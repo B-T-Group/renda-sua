@@ -97,12 +97,16 @@ export class AssistantService implements OnModuleInit {
     let handoff = false;
     let usedKnowledge = false;
     const maxLoops = Math.max(1, settings?.maxToolIterations || 5);
+    const toolConfig = await this.tools.buildToolConfig(input.identity);
+    const hasShoppingTools = toolConfig.tools?.some(
+      (t) => t.toolSpec?.name === 'search_catalog'
+    ) ?? false;
     for (let index = 0; index < maxLoops; index++) {
       const result = await this.bedrock.converseWithTools({
         model: settings?.model || undefined,
-        system: this.systemPrompt(input, locale),
+        system: this.systemPrompt(input, locale, hasShoppingTools),
         messages,
-        toolConfig: this.tools.buildToolConfig(input.identity),
+        toolConfig,
         maxTokens: 700,
         temperature: 0.2,
       });
@@ -252,11 +256,24 @@ export class AssistantService implements OnModuleInit {
 
   private systemPrompt(
     input: Omit<AssistantChatInput, 'locale'>,
-    locale: AssistantLocale
+    locale: AssistantLocale,
+    hasShoppingTools: boolean
   ): string {
     const name = input.identity.firstName
       ? `Address the customer naturally as ${input.identity.firstName}.`
       : 'Do not invent a customer name.';
+    
+    const market = input.identity.market;
+    const marketContext = market
+      ? `The customer is in ${market.country_code}${market.state ? ` (${market.state})` : ''}. Never ask which country they are in.`
+      : 'The customer market is unknown.';
+    
+    const shoppingGuidance = hasShoppingTools
+      ? `When the customer expresses buy or availability intent ("I want to buy...", "Do you have...", "Show me..."), call search_catalog (clarify the product if vague). Only call list_supported_country_states for explicit coverage questions ("which countries do you serve?").`
+      : market
+      ? `When the customer expresses buy or availability intent, clarify what they want to buy, then guide them to search in the app. Never ask which country they are in — you already know.`
+      : `When the customer expresses buy or availability intent and you don't know their market, ask which country they are in so you can help them find products.`;
+    
     const channelRules =
       input.channel === 'whatsapp'
         ? `WhatsApp channel rules:
@@ -268,9 +285,12 @@ Do not call request_human_support for automated or non-inquiry text. Call it onl
 If no answer is available, request human support and say we will get back shortly.
 For app errors, bugs, or payment failures, request human support and say the technical team will investigate.`;
     return `You are Rendasua's professional customer assistant. ${name}
+${marketContext}
 Mirror the customer's language; the current language is ${locale}.
 Use tools for company facts and private account data. Never invent information.
+${shoppingGuidance}
 Before answering about countries, markets, coverage, regions/states, or payment methods/rails (including short follow-ups like "and Brazil?"), you MUST call list_supported_country_states and/or list_supported_payment_systems. Answer only from those tool results. Use get_knowledge for process copy (pay-at-delivery, pickup, support), not as the sole source of live country lists.
+${market && !hasShoppingTools ? `NEVER ask the customer which country they are in or list ISO country codes when they express buy intent. You already know they are in ${market.country_code}.` : ''}
 If a country is not returned as configured/active, say we are not available there yet. Never invent local payment methods (for example Pix) or claim Groupe BT presence equals Rendasua availability.
 When the customer asks about their orders, recent purchases, deliveries, or a specific order number, call get_my_recent_orders or get_order_status (only available when those tools are provided).
 ${channelRules}

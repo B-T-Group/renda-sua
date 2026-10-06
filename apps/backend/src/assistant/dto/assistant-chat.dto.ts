@@ -4,11 +4,13 @@ import {
   ArrayMinSize,
   IsArray,
   IsIn,
+  IsOptional,
   IsString,
+  Length,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class AssistantChatMessageDto {
   @ApiProperty({ enum: ['user', 'assistant'] })
@@ -21,6 +23,19 @@ export class AssistantChatMessageDto {
   content!: string;
 }
 
+export class AssistantMarketContextDto {
+  @ApiProperty({ description: 'ISO 3166-1 alpha-2 country code', example: 'CM' })
+  @IsString()
+  @Length(2, 2)
+  country_code!: string;
+
+  @ApiPropertyOptional({ description: 'State/region name', example: 'Littoral' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  state?: string;
+}
+
 export class AssistantChatRequestDto {
   @ApiProperty({ type: [AssistantChatMessageDto] })
   @IsArray()
@@ -29,6 +44,15 @@ export class AssistantChatRequestDto {
   @ValidateNested({ each: true })
   @Type(() => AssistantChatMessageDto)
   messages!: AssistantChatMessageDto[];
+
+  @ApiPropertyOptional({
+    type: AssistantMarketContextDto,
+    description: 'Market context from the app (country and optional state)',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => AssistantMarketContextDto)
+  market?: AssistantMarketContextDto;
 }
 
 export class AssistantChatResponseDto {

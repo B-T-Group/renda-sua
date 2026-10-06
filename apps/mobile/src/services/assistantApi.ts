@@ -7,6 +7,11 @@ export type AssistantChatMessage = {
   content: string;
 };
 
+export type AssistantMarketContext = {
+  country_code: string;
+  state?: string;
+};
+
 /** @deprecated Use {@link AssistantChatMessage} */
 export type AssistantChatMessagePayload = AssistantChatMessage;
 
@@ -18,11 +23,18 @@ export type AssistantChatResponse = {
 };
 
 export async function postAssistantChat(
-  messages: AssistantChatMessagePayload[]
+  messages: AssistantChatMessagePayload[],
+  marketContext?: AssistantMarketContext | null
 ): Promise<AssistantChatResponse> {
   const token = await Auth0DirectService.getAccessToken();
-  if (token) {
-    return api.post<AssistantChatResponse>('/assistant/chat', { messages });
+  const body: { messages: AssistantChatMessagePayload[]; market?: AssistantMarketContext } = {
+    messages,
+  };
+  if (marketContext) {
+    body.market = marketContext;
   }
-  return publicApiPost<AssistantChatResponse>('/assistant/chat', { messages });
+  if (token) {
+    return api.post<AssistantChatResponse>('/assistant/chat', body);
+  }
+  return publicApiPost<AssistantChatResponse>('/assistant/chat', body);
 }

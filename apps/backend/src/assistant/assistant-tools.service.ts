@@ -1,6 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { Tool, ToolConfiguration } from '@aws-sdk/client-bedrock-runtime';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { InventoryItemsService } from '../inventory-items/inventory-items.service';
+import { AppConfigService } from '../app-config/app-config.service';
 import { AssistantMarketsCatalogService } from './assistant-markets-catalog.service';
 import {
   getKnowledgeSection,
@@ -36,22 +38,41 @@ export class AssistantToolsService {
 
   constructor(
     private readonly hasura: HasuraSystemService,
-    private readonly marketsCatalog: AssistantMarketsCatalogService
+    private readonly marketsCatalog: AssistantMarketsCatalogService,
+    private readonly inventoryItems: InventoryItemsService,
+    private readonly appConfig: AppConfigService
   ) {}
 
-  getToolConfig(identity: AssistantIdentity): ToolConfiguration {
+  async getToolConfig(identity: AssistantIdentity): Promise<ToolConfiguration> {
     const tools = [
       this.knowledgeTool(),
       this.countryStatesTool(),
       this.paymentSystemsTool(),
       this.humanSupportTool(),
     ];
+    
+    const country = identity.market?.country_code;
+    const shoppingEnabled = await this.isShoppingEnabled(country);
+    if (shoppingEnabled) {
+      tools.push(this.searchCatalogTool());
+    }
+    
     if (identity.userId) tools.push(...this.userTools(identity));
     return { tools };
   }
 
-  buildToolConfig(identity: AssistantIdentity): ToolConfiguration {
+  buildToolConfig(identity: AssistantIdentity): Promise<ToolConfiguration> {
     return this.getToolConfig(identity);
+  }
+
+  private async isShoppingEnabled(countryCode?: string): Promise<boolean> {
+    try {
+      const flags = await this.appConfig.getClientFlags(countryCode);
+      return flags.assistant_shopping_v1 === true;
+    } catch (error: any) {
+      this.logger.warn(`Failed to check shopping flag: ${error.message}`);
+      return false;
+    }
   }
 
   isMarketCatalogTool(name: string): boolean {
@@ -100,6 +121,9 @@ export class AssistantToolsService {
     }
     if (request.name === 'list_supported_payment_systems') {
       return this.listPaymentSystems(request);
+    }
+    if (request.name === 'search_catalog') {
+      return this.searchCatalog(request);
     }
     if (request.name === 'request_human_support') return this.handoff(request);
     if (!request.identity.userId) return { content: 'Authentication is required.' };
@@ -207,6 +231,84 @@ export class AssistantToolsService {
     return { content: JSON.stringify(addresses.slice(0, 10)) };
   }
 
+  private async searchCatalog(
+    request: ToolRequest
+  ): Promise<AssistantToolResult> {
+    const query = String(request.input.query || request.input.q || '').trim();
+    if (!query || query.length < 2) {
+      return {
+        content: 'Please provide a search query with at least 2 characters.',
+      };
+    }
+
+    const market = request.identity.market;
+    if (!market?.country_code) {
+      return {
+        content: 'Market information is required to search the catalog.',
+      };
+    }
+
+    try {
+      const suggestions = await this.inventoryItems.getInventorySearchSuggestions({
+        q: query,
+        country_code: market.country_code,
+        is_active: true,
+        include_unavailable: false,
+      });
+
+      if (!suggestions.length) {
+        return {
+          content: `No products found for "${query}" in ${market.country_code}. Try a different search term.`,
+        };
+      }
+
+      const products = suggestions
+        .filter((s: { kind: string }) => s.kind === 'product')
+        .slice(0, 8) as Array<{
+          kind: 'product';
+          inventoryId: string;
+          title: string;
+          price: number;
+          currency: string;
+        }>;
+      const categories = suggestions
+        .filter((s: { kind: string }) => s.kind === 'category')
+        .slice(0, 3) as Array<{ kind: 'category'; value: string }>;
+
+      const baseUrl =
+        process.env.FRONTEND_URL || 'https://rendasua.com';
+
+      const formatted = [];
+      
+      if (products.length > 0) {
+        formatted.push('**Products:**');
+        for (const p of products) {
+          const itemLink = `${baseUrl}/inventory/${p.inventoryId}`;
+          const price = p.price ? ` - ${p.price} ${p.currency}` : '';
+          formatted.push(`- [${p.title}](${itemLink})${price}`);
+        }
+      }
+
+      if (categories.length > 0) {
+        formatted.push('\n**Categories:**');
+        for (const c of categories) {
+          const catLink = `${baseUrl}/shop?category=${encodeURIComponent(c.value)}`;
+          formatted.push(`- [${c.value}](${catLink})`);
+        }
+      }
+
+      const searchLink = `${baseUrl}/shop?q=${encodeURIComponent(query)}`;
+      formatted.push(`\n[View all results for "${query}"](${searchLink})`);
+
+      return { content: formatted.join('\n') };
+    } catch (error: any) {
+      this.logger.error(`Catalog search failed: ${error.message}`, error.stack);
+      return {
+        content: 'Unable to search the catalog at this time. Please try again.',
+      };
+    }
+  }
+
   private getProfile(identity: AssistantIdentity): AssistantToolResult {
     return {
       content: JSON.stringify({
@@ -215,6 +317,28 @@ export class AssistantToolsService {
         accountType: identity.accountType,
         preferredLanguage: identity.preferredLanguage,
       }),
+    };
+  }
+
+  private searchCatalogTool(): Tool {
+    return {
+      toolSpec: {
+        name: 'search_catalog',
+        description:
+          'Search the product catalog for items available in the customer\'s market. Returns products with links, prices, and categories. Use when the customer expresses buy or availability intent. Always clarify the product if vague.',
+        inputSchema: {
+          json: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: 'Product search query (name, category, brand, etc.)',
+              },
+            },
+            required: ['query'],
+          },
+        },
+      },
     };
   }
 
