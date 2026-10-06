@@ -89,7 +89,7 @@ describe('RendaCharacter', () => {
 
   it('animated={false} is static too (message avatars)', () => {
     mockReducedMotion(false);
-    const { container } = render(<RendaCharacter size={28} role="avatar" animated={false} />);
+    const { container } = render(<RendaCharacter size={28} surface="avatar" animated={false} />);
     expect(svgOf(container).getAttribute('data-renda-motion')).toBe('static');
     expect(rafSpy).not.toHaveBeenCalled();
   });

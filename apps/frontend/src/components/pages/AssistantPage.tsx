@@ -145,7 +145,7 @@ function MiniOrb({
           justifyContent: 'center',
         }}
       >
-        <RendaCharacter size={28} role="avatar" animated={false} />
+        <RendaCharacter size={28} surface="avatar" animated={false} />
       </Box>
     );
   }
@@ -422,7 +422,7 @@ function AssistantHeader({
               justifyContent: 'center',
             }}
           >
-            <RendaCharacter size={40} role="header" state={character} />
+            <RendaCharacter size={40} surface="header" state={character} />
           </Box>
         ) : (
           <Box
@@ -524,7 +524,7 @@ function HeroCharacter({ state }: { state: RendaState }) {
     >
       <RendaCharacter
         size={size}
-        role="hero"
+        surface="hero"
         state={state}
         style={{ position: 'relative' }}
       />

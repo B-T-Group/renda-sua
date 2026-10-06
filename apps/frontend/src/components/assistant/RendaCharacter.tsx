@@ -18,7 +18,7 @@ import {
   RendaEngine,
   RendaEyes,
   RendaNodes,
-  RendaRole,
+  RendaSurface,
   RendaState,
   SWEEP_WEDGES,
   eyeShapeFor,
@@ -27,7 +27,7 @@ import {
 import { msSinceInteraction, onInteraction } from './interactionClock';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
-export type { RendaEyes, RendaRole, RendaState } from './rendaCharacterEngine';
+export type { RendaEyes, RendaSurface, RendaState } from './rendaCharacterEngine';
 export { eyesForSize } from './rendaCharacterEngine';
 
 export interface RendaCharacterProps {
@@ -39,7 +39,7 @@ export interface RendaCharacterProps {
   /** Defaults to the size rule: expressive ≥ 36, dots 20-35, none below 20. */
   eyes?: RendaEyes;
   /** Spec "Where" column: header idle is static, avatars never move, hero/launcher settle. */
-  role?: RendaRole;
+  surface?: RendaSurface;
   className?: string;
   style?: CSSProperties;
   'data-testid'?: string;
@@ -106,14 +106,14 @@ function RendaCharacterImpl({
   state = 'idle',
   animated = true,
   eyes,
-  role = 'hero',
+  surface = 'hero',
   className,
   style,
   'data-testid': testId,
 }: RendaCharacterProps) {
   const eyesMode: RendaEyes = eyes ?? eyesForSize(size);
   const reducedMotion = usePrefersReducedMotion();
-  const isStatic = !animated || reducedMotion || role === 'avatar';
+  const isStatic = !animated || reducedMotion || surface === 'avatar';
   const id = `renda${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const svgRef = useRef<SVGSVGElement>(null);
   const engineRef = useRef<RendaEngine | null>(null);
@@ -169,7 +169,7 @@ function RendaCharacterImpl({
     if (!svg) return undefined;
     const engine = new RendaEngine(
       collectNodes(svg),
-      { size, eyes: eyesMode, role },
+      { size, eyes: eyesMode, surface },
       state
     );
     engineRef.current = engine;
@@ -181,7 +181,7 @@ function RendaCharacterImpl({
     };
     // `state` is applied by the effect below; rebuilding on state change would drop motion.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [size, eyesMode, role]);
+  }, [size, eyesMode, surface]);
 
   useLayoutEffect(() => {
     const engine = engineRef.current;
@@ -204,7 +204,7 @@ function RendaCharacterImpl({
 
   const width = +(size * RENDA_WIDTH_RATIO).toFixed(2);
   const url = (k: string) => `url(#${id}${k})`;
-  const eyeShape = eyeShapeFor(role, eyesMode, state);
+  const eyeShape = eyeShapeFor(surface, eyesMode, state);
 
   return (
     <svg
@@ -217,7 +217,7 @@ function RendaCharacterImpl({
       className={className}
       data-testid={testId}
       data-renda=""
-      data-renda-state={role === 'avatar' ? 'idle' : state}
+      data-renda-state={surface === 'avatar' ? 'idle' : state}
       data-renda-eyes={eyesMode}
       data-renda-eye-shape={eyeShape}
       data-renda-motion={

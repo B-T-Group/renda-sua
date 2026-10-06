@@ -336,7 +336,7 @@ export function AssistantLauncher({
         >
           <RendaCharacter
             size={52}
-            role="launcher"
+            surface="launcher"
             state={state}
             data-testid="assistant-launcher-character"
           />

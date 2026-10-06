@@ -21,7 +21,7 @@ export type RendaState =
 export type RendaEyes = 'expressive' | 'dot' | 'none';
 
 /** Where the character is used (spec "Where" column). */
-export type RendaRole = 'hero' | 'header' | 'launcher' | 'avatar';
+export type RendaSurface = 'hero' | 'header' | 'launcher' | 'avatar';
 
 /** Eye shape actually drawn for a state (exposed for tests and a11y-neutral styling hooks). */
 export type RendaEyeShape = 'arc' | 'open' | 'dot' | 'none';
@@ -141,11 +141,11 @@ export const RENDA_STATES: Record<RendaState, StateConfig> = {
 
 /** Role filters from the spec "Where" column (header idle is static; avatars never move). */
 export function stateConfigFor(
-  role: RendaRole,
+  surface: RendaSurface,
   eyes: RendaEyes,
   state: RendaState
 ): StateConfig {
-  if (role === 'avatar') {
+  if (surface === 'avatar') {
     return {
       ...RENDA_STATES.idle,
       amp: 0,
@@ -155,9 +155,9 @@ export function stateConfigFor(
     };
   }
   let s = state;
-  if (role === 'header' && (s === 'attentive' || s === 'listening')) s = 'idle';
+  if (surface === 'header' && (s === 'attentive' || s === 'listening')) s = 'idle';
   const c: StateConfig = { ...RENDA_STATES[s] };
-  if (role === 'header' && s === 'idle') {
+  if (surface === 'header' && s === 'idle') {
     c.amp = 0;
     c.grad = 0;
     c.halo = 'mid';
@@ -167,13 +167,13 @@ export function stateConfigFor(
 }
 
 export function eyeShapeFor(
-  role: RendaRole,
+  surface: RendaSurface,
   eyes: RendaEyes,
   state: RendaState
 ): RendaEyeShape {
   if (eyes === 'none') return 'none';
   if (eyes === 'dot') return 'dot';
-  return stateConfigFor(role, eyes, state).eyes;
+  return stateConfigFor(surface, eyes, state).eyes;
 }
 
 /* ------------------------------ geometry ------------------------------ */
@@ -314,7 +314,7 @@ export interface RendaNodes {
 export interface RendaEngineOptions {
   size: number;
   eyes: RendaEyes;
-  role: RendaRole;
+  surface: RendaSurface;
 }
 
 /** Milliseconds without touch, scroll or pointer before the hero/launcher settles. */
@@ -357,11 +357,11 @@ export class RendaEngine {
   }
 
   private cfg(state = this.state): StateConfig {
-    return stateConfigFor(this.o.role, this.o.eyes, state);
+    return stateConfigFor(this.o.surface, this.o.eyes, state);
   }
 
   setState(state: RendaState, reduced: boolean): void {
-    if (this.o.role === 'avatar') return;
+    if (this.o.surface === 'avatar') return;
     if (state === this.state) return;
     this.state = state;
     const t = this.t;
@@ -403,7 +403,7 @@ export class RendaEngine {
 
   private settleOn(idleMs: number): boolean {
     return (
-      (this.o.role === 'hero' || this.o.role === 'launcher') &&
+      (this.o.surface === 'hero' || this.o.surface === 'launcher') &&
       this.state === 'idle' &&
       idleMs > SETTLE_AFTER_MS
     );

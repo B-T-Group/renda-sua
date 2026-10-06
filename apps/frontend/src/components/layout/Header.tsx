@@ -877,7 +877,7 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
                 }}
               >
                 {assistantEntry === 'character' ? (
-                  <RendaCharacter size={28} role="avatar" animated={false} style={{ margin: -4 }} />
+                  <RendaCharacter size={28} surface="avatar" animated={false} style={{ margin: -4 }} />
                 ) : (
                   <SmartToy fontSize="small" />
                 )}
