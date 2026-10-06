@@ -75,7 +75,7 @@ describe('startIdleEyeLife', () => {
 
 describe('advanceIdleEyeLife', () => {
   it('Rest → Wake (55%) after the rest hold', () => {
-    let s = startIdleEyeLife(0, 0); // rest ends at 2500
+    const s = startIdleEyeLife(0, 0); // rest ends at 2500
     const { state, startedLeg } = advanceIdleEyeLife(s, 2500, 0.0); // wake
     expect(startedLeg).toBe(true);
     expect(state.phase).toBe('wake');
@@ -84,7 +84,7 @@ describe('advanceIdleEyeLife', () => {
   });
 
   it('Rest may roll into another Rest (remaining %)', () => {
-    let s = startIdleEyeLife(0, 0);
+    const s = startIdleEyeLife(0, 0);
     const { state } = advanceIdleEyeLife(s, 2500, 0.9); // > 0.70 → rest
     expect(state.phase).toBe('rest');
   });

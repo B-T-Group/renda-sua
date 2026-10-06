@@ -50,7 +50,8 @@ describe('RendaCharacter', () => {
     const { container } = render(<RendaCharacter size={size} />);
     const svg = svgOf(container);
     expect(svg.getAttribute('data-renda-eyes')).toBe(eyes);
-    expect(svg.querySelectorAll('[data-r="open"]')).toHaveLength(open);
+    // Dot eyes reuse data-r="open" (circle) so the engine can blink them; expressive opens are ellipses.
+    expect(svg.querySelectorAll('ellipse[data-r="open"]')).toHaveLength(open);
     expect(svg.querySelectorAll('[data-r="arc"]')).toHaveLength(arcs);
     expect(svg.querySelectorAll('[data-r="eye"] circle')).toHaveLength(dots);
   });

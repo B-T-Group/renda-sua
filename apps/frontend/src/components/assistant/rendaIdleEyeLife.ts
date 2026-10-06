@@ -135,7 +135,7 @@ function openPose(phase: IdleEyePhase, offset: readonly [number, number] = CENTR
 }
 
 /** Start of the life cycle: Rest for a fresh Idle entry. */
-export function startIdleEyeLife(now: number, rand: number = 0.5): IdleEyeLifeState {
+export function startIdleEyeLife(now: number, rand = 0.5): IdleEyeLifeState {
   const hold = uniform(IDLE_EYE_TIMING.restMin, IDLE_EYE_TIMING.restMax, rand);
   return {
     phase: 'rest',
@@ -504,7 +504,7 @@ export type DotBlinkState = {
   pendingDouble: boolean;
 };
 
-export function startDotBlink(now: number, rand: number = 0.5): DotBlinkState {
+export function startDotBlink(now: number, rand = 0.5): DotBlinkState {
   return {
     nextBlinkAt: now + uniform(IDLE_EYE_TIMING.openBlinkMin, IDLE_EYE_TIMING.openBlinkMax, rand),
     blinkStartedAt: -Infinity,
