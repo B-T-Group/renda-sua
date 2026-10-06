@@ -24,6 +24,7 @@ import { AdminBroadcastStore } from './AdminBroadcastStore';
 import { ReferralRejectionStore } from './ReferralRejectionStore';
 import { PickupReminderStore } from './PickupReminderStore';
 import { StorePickupReminderStore } from './StorePickupReminderStore';
+import { AssistantStore } from './AssistantStore';
 import { resetStockAvailabilityPending } from '../hooks/useStockAvailabilityChecks';
 import { hydrateFirstOrderJourneyPins } from '../utils/firstOrderJourneyStorage';
 
@@ -43,6 +44,7 @@ export class RootStore {
   public nudge: NudgeStore;
   public ftue: FtueStore;
   public market: MarketStore;
+  public assistant: AssistantStore;
 
   constructor() {
     makeAutoObservable(this);
@@ -61,6 +63,7 @@ export class RootStore {
     this.nudge = new NudgeStore();
     this.ftue = new FtueStore();
     this.market = new MarketStore();
+    this.assistant = new AssistantStore();
     SessionService.bind(this);
   }
 
@@ -76,6 +79,8 @@ export class RootStore {
     this.persona.reset();
     this.auth.reset();
     this.cart.clear();
+    // Rotate assistant thread on sign-out (auth state change)
+    this.assistant.rotateThread();
   }
 
   async hydrate(): Promise<void> {

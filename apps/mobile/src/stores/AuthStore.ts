@@ -386,6 +386,9 @@ export class AuthStore {
       this.isLoading = false;
     });
 
+    // Rotate assistant thread on sign-in (auth state change)
+    this.rootStore.assistant.rotateThread();
+
     await this.persistAuth();
     await this.reloadPostAuthResumeFromStorage();
     await SessionService.completeLogin({ user, tokens });
@@ -429,6 +432,8 @@ export class AuthStore {
       this.isAuthenticated = true;
       this.error = null;
     });
+    // Rotate assistant thread on sign-in (auth state change)
+    this.rootStore.assistant.rotateThread();
     await Auth0DirectService.syncSessionUserAndAccessToken({
       accessToken: tokens.accessToken,
       expiresAt: tokens.expiresAt,
