@@ -170,6 +170,92 @@ describe('OrderReorderService', () => {
     expect(result.lines).toHaveLength(1);
     expect(result.lines[0].quantity).toBe(2);
     expect(result.skipped).toHaveLength(0);
+    expect(result.navigation_hint).toBe('cart');
+  });
+
+  it('food_only checks out when every line is a dish', async () => {
+    const order = {
+      ...baseOrder,
+      order_items: [
+        { ...baseOrder.order_items[0], is_cooked_food: true, item_name: 'Ndolé' },
+      ],
+    };
+    const dish = {
+      ...baseInventory,
+      item: { ...baseInventory.item, name: 'Ndolé', is_cooked_food: true },
+    };
+    mockOrderAndInventory(order, [dish]);
+    const result = await service.reorder('order-1', true);
+    expect(result.lines).toHaveLength(1);
+    expect(result.navigation_hint).toBe('checkout');
+  });
+
+  it('food_only keeps a category dish whose flag is false and drops groceries', async () => {
+    const order = {
+      ...baseOrder,
+      order_items: [
+        { ...baseOrder.order_items[0], is_cooked_food: false, item_name: 'Eru' },
+        {
+          id: 'oi-2',
+          business_inventory_id: 'inv-2',
+          item_id: 'item-2',
+          item_variant_id: null,
+          item_name: 'Soap',
+          variant_name: null,
+          quantity: 1,
+          is_cooked_food: false,
+        },
+      ],
+    };
+    const dish = {
+      ...baseInventory,
+      item: {
+        ...baseInventory.item,
+        name: 'Eru',
+        is_cooked_food: false,
+        item_sub_category: { item_category: { name: FOOD_CATEGORY_NAME } },
+      },
+    };
+    const soap = {
+      ...baseInventory,
+      id: 'inv-2',
+      item: {
+        ...baseInventory.item,
+        id: 'item-2',
+        name: 'Soap',
+        is_cooked_food: false,
+        item_sub_category: { item_category: { name: 'Grocery' } },
+      },
+    };
+    mockOrderAndInventory(order, [dish, soap]);
+    const result = await service.reorder('order-1', true);
+    expect(result.lines.map((line) => line.item_data.name)).toEqual(['Eru']);
+    expect(result.skipped).toHaveLength(0);
+  });
+
+  it('food_only returns none when the order has no dishes', async () => {
+    mockOrderAndInventory(baseOrder, [baseInventory]);
+    const result = await service.reorder('order-1', true);
+    expect(result.lines).toHaveLength(0);
+    expect(result.skipped).toHaveLength(0);
+    expect(result.navigation_hint).toBe('none');
+  });
+
+  it('food_only does not treat a padded category name as a dish', async () => {
+    const dish = {
+      ...baseInventory,
+      item: {
+        ...baseInventory.item,
+        is_cooked_food: false,
+        item_sub_category: {
+          item_category: { name: ` ${FOOD_CATEGORY_NAME} ` },
+        },
+      },
+    };
+    mockOrderAndInventory(baseOrder, [dish]);
+    const result = await service.reorder('order-1', true);
+    expect(result.lines).toHaveLength(0);
+    expect(result.navigation_hint).toBe('none');
   });
 
   it('returns checkout hint when all lines available, accepting, address valid', async () => {

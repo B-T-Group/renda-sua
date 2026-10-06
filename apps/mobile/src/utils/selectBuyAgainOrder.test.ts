@@ -29,4 +29,31 @@ describe('selectBuyAgainOrder', () => {
   it('hides buy again on restaurants when nothing cooked was bought', () => {
     expect(selectBuyAgainOrder([grocery], true)).toBeNull();
   });
+
+  it('keeps a dish identified only by a trimmed restaurant category', () => {
+    const dish = {
+      id: 'eru',
+      quantity: 1,
+      item_name: 'Eru',
+      is_cooked_food: false,
+      item: {
+        is_cooked_food: false,
+        item_sub_category: {
+          item_category: { name: ' Restaurant & Cooked Food ' },
+        },
+      },
+    } as OrderItem;
+    const picked = selectBuyAgainOrder(
+      [{ id: 'past', current_status: 'complete', order_items: [dish] } as Order],
+      true
+    );
+    expect(picked?.lines.map((item) => item.item_name)).toEqual(['Eru']);
+  });
+
+  it('skips cancelled and failed orders', () => {
+    const cancelled = order('cancelled', 'cancelled', [line('Eru', true)]);
+    const failed = order('failed', 'failed', [line('Eru', true)]);
+    expect(selectBuyAgainOrder([cancelled, failed], false)).toBeNull();
+    expect(selectBuyAgainOrder([], true)).toBeNull();
+  });
 });
