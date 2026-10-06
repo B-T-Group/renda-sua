@@ -1,5 +1,25 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { AssistantStore } from './AssistantStore';
+import {
+  AssistantStore,
+  classifyAssistantError,
+  type AssistantChatTransport,
+} from './AssistantStore';
+
+type Reply = Awaited<ReturnType<AssistantChatTransport>>;
+
+/** Transport whose responses the test resolves or rejects by hand. */
+function controllableTransport() {
+  const calls: Array<{
+    messages: Parameters<AssistantChatTransport>[0];
+    resolve: (value: Reply) => void;
+    reject: (error: unknown) => void;
+  }> = [];
+  const transport: AssistantChatTransport = (messages) =>
+    new Promise<Reply>((resolve, reject) => {
+      calls.push({ messages, resolve, reject });
+    });
+  return { transport, calls };
+}
 
 // UUID v4 regex pattern: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
 // where y is [89ab] (variant bits)
@@ -14,6 +34,7 @@ describe('AssistantStore', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -167,5 +188,147 @@ describe('AssistantStore', () => {
     expect(store.threadId).not.toBe(originalThreadId);
     expect(store.messages).toEqual([]);
     expect(store.lastActivityAt).toBeGreaterThan(originalActivity);
+  });
+
+  describe('send, retry and in-flight requests', () => {
+    it('sends the history and appends the reply', async () => {
+      const { transport, calls } = controllableTransport();
+      const sent = store.sendMessage('  Where are you?  ', transport);
+      expect(store.isSending).toBe(true);
+      expect(calls[0].messages).toEqual([{ role: 'user', content: 'Where are you?' }]);
+
+      calls[0].resolve({ reply: ' Douala ', handoff: true });
+      await sent;
+
+      expect(store.messages.map((m) => [m.role, m.content])).toEqual([
+        ['user', 'Where are you?'],
+        ['assistant', 'Douala'],
+      ]);
+      expect(store.handoff).toBe(true);
+      expect(store.isSending).toBe(false);
+    });
+
+    it('retry re-sends the failed message once instead of appending a copy', async () => {
+      const { transport, calls } = controllableTransport();
+      const first = store.sendMessage('Hello', transport);
+      calls[0].reject(new TypeError('Network request failed'));
+      await first;
+
+      expect(store.error).toBe('Network request failed');
+      expect(store.errorKind).toBe('network');
+      expect(store.failedMessageId).toBe(store.messages[0].id);
+      expect(store.isSending).toBe(false);
+
+      const retry = store.retryFailed(transport);
+      // Marked as retrying: error cleared, sending, still a single user bubble.
+      expect(store.error).toBe(null);
+      expect(store.failedMessageId).toBe(null);
+      expect(store.isSending).toBe(true);
+      expect(store.messages).toHaveLength(1);
+      expect(calls[1].messages).toEqual([{ role: 'user', content: 'Hello' }]);
+
+      calls[1].resolve({ reply: 'Hi!' });
+      await retry;
+
+      expect(store.messages.map((m) => m.content)).toEqual(['Hello', 'Hi!']);
+      expect(store.messages.filter((m) => m.role === 'user')).toHaveLength(1);
+    });
+
+    it('retry is a no-op when nothing failed', async () => {
+      const { transport, calls } = controllableTransport();
+      expect(await store.retryFailed(transport)).toBe(false);
+      expect(calls).toHaveLength(0);
+    });
+
+    it('drops a late reply after rotation and does not leave isSending stuck', async () => {
+      const { transport, calls } = controllableTransport();
+      const sent = store.sendMessage('Signed-in question', transport);
+      const threadBefore = store.threadId;
+
+      store.rotateThread(); // e.g. sign-out while the request is in flight
+
+      expect(store.threadId).not.toBe(threadBefore);
+      expect(store.isSending).toBe(false);
+      expect(store.messages).toEqual([]);
+
+      calls[0].resolve({ reply: 'Your order #123 is on the way', handoff: true });
+      await sent;
+
+      expect(store.messages).toEqual([]);
+      expect(store.handoff).toBe(false);
+      expect(store.isSending).toBe(false);
+    });
+
+    it('drops a late error after Start over', async () => {
+      const { transport, calls } = controllableTransport();
+      const sent = store.sendMessage('Hello', transport);
+
+      store.clearChat();
+      calls[0].reject(new Error('Internal server error'));
+      await sent;
+
+      expect(store.error).toBe(null);
+      expect(store.errorKind).toBe(null);
+      expect(store.failedMessageId).toBe(null);
+      expect(store.isSending).toBe(false);
+    });
+
+    it('an orphaned request settling does not end the next request', async () => {
+      const { transport, calls } = controllableTransport();
+      const orphan = store.sendMessage('Old thread', transport);
+      store.rotateThread();
+
+      const current = store.sendMessage('New thread', transport);
+      expect(store.isSending).toBe(true);
+      expect(calls[1].messages).toEqual([{ role: 'user', content: 'New thread' }]);
+
+      calls[0].resolve({ reply: 'Late reply' });
+      await orphan;
+      expect(store.isSending).toBe(true);
+      expect(store.messages.map((m) => m.content)).toEqual(['New thread']);
+
+      calls[1].resolve({ reply: 'Fresh reply' });
+      await current;
+      expect(store.isSending).toBe(false);
+      expect(store.messages.map((m) => m.content)).toEqual(['New thread', 'Fresh reply']);
+    });
+
+    it('ignores a send while a request is in flight', async () => {
+      const { transport, calls } = controllableTransport();
+      const first = store.sendMessage('One', transport);
+      expect(await store.sendMessage('Two', transport)).toBe(false);
+      expect(calls).toHaveLength(1);
+      calls[0].resolve({ reply: 'ok' });
+      await first;
+      expect(store.messages.map((m) => m.content)).toEqual(['One', 'ok']);
+    });
+
+    it('rotates an idle thread before sending', async () => {
+      const { transport, calls } = controllableTransport();
+      store.addUserMessage('Old message');
+      const threadBefore = store.threadId;
+      vi.advanceTimersByTime(30 * 60 * 1000);
+
+      const sent = store.sendMessage('Fresh start', transport);
+      expect(store.threadId).not.toBe(threadBefore);
+      expect(calls[0].messages).toEqual([{ role: 'user', content: 'Fresh start' }]);
+      calls[0].resolve({ reply: 'Hi' });
+      await sent;
+    });
+  });
+
+  describe('classifyAssistantError', () => {
+    it('treats fetch TypeErrors and network messages as network errors', () => {
+      expect(classifyAssistantError(new TypeError('Network request failed'))).toBe('network');
+      expect(classifyAssistantError(new Error('Failed to fetch'))).toBe('network');
+      expect(classifyAssistantError(new Error('Request timed out'))).toBe('network');
+    });
+
+    it('treats HTTP and unknown errors as server errors', () => {
+      const http = Object.assign(new Error('Too many requests'), { status: 429 });
+      expect(classifyAssistantError(http)).toBe('server');
+      expect(classifyAssistantError(new Error('Internal Server Error'))).toBe('server');
+      expect(classifyAssistantError(undefined)).toBe('server');
+    });
   });
 });

@@ -5,6 +5,7 @@ import {
   TextInput as RNTextInput,
   type TextInputProps,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { Text } from 'react-native-paper';
@@ -22,6 +23,8 @@ export interface AppTextInputProps extends Omit<TextInputProps, 'style'> {
   onTrailingIconPress?: () => void;
   disabled?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
+  /** Extra style for the inner TextInput (e.g. maxHeight to cap multiline growth). */
+  inputStyle?: StyleProp<TextStyle>;
 }
 
 /**
@@ -38,6 +41,7 @@ export const AppTextInput = forwardRef<RNTextInput, AppTextInputProps>(
       onTrailingIconPress,
       disabled,
       containerStyle,
+      inputStyle,
       ...rest
     },
     ref,
@@ -100,6 +104,7 @@ export const AppTextInput = forwardRef<RNTextInput, AppTextInputProps>(
                 paddingVertical: 0,
               },
               leadingIcon ? { marginLeft: spacing.xs } : null,
+              inputStyle,
             ]}
             placeholderTextColor={colors.text.secondary}
             editable={!disabled}

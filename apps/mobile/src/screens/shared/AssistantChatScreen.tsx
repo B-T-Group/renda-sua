@@ -23,12 +23,13 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useStore } from '@/stores/RootStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { spacing, borderRadius } from '@/theme/spacing';
-import { motion, motionDuration } from '@/theme/motion';
-import { postAssistantChat, type AssistantChatMessagePayload } from '@/services/assistantApi';
+import { motionDuration } from '@/theme/motion';
+import { postAssistantChat } from '@/services/assistantApi';
 import type { AssistantMessage } from '@/stores/AssistantStore';
 
-const MAX_API_MESSAGES = 20;
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
+/** AC9: the composer grows with the text up to 4 rows, then scrolls. */
+const COMPOSER_MAX_LINES = 4;
 
 function MiniOrb({ size = 36 }: { size?: number }) {
   const { colors } = useTheme();
@@ -192,16 +193,17 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   const { colors } = useTheme();
   const store = useStore();
   const firstName = store.auth.user?.firstName;
-  const nameParam = firstName ? `, ${firstName}` : '';
 
   return (
     <View style={styles.empty}>
       <MiniOrb size={88} />
       <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
-        {t('assistant.emptyTitle', {
-          defaultValue: 'Hi{{name}}! What do you need today?',
-          name: nameParam,
-        })}
+        {firstName
+          ? t('assistant.emptyTitleNamed', {
+              defaultValue: 'Hi, {{name}}! What do you need today?',
+              name: firstName,
+            })
+          : t('assistant.emptyTitle', 'Hi! What do you need today?')}
       </Text>
       <View style={styles.chips}>
         {SUGGESTIONS.map((item) => {
@@ -246,20 +248,13 @@ const SUGGESTIONS = [
 
 const AssistantChatScreen = observer(function AssistantChatScreen() {
   const { t } = useTranslation();
-  const { colors } = useTheme();
+  const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const store = useStore();
   const { assistant } = store;
   const listRef = useRef<FlatList<AssistantMessage>>(null);
   const [draft, setDraft] = useState('');
-  const requestIdRef = useRef(0);
-  const currentThreadIdRef = useRef(assistant.threadId);
-
-  // Track current thread id
-  useEffect(() => {
-    currentThreadIdRef.current = assistant.threadId;
-  }, [assistant.threadId]);
 
   // Check idle on screen focus
   useFocusEffect(
@@ -270,53 +265,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
 
   const onSend = useCallback(
     async (override?: string) => {
-      // Check idle before sending
-      assistant.checkAndRotateIfIdle();
-
       const text = (override ?? draft).trim();
       if (!text || assistant.isSending) return;
-
-      // Clear draft immediately on successful send start
-      const threadIdAtSend = assistant.threadId;
-      assistant.addUserMessage(text);
-      assistant.setIsSending(true);
-      assistant.setError(null);
-      const requestId = ++requestIdRef.current;
-      setDraft('');
-
+      // Typed text is now a bubble; on failure it stays there and Retry re-sends it.
+      if (override === undefined) setDraft('');
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-
-      try {
-        const payload: AssistantChatMessagePayload[] = assistant.messages
-          .slice(-MAX_API_MESSAGES)
-          .map((m) => ({
-            role: m.role,
-            content: m.content,
-          }));
-        const data = await postAssistantChat(payload);
-
-        // Drop late replies: discard if thread rotated since request
-        if (requestId !== requestIdRef.current || threadIdAtSend !== currentThreadIdRef.current) {
-          return;
-        }
-
-        if (data.reply?.trim()) {
-          assistant.addAssistantMessage(data.reply.trim());
-        }
-        if (data.handoff) assistant.setHandoff(true);
-      } catch (e: any) {
-        // Drop late errors too
-        if (requestId !== requestIdRef.current || threadIdAtSend !== currentThreadIdRef.current) {
-          return;
-        }
-        assistant.setError(e?.message ?? 'Failed to reach the assistant');
-        // Restore draft on error so user can retry
-        setDraft(text);
-      } finally {
-        if (requestId === requestIdRef.current && threadIdAtSend === currentThreadIdRef.current) {
-          assistant.setIsSending(false);
-        }
-      }
+      await assistant.sendMessage(text, postAssistantChat);
     },
     [assistant, draft]
   );
@@ -340,9 +294,8 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
   );
 
   const onRetry = useCallback(() => {
-    assistant.setError(null);
-    void onSend();
-  }, [assistant, onSend]);
+    void assistant.retryFailed(postAssistantChat);
+  }, [assistant]);
 
   const onOpenWhatsApp = useCallback(() => {
     void Linking.openURL(`https://wa.me/${WHATSAPP_SUPPORT_NUMBER}`);
@@ -356,7 +309,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
     >
       <FlatList
         ref={listRef}
-        data={assistant.messages}
+        data={assistant.messages.slice()}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={renderItem}
@@ -462,7 +415,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
             'Ask about an item, order or delivery…'
           )}
           multiline
-          numberOfLines={4}
+          inputStyle={{ maxHeight: typography.body.lineHeight * COMPOSER_MAX_LINES }}
           disabled={assistant.isSending}
           onSubmitEditing={() => void onSend()}
           blurOnSubmit={false}

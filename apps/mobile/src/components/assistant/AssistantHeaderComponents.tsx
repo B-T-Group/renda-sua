@@ -13,7 +13,7 @@ export const AssistantHeaderTitle = observer(function AssistantHeaderTitle() {
   const store = useStore();
   const { assistant } = store;
 
-  const statusLabel = assistant.error
+  const statusLabel = assistant.errorKind === 'network'
     ? t('assistant.subtitleOffline', 'Offline')
     : assistant.isSending
     ? t('assistant.subtitleThinking', 'Thinking…')
