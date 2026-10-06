@@ -167,6 +167,7 @@ export type GuestRootStackParamList = {
     | undefined;
   RentalListingDetail: { listingId: string };
   CategoriesBrowse: undefined;
+  AssistantChat: undefined;
 };
 
 /** Guest shell: browse catalog + rentals + food + auth stack in bottom tabs. */

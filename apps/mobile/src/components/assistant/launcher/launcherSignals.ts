@@ -43,10 +43,15 @@ export function launcherSuppressionCount(): number {
 export const subscribeLauncherSuppression = suppressionSignal.subscribe;
 
 let lastInteractionAt = Date.now();
+let lastInteractionEmit = -Infinity;
 const interactionSignal = createSignal();
+/** Root touches fire constantly while scrolling; notify listeners at most 1×/s. */
+export const INTERACTION_EMIT_INTERVAL_MS = 1000;
 
 export function markLauncherInteraction(now: number = Date.now()): void {
   lastInteractionAt = now;
+  if (now - lastInteractionEmit < INTERACTION_EMIT_INTERVAL_MS) return;
+  lastInteractionEmit = now;
   interactionSignal.emit();
 }
 
@@ -60,4 +65,5 @@ export const subscribeLauncherInteraction = interactionSignal.subscribe;
 export function __resetLauncherSignals(now = 0): void {
   suppressionCount = 0;
   lastInteractionAt = now;
+  lastInteractionEmit = -Infinity;
 }

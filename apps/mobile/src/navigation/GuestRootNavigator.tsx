@@ -25,6 +25,12 @@ import CartScreen from '../screens/shared/CartScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
 import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
+import AssistantChatScreen from '../screens/shared/AssistantChatScreen';
+import {
+  AssistantHeaderTitle,
+  AssistantHeaderRight,
+} from '../components/assistant/AssistantHeaderComponents';
+import { useStore } from '../stores/RootStore';
 import {
   createFloatingTabBarStyle,
   TabBarIconContent,
@@ -37,6 +43,8 @@ import {
   renderFloatingAnimatedTabBar,
 } from './floatingTabBarVisibility';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
+import { AssistantLauncherHost } from '../components/assistant/launcher/AssistantLauncherHost';
+import { markLauncherInteraction } from '../components/assistant/launcher/launcherSignals';
 
 const GuestTab = createBottomTabNavigator<GuestTabParamList>();
 const GuestAuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -253,9 +261,10 @@ export function GuestRootNavigator({
 } = {}) {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
+  const store = useStore();
 
   return (
-    <View style={styles.flex}>
+    <View style={styles.flex} onTouchStart={onRootTouch}>
       <GuestRootStack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: colors.pageBackground },
@@ -338,9 +347,24 @@ export function GuestRootNavigator({
             headerBackTitle: t('public.items.detail.browseMore', 'Browse more items'),
           }}
         />
+        {/* #451: reachable only from the flagged guest launcher (PR-3b adds chips / events). */}
+        <GuestRootStack.Screen
+          name="AssistantChat"
+          component={AssistantChatScreen}
+          options={{
+            headerShown: true,
+            headerTitle: () => <AssistantHeaderTitle />,
+            headerRight: () => <AssistantHeaderRight onPress={() => store.assistant.clearChat()} />,
+          }}
+        />
       </GuestRootStack.Navigator>
+      {/* #451: floating Renda launcher (flag assistant_launcher_v1; renders nothing when off). */}
+      <AssistantLauncherHost persona="guest" />
     </View>
   );
 }
+
+/** Feeds the launcher's 20 s settle / attention idle; cheap (throttled, no re-render here). */
+const onRootTouch = () => markLauncherInteraction();
 
 const styles = StyleSheet.create({ flex: { flex: 1 } });

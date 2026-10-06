@@ -71,8 +71,13 @@ export function trackLauncherImpression(
   send('assistant.launcher.impression', ctx, { variant, motion: reducedMotion ? 'reduced' : 'on' });
 }
 
-export function trackLauncherTap(ctx: LauncherEventContext, variant: LauncherVariant, entry: LauncherEntry): void {
-  send('assistant.launcher.tap', ctx, { variant, entry });
+/** `variant` is the surface tapped; a menu-row tap has none. */
+export function trackLauncherTap(
+  ctx: LauncherEventContext,
+  variant: LauncherVariant | undefined,
+  entry: LauncherEntry
+): void {
+  send('assistant.launcher.tap', ctx, variant ? { variant, entry } : { entry });
 }
 
 export function trackNudgeShown(ctx: LauncherEventContext): void {

@@ -15,6 +15,7 @@ import { PersonaQuickSwitch } from '../../components/persona/PersonaQuickSwitch'
 import { MenuLanguageSwitcher } from '../../components/menu/MenuLanguageSwitcher';
 import { TabAwareSnackbar } from '../../components/feedback/TabAwareSnackbar';
 import { UserMenuRow } from '../../components/common/UserMenuRow';
+import { useAssistantEntryTap } from '../../components/assistant/launcher/useAssistantEntryTap';
 import { UserMenuSection } from '../../components/common/UserMenuSection';
 import { MyRatingMenuRow } from '../../components/rating/MyRatingMenuRow';
 import { UserProfileHeaderCard } from '../../components/common/UserProfileHeaderCard';
@@ -48,6 +49,7 @@ function ClientMenuTabScreenBase() {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const { auth } = useStore();
+  const trackEntryTap = useAssistantEntryTap();
   const tabScrollBottomPad = useMainTabContentBottomPadding(40);
   const {
     checking: checkingUpdate,
@@ -208,7 +210,10 @@ function ClientMenuTabScreenBase() {
               'assistant.subtitle',
               'Ask about delivery, payments, and more'
             )}
-            onPress={() => goTo('AssistantChat')}
+            onPress={() => {
+              trackEntryTap(undefined, 'menu');
+              goTo('AssistantChat');
+            }}
           />
           <UserMenuRow
             icon="message-text-outline"
