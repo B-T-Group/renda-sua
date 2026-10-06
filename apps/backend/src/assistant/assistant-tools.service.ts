@@ -252,7 +252,6 @@ export class AssistantToolsService {
       const suggestions = await this.inventoryItems.getInventorySearchSuggestions({
         q: query,
         country_code: market.country_code,
-        state: market.state,
         is_active: true,
         include_unavailable: false,
       });

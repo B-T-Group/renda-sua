@@ -23,7 +23,7 @@ describe('AssistantService', () => {
     converseWithTools: jest.fn(),
   };
   const tools = {
-    buildToolConfig: jest.fn().mockReturnValue({ tools: [] }),
+    buildToolConfig: jest.fn().mockResolvedValue({ tools: [] }),
     executeTool: jest.fn(),
     isMarketCatalogTool: jest.fn(
       (name: string) =>
@@ -39,7 +39,7 @@ describe('AssistantService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    tools.buildToolConfig.mockReturnValue({ tools: [] });
+    tools.buildToolConfig.mockResolvedValue({ tools: [] });
   });
 
   it('returns final text when Bedrock ends the turn', async () => {
@@ -57,6 +57,7 @@ describe('AssistantService', () => {
         userId: null,
         firstName: null,
         preferredLanguage: null,
+        market: { country_code: 'CM' },
         country: 'CM',
         phoneE164: '2376',
         accountType: null,
@@ -87,6 +88,7 @@ describe('AssistantService', () => {
         userId: 'u1',
         firstName: 'Samuel',
         preferredLanguage: 'fr',
+        market: { country_code: 'GA' },
         country: 'GA',
         phoneE164: null,
         accountType: 'client',
@@ -139,6 +141,8 @@ describe('AssistantService', () => {
         userId: 'u1',
         firstName: 'Ada',
         preferredLanguage: 'fr',
+        market: { country_code: 'CM' },
+        market: { country_code: 'CM' },
         country: 'CM',
         phoneE164: null,
         accountType: 'client',
@@ -176,6 +180,7 @@ describe('AssistantService', () => {
         userId: null,
         firstName: null,
         preferredLanguage: 'en',
+        market: null,
         country: null,
         phoneE164: '2376',
         accountType: null,
@@ -241,6 +246,7 @@ describe('AssistantService', () => {
         userId: null,
         firstName: null,
         preferredLanguage: 'en',
+        market: { country_code: 'GA' },
         country: 'GA',
         phoneE164: '2376',
         accountType: null,
@@ -285,6 +291,7 @@ describe('AssistantService', () => {
         userId: null,
         firstName: null,
         preferredLanguage: 'en',
+        market: { country_code: 'GA' },
         country: 'GA',
         phoneE164: '2416',
         accountType: null,
@@ -327,6 +334,7 @@ describe('AssistantService', () => {
         userId: null,
         firstName: null,
         preferredLanguage: 'en',
+        market: null,
         country: null,
         phoneE164: '2376',
         accountType: null,
@@ -352,6 +360,7 @@ describe('AssistantService', () => {
         userId: null,
         firstName: null,
         preferredLanguage: 'en',
+        market: null,
         country: null,
         phoneE164: '2376',
         accountType: null,
@@ -377,6 +386,8 @@ describe('AssistantService', () => {
         userId: 'u1',
         firstName: 'Ada',
         preferredLanguage: 'en',
+        market: { country_code: 'CM' },
+        market: { country_code: 'CM' },
         country: 'CM',
         phoneE164: null,
         accountType: 'client',
@@ -403,6 +414,7 @@ describe('AssistantService', () => {
         userId: null,
         firstName: null,
         preferredLanguage: null,
+        market: { country_code: 'CM' },
         country: 'CM',
         phoneE164: '2376',
         accountType: null,
@@ -411,5 +423,94 @@ describe('AssistantService', () => {
     });
     expect(result.silent).toBe(false);
     expect(result.reply.length).toBeGreaterThan(0);
+  });
+
+  describe('market prompt injection', () => {
+    it('injects market context into system prompt when market is known', async () => {
+      bedrock.converseWithTools.mockResolvedValue({
+        stopReason: 'end_turn',
+        text: 'We have phones available.',
+        toolUses: [],
+        assistantContent: [{ text: 'We have phones available.' }],
+      });
+
+      await service.runTurn({
+        channel: 'app',
+        messages: [{ role: 'user', content: 'I want to buy a phone' }],
+        identity: {
+          isVerified: true,
+          userId: 'u1',
+          firstName: 'Samuel',
+          preferredLanguage: 'en',
+          market: { country_code: 'CM' },
+          country: 'CM',
+          phoneE164: null,
+          accountType: 'client',
+          clientId: 'c1',
+        },
+      });
+
+      const systemPromptCall = bedrock.converseWithTools.mock.calls[0][0].system;
+      expect(systemPromptCall).toContain('The customer is in CM');
+      expect(systemPromptCall).toContain('Never ask which country they are in');
+    });
+
+    it('includes no-country-quiz rule in prompt when market is known', async () => {
+      bedrock.converseWithTools.mockResolvedValue({
+        stopReason: 'end_turn',
+        text: 'Here are some bottles.',
+        toolUses: [],
+        assistantContent: [{ text: 'Here are some bottles.' }],
+      });
+
+      await service.runTurn({
+        channel: 'app',
+        messages: [{ role: 'user', content: 'I want to buy a bottle' }],
+        identity: {
+          isVerified: true,
+          userId: 'u1',
+          firstName: 'Samuel',
+          preferredLanguage: 'en',
+          market: { country_code: 'CM' },
+          country: 'CM',
+          phoneE164: null,
+          accountType: 'client',
+          clientId: 'c1',
+        },
+      });
+
+      const systemPromptCall = bedrock.converseWithTools.mock.calls[0][0].system;
+      expect(systemPromptCall).toContain('Never ask which country they are in');
+      expect(systemPromptCall).toContain('customer is in CM');
+    });
+
+    it('allows country questions when market is unknown', async () => {
+      bedrock.converseWithTools.mockResolvedValue({
+        stopReason: 'end_turn',
+        text: 'Which country are you in?',
+        toolUses: [],
+        assistantContent: [{ text: 'Which country are you in?' }],
+      });
+
+      await service.runTurn({
+        channel: 'app',
+        messages: [{ role: 'user', content: 'I want to buy a phone' }],
+        identity: {
+          isVerified: false,
+          userId: null,
+          firstName: null,
+          preferredLanguage: null,
+          market: null,
+          country: null,
+          phoneE164: null,
+          accountType: null,
+          clientId: null,
+        },
+      });
+
+      const systemPromptCall = bedrock.converseWithTools.mock.calls[0][0].system;
+      expect(systemPromptCall).toContain('The customer market is unknown');
+      expect(systemPromptCall).not.toContain('NEVER ask the customer which country');
+    });
   });
 });
