@@ -71,12 +71,19 @@ function createHarness() {
     waitAndExecuteScheduleService: {
       schedulePaymentTimeout: jest.fn().mockResolvedValue(undefined),
     },
+    siteEventsService: {
+      trackEvent: jest.fn().mockResolvedValue(undefined),
+    },
     logger: { log: jest.fn(), error: jest.fn(), warn: jest.fn() },
   });
   jest
     .spyOn(service as any, 'getOrderWithItems')
     .mockResolvedValue(claimOrder());
-  jest.spyOn(service as any, 'resolveOrderHoldAmount').mockResolvedValue(2500);
+  jest.spyOn(service as any, 'resolveOrderHoldAmount').mockResolvedValue({
+    rail: 'mobile_money',
+    holdPercentage: 80,
+    holdAmount: 2500,
+  });
   return {
     service,
     resolveCheckoutPaymentPhone,

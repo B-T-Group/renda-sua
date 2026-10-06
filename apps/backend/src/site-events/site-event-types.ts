@@ -99,6 +99,17 @@ export const SITE_EVENT_TYPES_V1 = [
   'catalog.module.click',
 ] as const;
 
-export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number];
+// Server-only events (Phase 0 #453) - not allowed in public /track-site-event
+export const SERVER_SITE_EVENT_TYPES = [
+  'agent.claim_funds_check',
+  'agent.claim_topup_started',
+  'agent.claim_topup_succeeded',
+  'agent.claim_topup_failed',
+  'agent.claim_topup_cancelled',
+  'checkout.delivery_availability',
+] as const;
+
+export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number] | (typeof SERVER_SITE_EVENT_TYPES)[number];
+export type ServerSiteEventType = (typeof SERVER_SITE_EVENT_TYPES)[number];
 
 export const SITE_EVENT_SUBJECT_INVENTORY_ITEM = 'inventory_item';

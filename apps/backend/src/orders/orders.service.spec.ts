@@ -438,6 +438,10 @@ describe('OrdersService', () => {
           useValue: { emit: jest.fn() },
         },
         {
+          provide: require('../site-events/site-events.service').SiteEventsService,
+          useValue: { trackEvent: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
           provide: require('../food/food-orders.service').FoodOrdersService,
           useValue: { applyConfirmationUpdates: jest.fn() },
         },
@@ -4030,7 +4034,11 @@ describe('OrdersService', () => {
       });
       jest.spyOn(service as any, 'assertClaimableFulfillment').mockReturnValue(undefined);
       jest.spyOn(service as any, 'getAgentStatus').mockResolvedValue('active');
-      jest.spyOn(service as any, 'resolveOrderHoldAmount').mockResolvedValue(8000);
+      jest.spyOn(service as any, 'resolveOrderHoldAmount').mockResolvedValue({
+        rail: 'mobile_money',
+        holdPercentage: 80,
+        holdAmount: 8000,
+      });
       hasuraSystemService.getAccount.mockResolvedValue({
         id: 'account-1',
         available_balance: 8000,
