@@ -333,6 +333,51 @@ describe('Reservation deposit money flow (service level)', () => {
     ]);
   });
 
+  it('(c) incomplete forfeit returns 500 FORFEIT_LEDGER_INCOMPLETE instead of 201', async () => {
+    await seedHeldDepositOrder(h);
+    const ledger = (h.service as any).depositLedgerService as DepositLedgerService;
+    jest.spyOn(ledger, 'forfeitDepositToHq').mockRejectedValueOnce(new Error('Insufficient withheld balance'));
+
+    await expect(cancel(h)).rejects.toMatchObject({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      response: expect.objectContaining({
+        errorCode: 'FORFEIT_LEDGER_INCOMPLETE',
+        message: expect.stringContaining('Deposit forfeit incomplete'),
+      }),
+    });
+
+    const order = h.db.orders.get(ORDER_ID)!;
+    expect(order.current_status).toBe('cancelled');
+    expect(order.deposit_status).toBe('forfeited');
+    expect(order.deposit_forfeit_reason).toBe('customer_no_show_pickup');
+    
+    const allTxns = h.db.txnsFor(TXN_ID);
+    expect(allTxns.filter((t) => t.transaction_type === 'release')).toHaveLength(0);
+    expect(allTxns.filter((t) => t.transaction_type === 'payment')).toHaveLength(0);
+    expect(h.db.account('acct-hq').available_balance).toBe(0);
+    expect(h.db.account('acct-client').withheld_balance).toBe(DEPOSIT);
+  });
+
+  it('(c) idempotent resume of incomplete forfeit completes the ledger', async () => {
+    await seedHeldDepositOrder(h, {
+      current_status: 'cancelled',
+      deposit_status: 'forfeited',
+      deposit_forfeit_reason: 'customer_no_show_pickup',
+    });
+
+    const result = await h.deposits.forfeitDeposit(ORDER_ID, 'customer_no_show_pickup');
+
+    expect(result.success).toBe(true);
+    expect(depositRows(h)).toEqual([
+      'acct-client:deposit:500',
+      'acct-client:hold:500',
+      'acct-client:release:500',
+      'acct-client:payment:500',
+      'acct-hq:deposit:500',
+    ]);
+    expect(h.db.account('acct-hq').available_balance).toBe(DEPOSIT);
+  });
+
   it('(c) concurrent forfeit + forfeit + refund on the same deposit: one winner, one set of rows', async () => {
     await seedHeldDepositOrder(h, { current_status: 'cancelled' });
 
