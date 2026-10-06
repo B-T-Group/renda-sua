@@ -67,3 +67,22 @@ export function resolveAmountDueAfterDeposit(order: {
   if (order.total_amount == null) return null;
   return Math.max(0, Number(order.total_amount) - (order.deposit_amount ?? 0));
 }
+
+/**
+ * Cash exception is blocked for orders with captured/applied/forfeited deposits
+ * to prevent fraud (agent keeping cash + commission without client confirmation).
+ */
+export function hasCashExceptionBlockingDeposit(order: {
+  deposit_amount?: number | null;
+  deposit_status?: string | null;
+}): boolean {
+  const depositAmount = Number(order.deposit_amount) || 0;
+  const depositStatus = order.deposit_status;
+  return (
+    depositAmount > 0 &&
+    depositStatus != null &&
+    (depositStatus === 'paid' ||
+      depositStatus === 'applied' ||
+      depositStatus === 'forfeited')
+  );
+}
