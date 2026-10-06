@@ -1,16 +1,16 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-06 for #451 PR-0+1 (assistant analytics events + feature flags). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-05 for pickup order timelines (Picked up, no On the way) and diaspora recipient WhatsApp complete (`rs_recipient_complete_pickup`). 2026-10-06 for #451 PR-0+1 (assistant analytics events + feature flags). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
 
-### Changes since `64c13d6` (merged to `main` up to `9c3435b`, 2026-10-01; PR-0+1 uncommitted)
+### Changes since `64c13d6` (merged to `main` up to `9c3435b`, 2026-10-01)
 
 | PR | Issue | Change | Sections of this doc now stale |
 |---|---|---|---|
-| #451 PR-0+1 | #451 | **Shopping assistant analytics plumbing + feature flags (uncommitted).** Added `assistant.*` and `orders.reorder.*` event types to `SITE_EVENT_TYPES_V1`. Assistant metadata allowlist exempts UUID-shaped `thread_id`, `target_id`, `order_id` from the phone heuristic. Client flags `assistant_launcher_v1` (orb, nudge, chips) and `assistant_shopping_v1` (catalog tools, per market) seeded in Hasura with default false. Mobile flags fetch now passes market country. See Appendix C.1. | Appendix C.1 flag table (updated) |
+| #451 PR-0+1 | #451 | **Shopping assistant analytics plumbing + feature flags (#458).** Added 17 `assistant.*` and 3 `orders.reorder.*` event types to `SITE_EVENT_TYPES_V1` (public events). Assistant metadata validated per-key with enums, booleans, and bounded integers; UUID-shaped `thread_id`, `target_id`, `order_id` exempted from phone heuristic. Server-only events `assistant.message.classified` and `assistant.support.deflected` rejected on public `/track-site-event`. Client flags `assistant_launcher_v1` (orb, nudge, chips) and `assistant_shopping_v1` (catalog tools, per market) seeded in Hasura with default false. Mobile flags fetch passes market country and keeps last flags on failure. See Appendix C.1. | Appendix C.1 flag table (updated) |
 | same-region distance | – | **Store distance is shown only in the same country and state.** Catalog, store, and item distances are omitted when the shopper and the store differ by country or state. | §2.1 Client |
 | pickup timeline | – | **Client order timeline is pickup-aware (web + mobile).** Store pickup shows Placed, Confirmed, Preparing, Picked up. Delivery still includes On the way and Delivered. | §2.1 Order tracking |
 | diaspora recipient complete | – | **Diaspora store-pickup recipient can complete on WhatsApp.** When the order is ready and the card is paid or authorized, `rs_recipient_complete_pickup` (quick reply Complete order) settles like the payer's `complete-pickup` and pays the store. The payer can still complete in the app. Delivery diaspora is unchanged (merchant paid at agent pickup; recipient still gets the PIN). Template must be approved in Meta before it sends. | §2.1, §3.4.5, diaspora checkout |

@@ -4,6 +4,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import { registerEnvChangeListener } from '../config/envSwitch';
@@ -30,14 +31,31 @@ export function ClientFlagsProvider({ children }: { children: React.ReactNode })
   const [flags, setFlags] = useState<ClientFlags>(DEFAULT_CLIENT_FLAGS);
   const [loading, setLoading] = useState(true);
   const { selectedMarket } = useMarket();
+  const requestIdRef = useRef(0);
+
+  // Key refresh on the countryCode string to avoid double fetch on object rebuild
+  const countryCode = selectedMarket?.countryCode;
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const country = selectedMarket?.countryCode;
-    const next = await fetchClientFlags(country);
-    setFlags(next);
-    setLoading(false);
-  }, [selectedMarket]);
+    const requestId = ++requestIdRef.current;
+
+    try {
+      const next = await fetchClientFlags(countryCode);
+      // Ignore out-of-order responses
+      if (requestId === requestIdRef.current) {
+        setFlags(next);
+      }
+    } catch (error) {
+      // On fetch failure, keep the previous flags (never reset to false)
+      // catalog_experience_v1, floating_nav_enabled, reels_enabled are on in prod
+      console.warn('Failed to fetch client flags, keeping previous state', error);
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+      }
+    }
+  }, [countryCode]);
 
   useEffect(() => {
     void refresh();

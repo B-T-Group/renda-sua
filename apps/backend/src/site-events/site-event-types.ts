@@ -101,7 +101,7 @@ export const SITE_EVENT_TYPES_V1 = [
   'orders.reorder.impression',
   'orders.reorder.tap',
   'orders.reorder.result',
-  // Assistant (#451)
+  // Assistant (#451) - client-emitted events
   'assistant.launcher.impression',
   'assistant.launcher.tap',
   'assistant.nudge.shown',
@@ -110,13 +110,11 @@ export const SITE_EVENT_TYPES_V1 = [
   'assistant.chat.opened',
   'assistant.chip.tap',
   'assistant.message.sent',
-  'assistant.message.classified',
   'assistant.deeplink.shown',
   'assistant.deeplink.tap',
   'assistant.attributed.add_to_cart',
   'assistant.attributed.order_created',
   'assistant.handoff.requested',
-  'assistant.support.deflected',
   'assistant.feedback.submitted',
   'assistant.error.shown',
 ] as const;
@@ -129,6 +127,9 @@ export const SERVER_SITE_EVENT_TYPES = [
   'agent.claim_topup_failed',
   'agent.claim_topup_cancelled',
   'checkout.delivery_availability',
+  // Assistant server-only events (#451)
+  'assistant.message.classified',
+  'assistant.support.deflected',
 ] as const;
 
 export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number] | (typeof SERVER_SITE_EVENT_TYPES)[number];

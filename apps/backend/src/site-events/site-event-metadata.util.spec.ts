@@ -79,95 +79,165 @@ describe('site-event-metadata.util', () => {
   });
 
   describe('assistant event metadata', () => {
-    it('allowlists assistant.* metadata keys only', () => {
+    it('validates enums and drops invalid values', () => {
       const out = normalizeSiteEventMetadata('assistant.message.sent', {
         thread_id: '550e8400-e29b-41d4-a716-446655440000',
         turn: 3,
         input: 'typed',
+        intent: 'invalid_intent',
         length_bucket: '<20',
-        secret: 'should-be-dropped',
-        message_text: 'user typed this',
       }, 'client');
       expect(out.thread_id).toBe('550e8400-e29b-41d4-a716-446655440000');
       expect(out.turn).toBe(3);
       expect(out.input).toBe('typed');
+      expect(out.intent).toBeUndefined(); // invalid enum dropped
       expect(out.length_bucket).toBe('<20');
-      expect(out.secret).toBeUndefined();
-      expect(out.message_text).toBeUndefined();
     });
 
-    it('preserves UUID-shaped thread_id despite ≥7 digits (phone heuristic)', () => {
+    it('validates booleans and drops non-boolean values', () => {
+      const out = normalizeSiteEventMetadata('assistant.chat.opened', {
+        thread_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+        is_signed_in: true,
+        has_active_order: 'yes', // invalid
+        grounded: 1, // invalid
+      }, 'client');
+      expect(out.thread_id).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+      expect(out.is_signed_in).toBe(true);
+      expect(out.has_active_order).toBeUndefined();
+      expect(out.grounded).toBeUndefined();
+    });
+
+    it('validates bounded integers and drops invalid numbers', () => {
+      const out = normalizeSiteEventMetadata('assistant.deeplink.tap', {
+        thread_id: '550e8400-e29b-41d4-a716-446655440000',
+        turn: 5,
+        position: 1,
+        minutes_since_tap: -1, // negative dropped
+        bad_turn: 237670000000, // too large for turn, but not in allowlist anyway
+      }, 'client');
+      expect(out.turn).toBe(5);
+      expect(out.position).toBe(1);
+      expect(out.minutes_since_tap).toBeUndefined();
+      expect(out.bad_turn).toBeUndefined();
+    });
+
+    it('drops phone numbers inside tools_used array', () => {
+      const out = normalizeSiteEventMetadata('assistant.message.classified', {
+        thread_id: '550e8400-e29b-41d4-a716-446655440000',
+        tools_used: ['+237 670 00 00 00', 'search_catalog', 'jean@example.com'],
+      }, 'client');
+      expect(out.tools_used).toEqual(['search_catalog']); // only valid tool name kept
+    });
+
+    it('drops free text in reason field', () => {
+      const out = normalizeSiteEventMetadata('assistant.feedback.submitted', {
+        thread_id: '550e8400-e29b-41d4-a716-446655440000',
+        rating: 'down',
+        reason: 'Other: the delivery guy was rude, my name is Jean Mbarga',
+      }, 'client');
+      expect(out.rating).toBe('down');
+      expect(out.reason).toBeUndefined(); // free text dropped, only enum values allowed
+    });
+
+    it('drops free text in screen field', () => {
+      const out = normalizeSiteEventMetadata('assistant.launcher.impression', {
+        screen: 'riz parfumé 25 kg pas cher', // spaces not allowed
+        variant: 'orb',
+      }, 'client');
+      expect(out.screen).toBeUndefined();
+      expect(out.variant).toBe('orb');
+    });
+
+    it('accepts valid screen and chip_id patterns', () => {
+      const out = normalizeSiteEventMetadata('assistant.chip.tap', {
+        thread_id: '550e8400-e29b-41d4-a716-446655440000',
+        screen: 'ClientBrowseHomeScreen',
+        chip_id: 'track_order',
+      }, 'client');
+      expect(out.screen).toBe('ClientBrowseHomeScreen');
+      expect(out.chip_id).toBe('track_order');
+    });
+
+    it('drops nested objects outright', () => {
+      const out = normalizeSiteEventMetadata('assistant.message.sent', {
+        thread_id: '550e8400-e29b-41d4-a716-446655440000',
+        context: { message: 'I want 25kg rice at Akwa', q: 'riz parfumé' },
+        input: 'typed',
+      }, 'client');
+      expect(out.thread_id).toBe('550e8400-e29b-41d4-a716-446655440000');
+      expect(out.context).toBeUndefined(); // nested object dropped
+      expect(out.input).toBe('typed');
+    });
+
+    it('drops phone number sent as number in turn field', () => {
+      const out = normalizeSiteEventMetadata('assistant.message.sent', {
+        thread_id: '550e8400-e29b-41d4-a716-446655440000',
+        turn: 237670000000, // phone as number, out of bounds
+      }, 'client');
+      expect(out.turn).toBeUndefined();
+    });
+
+    it('preserves UUID-shaped IDs and validates gate fields', () => {
       const out = normalizeSiteEventMetadata('assistant.chat.opened', {
         thread_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
         entry: 'orb',
-        is_signed_in: true,
+        persona: 'guest',
+        market: 'CM',
+        locale: 'fr',
+        channel: 'app',
       }, 'client');
       expect(out.thread_id).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
       expect(out.entry).toBe('orb');
-      expect(out.is_signed_in).toBe(true);
+      expect(out.persona).toBe('guest');
+      expect(out.market).toBe('CM');
+      expect(out.locale).toBe('fr');
+      expect(out.channel).toBe('app');
     });
 
-    it('preserves UUID-shaped target_id and order_id', () => {
-      const out = normalizeSiteEventMetadata('assistant.deeplink.tap', {
+    it('validates feedback fields', () => {
+      const out = normalizeSiteEventMetadata('assistant.feedback.submitted', {
         thread_id: '550e8400-e29b-41d4-a716-446655440000',
-        type: 'item',
-        target_id: 'f47ac10b-58cc-4372-a567-0e02b2c3d479',
-        order_id: '123e4567-e89b-12d3-a456-426614174000',
-        position: 1,
+        rating: 'down',
+        reason: 'wrong_price',
+        shown_price: 18500,
+        currency: 'XAF',
+        shown_stock_bucket: 'in',
       }, 'client');
-      expect(out.thread_id).toBe('550e8400-e29b-41d4-a716-446655440000');
-      expect(out.type).toBe('item');
-      expect(out.target_id).toBe('f47ac10b-58cc-4372-a567-0e02b2c3d479');
-      expect(out.order_id).toBe('123e4567-e89b-12d3-a456-426614174000');
-      expect(out.position).toBe(1);
+      expect(out.shown_price).toBe(18500);
+      expect(out.currency).toBe('XAF');
+      expect(out.shown_stock_bucket).toBe('in');
     });
 
-    it('strips real phone numbers from assistant events', () => {
-      const out = normalizeSiteEventMetadata('assistant.message.sent', {
+    it('caps tools_used array at 10 elements', () => {
+      const manyTools = Array(15).fill('search_catalog');
+      const out = normalizeSiteEventMetadata('assistant.message.classified', {
         thread_id: '550e8400-e29b-41d4-a716-446655440000',
-        turn: 1,
-        phone_number: '+237670000000',
-        email: 'user@example.com',
+        tools_used: manyTools,
       }, 'client');
-      expect(out.thread_id).toBe('550e8400-e29b-41d4-a716-446655440000');
-      expect(out.turn).toBe(1);
-      expect(out.phone_number).toBeUndefined();
-      expect(out.email).toBeUndefined();
+      expect(out.tools_used).toHaveLength(10);
     });
 
-    it('strips non-UUID values in thread_id/target_id/order_id fields', () => {
-      const out = normalizeSiteEventMetadata('assistant.chat.opened', {
-        thread_id: 'not-a-uuid-12345678',
-        target_id: '1234567890',
-        order_id: 'short',
+    it('preserves valid tool names and drops invalid ones', () => {
+      const out = normalizeSiteEventMetadata('assistant.message.classified', {
+        thread_id: '550e8400-e29b-41d4-a716-446655440000',
+        tools_used: ['search_catalog', 'invalid_tool', 'get_my_addresses', 'hack'],
       }, 'client');
-      // thread_id looks like phone (≥7 digits)
-      expect(out.thread_id).toBeUndefined();
-      // target_id looks like phone
-      expect(out.target_id).toBeUndefined();
-      // order_id is short (no allowlist)
-      expect(out.order_id).toBeUndefined();
+      expect(out.tools_used).toEqual(['search_catalog', 'get_my_addresses']);
     });
 
-    it('handles mixed allowlist and UUID fields', () => {
+    it('validates server-only assistant events correctly', () => {
+      // assistant.message.classified is server-only
       const out = normalizeSiteEventMetadata('assistant.message.classified', {
         thread_id: '550e8400-e29b-41d4-a716-446655440000',
         turn: 2,
         intent: 'buy',
-        confidence: 'high',
-        tools_used: ['search_catalog'],
-        grounded: true,
-        input: 'typed',
-        secret_key: 'should-be-dropped',
-      }, 'client');
+        persona: 'client',
+        market: 'CM',
+      }, 'server');
       expect(out.thread_id).toBe('550e8400-e29b-41d4-a716-446655440000');
-      expect(out.turn).toBe(2);
       expect(out.intent).toBe('buy');
-      expect(out.confidence).toBe('high');
-      expect(out.tools_used).toEqual(['search_catalog']);
-      expect(out.grounded).toBe(true);
-      expect(out.input).toBe('typed');
-      expect(out.secret_key).toBeUndefined();
+      expect(out.persona).toBe('client');
+      expect(out.market).toBe('CM');
     });
   });
 });

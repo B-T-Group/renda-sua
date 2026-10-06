@@ -25,6 +25,7 @@ const AUTH_METADATA_ALLOWLIST = new Set([
 ]);
 
 // Server event keys that should not be filtered despite containing digits (Phase 0 #453)
+// Also includes orderId for reorder events (#451 review)
 const SERVER_EVENT_ID_ALLOWLIST = new Set([
   'orderId',
   'orderNumber',
@@ -36,38 +37,124 @@ const SERVER_EVENT_ID_ALLOWLIST = new Set([
   'clientId',
 ]);
 
-// Assistant metadata allowlist (Phase 0 #451): keys that should pass through for assistant.* events
-const ASSISTANT_METADATA_ALLOWLIST = new Set([
-  'thread_id',
-  'target_id',
-  'order_id',
-  'turn',
-  'chip_id',
-  'position',
-  'context',
-  'input',
-  'intent',
-  'confidence',
-  'tools_used',
-  'grounded',
-  'type',
-  'minutes_since_tap',
-  'via',
-  'trigger',
-  'rating',
-  'reason',
-  'card_type',
-  'kind',
-  'length_bucket',
-  'entry',
-  'variant',
-  'motion',
-  'screen',
-  'dismiss_reason',
-  'is_signed_in',
-  'has_active_order',
-  'reorder_eligible',
+// Assistant metadata validators (Phase 0 #451 PR review): per-key validation
+const ASSISTANT_ENUM_VALUES = {
+  input: new Set(['typed', 'chip', 'voice']),
+  intent: new Set(['buy', 'availability', 'reorder', 'track', 'support', 'other']),
+  confidence: new Set(['high', 'low']),
+  rating: new Set(['up', 'down']),
+  reason: new Set(['wrong_price', 'wrong_stock', 'off_topic', 'other']),
+  kind: new Set(['network', 'server', 'rate_limited']),
+  entry: new Set(['orb', 'header_icon', 'menu', 'nudge', 'orb_extended']),
+  variant: new Set(['orb', 'orb_extended', 'header_icon']),
+  motion: new Set(['on', 'reduced']),
+  dismiss_reason: new Set(['close', 'outside', 'timeout', 'opened']),
+  trigger: new Set(['first_run', 'zero_results', 'reorder_eligible', 'chip', 'model', 'low_confidence']),
+  context: new Set(['empty_state', 'in_thread']),
+  type: new Set(['item', 'store', 'cart', 'reorder', 'order', 'search']),
+  via: new Set(['reorder', 'item', 'store']),
+  card_type: new Set(['item', 'store', 'order', 'reorder', 'link']),
+  length_bucket: new Set(['<20', '20-80', '>80']),
+  // Gate fields (spec §4, plan §3.3)
+  persona: new Set(['guest', 'client', 'agent', 'business', 'delegate', 'admin']),
+  channel: new Set(['app', 'whatsapp']),
+  // ISO-2 country codes for market (common markets from the repo)
+  market: new Set(['CM', 'GA', 'CA', 'US', 'TG', 'BJ', 'CI', 'CG', 'PH']),
+  locale: new Set(['en', 'fr']),
+  // Feedback fields (plan §4 AC13)
+  currency: new Set(['XAF', 'FCFA', 'CAD', 'USD', 'PHP']),
+  shown_stock_bucket: new Set(['in', 'low', 'out']),
+};
+
+const ASSISTANT_TOOL_NAMES = new Set([
+  'get_knowledge',
+  'list_supported_country_states',
+  'list_supported_payment_systems',
+  'request_human_support',
+  'get_my_profile_summary',
+  'get_my_recent_orders',
+  'get_order_status',
+  'get_my_addresses',
+  'search_catalog',
+  'get_reorder_options',
 ]);
+
+const SCREEN_CHIP_PATTERN = /^[A-Za-z0-9_.-]{1,40}$/;
+
+function validateAssistantValue(key: string, value: unknown): unknown | null {
+  // UUID-validated fields
+  if (['thread_id', 'target_id', 'order_id'].includes(key)) {
+    if (typeof value === 'string' && isUuidValue(value)) {
+      return value;
+    }
+    return null;
+  }
+
+  // Enum fields
+  if (key in ASSISTANT_ENUM_VALUES) {
+    const allowedSet = ASSISTANT_ENUM_VALUES[key as keyof typeof ASSISTANT_ENUM_VALUES];
+    if (typeof value === 'string' && allowedSet.has(value)) {
+      return value;
+    }
+    return null;
+  }
+
+  // Boolean fields
+  if (['is_signed_in', 'has_active_order', 'reorder_eligible', 'grounded'].includes(key)) {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    return null;
+  }
+
+  // Bounded non-negative integers
+  if (['turn', 'position', 'minutes_since_tap'].includes(key)) {
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= 999999) {
+      return value;
+    }
+    return null;
+  }
+
+  // Bounded price (cents/minor units)
+  if (key === 'shown_price') {
+    if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1e10) {
+      return value;
+    }
+    return null;
+  }
+
+  // Screen and chip_id: alphanumeric with limited special chars
+  if (['screen', 'chip_id'].includes(key)) {
+    if (typeof value === 'string' && SCREEN_CHIP_PATTERN.test(value)) {
+      return value;
+    }
+    return null;
+  }
+
+  // tools_used: array of known tool names, capped at 10 elements
+  if (key === 'tools_used') {
+    if (Array.isArray(value)) {
+      const validated = value
+        .filter((item) => typeof item === 'string' && ASSISTANT_TOOL_NAMES.has(item))
+        .slice(0, 10);
+      return validated.length > 0 ? validated : null;
+    }
+    return null;
+  }
+
+  // Reject nested objects outright
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return null;
+  }
+
+  // Reject any arrays not explicitly handled above
+  if (Array.isArray(value)) {
+    return null;
+  }
+
+  // Unknown key or invalid type
+  return null;
+}
 
 const SENSITIVE_VALUE_KEY = /^(code|otp|password|loginhint|login_hint|email|phone|phone_number)$/i;
 
@@ -105,8 +192,9 @@ export function filterAssistantEventMetadata(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
-    if (ASSISTANT_METADATA_ALLOWLIST.has(key)) {
-      out[key] = value;
+    const validated = validateAssistantValue(key, value);
+    if (validated !== null) {
+      out[key] = validated;
     }
   }
   return out;
