@@ -35,6 +35,7 @@ import {
   VIEWBOX_H,
   VIEWBOX_W,
   arcEyePath,
+  arcGlowStrokes,
   buildRingSegments,
   buildSweepSegments,
   bloomStops,
@@ -322,10 +323,27 @@ export const EchoEllipse = memo(function EchoEllipse({ k, index }: LayerProps & 
   );
 });
 
-/** Happy arcs for both eyes. */
-export const ArcEyes = memo(function ArcEyes({ k }: LayerProps) {
+const ARC_GLOW_STROKES = arcGlowStrokes();
+
+/** Happy arcs for both eyes; `glow` (dark mode) adds a faint white glow that hugs the stroke. */
+export const ArcEyes = memo(function ArcEyes({ k, glow = false }: LayerProps & { glow?: boolean }) {
   return (
     <PaddedSvg k={k} pad={0}>
+      {glow
+        ? EYE_CENTERS.map(([x, y]) =>
+            ARC_GLOW_STROKES.map((g) => (
+              <Path
+                key={`${x}g${g.width}`}
+                d={arcEyePath(x, y)}
+                fill="none"
+                stroke={T.eye}
+                strokeOpacity={g.opacity}
+                strokeWidth={g.width}
+                strokeLinecap="round"
+              />
+            ))
+          )
+        : null}
       {EYE_CENTERS.map(([x, y]) => (
         <Path
           key={x}
@@ -364,7 +382,7 @@ export const DotEyes = memo(function DotEyes({ k }: LayerProps) {
   );
 });
 
-/** Dark mode: soft tint glow behind the eyes (prototype eye drop-shadow). */
+/** Dark mode: soft tint glow behind the open / dot eyes (prototype eye drop-shadow). Arcs glow via `ArcEyes glow`. */
 export const EyeGlow = memo(function EyeGlow({ k, id }: LayerProps & { id: string }) {
   return (
     <PaddedSvg k={k} pad={0}>

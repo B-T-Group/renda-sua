@@ -571,15 +571,23 @@ function RendaCharacterAnimated({
           <Animated.View
             style={[layerStyles.fill, { transform: [{ translateX: eyeX }, { translateY: eyeY }] }]}
           >
-            {dark ? <EyeGlow k={k} id={id} /> : null}
             {eyeShape === 'dot' ? (
-              <DotEyes k={k} />
+              <>
+                {dark ? <EyeGlow k={k} id={id} /> : null}
+                <DotEyes k={k} />
+              </>
             ) : (
               <>
+                {/* Dark: the disc glow belongs to the open eyes only, so it fades with them. */}
+                {dark ? (
+                  <Animated.View style={[layerStyles.fill, { opacity: openOpacity }]}>
+                    <EyeGlow k={k} id={id} />
+                  </Animated.View>
+                ) : null}
                 <Animated.View
                   style={[layerStyles.fill, { opacity: arcOpacity, transform: [{ translateY: arcLift }] }]}
                 >
-                  <ArcEyes k={k} />
+                  <ArcEyes k={k} glow={dark} />
                 </Animated.View>
                 {EYE_CENTERS.map(([x, y]) => {
                   const b = openEyeBox(x, y);

@@ -552,3 +552,41 @@ export function buildSweepSegments(
     };
   });
 }
+
+// ---------------------------------------------------------------------------
+// Dark-mode happy-arc glow
+// ---------------------------------------------------------------------------
+
+/**
+ * The prototype glows the eyes in dark mode with a drop shadow of the eye's
+ * own shape (σ 1.6). For the 3.5-wide arc that is a soft line hugging the
+ * stroke, not a disc, so it is drawn as a few wider strokes of the same path.
+ * Kept faint and white (the eyes' colour).
+ */
+export const ARC_GLOW = { sigma: 1.6, peak: 0.6, radii: [2.25, 2.75, 3.25, 3.75, 4.5, 5.5] } as const;
+
+/** Opacity of a stroke (half-width `halfWidth`) blurred by `sigma`, at distance `d` from its centreline. */
+export function blurredStrokeProfile(d: number, halfWidth: number, sigma: number): number {
+  return normalCdf((halfWidth - d) / sigma) - normalCdf((-halfWidth - d) / sigma);
+}
+
+export type GlowStroke = { width: number; opacity: number };
+
+/**
+ * Same-colour strokes (widest first) whose stacked alpha follows
+ * `peak * blurredStrokeProfile` between the arc's edge and the outer radius.
+ */
+export function arcGlowStrokes(spec: typeof ARC_GLOW = ARC_GLOW): GlowStroke[] {
+  const half = ARC_EYE_STROKE / 2;
+  const out: GlowStroke[] = [];
+  let transmit = 1;
+  for (let i = spec.radii.length - 1; i >= 0; i -= 1) {
+    const inner = i === 0 ? half : spec.radii[i - 1];
+    const mid = (inner + spec.radii[i]) / 2;
+    const target = spec.peak * blurredStrokeProfile(mid, half, spec.sigma);
+    const opacity = Math.min(1, Math.max(0, 1 - (1 - target) / transmit));
+    transmit *= 1 - opacity;
+    out.push({ width: spec.radii[i] * 2, opacity: Math.round(opacity * 1000) / 1000 });
+  }
+  return out;
+}

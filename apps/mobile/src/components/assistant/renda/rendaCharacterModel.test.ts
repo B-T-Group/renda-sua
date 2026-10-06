@@ -22,7 +22,11 @@ import {
   RING_SQUASH_X,
   SPARKLE_ANGLES,
   SUCCESS_SPRING,
+  ARC_EYE_STROKE,
+  ARC_GLOW,
   arcEyePath,
+  arcGlowStrokes,
+  blurredStrokeProfile,
   buildRingSegments,
   buildRingWedges,
   buildSweepWedges,
@@ -305,5 +309,34 @@ describe('glow: blurred prototype shapes as gradient stops (no native SVG filter
   it('static drawings use fewer ring segments below 36 px', () => {
     expect(staticWedgeCountForSize(28)).toBe(24);
     expect(staticWedgeCountForSize(40)).toBe(wedgeCountForSize(40));
+  });
+});
+
+describe('dark-mode eye glow and listening offset', () => {
+  it('arc glow: faint stacked strokes that hug the arc (no disc behind it)', () => {
+    const strokes = arcGlowStrokes();
+    expect(strokes.map((g) => g.width)).toEqual([...ARC_GLOW.radii].reverse().map((r) => r * 2));
+    // Widest stroke reaches only 5.5 units from the centreline (the old disc was 9 × 10).
+    expect(strokes[0].width / 2).toBeLessThanOrEqual(5.5);
+    expect(Math.min(...strokes.map((g) => g.width))).toBeGreaterThan(ARC_EYE_STROKE);
+    // Stacked alpha just outside the stroke stays faint and falls off outwards.
+    const alphaAt = (d: number) =>
+      1 - strokes.filter((g) => g.width / 2 > d).reduce((t, g) => t * (1 - g.opacity), 1);
+    expect(alphaAt(2)).toBeLessThan(0.3);
+    expect(alphaAt(2)).toBeGreaterThan(alphaAt(3));
+    expect(alphaAt(3)).toBeGreaterThan(alphaAt(5));
+    expect(alphaAt(6)).toBe(0);
+    for (const g of strokes) expect(g.opacity).toBeGreaterThanOrEqual(0);
+  });
+
+  it('blurred stroke profile peaks on the centreline and halves near the edge', () => {
+    expect(blurredStrokeProfile(0, 1.75, 1.6)).toBeGreaterThan(blurredStrokeProfile(1.75, 1.75, 1.6));
+    expect(blurredStrokeProfile(1.75, 1.75, 1.6)).toBeCloseTo(0.5 - (1 - normalCdf(3.5 / 1.6)), 2);
+  });
+
+  it('listening looks down 2 from attentive (spec: open, offset down 2)', () => {
+    expect(RENDA_STATE_CONFIG.attentive.offset).toEqual([0, 0]);
+    expect(RENDA_STATE_CONFIG.listening.offset).toEqual([0, 2]);
+    expect(RENDA_STATE_CONFIG.listening.eyes).toBe('open');
   });
 });
