@@ -7155,6 +7155,15 @@
     "chip": "Exports"
   },
   "assistant": {
+    "launcher": {
+      "a11y": "Ouvrir l'assistant d'achat",
+      "hint": "Trouvez un article, repassez ou suivez une commande"
+    },
+    "nudge": {
+      "body": "Bonjour ! Je peux trouver un article, suivre ou repasser votre commande.",
+      "cta": "Essayer",
+      "dismiss": "Fermer"
+    },
     "title": "Assistant RendaSua",
     "subtitle": "IA · Répond en quelques secondes",
     "subtitleThinking": "Réflexion…",

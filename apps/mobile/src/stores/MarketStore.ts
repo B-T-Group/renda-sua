@@ -20,6 +20,8 @@ export class MarketStore {
   detectedCountryCode: string | null = null;
   detectedStateCode: string | null = null;
   pendingPromptCountry: string | null = null;
+  /** The market-change prompt appeared this app session (the assistant nudge waits for another session). */
+  promptShownThisSession = false;
   hydrated = false;
 
   constructor() {
@@ -126,7 +128,10 @@ export class MarketStore {
     if (this.mode === 'MANUAL' && upper !== this.selectedCountryCode) {
       const dismissed = await readPromptDismissed();
       if (dismissed?.toUpperCase() === upper) return;
-      runInAction(() => { this.pendingPromptCountry = upper; });
+      runInAction(() => {
+        this.pendingPromptCountry = upper;
+        this.promptShownThisSession = true;
+      });
       trackMarketEvent('market_change_prompt_shown', {
         countryCode: upper,
         previousCountryCode: this.selectedCountryCode,

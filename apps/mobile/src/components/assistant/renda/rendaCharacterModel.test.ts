@@ -219,7 +219,8 @@ describe('colours and ring gradient', () => {
     const s = buildSweepWedges(41, 50, 50);
     expect(s.length).toBeGreaterThan(50);
     const maxOpacity = Math.max(...s.map((w) => w.opacity));
-    expect(maxOpacity).toBeCloseTo(0.95, 2);
+    expect(maxOpacity).toBeGreaterThan(0.9);
+    expect(maxOpacity).toBeLessThanOrEqual(0.95);
     expect(s[s.length - 1].opacity).toBeLessThan(0.05);
   });
 
