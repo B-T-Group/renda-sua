@@ -39,6 +39,7 @@ const AgentBottomNav: React.FC = () => {
   return (
     <Paper
       elevation={3}
+      data-app-chrome="bottom-nav"
       sx={{
         position: 'fixed',
         bottom: 0,

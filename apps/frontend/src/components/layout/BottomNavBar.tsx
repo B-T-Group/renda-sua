@@ -24,6 +24,7 @@ const BottomNavBar: React.FC<BottomNavBarProps> = ({ tabs }) => {
   return (
     <Paper
       elevation={3}
+      data-app-chrome="bottom-nav"
       sx={{
         position: 'fixed',
         bottom: 0,
