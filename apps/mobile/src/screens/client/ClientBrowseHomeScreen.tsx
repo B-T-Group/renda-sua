@@ -31,7 +31,7 @@ import { AssistantIconButton } from '../../components/common/AssistantIconButton
 import { useAssistantEntryTap } from '../../components/assistant/launcher/useAssistantEntryTap';
 import { useClientFlagsResolved } from '../../components/assistant/launcher/launcherHooks';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
-import { assistantViewer, shouldHideHeaderAssistantButton } from '../../utils/assistantLauncher';
+import { assistantViewer, canSeeRendaCharacter, shouldHideHeaderAssistantButton } from '../../utils/assistantLauncher';
 import { NotificationBellButton } from '../../components/common/NotificationBellButton';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
@@ -272,7 +272,7 @@ function ClientBrowseHomeScreenBase() {
           hideAssistantHeaderButton ? undefined : (
             <AssistantIconButton
               onPress={openAssistant}
-              character={assistantFlagOn && (viewer === 'client' || viewer === 'guest')}
+              character={canSeeRendaCharacter(viewer)}
             />
           )
         }

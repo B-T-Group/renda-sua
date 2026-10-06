@@ -82,13 +82,15 @@ describe('persona × route × flag', () => {
     isMobile,
   });
 
-  it('flag off: no launcher, the WhatsApp bubble is never swapped, header keeps SmartToy (except /assistant)', () => {
+  it('flag off: no launcher, the WhatsApp bubble is never swapped; client/guest get header character (agent/business keep icon)', () => {
     for (const path of ['/', '/items', '/cart']) {
-      for (const cg of [true, false]) {
-        expect(shouldShowAssistantLauncher(at(path, false, cg))).toBe(false);
-        expect(orbReplacesWhatsApp(at(path, false, cg))).toBe(false);
-        expect(headerAssistantEntry(at(path, false, cg))).toBe('icon');
-      }
+      expect(shouldShowAssistantLauncher(at(path, false, true))).toBe(false);
+      expect(orbReplacesWhatsApp(at(path, false, true))).toBe(false);
+      expect(headerAssistantEntry(at(path, false, true))).toBe('character');
+      // Agent/business still get icon
+      expect(shouldShowAssistantLauncher(at(path, false, false))).toBe(false);
+      expect(orbReplacesWhatsApp(at(path, false, false))).toBe(false);
+      expect(headerAssistantEntry(at(path, false, false))).toBe('icon');
     }
     // /assistant already has the page character for client/guest, so hide the nav robot
     // even with the flag off. Agent/business keep SmartToy.
