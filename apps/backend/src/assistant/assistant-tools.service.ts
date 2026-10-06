@@ -249,7 +249,7 @@ export class AssistantToolsService {
     }
 
     try {
-      const result = await this.inventoryItems.getInventorySearchSuggestions({
+      const suggestions = await this.inventoryItems.getInventorySearchSuggestions({
         q: query,
         country_code: market.country_code,
         state: market.state,
@@ -257,7 +257,6 @@ export class AssistantToolsService {
         include_unavailable: false,
       });
 
-      const suggestions = result.suggestions || [];
       if (!suggestions.length) {
         return {
           content: `No products found for "${query}" in ${market.country_code}. Try a different search term.`,
@@ -265,11 +264,17 @@ export class AssistantToolsService {
       }
 
       const products = suggestions
-        .filter((s) => s.kind === 'product')
-        .slice(0, 8);
+        .filter((s: { kind: string }) => s.kind === 'product')
+        .slice(0, 8) as Array<{
+          kind: 'product';
+          inventoryId: string;
+          title: string;
+          price: number;
+          currency: string;
+        }>;
       const categories = suggestions
-        .filter((s) => s.kind === 'category')
-        .slice(0, 3);
+        .filter((s: { kind: string }) => s.kind === 'category')
+        .slice(0, 3) as Array<{ kind: 'category'; value: string }>;
 
       const baseUrl =
         process.env.FRONTEND_URL || 'https://rendasua.com';
@@ -321,7 +326,7 @@ export class AssistantToolsService {
       toolSpec: {
         name: 'search_catalog',
         description:
-          'Search the product catalog for items available in the customer's market. Returns products with links, prices, and categories. Use when the customer expresses buy or availability intent ("I want to buy...", "Do you have...?", "Show me..."). Always clarify the product if vague.',
+          'Search the product catalog for items available in the customer\'s market. Returns products with links, prices, and categories. Use when the customer expresses buy or availability intent. Always clarify the product if vague.',
         inputSchema: {
           json: {
             type: 'object',
