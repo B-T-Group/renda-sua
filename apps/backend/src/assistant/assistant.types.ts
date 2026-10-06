@@ -7,11 +7,19 @@ export type AssistantChatMessage = {
   content: string;
 };
 
+export type AssistantMarket = {
+  country_code: string;
+  state?: string;
+};
+
 export type AssistantIdentity = {
   isVerified: boolean;
   userId: string | null;
   firstName: string | null;
   preferredLanguage: AssistantLocale | null;
+  /** Market resolved from context → primary address → phone */
+  market: AssistantMarket | null;
+  /** Deprecated: use market.country_code */
   country: string | null;
   phoneE164: string | null;
   accountType: string | null;
@@ -24,6 +32,8 @@ export type AssistantChatInput = {
   messages: AssistantChatMessage[];
   identity: AssistantIdentity;
   locale?: AssistantLocale | null;
+  /** Market context from the client (optional) */
+  marketContext?: AssistantMarket | null;
 };
 
 export type AssistantReply = {
