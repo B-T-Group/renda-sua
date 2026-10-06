@@ -110,8 +110,10 @@ function App() {
   const isPlaceOrderFlowPage = /^\/items\/[^/]+\/place_order(?:\/anon-address)?\/?$/.test(
     location.pathname
   );
+  // The assistant chat has its own WhatsApp handoff, and the bubble would cover its send button.
+  const isAssistantPage = location.pathname === '/assistant';
   const shouldHideWhatsappWidget =
-    isMobile && (isItemDetailPage || isPlaceOrderFlowPage);
+    isAssistantPage || (isMobile && (isItemDetailPage || isPlaceOrderFlowPage));
   const isBusinessItemsCatalog = location.pathname.startsWith('/business/items');
 
   const {
@@ -204,9 +206,11 @@ function App() {
         <Box
           sx={{
             flex: 1,
-            py: isHomePage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
-            paddingBottom:
-              showAgentBottomNav || showClientBottomNav || showGuestBottomNav
+            py: isHomePage || isAssistantPage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
+            // The assistant is a full-height column that reserves the bottom nav itself.
+            paddingBottom: isAssistantPage
+              ? 0
+              : showAgentBottomNav || showClientBottomNav || showGuestBottomNav
                 ? { xs: '80px', md: isBusinessItemsCatalog ? 1.5 : 4 }
                 : isHomePage
                   ? 0
@@ -1070,7 +1074,8 @@ function App() {
           </Container>
         </Box>
 
-        <Footer />
+        {/* The assistant chat fills the viewport, so a footer below it would only make the page scroll. */}
+        {!isAssistantPage && <Footer />}
 
         {/* Agent Bottom Navigation - Only visible for agents on mobile */}
         <AgentBottomNav />
