@@ -177,7 +177,10 @@ import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
-import { DepositRefundService } from './deposit-refund.service';
+import {
+  DepositForfeitReason,
+  DepositRefundService,
+} from './deposit-refund.service';
 import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
 
@@ -6254,6 +6257,12 @@ export class OrdersService {
         `Failed to enqueue fail-pickup refund for ${request.orderId}: ${error?.message}`
       );
     }
+    await this.handleNoshowDeposit(
+      order,
+      request.orderId,
+      'ready_for_pickup',
+      request.notes
+    );
     return {
       success: true,
       order,
@@ -6448,6 +6457,7 @@ export class OrdersService {
         `Failed to enqueue fail-pickup refund for ${orderId}: ${error?.message}`
       );
     }
+    await this.handleNoshowDeposit(order, orderId, previousStatus, notes);
   }
 
   private assertCookedFoodFailPickupEligible(order: Orders): void {
@@ -10405,7 +10415,8 @@ export class OrdersService {
       orderId,
       previousStatus,
       cancelledBy,
-      notes
+      notes,
+      sqsReason
     );
 
     try {
@@ -10430,6 +10441,8 @@ export class OrdersService {
    * - Customer cancel / refuse / no-show:
    *   - Before lock point → refund
    *   - After lock point → forfeit with reason code
+   * - Merchant-initiated pickup no-show (`client_no_show`) uses the customer
+   *   no-show rule, not the generic business-cancel refund.
    * - Lock point: delivery = out_for_delivery, pickup = ready_for_pickup
    */
   private async handleDepositOnCancellation(
@@ -10437,7 +10450,8 @@ export class OrdersService {
     orderId: string,
     previousStatus: string,
     cancelledBy: 'client' | 'business' | 'system',
-    notes?: string
+    notes?: string,
+    reason?: string
   ): Promise<void> {
     const depositStatus = (order as any).deposit_status;
     const depositAmount = (order as any).deposit_amount;
@@ -10457,6 +10471,16 @@ export class OrdersService {
       fulfillmentMethod,
       previousStatus
     );
+
+    if (reason === CLIENT_NO_SHOW_REASON && afterLock) {
+      await this.applyDepositForfeit(
+        orderId,
+        fulfillmentMethod === 'delivery'
+          ? 'customer_no_show_delivery'
+          : 'customer_no_show_pickup'
+      );
+      return;
+    }
 
     // Business/system cancel → always refund (even after lock)
     if (cancelledBy === 'business' || cancelledBy === 'system') {
@@ -10505,27 +10529,55 @@ export class OrdersService {
           );
         }
       } else {
-        // After lock → forfeit to Rendasua HQ
-        try {
-          const forfeitResult = await this.depositRefundService.forfeitDeposit(
-            orderId,
-            'customer_cancel_after_lock'
-          );
-          if (!forfeitResult.success) {
-            this.logger.error(
-              `Deposit forfeit failed for client cancel (after lock) of order ${orderId}: ${forfeitResult.message}`
-            );
-          } else {
-            this.logger.log(
-              `Deposit forfeited for client cancel (after lock) of order ${orderId}`
-            );
-          }
-        } catch (error: any) {
-          this.logger.error(
-            `Failed to process deposit forfeit for client cancel (after lock): ${error.message}`
-          );
-        }
+        await this.applyDepositForfeit(orderId, 'customer_cancel_after_lock');
       }
+    }
+  }
+
+  private async handleNoshowDeposit(
+    order: Orders,
+    orderId: string,
+    previousStatus: string,
+    notes?: string
+  ): Promise<void> {
+    try {
+      await this.handleDepositOnCancellation(
+        order,
+        orderId,
+        previousStatus,
+        'business',
+        notes,
+        CLIENT_NO_SHOW_REASON
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to handle deposit on pickup no-show for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async applyDepositForfeit(
+    orderId: string,
+    forfeitReason: DepositForfeitReason
+  ): Promise<void> {
+    try {
+      const forfeitResult = await this.depositRefundService.forfeitDeposit(
+        orderId,
+        forfeitReason
+      );
+      if (!forfeitResult.success) {
+        this.logger.error(
+          `Deposit forfeit failed for ${forfeitReason} on order ${orderId}: ${forfeitResult.message}`
+        );
+        return;
+      }
+      this.logger.log(
+        `Deposit forfeited (${forfeitReason}) for order ${orderId}`
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to process deposit forfeit (${forfeitReason}) for ${orderId}: ${error.message}`
+      );
     }
   }
 

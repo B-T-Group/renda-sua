@@ -59,6 +59,9 @@ function createHarness() {
   jest.spyOn(service as any, 'getOrderDetails').mockImplementation(getOrderDetails);
   jest.spyOn(service as any, 'updateReservedQuantities').mockResolvedValue(undefined);
   jest.spyOn(service as any, 'createStatusHistoryEntry').mockResolvedValue(undefined);
+  const handleDepositOnCancellation = jest
+    .spyOn(service as any, 'handleDepositOnCancellation')
+    .mockResolvedValue(undefined);
   return {
     service,
     executeQuery,
@@ -69,6 +72,7 @@ function createHarness() {
     quoteNoshowFee,
     cancelOrderPaymentIntent,
     getOrderDetails,
+    handleDepositOnCancellation,
   };
 }
 
@@ -167,6 +171,14 @@ describe('OrdersService.failPickup', () => {
       'client_no_show',
       'ready_for_pickup'
     );
+    expect(harness.handleDepositOnCancellation).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'order-1' }),
+      'order-1',
+      'ready_for_pickup',
+      'business',
+      'no show',
+      'client_no_show'
+    );
   });
 
   it('rejects unpaid, unready, retail, and agent-assigned delivery orders', async () => {
@@ -249,6 +261,17 @@ describe('OrdersService.failPickup', () => {
       'business',
       'client_no_show',
       'ready_for_pickup'
+    );
+    expect(harness.handleDepositOnCancellation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'order-1',
+        current_status: 'ready_for_pickup',
+      }),
+      'order-1',
+      'ready_for_pickup',
+      'business',
+      'no show',
+      'client_no_show'
     );
     expect(harness.restore).toHaveBeenCalledWith('order-1');
     expect(harness.cancelOrderPaymentIntent).not.toHaveBeenCalled();
