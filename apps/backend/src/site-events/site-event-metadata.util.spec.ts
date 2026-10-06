@@ -232,6 +232,13 @@ describe('site-event-metadata.util', () => {
       expect(out).toEqual({ currency: 'XOF', market: 'TG' });
     });
 
+    it('drops inherited object keys with string values instead of throwing', () => {
+      const metadata = JSON.parse(
+        '{"constructor":"typed","toString":"x","hasOwnProperty":"y","__proto__":"z","valueOf":"v","input":"typed"}'
+      );
+      expect(normalizeSiteEventMetadata('assistant.message.sent', metadata, 'anonymous')).toEqual({ input: 'typed' });
+    });
+
     it('caps tools_used array at 10 elements', () => {
       const manyTools = Array(15).fill('search_catalog');
       const out = normalizeSiteEventMetadata('assistant.message.classified', {

@@ -98,7 +98,8 @@ function validateAssistantValue(key: string, value: unknown): unknown | null {
   }
 
   // Enum fields
-  if (key in ASSISTANT_ENUM_VALUES) {
+  // Own keys only: `key in` would match inherited names like `constructor`/`toString`.
+  if (Object.prototype.hasOwnProperty.call(ASSISTANT_ENUM_VALUES, key)) {
     const allowedSet = ASSISTANT_ENUM_VALUES[key as keyof typeof ASSISTANT_ENUM_VALUES];
     if (typeof value === 'string' && allowedSet.has(value)) {
       return value;
