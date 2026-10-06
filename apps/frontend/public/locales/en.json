@@ -8556,6 +8556,7 @@
     "ctaBody": "Get instant answers about delivery, payments, pickup, and more — 24/7.",
     "statusOnline": "AI · Replies in seconds",
     "statusThinking": "Thinking…",
+    "statusOffline": "Offline",
     "suggestion": {
       "location": "Where are you located?",
       "payDelivery": "Do you support payment at delivery?",

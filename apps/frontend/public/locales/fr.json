@@ -8572,6 +8572,7 @@
     "ctaBody": "Obtenez des réponses instantanées sur la livraison, les paiements, le retrait et plus encore — 24h/24, 7j/7.",
     "statusOnline": "IA · Répond en quelques secondes",
     "statusThinking": "Réflexion…",
+    "statusOffline": "Hors ligne",
     "suggestion": {
       "location": "Où êtes-vous situés ?",
       "payDelivery": "Acceptez-vous le paiement à la livraison ?",

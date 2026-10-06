@@ -145,7 +145,9 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
               ? theme.palette.primary.main
               : theme.palette.background.paper,
             border: isUser ? 'none' : `1px solid ${theme.palette.divider}`,
-            color: isUser ? 'white' : theme.palette.text.primary,
+            color: isUser
+              ? theme.palette.primary.contrastText
+              : theme.palette.text.primary,
           }}
         >
           {isUser ? (
@@ -155,6 +157,7 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
                 whiteSpace: 'pre-wrap',
                 fontSize: '15px',
                 lineHeight: '22px',
+                color: 'inherit',
               }}
             >
               {message.content}
@@ -185,8 +188,7 @@ function HandoffBanner() {
           mb: 1.5,
           p: 2,
           borderRadius: 2,
-          backgroundColor: theme.palette.info.main,
-          opacity: 0.1,
+          backgroundColor: `${theme.palette.info.main}1A`,
           border: `1px solid ${theme.palette.info.main}`,
         }}
       >
@@ -232,15 +234,19 @@ function AssistantHeader({
   onClear,
   hasMsgs,
   isThinking,
+  isOffline,
 }: {
   onClear: () => void;
   hasMsgs: boolean;
   isThinking: boolean;
+  isOffline: boolean;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
 
-  const statusText = isThinking
+  const statusText = isOffline
+    ? t('assistant.statusOffline', 'Offline')
+    : isThinking
     ? t('assistant.statusThinking', 'Thinking…')
     : t('assistant.statusOnline', 'AI · Replies in seconds');
 
@@ -248,7 +254,7 @@ function AssistantHeader({
     <Box
       sx={{
         position: 'sticky',
-        top: 0,
+        top: { xs: 56, sm: 64 },
         zIndex: 10,
         px: { xs: 2, sm: 3 },
         py: 2,
@@ -529,22 +535,42 @@ function AssistantInput({
 }
 
 const AssistantPage: React.FC = () => {
-  const { messages, isSending, error, handoff, sendMessage, clearChat } =
-    useAssistantChat();
+  const {
+    messages,
+    isSending,
+    error,
+    handoff,
+    isOffline,
+    draft,
+    setDraft,
+    sendMessage,
+    clearChat,
+  } = useAssistantChat();
   const { t } = useTranslation();
   const theme = useTheme();
-  const [draft, setDraft] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (bottomRef.current) {
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages, isSending]);
 
   const handleSend = (override?: string) => {
     const text = (override ?? draft).trim();
     if (!text || isSending) return;
     setDraft('');
-    void sendMessage(text);
+    void sendMessage(text, false);
+  };
+
+  const handleRetry = () => {
+    const lastUserMessage = messages
+      .slice()
+      .reverse()
+      .find((m) => m.role === 'user');
+    if (lastUserMessage) {
+      void sendMessage(lastUserMessage.content, true);
+    }
   };
 
   return (
@@ -568,6 +594,7 @@ const AssistantPage: React.FC = () => {
         onClear={clearChat}
         hasMsgs={messages.length > 0}
         isThinking={isSending}
+        isOffline={isOffline}
       />
 
       <Box
@@ -593,8 +620,7 @@ const AssistantPage: React.FC = () => {
                 sx={{
                   p: 2,
                   borderRadius: 2,
-                  backgroundColor: theme.palette.error.light,
-                  opacity: 0.1,
+                  backgroundColor: `${theme.palette.error.main}1A`,
                   border: `1px solid ${theme.palette.error.main}`,
                   display: 'flex',
                   alignItems: 'center',
@@ -615,17 +641,7 @@ const AssistantPage: React.FC = () => {
                 <Button
                   size="small"
                   variant="outlined"
-                  onClick={() => {
-                    if (messages.length > 0) {
-                      const lastUserMessage = messages
-                        .slice()
-                        .reverse()
-                        .find((m) => m.role === 'user');
-                      if (lastUserMessage) {
-                        void sendMessage(lastUserMessage.content);
-                      }
-                    }
-                  }}
+                  onClick={handleRetry}
                 >
                   {t('assistant.retry', 'Retry')}
                 </Button>

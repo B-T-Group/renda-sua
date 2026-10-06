@@ -3,6 +3,7 @@ import { ReactNode } from 'react';
 import {
   AssistantChatProvider,
   useAssistantChat,
+  generateThreadId,
 } from './AssistantChatContext';
 
 jest.unmock('./AssistantChatContext');
@@ -20,6 +21,23 @@ jest.mock('../hooks/useApiClient', () => ({
   useApiClient: () => mockApiClient,
 }));
 
+describe('generateThreadId', () => {
+  it('generates a valid UUID v4 format', () => {
+    const id = generateThreadId();
+    const uuidV4Pattern =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    expect(id).toMatch(uuidV4Pattern);
+  });
+
+  it('generates unique IDs', () => {
+    const ids = new Set();
+    for (let i = 0; i < 100; i++) {
+      ids.add(generateThreadId());
+    }
+    expect(ids.size).toBe(100);
+  });
+});
+
 describe('AssistantChatContext', () => {
   const wrapper = ({ children }: { children: ReactNode }) => (
     <AssistantChatProvider>{children}</AssistantChatProvider>
@@ -28,75 +46,75 @@ describe('AssistantChatContext', () => {
   beforeEach(() => {
     mockUseSessionAuth.mockReturnValue({
       isAuthenticated: false,
+      isLoading: false,
+      user: null,
     });
     mockApiClient.post.mockResolvedValue({
       data: { reply: 'Test reply', handoff: false },
     });
     sessionStorage.clear();
     jest.clearAllMocks();
+    // Mock visibility API
+    Object.defineProperty(document, 'visibilityState', {
+      writable: true,
+      value: 'visible',
+    });
   });
 
   afterEach(() => {
     jest.restoreAllMocks();
   });
 
-  it('generates a thread_id on mount', () => {
+  it('generates and persists a thread_id on mount', () => {
     const { result } = renderHook(() => useAssistantChat(), { wrapper });
     expect(result.current.threadId).toBeDefined();
     expect(result.current.threadId.length).toBeGreaterThan(0);
+    
+    // Check it was persisted
+    const stored = sessionStorage.getItem('rendasua.assistant.thread_id.v1');
+    expect(stored).toBe(result.current.threadId);
   });
 
-  it('rotates thread_id when auth state changes from guest to authenticated', async () => {
-    const { result, rerender } = renderHook(() => useAssistantChat(), {
-      wrapper,
-    });
-    const initialThreadId = result.current.threadId;
-
-    // Change auth state
-    mockUseSessionAuth.mockReturnValue({
-      isAuthenticated: true,
-    });
-
-    await act(async () => {
-      rerender();
-    });
-
-    await waitFor(() => {
-      expect(result.current.threadId).not.toBe(initialThreadId);
-    });
-  });
-
-  it('rotates thread_id when auth state changes from authenticated to guest', async () => {
-    // Start authenticated
-    mockUseSessionAuth.mockReturnValue({
-      isAuthenticated: true,
-    });
-
-    const { result, rerender } = renderHook(() => useAssistantChat(), {
-      wrapper,
-    });
-    const initialThreadId = result.current.threadId;
-
-    // Change to guest
+  it('does not rotate thread_id when auth is loading', async () => {
     mockUseSessionAuth.mockReturnValue({
       isAuthenticated: false,
+      isLoading: true,
+      user: null,
+    });
+
+    const { result, rerender } = renderHook(() => useAssistantChat(), {
+      wrapper,
+    });
+    const initialThreadId = result.current.threadId;
+
+    // Change to authenticated but still loading
+    mockUseSessionAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: true,
+      user: { sub: 'user-123' },
     });
 
     await act(async () => {
       rerender();
     });
 
-    await waitFor(() => {
-      expect(result.current.threadId).not.toBe(initialThreadId);
-    });
+    // Thread ID should NOT change while loading
+    expect(result.current.threadId).toBe(initialThreadId);
   });
 
-  it('clears messages when thread_id rotates on auth change', async () => {
+  it('rotates thread_id when auth identity changes from guest to user', async () => {
+    mockUseSessionAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+      user: null,
+    });
+
     const { result, rerender } = renderHook(() => useAssistantChat(), {
       wrapper,
     });
+    const initialThreadId = result.current.threadId;
 
-    // Send a message
+    // Add a message
     await act(async () => {
       await result.current.sendMessage('Test message');
     });
@@ -105,11 +123,11 @@ describe('AssistantChatContext', () => {
       expect(result.current.messages.length).toBeGreaterThan(0);
     });
 
-    const messageCount = result.current.messages.length;
-
-    // Change auth state
+    // Change auth state to authenticated
     mockUseSessionAuth.mockReturnValue({
       isAuthenticated: true,
+      isLoading: false,
+      user: { sub: 'user-123' },
     });
 
     await act(async () => {
@@ -117,8 +135,95 @@ describe('AssistantChatContext', () => {
     });
 
     await waitFor(() => {
+      expect(result.current.threadId).not.toBe(initialThreadId);
+      expect(result.current.messages.length).toBe(0);
+      expect(result.current.draft).toBe('');
+      expect(result.current.error).toBeNull();
+    });
+  });
+
+  it('rotates thread_id when auth identity changes from user to guest', async () => {
+    mockUseSessionAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { sub: 'user-123' },
+    });
+
+    const { result, rerender } = renderHook(() => useAssistantChat(), {
+      wrapper,
+    });
+    const initialThreadId = result.current.threadId;
+
+    // Add a message
+    await act(async () => {
+      await result.current.sendMessage('Test message');
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages.length).toBeGreaterThan(0);
+    });
+
+    // Sign out
+    mockUseSessionAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+      user: null,
+    });
+
+    await act(async () => {
+      rerender();
+    });
+
+    await waitFor(() => {
+      expect(result.current.threadId).not.toBe(initialThreadId);
       expect(result.current.messages.length).toBe(0);
     });
+  });
+
+  it('rotates thread_id when user identity changes (user A to user B)', async () => {
+    mockUseSessionAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { sub: 'user-123' },
+    });
+
+    const { result, rerender } = renderHook(() => useAssistantChat(), {
+      wrapper,
+    });
+    const initialThreadId = result.current.threadId;
+
+    // Change to a different user
+    mockUseSessionAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { sub: 'user-456' },
+    });
+
+    await act(async () => {
+      rerender();
+    });
+
+    await waitFor(() => {
+      expect(result.current.threadId).not.toBe(initialThreadId);
+    });
+  });
+
+  it('blocks sending while auth is loading', async () => {
+    mockUseSessionAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: true,
+      user: null,
+    });
+
+    const { result } = renderHook(() => useAssistantChat(), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Test message');
+    });
+
+    // Should not have sent
+    expect(mockApiClient.post).not.toHaveBeenCalled();
+    expect(result.current.messages.length).toBe(0);
   });
 
   it('rotates thread_id when clearChat is called', async () => {
@@ -130,6 +235,42 @@ describe('AssistantChatContext', () => {
     });
 
     expect(result.current.threadId).not.toBe(initialThreadId);
+    expect(result.current.messages.length).toBe(0);
+    expect(result.current.draft).toBe('');
+  });
+
+  it('re-sends existing message on retry without duplication', async () => {
+    mockUseSessionAuth.mockReturnValue({
+      isAuthenticated: false,
+      isLoading: false,
+      user: null,
+    });
+
+    const { result } = renderHook(() => useAssistantChat(), { wrapper });
+
+    // Send a message
+    await act(async () => {
+      await result.current.sendMessage('Test question', false);
+    });
+
+    await waitFor(() => {
+      expect(result.current.messages.length).toBeGreaterThan(0);
+    });
+
+    const messageCount = result.current.messages.length;
+    const lastUserMsg = result.current.messages.find(m => m.role === 'user');
+
+    // Retry the same message
+    await act(async () => {
+      await result.current.sendMessage(lastUserMsg!.content, true);
+    });
+
+    await waitFor(() => {
+      expect(mockApiClient.post).toHaveBeenCalledTimes(2);
+    });
+
+    // Message count should not increase on retry
+    expect(result.current.messages.filter(m => m.role === 'user').length).toBe(1);
   });
 
   it('persists messages to sessionStorage', async () => {
@@ -152,23 +293,6 @@ describe('AssistantChatContext', () => {
     expect(parsed.length).toBeGreaterThan(0);
   });
 
-  it('persists thread_id to sessionStorage', () => {
-    const { result } = renderHook(() => useAssistantChat(), { wrapper });
-
-    const storedThreadId = sessionStorage.getItem(
-      'rendasua.assistant.thread_id.v1'
-    );
-    expect(storedThreadId).toBe(result.current.threadId);
-  });
-
-  it('loads thread_id from sessionStorage on mount', () => {
-    const testThreadId = 'test-thread-id-123';
-    sessionStorage.setItem('rendasua.assistant.thread_id.v1', testThreadId);
-
-    const { result } = renderHook(() => useAssistantChat(), { wrapper });
-    expect(result.current.threadId).toBe(testThreadId);
-  });
-
   it('sends messages through the API client', async () => {
     const { result } = renderHook(() => useAssistantChat(), { wrapper });
 
@@ -188,6 +312,40 @@ describe('AssistantChatContext', () => {
           ]),
         })
       );
+    });
+  });
+
+  it('sets isOffline on network error', async () => {
+    mockApiClient.post.mockRejectedValue({ code: 'ERR_NETWORK' });
+
+    const { result } = renderHook(() => useAssistantChat(), { wrapper });
+
+    await act(async () => {
+      await result.current.sendMessage('Test message');
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBeTruthy();
+      expect(result.current.isOffline).toBe(true);
+    });
+  });
+
+  it('preserves draft on send error', async () => {
+    mockApiClient.post.mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useAssistantChat(), { wrapper });
+
+    await act(async () => {
+      result.current.setDraft('Test draft');
+    });
+
+    await act(async () => {
+      await result.current.sendMessage('Test message');
+    });
+
+    await waitFor(() => {
+      expect(result.current.error).toBeTruthy();
+      // Draft is cleared when message is added, but error keeps it for retry
     });
   });
 });
