@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import { useApiClient } from '../hooks/useApiClient';
+import { useMarket } from './MarketContext';
 import {
   STORAGE_KEY_LAST_ACTIVITY,
   STORAGE_KEY_MESSAGES,
@@ -249,6 +250,7 @@ function makeMessageId(): string {
 export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const apiClient = useApiClient();
   const { isAuthenticated, isLoading: authLoading, user } = useSessionAuth();
+  const { selectedMarket } = useMarket();
   const authSettled = !authLoading;
   const owner = assistantOwnerKey(isAuthenticated, user?.sub);
 
@@ -435,9 +437,19 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
           role: m.role,
           content: m.content,
         }));
+        const body: {
+          messages: typeof payload;
+          market?: { country_code: string; state?: string };
+        } = { messages: payload };
+        if (selectedMarket) {
+          body.market = {
+            country_code: selectedMarket.countryCode,
+            state: selectedMarket.stateCode || undefined,
+          };
+        }
         const { data } = await apiClient.post<ChatApiResponse>(
           '/assistant/chat',
-          { messages: payload },
+          body,
           controller ? { signal: controller.signal } : undefined
         );
         if (!isCurrent()) return;
@@ -465,7 +477,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         if (isOwnRequest()) setSending(false);
       }
     },
-    [apiClient, commitMessages, setSending]
+    [apiClient, commitMessages, setSending, selectedMarket]
   );
 
   const sendMessage = useCallback(

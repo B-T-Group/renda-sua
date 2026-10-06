@@ -108,9 +108,9 @@ const rafAvailable = () =>
 /**
  * "Renda", the assistant character (spec #451 §1): an upright oval ring around a
  * navy face with two white eyes. Decorative only (`aria-hidden`); state changes are
- * never announced through it. Idle on the hero / launcher runs the eye life
- * cycle (Rest→Wake→Glance→Blink→Drowse); the header stays static. Reduce motion
- * gives a static ring whose eye shape still switches per state.
+ * never announced through it. Idle on the hero / launcher / catalog header runs the
+ * eye life cycle (Rest→Wake→Glance→Blink→Drowse at size ≥36; blink-only at 20–35).
+ * Reduce motion gives a static ring whose eye shape still switches per state.
  */
 function RendaCharacterImpl({
   size,

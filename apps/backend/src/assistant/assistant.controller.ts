@@ -50,12 +50,16 @@ export class AssistantController {
     @ReqContext() context: RequestContext,
     @Body() body: AssistantChatRequestDto
   ): Promise<AssistantChatResponseDto> {
-    const identity = await this.identities.resolveFromUserId(context.userId);
+    const identity = await this.identities.resolveFromUserId(
+      context.userId,
+      body.market
+    );
     const result = await this.assistant.chat({
       channel: 'app',
       messages: body.messages,
       identity,
       locale: identity.preferredLanguage,
+      marketContext: body.market,
     });
     return { reply: result.reply, handoff: result.handoff };
   }

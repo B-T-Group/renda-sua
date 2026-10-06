@@ -1,7 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as libphonenumber from 'google-libphonenumber';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import type { AssistantIdentity, AssistantLocale } from './assistant.types';
+import type {
+  AssistantIdentity,
+  AssistantLocale,
+  AssistantMarket,
+} from './assistant.types';
 
 interface UserIdentityRow {
   id: string;
@@ -14,6 +18,12 @@ interface UserIdentityRow {
   business?: { id: string } | null;
 }
 
+interface AddressRow {
+  country: string;
+  state: string | null;
+  is_primary: boolean;
+}
+
 @Injectable()
 export class AssistantIdentityService {
   private readonly logger = new Logger(AssistantIdentityService.name);
@@ -24,33 +34,150 @@ export class AssistantIdentityService {
   async resolveFromPhone(phone: string): Promise<AssistantIdentity> {
     const normalized = phone.replace(/^\+/, '').trim();
     const country = this.inferCountryFromPhone(normalized);
-    if (!normalized) return this.anonymous(null, country);
+    if (!normalized) return this.anonymous(null, null, country);
     const user = await this.findByPhone(normalized);
-    return user
-      ? this.fromUser(user, normalized, country)
-      : this.anonymous(normalized, country);
+    if (!user) return this.anonymous(normalized, null, country);
+    const phone164 = normalized;
+    const market = await this.resolveMarketFromUser(user, country);
+    return this.fromUser(user, phone164, market);
   }
 
   async resolveFromUserId(
-    userId: string | null | undefined
+    userId: string | null | undefined,
+    marketContext?: AssistantMarket | null
   ): Promise<AssistantIdentity> {
-    if (!userId || userId === 'anonymous') return this.anonymous();
+    if (!userId || userId === 'anonymous') {
+      return this.anonymous(null, marketContext, null);
+    }
     const user = await this.findById(userId);
-    if (!user) return this.anonymous();
+    if (!user) return this.anonymous(null, marketContext, null);
     const phone = user.phone_number?.replace(/^\+/, '').trim() || null;
-    return this.fromUser(user, phone, this.inferCountryFromPhone(phone || ''));
+    const phoneCountry = this.inferCountryFromPhone(phone || '');
+    const market = await this.resolveMarketFromUser(user, phoneCountry, marketContext);
+    return this.fromUser(user, phone, market);
+  }
+
+  /**
+   * Resolves market in priority order:
+   * 1. marketContext (from client)
+   * 2. Primary address from user's profile
+   * 3. Phone-inferred country
+   */
+  private async resolveMarketFromUser(
+    user: UserIdentityRow,
+    phoneCountry: string | null,
+    marketContext?: AssistantMarket | null
+  ): Promise<AssistantMarket | null> {
+    if (marketContext) {
+      return {
+        country_code: marketContext.country_code.toUpperCase(),
+        state: marketContext.state,
+      };
+    }
+    const addressMarket = await this.getPrimaryAddressMarket(user);
+    if (addressMarket) return addressMarket;
+    if (phoneCountry) return { country_code: phoneCountry };
+    return null;
+  }
+
+  private async getPrimaryAddressMarket(
+    user: UserIdentityRow
+  ): Promise<AssistantMarket | null> {
+    if (user.client?.id) {
+      return this.getClientPrimaryAddress(user.client.id);
+    }
+    if (user.agent?.id) {
+      return this.getAgentPrimaryAddress(user.agent.id);
+    }
+    if (user.business?.id) {
+      return this.getBusinessPrimaryAddress(user.business.id);
+    }
+    return null;
+  }
+
+  private async getClientPrimaryAddress(
+    clientId: string
+  ): Promise<AssistantMarket | null> {
+    const result = await this.hasura.executeQuery<{
+      addresses: AddressRow[];
+    }>(
+      `query GetClientPrimaryAddress($clientId: uuid!) {
+        addresses(
+          where: {
+            client_addresses: { client_id: { _eq: $clientId } }
+            status: { _eq: active }
+            is_primary: { _eq: true }
+          }
+          limit: 1
+        ) { country state is_primary }
+      }`,
+      { clientId }
+    );
+    return this.toMarket(result.addresses?.[0]);
+  }
+
+  private async getAgentPrimaryAddress(
+    agentId: string
+  ): Promise<AssistantMarket | null> {
+    const result = await this.hasura.executeQuery<{
+      addresses: AddressRow[];
+    }>(
+      `query GetAgentPrimaryAddress($agentId: uuid!) {
+        addresses(
+          where: {
+            agent_addresses: { agent_id: { _eq: $agentId } }
+            status: { _eq: active }
+            is_primary: { _eq: true }
+          }
+          limit: 1
+        ) { country state is_primary }
+      }`,
+      { agentId }
+    );
+    return this.toMarket(result.addresses?.[0]);
+  }
+
+  private async getBusinessPrimaryAddress(
+    businessId: string
+  ): Promise<AssistantMarket | null> {
+    const result = await this.hasura.executeQuery<{
+      addresses: AddressRow[];
+    }>(
+      `query GetBusinessPrimaryAddress($businessId: uuid!) {
+        addresses(
+          where: {
+            business_addresses: { business_id: { _eq: $businessId } }
+            status: { _eq: active }
+            is_primary: { _eq: true }
+          }
+          limit: 1
+        ) { country state is_primary }
+      }`,
+      { businessId }
+    );
+    return this.toMarket(result.addresses?.[0]);
+  }
+
+  private toMarket(address: AddressRow | undefined): AssistantMarket | null {
+    if (!address?.country) return null;
+    return {
+      country_code: address.country.toUpperCase(),
+      state: address.state || undefined,
+    };
   }
 
   anonymous(
     phoneE164: string | null = null,
-    country: string | null = null
+    market: AssistantMarket | null = null,
+    phoneCountry: string | null = null
   ): AssistantIdentity {
     return {
       isVerified: false,
       userId: null,
       firstName: null,
       preferredLanguage: null,
-      country,
+      market: market || (phoneCountry ? { country_code: phoneCountry } : null),
+      country: market?.country_code || phoneCountry,
       phoneE164,
       accountType: null,
       clientId: null,
@@ -93,14 +220,15 @@ export class AssistantIdentityService {
   private fromUser(
     user: UserIdentityRow,
     phoneE164: string | null,
-    country: string | null
+    market: AssistantMarket | null
   ): AssistantIdentity {
     return {
       isVerified: true,
       userId: user.id,
       firstName: user.first_name?.trim() || null,
       preferredLanguage: normalizeLocale(user.preferred_language),
-      country,
+      market,
+      country: market?.country_code || null,
       phoneE164,
       accountType: resolveAccountType(user),
       clientId: user.client?.id ?? null,

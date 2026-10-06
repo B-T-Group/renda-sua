@@ -70,7 +70,7 @@ import {
   SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION,
   SITE_EVENT_ASSISTANT_LAUNCHER_TAP,
 } from '../../hooks/useTrackSiteEvent';
-import { RendaAvatar } from '../assistant/RendaAvatar';
+import { RendaCharacter } from '../assistant/RendaCharacter';
 import {
   HeaderAssistantEntry,
   assistantScreenName,
@@ -884,7 +884,7 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
                 }}
               >
                 {assistantEntry === 'character' ? (
-                  <RendaAvatar size={28} style={{ margin: -4 }} />
+                  <RendaCharacter size={36} surface="header" state="idle" style={{ margin: -4 }} />
                 ) : (
                   <SmartToy fontSize="small" />
                 )}

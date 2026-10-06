@@ -24,7 +24,7 @@ import { useStore } from '@/stores/RootStore';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { spacing, borderRadius } from '@/theme/spacing';
 import { motionDuration } from '@/theme/motion';
-import { postAssistantChat } from '@/services/assistantApi';
+import { postAssistantChat, type AssistantMarketContext } from '@/services/assistantApi';
 import type { AssistantMessage } from '@/stores/AssistantStore';
 import { RendaCharacter } from '@/components/assistant/renda/RendaCharacter';
 import { StageDisc } from '@/components/assistant/renda/rendaCharacterLayers';
@@ -58,6 +58,27 @@ function MiniOrb({ size = 36 }: { size?: number }) {
 function useShowsRendaCharacter(): boolean {
   const { auth, persona } = useStore();
   return canSeeRendaCharacter(assistantViewer(auth.isAuthenticated, persona.activePersona));
+}
+
+/**
+ * Creates a market-aware transport for the assistant chat.
+ * Wraps postAssistantChat with the current market context from MarketStore.
+ */
+function useAssistantTransport() {
+  const { market } = useStore();
+  return useCallback(
+    async (messages: { role: 'user' | 'assistant'; content: string }[]) => {
+      const marketContext: AssistantMarketContext | null =
+        market.selectedCountryCode
+          ? {
+              country_code: market.selectedCountryCode,
+              state: market.selectedStateCode || undefined,
+            }
+          : null;
+      return postAssistantChat(messages, marketContext);
+    },
+    [market.selectedCountryCode, market.selectedStateCode]
+  );
 }
 
 const MESSAGE_AVATAR = 28;
@@ -305,6 +326,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
   const [draft, setDraft] = useState('');
   const [composerFocused, setComposerFocused] = useState(false);
   const character = useShowsRendaCharacter();
+  const assistantTransport = useAssistantTransport();
 
   // Hero: Attentive while the composer is focused, Listening once it has text.
   useEffect(() => {
@@ -326,9 +348,9 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
       // Typed text is now a bubble; on failure it stays there and Retry re-sends it.
       if (override === undefined) setDraft('');
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
-      await assistant.sendMessage(text, postAssistantChat);
+      await assistant.sendMessage(text, assistantTransport);
     },
-    [assistant, draft]
+    [assistant, draft, assistantTransport]
   );
 
   const renderItem = useCallback(
@@ -354,8 +376,8 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
   );
 
   const onRetry = useCallback(() => {
-    void assistant.retryFailed(postAssistantChat);
-  }, [assistant]);
+    void assistant.retryFailed(assistantTransport);
+  }, [assistant, assistantTransport]);
 
   const onOpenWhatsApp = useCallback(() => {
     void Linking.openURL(`https://wa.me/${WHATSAPP_SUPPORT_NUMBER}`);
