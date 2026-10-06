@@ -3,6 +3,7 @@ import { Fragment, ReactNode, StrictMode } from 'react';
 import {
   AssistantChatProvider,
   assistantOwnerKey,
+  clearAssistantChatStorage,
   generateThreadId,
   IDLE_TIMEOUT_MS,
   STORAGE_KEY_LAST_ACTIVITY,
@@ -38,6 +39,8 @@ const USER_B = {
   isLoading: false,
   user: { sub: 'auth0|bob' },
 };
+/** Signed in, but no user/sub decoded yet (e.g. a refresh that returned no id_token). */
+const SIGNED_IN_NO_SUB = { isAuthenticated: true, isLoading: false, user: undefined };
 
 const wrapper = ({ children }: { children: ReactNode }) => (
   <AssistantChatProvider>{children}</AssistantChatProvider>
@@ -145,9 +148,11 @@ describe('generateThreadId', () => {
 });
 
 describe('assistantOwnerKey', () => {
-  it('is "guest" when signed out and an opaque hash when signed in', () => {
+  it('is "guest" when signed out, unknown (null) when signed in without a sub, and an opaque hash otherwise', () => {
     expect(assistantOwnerKey(false, 'auth0|x')).toBe('guest');
-    expect(assistantOwnerKey(true, undefined)).toBe('guest');
+    expect(assistantOwnerKey(false, undefined)).toBe('guest');
+    expect(assistantOwnerKey(true, undefined)).toBeNull();
+    expect(assistantOwnerKey(true, '')).toBeNull();
     const a = assistantOwnerKey(true, 'auth0|alice@example.com');
     expect(a).toMatch(/^u:[0-9a-f]{14}$/);
     expect(a).not.toContain('alice');
@@ -458,6 +463,221 @@ describe('AssistantChatProvider: in-flight requests across rotation', () => {
   });
 });
 
+describe('AssistantChatProvider: requests across provider unmount/remount (QA B1)', () => {
+  type Reply = { data: { reply: string; handoff: boolean } };
+  const signalOf = (call: number) =>
+    (mockApiClient.post.mock.calls[call][2] as { signal?: AbortSignal } | undefined)?.signal;
+
+  it('a guest reply pending across unmount -> remount as A is never written, and A sends only A (QA repro R1)', async () => {
+    const pending = deferred<Reply>();
+    mockApiClient.post.mockImplementationOnce(() => pending.promise);
+    mockUseSessionAuth.mockReturnValue(GUEST);
+    const guest = renderHook(() => useAssistantChat(), { wrapper });
+    act(() => {
+      void guest.result.current.sendMessage('GUEST SECRET');
+    });
+    // OTP sign-in batched with navigate('/app'): App shows LoadingPage, the provider unmounts.
+    guest.unmount();
+    expect(signalOf(0)?.aborted).toBe(true);
+
+    mockUseSessionAuth.mockReturnValue(USER_A);
+    const a1 = renderHook(() => useAssistantChat(), { wrapper });
+    expect(a1.result.current.messages).toEqual([]);
+    const aThread = sessionStorage.getItem(STORAGE_KEY_THREAD_ID);
+    const aOwner = assistantOwnerKey(true, USER_A.user.sub);
+    expect(sessionStorage.getItem(STORAGE_KEY_OWNER)).toBe(aOwner);
+    const storedBefore = sessionStorage.getItem(STORAGE_KEY_MESSAGES);
+    const activityBefore = sessionStorage.getItem(STORAGE_KEY_LAST_ACTIVITY);
+
+    // The guest reply lands late (the mock ignores the abort signal, like a reply already in flight).
+    await act(async () => {
+      pending.resolve({ data: { reply: 'GUEST REPLY', handoff: true } });
+    });
+    expect(sessionStorage.getItem(STORAGE_KEY_MESSAGES)).toBe(storedBefore);
+    expect(sessionStorage.getItem(STORAGE_KEY_LAST_ACTIVITY)).toBe(activityBefore);
+    expect(sessionStorage.getItem(STORAGE_KEY_THREAD_ID)).toBe(aThread);
+    expect(sessionStorage.getItem(STORAGE_KEY_OWNER)).toBe(aOwner);
+    expect(a1.result.current.messages).toEqual([]);
+    expect(a1.result.current.handoff).toBe(false);
+    a1.unmount();
+
+    // Any later remount as A (reload, /app) restores nothing from the guest.
+    const a2 = renderHook(() => useAssistantChat(), { wrapper });
+    expect(a2.result.current.messages).toEqual([]);
+    await act(async () => {
+      await a2.result.current.sendMessage('first as A');
+    });
+    expect(payloads().at(-1)).toEqual(['first as A']);
+    // Every request after the guest's own one carries no guest content.
+    expect(JSON.stringify(payloads().slice(1))).not.toContain('GUEST');
+  });
+
+  it('unmount orphans the request: a reply after remount as the same owner is not written by the dead instance', async () => {
+    const pending = deferred<Reply>();
+    mockApiClient.post.mockImplementationOnce(() => pending.promise);
+    const first = await chatAs(USER_A);
+    act(() => {
+      void first.result.current.sendMessage('q while navigating');
+    });
+    first.unmount();
+    expect(signalOf(0)?.aborted).toBe(true);
+
+    const second = renderHook(() => useAssistantChat(), { wrapper });
+    const storedBefore = sessionStorage.getItem(STORAGE_KEY_MESSAGES);
+    await act(async () => {
+      pending.resolve({ data: { reply: 'LATE REPLY', handoff: false } });
+    });
+    expect(sessionStorage.getItem(STORAGE_KEY_MESSAGES)).toBe(storedBefore);
+    expect(sessionStorage.getItem(STORAGE_KEY_MESSAGES)).not.toContain('LATE REPLY');
+    expect(contents(second)).toEqual(['q while navigating']);
+  });
+
+  it('checks storage at response time: a reply is dropped if the stored thread was cleared mid-request (e.g. logout)', async () => {
+    const pending = deferred<Reply>();
+    mockApiClient.post.mockImplementationOnce(() => pending.promise);
+    const h = await chatAs(USER_A);
+    act(() => {
+      void h.result.current.sendMessage('my order address?');
+    });
+    // Same instance stays mounted; storage changes underneath it.
+    clearAssistantChatStorage();
+    await act(async () => {
+      pending.resolve({ data: { reply: 'Your address is 1 Main St', handoff: true } });
+    });
+    expect(sessionStorage.getItem(STORAGE_KEY_MESSAGES)).toBeNull();
+    expect(sessionStorage.getItem(STORAGE_KEY_LAST_ACTIVITY)).toBeNull();
+    expect(contents(h)).toEqual(['my order address?']);
+    expect(h.result.current.handoff).toBe(false);
+    expect(h.result.current.isSending).toBe(false);
+  });
+
+  it('checks the stored owner at response time: a reply is dropped if storage now belongs to someone else', async () => {
+    const pending = deferred<Reply>();
+    mockApiClient.post.mockImplementationOnce(() => pending.promise);
+    const h = await chatAs(USER_A);
+    act(() => {
+      void h.result.current.sendMessage('q');
+    });
+    sessionStorage.setItem(STORAGE_KEY_OWNER, assistantOwnerKey(true, USER_B.user.sub) as string);
+    await act(async () => {
+      pending.resolve({ data: { reply: 'A REPLY', handoff: false } });
+    });
+    expect(sessionStorage.getItem(STORAGE_KEY_MESSAGES)).not.toContain('A REPLY');
+    expect(contents(h)).toEqual(['q']);
+  });
+
+  it('passes an abort signal and aborts it on Start over', async () => {
+    const pending = deferred<Reply>();
+    mockApiClient.post.mockImplementationOnce(() => pending.promise);
+    const h = await chatAs(GUEST);
+    act(() => {
+      void h.result.current.sendMessage('q');
+    });
+    const signal = signalOf(0);
+    expect(signal).toBeDefined();
+    expect(signal?.aborted).toBe(false);
+    await act(async () => {
+      h.result.current.clearChat();
+    });
+    expect(signal?.aborted).toBe(true);
+  });
+});
+
+describe('AssistantChatProvider: signed in without a sub (QA N1)', () => {
+  it('stays locked: no restore, no send, nothing written', async () => {
+    const guest = await chatAs(GUEST, ['GUEST SECRET']);
+    guest.unmount();
+    const before = { ...sessionStorage };
+    mockApiClient.post.mockClear();
+
+    mockUseSessionAuth.mockReturnValue(SIGNED_IN_NO_SUB);
+    const h = renderHook(() => useAssistantChat(), { wrapper });
+    expect(h.result.current.ready).toBe(false);
+    expect(h.result.current.messages).toEqual([]);
+    let sent = true;
+    await act(async () => {
+      sent = await h.result.current.sendMessage('as signed-in');
+    });
+    expect(sent).toBe(false);
+    expect(mockApiClient.post).not.toHaveBeenCalled();
+    expect({ ...sessionStorage }).toEqual(before);
+  });
+
+  it('in session: guest -> signed-in-without-sub locks the chat, then the real sub rotates (QA repro R2)', async () => {
+    const h = await chatAs(GUEST, ['GUEST SECRET']);
+    mockUseSessionAuth.mockReturnValue(SIGNED_IN_NO_SUB);
+    await act(async () => {
+      h.rerender();
+    });
+    expect(h.result.current.ready).toBe(false);
+    let sent = true;
+    await act(async () => {
+      sent = await h.result.current.sendMessage('as signed-in');
+    });
+    expect(sent).toBe(false);
+    expect(payloads()).toEqual([['GUEST SECRET']]);
+
+    mockUseSessionAuth.mockReturnValue(USER_A);
+    await act(async () => {
+      h.rerender();
+    });
+    expect(h.result.current.ready).toBe(true);
+    expect(h.result.current.messages).toEqual([]);
+    await act(async () => {
+      await h.result.current.sendMessage('as A');
+    });
+    expect(payloads().at(-1)).toEqual(['as A']);
+  });
+});
+
+describe('AssistantChatProvider: back/forward cache restore (QA N3)', () => {
+  const pageshow = (persisted: boolean) => {
+    const e = new Event('pageshow');
+    Object.defineProperty(e, 'persisted', { value: persisted });
+    window.dispatchEvent(e);
+  };
+
+  it('drops the restored chat when storage moved on (logout, rotation) while the page was cached', async () => {
+    const h = await chatAs(USER_A, ['A secret']);
+    expect(contents(h)).toEqual(['A secret', 'reply 1']);
+    // Simulate what a logout + later page did to this tab's storage while the document sat in bfcache.
+    clearAssistantChatStorage();
+    sessionStorage.setItem(STORAGE_KEY_OWNER, 'guest');
+    sessionStorage.setItem(STORAGE_KEY_THREAD_ID, generateThreadId());
+    await act(async () => {
+      pageshow(true);
+    });
+    expect(h.result.current.messages).toEqual([]);
+    expect(JSON.stringify({ ...sessionStorage })).not.toContain('A secret');
+  });
+
+  it('ignores a normal (non-persisted) pageshow and a bfcache restore with unchanged storage', async () => {
+    const h = await chatAs(USER_A, ['A q']);
+    const thread = h.result.current.threadId;
+    await act(async () => {
+      pageshow(false);
+    });
+    await act(async () => {
+      pageshow(true);
+    });
+    expect(contents(h)).toEqual(['A q', 'reply 1']);
+    expect(h.result.current.threadId).toBe(thread);
+  });
+});
+
+describe('clearAssistantChatStorage (QA N4)', () => {
+  it('removes all four assistant keys and leaves other keys alone', async () => {
+    await chatAs(USER_A, ['A q']);
+    sessionStorage.setItem('unrelated', 'keep');
+    expect(sessionStorage.getItem(STORAGE_KEY_MESSAGES)).not.toBeNull();
+    clearAssistantChatStorage();
+    for (const key of [STORAGE_KEY_MESSAGES, STORAGE_KEY_THREAD_ID, STORAGE_KEY_LAST_ACTIVITY, STORAGE_KEY_OWNER]) {
+      expect(sessionStorage.getItem(key)).toBeNull();
+    }
+    expect(sessionStorage.getItem('unrelated')).toBe('keep');
+  });
+});
+
 describe('AssistantChatProvider: retry, draft and offline', () => {
   it('retry re-sends the failed message once (no duplicate in thread or payload)', async () => {
     mockApiClient.post.mockRejectedValueOnce({ code: 'ERR_NETWORK' });
@@ -527,6 +747,8 @@ describe('AssistantChatProvider: retry, draft and offline', () => {
     expect(Object.keys(body)).toEqual(['messages']);
     expect(body.messages).toHaveLength(20);
     expect(mockApiClient.post.mock.calls.at(-1)[0]).toBe('/assistant/chat');
-    expect(mockApiClient.post.mock.calls.at(-1)).toHaveLength(2);
+    // The only request config is the abort signal: no extra headers (no X-Anonymous-Id).
+    const config = mockApiClient.post.mock.calls.at(-1)[2];
+    expect(Object.keys(config)).toEqual(['signal']);
   });
 });

@@ -10,6 +10,12 @@ import {
   useState,
 } from 'react';
 import { useApiClient } from '../hooks/useApiClient';
+import {
+  STORAGE_KEY_LAST_ACTIVITY,
+  STORAGE_KEY_MESSAGES,
+  STORAGE_KEY_OWNER,
+  STORAGE_KEY_THREAD_ID,
+} from './assistantChatStorage';
 import { useSessionAuth } from './SessionAuthContext';
 
 export type AssistantChatMessage = {
@@ -45,11 +51,13 @@ const AssistantChatContext = createContext<AssistantChatContextType | null>(
   null
 );
 
-export const STORAGE_KEY_MESSAGES = 'rendasua.assistant.chat.v1';
-export const STORAGE_KEY_THREAD_ID = 'rendasua.assistant.thread_id.v1';
-export const STORAGE_KEY_LAST_ACTIVITY = 'rendasua.assistant.last_activity.v1';
-/** Opaque owner of the stored thread: `guest` or `u:<hash of user.sub>`. Never the raw sub. */
-export const STORAGE_KEY_OWNER = 'rendasua.assistant.owner.v1';
+export {
+  STORAGE_KEY_MESSAGES,
+  STORAGE_KEY_THREAD_ID,
+  STORAGE_KEY_LAST_ACTIVITY,
+  STORAGE_KEY_OWNER,
+  clearAssistantChatStorage,
+} from './assistantChatStorage';
 const MAX_API_MESSAGES = 20;
 export const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -94,7 +102,10 @@ export function generateThreadId(): string {
   });
 }
 
-/** cyrb53: small, fast, non-reversible-in-practice string hash (53 bits). */
+/**
+ * cyrb53: small, fast, non-cryptographic 53-bit hash. It only keeps the raw id out of
+ * storage and serves as an equality key; with a candidate sub anyone can confirm a match.
+ */
 function opaqueHash(input: string): string {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
@@ -110,12 +121,18 @@ function opaqueHash(input: string): string {
   return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0');
 }
 
-/** Opaque, stable owner key for the current identity. Stored instead of any PII. */
+/**
+ * Stable owner key for the current identity, stored instead of any PII.
+ * Returns null when signed in but the user id is not known yet (e.g. a token
+ * refresh without an id_token): the owner is unknown, not a guest, so the chat
+ * stays locked (no restore, no send) until the sub is available.
+ */
 export function assistantOwnerKey(
   isAuthenticated: boolean,
   sub: string | null | undefined
-): string {
-  if (!isAuthenticated || !sub) return 'guest';
+): string | null {
+  if (!isAuthenticated) return 'guest';
+  if (!sub) return null;
   return `u:${opaqueHash(`rendasua.assistant:${sub}`)}`;
 }
 
@@ -214,8 +231,12 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const readyRef = useRef(false);
   const isSendingRef = useRef(false);
   const requestIdRef = useRef(0);
+  /** Aborts the request in flight (at most one; sending is serialised). */
+  const abortRef = useRef<AbortController | null>(null);
   /** Owner the in-memory thread belongs to (null until the first settled check). */
   const ownerRef = useRef<string | null>(null);
+  /** Bumped to force the owner check to run again (bfcache restore). */
+  const [ownerCheck, setOwnerCheck] = useState(0);
 
   const commitMessages = useCallback((next: AssistantChatMessage[]) => {
     messagesRef.current = next;
@@ -235,6 +256,8 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const rotate = useCallback(
     (nextOwner?: string) => {
       requestIdRef.current += 1;
+      abortRef.current?.abort();
+      abortRef.current = null;
       const id = generateThreadId();
       threadIdRef.current = id;
       setThreadIdState(id);
@@ -255,9 +278,10 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
   );
 
   // Owner check: runs on mount and whenever auth settles or the identity changes.
-  // Nothing is restored (and nothing can be sent) until auth has settled.
+  // Nothing is restored (and nothing can be sent) until auth has settled and the
+  // owner is known (signed in without a sub stays locked).
   useLayoutEffect(() => {
-    if (!authSettled) {
+    if (!authSettled || owner === null) {
       readyRef.current = false;
       setReady(false);
       return;
@@ -286,7 +310,39 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
     }
     readyRef.current = true;
     setReady(true);
-  }, [authSettled, owner, rotate]);
+  }, [authSettled, owner, rotate, ownerCheck]);
+
+  // Unmount: orphan and cancel the request in flight. The provider unmounts at
+  // sign-in (App shows LoadingPage on /app), and a late guest reply must not
+  // land in whatever thread the next instance creates.
+  useEffect(
+    () => () => {
+      requestIdRef.current += 1;
+      abortRef.current?.abort();
+    },
+    []
+  );
+
+  // Back/forward cache restore: React state may predate a logout or rotation
+  // done by a later page. Drop it and re-run the owner check against storage.
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return;
+      const stale =
+        readStorage(STORAGE_KEY_OWNER) !== ownerRef.current ||
+        readStorage(STORAGE_KEY_THREAD_ID) !== threadIdRef.current;
+      if (!stale) return;
+      requestIdRef.current += 1;
+      abortRef.current?.abort();
+      messagesRef.current = [];
+      setMessagesState([]);
+      ownerRef.current = null;
+      readyRef.current = false;
+      setOwnerCheck((n) => n + 1);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   /** Rotates if the thread has been idle; must run before activity is recorded. */
   const rotateIfIdle = useCallback((): boolean => {
@@ -314,9 +370,23 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
     async (history: AssistantChatMessage[]) => {
       const requestId = ++requestIdRef.current;
       const requestThreadId = threadIdRef.current;
-      const isCurrent = () =>
+      const requestOwner = ownerRef.current;
+      const controller =
+        typeof AbortController !== 'undefined' ? new AbortController() : null;
+      abortRef.current = controller;
+      /** This instance still owns the request (no rotation or unmount since). */
+      const isOwnRequest = () =>
         requestIdRef.current === requestId &&
         threadIdRef.current === requestThreadId;
+      /**
+       * Safe to write: also checks storage, the source of truth shared by every
+       * provider instance in the tab (another instance may have rotated it, or
+       * logout may have cleared it).
+       */
+      const isCurrent = () =>
+        isOwnRequest() &&
+        readStorage(STORAGE_KEY_THREAD_ID) === requestThreadId &&
+        readStorage(STORAGE_KEY_OWNER) === requestOwner;
 
       writeStorage(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
       setError(null);
@@ -330,7 +400,8 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         }));
         const { data } = await apiClient.post<ChatApiResponse>(
           '/assistant/chat',
-          { messages: payload }
+          { messages: payload },
+          controller ? { signal: controller.signal } : undefined
         );
         if (!isCurrent()) return;
         const reply = data?.reply?.trim() || '';
@@ -348,7 +419,8 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         setIsOffline(isNetworkError(err));
         setError(errorText(err));
       } finally {
-        if (isCurrent()) setSending(false);
+        if (abortRef.current === controller) abortRef.current = null;
+        if (isOwnRequest()) setSending(false);
       }
     },
     [apiClient, commitMessages, setSending]
