@@ -84,6 +84,7 @@ let replyCount = 0;
 beforeEach(() => {
   sessionStorage.clear();
   jest.clearAllMocks();
+  mockApiClient.post.mockReset(); // drop queued *Once values so failures can't cascade
   replyCount = 0;
   mockUseSessionAuth.mockReturnValue(GUEST);
   mockApiClient.post.mockImplementation(async () => ({

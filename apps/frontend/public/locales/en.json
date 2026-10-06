@@ -8546,6 +8546,7 @@
     "handoffBody": "Continue on WhatsApp. We usually reply within 1 hour.",
     "errorGeneric": "Something went wrong. Please try again.",
     "errorMessage": "Message not sent. Check your connection.",
+    "errorServer": "Message not sent. Please try again.",
     "retry": "Retry",
     "clear": "Clear chat",
     "startOver": "Start over",

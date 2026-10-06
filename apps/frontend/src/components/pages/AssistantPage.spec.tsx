@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { BrowserRouter } from 'react-router-dom';
@@ -47,14 +47,28 @@ const payloads = () =>
     call[1].messages.map((m: { content: string }) => m.content)
   );
 
-/** WCAG relative-luminance contrast between two `rgb(...)` / `#rrggbb` colours. */
+type Rgba = [number, number, number, number];
+/** Parses `rgb(...)`, `rgba(...)` or `#rrggbb`. */
+function parseColour(c: string): Rgba {
+  if (c.startsWith('#')) {
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+    return [r, g, b, 1];
+  }
+  const [r, g, b, a] = (c.match(/\d+(\.\d+)?/g) || []).map(Number);
+  return [r, g, b, a ?? 1];
+}
+/** Composites a (possibly translucent) colour over an opaque backdrop. */
+function over(fg: string, backdrop: string): string {
+  const [r, g, b, a] = parseColour(fg);
+  const [br, bg, bb] = parseColour(backdrop);
+  const mix = (x: number, y: number) => Math.round(x * a + y * (1 - a));
+  return `rgb(${mix(r, br)}, ${mix(g, bg)}, ${mix(b, bb)})`;
+}
+
+/** WCAG relative-luminance contrast between two opaque colours. */
 function contrast(a: string, b: string): number {
-  const parse = (c: string) => {
-    if (c.startsWith('#')) return [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
-    return (c.match(/\d+(\.\d+)?/g) || []).slice(0, 3).map(Number);
-  };
   const lum = (c: string) => {
-    const [r, g, bl] = parse(c).map((v) => {
+    const [r, g, bl] = parseColour(c).slice(0, 3).map((v) => {
       const s = v / 255;
       return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
     });
@@ -67,6 +81,8 @@ function contrast(a: string, b: string): number {
 beforeEach(() => {
   sessionStorage.clear();
   jest.clearAllMocks();
+  // mockReset also drops queued *Once values, so a failing test can't leak into the next one.
+  mockApiClient.post.mockReset();
   mockUseSessionAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, user: null });
   mockApiClient.post.mockResolvedValue({ data: { reply: 'Test reply', handoff: false } });
 });
@@ -151,15 +167,72 @@ describe('AssistantPage', () => {
     await screen.findByText(/^(Offline|assistant\.statusOffline)$/);
   });
 
-  it('handoff card body text meets WCAG AA contrast on its background', async () => {
+  const NETWORK_COPY = /^(Message not sent\. Check your connection\.|assistant\.errorMessage)$/;
+  const SERVER_COPY = /^(Message not sent\. Please try again\.|assistant\.errorServer)$/;
+
+  it.each([
+    ['axios network error (ERR_NETWORK)', { code: 'ERR_NETWORK', message: 'Network Error' }],
+    ['request that never got a response (offline / timeout)', { message: 'timeout of 0ms exceeded' }],
+  ])('network failure shows "Check your connection": %s', async (_label, rejection) => {
+    mockApiClient.post.mockRejectedValueOnce(rejection);
+    renderPage();
+    typeAndEnter('q');
+    const banner = await screen.findByTestId('assistant-error-banner');
+    expect(banner.getAttribute('data-error-kind')).toBe('network');
+    expect(within(banner).getByText(NETWORK_COPY)).toBeInTheDocument();
+    expect(within(banner).queryByText(SERVER_COPY)).toBeNull();
+  });
+
+  it.each([
+    ['500 Internal Server Error', { response: { status: 500, data: { message: 'Internal server error' } } }],
+    ['429 Too Many Requests', { response: { status: 429, data: {} } }],
+    ['400 API error body', { response: { status: 400, data: { message: 'Bad request' } }, code: 'ERR_BAD_REQUEST' }],
+  ])('server error shows "Please try again", not the connection copy: %s', async (_label, rejection) => {
+    mockApiClient.post.mockRejectedValueOnce(rejection);
+    renderPage();
+    typeAndEnter('q');
+    const banner = await screen.findByTestId('assistant-error-banner');
+    expect(banner.getAttribute('data-error-kind')).toBe('server');
+    expect(within(banner).getByText(SERVER_COPY)).toBeInTheDocument();
+    expect(within(banner).queryByText(NETWORK_COPY)).toBeNull();
+  });
+
+  it('switches the error copy when a retry fails for a different reason', async () => {
+    mockApiClient.post.mockRejectedValueOnce({ response: { status: 500, data: {} } });
+    mockApiClient.post.mockRejectedValueOnce({ code: 'ERR_NETWORK' });
+    renderPage();
+    typeAndEnter('q');
+    await screen.findByText(SERVER_COPY);
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+    await screen.findByText(NETWORK_COPY);
+    expect(screen.queryByText(SERVER_COPY)).toBeNull();
+  });
+
+  it('handoff card is a primary-tint brand surface whose body text meets WCAG AA', async () => {
     mockApiClient.post.mockResolvedValueOnce({ data: { reply: 'Connecting you', handoff: true } });
     renderPage();
     typeAndEnter('human please');
     const card = await screen.findByTestId('assistant-handoff-card');
     const body = screen.getByTestId('assistant-handoff-body');
-    const ratio = contrast(getComputedStyle(body).color, getComputedStyle(card).backgroundColor);
+    const cardStyle = getComputedStyle(card);
+
+    // Surface: primary.main at 6-8% alpha (not the old cyan fill), border primary at ~30% alpha.
+    const [r, g, b, a] = parseColour(cardStyle.backgroundColor);
+    expect(parseColour(theme.palette.primary.main).slice(0, 3)).toEqual([r, g, b]);
+    expect(a).toBeGreaterThanOrEqual(0.06);
+    expect(a).toBeLessThanOrEqual(0.08);
+    const [br, bg, bb, ba] = parseColour(cardStyle.borderTopColor);
+    expect(parseColour(theme.palette.primary.main).slice(0, 3)).toEqual([br, bg, bb]);
+    expect(ba).toBeCloseTo(0.3, 2);
+
+    // Contrast is measured on what is actually painted: the tint over the message area background.
+    const painted = over(cardStyle.backgroundColor, theme.palette.background.default);
+    const ratio = contrast(getComputedStyle(body).color, painted);
     expect(ratio).toBeGreaterThanOrEqual(4.5);
-    expect(card.querySelector('a[href="https://wa.me/18556488855"]')).not.toBeNull();
+
+    const whatsapp = card.querySelector('a[href="https://wa.me/18556488855"]') as HTMLElement;
+    expect(whatsapp).not.toBeNull();
+    expect(whatsapp.className).toMatch(/MuiButton-containedPrimary/);
   });
 
   it('shows the mini-orb only on the first assistant bubble of a group', () => {

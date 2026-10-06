@@ -13,6 +13,7 @@ import {
   InputBase,
   Stack,
   Typography,
+  alpha,
   useTheme,
 } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -211,7 +212,16 @@ function MessageBubble({
   );
 }
 
-function ErrorBanner({ onRetry }: { onRetry: () => void }) {
+/** `network`: the request never reached the server. `server`: the API answered with an error. */
+type ChatErrorKind = 'network' | 'server';
+
+function ErrorBanner({
+  kind,
+  onRetry,
+}: {
+  kind: ChatErrorKind;
+  onRetry: () => void;
+}) {
   const { t } = useTranslation();
   const theme = useTheme();
   return (
@@ -219,6 +229,7 @@ function ErrorBanner({ onRetry }: { onRetry: () => void }) {
       data-chat-item
       role="alert"
       data-testid="assistant-error-banner"
+      data-error-kind={kind}
       sx={{
         p: 2,
         borderRadius: 2,
@@ -233,7 +244,9 @@ function ErrorBanner({ onRetry }: { onRetry: () => void }) {
         variant="body2"
         sx={{ flex: 1, color: theme.palette.text.primary }}
       >
-        {t('assistant.errorMessage', 'Message not sent. Check your connection.')}
+        {kind === 'network'
+          ? t('assistant.errorMessage', 'Message not sent. Check your connection.')
+          : t('assistant.errorServer', 'Message not sent. Please try again.')}
       </Typography>
       <Button
         size="small"
@@ -264,8 +277,8 @@ function HandoffCard() {
         sx={{
           p: 2,
           borderRadius: 2,
-          backgroundColor: brandTokens.info.soft,
-          border: `1px solid ${theme.palette.info.main}`,
+          backgroundColor: alpha(theme.palette.primary.main, 0.06),
+          border: `1px solid ${alpha(theme.palette.primary.main, 0.3)}`,
           display: 'flex',
           gap: 1.5,
           alignItems: 'flex-start',
@@ -273,7 +286,7 @@ function HandoffCard() {
       >
         <SupportAgent
           aria-hidden
-          sx={{ color: theme.palette.info.dark, fontSize: 24, mt: 0.25 }}
+          sx={{ color: theme.palette.primary.main, fontSize: 24, mt: 0.25 }}
         />
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
@@ -285,7 +298,8 @@ function HandoffCard() {
           <Typography
             variant="body2"
             data-testid="assistant-handoff-body"
-            sx={{ color: brandTokens.text.secondary, mb: 1.5 }}
+            // text.secondary (#64748B) drops below 4.5:1 on the primary tint; text.primary is ~15:1.
+            sx={{ color: theme.palette.text.primary, mb: 1.5 }}
           >
             {t(
               'assistant.handoffBody',
@@ -750,7 +764,12 @@ const AssistantPage: React.FC = () => {
                 <ThinkingIndicator />
               </Box>
             )}
-            {error && !isSending && <ErrorBanner onRetry={() => void retry()} />}
+            {error && !isSending && (
+              <ErrorBanner
+                kind={isOffline ? 'network' : 'server'}
+                onRetry={() => void retry()}
+              />
+            )}
             {handoff && <HandoffCard />}
           </Stack>
         )}

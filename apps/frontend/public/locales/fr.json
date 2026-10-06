@@ -8562,6 +8562,7 @@
     "handoffBody": "Continuez sur WhatsApp. Nous répondons en général sous 1 heure.",
     "errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
     "errorMessage": "Message non envoyé. Vérifiez votre connexion.",
+    "errorServer": "Message non envoyé. Veuillez réessayer.",
     "retry": "Réessayer",
     "clear": "Effacer la conversation",
     "startOver": "Recommencer",
