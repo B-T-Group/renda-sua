@@ -99,6 +99,10 @@ describe('OrdersService cash-exception inventory', () => {
       .compile();
 
     service = module.get(OrdersService);
+    // Settlement claims the deposit (paid -> applied) before applying it.
+    (service as any).depositRefundService = {
+      claimDepositApplied: jest.fn().mockResolvedValue('applied'),
+    };
     (service as any).representativeCompensationService = {
       evaluateForOrderSafe: jest.fn(),
     };
@@ -212,6 +216,7 @@ describe('OrdersService cash-exception inventory', () => {
       orderNumber: '49520979',
       depositTransactionId: 'dep-txn-1',
     });
+    expect((service as any).depositRefundService.claimDepositApplied).toHaveBeenCalledWith('order-123');
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('MarkCashException'),
       expect.objectContaining({ orderId: 'order-123' })
@@ -235,6 +240,23 @@ describe('OrdersService cash-exception inventory', () => {
     });
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     expect(inventoryCalls()).toEqual([]);
+  });
+
+  it('refuses cash exception without applying when the deposit was already forfeited', async () => {
+    stubOrder({
+      deposit_status: 'paid',
+      deposit_amount: 2000,
+      deposit_mobile_payment_transaction_id: 'dep-txn-1',
+    });
+    (service as any).depositRefundService.claimDepositApplied.mockResolvedValue('forfeited');
+    const apply = jest.fn();
+    (service as any).depositLedgerService = { applyHeldDepositAsPayment: apply };
+
+    await expect(service.markPaidInCashException('order-123')).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+    });
+    expect(apply).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
   it('does not apply a deposit when cash exception has no captured deposit', async () => {
