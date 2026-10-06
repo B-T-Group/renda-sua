@@ -410,18 +410,47 @@ class CancellationFinancialsTest(unittest.TestCase):
         self.assertEqual(call.args[4], "order-123")
         deps["update_order_hold_status"].assert_not_called()
 
-    def test_hold_not_active_is_a_no_op(self):
+    def test_inactive_hold_row_releases_from_ledger_and_is_not_rewritten(self):
+        # Agent drop flips the whole row to `cancelled` while the client's hold is
+        # still live; the row status must not short-circuit the client release.
         with self._patch_cancellation_dependencies(
-            order=_order(), hold=_hold(status="cancelled"), transaction_ids=[]
+            order=_order(),
+            hold=_hold(status="cancelled", client_hold_amount=0.0),
+            transaction_ids=["rel"],
+            held={"client-account-123": 100.0},
         ) as deps:
             result = handler.process_cancellation_financials(
                 "order-123", "business", "pending", "endpoint", "secret"
             )
         self.assertTrue(result["success"])
-        self.assertEqual(result.get("skipped"), "hold_not_active")
-        deps["register_account_transaction"].assert_not_called()
-        deps["get_reference_held_amount"].assert_not_called()
+        call = deps["register_account_transaction"].call_args
+        self.assertEqual(call.args[1], 100.0)
+        self.assertEqual(call.kwargs["idempotency_key"], "order:order-123:cancel_release:client")
         deps["update_order_hold_status"].assert_not_called()
+
+    def test_inactive_hold_row_with_nothing_held_is_a_no_op(self):
+        with self._patch_cancellation_dependencies(
+            order=_order(), hold=_hold(status="completed"), transaction_ids=[],
+            held={"client-account-123": 0.0},
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "pending", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"])
+        deps["register_account_transaction"].assert_not_called()
+        deps["update_order_hold_status"].assert_not_called()
+
+    def test_assigned_agent_without_account_and_no_row_does_not_fail_cancel(self):
+        order = _order(assigned_agent=SimpleNamespace(user_id="agent-user-123"))
+        with self._patch_cancellation_dependencies(
+            order=order, hold=None, transaction_ids=[], agent_account=None,
+            held={"client-account-123": 0.0},
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "pending", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"], result)
+        deps["register_account_transaction"].assert_not_called()
 
     def test_releases_use_deterministic_keys_and_held_ignores_own_releases(self):
         order = _order(assigned_agent=SimpleNamespace(user_id="agent-user-123"))
