@@ -13,7 +13,13 @@ import {
   fetchClientFlags,
   type ClientFlags,
 } from '../services/clientFlagsApi';
-import { useMarket } from '../hooks/useMarket';
+import { useStore } from '../stores/RootStore';
+import {
+  createClientFlagsLoader,
+  watchMarketCountry,
+  type ClientFlagsLoader,
+  type ClientFlagsLoaderState,
+} from './clientFlagsLoader';
 
 type ClientFlagsContextValue = {
   flags: ClientFlags;
@@ -27,47 +33,46 @@ const ClientFlagsContext = createContext<ClientFlagsContextValue>({
   refresh: async () => undefined,
 });
 
+/**
+ * Fetches client flags for the selected market. Logic lives in
+ * `clientFlagsLoader.ts` (unit-tested): refetch on market change via a MobX
+ * reaction, latest request wins, last known flags kept on failure.
+ */
 export function ClientFlagsProvider({ children }: { children: React.ReactNode }) {
-  const [flags, setFlags] = useState<ClientFlags>(DEFAULT_CLIENT_FLAGS);
-  const [loading, setLoading] = useState(true);
-  const { selectedMarket } = useMarket();
-  const requestIdRef = useRef(0);
-
-  // Key refresh on the countryCode string to avoid double fetch on object rebuild
-  const countryCode = selectedMarket?.countryCode;
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    const requestId = ++requestIdRef.current;
-
-    try {
-      const next = await fetchClientFlags(countryCode);
-      // Ignore out-of-order responses
-      if (requestId === requestIdRef.current) {
-        setFlags(next);
-      }
-    } catch (error) {
-      // On fetch failure, keep the previous flags (never reset to false)
-      // catalog_experience_v1, floating_nav_enabled, reels_enabled are on in prod
-      console.warn('Failed to fetch client flags, keeping previous state', error);
-    } finally {
-      if (requestId === requestIdRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [countryCode]);
+  const { market } = useStore();
+  const [state, setState] = useState<ClientFlagsLoaderState>({
+    flags: DEFAULT_CLIENT_FLAGS,
+    loading: true,
+  });
+  const loaderRef = useRef<ClientFlagsLoader | null>(null);
+  // Seed a recreated loader (e.g. StrictMode remount) with the latest flags.
+  const latestFlagsRef = useRef(state.flags);
+  latestFlagsRef.current = state.flags;
 
   useEffect(() => {
-    void refresh();
-  }, [refresh]);
+    const loader = createClientFlagsLoader(fetchClientFlags, setState, latestFlagsRef.current);
+    loaderRef.current = loader;
+    const stopMarket = watchMarketCountry(market, (countryCode) => {
+      void loader.setCountry(countryCode);
+    });
+    const stopEnv = registerEnvChangeListener(() => {
+      void loader.refresh();
+    });
+    return () => {
+      stopMarket();
+      stopEnv();
+      loader.dispose();
+      if (loaderRef.current === loader) loaderRef.current = null;
+    };
+  }, [market]);
 
-  useEffect(() => registerEnvChangeListener(() => {
-    void refresh();
-  }), [refresh]);
+  const refresh = useCallback(async () => {
+    await loaderRef.current?.refresh();
+  }, []);
 
   const value = useMemo(
-    () => ({ flags, loading, refresh }),
-    [flags, loading, refresh]
+    () => ({ flags: state.flags, loading: state.loading, refresh }),
+    [state.flags, state.loading, refresh]
   );
 
   return (

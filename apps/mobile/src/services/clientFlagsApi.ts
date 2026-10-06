@@ -30,18 +30,30 @@ type ClientFlagsResponse = {
   message: string;
 };
 
+export type ClientFlagsFetchResult =
+  | { ok: true; flags: ClientFlags }
+  | { ok: false; error: unknown };
+
+/**
+ * Fetches client flags for an optional market (ISO-2). Never throws: failures
+ * come back as `{ ok: false }` so callers can keep their last known flags
+ * instead of falling back to all-false defaults mid-session.
+ */
 export async function fetchClientFlags(
   country?: string,
   init?: { signal?: AbortSignal }
-): Promise<ClientFlags> {
+): Promise<ClientFlagsFetchResult> {
   try {
     const res = await publicApiGet<ClientFlagsResponse>(
       '/app-config/client-flags',
       country ? { country } : undefined,
       init
     );
-    return { ...DEFAULT_CLIENT_FLAGS, ...res.data };
-  } catch {
-    return DEFAULT_CLIENT_FLAGS;
+    if (!res || typeof res.data !== 'object' || res.data === null) {
+      return { ok: false, error: new Error('Malformed client flags response') };
+    }
+    return { ok: true, flags: { ...DEFAULT_CLIENT_FLAGS, ...res.data } };
+  } catch (error) {
+    return { ok: false, error };
   }
 }

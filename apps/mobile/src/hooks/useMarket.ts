@@ -52,7 +52,12 @@ export function useMarket(): UseMarketResult {
   const { countries } = useSupportedCountries();
 
   const markets = useMemo<Market[]>(
-    () => countries.map(toMarket).filter((m) => m.isEnabled),
+    // Skip malformed rows (missing code) so toMarket can't throw during render.
+    () =>
+      countries
+        .filter((c) => typeof c?.code === 'string' && c.code.length > 0)
+        .map(toMarket)
+        .filter((m) => m.isEnabled),
     [countries]
   );
 

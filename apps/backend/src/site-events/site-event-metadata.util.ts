@@ -25,7 +25,6 @@ const AUTH_METADATA_ALLOWLIST = new Set([
 ]);
 
 // Server event keys that should not be filtered despite containing digits (Phase 0 #453)
-// Also includes orderId for reorder events (#451 review)
 const SERVER_EVENT_ID_ALLOWLIST = new Set([
   'orderId',
   'orderNumber',
@@ -62,7 +61,7 @@ const ASSISTANT_ENUM_VALUES = {
   market: new Set(['CM', 'GA', 'CA', 'US', 'TG', 'BJ', 'CI', 'CG', 'PH']),
   locale: new Set(['en', 'fr']),
   // Feedback fields (plan §4 AC13)
-  currency: new Set(['XAF', 'FCFA', 'CAD', 'USD', 'PHP']),
+  currency: new Set(['XAF', 'XOF', 'FCFA', 'CAD', 'USD', 'PHP']),
   shown_stock_bucket: new Set(['in', 'low', 'out']),
 };
 
@@ -81,9 +80,17 @@ const ASSISTANT_TOOL_NAMES = new Set([
 
 const SCREEN_CHIP_PATTERN = /^[A-Za-z0-9_.-]{1,40}$/;
 
+const MAX_SHOWN_PRICE = 99_999_999;
+
+// Keys exempt from the phone heuristic only when the value is a strict UUID.
+const ASSISTANT_UUID_ID_KEYS: ReadonlySet<string> = new Set(['thread_id', 'target_id', 'order_id']);
+// Client reorder events (mobile sends metadata.orderId; web uses subject_id).
+const REORDER_UUID_ID_KEYS: ReadonlySet<string> = new Set(['orderId']);
+const NO_UUID_ID_KEYS: ReadonlySet<string> = new Set();
+
 function validateAssistantValue(key: string, value: unknown): unknown | null {
   // UUID-validated fields
-  if (['thread_id', 'target_id', 'order_id'].includes(key)) {
+  if (ASSISTANT_UUID_ID_KEYS.has(key)) {
     if (typeof value === 'string' && isUuidValue(value)) {
       return value;
     }
@@ -115,9 +122,10 @@ function validateAssistantValue(key: string, value: unknown): unknown | null {
     return null;
   }
 
-  // Bounded price (cents/minor units)
+  // Shown price: whole number, at most 8 digits. A 9+ digit integer could be
+  // a phone number (CM mobiles are 9 digits), so it is dropped.
   if (key === 'shown_price') {
-    if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1e10) {
+    if (typeof value === 'number' && Number.isInteger(value) && value >= 0 && value <= MAX_SHOWN_PRICE) {
       return value;
     }
     return null;
@@ -169,6 +177,17 @@ export function isAuthSiteEventType(eventType: string): boolean {
 
 export function isAssistantSiteEventType(eventType: string): boolean {
   return eventType.startsWith('assistant.');
+}
+
+export function isReorderSiteEventType(eventType: string): boolean {
+  return eventType.startsWith('orders.reorder.');
+}
+
+/** Keys whose values are kept only if they are strict UUIDs (dropped otherwise). */
+export function uuidIdKeysForEventType(eventType: string): ReadonlySet<string> {
+  if (isAssistantSiteEventType(eventType)) return ASSISTANT_UUID_ID_KEYS;
+  if (isReorderSiteEventType(eventType)) return REORDER_UUID_ID_KEYS;
+  return NO_UUID_ID_KEYS;
 }
 
 function isUuidValue(value: string): boolean {
@@ -223,15 +242,15 @@ export function valueLooksLikePii(
   key: string,
   value: unknown,
   isServerEvent: boolean,
-  isAssistantEvent = false
+  uuidIdKeys: ReadonlySet<string> = NO_UUID_ID_KEYS
 ): boolean {
   if (typeof value !== 'string') return false;
   if (SENSITIVE_VALUE_KEY.test(key)) return true;
   // For server events, allow specific ID keys even if they contain digits
   if (isServerEvent && SERVER_EVENT_ID_ALLOWLIST.has(key)) return false;
-  // For assistant events, allow UUID-shaped thread_id, target_id, and order_id
-  // even though they fail the phone heuristic (≥7 digits)
-  if (isAssistantEvent && ['thread_id', 'target_id', 'order_id'].includes(key)) {
+  // Assistant thread_id/target_id/order_id and reorder orderId: keep only strict
+  // UUIDs (they would otherwise fail the ≥7-digit phone heuristic); drop anything else.
+  if (uuidIdKeys.has(key)) {
     return !isUuidValue(value);
   }
   if (looksLikeEmail(value)) return true;
@@ -243,16 +262,16 @@ export function valueLooksLikePii(
 export function stripPiiFromMetadata(
   metadata: Record<string, unknown>,
   isServerEvent: boolean,
-  isAssistantEvent = false
+  uuidIdKeys: ReadonlySet<string> = NO_UUID_ID_KEYS
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
-    if (valueLooksLikePii(key, value, isServerEvent, isAssistantEvent)) {
+    if (valueLooksLikePii(key, value, isServerEvent, uuidIdKeys)) {
       logger.warn(`Dropping PII-like key "${key}" from site_event metadata`);
       continue;
     }
     if (value && typeof value === 'object' && !Array.isArray(value)) {
-      out[key] = stripPiiFromMetadata(value as Record<string, unknown>, isServerEvent, isAssistantEvent);
+      out[key] = stripPiiFromMetadata(value as Record<string, unknown>, isServerEvent, uuidIdKeys);
       continue;
     }
     out[key] = value;
@@ -276,5 +295,5 @@ export function normalizeSiteEventMetadata(
   } else {
     base = { ...metadata };
   }
-  return stripPiiFromMetadata(base, isServerEvent, isAssistantEvent);
+  return stripPiiFromMetadata(base, isServerEvent, uuidIdKeysForEventType(eventType));
 }

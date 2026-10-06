@@ -208,6 +208,30 @@ describe('site-event-metadata.util', () => {
       expect(out.shown_stock_bucket).toBe('in');
     });
 
+    it('keeps shown_price only as a whole number of at most 8 digits', () => {
+      const keep = (v: unknown) =>
+        normalizeSiteEventMetadata('assistant.feedback.submitted', { shown_price: v }, 'client').shown_price;
+      expect(keep(0)).toBe(0);
+      expect(keep(18500)).toBe(18500);
+      expect(keep(99_999_999)).toBe(99_999_999);
+      expect(keep(670000000)).toBeUndefined(); // 9-digit CM mobile number
+      expect(keep(100_000_000)).toBeUndefined();
+      expect(keep(237670000000)).toBeUndefined();
+      expect(keep(1.5)).toBeUndefined();
+      expect(keep(-1)).toBeUndefined();
+      expect(keep(Number.NaN)).toBeUndefined();
+      expect(keep(Number.POSITIVE_INFINITY)).toBeUndefined();
+      expect(keep('18500')).toBeUndefined();
+    });
+
+    it('accepts XOF currency for BJ/CI/TG feedback', () => {
+      const out = normalizeSiteEventMetadata('assistant.feedback.submitted', {
+        currency: 'XOF',
+        market: 'TG',
+      }, 'client');
+      expect(out).toEqual({ currency: 'XOF', market: 'TG' });
+    });
+
     it('caps tools_used array at 10 elements', () => {
       const manyTools = Array(15).fill('search_catalog');
       const out = normalizeSiteEventMetadata('assistant.message.classified', {
@@ -238,6 +262,29 @@ describe('site-event-metadata.util', () => {
       expect(out.intent).toBe('buy');
       expect(out.persona).toBe('client');
       expect(out.market).toBe('CM');
+    });
+  });
+
+  describe('reorder event metadata', () => {
+    const uuid = '550e8400-e29b-41d4-a716-446655440000';
+
+    it('keeps a strict-UUID orderId on client reorder events', () => {
+      const out = normalizeSiteEventMetadata('orders.reorder.tap', { orderId: uuid, source: 'mobile' }, 'client');
+      expect(out).toEqual({ orderId: uuid, source: 'mobile' });
+    });
+
+    it('drops a non-UUID or phone-like orderId on client reorder events', () => {
+      for (const orderId of ['+237 670 00 00 00', '670000000', `${uuid} `, 'ORD-12041661', 'jean@example.com']) {
+        const out = normalizeSiteEventMetadata('orders.reorder.result', { orderId, source: 'mobile' }, 'client');
+        expect(out).toEqual({ source: 'mobile' });
+      }
+    });
+
+    it('does not extend the UUID exemption to other keys or other event types', () => {
+      expect(
+        normalizeSiteEventMetadata('orders.reorder.tap', { order_id: uuid, thread_id: uuid }, 'client')
+      ).toEqual({});
+      expect(normalizeSiteEventMetadata('catalog.module.click', { orderId: uuid }, 'client')).toEqual({});
     });
   });
 });
