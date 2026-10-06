@@ -6,6 +6,7 @@ import { GiveChangePayoutService } from './give-change-payout.service';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsCoreModule } from './mobile-payments-core.module';
 import { MobilePaymentsController } from './mobile-payments.controller';
+import { MobileTransactionAccessService } from './mobile-transaction-access.service';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
 import { PendingWithdrawalReconcilerService } from './pending-withdrawal-reconciler.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
@@ -23,6 +24,7 @@ import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.se
     GiveChangePayoutService,
     PendingWithdrawalResolveService,
     PendingWithdrawalReconcilerService,
+    MobileTransactionAccessService,
   ],
   exports: [GiveChangePayoutService, PendingWithdrawalResolveService],
 })
