@@ -17,6 +17,11 @@ import {
 } from '../users/persona.util';
 import { timezoneFromAddressCountryCode } from '../users/user-timezone.util';
 import { resolveCurrencyFromCountry } from '../country-currency/country-currency.util';
+import {
+  UPDATE_ADDRESS_MUTATION,
+  buildAddressesSetInput,
+  toAddressUpdateHttpException,
+} from './address-update.util';
 import { postalCodeForStorage } from './postal-code.util';
 
 export interface CreateAddressDto {
@@ -1213,73 +1218,7 @@ export class AddressesService {
       if (addressData.instructions !== undefined) {
         updateData.instructions = addressData.instructions;
       }
-      // Update address
-      const updateMutation = `
-        mutation UpdateAddress(
-          $addressId: uuid!,
-          $addressLine1: String,
-          $addressLine2: String,
-          $city: String,
-          $state: String,
-          $postalCode: String,
-          $country: String,
-          $isPrimary: Boolean,
-          $addressType: String,
-          $latitude: numeric,
-          $longitude: numeric,
-          $instructions: String
-        ) {
-          update_addresses_by_pk(
-            pk_columns: { id: $addressId },
-            _set: {
-              address_line_1: $addressLine1,
-              address_line_2: $addressLine2,
-              city: $city,
-              state: $state,
-              postal_code: $postalCode,
-              country: $country,
-              is_primary: $isPrimary,
-              address_type: $addressType,
-              latitude: $latitude,
-              longitude: $longitude,
-              instructions: $instructions
-            }
-          ) {
-            id
-            address_line_1
-            address_line_2
-            city
-            state
-            postal_code
-            country
-            is_primary
-            address_type
-            latitude
-            longitude
-            instructions
-            created_at
-            updated_at
-          }
-        }
-      `;
-
-      const result = await this.hasuraSystemService.executeMutation(
-        updateMutation,
-        {
-          addressId,
-          addressLine1: updateData.address_line_1,
-          addressLine2: updateData.address_line_2,
-          city: updateData.city,
-          state: updateData.state,
-          postalCode: updateData.postal_code ?? '',
-          country: updateData.country,
-          isPrimary: updateData.is_primary,
-          addressType: updateData.address_type,
-          latitude: updateData.latitude,
-          longitude: updateData.longitude,
-          instructions: updateData.instructions ?? undefined,
-        }
-      );
+      const updatedAddress = await this.persistAddressUpdate(addressId, updateData);
 
       const countryChanged =
         addressData.country !== undefined &&
@@ -1297,21 +1236,30 @@ export class AddressesService {
 
       return {
         success: true,
-        address: result.update_addresses_by_pk,
+        address: updatedAddress,
         warning: warning || undefined,
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throw toAddressUpdateHttpException(error);
     }
+  }
+
+  private async persistAddressUpdate(
+    addressId: string,
+    updateData: Record<string, unknown>
+  ): Promise<AddressResponse> {
+    const set = buildAddressesSetInput(updateData);
+    if (Object.keys(set).length === 0) {
+      const existing = await this.getAddressesByIds([addressId]);
+      return existing[0];
+    }
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_addresses_by_pk: AddressResponse;
+    }>(UPDATE_ADDRESS_MUTATION, { addressId, set });
+    if (!result.update_addresses_by_pk) {
+      throw new HttpException('Failed to update address', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+    return result.update_addresses_by_pk;
   }
 
   private async getBusinessIdForAddress(
@@ -1844,83 +1792,15 @@ export class AddressesService {
     if (addressData.instructions !== undefined) {
       updateData.instructions = addressData.instructions;
     }
-    // Update address
-    const updateMutation = `
-      mutation UpdateAddress(
-        $addressId: uuid!,
-        $addressLine1: String,
-        $addressLine2: String,
-        $city: String,
-        $state: String,
-        $postalCode: String,
-        $country: String,
-        $addressType: String,
-        $latitude: numeric,
-        $longitude: numeric,
-        $instructions: String
-      ) {
-        update_addresses_by_pk(
-          pk_columns: { id: $addressId },
-          _set: {
-            address_line_1: $addressLine1,
-            address_line_2: $addressLine2,
-            city: $city,
-            state: $state,
-            postal_code: $postalCode,
-            country: $country,
-            address_type: $addressType,
-            latitude: $latitude,
-            longitude: $longitude,
-            instructions: $instructions,
-          }
-        ) {
-          id
-          address_line_1
-          address_line_2
-          city
-          state
-          postal_code
-          country
-          is_primary
-          address_type
-          latitude
-          longitude
-          instructions
-          created_at
-          updated_at
-          status
-        }
-      }
-    `;
-
-    const result = await this.hasuraSystemService.executeMutation(
-      updateMutation,
-      {
-        addressId,
-        addressLine1: updateData.address_line_1,
-        addressLine2: updateData.address_line_2,
-        city: updateData.city,
-        state: updateData.state,
-        postalCode: updateData.postal_code ?? '',
-        country: updateData.country,
-        addressType: updateData.address_type,
-        latitude: updateData.latitude,
-        longitude: updateData.longitude,
-        instructions: updateData.instructions ?? undefined,
-      }
-    );
-    // Country/primary location address drives payment rail → storefront visibility.
+    const updatedAddress = await this.persistAddressUpdate(addressId, updateData);
     if (businessLocation.is_primary) {
-      await this.syncUserCountry(
-        userId,
-        result.update_addresses_by_pk?.country
-      );
+      await this.syncUserCountry(userId, updatedAddress?.country);
     }
     await this.recomputeBusinessLifecycle(businessId);
 
     return {
       success: true,
-      address: result.update_addresses_by_pk,
+      address: updatedAddress,
       warning: warning || undefined,
     };
   }
