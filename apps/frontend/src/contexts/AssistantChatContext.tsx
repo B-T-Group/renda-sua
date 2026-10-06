@@ -41,7 +41,6 @@ const AssistantChatContext = createContext<AssistantChatContextType | null>(
 const STORAGE_KEY_MESSAGES = 'rendasua.assistant.chat.v1';
 const STORAGE_KEY_THREAD_ID = 'rendasua.assistant.thread_id.v1';
 const STORAGE_KEY_LAST_ACTIVITY = 'rendasua.assistant.last_activity.v1';
-const STORAGE_KEY_AUTH_STATE = 'rendasua.assistant.auth_state.v1';
 const MAX_API_MESSAGES = 20;
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
@@ -152,24 +151,6 @@ function persistLastActivity(timestamp: number): void {
   if (typeof sessionStorage === 'undefined') return;
   try {
     sessionStorage.setItem(STORAGE_KEY_LAST_ACTIVITY, timestamp.toString());
-  } catch {
-    /* ignore quota */
-  }
-}
-
-function loadAuthState(): string {
-  if (typeof sessionStorage === 'undefined') return 'unknown';
-  try {
-    return sessionStorage.getItem(STORAGE_KEY_AUTH_STATE) || 'unknown';
-  } catch {
-    return 'unknown';
-  }
-}
-
-function persistAuthState(state: string): void {
-  if (typeof sessionStorage === 'undefined') return;
-  try {
-    sessionStorage.setItem(STORAGE_KEY_AUTH_STATE, state);
   } catch {
     /* ignore quota */
   }

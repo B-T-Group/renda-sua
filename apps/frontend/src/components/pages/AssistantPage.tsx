@@ -10,7 +10,7 @@ import {
   useTheme,
 } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
-import React, { KeyboardEvent, useEffect, useRef, useState } from 'react';
+import React, { KeyboardEvent, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAssistantChat } from '../../contexts/AssistantChatContext';
 import type { AssistantChatMessage } from '../../contexts/AssistantChatContext';
