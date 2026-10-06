@@ -229,20 +229,17 @@ export class SiteEventsService {
 
   private normalizeMetadata(
     eventType: string,
-    metadata?: Record<string, unknown>
+    metadata: Record<string, unknown> | undefined,
+    viewerType: string
   ): Record<string, unknown> {
     if (!metadata || typeof metadata !== 'object') {
       return {};
     }
-    const sanitized = normalizeSiteEventMetadata(eventType, metadata);
+    const sanitized = normalizeSiteEventMetadata(eventType, metadata, viewerType);
     const keys = Object.keys(sanitized).slice(0, MAX_METADATA_KEYS);
     const out: Record<string, unknown> = {};
     for (const k of keys) {
       const value = sanitized[k];
-      if (valueLooksLikePiiInMetadata(k, value)) {
-        this.logger.warn(`Dropped PII-like metadata for event ${eventType}`);
-        continue;
-      }
       out[k] = value;
     }
     const s = JSON.stringify(out);
@@ -306,7 +303,7 @@ export class SiteEventsService {
     viewer: TrackViewerIdentity
   ): Promise<void> {
     this.assertV1Subject(body);
-    const metadata = this.normalizeMetadata(body.eventType, body.metadata);
+    const metadata = this.normalizeMetadata(body.eventType, body.metadata, viewer.viewerType);
     const isDupe = await this.isRecentDuplicate({
       viewerType: viewer.viewerType,
       viewerId: viewer.viewerId,

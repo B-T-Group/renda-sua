@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { SiteEventsService } from '../site-events/site-events.service';
 import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 import {
@@ -23,11 +23,9 @@ export class DeliveryAvailabilityService {
   private readonly rules: DeliveryAvailabilityRule[];
 
   constructor(
-    @Optional()
     @Inject(DELIVERY_AVAILABILITY_RULES)
     rules: DeliveryAvailabilityRule[] | null,
-    @Optional()
-    private readonly siteEventsService?: SiteEventsService
+    private readonly siteEventsService: SiteEventsService
   ) {
     this.rules = [...(rules ?? [])].sort((a, b) => a.order - b.order);
   }
@@ -111,24 +109,22 @@ export class DeliveryAvailabilityService {
     this.logger.log(JSON.stringify(logPayload));
 
     // Emit durable site_event (Phase 0 #453)
-    if (this.siteEventsService) {
-      emitServerSiteEvent(
-        this.siteEventsService,
-        'checkout.delivery_availability',
-        {
-          businessId: ctx.businessId,
-          businessLocationId: ctx.businessLocationId ?? null,
-          sellerCountry: ctx.sellerCountry,
-          sellerState: ctx.sellerState,
-          clientId: ctx.clientId ?? null,
-          available: result.available,
-          reason: result.reason,
-          ruleId: result.ruleId,
-          eligibleAgentCount: result.metadata?.eligibleAgentCount ?? null,
-          radiusKm: result.metadata?.radiusKm ?? null,
-          durationMs,
-        }
-      );
-    }
+    emitServerSiteEvent(
+      this.siteEventsService,
+      'checkout.delivery_availability',
+      {
+        businessId: ctx.businessId,
+        businessLocationId: ctx.businessLocationId ?? null,
+        sellerCountry: ctx.sellerCountry,
+        sellerState: ctx.sellerState,
+        clientId: ctx.clientId ?? null,
+        available: result.available,
+        reason: result.reason,
+        ruleId: result.ruleId,
+        eligibleAgentCount: result.metadata?.eligibleAgentCount ?? null,
+        radiusKm: result.metadata?.radiusKm ?? null,
+        durationMs,
+      }
+    );
   }
 }
