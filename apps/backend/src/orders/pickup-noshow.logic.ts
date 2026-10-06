@@ -105,7 +105,7 @@ function validHours(value: number | string | null | undefined): number {
   ) {
     throw new HttpException(
       `pickup_noshow_cancel_hours must be between ${MIN_PICKUP_NOSHOW_HOURS} and ${MAX_PICKUP_NOSHOW_HOURS}`,
-      HttpStatus.INTERNAL_SERVER_ERROR
+      HttpStatus.BAD_REQUEST
     );
   }
   return hours;

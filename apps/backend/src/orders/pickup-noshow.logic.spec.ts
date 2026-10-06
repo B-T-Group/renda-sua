@@ -175,7 +175,7 @@ describe('loadPickupNoshowClock', () => {
           error: jest.fn(),
         })
       ).rejects.toMatchObject({
-        status: HttpStatus.INTERNAL_SERVER_ERROR,
+        status: HttpStatus.BAD_REQUEST,
         message: 'pickup_noshow_cancel_hours must be between 1 and 168',
       });
     }
