@@ -64,18 +64,23 @@ export function generateThreadId(): string {
   // Try crypto.getRandomValues (all browsers, build RFC4122 v4)
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
     try {
-      // RFC4122 v4 UUID template
-      const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
+      // RFC4122 v4 UUID template: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+      // We need 32 hex digits (ignoring the fixed '4')
       const bytes = new Uint8Array(16);
       crypto.getRandomValues(bytes);
       
-      let byteIndex = 0;
-      return template.replace(/[xy]/g, (c) => {
-        const byte = bytes[byteIndex++];
-        const r = byte % 16;
-        const v = c === 'x' ? r : (r & 0x3) | 0x8;
-        return v.toString(16);
-      });
+      // Build UUID parts
+      const hex = Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      
+      return [
+        hex.substring(0, 8),
+        hex.substring(8, 12),
+        '4' + hex.substring(13, 16),
+        ((parseInt(hex.substring(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, '0') + hex.substring(18, 20),
+        hex.substring(20, 32),
+      ].join('-');
     } catch {
       // Fall through to Math.random
     }
