@@ -1,4 +1,4 @@
-import { AutoAwesome, Clear, Send, WhatsApp } from '@mui/icons-material';
+import { RestartAlt, Send, SmartToy, WhatsApp } from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -7,22 +7,14 @@ import {
   InputBase,
   Stack,
   Typography,
+  useTheme,
 } from '@mui/material';
-import { AnimatePresence, motion } from 'framer-motion';
-import React, { KeyboardEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
+import React, { KeyboardEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  AssistantChatMessage,
-  useAssistantChat,
-} from '../../hooks/useAssistantChat';
-import { AssistantEmptyIllustration } from './AssistantEmptyIllustration';
+import { useAssistantChat } from '../../contexts/AssistantChatContext';
+import type { AssistantChatMessage } from '../../contexts/AssistantChatContext';
 import { AssistantMarkdown } from './AssistantMarkdown';
-import { brandTokens } from '../../theme/brandTokens';
-
-const PAGE_BG = 'linear-gradient(160deg, #050b16 0%, #0a1726 48%, #061018 100%)';
-const ACCENT = brandTokens.primary.light;
-const ACCENT_DIM = 'rgba(47, 111, 214, 0.14)';
-const GLASS = 'rgba(255, 255, 255, 0.05)';
 
 const SUGGESTION_KEYS = [
   {
@@ -43,239 +35,193 @@ const SUGGESTION_KEYS = [
   },
 ] as const;
 
-function useTypewriter(text: string, enabled: boolean, cps = 42): string {
-  const [shown, setShown] = useState(enabled ? '' : text);
-  useEffect(() => {
-    if (!enabled) {
-      setShown(text);
-      return;
-    }
-    setShown('');
-    let i = 0;
-    const id = window.setInterval(() => {
-      i += 1;
-      setShown(text.slice(0, i));
-      if (i >= text.length) window.clearInterval(id);
-    }, Math.max(12, Math.floor(1000 / cps)));
-    return () => window.clearInterval(id);
-  }, [text, enabled, cps]);
-  return shown;
-}
 
-function ThinkingOrb() {
+function ThinkingIndicator() {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -4 }}
-      transition={{ duration: 0.25 }}
+      transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
     >
       <Stack
         direction="row"
-        spacing={1.5}
+        spacing={1}
         alignItems="center"
         sx={{
           alignSelf: 'flex-start',
-          px: 1.75,
-          py: 1.1,
-          borderRadius: 3,
-          background: GLASS,
-          border: `1px solid ${ACCENT_DIM}`,
-          boxShadow: '0 0 24px rgba(47,111,214,0.12)',
+          px: 2,
+          py: 1.5,
+          borderRadius: '16px 16px 16px 4px',
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${theme.palette.divider}`,
         }}
+        role="status"
+        aria-live="polite"
+        aria-label={t('assistant.thinking', 'Thinking…')}
       >
-        <Box
+        <Typography
+          variant="body2"
           sx={{
-            width: 28,
-            height: 28,
-            borderRadius: '50%',
-            background: `radial-gradient(circle at 35% 35%, ${brandTokens.primary.light}, ${brandTokens.primary.dark})`,
-            boxShadow: '0 0 16px rgba(47,111,214,0.7)',
-            animation: 'aiOrbPulse 1.4s ease-in-out infinite',
-            position: 'relative',
-            '&::after': {
-              content: '""',
-              position: 'absolute',
-              inset: -4,
-              borderRadius: '50%',
-              border: '1px solid rgba(47,111,214,0.35)',
-              animation: 'aiRingSpin 2.4s linear infinite',
-            },
+            color: theme.palette.text.secondary,
+            fontSize: '15px',
+            lineHeight: '22px',
           }}
-        />
-        <Box>
-          <Typography
-            variant="caption"
-            sx={{ color: ACCENT, fontWeight: 700, letterSpacing: 0.6 }}
-          >
-            {t('assistant.thinking', 'Thinking…')}
-          </Typography>
-          <Stack direction="row" spacing={0.6} sx={{ mt: 0.4 }}>
+        >
+          {t('assistant.thinking', 'Thinking…')}
+        </Typography>
+        {!prefersReducedMotion && (
+          <Stack direction="row" spacing={0.5}>
             {[0, 1, 2].map((i) => (
               <Box
                 key={i}
                 sx={{
-                  width: 5,
-                  height: 5,
+                  width: 6,
+                  height: 6,
                   borderRadius: '50%',
-                  bgcolor: ACCENT,
-                  animation: 'aiBounce 1.1s ease-in-out infinite',
-                  animationDelay: `${i * 0.18}s`,
+                  bgcolor: theme.palette.text.secondary,
+                  animation: 'dotBounce 1.4s ease-in-out infinite',
+                  animationDelay: `${i * 0.2}s`,
                 }}
               />
             ))}
           </Stack>
+        )}
+      </Stack>
+    </motion.div>
+  );
+}
+
+function MessageBubble({ message }: { message: AssistantChatMessage }) {
+  const isUser = message.role === 'user';
+  const theme = useTheme();
+  const prefersReducedMotion = useReducedMotion();
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
+      style={{
+        display: 'flex',
+        justifyContent: isUser ? 'flex-end' : 'flex-start',
+      }}
+    >
+      <Stack
+        direction="row"
+        spacing={1}
+        sx={{
+          maxWidth: { xs: '80%', sm: '560px' },
+          alignItems: 'flex-start',
+        }}
+      >
+        {!isUser && (
+          <Box
+            sx={{
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              backgroundColor: theme.palette.primary.main,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              mt: 0.5,
+            }}
+          >
+            <SmartToy sx={{ fontSize: 16, color: 'white' }} />
+          </Box>
+        )}
+        <Box
+          sx={{
+            px: 2,
+            py: 1.5,
+            borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
+            backgroundColor: isUser
+              ? theme.palette.primary.main
+              : theme.palette.background.paper,
+            border: isUser ? 'none' : `1px solid ${theme.palette.divider}`,
+            color: isUser ? 'white' : theme.palette.text.primary,
+          }}
+        >
+          {isUser ? (
+            <Typography
+              variant="body2"
+              sx={{
+                whiteSpace: 'pre-wrap',
+                fontSize: '15px',
+                lineHeight: '22px',
+              }}
+            >
+              {message.content}
+            </Typography>
+          ) : (
+            <AssistantMarkdown content={message.content} rich />
+          )}
         </Box>
       </Stack>
     </motion.div>
   );
 }
 
-function MessageBubble({
-  message,
-  animateReveal,
-}: {
-  message: AssistantChatMessage;
-  animateReveal: boolean;
-}) {
-  const isUser = message.role === 'user';
-  const shown = useTypewriter(message.content, !isUser && animateReveal);
-  const done = isUser || shown.length >= message.content.length;
-
-  return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 14, scale: 0.97 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-      style={{
-        display: 'flex',
-        justifyContent: isUser ? 'flex-end' : 'flex-start',
-      }}
-    >
-      <Box
-        sx={{
-          maxWidth: { xs: '90%', sm: '72%' },
-          px: 2,
-          py: 1.35,
-          borderRadius: isUser ? '18px 18px 5px 18px' : '18px 18px 18px 5px',
-          background: isUser
-            ? 'linear-gradient(135deg, #00bcd4 0%, #006978 100%)'
-            : 'linear-gradient(180deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.03) 100%)',
-          border: isUser ? 'none' : `1px solid ${ACCENT_DIM}`,
-          color: 'white',
-          boxShadow: isUser
-            ? '0 8px 28px rgba(47,111,214,0.22)'
-            : '0 4px 18px rgba(0,0,0,0.35)',
-          position: 'relative',
-          overflow: 'hidden',
-          ...(!isUser && !done
-            ? {
-                '&::after': {
-                  content: '""',
-                  position: 'absolute',
-                  inset: 0,
-                  background:
-                    'linear-gradient(90deg, transparent, rgba(47,111,214,0.08), transparent)',
-                  animation: 'aiShimmer 1.4s ease-in-out infinite',
-                },
-              }
-            : {}),
-        }}
-      >
-        {!isUser && (
-          <Stack direction="row" spacing={0.75} alignItems="center" sx={{ mb: 0.75 }}>
-            <AutoAwesome sx={{ fontSize: 13, color: ACCENT }} />
-            <Typography
-              variant="caption"
-              sx={{ color: ACCENT, fontWeight: 700, letterSpacing: 0.4 }}
-            >
-              AI
-            </Typography>
-          </Stack>
-        )}
-        <Box sx={{ position: 'relative' }}>
-          {isUser ? (
-            <Typography
-              variant="body2"
-              sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}
-            >
-              {shown}
-            </Typography>
-          ) : (
-            <AssistantMarkdown content={shown} rich={done} />
-          )}
-          {!done && (
-            <Box
-              component="span"
-              sx={{
-                display: 'inline-block',
-                width: 7,
-                height: 14,
-                ml: 0.4,
-                bgcolor: ACCENT,
-                verticalAlign: 'text-bottom',
-                animation: 'aiCursorBlink 0.9s steps(1) infinite',
-              }}
-            />
-          )}
-        </Box>
-      </Box>
-    </motion.div>
-  );
-}
-
 function HandoffBanner() {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <motion.div
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
+      transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
     >
       <Box
         sx={{
           mx: { xs: 1.5, sm: 2.5 },
           mb: 1.5,
           p: 2,
-          borderRadius: 2.5,
-          background: 'rgba(0, 188, 212, 0.09)',
-          border: '1px solid rgba(0, 188, 212, 0.28)',
+          borderRadius: 2,
+          backgroundColor: theme.palette.info.main,
+          opacity: 0.1,
+          border: `1px solid ${theme.palette.info.main}`,
         }}
       >
         <Typography
           variant="subtitle2"
-          sx={{ color: '#4dd0e1', mb: 0.5, fontWeight: 700 }}
+          sx={{
+            color: theme.palette.text.primary,
+            mb: 0.5,
+            fontWeight: 600,
+          }}
         >
-          {t('assistant.handoffTitle', 'Connecting you with our team')}
+          {t(
+            'assistant.handoffTitle',
+            'A team member will help you'
+          )}
         </Typography>
         <Typography
           variant="body2"
-          sx={{ color: 'rgba(255,255,255,0.65)', mb: 1.5 }}
+          sx={{ color: theme.palette.text.secondary, mb: 1.5 }}
         >
           {t(
             'assistant.handoffBody',
-            'Our support team will follow up with you shortly.'
+            'Continue on WhatsApp. We usually reply within 1 hour.'
           )}
         </Typography>
         <Button
           size="small"
-          variant="outlined"
+          variant="contained"
+          color="primary"
           startIcon={<WhatsApp />}
           href="https://wa.me/18556488855"
           target="_blank"
           rel="noopener noreferrer"
-          sx={{
-            borderColor: 'rgba(47,111,214,0.35)',
-            color: ACCENT,
-            '&:hover': {
-              borderColor: ACCENT,
-              background: 'rgba(47,111,214,0.08)',
-            },
-          }}
         >
-          {t('assistant.whatsappCta', 'Chat on WhatsApp')}
+          {t('assistant.openWhatsApp', 'Open WhatsApp')}
         </Button>
       </Box>
     </motion.div>
@@ -292,6 +238,12 @@ function AssistantHeader({
   isThinking: boolean;
 }) {
   const { t } = useTranslation();
+  const theme = useTheme();
+
+  const statusText = isThinking
+    ? t('assistant.statusThinking', 'Thinking…')
+    : t('assistant.statusOnline', 'AI · Replies in seconds');
+
   return (
     <Box
       sx={{
@@ -299,76 +251,63 @@ function AssistantHeader({
         top: 0,
         zIndex: 10,
         px: { xs: 2, sm: 3 },
-        py: 1.75,
+        py: 2,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
-        background:
-          'linear-gradient(180deg, rgba(5,11,22,0.96) 0%, rgba(5,11,22,0.72) 100%)',
-        backdropFilter: 'blur(16px)',
-        borderBottom: '1px solid rgba(47,111,214,0.08)',
+        backgroundColor: theme.palette.background.paper,
+        borderBottom: `1px solid ${theme.palette.divider}`,
       }}
     >
       <Stack direction="row" spacing={1.5} alignItems="center">
         <Box
           sx={{
-            width: 44,
-            height: 44,
+            width: 36,
+            height: 36,
             borderRadius: '50%',
-            background: 'radial-gradient(circle at 35% 35%, #26c6da, #005f6b)',
+            backgroundColor: theme.palette.primary.main,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 0 22px rgba(47,111,214,0.55)',
-            animation: isThinking
-              ? 'aiOrbPulse 1.2s ease-in-out infinite'
-              : 'aiOrbPulse 3.2s ease-in-out infinite',
             flexShrink: 0,
           }}
         >
-          <AutoAwesome sx={{ fontSize: 18, color: 'white' }} />
+          <SmartToy sx={{ fontSize: 20, color: 'white' }} />
         </Box>
         <Box>
           <Typography
-            variant="subtitle1"
-            sx={{ fontWeight: 700, color: 'white', lineHeight: 1.2 }}
+            variant="h6"
+            sx={{
+              fontWeight: 600,
+              color: theme.palette.text.primary,
+              lineHeight: 1.2,
+              fontFamily: theme.typography.h6.fontFamily,
+            }}
           >
-            {t('assistant.title', 'Rendasua Assistant')}
+            {t('assistant.title', 'RendaSua Assistant')}
           </Typography>
-          <Stack direction="row" spacing={0.75} alignItems="center">
-            <Box
-              sx={{
-                width: 7,
-                height: 7,
-                borderRadius: '50%',
-                bgcolor: isThinking ? '#ffd54f' : '#69f0ae',
-                boxShadow: isThinking
-                  ? '0 0 8px #ffd54f'
-                  : '0 0 8px #69f0ae',
-              }}
-            />
-            <Typography
-              variant="caption"
-              sx={{ color: ACCENT, opacity: 0.85, lineHeight: 1 }}
-            >
-              {isThinking
-                ? t('assistant.statusThinking', 'Generating response')
-                : t('assistant.statusOnline', 'Online · AI powered')}
-            </Typography>
-          </Stack>
+          <Typography
+            variant="caption"
+            sx={{ color: theme.palette.text.secondary, lineHeight: 1 }}
+          >
+            {statusText}
+          </Typography>
         </Box>
       </Stack>
       {hasMsgs && (
         <IconButton
-          size="small"
+          size="medium"
           onClick={onClear}
-          aria-label={t('assistant.clear', 'Clear chat')}
+          aria-label={t('assistant.startOver', 'Start over')}
+          title={t('assistant.startOver', 'Start over')}
           sx={{
-            color: 'rgba(255,255,255,0.45)',
-            '&:hover': { color: 'white' },
+            minWidth: 44,
+            minHeight: 44,
+            color: theme.palette.text.secondary,
+            '&:hover': { color: theme.palette.text.primary },
           }}
         >
-          <Clear fontSize="small" />
+          <RestartAlt />
         </IconButton>
       )}
     </Box>
@@ -377,6 +316,9 @@ function AssistantHeader({
 
 function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const prefersReducedMotion = useReducedMotion();
+
   return (
     <Box
       sx={{
@@ -390,28 +332,40 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
       }}
     >
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={prefersReducedMotion ? {} : { opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+        transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
       >
-        <AssistantEmptyIllustration size={156} />
+        <Box
+          sx={{
+            width: 88,
+            height: 88,
+            borderRadius: '50%',
+            backgroundColor: theme.palette.primary.main,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            mb: 3,
+          }}
+        >
+          <SmartToy sx={{ fontSize: 44, color: 'white' }} />
+        </Box>
       </motion.div>
       <Typography
         variant="h6"
         sx={{
-          mt: 3,
           mb: 1,
-          color: 'white',
-          fontWeight: 700,
+          color: theme.palette.text.primary,
+          fontWeight: 600,
           textAlign: 'center',
         }}
       >
-        {t('assistant.emptyTitle', 'What can I help you with?')}
+        {t('assistant.emptyTitle', 'Hi! What do you need today?')}
       </Typography>
       <Typography
         variant="body2"
         sx={{
-          color: 'rgba(255,255,255,0.45)',
+          color: theme.palette.text.secondary,
           textAlign: 'center',
           maxWidth: 340,
           lineHeight: 1.7,
@@ -436,21 +390,25 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
           return (
             <motion.div
               key={item.key}
-              initial={{ opacity: 0, y: 8 }}
+              initial={prefersReducedMotion ? {} : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 + index * 0.06 }}
+              transition={{
+                duration: prefersReducedMotion ? 0 : 0.2,
+                delay: prefersReducedMotion ? 0 : 0.1 + index * 0.05,
+              }}
             >
               <Chip
                 label={label}
                 clickable
                 onClick={() => onPick(label)}
+                variant="outlined"
                 sx={{
-                  color: 'rgba(255,255,255,0.88)',
-                  bgcolor: 'rgba(47,111,214,0.08)',
-                  border: '1px solid rgba(47,111,214,0.22)',
+                  color: theme.palette.primary.main,
+                  borderColor: theme.palette.divider,
+                  minHeight: 40,
                   '&:hover': {
-                    bgcolor: 'rgba(47,111,214,0.16)',
-                    borderColor: ACCENT,
+                    borderColor: theme.palette.primary.main,
+                    backgroundColor: `${theme.palette.primary.main}0A`,
                   },
                 }}
               />
@@ -474,6 +432,8 @@ function AssistantInput({
   disabled: boolean;
 }) {
   const { t } = useTranslation();
+  const theme = useTheme();
+
   const handleKey = (
     e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -491,25 +451,22 @@ function AssistantInput({
         zIndex: 10,
         px: { xs: 1.5, sm: 2.5 },
         py: 2,
-        background:
-          'linear-gradient(0deg, rgba(5,11,22,0.97) 55%, transparent 100%)',
-        backdropFilter: 'blur(12px)',
+        backgroundColor: theme.palette.background.default,
       }}
     >
       <Box
         sx={{
           display: 'flex',
-          alignItems: 'center',
-          gap: 0.5,
-          background: GLASS,
-          border: '1px solid rgba(47,111,214,0.22)',
-          borderRadius: 3.5,
+          alignItems: 'flex-end',
+          gap: 1,
+          backgroundColor: theme.palette.grey[100],
+          borderRadius: '12px',
           px: 2,
-          py: 0.85,
-          transition: 'border-color 0.2s, box-shadow 0.2s',
+          py: 1,
+          minHeight: 48,
+          transition: 'box-shadow 0.2s',
           '&:focus-within': {
-            borderColor: 'rgba(47,111,214,0.55)',
-            boxShadow: '0 0 0 1px rgba(47,111,214,0.18), 0 0 28px rgba(47,111,214,0.12)',
+            boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
           },
         }}
       >
@@ -520,14 +477,26 @@ function AssistantInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKey}
-          placeholder={t('assistant.placeholder', 'Type your question…')}
+          placeholder={t(
+            'assistant.placeholder',
+            'Ask about an item, order or delivery…'
+          )}
           disabled={disabled}
+          name="message"
+          autoComplete="off"
+          inputProps={{
+            'aria-label': t('assistant.placeholder', 'Ask about an item, order or delivery…'),
+          }}
           sx={{
-            color: 'white',
-            fontSize: '0.92rem',
+            fontSize: '15px',
+            lineHeight: '22px',
+            py: 0.75,
+            '& .MuiInputBase-input': {
+              color: theme.palette.text.primary,
+            },
             '& .MuiInputBase-input::placeholder': {
-              color: 'rgba(255,255,255,0.32)',
-              opacity: 1,
+              color: theme.palette.text.secondary,
+              opacity: 0.7,
             },
           }}
         />
@@ -535,24 +504,24 @@ function AssistantInput({
           onClick={onSend}
           disabled={disabled || !value.trim()}
           aria-label={t('assistant.send', 'Send')}
-          size="small"
           sx={{
-            width: 38,
-            height: 38,
-            color:
+            width: 48,
+            height: 48,
+            flexShrink: 0,
+            color: 'white',
+            backgroundColor:
               disabled || !value.trim()
-                ? 'rgba(255,255,255,0.18)'
-                : '#041018',
-            bgcolor:
-              disabled || !value.trim() ? 'transparent' : ACCENT,
-            transition: 'all 0.2s',
+                ? theme.palette.action.disabled
+                : theme.palette.primary.main,
             '&:not(:disabled):hover': {
-              bgcolor: brandTokens.primary.light,
-              boxShadow: '0 0 18px rgba(47,111,214,0.45)',
+              backgroundColor: theme.palette.primary.dark,
+            },
+            '&:disabled': {
+              backgroundColor: theme.palette.action.disabledBackground,
             },
           }}
         >
-          <Send fontSize="small" />
+          <Send />
         </IconButton>
       </Box>
     </Box>
@@ -563,28 +532,13 @@ const AssistantPage: React.FC = () => {
   const { messages, isSending, error, handoff, sendMessage, clearChat } =
     useAssistantChat();
   const { t } = useTranslation();
+  const theme = useTheme();
   const [draft, setDraft] = useState('');
   const bottomRef = useRef<HTMLDivElement>(null);
-  const revealedIds = useRef<Set<string>>(new Set());
-  const latestAssistantId = useMemo(() => {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'assistant') return messages[i].id;
-    }
-    return null;
-  }, [messages]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSending]);
-
-  useEffect(() => {
-    if (latestAssistantId) {
-      const timer = window.setTimeout(() => {
-        revealedIds.current.add(latestAssistantId);
-      }, Math.min(8000, Math.max(400, (messages.find((m) => m.id === latestAssistantId)?.content.length ?? 0) * 24)));
-      return () => window.clearTimeout(timer);
-    }
-  }, [latestAssistantId, messages]);
 
   const handleSend = (override?: string) => {
     const text = (override ?? draft).trim();
@@ -602,78 +556,14 @@ const AssistantPage: React.FC = () => {
         minHeight: 'calc(100vh - 116px)',
         display: 'flex',
         flexDirection: 'column',
-        background: PAGE_BG,
+        backgroundColor: theme.palette.background.default,
         position: 'relative',
-        overflow: 'hidden',
-        '&::before': {
-          content: '""',
-          position: 'absolute',
-          inset: 0,
-          backgroundImage:
-            'radial-gradient(circle, rgba(47,111,214,0.07) 1px, transparent 1px)',
-          backgroundSize: '40px 40px',
-          pointerEvents: 'none',
-          maskImage:
-            'radial-gradient(ellipse at center, black 35%, transparent 80%)',
-        },
-        '@keyframes aiBounce': {
+        '@keyframes dotBounce': {
           '0%, 60%, 100%': { transform: 'translateY(0)' },
-          '30%': { transform: 'translateY(-5px)' },
-        },
-        '@keyframes aiOrbPulse': {
-          '0%, 100%': { boxShadow: '0 0 18px rgba(47,111,214,0.5)' },
-          '50%': {
-            boxShadow:
-              '0 0 34px rgba(47,111,214,0.95), 0 0 60px rgba(47,111,214,0.28)',
-          },
-        },
-        '@keyframes aiRingSpin': {
-          '0%': { transform: 'rotate(0deg)' },
-          '100%': { transform: 'rotate(360deg)' },
-        },
-        '@keyframes aiShimmer': {
-          '0%': { transform: 'translateX(-120%)' },
-          '100%': { transform: 'translateX(120%)' },
-        },
-        '@keyframes aiCaret': {
-          '0%, 49%': { opacity: 1 },
-          '50%, 100%': { opacity: 0 },
-        },
-        '@keyframes aiDrift': {
-          '0%, 100%': { transform: 'translate3d(0,0,0)' },
-          '50%': { transform: 'translate3d(18px, -22px, 0)' },
+          '30%': { transform: 'translateY(-4px)' },
         },
       }}
     >
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '-18%',
-          right: '-10%',
-          width: 520,
-          height: 520,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, rgba(0,188,212,0.14) 0%, transparent 65%)',
-          pointerEvents: 'none',
-          animation: 'aiDrift 12s ease-in-out infinite',
-        }}
-      />
-      <Box
-        sx={{
-          position: 'absolute',
-          bottom: '-14%',
-          left: '-8%',
-          width: 420,
-          height: 420,
-          borderRadius: '50%',
-          background:
-            'radial-gradient(circle, rgba(0,100,180,0.12) 0%, transparent 65%)',
-          pointerEvents: 'none',
-          animation: 'aiDrift 16s ease-in-out infinite reverse',
-        }}
-      />
-
       <AssistantHeader
         onClear={clearChat}
         hasMsgs={messages.length > 0}
@@ -688,42 +578,58 @@ const AssistantPage: React.FC = () => {
           flexDirection: 'column',
           px: { xs: 1.5, sm: 2.5 },
           py: 2,
-          '&::-webkit-scrollbar': { width: 4 },
-          '&::-webkit-scrollbar-track': { background: 'transparent' },
-          '&::-webkit-scrollbar-thumb': {
-            background: 'rgba(47,111,214,0.2)',
-            borderRadius: 2,
-          },
         }}
       >
         {messages.length === 0 ? (
           <EmptyState onPick={(text) => handleSend(text)} />
         ) : (
-          <Stack spacing={1.4} sx={{ pb: 1 }}>
-            <AnimatePresence initial={false}>
-              {messages.map((m) => (
-                <MessageBubble
-                  key={m.id}
-                  message={m}
-                  animateReveal={
-                    m.role === 'assistant' &&
-                    m.id === latestAssistantId &&
-                    !revealedIds.current.has(m.id)
-                  }
-                />
-              ))}
-            </AnimatePresence>
-            <AnimatePresence>{isSending ? <ThinkingOrb /> : null}</AnimatePresence>
+          <Stack spacing={2} sx={{ pb: 1 }}>
+            {messages.map((m) => (
+              <MessageBubble key={m.id} message={m} />
+            ))}
+            {isSending && <ThinkingIndicator />}
             {error && (
-              <Typography
-                variant="caption"
-                sx={{ color: 'rgba(255,120,120,0.85)', px: 1 }}
+              <Box
+                sx={{
+                  p: 2,
+                  borderRadius: 2,
+                  backgroundColor: theme.palette.error.light,
+                  opacity: 0.1,
+                  border: `1px solid ${theme.palette.error.main}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 2,
+                }}
               >
-                {t(
-                  'assistant.errorGeneric',
-                  'Something went wrong. Please try again.'
-                )}
-              </Typography>
+                <Box sx={{ flex: 1 }}>
+                  <Typography
+                    variant="body2"
+                    sx={{ color: theme.palette.text.primary, mb: 0.5 }}
+                  >
+                    {t(
+                      'assistant.errorMessage',
+                      'Message not sent. Check your connection.'
+                    )}
+                  </Typography>
+                </Box>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  onClick={() => {
+                    if (messages.length > 0) {
+                      const lastUserMessage = messages
+                        .slice()
+                        .reverse()
+                        .find((m) => m.role === 'user');
+                      if (lastUserMessage) {
+                        void sendMessage(lastUserMessage.content);
+                      }
+                    }
+                  }}
+                >
+                  {t('assistant.retry', 'Retry')}
+                </Button>
+              </Box>
             )}
           </Stack>
         )}

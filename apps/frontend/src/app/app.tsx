@@ -1,4 +1,5 @@
 import { useSessionAuth } from '../contexts/SessionAuthContext';
+import { AssistantChatProvider } from '../contexts/AssistantChatContext';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
 import { Suspense, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -186,6 +187,7 @@ function App() {
   }
 
   return (
+    <AssistantChatProvider>
     <BusinessOrdersLiveProvider>
     <IncomingOrderInterruptProvider>
       <StorePickupReminderProvider>
@@ -1105,6 +1107,7 @@ function App() {
       </StorePickupReminderProvider>
     </IncomingOrderInterruptProvider>
     </BusinessOrdersLiveProvider>
+    </AssistantChatProvider>
   );
 }
 
