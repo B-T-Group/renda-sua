@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AssistantLauncher, requestAssistantAttention } from './AssistantLauncher';
 import { NUDGE_AUTO_HIDE_MS } from './AssistantLauncherNudge';
@@ -142,6 +142,20 @@ describe('AssistantLauncher', () => {
   });
 
   describe('first-run nudge', () => {
+    it('is announced through a persistent polite live region', () => {
+      renderLauncher('home');
+      const announcer = screen.getByTestId('assistant-launcher-announcer');
+      expect(announcer.getAttribute('aria-live')).toBe('polite');
+      expect(announcer.textContent).toBe('');
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+      expect(announcer.textContent).toMatch(/^Hi! I can find items/);
+      expect(screen.getByTestId('assistant-launcher-nudge').getAttribute('aria-live')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+      expect(announcer.textContent).toBe('');
+    });
+
     it('shows after 3 s on home with the attention ripple, once per device', () => {
       renderLauncher('home');
       act(() => {
@@ -151,7 +165,11 @@ describe('AssistantLauncher', () => {
       act(() => {
         jest.advanceTimersByTime(1);
       });
-      expect(screen.getByText('Hi! I can find items, track your order or reorder for you.')).toBeInTheDocument();
+      expect(
+        within(screen.getByTestId('assistant-launcher-nudge')).getByText(
+          'Hi! I can find items, track your order or reorder for you.'
+        )
+      ).toBeInTheDocument();
       expect(localStorage.getItem(NUDGE_SEEN_KEY)).toBe('1');
       expect(events('assistant.nudge.shown')[0].metadata).toMatchObject({ screen: 'home' });
       expect(events('assistant.attention.played')[0].metadata).toMatchObject({ trigger: 'first_run' });
@@ -253,6 +271,23 @@ describe('AssistantLauncher', () => {
         jest.advanceTimersByTime(2000);
       });
       expect(events('assistant.attention.played')).toHaveLength(1);
+    });
+
+    it('never plays on a hidden tab (waits until it is visible again)', () => {
+      const vis = jest.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+      renderLauncher('items');
+      act(() => requestAssistantAttention('zero_results'));
+      act(() => {
+        jest.advanceTimersByTime(6000);
+      });
+      expect(events('assistant.attention.played')).toHaveLength(0);
+      expect(localStorage.getItem(ATTENTION_LOG_KEY)).toBeNull();
+      vis.mockReturnValue('visible');
+      act(() => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(events('assistant.attention.played')).toHaveLength(1);
+      vis.mockRestore();
     });
 
     it('reduce motion: no ripple, but the nudge still shows', () => {

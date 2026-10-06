@@ -35,6 +35,18 @@ export const NUDGE_DWELL_MS = 3000;
 export const ATTENTION_SCROLL_IDLE_MS = 2000;
 /** Ripple + pop ≤ 1.6 s. */
 export const ATTENTION_MS = 1600;
+/** Screen-reader-only text (kept in the a11y tree, off screen). */
+const visuallyHidden = {
+  position: 'absolute',
+  width: 1,
+  height: 1,
+  margin: -1,
+  padding: 0,
+  border: 0,
+  overflow: 'hidden',
+  clip: 'rect(0 0 0 0)',
+  whiteSpace: 'nowrap',
+} as const;
 /** Attentive → Idle 150 ms after pointer leave / blur / press-out. */
 const ATTENTIVE_EXIT_MS = 150;
 
@@ -169,6 +181,16 @@ export function AssistantLauncher({
       // Reduce motion: no ripple (and nothing is counted against the caps).
       if (reducedMotion || !canPlayAttention()) return;
       const tryPlay = () => {
+        // Never on a hidden tab (it would burn the session/weekly cap unseen).
+        if (
+          typeof document !== 'undefined' &&
+          document.visibilityState === 'hidden'
+        ) {
+          attentionTimers.current.push(
+            window.setTimeout(tryPlay, ATTENTION_SCROLL_IDLE_MS)
+          );
+          return;
+        }
         const sinceScroll = Date.now() - lastScrollRef.current;
         if (sinceScroll < ATTENTION_SCROLL_IDLE_MS) {
           attentionTimers.current.push(
@@ -355,19 +377,24 @@ export function AssistantLauncher({
           </Typography>
         )}
       </ButtonBase>
+      <Box component="span" id={hintId} sx={visuallyHidden}>
+        {t('assistant.launcher.hint', 'Find items, reorder or track an order')}
+      </Box>
+      {/* Persistent polite live region: text inserted into it when the nudge opens is
+          announced (a live region mounted together with its content often is not). */}
       <Box
         component="span"
-        id={hintId}
-        sx={{
-          position: 'absolute',
-          width: 1,
-          height: 1,
-          overflow: 'hidden',
-          clip: 'rect(0 0 0 0)',
-          whiteSpace: 'nowrap',
-        }}
+        role="status"
+        aria-live="polite"
+        data-testid="assistant-launcher-announcer"
+        sx={visuallyHidden}
       >
-        {t('assistant.launcher.hint', 'Find items, reorder or track an order')}
+        {nudgeOpen
+          ? t(
+              'assistant.nudge.text',
+              'Hi! I can find items, track your order or reorder for you.'
+            )
+          : ''}
       </Box>
     </Box>
   );

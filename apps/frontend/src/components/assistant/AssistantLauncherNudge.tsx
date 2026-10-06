@@ -1,6 +1,6 @@
 import { Close } from '@mui/icons-material';
 import { Box, Button, IconButton, Typography, alpha } from '@mui/material';
-import { useEffect, useRef } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { brandTokens } from '../../theme/brandTokens';
 
@@ -24,6 +24,7 @@ export function AssistantLauncherNudge({
 }: AssistantLauncherNudgeProps) {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
+  const textId = `assistant-nudge-text-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
 
@@ -49,8 +50,9 @@ export function AssistantLauncherNudge({
   return (
     <Box
       ref={ref}
-      role="status"
-      aria-live="polite"
+      // Announced through the launcher's persistent live region, not here.
+      role="group"
+      aria-labelledby={textId}
       data-testid="assistant-launcher-nudge"
       sx={{
         position: 'relative',
@@ -81,6 +83,7 @@ export function AssistantLauncherNudge({
       }}
     >
       <Typography
+        id={textId}
         variant="body2"
         sx={{
           color: brandTokens.text.primary,
