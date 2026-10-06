@@ -16,23 +16,33 @@ import Svg, {
 } from 'react-native-svg';
 import { rendaCharacterTokens as T } from '../../../theme/rendaCharacterTokens';
 import {
+  BLOOM,
+  BLOOM_RADIUS,
   CX,
   CY,
   DOT_EYE_R,
   EYE_CENTERS,
   FACE,
   FACE_EDGE,
-  HALO,
+  HALO_GLOW,
+  HALO_WIDE_ALPHA,
+  HALO_WIDE_GLOW,
   OPEN_EYE,
   ARC_EYE_STROKE,
   RING,
+  RING_OUTER,
   RING_OVERLAY_STROKE,
   VIEWBOX_H,
   VIEWBOX_W,
   arcEyePath,
   buildRingSegments,
   buildSweepSegments,
+  bloomStops,
   haloColor,
+  ovalGlowExtent,
+  ovalGlowStops,
+  ringColorAt,
+  type GlowStop,
 } from './rendaCharacterModel';
 
 /** Absolute frame for an SVG covering viewBox rect (x, y, w, h) at scale k px/unit. */
@@ -61,62 +71,64 @@ function PaddedSvg({ k, pad, children }: LayerProps & { pad: number; children: R
   );
 }
 
-const HALO_PAD = 32;
+const HALO_CORE = { ...ovalGlowExtent(HALO_GLOW), stops: ovalGlowStops(HALO_GLOW) };
+const HALO_WIDE = { ...ovalGlowExtent(HALO_WIDE_GLOW), stops: ovalGlowStops(HALO_WIDE_GLOW) };
+/** Padding (viewBox units) that fits the halo oval around the 82 × 100 box. */
+export function haloPad(dark: boolean): number {
+  const g = dark ? HALO_WIDE : HALO_CORE;
+  return Math.ceil(Math.max(g.rx - CX, g.ry - CY)) + 1;
+}
 
-/** Soft oval halo (blur replaced by a radial falloff; no SVG filters on native). */
-export const HaloLayer = memo(function HaloLayer({ k, dark, id }: LayerProps & { dark: boolean; id: string }) {
-  const color = haloColor(dark);
-  const spread = 10;
+function GlowGradient({ id, color, stops, alpha = 1 }: { id: string; color: string; stops: GlowStop[]; alpha?: number }) {
   return (
-    <PaddedSvg k={k} pad={HALO_PAD}>
+    <RadialGradient id={id} cx="50%" cy="50%" rx="50%" ry="50%">
+      {stops.map((st, i) => (
+        <Stop key={i} offset={st.offset} stopColor={color} stopOpacity={st.opacity * alpha} />
+      ))}
+    </RadialGradient>
+  );
+}
+
+/** Halo shapes (no <Svg>): the prototype's blurred ovals as Gaussian-profile radial gradients. */
+export function HaloShapes({ dark, id }: { dark: boolean; id: string }) {
+  return (
+    <>
       <Defs>
-        <RadialGradient id={`${id}h`} cx="50%" cy="50%" rx="50%" ry="50%">
-          <Stop offset="0" stopColor={color} stopOpacity={1} />
-          <Stop offset={(HALO.ry - spread) / (HALO.ry + spread)} stopColor={color} stopOpacity={1} />
-          <Stop offset="1" stopColor={color} stopOpacity={0} />
-        </RadialGradient>
+        <GlowGradient id={`${id}h`} color={haloColor(dark)} stops={HALO_CORE.stops} />
         {dark ? (
-          <RadialGradient id={`${id}hw`} cx="50%" cy="50%" rx="50%" ry="50%">
-            <Stop offset="0" stopColor={T.ringLight} stopOpacity={0.55} />
-            <Stop offset="0.45" stopColor={T.ringLight} stopOpacity={0.55} />
-            <Stop offset="1" stopColor={T.ringLight} stopOpacity={0} />
-          </RadialGradient>
+          <GlowGradient id={`${id}hw`} color={T.ringLight} stops={HALO_WIDE.stops} alpha={HALO_WIDE_ALPHA} />
         ) : null}
       </Defs>
-      {dark ? <Ellipse cx={CX} cy={CY} rx={70} ry={82} fill={`url(#${id}hw)`} /> : null}
-      <Ellipse cx={CX} cy={CY} rx={HALO.rx + spread} ry={HALO.ry + spread} fill={`url(#${id}h)`} />
+      {dark ? <Ellipse cx={CX} cy={CY} rx={HALO_WIDE.rx} ry={HALO_WIDE.ry} fill={`url(#${id}hw)`} /> : null}
+      <Ellipse cx={CX} cy={CY} rx={HALO_CORE.rx} ry={HALO_CORE.ry} fill={`url(#${id}h)`} />
+    </>
+  );
+}
+
+/** Soft oval halo (blur replaced by a Gaussian falloff; no SVG filters on native). */
+export const HaloLayer = memo(function HaloLayer({ k, dark, id }: LayerProps & { dark: boolean; id: string }) {
+  return (
+    <PaddedSvg k={k} pad={haloPad(dark)}>
+      <HaloShapes dark={dark} id={id} />
     </PaddedSvg>
   );
 });
 
-/** Glow band hugging the ring (the prototype's blurred "bloom"). */
-export const BloomLayer = memo(function BloomLayer({ k, id }: LayerProps & { id: string }) {
-  const s = 1.25;
+/**
+ * Ring base under the rotating overlay: a filled oval to the ring's outer edge
+ * (the face covers the middle), so no background seam shows between the ring
+ * and the face, plus the faint outer line.
+ */
+export function RingBaseShapes({ id }: { id: string }) {
   return (
-    <PaddedSvg k={k} pad={14}>
-      <Defs>
-        <RadialGradient id={`${id}b`} cx="50%" cy="50%" rx="50%" ry="50%">
-          <Stop offset="0.66" stopColor={T.ringLight} stopOpacity={0} />
-          <Stop offset={1 / s} stopColor={T.ringLight} stopOpacity={1} />
-          <Stop offset="0.95" stopColor={T.ringLight} stopOpacity={0} />
-        </RadialGradient>
-      </Defs>
-      <Ellipse cx={CX} cy={CY} rx={RING.rx * s} ry={RING.ry * s} fill={`url(#${id}b)`} />
-    </PaddedSvg>
-  );
-});
-
-/** Exact 7-wide ring + faint outer line, under the rotating gradient overlay. */
-export const RingBaseLayer = memo(function RingBaseLayer({ k, id }: LayerProps & { id: string }) {
-  return (
-    <PaddedSvg k={k} pad={4}>
+    <>
       <Defs>
         <LinearGradient id={`${id}rb`} x1="0" y1="0" x2="1" y2="0">
           <Stop offset="0" stopColor={T.ringMain} />
           <Stop offset="1" stopColor={T.ringLight} />
         </LinearGradient>
       </Defs>
-      <Ellipse cx={CX} cy={CY} rx={RING.rx} ry={RING.ry} fill="none" stroke={`url(#${id}rb)`} strokeWidth={RING.stroke} />
+      <Ellipse cx={CX} cy={CY} rx={RING_OUTER.rx} ry={RING_OUTER.ry} fill={`url(#${id}rb)`} />
       <Ellipse
         cx={CX}
         cy={CY}
@@ -127,6 +139,14 @@ export const RingBaseLayer = memo(function RingBaseLayer({ k, id }: LayerProps &
         strokeOpacity={0.28}
         strokeWidth={0.7}
       />
+    </>
+  );
+}
+
+export const RingBaseLayer = memo(function RingBaseLayer({ k, id }: LayerProps & { id: string }) {
+  return (
+    <PaddedSvg k={k} pad={4}>
+      <RingBaseShapes id={id} />
     </PaddedSvg>
   );
 });
@@ -170,6 +190,57 @@ export const RingSweepCircle = memo(function RingSweepCircle({ k }: LayerProps) 
         <Path key={i} d={w.d} fill={w.fill} fillOpacity={w.opacity} />
       ))}
     </CircleSquareSvg>
+  );
+});
+
+/** Circle-space square (centred on CX, CY) that holds the rotating bloom. */
+export const BLOOM_SQUARE = (() => {
+  const half = BLOOM_RADIUS + 1;
+  return { x: CX - half, y: CY - half, size: half * 2 };
+})();
+
+/**
+ * Ring bloom in circle space (parent squashes x to 37/46 and rotates it with
+ * the gradient): `segments` slices, each a userSpace radial gradient of the
+ * blurred 9-wide band in that slice's ring colour, so the glow is light by the
+ * highlight and deep blue by primary.main, as in the prototype.
+ */
+export function bloomSlices(segments: number) {
+  const outer = BLOOM_RADIUS;
+  return buildRingSegments(segments, CX, CY, (outer + BLOOM.inner) / 2, outer - BLOOM.inner, 0).map((w, i) => ({
+    d: w.d,
+    color: ringColorAt((i + 0.5) * (360 / segments)),
+  }));
+}
+
+const BLOOM_STOPS = bloomStops(10);
+
+export function BloomShapes({ id, segments }: { id: string; segments: number }) {
+  const slices = useMemo(() => bloomSlices(segments), [segments]);
+  return (
+    <>
+      <Defs>
+        {slices.map((sl, i) => (
+          <RadialGradient key={i} id={`${id}bl${i}`} gradientUnits="userSpaceOnUse" cx={CX} cy={CY} r={BLOOM_RADIUS}>
+            {BLOOM_STOPS.map((st, j) => (
+              <Stop key={j} offset={st.offset} stopColor={sl.color} stopOpacity={st.opacity} />
+            ))}
+          </RadialGradient>
+        ))}
+      </Defs>
+      {slices.map((sl, i) => (
+        <Path key={i} d={sl.d} fill={`url(#${id}bl${i})`} />
+      ))}
+    </>
+  );
+}
+
+export const RingBloomCircle = memo(function RingBloomCircle({ k, id, segments }: LayerProps & { id: string; segments: number }) {
+  const q = BLOOM_SQUARE;
+  return (
+    <Svg width={q.size * k} height={q.size * k} viewBox={`${q.x} ${q.y} ${q.size} ${q.size}`}>
+      <BloomShapes id={id} segments={segments} />
+    </Svg>
   );
 });
 
@@ -339,4 +410,25 @@ export const Sparkle = memo(function Sparkle({ px, color }: { px: number; color:
 
 export const layerStyles = StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject, overflow: 'visible' },
+});
+
+/**
+ * Empty-state hero disc (spec §1: `primary.light` 8% behind the hero, 1.5× its
+ * height) with the prototype's soft edge: flat to 55% of the radius, then
+ * fading to 0, so the glow has something to sit on without a hard rim.
+ */
+export const StageDisc = memo(function StageDisc({ diameter, dark }: { diameter: number; dark: boolean }) {
+  const alpha = dark ? 0.1 : 0.08;
+  return (
+    <Svg width={diameter} height={diameter} viewBox="0 0 100 100" pointerEvents="none">
+      <Defs>
+        <RadialGradient id="rendaStageDisc" cx="50%" cy="50%" r="50%">
+          <Stop offset="0" stopColor={T.ringLight} stopOpacity={alpha} />
+          <Stop offset="0.55" stopColor={T.ringLight} stopOpacity={alpha} />
+          <Stop offset="1" stopColor={T.ringLight} stopOpacity={0} />
+        </RadialGradient>
+      </Defs>
+      <Circle cx={50} cy={50} r={50} fill="url(#rendaStageDisc)" />
+    </Svg>
+  );
 });

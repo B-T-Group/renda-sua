@@ -33,6 +33,8 @@ import {
   SUCCESS_SPRING,
   VIEWBOX_H,
   VIEWBOX_W,
+  bloomAlphaRange,
+  bloomSegmentsForSize,
   characterWidth,
   easeInOutCubic,
   easeOutCubic,
@@ -51,7 +53,7 @@ import {
 } from './rendaCharacterModel';
 import {
   ArcEyes,
-  BloomLayer,
+  BLOOM_SQUARE,
   DotEyes,
   ECHO_DEFS,
   EchoEllipse,
@@ -63,6 +65,7 @@ import {
   OrbitCircle,
   RING_SQUARE,
   RingBaseLayer,
+  RingBloomCircle,
   RingGradientCircle,
   RingSweepCircle,
   RippleOval,
@@ -71,6 +74,7 @@ import {
   layerStyles,
   openEyeBox,
 } from './rendaCharacterLayers';
+import { RendaCharacterStatic } from './RendaCharacterStatic';
 
 export type { RendaCharacterState, RendaEyes } from './rendaCharacterModel';
 
@@ -78,7 +82,10 @@ export type RendaCharacterProps = {
   /** Character height in px (width is 0.82 × height). */
   size: number;
   state?: RendaCharacterState;
-  /** false = static drawing (message avatars, badges). Default true. */
+  /**
+   * false = static drawing (message avatars, header button, badges): a single
+   * <Svg> with no Animated values or listeners. Default true.
+   */
   animated?: boolean;
   /** Override the size-derived eye level. */
   eyes?: RendaEyes;
@@ -147,20 +154,30 @@ const SPARKLE_OPACITY = { inputRange: [0, 0.25, 1], outputRange: [0, 1, 0] };
 const SUCCESS_VELOCITY = springVelocityForPeak(0.08, SUCCESS_SPRING);
 const ATTENTION_VELOCITY = springVelocityForPeak(0.1, ATTENTION_SPRING);
 
-function RendaCharacterImpl({
+/**
+ * Latch: false until `on` is first true, then true for the instance's life.
+ * One-shot layers (sparkles, ripples, orbits, sweep) mount on first use only,
+ * so an idle launcher / hero does not carry ~14 invisible native SVG views.
+ */
+function useLatch(on: boolean): boolean {
+  const [latched, setLatched] = useState(on);
+  if (on && !latched) setLatched(true);
+  return latched || on;
+}
+
+type AnimatedProps = Omit<RendaCharacterProps, 'animated' | 'dark'> & { dark: boolean };
+
+function RendaCharacterAnimated({
   size,
   state = 'idle',
-  animated = true,
   eyes,
   staticIdle = false,
   paused = false,
-  dark: darkProp,
+  dark,
   replayKey = 0,
   style,
   testID,
-}: RendaCharacterProps) {
-  const theme = useTheme();
-  const dark = darkProp ?? theme.isDark;
+}: AnimatedProps) {
   const reducedMotion = useReducedMotion();
   const appActive = useAppActive();
   const id = useMemo(() => `renda${++instanceSeq}`, []);
@@ -170,13 +187,13 @@ function RendaCharacterImpl({
   const eyeLevel = eyes ?? eyesForSize(size);
   const effectivePaused = paused || !appActive;
   const cfg = resolveRendaConfig(state, {
-    animated,
+    animated: true,
     reducedMotion,
     staticIdle,
     paused: effectivePaused,
   });
   const eyeShape = eyeShapeFor(eyeLevel, cfg);
-  const motionCapable = animated && !reducedMotion;
+  const motionCapable = !reducedMotion;
 
   // ---- animated values -------------------------------------------------
   const breath = useValue(0);
@@ -368,40 +385,107 @@ function RendaCharacterImpl({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, replayKey, cfg.oneShots]);
 
-  // ---- derived styles --------------------------------------------------
-  const [hMin, hMax] = haloAlphaRange(dark);
-  const haloLevel = Animated.add(
-    Animated.multiply(breath, Animated.subtract(1, haloFollow)),
-    Animated.multiply(haloFollow, haloFixed)
+  // ---- derived nodes (memoised: new nodes each render would make the native
+  // driver detach / re-attach its graph) ------------------------------------
+  const amp = cfg.amp;
+  const nodes = useMemo(() => {
+    const [hMin, hMax] = haloAlphaRange(dark);
+    const [bMin, bMax] = bloomAlphaRange(dark);
+    const haloLevel = Animated.add(
+      Animated.multiply(breath, Animated.subtract(1, haloFollow)),
+      Animated.multiply(haloFollow, haloFixed)
+    );
+    return {
+      haloOpacity: haloLevel.interpolate({ inputRange: [0, 1], outputRange: [hMin, hMax] }),
+      bloomOpacity: haloLevel.interpolate({ inputRange: [0, 1], outputRange: [bMin, bMax] }),
+      spinRotate: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }),
+      sweepRotate: sweep.interpolate({
+        inputRange: SWEEP_ANGLE.inputRange,
+        outputRange: SWEEP_ANGLE.outputRange.map((a) => `${a}deg`),
+        extrapolate: 'clamp',
+      }),
+      sweepOpacity: sweep.interpolate({ ...SWEEP_OPACITY, extrapolate: 'clamp' }),
+      openOpacity: eyeMix.interpolate({ inputRange: [0, 0.8, 1], outputRange: [0, 1, 1] }),
+      arcOpacity: eyeMix.interpolate({ inputRange: [0, 0.2, 1], outputRange: [1, 1, 0] }),
+      arcLift: eyeMix.interpolate({ inputRange: [0, 1], outputRange: [0, -1.5 * k] }),
+      openScaleY: Animated.multiply(eyeMix.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }), blink),
+      echoOpacity: Animated.multiply(orbitOpacity, dark ? 0.75 : 0.5),
+      echoRotate: ECHO_TURNS.map((turns) =>
+        orbitClock.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${turns * 360}deg`] })
+      ),
+      orbitRotate: [
+        orbitClock.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${ORBIT_TURNS * 360}deg`] }),
+        orbitClock.interpolate({ inputRange: [0, 1], outputRange: ['140deg', `${140 - ORBIT_TURNS * 360}deg`] }),
+      ],
+    };
+  }, [dark, k, breath, haloFollow, haloFixed, spin, sweep, eyeMix, blink, orbitOpacity, orbitClock]);
+  const bodyScale = useMemo(
+    () =>
+      Animated.multiply(
+        breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1 + Math.max(amp, 0.0001)] }),
+        pop.interpolate({ inputRange: [0, 1], outputRange: [1, 2] })
+      ),
+    [breath, pop, amp]
   );
-  const haloOpacity = haloLevel.interpolate({ inputRange: [0, 1], outputRange: [hMin, hMax] });
-  const bloomOpacity = haloLevel.interpolate({
-    inputRange: [0, 1],
-    outputRange: dark ? [0.55, 0.9] : [0.22, 0.32],
-  });
-  const bodyScale = Animated.multiply(
-    breath.interpolate({ inputRange: [0, 1], outputRange: [1, 1 + Math.max(cfg.amp, 0.0001)] }),
-    pop.interpolate({ inputRange: [0, 1], outputRange: [1, 2] })
+  const rippleNodes = useMemo(
+    () =>
+      ripples.map((v) => ({
+        opacity: v.interpolate({ inputRange: [-1, -0.001, 0, 1], outputRange: [0, 0, 0.35, 0], extrapolate: 'clamp' }),
+        scale: v.interpolate({
+          inputRange: OUT_CUBIC.inputRange,
+          outputRange: OUT_CUBIC.outputRange.map((o) => 1 + 0.5 * o),
+          extrapolate: 'clamp',
+        }),
+      })),
+    [ripples]
   );
-  const spinRotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-  const sweepRotate = sweep.interpolate({
-    inputRange: SWEEP_ANGLE.inputRange,
-    outputRange: SWEEP_ANGLE.outputRange.map((a) => `${a}deg`),
-    extrapolate: 'clamp',
-  });
-  const sweepOpacity = sweep.interpolate({ ...SWEEP_OPACITY, extrapolate: 'clamp' });
-  const openOpacity = eyeMix.interpolate({ inputRange: [0, 0.8, 1], outputRange: [0, 1, 1] });
-  const arcOpacity = eyeMix.interpolate({ inputRange: [0, 0.2, 1], outputRange: [1, 1, 0] });
-  const arcLift = eyeMix.interpolate({ inputRange: [0, 1], outputRange: [0, -1.5 * k] });
-  const openScaleY = Animated.multiply(
-    eyeMix.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }),
-    blink
+  const sparkleNodes = useMemo(
+    () =>
+      SPARKLE_ANGLES.map((angle, i) => {
+        const v = sparkles[i];
+        const { from, to } = sparklePath(angle);
+        const unitsTall = Math.max((4 / size) * 100, 6);
+        const px = unitsTall * k * 2.1;
+        const along = (delta: number) =>
+          v.interpolate({ inputRange: OUT_CUBIC.inputRange, outputRange: OUT_CUBIC.outputRange.map((o) => o * delta * k) });
+        return {
+          angle,
+          px,
+          left: from[0] * k - px / 2,
+          top: from[1] * k - px / 2,
+          opacity: v.interpolate(SPARKLE_OPACITY),
+          tx: along(to[0] - from[0]),
+          ty: along(to[1] - from[1]),
+          scale: v.interpolate({ inputRange: OUT_CUBIC.inputRange, outputRange: OUT_CUBIC.outputRange.map((o) => 0.6 + 0.4 * o) }),
+        };
+      }),
+    [sparkles, size, k]
   );
 
+  // One-shot layers mount on first use (and stay, so fades / tails finish).
+  const needRipples = useLatch(motionCapable && state === 'attention');
+  const needSparkles = useLatch(motionCapable && state === 'success');
+  const needSweep = useLatch(motionCapable && state === 'responding');
+  const needOrbits = useLatch(motionCapable && cfg.orbits);
+
   const segments = wedgeCountForSize(size);
-  const showLoopsLayers = motionCapable; // static characters skip invisible layers
   const q = RING_SQUARE;
+  const bq = BLOOM_SQUARE;
   const orbitHalf = ORBIT_R + 3;
+  const {
+    haloOpacity,
+    bloomOpacity,
+    spinRotate,
+    sweepRotate,
+    sweepOpacity,
+    openOpacity,
+    arcOpacity,
+    arcLift,
+    openScaleY,
+    echoOpacity,
+    echoRotate,
+    orbitRotate,
+  } = nodes;
 
   return (
     <View
@@ -414,29 +498,11 @@ function RendaCharacterImpl({
       style={[{ width, height: size }, styles.root, style]}
     >
       {/* Attention ripples: outside the body, oval, 1.0→1.5, .35→0 */}
-      {showLoopsLayers
-        ? ripples.map((v, i) => (
+      {needRipples
+        ? rippleNodes.map((n, i) => (
             <Animated.View
               key={`r${i}`}
-              style={[
-                layerStyles.fill,
-                {
-                  opacity: v.interpolate({
-                    inputRange: [-1, -0.001, 0, 1],
-                    outputRange: [0, 0, 0.35, 0],
-                    extrapolate: 'clamp',
-                  }),
-                  transform: [
-                    {
-                      scale: v.interpolate({
-                        inputRange: OUT_CUBIC.inputRange,
-                        outputRange: OUT_CUBIC.outputRange.map((o) => 1 + 0.5 * o),
-                        extrapolate: 'clamp',
-                      }),
-                    },
-                  ],
-                },
-              ]}
+              style={[layerStyles.fill, { opacity: n.opacity, transform: [{ scale: n.scale }] }]}
             >
               <RippleOval k={k} dark={dark} />
             </Animated.View>
@@ -447,29 +513,20 @@ function RendaCharacterImpl({
         <Animated.View style={[layerStyles.fill, { opacity: haloOpacity }]}>
           <HaloLayer k={k} dark={dark} id={id} />
         </Animated.View>
-        <Animated.View style={[layerStyles.fill, { opacity: bloomOpacity }]}>
-          <BloomLayer k={k} id={id} />
+
+        {/* Ring bloom: the gradient's own colours, rotating with it (prototype r.bloom). */}
+        <Animated.View style={[frameStyle(k, bq.x, bq.y, bq.size, bq.size), { opacity: bloomOpacity }]}>
+          <View style={[styles.square, { transform: [{ scaleX: RING_SQUASH_X }] }]}>
+            <Animated.View style={[styles.square, { transform: [{ rotate: spinRotate }] }]}>
+              <RingBloomCircle k={k} id={id} segments={bloomSegmentsForSize(size)} />
+            </Animated.View>
+          </View>
         </Animated.View>
 
-        {showLoopsLayers ? (
-          <Animated.View style={[layerStyles.fill, { opacity: Animated.multiply(orbitOpacity, dark ? 0.75 : 0.5) }]}>
+        {needOrbits ? (
+          <Animated.View style={[layerStyles.fill, { opacity: echoOpacity }]}>
             {ECHO_DEFS.map((_, i) => (
-              <Animated.View
-                key={`e${i}`}
-                style={[
-                  layerStyles.fill,
-                  {
-                    transform: [
-                      {
-                        rotate: orbitClock.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0deg', `${ECHO_TURNS[i] * 360}deg`],
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              >
+              <Animated.View key={`e${i}`} style={[layerStyles.fill, { transform: [{ rotate: echoRotate[i] }] }]}>
                 <EchoEllipse k={k} index={i} />
               </Animated.View>
             ))}
@@ -483,7 +540,7 @@ function RendaCharacterImpl({
           <Animated.View style={[styles.square, { transform: [{ rotate: spinRotate }] }]}>
             <RingGradientCircle k={k} segments={segments} />
           </Animated.View>
-          {showLoopsLayers ? (
+          {needSweep ? (
             <Animated.View
               style={[styles.squareAbs, { opacity: sweepOpacity, transform: [{ rotate: sweepRotate }] }]}
             >
@@ -492,7 +549,7 @@ function RendaCharacterImpl({
           ) : null}
         </View>
 
-        {showLoopsLayers
+        {needOrbits
           ? [-20, 20].map((tilt, i) => (
               <Animated.View
                 key={`o${i}`}
@@ -501,21 +558,7 @@ function RendaCharacterImpl({
                   { opacity: orbitOpacity, transform: [{ rotate: `${tilt}deg` }, { scaleY: 0.44 }] },
                 ]}
               >
-                <Animated.View
-                  style={{
-                    transform: [
-                      {
-                        rotate: orbitClock.interpolate({
-                          inputRange: [0, 1],
-                          outputRange:
-                            i === 0
-                              ? ['0deg', `${ORBIT_TURNS * 360}deg`]
-                              : ['140deg', `${140 - ORBIT_TURNS * 360}deg`],
-                        }),
-                      },
-                    ],
-                  }}
-                >
+                <Animated.View style={{ transform: [{ rotate: orbitRotate[i] }] }}>
                   <OrbitCircle k={k} dark={dark} id={`${id}${i}`} />
                 </Animated.View>
               </Animated.View>
@@ -559,53 +602,50 @@ function RendaCharacterImpl({
       </Animated.View>
 
       {/* Success sparkles: six 4 px diamonds, outward 0→14% of height */}
-      {showLoopsLayers
-        ? SPARKLE_ANGLES.map((angle, i) => {
-            const v = sparkles[i];
-            const { from, to } = sparklePath(angle);
-            const unitsTall = Math.max((4 / size) * 100, 6);
-            const px = unitsTall * k * 2.1;
-            return (
-              <Animated.View
-                key={`s${angle}`}
-                style={[
-                  styles.sparkle,
-                  {
-                    left: from[0] * k - px / 2,
-                    top: from[1] * k - px / 2,
-                    width: px,
-                    height: px,
-                    opacity: v.interpolate(SPARKLE_OPACITY),
-                    transform: [
-                      {
-                        translateX: v.interpolate({
-                          inputRange: OUT_CUBIC.inputRange,
-                          outputRange: OUT_CUBIC.outputRange.map((o) => o * (to[0] - from[0]) * k),
-                        }),
-                      },
-                      {
-                        translateY: v.interpolate({
-                          inputRange: OUT_CUBIC.inputRange,
-                          outputRange: OUT_CUBIC.outputRange.map((o) => o * (to[1] - from[1]) * k),
-                        }),
-                      },
-                      {
-                        scale: v.interpolate({
-                          inputRange: OUT_CUBIC.inputRange,
-                          outputRange: OUT_CUBIC.outputRange.map((o) => 0.6 + 0.4 * o),
-                        }),
-                      },
-                    ],
-                  },
-                ]}
-              >
-                <Sparkle px={px} color={sparkleColor(i, dark)} />
-              </Animated.View>
-            );
-          })
+      {needSparkles
+        ? sparkleNodes.map((n, i) => (
+            <Animated.View
+              key={`s${n.angle}`}
+              style={[
+                styles.sparkle,
+                {
+                  left: n.left,
+                  top: n.top,
+                  width: n.px,
+                  height: n.px,
+                  opacity: n.opacity,
+                  transform: [{ translateX: n.tx }, { translateY: n.ty }, { scale: n.scale }],
+                },
+              ]}
+            >
+              <Sparkle px={n.px} color={sparkleColor(i, dark)} />
+            </Animated.View>
+          ))
         : null}
     </View>
   );
+}
+
+/**
+ * `animated={false}` (message avatars, header button, badges) renders the
+ * single-<Svg> static drawing; everything else gets the animated character.
+ */
+function RendaCharacterImpl(props: RendaCharacterProps) {
+  const theme = useTheme();
+  const dark = props.dark ?? theme.isDark;
+  if (props.animated === false) {
+    return (
+      <RendaCharacterStatic
+        size={props.size}
+        state={props.state}
+        eyes={props.eyes}
+        dark={dark}
+        style={props.style}
+        testID={props.testID}
+      />
+    );
+  }
+  return <RendaCharacterAnimated {...props} dark={dark} />;
 }
 
 export const RendaCharacter = memo(RendaCharacterImpl);

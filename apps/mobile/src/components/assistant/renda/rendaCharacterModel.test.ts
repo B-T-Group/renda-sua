@@ -2,6 +2,19 @@ import { describe, expect, it } from 'vitest';
 import {
   ASPECT,
   ATTENTION_SPRING,
+  BLOOM,
+  BLOOM_RADIUS,
+  HALO_GLOW,
+  HALO_WIDE_GLOW,
+  RING_OUTER,
+  bloomAlphaRange,
+  bloomProfile,
+  bloomSegmentsForSize,
+  bloomStops,
+  normalCdf,
+  ovalGlowExtent,
+  ovalGlowStops,
+  staticWedgeCountForSize,
   FACE_EDGE,
   RENDA_STATE_CONFIG,
   RING,
@@ -229,5 +242,68 @@ describe('colours and ring gradient', () => {
     const p = sparklePath(90);
     expect(p.to[0] - p.from[0]).toBeCloseTo(14);
     expect(p.to[1]).toBeCloseTo(p.from[1]);
+  });
+});
+
+describe('glow: blurred prototype shapes as gradient stops (no native SVG filters)', () => {
+  it('normal CDF matches known values', () => {
+    expect(normalCdf(0)).toBeCloseTo(0.5, 6);
+    expect(normalCdf(1)).toBeCloseTo(0.841345, 5);
+    expect(normalCdf(-1.96)).toBeCloseTo(0.024998, 5);
+    expect(normalCdf(3) + normalCdf(-3)).toBeCloseTo(1, 6);
+  });
+
+  it('halo stops fall off like the prototype blur (oval 44.5 × 54.5, σ 4.5)', () => {
+    const stops = ovalGlowStops(HALO_GLOW);
+    const { rx, ry } = ovalGlowExtent(HALO_GLOW);
+    // Ends 3σ beyond the blurred edge and stays inside the ring until the edge zone.
+    expect(ry).toBeCloseTo(RING_OUTER.ry + 4.5 + 13.5);
+    expect(stops[0]).toEqual({ offset: 0, opacity: 1 });
+    expect(stops[stops.length - 1].opacity).toBe(0);
+    for (let i = 1; i < stops.length; i++) {
+      expect(stops[i].offset).toBeGreaterThan(stops[i - 1].offset);
+      expect(stops[i].opacity).toBeLessThanOrEqual(stops[i - 1].opacity);
+    }
+    // Half intensity at the blurred edge, on both axes (aspect chosen for that).
+    const tHalf = (RING_OUTER.ry + HALO_GLOW.edge) / ry;
+    expect((RING_OUTER.rx + HALO_GLOW.edge) / rx).toBeCloseTo(tHalf, 6);
+    const near = stops.reduce((a, b) => (Math.abs(b.offset - tHalf) < Math.abs(a.offset - tHalf) ? b : a));
+    expect(near.opacity).toBeGreaterThan(0.35);
+    expect(near.opacity).toBeLessThan(0.65);
+  });
+
+  it('dark wide halo is broader and fits its padded box', () => {
+    expect(ovalGlowExtent(HALO_WIDE_GLOW).ry).toBeGreaterThan(ovalGlowExtent(HALO_GLOW).ry);
+  });
+
+  it('bloom: blurred 9-wide band on the ring centreline (σ 2.2)', () => {
+    expect(bloomProfile(46)).toBeCloseTo(normalCdf(4.5 / 2.2) - normalCdf(-4.5 / 2.2), 6);
+    expect(bloomProfile(46 + BLOOM.halfWidth)).toBeCloseTo(0.5, 1);
+    expect(bloomProfile(BLOOM_RADIUS)).toBeLessThan(0.01);
+    const stops = bloomStops(10);
+    expect(stops[stops.length - 1]).toEqual({ offset: 1, opacity: 0 });
+    const peak = stops.reduce((a, b) => (b.opacity > a.opacity ? b : a));
+    expect(peak.offset * BLOOM_RADIUS).toBeGreaterThan(43);
+    expect(peak.offset * BLOOM_RADIUS).toBeLessThan(49);
+  });
+
+  it('bloom alpha follows the prototype (.22–.32 light, .55–.90 dark) with soft-glow segment counts', () => {
+    expect(bloomAlphaRange(false)).toEqual([0.22, 0.32]);
+    expect(bloomAlphaRange(true)).toEqual([0.55, 0.9]);
+    expect(bloomSegmentsForSize(128)).toBe(36);
+    expect(bloomSegmentsForSize(52)).toBe(24);
+  });
+
+  it('translucent segments do not overlap (overlaps would show as spokes)', () => {
+    const [a, b] = buildRingSegments(24, 41, 50, 46, 10, 0);
+    // Segment 0 ends exactly where segment 1 starts.
+    const endA = a.d.split('L')[1];
+    const startB = b.d.slice(1).split('L')[0];
+    expect(endA.trim()).toBe(startB.trim());
+  });
+
+  it('static drawings use fewer ring segments below 36 px', () => {
+    expect(staticWedgeCountForSize(28)).toBe(24);
+    expect(staticWedgeCountForSize(40)).toBe(wedgeCountForSize(40));
   });
 });

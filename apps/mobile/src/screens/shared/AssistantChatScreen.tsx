@@ -27,6 +27,7 @@ import { motionDuration } from '@/theme/motion';
 import { postAssistantChat } from '@/services/assistantApi';
 import type { AssistantMessage } from '@/stores/AssistantStore';
 import { RendaCharacter } from '@/components/assistant/renda/RendaCharacter';
+import { StageDisc } from '@/components/assistant/renda/rendaCharacterLayers';
 import { useInteractionSettled } from '@/components/assistant/launcher/launcherHooks';
 import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher';
 
@@ -208,7 +209,7 @@ function MessageBubble({ item, isUser, showOrb, character }: MessageBubbleProps)
 }
 
 const EmptyHero = observer(function EmptyHero() {
-  const { colors } = useTheme();
+  const { isDark } = useTheme();
   const { assistantCharacter } = useStore();
   const isFocused = useIsFocused();
   // Battery: pause off-screen and after the 20 s settle (focus resumes).
@@ -217,14 +218,10 @@ const EmptyHero = observer(function EmptyHero() {
   const disc = HERO_SIZE * 1.5;
   return (
     <View style={[styles.hero, { width: disc, height: disc }]}>
-      {/* Subtle primary.light 8% disc so the light-mode glow has something to sit on. */}
-      <View
-        pointerEvents="none"
-        style={[
-          StyleSheet.absoluteFill,
-          { borderRadius: disc / 2, backgroundColor: colors.primary.light, opacity: 0.08 },
-        ]}
-      />
+      {/* Subtle primary.light 8% disc (soft edge) so the light-mode glow has something to sit on. */}
+      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+        <StageDisc diameter={disc} dark={isDark} />
+      </View>
       <RendaCharacter
         size={HERO_SIZE}
         state={state}

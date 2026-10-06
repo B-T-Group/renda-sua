@@ -300,6 +300,11 @@ export function wedgeCountForSize(size: number): number {
   return 32;
 }
 
+/** Static drawings (message avatars, header button): no rotation, so fewer still. */
+export function staticWedgeCountForSize(size: number): number {
+  return size >= 36 ? wedgeCountForSize(size) : 24;
+}
+
 export type SweepWedge = Wedge & { opacity: number };
 
 /**
@@ -321,6 +326,109 @@ export function buildSweepWedges(cx: number, cy: number, r: number): SweepWedge[
     });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Glow: the prototype blurs SVG shapes (feGaussianBlur). Native has no filters,
+// so the blurred profiles are baked into gradient stops with the same falloff
+// (a Gaussian blur of an edge is a normal CDF across that edge).
+// ---------------------------------------------------------------------------
+
+/** Standard normal CDF (Abramowitz-Stegun 7.1.26, |error| < 1.5e-7). */
+export function normalCdf(x: number): number {
+  const z = Math.abs(x) / Math.SQRT2;
+  const t = 1 / (1 + 0.3275911 * z);
+  const poly =
+    t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
+  const erf = 1 - poly * Math.exp(-z * z);
+  return 0.5 * (1 + (x >= 0 ? erf : -erf));
+}
+
+/** Outer edge of the 7-wide ring (rx 37 + 3.5, ry 46 + 3.5). */
+export const RING_OUTER = { rx: RING.rx + RING.stroke / 2, ry: RING.ry + RING.stroke / 2 } as const;
+
+export type GlowStop = { offset: number; opacity: number };
+
+export type OvalGlowSpec = {
+  /** Blurred shape edge, in units beyond the ring's outer edge (prototype halo: 44.5/54.5 → ~4.5). */
+  edge: number;
+  /** Blur sigma in viewBox units (prototype: 4.5 halo core, 14 dark wide halo). */
+  sigma: number;
+  /** Tail length in sigmas before the gradient ends. */
+  tail?: number;
+};
+
+/**
+ * Gradient oval (centred on CX, CY) that holds an `OvalGlowSpec`. A radial
+ * gradient scales with its oval, so the same stop lands at slightly different
+ * distances beyond the ring on the two axes; the oval's aspect is chosen so
+ * both axes agree exactly at the blurred edge (where the glow is most visible).
+ */
+export function ovalGlowExtent(spec: OvalGlowSpec): { rx: number; ry: number; extent: number } {
+  const extent = spec.edge + (spec.tail ?? 3) * spec.sigma;
+  const ry = RING_OUTER.ry + extent;
+  const rx = (ry * (RING_OUTER.rx + spec.edge)) / (RING_OUTER.ry + spec.edge);
+  return { rx, ry, extent };
+}
+
+/**
+ * Radial-gradient stops reproducing a blurred oval: opacity Φ((edge − d) / σ)
+ * at `d` units beyond the ring's outer edge (mean of the two axes per stop).
+ */
+export function ovalGlowStops(spec: OvalGlowSpec, samples = 12): GlowStop[] {
+  const { rx, ry } = ovalGlowExtent(spec);
+  const dAt = (t: number) => (t * rx - RING_OUTER.rx + (t * ry - RING_OUTER.ry)) / 2;
+  const inner = Math.max(0, Math.min(RING_OUTER.rx / rx, RING_OUTER.ry / ry) - 0.08);
+  const stops: GlowStop[] = [{ offset: 0, opacity: 1 }];
+  for (let i = 0; i < samples; i++) {
+    const t = inner + ((1 - inner) * i) / (samples - 1);
+    const d = dAt(t);
+    const v = i === samples - 1 ? 0 : normalCdf((spec.edge - d) / spec.sigma);
+    stops.push({ offset: fmt(t), opacity: fmt(Math.min(1, v)) });
+  }
+  return stops;
+}
+
+/** Prototype halo core: oval 44.5 × 54.5 blurred σ 4.5 (edge ~4.5 beyond the ring). */
+export const HALO_GLOW: OvalGlowSpec = { edge: 4.5, sigma: 4.5 };
+/** Prototype dark-mode wide halo: oval 48 × 58 blurred σ 14, 55% (`primary.light`). */
+export const HALO_WIDE_GLOW: OvalGlowSpec = { edge: 8, sigma: 14, tail: 2.5 };
+export const HALO_WIDE_ALPHA = 0.55;
+
+/**
+ * Ring bloom (prototype `r.bloom`): the ring wedges through a 9-wide mask,
+ * blurred σ 2.2, so the glow takes the gradient's colour and rotates with it.
+ * Drawn in circle space (r 46, squashed like the ring overlay).
+ */
+export const BLOOM = { halfWidth: 4.5, sigma: 2.2, inner: 38 } as const;
+export const BLOOM_RADIUS = RING.ry + BLOOM.halfWidth + 3 * BLOOM.sigma;
+
+/** Opacity of the blurred 9-wide band at circle-space radius `r`. */
+export function bloomProfile(r: number): number {
+  const { halfWidth: h, sigma: s } = BLOOM;
+  return normalCdf((RING.ry + h - r) / s) - normalCdf((RING.ry - h - r) / s);
+}
+
+/** userSpace radial-gradient stops (radius `BLOOM_RADIUS`) for the bloom band. */
+export function bloomStops(samples = 8): GlowStop[] {
+  const stops: GlowStop[] = [];
+  const t0 = BLOOM.inner / BLOOM_RADIUS;
+  for (let i = 0; i < samples; i++) {
+    const t = t0 + ((1 - t0) * i) / (samples - 1);
+    const v = i === samples - 1 ? 0 : bloomProfile(t * BLOOM_RADIUS);
+    stops.push({ offset: fmt(t), opacity: fmt(v) });
+  }
+  return stops;
+}
+
+/** Bloom segments: the glow is soft, so fewer than the ring itself. */
+export function bloomSegmentsForSize(size: number): number {
+  return size >= 96 ? 36 : 24;
+}
+
+/** Bloom layer opacity range by halo level (prototype: .22–.32 light, .55–.90 dark). */
+export function bloomAlphaRange(dark: boolean): [number, number] {
+  return dark ? [0.55, 0.9] : [0.22, 0.32];
 }
 
 /** Halo alpha range: 16–28% on light surfaces, 30–45% in dark mode. */
@@ -398,15 +506,17 @@ export function buildRingSegments(
   cx: number,
   cy: number,
   rMid: number,
-  stroke: number
+  stroke: number,
+  /** Degrees each side; hides seams between opaque fills. Use 0 for translucent fills (overlaps show as spokes). */
+  overlap = 0.4
 ): Wedge[] {
   const step = 360 / count;
   const rOut = rMid + stroke / 2;
   const rIn = rMid - stroke / 2;
   const out: Wedge[] = [];
   for (let i = 0; i < count; i++) {
-    const a0 = i * step - 0.4;
-    const a1 = (i + 1) * step + 0.4;
+    const a0 = i * step - overlap;
+    const a1 = (i + 1) * step + overlap;
     const [ox0, oy0] = polar(a0, rOut, cx, cy);
     const [ox1, oy1] = polar(a1, rOut, cx, cy);
     const [ix1, iy1] = polar(a1, rIn, cx, cy);
