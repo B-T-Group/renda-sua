@@ -64,7 +64,7 @@ afterEach(() => {
 describe('AssistantLauncher', () => {
   it('is a labelled button with a hint, at 24/24 on desktop, below MUI dialogs', () => {
     renderLauncher('items');
-    const button = screen.getByRole('button', { name: 'Open shopping assistant' });
+    const button = screen.getByRole('button', { name: 'Ask: open shopping assistant' });
     const hint = document.getElementById(button.getAttribute('aria-describedby') || '');
     expect(hint?.textContent).toBe('Find items, reorder or track an order');
     const root = screen.getByTestId('assistant-launcher');
@@ -80,10 +80,18 @@ describe('AssistantLauncher', () => {
     renderLauncher('items');
     expect(screen.getByTestId('assistant-launcher').getAttribute('data-variant')).toBe('orb_extended');
     expect(screen.getByText('Ask')).toBeInTheDocument();
+    // Accessible name starts with the visible pill (WCAG 2.5.3 Label in Name).
+    const button = screen.getByRole('button', { name: 'Ask: open shopping assistant' });
+    expect(button.getAttribute('aria-label')?.startsWith('Ask')).toBe(true);
+    expect(document.getElementById(button.getAttribute('aria-describedby') || '')?.textContent).toBe(
+      'Find items, reorder or track an order'
+    );
     act(() => {
       fireEvent.scroll(window);
     });
     expect(screen.queryByText('Ask')).toBeNull();
+    // Compact: the short label, without the visible "Ask" prefix.
+    expect(screen.getByRole('button', { name: 'Open shopping assistant' })).toBeInTheDocument();
   });
 
   it('is compact from the 4th session on', () => {
@@ -112,7 +120,7 @@ describe('AssistantLauncher', () => {
 
   it('hover/focus makes the character attentive; leaving returns to idle after 150 ms', () => {
     renderLauncher('items');
-    const button = screen.getByRole('button', { name: 'Open shopping assistant' });
+    const button = screen.getByRole('button', { name: 'Ask: open shopping assistant' });
     const svg = () => screen.getByTestId('assistant-launcher-character');
     expect(svg().getAttribute('data-renda-state')).toBe('idle');
     fireEvent.pointerEnter(button);
@@ -130,7 +138,7 @@ describe('AssistantLauncher', () => {
 
   it('tap tracks and opens /assistant', () => {
     renderLauncher('store_detail', { isSignedIn: true });
-    fireEvent.click(screen.getByRole('button', { name: 'Open shopping assistant' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ask: open shopping assistant' }));
     expect(events('assistant.launcher.tap')[0].metadata).toMatchObject({
       screen: 'store_detail',
       variant: 'orb_extended',

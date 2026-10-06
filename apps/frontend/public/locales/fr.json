@@ -8589,7 +8589,8 @@
     "launcher": {
       "label": "Ouvrir l'assistant d'achat",
       "hint": "Trouvez un article, repassez ou suivez une commande",
-      "ask": "Demander"
+      "ask": "Demander",
+      "labelExtended": "Demander : ouvrir l'assistant d'achat"
     },
     "nudge": {
       "text": "Bonjour ! Je peux trouver un article, suivre ou repasser votre commande.",

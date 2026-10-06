@@ -289,7 +289,13 @@ export function AssistantLauncher({
     : engaged
     ? 'attentive'
     : 'idle';
-  const label = t('assistant.launcher.label', 'Open shopping assistant');
+  // Accessible name must start with the visible pill when extended (WCAG 2.5.3).
+  const label = extended
+    ? t(
+        'assistant.launcher.labelExtended',
+        'Ask: open shopping assistant'
+      )
+    : t('assistant.launcher.label', 'Open shopping assistant');
 
   return (
     <Box

@@ -119,15 +119,21 @@ export type HeaderAssistantEntry = 'icon' | 'character' | 'hidden' | 'pending';
 
 /**
  * Site header assistant button. One entry point at a time: hidden where the
- * launcher shows and on /assistant itself; elsewhere client/guest get the 28 px
- * character (dot eyes). Flag off, or agent/business: today's SmartToy icon.
+ * launcher shows and on /assistant for client/guest (the page character is the
+ * entry, flagged or not); elsewhere with the flag on, client/guest get the 28 px
+ * character. Flag off on other routes, or agent/business: today's SmartToy icon.
  */
 export function headerAssistantEntry(
   i: AssistantEntryInputs
 ): HeaderAssistantEntry {
-  if (!i.flagOn || !i.isClientOrGuest) return 'icon';
-  if (i.pathname === '/assistant' || i.pathname === '/assistant/')
+  // /assistant already shows the page character for client/guest (flagged or not),
+  // so the global-nav SmartToy would be a second entry point.
+  if (
+    i.isClientOrGuest &&
+    (i.pathname === '/assistant' || i.pathname === '/assistant/')
+  )
     return 'hidden';
+  if (!i.flagOn || !i.isClientOrGuest) return 'icon';
   if (shouldShowAssistantLauncher(i)) return 'hidden';
   return 'character';
 }

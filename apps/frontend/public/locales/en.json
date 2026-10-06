@@ -8573,7 +8573,8 @@
     "launcher": {
       "label": "Open shopping assistant",
       "hint": "Find items, reorder or track an order",
-      "ask": "Ask"
+      "ask": "Ask",
+      "labelExtended": "Ask: open shopping assistant"
     },
     "nudge": {
       "text": "Hi! I can find items, track your order or reorder for you.",

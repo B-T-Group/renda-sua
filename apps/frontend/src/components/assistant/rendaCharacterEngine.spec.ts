@@ -133,4 +133,21 @@ describe('RendaEngine blinks', () => {
     }
     expect(minScaleY).toBeLessThan(0.5);
   });
+
+  it('listening eye translate settles at y = 2 (spec §1: offset down 2)', () => {
+    const { nodes } = fakeNodes();
+    const engine = new RendaEngine(
+      nodes,
+      { size: 160, eyes: 'expressive', surface: 'hero' },
+      'idle',
+      () => 0
+    );
+    engine.setState('listening', false);
+    for (let i = 0; i < 40; i++) engine.step(16, false, 0);
+    const eye = nodes.eyes[0].g as { attrs: Record<string, string> };
+    const m = /translate\(([\d.-]+) ([\d.-]+)\)/.exec(eye.attrs.transform || '');
+    expect(m).not.toBeNull();
+    expect(Number(m?.[1])).toBeCloseTo(0, 1);
+    expect(Number(m?.[2])).toBeCloseTo(2, 1);
+  });
 });

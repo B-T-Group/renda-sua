@@ -147,6 +147,19 @@ describe('D2: the orb replaces the floating WhatsApp bubble (flag-gated)', () =>
     expect(screen.getByTestId('header-entry').textContent).toBe('pending');
   });
 
+  it('flag off: /assistant hides the nav SmartToy for client/guest (page character is the entry)', async () => {
+    mockFlags.flags.assistant_launcher_v1 = false;
+    await renderAt('guest', '/assistant');
+    expect(screen.getByTestId('header-entry').textContent).toBe('hidden');
+    expect(screen.queryByTestId('assistant-launcher')).toBeNull();
+  });
+
+  it('flag off: /assistant keeps SmartToy for agent', async () => {
+    mockFlags.flags.assistant_launcher_v1 = false;
+    await renderAt('agent', '/assistant');
+    expect(screen.getByTestId('header-entry').textContent).toBe('icon');
+  });
+
   it('flag off + signed-in persona still loading: today\'s bubble and icon', async () => {
     await renderAt('loading', '/');
     expect(await screen.findByTestId('whatsapp-bubble')).toBeInTheDocument();
