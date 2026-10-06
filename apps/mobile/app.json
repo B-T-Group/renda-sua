@@ -2,7 +2,7 @@
   "expo": {
     "name": "Rendasua",
     "slug": "agent-mobile",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "owner": "rendasua-org",
     "scheme": "rendasua",
     "orientation": "portrait",
@@ -19,9 +19,7 @@
       "fallbackToCacheTimeout": 0,
       "url": "https://u.expo.dev/ee97ea4d-518f-4fe5-a7e9-e6aadef4bf46"
     },
-    "runtimeVersion": {
-      "policy": "appVersion"
-    },
+    "runtimeVersion": "1.1.1",
     "cli": {
       "appVersionSource": "remote"
     },
