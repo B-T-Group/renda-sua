@@ -175,6 +175,7 @@ import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
+import { remainderTimingLabel } from './remainder-timing-label.util';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import {
@@ -7801,8 +7802,10 @@ export class OrdersService {
     }
 
     // Get comprehensive order data with all relationships
-    // For agents, exclude financial fields (total_amount, order_holds, order item prices)
-    // but keep base_delivery_fee, per_km_delivery_fee, and subtotal for commission and hold amount calculation
+    // For agents, exclude financial fields (order_holds, order item prices).
+    // base_delivery_fee, per_km_delivery_fee and subtotal feed commission / hold
+    // amounts; total_amount feeds amount_due (cash to collect after a deposit).
+    // transformOrderForAgentSync strips all of them from the response.
     const isAgent = isActivePersona(user, 'agent');
     const query = isAgent
       ? `
@@ -7829,6 +7832,7 @@ export class OrdersService {
           is_diaspora_order
           fulfillment_country
           subtotal
+          total_amount
           base_delivery_fee
           per_km_delivery_fee
           delivery_fee_waived
@@ -9787,6 +9791,7 @@ export class OrdersService {
       amount: depositAmount,
       orderNumber: order.order_number,
       depositTransactionId: depositTxnId,
+      memo: `Deposit released for settlement of order ${order.order_number}`,
     });
   }
 
@@ -9989,7 +9994,7 @@ export class OrdersService {
 
     await this.completeOrderWithSideEffects(
       order,
-      'Order completed after pay-at-delivery payment confirmation'
+      `Order completed after ${remainderTimingLabel(order, 'hyphen')} payment confirmation`
     );
   }
 
@@ -14876,7 +14881,7 @@ export class OrdersService {
                 accountId: clientAccount.id,
                 amount: subtotalPortion,
                 transactionType: 'payment',
-                memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
+                memo: `Order item payment for order ${order.order_number} (${remainderTimingLabel(order)})`,
                 referenceId: orderId,
                 idempotencyKey: this.settlementKey('item', 'payment', orderId),
               }),

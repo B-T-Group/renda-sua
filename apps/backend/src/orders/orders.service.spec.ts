@@ -6177,4 +6177,81 @@ describe('OrdersService', () => {
       ).toHaveBeenCalled();
     });
   });
+
+  describe('getOrderById agent view amount_due', () => {
+    const padOrderRow = {
+      id: 'order-pad-1',
+      order_number: '60093851',
+      business_id: 'business-123',
+      client_id: 'client-123',
+      assigned_agent_id: 'agent-123',
+      current_status: 'out_for_delivery',
+      payment_timing: 'pay_at_delivery',
+      fulfillment_method: 'delivery',
+      currency: 'XAF',
+      subtotal: 800,
+      total_amount: 1300,
+      base_delivery_fee: 500,
+      per_km_delivery_fee: 0,
+      deposit_amount: 200,
+      deposit_status: 'paid',
+      order_items: [],
+    };
+
+    beforeEach(() => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+        ...padOrderRow,
+        client: { user_id: 'client-456' },
+      });
+      jest
+        .spyOn(service as any, 'getAgentInfo')
+        .mockResolvedValue({ isAgent: true, isVerified: true });
+      agentHoldService.getHoldPercentageForAgent.mockResolvedValue(0);
+      // Behave like Hasura: only return the columns the query selects.
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        const row: Record<string, unknown> = { ...padOrderRow };
+        if (!/\btotal_amount\b/.test(query)) delete row.total_amount;
+        return { orders_by_pk: row };
+      });
+    });
+
+    it('returns the remainder to collect (total - deposit) without exposing total_amount', async () => {
+      const result: any = await service.getOrderById('order-pad-1');
+
+      expect(result.access_reason).toBe('assigned_agent');
+      expect(result.amount_due).toBe(1100);
+      expect(result.total_amount).toBeUndefined();
+      expect(result.subtotal).toBeUndefined();
+    });
+  });
+
+  describe('settlement copy for pay-at-pickup deposit orders', () => {
+    it('labels the settlement deposit release as a settlement, not a refund', async () => {
+      jest
+        .spyOn(service as any, 'claimDepositForSettlement')
+        .mockResolvedValue(true);
+      const ledger = (service as any).depositLedgerService;
+
+      await (service as any).releasePaidDepositHoldIfNeeded(
+        {
+          id: 'order-d',
+          order_number: '14795691',
+          payment_timing: 'pay_at_pickup',
+          fulfillment_method: 'pickup',
+          deposit_amount: 200,
+          deposit_status: 'paid',
+          deposit_mobile_payment_transaction_id: 'dep-txn-1',
+        },
+        'client-acct-1'
+      );
+
+      expect(ledger.releaseDepositToAvailable).toHaveBeenCalledWith(
+        expect.objectContaining({
+          depositTransactionId: 'dep-txn-1',
+          memo: 'Deposit released for settlement of order 14795691',
+        })
+      );
+    });
+  });
 });
