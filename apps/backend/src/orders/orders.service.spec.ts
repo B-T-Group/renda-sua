@@ -476,8 +476,14 @@ describe('OrdersService', () => {
               lines: [],
             }),
             isDepositRequired: jest.fn().mockReturnValue(false),
+            isDepositCollected: jest.fn(
+              (o: any) =>
+                (o?.deposit_status === 'paid' || o?.deposit_status === 'applied') &&
+                Number(o?.deposit_amount) > 0
+            ),
             remainderPaymentAmount: jest.fn((o: any) =>
-              o?.deposit_status === 'paid'
+              (o?.deposit_status === 'paid' || o?.deposit_status === 'applied') &&
+              Number(o?.deposit_amount) > 0
                 ? Math.max(0, (o.total_amount || 0) - (o.deposit_amount || 0))
                 : o?.total_amount || 0
             ),

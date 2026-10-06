@@ -1061,9 +1061,9 @@ export class OrdersService {
         ...restOrder
       } = order;
 
-      // Agents must not see GMV (total_amount), but need remainder when deposit is paid
+      // Agents must not see GMV (total_amount), but need remainder when deposit is paid/applied
       const depositPaid =
-        order.deposit_status === 'paid' && Number(order.deposit_amount) > 0;
+        this.depositCalculationService.isDepositCollected(order);
       const amountDue = depositPaid
         ? this.depositCalculationService.remainderPaymentAmount(order)
         : undefined;

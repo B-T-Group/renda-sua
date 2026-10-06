@@ -5,11 +5,19 @@
  * remainder when order is delivered/picked up. The server quotes deposit_amount.
  *
  * Backend contract (renda-sua #275, merged main @ 3ed60fab):
- * - deposit_status enum: none | pending | paid | failed | forfeited | refunded
+ * - deposit_status enum: none | pending | paid | failed | forfeited | refunded | applied
+ *   (applied = counted toward the price at settlement / cash exception, renda-sua #460)
  * - Note: pending_payment is current_status, NOT deposit_status
  */
 
-export type DepositStatus = 'none' | 'pending' | 'paid' | 'failed' | 'forfeited' | 'refunded';
+export type DepositStatus =
+  | 'none'
+  | 'pending'
+  | 'paid'
+  | 'failed'
+  | 'forfeited'
+  | 'refunded'
+  | 'applied';
 
 export interface DepositConfig {
   /** Server-authoritative deposit amount (XAF). UI always prefers this when present. */

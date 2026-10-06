@@ -182,6 +182,28 @@ describe('DepositCalculationService', () => {
       ).toBe(50);
     });
 
+    it('returns total minus deposit when deposit is applied (counted at settlement / cash exception)', () => {
+      expect(
+        service.remainderPaymentAmount({
+          total_amount: 5000,
+          deposit_amount: 500,
+          deposit_status: 'applied',
+        })
+      ).toBe(4500);
+    });
+
+    it('returns full total when the deposit was forfeited or refunded', () => {
+      for (const deposit_status of ['forfeited', 'refunded', 'failed']) {
+        expect(
+          service.remainderPaymentAmount({
+            total_amount: 5000,
+            deposit_amount: 500,
+            deposit_status,
+          })
+        ).toBe(5000);
+      }
+    });
+
     it('returns full total when deposit is pending', () => {
       expect(
         service.remainderPaymentAmount({
