@@ -5,9 +5,9 @@
  *
  * Motion uses RN core Animated with `useNativeDriver: true` and animates
  * transform / opacity only (eng plan §6.1: no Reanimated / worklets here).
- * Idle on the hero / launcher runs the eye life cycle (Rest→Wake→Glance→Blink
- * →Drowse); the header stays static. Reduce Motion: no life cycle; eye shapes
- * still switch per state. Decorative: hidden from screen readers.
+ * Idle on the hero / launcher / catalog header runs the eye life cycle (Rest→Wake
+ * →Glance→Blink→Drowse at size ≥36; blink-only at 20–35). Reduce Motion: no
+ * life cycle; eye shapes still switch per state. Decorative: hidden from screen readers.
  */
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import {

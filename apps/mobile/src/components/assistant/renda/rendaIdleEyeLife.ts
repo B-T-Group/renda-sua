@@ -4,7 +4,7 @@
  * covers phases, caps, offsets and mode gating. Drivers (Animated / rAF) only
  * paint what this module decides.
  *
- * Placement: launcher + empty-state hero only. Header stays static at Idle.
+ * Placement: launcher, hero, and header (catalog/client-guest with character).
  * Dot eyes (20–35): blink only. Reduce-motion / paused / staticIdle: off.
  */
 export type IdleEyePhase = 'rest' | 'wake' | 'glance' | 'blink' | 'drowse';
@@ -56,20 +56,19 @@ export type IdleEyeMode = 'full' | 'blinkOnly' | 'off';
 export type IdleEyeLifeOptions = {
   /** Size-derived eye level. */
   eyes: 'expressive' | 'dot' | 'none';
-  /** Header avatar: idle is static — no life cycle. */
+  /** Set to true to freeze the life cycle (legacy staticIdle prop). */
   staticIdle?: boolean;
   reducedMotion?: boolean;
   /** Battery / settle / blur pause. */
   paused?: boolean;
   /**
    * false on surfaces that must not run the life cycle (message avatars).
-   * Hero and launcher pass true (the default when omitted is true for callers
-   * that already gated placement).
+   * Hero, launcher, and header pass true.
    */
   enabled?: boolean;
 };
 
-/** Where the life cycle may run (spec: launcher + empty-state hero only). */
+/** Where the life cycle may run (launcher, hero, header). */
 export function idleEyeMode(opts: IdleEyeLifeOptions): IdleEyeMode {
   if (opts.enabled === false) return 'off';
   if (opts.staticIdle || opts.reducedMotion || opts.paused) return 'off';

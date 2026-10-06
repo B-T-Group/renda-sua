@@ -525,14 +525,14 @@ export class RendaEngine {
       n.sweepRot.setAttribute('transform', `rotate(${fmt(a)} ${CX} ${CY})`);
     } else n.sweep.setAttribute('opacity', '0');
 
-    // Eyes: Idle life cycle on hero/launcher; otherwise 150 ms morph + blink.
+    // Eyes: Idle life cycle on hero/launcher/header; otherwise 150 ms morph + blink.
     if (n.eyes.length) {
       const mode = idleEyeMode({
         eyes: this.o.eyes,
-        staticIdle: this.o.surface === 'header',
+        staticIdle: false,
         reducedMotion: rm,
         paused: this.settleOn(idleMs),
-        enabled: this.state === 'idle' && (this.o.surface === 'hero' || this.o.surface === 'launcher'),
+        enabled: this.state === 'idle' && (this.o.surface === 'hero' || this.o.surface === 'launcher' || this.o.surface === 'header'),
       });
 
       let blink = 1;
