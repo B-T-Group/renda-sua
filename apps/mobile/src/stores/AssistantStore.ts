@@ -4,6 +4,7 @@
  */
 
 import { makeAutoObservable } from 'mobx';
+import { randomUUID } from '../utils/uuid';
 
 export type AssistantMessage = {
   id: string;
@@ -18,7 +19,7 @@ function makeMessageId(): string {
 }
 
 function makeThreadId(): string {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  return randomUUID();
 }
 
 export class AssistantStore {

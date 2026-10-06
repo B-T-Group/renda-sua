@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AssistantStore } from './AssistantStore';
 
+// UUID v4 regex pattern: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+// where y is [89ab] (variant bits)
+const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 describe('AssistantStore', () => {
   let store: AssistantStore;
 
@@ -19,6 +23,23 @@ describe('AssistantStore', () => {
     expect(store.isSending).toBe(false);
     expect(store.error).toBe(null);
     expect(store.handoff).toBe(false);
+  });
+
+  it('generates thread_id as a valid UUID v4', () => {
+    expect(store.threadId).toMatch(UUID_V4_REGEX);
+    
+    // Test multiple rotations to ensure format consistency
+    const threadIds = new Set<string>();
+    threadIds.add(store.threadId);
+    
+    for (let i = 0; i < 5; i++) {
+      store.rotateThread();
+      expect(store.threadId).toMatch(UUID_V4_REGEX);
+      threadIds.add(store.threadId);
+    }
+    
+    // Ensure all generated IDs are unique
+    expect(threadIds.size).toBe(6);
   });
 
   it('adds user messages', () => {
