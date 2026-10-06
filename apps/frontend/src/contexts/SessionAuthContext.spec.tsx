@@ -179,6 +179,33 @@ describe('SessionAuthContext', () => {
     );
   });
 
+  it('logout clears the assistant chat keys from sessionStorage (QA N4)', async () => {
+    const keys = [
+      'rendasua.assistant.chat.v1',
+      'rendasua.assistant.thread_id.v1',
+      'rendasua.assistant.last_activity.v1',
+      'rendasua.assistant.owner.v1',
+    ];
+    keys.forEach((k) => sessionStorage.setItem(k, 'x'));
+    sessionStorage.setItem('unrelated', 'keep');
+    const auth0Logout = jest.fn();
+    mockUseAuth0.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { sub: 'auth0|alice' },
+      getAccessTokenSilently: jest.fn(),
+      logout: auth0Logout,
+    });
+    const { result } = renderHook(() => useSessionAuth(), { wrapper });
+    await act(async () => {
+      await result.current.logout();
+    });
+    keys.forEach((k) => expect(sessionStorage.getItem(k)).toBeNull());
+    expect(sessionStorage.getItem('unrelated')).toBe('keep');
+    expect(auth0Logout).toHaveBeenCalled();
+    sessionStorage.clear();
+  });
+
   it('prefers Auth0 SPA user when authenticated via Auth0', async () => {
     mockUseAuth0.mockReturnValue({
       isAuthenticated: true,
