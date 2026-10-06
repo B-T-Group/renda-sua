@@ -115,6 +115,17 @@ describe('flag gating + allowlist', () => {
     expect(shouldHideHeaderAssistantButton(true, 'client', 'InventoryItemDetail')).toBe(false);
     expect(shouldHideHeaderAssistantButton(true, 'business', 'ClientBrowse')).toBe(false);
   });
+
+  it('no flash: client / guest get no header button until flags first resolve', () => {
+    expect(shouldHideHeaderAssistantButton(false, 'client', 'ClientBrowse', false)).toBe(true);
+    expect(shouldHideHeaderAssistantButton(false, 'guest', 'ClientBrowse', false)).toBe(true);
+    // Resolved off: the header button shows; resolved on: the launcher owns the screen.
+    expect(shouldHideHeaderAssistantButton(false, 'client', 'ClientBrowse', true)).toBe(false);
+    expect(shouldHideHeaderAssistantButton(true, 'client', 'ClientBrowse', true)).toBe(true);
+    // Agent / business never wait on the launcher flag.
+    expect(shouldHideHeaderAssistantButton(false, 'business', 'ClientBrowse', false)).toBe(false);
+    expect(shouldHideHeaderAssistantButton(false, 'agent', 'ClientBrowse', false)).toBe(false);
+  });
 });
 
 describe('placement', () => {

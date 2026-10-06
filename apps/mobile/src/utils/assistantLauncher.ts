@@ -80,15 +80,19 @@ export function shouldShowLauncher(i: LauncherVisibilityInput): boolean {
 
 /**
  * One entry point at a time: with the flag on, the header assistant button
- * hides wherever the launcher is allowed for a client / guest.
+ * hides wherever the launcher is allowed for a client / guest. Until the first
+ * flags answer (`flagsResolved`), client / guest get no header button either,
+ * so it never flashes in and then out when the flag resolves on.
  */
 export function shouldHideHeaderAssistantButton(
   flagOn: boolean,
   viewer: AssistantViewer,
-  route: string
+  route: string,
+  flagsResolved = true
 ): boolean {
-  if (!flagOn) return false;
   if (viewer !== 'client' && viewer !== 'guest') return false;
+  if (!flagsResolved) return true;
+  if (!flagOn) return false;
   return isLauncherRoute(viewer, route);
 }
 

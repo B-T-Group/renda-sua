@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { InteractionManager, Keyboard } from 'react-native';
+import { InteractionManager, Keyboard, Platform } from 'react-native';
+import { useClientFlags } from '../../../contexts/ClientFlagsContext';
 import { rootNavigationRef } from '../../../navigation/rootNavigationRef';
 import { SETTLE_AFTER_MS } from '../../../utils/assistantLauncher';
 import { lastLauncherInteractionAt, subscribeLauncherInteraction } from './launcherSignals';
@@ -41,11 +42,20 @@ export function useDeferredMount(delayMs: number, enabled: boolean): boolean {
   return mounted;
 }
 
+/**
+ * iOS has will-events, so the launcher hides as the keyboard starts to slide
+ * in (not after); Android only emits did-events.
+ */
+export const KEYBOARD_EVENTS =
+  Platform.OS === 'ios'
+    ? ({ show: 'keyboardWillShow', hide: 'keyboardWillHide' } as const)
+    : ({ show: 'keyboardDidShow', hide: 'keyboardDidHide' } as const);
+
 export function useKeyboardOpen(): boolean {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(() => Keyboard.isVisible());
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setOpen(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setOpen(false));
+    const show = Keyboard.addListener(KEYBOARD_EVENTS.show, () => setOpen(true));
+    const hide = Keyboard.addListener(KEYBOARD_EVENTS.hide, () => setOpen(false));
     return () => {
       show.remove();
       hide.remove();
@@ -72,4 +82,18 @@ export function useInteractionSettled(resetKey?: unknown): boolean {
     return () => clearTimeout(timer);
   }, [lastInteractionAt, resetKey]);
   return settled;
+}
+
+/** Process-wide: client flags have resolved (success or failure) at least once. */
+let clientFlagsResolvedOnce = false;
+
+/**
+ * True once the first client-flags fetch has settled; stays true through later
+ * market refetches (`loading` flips back to true on each one). Lets flag-driven
+ * entry points render once with the real value instead of flashing the default.
+ */
+export function useClientFlagsResolved(): boolean {
+  const { loading } = useClientFlags();
+  if (!loading) clientFlagsResolvedOnce = true;
+  return clientFlagsResolvedOnce;
 }

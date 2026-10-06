@@ -8,7 +8,7 @@
  * ride the floating pill's hide-on-scroll).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -140,6 +140,8 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
   };
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
+  const tRef = useRef(t);
+  tRef.current = t;
   const visibleRef = useRef(visible);
   visibleRef.current = visible;
 
@@ -149,6 +151,7 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
   }, [visible, route, reducedMotion]);
 
   // Attention ripple (rare, capped, waits for 2 s idle, never when hidden).
+  const attentionEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playAttention = useCallback(
     async (trigger: AttentionTrigger) => {
       // Read live values: this runs after the idle wait, not when it was scheduled.
@@ -168,7 +171,11 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
       setCharState('attention');
       setReplayKey((k) => k + 1);
       trackAttentionPlayed(ctxRef.current, trigger);
-      setTimeout(() => setCharState((s) => (s === 'attention' ? 'idle' : s)), ATTENTION_DURATION_MS);
+      if (attentionEndTimer.current) clearTimeout(attentionEndTimer.current);
+      attentionEndTimer.current = setTimeout(() => {
+        attentionEndTimer.current = null;
+        setCharState((s) => (s === 'attention' ? 'idle' : s));
+      }, ATTENTION_DURATION_MS);
     },
     [reducedMotion]
   );
@@ -193,13 +200,16 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
   useEffect(
     () => () => {
       if (attentionTimer.current) clearTimeout(attentionTimer.current);
+      if (attentionEndTimer.current) clearTimeout(attentionEndTimer.current);
     },
     []
   );
   useEffect(() => {
-    attentionListener = (req) => requestAttention(req.trigger);
+    const listener = (req: AttentionRequest) => requestAttention(req.trigger);
+    attentionListener = listener;
     return () => {
-      attentionListener = null;
+      // Only clear our own registration (a newer host may have replaced it).
+      if (attentionListener === listener) attentionListener = null;
     };
   }, [requestAttention]);
 
@@ -220,6 +230,10 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
       markSeen();
       setNudgeVisible(true);
       trackNudgeShown(ctxRef.current);
+      // Screen readers keep focus where it was; announce the bubble once.
+      AccessibilityInfo.announceForAccessibility(
+        tRef.current('assistant.nudge.body', 'Hi! I can find items, track your order or reorder for you.')
+      );
       requestAttention('first_run');
     }, NUDGE_DWELL_MS);
     return () => clearTimeout(timer);

@@ -29,6 +29,7 @@ import { ActionsNeededSection } from '../../components/common/ActionsNeededSecti
 import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { AssistantIconButton } from '../../components/common/AssistantIconButton';
 import { useAssistantEntryTap } from '../../components/assistant/launcher/useAssistantEntryTap';
+import { useClientFlagsResolved } from '../../components/assistant/launcher/launcherHooks';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { assistantViewer, shouldHideHeaderAssistantButton } from '../../utils/assistantLauncher';
 import { NotificationBellButton } from '../../components/common/NotificationBellButton';
@@ -65,7 +66,16 @@ function ClientBrowseHomeScreenBase() {
   const assistantFlagOn = flags.assistant_launcher_v1;
   const viewer = assistantViewer(auth.isAuthenticated, persona.activePersona);
   // #451 one entry point: with the launcher flag on, the floating launcher owns this screen.
-  const hideAssistantHeaderButton = shouldHideHeaderAssistantButton(assistantFlagOn, viewer, route.name);
+  // No flash: for client / guest, wait for the first flags answer before
+  // deciding, so the header icon never shows and then vanishes when the
+  // launcher flag resolves on (agent / business are unaffected by the flag).
+  const flagsResolved = useClientFlagsResolved();
+  const hideAssistantHeaderButton = shouldHideHeaderAssistantButton(
+    assistantFlagOn,
+    viewer,
+    route.name,
+    flagsResolved
+  );
   const openAssistant = useCallback(() => {
     trackEntryTap('header_icon', 'header_icon');
     rootNav?.navigate('AssistantChat');
