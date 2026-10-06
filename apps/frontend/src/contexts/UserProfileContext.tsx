@@ -888,6 +888,10 @@ export const UserProfileProvider: React.FC<UserProfileProviderProps> = ({
   );
 };
 
+/** Same as useUserProfileContext, but null outside the provider (shared widgets, tests). */
+export const useOptionalUserProfileContext = (): UserProfileContextType | null =>
+  useContext(UserProfileContext) ?? null;
+
 export const useUserProfileContext = (): UserProfileContextType => {
   const context = useContext(UserProfileContext);
   if (context === undefined) {

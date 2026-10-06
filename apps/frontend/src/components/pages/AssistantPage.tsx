@@ -14,6 +14,7 @@ import {
   Stack,
   Typography,
   alpha,
+  useMediaQuery,
   useTheme,
 } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
@@ -22,13 +23,21 @@ import React, {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAssistantChat } from '../../contexts/AssistantChatContext';
 import type { AssistantChatMessage } from '../../contexts/AssistantChatContext';
 import { useAppChromeInsets } from '../../hooks/useAppChromeInsets';
 import { brandTokens } from '../../theme/brandTokens';
+import { RendaCharacter } from '../assistant/RendaCharacter';
+import type { RendaState } from '../assistant/RendaCharacter';
+import { useShowsRendaCharacter } from '../assistant/useAssistantPersona';
+import { useRendaChatState } from '../assistant/useRendaChatState';
 import { AssistantMarkdown } from './AssistantMarkdown';
+
+/** Thread and composer are capped and centred on desktop (Product & UX 3b/4b). */
+const THREAD_MAX_WIDTH = 760;
 
 const SUGGESTION_KEYS = [
   {
@@ -48,7 +57,6 @@ const SUGGESTION_KEYS = [
     fallback: 'Do you support mobile payments?',
   },
 ] as const;
-
 
 function ThinkingIndicator() {
   const { t } = useTranslation();
@@ -110,11 +118,36 @@ function ThinkingIndicator() {
   );
 }
 
-function MiniOrb({ visible }: { visible: boolean }) {
+function MiniOrb({
+  visible,
+  character,
+}: {
+  visible: boolean;
+  character: boolean;
+}) {
   const theme = useTheme();
   if (!visible) {
     // Keeps grouped bubbles aligned with the first bubble of the group.
     return <Box sx={{ width: 28, flexShrink: 0 }} aria-hidden />;
+  }
+  if (character) {
+    // Message avatar: 28 px character, dot eyes, no motion (many on screen).
+    return (
+      <Box
+        data-testid="assistant-mini-orb"
+        aria-hidden
+        sx={{
+          width: 28,
+          height: 28,
+          flexShrink: 0,
+          mt: 0.5,
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <RendaCharacter size={28} role="avatar" animated={false} />
+      </Box>
+    );
   }
   return (
     <Box
@@ -132,7 +165,9 @@ function MiniOrb({ visible }: { visible: boolean }) {
         mt: 0.5,
       }}
     >
-      <SmartToy sx={{ fontSize: 16, color: theme.palette.primary.contrastText }} />
+      <SmartToy
+        sx={{ fontSize: 16, color: theme.palette.primary.contrastText }}
+      />
     </Box>
   );
 }
@@ -140,9 +175,11 @@ function MiniOrb({ visible }: { visible: boolean }) {
 function MessageBubble({
   message,
   showOrb,
+  character,
 }: {
   message: AssistantChatMessage;
   showOrb: boolean;
+  character: boolean;
 }) {
   const isUser = message.role === 'user';
   const theme = useTheme();
@@ -168,9 +205,11 @@ function MessageBubble({
           alignItems: 'flex-start',
         }}
       >
-        {!isUser && <MiniOrb visible={showOrb} />}
+        {!isUser && <MiniOrb visible={showOrb} character={character} />}
         <Box
-          data-testid={isUser ? 'assistant-user-bubble' : 'assistant-reply-bubble'}
+          data-testid={
+            isUser ? 'assistant-user-bubble' : 'assistant-reply-bubble'
+          }
           sx={{
             px: 2,
             py: 1.5,
@@ -245,7 +284,10 @@ function ErrorBanner({
         sx={{ flex: 1, color: theme.palette.text.primary }}
       >
         {kind === 'network'
-          ? t('assistant.errorMessage', 'Message not sent. Check your connection.')
+          ? t(
+              'assistant.errorMessage',
+              'Message not sent. Check your connection.'
+            )
           : t('assistant.errorServer', 'Message not sent. Please try again.')}
       </Typography>
       <Button
@@ -329,11 +371,14 @@ function AssistantHeader({
   hasMsgs,
   isThinking,
   isOffline,
+  character,
 }: {
   onClear: () => void;
   hasMsgs: boolean;
   isThinking: boolean;
   isOffline: boolean;
+  /** Character state for client/guest; null keeps the SmartToy avatar (agent/business). */
+  character: RendaState | null;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -359,22 +404,45 @@ function AssistantHeader({
         borderBottom: `1px solid ${theme.palette.divider}`,
       }}
     >
-      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
-        <Box
-          aria-hidden
-          sx={{
-            width: 36,
-            height: 36,
-            borderRadius: '50%',
-            backgroundColor: theme.palette.primary.main,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <SmartToy sx={{ fontSize: 20, color: theme.palette.primary.contrastText }} />
-        </Box>
+      <Stack
+        direction="row"
+        spacing={1.5}
+        alignItems="center"
+        sx={{ minWidth: 0 }}
+      >
+        {character ? (
+          <Box
+            aria-hidden
+            data-testid="assistant-header-character"
+            sx={{
+              width: 40,
+              height: 40,
+              flexShrink: 0,
+              display: 'flex',
+              justifyContent: 'center',
+            }}
+          >
+            <RendaCharacter size={40} role="header" state={character} />
+          </Box>
+        ) : (
+          <Box
+            aria-hidden
+            sx={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              backgroundColor: theme.palette.primary.main,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+            }}
+          >
+            <SmartToy
+              sx={{ fontSize: 20, color: theme.palette.primary.contrastText }}
+            />
+          </Box>
+        )}
         <Box sx={{ minWidth: 0 }}>
           <Typography
             variant="h6"
@@ -419,7 +487,59 @@ function AssistantHeader({
   );
 }
 
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+/** Empty-state hero: 160 on desktop, 128 on mobile, on a primary.light 8% disc 1.5× its height. */
+function HeroCharacter({ state }: { state: RendaState }) {
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('md'));
+  const size = isDesktop ? 160 : 128;
+  const disc = size * 1.5;
+  return (
+    <Box
+      data-testid="assistant-hero-character"
+      data-size={size}
+      aria-hidden
+      sx={{
+        position: 'relative',
+        width: disc,
+        height: disc,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        mb: 1,
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          inset: 0,
+          borderRadius: '50%',
+          pointerEvents: 'none',
+          background: `radial-gradient(closest-side, ${alpha(
+            brandTokens.primary.light,
+            0.08
+          )} 0%, ${alpha(brandTokens.primary.light, 0.08)} 55%, ${alpha(
+            brandTokens.primary.light,
+            0
+          )} 100%)`,
+        },
+      }}
+    >
+      <RendaCharacter
+        size={size}
+        role="hero"
+        state={state}
+        style={{ position: 'relative' }}
+      />
+    </Box>
+  );
+}
+
+function EmptyState({
+  onPick,
+  character,
+}: {
+  onPick: (text: string) => void;
+  /** Character state for client/guest; null keeps the SmartToy orb (agent/business). */
+  character: RendaState | null;
+}) {
   const { t } = useTranslation();
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
@@ -436,26 +556,32 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
         px: 3,
       }}
     >
-      <motion.div
-        initial={prefersReducedMotion ? {} : { opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
-      >
-        <Box
-          sx={{
-            width: 88,
-            height: 88,
-            borderRadius: '50%',
-            backgroundColor: theme.palette.primary.main,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            mb: 3,
-          }}
+      {character ? (
+        <HeroCharacter state={character} />
+      ) : (
+        <motion.div
+          initial={prefersReducedMotion ? {} : { opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
         >
-          <SmartToy sx={{ fontSize: 44, color: theme.palette.primary.contrastText }} />
-        </Box>
-      </motion.div>
+          <Box
+            sx={{
+              width: 88,
+              height: 88,
+              borderRadius: '50%',
+              backgroundColor: theme.palette.primary.main,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mb: 3,
+            }}
+          >
+            <SmartToy
+              sx={{ fontSize: 44, color: theme.palette.primary.contrastText }}
+            />
+          </Box>
+        </motion.div>
+      )}
       <Typography
         variant="h6"
         sx={{
@@ -529,12 +655,14 @@ function AssistantInput({
   value,
   onChange,
   onSend,
+  onFocusChange,
   inputDisabled,
   sendDisabled,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
+  onFocusChange: (focused: boolean) => void;
   inputDisabled: boolean;
   sendDisabled: boolean;
 }) {
@@ -566,6 +694,9 @@ function AssistantInput({
           display: 'flex',
           alignItems: 'flex-end',
           gap: 1,
+          width: '100%',
+          maxWidth: { md: THREAD_MAX_WIDTH },
+          mx: 'auto',
           backgroundColor: brandTokens.surface.input,
           borderRadius: '12px',
           pl: 2,
@@ -585,6 +716,8 @@ function AssistantInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKey}
+          onFocus={() => onFocusChange(true)}
+          onBlur={() => onFocusChange(false)}
           placeholder={t(
             'assistant.placeholder',
             'Ask about an item, order or delivery…'
@@ -676,6 +809,7 @@ const AssistantPage: React.FC = () => {
     isOffline,
     draft,
     ready,
+    lastReply,
     setDraft,
     sendMessage,
     retry,
@@ -684,6 +818,17 @@ const AssistantPage: React.FC = () => {
   const theme = useTheme();
   const chrome = useAppChromeInsets();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const showsCharacter = useShowsRendaCharacter();
+  const [composerFocused, setComposerFocused] = useState(false);
+  const characterState = useRendaChatState({
+    isSending,
+    lastReply,
+    isEmpty: messages.length === 0,
+    composerFocused,
+    composerHasText: draft.trim().length > 0,
+  });
+  // The "Thinking…" subtitle is paired with the character's Thinking (≥ 400 ms).
+  const isThinking = isSending || characterState === 'thinking';
 
   // The page is a viewport-sized column; start it flush under the site top bar.
   useEffect(() => {
@@ -729,8 +874,9 @@ const AssistantPage: React.FC = () => {
       <AssistantHeader
         onClear={clearChat}
         hasMsgs={messages.length > 0}
-        isThinking={isSending}
+        isThinking={isThinking}
         isOffline={isOffline}
+        character={showsCharacter ? characterState : null}
       />
 
       <Box
@@ -748,37 +894,57 @@ const AssistantPage: React.FC = () => {
           py: 2,
         }}
       >
-        {messages.length === 0 ? (
-          <EmptyState onPick={(text) => handleSend(text)} />
-        ) : (
-          <Stack spacing={2} sx={{ pb: 1 }}>
-            {messages.map((m, i) => (
-              <MessageBubble
-                key={m.id}
-                message={m}
-                showOrb={m.role === 'assistant' && messages[i - 1]?.role !== 'assistant'}
-              />
-            ))}
-            {isSending && (
-              <Box data-chat-item>
-                <ThinkingIndicator />
-              </Box>
-            )}
-            {error && !isSending && (
-              <ErrorBanner
-                kind={isOffline ? 'network' : 'server'}
-                onRetry={() => void retry()}
-              />
-            )}
-            {handoff && <HandoffCard />}
-          </Stack>
-        )}
+        <Box
+          data-testid="assistant-thread"
+          sx={{
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            width: '100%',
+            maxWidth: { md: THREAD_MAX_WIDTH },
+            mx: 'auto',
+          }}
+        >
+          {messages.length === 0 ? (
+            <EmptyState
+              onPick={(text) => handleSend(text)}
+              character={showsCharacter ? characterState : null}
+            />
+          ) : (
+            <Stack spacing={2} sx={{ pb: 1 }}>
+              {messages.map((m, i) => (
+                <MessageBubble
+                  key={m.id}
+                  message={m}
+                  showOrb={
+                    m.role === 'assistant' &&
+                    messages[i - 1]?.role !== 'assistant'
+                  }
+                  character={showsCharacter}
+                />
+              ))}
+              {isSending && (
+                <Box data-chat-item>
+                  <ThinkingIndicator />
+                </Box>
+              )}
+              {error && !isSending && (
+                <ErrorBanner
+                  kind={isOffline ? 'network' : 'server'}
+                  onRetry={() => void retry()}
+                />
+              )}
+              {handoff && <HandoffCard />}
+            </Stack>
+          )}
+        </Box>
       </Box>
 
       <AssistantInput
         value={draft}
         onChange={setDraft}
         onSend={() => handleSend()}
+        onFocusChange={setComposerFocused}
         inputDisabled={!ready}
         sendDisabled={!ready || isSending}
       />
