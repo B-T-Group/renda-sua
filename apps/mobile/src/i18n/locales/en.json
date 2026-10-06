@@ -7233,6 +7233,15 @@
     "chip": "Exports"
   },
   "assistant": {
+    "launcher": {
+      "a11y": "Open shopping assistant",
+      "hint": "Find items, reorder or track an order"
+    },
+    "nudge": {
+      "body": "Hi! I can find items, track your order or reorder for you.",
+      "cta": "Try it",
+      "dismiss": "Dismiss"
+    },
     "title": "RendaSua Assistant",
     "subtitle": "AI · Replies in seconds",
     "subtitleThinking": "Thinking…",

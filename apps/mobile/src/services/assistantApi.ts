@@ -13,6 +13,8 @@ export type AssistantChatMessagePayload = AssistantChatMessage;
 export type AssistantChatResponse = {
   reply: string;
   handoff: boolean;
+  /** Chat contract v2 (eng plan §5.2); absent on today's backend. */
+  blocks?: unknown[];
 };
 
 export async function postAssistantChat(

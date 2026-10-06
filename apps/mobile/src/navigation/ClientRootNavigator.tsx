@@ -27,6 +27,8 @@ import TermsScreen from '../screens/shared/TermsScreen';
 import PrivacyPolicyScreen from '../screens/shared/PrivacyPolicyScreen';
 import FAQScreen from '../screens/shared/FAQScreen';
 import AssistantChatScreen from '../screens/shared/AssistantChatScreen';
+import { AssistantLauncherHost } from '../components/assistant/launcher/AssistantLauncherHost';
+import { markLauncherInteraction } from '../components/assistant/launcher/launcherSignals';
 import {
   AssistantHeaderTitle,
   AssistantHeaderRight,
@@ -257,7 +259,7 @@ export function ClientRootNavigator() {
   const { t } = useTranslation();
   const store = useStore();
   return (
-    <View style={styles.flex}>
+    <View style={styles.flex} onTouchStart={onRootTouch}>
       <ClientRootStack.Navigator
         screenOptions={{
           headerStyle: { backgroundColor: colors.pageBackground },
@@ -532,8 +534,13 @@ export function ClientRootNavigator() {
           options={{ title: 'Notifications' }}
         />
       </ClientRootStack.Navigator>
+      {/* #451: floating Renda launcher (flag assistant_launcher_v1; renders nothing when off). */}
+      <AssistantLauncherHost persona="client" />
     </View>
   );
 }
+
+/** Feeds the launcher's 20 s settle / attention idle; cheap (throttled, no re-render here). */
+const onRootTouch = () => markLauncherInteraction();
 
 const styles = StyleSheet.create({ flex: { flex: 1 } });

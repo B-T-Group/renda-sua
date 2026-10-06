@@ -7,12 +7,16 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useStore } from '@/stores/RootStore';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
+import { RendaCharacter } from '@/components/assistant/renda/RendaCharacter';
+import { headerCharacterState } from '@/utils/assistantCharacterMachine';
+import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher';
 
 export const AssistantHeaderTitle = observer(function AssistantHeaderTitle() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const store = useStore();
-  const { assistant } = store;
+  const { assistant, assistantCharacter, auth, persona } = store;
+  const character = canSeeRendaCharacter(assistantViewer(auth.isAuthenticated, persona.activePersona));
 
   const statusLabel = assistant.errorKind === 'network'
     ? t('assistant.subtitleOffline', 'Offline')
@@ -22,9 +26,20 @@ export const AssistantHeaderTitle = observer(function AssistantHeaderTitle() {
 
   return (
     <View style={styles.headerTitleContainer}>
-      <View style={[styles.miniOrb, { backgroundColor: colors.primary.main }]}>
-        <MaterialIcons name="smart-toy" size={20} color={colors.primary.contrast} />
-      </View>
+      {character ? (
+        // #451: 40 px, static idle; Thinking / Responding / Success animate.
+        // Paired with the "Thinking…" subtitle (the screen-reader cue).
+        <RendaCharacter
+          size={40}
+          state={headerCharacterState(assistantCharacter.state)}
+          staticIdle
+          testID="assistant-header-character"
+        />
+      ) : (
+        <View style={[styles.miniOrb, { backgroundColor: colors.primary.main }]}>
+          <MaterialIcons name="smart-toy" size={20} color={colors.primary.contrast} />
+        </View>
+      )}
       <View>
         <Text style={[styles.title, { color: colors.text.primary }]} numberOfLines={1}>
           {t('assistant.title', 'RendaSua Assistant')}

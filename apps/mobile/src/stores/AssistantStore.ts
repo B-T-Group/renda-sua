@@ -5,6 +5,8 @@
 
 import { makeAutoObservable } from 'mobx';
 import { randomUUID } from '../utils/uuid';
+import type { ReplyOutcome } from '../utils/assistantCharacterMachine';
+import { replyHasToolSuccess, replyOutcome } from '../utils/assistantReplyOutcome';
 
 export type AssistantMessage = {
   id: string;
@@ -18,7 +20,10 @@ export type AssistantErrorKind = 'network' | 'server';
 /** Sends the chat history; injected so the store stays testable without the API client. */
 export type AssistantChatTransport = (
   messages: Array<Pick<AssistantMessage, 'role' | 'content'>>
-) => Promise<{ reply?: string | null; handoff?: boolean | null }>;
+) => Promise<{ reply?: string | null; handoff?: boolean | null; blocks?: unknown }>;
+
+/** How the latest request on this thread settled (drives the Renda character). */
+export type AssistantSettle = { seq: number; outcome: ReplyOutcome; toolSuccess: boolean };
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 export const MAX_API_MESSAGES = 20;
@@ -54,6 +59,8 @@ export class AssistantStore {
   /** User message whose send failed; Retry re-sends the history that already contains it. */
   failedMessageId: string | null = null;
   handoff: boolean = false;
+  /** Latest settled request (reply / error / handoff); null after a thread rotation. */
+  lastSettle: AssistantSettle | null = null;
 
   private requestSeq = 0;
   /** Id of the request whose completion may still update this thread. */
@@ -127,6 +134,7 @@ export class AssistantStore {
     this.handoff = false;
     this.isSending = false;
     this.activeRequestId = null;
+    this.lastSettle = null;
     this.updateActivity();
   }
 
@@ -192,6 +200,11 @@ export class AssistantStore {
     const reply = data?.reply?.trim();
     if (reply) this.addAssistantMessage(reply);
     if (data?.handoff) this.handoff = true;
+    this.lastSettle = {
+      seq: requestId,
+      outcome: replyOutcome(data),
+      toolSuccess: replyHasToolSuccess(data),
+    };
   }
 
   private applyFailure(requestId: number, threadId: string, error: unknown): void {
@@ -201,6 +214,7 @@ export class AssistantStore {
     this.errorKind = classifyAssistantError(error);
     const lastUser = [...this.messages].reverse().find((m) => m.role === 'user');
     this.failedMessageId = lastUser?.id ?? null;
+    this.lastSettle = { seq: requestId, outcome: 'error', toolSuccess: false };
   }
 
   private endRequest(requestId: number): void {
