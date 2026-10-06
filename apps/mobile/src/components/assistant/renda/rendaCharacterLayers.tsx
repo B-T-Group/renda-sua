@@ -372,6 +372,20 @@ export const OpenEye = memo(function OpenEye({ k, x, y }: LayerProps & { x: numb
   );
 });
 
+/** Box around one dot eye so scaleY (Idle blink-only) pivots on its centre. */
+export function dotEyeBox(x: number, y: number) {
+  return { x: x - DOT_EYE_R - 1, y: y - DOT_EYE_R - 1, w: DOT_EYE_R * 2 + 2, h: DOT_EYE_R * 2 + 2 };
+}
+
+export const DotEye = memo(function DotEye({ k, x, y }: LayerProps & { x: number; y: number }) {
+  const b = dotEyeBox(x, y);
+  return (
+    <Svg width={b.w * k} height={b.h * k} viewBox={`${b.x} ${b.y} ${b.w} ${b.h}`}>
+      <Circle cx={x} cy={y} r={DOT_EYE_R} fill={T.eye} />
+    </Svg>
+  );
+});
+
 export const DotEyes = memo(function DotEyes({ k }: LayerProps) {
   return (
     <PaddedSvg k={k} pad={0}>
