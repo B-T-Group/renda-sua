@@ -908,6 +908,18 @@ def process_cancellation_financials(
             platform_account_id = resolve_platform_account_id(
                 order.currency, hasura_endpoint, hasura_admin_secret
             )
+            if not platform_account_id:
+                # Fee legs must not be skipped: without HQ the split cannot complete.
+                # Release already posted (keyed); raising via the caller retries the
+                # fee without re-releasing.
+                log_error(
+                    "cancel_fee_legs_failed: platform account not resolved",
+                    order_id=order_id,
+                    currency=order.currency,
+                    cancellation_fee=cancellation_fee,
+                )
+                return {"success": False, "error": "Platform account not found for cancellation fee"}
+
             fee_result = register_cancellation_fee_transactions(
                 order_id,
                 order.order_number,
@@ -922,7 +934,13 @@ def process_cancellation_financials(
             )
 
             if not fee_result.get("success"):
-                log_error("Failed to register cancellation fee transactions", order_id=order_id, error=fee_result.get("error"))
+                log_error(
+                    "cancel_fee_legs_failed: Failed to register cancellation fee transactions",
+                    order_id=order_id,
+                    error=fee_result.get("error"),
+                    cancellation_fee=cancellation_fee,
+                    client_released=client_release_total,
+                )
                 return {"success": False, "error": "Failed to process cancellation fee"}
 
             log_info("Cancellation fee transactions registered successfully", order_id=order_id)
@@ -979,15 +997,9 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
         log_error("Failed to retrieve Hasura admin secret", error=e)
         return {"success": False, "error": "Failed to retrieve Hasura admin secret"}
 
-    _send_slack_order_alert_safe(
-        message.orderId,
-        "order.cancelled",
-        environment,
-        message.cancellationReason,
-        message.cancelledBy,
-    )
-    
-    # Process cancellation financials
+    # Financials first. On failure raise so SQS retries the message; Slack and
+    # Stripe have not run yet, so a retry does not re-alert or re-refund. Release
+    # and fee legs are keyed, so a retry completes only the missing steps.
     financial_result = process_cancellation_financials(
         message.orderId,
         message.cancelledBy,
@@ -996,16 +1008,26 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
         hasura_admin_secret,
         message.cancellationReason,
     )
-    
+
     if not financial_result.get("success"):
-        # Not retried by SQS (the handler returns normally): this line is the only
-        # signal that held money may be stuck. Keep the stable token for alerting.
         log_error(
-            "cancel_financials_failed: Cancellation financial processing failed",
+            "cancel_financials_failed: Cancellation financial processing failed; "
+            "leaving message retryable (Slack/Stripe not run)",
             order_id=message.orderId,
             error=financial_result.get("error"),
         )
-        # Continue even if financial processing fails - order is already cancelled
+        raise RuntimeError(
+            f"cancel_financials_failed order={message.orderId}: "
+            f"{financial_result.get('error')}"
+        )
+
+    _send_slack_order_alert_safe(
+        message.orderId,
+        "order.cancelled",
+        environment,
+        message.cancellationReason,
+        message.cancelledBy,
+    )
 
     # Trigger Stripe refund if order was paid via credit card
     stripe_refund_result = trigger_stripe_refund_safe(
@@ -1019,7 +1041,7 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
     # Cancellation emails are sent by the backend when status is updated to cancelled
 
     return {
-        "success": financial_result.get("success", False),
+        "success": True,
         "financial_processing": financial_result,
         "cancellation_fee": financial_result.get("cancellation_fee", 0),
         "stripe_refund": stripe_refund_result,
@@ -1183,6 +1205,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             elif event_type == "order.status.updated":
                 result = handle_order_status_updated({"Records": [record]})
             elif event_type == "order.cancelled":
+                # cancel_financials_failed raises so SQS retries; do not swallow.
                 result = handle_order_cancelled({"Records": [record]})
             else:
                 log_error("Unknown event type", event_type=event_type, order_id=message.orderId)
@@ -1215,6 +1238,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         log_error("Unhandled error in Lambda handler", error=e)
         import traceback
         traceback.print_exc()
+        # Re-raise cancel financial failures so the SQS message is not deleted and
+        # can retry (release/fee keys make a retry safe; Slack/Stripe run only after
+        # financials succeed).
+        if "cancel_financials_failed" in str(e):
+            raise
         return {
             "success": False,
             "error": str(e),

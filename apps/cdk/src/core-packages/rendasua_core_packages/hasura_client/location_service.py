@@ -44,7 +44,6 @@ def get_all_agent_locations(
             phone_number
             first_name
             last_name
-            identifier
             preferred_language
             created_at
             updated_at
@@ -83,7 +82,6 @@ def get_all_agent_locations(
                         phone_number=user_data.get("phone_number"),
                         first_name=user_data["first_name"],
                         last_name=user_data["last_name"],
-                        identifier=user_data["identifier"],
                         preferred_language=user_data.get("preferred_language"),
                         created_at=parse_datetime(user_data.get("created_at")),
                         updated_at=parse_datetime(user_data.get("updated_at")),

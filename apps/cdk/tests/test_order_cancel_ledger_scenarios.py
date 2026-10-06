@@ -395,6 +395,56 @@ class CancelLedgerScenarios(unittest.TestCase):
             "cancel_release_ledger_exceeds_row", [c.args[0] for c in log_error.call_args_list]
         )
 
+    def test_platform_account_missing_fails_after_release_without_fee_legs(self):
+        """QA case 8 failure mode: release posts, fee cannot (no HQ), hold stays active."""
+        L = self.ledger
+        L.seed(CLIENT, "deposit", 200, "momo-txn")
+        L.seed(CLIENT, "hold", 200, ORDER_ID)
+        self.hold_row = _hold()
+        order = _order()
+
+        with self._env(order):
+            with patch.object(handler, "resolve_platform_account_id", return_value=None):
+                result = handler.process_cancellation_financials(
+                    ORDER_ID, "business", "ready_for_pickup", "ep", "secret",
+                    cancellation_reason="client_no_show",
+                )
+
+        self.assertFalse(result["success"])
+        self.assertIn("Platform account", result["error"])
+        # Release landed; fee legs did not; hold still active for a retry.
+        self.assertEqual(L.bal(CLIENT), (200.0, 0.0))
+        self.assertEqual(L.bal(BUSINESS), (0.0, 0.0))
+        self.assertEqual(L.bal(HQ), (0.0, 0.0))
+        self.assertEqual(self.hold_row.status, "active")
+        self.assertEqual(
+            [r["key"] for r in L.written()],
+            [f"order:{ORDER_ID}:cancel_release:client"],
+        )
+
+    def test_fee_posts_after_release_at_zero_available(self):
+        """Fee is charged from the just-released funds, not pre-release available."""
+        L = self.ledger
+        L.seed(CLIENT, "deposit", 200, "momo-txn")
+        L.seed(CLIENT, "hold", 200, ORDER_ID)
+        self.assertEqual(L.bal(CLIENT), (0.0, 200.0))  # available 0
+        self.hold_row = _hold()
+        order = _order()
+
+        result = self._cancel(order, "business", "ready_for_pickup", "client_no_show")
+        self.assertTrue(result["success"], result)
+        self.assertEqual(result["cancellation_fee"], 60.0)
+        # release 200 then fee 60 => available 140
+        self.assertEqual(L.bal(CLIENT), (140.0, 0.0))
+        self.assertEqual(L.bal(BUSINESS), (30.0, 0.0))
+        self.assertEqual(L.bal(HQ), (30.0, 0.0))
+        self.assertEqual(self.hold_row.status, "cancelled")
+        keys = [r["key"] for r in L.written()]
+        # Release key must appear before fee keys in write order.
+        self.assertEqual(keys[0], f"order:{ORDER_ID}:cancel_release:client")
+        self.assertIn(f"order:{ORDER_ID}:cancel_fee:client", keys)
+
+
 
 if __name__ == "__main__":
     unittest.main()
