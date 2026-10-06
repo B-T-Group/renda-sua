@@ -7,7 +7,26 @@
  * written per frame, straight to the SVG nodes, so React never re-renders per frame.
  * Web has no dark mode, so only the light-surface treatment is ported.
  */
-import { brandTokens } from '../../theme/brandTokens';
+import {
+  CX,
+  CY,
+  EYE_Y,
+  RENDA_COLORS,
+  mixHex,
+} from './rendaCharacterTokens';
+import type { RendaEyes } from './rendaCharacterTokens';
+
+export {
+  CX,
+  CY,
+  EYE_X,
+  EYE_Y,
+  RENDA_COLORS,
+  RENDA_WIDTH_RATIO,
+  eyesForSize,
+  mixHex,
+} from './rendaCharacterTokens';
+export type { RendaEyes } from './rendaCharacterTokens';
 
 export type RendaState =
   | 'idle'
@@ -18,52 +37,11 @@ export type RendaState =
   | 'success'
   | 'attention';
 
-export type RendaEyes = 'expressive' | 'dot' | 'none';
-
 /** Where the character is used (spec "Where" column). */
 export type RendaSurface = 'hero' | 'header' | 'launcher' | 'avatar';
 
 /** Eye shape actually drawn for a state (exposed for tests and a11y-neutral styling hooks). */
 export type RendaEyeShape = 'arc' | 'open' | 'dot' | 'none';
-
-/** Expressive eyes need >= 36 px of character height, dots 20-35 px, none below 20. */
-export function eyesForSize(size: number): RendaEyes {
-  if (size >= 36) return 'expressive';
-  if (size >= 20) return 'dot';
-  return 'none';
-}
-
-export const RENDA_WIDTH_RATIO = 0.82;
-export const CX = 41;
-export const CY = 50;
-
-const hex = (h: string) =>
-  [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
-export function mixHex(a: string, b: string, t: number): string {
-  const A = hex(a);
-  const B = hex(b);
-  return (
-    '#' +
-    A.map((v, i) =>
-      Math.round(v + (B[i] - v) * t)
-        .toString(16)
-        .padStart(2, '0')
-    ).join('')
-  );
-}
-
-/** Colours come from the brand tokens only (no gold, no orange; green only in the Success sparkle). */
-export const RENDA_COLORS = {
-  main: brandTokens.primary.main,
-  light: brandTokens.primary.light,
-  tint: brandTokens.tint.primaryStrong,
-  navy: brandTokens.secondary.main,
-  /** secondary.main with a 12% black inner shade at the face edge. */
-  navyEdge: mixHex(brandTokens.secondary.main, '#000000', 0.12),
-  white: brandTokens.primary.contrastText,
-  sparkCore: brandTokens.cta.main,
-  sparkLight: brandTokens.cta.light,
-} as const;
 
 type HaloMode = 'breath' | 'max' | 'mid';
 interface StateConfig {
@@ -263,8 +241,6 @@ export const ECHOES: Array<[number, number, number, number, string, number]> = [
   [41.0, 48.4, 40.2, 49.0, C.light, 0.8],
 ];
 
-export const EYE_X = [28, 54] as const;
-export const EYE_Y = 46;
 export const SPARK_ANGLES = [30, 90, 150, 210, 270, 330] as const;
 
 /** Spring pop (damping 12, stiffness 180, mass 1), normalised to `peak`; index = ms. */

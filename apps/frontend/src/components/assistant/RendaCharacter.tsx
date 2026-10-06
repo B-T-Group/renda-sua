@@ -25,6 +25,7 @@ import {
   eyesForSize,
 } from './rendaCharacterEngine';
 import { msSinceInteraction, onInteraction } from './interactionClock';
+import { RendaAvatar } from './RendaAvatar';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
 export type { RendaEyes, RendaSurface, RendaState } from './rendaCharacterEngine';
@@ -438,5 +439,25 @@ function RendaCharacterImpl({
   );
 }
 
-export const RendaCharacter = memo(RendaCharacterImpl);
+/**
+ * Static surfaces (`surface="avatar"`: 28 px message avatars and the header button)
+ * render the lightweight {@link RendaAvatar}; the rAF engine with its 120-wedge ring,
+ * blur filters and masks only mounts for the hero, launcher and chat header.
+ */
+function RendaCharacterSwitch(props: RendaCharacterProps) {
+  if (props.surface === 'avatar') {
+    return (
+      <RendaAvatar
+        size={props.size}
+        eyes={props.eyes}
+        className={props.className}
+        style={props.style}
+        data-testid={props['data-testid']}
+      />
+    );
+  }
+  return <RendaCharacterImpl {...props} />;
+}
+
+export const RendaCharacter = memo(RendaCharacterSwitch);
 export default RendaCharacter;

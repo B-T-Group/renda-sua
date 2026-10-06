@@ -104,4 +104,25 @@ describe('RendaCharacter', () => {
     const ids = Array.from(container.querySelectorAll('mask')).map((m) => m.id);
     expect(new Set(ids).size).toBe(ids.length);
   });
+
+  it('static avatars are lightweight: no filters, masks or wedge ring', () => {
+    const { container } = render(<RendaCharacter size={28} surface="avatar" animated={false} />);
+    const svg = svgOf(container);
+    expect(svg.querySelectorAll('filter, mask, use').length).toBe(0);
+    expect(svg.querySelectorAll('*').length).toBeLessThan(20);
+    expect(svg.getAttribute('aria-hidden')).toBe('true');
+    expect(svg.getAttribute('data-renda-eyes')).toBe('dot');
+    expect(svg.querySelectorAll('circle')).toHaveLength(2);
+  });
+
+  it('100 message avatars stay under 2,000 SVG nodes in total (the animated character is ~270 each)', () => {
+    const { container } = render(
+      <div>
+        {Array.from({ length: 100 }, (_, i) => (
+          <RendaCharacter key={i} size={28} surface="avatar" animated={false} />
+        ))}
+      </div>
+    );
+    expect(container.querySelectorAll('svg *').length).toBeLessThan(2000);
+  });
 });
