@@ -95,7 +95,8 @@ describe('advanceIdleEyeLife', () => {
     s = advanceIdleEyeLife(s, 2500, 0.0).state; // → wake leg 0
     // Mid morph
     const mid = advanceIdleEyeLife(s, 2500 + 75).state;
-    expect(mid.pose.eyeMix).toBeCloseTo(0.5, 1);
+    expect(mid.pose.eyeMix).toBeGreaterThan(0.5); // ease-out is ahead of linear
+    expect(mid.pose.eyeMix).toBeLessThan(1);
     // Morph done → hold
     const held = advanceIdleEyeLife(s, 2500 + IDLE_EYE_TIMING.wakeMorph, 0.5).state;
     expect(held.phase).toBe('wake');
@@ -173,7 +174,8 @@ describe('advanceIdleEyeLife', () => {
     s = advanceIdleEyeLife(s, s.legEndsAt, 0.9, 0.9, 0.9).state;
     expect(s.phase).toBe('drowse');
     const mid = advanceIdleEyeLife(s, s.legStartedAt + 90).state;
-    expect(mid.pose.eyeMix).toBeCloseTo(0.5, 1);
+    expect(mid.pose.eyeMix).toBeGreaterThan(0.5); // ease-in leaves mix high early
+    expect(mid.pose.eyeMix).toBeLessThan(1);
     const done = advanceIdleEyeLife(s, s.legEndsAt, 0.5).state;
     expect(done.phase).toBe('rest');
     expect(done.pose.eyeMix).toBe(0);

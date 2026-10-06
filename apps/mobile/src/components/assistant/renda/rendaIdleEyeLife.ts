@@ -445,6 +445,10 @@ export function advanceIdleEyeLife(
   return { state: s, startedLeg };
 }
 
+/** Easing helpers matching the spec (ease-out wake, ease-in drowse). */
+export const idleEyeEaseOutCubic = (p: number) => 1 - Math.pow(1 - clamp01(p), 3);
+export const idleEyeEaseInCubic = (p: number) => Math.pow(clamp01(p), 3);
+
 /** Linear pose within the current leg (drivers may re-ease). */
 function poseDuringLeg(s: IdleEyeLifeState, now: number): IdleEyePose {
   const start = s.legStartedAt;
@@ -455,7 +459,7 @@ function poseDuringLeg(s: IdleEyeLifeState, now: number): IdleEyePose {
     case 'rest':
       return restPose();
     case 'wake':
-      if (s.leg === 0) return { phase: 'wake', eyeMix: u, offset: CENTRE, blink: 1 };
+      if (s.leg === 0) return { phase: 'wake', eyeMix: idleEyeEaseOutCubic(u), offset: CENTRE, blink: 1 };
       return openPose('wake');
     case 'glance': {
       const dir = s.glanceDir ?? 'right';
@@ -482,7 +486,7 @@ function poseDuringLeg(s: IdleEyeLifeState, now: number): IdleEyePose {
       return { phase: 'blink', eyeMix: 1, offset: s.pose.offset, blink };
     }
     case 'drowse':
-      return { phase: 'drowse', eyeMix: 1 - u, offset: CENTRE, blink: 1 };
+      return { phase: 'drowse', eyeMix: 1 - idleEyeEaseInCubic(u), offset: CENTRE, blink: 1 };
     default:
       return s.pose;
   }
@@ -558,6 +562,3 @@ export function advanceDotBlink(
   return { state: s, blink: 1 };
 }
 
-/** Easing helpers matching the spec (ease-out wake, ease-in drowse). */
-export const idleEyeEaseOutCubic = (p: number) => 1 - Math.pow(1 - clamp01(p), 3);
-export const idleEyeEaseInCubic = (p: number) => Math.pow(clamp01(p), 3);
