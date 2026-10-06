@@ -41,6 +41,15 @@ export interface RendaCharacterProps {
   eyes?: RendaEyes;
   /** Spec "Where" column: header idle is static, avatars never move, hero/launcher settle. */
   surface?: RendaSurface;
+  /**
+   * Review / harness only: freeze the Idle eye life cycle on one phase
+   * (Rest / Wake / Glance / Blink / Drowse).
+   */
+  idleEyeForce?: {
+    phase: import('./rendaIdleEyeLife').IdleEyePhase;
+    glance?: import('./rendaIdleEyeLife').GlanceDir;
+    blinkProgress?: number;
+  };
   className?: string;
   style?: CSSProperties;
   'data-testid'?: string;
@@ -99,8 +108,9 @@ const rafAvailable = () =>
 /**
  * "Renda", the assistant character (spec #451 §1): an upright oval ring around a
  * navy face with two white eyes. Decorative only (`aria-hidden`); state changes are
- * never announced through it. Reduce motion gives a static ring whose eye shape
- * still switches per state.
+ * never announced through it. Idle on the hero / launcher runs the eye life
+ * cycle (Rest→Wake→Glance→Blink→Drowse); the header stays static. Reduce motion
+ * gives a static ring whose eye shape still switches per state.
  */
 function RendaCharacterImpl({
   size,
@@ -108,6 +118,7 @@ function RendaCharacterImpl({
   animated = true,
   eyes,
   surface = 'hero',
+  idleEyeForce,
   className,
   style,
   'data-testid': testId,
@@ -196,6 +207,18 @@ function RendaCharacterImpl({
       startLoopRef.current();
     }
   }, [state, isStatic]);
+
+  // Review harness: freeze Idle eye phases for screenshots.
+  useLayoutEffect(() => {
+    const engine = engineRef.current;
+    if (!engine) return;
+    engine.setIdleEyeForce(idleEyeForce ?? null);
+    if (idleEyeForce) {
+      // Paint one frame even under reduce-motion / static so screenshots work.
+      engine.step(0, false, 0);
+      if (!staticRef.current) startLoopRef.current();
+    }
+  }, [idleEyeForce]);
 
   // Resume after the settle / a hidden tab on the next interaction or focus.
   useEffect(() => {
@@ -396,7 +419,13 @@ function RendaCharacterImpl({
               {EYE_X.map((x) => (
                 <g key={x} data-r="eye">
                   {eyesMode === 'dot' ? (
-                    <circle cx={x} cy={EYE_Y} r={5} fill={C.white} />
+                    <circle
+                      data-r="open"
+                      cx={x}
+                      cy={EYE_Y}
+                      r={5}
+                      fill={C.white}
+                    />
                   ) : (
                     <>
                       <ellipse

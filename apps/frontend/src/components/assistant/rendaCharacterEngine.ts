@@ -15,6 +15,18 @@ import {
   mixHex,
 } from './rendaCharacterTokens';
 import type { RendaEyes } from './rendaCharacterTokens';
+import {
+  advanceDotBlink,
+  advanceIdleEyeLife,
+  idleEyeMode,
+  poseForPhase,
+  startDotBlink,
+  startIdleEyeLife,
+  type DotBlinkState,
+  type GlanceDir,
+  type IdleEyeLifeState,
+  type IdleEyePhase,
+} from './rendaIdleEyeLife';
 
 export {
   CX,
@@ -27,6 +39,15 @@ export {
   mixHex,
 } from './rendaCharacterTokens';
 export type { RendaEyes } from './rendaCharacterTokens';
+export {
+  GLANCE_OFFSETS,
+  IDLE_EYE_TIMING,
+  idleEyeMode,
+  poseForPhase,
+  startIdleEyeLife,
+  advanceIdleEyeLife,
+} from './rendaIdleEyeLife';
+export type { IdleEyePhase, GlanceDir, IdleEyePose } from './rendaIdleEyeLife';
 
 export type RendaState =
   | 'idle'
@@ -314,6 +335,13 @@ export class RendaEngine {
   private motion = 1;
   private blinkAt = Infinity;
   private blinkStart = -1e9;
+  private blinkScale = 1;
+  /** Idle eye life cycle (hero/launcher expressive). Null when inactive. */
+  private idleLife: IdleEyeLifeState | null = null;
+  /** Dot-eye blink-only scheduler. */
+  private dotBlink: DotBlinkState | null = null;
+  /** Review harness: freeze a life-cycle pose. */
+  private idleEyeForce: { phase: IdleEyePhase; glance?: GlanceDir; blinkProgress?: number } | null = null;
   private pops: Array<{ start: number; kind: 'resp' | 'spring' | 'att' }> = [];
   private sweepStart = -1e9;
   private sparkStart = -1e9;
@@ -339,14 +367,30 @@ export class RendaEngine {
     return stateConfigFor(this.o.surface, this.o.eyes, state);
   }
 
+  setIdleEyeForce(
+    force: { phase: IdleEyePhase; glance?: GlanceDir; blinkProgress?: number } | null
+  ): void {
+    this.idleEyeForce = force;
+  }
+
   setState(state: RendaState, reduced: boolean): void {
     if (this.o.surface === 'avatar') return;
     if (state === this.state) return;
+    const prev = this.state;
     this.state = state;
     const t = this.t;
     const cfg = this.cfg();
+    // Cancel Idle life cycle on leaving Idle (e.g. Attentive); restart from Rest on return.
+    if (state !== 'idle') {
+      this.idleLife = null;
+      this.dotBlink = null;
+    } else if (prev !== 'idle') {
+      this.idleLife = null;
+      this.dotBlink = null;
+    }
     // First blink comes quickly (as in the approved prototype), then every 4-7 s.
-    this.blinkAt = cfg.blink ? t + 700 + this.random() * 300 : Infinity;
+    // Idle life cycle owns blinks on hero/launcher; keep attentive/listening blinks.
+    this.blinkAt = cfg.blink && state !== 'idle' ? t + 700 + this.random() * 300 : Infinity;
     if (!reduced) {
       if (state === 'responding') {
         this.pops.push({ start: t, kind: 'resp' });
@@ -481,21 +525,75 @@ export class RendaEngine {
       n.sweepRot.setAttribute('transform', `rotate(${fmt(a)} ${CX} ${CY})`);
     } else n.sweep.setAttribute('opacity', '0');
 
-    // Eyes: 150 ms morph, 200 ms offset, blink 160 ms.
+    // Eyes: Idle life cycle on hero/launcher; otherwise 150 ms morph + blink.
     if (n.eyes.length) {
-      let eyeTarget = cfg.eyes === 'open' ? 1 : 0;
-      const ae = t - this.rippleStart;
-      if (this.state === 'attention') eyeTarget = ae < 1100 ? 1 : 0;
-      this.eyeMix = rm ? eyeTarget : smooth(this.eyeMix, eyeTarget, dt, 40);
-      this.eyeX = rm ? cfg.off[0] : smooth(this.eyeX, cfg.off[0], dt, 55);
-      this.eyeY = rm ? cfg.off[1] : smooth(this.eyeY, cfg.off[1], dt, 55);
-      if (!rm && t >= this.blinkAt) {
-        this.blinkStart = t;
-        this.blinkAt = t + 4000 + this.random() * 3000;
+      const mode = idleEyeMode({
+        eyes: this.o.eyes,
+        staticIdle: this.o.surface === 'header',
+        reducedMotion: rm,
+        paused: this.settleOn(idleMs),
+        enabled: this.state === 'idle' && (this.o.surface === 'hero' || this.o.surface === 'launcher'),
+      });
+
+      let blink = 1;
+      if (this.idleEyeForce) {
+        const pose = poseForPhase(this.idleEyeForce.phase, this.idleEyeForce);
+        this.eyeMix = pose.eyeMix;
+        this.eyeX = pose.offset[0];
+        this.eyeY = pose.offset[1];
+        blink = pose.blink;
+        this.idleLife = null;
+        this.dotBlink = null;
+      } else if (mode === 'full') {
+        if (!this.idleLife) this.idleLife = startIdleEyeLife(t, this.random());
+        const { state: next } = advanceIdleEyeLife(
+          this.idleLife,
+          t,
+          this.random(),
+          this.random(),
+          this.random()
+        );
+        this.idleLife = next;
+        // Ease toward the pose (wake morph / glance / drowse already lerp in the module).
+        const pose = next.pose;
+        this.eyeMix = pose.eyeMix;
+        this.eyeX = pose.offset[0];
+        this.eyeY = pose.offset[1];
+        blink = pose.blink;
+        this.dotBlink = null;
+        this.blinkAt = Infinity;
+      } else if (mode === 'blinkOnly') {
+        if (!this.dotBlink) this.dotBlink = startDotBlink(t, this.random());
+        const { state: next, blink: b } = advanceDotBlink(
+          this.dotBlink,
+          t,
+          this.random(),
+          this.random()
+        );
+        this.dotBlink = next;
+        blink = b;
+        this.eyeMix = 0;
+        this.eyeX = 0;
+        this.eyeY = 0;
+        this.idleLife = null;
+        this.blinkAt = Infinity;
+      } else {
+        this.idleLife = null;
+        this.dotBlink = null;
+        let eyeTarget = cfg.eyes === 'open' ? 1 : 0;
+        const ae = t - this.rippleStart;
+        if (this.state === 'attention') eyeTarget = ae < 1100 ? 1 : 0;
+        this.eyeMix = rm ? eyeTarget : smooth(this.eyeMix, eyeTarget, dt, 40);
+        this.eyeX = rm ? cfg.off[0] : smooth(this.eyeX, cfg.off[0], dt, 55);
+        this.eyeY = rm ? cfg.off[1] : smooth(this.eyeY, cfg.off[1], dt, 55);
+        if (!rm && t >= this.blinkAt) {
+          this.blinkStart = t;
+          this.blinkAt = t + 4000 + this.random() * 3000;
+        }
+        const be = (t - this.blinkStart) / 160;
+        blink = be >= 0 && be < 1 && !rm ? 1 - 0.9 * Math.sin(Math.PI * be) : 1;
       }
-      const be = (t - this.blinkStart) / 160;
-      const blink =
-        be >= 0 && be < 1 && !rm ? 1 - 0.9 * Math.sin(Math.PI * be) : 1;
+      this.blinkScale = blink;
       const em = this.eyeMix;
       for (const e of n.eyes) {
         e.g.setAttribute(
@@ -511,6 +609,13 @@ export class RendaEngine {
           e.open.setAttribute('opacity', String(fmt(clamp(em * 1.25))));
           e.arc.setAttribute('opacity', String(fmt(clamp((1 - em) * 1.25))));
           e.arc.setAttribute('transform', `translate(0 ${fmt(em * -1.5)})`);
+        } else if (e.open) {
+          // Dot eyes: blink only (scaleY), no arc morph.
+          e.open.setAttribute(
+            'transform',
+            `translate(0 ${EYE_Y}) scale(1 ${fmt(blink)}) translate(0 ${-EYE_Y})`
+          );
+          e.open.setAttribute('opacity', '1');
         }
       }
     }
@@ -570,6 +675,7 @@ export class RendaEngine {
     if (t - this.sparkStart <= 900 + 5 * 40) return false;
     if (t - this.rippleStart <= 1600) return false;
     if (this.blinkAt !== Infinity) return false;
+    if (this.idleLife || this.dotBlink || this.idleEyeForce) return false;
     const eyeTarget = cfg.eyes === 'open' ? 1 : 0;
     if (Math.abs(this.eyeMix - eyeTarget) > 0.002) return false;
     if (
