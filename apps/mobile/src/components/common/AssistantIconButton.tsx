@@ -10,8 +10,8 @@ export interface AssistantIconButtonProps {
   style?: object;
   /**
    * #451 (flag `assistant_launcher_v1`, client / guest only, where the
-   * launcher is hidden): render the 28 px animated character with dot eyes
-   * and Idle blink cycle instead of the line icon.
+   * launcher is hidden): render the 36 px animated character with expressive
+   * eyes and full Idle life cycle (glance, blink, morph) instead of the line icon.
    */
   character?: boolean;
 }
@@ -30,7 +30,7 @@ export function AssistantIconButton({ onPress, style, character = false }: Assis
       style={[styles.btn, style]}
     >
       {character ? (
-        <RendaCharacter size={28} state="idle" />
+        <RendaCharacter size={36} state="idle" />
       ) : (
         <MaterialCommunityIcons name="robot-outline" size={24} color={colors.primary.main} />
       )}
