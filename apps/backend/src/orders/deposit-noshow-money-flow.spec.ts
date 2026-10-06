@@ -288,6 +288,8 @@ describe('Reservation deposit money flow (service level)', () => {
         payment_status: 'paid',
         deposit_status: forcedDepositStatus,
       });
+      // Spare wallet funds, so only the guards (not a balance shortfall) stop a second debit.
+      h.db.account('acct-client').available_balance += 1000;
       const before = h.db.snapshot();
 
       await expect(cancel(h)).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
