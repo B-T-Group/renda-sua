@@ -343,8 +343,8 @@ const FoodsPage: React.FC = () => {
             <Box
               sx={{
                 display: 'grid',
-                gap: 1.5,
-                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+                gap: 2,
+                gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', lg: '1fr 1fr 1fr' },
               }}
             >
               {stores.map((store) => (

@@ -6,8 +6,7 @@ import { useTranslation } from 'react-i18next';
 import type { CatalogStore } from '../../hooks/useCatalogStores';
 import RestaurantCard from './RestaurantCard';
 
-const TILE_WIDTH = 280;
-const TILE_HEIGHT = 152;
+const TILE_WIDTH = 220;
 
 export function RestaurantCarousel({
   stores,
@@ -24,11 +23,11 @@ export function RestaurantCarousel({
       <Typography variant="subtitle1" fontWeight={800} sx={{ mb: 1.25 }}>
         {title}
       </Typography>
-      <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', pb: 0.5 }}>
+      <Box sx={{ display: 'flex', gap: 1.5, overflowX: 'auto', pb: 0.5, alignItems: 'stretch' }}>
         {stores.map((store) => (
           <Box
             key={store.business_location_id}
-            sx={{ width: TILE_WIDTH, height: TILE_HEIGHT, flex: '0 0 auto' }}
+            sx={{ width: TILE_WIDTH, flex: '0 0 auto', display: 'flex' }}
           >
             <RestaurantCard store={store} fill />
           </Box>
@@ -42,7 +41,7 @@ export function RestaurantCarousel({
 function MoreRestaurantsTile({ onMore }: { onMore: () => void }) {
   const { t } = useTranslation();
   return (
-    <Box sx={{ width: TILE_WIDTH, height: TILE_HEIGHT, flex: '0 0 auto' }}>
+    <Box sx={{ width: TILE_WIDTH, flex: '0 0 auto', display: 'flex' }}>
       <Card sx={{ width: '100%', height: '100%', borderRadius: 2 }}>
         <CardActionArea
           onClick={onMore}
