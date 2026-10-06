@@ -55,9 +55,8 @@ import {
   useFocusedRouteName,
   useInteractionSettled,
   useKeyboardOpen,
-  useLastInteractionAt,
 } from './launcherHooks';
-import { markLauncherInteraction } from './launcherSignals';
+import { lastLauncherInteractionAt, markLauncherInteraction } from './launcherSignals';
 
 const DEFERRED_MOUNT_MS = 1500;
 
@@ -114,7 +113,6 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
   const keyboardOpen = useKeyboardOpen();
   const suppressed = useLauncherSuppressed();
   const reducedMotion = useReducedMotion();
-  const lastInteractionAt = useLastInteractionAt();
   const [seen, markSeen] = useNudgeSeen();
   const [nudgeVisible, setNudgeVisible] = useState(false);
   const [charState, setCharState] = useState<RendaCharacterState>('idle');
@@ -142,25 +140,27 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
   };
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
 
   // Impression: once per app session per screen.
   useEffect(() => {
     if (visible && route) trackLauncherImpression(ctxRef.current, 'orb', reducedMotion);
   }, [visible, route, reducedMotion]);
 
-
   // Attention ripple (rare, capped, waits for 2 s idle, never when hidden).
   const playAttention = useCallback(
     async (trigger: AttentionTrigger) => {
-      if (!visible || reducedMotion || session.attentionPlayed) return;
-      let history: number[] = [];
+      // Read live values: this runs after the idle wait, not when it was scheduled.
+      if (!visibleRef.current || reducedMotion || session.attentionPlayed) return;
+      let history: number[];
       try {
         history = parseAttentionHistory(await AsyncStorage.getItem(ATTENTION_STORAGE_KEY));
       } catch {
         return;
       }
       const now = Date.now();
-      if (!canPlayAttention(history, now, session.attentionPlayed)) return;
+      if (!visibleRef.current || !canPlayAttention(history, now, session.attentionPlayed)) return;
       session.attentionPlayed = true;
       void AsyncStorage.setItem(ATTENTION_STORAGE_KEY, JSON.stringify(recordAttention(history, now))).catch(
         () => undefined
@@ -170,14 +170,31 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
       trackAttentionPlayed(ctxRef.current, trigger);
       setTimeout(() => setCharState((s) => (s === 'attention' ? 'idle' : s)), ATTENTION_DURATION_MS);
     },
-    [visible, reducedMotion]
+    [reducedMotion]
   );
+  // Wait for 2 s of touch / scroll idle (re-checked after each wait), then play.
+  const attentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestAttention = useCallback(
     (trigger: AttentionTrigger) => {
-      const wait = attentionDelay(lastInteractionAt, Date.now());
-      setTimeout(() => void playAttention(trigger), wait);
+      const attempt = () => {
+        const wait = attentionDelay(lastLauncherInteractionAt(), Date.now());
+        if (wait > 0) {
+          attentionTimer.current = setTimeout(attempt, wait);
+          return;
+        }
+        attentionTimer.current = null;
+        void playAttention(trigger);
+      };
+      if (attentionTimer.current) clearTimeout(attentionTimer.current);
+      attempt();
     },
-    [lastInteractionAt, playAttention]
+    [playAttention]
+  );
+  useEffect(
+    () => () => {
+      if (attentionTimer.current) clearTimeout(attentionTimer.current);
+    },
+    []
   );
   useEffect(() => {
     attentionListener = (req) => requestAttention(req.trigger);
