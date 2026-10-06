@@ -21,6 +21,7 @@ from .orders_service import (
 
 # Order hold-related functions
 from .order_holds_service import (
+    get_order_hold,
     get_or_create_order_hold,
     update_order_hold_status,
 )
@@ -30,6 +31,7 @@ from .accounts_service import (
     get_account_by_user_and_currency,
     register_account_transaction,
     determine_transaction_balance_update,
+    get_reference_held_amount,
 )
 
 # Transaction-related functions
@@ -72,11 +74,13 @@ __all__ = [
     "get_order_business_location_country_strict",
     "get_platform_order_lifecycle_counts",
     # Order holds
+    "get_order_hold",
     "get_or_create_order_hold",
     "update_order_hold_status",
     # Accounts
     "get_account_by_user_and_currency",
     "register_account_transaction",
+    "get_reference_held_amount",
     "determine_transaction_balance_update",
     # Transactions
     "register_cancellation_fee_transactions",

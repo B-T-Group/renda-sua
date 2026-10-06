@@ -286,10 +286,16 @@ def register_account_transaction(
     memo: str,
     reference_id: str,
     hasura_endpoint: str,
-    hasura_admin_secret: str
+    hasura_admin_secret: str,
+    idempotency_key: Optional[str] = None,
 ) -> Optional[str]:
     """
     Register an account transaction and update account balances.
+
+    When ``idempotency_key`` is set the move happens at most once: if a row with
+    that key already exists its id is returned and balances are left alone. The
+    key is UNIQUE on account_transactions, so a racing duplicate insert fails
+    before the balance update runs.
     
     Args:
         account_id: Account ID
@@ -319,6 +325,17 @@ def register_account_transaction(
     log_info("Fetching account for transaction", account_id=account_id, transaction_type=transaction_type)
     
     try:
+        if idempotency_key:
+            existing_id = _find_transaction_by_idempotency_key(client, idempotency_key)
+            if existing_id:
+                log_info(
+                    "Transaction already registered for idempotency key; skipping",
+                    account_id=account_id,
+                    idempotency_key=idempotency_key,
+                    transaction_id=existing_id,
+                )
+                return existing_id
+
         data = client.execute(query, {"accountId": account_id})
         account_data = data.get("accounts_by_pk")
         
@@ -401,30 +418,47 @@ def register_account_transaction(
           $amount: numeric!,
           $transactionType: transaction_type_enum!,
           $memo: String,
-          $referenceId: uuid
+          $referenceId: uuid,
+          $idempotencyKey: String
         ) {
           insert_account_transactions_one(object: {
             account_id: $accountId,
             amount: $amount,
             transaction_type: $transactionType,
             memo: $memo,
-            reference_id: $referenceId
+            reference_id: $referenceId,
+            idempotency_key: $idempotencyKey
           }) {
             id
           }
         }
         """
         
-        transaction_data = client.execute(
-            mutation,
-            {
-                "accountId": account_id,
-                "amount": amount,
-                "transactionType": transaction_type.lower(),
-                "memo": memo,
-                "referenceId": reference_id,
-            },
-        )
+        try:
+            transaction_data = client.execute(
+                mutation,
+                {
+                    "accountId": account_id,
+                    "amount": amount,
+                    "transactionType": transaction_type.lower(),
+                    "memo": memo,
+                    "referenceId": reference_id,
+                    "idempotencyKey": idempotency_key,
+                },
+            )
+        except Exception:
+            # A concurrent run inserted the same key first: report its row, move nothing.
+            if idempotency_key:
+                existing_id = _find_transaction_by_idempotency_key(client, idempotency_key)
+                if existing_id:
+                    log_info(
+                        "Idempotency key won by a concurrent insert; skipping",
+                        account_id=account_id,
+                        idempotency_key=idempotency_key,
+                        transaction_id=existing_id,
+                    )
+                    return existing_id
+            raise
         
         transaction_id = transaction_data.get("insert_account_transactions_one", {}).get("id")
         
@@ -469,3 +503,67 @@ def register_account_transaction(
         return None
 
 
+
+
+def _find_transaction_by_idempotency_key(client: HasuraClient, idempotency_key: str) -> Optional[str]:
+    data = client.execute(
+        """
+        query TransactionByIdempotencyKey($key: String!) {
+          account_transactions(where: { idempotency_key: { _eq: $key } }, limit: 1) {
+            id
+          }
+        }
+        """,
+        {"key": idempotency_key},
+    )
+    rows = data.get("account_transactions") or []
+    return rows[0]["id"] if rows else None
+
+
+def get_reference_held_amount(
+    account_id: str,
+    reference_id: str,
+    hasura_endpoint: str,
+    hasura_admin_secret: str,
+    exclude_release_key_prefix: Optional[str] = None,
+) -> float:
+    """
+    Amount still withheld on ``account_id`` for ledger rows referencing ``reference_id``
+    (sum of holds minus sum of releases).
+
+    Releases whose idempotency key starts with ``exclude_release_key_prefix`` are not
+    subtracted, so a caller retrying its own keyed releases sees the amount that was
+    held before its first attempt. Raises on Hasura errors so callers fail closed.
+    """
+    release_filter = '{ transaction_type: { _eq: "release" } }'
+    variables: dict = {"accountId": account_id, "referenceId": reference_id}
+    if exclude_release_key_prefix:
+        release_filter = (
+            '{ transaction_type: { _eq: "release" }, _or: ['
+            "{ idempotency_key: { _is_null: true } }, "
+            "{ idempotency_key: { _nlike: $excludePattern } }] }"
+        )
+        variables["excludePattern"] = f"{exclude_release_key_prefix}%"
+    pattern_var = ", $excludePattern: String!" if exclude_release_key_prefix else ""
+    query = f"""
+    query ReferenceHeldAmount($accountId: uuid!, $referenceId: uuid!{pattern_var}) {{
+      holds: account_transactions_aggregate(where: {{
+        account_id: {{ _eq: $accountId }},
+        reference_id: {{ _eq: $referenceId }},
+        transaction_type: {{ _eq: "hold" }}
+      }}) {{ aggregate {{ sum {{ amount }} }} }}
+      releases: account_transactions_aggregate(where: {{
+        account_id: {{ _eq: $accountId }},
+        reference_id: {{ _eq: $referenceId }},
+        _and: [{release_filter}]
+      }}) {{ aggregate {{ sum {{ amount }} }} }}
+    }}
+    """
+    client = HasuraClient(HasuraClientConfig(endpoint=hasura_endpoint, admin_secret=hasura_admin_secret))
+    data = client.execute(query, variables)
+
+    def _sum(alias: str) -> float:
+        agg = ((data.get(alias) or {}).get("aggregate") or {}).get("sum") or {}
+        return float(agg.get("amount") or 0)
+
+    return max(0.0, round(_sum("holds") - _sum("releases"), 2))
