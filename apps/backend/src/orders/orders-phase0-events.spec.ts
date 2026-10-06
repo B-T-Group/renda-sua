@@ -96,9 +96,15 @@ describe('OrdersService Phase 0 Events', () => {
         available_balance: 3000, // Less than holdAmount (8000)
       });
 
-      await expect(
-        harness.service.claimOrder({ orderId: 'order-123' })
-      ).rejects.toThrow(ForbiddenException);
+      let error: any;
+      try {
+        await harness.service.claimOrder({ orderId: 'order-123' });
+      } catch (e) {
+        error = e;
+      }
+
+      expect(error).toBeDefined();
+      expect(error.status).toBe(403);
 
       // Wait for async emission
       await new Promise((resolve) => setImmediate(resolve));
