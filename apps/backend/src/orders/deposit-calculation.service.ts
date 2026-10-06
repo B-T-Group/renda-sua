@@ -77,8 +77,26 @@ export class DepositCalculationService {
   }
 
   /**
+   * True when the reservation deposit was collected from the client: still
+   * held ('paid') or already counted toward the price ('applied', e.g. at
+   * cash exception or settlement). Use this for amount math only; refund and
+   * forfeit eligibility stay 'paid'-only.
+   */
+  isDepositCollected(order: {
+    deposit_amount?: number | null;
+    deposit_status?: string | null;
+  }): boolean {
+    const status = order.deposit_status;
+    return (
+      (status === 'paid' || status === 'applied') &&
+      (Number(order.deposit_amount) || 0) > 0
+    );
+  }
+
+  /**
    * Amount to collect on remainder MoMo (pickup/delivery/cash recon).
-   * When deposit is already paid, charge only total − deposit.
+   * When the deposit was collected ('paid' or 'applied'), charge only
+   * total − deposit.
    */
   remainderPaymentAmount(order: {
     total_amount?: number | null;
@@ -87,7 +105,7 @@ export class DepositCalculationService {
   }): number {
     const total = Number(order.total_amount) || 0;
     const deposit = Number(order.deposit_amount) || 0;
-    if (order.deposit_status === 'paid' && deposit > 0) {
+    if (this.isDepositCollected(order)) {
       return Math.max(0, total - deposit);
     }
     return total;

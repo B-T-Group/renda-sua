@@ -30,6 +30,8 @@ interface NoshowPreview {
   merchantShare: number;
   refundAmount: number;
   currency: string;
+  /** > 0 for an unpaid pay-at-pickup order: the held deposit is the no-show penalty (no fee). */
+  depositForfeitAmount?: number;
 }
 
 interface Props {
@@ -107,7 +109,12 @@ const PickupNoshowDialog: React.FC<Props> = ({ open, order, onClose, onSuccess }
         notes: notes.trim() || undefined,
       });
       enqueueSnackbar(
-        t('orders.pickupNoshow.cancelled', 'Pickup cancelled. The client is refunded except for the fee.'),
+        (preview?.depositForfeitAmount ?? 0) > 0
+          ? t(
+              'orders.pickupNoshow.cancelledDeposit',
+              "Pickup cancelled. The client's reservation deposit is kept as the no-show penalty."
+            )
+          : t('orders.pickupNoshow.cancelled', 'Pickup cancelled. The client is refunded except for the fee.'),
         { variant: 'success' }
       );
       onSuccess?.();
@@ -124,8 +131,19 @@ const PickupNoshowDialog: React.FC<Props> = ({ open, order, onClose, onSuccess }
     }
   };
 
-  const feeLine =
-    preview && preview.cancellationFee > 0
+  const depositLine =
+    preview && (preview.depositForfeitAmount ?? 0) > 0
+      ? t(
+          'orders.pickupNoshow.depositLine',
+          "No fee. The client's {{amount}} {{currency}} reservation deposit is kept by Rendasua as the no-show penalty.",
+          {
+            amount: (preview.depositForfeitAmount ?? 0).toLocaleString(),
+            currency: preview.currency,
+          }
+        )
+      : null;
+  const feeLine = depositLine ??
+    (preview && preview.cancellationFee > 0
       ? t(
           'orders.pickupNoshow.feeLine',
           'Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.',
@@ -137,7 +155,7 @@ const PickupNoshowDialog: React.FC<Props> = ({ open, order, onClose, onSuccess }
             percent: preview.cancellationFeePercent,
           }
         )
-      : null;
+      : null);
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">

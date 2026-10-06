@@ -84,3 +84,65 @@ describe('orderToPhaseInput cooked-food pickup', () => {
     expect(info.hubGroup).toBe('waiting');
   });
 });
+
+describe('flagged location pay-after (non-cooked goods)', () => {
+  it('asks client to pay for confirmed flagged location pickup order', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'confirmed',
+        fulfillmentMethod: 'pickup',
+        isCookedFoodPickup: false,
+        payAfterMerchantConfirm: true,
+        paymentStatus: 'pending',
+      },
+      'client'
+    );
+    expect(info.primaryActionId).toBe('pay');
+    expect(info.hubGroup).toBe('waiting');
+  });
+
+  it('asks client to pay for confirmed flagged location delivery order', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'confirmed',
+        fulfillmentMethod: 'delivery',
+        isCookedFoodPickup: false,
+        payAfterMerchantConfirm: true,
+        paymentStatus: 'pending',
+      },
+      'client'
+    );
+    expect(info.primaryActionId).toBe('pay');
+    expect(info.hubGroup).toBe('waiting');
+  });
+
+  it('business waits for payment on flagged location order before marking ready', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'confirmed',
+        fulfillmentMethod: 'pickup',
+        isCookedFoodPickup: false,
+        payAfterMerchantConfirm: true,
+        paymentStatus: 'pending',
+      },
+      'business'
+    );
+    expect(info.primaryActionId).toBe('none');
+    expect(info.hubGroup).toBe('waiting');
+  });
+
+  it('business can mark ready after payment on flagged location order', () => {
+    const info = resolveOrderPhase(
+      {
+        status: 'confirmed',
+        fulfillmentMethod: 'pickup',
+        isCookedFoodPickup: false,
+        payAfterMerchantConfirm: true,
+        paymentStatus: 'paid',
+      },
+      'business'
+    );
+    expect(info.primaryActionId).toBe('mark_ready');
+    expect(info.hubGroup).toBe('action_needed');
+  });
+});

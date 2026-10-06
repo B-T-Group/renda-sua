@@ -20,6 +20,7 @@ import { FoodModule } from '../food/food.module';
 import { PdfModule } from '../pdf/pdf.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { RecipientsModule } from '../recipients/recipients.module';
+import { SiteEventsModule } from '../site-events/site-events.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { StripeTaxModule } from '../stripe-tax/stripe-tax.module';
 import { StripeAuthReconcilerService } from '../stripe-payments/stripe-auth-reconciler.service';
@@ -93,6 +94,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     DeliveryConfigModule,
     CommissionsModule,
     PdfModule,
+    SiteEventsModule,
     StripePaymentsModule,
     StripeTaxModule,
     RefundsModule,

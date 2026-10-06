@@ -24,7 +24,8 @@ describe('Auth0Service.ensureTestUser invalid phone', () => {
     testUsers: {
       enabled: true,
       emailDomain: 'test.rendasua.com',
-      phoneSuffix: '5555',
+      emailAllowlist: [],
+      phoneAllowlist: ['+10000000000', '+15555555555'],
       password: 'TestPassword1!',
       emailConnection: 'email',
       phoneConnection: 'sms',
@@ -49,9 +50,9 @@ describe('Auth0Service.ensureTestUser invalid phone', () => {
     const service = createService();
 
     await expect(
-      service.verifyTestUserPhone('+10000000000')
+      service.verifyTestUserPhone('+10000000000', '0000')
     ).rejects.toBeInstanceOf(HttpException);
-    await expect(service.verifyTestUserPhone('+10000000000')).rejects.toMatchObject({
+    await expect(service.verifyTestUserPhone('+10000000000', '0000')).rejects.toMatchObject({
       status: HttpStatus.BAD_REQUEST,
     });
   });
@@ -64,7 +65,7 @@ describe('Auth0Service.ensureTestUser invalid phone', () => {
     });
     const service = createService();
 
-    await expect(service.verifyTestUserPhone('+15555555555')).resolves.toEqual(
+    await expect(service.verifyTestUserPhone('+15555555555', '0000')).resolves.toEqual(
       expect.objectContaining({ access_token: 'tok' })
     );
   });

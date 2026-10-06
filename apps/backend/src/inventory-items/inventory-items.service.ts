@@ -12,6 +12,7 @@ import {
   ItemEmbeddingService,
   type ItemSimilarityMatch,
 } from '../embeddings/item-embedding.service';
+import { sameCountryAndState } from '../common/same-region.util';
 import { isUuid } from '../common/uuid.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -1087,6 +1088,68 @@ export class InventoryItemsService {
     }
   }
 
+  private async resolveShopperRegion(query: {
+    origin_lat?: number;
+    origin_lng?: number;
+  }): Promise<{ country: string; state: string } | null> {
+    const explicit = parseOptionalLatLng(query.origin_lat, query.origin_lng);
+    if (explicit) return this.regionFromLatLng(explicit.lat, explicit.lng);
+    return this.regionFromPrimaryAddress();
+  }
+
+  private async regionFromPrimaryAddress(): Promise<{
+    country: string;
+    state: string;
+  } | null> {
+    try {
+      const addr = await this.addressesService.getCurrentUserPrimaryAddress();
+      if (addr?.country?.trim() && addr?.state?.trim()) {
+        return { country: addr.country.trim(), state: addr.state.trim() };
+      }
+      if (addr?.latitude == null || addr?.longitude == null) return null;
+      return this.regionFromLatLng(Number(addr.latitude), Number(addr.longitude));
+    } catch (error: any) {
+      this.logger.debug(`Shopper region skipped: ${error?.message ?? error}`);
+      return null;
+    }
+  }
+
+  private async regionFromLatLng(
+    lat: number,
+    lng: number
+  ): Promise<{ country: string; state: string } | null> {
+    try {
+      const geo = await this.googleDistanceService.reverseGeocode(lat, lng);
+      const country = geo.country_code?.trim();
+      const state = geo.state?.trim();
+      if (!country || !state) return null;
+      return { country, state };
+    } catch (error: any) {
+      this.logger.debug(`Shopper region geocode skipped: ${error?.message ?? error}`);
+      return null;
+    }
+  }
+
+  private metersWithinRegion(
+    origin: { lat: number; lng: number } | null,
+    region: { country: string; state: string } | null,
+    place?: {
+      country?: string | null;
+      state?: string | null;
+      latitude?: number | null;
+      longitude?: number | null;
+    } | null
+  ): number | null {
+    if (!origin || !region || !sameCountryAndState(region, place ?? {})) {
+      return null;
+    }
+    const lat = place?.latitude;
+    const lng = place?.longitude;
+    if (lat == null || lng == null) return null;
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
+    return haversineMeters(origin.lat, origin.lng, Number(lat), Number(lng));
+  }
+
   private async countInventoryRowsByLocation(
     where: Record<string, unknown>
   ): Promise<Map<string, number>> {
@@ -1118,7 +1181,12 @@ export class InventoryItemsService {
         id: string;
         name: string;
         logo_url: string | null;
-        address?: { latitude?: number | null; longitude?: number | null } | null;
+        address?: {
+          country?: string | null;
+          state?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+        } | null;
       }
     >
   > {
@@ -1134,6 +1202,8 @@ export class InventoryItemsService {
           name
           logo_url
           address {
+            country
+            state
             latitude
             longitude
           }
@@ -1147,7 +1217,12 @@ export class InventoryItemsService {
       id: string;
       name: string;
       logo_url?: string | null;
-      address?: { latitude?: number | null; longitude?: number | null } | null;
+      address?: {
+        country?: string | null;
+        state?: string | null;
+        latitude?: number | null;
+        longitude?: number | null;
+      } | null;
     }> = locRes.business_locations ?? [];
     return new Map(locRows.map((l) => [l.id, { ...l, logo_url: l.logo_url ?? null }]));
   }
@@ -1156,35 +1231,31 @@ export class InventoryItemsService {
     counts: Map<string, number>,
     byId: Map<
       string,
-      { address?: { latitude?: number | null; longitude?: number | null } | null }
+      {
+        address?: {
+          country?: string | null;
+          state?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+        } | null;
+      }
     >,
-    origin: { lat: number; lng: number } | null
+    origin: { lat: number; lng: number } | null,
+    region: { country: string; state: string } | null
   ): Array<{
     id: string;
     item_count: number;
     distance_meters: number | null;
   }> {
-    return [...counts.keys()].map((id) => {
-      const loc = byId.get(id);
-      let distance_meters: number | null = null;
-      if (origin && loc?.address) {
-        const lat = loc.address.latitude;
-        const lng = loc.address.longitude;
-        if (lat != null && lng != null) {
-          distance_meters = haversineMeters(
-            origin.lat,
-            origin.lng,
-            Number(lat),
-            Number(lng)
-          );
-        }
-      }
-      return {
-        id,
-        item_count: counts.get(id) ?? 0,
-        distance_meters,
-      };
-    });
+    return [...counts.keys()].map((id) => ({
+      id,
+      item_count: counts.get(id) ?? 0,
+      distance_meters: this.metersWithinRegion(
+        origin,
+        region,
+        byId.get(id)?.address
+      ),
+    }));
   }
 
   private rankTopLocationsByOrigin(
@@ -1194,13 +1265,19 @@ export class InventoryItemsService {
       {
         name: string;
         logo_url: string | null;
-        address?: { latitude?: number | null; longitude?: number | null } | null;
+        address?: {
+          country?: string | null;
+          state?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+        } | null;
       }
     >,
     origin: { lat: number; lng: number } | null,
+    region: { country: string; state: string } | null,
     take: number
   ): TopInventoryLocationRow[] {
-    const scored = this.scoreTopLocationsByDistance(counts, byId, origin);
+    const scored = this.scoreTopLocationsByDistance(counts, byId, origin, region);
     if (origin) {
       scored.sort((a, b) => {
         const da = a.distance_meters ?? Infinity;
@@ -1251,8 +1328,17 @@ export class InventoryItemsService {
     const counts = await this.countInventoryRowsByLocation(built.where);
     if (counts.size === 0) return [];
     const origin = await this.resolveTopLocationsOrigin(query);
+    const shopperRegion = origin
+      ? await this.resolveShopperRegion(query)
+      : null;
     const byId = await this.fetchTopStripLocationsByIds([...counts.keys()]);
-    return this.rankTopLocationsByOrigin(counts, byId, origin, take);
+    return this.rankTopLocationsByOrigin(
+      counts,
+      byId,
+      origin,
+      shopperRegion,
+      take
+    );
   }
 
   /**
@@ -1347,6 +1433,8 @@ export class InventoryItemsService {
         logo_url: string | null;
         latitude?: number | null;
         longitude?: number | null;
+        country?: string | null;
+        state?: string | null;
       }
     >
   > {
@@ -1369,6 +1457,8 @@ export class InventoryItemsService {
           }
           address {
             city
+            country
+            state
             latitude
             longitude
           }
@@ -1393,6 +1483,8 @@ export class InventoryItemsService {
       } | null;
       address?: {
         city?: string | null;
+        country?: string | null;
+        state?: string | null;
         latitude?: number | null;
         longitude?: number | null;
       } | null;
@@ -1413,6 +1505,8 @@ export class InventoryItemsService {
           logo_url: loc.logo_url ?? null,
           latitude: loc.address?.latitude ?? null,
           longitude: loc.address?.longitude ?? null,
+          country: loc.address?.country ?? null,
+          state: loc.address?.state ?? null,
         },
       ])
     );
@@ -1460,9 +1554,12 @@ export class InventoryItemsService {
         reliability_tier?: string;
         latitude?: number | null;
         longitude?: number | null;
+        country?: string | null;
+        state?: string | null;
       }
     >,
     origin: { lat: number; lng: number } | null,
+    region: { country: string; state: string } | null,
     take: number
   ): TopInventoryStoreRow[] {
     const demoted = new Set(['demote', 'restrict', 'suspend']);
@@ -1470,16 +1567,11 @@ export class InventoryItemsService {
       .filter((id) => !demoted.has(byId.get(id)?.reliability_tier || 'ok'))
       .map((id) => {
       const loc = byId.get(id);
-      let distance_meters: number | null = null;
-      if (origin && loc?.latitude != null && loc?.longitude != null) {
-        distance_meters = haversineMeters(
-          origin.lat,
-          origin.lng,
-          Number(loc.latitude),
-          Number(loc.longitude)
-        );
-      }
-      return { id, item_count: counts.get(id) ?? 0, distance_meters };
+      return {
+        id,
+        item_count: counts.get(id) ?? 0,
+        distance_meters: this.metersWithinRegion(origin, region, loc),
+      };
     });
     if (origin) {
       scored.sort((a, b) => {
@@ -1539,6 +1631,9 @@ export class InventoryItemsService {
     const counts = await this.countDistinctCatalogItemsByLocation(built.where);
     if (counts.size === 0) return [];
     const origin = await this.resolveTopLocationsOrigin(query);
+    const shopperRegion = origin
+      ? await this.resolveShopperRegion(query)
+      : null;
     const byId = await this.fetchStoreLocationDetailsByIds([...counts.keys()]);
     for (const id of [...counts.keys()]) {
       if (!byId.has(id)) counts.delete(id);
@@ -1546,7 +1641,13 @@ export class InventoryItemsService {
     if (counts.size === 0) return [];
     await this.applyStoreDirectoryFilters(counts, byId, query);
     if (counts.size === 0) return [];
-    const ranked = this.rankTopStoresByOrigin(counts, byId, origin, take);
+    const ranked = this.rankTopStoresByOrigin(
+      counts,
+      byId,
+      origin,
+      shopperRegion,
+      take
+    );
     const partnerIds = await this.activePartnerBusinessIds();
     return ranked.map((row) => ({
       ...row,
@@ -1664,15 +1765,10 @@ export class InventoryItemsService {
     if (!ownerPreview && item_count === 0) return null;
 
     const origin = await this.resolveTopLocationsOrigin(query);
-    let distance_meters: number | null = null;
-    if (origin && loc.latitude != null && loc.longitude != null) {
-      distance_meters = haversineMeters(
-        origin.lat,
-        origin.lng,
-        Number(loc.latitude),
-        Number(loc.longitude)
-      );
-    }
+    const shopperRegion = origin
+      ? await this.resolveShopperRegion(query)
+      : null;
+    const distance_meters = this.metersWithinRegion(origin, shopperRegion, loc);
     return {
       business_location_id: locationId,
       business_id: loc.business_id,
@@ -1849,9 +1945,13 @@ export class InventoryItemsService {
       const relevanceSignals =
         await this.getRelevanceSignalsFromPastOrders(clientId);
       const listOrigin = await this.resolveTopLocationsOrigin(query);
+      const shopperRegion = listOrigin
+        ? await this.resolveShopperRegion(query)
+        : null;
       const withHaversine = this.applyHaversineDistanceForRanking(
         itemsWithViewsAndDeals,
-        listOrigin
+        listOrigin,
+        shopperRegion
       );
       const withRatings = await this.attachRatingAggregates(withHaversine);
       const winners = await this.pickBestListingPerItem(
@@ -1878,7 +1978,8 @@ export class InventoryItemsService {
       const pageItems = sorted.slice(listOffset, listOffset + limit);
       const withGoogle = await this.enrichWithDistanceOnly(
         pageItems,
-        parseOptionalLatLng(query.origin_lat, query.origin_lng)
+        parseOptionalLatLng(query.origin_lat, query.origin_lng),
+        shopperRegion
       );
       const withLikes = await this.attachLikeState(withGoogle);
       return {
@@ -1969,30 +2070,33 @@ export class InventoryItemsService {
 
   private applyHaversineDistanceForRanking(
     items: InventoryItem[],
-    origin: { lat: number; lng: number } | null
+    origin: { lat: number; lng: number } | null,
+    region: { country: string; state: string } | null
   ): InventoryItem[] {
-    if (!origin) {
-      return items;
-    }
-    return items.map((item) => {
-      const lat = item.business_location?.address?.latitude;
-      const lng = item.business_location?.address?.longitude;
-      if (
-        lat == null ||
-        lng == null ||
-        !Number.isFinite(Number(lat)) ||
-        !Number.isFinite(Number(lng))
-      ) {
-        return { ...item, distance_value: undefined };
-      }
-      const m = haversineMeters(
-        origin.lat,
-        origin.lng,
-        Number(lat),
-        Number(lng)
-      );
-      return { ...item, distance_value: m };
-    });
+    return items.map((item) => this.withHaversineDistance(item, origin, region));
+  }
+
+  private withHaversineDistance(
+    item: InventoryItem,
+    origin: { lat: number; lng: number } | null,
+    region: { country: string; state: string } | null
+  ): InventoryItem {
+    const meters = this.metersWithinRegion(
+      origin,
+      region,
+      item.business_location?.address
+    );
+    if (meters == null) return this.withoutDistance(item);
+    return { ...item, distance_value: meters };
+  }
+
+  private withoutDistance(item: InventoryItem): InventoryItem {
+    return {
+      ...item,
+      distance_text: undefined,
+      duration_text: undefined,
+      distance_value: undefined,
+    };
   }
 
   private async pickBestListingPerItem(
@@ -3293,6 +3397,49 @@ export class InventoryItemsService {
    * Enrich items with distance from primary address or anonymous lat/lng (no sort).
    */
   private async enrichWithDistanceOnly(
+    items: InventoryItem[],
+    anonymousOrigin: { lat: number; lng: number } | null,
+    region: { country: string; state: string } | null
+  ): Promise<InventoryItem[]> {
+    const scoped = this.omitDistanceOutsideRegion(items, region);
+    const eligible = region
+      ? scoped.filter((item) =>
+          sameCountryAndState(region, item.business_location?.address)
+        )
+      : [];
+    if (eligible.length === 0) return scoped;
+    try {
+      const enriched = await this.fetchGoogleDistances(eligible, anonymousOrigin);
+      return this.mergeEnrichedDistances(scoped, enriched);
+    } catch (error: any) {
+      this.logger.warn(
+        `Distance enrichment skipped: ${error?.message ?? String(error)}`
+      );
+      return scoped;
+    }
+  }
+
+  private omitDistanceOutsideRegion(
+    items: InventoryItem[],
+    region: { country: string; state: string } | null
+  ): InventoryItem[] {
+    if (!region) return items.map((item) => this.withoutDistance(item));
+    return items.map((item) =>
+      sameCountryAndState(region, item.business_location?.address)
+        ? item
+        : this.withoutDistance(item)
+    );
+  }
+
+  private mergeEnrichedDistances(
+    base: InventoryItem[],
+    enriched: InventoryItem[]
+  ): InventoryItem[] {
+    const byId = new Map(enriched.map((item) => [item.id, item]));
+    return base.map((item) => byId.get(item.id) ?? item);
+  }
+
+  private async fetchGoogleDistances(
     items: InventoryItem[],
     anonymousOrigin: { lat: number; lng: number } | null
   ): Promise<InventoryItem[]> {

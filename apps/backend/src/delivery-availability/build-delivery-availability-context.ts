@@ -3,8 +3,10 @@ import { DeliveryAvailabilityContext } from './delivery-availability.types';
 
 export interface DeliveryAvailabilityContextInput {
   businessId: string;
+  businessLocationId?: string | null;
   sellerCountry?: string | null;
   sellerState?: string | null;
+  sellerCity?: string | null;
   pickupLat?: number | string | null;
   pickupLon?: number | string | null;
   deliveryAddressId?: string | null;
@@ -18,6 +20,7 @@ export interface DeliveryAvailabilityContextInput {
   verifiedAgentDelivery?: boolean;
   clientId?: string;
   evaluatedAt?: Date;
+  stage?: 'preflight' | 'place_order';
 }
 
 /** Shared by checkout preflight and order create so both gates see the same inputs. */
@@ -26,8 +29,10 @@ export function buildDeliveryAvailabilityContext(
 ): DeliveryAvailabilityContext {
   return {
     businessId: input.businessId,
+    businessLocationId: input.businessLocationId ?? undefined,
     sellerCountry: normalizedSellerCountry(input.sellerCountry),
     sellerState: (input.sellerState ?? '').trim(),
+    sellerCity: input.sellerCity?.trim() || undefined,
     pickupLat: finiteCoord(input.pickupLat),
     pickupLon: finiteCoord(input.pickupLon),
     deliveryAddressId: input.deliveryAddressId ?? undefined,
@@ -41,6 +46,7 @@ export function buildDeliveryAvailabilityContext(
     verifiedAgentDelivery: input.verifiedAgentDelivery,
     clientId: input.clientId,
     evaluatedAt: input.evaluatedAt ?? new Date(),
+    stage: input.stage,
   };
 }
 

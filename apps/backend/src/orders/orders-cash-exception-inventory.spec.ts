@@ -8,6 +8,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrdersService } from './orders.service';
+import { DepositCalculationService } from './deposit-calculation.service';
 
 jest.mock('../addresses/addresses.service', () => ({
   AddressesService: class AddressesService {},
@@ -89,12 +90,21 @@ describe('OrdersService cash-exception inventory', () => {
           useValue: { sendOrderCompletedMessage: jest.fn().mockResolvedValue(undefined) },
         },
         { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        {
+          provide: require('../site-events/site-events.service').SiteEventsService,
+          useValue: { trackEvent: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     })
       .useMocker(() => ({}))
       .compile();
 
     service = module.get(OrdersService);
+    (service as any).depositCalculationService = new DepositCalculationService();
+    // Settlement claims the deposit (paid -> applied) before applying it.
+    (service as any).depositRefundService = {
+      claimDepositApplied: jest.fn().mockResolvedValue('applied'),
+    };
     (service as any).representativeCompensationService = {
       evaluateForOrderSafe: jest.fn(),
     };
@@ -182,7 +192,7 @@ describe('OrdersService cash-exception inventory', () => {
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
-  it('applies a paid reservation deposit when cash exception completes', async () => {
+  it('blocks cash exception for orders with paid reservation deposits', async () => {
     stubOrder({
       deposit_status: 'paid',
       deposit_amount: 2000,
@@ -193,44 +203,54 @@ describe('OrdersService cash-exception inventory', () => {
       applyHeldDepositAsPayment: apply,
     };
 
-    await expect(service.markPaidInCashException('order-123')).resolves.toEqual({
-      success: true,
-      message: 'Cash exception recorded',
+    await expect(service.markPaidInCashException('order-123')).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: expect.objectContaining({
+        success: false,
+        error: 'CASH_EXCEPTION_BLOCKED_FOR_DEPOSIT_ORDER',
+      }),
     });
 
-    expect(hasuraSystemService.getAccount).toHaveBeenCalledWith(
-      'client-user',
-      'XAF'
-    );
-    expect(apply).toHaveBeenCalledWith({
-      clientAccountId: 'acct-1',
-      amount: 2000,
-      orderNumber: '49520979',
-      depositTransactionId: 'dep-txn-1',
-    });
-    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('MarkCashException'),
-      expect.objectContaining({ orderId: 'order-123' })
-    );
+    expect(apply).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
-  it('fails cash exception without completing when deposit apply throws', async () => {
+  it('blocks cash exception for orders with applied deposits', async () => {
     stubOrder({
-      deposit_status: 'paid',
+      deposit_status: 'applied',
       deposit_amount: 2000,
       deposit_mobile_payment_transaction_id: 'dep-txn-1',
     });
-    (service as any).depositLedgerService = {
-      applyHeldDepositAsPayment: jest
-        .fn()
-        .mockRejectedValue(new Error('Deposit apply payment failed')),
-    };
 
     await expect(service.markPaidInCashException('order-123')).rejects.toMatchObject({
-      status: HttpStatus.CONFLICT,
+      status: HttpStatus.BAD_REQUEST,
+      response: expect.objectContaining({
+        success: false,
+        error: 'CASH_EXCEPTION_BLOCKED_FOR_DEPOSIT_ORDER',
+      }),
     });
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     expect(inventoryCalls()).toEqual([]);
+  });
+
+  it('blocks cash exception for orders with forfeited deposits', async () => {
+    stubOrder({
+      deposit_status: 'forfeited',
+      deposit_amount: 2000,
+      deposit_mobile_payment_transaction_id: 'dep-txn-1',
+    });
+    const apply = jest.fn();
+    (service as any).depositLedgerService = { applyHeldDepositAsPayment: apply };
+
+    await expect(service.markPaidInCashException('order-123')).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: expect.objectContaining({
+        success: false,
+        error: 'CASH_EXCEPTION_BLOCKED_FOR_DEPOSIT_ORDER',
+      }),
+    });
+    expect(apply).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
   it('does not apply a deposit when cash exception has no captured deposit', async () => {
@@ -245,6 +265,45 @@ describe('OrdersService cash-exception inventory', () => {
     expect(apply).not.toHaveBeenCalled();
   });
 
+  it('blocks reconcile-cash-exception for deposit orders', async () => {
+    // With the new gate, cash exception is blocked for deposit orders,
+    // so reconciliation should also be blocked if somehow an order with
+    // a deposit reaches pending_manual_reconciliation state.
+    const order: Record<string, any> = {
+      ...cashOrder,
+      business_id: 'biz-1',
+      total_amount: 5000,
+      deposit_status: 'applied',
+      deposit_amount: 500,
+      deposit_mobile_payment_transaction_id: 'dep-txn-1',
+      payment_status: 'pending',
+      reconciliation_status: 'pending_manual_reconciliation',
+    };
+    jest
+      .spyOn(service as any, 'getOrderDetails')
+      .mockResolvedValue(order);
+
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'biz-user',
+      active_persona: 'business',
+      business: { id: 'biz-1', user_id: 'biz-user' },
+    });
+    hasuraUserService.sessionPersonaContext.mockReturnValue({
+      jwtDefaultRole: 'business',
+      jwtAllowedRoles: ['business'],
+    });
+
+    await expect(
+      service.reconcileCashException('order-123', '+237670000000')
+    ).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+      response: expect.objectContaining({
+        success: false,
+        error: 'CASH_EXCEPTION_BLOCKED_FOR_DEPOSIT_ORDER',
+      }),
+    });
+  });
+
   it('rejects cash exception unless the order is pay-at-delivery and out for delivery', async () => {
     stubOrder({ payment_timing: 'pay_now' });
     await expect(service.markPaidInCashException('order-123')).rejects.toMatchObject({
@@ -256,5 +315,57 @@ describe('OrdersService cash-exception inventory', () => {
       status: HttpStatus.BAD_REQUEST,
     });
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('allows cash exception for orders with pending deposits (not yet captured)', async () => {
+    stubOrder({
+      deposit_status: 'pending',
+      deposit_amount: 2000,
+    });
+
+    await expect(service.markPaidInCashException('order-123')).resolves.toEqual({
+      success: true,
+      message: 'Cash exception recorded',
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalled();
+  });
+
+  it('allows cash exception for orders with failed deposits', async () => {
+    stubOrder({
+      deposit_status: 'failed',
+      deposit_amount: 2000,
+    });
+
+    await expect(service.markPaidInCashException('order-123')).resolves.toEqual({
+      success: true,
+      message: 'Cash exception recorded',
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalled();
+  });
+
+  it('allows cash exception for orders with refunded deposits', async () => {
+    stubOrder({
+      deposit_status: 'refunded',
+      deposit_amount: 2000,
+    });
+
+    await expect(service.markPaidInCashException('order-123')).resolves.toEqual({
+      success: true,
+      message: 'Cash exception recorded',
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalled();
+  });
+
+  it('allows cash exception for orders with zero deposit amount', async () => {
+    stubOrder({
+      deposit_status: 'none',
+      deposit_amount: 0,
+    });
+
+    await expect(service.markPaidInCashException('order-123')).resolves.toEqual({
+      success: true,
+      message: 'Cash exception recorded',
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalled();
   });
 });

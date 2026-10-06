@@ -13,6 +13,7 @@ import {
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AppText } from './AppText';
+import { useLauncherSuppressor } from '../assistant/launcher/useLauncherSuppressor';
 
 export { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 
@@ -134,6 +135,7 @@ export function BottomSheet({
   const renderBackdrop = useSheetBackdrop(persistent);
   const onDismiss = usePersistentDismiss(ref, visible, persistent, onClose);
   useSheetVisibility(ref, visible);
+  useLauncherSuppressor(visible);
   const renderFooter = useCallback(
     (props: BottomSheetFooterProps) => (
       <BottomSheetFooter {...props} bottomInset={insets.bottom}>

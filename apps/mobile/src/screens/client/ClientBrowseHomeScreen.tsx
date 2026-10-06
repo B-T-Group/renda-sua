@@ -28,6 +28,10 @@ import { HomeLaneSwitcher, type HomeLane } from '../../components/client/HomeLan
 import { ActionsNeededSection } from '../../components/common/ActionsNeededSection';
 import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { AssistantIconButton } from '../../components/common/AssistantIconButton';
+import { useAssistantEntryTap } from '../../components/assistant/launcher/useAssistantEntryTap';
+import { useClientFlagsResolved } from '../../components/assistant/launcher/launcherHooks';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { assistantViewer, canSeeRendaCharacter, shouldHideHeaderAssistantButton } from '../../utils/assistantLauncher';
 import { NotificationBellButton } from '../../components/common/NotificationBellButton';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
@@ -57,9 +61,25 @@ function ClientBrowseHomeScreenBase() {
     navigation.getParent<NativeStackNavigationProp<ClientRootStackParamList> | undefined>();
   const tabNav = navigation as BottomTabNavigationProp<ClientMainTabParamList>;
 
+  const { flags } = useClientFlags();
+  const trackEntryTap = useAssistantEntryTap();
+  const assistantFlagOn = flags.assistant_launcher_v1;
+  const viewer = assistantViewer(auth.isAuthenticated, persona.activePersona);
+  // #451 one entry point: with the launcher flag on, the floating launcher owns this screen.
+  // No flash: for client / guest, wait for the first flags answer before
+  // deciding, so the header icon never shows and then vanishes when the
+  // launcher flag resolves on (agent / business are unaffected by the flag).
+  const flagsResolved = useClientFlagsResolved();
+  const hideAssistantHeaderButton = shouldHideHeaderAssistantButton(
+    assistantFlagOn,
+    viewer,
+    route.name,
+    flagsResolved
+  );
   const openAssistant = useCallback(() => {
+    trackEntryTap('header_icon', 'header_icon');
     rootNav?.navigate('AssistantChat');
-  }, [rootNav]);
+  }, [rootNav, trackEntryTap]);
 
   const { selected: homeOrders, totalActive: homeOrdersTotalActive } = useMemo(
     () => selectClientHomeOrders(clientBrowseOrders ? orders : []),
@@ -248,7 +268,14 @@ function ClientBrowseHomeScreenBase() {
             {notificationBell}
           </View>
         }
-        headerMarketTrailing={<AssistantIconButton onPress={openAssistant} />}
+        headerMarketTrailing={
+          hideAssistantHeaderButton ? undefined : (
+            <AssistantIconButton
+              onPress={openAssistant}
+              character={canSeeRendaCharacter(viewer)}
+            />
+          )
+        }
         discoveryExtra={
           <>
             {buyAgain ? (

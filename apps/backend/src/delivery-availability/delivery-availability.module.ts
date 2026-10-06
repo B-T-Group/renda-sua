@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { HasuraModule } from '../hasura/hasura.module';
+import { SiteEventsModule } from '../site-events/site-events.module';
 import { DeliveryAvailabilityService } from './delivery-availability.service';
 import { DELIVERY_AVAILABILITY_RULES } from './delivery-availability.types';
 import { EligibleAgentsQueryService } from './eligible-agents-query.service';
@@ -15,7 +16,7 @@ import { ServiceAreaEnabledRule } from './rules/service-area-enabled.rule';
  * DELIVERY_AVAILABILITY_RULES factory below — no checkout changes required.
  */
 @Module({
-  imports: [HasuraModule, DeliveryConfigModule],
+  imports: [HasuraModule, DeliveryConfigModule, SiteEventsModule],
   providers: [
     EligibleAgentsQueryService,
     ServiceAreaEnabledRule,

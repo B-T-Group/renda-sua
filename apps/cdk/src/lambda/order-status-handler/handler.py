@@ -21,8 +21,9 @@ from rendasua_core_packages.hasura_client import (
     get_complete_order_details,
     get_order_details_for_notification,
     get_platform_order_lifecycle_counts,
-    get_or_create_order_hold,
+    get_order_hold,
     get_account_by_user_and_currency,
+    get_reference_held_amount,
     register_account_transaction,
     update_order_hold_status,
     get_cancellation_fee_percent_rows,
@@ -603,6 +604,18 @@ def compute_cancellation_fee(
     return fee
 
 
+def is_reservation_deposit_order(order: Any) -> bool:
+    """True when the order carries a reservation deposit (pay-at-pickup / pay-at-delivery)."""
+    status = (getattr(order, "deposit_status", None) or "none").lower()
+    amount = float(getattr(order, "deposit_amount", None) or 0)
+    return status != "none" or amount > 0
+
+
+def cancel_release_key_prefix(order_id: str) -> str:
+    """Deterministic once-only key prefix for this order's cancellation releases."""
+    return f"order:{order_id}:cancel_release:"
+
+
 def process_cancellation_financials(
     order_id: str,
     cancelled_by: str,
@@ -650,25 +663,50 @@ def process_cancellation_financials(
             log_error("Client not found", order_id=order_id)
             return {"success": False, "error": "Client not found"}
         
-        # Get or create order hold
-        order_hold = get_or_create_order_hold(order_id, order, hasura_endpoint, hasura_admin_secret)
-        
-        if not order_hold:
-            log_error("Failed to get or create order hold", order_id=order_id)
-            return {"success": False, "error": "Failed to get or create order hold"}
-        
-        log_info("Order hold retrieved", order_id=order_id, hold_id=order_hold.id)
-
-        if getattr(order_hold, "item_settlement_completed_at", None):
+        # Release only money that was really held for THIS order. Never create a
+        # hold row here: a fresh row priced at the order total is how deposit
+        # (pay-at-pickup / pay-at-delivery) orders used to release other orders'
+        # held funds. Reservation deposits are held under the deposit transaction
+        # and are forfeited / refunded / applied by the backend, so they are never
+        # touched here.
+        #
+        # The hold row's status is NOT a "cancel already processed" marker: agent
+        # drop (manual and SLA system drop) flips the whole row to `cancelled`
+        # after releasing only the agent's part, while the client's pay-now hold
+        # stays live. Only an `active` row's amounts are trusted; otherwise the
+        # ledger alone says what is still held. Exactly-once comes from the
+        # idempotency keys, not from the row status.
+        order_hold = get_order_hold(order_id, hasura_endpoint, hasura_admin_secret)
+        row_active = order_hold is not None and order_hold.status == "active"
+        if order_hold is not None and not row_active:
             log_info(
-                "Item settlement already applied; releasing only remaining held amounts",
+                "cancel_hold_row_not_active",
                 order_id=order_id,
+                hold_id=order_hold.id,
+                hold_status=order_hold.status,
+                note="releasing from the order-ref ledger only",
             )
+
+        is_deposit_order = is_reservation_deposit_order(order)
+        if is_deposit_order:
+            log_info(
+                "cancel_release_deposit_order",
+                order_id=order_id,
+                deposit_status=getattr(order, "deposit_status", None),
+                note="deposit settled by backend; releasing only order-ref holds",
+            )
+
+        release_key_prefix = cancel_release_key_prefix(order_id)
         release_failures = []
-        
-        # Release agent hold if agent is assigned
-        agent_hold_amount = order_hold.agent_hold_amount
-        if order.assigned_agent and order.assigned_agent.user_id and agent_hold_amount > 0:
+
+        # Release agent hold if agent is assigned (capped by the agent's order-ref ledger hold).
+        # No active row: the agent's order-ref ledger hold (if any) is the amount.
+        agent_hold_amount = order_hold.agent_hold_amount if row_active else None
+        if (
+            order.assigned_agent
+            and order.assigned_agent.user_id
+            and (agent_hold_amount is None or agent_hold_amount > 0)
+        ):
             agent_user_id = order.assigned_agent.user_id
             agent_account = get_account_by_user_and_currency(
                 agent_user_id,
@@ -678,21 +716,43 @@ def process_cancellation_financials(
             )
             
             if agent_account:
-                log_info("Releasing agent hold", order_id=order_id, amount=agent_hold_amount)
-                transaction_id = register_account_transaction(
+                agent_held = get_reference_held_amount(
                     agent_account.id,
-                    agent_hold_amount,
-                    "release",
-                    f"Hold released for order {order.order_number}",
                     order_id,
                     hasura_endpoint,
-                    hasura_admin_secret
+                    hasura_admin_secret,
+                    exclude_release_key_prefix=release_key_prefix,
                 )
-                if transaction_id:
-                    log_info("Agent hold released successfully", order_id=order_id, transaction_id=transaction_id)
-                else:
-                    release_failures.append("agent hold")
-                    log_error("Failed to release agent hold", order_id=order_id)
+                agent_requested = agent_held if agent_hold_amount is None else agent_hold_amount
+                agent_release = round(max(0.0, min(agent_requested, agent_held)), 2)
+                if agent_release < agent_requested:
+                    log_error(
+                        "cancel_release_capped",
+                        order_id=order_id,
+                        party="agent",
+                        requested=agent_requested,
+                        held=agent_held,
+                    )
+                if agent_release > 0:
+                    log_info("Releasing agent hold", order_id=order_id, amount=agent_release)
+                    transaction_id = register_account_transaction(
+                        agent_account.id,
+                        agent_release,
+                        "release",
+                        f"Hold released for order {order.order_number}",
+                        order_id,
+                        hasura_endpoint,
+                        hasura_admin_secret,
+                        idempotency_key=f"{release_key_prefix}agent",
+                    )
+                    if transaction_id:
+                        log_info("Agent hold released successfully", order_id=order_id, transaction_id=transaction_id)
+                    else:
+                        release_failures.append("agent hold")
+                        log_error("Failed to release agent hold", order_id=order_id)
+            elif agent_hold_amount is None:
+                # Nothing on record to release for the agent; do not fail the cancel.
+                log_info("Agent account not found; no agent hold on record", order_id=order_id, agent_user_id=agent_user_id)
             else:
                 release_failures.append("agent hold")
                 log_error("Agent account not found", order_id=order_id, agent_user_id=agent_user_id)
@@ -710,15 +770,14 @@ def process_cancellation_financials(
             log_error("Client account not found", order_id=order_id, client_user_id=client_user_id)
             return {"success": False, "error": "Client account not found"}
         
-        # Process cancellation fee
+        # Resolve the cancellation fee BEFORE moving money so a config failure
+        # never releases holds with the fee silently waived.
         cancellation_fee = 0.0
         fee_applies = client_cancellation_fee_applies(
             order, cancelled_by, previous_status, cancellation_reason
         )
         if fee_applies:
-            # Client cancelling after confirmation - fee applies
             log_info("Client cancelled after confirmation, checking for cancellation fee", order_id=order_id, previous_status=previous_status)
-            
             try:
                 cancellation_fee = compute_cancellation_fee(
                     order, order_id, hasura_endpoint, hasura_admin_secret
@@ -731,63 +790,64 @@ def process_cancellation_financials(
                     order_id=order_id,
                 )
                 return {"success": False, "error": "Failed to resolve cancellation fee"}
-
-            if cancellation_fee > 0:
-                # Get business location account (or legacy business account)
-                business_user_id = order.business.user_id
-                business_location_id = getattr(order, "business_location_id", None)
-                business_account = get_account_by_user_and_currency(
-                    business_user_id,
-                    order.currency,
-                    hasura_endpoint,
-                    hasura_admin_secret,
-                    business_location_id=business_location_id,
-                )
-
-                if not business_account:
-                    log_error("Business account not found", order_id=order_id, business_user_id=business_user_id)
-                    return {"success": False, "error": "Business account not found"}
-
-                platform_account_id = resolve_platform_account_id(
-                    order.currency, hasura_endpoint, hasura_admin_secret
-                )
-                fee_result = register_cancellation_fee_transactions(
-                    order_id,
-                    order.order_number,
-                    client_account.id,
-                    business_account.id,
-                    cancellation_fee,
-                    order.currency,
-                    hasura_endpoint,
-                    hasura_admin_secret,
-                    platform_account_id=platform_account_id,
-                )
-
-                if not fee_result.get("success"):
-                    log_error("Failed to register cancellation fee transactions", order_id=order_id, error=fee_result.get("error"))
-                    return {"success": False, "error": "Failed to process cancellation fee"}
-
-                log_info("Cancellation fee transactions registered successfully", order_id=order_id)
-            else:
-                log_info("Cancellation fee is 0 for this order, nothing to charge", order_id=order_id)
-
         elif cancelled_by == "business":
             log_info("Business cancelled order, no cancellation fee", order_id=order_id)
-        
-        # Release client hold (minus cancellation fee if applicable)
-        client_hold_amount = order_hold.client_hold_amount
-        refund_amount = client_hold_amount - cancellation_fee
-        
-        if refund_amount > 0:
-            log_info("Releasing client hold", order_id=order_id, amount=refund_amount, cancellation_fee=cancellation_fee)
+
+        # Client: release the order's own hold in full, capped by what the ledger
+        # actually holds for this order. The fee is charged afterwards from the
+        # released funds, so nothing is left stranded in withheld.
+        client_held = get_reference_held_amount(
+            client_account.id,
+            order_id,
+            hasura_endpoint,
+            hasura_admin_secret,
+            exclude_release_key_prefix=release_key_prefix,
+        )
+        if row_active:
+            requested_items = order_hold.client_hold_amount
+            requested_delivery = order_hold.delivery_fees
+        else:
+            # No row / inactive row: only ledger holds actually created for this order.
+            requested_items = client_held
+            requested_delivery = 0.0
+        items_release = round(max(0.0, min(requested_items, client_held)), 2)
+        delivery_release = round(
+            max(0.0, min(requested_delivery, client_held - items_release)), 2
+        )
+        client_release_total = round(items_release + delivery_release, 2)
+        requested_total = round(requested_items + requested_delivery, 2)
+        if client_release_total < requested_total:
+            # Expected on deposit orders (the backend writes total - deposit to the row
+            # at agent claim with no ledger hold behind it); an anomaly otherwise.
+            capped_log = log_info if is_deposit_order and client_held == 0 else log_error
+            capped_log(
+                "cancel_release_capped",
+                order_id=order_id,
+                party="client",
+                requested=requested_total,
+                held=client_held,
+                deposit_order=is_deposit_order,
+            )
+        if client_held > client_release_total:
+            log_error(
+                "cancel_release_ledger_exceeds_row",
+                order_id=order_id,
+                held=client_held,
+                releasing=client_release_total,
+                left_held=round(client_held - client_release_total, 2),
+            )
+
+        if items_release > 0:
+            log_info("Releasing client hold", order_id=order_id, amount=items_release, cancellation_fee=cancellation_fee)
             transaction_id = register_account_transaction(
                 client_account.id,
-                refund_amount,
+                items_release,
                 "release",
-                f"Hold released for order {order.order_number}" + (f" (cancellation fee: {cancellation_fee} deducted)" if cancellation_fee > 0 else ""),
+                f"Hold released for order {order.order_number}",
                 order_id,
                 hasura_endpoint,
-                hasura_admin_secret
+                hasura_admin_secret,
+                idempotency_key=f"{release_key_prefix}client",
             )
             if transaction_id:
                 log_info("Client hold released successfully", order_id=order_id, transaction_id=transaction_id)
@@ -795,18 +855,17 @@ def process_cancellation_financials(
                 release_failures.append("client hold")
                 log_error("Failed to release client hold", order_id=order_id)
         
-        # Release delivery fees hold
-        delivery_fees = order_hold.delivery_fees
-        if delivery_fees > 0:
-            log_info("Releasing delivery fees hold", order_id=order_id, amount=delivery_fees)
+        if delivery_release > 0:
+            log_info("Releasing delivery fees hold", order_id=order_id, amount=delivery_release)
             transaction_id = register_account_transaction(
                 client_account.id,
-                delivery_fees,
+                delivery_release,
                 "release",
                 f"Hold released for order {order.order_number} delivery fee",
                 order_id,
                 hasura_endpoint,
-                hasura_admin_secret
+                hasura_admin_secret,
+                idempotency_key=f"{release_key_prefix}delivery",
             )
             if transaction_id:
                 log_info("Delivery fees hold released successfully", order_id=order_id, transaction_id=transaction_id)
@@ -819,17 +878,85 @@ def process_cancellation_financials(
             log_error("Failed to release all cancellation holds", order_id=order_id, failed_releases=failed_releases)
             return {"success": False, "error": f"Failed to release: {failed_releases}"}
 
-        # Update order hold status to cancelled
-        success = update_order_hold_status(
-            order_hold.id,
-            "cancelled",
-            hasura_endpoint,
-            hasura_admin_secret
-        )
-        
-        if not success:
-            log_error("Failed to update order hold status", order_id=order_id)
-            return {"success": False, "error": "Failed to update order hold status"}
+        if cancellation_fee > 0:
+            if cancellation_fee > client_release_total:
+                # The fee is not covered by money this cancellation returned, so it
+                # comes out of unrelated available funds (e.g. an uncaptured card
+                # authorization has no wallet hold). Kept as-is; surfaced for review.
+                log_error(
+                    "cancel_fee_exceeds_released",
+                    order_id=order_id,
+                    cancellation_fee=cancellation_fee,
+                    released=client_release_total,
+                    payment_source=getattr(order, "payment_source", None),
+                    payment_status=getattr(order, "payment_status", None),
+                )
+            business_user_id = order.business.user_id
+            business_location_id = getattr(order, "business_location_id", None)
+            business_account = get_account_by_user_and_currency(
+                business_user_id,
+                order.currency,
+                hasura_endpoint,
+                hasura_admin_secret,
+                business_location_id=business_location_id,
+            )
+
+            if not business_account:
+                log_error("Business account not found", order_id=order_id, business_user_id=business_user_id)
+                return {"success": False, "error": "Business account not found"}
+
+            platform_account_id = resolve_platform_account_id(
+                order.currency, hasura_endpoint, hasura_admin_secret
+            )
+            if not platform_account_id:
+                # Fee legs must not be skipped: without HQ the split cannot complete.
+                # Release already posted (keyed); raising via the caller retries the
+                # fee without re-releasing.
+                log_error(
+                    "cancel_fee_legs_failed: platform account not resolved",
+                    order_id=order_id,
+                    currency=order.currency,
+                    cancellation_fee=cancellation_fee,
+                )
+                return {"success": False, "error": "Platform account not found for cancellation fee"}
+
+            fee_result = register_cancellation_fee_transactions(
+                order_id,
+                order.order_number,
+                client_account.id,
+                business_account.id,
+                cancellation_fee,
+                order.currency,
+                hasura_endpoint,
+                hasura_admin_secret,
+                platform_account_id=platform_account_id,
+                idempotency_key_prefix=f"order:{order_id}:cancel_fee",
+            )
+
+            if not fee_result.get("success"):
+                log_error(
+                    "cancel_fee_legs_failed: Failed to register cancellation fee transactions",
+                    order_id=order_id,
+                    error=fee_result.get("error"),
+                    cancellation_fee=cancellation_fee,
+                    client_released=client_release_total,
+                )
+                return {"success": False, "error": "Failed to process cancellation fee"}
+
+            log_info("Cancellation fee transactions registered successfully", order_id=order_id)
+        elif fee_applies:
+            log_info("Cancellation fee is 0 for this order, nothing to charge", order_id=order_id)
+
+        if row_active:
+            success = update_order_hold_status(
+                order_hold.id,
+                "cancelled",
+                hasura_endpoint,
+                hasura_admin_secret
+            )
+            if not success:
+                log_error("Failed to update order hold status", order_id=order_id)
+                return {"success": False, "error": "Failed to update order hold status"}
         
         log_info("Cancellation financial processing completed successfully", order_id=order_id, cancellation_fee=cancellation_fee)
         return {"success": True, "cancellation_fee": cancellation_fee}
@@ -870,15 +997,9 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
         log_error("Failed to retrieve Hasura admin secret", error=e)
         return {"success": False, "error": "Failed to retrieve Hasura admin secret"}
 
-    _send_slack_order_alert_safe(
-        message.orderId,
-        "order.cancelled",
-        environment,
-        message.cancellationReason,
-        message.cancelledBy,
-    )
-    
-    # Process cancellation financials
+    # Financials first. On failure raise so SQS retries the message; Slack and
+    # Stripe have not run yet, so a retry does not re-alert or re-refund. Release
+    # and fee legs are keyed, so a retry completes only the missing steps.
     financial_result = process_cancellation_financials(
         message.orderId,
         message.cancelledBy,
@@ -887,10 +1008,26 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
         hasura_admin_secret,
         message.cancellationReason,
     )
-    
+
     if not financial_result.get("success"):
-        log_error("Cancellation financial processing failed", order_id=message.orderId, error=financial_result.get("error"))
-        # Continue even if financial processing fails - order is already cancelled
+        log_error(
+            "cancel_financials_failed: Cancellation financial processing failed; "
+            "leaving message retryable (Slack/Stripe not run)",
+            order_id=message.orderId,
+            error=financial_result.get("error"),
+        )
+        raise RuntimeError(
+            f"cancel_financials_failed order={message.orderId}: "
+            f"{financial_result.get('error')}"
+        )
+
+    _send_slack_order_alert_safe(
+        message.orderId,
+        "order.cancelled",
+        environment,
+        message.cancellationReason,
+        message.cancelledBy,
+    )
 
     # Trigger Stripe refund if order was paid via credit card
     stripe_refund_result = trigger_stripe_refund_safe(
@@ -904,7 +1041,7 @@ def handle_order_cancelled(event: Dict[str, Any]) -> Dict[str, Any]:
     # Cancellation emails are sent by the backend when status is updated to cancelled
 
     return {
-        "success": financial_result.get("success", False),
+        "success": True,
         "financial_processing": financial_result,
         "cancellation_fee": financial_result.get("cancellation_fee", 0),
         "stripe_refund": stripe_refund_result,
@@ -1068,6 +1205,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             elif event_type == "order.status.updated":
                 result = handle_order_status_updated({"Records": [record]})
             elif event_type == "order.cancelled":
+                # cancel_financials_failed raises so SQS retries; do not swallow.
                 result = handle_order_cancelled({"Records": [record]})
             else:
                 log_error("Unknown event type", event_type=event_type, order_id=message.orderId)
@@ -1100,6 +1238,11 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         log_error("Unhandled error in Lambda handler", error=e)
         import traceback
         traceback.print_exc()
+        # Re-raise cancel financial failures so the SQS message is not deleted and
+        # can retry (release/fee keys make a retry safe; Slack/Stripe run only after
+        # financials succeed).
+        if "cancel_financials_failed" in str(e):
+            raise
         return {
             "success": False,
             "error": str(e),

@@ -137,6 +137,98 @@ describe('OrderRecipientNotificationsService', () => {
       expect(sms.sendSms).not.toHaveBeenCalled();
     });
 
+    it('does not offer complete when the diaspora pickup is still unpaid', async () => {
+      build({
+        ...THIRD_PARTY_ORDER,
+        recipient_notify_whatsapp: true,
+        fulfillment_method: 'pickup',
+        is_diaspora_order: true,
+        payment_status: 'pending',
+      });
+
+      await service.notifyStatusChange('order-1', 'ready_for_pickup');
+
+      expect(whatsApp.send.mock.calls[0][0].payload.templateKey).toBe(
+        'recipient_order_ready'
+      );
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('binds a paid diaspora pickup and skips delivery even when paid', async () => {
+      build({
+        ...THIRD_PARTY_ORDER,
+        recipient_notify_whatsapp: true,
+        fulfillment_method: 'pickup',
+        is_diaspora_order: true,
+        payment_status: 'paid',
+      });
+      whatsApp.send.mockResolvedValue({
+        status: 'sent',
+        providerMessageId: 'wamid.paid',
+      });
+
+      await service.notifyStatusChange('order-1', 'ready_for_pickup');
+
+      expect(whatsApp.send.mock.calls[0][0].payload.templateKey).toBe(
+        'recipient_complete_pickup'
+      );
+      expect(hasura.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('BindRecipientComplete'),
+        expect.objectContaining({
+          object: expect.objectContaining({
+            provider_message_id: 'wamid.paid',
+            entity_id: 'order-1',
+          }),
+        })
+      );
+
+      build({
+        ...THIRD_PARTY_ORDER,
+        recipient_notify_whatsapp: true,
+        fulfillment_method: 'delivery',
+        is_diaspora_order: true,
+        payment_status: 'paid',
+      });
+      await service.notifyStatusChange('order-2', 'ready_for_pickup');
+      expect(whatsApp.send.mock.calls[0][0].payload.templateKey).toBe(
+        'recipient_order_ready'
+      );
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('does not bind without a provider id, and a bind failure still counts as sent', async () => {
+      build({
+        ...THIRD_PARTY_ORDER,
+        recipient_notify_whatsapp: true,
+        fulfillment_method: 'pickup',
+        is_diaspora_order: true,
+        payment_status: 'authorized',
+      });
+      whatsApp.send.mockResolvedValue({ status: 'sent' });
+
+      await service.notifyStatusChange('order-1', 'ready_for_pickup');
+      expect(hasura.executeMutation).not.toHaveBeenCalled();
+      expect(sms.sendSms).not.toHaveBeenCalled();
+
+      build({
+        ...THIRD_PARTY_ORDER,
+        recipient_notify_whatsapp: true,
+        fulfillment_method: 'pickup',
+        is_diaspora_order: true,
+        payment_status: 'authorized',
+      });
+      whatsApp.send.mockResolvedValue({
+        status: 'sent',
+        providerMessageId: 'wamid.bind-fail',
+      });
+      hasura.executeMutation.mockRejectedValue(new Error('hasura down'));
+
+      await expect(
+        service.notifyStatusChange('order-1', 'ready_for_pickup')
+      ).resolves.toBeUndefined();
+      expect(sms.sendSms).not.toHaveBeenCalled();
+    });
+
     it('keeps the ready notice for a non-diaspora pickup', async () => {
       build({
         ...THIRD_PARTY_ORDER,

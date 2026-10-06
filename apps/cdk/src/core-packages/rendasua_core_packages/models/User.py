@@ -23,7 +23,7 @@ class User(BaseModel):
     email_verified: Optional[bool] | None = None
     first_name: str
     id: str
-    identifier: str
+    identifier: Optional[str] = None
     last_name: str
     phone_number: Optional[str] | None = None
     phone_number_verified: Optional[bool] | None = None

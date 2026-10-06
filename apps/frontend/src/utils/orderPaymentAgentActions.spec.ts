@@ -30,4 +30,23 @@ describe('orderNeedsPayAtDeliveryAgentActions', () => {
       })
     ).toBe(false);
   });
+
+  it('hides collect-at-delivery actions for flagged non-cooked goods pay-after', () => {
+    expect(
+      orderNeedsPayAtDeliveryAgentActions({
+        payment_timing: 'pay_now',
+        payment_method: 'mobile_money',
+        pay_after_merchant_confirm: true,
+      })
+    ).toBe(false);
+  });
+
+  it('hides collect-at-pickup actions for flagged location pickup pay-after', () => {
+    expect(
+      orderNeedsPayAtDeliveryAgentActions({
+        payment_timing: 'pay_at_pickup',
+        pay_after_merchant_confirm: true,
+      })
+    ).toBe(false);
+  });
 });

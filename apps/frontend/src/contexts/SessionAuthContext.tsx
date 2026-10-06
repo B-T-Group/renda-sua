@@ -12,6 +12,7 @@ import React, {
 import { environment } from '../config/environment';
 import { personaAuthorizationParams } from '../services/tokenService';
 import { readStoredActivePersonaSlug } from '../utils/activePersonaStorage';
+import { clearAssistantChatStorage } from './assistantChatStorage';
 
 type JwtPayload = Record<string, any>;
 
@@ -294,6 +295,8 @@ export const SessionAuthProvider: React.FC<{ children: ReactNode }> = ({
   );
 
   const logout = useCallback(async () => {
+    // Chat history must not outlive the session in this tab (it can hold order/address data).
+    clearAssistantChatStorage();
     clearPasswordlessSession();
     // Call backend logout to clear session cookie
     try {

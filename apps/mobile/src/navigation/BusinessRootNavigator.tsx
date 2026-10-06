@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StyleSheet, View } from 'react-native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../contexts/ThemeContext';
+import { useStore } from '../stores/RootStore';
 
 import BusinessDashboardScreen from '../screens/business/BusinessDashboardScreen';
 import BusinessMenuTabScreen from '../screens/business/BusinessMenuTabScreen';
@@ -88,6 +89,10 @@ import TermsScreen from '../screens/shared/TermsScreen';
 import PrivacyPolicyScreen from '../screens/shared/PrivacyPolicyScreen';
 import FAQScreen from '../screens/shared/FAQScreen';
 import AssistantChatScreen from '../screens/shared/AssistantChatScreen';
+import {
+  AssistantHeaderTitle,
+  AssistantHeaderRight,
+} from '../components/assistant/AssistantHeaderComponents';
 import MessagesScreen from '../screens/shared/MessagesScreen';
 import ThreadDetailScreen from '../screens/shared/ThreadDetailScreen';
 import SupportTicketsScreen from '../screens/shared/SupportTicketsScreen';
@@ -268,6 +273,7 @@ export function BusinessRootNavigator() {
   useBusinessOrdersLive();
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
+  const store = useStore();
 
   return (
     <OwnerOrdersApiProvider>
@@ -759,7 +765,10 @@ export function BusinessRootNavigator() {
           name="AssistantChat"
           component={AssistantChatScreen}
           options={{
-            title: t('assistant.title', 'Rendasua Assistant'),
+            headerTitle: () => <AssistantHeaderTitle />,
+            headerRight: () => (
+              <AssistantHeaderRight onPress={() => store.assistant.clearChat()} />
+            ),
             headerBackTitle: t('business.tabs.dashboard', 'Dashboard'),
           }}
         />

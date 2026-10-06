@@ -69,6 +69,8 @@ import {
 import { PdfService } from '../pdf/pdf.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
+import { SiteEventsService } from '../site-events/site-events.service';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { StripeCaptureService } from '../stripe-payments/stripe-capture.service';
 import { StripeCheckoutService } from '../stripe-payments/stripe-checkout.service';
@@ -173,9 +175,14 @@ import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { shouldReuseConfirmedDeliveryWindow } from './confirm-existing-delivery-window.util';
 import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
+import { remainderTimingLabel } from './remainder-timing-label.util';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService } from './deposit-ledger.service';
-import { DepositRefundService } from './deposit-refund.service';
+import {
+  DepositForfeitReason,
+  DepositRefundService,
+  RESOLVED_DEPOSIT_STATUSES,
+} from './deposit-refund.service';
 import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
 
@@ -600,6 +607,7 @@ export class OrdersService {
     private readonly depositLedgerService: DepositLedgerService,
     private readonly depositRefundService: DepositRefundService,
     private readonly variantInventory: VariantInventoryService,
+    private readonly siteEventsService: SiteEventsService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
     @Optional()
@@ -1054,9 +1062,9 @@ export class OrdersService {
         ...restOrder
       } = order;
 
-      // Agents must not see GMV (total_amount), but need remainder when deposit is paid
+      // Agents must not see GMV (total_amount), but need remainder when deposit is paid/applied
       const depositPaid =
-        order.deposit_status === 'paid' && Number(order.deposit_amount) > 0;
+        this.depositCalculationService.isDepositCollected(order);
       const amountDue = depositPaid
         ? this.depositCalculationService.remainderPaymentAmount(order)
         : undefined;
@@ -2588,7 +2596,11 @@ export class OrdersService {
       );
   }
 
-  async claimOrder(request: GetOrderRequest, platformHeader?: string) {
+  async claimOrder(
+    request: GetOrderRequest,
+    platformHeader?: string,
+    fundsCheckSource?: 'claim' | 'offer_accept'
+  ) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
       user,
@@ -2627,7 +2639,7 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
-    const holdAmount = await this.resolveOrderHoldAmount(order);
+    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
       order.currency
@@ -2641,13 +2653,32 @@ export class OrdersService {
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // balance checks
     if (holdAmount > 0) {
-      if (Number(agentAccount.available_balance) < 0) {
+      const availableBalance = Number(agentAccount.available_balance);
+      // Emit funds check (Phase 0 #453)
+      this.emitClaimFundsCheck({
+        orderId: order.id,
+        orderNumber: order.order_number,
+        agentId: agent.id,
+        city: (order as any).business_location?.address?.city ?? null,
+        state: (order as any).business_location?.address?.state ?? null,
+        subtotal: order.subtotal,
+        currency: order.currency,
+        holdPercentage,
+        holdAmount,
+        availableBalance,
+        needsTopUp: availableBalance < holdAmount,
+        hasEnoughFunds: availableBalance >= holdAmount,
+        rail,
+        source: fundsCheckSource || 'claim',
+      });
+
+      if (availableBalance < 0) {
         throw new HttpException(
           `Account balance is negative. Please top up your account before claiming orders. Current balance: ${agentAccount.available_balance} ${order.currency}`,
           HttpStatus.FORBIDDEN
         );
       }
-      if (Number(agentAccount.available_balance) < holdAmount)
+      if (availableBalance < holdAmount)
         throw new HttpException(
           `Insufficient balance. Required: ${holdAmount} ${order.currency}, Available: ${agentAccount.available_balance} ${order.currency}`,
           HttpStatus.FORBIDDEN
@@ -2774,7 +2805,7 @@ export class OrdersService {
     }
 
     try {
-      return await this.claimOrder(request, platformHeader);
+      return await this.claimOrder(request, platformHeader, 'offer_accept');
     } catch (error: any) {
       const responseError =
         error instanceof HttpException
@@ -2865,7 +2896,7 @@ export class OrdersService {
 
     // Calculate required hold amount (0 for internal agents and
     // Stripe-enabled orders, which do not require a caution/hold)
-    const holdAmount = await this.resolveOrderHoldAmount(order);
+    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
 
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // payment and assign directly
@@ -2922,6 +2953,25 @@ export class OrdersService {
       user.id,
       order.currency
     );
+    const availableBalance = Number(agentAccount?.available_balance ?? 0);
+
+    // Emit funds check (Phase 0 #453)
+    this.emitClaimFundsCheck({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      agentId: agent.id,
+      city: (order as any).business_location?.address?.city ?? null,
+      state: (order as any).business_location?.address?.state ?? null,
+      subtotal: order.subtotal,
+      currency: order.currency,
+      holdPercentage,
+      holdAmount,
+      availableBalance,
+      needsTopUp: availableBalance < holdAmount,
+      hasEnoughFunds: availableBalance >= holdAmount,
+      rail,
+      source: 'claim_topup',
+    });
 
     // Get payment provider from the order item country (not the agent's phone).
     const phoneNumber = await this.resolveClaimTopupPhone(
@@ -2991,6 +3041,18 @@ export class OrdersService {
           }
         );
 
+        // Emit topup failed event for initiation failure (Phase 0 #453)
+        emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_failed', {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          agentId: agent.id,
+          holdAmount,
+          transactionId: paymentTransaction.transactionId,
+          provider,
+          currency: order.currency,
+          reason: 'initiation_failed',
+        });
+
         throw new HttpException(
           {
             success: false,
@@ -3019,6 +3081,17 @@ export class OrdersService {
       this.logger.log(
         `Payment initiated successfully for claim order ${order.order_number}, transaction ID: ${paymentTransaction.transactionId}`
       );
+
+      // Emit topup started event (Phase 0 #453)
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_started', {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        agentId: agent.id,
+        holdAmount,
+        transactionId: paymentTransaction.transactionId,
+        provider,
+        currency: order.currency,
+      });
 
       // Schedule payment timeout (wait-and-execute state machine)
       try {
@@ -3139,6 +3212,17 @@ export class OrdersService {
         error_code: 'CLAIM_REQUEST_CANCELLED',
       }
     );
+
+    // Emit topup cancelled event (Phase 0 #453)
+    emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_cancelled', {
+      orderId: order.id,
+      orderNumber: order.order_number,
+      agentId: agent.id,
+      holdAmount: pendingClaimTransaction.amount ?? 0,
+      transactionId: pendingClaimTransaction.transaction_id,
+      provider: pendingClaimTransaction.provider,
+      currency: pendingClaimTransaction.currency ?? order.currency,
+    });
 
     return {
       success: true,
@@ -5481,6 +5565,24 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
+
+    const depositAmount = Number((order as any).deposit_amount) || 0;
+    const depositStatus = (order as any).deposit_status as string | undefined;
+    if (
+      depositAmount > 0 &&
+      depositStatus &&
+      ['paid', 'applied', 'forfeited'].includes(depositStatus)
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            'Cash exception is not available for orders with reservation deposits. Please contact support or use mobile payment reconciliation.',
+          error: 'CASH_EXCEPTION_BLOCKED_FOR_DEPOSIT_ORDER',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
     if (order.current_status !== 'out_for_delivery') {
       throw new HttpException(
         'Cash exception can only be reported when order is out for delivery',
@@ -5611,6 +5713,24 @@ export class OrdersService {
     if (paymentTiming !== 'pay_at_delivery') {
       throw new HttpException(
         'Cash exception mobile reconciliation is only for pay-at-delivery orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const depositAmount = Number((order as any).deposit_amount) || 0;
+    const depositStatus = (order as any).deposit_status as string | undefined;
+    if (
+      depositAmount > 0 &&
+      depositStatus &&
+      ['paid', 'applied', 'forfeited'].includes(depositStatus)
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            'Cash exception reconciliation is not available for orders with reservation deposits.',
+          error: 'CASH_EXCEPTION_BLOCKED_FOR_DEPOSIT_ORDER',
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -5973,14 +6093,14 @@ export class OrdersService {
     );
     const order = await this.requireOrder(orderId);
     const clock = await loadPickupNoshowClock(this.hasuraSystemService, order as any, this.logger);
-    const quote = await this.quoteNoshowFee(order);
+    const quote = await this.quoteNoshowOutcome(order);
     return {
       success: true,
       ...clock,
       ...quote,
       canCancel:
         clock.canCancel &&
-        (this.paidPickupReady(order) || this.deliveryCookedReady(order)),
+        (this.noshowCancelEligible(order) || this.deliveryCookedReady(order)),
       pickupReminderLastSentAt: (order as any).pickup_reminder_last_sent_at ?? null,
     };
   }
@@ -6018,16 +6138,16 @@ export class OrdersService {
     failure_reason_id: string;
     notes?: string;
   }) {
-    await this.requireBusinessOrderAccess(
+    const userId = await this.requireBusinessOrderAccess(
       request.orderId,
       'Only business users can cancel an uncollected pickup',
       'Unauthorized to cancel this pickup'
     );
     const order = await this.requireOrder(request.orderId);
     if (this.isCookedFailPickupOrder(order)) return this.failPickup(request);
-    this.assertPaidPickupNoshow(order);
+    this.assertNoshowCancellable(order);
     await this.requireNoshowWindow(order);
-    return this.commitUncollectedPickupCancel(order, request);
+    return this.commitUncollectedPickupCancel(order, request, userId);
   }
 
   async failPickup(request: {
@@ -6175,6 +6295,12 @@ export class OrdersService {
         `Failed to enqueue fail-pickup refund for ${request.orderId}: ${error?.message}`
       );
     }
+    await this.handleNoshowDeposit(
+      order,
+      request.orderId,
+      'ready_for_pickup',
+      request.notes
+    );
     return {
       success: true,
       order,
@@ -6369,6 +6495,7 @@ export class OrdersService {
         `Failed to enqueue fail-pickup refund for ${orderId}: ${error?.message}`
       );
     }
+    await this.handleNoshowDeposit(order, orderId, previousStatus, notes);
   }
 
   private assertCookedFoodFailPickupEligible(order: Orders): void {
@@ -6452,12 +6579,78 @@ export class OrdersService {
     );
   }
 
-  private assertPaidPickupNoshow(order: Orders): void {
-    if (this.paidPickupReady(order)) return;
+  /** Classic MoMo pay-at-pickup / pay-at-delivery (not cooked pay-after-confirm). */
+  private isClassicDeferredPayment(order: Orders): boolean {
+    const timing = (order as any).payment_timing;
+    return (
+      (timing === 'pay_at_pickup' || timing === 'pay_at_delivery') &&
+      (order as any).pay_after_merchant_confirm !== true
+    );
+  }
+
+  /**
+   * Unpaid pay-at-pickup order whose reservation deposit is captured and still
+   * held, ready, not collected. The deposit is the only no-show penalty here.
+   */
+  private unpaidDepositPickupReady(order: Orders): boolean {
+    if (order.fulfillment_method !== 'pickup') return false;
+    if (order.current_status !== 'ready_for_pickup') return false;
+    if ((order as any).payment_timing !== 'pay_at_pickup') return false;
+    if ((order as any).pay_after_merchant_confirm === true) return false;
+    const payment = (order.payment_status || '').toLowerCase();
+    if (payment !== 'pending' && payment !== 'pending_payment') return false;
+    return (
+      (order as any).deposit_status === 'paid' &&
+      Number((order as any).deposit_amount) > 0
+    );
+  }
+
+  /**
+   * Goods no-show cancel:
+   * - paid pay-now pickup (percent fee, client refunded the rest), or
+   * - unpaid pay-at-pickup with a held deposit (deposit forfeited, no fee).
+   * Never a paid classic pay-at-pickup/delivery order: settlement already
+   * consumed its deposit and paid the merchant (QA #459 B-1 / N-3).
+   */
+  private noshowCancelEligible(order: Orders): boolean {
+    if (this.unpaidDepositPickupReady(order)) return true;
+    return this.paidPickupReady(order) && !this.isClassicDeferredPayment(order);
+  }
+
+  private assertNoshowCancellable(order: Orders): void {
+    if (this.noshowCancelEligible(order)) return;
+    if (this.paidPickupReady(order)) {
+      throw new HttpException(
+        'This order was already paid at pickup, so it cannot be cancelled as a no-show. Use a refund instead.',
+        HttpStatus.BAD_REQUEST
+      );
+    }
     throw new HttpException(
-      'Only a paid pickup that is ready can be cancelled as a no-show',
+      'Only a ready pickup that is paid, or a pay-at-pickup order with a paid reservation deposit, can be cancelled as a no-show',
       HttpStatus.BAD_REQUEST
     );
+  }
+
+  /** Fee/refund preview; the deposit case keeps the deposit instead of a fee. */
+  private async quoteNoshowOutcome(order: Orders) {
+    if (this.unpaidDepositPickupReady(order)) {
+      return {
+        cancellationFee: 0,
+        cancellationFeePercent: 0,
+        merchantShare: 0,
+        platformShare: 0,
+        refundAmount: 0,
+        currency: order.currency,
+        depositForfeitAmount: Number((order as any).deposit_amount) || 0,
+        noshowPenalty: 'deposit' as const,
+      };
+    }
+    const quote = await this.quoteNoshowFee(order);
+    return {
+      ...quote,
+      depositForfeitAmount: 0,
+      noshowPenalty: quote.cancellationFee > 0 ? ('fee' as const) : ('none' as const),
+    };
   }
 
   private isCookedFailPickupOrder(order: Orders): boolean {
@@ -6495,37 +6688,92 @@ export class OrdersService {
 
   private async commitUncollectedPickupCancel(
     order: Orders,
-    request: { orderId: string; failure_reason_id: string; notes?: string }
+    request: { orderId: string; failure_reason_id: string; notes?: string },
+    actorUserId?: string
   ) {
     const reason = await this.assertActivePickupFailureReason(
       request.failure_reason_id
     );
-    const quote = await this.quoteNoshowFee(order);
+    const quote = await this.quoteNoshowOutcome(order);
     await this.releaseStripeAuthorizationIfNeeded(order);
     const previousStatus = order.current_status;
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
+    
+    const eligibleFromStatuses = ['ready_for_pickup'];
+    const casSuccess = await this.casCancelUncollectedPickup(
       request.orderId,
-      'cancelled',
-      { viaCancelEndpoint: true }
+      eligibleFromStatuses
     );
-    await this.finishNoshowCancel(order, request, previousStatus, reason);
+    if (!casSuccess) {
+      throw new HttpException(
+        'Order status has changed. Only orders in ready_for_pickup status can be cancelled as uncollected.',
+        HttpStatus.CONFLICT
+      );
+    }
+    
+    const updatedOrder = { 
+      id: request.orderId, 
+      current_status: 'cancelled' as const 
+    };
+    await this.finishNoshowCancel(
+      order,
+      request,
+      previousStatus,
+      reason,
+      actorUserId
+    );
     return {
       success: true,
       order: updatedOrder,
       refund_amount: quote.refundAmount,
       fee_retained: quote.cancellationFee,
       merchant_share: quote.merchantShare,
+      deposit_forfeit_amount: quote.depositForfeitAmount,
       message: 'Pickup cancelled because the client did not collect it',
     };
+  }
+
+  private async casCancelUncollectedPickup(
+    orderId: string,
+    eligibleFromStatuses: string[]
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
+      `
+      mutation CasCancelUncollectedPickup(
+        $orderId: uuid!
+        $eligibleFromStatuses: [order_status!]!
+        $now: timestamptz!
+      ) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _in: $eligibleFromStatuses }
+          }
+          _set: {
+            current_status: cancelled
+            updated_at: $now
+          }
+        ) { affected_rows }
+      }
+      `,
+      {
+        orderId,
+        eligibleFromStatuses,
+        now: new Date().toISOString(),
+      }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
 
   private async finishNoshowCancel(
     order: Orders,
     request: { orderId: string; notes?: string },
     previousStatus: string,
-    reason: string
+    reason: string,
+    actorUserId?: string
   ): Promise<void> {
-    const userId = await this.resolveOptionalUserId();
+    const userId = actorUserId ?? (await this.resolveOptionalUserId());
     const detail = [reason, request.notes].filter(Boolean).join('. ');
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -6541,7 +6789,8 @@ export class OrdersService {
       previousStatus,
       'business',
       request.notes,
-      CLIENT_NO_SHOW_REASON
+      CLIENT_NO_SHOW_REASON,
+      userId ?? undefined
     );
   }
 
@@ -7420,7 +7669,7 @@ export class OrdersService {
 
     if (!agent.is_verified) {
       const order = await this.getOrderWithItems(orderId);
-      const holdAmount = await this.resolveOrderHoldAmount(order);
+      const { holdAmount } = await this.resolveOrderHoldAmount(order);
       return this.createClaimAvailabilityFailure(
         holdAmount,
         'Complete account verification before claiming orders.'
@@ -7435,7 +7684,7 @@ export class OrdersService {
       );
     } catch (error: any) {
       const order = await this.getOrderWithItems(orderId);
-      const holdAmount = await this.resolveOrderHoldAmount(order);
+      const { holdAmount } = await this.resolveOrderHoldAmount(order);
       return this.createClaimAvailabilityFailure(
         holdAmount,
         error?.response?.error ??
@@ -7448,7 +7697,7 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
 
-    const holdAmount = await this.resolveOrderHoldAmount(order);
+    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
 
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
@@ -7492,12 +7741,30 @@ export class OrdersService {
       );
     if (hasPendingClaim) {
       return this.createClaimAvailabilityFailure(
-        holdAmount,
+        holdAmount, // Use result from earlier call
         'This order has a pending claim. Another agent may be completing payment. Please choose another order.'
       );
     }
 
     if (holdAmount <= 0) {
+      // Emit funds check without balance (Phase 0 #453)
+      this.emitClaimFundsCheck({
+        orderId: order.id,
+        orderNumber: order.order_number,
+        agentId: agent.id,
+        city: (order as any).business_location?.address?.city ?? null,
+        state: (order as any).business_location?.address?.state ?? null,
+        subtotal: order.subtotal,
+        currency: order.currency,
+        holdPercentage,
+        holdAmount,
+        availableBalance: 0,
+        needsTopUp: false,
+        hasEnoughFunds: true,
+        rail,
+        source: 'availability',
+      });
+
       return {
         success: true,
         orderOpenStatus: true,
@@ -7514,6 +7781,24 @@ export class OrdersService {
     );
     const availableBalance = Number(agentAccount?.available_balance ?? 0);
     const hasEnoughFundsForHold = availableBalance >= holdAmount;
+
+    // Emit funds check event (Phase 0 #453)
+    this.emitClaimFundsCheck({
+      orderId: order.id,
+      orderNumber: order.order_number,
+      agentId: agent.id,
+      city: (order as any).business_location?.address?.city ?? null,
+      state: (order as any).business_location?.address?.state ?? null,
+      subtotal: order.subtotal,
+      currency: order.currency,
+      holdPercentage,
+      holdAmount,
+      availableBalance,
+      needsTopUp: !hasEnoughFundsForHold,
+      hasEnoughFunds: hasEnoughFundsForHold,
+      rail,
+      source: 'availability',
+    });
 
     return {
       success: true,
@@ -7599,8 +7884,10 @@ export class OrdersService {
     }
 
     // Get comprehensive order data with all relationships
-    // For agents, exclude financial fields (total_amount, order_holds, order item prices)
-    // but keep base_delivery_fee, per_km_delivery_fee, and subtotal for commission and hold amount calculation
+    // For agents, exclude financial fields (order_holds, order item prices).
+    // base_delivery_fee, per_km_delivery_fee and subtotal feed commission / hold
+    // amounts; total_amount feeds amount_due (cash to collect after a deposit).
+    // transformOrderForAgentSync strips all of them from the response.
     const isAgent = isActivePersona(user, 'agent');
     const query = isAgent
       ? `
@@ -7627,6 +7914,7 @@ export class OrdersService {
           is_diaspora_order
           fulfillment_country
           subtotal
+          total_amount
           base_delivery_fee
           per_km_delivery_fee
           delivery_fee_waived
@@ -9124,7 +9412,17 @@ export class OrdersService {
       const order = await this.requireOrderDetailsByNumber(orderNumber);
       this.assertDepositCallbackTxnMatches(order, transactionDbId);
 
-      if ((order as any).deposit_status === 'paid') {
+      const depositStatus = (order as any).deposit_status as string | undefined;
+      if (depositStatus && RESOLVED_DEPOSIT_STATUSES.has(depositStatus)) {
+        // Late / replayed SUCCESS after the deposit was forfeited, refunded or
+        // applied: the ledger already has the credit; move nothing, do not throw.
+        this.logger.log(
+          `deposit_callback_noop order=${orderNumber} deposit_status=${depositStatus}`
+        );
+        return;
+      }
+
+      if (depositStatus === 'paid') {
         await this.repairPaidDepositHoldIfMissing(order, transactionDbId);
         if (this.isTerminalForDepositCallback(order.current_status)) {
           await this.refundPaidDepositOnTerminalOrder(order.id);
@@ -9415,7 +9713,9 @@ export class OrdersService {
     if (
       result.success ||
       result.errorCode === 'ALREADY_REFUNDED' ||
-      result.errorCode === 'DEPOSIT_NOT_CAPTURED'
+      result.errorCode === 'DEPOSIT_NOT_CAPTURED' ||
+      result.errorCode === 'DEPOSIT_FORFEITED' ||
+      result.errorCode === 'DEPOSIT_APPLIED'
     ) {
       return;
     }
@@ -9463,17 +9763,53 @@ export class OrdersService {
     const depositTxnId = (order as any)
       .deposit_mobile_payment_transaction_id as string | undefined;
     const userId = order.client?.user_id;
-    if ((order as any).deposit_status !== 'paid' || amount <= 0 || !depositTxnId || !userId) {
+    const status = (order as any).deposit_status;
+    // 'applied' = an earlier attempt already claimed it: resume the keyed moves.
+    if ((status !== 'paid' && status !== 'applied') || amount <= 0 || !depositTxnId || !userId) {
       return null;
     }
     return { amount, depositTxnId, userId };
   }
 
+  /**
+   * Settlement consumes the held deposit: claim it (paid → applied) before any
+   * ledger move so a racing no-show forfeit or refund cannot also take it.
+   * Returns true when the caller should run the (idempotent) deposit ledger moves.
+   */
+  private async claimDepositForSettlement(order: Orders): Promise<boolean> {
+    const status = await this.depositRefundService.claimDepositApplied(order.id);
+    if (status === 'applied') return true;
+    if (status === 'forfeited') this.throwForfeitedDepositAtSettlement(order);
+    this.logger.warn(
+      `deposit_not_applied_at_settlement order=${order.order_number} deposit_status=${status}`
+    );
+    return false;
+  }
+
+  /**
+   * The deposit went to HQ as a no-show / late-cancel penalty: never also count
+   * it in a settlement (the full item debit would charge the client for it twice).
+   */
+  private assertDepositNotForfeitedForSettlement(order: Orders): void {
+    const amount = Number((order as any).deposit_amount) || 0;
+    if ((order as any).deposit_status === 'forfeited' && amount > 0) {
+      this.throwForfeitedDepositAtSettlement(order);
+    }
+  }
+
+  private throwForfeitedDepositAtSettlement(order: Orders): never {
+    throw new Error(
+      `Deposit for order ${order.order_number} was forfeited; refusing to settle it as payment`
+    );
+  }
+
   private async applyPaidDepositForExternalSettlement(
     order: Orders
   ): Promise<void> {
+    this.assertDepositNotForfeitedForSettlement(order);
     const params = this.paidDepositApplyParams(order);
     if (!params) return;
+    if (!(await this.claimDepositForSettlement(order))) return;
     const clientAccount = await this.hasuraSystemService.getAccount(
       params.userId,
       order.currency
@@ -9509,7 +9845,12 @@ export class OrdersService {
     }
   }
 
-  /** Idempotent via deposit txn release reference. */
+  /**
+   * Classic PAP/PAD settlement: claim the deposit as applied (paid → applied),
+   * then release its hold so the full item debit can include it.
+   * Idempotent via the deposit txn release reference + key; a retry after the
+   * claim sees 'applied' and only finishes the release.
+   */
   private async releasePaidDepositHoldIfNeeded(
     order: Orders,
     clientAccountId: string
@@ -9518,14 +9859,21 @@ export class OrdersService {
     const depositStatus = (order as any).deposit_status;
     const depositTxnId = (order as any)
       .deposit_mobile_payment_transaction_id as string | undefined;
-    if (depositStatus !== 'paid' || depositAmount <= 0 || !depositTxnId) {
+    this.assertDepositNotForfeitedForSettlement(order);
+    if (
+      (depositStatus !== 'paid' && depositStatus !== 'applied') ||
+      depositAmount <= 0 ||
+      !depositTxnId
+    ) {
       return;
     }
+    if (!(await this.claimDepositForSettlement(order))) return;
     await this.depositLedgerService.releaseDepositToAvailable({
       clientAccountId,
       amount: depositAmount,
       orderNumber: order.order_number,
       depositTransactionId: depositTxnId,
+      memo: `Deposit released for settlement of order ${order.order_number}`,
     });
   }
 
@@ -9728,7 +10076,7 @@ export class OrdersService {
 
     await this.completeOrderWithSideEffects(
       order,
-      'Order completed after pay-at-delivery payment confirmation'
+      `Order completed after ${remainderTimingLabel(order, 'hyphen')} payment confirmation`
     );
   }
 
@@ -10236,7 +10584,8 @@ export class OrdersService {
     previousStatus: string,
     cancelledBy: 'client' | 'business' | 'system',
     notes?: string,
-    sqsReason?: string
+    sqsReason?: string,
+    actorUserId?: string
   ): Promise<void> {
     try {
       await this.purchaseCreditsService?.restore(orderId);
@@ -10290,7 +10639,9 @@ export class OrdersService {
       orderId,
       previousStatus,
       cancelledBy,
-      notes
+      notes,
+      sqsReason,
+      actorUserId
     );
 
     try {
@@ -10315,6 +10666,12 @@ export class OrdersService {
    * - Customer cancel / refuse / no-show:
    *   - Before lock point → refund
    *   - After lock point → forfeit with reason code
+   * - Merchant pickup no-show (`client_no_show`) on an UNPAID pay-at-pickup
+   *   order that was ready: forfeit the held deposit (customer_no_show_pickup).
+   *   Any other no-show (paid order, cooked fail-pickup, delivery) never
+   *   forfeits and uses the business-cancel rule. Cooked orders carry no
+   *   deposit, and a paid classic order's deposit was applied by settlement
+   *   (deposit_status 'applied', so the refund below is refused as well).
    * - Lock point: delivery = out_for_delivery, pickup = ready_for_pickup
    */
   private async handleDepositOnCancellation(
@@ -10322,7 +10679,9 @@ export class OrdersService {
     orderId: string,
     previousStatus: string,
     cancelledBy: 'client' | 'business' | 'system',
-    notes?: string
+    notes?: string,
+    reason?: string,
+    actorUserId?: string
   ): Promise<void> {
     const depositStatus = (order as any).deposit_status;
     const depositAmount = (order as any).deposit_amount;
@@ -10342,6 +10701,18 @@ export class OrdersService {
       fulfillmentMethod,
       previousStatus
     );
+
+    if (
+      reason === CLIENT_NO_SHOW_REASON &&
+      this.isUnpaidPickupNoshow(order, previousStatus)
+    ) {
+      await this.applyDepositForfeit(
+        orderId,
+        'customer_no_show_pickup',
+        actorUserId
+      );
+      return;
+    }
 
     // Business/system cancel → always refund (even after lock)
     if (cancelledBy === 'business' || cancelledBy === 'system') {
@@ -10390,28 +10761,91 @@ export class OrdersService {
           );
         }
       } else {
-        // After lock → forfeit to Rendasua HQ
-        try {
-          const forfeitResult = await this.depositRefundService.forfeitDeposit(
-            orderId,
-            'customer_cancel_after_lock'
-          );
-          if (!forfeitResult.success) {
-            this.logger.error(
-              `Deposit forfeit failed for client cancel (after lock) of order ${orderId}: ${forfeitResult.message}`
-            );
-          } else {
-            this.logger.log(
-              `Deposit forfeited for client cancel (after lock) of order ${orderId}`
-            );
-          }
-        } catch (error: any) {
-          this.logger.error(
-            `Failed to process deposit forfeit for client cancel (after lock): ${error.message}`
-          );
-        }
+        await this.applyDepositForfeit(orderId, 'customer_cancel_after_lock');
       }
     }
+  }
+
+  private async handleNoshowDeposit(
+    order: Orders,
+    orderId: string,
+    previousStatus: string,
+    notes?: string
+  ): Promise<void> {
+    try {
+      await this.handleDepositOnCancellation(
+        order,
+        orderId,
+        previousStatus,
+        'business',
+        notes,
+        CLIENT_NO_SHOW_REASON
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to handle deposit on pickup no-show for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  /** Snapshot taken before the cancel: unpaid pay-at-pickup that was ready. */
+  private isUnpaidPickupNoshow(order: Orders, previousStatus: string): boolean {
+    if ((order as any).fulfillment_method !== 'pickup') return false;
+    if (previousStatus !== 'ready_for_pickup') return false;
+    if ((order as any).payment_timing !== 'pay_at_pickup') return false;
+    if ((order as any).pay_after_merchant_confirm === true) return false;
+    const payment = ((order as any).payment_status || '').toLowerCase();
+    return payment === 'pending' || payment === 'pending_payment';
+  }
+
+  private async applyDepositForfeit(
+    orderId: string,
+    forfeitReason: DepositForfeitReason,
+    actorUserId?: string
+  ): Promise<void> {
+    const forfeitResult = await this.depositRefundService.forfeitDeposit(
+      orderId,
+      forfeitReason,
+      { forfeitedByUserId: actorUserId ?? null }
+    );
+    if (!forfeitResult.success) {
+      const errorCode = forfeitResult.errorCode || 'FORFEIT_ERROR';
+      const message = forfeitResult.message || 'Deposit forfeit failed';
+      
+      if (errorCode === 'FORFEIT_LEDGER_INCOMPLETE') {
+        this.logger.error(
+          `deposit_forfeit_ledger_incomplete orderId=${orderId} reason=${forfeitReason}: ${message}`,
+          { orderId, forfeitReason, errorCode, message }
+        );
+        throw new HttpException(
+          {
+            message: 'Deposit forfeit incomplete. The deposit claim succeeded but ledger entries are incomplete. Contact support to resume.',
+            errorCode: 'FORFEIT_LEDGER_INCOMPLETE',
+            orderId,
+            forfeitReason,
+            details: message,
+          },
+          HttpStatus.INTERNAL_SERVER_ERROR
+        );
+      }
+      
+      this.logger.error(
+        `Deposit forfeit failed for ${forfeitReason} on order ${orderId}: ${message}`,
+        { orderId, forfeitReason, errorCode, message }
+      );
+      throw new HttpException(
+        {
+          message,
+          errorCode,
+          orderId,
+          forfeitReason,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+    this.logger.log(
+      `Deposit forfeited (${forfeitReason}) for order ${orderId}`
+    );
   }
 
   private async releaseStripeAuthorizationIfNeeded(order: Orders): Promise<void> {
@@ -10507,6 +10941,17 @@ export class OrdersService {
       this.logger.warn(
         `Claim top-up for ${ctx.order.order_number} stayed in the wallet; order was not assigned`
       );
+      // Emit order_taken outcome when lost (Phase 0 #453)
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_failed', {
+        orderId: ctx.order.id,
+        orderNumber: ctx.order.order_number,
+        agentId: ctx.agentId,
+        holdAmount: transaction.amount,
+        transactionId: transaction.transaction_id,
+        provider: transaction.provider,
+        currency: transaction.currency,
+        reason: 'order_taken',
+      });
       return;
     }
     await this.placeClaimHoldOrRevert({
@@ -10516,7 +10961,22 @@ export class OrdersService {
       agentId: ctx.agentId,
       freshAssignment: slot === 'assigned',
     });
-    if (slot === 'assigned') await this.recordNewClaimAssignment(ctx);
+    if (slot === 'assigned') {
+      await this.recordNewClaimAssignment(ctx);
+      // Emit topup succeeded only when slot assigned (Phase 0 #453)
+      const durationMs = Date.now() - new Date(transaction.created_at).getTime();
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_succeeded', {
+        orderId: ctx.order.id,
+        orderNumber: ctx.order.order_number,
+        agentId: ctx.agentId,
+        holdAmount: transaction.amount,
+        transactionId: transaction.transaction_id,
+        provider: transaction.provider,
+        currency: transaction.currency,
+        durationMs,
+      });
+    }
+
     this.logger.log(this.claimPaymentDoneMessage(ctx.order.order_number, transaction));
   }
 
@@ -11011,7 +11471,7 @@ export class OrdersService {
             user_id
           }
           business_location {
-            address { country }
+            address { country city state }
             business { user { country } }
           }
           order_items {
@@ -11035,12 +11495,14 @@ export class OrdersService {
    * Compute the agent hold (caution) amount for an order. Orders for items
    * from a Stripe-enabled country are settled via Stripe, so no caution/hold
    * is applicable and the hold amount is always 0.
+   * 
+   * Returns rail, holdPercentage, and holdAmount for reuse in emit logic.
    */
   private async resolveOrderHoldAmount(
     order: Orders | null
-  ): Promise<number> {
+  ): Promise<{ rail: 'mobile_money' | 'stripe'; holdPercentage: number; holdAmount: number }> {
     if (!order) {
-      return 0;
+      return { rail: 'mobile_money', holdPercentage: 0, holdAmount: 0 };
     }
     const rail = order.business_id
       ? await this.paymentRoutingService.resolveRailForBusiness(
@@ -11048,11 +11510,92 @@ export class OrdersService {
         )
       : 'mobile_money';
     if (rail === 'stripe') {
-      return 0;
+      return { rail: 'stripe', holdPercentage: 0, holdAmount: 0 };
     }
     const holdPercentage =
       await this.agentHoldService.getHoldPercentageForAgent();
-    return (order.subtotal * holdPercentage) / 100;
+    const holdAmount = (order.subtotal * holdPercentage) / 100;
+    return { rail, holdPercentage, holdAmount };
+  }
+
+  /**
+   * Emit agent.claim_funds_check event (Phase 0 #453).
+   * Fire-and-forget; failures are caught and logged.
+   */
+  private emitClaimFundsCheck(params: {
+    orderId: string;
+    orderNumber: string;
+    agentId: string;
+    city: string | null;
+    state: string | null;
+    subtotal: number;
+    currency: string;
+    holdPercentage: number;
+    holdAmount: number;
+    availableBalance: number;
+    needsTopUp: boolean;
+    hasEnoughFunds: boolean;
+    rail: 'mobile_money' | 'stripe';
+    source: 'availability' | 'claim' | 'claim_topup' | 'offer_accept';
+  }): void {
+    const shortfall = Math.max(0, params.holdAmount - params.availableBalance);
+    emitServerSiteEvent(this.siteEventsService, 'agent.claim_funds_check', {
+      orderId: params.orderId,
+      orderNumber: params.orderNumber,
+      agentId: params.agentId,
+      city: params.city,
+      state: params.state,
+      subtotal: params.subtotal,
+      currency: params.currency,
+      holdPercentage: params.holdPercentage,
+      holdAmount: params.holdAmount,
+      availableBalance: params.availableBalance,
+      needsTopUp: params.needsTopUp,
+      hasEnoughFunds: params.hasEnoughFunds,
+      shortfall,
+      rail: params.rail,
+      source: params.source,
+    });
+  }
+
+  /**
+   * Emit agent.claim_topup_failed event (Phase 0 #453).
+   * Public so payment callback handler can call it.
+   */
+  async emitClaimTopupFailed(
+    transaction: MobilePaymentTransaction,
+    reason: string
+  ): Promise<void> {
+    try {
+      const order = await this.getOrderForProcessingByNumber(
+        transaction.entity_id || transaction.reference
+      );
+      if (!transaction.account_id) {
+        this.logger.warn(`Cannot emit claim_topup_failed: missing account_id for transaction ${transaction.id}`);
+        return;
+      }
+      const account = await this.hasuraSystemService.getAccountById(
+        transaction.account_id
+      );
+      if (!account) return;
+      const user = await this.hasuraSystemService.getUserById(account.user_id);
+      if (!user || !userHasPersona(user, 'agent') || !user.agent) return;
+
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_failed', {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        agentId: user.agent.id,
+        holdAmount: transaction.amount,
+        transactionId: transaction.transaction_id,
+        provider: transaction.provider,
+        currency: transaction.currency,
+        reason,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not emit claim_topup_failed for transaction ${transaction.id}: ${error?.message}`
+      );
+    }
   }
 
   private createClaimAvailabilityFailure(
@@ -11364,8 +11907,10 @@ export class OrdersService {
     const result = await this.deliveryAvailabilityService.evaluate(
       buildDeliveryAvailabilityContext({
         businessId: inventory?.business_location?.business?.id ?? '',
+        businessLocationId: inventory?.business_location?.id,
         sellerCountry: address?.country,
         sellerState: address?.state,
+        sellerCity: address?.city,
         pickupLat: address?.latitude,
         pickupLon: address?.longitude,
         deliveryAddressId: deliveryAddress?.id,
@@ -11378,6 +11923,7 @@ export class OrdersService {
         requiresFastDelivery,
         verifiedAgentDelivery,
         clientId,
+        stage: 'place_order',
       })
     );
     if (result.available) return;
@@ -11550,6 +12096,7 @@ export class OrdersService {
             }
           }
           business_location {
+            id
             business_id
             is_active
             pay_at_confirm
@@ -13860,7 +14407,8 @@ export class OrdersService {
       // Merchant settlement will still use the FULL order total (deposit + remainder)
       const depositAmount = (order as any).deposit_amount || 0;
       const depositStatus = (order as any).deposit_status;
-      const depositPaid = depositStatus === 'paid';
+      const depositPaid =
+        depositStatus === 'paid' || depositStatus === 'applied';
       
       const clientHoldAmount = depositPaid
         ? Math.max(0, order.total_amount - depositAmount)
@@ -14438,7 +14986,7 @@ export class OrdersService {
                 accountId: clientAccount.id,
                 amount: subtotalPortion,
                 transactionType: 'payment',
-                memo: `Order item payment for order ${order.order_number} (pay at delivery)`,
+                memo: `Order item payment for order ${order.order_number} (${remainderTimingLabel(order)})`,
                 referenceId: orderId,
                 idempotencyKey: this.settlementKey('item', 'payment', orderId),
               }),

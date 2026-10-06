@@ -6251,6 +6251,8 @@
       "remindError": "Impossible d’envoyer le rappel",
       "loadError": "Impossible de charger les options de retrait",
       "feeLine": "Frais {{fee}} {{currency}} ({{percent}} % des articles). Vous recevez {{share}} {{currency}}. Le client récupère {{refund}} {{currency}}.",
+      "depositLine": "Aucuns frais. L'acompte de réservation du client ({{amount}} {{currency}}) est conservé par Rendasua comme pénalité d'absence.",
+      "cancelledDeposit": "Retrait annulé. L'acompte de réservation du client est conservé comme pénalité d'absence.",
       "wait": "Vous pouvez annuler pour absence après {{hours}} heures au statut prêt.",
       "cancel": "Annuler — le client n’est pas venu",
       "cancelled": "Retrait annulé. Le client est remboursé, moins les frais.",
@@ -8436,9 +8438,15 @@
     "dishes": {
       "tab": "Plats"
     },
+    "catalogTitle": "Plats disponibles",
     "restaurants": {
       "tab": "Restaurants",
+      "section": "Restaurants",
       "searchPlaceholder": "Rechercher un restaurant",
+      "more": "Plus",
+      "moreHint": "Tous les restaurants",
+      "moreA11y": "Voir tous les restaurants",
+      "backToDishes": "Retour aux plats",
       "dishCount": "{{count}} plats",
       "openMenu": "Ouvrir le menu de {{name}}",
       "loading": "Chargement des restaurants…",
@@ -8539,29 +8547,35 @@
     "waitingBody": "Lorsqu’une nouvelle commande nécessite une confirmation, elle apparaîtra ici immédiatement."
   },
   "assistant": {
-    "title": "Assistant Rendasua",
+    "title": "Assistant RendaSua",
     "subtitle": "Posez vos questions sur la livraison, les paiements, etc.",
     "open": "Discuter avec nous",
     "close": "Fermer le chat",
     "send": "Envoyer",
-    "placeholder": "Tapez votre question…",
+    "placeholder": "Article, commande, livraison : posez votre question…",
     "empty": "Demandez où nous sommes situés, comment fonctionnent les paiements ou si le retrait est disponible.",
     "emptyIllustration": "Discuter avec Rendasua",
     "typing": "L'assistant écrit…",
     "handoff": "Nous vous mettons en relation avec notre équipe. Vous pouvez aussi nous joindre sur WhatsApp.",
-    "thinking": "Réflexion en cours…",
-    "emptyTitle": "Comment puis-je vous aider ?",
+    "thinking": "Réflexion…",
+    "emptyTitle": "Bonjour ! De quoi avez-vous besoin aujourd'hui ?",
     "emptySubtitle": "Posez des questions sur nos services, la livraison, les paiements ou les points de retrait.",
-    "handoffTitle": "Mise en relation avec notre équipe",
-    "handoffBody": "Notre équipe de support vous contactera sous peu.",
+    "handoffTitle": "Un conseiller va vous aider",
+    "handoffBody": "Continuez sur WhatsApp. Nous répondons en général sous 1 heure.",
     "errorGeneric": "Une erreur est survenue. Veuillez réessayer.",
+    "errorMessage": "Message non envoyé. Vérifiez votre connexion.",
+    "errorServer": "Message non envoyé. Veuillez réessayer.",
+    "retry": "Réessayer",
     "clear": "Effacer la conversation",
+    "startOver": "Recommencer",
+    "openWhatsApp": "Ouvrir WhatsApp",
     "whatsappCta": "Discuter sur WhatsApp",
     "supportCta": "Consulter notre assistant IA",
     "ctaTitle": "Consulter notre assistant IA",
     "ctaBody": "Obtenez des réponses instantanées sur la livraison, les paiements, le retrait et plus encore — 24h/24, 7j/7.",
-    "statusOnline": "En ligne · Propulsé par l'IA",
-    "statusThinking": "Génération de la réponse",
+    "statusOnline": "IA · Répond en quelques secondes",
+    "statusThinking": "Réflexion…",
+    "statusOffline": "Hors ligne",
     "suggestion": {
       "location": "Où êtes-vous situés ?",
       "payDelivery": "Acceptez-vous le paiement à la livraison ?",
@@ -8571,7 +8585,18 @@
     "homeEntryTitle": "Demandez à l'assistant IA",
     "homeEntryBody": "Obtenez des réponses rapides sur la livraison, les paiements, le retrait et votre compte.",
     "homeEntryCta": "Ouvrir l'assistant",
-    "headerLabel": "Demandez à l'assistant Rendasua"
+    "headerLabel": "Demandez à l'assistant Rendasua",
+    "launcher": {
+      "label": "Ouvrir l'assistant d'achat",
+      "hint": "Trouvez un article, repassez ou suivez une commande",
+      "ask": "Demander",
+      "labelExtended": "Demander : ouvrir l'assistant d'achat"
+    },
+    "nudge": {
+      "text": "Bonjour ! Je peux trouver un article, suivre ou repasser votre commande.",
+      "tryIt": "Essayer",
+      "dismiss": "Fermer"
+    }
   },
   "dashboardComposing": {
     "client": {

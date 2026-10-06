@@ -16,9 +16,16 @@ export type TrackSiteEventInput = {
   metadata?: Record<string, unknown>;
   subjectType?: string;
   subjectId?: string;
+  /**
+   * Signed-out only: replaces the per-install `rs_anon_id` header (assistant
+   * events use the chat thread id so guest chats stay unlinkable; eng plan §3.3).
+   * Never sent in the body.
+   */
+  anonymousId?: string;
 };
 
-async function postTrackSiteEvent(body: TrackSiteEventInput): Promise<void> {
+async function postTrackSiteEvent(input: TrackSiteEventInput): Promise<void> {
+  const { anonymousId, ...body } = input;
   const headers: Record<string, string> = {
     'x-rendasua-platform': Platform.OS,
   };
@@ -27,7 +34,7 @@ async function postTrackSiteEvent(body: TrackSiteEventInput): Promise<void> {
     await api.post('/track-site-event', body, { headers });
     return;
   }
-  const anonId = await getOrCreateRsAnonymousId();
+  const anonId = anonymousId || (await getOrCreateRsAnonymousId());
   await publicApiPost('/track-site-event', body, {
     headers: { ...headers, 'X-Anonymous-Id': anonId },
   });

@@ -27,6 +27,7 @@ import type {
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
+import { MobileTransactionAccessService } from './mobile-transaction-access.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
@@ -70,7 +71,8 @@ export class MobilePaymentsController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly callbackProcessor: MobilePaymentCallbackProcessor,
     private readonly withdrawalPinService: WithdrawalPinService,
-    private readonly pendingWithdrawalResolveService: PendingWithdrawalResolveService
+    private readonly pendingWithdrawalResolveService: PendingWithdrawalResolveService,
+    private readonly transactionAccessService: MobileTransactionAccessService
   ) {}
 
   /**
@@ -546,13 +548,22 @@ export class MobilePaymentsController {
    * Get transaction by ID
    */
   @Get('transactions/:transactionId')
-  async getTransaction(@Param('transactionId') transactionId: string) {
+  async getTransaction(
+    @Param('transactionId') transactionId: string,
+    @ReqContext() ctx: RequestContext
+  ) {
     try {
+      const user = await this.hasuraUserService.getUser(ctx);
       const transaction = await this.databaseService.getTransactionById(
         transactionId
       );
 
-      if (!transaction) {
+      // Owner of the linked account or mobile-payments admin only. Anyone else
+      // gets the same 404 as a missing id, so ids cannot be probed.
+      if (
+        !transaction ||
+        !(await this.transactionAccessService.canView(transaction, user?.id))
+      ) {
         throw new HttpException(
           {
             success: false,

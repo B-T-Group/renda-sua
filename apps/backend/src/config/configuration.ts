@@ -1,3 +1,8 @@
+import {
+  isProductionRuntime,
+  parseTestAllowlist,
+} from '../auth/test-user-bypass.util';
+
 export interface DatabaseConfig {
   url: string;
 }
@@ -109,7 +114,10 @@ export interface Auth0TestUsersConfig {
   phoneConnection: string;
   password: string;
   emailDomain: string;
-  phoneSuffix: string;
+  /** Extra exact test emails outside the test domain (AUTH0_TEST_EMAIL_ALLOWLIST). */
+  emailAllowlist: string[];
+  /** The ONLY phones that may use the test bypass (AUTH0_TEST_PHONE_ALLOWLIST). */
+  phoneAllowlist: string[];
 }
 
 export interface Auth0Config {
@@ -1017,11 +1025,11 @@ export default (): Configuration => {
       managementClientId: process.env.AUTH0_MGMT_CLIENT_ID || '',
       managementClientSecret: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
       testUsers: {
-        // SECURITY: Test users are ONLY enabled when explicitly set to 'true'
-        // Never enable by default in production, even if NODE_ENV is misconfigured
+        // SECURITY: Test users are ONLY enabled when explicitly set to 'true',
+        // and never when NODE_ENV or DEPLOYMENT_ENV is 'production'.
         enabled:
           process.env.AUTH0_TEST_USERS_ENABLED === 'true' &&
-          process.env.NODE_ENV !== 'production',
+          !isProductionRuntime(process.env),
         emailConnection:
           process.env.AUTH0_TEST_USERS_EMAIL_CONNECTION || 'Email-Test-Users',
         phoneConnection:
@@ -1030,7 +1038,9 @@ export default (): Configuration => {
         // Must be set explicitly via AUTH0_TEST_USER_PASSWORD env var
         password: process.env.AUTH0_TEST_USER_PASSWORD || '',
         emailDomain: process.env.AUTH0_TEST_EMAIL_DOMAIN || 'rendasua-test.com',
-        phoneSuffix: process.env.AUTH0_TEST_PHONE_SUFFIX || '0000',
+        emailAllowlist: parseTestAllowlist(process.env.AUTH0_TEST_EMAIL_ALLOWLIST),
+        // No suffix rule: only explicitly listed phones (exact match) qualify.
+        phoneAllowlist: parseTestAllowlist(process.env.AUTH0_TEST_PHONE_ALLOWLIST),
       },
     },
     googleCache: {

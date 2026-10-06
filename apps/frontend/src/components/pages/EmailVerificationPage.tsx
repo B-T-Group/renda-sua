@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserVerification } from '../../hooks/useUserVerification';
 import Logo from '../common/Logo';
+import { clearAssistantChatStorage } from '../../contexts/assistantChatStorage';
 
 /**
  * EmailVerificationPage Component
@@ -112,6 +113,7 @@ const EmailVerificationPage: React.FC = () => {
   };
 
   const handleLogout = () => {
+    clearAssistantChatStorage();
     logout({
       logoutParams: {
         returnTo: window.location.origin,

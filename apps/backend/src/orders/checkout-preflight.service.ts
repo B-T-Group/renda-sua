@@ -109,7 +109,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
           default_estimated_prep_minutes
           user { id country }
         }
-        address { country state latitude longitude }
+        address { country state city latitude longitude }
       }
       food_settings {
         marked_unavailable_at
@@ -1343,8 +1343,10 @@ export class CheckoutPreflightService {
     const address = group.inventoryRows[0]?.business_location?.address;
     return buildDeliveryAvailabilityContext({
       businessId,
+      businessLocationId: group.inventoryRows[0]?.business_location?.id,
       sellerCountry: group.sellerCountry,
       sellerState: address?.state,
+      sellerCity: address?.city,
       pickupLat: address?.latitude,
       pickupLon: address?.longitude,
       deliveryAddressId: dto.delivery_address_id,
@@ -1355,6 +1357,7 @@ export class CheckoutPreflightService {
       inventoryIds: group.inventoryRows.map((inv: any) => inv?.id),
       requiresFastDelivery: dto.requires_fast_delivery === true,
       verifiedAgentDelivery: dto.verified_agent_delivery === true,
+      stage: 'preflight',
     });
   }
 

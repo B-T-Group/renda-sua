@@ -16,6 +16,8 @@ type Preview = {
   merchantShare: number;
   refundAmount: number;
   currency: string;
+  /** > 0 for an unpaid pay-at-pickup order: the held deposit is the no-show penalty (no fee). */
+  depositForfeitAmount?: number;
 };
 
 type Props = {
@@ -116,17 +118,26 @@ export function PickupNoshowSheet({ visible, order, onDismiss, onSuccess }: Prop
             {preview?.canCancel ? (
               <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
                 <Text variant="bodySmall">
-                  {t(
-                    'orders.pickupNoshow.feeLine',
-                    'Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.',
-                    {
-                      fee: preview.cancellationFee.toLocaleString(),
-                      share: preview.merchantShare.toLocaleString(),
-                      refund: preview.refundAmount.toLocaleString(),
-                      currency: preview.currency,
-                      percent: preview.cancellationFeePercent,
-                    }
-                  )}
+                  {(preview.depositForfeitAmount ?? 0) > 0
+                    ? t(
+                        'orders.pickupNoshow.depositLine',
+                        "No fee. The client's {{amount}} {{currency}} reservation deposit is kept by Rendasua as the no-show penalty.",
+                        {
+                          amount: (preview.depositForfeitAmount ?? 0).toLocaleString(),
+                          currency: preview.currency,
+                        }
+                      )
+                    : t(
+                        'orders.pickupNoshow.feeLine',
+                        'Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.',
+                        {
+                          fee: preview.cancellationFee.toLocaleString(),
+                          share: preview.merchantShare.toLocaleString(),
+                          refund: preview.refundAmount.toLocaleString(),
+                          currency: preview.currency,
+                          percent: preview.cancellationFeePercent,
+                        }
+                      )}
                 </Text>
                 {reasons.map((reason) => (
                   <Button

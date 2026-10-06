@@ -48,7 +48,10 @@ import { buildCatalogFilterOptions } from '../../utils/catalogFilterOptions';
 import { InventoryCatalogCard } from '../../components/browse/InventoryCatalogCard';
 import { InventoryCatalogGridTile } from '../../components/browse/InventoryCatalogGridTile';
 import { BrowseCatalogListHeader } from '../../components/browse/BrowseCatalogListHeader';
-import { FoodsRestaurantList } from '../../components/browse/FoodsRestaurantList';
+import {
+  FoodsRestaurantCarousel,
+  FoodsRestaurantList,
+} from '../../components/browse/FoodsRestaurantList';
 import { CatalogBrowseSearchBar } from '../../components/browse/CatalogBrowseSearchBar';
 import { CatalogBrowseFilterSheet } from '../../components/browse/CatalogBrowseFilterSheet';
 import { CatalogItemSkeleton } from '../../components/browse/CatalogItemSkeleton';
@@ -244,8 +247,8 @@ function BrowseCatalogScreenInner({
     setCatalogSegment(legacyFoodOnly ? 'food' : initialSegment);
   }, [initialSegment, legacyFoodOnly]);
   const foodOnly = legacyFoodOnly || catalogSegment === 'food';
-  const [foodsView, setFoodsView] = useState<'restaurants' | 'dishes'>('restaurants');
-  const showRestaurants = foodOnly && foodsView === 'restaurants';
+  const [browsingAllRestaurants, setBrowsingAllRestaurants] = useState(false);
+  const showAllRestaurants = foodOnly && browsingAllRestaurants;
   const tabBarHeight = useBottomTabBarHeight();
   const bottomPad = tabBarHeight + spacing.lg;
   const isWideHero = width >= 640;
@@ -357,7 +360,21 @@ function BrowseCatalogScreenInner({
     food_only: foodOnly || undefined,
     export_only: exportOnly || undefined,
     withAuth: inventoryRequestsWithAuth,
-    enabled: catalogReady && !showRestaurants,
+    enabled: catalogReady && !showAllRestaurants,
+  });
+
+  const {
+    stores: restaurantPreview,
+    loading: restaurantPreviewLoading,
+    refetch: refetchRestaurantPreview,
+  } = useCatalogStores({
+    limit: 12,
+    countryCode: catalogCountryCode,
+    state: catalogState,
+    origin: catalogOrigin,
+    withAuth: inventoryRequestsWithAuth,
+    enabled: catalogReady && foodOnly && !showAllRestaurants,
+    foodOnly: true,
   });
 
   const {
@@ -372,7 +389,7 @@ function BrowseCatalogScreenInner({
     state: catalogState,
     origin: catalogOrigin,
     withAuth: inventoryRequestsWithAuth,
-    enabled: catalogReady && showRestaurants,
+    enabled: catalogReady && showAllRestaurants,
     foodOnly: true,
   });
 
@@ -531,7 +548,7 @@ function BrowseCatalogScreenInner({
   });
 
   const resultsLabel = useMemo(() => {
-    if (showRestaurants) {
+    if (showAllRestaurants) {
       if (restaurantsLoading && restaurants.length === 0) {
         return t('foods.restaurants.loading', 'Loading restaurants…');
       }
@@ -552,7 +569,7 @@ function BrowseCatalogScreenInner({
     if (loading && items.length === 0) return t('public.items.results.loading', 'Loading items…');
     if (total === 0) return t('public.items.results.none', 'No items to show');
     return t('public.items.results.count', '{{count}} items', { count: total });
-  }, [foodOnly, showRestaurants, restaurantsLoading, restaurants.length, loading, items.length, total, t]);
+  }, [foodOnly, showAllRestaurants, restaurantsLoading, restaurants.length, loading, items.length, total, t]);
 
   const sortSummaryLabel = useMemo(() => {
     const opt = CATALOG_SORT_OPTIONS.find((o) => o.key === sort);
@@ -628,13 +645,14 @@ function BrowseCatalogScreenInner({
 
   const isSearchFetching =
     searchDraft.trim() !== debouncedSearch ||
-    ((showRestaurants ? restaurantsLoading : loading) && debouncedSearch.length > 0);
+    ((showAllRestaurants ? restaurantsLoading : loading) && debouncedSearch.length > 0);
 
   const onListRefresh = useCallback(async () => {
     setPullRefreshing(true);
     try {
       const tasks: Promise<unknown>[] = [refetch(), refetchFacets()];
-      if (showRestaurants) tasks.push(refetchRestaurants());
+      if (showAllRestaurants) tasks.push(refetchRestaurants());
+      else if (foodOnly) tasks.push(refetchRestaurantPreview());
       if (dealsStopEnabled) tasks.push(refetchDealsStop());
       if (categoryStopEnabled) tasks.push(refetchTopInCategory());
       if (essentialsStopEnabled) tasks.push(refetchEssentials());
@@ -657,8 +675,10 @@ function BrowseCatalogScreenInner({
     refetchFeaturedStore,
     bagComplementsStopEnabled,
     refetchBagComplements,
-    showRestaurants,
+    showAllRestaurants,
+    foodOnly,
     refetchRestaurants,
+    refetchRestaurantPreview,
   ]);
 
   const onClearFilterField = useCallback((field: keyof CatalogFilterState) => {
@@ -739,23 +759,51 @@ function BrowseCatalogScreenInner({
             ) : undefined
           }
           foodOnly={foodOnly}
-          foodsView={foodsView}
-          onFoodsViewChange={setFoodsView}
-          showDishTools={!showRestaurants}
-          restaurantsSlot={
-            showRestaurants ? (
-              <FoodsRestaurantList
-                stores={restaurants}
-                loading={restaurantsLoading}
-                error={restaurantsError}
-                hasSearch={debouncedSearch.length > 0}
+          restaurantsCarousel={
+            foodOnly && !showAllRestaurants ? (
+              <FoodsRestaurantCarousel
+                stores={restaurantPreview}
+                loading={restaurantPreviewLoading}
                 onPress={(businessLocationId) =>
                   onStorePress?.(businessLocationId, { foodOnly: true })
                 }
-                onRetry={() => {
-                  void refetchRestaurants();
+                onMore={() => {
+                  setSearchDraft('');
+                  setDebouncedSearch('');
+                  setBrowsingAllRestaurants(true);
                 }}
               />
+            ) : null
+          }
+          showDishTools={!showAllRestaurants}
+          restaurantsSlot={
+            showAllRestaurants ? (
+              <View>
+                <Chip
+                  icon="arrow-left"
+                  mode="outlined"
+                  onPress={() => {
+                    setSearchDraft('');
+                    setDebouncedSearch('');
+                    setBrowsingAllRestaurants(false);
+                  }}
+                  style={{ alignSelf: 'flex-start', marginBottom: spacing.sm }}
+                >
+                  {t('foods.restaurants.backToDishes', 'Back to dishes')}
+                </Chip>
+                <FoodsRestaurantList
+                  stores={restaurants}
+                  loading={restaurantsLoading}
+                  error={restaurantsError}
+                  hasSearch={debouncedSearch.length > 0}
+                  onPress={(businessLocationId) =>
+                    onStorePress?.(businessLocationId, { foodOnly: true })
+                  }
+                  onRetry={() => {
+                    void refetchRestaurants();
+                  }}
+                />
+              </View>
             ) : null
           }
           catalogFilters={catalogFilters}
@@ -802,14 +850,17 @@ function BrowseCatalogScreenInner({
       items.length,
       onListRefresh,
       foodOnly,
-      foodsView,
-      showRestaurants,
+      showAllRestaurants,
+      restaurantPreview,
+      restaurantPreviewLoading,
       restaurants,
       restaurantsLoading,
       restaurantsError,
       debouncedSearch,
       onStorePress,
       refetchRestaurants,
+      spacing.sm,
+      t,
       showExportsChip,
       exportOnly,
       onToggleExportOnly,
@@ -962,7 +1013,7 @@ function BrowseCatalogScreenInner({
               loading={isSearchFetching}
               placeholder={
                 foodOnly
-                  ? showRestaurants
+                  ? showAllRestaurants
                     ? t('foods.restaurants.searchPlaceholder', 'Search restaurants')
                     : t('foods.searchPlaceholder', 'Search dishes')
                   : undefined
@@ -980,7 +1031,7 @@ function BrowseCatalogScreenInner({
       </Reanimated.View>
       <FlashList
         ref={listRef}
-        data={showRestaurants ? [] : feedRows}
+        data={showAllRestaurants ? [] : feedRows}
         keyExtractor={keyExtractorRow}
         ListHeaderComponent={listHeaderElement}
         keyboardShouldPersistTaps="handled"
@@ -997,10 +1048,10 @@ function BrowseCatalogScreenInner({
         onScroll={onFeedScroll}
         scrollEventThrottle={16}
         onEndReached={() => {
-          if (!showRestaurants && canLoadMore) loadMore();
+          if (!showAllRestaurants && canLoadMore) loadMore();
         }}
         onEndReachedThreshold={0.35}
-        ListEmptyComponent={showRestaurants ? null : listEmpty}
+        ListEmptyComponent={showAllRestaurants ? null : listEmpty}
         ListFooterComponent={
           <View style={[styles.footer, { paddingBottom: bottomPad }]}>
             {loadingMore ? <ActivityIndicator color={colors.primary.main} /> : null}

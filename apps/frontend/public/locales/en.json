@@ -6532,6 +6532,8 @@
       "remindError": "Could not send the reminder",
       "loadError": "Could not load pickup options",
       "feeLine": "Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.",
+      "depositLine": "No fee. The client's {{amount}} {{currency}} reservation deposit is kept by Rendasua as the no-show penalty.",
+      "cancelledDeposit": "Pickup cancelled. The client's reservation deposit is kept as the no-show penalty.",
       "wait": "You can cancel for a no-show after the order has been ready for {{hours}} hours.",
       "cancel": "Cancel — client did not pick up",
       "cancelled": "Pickup cancelled. The client is refunded except for the fee.",
@@ -8420,9 +8422,15 @@
     "dishes": {
       "tab": "Dishes"
     },
+    "catalogTitle": "Available dishes",
     "restaurants": {
       "tab": "Restaurants",
+      "section": "Restaurants",
       "searchPlaceholder": "Search restaurants",
+      "more": "More",
+      "moreHint": "All restaurants",
+      "moreA11y": "Browse all restaurants",
+      "backToDishes": "Back to dishes",
       "dishCount": "{{count}} dishes",
       "openMenu": "Open {{name}} menu",
       "loading": "Loading restaurants…",
@@ -8523,29 +8531,35 @@
     "waitingBody": "When a new order needs confirmation, it will appear here immediately."
   },
   "assistant": {
-    "title": "Rendasua Assistant",
+    "title": "RendaSua Assistant",
     "subtitle": "Ask about delivery, payments, and more",
     "open": "Chat with us",
     "close": "Close chat",
     "send": "Send",
-    "placeholder": "Type your question…",
+    "placeholder": "Ask about an item, order or delivery…",
     "empty": "Ask where we are located, how payments work, or whether pickup is available.",
     "emptyIllustration": "Chat with Rendasua",
     "typing": "Assistant is typing…",
     "handoff": "We are connecting you with our team. You can also reach us on WhatsApp.",
     "thinking": "Thinking…",
-    "emptyTitle": "What can I help you with?",
+    "emptyTitle": "Hi! What do you need today?",
     "emptySubtitle": "Ask about our services, delivery, payments, or pickup locations.",
-    "handoffTitle": "Connecting you with our team",
-    "handoffBody": "Our support team will follow up with you shortly.",
+    "handoffTitle": "A team member will help you",
+    "handoffBody": "Continue on WhatsApp. We usually reply within 1 hour.",
     "errorGeneric": "Something went wrong. Please try again.",
+    "errorMessage": "Message not sent. Check your connection.",
+    "errorServer": "Message not sent. Please try again.",
+    "retry": "Retry",
     "clear": "Clear chat",
+    "startOver": "Start over",
+    "openWhatsApp": "Open WhatsApp",
     "whatsappCta": "Chat on WhatsApp",
     "supportCta": "Ask our AI assistant",
     "ctaTitle": "Ask our AI assistant",
     "ctaBody": "Get instant answers about delivery, payments, pickup, and more — 24/7.",
-    "statusOnline": "Online · AI powered",
-    "statusThinking": "Generating response",
+    "statusOnline": "AI · Replies in seconds",
+    "statusThinking": "Thinking…",
+    "statusOffline": "Offline",
     "suggestion": {
       "location": "Where are you located?",
       "payDelivery": "Do you support payment at delivery?",
@@ -8555,7 +8569,18 @@
     "homeEntryTitle": "Ask the AI assistant",
     "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",
     "homeEntryCta": "Open assistant",
-    "headerLabel": "Ask Rendasua assistant"
+    "headerLabel": "Ask Rendasua assistant",
+    "launcher": {
+      "label": "Open shopping assistant",
+      "hint": "Find items, reorder or track an order",
+      "ask": "Ask",
+      "labelExtended": "Ask: open shopping assistant"
+    },
+    "nudge": {
+      "text": "Hi! I can find items, track your order or reorder for you.",
+      "tryIt": "Try it",
+      "dismiss": "Dismiss"
+    }
   },
   "dashboardComposing": {
     "client": {

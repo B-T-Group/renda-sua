@@ -43,6 +43,7 @@ describe('MobilePaymentsController GIVE_CHANGE withdraw gates', () => {
       { getUser: jest.fn().mockResolvedValue({ id: 'user-1' }) } as never,
       {} as never,
       {} as never,
+      {} as never,
       {} as never
     );
   });

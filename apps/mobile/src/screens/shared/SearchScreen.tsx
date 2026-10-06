@@ -42,6 +42,11 @@ export function SearchScreen() {
     void rememberSearch(cleaned).then(setRecent);
   }, []);
 
+  const clearSearch = useCallback(() => {
+    setQuery('');
+    setSubmitted('');
+  }, []);
+
   const openItem = useCallback(
     (inventoryItemId: string) => {
       (rootNav ?? (navigation as unknown as NativeStackNavigationProp<ClientRootStackParamList>)).navigate(
@@ -60,6 +65,7 @@ export function SearchScreen() {
           value={query}
           onChangeText={setQuery}
           onSubmitEditing={() => submit(query)}
+          onClear={clearSearch}
           placeholder={t('client.search.placeholder', 'Search products, stores, food')}
           autoFocus
         />

@@ -1,13 +1,13 @@
-import React, { forwardRef } from 'react';
+import React, { forwardRef, useRef } from 'react';
 import {
   StyleSheet,
   View,
   TextInput,
-  Pressable,
   type TextInputProps,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
+import { Pressable } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { spacing, borderRadius } from '@/theme/spacing';
@@ -28,10 +28,24 @@ export interface SearchInputProps extends Omit<TextInputProps, 'style'> {
  * - Trailing clear button when value is non-empty
  */
 export const SearchInput = forwardRef<TextInput, SearchInputProps>(
-  ({ onClear, containerStyle, value, placeholder, placeholderTextColor, onFocus, onBlur, ...rest }, ref) => {
+  ({ onClear, onChangeText, containerStyle, value, placeholder, placeholderTextColor, onFocus, onBlur, ...rest }, ref) => {
     const { t } = useTranslation();
     const { colors } = useTheme();
     const [focused, setFocused] = React.useState(false);
+    const clearedThisPress = useRef(false);
+
+    const clearValue = () => {
+      if (clearedThisPress.current) return;
+      clearedThisPress.current = true;
+      if (onClear) onClear();
+      else onChangeText?.('');
+    };
+
+    const releaseClear = () => {
+      queueMicrotask(() => {
+        clearedThisPress.current = false;
+      });
+    };
 
     return (
       <View
@@ -58,6 +72,7 @@ export const SearchInput = forwardRef<TextInput, SearchInputProps>(
           placeholderTextColor={placeholderTextColor ?? colors.text.secondary}
           returnKeyType="search"
           clearButtonMode="never"
+          onChangeText={onChangeText}
           onFocus={e => {
             setFocused(true);
             onFocus?.(e);
@@ -70,7 +85,13 @@ export const SearchInput = forwardRef<TextInput, SearchInputProps>(
         />
         {value ? (
           <Pressable
-            onPress={onClear}
+            // Press-in clears before iOS spends the tap dismissing the keyboard.
+            onPressIn={clearValue}
+            onPress={() => {
+              clearValue();
+              clearedThisPress.current = false;
+            }}
+            onPressOut={releaseClear}
             style={styles.clearButton}
             accessibilityRole="button"
             accessibilityLabel={t('common.clearSearch', 'Clear search')}

@@ -38,7 +38,7 @@ def _hold(**overrides):
         "client_hold_amount": 100.0,
         "agent_hold_amount": 0.0,
         "delivery_fees": 0.0,
-        "item_settlement_completed_at": None,
+        "status": "active",
     }
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -196,10 +196,11 @@ class CancellationFinancialsTest(unittest.TestCase):
 
         self.assertTrue(result["success"])
         self.assertEqual(result["cancellation_fee"], 2700.0)
-        # fee charged, then hold released minus the fee, delivery hold released in full
+        # the order's own hold is released in full, then the fee is charged from
+        # the released funds (nothing left stranded in withheld)
         self.assertEqual(register_fee.call_args.args[4], 2700.0)
         released = [c.args[1] for c in deps["register_account_transaction"].call_args_list]
-        self.assertEqual(released, [6300.0, 1500.0])
+        self.assertEqual(released, [9000.0, 1500.0])
 
     def test_canada_explicit_zero_row_charges_nothing(self):
         order = _order(total_amount=100.0, currency="CAD")
@@ -330,6 +331,207 @@ class CancellationFinancialsTest(unittest.TestCase):
         self.assertEqual(result["error"], "Failed to release: agent hold")
         deps["update_order_hold_status"].assert_not_called()
 
+    # --- #462 / NB-4: never over-release on deposit (PAP/PAD) orders -------------
+
+    def test_deposit_order_without_hold_row_releases_nothing_and_creates_no_hold(self):
+        order = _order(
+            payment_timing="pay_at_pickup",
+            payment_status="pending",
+            deposit_status="forfeited",
+            deposit_amount=200.0,
+            total_amount=800.0,
+        )
+        with self._patch_cancellation_dependencies(
+            order=order, hold=None, transaction_ids=[], held={"client-account-123": 0.0}
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "ready_for_pickup", "endpoint", "secret",
+                cancellation_reason="client_no_show",
+            )
+        self.assertTrue(result["success"])
+        self.assertEqual(result["cancellation_fee"], 0.0)
+        deps["register_account_transaction"].assert_not_called()
+        deps["update_order_hold_status"].assert_not_called()
+        self.assertFalse(hasattr(handler, "get_or_create_order_hold"))
+
+    def test_deposit_order_phantom_hold_row_is_capped_by_ledger(self):
+        # PAD order E: backend wrote order_holds.client_hold_amount = total - deposit
+        # at agent claim, but no client ledger hold exists for the order.
+        order = _order(
+            payment_timing="pay_at_delivery",
+            payment_status="pending",
+            deposit_status="paid",
+            deposit_amount=200.0,
+            total_amount=1300.0,
+        )
+        with self._patch_cancellation_dependencies(
+            order=order,
+            hold=_hold(client_hold_amount=1100.0),
+            transaction_ids=[],
+            held={"client-account-123": 0.0},
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "confirmed", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"])
+        deps["register_account_transaction"].assert_not_called()
+        deps["update_order_hold_status"].assert_called_once_with(
+            "hold-123", "cancelled", "endpoint", "secret"
+        )
+
+    def test_release_is_capped_at_the_ledger_hold_for_the_order(self):
+        with self._patch_cancellation_dependencies(
+            order=_order(total_amount=800.0),
+            hold=_hold(client_hold_amount=800.0),
+            transaction_ids=["rel"],
+            held={"client-account-123": 300.0},
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "confirmed", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"])
+        released = [c.args[1] for c in deps["register_account_transaction"].call_args_list]
+        self.assertEqual(released, [300.0])
+
+    def test_no_hold_row_releases_only_ledger_holds_for_the_order(self):
+        with self._patch_cancellation_dependencies(
+            order=_order(payment_timing="pay_now", payment_status="paid"),
+            hold=None,
+            transaction_ids=["rel"],
+            held={"client-account-123": 200.0},
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "pending", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"])
+        call = deps["register_account_transaction"].call_args
+        self.assertEqual(call.args[1], 200.0)
+        self.assertEqual(call.args[2], "release")
+        self.assertEqual(call.args[4], "order-123")
+        deps["update_order_hold_status"].assert_not_called()
+
+    def test_inactive_hold_row_releases_from_ledger_and_is_not_rewritten(self):
+        # Agent drop flips the whole row to `cancelled` while the client's hold is
+        # still live; the row status must not short-circuit the client release.
+        with self._patch_cancellation_dependencies(
+            order=_order(),
+            hold=_hold(status="cancelled", client_hold_amount=0.0),
+            transaction_ids=["rel"],
+            held={"client-account-123": 100.0},
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "pending", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"])
+        call = deps["register_account_transaction"].call_args
+        self.assertEqual(call.args[1], 100.0)
+        self.assertEqual(call.kwargs["idempotency_key"], "order:order-123:cancel_release:client")
+        deps["update_order_hold_status"].assert_not_called()
+
+    def test_inactive_hold_row_with_nothing_held_is_a_no_op(self):
+        with self._patch_cancellation_dependencies(
+            order=_order(), hold=_hold(status="completed"), transaction_ids=[],
+            held={"client-account-123": 0.0},
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "pending", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"])
+        deps["register_account_transaction"].assert_not_called()
+        deps["update_order_hold_status"].assert_not_called()
+
+    def test_assigned_agent_without_account_and_no_row_does_not_fail_cancel(self):
+        order = _order(assigned_agent=SimpleNamespace(user_id="agent-user-123"))
+        with self._patch_cancellation_dependencies(
+            order=order, hold=None, transaction_ids=[], agent_account=None,
+            held={"client-account-123": 0.0},
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "pending", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"], result)
+        deps["register_account_transaction"].assert_not_called()
+
+    def test_releases_use_deterministic_keys_and_held_ignores_own_releases(self):
+        order = _order(assigned_agent=SimpleNamespace(user_id="agent-user-123"))
+        hold = _hold(client_hold_amount=100.0, delivery_fees=25.0, agent_hold_amount=40.0)
+        with self._patch_cancellation_dependencies(
+            order=order, hold=hold, transaction_ids=["agent-rel", "client-rel", "delivery-rel"]
+        ) as deps:
+            result = handler.process_cancellation_financials(
+                "order-123", "business", "pending", "endpoint", "secret"
+            )
+        self.assertTrue(result["success"])
+        keys = [
+            c.kwargs.get("idempotency_key")
+            for c in deps["register_account_transaction"].call_args_list
+        ]
+        self.assertEqual(
+            keys,
+            [
+                "order:order-123:cancel_release:agent",
+                "order:order-123:cancel_release:client",
+                "order:order-123:cancel_release:delivery",
+            ],
+        )
+        for c in deps["get_reference_held_amount"].call_args_list:
+            self.assertEqual(
+                c.kwargs.get("exclude_release_key_prefix"),
+                "order:order-123:cancel_release:",
+            )
+
+    def test_fee_is_charged_after_release_with_idempotent_fee_keys(self):
+        order = _order(payment_timing="pay_now", payment_status="paid", total_amount=200.0)
+        calls = []
+        with self._patch_cancellation_dependencies(
+            order=order, hold=_hold(client_hold_amount=200.0), transaction_ids=["rel"]
+        ) as deps:
+            deps["register_account_transaction"].side_effect = (
+                lambda *a, **k: calls.append(("release", a[1])) or "rel"
+            )
+            with self._patch_fee_config(country="CM", rows=[
+                {"country_code": "CM", "number_value": 30}
+            ]), patch.object(
+                handler,
+                "register_cancellation_fee_transactions",
+                side_effect=lambda *a, **k: calls.append(("fee", a[4], k.get("idempotency_key_prefix")))
+                or {"success": True},
+            ):
+                result = handler.process_cancellation_financials(
+                    "order-123", "business", "ready_for_pickup", "endpoint", "secret",
+                    cancellation_reason="client_no_show",
+                )
+        self.assertTrue(result["success"])
+        self.assertEqual(result["cancellation_fee"], 60.0)
+        self.assertEqual(
+            calls,
+            [("release", 200.0), ("fee", 60.0, "order:order-123:cancel_fee")],
+        )
+
+    def test_failed_fee_after_release_fails_step_and_keeps_hold_active(self):
+        order = _order(payment_timing="pay_now", payment_status="paid", total_amount=200.0)
+        with self._patch_cancellation_dependencies(
+            order=order, hold=_hold(client_hold_amount=200.0), transaction_ids=["rel"]
+        ) as deps:
+            with self._patch_fee_config(country="CM", rows=[
+                {"country_code": "CM", "number_value": 30}
+            ]), patch.object(
+                handler,
+                "register_cancellation_fee_transactions",
+                return_value={"success": False, "error": "boom"},
+            ):
+                result = handler.process_cancellation_financials(
+                    "order-123", "client", "confirmed", "endpoint", "secret"
+                )
+        self.assertFalse(result["success"])
+        deps["update_order_hold_status"].assert_not_called()
+
+    def test_is_reservation_deposit_order(self):
+        self.assertTrue(handler.is_reservation_deposit_order(_order(deposit_status="paid")))
+        self.assertTrue(handler.is_reservation_deposit_order(_order(deposit_amount=150.0)))
+        self.assertFalse(handler.is_reservation_deposit_order(_order(deposit_status="none")))
+        self.assertFalse(handler.is_reservation_deposit_order(_order()))
+
     def _patch_fee_config(self, country, rows):
         stack = ExitStack()
         stack.enter_context(
@@ -350,6 +552,7 @@ class CancellationFinancialsTest(unittest.TestCase):
         hold,
         transaction_ids,
         agent_account=SimpleNamespace(id="agent-account-123"),
+        held=None,
     ):
         client_account = SimpleNamespace(id="client-account-123")
 
@@ -358,12 +561,26 @@ class CancellationFinancialsTest(unittest.TestCase):
                 return agent_account
             return client_account
 
+        # Ledger amount held per account for this order. Defaults to exactly what
+        # the hold row says, i.e. a consistent ledger.
+        if held is None:
+            held = {
+                "client-account-123": (hold.client_hold_amount + hold.delivery_fees) if hold else 0.0,
+                "agent-account-123": hold.agent_hold_amount if hold else 0.0,
+            }
+
+        def get_held(account_id, *_args, **_kwargs):
+            return held.get(account_id, 0.0)
+
         patches = {
             "get_complete_order_details": patch.object(
                 handler, "get_complete_order_details", return_value=order
             ),
-            "get_or_create_order_hold": patch.object(
-                handler, "get_or_create_order_hold", return_value=hold
+            "get_order_hold": patch.object(
+                handler, "get_order_hold", return_value=hold
+            ),
+            "get_reference_held_amount": patch.object(
+                handler, "get_reference_held_amount", side_effect=get_held
             ),
             "get_account_by_user_and_currency": patch.object(
                 handler, "get_account_by_user_and_currency", side_effect=get_account

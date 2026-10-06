@@ -1,4 +1,5 @@
 import { useSessionAuth } from '../contexts/SessionAuthContext';
+import { AssistantChatProvider } from '../contexts/AssistantChatContext';
 import { Box, Container, useMediaQuery, useTheme } from '@mui/material';
 import { Suspense, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +13,9 @@ import {
 import * as LazyPages from './lazy-routes';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
 import { DeferredFloatingWhatsApp } from '../components/common/DeferredFloatingWhatsApp';
+import { DeferredAssistantLauncher } from '../components/assistant/DeferredAssistantLauncher';
+import { assistantScreenName } from '../components/assistant/assistantLauncherRoutes';
+import { useAssistantEntryGate } from '../components/assistant/useAssistantEntryGate';
 import LoadingPage from '../components/common/LoadingPage';
 import AgentOnboardingModal from '../components/dialogs/AgentOnboardingModal';
 import AgentLocationDisclosureModal from '../components/dialogs/AgentLocationDisclosureModal';
@@ -105,12 +109,29 @@ function App() {
   const hasMobileBottomNav =
     showAgentBottomNav || showClientBottomNav || showGuestBottomNav;
   const whatsappBottomOffset = hasMobileBottomNav ? 92 : 24;
+  // GuestBottomNav also renders on the guest home page (unlike `showGuestBottomNav`), so the
+  // launcher clears it there too; WhatsApp keeps its existing offset.
+  const assistantLauncherBottomOffset =
+    hasMobileBottomNav || (!isAuthenticated && isMobile) ? 92 : 24;
   const isItemDetailPage = /^\/items\/[^/]+\/?$/.test(location.pathname);
   const isPlaceOrderFlowPage = /^\/items\/[^/]+\/place_order(?:\/anon-address)?\/?$/.test(
     location.pathname
   );
+  // The assistant chat has its own WhatsApp handoff, and the bubble would cover its send button.
+  const isAssistantPage = location.pathname === '/assistant';
+  // Assistant launcher (#451 PR-6, behind `assistant_launcher_v1`, client and guest only).
+  // D2: for them the orb replaces the WhatsApp bubble on orb routes.
+  const assistantEntry = useAssistantEntryGate({
+    isAuthenticated,
+    userType,
+    personaLoading: profileLoading,
+    pathname: location.pathname,
+    isMobile,
+  });
   const shouldHideWhatsappWidget =
-    isMobile && (isItemDetailPage || isPlaceOrderFlowPage);
+    isAssistantPage ||
+    (isMobile && (isItemDetailPage || isPlaceOrderFlowPage)) ||
+    assistantEntry.whatsappYieldsToOrb;
   const isBusinessItemsCatalog = location.pathname.startsWith('/business/items');
 
   const {
@@ -186,6 +207,7 @@ function App() {
   }
 
   return (
+    <AssistantChatProvider>
     <BusinessOrdersLiveProvider>
     <IncomingOrderInterruptProvider>
       <StorePickupReminderProvider>
@@ -197,14 +219,16 @@ function App() {
           flexDirection: 'column',
         }}
       >
-        <Header />
+        <Header assistantEntry={assistantEntry.headerEntry} />
 
         <Box
           sx={{
             flex: 1,
-            py: isHomePage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
-            paddingBottom:
-              showAgentBottomNav || showClientBottomNav || showGuestBottomNav
+            py: isHomePage || isAssistantPage ? 0 : (isBusinessItemsCatalog ? { xs: 1, sm: 1.5 } : 4),
+            // The assistant is a full-height column that reserves the bottom nav itself.
+            paddingBottom: isAssistantPage
+              ? 0
+              : showAgentBottomNav || showClientBottomNav || showGuestBottomNav
                 ? { xs: '80px', md: isBusinessItemsCatalog ? 1.5 : 4 }
                 : isHomePage
                   ? 0
@@ -1068,7 +1092,8 @@ function App() {
           </Container>
         </Box>
 
-        <Footer />
+        {/* The assistant chat fills the viewport, so a footer below it would only make the page scroll. */}
+        {!isAssistantPage && <Footer />}
 
         {/* Agent Bottom Navigation - Only visible for agents on mobile */}
         <AgentBottomNav />
@@ -1082,6 +1107,14 @@ function App() {
         <DeferredFloatingWhatsApp
           whatsappBottomOffset={whatsappBottomOffset}
           hidden={shouldHideWhatsappWidget}
+        />
+
+        <DeferredAssistantLauncher
+          hidden={!assistantEntry.showLauncher}
+          isMobile={isMobile}
+          bottomOffset={assistantLauncherBottomOffset}
+          screen={assistantScreenName(location.pathname)}
+          isSignedIn={isAuthenticated}
         />
 
         {/* Agent Onboarding - Forces onboarding for agents who haven't completed it */}
@@ -1105,6 +1138,7 @@ function App() {
       </StorePickupReminderProvider>
     </IncomingOrderInterruptProvider>
     </BusinessOrdersLiveProvider>
+    </AssistantChatProvider>
   );
 }
 

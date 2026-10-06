@@ -438,6 +438,10 @@ describe('OrdersService', () => {
           useValue: { emit: jest.fn() },
         },
         {
+          provide: require('../site-events/site-events.service').SiteEventsService,
+          useValue: { trackEvent: jest.fn().mockResolvedValue(undefined) },
+        },
+        {
           provide: require('../food/food-orders.service').FoodOrdersService,
           useValue: { applyConfirmationUpdates: jest.fn() },
         },
@@ -472,8 +476,14 @@ describe('OrdersService', () => {
               lines: [],
             }),
             isDepositRequired: jest.fn().mockReturnValue(false),
+            isDepositCollected: jest.fn(
+              (o: any) =>
+                (o?.deposit_status === 'paid' || o?.deposit_status === 'applied') &&
+                Number(o?.deposit_amount) > 0
+            ),
             remainderPaymentAmount: jest.fn((o: any) =>
-              o?.deposit_status === 'paid'
+              (o?.deposit_status === 'paid' || o?.deposit_status === 'applied') &&
+              Number(o?.deposit_amount) > 0
                 ? Math.max(0, (o.total_amount || 0) - (o.deposit_amount || 0))
                 : o?.total_amount || 0
             ),
@@ -1537,6 +1547,126 @@ describe('OrdersService', () => {
         expect.objectContaining({ payAfterMerchantConfirm: false })
       );
       expect(finalizeSpy).toHaveBeenCalled();
+    });
+
+    // ---- Multi-location any-flagged twin ----
+    it('multi-location cart with any flagged location: whole cart becomes pay-after', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        available_balance: 0,
+      } as any);
+      (service as any).paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({
+          rail: 'mobile_money',
+          isDiaspora: false,
+        }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      jest.spyOn(service as any, 'updateReservedQuantities').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'isMarketFlagEnabled')
+        .mockImplementation(async (key: string) =>
+          key === 'pay_after_confirm_location_flag_enabled' ? true : false
+        );
+      jest.spyOn(service as any, 'requireOrderDetailsByNumber')
+        .mockResolvedValue({ id: 'order-123', order_number: '12345678' });
+      jest.spyOn(service as any, 'sendOrderPlacedNotifications').mockResolvedValue(undefined);
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'merchantLifecycle') {
+          return { checkoutGateEnabled: false };
+        }
+        if (key === 'notification') {
+          return { orderStatusChangeEnabled: false };
+        }
+        return undefined;
+      });
+      (service as any).mobilePaymentsService = {
+        initiatePayment: jest.fn(),
+        getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
+      };
+      const finalizeSpy = jest.spyOn(service as any, 'finalizeClientOrderPayment')
+        .mockResolvedValue(undefined);
+
+      const flaggedInv = {
+        id: 'inv-flagged',
+        computed_available_quantity: 10,
+        selling_price: 1000,
+        is_active: true,
+        business_location_id: 'loc-flagged',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        business_location: {
+          business_id: 'biz-1',
+          is_active: true,
+          pay_at_confirm: true,
+          mobile_payment_phone: { is_verified: true },
+          address: { country: 'CM' },
+          business: {
+            id: 'biz-1',
+            name: 'Flagged Store',
+            can_accept_orders: true,
+            is_verified: true,
+            user: { id: 'm-1', country: 'CM' },
+          },
+        },
+        item: {
+          id: 'item-f',
+          name: 'Flagged Item',
+          is_cooked_food: false,
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          currency: 'XAF',
+          item_variants: [],
+          item_sub_category: { item_category: { name: 'Hardware' } },
+        },
+      };
+      const unflaggedInv = {
+        ...flaggedInv,
+        id: 'inv-unflagged',
+        business_location_id: 'loc-unflagged',
+        business_location: {
+          ...flaggedInv.business_location,
+          id: 'loc-unflagged',
+          pay_at_confirm: false,
+        },
+        item: { ...flaggedInv.item, id: 'item-u', name: 'Unflagged Item', pay_at_pickup_enabled: true },
+      };
+
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ business_inventory: [flaggedInv, unflaggedInv] })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-123',
+            order_number: '12345678',
+            pay_after_merchant_confirm: true,
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+
+      await service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_at_pickup',
+        phone_number: '+237654100000',
+        items: [
+          { business_inventory_id: 'inv-flagged', quantity: 1 },
+          { business_inventory_id: 'inv-unflagged', quantity: 1 },
+        ],
+      });
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ payAfterMerchantConfirm: true })
+      );
+      expect(finalizeSpy).not.toHaveBeenCalled();
     });
 
     it('calculates the MoMo deposit from the post-credit total', async () => {
@@ -3910,7 +4040,11 @@ describe('OrdersService', () => {
       });
       jest.spyOn(service as any, 'assertClaimableFulfillment').mockReturnValue(undefined);
       jest.spyOn(service as any, 'getAgentStatus').mockResolvedValue('active');
-      jest.spyOn(service as any, 'resolveOrderHoldAmount').mockResolvedValue(8000);
+      jest.spyOn(service as any, 'resolveOrderHoldAmount').mockResolvedValue({
+        rail: 'mobile_money',
+        holdPercentage: 80,
+        holdAmount: 8000,
+      });
       hasuraSystemService.getAccount.mockResolvedValue({
         id: 'account-1',
         available_balance: 8000,
@@ -4625,6 +4759,121 @@ describe('OrdersService', () => {
       ).not.toHaveBeenCalled();
     });
 
+    const unpaidPickup = {
+      ...paidOrder,
+      fulfillment_method: 'pickup',
+      payment_timing: 'pay_at_pickup',
+      payment_status: 'pending',
+    };
+
+    it('forfeits on a merchant no-show of an unpaid pay-at-pickup order, attributed to the store user', async () => {
+      (service as any).depositCalculationService.isAfterRefundLockPoint
+        .mockReturnValue(true);
+
+      await (service as any).handleDepositOnCancellation(
+        unpaidPickup,
+        'order-1',
+        'ready_for_pickup',
+        'business',
+        'did not collect',
+        'client_no_show',
+        'store-user-1'
+      );
+
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).toHaveBeenCalledWith('order-1', 'customer_no_show_pickup', {
+        forfeitedByUserId: 'store-user-1',
+      });
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+    });
+
+    it('never forfeits a no-show on a paid, pay-after-confirm or delivery order', async () => {
+      (service as any).depositCalculationService.isAfterRefundLockPoint
+        .mockReturnValue(true);
+      const cases = [
+        { ...unpaidPickup, payment_status: 'paid' },
+        { ...unpaidPickup, pay_after_merchant_confirm: true },
+        { ...unpaidPickup, payment_timing: 'pay_now' },
+        { ...paidOrder, payment_timing: 'pay_at_delivery', payment_status: 'pending' },
+      ];
+      for (const order of cases) {
+        await (service as any).handleDepositOnCancellation(
+          order,
+          'order-1',
+          order.fulfillment_method === 'delivery' ? 'out_for_delivery' : 'ready_for_pickup',
+          'business',
+          undefined,
+          'client_no_show'
+        );
+      }
+
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).not.toHaveBeenCalled();
+      // Business-cancel rule instead (refund is refused later if the deposit is applied).
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledTimes(cases.length);
+    });
+
+    it('still refunds a no-show before the lock point', async () => {
+      (service as any).depositCalculationService.isAfterRefundLockPoint
+        .mockReturnValue(false);
+
+      await (service as any).handleDepositOnCancellation(
+        {
+          ...paidOrder,
+          fulfillment_method: 'pickup',
+        },
+        'order-1',
+        'confirmed',
+        'business',
+        undefined,
+        'client_no_show'
+      );
+
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-1', { allowAfterLock: true });
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).not.toHaveBeenCalled();
+    });
+
+    it('passes client_no_show through cancellation side effects', async () => {
+      const handle = jest
+        .spyOn(service as any, 'handleDepositOnCancellation')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      (service as any).orderQueueService = {
+        sendOrderCancelledMessage: jest.fn().mockResolvedValue(undefined),
+      };
+
+      await (service as any).runOrderCancellationSideEffects(
+        { order_items: [] },
+        'order-1',
+        'ready_for_pickup',
+        'business',
+        'left a note',
+        'client_no_show'
+      );
+
+      expect(handle).toHaveBeenCalledWith(
+        { order_items: [] },
+        'order-1',
+        'ready_for_pickup',
+        'business',
+        'left a note',
+        'client_no_show',
+        undefined
+      );
+    });
+
     it('forfeits after lock and refunds before lock for client cancel', async () => {
       const lock =
         (service as any).depositCalculationService.isAfterRefundLockPoint;
@@ -4645,7 +4894,9 @@ describe('OrdersService', () => {
 
       expect(
         (service as any).depositRefundService.forfeitDeposit
-      ).toHaveBeenCalledWith('order-1', 'customer_cancel_after_lock');
+      ).toHaveBeenCalledWith('order-1', 'customer_cancel_after_lock', {
+        forfeitedByUserId: null,
+      });
       expect(
         (service as any).depositRefundService.refundDeposit
       ).toHaveBeenCalledWith('order-1');
@@ -5924,6 +6175,83 @@ describe('OrdersService', () => {
       expect(
         (service as any).mobilePaymentsService.initiatePayment
       ).toHaveBeenCalled();
+    });
+  });
+
+  describe('getOrderById agent view amount_due', () => {
+    const padOrderRow = {
+      id: 'order-pad-1',
+      order_number: '60093851',
+      business_id: 'business-123',
+      client_id: 'client-123',
+      assigned_agent_id: 'agent-123',
+      current_status: 'out_for_delivery',
+      payment_timing: 'pay_at_delivery',
+      fulfillment_method: 'delivery',
+      currency: 'XAF',
+      subtotal: 800,
+      total_amount: 1300,
+      base_delivery_fee: 500,
+      per_km_delivery_fee: 0,
+      deposit_amount: 200,
+      deposit_status: 'paid',
+      order_items: [],
+    };
+
+    beforeEach(() => {
+      hasuraUserService.getUser.mockResolvedValue(mockAgentUser);
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
+        ...padOrderRow,
+        client: { user_id: 'client-456' },
+      });
+      jest
+        .spyOn(service as any, 'getAgentInfo')
+        .mockResolvedValue({ isAgent: true, isVerified: true });
+      agentHoldService.getHoldPercentageForAgent.mockResolvedValue(0);
+      // Behave like Hasura: only return the columns the query selects.
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        const row: Record<string, unknown> = { ...padOrderRow };
+        if (!/\btotal_amount\b/.test(query)) delete row.total_amount;
+        return { orders_by_pk: row };
+      });
+    });
+
+    it('returns the remainder to collect (total - deposit) without exposing total_amount', async () => {
+      const result: any = await service.getOrderById('order-pad-1');
+
+      expect(result.access_reason).toBe('assigned_agent');
+      expect(result.amount_due).toBe(1100);
+      expect(result.total_amount).toBeUndefined();
+      expect(result.subtotal).toBeUndefined();
+    });
+  });
+
+  describe('settlement copy for pay-at-pickup deposit orders', () => {
+    it('labels the settlement deposit release as a settlement, not a refund', async () => {
+      jest
+        .spyOn(service as any, 'claimDepositForSettlement')
+        .mockResolvedValue(true);
+      const ledger = (service as any).depositLedgerService;
+
+      await (service as any).releasePaidDepositHoldIfNeeded(
+        {
+          id: 'order-d',
+          order_number: '14795691',
+          payment_timing: 'pay_at_pickup',
+          fulfillment_method: 'pickup',
+          deposit_amount: 200,
+          deposit_status: 'paid',
+          deposit_mobile_payment_transaction_id: 'dep-txn-1',
+        },
+        'client-acct-1'
+      );
+
+      expect(ledger.releaseDepositToAvailable).toHaveBeenCalledWith(
+        expect.objectContaining({
+          depositTransactionId: 'dep-txn-1',
+          memo: 'Deposit released for settlement of order 14795691',
+        })
+      );
     });
   });
 });

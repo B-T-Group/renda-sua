@@ -24,6 +24,8 @@ import { AdminBroadcastStore } from './AdminBroadcastStore';
 import { ReferralRejectionStore } from './ReferralRejectionStore';
 import { PickupReminderStore } from './PickupReminderStore';
 import { StorePickupReminderStore } from './StorePickupReminderStore';
+import { AssistantStore } from './AssistantStore';
+import { AssistantCharacterStore } from './AssistantCharacterStore';
 import { resetStockAvailabilityPending } from '../hooks/useStockAvailabilityChecks';
 import { hydrateFirstOrderJourneyPins } from '../utils/firstOrderJourneyStorage';
 
@@ -43,6 +45,9 @@ export class RootStore {
   public nudge: NudgeStore;
   public ftue: FtueStore;
   public market: MarketStore;
+  public assistant: AssistantStore;
+  /** Renda character state for the chat hero + header avatar (#451 PR-5a). */
+  public assistantCharacter: AssistantCharacterStore;
 
   constructor() {
     makeAutoObservable(this);
@@ -61,6 +66,8 @@ export class RootStore {
     this.nudge = new NudgeStore();
     this.ftue = new FtueStore();
     this.market = new MarketStore();
+    this.assistant = new AssistantStore();
+    this.assistantCharacter = new AssistantCharacterStore(this.assistant);
     SessionService.bind(this);
   }
 
@@ -76,6 +83,8 @@ export class RootStore {
     this.persona.reset();
     this.auth.reset();
     this.cart.clear();
+    // Rotate assistant thread on sign-out (auth state change)
+    this.assistant.rotateThread();
   }
 
   async hydrate(): Promise<void> {

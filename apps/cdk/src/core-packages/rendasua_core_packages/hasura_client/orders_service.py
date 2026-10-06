@@ -227,6 +227,9 @@ def get_complete_order_details(
         payment_timing
         current_status
         pay_after_merchant_confirm
+        deposit_amount
+        deposit_status
+        business_location_id
         client {
           id
           user_id
@@ -319,7 +322,11 @@ def get_complete_order_details(
                 "pay_after_merchant_confirm"
             ),
             current_status=order_data.get("current_status") or "",
-            business_location_id="",  # Not fetched in this query
+            deposit_amount=float(order_data["deposit_amount"])
+            if order_data.get("deposit_amount") is not None
+            else None,
+            deposit_status=order_data.get("deposit_status"),
+            business_location_id=order_data.get("business_location_id") or "",
             delivery_address_id="",  # Not fetched in this query
             subtotal=0.0,
             # Fee-base inputs (cancellation fee = % of item subtotal after discounts)

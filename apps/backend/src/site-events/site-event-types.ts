@@ -97,8 +97,42 @@ export const SITE_EVENT_TYPES_V1 = [
   'auth_session_observed',
   'catalog.module.impression',
   'catalog.module.click',
+  // Reorder (mobile + web, #336 PR #344)
+  'orders.reorder.impression',
+  'orders.reorder.tap',
+  'orders.reorder.result',
+  // Assistant (#451) - client-emitted events
+  'assistant.launcher.impression',
+  'assistant.launcher.tap',
+  'assistant.nudge.shown',
+  'assistant.nudge.dismissed',
+  'assistant.attention.played',
+  'assistant.chat.opened',
+  'assistant.chip.tap',
+  'assistant.message.sent',
+  'assistant.deeplink.shown',
+  'assistant.deeplink.tap',
+  'assistant.attributed.add_to_cart',
+  'assistant.attributed.order_created',
+  'assistant.handoff.requested',
+  'assistant.feedback.submitted',
+  'assistant.error.shown',
 ] as const;
 
-export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number];
+// Server-only events (Phase 0 #453) - not allowed in public /track-site-event
+export const SERVER_SITE_EVENT_TYPES = [
+  'agent.claim_funds_check',
+  'agent.claim_topup_started',
+  'agent.claim_topup_succeeded',
+  'agent.claim_topup_failed',
+  'agent.claim_topup_cancelled',
+  'checkout.delivery_availability',
+  // Assistant server-only events (#451)
+  'assistant.message.classified',
+  'assistant.support.deflected',
+] as const;
+
+export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number] | (typeof SERVER_SITE_EVENT_TYPES)[number];
+export type ServerSiteEventType = (typeof SERVER_SITE_EVENT_TYPES)[number];
 
 export const SITE_EVENT_SUBJECT_INVENTORY_ITEM = 'inventory_item';
