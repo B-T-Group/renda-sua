@@ -1,4 +1,5 @@
 import {
+  hasCashExceptionBlockingDeposit,
   isDepositPaid,
   remainingAfterDeposit,
 } from './depositRemainder';
@@ -54,6 +55,54 @@ describe('depositRemainder', () => {
     ).toBe(true);
     expect(
       isDepositPaid({ deposit_amount: 150, deposit_status: 'pending' })
+    ).toBe(false);
+  });
+
+  it('blocks cash exception for paid deposits', () => {
+    expect(
+      hasCashExceptionBlockingDeposit({ deposit_amount: 150, deposit_status: 'paid' })
+    ).toBe(true);
+  });
+
+  it('blocks cash exception for applied deposits', () => {
+    expect(
+      hasCashExceptionBlockingDeposit({ deposit_amount: 150, deposit_status: 'applied' })
+    ).toBe(true);
+  });
+
+  it('blocks cash exception for forfeited deposits', () => {
+    expect(
+      hasCashExceptionBlockingDeposit({ deposit_amount: 150, deposit_status: 'forfeited' })
+    ).toBe(true);
+  });
+
+  it('allows cash exception for pending deposits', () => {
+    expect(
+      hasCashExceptionBlockingDeposit({ deposit_amount: 150, deposit_status: 'pending' })
+    ).toBe(false);
+  });
+
+  it('allows cash exception for failed deposits', () => {
+    expect(
+      hasCashExceptionBlockingDeposit({ deposit_amount: 150, deposit_status: 'failed' })
+    ).toBe(false);
+  });
+
+  it('allows cash exception for refunded deposits', () => {
+    expect(
+      hasCashExceptionBlockingDeposit({ deposit_amount: 150, deposit_status: 'refunded' })
+    ).toBe(false);
+  });
+
+  it('allows cash exception when deposit amount is zero', () => {
+    expect(
+      hasCashExceptionBlockingDeposit({ deposit_amount: 0, deposit_status: 'paid' })
+    ).toBe(false);
+  });
+
+  it('allows cash exception when deposit status is none', () => {
+    expect(
+      hasCashExceptionBlockingDeposit({ deposit_amount: 150, deposit_status: 'none' })
     ).toBe(false);
   });
 });

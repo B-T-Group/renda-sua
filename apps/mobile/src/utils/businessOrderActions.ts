@@ -10,6 +10,7 @@ import {
   isCookedFoodPayAfterPaid,
   isCookedFoodReadyFailEligible,
 } from './cookedFoodOrder';
+import { hasCashExceptionBlockingDeposit } from './depositResume';
 
 export type BusinessOrderActionId =
   | 'confirm'
@@ -144,7 +145,8 @@ function standardOrderActions(
 
   if (
     mode === 'owner' &&
-    order.reconciliation_status === 'pending_manual_reconciliation'
+    order.reconciliation_status === 'pending_manual_reconciliation' &&
+    !hasCashExceptionBlockingDeposit(order)
   ) {
     actions.push({
       id: 'reconcileCash',

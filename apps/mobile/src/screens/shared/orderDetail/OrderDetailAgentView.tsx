@@ -33,6 +33,7 @@ import { SimpleMessageDialog } from '../../../components/dialogs/SimpleMessageDi
 import { CompleteDeliveryPinDialog } from '../../../components/dialogs/CompleteDeliveryPinDialog';
 import { DeliveryCompleteSuccessModal } from '../../../components/dialogs/DeliveryCompleteSuccessModal';
 import { ActionLoadingDialog } from '../../../components/feedback/ActionLoadingDialog';
+import { hasCashExceptionBlockingDeposit } from '../../../utils/depositResume';
 import {
   DeliveryEarningsCard,
   DeliveryObjectiveHero,
@@ -1119,16 +1120,18 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
                   {t('agent.orders.payAtDelivery.requestPayment', { defaultValue: 'Request payment' })}
                 </Text>
               </Pressable>
-              <Pressable
-                style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.warning.main, borderRadius: borderRadius.md }]}
-                onPress={() => setShowCashExceptionDialog(true)}
-                disabled={actionLoading || payAtDeliveryDialogLoading}
-              >
-                <MaterialCommunityIcons name="cash-multiple" size={20} color={colors.warning.main} />
-                <Text style={[styles.actionBtnTextSecondary, { color: colors.warning.main }, typography.button]}>
-                  {t('agent.orders.payAtDelivery.markPaidInCash', { defaultValue: 'Mark paid in cash' })}
-                </Text>
-              </Pressable>
+              {!hasCashExceptionBlockingDeposit(order) ? (
+                <Pressable
+                  style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.warning.main, borderRadius: borderRadius.md }]}
+                  onPress={() => setShowCashExceptionDialog(true)}
+                  disabled={actionLoading || payAtDeliveryDialogLoading}
+                >
+                  <MaterialCommunityIcons name="cash-multiple" size={20} color={colors.warning.main} />
+                  <Text style={[styles.actionBtnTextSecondary, { color: colors.warning.main }, typography.button]}>
+                    {t('agent.orders.payAtDelivery.markPaidInCash', { defaultValue: 'Mark paid in cash' })}
+                  </Text>
+                </Pressable>
+              ) : null}
             </>
           ) : null}
           {status === 'out_for_delivery' && !needsPayAtDeliveryActions ? (

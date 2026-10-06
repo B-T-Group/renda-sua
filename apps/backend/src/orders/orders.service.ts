@@ -5565,6 +5565,24 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
+
+    const depositAmount = Number((order as any).deposit_amount) || 0;
+    const depositStatus = (order as any).deposit_status as string | undefined;
+    if (
+      depositAmount > 0 &&
+      depositStatus &&
+      ['paid', 'applied', 'forfeited'].includes(depositStatus)
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            'Cash exception is not available for orders with reservation deposits. Please contact support or use mobile payment reconciliation.',
+          error: 'CASH_EXCEPTION_BLOCKED_FOR_DEPOSIT_ORDER',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
     if (order.current_status !== 'out_for_delivery') {
       throw new HttpException(
         'Cash exception can only be reported when order is out for delivery',
@@ -5695,6 +5713,24 @@ export class OrdersService {
     if (paymentTiming !== 'pay_at_delivery') {
       throw new HttpException(
         'Cash exception mobile reconciliation is only for pay-at-delivery orders',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const depositAmount = Number((order as any).deposit_amount) || 0;
+    const depositStatus = (order as any).deposit_status as string | undefined;
+    if (
+      depositAmount > 0 &&
+      depositStatus &&
+      ['paid', 'applied', 'forfeited'].includes(depositStatus)
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            'Cash exception reconciliation is not available for orders with reservation deposits.',
+          error: 'CASH_EXCEPTION_BLOCKED_FOR_DEPOSIT_ORDER',
+        },
         HttpStatus.BAD_REQUEST
       );
     }

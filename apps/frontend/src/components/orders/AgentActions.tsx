@@ -34,6 +34,7 @@ import CompleteDeliveryDialog from '../dialogs/CompleteDeliveryDialog';
 import MarkDeliveryAsFailedDialog from '../dialogs/MarkDeliveryAsFailedDialog';
 import RequestPayAtDeliveryPaymentDialog from '../dialogs/RequestPayAtDeliveryPaymentDialog';
 import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
+import { hasCashExceptionBlockingDeposit } from '../../utils/depositRemainder';
 import ClaimOrderDialog from './ClaimOrderDialog';
 
 interface AgentActionsProps {
@@ -688,12 +689,14 @@ const AgentActions: React.FC<AgentActionsProps> = ({
             color: 'success' as const,
             icon: <CheckCircle />,
           });
-          actions.push({
-            label: t('orderActions.markPaidInCash', 'Mark paid in cash'),
-            action: () => setShowCashExceptionDialog(true),
-            color: 'warning' as const,
-            icon: <Cancel />,
-          });
+          if (!hasCashExceptionBlockingDeposit(order)) {
+            actions.push({
+              label: t('orderActions.markPaidInCash', 'Mark paid in cash'),
+              action: () => setShowCashExceptionDialog(true),
+              color: 'warning' as const,
+              icon: <Cancel />,
+            });
+          }
         } else {
           actions.push({
             label: t('orderActions.completeDelivery', 'Complete delivery'),
