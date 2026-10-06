@@ -27,6 +27,40 @@ export type AssistantChatMessage = {
 type ChatApiResponse = {
   reply: string;
   handoff: boolean;
+  /** Contract v2 (#451 §5.2): structured tool results. Absent on today's backend. */
+  blocks?: Array<{ kind?: unknown } | null> | null;
+};
+
+/** Block kinds that only come from a successful tool call (order/item/store found, reorder ready). */
+const TOOL_RESULT_BLOCK_KINDS = new Set(['item', 'store', 'order', 'reorder']);
+
+/**
+ * True when a reply carried a successful tool result, which is the only trigger for
+ * the character's Success state. Plain FAQ answers, link-only blocks and handoffs
+ * never count.
+ */
+export function replyHasToolSuccess(
+  data: Partial<ChatApiResponse> | null | undefined
+): boolean {
+  if (!data || data.handoff) return false;
+  if (!Array.isArray(data.blocks)) return false;
+  return data.blocks.some(
+    (b) =>
+      !!b && typeof b.kind === 'string' && TOOL_RESULT_BLOCK_KINDS.has(b.kind)
+  );
+}
+
+export type LastAssistantReply = {
+  /** Increments on every reply that lands in the thread. */
+  seq: number;
+  toolSuccess: boolean;
+  handoff: boolean;
+};
+
+const NO_REPLY: LastAssistantReply = {
+  seq: 0,
+  toolSuccess: false,
+  handoff: false,
 };
 
 interface AssistantChatContextType {
@@ -39,6 +73,8 @@ interface AssistantChatContextType {
   isOffline: boolean;
   /** False until auth has settled and the thread has been checked against its owner. */
   ready: boolean;
+  /** The latest reply that landed (drives the assistant character's Responding/Success). */
+  lastReply: LastAssistantReply;
   /** Appends a user message and sends the thread. Resolves false when nothing was sent. */
   sendMessage: (text: string) => Promise<boolean>;
   /** Re-sends the thread whose last user message failed, without adding a copy. */
@@ -224,6 +260,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const [handoff, setHandoff] = useState(false);
   const [draft, setDraft] = useState('');
   const [isOffline, setIsOffline] = useState(false);
+  const [lastReply, setLastReply] = useState<LastAssistantReply>(NO_REPLY);
 
   // Refs mirror state so async callbacks never act on a stale thread.
   const messagesRef = useRef<AssistantChatMessage[]>([]);
@@ -410,6 +447,11 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
             ...messagesRef.current,
             { id: makeMessageId(), role: 'assistant', content: reply },
           ]);
+          setLastReply((prev) => ({
+            seq: prev.seq + 1,
+            toolSuccess: replyHasToolSuccess(data),
+            handoff: !!data?.handoff,
+          }));
         }
         if (data?.handoff) setHandoff(true);
         writeStorage(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
@@ -465,6 +507,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
       draft,
       isOffline,
       ready,
+      lastReply,
       sendMessage,
       retry,
       setDraft,
@@ -479,6 +522,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
       draft,
       isOffline,
       ready,
+      lastReply,
       sendMessage,
       retry,
       clearChat,
@@ -490,6 +534,11 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
       {children}
     </AssistantChatContext.Provider>
   );
+}
+
+/** Null outside the provider (shared widgets that only need the thread id). */
+export function useOptionalAssistantChat(): AssistantChatContextType | null {
+  return useContext(AssistantChatContext);
 }
 
 export function useAssistantChat(): AssistantChatContextType {

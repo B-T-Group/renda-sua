@@ -8569,7 +8569,18 @@
     "homeEntryTitle": "Ask the AI assistant",
     "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",
     "homeEntryCta": "Open assistant",
-    "headerLabel": "Ask Rendasua assistant"
+    "headerLabel": "Ask Rendasua assistant",
+    "launcher": {
+      "label": "Open shopping assistant",
+      "hint": "Find items, reorder or track an order",
+      "ask": "Ask",
+      "labelExtended": "Ask: open shopping assistant"
+    },
+    "nudge": {
+      "text": "Hi! I can find items, track your order or reorder for you.",
+      "tryIt": "Try it",
+      "dismiss": "Dismiss"
+    }
   },
   "dashboardComposing": {
     "client": {

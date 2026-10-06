@@ -24,6 +24,10 @@ jest.mock('../../contexts/SessionAuthContext', () => ({
 jest.mock('../../hooks/useApiClient', () => ({
   useApiClient: () => mockApiClient,
 }));
+let mockUserType: string | null = null;
+jest.mock('../../contexts/UserProfileContext', () => ({
+  useOptionalUserProfileContext: () => (mockUserType ? { userType: mockUserType } : null),
+}));
 
 const renderPage = () =>
   render(
@@ -85,6 +89,7 @@ beforeEach(() => {
   mockApiClient.post.mockReset();
   mockUseSessionAuth.mockReturnValue({ isAuthenticated: false, isLoading: false, user: null });
   mockApiClient.post.mockResolvedValue({ data: { reply: 'Test reply', handoff: false } });
+  mockUserType = null;
 });
 
 describe('AssistantPage', () => {
@@ -268,5 +273,120 @@ describe('AssistantPage', () => {
     renderPage();
     expect(composer().disabled).toBe(true);
     expect(mockApiClient.post).not.toHaveBeenCalled();
+  });
+
+  describe('Renda character (client and guest)', () => {
+    const heroState = () =>
+      screen.getByTestId('assistant-hero-character').querySelector('svg')?.getAttribute('data-renda-state');
+    const subtitle = () => document.querySelector('header p[aria-live]')?.textContent ?? '';
+    const headerSvg = () =>
+      screen.getByTestId('assistant-header-character').querySelector('svg') as SVGSVGElement;
+
+    it('guest: empty-state hero (128 below md), header avatar at 40, no SmartToy', () => {
+      renderPage();
+      const hero = screen.getByTestId('assistant-hero-character');
+      expect(hero.getAttribute('data-size')).toBe('128');
+      expect(hero.querySelector('svg')?.getAttribute('height')).toBe('128');
+      expect(hero.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+      expect(headerSvg().getAttribute('height')).toBe('40');
+      expect(headerSvg().getAttribute('data-renda-eyes')).toBe('expressive');
+      expect(screen.queryByTestId('SmartToyIcon')).toBeNull();
+    });
+
+    it('signed-in client sees the character', () => {
+      mockUseSessionAuth.mockReturnValue({ isAuthenticated: true, isLoading: false, user: { sub: 'auth0|c1' } });
+      mockUserType = 'client';
+      renderPage();
+      expect(screen.getByTestId('assistant-hero-character')).toBeInTheDocument();
+    });
+
+    it.each(['agent', 'business'])('%s keeps the SmartToy icon', (persona) => {
+      mockUseSessionAuth.mockReturnValue({ isAuthenticated: true, isLoading: false, user: { sub: 'auth0|x1' } });
+      mockUserType = persona;
+      renderPage();
+      expect(screen.queryByTestId('assistant-hero-character')).toBeNull();
+      expect(screen.queryByTestId('assistant-header-character')).toBeNull();
+      expect(screen.getAllByTestId('SmartToyIcon').length).toBeGreaterThan(0);
+    });
+
+    it('message avatars are the 28 px character with static dot eyes', () => {
+      sessionStorage.setItem(STORAGE_KEY_OWNER, 'guest');
+      sessionStorage.setItem(STORAGE_KEY_THREAD_ID, '11111111-1111-4111-8111-111111111111');
+      sessionStorage.setItem(
+        STORAGE_KEY_MESSAGES,
+        JSON.stringify([
+          { id: '1', role: 'user', content: 'u1' },
+          { id: '2', role: 'assistant', content: 'a1' },
+        ])
+      );
+      renderPage();
+      const svg = screen.getByTestId('assistant-mini-orb').querySelector('svg') as SVGSVGElement;
+      expect(svg.getAttribute('height')).toBe('28');
+      expect(svg.getAttribute('data-renda-eyes')).toBe('dot');
+      expect(svg.getAttribute('data-renda-motion')).toBe('static');
+    });
+
+    it('Idle → Attentive on focus → Typing when non-empty → Idle on blur', () => {
+      renderPage();
+      expect(heroState()).toBe('idle');
+      fireEvent.focus(composer());
+      expect(heroState()).toBe('attentive');
+      fireEvent.change(composer(), { target: { value: 'Where is my order?' } });
+      expect(heroState()).toBe('listening');
+      fireEvent.blur(composer());
+      expect(heroState()).toBe('idle');
+    });
+
+    it('send: Thinking with the subtitle (≥ 400 ms), Responding on reply, then Idle; no Success for plain answers', async () => {
+      let resolve: (v: unknown) => void = () => undefined;
+      mockApiClient.post.mockReturnValueOnce(new Promise((r) => (resolve = r)));
+      renderPage();
+      typeAndEnter('Do you deliver?');
+      expect(headerSvg().getAttribute('data-renda-state')).toBe('thinking');
+      expect(subtitle()).toMatch(/^(Thinking…|assistant\.statusThinking)$/);
+      resolve({ data: { reply: 'Yes we do.', handoff: false } });
+      await screen.findByText('Yes we do.');
+      // Fast reply: Thinking (and its subtitle) are still held for the 400 ms minimum.
+      expect(headerSvg().getAttribute('data-renda-state')).toBe('thinking');
+      expect(subtitle()).toMatch(/^(Thinking…|assistant\.statusThinking)$/);
+      await waitFor(() => expect(headerSvg().getAttribute('data-renda-state')).toBe('responding'), { timeout: 2000 });
+      await waitFor(() => expect(headerSvg().getAttribute('data-renda-state')).toBe('idle'), { timeout: 2000 });
+      expect(subtitle()).not.toMatch(/Thinking|statusThinking/);
+    });
+
+    it('Success only when the reply carries a successful tool result', async () => {
+      mockApiClient.post.mockResolvedValueOnce({
+        data: { reply: 'Found your order.', handoff: false, blocks: [{ kind: 'order' }] },
+      });
+      renderPage();
+      typeAndEnter('Where is my order?');
+      await screen.findByText('Found your order.');
+      await waitFor(() => expect(headerSvg().getAttribute('data-renda-state')).toBe('success'), { timeout: 3000 });
+      await waitFor(() => expect(headerSvg().getAttribute('data-renda-state')).toBe('idle'), { timeout: 3000 });
+    });
+
+    it('never Success on handoff or error', async () => {
+      mockApiClient.post
+        .mockResolvedValueOnce({ data: { reply: 'Connecting you.', handoff: true, blocks: [{ kind: 'order' }] } })
+        .mockRejectedValueOnce({ response: { status: 500, data: {} } });
+      renderPage();
+      const seen = new Set<string>();
+      const observer = new MutationObserver(() => {
+        const st = document
+          .querySelector('[data-testid="assistant-header-character"] svg')
+          ?.getAttribute('data-renda-state');
+        if (st) seen.add(st);
+      });
+      observer.observe(document.body, { attributes: true, subtree: true, attributeFilter: ['data-renda-state'] });
+      typeAndEnter('I want a person');
+      await screen.findByText('Connecting you.');
+      await waitFor(() => expect(headerSvg().getAttribute('data-renda-state')).toBe('idle'), { timeout: 3000 });
+      typeAndEnter('hello?');
+      await screen.findByTestId('assistant-error-banner');
+      await waitFor(() => expect(headerSvg().getAttribute('data-renda-state')).toBe('idle'), { timeout: 3000 });
+      observer.disconnect();
+      expect(seen.has('success')).toBe(false);
+      expect(seen.has('responding')).toBe(true);
+    });
   });
 });

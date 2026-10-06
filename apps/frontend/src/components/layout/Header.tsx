@@ -42,7 +42,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { useSnackbar } from 'notistack';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useCart } from '../../contexts/CartContext';
@@ -66,6 +66,17 @@ import { HeaderSearchPopover } from './HeaderSearchPopover';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
 import { brandTokens } from '../../theme/brandTokens';
+import {
+  SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION,
+  SITE_EVENT_ASSISTANT_LAUNCHER_TAP,
+} from '../../hooks/useTrackSiteEvent';
+import { RendaAvatar } from '../assistant/RendaAvatar';
+import {
+  HeaderAssistantEntry,
+  assistantScreenName,
+} from '../assistant/assistantLauncherRoutes';
+import { claimImpression } from '../assistant/launcherStorage';
+import { useAssistantLauncherAnalytics } from '../assistant/useAssistantLauncherAnalytics';
 
 function catalogContextFromPath(pathname: string): MarketStatesCatalog {
   if (pathname.startsWith('/rentals')) return 'rentals';
@@ -82,7 +93,17 @@ function catalogContextFromPath(pathname: string): MarketStatesCatalog {
   return 'all';
 }
 
-const Header: React.FC = () => {
+export interface HeaderProps {
+  /**
+   * Assistant button treatment (#451 PR-6): `icon` = today's SmartToy, `character` =
+   * the 28 px Renda character (client/guest with `assistant_launcher_v1`), `hidden`
+   * where the floating launcher shows or on /assistant itself, `pending` = slot kept
+   * but invisible while client flags resolve (no icon flash before the launcher).
+   */
+  assistantEntry?: HeaderAssistantEntry;
+}
+
+const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
   const {
     isAuthenticated: hasSession,
     isSessionReady,
@@ -90,6 +111,7 @@ const Header: React.FC = () => {
     user,
     logout,
   } = useSessionAuth();
+  const trackAssistantEntry = useAssistantLauncherAnalytics(hasSession);
   const isAuthenticated = hasSession || !isSessionReady;
   const {
     userType,
@@ -123,6 +145,23 @@ const Header: React.FC = () => {
   const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const assistantScreen = assistantScreenName(location.pathname);
+  useEffect(() => {
+    if (assistantEntry !== 'character') return;
+    if (claimImpression(`header_icon:${assistantScreen}`)) {
+      trackAssistantEntry(SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION, {
+        screen: assistantScreen,
+        variant: 'header_icon',
+        motion: 'reduced',
+      });
+    }
+  }, [assistantEntry, assistantScreen, trackAssistantEntry]);
+  const onAssistantHeaderTap = () =>
+    trackAssistantEntry(SITE_EVENT_ASSISTANT_LAUNCHER_TAP, {
+      screen: assistantScreen,
+      variant: 'header_icon',
+      entry: 'header_icon',
+    });
   // Guest desktop is two rows, but the top row still has long utility labels
   // plus market/auth controls, so collapse to the drawer below lg (1200px).
   // Authenticated nav has 2–3 short items — md (900px) is fine.
@@ -816,13 +855,22 @@ const Header: React.FC = () => {
                 compact={isMobile}
               />
 
-              {/* AI Assistant */}
+              {/* AI Assistant: one entry point at a time (hidden where the launcher shows). */}
+              {assistantEntry !== 'hidden' && (
               <IconButton
                 component={RouterLink}
                 to="/assistant"
                 size="small"
+                onClick={assistantEntry === 'character' ? onAssistantHeaderTap : undefined}
+                data-assistant-entry={assistantEntry}
                 aria-label={t('assistant.headerLabel', 'Ask Rendasua assistant')}
+                // `pending` (client/guest while flags resolve, ≤ 3 s): keep the slot so
+                // nothing shifts, but don't flash an icon the flag may be about to hide.
+                {...(assistantEntry === 'pending'
+                  ? { 'aria-hidden': true, tabIndex: -1 }
+                  : {})}
                 sx={{
+                  visibility: assistantEntry === 'pending' ? 'hidden' : undefined,
                   color: '#ffffff',
                   padding: '10px',
                   minWidth: 44,
@@ -835,8 +883,13 @@ const Header: React.FC = () => {
                   },
                 }}
               >
-                <SmartToy fontSize="small" />
+                {assistantEntry === 'character' ? (
+                  <RendaAvatar size={28} style={{ margin: -4 }} />
+                ) : (
+                  <SmartToy fontSize="small" />
+                )}
               </IconButton>
+              )}
 
               {/* Language Switcher - desktop only; mobile: in hamburger menu */}
               {!isMobile && <LanguageSwitcher inverted />}
