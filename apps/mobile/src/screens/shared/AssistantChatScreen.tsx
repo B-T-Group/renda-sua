@@ -14,7 +14,7 @@ import {
 import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHeaderHeight } from '@react-navigation/elements';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { AssistantMarkdownText } from '@/components/common/AssistantMarkdownText';
@@ -26,6 +26,9 @@ import { spacing, borderRadius } from '@/theme/spacing';
 import { motionDuration } from '@/theme/motion';
 import { postAssistantChat } from '@/services/assistantApi';
 import type { AssistantMessage } from '@/stores/AssistantStore';
+import { RendaCharacter } from '@/components/assistant/renda/RendaCharacter';
+import { useInteractionSettled } from '@/components/assistant/launcher/launcherHooks';
+import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher';
 
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
 /** AC9: the composer grows with the text up to 4 rows, then scrolls. */
@@ -49,6 +52,17 @@ function MiniOrb({ size = 36 }: { size?: number }) {
     </View>
   );
 }
+
+/** #451: client / guest see the Renda character; agent / business keep the static smart-toy orb. */
+function useShowsRendaCharacter(): boolean {
+  const { auth, persona } = useStore();
+  return canSeeRendaCharacter(assistantViewer(auth.isAuthenticated, persona.activePersona));
+}
+
+const MESSAGE_AVATAR = 28;
+/** Character width at 28 (0.82 aspect), so grouped bubbles line up with the avatar. */
+const MESSAGE_AVATAR_WIDTH = Math.round(MESSAGE_AVATAR * 0.82);
+const HERO_SIZE = 128;
 
 function TypingIndicator() {
   const { t } = useTranslation();
@@ -118,9 +132,10 @@ interface MessageBubbleProps {
   item: AssistantMessage;
   isUser: boolean;
   showOrb: boolean;
+  character: boolean;
 }
 
-function MessageBubble({ item, isUser, showOrb }: MessageBubbleProps) {
+function MessageBubble({ item, isUser, showOrb, character }: MessageBubbleProps) {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const duration = motionDuration('normal', reduceMotion);
@@ -154,8 +169,12 @@ function MessageBubble({ item, isUser, showOrb }: MessageBubbleProps) {
         },
       ]}
     >
-      {!isUser && showOrb && <MiniOrb size={36} />}
-      {!isUser && !showOrb && <View style={{ width: 36 }} />}
+      {!isUser && showOrb && character ? (
+        // Dot eyes (20–35), static: many on screen, motion in the thread is noise.
+        <RendaCharacter size={MESSAGE_AVATAR} state="idle" animated={false} />
+      ) : null}
+      {!isUser && showOrb && !character ? <MiniOrb size={36} /> : null}
+      {!isUser && !showOrb ? <View style={{ width: character ? MESSAGE_AVATAR_WIDTH : 36 }} /> : null}
       <View
         style={[
           styles.bubble,
@@ -188,15 +207,44 @@ function MessageBubble({ item, isUser, showOrb }: MessageBubbleProps) {
   );
 }
 
+const EmptyHero = observer(function EmptyHero() {
+  const { colors } = useTheme();
+  const { assistantCharacter } = useStore();
+  const isFocused = useIsFocused();
+  // Battery: pause off-screen and after the 20 s settle (focus resumes).
+  const settled = useInteractionSettled(isFocused);
+  const state = assistantCharacter.state;
+  const disc = HERO_SIZE * 1.5;
+  return (
+    <View style={[styles.hero, { width: disc, height: disc }]}>
+      {/* Subtle primary.light 8% disc so the light-mode glow has something to sit on. */}
+      <View
+        pointerEvents="none"
+        style={[
+          StyleSheet.absoluteFill,
+          { borderRadius: disc / 2, backgroundColor: colors.primary.light, opacity: 0.08 },
+        ]}
+      />
+      <RendaCharacter
+        size={HERO_SIZE}
+        state={state}
+        paused={!isFocused || (settled && state === 'idle')}
+        testID="assistant-hero-character"
+      />
+    </View>
+  );
+});
+
 function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const store = useStore();
   const firstName = store.auth.user?.firstName?.trim();
+  const character = useShowsRendaCharacter();
 
   return (
     <View style={styles.empty}>
-      <MiniOrb size={88} />
+      {character ? <EmptyHero /> : <MiniOrb size={88} />}
       <Text style={[styles.emptyTitle, { color: colors.text.primary }]}>
         {firstName
           ? t('assistant.emptyTitleNamed', {
@@ -255,8 +303,17 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
   const headerHeight = useHeaderHeight();
   const store = useStore();
   const { assistant } = store;
+  const { assistantCharacter } = store;
   const listRef = useRef<FlatList<AssistantMessage>>(null);
   const [draft, setDraft] = useState('');
+  const [composerFocused, setComposerFocused] = useState(false);
+  const character = useShowsRendaCharacter();
+
+  // Hero: Attentive while the composer is focused, Listening once it has text.
+  useEffect(() => {
+    assistantCharacter.setComposer(composerFocused, draft.trim().length > 0);
+  }, [assistantCharacter, composerFocused, draft]);
+  useEffect(() => () => assistantCharacter.setComposer(false, false), [assistantCharacter]);
 
   // Check idle on screen focus
   useFocusEffect(
@@ -287,11 +344,16 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
 
       return (
         <View style={{ marginTop }}>
-          <MessageBubble item={item} isUser={item.role === 'user'} showOrb={showOrb} />
+          <MessageBubble
+            item={item}
+            isUser={item.role === 'user'}
+            showOrb={showOrb}
+            character={character}
+          />
         </View>
       );
     },
-    [assistant.messages]
+    [assistant.messages, character]
   );
 
   const onRetry = useCallback(() => {
@@ -421,6 +483,8 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
           inputStyle={{ maxHeight: typography.body.lineHeight * COMPOSER_MAX_LINES }}
           disabled={assistant.isSending}
           onSubmitEditing={() => void onSend()}
+          onFocus={() => setComposerFocused(true)}
+          onBlur={() => setComposerFocused(false)}
           blurOnSubmit={false}
           containerStyle={[
             styles.input,
@@ -491,6 +555,10 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
   miniOrb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hero: {
     alignItems: 'center',
     justifyContent: 'center',
   },

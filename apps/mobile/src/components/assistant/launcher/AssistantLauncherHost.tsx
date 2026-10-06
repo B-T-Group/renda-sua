@@ -30,12 +30,10 @@ import {
   canPlayAttention,
   canShowNudge,
   cartFabVisibleOn,
-  isSettled,
   launcherPlacement,
   parseAttentionHistory,
   recordAttention,
   shouldShowLauncher,
-  SETTLE_AFTER_MS,
   type AttentionTrigger,
   type LauncherPersona,
   type NudgeDismissReason,
@@ -55,6 +53,7 @@ import { useLauncherSuppressed } from './useLauncherSuppressor';
 import {
   useDeferredMount,
   useFocusedRouteName,
+  useInteractionSettled,
   useKeyboardOpen,
   useLastInteractionAt,
 } from './launcherHooks';
@@ -120,7 +119,8 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
   const [nudgeVisible, setNudgeVisible] = useState(false);
   const [charState, setCharState] = useState<RendaCharacterState>('idle');
   const [replayKey, setReplayKey] = useState(0);
-  const [settled, setSettled] = useState(false);
+  // Settle: idle eases to static after 20 s without touch / scroll; a route change resumes.
+  const settled = useInteractionSettled(route);
 
   const visible = shouldShowLauncher({
     flagOn: true,
@@ -148,15 +148,6 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
     if (visible && route) trackLauncherImpression(ctxRef.current, 'orb', reducedMotion);
   }, [visible, route, reducedMotion]);
 
-  // Settle: idle eases to static after 20 s without touch / scroll; focus resumes.
-  useEffect(() => {
-    markLauncherInteraction();
-  }, [route]);
-  useEffect(() => {
-    setSettled(isSettled(lastInteractionAt, Date.now()));
-    const timer = setTimeout(() => setSettled(true), SETTLE_AFTER_MS);
-    return () => clearTimeout(timer);
-  }, [lastInteractionAt]);
 
   // Attention ripple (rare, capped, waits for 2 s idle, never when hidden).
   const playAttention = useCallback(

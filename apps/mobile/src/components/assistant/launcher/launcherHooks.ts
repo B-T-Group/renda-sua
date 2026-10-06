@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { InteractionManager, Keyboard } from 'react-native';
 import { rootNavigationRef } from '../../../navigation/rootNavigationRef';
+import { SETTLE_AFTER_MS } from '../../../utils/assistantLauncher';
 import { lastLauncherInteractionAt, subscribeLauncherInteraction } from './launcherSignals';
 
 /** Deepest focused route name of the root navigation container. */
@@ -51,4 +52,20 @@ export function useKeyboardOpen(): boolean {
 
 export function useLastInteractionAt(): number {
   return useSyncExternalStore(subscribeLauncherInteraction, lastLauncherInteractionAt);
+}
+
+/**
+ * True after 20 s with no touch / scroll (spec "settle"); any interaction or
+ * a change of `resetKey` (e.g. screen focus, route) resumes.
+ */
+export function useInteractionSettled(resetKey?: unknown): boolean {
+  const lastInteractionAt = useLastInteractionAt();
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    setSettled(false);
+    const elapsed = Date.now() - lastInteractionAt;
+    const timer = setTimeout(() => setSettled(true), Math.max(0, SETTLE_AFTER_MS - Math.max(0, elapsed)));
+    return () => clearTimeout(timer);
+  }, [lastInteractionAt, resetKey]);
+  return settled;
 }

@@ -108,6 +108,9 @@ export const AppTextInput = forwardRef<RNTextInput, AppTextInputProps>(
             ]}
             placeholderTextColor={colors.text.secondary}
             editable={!disabled}
+            {...rest}
+            // After the spread so a caller's onFocus/onBlur chains instead of
+            // replacing the focus-ring handlers.
             onFocus={e => {
               setFocused(true);
               rest.onFocus?.(e);
@@ -116,7 +119,6 @@ export const AppTextInput = forwardRef<RNTextInput, AppTextInputProps>(
               setFocused(false);
               rest.onBlur?.(e);
             }}
-            {...rest}
           />
           {trailingIcon ? (
             <MaterialCommunityIcons
