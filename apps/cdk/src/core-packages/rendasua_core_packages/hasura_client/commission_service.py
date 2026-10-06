@@ -209,7 +209,6 @@ def get_rendasua_hq_user(client: HasuraClient) -> Optional[User]:
       users(where: { email: { _eq: "hq@rendasua.com" } }) {
         id
         user_type_id
-        identifier
         first_name
         last_name
         email
@@ -231,10 +230,10 @@ def get_rendasua_hq_user(client: HasuraClient) -> Optional[User]:
             return None
         
         user_data = users_data[0]
-        hq_user = User(
+        # users.identifier was dropped (migration 20260327120000); do not select it.
+        hq_user = User.model_construct(
             id=user_data["id"],
             user_type_id=user_data.get("user_type_id"),
-            identifier=user_data["identifier"],
             first_name=user_data["first_name"],
             last_name=user_data["last_name"],
             email=user_data["email"],
