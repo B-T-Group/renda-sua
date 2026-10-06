@@ -1,0 +1,9 @@
+aria-label: Demander : ouvrir l'assistant d'achat
+aria-describedby text: Trouvez un article, repassez ou suivez une commande
+visible: ["Demander"]
+variant: orb_extended
+
+Playwright ariaSnapshot:
+- 'button "Demander : ouvrir l''assistant d''achat"': Demander
+- text: Trouvez un article, repassez ou suivez une commande
+- status

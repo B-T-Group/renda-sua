@@ -1,0 +1,16 @@
+{
+  "aria": {
+    "tag": "BUTTON",
+    "role": "button",
+    "aria-label": "Demander : ouvrir l'assistant d'achat",
+    "aria-describedby": "assistant-launcher-hint-r3c",
+    "describedbyText": "Trouvez un article, repassez ou suivez une commande",
+    "visibleText": [
+      "Demander"
+    ],
+    "dataVariant": "orb_extended",
+    "accessibleNameComputed": "Demander : ouvrir l'assistant d'achat",
+    "outerHTML": "<button class=\"MuiButtonBase-root css-myic72\" tabindex=\"0\" type=\"button\" aria-label=\"Demander : ouvrir l'assistant d'achat\" aria-describedby=\"assistant-launcher-hint-r3c\"><div class=\"MuiBox-root css-ej6cyo\"><svg viewBox=\"0 0 82 100\" width=\"42.64\" height=\"52\" aria-hidden=\"true\" focusable=\"false\" data-testid=\"assistant-launcher-character\" data-renda=\"\" data-renda-state=\"idle\" data-renda-eyes=\"expressive\" data-renda-eye-shape=\"arc\" data-renda-motion=\"reduced\" style=\"display: block; overflow: visible; flex: 0 0 auto; pointer-events: none;\"><defs><mask id=\"rendar3drm\" maskUnits=\"userSpaceOnUse\" x=\"-60\" y=\"-60\" width=\"202\" height=\"220\"><ellipse cx=\"41\" cy=\"50\" rx=\"37\" ry=\"46\" fill=\"none\" stroke=\"#fff\" stroke-width=\"7\"></ellipse></mask><mask id=\"rendar3dbm\" maskUnits=\"userSpaceOnUse\" x=\"-60\" y=\"-"
+  },
+  "snapshot": "- 'button \"Demander : ouvrir l''assistant d''achat\"': Demander\n- text: Trouvez un article, repassez ou suivez une commande\n- status"
+}

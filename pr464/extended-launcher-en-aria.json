@@ -1,0 +1,16 @@
+{
+  "aria": {
+    "tag": "BUTTON",
+    "role": "button",
+    "aria-label": "Ask: open shopping assistant",
+    "aria-describedby": "assistant-launcher-hint-r21",
+    "describedbyText": "Find items, reorder or track an order",
+    "visibleText": [
+      "Ask"
+    ],
+    "dataVariant": "orb_extended",
+    "accessibleNameComputed": "Ask: open shopping assistant",
+    "outerHTML": "<button class=\"MuiButtonBase-root css-myic72\" tabindex=\"0\" type=\"button\" aria-label=\"Ask: open shopping assistant\" aria-describedby=\"assistant-launcher-hint-r21\"><div class=\"MuiBox-root css-ej6cyo\"><svg viewBox=\"0 0 82 100\" width=\"42.64\" height=\"52\" aria-hidden=\"true\" focusable=\"false\" data-testid=\"assistant-launcher-character\" data-renda=\"\" data-renda-state=\"idle\" data-renda-eyes=\"expressive\" data-renda-eye-shape=\"arc\" data-renda-motion=\"reduced\" style=\"display: block; overflow: visible; flex: 0 0 auto; pointer-events: none;\"><defs><mask id=\"rendar22rm\" maskUnits=\"userSpaceOnUse\" x=\"-60\" y=\"-60\" width=\"202\" height=\"220\"><ellipse cx=\"41\" cy=\"50\" rx=\"37\" ry=\"46\" fill=\"none\" stroke=\"#fff\" stroke-width=\"7\"></ellipse></mask><mask id=\"rendar22bm\" maskUnits=\"userSpaceOnUse\" x=\"-60\" y=\"-60\" width"
+  },
+  "snapshot": "- 'button \"Ask: open shopping assistant\"': Ask\n- text: Find items, reorder or track an order\n- status"
+}

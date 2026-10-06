@@ -1,0 +1,9 @@
+aria-label: Ask: open shopping assistant
+aria-describedby text: Find items, reorder or track an order
+visible: ["Ask"]
+variant: orb_extended
+
+Playwright ariaSnapshot:
+- 'button "Ask: open shopping assistant"': Ask
+- text: Find items, reorder or track an order
+- status
