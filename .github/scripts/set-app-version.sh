@@ -28,3 +28,5 @@ app.expo.version = version;
 fs.writeFileSync(path, JSON.stringify(app, null, 2) + '\n');
 console.log('Set expo.version to ' + version);
 " "$VERSION"
+
+echo "OTA updates keep using runtimeVersion from apps/mobile/app.json."
