@@ -1343,8 +1343,10 @@ export class CheckoutPreflightService {
     const address = group.inventoryRows[0]?.business_location?.address;
     return buildDeliveryAvailabilityContext({
       businessId,
+      businessLocationId: group.inventoryRows[0]?.business_location?.id,
       sellerCountry: group.sellerCountry,
       sellerState: address?.state,
+      sellerCity: address?.city,
       pickupLat: address?.latitude,
       pickupLon: address?.longitude,
       deliveryAddressId: dto.delivery_address_id,
@@ -1355,6 +1357,7 @@ export class CheckoutPreflightService {
       inventoryIds: group.inventoryRows.map((inv: any) => inv?.id),
       requiresFastDelivery: dto.requires_fast_delivery === true,
       verifiedAgentDelivery: dto.verified_agent_delivery === true,
+      stage: 'preflight',
     });
   }
 

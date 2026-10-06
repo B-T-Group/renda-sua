@@ -97,7 +97,10 @@ export const SITE_EVENT_TYPES_V1 = [
   'auth_session_observed',
   'catalog.module.impression',
   'catalog.module.click',
-  // Agent claim friction & delivery availability (Phase 0 #453)
+] as const;
+
+// Server-only events (Phase 0 #453) - not allowed in public /track-site-event
+export const SERVER_SITE_EVENT_TYPES = [
   'agent.claim_funds_check',
   'agent.claim_topup_started',
   'agent.claim_topup_succeeded',
@@ -106,6 +109,7 @@ export const SITE_EVENT_TYPES_V1 = [
   'checkout.delivery_availability',
 ] as const;
 
-export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number];
+export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number] | (typeof SERVER_SITE_EVENT_TYPES)[number];
+export type ServerSiteEventType = (typeof SERVER_SITE_EVENT_TYPES)[number];
 
 export const SITE_EVENT_SUBJECT_INVENTORY_ITEM = 'inventory_item';

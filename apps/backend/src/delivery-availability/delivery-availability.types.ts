@@ -21,6 +21,7 @@ export interface DeliveryAvailabilityContext {
   businessLocationId?: string;
   sellerCountry: string;
   sellerState: string;
+  sellerCity?: string;
   /** Business pickup coordinates — the anchor for agent proximity. */
   pickupLat: number | null;
   pickupLon: number | null;
@@ -35,6 +36,7 @@ export interface DeliveryAvailabilityContext {
   verifiedAgentDelivery?: boolean;
   clientId?: string;
   evaluatedAt: Date;
+  stage?: 'preflight' | 'place_order';
 }
 
 /** Internal evaluation result (service + logs). */

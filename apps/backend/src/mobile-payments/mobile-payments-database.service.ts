@@ -76,6 +76,8 @@ export interface PendingClaimOrderTransaction {
   status: 'pending' | 'success' | 'failed' | 'cancelled';
   created_at: string;
   account_id?: string;
+  amount?: number;
+  currency?: string;
 }
 
 @Injectable()

@@ -117,12 +117,14 @@ export class DeliveryAvailabilityService {
         businessLocationId: ctx.businessLocationId ?? null,
         sellerCountry: ctx.sellerCountry,
         sellerState: ctx.sellerState,
+        sellerCity: ctx.sellerCity ?? null,
         clientId: ctx.clientId ?? null,
         available: result.available,
         reason: result.reason,
         ruleId: result.ruleId,
         eligibleAgentCount: result.metadata?.eligibleAgentCount ?? null,
         radiusKm: result.metadata?.radiusKm ?? null,
+        stage: ctx.stage ?? null,
         durationMs,
       }
     );

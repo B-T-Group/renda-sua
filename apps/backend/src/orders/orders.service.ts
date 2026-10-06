@@ -3036,6 +3036,18 @@ export class OrdersService {
           }
         );
 
+        // Emit topup failed event for initiation failure (Phase 0 #453)
+        emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_failed', {
+          orderId: order.id,
+          orderNumber: order.order_number,
+          agentId: agent.id,
+          holdAmount,
+          transactionId: paymentTransaction.transactionId,
+          provider,
+          currency: order.currency,
+          reason: 'initiation_failed',
+        });
+
         throw new HttpException(
           {
             success: false,
@@ -3196,20 +3208,15 @@ export class OrdersService {
       }
     );
 
-    // Fetch full transaction for event metadata (Phase 0 #453)
-    const fullTransaction = await this.mobilePaymentsDatabaseService.getTransactionById(
-      pendingClaimTransaction.id
-    );
-
     // Emit topup cancelled event (Phase 0 #453)
     emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_cancelled', {
       orderId: order.id,
       orderNumber: order.order_number,
       agentId: agent.id,
-      holdAmount: fullTransaction?.amount ?? 0,
+      holdAmount: pendingClaimTransaction.amount ?? 0,
       transactionId: pendingClaimTransaction.transaction_id,
       provider: pendingClaimTransaction.provider,
-      currency: fullTransaction?.currency ?? order.currency,
+      currency: pendingClaimTransaction.currency ?? order.currency,
     });
 
     return {
@@ -7564,12 +7571,10 @@ export class OrdersService {
       );
     if (hasPendingClaim) {
       return this.createClaimAvailabilityFailure(
-        0, // holdAmount unknown at this point
+        holdAmount, // Use result from earlier call
         'This order has a pending claim. Another agent may be completing payment. Please choose another order.'
       );
     }
-
-    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
 
     if (holdAmount <= 0) {
       // Emit funds check without balance (Phase 0 #453)
@@ -10617,6 +10622,17 @@ export class OrdersService {
       this.logger.warn(
         `Claim top-up for ${ctx.order.order_number} stayed in the wallet; order was not assigned`
       );
+      // Emit order_taken outcome when lost (Phase 0 #453)
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_failed', {
+        orderId: ctx.order.id,
+        orderNumber: ctx.order.order_number,
+        agentId: ctx.agentId,
+        holdAmount: transaction.amount,
+        transactionId: transaction.transaction_id,
+        provider: transaction.provider,
+        currency: transaction.currency,
+        reason: 'order_taken',
+      });
       return;
     }
     await this.placeClaimHoldOrRevert({
@@ -10626,22 +10642,21 @@ export class OrdersService {
       agentId: ctx.agentId,
       freshAssignment: slot === 'assigned',
     });
-    if (slot === 'assigned') await this.recordNewClaimAssignment(ctx);
-
-    // Emit topup succeeded event (Phase 0 #453)
-    const durationMs = transaction.updated_at && transaction.created_at
-      ? new Date(transaction.updated_at).getTime() - new Date(transaction.created_at).getTime()
-      : undefined;
-    emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_succeeded', {
-      orderId: ctx.order.id,
-      orderNumber: ctx.order.order_number,
-      agentId: ctx.agentId,
-      holdAmount: transaction.amount,
-      transactionId: transaction.transaction_id,
-      provider: transaction.provider,
-      currency: transaction.currency,
-      ...(durationMs !== undefined ? { durationMs } : {}),
-    });
+    if (slot === 'assigned') {
+      await this.recordNewClaimAssignment(ctx);
+      // Emit topup succeeded only when slot assigned (Phase 0 #453)
+      const durationMs = Date.now() - new Date(transaction.created_at).getTime();
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_succeeded', {
+        orderId: ctx.order.id,
+        orderNumber: ctx.order.order_number,
+        agentId: ctx.agentId,
+        holdAmount: transaction.amount,
+        transactionId: transaction.transaction_id,
+        provider: transaction.provider,
+        currency: transaction.currency,
+        durationMs,
+      });
+    }
 
     this.logger.log(this.claimPaymentDoneMessage(ctx.order.order_number, transaction));
   }
@@ -11137,7 +11152,7 @@ export class OrdersService {
             user_id
           }
           business_location {
-            address { country }
+            address { country city state }
             business { user { country } }
           }
           order_items {
@@ -11573,8 +11588,10 @@ export class OrdersService {
     const result = await this.deliveryAvailabilityService.evaluate(
       buildDeliveryAvailabilityContext({
         businessId: inventory?.business_location?.business?.id ?? '',
+        businessLocationId: inventory?.business_location?.id,
         sellerCountry: address?.country,
         sellerState: address?.state,
+        sellerCity: address?.city,
         pickupLat: address?.latitude,
         pickupLon: address?.longitude,
         deliveryAddressId: deliveryAddress?.id,
@@ -11587,6 +11604,7 @@ export class OrdersService {
         requiresFastDelivery,
         verifiedAgentDelivery,
         clientId,
+        stage: 'place_order',
       })
     );
     if (result.available) return;

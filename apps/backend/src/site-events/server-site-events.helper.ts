@@ -10,31 +10,42 @@ const logger = new Logger('ServerSiteEvents');
  * Failures are caught and logged; they never throw.
  */
 export function emitServerSiteEvent(
-  siteEventsService: SiteEventsService,
+  siteEventsService: SiteEventsService | null | undefined,
   eventType: SiteEventTypeV1,
   metadata: Record<string, unknown>
 ): void {
-  // Fire-and-forget: do not await
-  void siteEventsService
-    .trackEvent(
-      {
-        eventType,
-        metadata,
-        // No subject - avoids 12h dedupe for repeated checks
-        subjectType: undefined,
-        subjectId: undefined,
-      },
-      {
-        viewerType: 'server',
-        viewerId: 'system',
-        jwtVerified: false,
-      }
-    )
-    .catch((error: any) => {
-      // SiteEventsService already logs errors, but add extra safety
-      logger.error(
-        `Failed to emit ${eventType}: ${error?.message ?? error}`,
-        error?.stack
-      );
-    });
+  try {
+    if (!siteEventsService) {
+      logger.warn(`SiteEventsService is null for event ${eventType}`);
+      return;
+    }
+    // Fire-and-forget: do not await
+    void siteEventsService
+      .trackEvent(
+        {
+          eventType,
+          metadata,
+          // No subject - avoids 12h dedupe for repeated checks
+          subjectType: undefined,
+          subjectId: undefined,
+        },
+        {
+          viewerType: 'server',
+          viewerId: 'system',
+          jwtVerified: false,
+        }
+      )
+      .catch((error: any) => {
+        // SiteEventsService already logs errors, but add extra safety
+        logger.error(
+          `Failed to emit ${eventType}: ${error?.message ?? error}`,
+          error?.stack
+        );
+      });
+  } catch (error: any) {
+    logger.error(
+      `Synchronous error in emitServerSiteEvent for ${eventType}: ${error?.message ?? error}`,
+      error?.stack
+    );
+  }
 }
