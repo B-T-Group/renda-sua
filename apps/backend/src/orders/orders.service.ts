@@ -2634,14 +2634,7 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
-    const holdAmount = await this.resolveOrderHoldAmount(order);
-    const holdPercentage =
-      await this.agentHoldService.getHoldPercentageForAgent();
-    const rail = order.business_id
-      ? await this.paymentRoutingService.resolveRailForBusiness(
-          order.business_id
-        )
-      : ('mobile_money' as const);
+    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
       order.currency
@@ -2898,14 +2891,7 @@ export class OrdersService {
 
     // Calculate required hold amount (0 for internal agents and
     // Stripe-enabled orders, which do not require a caution/hold)
-    const holdAmount = await this.resolveOrderHoldAmount(order);
-    const holdPercentage =
-      await this.agentHoldService.getHoldPercentageForAgent();
-    const rail = order.business_id
-      ? await this.paymentRoutingService.resolveRailForBusiness(
-          order.business_id
-        )
-      : ('mobile_money' as const);
+    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
 
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // payment and assign directly
@@ -2941,6 +2927,22 @@ export class OrdersService {
       };
     }
 
+    // Block if another agent has a pending claim (claim-with-topup) on this order
+    const hasPendingClaim =
+      await this.mobilePaymentsDatabaseService.hasPendingClaimOrderForOrderNumber(
+        order.order_number
+      );
+    if (hasPendingClaim) {
+      throw new HttpException(
+        {
+          message:
+            'This order has a pending claim. Another agent may be completing payment. Please choose another order.',
+          error: 'PENDING_CLAIM',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+
     // Get or create agent account
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
@@ -2960,27 +2962,11 @@ export class OrdersService {
       holdPercentage,
       holdAmount,
       availableBalance,
-      needsTopUp: true,
-      hasEnoughFunds: false,
+      needsTopUp: availableBalance < holdAmount,
+      hasEnoughFunds: availableBalance >= holdAmount,
       rail,
       source: 'claim_topup',
     });
-
-    // Block if another agent has a pending claim (claim-with-topup) on this order
-    const hasPendingClaim =
-      await this.mobilePaymentsDatabaseService.hasPendingClaimOrderForOrderNumber(
-        order.order_number
-      );
-    if (hasPendingClaim) {
-      throw new HttpException(
-        {
-          message:
-            'This order has a pending claim. Another agent may be completing payment. Please choose another order.',
-          error: 'PENDING_CLAIM',
-        },
-        HttpStatus.CONFLICT
-      );
-    }
 
     // Get payment provider from the order item country (not the agent's phone).
     const phoneNumber = await this.resolveClaimTopupPhone(
@@ -7506,7 +7492,7 @@ export class OrdersService {
 
     if (!agent.is_verified) {
       const order = await this.getOrderWithItems(orderId);
-      const holdAmount = await this.resolveOrderHoldAmount(order);
+      const { holdAmount } = await this.resolveOrderHoldAmount(order);
       return this.createClaimAvailabilityFailure(
         holdAmount,
         'Complete account verification before claiming orders.'
@@ -7521,7 +7507,7 @@ export class OrdersService {
       );
     } catch (error: any) {
       const order = await this.getOrderWithItems(orderId);
-      const holdAmount = await this.resolveOrderHoldAmount(order);
+      const { holdAmount } = await this.resolveOrderHoldAmount(order);
       return this.createClaimAvailabilityFailure(
         holdAmount,
         error?.response?.error ??
@@ -7534,14 +7520,7 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
 
-    const holdAmount = await this.resolveOrderHoldAmount(order);
-    const holdPercentage =
-      await this.agentHoldService.getHoldPercentageForAgent();
-    const rail = order.business_id
-      ? await this.paymentRoutingService.resolveRailForBusiness(
-          order.business_id
-        )
-      : ('mobile_money' as const);
+    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
 
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
@@ -7585,9 +7564,40 @@ export class OrdersService {
       );
     if (hasPendingClaim) {
       return this.createClaimAvailabilityFailure(
-        holdAmount,
+        0, // holdAmount unknown at this point
         'This order has a pending claim. Another agent may be completing payment. Please choose another order.'
       );
+    }
+
+    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
+
+    if (holdAmount <= 0) {
+      // Emit funds check without balance (Phase 0 #453)
+      this.emitClaimFundsCheck({
+        orderId: order.id,
+        orderNumber: order.order_number,
+        agentId: agent.id,
+        city: (order as any).business_location?.address?.city ?? null,
+        state: (order as any).business_location?.address?.state ?? null,
+        subtotal: order.subtotal,
+        currency: order.currency,
+        holdPercentage,
+        holdAmount,
+        availableBalance: 0,
+        needsTopUp: false,
+        hasEnoughFunds: true,
+        rail,
+        source: 'availability',
+      });
+
+      return {
+        success: true,
+        orderOpenStatus: true,
+        hasEnoughFundsForHold: true,
+        needsTopUpToClaim: false,
+        holdAmount,
+        message: 'Order is open and available to claim',
+      };
     }
 
     const agentAccount = await this.hasuraSystemService.getAccount(
@@ -7609,22 +7619,11 @@ export class OrdersService {
       holdPercentage,
       holdAmount,
       availableBalance,
-      needsTopUp: !hasEnoughFundsForHold && holdAmount > 0,
+      needsTopUp: !hasEnoughFundsForHold,
       hasEnoughFunds: hasEnoughFundsForHold,
       rail,
       source: 'availability',
     });
-
-    if (holdAmount <= 0) {
-      return {
-        success: true,
-        orderOpenStatus: true,
-        hasEnoughFundsForHold: true,
-        needsTopUpToClaim: false,
-        holdAmount,
-        message: 'Order is open and available to claim',
-      };
-    }
 
     return {
       success: true,
@@ -11162,12 +11161,14 @@ export class OrdersService {
    * Compute the agent hold (caution) amount for an order. Orders for items
    * from a Stripe-enabled country are settled via Stripe, so no caution/hold
    * is applicable and the hold amount is always 0.
+   * 
+   * Returns rail, holdPercentage, and holdAmount for reuse in emit logic.
    */
   private async resolveOrderHoldAmount(
     order: Orders | null
-  ): Promise<number> {
+  ): Promise<{ rail: 'mobile_money' | 'stripe'; holdPercentage: number; holdAmount: number }> {
     if (!order) {
-      return 0;
+      return { rail: 'mobile_money', holdPercentage: 0, holdAmount: 0 };
     }
     const rail = order.business_id
       ? await this.paymentRoutingService.resolveRailForBusiness(
@@ -11175,11 +11176,12 @@ export class OrdersService {
         )
       : 'mobile_money';
     if (rail === 'stripe') {
-      return 0;
+      return { rail: 'stripe', holdPercentage: 0, holdAmount: 0 };
     }
     const holdPercentage =
       await this.agentHoldService.getHoldPercentageForAgent();
-    return (order.subtotal * holdPercentage) / 100;
+    const holdAmount = (order.subtotal * holdPercentage) / 100;
+    return { rail, holdPercentage, holdAmount };
   }
 
   /**
