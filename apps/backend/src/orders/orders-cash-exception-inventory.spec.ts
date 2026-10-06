@@ -8,6 +8,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { OrderStatusService } from './order-status.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrdersService } from './orders.service';
+import { DepositCalculationService } from './deposit-calculation.service';
 
 jest.mock('../addresses/addresses.service', () => ({
   AddressesService: class AddressesService {},
@@ -99,6 +100,11 @@ describe('OrdersService cash-exception inventory', () => {
       .compile();
 
     service = module.get(OrdersService);
+    (service as any).depositCalculationService = new DepositCalculationService();
+    // Settlement claims the deposit (paid -> applied) before applying it.
+    (service as any).depositRefundService = {
+      claimDepositApplied: jest.fn().mockResolvedValue('applied'),
+    };
     (service as any).representativeCompensationService = {
       evaluateForOrderSafe: jest.fn(),
     };
@@ -212,6 +218,7 @@ describe('OrdersService cash-exception inventory', () => {
       orderNumber: '49520979',
       depositTransactionId: 'dep-txn-1',
     });
+    expect((service as any).depositRefundService.claimDepositApplied).toHaveBeenCalledWith('order-123');
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('MarkCashException'),
       expect.objectContaining({ orderId: 'order-123' })
@@ -237,6 +244,23 @@ describe('OrdersService cash-exception inventory', () => {
     expect(inventoryCalls()).toEqual([]);
   });
 
+  it('refuses cash exception without applying when the deposit was already forfeited', async () => {
+    stubOrder({
+      deposit_status: 'paid',
+      deposit_amount: 2000,
+      deposit_mobile_payment_transaction_id: 'dep-txn-1',
+    });
+    (service as any).depositRefundService.claimDepositApplied.mockResolvedValue('forfeited');
+    const apply = jest.fn();
+    (service as any).depositLedgerService = { applyHeldDepositAsPayment: apply };
+
+    await expect(service.markPaidInCashException('order-123')).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+    });
+    expect(apply).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  });
+
   it('does not apply a deposit when cash exception has no captured deposit', async () => {
     stubOrder();
     const apply = jest.fn();
@@ -247,6 +271,90 @@ describe('OrdersService cash-exception inventory', () => {
     await service.markPaidInCashException('order-123');
 
     expect(apply).not.toHaveBeenCalled();
+  });
+
+  it('reconciles a cash exception for total minus the deposit already applied (RB-1)', async () => {
+    // Stateful order: the cash exception claims the deposit (paid -> applied)
+    // and marks reconciliation pending; reconcile then re-reads the order.
+    const order: Record<string, any> = {
+      ...cashOrder,
+      business_id: 'biz-1',
+      total_amount: 5000,
+      deposit_status: 'paid',
+      deposit_amount: 500,
+      deposit_mobile_payment_transaction_id: 'dep-txn-1',
+      payment_status: 'pending',
+    };
+    jest
+      .spyOn(service as any, 'getOrderDetails')
+      .mockImplementation(async () => ({ ...order }));
+    (service as any).depositRefundService.claimDepositApplied.mockImplementation(
+      async () => {
+        if (order.deposit_status === 'paid') order.deposit_status = 'applied';
+        return order.deposit_status;
+      }
+    );
+    hasuraSystemService.executeMutation.mockImplementation(async (m: string) => {
+      if (String(m).includes('MarkCashException')) {
+        order.reconciliation_status = 'pending_manual_reconciliation';
+        order.current_status = 'complete';
+      }
+      return {};
+    });
+    const apply = jest.fn().mockResolvedValue(undefined);
+    (service as any).depositLedgerService = { applyHeldDepositAsPayment: apply };
+
+    await service.markPaidInCashException('order-123');
+    expect(apply).toHaveBeenCalledWith(expect.objectContaining({ amount: 500 }));
+    expect(order.deposit_status).toBe('applied');
+
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'biz-user',
+      active_persona: 'business',
+      business: { id: 'biz-1', user_id: 'biz-user' },
+    });
+    hasuraUserService.sessionPersonaContext.mockReturnValue({
+      jwtDefaultRole: 'business',
+      jwtAllowedRoles: ['business'],
+    });
+    jest.spyOn(service as any, 'orderMomoContext').mockReturnValue({
+      provider: 'mtn',
+      itemCountry: 'CM',
+      payerUserId: 'client-user',
+    });
+    const createTransaction = jest.fn().mockResolvedValue({
+      id: 'tx-1',
+      reference: 'ref-1',
+      status: 'pending',
+    });
+    const initiatePayment = jest
+      .fn()
+      .mockResolvedValue({ success: true, transactionId: 'momo-1', message: 'ok' });
+    (service as any).mobilePaymentsDatabaseService = {
+      getPendingCashReconciliationTransactionByOrderNumber: jest
+        .fn()
+        .mockResolvedValue(null),
+      createTransaction,
+      updateTransaction: jest.fn().mockResolvedValue(undefined),
+    };
+    (service as any).mobilePaymentsService = { initiatePayment };
+
+    await expect(
+      service.reconcileCashException('order-123', '+237670000000')
+    ).resolves.toMatchObject({ success: true });
+
+    // 5000 total, 500 deposit already taken at cash exception: ask for 4500, not 5000.
+    expect(createTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        amount: 4500,
+        payment_entity: 'order_cash_reconciliation',
+      })
+    );
+    expect(initiatePayment).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 4500 }),
+      expect.any(String),
+      'client-user'
+    );
   });
 
   it('rejects cash exception unless the order is pay-at-delivery and out for delivery', async () => {

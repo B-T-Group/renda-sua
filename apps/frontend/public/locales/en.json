@@ -6532,6 +6532,8 @@
       "remindError": "Could not send the reminder",
       "loadError": "Could not load pickup options",
       "feeLine": "Fee {{fee}} {{currency}} ({{percent}}% of the items). You receive {{share}} {{currency}}. The client gets back {{refund}} {{currency}}.",
+      "depositLine": "No fee. The client's {{amount}} {{currency}} reservation deposit is kept by Rendasua as the no-show penalty.",
+      "cancelledDeposit": "Pickup cancelled. The client's reservation deposit is kept as the no-show penalty.",
       "wait": "You can cancel for a no-show after the order has been ready for {{hours}} hours.",
       "cancel": "Cancel — client did not pick up",
       "cancelled": "Pickup cancelled. The client is refunded except for the fee.",

@@ -8,7 +8,21 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
  * account_transactions.reference_id is UUID — use the deposit MoMo txn id for
  * hold/release/forfeit (same pattern as GIVE_CHANGE using mobile_tx.id).
  * Settlement item payment still uses orderId, so it does not collide.
+ *
+ * Every move also carries a once-only idempotency key derived from the deposit
+ * txn id (see depositLedgerKey). The keys are shared across purposes on purpose:
+ * a deposit has exactly one hold, one release and at most one client payment, so
+ * a refund racing a forfeit (or settlement) cannot both release, and a forfeit
+ * racing a cash-exception apply cannot both debit, even if both pass the
+ * reference check at the same moment.
  */
+export function depositLedgerKey(
+  depositTransactionId: string,
+  move: 'hold' | 'release' | 'payment' | 'forfeit_hq'
+): string {
+  return `deposit:${depositTransactionId}:${move}`;
+}
+
 @Injectable()
 export class DepositLedgerService {
   private readonly logger = new Logger(DepositLedgerService.name);
@@ -64,6 +78,7 @@ export class DepositLedgerService {
         amount: params.amount,
         referenceId: params.depositTransactionId,
         memo: `Deposit hold for order ${params.orderNumber}`,
+        idempotencyKey: depositLedgerKey(params.depositTransactionId, 'hold'),
       });
 
     let hold = await attempt();
@@ -100,6 +115,7 @@ export class DepositLedgerService {
       amount: params.amount,
       referenceId: params.depositTransactionId,
       memo: `Deposit hold (legacy catch-up) for order ${params.orderNumber}`,
+      idempotencyKey: depositLedgerKey(params.depositTransactionId, 'hold'),
     });
     if (!hold?.success) {
       throw new Error(
@@ -127,6 +143,7 @@ export class DepositLedgerService {
       memo:
         params.memo ??
         `Deposit refund released for order ${params.orderNumber}`,
+      idempotencyKey: depositLedgerKey(params.depositTransactionId, 'release'),
     });
     if (!release?.success) {
       throw new Error(
@@ -157,6 +174,7 @@ export class DepositLedgerService {
       amount: params.amount,
       referenceId: params.depositTransactionId,
       memo: `Deposit applied for order ${params.orderNumber}`,
+      idempotencyKey: depositLedgerKey(params.depositTransactionId, 'payment'),
     });
     if (!debit?.success) {
       throw new Error(
@@ -178,6 +196,8 @@ export class DepositLedgerService {
 
   /**
    * Forfeit: release hold → debit client available → credit Rendasua HQ available.
+   * Callers must have claimed the deposit (deposit_status paid → forfeited) first;
+   * this method is idempotent so a claimed-but-incomplete forfeit can be resumed.
    */
   async forfeitDepositToHq(params: {
     clientAccountId: string;
@@ -193,6 +213,7 @@ export class DepositLedgerService {
       amount: params.amount,
       referenceId: params.depositTransactionId,
       memo: `Deposit forfeit release for order ${params.orderNumber}`,
+      idempotencyKey: depositLedgerKey(params.depositTransactionId, 'release'),
     });
     if (!release?.success) {
       throw new Error(
@@ -207,6 +228,7 @@ export class DepositLedgerService {
       amount: params.amount,
       referenceId: params.depositTransactionId,
       memo: `Deposit forfeited for order ${params.orderNumber}`,
+      idempotencyKey: depositLedgerKey(params.depositTransactionId, 'payment'),
     });
     if (!debit?.success) {
       throw new Error(
@@ -233,6 +255,9 @@ export class DepositLedgerService {
       amount: params.amount,
       referenceId: params.depositTransactionId,
       memo: `Deposit forfeited from order ${params.orderNumber}`,
+      idempotencyKey: depositLedgerKey(params.depositTransactionId, 'forfeit_hq'),
+      // HQ revenue, never a cash-advance repayment.
+      skipCashAdvanceRepayment: true,
     });
     if (!credit?.success) {
       throw new Error(

@@ -180,6 +180,7 @@ import { DepositLedgerService } from './deposit-ledger.service';
 import {
   DepositForfeitReason,
   DepositRefundService,
+  RESOLVED_DEPOSIT_STATUSES,
 } from './deposit-refund.service';
 import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
@@ -1060,9 +1061,9 @@ export class OrdersService {
         ...restOrder
       } = order;
 
-      // Agents must not see GMV (total_amount), but need remainder when deposit is paid
+      // Agents must not see GMV (total_amount), but need remainder when deposit is paid/applied
       const depositPaid =
-        order.deposit_status === 'paid' && Number(order.deposit_amount) > 0;
+        this.depositCalculationService.isDepositCollected(order);
       const amountDue = depositPaid
         ? this.depositCalculationService.remainderPaymentAmount(order)
         : undefined;
@@ -6055,14 +6056,14 @@ export class OrdersService {
     );
     const order = await this.requireOrder(orderId);
     const clock = await loadPickupNoshowClock(this.hasuraSystemService, order as any, this.logger);
-    const quote = await this.quoteNoshowFee(order);
+    const quote = await this.quoteNoshowOutcome(order);
     return {
       success: true,
       ...clock,
       ...quote,
       canCancel:
         clock.canCancel &&
-        (this.paidPickupReady(order) || this.deliveryCookedReady(order)),
+        (this.noshowCancelEligible(order) || this.deliveryCookedReady(order)),
       pickupReminderLastSentAt: (order as any).pickup_reminder_last_sent_at ?? null,
     };
   }
@@ -6100,16 +6101,16 @@ export class OrdersService {
     failure_reason_id: string;
     notes?: string;
   }) {
-    await this.requireBusinessOrderAccess(
+    const userId = await this.requireBusinessOrderAccess(
       request.orderId,
       'Only business users can cancel an uncollected pickup',
       'Unauthorized to cancel this pickup'
     );
     const order = await this.requireOrder(request.orderId);
     if (this.isCookedFailPickupOrder(order)) return this.failPickup(request);
-    this.assertPaidPickupNoshow(order);
+    this.assertNoshowCancellable(order);
     await this.requireNoshowWindow(order);
-    return this.commitUncollectedPickupCancel(order, request);
+    return this.commitUncollectedPickupCancel(order, request, userId);
   }
 
   async failPickup(request: {
@@ -6541,12 +6542,78 @@ export class OrdersService {
     );
   }
 
-  private assertPaidPickupNoshow(order: Orders): void {
-    if (this.paidPickupReady(order)) return;
+  /** Classic MoMo pay-at-pickup / pay-at-delivery (not cooked pay-after-confirm). */
+  private isClassicDeferredPayment(order: Orders): boolean {
+    const timing = (order as any).payment_timing;
+    return (
+      (timing === 'pay_at_pickup' || timing === 'pay_at_delivery') &&
+      (order as any).pay_after_merchant_confirm !== true
+    );
+  }
+
+  /**
+   * Unpaid pay-at-pickup order whose reservation deposit is captured and still
+   * held, ready, not collected. The deposit is the only no-show penalty here.
+   */
+  private unpaidDepositPickupReady(order: Orders): boolean {
+    if (order.fulfillment_method !== 'pickup') return false;
+    if (order.current_status !== 'ready_for_pickup') return false;
+    if ((order as any).payment_timing !== 'pay_at_pickup') return false;
+    if ((order as any).pay_after_merchant_confirm === true) return false;
+    const payment = (order.payment_status || '').toLowerCase();
+    if (payment !== 'pending' && payment !== 'pending_payment') return false;
+    return (
+      (order as any).deposit_status === 'paid' &&
+      Number((order as any).deposit_amount) > 0
+    );
+  }
+
+  /**
+   * Goods no-show cancel:
+   * - paid pay-now pickup (percent fee, client refunded the rest), or
+   * - unpaid pay-at-pickup with a held deposit (deposit forfeited, no fee).
+   * Never a paid classic pay-at-pickup/delivery order: settlement already
+   * consumed its deposit and paid the merchant (QA #459 B-1 / N-3).
+   */
+  private noshowCancelEligible(order: Orders): boolean {
+    if (this.unpaidDepositPickupReady(order)) return true;
+    return this.paidPickupReady(order) && !this.isClassicDeferredPayment(order);
+  }
+
+  private assertNoshowCancellable(order: Orders): void {
+    if (this.noshowCancelEligible(order)) return;
+    if (this.paidPickupReady(order)) {
+      throw new HttpException(
+        'This order was already paid at pickup, so it cannot be cancelled as a no-show. Use a refund instead.',
+        HttpStatus.BAD_REQUEST
+      );
+    }
     throw new HttpException(
-      'Only a paid pickup that is ready can be cancelled as a no-show',
+      'Only a ready pickup that is paid, or a pay-at-pickup order with a paid reservation deposit, can be cancelled as a no-show',
       HttpStatus.BAD_REQUEST
     );
+  }
+
+  /** Fee/refund preview; the deposit case keeps the deposit instead of a fee. */
+  private async quoteNoshowOutcome(order: Orders) {
+    if (this.unpaidDepositPickupReady(order)) {
+      return {
+        cancellationFee: 0,
+        cancellationFeePercent: 0,
+        merchantShare: 0,
+        platformShare: 0,
+        refundAmount: 0,
+        currency: order.currency,
+        depositForfeitAmount: Number((order as any).deposit_amount) || 0,
+        noshowPenalty: 'deposit' as const,
+      };
+    }
+    const quote = await this.quoteNoshowFee(order);
+    return {
+      ...quote,
+      depositForfeitAmount: 0,
+      noshowPenalty: quote.cancellationFee > 0 ? ('fee' as const) : ('none' as const),
+    };
   }
 
   private isCookedFailPickupOrder(order: Orders): boolean {
@@ -6584,12 +6651,13 @@ export class OrdersService {
 
   private async commitUncollectedPickupCancel(
     order: Orders,
-    request: { orderId: string; failure_reason_id: string; notes?: string }
+    request: { orderId: string; failure_reason_id: string; notes?: string },
+    actorUserId?: string
   ) {
     const reason = await this.assertActivePickupFailureReason(
       request.failure_reason_id
     );
-    const quote = await this.quoteNoshowFee(order);
+    const quote = await this.quoteNoshowOutcome(order);
     await this.releaseStripeAuthorizationIfNeeded(order);
     const previousStatus = order.current_status;
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
@@ -6597,13 +6665,20 @@ export class OrdersService {
       'cancelled',
       { viaCancelEndpoint: true }
     );
-    await this.finishNoshowCancel(order, request, previousStatus, reason);
+    await this.finishNoshowCancel(
+      order,
+      request,
+      previousStatus,
+      reason,
+      actorUserId
+    );
     return {
       success: true,
       order: updatedOrder,
       refund_amount: quote.refundAmount,
       fee_retained: quote.cancellationFee,
       merchant_share: quote.merchantShare,
+      deposit_forfeit_amount: quote.depositForfeitAmount,
       message: 'Pickup cancelled because the client did not collect it',
     };
   }
@@ -6612,9 +6687,10 @@ export class OrdersService {
     order: Orders,
     request: { orderId: string; notes?: string },
     previousStatus: string,
-    reason: string
+    reason: string,
+    actorUserId?: string
   ): Promise<void> {
-    const userId = await this.resolveOptionalUserId();
+    const userId = actorUserId ?? (await this.resolveOptionalUserId());
     const detail = [reason, request.notes].filter(Boolean).join('. ');
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -6630,7 +6706,8 @@ export class OrdersService {
       previousStatus,
       'business',
       request.notes,
-      CLIENT_NO_SHOW_REASON
+      CLIENT_NO_SHOW_REASON,
+      userId ?? undefined
     );
   }
 
@@ -9249,7 +9326,17 @@ export class OrdersService {
       const order = await this.requireOrderDetailsByNumber(orderNumber);
       this.assertDepositCallbackTxnMatches(order, transactionDbId);
 
-      if ((order as any).deposit_status === 'paid') {
+      const depositStatus = (order as any).deposit_status as string | undefined;
+      if (depositStatus && RESOLVED_DEPOSIT_STATUSES.has(depositStatus)) {
+        // Late / replayed SUCCESS after the deposit was forfeited, refunded or
+        // applied: the ledger already has the credit; move nothing, do not throw.
+        this.logger.log(
+          `deposit_callback_noop order=${orderNumber} deposit_status=${depositStatus}`
+        );
+        return;
+      }
+
+      if (depositStatus === 'paid') {
         await this.repairPaidDepositHoldIfMissing(order, transactionDbId);
         if (this.isTerminalForDepositCallback(order.current_status)) {
           await this.refundPaidDepositOnTerminalOrder(order.id);
@@ -9540,7 +9627,9 @@ export class OrdersService {
     if (
       result.success ||
       result.errorCode === 'ALREADY_REFUNDED' ||
-      result.errorCode === 'DEPOSIT_NOT_CAPTURED'
+      result.errorCode === 'DEPOSIT_NOT_CAPTURED' ||
+      result.errorCode === 'DEPOSIT_FORFEITED' ||
+      result.errorCode === 'DEPOSIT_APPLIED'
     ) {
       return;
     }
@@ -9588,17 +9677,53 @@ export class OrdersService {
     const depositTxnId = (order as any)
       .deposit_mobile_payment_transaction_id as string | undefined;
     const userId = order.client?.user_id;
-    if ((order as any).deposit_status !== 'paid' || amount <= 0 || !depositTxnId || !userId) {
+    const status = (order as any).deposit_status;
+    // 'applied' = an earlier attempt already claimed it: resume the keyed moves.
+    if ((status !== 'paid' && status !== 'applied') || amount <= 0 || !depositTxnId || !userId) {
       return null;
     }
     return { amount, depositTxnId, userId };
   }
 
+  /**
+   * Settlement consumes the held deposit: claim it (paid → applied) before any
+   * ledger move so a racing no-show forfeit or refund cannot also take it.
+   * Returns true when the caller should run the (idempotent) deposit ledger moves.
+   */
+  private async claimDepositForSettlement(order: Orders): Promise<boolean> {
+    const status = await this.depositRefundService.claimDepositApplied(order.id);
+    if (status === 'applied') return true;
+    if (status === 'forfeited') this.throwForfeitedDepositAtSettlement(order);
+    this.logger.warn(
+      `deposit_not_applied_at_settlement order=${order.order_number} deposit_status=${status}`
+    );
+    return false;
+  }
+
+  /**
+   * The deposit went to HQ as a no-show / late-cancel penalty: never also count
+   * it in a settlement (the full item debit would charge the client for it twice).
+   */
+  private assertDepositNotForfeitedForSettlement(order: Orders): void {
+    const amount = Number((order as any).deposit_amount) || 0;
+    if ((order as any).deposit_status === 'forfeited' && amount > 0) {
+      this.throwForfeitedDepositAtSettlement(order);
+    }
+  }
+
+  private throwForfeitedDepositAtSettlement(order: Orders): never {
+    throw new Error(
+      `Deposit for order ${order.order_number} was forfeited; refusing to settle it as payment`
+    );
+  }
+
   private async applyPaidDepositForExternalSettlement(
     order: Orders
   ): Promise<void> {
+    this.assertDepositNotForfeitedForSettlement(order);
     const params = this.paidDepositApplyParams(order);
     if (!params) return;
+    if (!(await this.claimDepositForSettlement(order))) return;
     const clientAccount = await this.hasuraSystemService.getAccount(
       params.userId,
       order.currency
@@ -9634,7 +9759,12 @@ export class OrdersService {
     }
   }
 
-  /** Idempotent via deposit txn release reference. */
+  /**
+   * Classic PAP/PAD settlement: claim the deposit as applied (paid → applied),
+   * then release its hold so the full item debit can include it.
+   * Idempotent via the deposit txn release reference + key; a retry after the
+   * claim sees 'applied' and only finishes the release.
+   */
   private async releasePaidDepositHoldIfNeeded(
     order: Orders,
     clientAccountId: string
@@ -9643,9 +9773,15 @@ export class OrdersService {
     const depositStatus = (order as any).deposit_status;
     const depositTxnId = (order as any)
       .deposit_mobile_payment_transaction_id as string | undefined;
-    if (depositStatus !== 'paid' || depositAmount <= 0 || !depositTxnId) {
+    this.assertDepositNotForfeitedForSettlement(order);
+    if (
+      (depositStatus !== 'paid' && depositStatus !== 'applied') ||
+      depositAmount <= 0 ||
+      !depositTxnId
+    ) {
       return;
     }
+    if (!(await this.claimDepositForSettlement(order))) return;
     await this.depositLedgerService.releaseDepositToAvailable({
       clientAccountId,
       amount: depositAmount,
@@ -10361,7 +10497,8 @@ export class OrdersService {
     previousStatus: string,
     cancelledBy: 'client' | 'business' | 'system',
     notes?: string,
-    sqsReason?: string
+    sqsReason?: string,
+    actorUserId?: string
   ): Promise<void> {
     try {
       await this.purchaseCreditsService?.restore(orderId);
@@ -10416,7 +10553,8 @@ export class OrdersService {
       previousStatus,
       cancelledBy,
       notes,
-      sqsReason
+      sqsReason,
+      actorUserId
     );
 
     try {
@@ -10441,8 +10579,12 @@ export class OrdersService {
    * - Customer cancel / refuse / no-show:
    *   - Before lock point → refund
    *   - After lock point → forfeit with reason code
-   * - Merchant-initiated pickup no-show (`client_no_show`) uses the customer
-   *   no-show rule, not the generic business-cancel refund.
+   * - Merchant pickup no-show (`client_no_show`) on an UNPAID pay-at-pickup
+   *   order that was ready: forfeit the held deposit (customer_no_show_pickup).
+   *   Any other no-show (paid order, cooked fail-pickup, delivery) never
+   *   forfeits and uses the business-cancel rule. Cooked orders carry no
+   *   deposit, and a paid classic order's deposit was applied by settlement
+   *   (deposit_status 'applied', so the refund below is refused as well).
    * - Lock point: delivery = out_for_delivery, pickup = ready_for_pickup
    */
   private async handleDepositOnCancellation(
@@ -10451,7 +10593,8 @@ export class OrdersService {
     previousStatus: string,
     cancelledBy: 'client' | 'business' | 'system',
     notes?: string,
-    reason?: string
+    reason?: string,
+    actorUserId?: string
   ): Promise<void> {
     const depositStatus = (order as any).deposit_status;
     const depositAmount = (order as any).deposit_amount;
@@ -10472,12 +10615,14 @@ export class OrdersService {
       previousStatus
     );
 
-    if (reason === CLIENT_NO_SHOW_REASON && afterLock) {
+    if (
+      reason === CLIENT_NO_SHOW_REASON &&
+      this.isUnpaidPickupNoshow(order, previousStatus)
+    ) {
       await this.applyDepositForfeit(
         orderId,
-        fulfillmentMethod === 'delivery'
-          ? 'customer_no_show_delivery'
-          : 'customer_no_show_pickup'
+        'customer_no_show_pickup',
+        actorUserId
       );
       return;
     }
@@ -10556,14 +10701,26 @@ export class OrdersService {
     }
   }
 
+  /** Snapshot taken before the cancel: unpaid pay-at-pickup that was ready. */
+  private isUnpaidPickupNoshow(order: Orders, previousStatus: string): boolean {
+    if ((order as any).fulfillment_method !== 'pickup') return false;
+    if (previousStatus !== 'ready_for_pickup') return false;
+    if ((order as any).payment_timing !== 'pay_at_pickup') return false;
+    if ((order as any).pay_after_merchant_confirm === true) return false;
+    const payment = ((order as any).payment_status || '').toLowerCase();
+    return payment === 'pending' || payment === 'pending_payment';
+  }
+
   private async applyDepositForfeit(
     orderId: string,
-    forfeitReason: DepositForfeitReason
+    forfeitReason: DepositForfeitReason,
+    actorUserId?: string
   ): Promise<void> {
     try {
       const forfeitResult = await this.depositRefundService.forfeitDeposit(
         orderId,
-        forfeitReason
+        forfeitReason,
+        { forfeitedByUserId: actorUserId ?? null }
       );
       if (!forfeitResult.success) {
         this.logger.error(
@@ -14140,7 +14297,8 @@ export class OrdersService {
       // Merchant settlement will still use the FULL order total (deposit + remainder)
       const depositAmount = (order as any).deposit_amount || 0;
       const depositStatus = (order as any).deposit_status;
-      const depositPaid = depositStatus === 'paid';
+      const depositPaid =
+        depositStatus === 'paid' || depositStatus === 'applied';
       
       const clientHoldAmount = depositPaid
         ? Math.max(0, order.total_amount - depositAmount)

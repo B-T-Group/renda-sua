@@ -881,9 +881,9 @@ export class OrdersController {
 
   @Get(':orderId/pickup-noshow')
   @ApiOperation({
-    summary: 'Preview a paid pickup no-show cancel',
+    summary: 'Preview a pickup no-show cancel',
     description:
-      'Business only. Returns whether the ready-for-pickup window has elapsed and the cancellation fee split.',
+      'Business only. Returns whether the ready-for-pickup window has elapsed and the penalty: the cancellation fee split for a paid pay-now pickup, or depositForfeitAmount (noshowPenalty=deposit, no fee) for an unpaid pay-at-pickup order with a held reservation deposit.',
   })
   @ApiParam({ name: 'orderId', description: 'Order ID' })
   @ApiResponse({ status: 200, description: 'No-show preview' })
@@ -904,9 +904,9 @@ export class OrdersController {
 
   @Post(':orderId/cancel-uncollected-pickup')
   @ApiOperation({
-    summary: 'Cancel a paid pickup the client did not collect',
+    summary: 'Cancel a pickup the client did not collect',
     description:
-      'Allowed only after pickup_noshow_cancel_hours (default 2) in ready_for_pickup. Charges the client cancellation fee. Half goes to the merchant.',
+      'Allowed only after pickup_noshow_cancel_hours (1-168, default 2) in ready_for_pickup. Paid pay-now pickup: charges the client cancellation fee, half to the merchant. Unpaid pay-at-pickup with a held reservation deposit: no fee, the deposit is forfeited to Rendasua. Paid classic pay-at-pickup/delivery orders are rejected (400).',
   })
   @ApiParam({ name: 'orderId', description: 'Order ID' })
   @ApiBody({

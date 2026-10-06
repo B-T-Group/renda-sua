@@ -140,15 +140,15 @@ describe('loadPickupNoshowClock', () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('using 2'));
   });
 
-  it('treats an explicit zero as immediate and rejects hours outside 0 to 168', async () => {
+  it('accepts 1 to 168 hours, rejects zero (N-8) and falls back to 2 for a null value', async () => {
     freeze(READY);
-    const immediate = await loadPickupNoshowClock(
-      runner([{ country_code: null, number_value: 0 }]),
+    const min = await loadPickupNoshowClock(
+      runner([{ country_code: null, number_value: 1 }]),
       order(),
       { warn: jest.fn(), error: jest.fn() }
     );
-    expect(immediate.canCancel).toBe(true);
-    expect(immediate.opensAt).toBe(READY);
+    expect(min.hours).toBe(1);
+    expect(min.canCancel).toBe(false);
 
     const max = await loadPickupNoshowClock(
       runner([{ country_code: null, number_value: '168' }]),
@@ -158,15 +158,17 @@ describe('loadPickupNoshowClock', () => {
     expect(max.hours).toBe(168);
     expect(max.canCancel).toBe(false);
 
+    const warn = jest.fn();
     const storedNull = await loadPickupNoshowClock(
       runner([{ country_code: null, number_value: null }]),
       order(),
-      { warn: jest.fn(), error: jest.fn() }
+      { warn, error: jest.fn() }
     );
-    expect(storedNull.hours).toBe(0);
-    expect(storedNull.canCancel).toBe(true);
+    expect(storedNull.hours).toBe(2);
+    expect(storedNull.canCancel).toBe(false);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('using 2'));
 
-    for (const number_value of [-1, 169, 'nope', Number.NaN]) {
+    for (const number_value of [0, '0', 0.5, -1, 169, 'nope', Number.NaN]) {
       await expect(
         loadPickupNoshowClock(runner([{ country_code: null, number_value }]), order(), {
           warn: jest.fn(),
@@ -174,7 +176,7 @@ describe('loadPickupNoshowClock', () => {
         })
       ).rejects.toMatchObject({
         status: HttpStatus.INTERNAL_SERVER_ERROR,
-        message: 'pickup_noshow_cancel_hours must be between 0 and 168',
+        message: 'pickup_noshow_cancel_hours must be between 1 and 168',
       });
     }
   });

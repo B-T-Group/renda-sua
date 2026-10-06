@@ -25,6 +25,19 @@ describe('depositRemainder', () => {
     ).toBe(850);
   });
 
+  it('computes total minus deposit when the deposit was applied', () => {
+    expect(
+      remainingAfterDeposit({
+        total_amount: 5000,
+        deposit_amount: 500,
+        deposit_status: 'applied',
+      })
+    ).toBe(4500);
+    expect(
+      isDepositPaid({ deposit_amount: 500, deposit_status: 'applied' })
+    ).toBe(true);
+  });
+
   it('returns full total when deposit not paid', () => {
     expect(
       remainingAfterDeposit({

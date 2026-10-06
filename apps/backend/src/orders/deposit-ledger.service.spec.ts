@@ -74,6 +74,7 @@ describe('DepositLedgerService', () => {
         amount: 150,
         referenceId: txnId,
         memo: 'Deposit hold for order 123',
+        idempotencyKey: `deposit:${txnId}:hold`,
       });
     });
 
@@ -141,12 +142,14 @@ describe('DepositLedgerService', () => {
         amount: 2000,
         referenceId: txnId,
         memo: 'Deposit released for settlement of order 49520979',
+        idempotencyKey: `deposit:${txnId}:release`,
       });
       expect(accountsService.registerPaymentIfNotExists).toHaveBeenCalledWith({
         accountId: 'acct-1',
         amount: 2000,
         referenceId: txnId,
         memo: 'Deposit applied for order 49520979',
+        idempotencyKey: `deposit:${txnId}:payment`,
       });
     });
 
@@ -206,6 +209,7 @@ describe('DepositLedgerService', () => {
         amount: 150,
         referenceId: txnId,
         memo: 'Deposit refund released for order 123',
+        idempotencyKey: `deposit:${txnId}:release`,
       });
     });
 
@@ -273,12 +277,15 @@ describe('DepositLedgerService', () => {
         amount: 150,
         referenceId: txnId,
         memo: 'Deposit forfeited for order 123',
+        idempotencyKey: `deposit:${txnId}:payment`,
       });
       expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
         accountId: 'hq-acct',
         amount: 150,
         referenceId: txnId,
         memo: 'Deposit forfeited from order 123',
+        idempotencyKey: `deposit:${txnId}:forfeit_hq`,
+        skipCashAdvanceRepayment: true,
       });
     });
 
