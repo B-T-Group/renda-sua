@@ -109,6 +109,10 @@ function App() {
   const hasMobileBottomNav =
     showAgentBottomNav || showClientBottomNav || showGuestBottomNav;
   const whatsappBottomOffset = hasMobileBottomNav ? 92 : 24;
+  // GuestBottomNav also renders on the guest home page (unlike `showGuestBottomNav`), so the
+  // launcher clears it there too; WhatsApp keeps its existing offset.
+  const assistantLauncherBottomOffset =
+    hasMobileBottomNav || (!isAuthenticated && isMobile) ? 92 : 24;
   const isItemDetailPage = /^\/items\/[^/]+\/?$/.test(location.pathname);
   const isPlaceOrderFlowPage = /^\/items\/[^/]+\/place_order(?:\/anon-address)?\/?$/.test(
     location.pathname
@@ -1107,7 +1111,7 @@ function App() {
         <DeferredAssistantLauncher
           hidden={!assistantEntry.showLauncher}
           isMobile={isMobile}
-          bottomOffset={whatsappBottomOffset}
+          bottomOffset={assistantLauncherBottomOffset}
           screen={assistantScreenName(location.pathname)}
           isSignedIn={isAuthenticated}
         />
