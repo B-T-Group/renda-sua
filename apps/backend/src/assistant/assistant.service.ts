@@ -98,9 +98,9 @@ export class AssistantService implements OnModuleInit {
     let usedKnowledge = false;
     const maxLoops = Math.max(1, settings?.maxToolIterations || 5);
     const toolConfig = await this.tools.buildToolConfig(input.identity);
-    const hasShoppingTools = toolConfig.tools.some(
+    const hasShoppingTools = toolConfig.tools?.some(
       (t) => t.toolSpec?.name === 'search_catalog'
-    );
+    ) ?? false;
     for (let index = 0; index < maxLoops; index++) {
       const result = await this.bedrock.converseWithTools({
         model: settings?.model || undefined,
