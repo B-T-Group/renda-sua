@@ -1,12 +1,26 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { OrdersService } from './orders.service';
 import { SiteEventsService } from '../site-events/site-events.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { AccountsService } from '../accounts/accounts.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
+import { OrderStatusService } from './order-status.service';
+import { GoogleDistanceService } from '../google/google-distance.service';
+import { AddressesService } from '../addresses/addresses.service';
+import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { MobilePaymentPhonesService } from '../mobile-payment-phones/mobile-payment-phones.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { FxEstimateService } from '../diaspora/fx-estimate.service';
+import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
+import { CommissionsService } from '../commissions/commissions.service';
+import { PdfService } from '../pdf/pdf.service';
+import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 
 /**
  * Phase 0 (#453): Agent claim friction & delivery availability events.
@@ -89,31 +103,27 @@ describe('OrdersService Phase 0 Events', () => {
         { provide: SiteEventsService, useValue: mockSiteEventsService },
         { provide: HasuraUserService, useValue: mockHasuraUserService },
         { provide: HasuraSystemService, useValue: mockHasuraSystemService },
+        { provide: AccountsService, useValue: {} },
+        { provide: ConfigService, useValue: { get: jest.fn() } },
+        { provide: OrderStatusService, useValue: {} },
+        { provide: GoogleDistanceService, useValue: {} },
+        { provide: AddressesService, useValue: {} },
+        { provide: MobilePaymentsService, useValue: {} },
+        { provide: MobilePaymentsDatabaseService, useValue: mockMobilePaymentsDatabaseService },
+        { provide: MobilePaymentPhonesService, useValue: {} },
+        { provide: NotificationsService, useValue: {} },
         { provide: AgentHoldService, useValue: mockAgentHoldService },
-        {
-          provide: PaymentRoutingService,
-          useValue: mockPaymentRoutingService,
-        },
-        {
-          provide: MobilePaymentsDatabaseService,
-          useValue: mockMobilePaymentsDatabaseService,
-        },
-        // Stub all other required dependencies
-        { provide: 'AccountsService', useValue: {} },
-        { provide: 'ConfigService', useValue: { get: jest.fn() } },
-        { provide: 'OrderStatusService', useValue: {} },
-        { provide: 'GoogleDistanceService', useValue: {} },
-        { provide: 'AddressesService', useValue: {} },
-        { provide: 'MobilePaymentsService', useValue: {} },
-        { provide: 'MobilePaymentPhonesService', useValue: {} },
-        { provide: 'NotificationsService', useValue: {} },
+        { provide: PaymentRoutingService, useValue: mockPaymentRoutingService },
+        { provide: FxEstimateService, useValue: {} },
+        { provide: DeliveryConfigService, useValue: {} },
+        { provide: CommissionsService, useValue: {} },
+        { provide: PdfService, useValue: {} },
+        { provide: DeliveryAvailabilityService, useValue: {} },
+        { provide: EventEmitter2, useValue: { emit: jest.fn() } },
+        // Stub remaining dependencies as symbols/values
         { provide: 'OrderRecipientNotificationsService', useValue: {} },
-        { provide: 'FxEstimateService', useValue: {} },
         { provide: 'RecipientsService', useValue: {} },
-        { provide: 'DeliveryConfigService', useValue: {} },
         { provide: 'DeliveryWindowsService', useValue: {} },
-        { provide: 'CommissionsService', useValue: {} },
-        { provide: 'PdfService', useValue: {} },
         { provide: 'OrderQueueService', useValue: {} },
         { provide: 'WaitAndExecuteScheduleService', useValue: {} },
         { provide: 'DeliveryPinService', useValue: {} },
@@ -137,14 +147,16 @@ describe('OrdersService Phase 0 Events', () => {
         { provide: 'OrderReassignmentService', useValue: {} },
         { provide: 'OrderEventsService', useValue: {} },
         { provide: 'RbacService', useValue: {} },
-        { provide: 'DeliveryAvailabilityService', useValue: {} },
-        { provide: 'EventEmitter2', useValue: { emit: jest.fn() } },
         { provide: 'FoodOrdersService', useValue: {} },
         { provide: 'CookedFoodPickupFlowService', useValue: {} },
         { provide: 'DepositCalculationService', useValue: {} },
         { provide: 'DepositLedgerService', useValue: {} },
         { provide: 'DepositRefundService', useValue: {} },
         { provide: 'VariantInventoryService', useValue: {} },
+        { provide: 'CommerceOrderInventoryHook', useValue: {} },
+        { provide: 'RepresentativeCompensationService', useValue: {} },
+        { provide: 'CreditsService', useValue: {} },
+        { provide: 'PurchaseCreditsService', useValue: {} },
       ],
     }).compile();
 
