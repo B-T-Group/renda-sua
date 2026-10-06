@@ -1,9 +1,11 @@
-import React, {
+import {
   createContext,
   ReactNode,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -29,7 +31,12 @@ interface AssistantChatContextType {
   threadId: string;
   draft: string;
   isOffline: boolean;
-  sendMessage: (text: string, isRetry?: boolean) => Promise<void>;
+  /** False until auth has settled and the thread has been checked against its owner. */
+  ready: boolean;
+  /** Appends a user message and sends the thread. Resolves false when nothing was sent. */
+  sendMessage: (text: string) => Promise<boolean>;
+  /** Re-sends the thread whose last user message failed, without adding a copy. */
+  retry: () => Promise<boolean>;
   setDraft: (draft: string) => void;
   clearChat: () => void;
 }
@@ -38,67 +45,111 @@ const AssistantChatContext = createContext<AssistantChatContextType | null>(
   null
 );
 
-const STORAGE_KEY_MESSAGES = 'rendasua.assistant.chat.v1';
-const STORAGE_KEY_THREAD_ID = 'rendasua.assistant.thread_id.v1';
-const STORAGE_KEY_LAST_ACTIVITY = 'rendasua.assistant.last_activity.v1';
+export const STORAGE_KEY_MESSAGES = 'rendasua.assistant.chat.v1';
+export const STORAGE_KEY_THREAD_ID = 'rendasua.assistant.thread_id.v1';
+export const STORAGE_KEY_LAST_ACTIVITY = 'rendasua.assistant.last_activity.v1';
+/** Opaque owner of the stored thread: `guest` or `u:<hash of user.sub>`. Never the raw sub. */
+export const STORAGE_KEY_OWNER = 'rendasua.assistant.owner.v1';
 const MAX_API_MESSAGES = 20;
-const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
+export const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
  * Generate a UUID v4 with progressive fallbacks:
- * 1. crypto.randomUUID (modern browsers, HTTPS only)
- * 2. crypto.getRandomValues (all browsers, builds RFC4122 v4)
- * 3. Math.random (test environments, non-crypto fallback)
+ * 1. crypto.randomUUID (modern browsers, secure contexts)
+ * 2. crypto.getRandomValues (RFC 4122 v4 built from random bytes)
+ * 3. Math.random (last resort; ids are not security tokens)
  */
 export function generateThreadId(): string {
-  // Try crypto.randomUUID first (modern browsers on HTTPS)
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+  const c: Crypto | undefined =
+    typeof crypto !== 'undefined' ? crypto : undefined;
+  if (c && typeof c.randomUUID === 'function') {
     try {
-      return crypto.randomUUID();
+      return c.randomUUID();
     } catch {
-      // Fall through to next method
+      // Fall through to the next method
     }
   }
-
-  // Try crypto.getRandomValues (all browsers, build RFC4122 v4)
-  if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+  if (c && typeof c.getRandomValues === 'function') {
     try {
-      // RFC4122 v4 UUID template: xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-      // We need 32 hex digits (ignoring the fixed '4')
       const bytes = new Uint8Array(16);
-      crypto.getRandomValues(bytes);
-      
-      // Build UUID parts
-      const hex = Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-      
+      c.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40; // version 4
+      bytes[8] = (bytes[8] & 0x3f) | 0x80; // RFC 4122 variant
+      const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0'));
       return [
-        hex.substring(0, 8),
-        hex.substring(8, 12),
-        '4' + hex.substring(13, 16),
-        ((parseInt(hex.substring(16, 18), 16) & 0x3f) | 0x80).toString(16).padStart(2, '0') + hex.substring(18, 20),
-        hex.substring(20, 32),
+        hex.slice(0, 4).join(''),
+        hex.slice(4, 6).join(''),
+        hex.slice(6, 8).join(''),
+        hex.slice(8, 10).join(''),
+        hex.slice(10, 16).join(''),
       ].join('-');
     } catch {
       // Fall through to Math.random
     }
   }
-
-  // Fallback to Math.random (test environments)
-  const template = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx';
-  return template.replace(/[xy]/g, (c) => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (ch) => {
     const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    const v = ch === 'x' ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
 }
 
-function loadStored(): AssistantChatMessage[] {
-  if (typeof sessionStorage === 'undefined') return [];
+/** cyrb53: small, fast, non-reversible-in-practice string hash (53 bits). */
+function opaqueHash(input: string): string {
+  let h1 = 0xdeadbeef;
+  let h2 = 0x41c6ce57;
+  for (let i = 0; i < input.length; i++) {
+    const ch = input.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
+  }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507);
+  h1 ^= Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507);
+  h2 ^= Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(16).padStart(14, '0');
+}
+
+/** Opaque, stable owner key for the current identity. Stored instead of any PII. */
+export function assistantOwnerKey(
+  isAuthenticated: boolean,
+  sub: string | null | undefined
+): string {
+  if (!isAuthenticated || !sub) return 'guest';
+  return `u:${opaqueHash(`rendasua.assistant:${sub}`)}`;
+}
+
+function readStorage(key: string): string | null {
+  if (typeof sessionStorage === 'undefined') return null;
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY_MESSAGES);
-    if (!raw) return [];
+    return sessionStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function writeStorage(key: string, value: string): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.setItem(key, value);
+  } catch {
+    /* ignore quota / privacy mode */
+  }
+}
+
+function removeStorage(key: string): void {
+  if (typeof sessionStorage === 'undefined') return;
+  try {
+    sessionStorage.removeItem(key);
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadStoredMessages(): AssistantChatMessage[] {
+  const raw = readStorage(STORAGE_KEY_MESSAGES);
+  if (!raw) return [];
+  try {
     const parsed = JSON.parse(raw) as AssistantChatMessage[];
     return Array.isArray(parsed) ? parsed : [];
   } catch {
@@ -106,54 +157,36 @@ function loadStored(): AssistantChatMessage[] {
   }
 }
 
-function persist(messages: AssistantChatMessage[]): void {
-  if (typeof sessionStorage === 'undefined') return;
-  try {
-    sessionStorage.setItem(
-      STORAGE_KEY_MESSAGES,
-      JSON.stringify(messages.slice(-MAX_API_MESSAGES))
-    );
-  } catch {
-    /* ignore quota */
-  }
+function persistMessages(messages: AssistantChatMessage[]): void {
+  writeStorage(
+    STORAGE_KEY_MESSAGES,
+    JSON.stringify(messages.slice(-MAX_API_MESSAGES))
+  );
 }
 
-function loadThreadId(): string {
-  if (typeof sessionStorage === 'undefined') return generateThreadId();
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY_THREAD_ID);
-    return raw || generateThreadId();
-  } catch {
-    return generateThreadId();
-  }
+/** True when the last recorded activity is older than the idle timeout. */
+function isIdleAt(now: number): boolean {
+  const raw = readStorage(STORAGE_KEY_LAST_ACTIVITY);
+  if (!raw) return false;
+  const last = Number(raw);
+  return Number.isFinite(last) && now - last > IDLE_TIMEOUT_MS;
 }
 
-function persistThreadId(threadId: string): void {
-  if (typeof sessionStorage === 'undefined') return;
-  try {
-    sessionStorage.setItem(STORAGE_KEY_THREAD_ID, threadId);
-  } catch {
-    /* ignore quota */
-  }
+/** Axios rejects without `response` when the request never reached the server. */
+function isNetworkError(err: unknown): boolean {
+  const e = err as { response?: unknown; code?: string } | null;
+  return !e?.response || e?.code === 'ERR_NETWORK';
 }
 
-function loadLastActivity(): number {
-  if (typeof sessionStorage === 'undefined') return Date.now();
-  try {
-    const raw = sessionStorage.getItem(STORAGE_KEY_LAST_ACTIVITY);
-    return raw ? parseInt(raw, 10) : Date.now();
-  } catch {
-    return Date.now();
-  }
-}
-
-function persistLastActivity(timestamp: number): void {
-  if (typeof sessionStorage === 'undefined') return;
-  try {
-    sessionStorage.setItem(STORAGE_KEY_LAST_ACTIVITY, timestamp.toString());
-  } catch {
-    /* ignore quota */
-  }
+function errorText(err: unknown): string {
+  const e = err as {
+    response?: { data?: { message?: unknown } };
+    message?: unknown;
+  } | null;
+  const fromServer = e?.response?.data?.message;
+  if (typeof fromServer === 'string' && fromServer) return fromServer;
+  if (typeof e?.message === 'string' && e.message) return e.message;
+  return 'Failed to reach the assistant';
 }
 
 function makeMessageId(): string {
@@ -163,171 +196,135 @@ function makeMessageId(): string {
 export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const apiClient = useApiClient();
   const { isAuthenticated, isLoading: authLoading, user } = useSessionAuth();
-  const [messages, setMessages] = useState<AssistantChatMessage[]>([]);
+  const authSettled = !authLoading;
+  const owner = assistantOwnerKey(isAuthenticated, user?.sub);
+
+  const [messages, setMessagesState] = useState<AssistantChatMessage[]>([]);
+  const [threadId, setThreadIdState] = useState('');
+  const [ready, setReady] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [handoff, setHandoff] = useState(false);
   const [draft, setDraft] = useState('');
   const [isOffline, setIsOffline] = useState(false);
-  const [threadId, setThreadId] = useState<string>(() => {
-    const id = loadThreadId();
-    // Persist the initial thread_id immediately
-    persistThreadId(id);
-    return id;
-  });
+
+  // Refs mirror state so async callbacks never act on a stale thread.
+  const messagesRef = useRef<AssistantChatMessage[]>([]);
+  const threadIdRef = useRef('');
+  const readyRef = useRef(false);
+  const isSendingRef = useRef(false);
   const requestIdRef = useRef(0);
-  const authIdentityRef = useRef<string | null>(null);
-  const lastIdleCheckRef = useRef<number>(Date.now());
+  /** Owner the in-memory thread belongs to (null until the first settled check). */
+  const ownerRef = useRef<string | null>(null);
 
-  // Load messages from sessionStorage on mount
-  useEffect(() => {
-    setMessages(loadStored());
+  const commitMessages = useCallback((next: AssistantChatMessage[]) => {
+    messagesRef.current = next;
+    setMessagesState(next);
+    persistMessages(next);
   }, []);
 
-  // Persist messages when they change
-  useEffect(() => {
-    persist(messages);
-  }, [messages]);
-
-  // Check idle timeout on focus and visibility change
-  useEffect(() => {
-    const checkIdle = () => {
-      const lastActivity = loadLastActivity();
-      const now = Date.now();
-      if (now - lastActivity > IDLE_TIMEOUT_MS) {
-        // Idle timeout: rotate thread_id
-        const newThreadId = generateThreadId();
-        setThreadId(newThreadId);
-        persistThreadId(newThreadId);
-        setMessages([]);
-        setHandoff(false);
-        setDraft('');
-        setError(null);
-        persist([]);
-        persistLastActivity(now);
-      }
-      lastIdleCheckRef.current = now;
-    };
-
-    const handleFocus = () => checkIdle();
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible') {
-        checkIdle();
-      }
-    };
-
-    window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-
-    // Check on mount
-    checkIdle();
-
-    return () => {
-      window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-    };
+  const setSending = useCallback((value: boolean) => {
+    isSendingRef.current = value;
+    setIsSending(value);
   }, []);
 
-  // Rotate thread_id when auth identity changes
-  useEffect(() => {
-    // Don't treat loading state as a change
-    if (authLoading) return;
-
-    const currentIdentity = isAuthenticated && user?.sub ? user.sub : 'guest';
-    const previousIdentity = authIdentityRef.current;
-
-    // Initialize on first run
-    if (previousIdentity === null) {
-      authIdentityRef.current = currentIdentity;
-      return;
-    }
-
-    // Rotate if identity changed (guest to user, user to guest, or user A to user B)
-    if (previousIdentity !== currentIdentity) {
-      const newThreadId = generateThreadId();
-      setThreadId(newThreadId);
-      persistThreadId(newThreadId);
-      authIdentityRef.current = currentIdentity;
-      // Clear all state
-      setMessages([]);
-      setHandoff(false);
+  /**
+   * New thread: fresh UUID, empty history, draft/error/handoff cleared, and any
+   * in-flight request orphaned (its reply or error is dropped when it settles).
+   */
+  const rotate = useCallback(
+    (nextOwner?: string) => {
+      requestIdRef.current += 1;
+      const id = generateThreadId();
+      threadIdRef.current = id;
+      setThreadIdState(id);
+      writeStorage(STORAGE_KEY_THREAD_ID, id);
+      if (nextOwner !== undefined) {
+        ownerRef.current = nextOwner;
+        writeStorage(STORAGE_KEY_OWNER, nextOwner);
+      }
+      removeStorage(STORAGE_KEY_LAST_ACTIVITY);
+      commitMessages([]);
       setDraft('');
       setError(null);
-      persist([]);
+      setHandoff(false);
+      setIsOffline(false);
+      setSending(false);
+    },
+    [commitMessages, setSending]
+  );
+
+  // Owner check: runs on mount and whenever auth settles or the identity changes.
+  // Nothing is restored (and nothing can be sent) until auth has settled.
+  useLayoutEffect(() => {
+    if (!authSettled) {
+      readyRef.current = false;
+      setReady(false);
+      return;
     }
-  }, [isAuthenticated, authLoading, user?.sub]);
+    if (readyRef.current && ownerRef.current === owner) return;
 
-  // Update last activity timestamp
-  const updateLastActivity = useCallback(() => {
-    const now = Date.now();
-    persistLastActivity(now);
-    
-    // Also check for idle timeout on activity
-    const lastCheck = lastIdleCheckRef.current;
-    if (now - lastCheck > 60000) { // Check at most once per minute
-      const lastActivity = loadLastActivity();
-      if (now - lastActivity > IDLE_TIMEOUT_MS) {
-        const newThreadId = generateThreadId();
-        setThreadId(newThreadId);
-        persistThreadId(newThreadId);
-        setMessages([]);
-        setHandoff(false);
-        setDraft('');
-        setError(null);
-        persist([]);
-      }
-      lastIdleCheckRef.current = now;
+    const storedOwner = readStorage(STORAGE_KEY_OWNER);
+    const storedThread = readStorage(STORAGE_KEY_THREAD_ID);
+    const identityChangedInSession =
+      ownerRef.current !== null && ownerRef.current !== owner;
+
+    if (
+      identityChangedInSession ||
+      storedOwner !== owner ||
+      !storedThread ||
+      isIdleAt(Date.now())
+    ) {
+      rotate(owner);
+    } else {
+      ownerRef.current = owner;
+      threadIdRef.current = storedThread;
+      setThreadIdState(storedThread);
+      const restored = loadStoredMessages();
+      messagesRef.current = restored;
+      setMessagesState(restored);
     }
-  }, []);
+    readyRef.current = true;
+    setReady(true);
+  }, [authSettled, owner, rotate]);
 
-  const clearChat = useCallback(() => {
-    requestIdRef.current += 1;
-    const newThreadId = generateThreadId();
-    setThreadId(newThreadId);
-    persistThreadId(newThreadId);
-    setMessages([]);
-    setHandoff(false);
-    setError(null);
-    setDraft('');
-    setIsSending(false);
-    setIsOffline(false);
-    persist([]);
-    updateLastActivity();
-  }, [updateLastActivity]);
+  /** Rotates if the thread has been idle; must run before activity is recorded. */
+  const rotateIfIdle = useCallback((): boolean => {
+    if (!readyRef.current || !isIdleAt(Date.now())) return false;
+    rotate();
+    return true;
+  }, [rotate]);
 
-  const sendMessage = useCallback(
-    async (text: string, isRetry = false) => {
-      const trimmed = text.trim();
-      if (!trimmed || isSending) return;
-      
-      // Block sending while auth is loading
-      if (authLoading) return;
-      
+  useEffect(() => {
+    const onFocus = () => {
+      rotateIfIdle();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') rotateIfIdle();
+    };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [rotateIfIdle]);
+
+  const dispatch = useCallback(
+    async (history: AssistantChatMessage[]) => {
+      const requestId = ++requestIdRef.current;
+      const requestThreadId = threadIdRef.current;
+      const isCurrent = () =>
+        requestIdRef.current === requestId &&
+        threadIdRef.current === requestThreadId;
+
+      writeStorage(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
       setError(null);
       setIsOffline(false);
-      updateLastActivity();
-
-      let nextMessages: AssistantChatMessage[];
-      
-      if (isRetry) {
-        // On retry, re-send the existing failed message (don't duplicate)
-        nextMessages = messages;
-      } else {
-        // New message: add to history
-        const userMessage: AssistantChatMessage = {
-          id: makeMessageId(),
-          role: 'user',
-          content: trimmed,
-        };
-        nextMessages = [...messages, userMessage];
-        setMessages(nextMessages);
-      }
-      
-      setIsSending(true);
-      const requestId = ++requestIdRef.current;
+      setSending(true);
 
       try {
-        const payload = nextMessages.slice(-MAX_API_MESSAGES).map((m) => ({
+        const payload = history.slice(-MAX_API_MESSAGES).map((m) => ({
           role: m.role,
           content: m.content,
         }));
@@ -335,49 +332,86 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
           '/assistant/chat',
           { messages: payload }
         );
-        if (requestId !== requestIdRef.current) return;
+        if (!isCurrent()) return;
         const reply = data?.reply?.trim() || '';
         if (reply) {
-          setMessages((prev) => [
-            ...prev,
+          commitMessages([
+            ...messagesRef.current,
             { id: makeMessageId(), role: 'assistant', content: reply },
           ]);
-          // Clear draft only on successful send
-          setDraft('');
         }
         if (data?.handoff) setHandoff(true);
-        updateLastActivity();
-      } catch (err: any) {
-        if (requestId !== requestIdRef.current) return;
-        const isNetworkError = !err?.response || err?.code === 'ERR_NETWORK';
-        setIsOffline(isNetworkError);
-        setError(
-          err?.response?.data?.message ||
-            err?.message ||
-            'Failed to reach the assistant'
-        );
-        // Keep draft on error so user can retry
+        writeStorage(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
+      } catch (err: unknown) {
+        if (!isCurrent()) return;
+        // The failed user message stays in the thread so Retry can re-send it.
+        setIsOffline(isNetworkError(err));
+        setError(errorText(err));
       } finally {
-        if (requestId === requestIdRef.current) {
-          setIsSending(false);
-        }
+        if (isCurrent()) setSending(false);
       }
     },
-    [apiClient, isSending, messages, updateLastActivity, authLoading]
+    [apiClient, commitMessages, setSending]
   );
 
-  const value: AssistantChatContextType = {
-    messages,
-    isSending,
-    error,
-    handoff,
-    threadId,
-    draft,
-    isOffline,
-    sendMessage,
-    setDraft,
-    clearChat,
-  };
+  const sendMessage = useCallback(
+    async (text: string): Promise<boolean> => {
+      const trimmed = text.trim();
+      if (!trimmed || !readyRef.current || isSendingRef.current) return false;
+      rotateIfIdle();
+      const next: AssistantChatMessage[] = [
+        ...messagesRef.current,
+        { id: makeMessageId(), role: 'user', content: trimmed },
+      ];
+      commitMessages(next);
+      await dispatch(next);
+      return true;
+    },
+    [commitMessages, dispatch, rotateIfIdle]
+  );
+
+  const retry = useCallback(async (): Promise<boolean> => {
+    if (!readyRef.current || isSendingRef.current) return false;
+    if (rotateIfIdle()) return false;
+    const history = messagesRef.current;
+    if (history[history.length - 1]?.role !== 'user') return false;
+    await dispatch(history);
+    return true;
+  }, [dispatch, rotateIfIdle]);
+
+  const clearChat = useCallback(() => {
+    rotate();
+  }, [rotate]);
+
+  const value = useMemo<AssistantChatContextType>(
+    () => ({
+      messages,
+      isSending,
+      error,
+      handoff,
+      threadId,
+      draft,
+      isOffline,
+      ready,
+      sendMessage,
+      retry,
+      setDraft,
+      clearChat,
+    }),
+    [
+      messages,
+      isSending,
+      error,
+      handoff,
+      threadId,
+      draft,
+      isOffline,
+      ready,
+      sendMessage,
+      retry,
+      clearChat,
+    ]
+  );
 
   return (
     <AssistantChatContext.Provider value={value}>

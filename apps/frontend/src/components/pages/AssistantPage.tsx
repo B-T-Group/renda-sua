@@ -1,4 +1,10 @@
-import { RestartAlt, Send, SmartToy, WhatsApp } from '@mui/icons-material';
+import {
+  RestartAlt,
+  Send,
+  SmartToy,
+  SupportAgent,
+  WhatsApp,
+} from '@mui/icons-material';
 import {
   Box,
   Button,
@@ -10,10 +16,17 @@ import {
   useTheme,
 } from '@mui/material';
 import { motion, useReducedMotion } from 'framer-motion';
-import React, { KeyboardEvent, useEffect, useRef } from 'react';
+import React, {
+  KeyboardEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAssistantChat } from '../../contexts/AssistantChatContext';
 import type { AssistantChatMessage } from '../../contexts/AssistantChatContext';
+import { useAppChromeInsets } from '../../hooks/useAppChromeInsets';
+import { brandTokens } from '../../theme/brandTokens';
 import { AssistantMarkdown } from './AssistantMarkdown';
 
 const SUGGESTION_KEYS = [
@@ -96,13 +109,48 @@ function ThinkingIndicator() {
   );
 }
 
-function MessageBubble({ message }: { message: AssistantChatMessage }) {
+function MiniOrb({ visible }: { visible: boolean }) {
+  const theme = useTheme();
+  if (!visible) {
+    // Keeps grouped bubbles aligned with the first bubble of the group.
+    return <Box sx={{ width: 28, flexShrink: 0 }} aria-hidden />;
+  }
+  return (
+    <Box
+      data-testid="assistant-mini-orb"
+      aria-hidden
+      sx={{
+        width: 28,
+        height: 28,
+        borderRadius: '50%',
+        backgroundColor: theme.palette.primary.main,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0,
+        mt: 0.5,
+      }}
+    >
+      <SmartToy sx={{ fontSize: 16, color: theme.palette.primary.contrastText }} />
+    </Box>
+  );
+}
+
+function MessageBubble({
+  message,
+  showOrb,
+}: {
+  message: AssistantChatMessage;
+  showOrb: boolean;
+}) {
   const isUser = message.role === 'user';
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
 
   return (
     <motion.div
+      data-chat-item
+      data-role={message.role}
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
@@ -119,35 +167,26 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
           alignItems: 'flex-start',
         }}
       >
-        {!isUser && (
-          <Box
-            sx={{
-              width: 28,
-              height: 28,
-              borderRadius: '50%',
-              backgroundColor: theme.palette.primary.main,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-              mt: 0.5,
-            }}
-          >
-            <SmartToy sx={{ fontSize: 16, color: 'white' }} />
-          </Box>
-        )}
+        {!isUser && <MiniOrb visible={showOrb} />}
         <Box
+          data-testid={isUser ? 'assistant-user-bubble' : 'assistant-reply-bubble'}
           sx={{
             px: 2,
             py: 1.5,
+            minWidth: 0,
             borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
             backgroundColor: isUser
               ? theme.palette.primary.main
               : theme.palette.background.paper,
             border: isUser ? 'none' : `1px solid ${theme.palette.divider}`,
-            color: isUser
-              ? theme.palette.primary.contrastText
-              : theme.palette.text.primary,
+            // Assistant markdown renders body2 Typography; restyle it to the chat body spec.
+            '& .MuiTypography-root': isUser
+              ? undefined
+              : {
+                  color: theme.palette.text.primary,
+                  fontSize: '15px',
+                  lineHeight: '22px',
+                },
           }}
         >
           {isUser ? (
@@ -155,9 +194,10 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
               variant="body2"
               sx={{
                 whiteSpace: 'pre-wrap',
+                overflowWrap: 'anywhere',
                 fontSize: '15px',
                 lineHeight: '22px',
-                color: 'inherit',
+                color: theme.palette.primary.contrastText,
               }}
             >
               {message.content}
@@ -171,60 +211,100 @@ function MessageBubble({ message }: { message: AssistantChatMessage }) {
   );
 }
 
-function HandoffBanner() {
+function ErrorBanner({ onRetry }: { onRetry: () => void }) {
+  const { t } = useTranslation();
+  const theme = useTheme();
+  return (
+    <Box
+      data-chat-item
+      role="alert"
+      data-testid="assistant-error-banner"
+      sx={{
+        p: 2,
+        borderRadius: 2,
+        backgroundColor: brandTokens.error.soft,
+        border: `1px solid ${theme.palette.error.main}`,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 2,
+      }}
+    >
+      <Typography
+        variant="body2"
+        sx={{ flex: 1, color: theme.palette.text.primary }}
+      >
+        {t('assistant.errorMessage', 'Message not sent. Check your connection.')}
+      </Typography>
+      <Button
+        size="small"
+        variant="outlined"
+        onClick={onRetry}
+        sx={{ minHeight: 44, flexShrink: 0 }}
+      >
+        {t('assistant.retry', 'Retry')}
+      </Button>
+    </Box>
+  );
+}
+
+function HandoffCard() {
   const { t } = useTranslation();
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: -8 }}
+      data-chat-item
+      initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: prefersReducedMotion ? 0 : 0.3 }}
+      transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
     >
       <Box
+        data-testid="assistant-handoff-card"
         sx={{
-          mx: { xs: 1.5, sm: 2.5 },
-          mb: 1.5,
           p: 2,
           borderRadius: 2,
-          backgroundColor: `${theme.palette.info.main}1A`,
+          backgroundColor: brandTokens.info.soft,
           border: `1px solid ${theme.palette.info.main}`,
+          display: 'flex',
+          gap: 1.5,
+          alignItems: 'flex-start',
         }}
       >
-        <Typography
-          variant="subtitle2"
-          sx={{
-            color: theme.palette.text.primary,
-            mb: 0.5,
-            fontWeight: 600,
-          }}
-        >
-          {t(
-            'assistant.handoffTitle',
-            'A team member will help you'
-          )}
-        </Typography>
-        <Typography
-          variant="body2"
-          sx={{ color: theme.palette.text.secondary, mb: 1.5 }}
-        >
-          {t(
-            'assistant.handoffBody',
-            'Continue on WhatsApp. We usually reply within 1 hour.'
-          )}
-        </Typography>
-        <Button
-          size="small"
-          variant="contained"
-          color="primary"
-          startIcon={<WhatsApp />}
-          href="https://wa.me/18556488855"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          {t('assistant.openWhatsApp', 'Open WhatsApp')}
-        </Button>
+        <SupportAgent
+          aria-hidden
+          sx={{ color: theme.palette.info.dark, fontSize: 24, mt: 0.25 }}
+        />
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Typography
+            variant="subtitle2"
+            sx={{ color: theme.palette.text.primary, mb: 0.5, fontWeight: 600 }}
+          >
+            {t('assistant.handoffTitle', 'A team member will help you')}
+          </Typography>
+          <Typography
+            variant="body2"
+            data-testid="assistant-handoff-body"
+            sx={{ color: brandTokens.text.secondary, mb: 1.5 }}
+          >
+            {t(
+              'assistant.handoffBody',
+              'Continue on WhatsApp. We usually reply within 1 hour.'
+            )}
+          </Typography>
+          <Button
+            size="small"
+            variant="contained"
+            color="primary"
+            startIcon={<WhatsApp />}
+            href="https://wa.me/18556488855"
+            target="_blank"
+            rel="noopener noreferrer"
+            sx={{ minHeight: 44 }}
+          >
+            {t('assistant.openWhatsApp', 'Open WhatsApp')}
+          </Button>
+        </Box>
       </Box>
     </motion.div>
   );
@@ -252,12 +332,12 @@ function AssistantHeader({
 
   return (
     <Box
+      component="header"
       sx={{
-        position: 'sticky',
-        top: { xs: 56, sm: 64 },
-        zIndex: 10,
+        flexShrink: 0,
         px: { xs: 2, sm: 3 },
-        py: 2,
+        py: 1.5,
+        minHeight: 64,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
@@ -265,8 +345,9 @@ function AssistantHeader({
         borderBottom: `1px solid ${theme.palette.divider}`,
       }}
     >
-      <Stack direction="row" spacing={1.5} alignItems="center">
+      <Stack direction="row" spacing={1.5} alignItems="center" sx={{ minWidth: 0 }}>
         <Box
+          aria-hidden
           sx={{
             width: 36,
             height: 36,
@@ -278,23 +359,27 @@ function AssistantHeader({
             flexShrink: 0,
           }}
         >
-          <SmartToy sx={{ fontSize: 20, color: 'white' }} />
+          <SmartToy sx={{ fontSize: 20, color: theme.palette.primary.contrastText }} />
         </Box>
-        <Box>
+        <Box sx={{ minWidth: 0 }}>
           <Typography
             variant="h6"
+            component="h1"
             sx={{
+              fontFamily: theme.typography.h4.fontFamily,
               fontWeight: 600,
+              fontSize: '18px',
               color: theme.palette.text.primary,
-              lineHeight: 1.2,
-              fontFamily: theme.typography.h6.fontFamily,
+              lineHeight: 1.25,
             }}
           >
             {t('assistant.title', 'RendaSua Assistant')}
           </Typography>
           <Typography
             variant="caption"
-            sx={{ color: theme.palette.text.secondary, lineHeight: 1 }}
+            component="p"
+            aria-live="polite"
+            sx={{ color: theme.palette.text.secondary, lineHeight: 1.3 }}
           >
             {statusText}
           </Typography>
@@ -354,7 +439,7 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
             mb: 3,
           }}
         >
-          <SmartToy sx={{ fontSize: 44, color: 'white' }} />
+          <SmartToy sx={{ fontSize: 44, color: theme.palette.primary.contrastText }} />
         </Box>
       </motion.div>
       <Typography
@@ -430,15 +515,18 @@ function AssistantInput({
   value,
   onChange,
   onSend,
-  disabled,
+  inputDisabled,
+  sendDisabled,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSend: () => void;
-  disabled: boolean;
+  inputDisabled: boolean;
+  sendDisabled: boolean;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
+  const canSend = !sendDisabled && !!value.trim();
 
   const handleKey = (
     e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -452,12 +540,11 @@ function AssistantInput({
   return (
     <Box
       sx={{
-        position: 'sticky',
-        bottom: 0,
-        zIndex: 10,
+        flexShrink: 0,
         px: { xs: 1.5, sm: 2.5 },
-        py: 2,
+        py: 1.5,
         backgroundColor: theme.palette.background.default,
+        borderTop: `1px solid ${theme.palette.divider}`,
       }}
     >
       <Box
@@ -465,11 +552,12 @@ function AssistantInput({
           display: 'flex',
           alignItems: 'flex-end',
           gap: 1,
-          backgroundColor: theme.palette.grey[100],
+          backgroundColor: brandTokens.surface.input,
           borderRadius: '12px',
-          px: 2,
-          py: 1,
-          minHeight: 48,
+          pl: 2,
+          pr: 0.5,
+          py: 0.5,
+          minHeight: 56,
           transition: 'box-shadow 0.2s',
           '&:focus-within': {
             boxShadow: `0 0 0 2px ${theme.palette.primary.main}40`,
@@ -487,43 +575,45 @@ function AssistantInput({
             'assistant.placeholder',
             'Ask about an item, order or delivery…'
           )}
-          disabled={disabled}
+          disabled={inputDisabled}
           name="message"
           autoComplete="off"
           inputProps={{
-            'aria-label': t('assistant.placeholder', 'Ask about an item, order or delivery…'),
+            'aria-label': t(
+              'assistant.placeholder',
+              'Ask about an item, order or delivery…'
+            ),
           }}
           sx={{
+            alignSelf: 'center',
             fontSize: '15px',
             lineHeight: '22px',
-            py: 0.75,
+            py: 1,
             '& .MuiInputBase-input': {
               color: theme.palette.text.primary,
             },
             '& .MuiInputBase-input::placeholder': {
-              color: theme.palette.text.secondary,
-              opacity: 0.7,
+              color: brandTokens.text.secondary,
+              opacity: 1,
             },
           }}
         />
         <IconButton
           onClick={onSend}
-          disabled={disabled || !value.trim()}
+          disabled={!canSend}
           aria-label={t('assistant.send', 'Send')}
           sx={{
             width: 48,
             height: 48,
             flexShrink: 0,
-            color: 'white',
-            backgroundColor:
-              disabled || !value.trim()
-                ? theme.palette.action.disabled
-                : theme.palette.primary.main,
-            '&:not(:disabled):hover': {
+            color: theme.palette.primary.contrastText,
+            backgroundColor: theme.palette.primary.main,
+            '&:hover': {
               backgroundColor: theme.palette.primary.dark,
             },
-            '&:disabled': {
-              backgroundColor: theme.palette.action.disabledBackground,
+            '&.Mui-disabled': {
+              color: theme.palette.primary.contrastText,
+              backgroundColor: theme.palette.action.disabled,
             },
           }}
         >
@@ -534,6 +624,35 @@ function AssistantInput({
   );
 }
 
+/** Scrolls the message area (never the window) so the newest item is visible. */
+function useScrollNewestIntoView(
+  containerRef: React.RefObject<HTMLDivElement | null>,
+  /** Changes whenever the thread gains or loses an item. */
+  threadKey: string
+) {
+  const prefersReducedMotion = useReducedMotion();
+  const isFirstRef = useRef(true);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const instant = isFirstRef.current || !!prefersReducedMotion;
+    isFirstRef.current = false;
+    const items = el.querySelectorAll<HTMLElement>('[data-chat-item]');
+    const newest = items[items.length - 1];
+    let top = el.scrollHeight;
+    // A reply taller than the viewport is shown from its first line.
+    if (newest && newest.offsetHeight > el.clientHeight) {
+      top = newest.offsetTop - 8;
+    }
+    if (typeof el.scrollTo === 'function') {
+      el.scrollTo({ top, behavior: instant ? 'auto' : 'smooth' });
+    } else {
+      el.scrollTop = top;
+    }
+  }, [containerRef, prefersReducedMotion, threadKey]);
+}
+
 const AssistantPage: React.FC = () => {
   const {
     messages,
@@ -542,48 +661,51 @@ const AssistantPage: React.FC = () => {
     handoff,
     isOffline,
     draft,
+    ready,
     setDraft,
     sendMessage,
+    retry,
     clearChat,
   } = useAssistantChat();
-  const { t } = useTranslation();
   const theme = useTheme();
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const chrome = useAppChromeInsets();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
+  // The page is a viewport-sized column; start it flush under the site top bar.
   useEffect(() => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages, isSending]);
+    if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
+  }, []);
+
+  useScrollNewestIntoView(
+    scrollRef,
+    `${messages.length}:${isSending}:${!!error}:${handoff}`
+  );
 
   const handleSend = (override?: string) => {
     const text = (override ?? draft).trim();
-    if (!text || isSending) return;
-    setDraft('');
-    void sendMessage(text, false);
+    if (!text || !ready || isSending) return;
+    // Typed text becomes a bubble; on failure it stays there and Retry re-sends it.
+    if (override === undefined) setDraft('');
+    void sendMessage(text);
   };
 
-  const handleRetry = () => {
-    const lastUserMessage = messages
-      .slice()
-      .reverse()
-      .find((m) => m.role === 'user');
-    if (lastUserMessage) {
-      void sendMessage(lastUserMessage.content, true);
-    }
-  };
+  const chromeHeight = chrome.top + chrome.bottom;
 
   return (
     <Box
+      data-testid="assistant-page"
       sx={{
+        // Cancel the layout Container's side gutters; app.tsx drops the vertical padding on this route.
         mx: { xs: -1.5, sm: -2, md: -3 },
-        mt: -4,
-        mb: -4,
-        minHeight: 'calc(100vh - 116px)',
+        height: `calc(100vh - ${chromeHeight}px)`,
+        '@supports (height: 100dvh)': {
+          height: `calc(100dvh - ${chromeHeight}px)`,
+        },
+        minHeight: 360,
         display: 'flex',
         flexDirection: 'column',
+        overflow: 'hidden',
         backgroundColor: theme.palette.background.default,
-        position: 'relative',
         '@keyframes dotBounce': {
           '0%, 60%, 100%': { transform: 'translateY(0)' },
           '30%': { transform: 'translateY(-4px)' },
@@ -598,9 +720,14 @@ const AssistantPage: React.FC = () => {
       />
 
       <Box
+        ref={scrollRef}
+        data-testid="assistant-messages"
         sx={{
           flex: 1,
+          minHeight: 0,
           overflowY: 'auto',
+          overscrollBehavior: 'contain',
+          position: 'relative',
           display: 'flex',
           flexDirection: 'column',
           px: { xs: 1.5, sm: 2.5 },
@@ -611,54 +738,30 @@ const AssistantPage: React.FC = () => {
           <EmptyState onPick={(text) => handleSend(text)} />
         ) : (
           <Stack spacing={2} sx={{ pb: 1 }}>
-            {messages.map((m) => (
-              <MessageBubble key={m.id} message={m} />
+            {messages.map((m, i) => (
+              <MessageBubble
+                key={m.id}
+                message={m}
+                showOrb={m.role === 'assistant' && messages[i - 1]?.role !== 'assistant'}
+              />
             ))}
-            {isSending && <ThinkingIndicator />}
-            {error && (
-              <Box
-                sx={{
-                  p: 2,
-                  borderRadius: 2,
-                  backgroundColor: `${theme.palette.error.main}1A`,
-                  border: `1px solid ${theme.palette.error.main}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 2,
-                }}
-              >
-                <Box sx={{ flex: 1 }}>
-                  <Typography
-                    variant="body2"
-                    sx={{ color: theme.palette.text.primary, mb: 0.5 }}
-                  >
-                    {t(
-                      'assistant.errorMessage',
-                      'Message not sent. Check your connection.'
-                    )}
-                  </Typography>
-                </Box>
-                <Button
-                  size="small"
-                  variant="outlined"
-                  onClick={handleRetry}
-                >
-                  {t('assistant.retry', 'Retry')}
-                </Button>
+            {isSending && (
+              <Box data-chat-item>
+                <ThinkingIndicator />
               </Box>
             )}
+            {error && !isSending && <ErrorBanner onRetry={() => void retry()} />}
+            {handoff && <HandoffCard />}
           </Stack>
         )}
-        <div ref={bottomRef} />
       </Box>
-
-      {handoff && <HandoffBanner />}
 
       <AssistantInput
         value={draft}
         onChange={setDraft}
         onSend={() => handleSend()}
-        disabled={isSending}
+        inputDisabled={!ready}
+        sendDisabled={!ready || isSending}
       />
     </Box>
   );
