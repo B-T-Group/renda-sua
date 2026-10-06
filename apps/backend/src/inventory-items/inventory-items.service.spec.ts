@@ -934,5 +934,94 @@ describe('InventoryItemsService store distance region', () => {
       api.metersWithinRegion(origin, { country: 'CA', state: 'Ontario' }, store)
     ).toBeNull();
   });
+
+  it('returns no distance without an origin, a region, or finite coordinates', () => {
+    const api = service() as any;
+    const region = { country: 'CM', state: 'Littoral' };
+    expect(api.metersWithinRegion(null, region, store)).toBeNull();
+    expect(api.metersWithinRegion(origin, null, store)).toBeNull();
+    expect(
+      api.metersWithinRegion(origin, region, { ...store, latitude: null })
+    ).toBeNull();
+    expect(
+      api.metersWithinRegion(origin, region, { ...store, longitude: Number.NaN })
+    ).toBeNull();
+  });
+
+  it('clears a stored distance outside the shopper region', () => {
+    const api = service() as any;
+    const abroad = {
+      id: 'abroad',
+      distance_text: '1,200 km',
+      duration_text: '14 hours',
+      distance_value: 1_200_000,
+      business_location: {
+        address: {
+          country: 'CA',
+          state: 'Ontario',
+          latitude: 43.6,
+          longitude: -79.3,
+        },
+      },
+    };
+    const stripped = api.withHaversineDistance(abroad, origin, {
+      country: 'CM',
+      state: 'Littoral',
+    });
+    expect(stripped.distance_text).toBeUndefined();
+    expect(stripped.duration_text).toBeUndefined();
+    expect(stripped.distance_value).toBeUndefined();
+
+    const unknownRegion = api.omitDistanceOutsideRegion([abroad], null);
+    expect(unknownRegion[0].distance_text).toBeUndefined();
+    expect(unknownRegion[0].distance_value).toBeUndefined();
+  });
+
+  it('ranks same-region stores by distance and hides the rest', () => {
+    const api = service() as any;
+    const region = { country: 'CM', state: 'Littoral' };
+    const counts = new Map([
+      ['near', 1],
+      ['far', 8],
+      ['tie-low', 2],
+      ['tie-high', 9],
+      ['abroad', 50],
+    ]);
+    const address = (
+      latitude: number,
+      longitude: number,
+      country = 'CM',
+      state = 'Littoral'
+    ) => ({
+      name: latitude.toString(),
+      logo_url: null,
+      address: { country, state, latitude, longitude },
+    });
+    const byId = new Map([
+      ['near', address(4.051, 9.708)],
+      ['far', address(4.2, 9.7)],
+      ['tie-low', address(4.051, 9.708)],
+      ['tie-high', address(4.051, 9.708)],
+      ['abroad', address(43.6, -79.3, 'CA', 'Ontario')],
+    ]);
+
+    const ranked = api.rankTopLocationsByOrigin(counts, byId, origin, region, 5);
+    expect(ranked.map((row: { id: string }) => row.id)).toEqual([
+      'tie-high',
+      'tie-low',
+      'near',
+      'far',
+      'abroad',
+    ]);
+    expect(ranked[0].distance_meters).toEqual(expect.any(Number));
+    expect(ranked[4].distance_meters).toBeNull();
+
+    const byCount = api.rankTopLocationsByOrigin(counts, byId, null, region, 5);
+    const distances = byCount.map(
+      (row: { distance_meters: number | null }) => row.distance_meters
+    );
+    expect(byCount.map((row: { id: string }) => row.id)[0]).toBe('abroad');
+    expect(distances.every((meters: number | null) => meters == null)).toBe(true);
+  });
 });
 

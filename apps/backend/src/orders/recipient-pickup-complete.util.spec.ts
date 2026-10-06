@@ -1,6 +1,7 @@
 import {
   canRecipientCompletePickup,
   isRecipientCompleteButton,
+  recipientCompleteLocale,
   recipientCompleteReply,
 } from './recipient-pickup-complete.util';
 
@@ -32,6 +33,12 @@ describe('canRecipientCompletePickup', () => {
     expect(
       canRecipientCompletePickup({ ...ready, current_status: 'preparing' })
     ).toBe(false);
+    expect(
+      canRecipientCompletePickup({ ...ready, is_diaspora_order: null })
+    ).toBe(false);
+    expect(canRecipientCompletePickup({ ...ready, payment_status: null })).toBe(
+      false
+    );
   });
 });
 
@@ -46,6 +53,18 @@ describe('recipient complete button', () => {
     );
     expect(isRecipientCompleteButton('COMPLETE')).toBe(false);
     expect(isRecipientCompleteButton('complete')).toBe(false);
+    expect(isRecipientCompleteButton('  terminer_la_commande  ')).toBe(true);
+    expect(isRecipientCompleteButton('   ', '   ')).toBe(false);
+  });
+
+  it('replies in French for a trimmed Central African country code', () => {
+    expect(recipientCompleteLocale(' ga ')).toBe('fr');
+    expect(recipientCompleteLocale('cm')).toBe('fr');
+    expect(recipientCompleteLocale('CI')).toBe('fr');
+    expect(recipientCompleteLocale('SN')).toBe('fr');
+    expect(recipientCompleteLocale('US')).toBe('en');
+    expect(recipientCompleteLocale('')).toBe('en');
+    expect(recipientCompleteLocale(null)).toBe('en');
   });
 
   it('confirms payment in the fulfillment language', () => {
@@ -54,6 +73,13 @@ describe('recipient complete button', () => {
     );
     expect(recipientCompleteReply('already_complete', 'fr', 'ORD-1')).toContain(
       'déjà terminée'
+    );
+    expect(recipientCompleteReply('not_allowed', 'fr')).toContain(
+      'ne peut pas être terminée'
+    );
+    expect(recipientCompleteReply('failed', 'en', '   ')).not.toContain('null');
+    expect(recipientCompleteReply('unmatched', 'en', null)).not.toContain(
+      '{{orderNumber}}'
     );
   });
 });
