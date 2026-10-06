@@ -18,7 +18,6 @@ describe('ClientFlagsContext behavior', () => {
       reorder_v1: true,
       reels_enabled: true,
       floating_nav_enabled: true,
-      auth_web_inapp_gates: false,
       reels_comments_enabled: false,
       reels_merchant_allowlist_only: false,
     });
