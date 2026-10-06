@@ -702,6 +702,7 @@ const Header: React.FC = () => {
       <AppBar
         position="sticky"
         elevation={0}
+        data-app-chrome="top"
         sx={{
           backgroundColor: personaHeader.backgroundColor,
           transition: 'background-color 0.35s ease',
