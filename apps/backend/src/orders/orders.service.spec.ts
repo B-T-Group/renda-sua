@@ -4753,49 +4753,64 @@ describe('OrdersService', () => {
       ).not.toHaveBeenCalled();
     });
 
-    it('forfeits after lock when a merchant pickup is a client no-show', async () => {
+    const unpaidPickup = {
+      ...paidOrder,
+      fulfillment_method: 'pickup',
+      payment_timing: 'pay_at_pickup',
+      payment_status: 'pending',
+    };
+
+    it('forfeits on a merchant no-show of an unpaid pay-at-pickup order, attributed to the store user', async () => {
       (service as any).depositCalculationService.isAfterRefundLockPoint
         .mockReturnValue(true);
 
       await (service as any).handleDepositOnCancellation(
-        {
-          ...paidOrder,
-          fulfillment_method: 'pickup',
-        },
+        unpaidPickup,
         'order-1',
         'ready_for_pickup',
         'business',
         'did not collect',
-        'client_no_show'
+        'client_no_show',
+        'store-user-1'
       );
 
       expect(
         (service as any).depositRefundService.forfeitDeposit
-      ).toHaveBeenCalledWith('order-1', 'customer_no_show_pickup');
+      ).toHaveBeenCalledWith('order-1', 'customer_no_show_pickup', {
+        forfeitedByUserId: 'store-user-1',
+      });
       expect(
         (service as any).depositRefundService.refundDeposit
       ).not.toHaveBeenCalled();
     });
 
-    it('forfeits after lock when a merchant delivery no-show is recorded', async () => {
+    it('never forfeits a no-show on a paid, pay-after-confirm or delivery order', async () => {
       (service as any).depositCalculationService.isAfterRefundLockPoint
         .mockReturnValue(true);
-
-      await (service as any).handleDepositOnCancellation(
-        paidOrder,
-        'order-1',
-        'out_for_delivery',
-        'business',
-        undefined,
-        'client_no_show'
-      );
+      const cases = [
+        { ...unpaidPickup, payment_status: 'paid' },
+        { ...unpaidPickup, pay_after_merchant_confirm: true },
+        { ...unpaidPickup, payment_timing: 'pay_now' },
+        { ...paidOrder, payment_timing: 'pay_at_delivery', payment_status: 'pending' },
+      ];
+      for (const order of cases) {
+        await (service as any).handleDepositOnCancellation(
+          order,
+          'order-1',
+          order.fulfillment_method === 'delivery' ? 'out_for_delivery' : 'ready_for_pickup',
+          'business',
+          undefined,
+          'client_no_show'
+        );
+      }
 
       expect(
         (service as any).depositRefundService.forfeitDeposit
-      ).toHaveBeenCalledWith('order-1', 'customer_no_show_delivery');
+      ).not.toHaveBeenCalled();
+      // Business-cancel rule instead (refund is refused later if the deposit is applied).
       expect(
         (service as any).depositRefundService.refundDeposit
-      ).not.toHaveBeenCalled();
+      ).toHaveBeenCalledTimes(cases.length);
     });
 
     it('still refunds a no-show before the lock point', async () => {
@@ -4848,7 +4863,8 @@ describe('OrdersService', () => {
         'ready_for_pickup',
         'business',
         'left a note',
-        'client_no_show'
+        'client_no_show',
+        undefined
       );
     });
 
@@ -4872,7 +4888,9 @@ describe('OrdersService', () => {
 
       expect(
         (service as any).depositRefundService.forfeitDeposit
-      ).toHaveBeenCalledWith('order-1', 'customer_cancel_after_lock');
+      ).toHaveBeenCalledWith('order-1', 'customer_cancel_after_lock', {
+        forfeitedByUserId: null,
+      });
       expect(
         (service as any).depositRefundService.refundDeposit
       ).toHaveBeenCalledWith('order-1');
