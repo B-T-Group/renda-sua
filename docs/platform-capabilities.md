@@ -1,7 +1,7 @@
 # Rendasua Platform Capabilities & Money Flows (living document)
 
 > **Status:** generated from a read of the code, not from product specs.
-> **Last verified:** 2026-10-05 for pickup order timelines (Picked up, no On the way) and diaspora recipient WhatsApp complete (`rs_recipient_complete_pickup`). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
+> **Last verified:** 2026-10-06 for merchant pickup no-show deposit forfeit (`client_no_show` after lock). Body baseline remains `B-T-Group/renda-sua` `main` @ commit **`64c13d6c91b839276c8f60ddbe4d2f3bea63d8c9`** ("fix(orders): do not move uncollected waived delivery fees (#397)", 2026-10-01 07:45 ET).
 > **Owner (document):** Samuel Besong (`besongsamuel`). Per-area owners are not recorded anywhere in the repo — see [Open questions](#open-questions).
 
 > **Stale-claims warning:** sections below were written at `64c13d6`. Where they conflict with the "Changes since" table, **the table wins**. Section-by-section refresh is still pending.
@@ -10,6 +10,7 @@
 
 | PR | Issue | Change | Sections of this doc now stale |
 |---|---|---|---|
+| pickup no-show deposit | – | **Merchant pickup no-show after lock forfeits the reservation deposit.** `cancel-uncollected-pickup` and cooked `fail-pickup` pass reason `client_no_show` into `handleDepositOnCancellation`. After the pickup lock (`ready_for_pickup`) the deposit is forfeited to HQ (`customer_no_show_pickup` / `customer_no_show_delivery`) instead of being refunded as a generic business cancel. Before lock, a business cancel still refunds. | §3.4.3, §3.4.5, §3.4.7 |
 | same-region distance | – | **Store distance is shown only in the same country and state.** Catalog, store, and item distances are omitted when the shopper and the store differ by country or state. | §2.1 Client |
 | pickup timeline | – | **Client order timeline is pickup-aware (web + mobile).** Store pickup shows Placed, Confirmed, Preparing, Picked up. Delivery still includes On the way and Delivered. | §2.1 Order tracking |
 | diaspora recipient complete | – | **Diaspora store-pickup recipient can complete on WhatsApp.** When the order is ready and the card is paid or authorized, `rs_recipient_complete_pickup` (quick reply Complete order) settles like the payer's `complete-pickup` and pays the store. The payer can still complete in the app. Delivery diaspora is unchanged (merchant paid at agent pickup; recipient still gets the PIN). Template must be approved in Meta before it sends. | §2.1, §3.4.5, diaspora checkout |
@@ -418,9 +419,10 @@ Legend: **C** = client account, **A** = agent account, **B** = business location
 | Claim / pickup / transit | as 3.4.1 for agent hold; **no item settlement yet** |
 | Agent at door: `initiate-pay-at-delivery-payment` | MoMo collect of `total − deposit` (`remainderPaymentAmount`); zero remainder ⇒ finalize immediately |
 | Collect callback OK (`finalizePayAtDeliveryPaymentAndComplete`) | C `deposit` remainder; `releasePaidDepositHoldIfNeeded`; C `payment` full item amount; item settlement (B/HQ/P); delivery settlement; status `complete` |
-| Cancel by business/system | deposit **refunded** (hold released) — `handleDepositOnCancellation` |
+| Cancel by business/system | deposit **refunded** (hold released) — `handleDepositOnCancellation`, except merchant no-show below |
 | Cancel by client before lock point | refunded |
 | Cancel by client after lock point | **forfeited**: release hold, C `payment`, HQ `deposit` (`forfeitDepositToHq`, reason `customer_cancel_after_lock`). Lock = `out_for_delivery` (delivery) / `ready_for_pickup` (pickup) |
+| Merchant pickup / fail-pickup no-show after lock | **forfeited** (`customer_no_show_pickup` or `customer_no_show_delivery`). Store-initiated, reason `client_no_show`. Before lock, still refunded |
 
 #### 3.4.4 Pay on delivery — cash / cash-exception
 | Step | Ledger |
@@ -438,7 +440,7 @@ Risk: until the business reconciles, nobody is paid (G-12).
 | Paid | C `deposit` (callback) + hold; order → `preparing` (auto prep clock) → `ready_for_pickup` automatically |
 | Pickup completes | `confirm-pickup` (merchant PIN), client `complete-pickup`, or diaspora recipient WhatsApp Complete order: item settlement (B/HQ/P); no delivery fee |
 | Unpaid after confirm | `cancelUnpaidCookedFoodAfterConfirm` — no fee (fee not charged for unpaid pay-after) |
-| Business `fail-pickup` (customer no-show, paid) | only after `ready_for_pickup` for `pickup_noshow_cancel_hours` (default 2). Fee = `cancellation_fee_percent` of items; refund = hold − fee. `order.cancelled` (`cancelledBy` `business`, reason `client_no_show`) → lambda: C `fee` full, B `deposit` floor half, HQ `deposit` remainder; rest released. Stripe authorization still released in full |
+| Business `fail-pickup` (customer no-show, paid) | only after `ready_for_pickup` for `pickup_noshow_cancel_hours` (default 2). Fee = `cancellation_fee_percent` of items; refund = hold − fee. `order.cancelled` (`cancelledBy` `business`, reason `client_no_show`) → lambda: C `fee` full, B `deposit` floor half, HQ `deposit` remainder; rest released. Paid reservation deposit is forfeited after lock (`customer_no_show_pickup` / `customer_no_show_delivery`). Stripe authorization still released in full |
 
 #### 3.4.6 Rental booking (`rentals.service.ts`)
 | Rail | Step | Ledger |
@@ -457,7 +459,7 @@ Findings: no platform commission on rentals **[V: none in `rentals.service.ts`]*
 |---|---|---|
 | `pending_payment`/`pending`, any | client, business | pay-now already held: C release hold + delivery hold; **no fee** (fee applies only from `confirmed`); deposit refunded (backend `handleDepositOnCancellation`) |
 | Client, `confirmed`/`preparing`/`ready_for_pickup` **before agent assigned** | client (policy) | Fee F = `cancellation_fee_percent` % of item subtotal (CM/GA 30, CA 0). C `fee` F; B `deposit` `floor(F/2)`; HQ `deposit` the remainder; C release `client_hold − F`; C release delivery hold. Unpaid pay-after and classic unpaid PAD/PAP: F = 0. Stripe: full authorization release (no partial capture) |
-| Merchant pickup no-show | business, after ready for `pickup_noshow_cancel_hours` (default 2), payment paid or authorized | same fee and 50/50 split as a client cancel. SQS `cancelled_by=business`, reason `client_no_show`. Cooked food uses `failed` + `failed_pickups`; other goods use `cancelled` and restock. Before the window, a store cancel that the policy already allows is a full refund |
+| Merchant pickup no-show | business, after ready for `pickup_noshow_cancel_hours` (default 2), payment paid or authorized | same fee and 50/50 split as a client cancel. SQS `cancelled_by=business`, reason `client_no_show`. Cooked food uses `failed` + `failed_pickups`; other goods use `cancelled` and restock. Paid reservation deposit is forfeited after lock (same as a client cancel at ready). Before the window, a store cancel that the policy already allows is a full refund |
 | Business cancel (early statuses) | business | no fee, except the pickup no-show row above; full release; deposit refunded |
 | System cancel from `pending_payment` (timeout) | system | lambda short-circuits: no holds, no refund |
 | After agent claim | **client cannot cancel** once an agent is assigned | agent can `drop_order` (agent hold released, order made available again — `orders.service.ts dropOrder` **[V]**); admin `cancelOrderAsAdmin` / `unassign-redispatch` |
@@ -610,7 +612,7 @@ sequenceDiagram
 | M8 | Cancellation-fee collection depends on client wallet funds for PAD/PAP orders; lambda failure leaves holds unreleased | `handler.py` | **[I]** |
 | M9 | Failed-delivery payouts go to business *user* account, other payouts go to *location* account | `failed-deliveries.service.ts` vs `commissions.service.ts` | **[V]** |
 | M10 | Refund clawback = gross item amount; HQ commission not returned; clawback debt not ledgered | `business-clawback.service` | **[V]** |
-| M11 | Client cannot cancel after agent assignment ⇒ delivery "lock point" (`out_for_delivery`) for deposit forfeiture is only reachable via other reasons; only `customer_cancel_after_lock` is wired in cancellation (other forfeit reasons exist in `deposit-refund.service.ts` types) | `cancellation-policy.service.ts`, `deposit-refund.service.ts` | **[I]** |
+| M11 | Client cannot cancel after agent assignment ⇒ delivery "lock point" (`out_for_delivery`) for deposit forfeiture is only reachable via other reasons; cancellation now wires `customer_cancel_after_lock` plus merchant no-show `customer_no_show_pickup` / `customer_no_show_delivery`. `customer_refuse_delivery` remains unwired | `cancellation-policy.service.ts`, `deposit-refund.service.ts`, `orders.service.ts` | **[I]** |
 | M12 | Client cancellation fee is split with the platform (`floor` half to the location account, remainder to HQ). The agent still receives none of it | lambda `register_cancellation_fee_transactions` | **[V]** as of the 50/50 split |
 | M13 | Fee is `cancellation_fee_percent` (CM/GA 30, CA 0). The flat `cancellation_fee` key is no longer read for cancellations or fail-pickup | `fee-percent.util.ts`, `cancellation_fee.py` | **[V]** |
 | M14 | `tax_amount` hardcoded 0 for MoMo markets; Stripe Tax estimated only | `orders.service.ts` | **[V]** |

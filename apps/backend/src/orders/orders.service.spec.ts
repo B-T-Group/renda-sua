@@ -4753,6 +4753,105 @@ describe('OrdersService', () => {
       ).not.toHaveBeenCalled();
     });
 
+    it('forfeits after lock when a merchant pickup is a client no-show', async () => {
+      (service as any).depositCalculationService.isAfterRefundLockPoint
+        .mockReturnValue(true);
+
+      await (service as any).handleDepositOnCancellation(
+        {
+          ...paidOrder,
+          fulfillment_method: 'pickup',
+        },
+        'order-1',
+        'ready_for_pickup',
+        'business',
+        'did not collect',
+        'client_no_show'
+      );
+
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).toHaveBeenCalledWith('order-1', 'customer_no_show_pickup');
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+    });
+
+    it('forfeits after lock when a merchant delivery no-show is recorded', async () => {
+      (service as any).depositCalculationService.isAfterRefundLockPoint
+        .mockReturnValue(true);
+
+      await (service as any).handleDepositOnCancellation(
+        paidOrder,
+        'order-1',
+        'out_for_delivery',
+        'business',
+        undefined,
+        'client_no_show'
+      );
+
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).toHaveBeenCalledWith('order-1', 'customer_no_show_delivery');
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).not.toHaveBeenCalled();
+    });
+
+    it('still refunds a no-show before the lock point', async () => {
+      (service as any).depositCalculationService.isAfterRefundLockPoint
+        .mockReturnValue(false);
+
+      await (service as any).handleDepositOnCancellation(
+        {
+          ...paidOrder,
+          fulfillment_method: 'pickup',
+        },
+        'order-1',
+        'confirmed',
+        'business',
+        undefined,
+        'client_no_show'
+      );
+
+      expect(
+        (service as any).depositRefundService.refundDeposit
+      ).toHaveBeenCalledWith('order-1', { allowAfterLock: true });
+      expect(
+        (service as any).depositRefundService.forfeitDeposit
+      ).not.toHaveBeenCalled();
+    });
+
+    it('passes client_no_show through cancellation side effects', async () => {
+      const handle = jest
+        .spyOn(service as any, 'handleDepositOnCancellation')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'updateReservedQuantities')
+        .mockResolvedValue(undefined);
+      (service as any).orderQueueService = {
+        sendOrderCancelledMessage: jest.fn().mockResolvedValue(undefined),
+      };
+
+      await (service as any).runOrderCancellationSideEffects(
+        { order_items: [] },
+        'order-1',
+        'ready_for_pickup',
+        'business',
+        'left a note',
+        'client_no_show'
+      );
+
+      expect(handle).toHaveBeenCalledWith(
+        { order_items: [] },
+        'order-1',
+        'ready_for_pickup',
+        'business',
+        'left a note',
+        'client_no_show'
+      );
+    });
+
     it('forfeits after lock and refunds before lock for client cancel', async () => {
       const lock =
         (service as any).depositCalculationService.isAfterRefundLockPoint;
