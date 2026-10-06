@@ -1438,13 +1438,13 @@ export class SignupService {
     if (attempt.channel === 'email') {
       const email = this.normalizeEmail(attempt.email);
       if (this.isTestUser(email, false)) {
-        return this.auth0Service.verifyTestUserEmail(email);
+        return this.auth0Service.verifyTestUserEmail(email, otp);
       }
       return this.auth0Service.verifyEmailOtp(email, otp);
     }
     const phone = this.normalizePhone(attempt.phone_number);
     if (this.isTestUser(phone, true)) {
-      return this.auth0Service.verifyTestUserPhone(phone);
+      return this.auth0Service.verifyTestUserPhone(phone, otp);
     }
     return this.auth0Service.verifySmsOtp(phone, otp);
   }

@@ -604,11 +604,11 @@ export class LoginService {
     try {
       if (email) {
         await (this.isTestUser(email, false)
-          ? this.auth0Service.verifyTestUserEmail(email)
+          ? this.auth0Service.verifyTestUserEmail(email, otp)
           : this.auth0Service.verifyEmailOtp(email, otp));
       } else {
         await (this.isTestUser(phone, true)
-          ? this.auth0Service.verifyTestUserPhone(phone)
+          ? this.auth0Service.verifyTestUserPhone(phone, otp)
           : this.auth0Service.verifySmsOtp(phone, otp));
       }
       await this.recordLockoutSuccess(lockoutKeys);
@@ -647,7 +647,7 @@ export class LoginService {
     let tokenData: TokenData;
     try {
       tokenData = (await (this.isTestUser(email, false)
-        ? this.auth0Service.verifyTestUserEmail(email)
+        ? this.auth0Service.verifyTestUserEmail(email, otp)
         : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
     } catch (error: any) {
       await this.recordLockoutFailure(lockoutKeys);
@@ -703,7 +703,7 @@ export class LoginService {
     let tokenData: TokenData;
     try {
       tokenData = (await (this.isTestUser(phoneNumber, true)
-        ? this.auth0Service.verifyTestUserPhone(phoneNumber)
+        ? this.auth0Service.verifyTestUserPhone(phoneNumber, otp)
         : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
     } catch (error: any) {
       await this.recordLockoutFailure(lockoutKeys);

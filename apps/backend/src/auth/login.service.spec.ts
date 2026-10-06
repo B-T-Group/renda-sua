@@ -481,6 +481,41 @@ describe('LoginService start, lockout, and session gates', () => {
       expect(lockout.recordSuccess).not.toHaveBeenCalled();
     });
 
+    it('forwards the submitted code to the test-user bypass and locks out on a wrong code', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        users: [
+          {
+            id: 'user-1',
+            email: 'qa@rendasua-test.com',
+            phone_number: null,
+            email_verified: true,
+            phone_number_verified: null,
+          },
+        ],
+      });
+      auth0Service.isTestUsersEnabled.mockReturnValue(true);
+      auth0Service.isTestEmail.mockReturnValue(true);
+      auth0Service.verifyTestUserEmail.mockRejectedValue(
+        new HttpException(
+          { success: false, error: 'Invalid or expired code' },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      await expect(
+        service.verifyLoginOtp(
+          { email: 'qa@rendasua-test.com', otp: '1234' },
+          'mobile'
+        )
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+      expect(auth0Service.verifyTestUserEmail).toHaveBeenCalledWith(
+        'qa@rendasua-test.com',
+        '1234'
+      );
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
+      expect(lockout.recordFailure).toHaveBeenCalledWith('user:user-1');
+      expect(lockout.recordSuccess).not.toHaveBeenCalled();
+    });
+
     it('records identifier lockout for flow v2 verify when the user is missing', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
       auth0Service.verifyEmailOtp.mockRejectedValue(new Error('bad otp'));

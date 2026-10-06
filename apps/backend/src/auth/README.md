@@ -75,6 +75,15 @@ The key encrypts Auth0 refresh tokens stored in Redis. Without it:
 - `NODE_ENV !== 'production'`
 
 This prevents test users from being enabled in production even if `NODE_ENV` is misconfigured.
+`DEPLOYMENT_ENV=production` also hard-disables it, and `Auth0Service` re-checks both at call time.
+
+Matching rules (`test-user-bypass.util.ts`):
+- **Email**: exact `AUTH0_TEST_EMAIL_DOMAIN` (default `rendasua-test.com`, no sub/look-alike domains),
+  or an exact entry in `AUTH0_TEST_EMAIL_ALLOWLIST` (comma-separated).
+- **Phone**: ONLY exact numbers in `AUTH0_TEST_PHONE_ALLOWLIST` (comma-separated, compared as digits).
+  The old "any number ending in 0000" suffix rule (`AUTH0_TEST_PHONE_SUFFIX`) was removed because it
+  matched real accounts.
+- **Code**: must be exactly `0000`; any other code fails with 400 and counts toward lockout.
 
 ### AUTH0_TEST_USER_PASSWORD
 

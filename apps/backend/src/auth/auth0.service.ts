@@ -3,6 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import axios from 'axios';
 import { ManagementClient } from 'auth0';
 import { Auth0TestUsersConfig, Configuration } from '../config/configuration';
+import {
+  isProductionRuntime,
+  isValidTestOtp,
+  matchesTestEmail,
+  matchesTestPhone,
+} from './test-user-bypass.util';
 
 export interface Auth0TokenResponse {
   access_token: string;
@@ -178,20 +184,51 @@ export class Auth0Service {
     return this.configService.get('auth0')?.testUsers;
   }
 
+  /** Never true in production (NODE_ENV or DEPLOYMENT_ENV), re-checked at call time. */
   isTestUsersEnabled(): boolean {
+    if (isProductionRuntime()) return false;
     return this.getTestUsersConfig()?.enabled === true;
   }
 
+  /** Exact test domain or explicit email allowlist entry. */
   isTestEmail(email: string): boolean {
     const config = this.getTestUsersConfig();
     if (!config) return false;
-    return email.trim().toLowerCase().endsWith(`@${config.emailDomain}`);
+    return matchesTestEmail(email, this.matchConfig(config));
   }
 
+  /** Explicit phone allowlist only (no suffix matching). */
   isTestPhone(phoneNumber: string): boolean {
     const config = this.getTestUsersConfig();
     if (!config) return false;
-    return phoneNumber.replace(/\D/g, '').endsWith(config.phoneSuffix);
+    return matchesTestPhone(phoneNumber, this.matchConfig(config));
+  }
+
+  private matchConfig(config: Auth0TestUsersConfig) {
+    return {
+      emailDomain: config.emailDomain || '',
+      emailAllowlist: config.emailAllowlist ?? [],
+      phoneAllowlist: config.phoneAllowlist ?? [],
+    };
+  }
+
+  /**
+   * Defence in depth for the bypass: the feature must be on (never in prod),
+   * the identifier must match the narrow rules, and the code must be 0000.
+   */
+  private assertTestBypassAllowed(isTestIdentifier: boolean, otp: string): void {
+    if (!this.isTestUsersEnabled() || !isTestIdentifier) {
+      throw new HttpException(
+        { success: false, error: 'Test user login is not available' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (!isValidTestOtp(otp)) {
+      throw new HttpException(
+        { success: false, error: 'Invalid or expired code' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
   }
 
   private async ensureTestUser(
@@ -252,14 +289,22 @@ export class Auth0Service {
     return data;
   }
 
-  async verifyTestUserEmail(email: string): Promise<Auth0TokenResponse> {
+  async verifyTestUserEmail(
+    email: string,
+    otp: string
+  ): Promise<Auth0TokenResponse> {
+    this.assertTestBypassAllowed(this.isTestEmail(email), otp);
     const connection = this.getTestUsersConfig()?.emailConnection || '';
     const username = email.trim().toLowerCase();
     await this.ensureTestUser(connection, { email: username });
     return this.passwordRealmLogin(connection, username);
   }
 
-  async verifyTestUserPhone(phoneNumber: string): Promise<Auth0TokenResponse> {
+  async verifyTestUserPhone(
+    phoneNumber: string,
+    otp: string
+  ): Promise<Auth0TokenResponse> {
+    this.assertTestBypassAllowed(this.isTestPhone(phoneNumber), otp);
     const connection = this.getTestUsersConfig()?.phoneConnection || '';
     const username = phoneNumber.trim();
     await this.ensureTestUser(connection, { phone_number: username });
