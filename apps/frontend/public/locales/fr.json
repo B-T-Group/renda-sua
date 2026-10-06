@@ -6251,6 +6251,8 @@
       "remindError": "Impossible d’envoyer le rappel",
       "loadError": "Impossible de charger les options de retrait",
       "feeLine": "Frais {{fee}} {{currency}} ({{percent}} % des articles). Vous recevez {{share}} {{currency}}. Le client récupère {{refund}} {{currency}}.",
+      "depositLine": "Aucuns frais. L'acompte de réservation du client ({{amount}} {{currency}}) est conservé par Rendasua comme pénalité d'absence.",
+      "cancelledDeposit": "Retrait annulé. L'acompte de réservation du client est conservé comme pénalité d'absence.",
       "wait": "Vous pouvez annuler pour absence après {{hours}} heures au statut prêt.",
       "cancel": "Annuler — le client n’est pas venu",
       "cancelled": "Retrait annulé. Le client est remboursé, moins les frais.",
