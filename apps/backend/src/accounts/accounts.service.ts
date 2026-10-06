@@ -39,6 +39,17 @@ export interface TransactionRequest {
   idempotencyKey?: string;
 }
 
+/**
+ * Reference-deduped ledger entry. `idempotencyKey` (optional) is also written to
+ * the UNIQUE account_transactions.idempotency_key, so two concurrent callers that
+ * both pass the reference check still produce one row (the loser's balance move
+ * is reverted).
+ */
+export type LedgerEntryIfNotExistsRequest = Pick<
+  TransactionRequest,
+  'accountId' | 'amount' | 'memo' | 'referenceId' | 'idempotencyKey'
+>;
+
 export interface TransactionResult {
   success: boolean;
   transactionId?: string;
@@ -345,6 +356,7 @@ export class AccountsService {
       | 'memo'
       | 'referenceId'
       | 'skipCashAdvanceRepayment'
+      | 'idempotencyKey'
     >
   ): Promise<IdempotentTransactionResult> {
     if (!request.referenceId) {
@@ -449,37 +461,25 @@ export class AccountsService {
   }
 
   async registerHoldIfNotExists(
-    request: Pick<
-      TransactionRequest,
-      'accountId' | 'amount' | 'memo' | 'referenceId'
-    >
+    request: LedgerEntryIfNotExistsRequest
   ): Promise<IdempotentTransactionResult> {
     return this.registerLedgerEntryIfNotExists(request, 'hold');
   }
 
   async registerReleaseIfNotExists(
-    request: Pick<
-      TransactionRequest,
-      'accountId' | 'amount' | 'memo' | 'referenceId'
-    >
+    request: LedgerEntryIfNotExistsRequest
   ): Promise<IdempotentTransactionResult> {
     return this.registerLedgerEntryIfNotExists(request, 'release');
   }
 
   async registerPaymentIfNotExists(
-    request: Pick<
-      TransactionRequest,
-      'accountId' | 'amount' | 'memo' | 'referenceId'
-    >
+    request: LedgerEntryIfNotExistsRequest
   ): Promise<IdempotentTransactionResult> {
     return this.registerLedgerEntryIfNotExists(request, 'payment');
   }
 
   private async registerLedgerEntryIfNotExists(
-    request: Pick<
-      TransactionRequest,
-      'accountId' | 'amount' | 'memo' | 'referenceId'
-    >,
+    request: LedgerEntryIfNotExistsRequest,
     transactionType: 'deposit' | 'withdrawal' | 'hold' | 'release' | 'payment'
   ): Promise<IdempotentTransactionResult> {
     if (!request.referenceId) {
@@ -499,6 +499,7 @@ export class AccountsService {
       transactionType,
       memo: request.memo,
       referenceId: request.referenceId,
+      idempotencyKey: request.idempotencyKey,
     });
     if (!result.success) {
       const raced = await this.hasTransactionForReference({
