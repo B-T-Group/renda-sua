@@ -1,6 +1,6 @@
 import * as libphonenumber from 'google-libphonenumber';
 
-type CameroonCarrier = 'mtn' | 'orange';
+type CameroonCarrier = 'mtn' | 'orange' | 'other';
 
 interface CameroonPhoneResult {
   carrier: CameroonCarrier;
@@ -24,14 +24,22 @@ export function isInternationalPhone(phone: string): boolean {
   return trimmed.startsWith('+') || trimmed.startsWith('00');
 }
 
-function normalizeCameroonPhone(phone: string): string | null {
+function phoneDigits(phone: string): string {
   let digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('237')) {
-    digits = digits.slice(3);
-  }
-  if (digits.length !== 9 || !digits.startsWith('6')) {
-    return null;
-  }
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  return digits;
+}
+
+/** True when the number includes Cameroon's country code, any prefix. */
+export function isCameroonCountryCode(phone?: string | null): boolean {
+  if (!phone?.trim()) return false;
+  return phoneDigits(phone).startsWith('237');
+}
+
+function normalizeCameroonPhone(phone: string): string | null {
+  let digits = phoneDigits(phone);
+  if (digits.startsWith('237')) digits = digits.slice(3);
+  if (digits.length !== 9 || !digits.startsWith('6')) return null;
   return digits;
 }
 
@@ -39,13 +47,14 @@ export function detectCameroonPhone(phone: string): CameroonPhoneResult | null {
   const normalized = normalizeCameroonPhone(phone);
   if (!normalized) return null;
   const prefix = normalized.slice(0, 3);
-  if (MTN_PREFIXES.has(prefix)) {
-    return { carrier: 'mtn', phone: normalized };
-  }
   if (ORANGE_PREFIXES.has(prefix)) {
     return { carrier: 'orange', phone: normalized };
   }
-  return null;
+  if (MTN_PREFIXES.has(prefix)) {
+    return { carrier: 'mtn', phone: normalized };
+  }
+  if (!isCameroonCountryCode(phone)) return null;
+  return { carrier: 'other', phone: normalized };
 }
 
 export function removeCountryCode(

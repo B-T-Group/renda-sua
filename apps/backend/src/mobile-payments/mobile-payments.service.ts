@@ -8,6 +8,7 @@ import { OrangeMomoService } from '../orange-momo/orange-momo.service';
 import { mapCountryToMobileMoneyProvider } from './item-country.util';
 import {
   detectCameroonPhone,
+  isCameroonCountryCode,
   removeCountryCode,
   resolveWalletPhoneRegion,
   validatePhoneNumber,
@@ -112,8 +113,7 @@ export class MobilePaymentsService {
   }
 
   getProvider(phoneNumber: string): MobilePaymentIntegrationProvider {
-    const res = detectCameroonPhone(phoneNumber);
-    if (res) {
+    if (isCameroonCountryCode(phoneNumber) || detectCameroonPhone(phoneNumber)) {
       return 'freemopay';
     }
     return 'mypvit';
@@ -136,19 +136,27 @@ export class MobilePaymentsService {
     customerPhone: string | undefined | null,
     storedProvider: string
   ): MobilePaymentIntegrationProvider {
-    if (customerPhone?.trim()) {
-      return this.getProvider(customerPhone);
-    }
+    return this.resolveProviderFromRequest({
+      customerPhone: customerPhone ?? undefined,
+      provider: this.knownProvider(storedProvider),
+    });
+  }
+
+  private knownProvider(
+    storedProvider: string
+  ): MobilePaymentRequest['provider'] | undefined {
     const p = storedProvider?.toLowerCase();
     if (
       p === 'mypvit' ||
-      p === 'freemopay' ||
+      p === 'airtel' ||
+      p === 'moov' ||
       p === 'mtn' ||
-      p === 'orange'
+      p === 'orange' ||
+      p === 'freemopay'
     ) {
       return p;
     }
-    throw new Error('UNSUPPORTED_INTEGRATION_PROVIDER');
+    return undefined;
   }
 
   /**
@@ -817,7 +825,8 @@ export class MobilePaymentsService {
   }
 
   /**
-   * Catalog: item country first. Wallet: explicit provider, then phone digits.
+   * Same choice at charge time and on the callback.
+   * Direct MTN/Orange first, then any +237 number on FreemoPay, then item country.
    */
   resolveProviderFromRequest(
     request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider' | 'itemCountry'>
@@ -825,6 +834,7 @@ export class MobilePaymentsService {
     if (request.provider === 'mtn' || request.provider === 'orange') {
       return request.provider;
     }
+    if (isCameroonCountryCode(request.customerPhone)) return 'freemopay';
     if (request.itemCountry?.trim()) {
       return this.getProviderForCountry(request.itemCountry);
     }
@@ -842,8 +852,8 @@ export class MobilePaymentsService {
     ) {
       return 'mypvit';
     }
-    if (request.customerPhone && detectCameroonPhone(request.customerPhone)) {
-      return 'freemopay';
+    if (request.customerPhone?.trim()) {
+      return this.getProvider(request.customerPhone);
     }
     return 'mypvit';
   }

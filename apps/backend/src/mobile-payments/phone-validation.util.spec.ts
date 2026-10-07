@@ -1,5 +1,6 @@
 import {
   detectCameroonPhone,
+  isCameroonCountryCode,
   resolveWalletPhoneRegion,
   validatePhoneNumber,
 } from './phone-validation.util';
@@ -28,6 +29,13 @@ describe('detectCameroonPhone', () => {
   it('classifies Orange 692 prefixes as Cameroon', () => {
     expect(detectCameroonPhone('692168717')?.carrier).toBe('orange');
     expect(detectCameroonPhone('+237692168717')?.carrier).toBe('orange');
+  });
+
+  it('treats every +237 number as Cameroon, including new prefixes', () => {
+    expect(isCameroonCountryCode('+237640448217')).toBe(true);
+    expect(isCameroonCountryCode('00237640448217')).toBe(true);
+    expect(detectCameroonPhone('+237640448217')?.carrier).toBe('other');
+    expect(detectCameroonPhone('640448217')).toBeNull();
   });
 });
 
