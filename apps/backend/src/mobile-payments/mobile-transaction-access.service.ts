@@ -25,6 +25,11 @@ export class MobileTransactionAccessService {
       const ownerId = await this.getAccountOwnerId(transaction.account_id);
       if (ownerId && ownerId === userId) return true;
     }
+    return this.canAdminister(userId);
+  }
+
+  async canAdminister(userId: string | null | undefined): Promise<boolean> {
+    if (!userId) return false;
     return this.rbacService.hasPermission(
       userId,
       PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS
