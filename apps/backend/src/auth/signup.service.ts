@@ -41,6 +41,8 @@ import {
   emitAuthSiteEvent,
   serverAuthViewer,
 } from './auth-site-events.helper';
+import { LockoutService } from './lockout.service';
+import { buildIdentifierLockoutKey } from './auth-lockout.util';
 import {
   buildOtpIdentifier,
   normalizeOtpDestination,
@@ -51,6 +53,8 @@ const ATTEMPT_TTL_MS = 15 * 60 * 1000;
 const RESEND_COOLDOWN_MS = 120 * 1000;
 const MAX_VERIFY_ATTEMPTS = 5;
 const COMPLETION_TOKEN_TTL_MS = 15 * 60 * 1000;
+/** #338: how long a finished signup flowId may be replayed (retry of the same finish). */
+const FINISH_REPLAY_WINDOW_MS = 2 * 60 * 1000;
 const SUPERSEDE_OPEN_ATTEMPTS = `
   mutation SupersedeSignupAttempts(
     $where: signup_attempts_bool_exp!
@@ -186,6 +190,7 @@ export class SignupService {
     private readonly referralProvisioning: ReferralProvisioningService,
     private readonly metaConversionsService: MetaConversionsService,
     private readonly otpSendLimiter: OtpSendLimiterService,
+    private readonly lockout: LockoutService,
     @Optional() private readonly campaigns?: CreditCampaignPublisher,
     @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
@@ -248,6 +253,9 @@ export class SignupService {
       phoneNumber || null
     );
     const identifier = buildOtpIdentifier({ email, phone: phoneNumber });
+    await this.assertIdentifierNotLockedOut(
+      buildIdentifierLockoutKey({ email, phone: phoneNumber })
+    );
     await this.otpSendLimiter.assertCanSend({
       destination,
       identifier,
@@ -457,18 +465,25 @@ export class SignupService {
       );
     }
     const attempt = await this.loadAttempt(flowId);
-    this.assertAttemptVerifiable(attempt);
     if (attempt.status === 'otp_verified') {
       return { flowId };
     }
+    // #338: same identifier-keyed lockout (5 failures -> 15 min, same 429 body) as
+    // known-account login, checked before the per-attempt cap so unknown identifiers
+    // are indistinguishable from existing accounts and cannot restart to keep guessing.
+    const lockoutKey = this.identifierLockoutKeyForAttempt(attempt);
+    if (lockoutKey) await this.assertIdentifierNotLockedOut(lockoutKey);
+    this.assertAttemptVerifiable(attempt);
     let tokens: Auth0TokenResponse;
     try {
       tokens = await this.verifyOtpAgainstAuth0(attempt, code);
     } catch (error: any) {
       await this.incrementVerifyAttempts(attempt);
+      if (lockoutKey) await this.lockout.recordFailure(lockoutKey);
       throw error;
     }
     this.assertTokenMatchesAttempt(tokens, attempt);
+    if (lockoutKey) await this.lockout.recordSuccess(lockoutKey);
     await this.markOtpVerified(attempt.id, tokens);
     return { flowId };
   }
@@ -501,6 +516,10 @@ export class SignupService {
     }
     const attempt = await this.loadAttempt(input.flowId);
     if (attempt.status === 'completed' && attempt.completion_result?.user?.id) {
+      // #338: a finished flowId is only replayable briefly (double-submit / network
+      // retry of the same finish call). After that it is rejected instead of handing
+      // the session out again to anyone holding the flowId.
+      this.assertFinishReplayWindow(attempt.completion_result);
       return this.replayFinishedSignup(attempt, input.flowId, platform);
     }
     this.assertAttemptFinishable(attempt);
@@ -1021,12 +1040,46 @@ export class SignupService {
         { context: 'signup', attempts: MAX_VERIFY_ATTEMPTS },
         serverAuthViewer()
       );
+
       throw new HttpException(
         {
           success: false,
           error: 'Too many invalid codes. Please start signup again.',
         },
         HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+  }
+
+  private identifierLockoutKeyForAttempt(attempt: SignupAttemptRow): string | null {
+    if (!attempt.email && !attempt.phone_number) return null;
+    return buildIdentifierLockoutKey({
+      email: attempt.email,
+      phone: attempt.phone_number,
+    });
+  }
+
+  /** Same 429 body as LoginService.throwLockout so known and unknown identifiers match. */
+  private async assertIdentifierNotLockedOut(lockoutKey: string): Promise<void> {
+    if (!(await this.lockout.isLockedOut(lockoutKey))) return;
+    const remainingMs = await this.lockout.getRemainingLockoutMs(lockoutKey);
+    const remainingMin = Math.ceil(remainingMs / 60000);
+    throw new HttpException(
+      {
+        success: false,
+        error: `Too many failed attempts. Try again in ${remainingMin} minute(s).`,
+      },
+      HttpStatus.TOO_MANY_REQUESTS
+    );
+  }
+
+  private assertFinishReplayWindow(snapshot: SignupCompletionSnapshot): void {
+    const completedAtMs = new Date(snapshot.completedAt || 0).getTime();
+    const age = Date.now() - completedAtMs;
+    if (!Number.isFinite(completedAtMs) || age > FINISH_REPLAY_WINDOW_MS) {
+      throw new HttpException(
+        { success: false, error: 'Signup already completed. Please log in.' },
+        HttpStatus.CONFLICT
       );
     }
   }

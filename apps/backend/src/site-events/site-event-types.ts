@@ -85,6 +85,7 @@ export const SITE_EVENT_TYPES_V1 = [
   // Auth funnel (web UX section 6)
   'auth_gate_shown',
   'auth_gate_dismissed',
+  'auth_ul_fallback_used',
   'auth_code_sent',
   'auth_code_send_failed',
   'auth_code_failed',

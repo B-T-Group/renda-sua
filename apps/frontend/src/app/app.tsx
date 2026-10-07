@@ -12,6 +12,7 @@ import {
 } from 'react-router-dom';
 import * as LazyPages from './lazy-routes';
 import ProtectedRoute from '../components/auth/ProtectedRoute';
+import { AddPhoneBanner } from '../components/auth/AddPhoneBanner';
 import { DeferredFloatingWhatsApp } from '../components/common/DeferredFloatingWhatsApp';
 import { DeferredAssistantLauncher } from '../components/assistant/DeferredAssistantLauncher';
 import { assistantScreenName } from '../components/assistant/assistantLauncherRoutes';
@@ -220,6 +221,7 @@ function App() {
         }}
       >
         <Header assistantEntry={assistantEntry.headerEntry} />
+        <AddPhoneBanner />
 
         <Box
           sx={{

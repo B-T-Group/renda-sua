@@ -15,9 +15,10 @@ import {
   useTheme,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useOptionalAuthGate } from '../../contexts/AuthGateContext';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import {
@@ -107,7 +108,7 @@ function persistLoginOtpSession(input: {
   );
 }
 
-const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
+const LegacyLoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
   open,
   onClose,
   returnTo,
@@ -556,6 +557,39 @@ const LoginMethodDialog: React.FC<LoginMethodDialogProps> = ({
       </DialogContent>
     </Dialog>
   );
+};
+
+/**
+ * #338: when the in-app gate is on for this market (`auth_web_inapp_gates`), every
+ * "Sign in" entry that opens this dialog (header, signup wizard, buy-now secondary CTA,
+ * page CTAs) is routed to the gate instead: auth flow v2 (uniform start, finish_account
+ * for new identifiers, Universal Login fallback link). The legacy dialog below uses the
+ * v1 otp-options / start-otp endpoints, which reveal whether an account exists, so it
+ * only renders while the flag is off.
+ */
+const LoginMethodDialog: React.FC<LoginMethodDialogProps> = (props) => {
+  const { open, onClose, returnTo } = props;
+  const gate = useOptionalAuthGate();
+  const navigate = useNavigate();
+  const gateOn = gate?.flagOn === true;
+  const gateRef = useRef(gate);
+  gateRef.current = gate;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!open || !gateOn || !gateRef.current) return;
+    onCloseRef.current();
+    const target = returnTo ? validateReturnTo(returnTo) : '';
+    void gateRef.current.requireAuth({
+      context: 'generic',
+      entry: 'login_dialog',
+      run: target ? () => navigate(target) : undefined,
+    });
+  }, [gateOn, navigate, open, returnTo]);
+
+  if (gateOn) return null;
+  return <LegacyLoginMethodDialog {...props} />;
 };
 
 export default LoginMethodDialog;

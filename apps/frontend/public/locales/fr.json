@@ -2078,6 +2078,7 @@
       "tooManyAttemptsCooldown": "Trop de codes demandés. Réessayez dans {{minutes}} min.",
       "finishAccountPending": "Vérifiez votre code, puis terminez la création du compte pour continuer.",
       "usePasswordInstead": "Utiliser un mot de passe",
+      "signInWithPassword": "Se connecter avec un mot de passe",
       "signInWithCodeInstead": "Se connecter avec un code",
       "passwordPlaceholder": "Mot de passe",
       "wrongPassword": "E-mail ou mot de passe incorrect.",
@@ -2123,6 +2124,24 @@
     "loginMethodHintEmailOtp": "Recevez un code dans votre boîte mail—sans mot de passe à retenir.",
     "loginMethodHintPassword": "Connectez-vous avec l’e-mail et le mot de passe de votre compte.",
     "loginMethodDivider": "Ou",
+    "phoneRequired": "Veuillez saisir votre numéro de téléphone",
+    "phoneInvalid": "Numéro de téléphone invalide",
+    "phoneAlreadyTaken": "Ce numéro de téléphone est déjà utilisé",
+    "addPhoneFailed": "Échec de l'ajout du numéro de téléphone",
+    "addPhoneBanner": {
+      "message": "Ajoutez un numéro de téléphone pour sécuriser votre compte et activer les notifications SMS",
+      "cta": "Ajouter un téléphone",
+      "dialogTitle": "Ajouter un numéro de téléphone",
+      "dialogDesc": "L'ajout d'un numéro de téléphone aide à sécuriser votre compte et vous permet de vous connecter par SMS.",
+      "invalid": "Saisissez un numéro valide, par ex. 6 12 34 56 78 ou +237 6 12 34 56 78."
+    },
+    "adminSignIn": {
+      "title": "Connexion requise",
+      "description": "Vous devez vous connecter pour accéder à cette page d’administration.",
+      "cta": "Se connecter"
+    },
+    "phoneNumber": "Numéro de téléphone",
+    "phonePlaceholder": "Numéro de téléphone",
     "loginMethodFooterNote": "Vous pouvez changer d’avis à tout moment—ce choix sert uniquement à lancer la bonne méthode de connexion.",
     "loginWithOtp": "Se connecter avec un mot de passe à usage unique",
     "loginWithOtpEmail": "Se connecter avec un mot de passe à usage unique (email)",
