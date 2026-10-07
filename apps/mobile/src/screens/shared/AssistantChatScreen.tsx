@@ -32,7 +32,7 @@ import { useInteractionSettled } from '@/components/assistant/launcher/launcherH
 import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher';
 import type { AssistantContext } from '@/utils/assistantChips';
 import { getContextualChips, buildChipMessage } from '@/utils/assistantChips';
-import { trackChipTap, buildLauncherMetadata, type LauncherEventContext } from '@/services/analytics/assistantLauncherAnalytics';
+import { trackChipTap, type LauncherEventContext } from '@/services/analytics/assistantLauncherAnalytics';
 import { useReorderOrder } from '@/hooks/useReorderOrder';
 import { ReorderCartConflictSheet } from '@/components/orders/ReorderCartConflictSheet';
 import { useNavigation } from '@react-navigation/native';
@@ -47,7 +47,6 @@ import {
   trackMessageSent,
   trackHandoffRequested,
   trackErrorShown,
-  type LauncherEventContext,
 } from '@/services/analytics/assistantLauncherAnalytics';
 
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
