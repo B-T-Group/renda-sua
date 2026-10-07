@@ -32,7 +32,7 @@ import { useInteractionSettled } from '@/components/assistant/launcher/launcherH
 import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher';
 import type { AssistantContext } from '@/utils/assistantChips';
 import { getContextualChips, buildChipMessage } from '@/utils/assistantChips';
-import { trackSiteEvent } from '@/services/AppEventsService';
+import { trackChipTap, buildLauncherMetadata, type LauncherEventContext } from '@/services/analytics/assistantLauncherAnalytics';
 import { useReorderOrder } from '@/hooks/useReorderOrder';
 import { ReorderCartConflictSheet } from '@/components/orders/ReorderCartConflictSheet';
 import { useNavigation } from '@react-navigation/native';
@@ -292,16 +292,20 @@ function EmptyState({
 
   const handleChipTap = useCallback(
     (chipId: string, label: string) => {
-      trackSiteEvent({
-        eventType: 'assistant.chip.tap',
-        metadata: {
-          chip_id: chipId,
-          screen: 'assistant-chat',
-        },
-      });
+      const viewer = assistantViewer(store.auth.isAuthenticated, store.persona.activePersona);
+      if (viewer === 'client' || viewer === 'guest') {
+        const launcherCtx: LauncherEventContext = {
+          persona: viewer,
+          screen: 'AssistantChat',
+          market: store.market.selectedCountryCode,
+          language: t.i18n?.language,
+          threadId: viewer === 'guest' ? store.assistant.threadId : undefined,
+        };
+        trackChipTap(launcherCtx, chipId);
+      }
       onPick(label);
     },
-    [onPick]
+    [onPick, store, t]
   );
 
   return (
