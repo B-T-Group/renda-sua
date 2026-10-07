@@ -1,7 +1,7 @@
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
   SITE_EVENT_ASSISTANT_ATTENTION_PLAYED,
   SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION,
@@ -28,6 +28,7 @@ import { RendaCharacter } from './RendaCharacter';
 import type { RendaState } from './rendaCharacterEngine';
 import { useAssistantLauncherAnalytics } from './useAssistantLauncherAnalytics';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
+import { buildAssistantContextFromPath } from '../../utils/buildAssistantContext';
 
 /** First-run nudge waits for 3 s of dwell on browse home. */
 export const NUDGE_DWELL_MS = 3000;
@@ -129,6 +130,7 @@ export function AssistantLauncher({
 }: AssistantLauncherProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const reducedMotion = usePrefersReducedMotion();
   const track = useAssistantLauncherAnalytics(isSignedIn);
   const hintId = `assistant-launcher-hint-${useId().replace(
@@ -266,7 +268,9 @@ export function AssistantLauncher({
   const open = (entry: 'orb' | 'orb_extended' | 'nudge') => {
     track(SITE_EVENT_ASSISTANT_LAUNCHER_TAP, { screen, variant, entry });
     if (nudgeOpen) dismissNudge('opened');
-    navigate('/assistant');
+    
+    const context = buildAssistantContextFromPath(location.pathname);
+    navigate('/assistant', context ? { state: { context } } : undefined);
   };
 
   const engage = () => {

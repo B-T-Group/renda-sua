@@ -77,6 +77,7 @@ import {
 } from '../assistant/assistantLauncherRoutes';
 import { claimImpression } from '../assistant/launcherStorage';
 import { useAssistantLauncherAnalytics } from '../assistant/useAssistantLauncherAnalytics';
+import { buildAssistantContextFromPath } from '../../utils/buildAssistantContext';
 
 function catalogContextFromPath(pathname: string): MarketStatesCatalog {
   if (pathname.startsWith('/rentals')) return 'rentals';
@@ -156,12 +157,16 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
       });
     }
   }, [assistantEntry, assistantScreen, trackAssistantEntry]);
-  const onAssistantHeaderTap = () =>
+  const onAssistantHeaderTap = useCallback(() => {
     trackAssistantEntry(SITE_EVENT_ASSISTANT_LAUNCHER_TAP, {
       screen: assistantScreen,
       variant: 'header_icon',
       entry: 'header_icon',
     });
+    // Navigate with context if on a contextual screen
+    const context = buildAssistantContextFromPath(location.pathname);
+    navigate('/assistant', context ? { state: { context } } : undefined);
+  }, [trackAssistantEntry, assistantScreen, location.pathname, navigate]);
   // Guest desktop is two rows, but the top row still has long utility labels
   // plus market/auth controls, so collapse to the drawer below lg (1200px).
   // Authenticated nav has 2–3 short items — md (900px) is fine.
@@ -858,10 +863,8 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
               {/* AI Assistant: one entry point at a time (hidden where the launcher shows). */}
               {assistantEntry !== 'hidden' && (
               <IconButton
-                component={RouterLink}
-                to="/assistant"
                 size="small"
-                onClick={assistantEntry === 'character' ? onAssistantHeaderTap : undefined}
+                onClick={onAssistantHeaderTap}
                 data-assistant-entry={assistantEntry}
                 aria-label={t('assistant.headerLabel', 'Ask Rendasua assistant')}
                 // `pending` (client/guest while flags resolve, ≤ 3 s): keep the slot so

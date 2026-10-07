@@ -26,6 +26,7 @@ import React, {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { useAssistantChat } from '../../contexts/AssistantChatContext';
 import type { AssistantChatMessage } from '../../contexts/AssistantChatContext';
 import { useAppChromeInsets } from '../../hooks/useAppChromeInsets';
@@ -35,28 +36,12 @@ import type { RendaState } from '../assistant/RendaCharacter';
 import { useShowsRendaCharacter } from '../assistant/useAssistantPersona';
 import { useRendaChatState } from '../assistant/useRendaChatState';
 import { AssistantMarkdown } from './AssistantMarkdown';
+import type { AssistantContext } from '../../utils/assistantChips';
+import { getContextualChips, buildChipMessage } from '../../utils/assistantChips';
+import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 
 /** Thread and composer are capped and centred on desktop (Product & UX 3b/4b). */
 const THREAD_MAX_WIDTH = 760;
-
-const SUGGESTION_KEYS = [
-  {
-    key: 'assistant.suggestion.location',
-    fallback: 'Where are you located?',
-  },
-  {
-    key: 'assistant.suggestion.payDelivery',
-    fallback: 'Do you support payment at delivery?',
-  },
-  {
-    key: 'assistant.suggestion.pickup',
-    fallback: 'Do you support in-store pickup?',
-  },
-  {
-    key: 'assistant.suggestion.mobilePay',
-    fallback: 'Do you support mobile payments?',
-  },
-] as const;
 
 function ThinkingIndicator() {
   const { t } = useTranslation();
@@ -535,14 +520,29 @@ function HeroCharacter({ state }: { state: RendaState }) {
 function EmptyState({
   onPick,
   character,
+  context,
 }: {
   onPick: (text: string) => void;
   /** Character state for client/guest; null keeps the SmartToy orb (agent/business). */
   character: RendaState | null;
+  context?: AssistantContext;
 }) {
   const { t } = useTranslation();
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const chips = getContextualChips(context);
+
+  const handleChipClick = (chipId: string, message: string) => {
+    void trackSiteEvent({
+      eventType: 'assistant.chip.tap',
+      metadata: {
+        chip_id: chipId,
+        context: context?.type || 'generic',
+      },
+    });
+    onPick(message);
+  };
 
   return (
     <Box
@@ -616,11 +616,20 @@ function EmptyState({
         justifyContent="center"
         sx={{ maxWidth: 520 }}
       >
-        {SUGGESTION_KEYS.map((item, index) => {
-          const label = t(item.key, item.fallback);
+        {chips.map((chip, index) => {
+          // Build interpolation variables from context
+          let interpolation = {};
+          if (context?.type === 'item_detail' && context.itemName) {
+            interpolation = { name: context.itemName };
+          } else if (context?.type === 'delivery_tracking' && context.orderNumber) {
+            interpolation = { orderNumber: context.orderNumber };
+          }
+          
+          const label = t(chip.translationKey, { defaultValue: chip.fallback, ...interpolation });
+          const message = buildChipMessage(chip, label, context);
           return (
             <motion.div
-              key={item.key}
+              key={chip.id}
               initial={prefersReducedMotion ? {} : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{
@@ -631,7 +640,7 @@ function EmptyState({
               <Chip
                 label={label}
                 clickable
-                onClick={() => onPick(label)}
+                onClick={() => handleChipClick(chip.id, message)}
                 variant="outlined"
                 sx={{
                   color: theme.palette.primary.main,
@@ -829,6 +838,9 @@ const AssistantPage: React.FC = () => {
   });
   // The "Thinking…" subtitle is paired with the character's Thinking (≥ 400 ms).
   const isThinking = isSending || characterState === 'thinking';
+  
+  const location = useLocation();
+  const context: AssistantContext | undefined = (location.state as { context?: AssistantContext })?.context;
 
   // The page is a viewport-sized column; start it flush under the site top bar.
   useEffect(() => {
@@ -909,6 +921,7 @@ const AssistantPage: React.FC = () => {
             <EmptyState
               onPick={(text) => handleSend(text)}
               character={showsCharacter ? characterState : null}
+              context={context}
             />
           ) : (
             <Stack spacing={2} sx={{ pb: 1 }}>

@@ -6,13 +6,14 @@
 export type AssistantMdInline =
   | { type: 'text'; text: string }
   | { type: 'bold'; text: string }
-  | { type: 'italic'; text: string };
+  | { type: 'italic'; text: string }
+  | { type: 'link'; text: string; url: string };
 
 export type AssistantMdBlock =
   | { type: 'paragraph'; inlines: AssistantMdInline[] }
   | { type: 'bullet'; inlines: AssistantMdInline[] };
 
-const INLINE_RE = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
+const INLINE_RE = /(\[([^\]]+)\]\(([^)]+)\)|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
 
 export function parseAssistantInline(text: string): AssistantMdInline[] {
   if (!text) return [];
@@ -24,7 +25,17 @@ export function parseAssistantInline(text: string): AssistantMdInline[] {
       parts.push({ type: 'text', text: text.slice(last, index) });
     }
     const token = match[0];
-    if (token.startsWith('**') && token.endsWith('**')) {
+    
+    // Check for [text](url) link
+    if (token.startsWith('[')) {
+      const linkText = match[2];
+      const url = match[3];
+      if (linkText && url) {
+        parts.push({ type: 'link', text: linkText, url });
+      } else {
+        parts.push({ type: 'text', text: token });
+      }
+    } else if (token.startsWith('**') && token.endsWith('**')) {
       parts.push({ type: 'bold', text: token.slice(2, -2) });
     } else if (
       (token.startsWith('*') && token.endsWith('*')) ||
@@ -78,6 +89,7 @@ export function parseAssistantMarkdown(source: string): AssistantMdBlock[] {
 /** Strip markdown markers for plain-text fallback (e.g. mid typewriter). */
 export function stripAssistantMarkdown(source: string): string {
   return source
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url) → text
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/_([^_]+)_/g, '$1')

@@ -1,6 +1,7 @@
 import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { PersonaSlug } from '../types/persona';
+import type { AssistantContext } from '../utils/assistantChips';
 
 export type EnrollPersonaParams = { targetPersona: PersonaSlug };
 
@@ -167,7 +168,7 @@ export type GuestRootStackParamList = {
     | undefined;
   RentalListingDetail: { listingId: string };
   CategoriesBrowse: undefined;
-  AssistantChat: undefined;
+  AssistantChat: { context?: AssistantContext } | undefined;
 };
 
 /** Guest shell: browse catalog + rentals + food + auth stack in bottom tabs. */
@@ -239,7 +240,7 @@ export type ClientRootStackParamList = {
   Terms: undefined;
   Privacy: undefined;
   FAQ: undefined;
-  AssistantChat: undefined;
+  AssistantChat: { context?: AssistantContext } | undefined;
   Messages: undefined;
   ThreadDetail: { threadId: string };
   SupportTickets: undefined;
@@ -385,7 +386,7 @@ export type BusinessRootStackParamList = {
   Terms: undefined;
   Privacy: undefined;
   FAQ: undefined;
-  AssistantChat: undefined;
+  AssistantChat: { context?: AssistantContext } | undefined;
   Messages: undefined;
   ThreadDetail: { threadId: string };
   SupportTickets: undefined;
