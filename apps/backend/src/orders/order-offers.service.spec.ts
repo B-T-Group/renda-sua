@@ -14,6 +14,8 @@ describe('OrderOffersService', () => {
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let commissionsService: jest.Mocked<CommissionsService>;
   let notificationsService: jest.Mocked<NotificationsService>;
+  let paymentRoutingService: any;
+  let agentHoldService: any;
 
   const now = new Date('2026-01-01T00:00:00.000Z');
 
@@ -55,6 +57,19 @@ describe('OrderOffersService', () => {
       getDeliveryAvailabilityRadiusKm: jest.fn().mockResolvedValue(5),
     } as unknown as DeliveryConfigService;
 
+    paymentRoutingService = {
+      resolveRailForBusiness: jest.fn().mockResolvedValue('mobile_money'),
+    };
+    agentHoldService = {
+      resolveOrderHoldWithCeiling: jest.fn().mockResolvedValue({
+        rail: 'mobile_money',
+        holdPercentage: 80,
+        rawHoldAmount: 4000,
+        holdAmount: 4000,
+        ceilingApplied: false,
+        ceilingXaf: null,
+      }),
+    };
     service = new OrderOffersService(
       hasuraSystemService,
       commissionsService,
@@ -62,7 +77,9 @@ describe('OrderOffersService', () => {
       configService,
       eligibleAgentsQueryService,
       waitAndExecuteScheduleService,
-      deliveryConfigService
+      deliveryConfigService,
+      paymentRoutingService as any,
+      agentHoldService as any
     );
   });
 
