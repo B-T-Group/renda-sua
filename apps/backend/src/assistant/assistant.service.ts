@@ -175,15 +175,20 @@ export class AssistantService implements OnModuleInit {
     messages: AssistantChatInput['messages'],
     toolsUsed: Set<string>
   ): 'buy' | 'availability' | 'reorder' | 'track' | 'support' | 'other' {
-    if (toolsUsed.has('search_catalog')) return 'buy';
+    const latest = [...messages].reverse().find((m) => m.role === 'user');
+    const text = (latest?.content || '').toLowerCase();
+    
+    if (toolsUsed.has('search_catalog')) {
+      if (/\b(available|availability|disponible|stock|en stock)\b/i.test(text)) {
+        return 'availability';
+      }
+      return 'buy';
+    }
     if (toolsUsed.has('get_reorder_options')) return 'reorder';
     if (toolsUsed.has('get_order_status') || toolsUsed.has('get_my_recent_orders')) {
       return 'track';
     }
     if (toolsUsed.has('request_human_support')) return 'support';
-    
-    const latest = [...messages].reverse().find((m) => m.role === 'user');
-    const text = (latest?.content || '').toLowerCase();
     
     if (/\b(buy|purchase|acheter|vendre|order|commande|prix|price|cost|co[uû]t)\b/i.test(text)) {
       return 'buy';

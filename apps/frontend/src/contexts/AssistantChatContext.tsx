@@ -259,7 +259,6 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const apiClient = useApiClient();
   const { isAuthenticated, isLoading: authLoading, user } = useSessionAuth();
   const { selectedMarket } = useMarket();
-  const { i18n } = useTranslation();
   const authSettled = !authLoading;
   const owner = assistantOwnerKey(isAuthenticated, user?.sub);
   const trackEvent = useAssistantLauncherAnalytics(isAuthenticated);
@@ -273,7 +272,8 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const [draft, setDraft] = useState('');
   const [isOffline, setIsOffline] = useState(false);
   const [lastReply, setLastReply] = useState<LastAssistantReply>(NO_REPLY);
-  const chatOpenedEmittedRef = useRef(false);
+  const prevHandoffRef = useRef(false);
+  const prevErrorRef = useRef<string | null>(null);
 
   // Refs mirror state so async callbacks never act on a stale thread.
   const messagesRef = useRef<AssistantChatMessage[]>([]);
@@ -394,27 +394,21 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
 
-  // Emit assistant.chat.opened when the chat becomes ready (Phase 0)
+  // Emit assistant.handoff.requested when handoff becomes true (rising edge only)
   useEffect(() => {
-    if (ready && !chatOpenedEmittedRef.current) {
-      chatOpenedEmittedRef.current = true;
-      trackEvent(SITE_EVENT_ASSISTANT_CHAT_OPENED, {});
-    }
-  }, [ready, trackEvent]);
-
-  // Emit assistant.handoff.requested when handoff becomes true (Phase 0)
-  useEffect(() => {
-    if (handoff) {
+    if (handoff && !prevHandoffRef.current) {
       trackEvent(SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED, {});
     }
+    prevHandoffRef.current = handoff;
   }, [handoff, trackEvent]);
 
-  // Emit assistant.error.shown when error is set (Phase 0)
+  // Emit assistant.error.shown when error is set (rising edge only)
   useEffect(() => {
-    if (error) {
+    if (error && error !== prevErrorRef.current) {
       const kind = isOffline ? 'network' : 'server';
       trackEvent(SITE_EVENT_ASSISTANT_ERROR_SHOWN, { kind });
     }
+    prevErrorRef.current = error;
   }, [error, isOffline, trackEvent]);
 
   /** Rotates if the thread has been idle; must run before activity is recorded. */
