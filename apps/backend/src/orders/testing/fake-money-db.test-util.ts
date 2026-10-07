@@ -167,6 +167,12 @@ export class FakeMoneyDb {
       account_transactions: this.txns.filter((t) =>
         (v.keys as string[]).includes(t.idempotency_key ?? '')
       ),
+      holds: this.txns.filter(
+        (t) =>
+          t.account_id === v.accountId &&
+          t.reference_id === v.referenceId &&
+          ['hold', 'release'].includes(t.transaction_type)
+      ),
     }),
     InsertTransactionIdempotent: (v: Row) => {
       if (this.txns.some((t) => t.idempotency_key === v.idempotencyKey)) {
