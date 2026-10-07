@@ -260,7 +260,38 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
       if (nudgeVisible) dismissNudge('opened');
       trackLauncherTap(ctxRef.current, 'orb', entry);
       if (rootNavigationRef.isReady()) {
-        rootNavigationRef.dispatch(CommonActions.navigate({ name: 'AssistantChat' }));
+        // Build context from current route if on a contextual screen
+        const state = rootNavigationRef.getState();
+        const currentRoute = state?.routes[state.index];
+        let context: any = undefined;
+        
+        if (currentRoute?.name === 'InventoryItemDetail' && currentRoute.params) {
+          const params = currentRoute.params as any;
+          context = {
+            type: 'item_detail',
+            inventoryId: params.inventoryItemId,
+            // itemName could be pulled from store/cache if available
+          };
+        } else if (currentRoute?.name === 'OrderDetail' && currentRoute.params) {
+          const params = currentRoute.params as any;
+          context = {
+            type: 'order_detail',
+            orderId: params.orderId,
+            // orderStatus could be pulled from store/cache if available
+          };
+        } else if (currentRoute?.name === 'ClientOrders' || currentRoute?.name === 'Orders') {
+          context = {
+            type: 'orders_list',
+            hasCompletedOrders: true, // Default true; could check store if cheap
+          };
+        }
+        
+        rootNavigationRef.dispatch(
+          CommonActions.navigate({ 
+            name: 'AssistantChat',
+            params: context ? { context } : undefined,
+          })
+        );
       }
     },
     [nudgeVisible, dismissNudge]

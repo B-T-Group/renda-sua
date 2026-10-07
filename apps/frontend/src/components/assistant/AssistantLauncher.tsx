@@ -1,7 +1,7 @@
 import { Box, ButtonBase, Typography } from '@mui/material';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import {
   SITE_EVENT_ASSISTANT_ATTENTION_PLAYED,
   SITE_EVENT_ASSISTANT_LAUNCHER_IMPRESSION,
@@ -129,6 +129,7 @@ export function AssistantLauncher({
 }: AssistantLauncherProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const reducedMotion = usePrefersReducedMotion();
   const track = useAssistantLauncherAnalytics(isSignedIn);
   const hintId = `assistant-launcher-hint-${useId().replace(
@@ -266,7 +267,37 @@ export function AssistantLauncher({
   const open = (entry: 'orb' | 'orb_extended' | 'nudge') => {
     track(SITE_EVENT_ASSISTANT_LAUNCHER_TAP, { screen, variant, entry });
     if (nudgeOpen) dismissNudge('opened');
-    navigate('/assistant');
+    
+    // Build context from current route
+    let context: any = undefined;
+    const path = location.pathname;
+    
+    if (path.startsWith('/items/')) {
+      const inventoryId = path.split('/items/')[1]?.split('/')[0];
+      if (inventoryId) {
+        context = {
+          type: 'item_detail',
+          inventoryId,
+          // itemName could be pulled from page data if available
+        };
+      }
+    } else if (path === '/orders') {
+      context = {
+        type: 'orders_list',
+        hasCompletedOrders: true, // Default true; could check from page data if available
+      };
+    } else if (path.startsWith('/orders/') && !path.includes('/reorder')) {
+      const orderId = path.split('/orders/')[1]?.split('/')[0];
+      if (orderId) {
+        context = {
+          type: 'order_detail',
+          orderId,
+          // orderStatus could be pulled from page data if available
+        };
+      }
+    }
+    
+    navigate('/assistant', context ? { state: { context } } : undefined);
   };
 
   const engage = () => {
