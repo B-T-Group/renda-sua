@@ -255,6 +255,12 @@ export interface ClaimAvailabilityResponse {
   needsTopUpToClaim: boolean;
   holdAmount: number;
   message: string;
+  holdPercentage: number;
+  rawHoldAmount: number;
+  ceilingApplied: boolean;
+  ceilingXaf: number | null;
+  availableBalance: number;
+  shortfallXaf: number;
 }
 
 export interface CompleteDeliveryRequest {
@@ -2639,7 +2645,8 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
-    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
+    const { rail, holdPercentage, holdAmount } =
+      await this.resolveOrderHoldAmount(order, agent.id);
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
       order.currency
@@ -2896,7 +2903,8 @@ export class OrdersService {
 
     // Calculate required hold amount (0 for internal agents and
     // Stripe-enabled orders, which do not require a caution/hold)
-    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
+    const { rail, holdPercentage, holdAmount } =
+      await this.resolveOrderHoldAmount(order, agent.id);
 
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // payment and assign directly
@@ -6144,6 +6152,8 @@ export class OrdersService {
       'Unauthorized to cancel this pickup'
     );
     const order = await this.requireOrder(request.orderId);
+    const resumed = await this.resumeNoshowDepositForfeit(order);
+    if (resumed) return resumed;
     if (this.isCookedFailPickupOrder(order)) return this.failPickup(request);
     this.assertNoshowCancellable(order);
     await this.requireNoshowWindow(order);
@@ -6915,11 +6925,16 @@ export class OrdersService {
       ? this.businessMayCancelOrder(order)
       : clientCancellableStatuses.includes(order.current_status);
 
-    if (!mayCancel)
+    if (!mayCancel) {
+      const resumed = isOrderOwner
+        ? await this.resumeClientDepositForfeit(order)
+        : null;
+      if (resumed) return resumed;
       throw new HttpException(
         `Cannot cancel order in ${order.current_status} status. Orders can only be cancelled before pickup by delivery agent.`,
         HttpStatus.BAD_REQUEST
       );
+    }
 
     // Create appropriate status history entry based on who cancelled
     const cancelledBy = isBusinessOwner ? 'business' : 'client';
@@ -7630,7 +7645,7 @@ export class OrdersService {
     // Transform orders for agents to show commission amounts
     const commissionConfig =
       await this.commissionsService.getCommissionConfigs();
-    const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent();
+    const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent(agent.id);
     const transformedOrders = this.transformOrdersForAgentSync(
       filteredOrders,
       agent.is_verified || false,
@@ -7669,10 +7684,16 @@ export class OrdersService {
 
     if (!agent.is_verified) {
       const order = await this.getOrderWithItems(orderId);
-      const { holdAmount } = await this.resolveOrderHoldAmount(order);
+      const { holdAmount, rawHoldAmount, holdPercentage, ceilingApplied, ceilingXaf } =
+        await this.resolveOrderHoldAmount(order, agent.id);
       return this.createClaimAvailabilityFailure(
         holdAmount,
-        'Complete account verification before claiming orders.'
+        'Complete account verification before claiming orders.',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        0
       );
     }
 
@@ -7684,11 +7705,17 @@ export class OrdersService {
       );
     } catch (error: any) {
       const order = await this.getOrderWithItems(orderId);
-      const { holdAmount } = await this.resolveOrderHoldAmount(order);
+      const { holdAmount, rawHoldAmount, holdPercentage, ceilingApplied, ceilingXaf } =
+        await this.resolveOrderHoldAmount(order, agent.id);
       return this.createClaimAvailabilityFailure(
         holdAmount,
         error?.response?.error ??
-          'Location tracking consent is required to claim orders.'
+          'Location tracking consent is required to claim orders.',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        0
       );
     }
 
@@ -7697,41 +7724,67 @@ export class OrdersService {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
 
-    const { rail, holdPercentage, holdAmount } = await this.resolveOrderHoldAmount(order);
+    const { rail, holdPercentage, holdAmount, rawHoldAmount, ceilingApplied, ceilingXaf } =
+      await this.resolveOrderHoldAmount(order, agent.id);
 
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
       return this.createClaimAvailabilityFailure(
         holdAmount,
-        'Your account is suspended. You cannot claim orders. Contact support.'
+        'Your account is suspended. You cannot claim orders. Contact support.',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        0
       );
     }
 
     if (order.current_status !== 'ready_for_pickup') {
       return this.createClaimAvailabilityFailure(
         holdAmount,
-        'This order is no longer open for claim.'
+        'This order is no longer open for claim.',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        0
       );
     }
 
     if ((order as any).fulfillment_method === 'pickup') {
       return this.createClaimAvailabilityFailure(
         holdAmount,
-        'This order is for customer pickup at the store and is not available to claim for delivery.'
+        'This order is for customer pickup at the store and is not available to claim for delivery.',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        0
       );
     }
 
     if (order.assigned_agent_id) {
       return this.createClaimAvailabilityFailure(
         holdAmount,
-        'This order is no longer open for claim.'
+        'This order is no longer open for claim.',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        0
       );
     }
 
     if (order.verified_agent_delivery && !agent.is_internal) {
       return this.createClaimAvailabilityFailure(
         holdAmount,
-        'This order requires an internal agent. Contact support to become an internal agent.'
+        'This order requires an internal agent. Contact support to become an internal agent.',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        0
       );
     }
 
@@ -7741,8 +7794,13 @@ export class OrdersService {
       );
     if (hasPendingClaim) {
       return this.createClaimAvailabilityFailure(
-        holdAmount, // Use result from earlier call
-        'This order has a pending claim. Another agent may be completing payment. Please choose another order.'
+        holdAmount,
+        'This order has a pending claim. Another agent may be completing payment. Please choose another order.',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        0
       );
     }
 
@@ -7772,6 +7830,12 @@ export class OrdersService {
         needsTopUpToClaim: false,
         holdAmount,
         message: 'Order is open and available to claim',
+        holdPercentage,
+        rawHoldAmount,
+        ceilingApplied,
+        ceilingXaf,
+        availableBalance: 0,
+        shortfallXaf: 0,
       };
     }
 
@@ -7809,6 +7873,12 @@ export class OrdersService {
       message: hasEnoughFundsForHold
         ? 'Order is open and available to claim'
         : 'Top up is required before claiming this order',
+      holdPercentage,
+      rawHoldAmount,
+      ceilingApplied,
+      ceilingXaf,
+      availableBalance,
+      shortfallXaf: Math.max(0, holdAmount - availableBalance),
     };
   }
 
@@ -10644,11 +10714,93 @@ export class OrdersService {
       actorUserId
     );
 
+    await this.enqueueOrderCancelled(
+      orderId,
+      cancelledBy,
+      previousStatus,
+      sqsReason ?? notes
+    );
+  }
+
+  /**
+   * Claimed forfeit whose ledger did not finish. The order is already
+   * cancelled, so the normal transition cannot run again. Finish the keyed
+   * moves and enqueue order.cancelled (also keyed). Do not touch inventory.
+   */
+  private async resumeNoshowDepositForfeit(order: Orders) {
+    if (this.forfeitResumeReason(order) !== 'customer_no_show_pickup') {
+      return null;
+    }
+    await this.finishForfeitResume(
+      order.id,
+      'customer_no_show_pickup',
+      'business',
+      CLIENT_NO_SHOW_REASON
+    );
+    return this.noshowForfeitResumeResponse(order);
+  }
+
+  private async resumeClientDepositForfeit(order: Orders) {
+    if (this.forfeitResumeReason(order) !== 'customer_cancel_after_lock') {
+      return null;
+    }
+    await this.finishForfeitResume(
+      order.id,
+      'customer_cancel_after_lock',
+      'client'
+    );
+    return {
+      success: true as const,
+      order,
+      message: 'Order cancelled successfully',
+    };
+  }
+
+  private forfeitResumeReason(order: Orders): string | null {
+    if (order.current_status !== 'cancelled') return null;
+    if ((order as any).deposit_status !== 'forfeited') return null;
+    const reason = (order as any).deposit_forfeit_reason;
+    return typeof reason === 'string' && reason.length > 0 ? reason : null;
+  }
+
+  private async finishForfeitResume(
+    orderId: string,
+    reason: DepositForfeitReason,
+    cancelledBy: 'client' | 'business',
+    sqsReason?: string
+  ): Promise<void> {
+    await this.applyDepositForfeit(orderId, reason);
+    await this.enqueueOrderCancelled(
+      orderId,
+      cancelledBy,
+      'ready_for_pickup',
+      sqsReason
+    );
+  }
+
+  private noshowForfeitResumeResponse(order: Orders) {
+    return {
+      success: true as const,
+      order,
+      refund_amount: 0,
+      fee_retained: 0,
+      merchant_share: 0,
+      deposit_forfeit_amount: Number((order as any).deposit_amount) || 0,
+      message: 'Pickup cancelled because the client did not collect it',
+    };
+  }
+
+  private async enqueueOrderCancelled(
+    orderId: string,
+    cancelledBy: 'client' | 'business' | 'system',
+    previousStatus: string,
+    sqsReason?: string
+  ): Promise<void> {
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
         cancelledBy,
-        sqsReason ?? notes,
+        sqsReason,
         previousStatus
       );
     } catch (error: any) {
@@ -11499,23 +11651,42 @@ export class OrdersService {
    * Returns rail, holdPercentage, and holdAmount for reuse in emit logic.
    */
   private async resolveOrderHoldAmount(
-    order: Orders | null
-  ): Promise<{ rail: 'mobile_money' | 'stripe'; holdPercentage: number; holdAmount: number }> {
+    order: Orders | null,
+    agentId?: string
+  ): Promise<{
+    rail: 'mobile_money' | 'stripe';
+    holdPercentage: number;
+    rawHoldAmount: number;
+    holdAmount: number;
+    ceilingApplied: boolean;
+    ceilingXaf: number | null;
+  }> {
     if (!order) {
-      return { rail: 'mobile_money', holdPercentage: 0, holdAmount: 0 };
+      return {
+        rail: 'mobile_money',
+        holdPercentage: 0,
+        rawHoldAmount: 0,
+        holdAmount: 0,
+        ceilingApplied: false,
+        ceilingXaf: null,
+      };
     }
+
     const rail = order.business_id
       ? await this.paymentRoutingService.resolveRailForBusiness(
           order.business_id
         )
       : 'mobile_money';
-    if (rail === 'stripe') {
-      return { rail: 'stripe', holdPercentage: 0, holdAmount: 0 };
-    }
-    const holdPercentage =
-      await this.agentHoldService.getHoldPercentageForAgent();
-    const holdAmount = (order.subtotal * holdPercentage) / 100;
-    return { rail, holdPercentage, holdAmount };
+
+    const resolvedAgentId = agentId || order.assigned_agent_id || null;
+
+    const holdResult = await this.agentHoldService.resolveOrderHoldWithCeiling(
+      order.subtotal,
+      resolvedAgentId,
+      rail
+    );
+
+    return holdResult;
   }
 
   /**
@@ -11600,7 +11771,12 @@ export class OrdersService {
 
   private createClaimAvailabilityFailure(
     holdAmount: number,
-    message: string
+    message: string,
+    holdPercentage = 0,
+    rawHoldAmount = 0,
+    ceilingApplied = false,
+    ceilingXaf: number | null = null,
+    availableBalance = 0
   ): ClaimAvailabilityResponse {
     return {
       success: true,
@@ -11609,6 +11785,12 @@ export class OrdersService {
       needsTopUpToClaim: false,
       holdAmount,
       message,
+      holdPercentage,
+      rawHoldAmount,
+      ceilingApplied,
+      ceilingXaf,
+      availableBalance,
+      shortfallXaf: Math.max(0, holdAmount - availableBalance),
     };
   }
 

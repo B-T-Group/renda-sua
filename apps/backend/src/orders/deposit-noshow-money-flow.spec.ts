@@ -356,6 +356,91 @@ describe('Reservation deposit money flow (service level)', () => {
     expect(allTxns.filter((t) => t.transaction_type === 'payment')).toHaveLength(0);
     expect(h.db.account('acct-hq').available_balance).toBe(0);
     expect(h.db.account('acct-client').withheld_balance).toBe(DEPOSIT);
+    expect(h.sendOrderCancelledMessage).not.toHaveBeenCalled();
+  });
+
+  it('(c) retrying the no-show finishes the claimed forfeit and enqueues cancel once', async () => {
+    await seedHeldDepositOrder(h);
+    const ledger = (h.service as any).depositLedgerService as DepositLedgerService;
+    jest.spyOn(ledger, 'forfeitDepositToHq').mockRejectedValueOnce(new Error('hq down'));
+    const releaseStock = jest.spyOn(h.service as any, 'updateReservedQuantities');
+
+    await expect(cancel(h)).rejects.toMatchObject({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+    });
+
+    const result = await cancel(h);
+
+    expect(result).toMatchObject({
+      success: true,
+      refund_amount: 0,
+      fee_retained: 0,
+      deposit_forfeit_amount: DEPOSIT,
+    });
+    expect(depositRows(h)).toEqual([
+      'acct-client:deposit:500',
+      'acct-client:hold:500',
+      'acct-client:release:500',
+      'acct-client:payment:500',
+      'acct-hq:deposit:500',
+    ]);
+    expect(h.db.account('acct-client')).toMatchObject({
+      available_balance: 0,
+      withheld_balance: 0,
+    });
+    expect(h.db.account('acct-hq').available_balance).toBe(DEPOSIT);
+    expect(h.sendOrderCancelledMessage).toHaveBeenCalledTimes(1);
+    expect(h.sendOrderCancelledMessage).toHaveBeenCalledWith(
+      ORDER_ID,
+      'business',
+      'client_no_show',
+      'ready_for_pickup'
+    );
+    expect(releaseStock).toHaveBeenCalledTimes(1);
+  });
+
+  it('(c) a client retry finishes an after-lock forfeit without releasing stock again', async () => {
+    await seedHeldDepositOrder(h, {
+      current_status: 'cancelled',
+      deposit_status: 'forfeited',
+      deposit_forfeit_reason: 'customer_cancel_after_lock',
+    });
+    (h.service as any).hasuraUserService = {
+      getUser: async () => ({ id: 'client-user', active_persona: 'client' }),
+    };
+    const releaseStock = jest.spyOn(h.service as any, 'updateReservedQuantities');
+
+    const result = await h.service.cancelOrder({
+      orderId: ORDER_ID,
+      cancellationReasonId: 1,
+    });
+
+    expect(result.success).toBe(true);
+    expect(h.db.account('acct-hq').available_balance).toBe(DEPOSIT);
+    expect(h.db.account('acct-client').withheld_balance).toBe(0);
+    expect(h.sendOrderCancelledMessage).toHaveBeenCalledWith(
+      ORDER_ID,
+      'client',
+      undefined,
+      'ready_for_pickup'
+    );
+    expect(releaseStock).not.toHaveBeenCalled();
+  });
+
+  it('(c) a cancelled refunded deposit is not forfeited by a no-show retry', async () => {
+    await seedHeldDepositOrder(h, {
+      current_status: 'cancelled',
+      deposit_status: 'refunded',
+      deposit_forfeit_reason: null,
+    });
+    const before = h.db.snapshot();
+
+    await expect(cancel(h)).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+    });
+
+    expect(h.db.snapshot()).toBe(before);
+    expect(h.sendOrderCancelledMessage).not.toHaveBeenCalled();
   });
 
   it('(c) idempotent resume of incomplete forfeit completes the ledger', async () => {

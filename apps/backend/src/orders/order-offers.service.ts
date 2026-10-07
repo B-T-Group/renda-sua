@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { haversineDistanceKm } from '../common/agent-proximity.util';
+import { AgentHoldService } from '../agents/agent-hold.service';
 import { CommissionsService } from '../commissions/commissions.service';
 import type { Configuration } from '../config/configuration';
 import { EligibleAgentsQueryService } from '../delivery-availability/eligible-agents-query.service';
@@ -8,6 +9,7 @@ import { DeliveryConfigService } from '../delivery-configs/delivery-configs.serv
 import { normalizeDeliveryCountryCode } from './delivery-pricing.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
 
 /** Final "round" value used to signal the exhaustion check rather than a real dispatch round. */
@@ -97,6 +99,14 @@ export interface OfferDetailsResponse {
       city: string | null;
       state: string | null;
     };
+    holdPercentage: number;
+    rawHoldAmount: number;
+    holdAmount: number;
+    ceilingApplied: boolean;
+    ceilingXaf: number | null;
+    availableBalance: number;
+    shortfallXaf: number;
+    needsTopUp: boolean;
   } | null;
 }
 
@@ -111,7 +121,9 @@ export class OrderOffersService {
     private readonly configService: ConfigService<Configuration>,
     private readonly eligibleAgentsQueryService: EligibleAgentsQueryService,
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
-    private readonly deliveryConfigService: DeliveryConfigService
+    private readonly deliveryConfigService: DeliveryConfigService,
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly agentHoldService: AgentHoldService
   ) {}
 
   private get ttlSeconds(): number {
@@ -538,6 +550,8 @@ export class OrderOffersService {
             order_number
             current_status
             assigned_agent_id
+            subtotal
+            business_id
             business {
               name
             }
@@ -565,7 +579,7 @@ export class OrderOffersService {
       orderId,
       agentId,
     });
-    return this.mapOfferRow(result?.order_offers?.[0]);
+    return this.mapOfferRow(result?.order_offers?.[0], agentId);
   }
 
   /**
@@ -599,6 +613,8 @@ export class OrderOffersService {
             order_number
             current_status
             assigned_agent_id
+            subtotal
+            business_id
             business {
               name
             }
@@ -626,11 +642,14 @@ export class OrderOffersService {
       agentId,
       now: new Date().toISOString(),
     });
-    return this.mapOfferRow(result?.order_offers?.[0]);
+    return this.mapOfferRow(result?.order_offers?.[0], agentId);
   }
 
   /** Map a raw order_offers row (with joined order) to the offer payload. */
-  private mapOfferRow(row: OfferRow | undefined): OfferDetailsResponse {
+  private async mapOfferRow(
+    row: OfferRow | undefined,
+    agentId: string
+  ): Promise<OfferDetailsResponse> {
     if (!row || !row.order) {
       return { success: true, active: false, offer: null };
     }
@@ -649,6 +668,49 @@ export class OrderOffersService {
       pickupAddr,
       dropoffAddr
     );
+
+    const subtotal = (order as any).subtotal || 0;
+    const businessId = (order as any).business_id || null;
+    const rail = businessId
+      ? await this.paymentRoutingService.resolveRailForBusiness(businessId)
+      : 'mobile_money';
+
+    const holdResult = await this.agentHoldService.resolveOrderHoldWithCeiling(
+      subtotal,
+      agentId,
+      rail
+    );
+
+    const agentUserQuery = `
+      query GetAgentUser($agentId: uuid!) {
+        agents_by_pk(id: $agentId) {
+          user_id
+        }
+      }
+    `;
+    const agentUserResult = await this.hasuraSystemService.executeQuery(
+      agentUserQuery,
+      { agentId }
+    );
+    const userId = agentUserResult?.agents_by_pk?.user_id;
+
+    let availableBalance = 0;
+    if (userId && row.currency) {
+      try {
+        const account = await this.hasuraSystemService.getAccount(
+          userId,
+          row.currency
+        );
+        availableBalance = Number(account?.available_balance ?? 0);
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to fetch account for user ${userId}, currency ${row.currency}: ${error?.message}`
+        );
+      }
+    }
+
+    const shortfallXaf = Math.max(0, holdResult.holdAmount - availableBalance);
+    const needsTopUp = shortfallXaf > 0;
 
     return {
       success: true,
@@ -675,6 +737,14 @@ export class OrderOffersService {
           city: dropoffAddr?.city ?? null,
           state: dropoffAddr?.state ?? null,
         },
+        holdPercentage: holdResult.holdPercentage,
+        rawHoldAmount: holdResult.rawHoldAmount,
+        holdAmount: holdResult.holdAmount,
+        ceilingApplied: holdResult.ceilingApplied,
+        ceilingXaf: holdResult.ceilingXaf,
+        availableBalance,
+        shortfallXaf,
+        needsTopUp,
       },
     };
   }

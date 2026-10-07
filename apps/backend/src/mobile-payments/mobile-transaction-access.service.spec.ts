@@ -71,3 +71,30 @@ describe('MobileTransactionAccessService.canView', () => {
     expect(hasPermission).not.toHaveBeenCalled();
   });
 });
+
+describe('MobileTransactionAccessService.canAdminister', () => {
+  let hasPermission: jest.Mock;
+  let service: MobileTransactionAccessService;
+
+  beforeEach(() => {
+    hasPermission = jest.fn().mockResolvedValue(false);
+    service = new MobileTransactionAccessService(
+      { executeQuery: jest.fn() } as never,
+      { hasPermission } as never
+    );
+  });
+
+  it('denies a request without a user id', async () => {
+    await expect(service.canAdminister(undefined)).resolves.toBe(false);
+    expect(hasPermission).not.toHaveBeenCalled();
+  });
+
+  it('allows a user with the mobile payments permission', async () => {
+    hasPermission.mockResolvedValue(true);
+    await expect(service.canAdminister('admin-1')).resolves.toBe(true);
+    expect(hasPermission).toHaveBeenCalledWith(
+      'admin-1',
+      PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS
+    );
+  });
+});
