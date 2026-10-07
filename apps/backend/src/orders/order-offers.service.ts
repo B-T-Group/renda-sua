@@ -116,14 +116,14 @@ export class OrderOffersService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly agentHoldService: AgentHoldService,
     private readonly commissionsService: CommissionsService,
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
     private readonly eligibleAgentsQueryService: EligibleAgentsQueryService,
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly deliveryConfigService: DeliveryConfigService,
-    private readonly paymentRoutingService: PaymentRoutingService
+    private readonly paymentRoutingService: PaymentRoutingService,
+    private readonly agentHoldService: AgentHoldService
   ) {}
 
   private get ttlSeconds(): number {
@@ -692,7 +692,7 @@ export class OrderOffersService {
       agentUserQuery,
       { agentId }
     );
-    const userId = agentUserResult.agents_by_pk?.user_id;
+    const userId = agentUserResult?.agents_by_pk?.user_id;
 
     let availableBalance = 0;
     if (userId && row.currency) {

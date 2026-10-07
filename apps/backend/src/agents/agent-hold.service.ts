@@ -159,6 +159,7 @@ export class AgentHoldService {
               "agent_hold_ceiling_min_clean_deliveries",
               "agent_hold_loss_weekly_cap_xaf"
             ]}
+            country_code: { _is_null: true }
           }
         ) {
           config_key
@@ -189,9 +190,12 @@ export class AgentHoldService {
    * Eligibility requires ALL of:
    * - is_verified=true
    * - is_internal=false
-   * - >= N PIN-confirmed completed deliveries (orders.status=completed AND delivery_pin_verified=true AND deliveryMethod=agent_delivery)
+   * - >= N PIN-confirmed completed deliveries (orders.current_status=complete AND
+   *   delivery_pin_hash IS NOT NULL AND delivery_overwrite_code_used_at IS NULL,
+   *   i.e. completed via the customer PIN, not the business overwrite code)
    * - zero failed_deliveries with resolution_type='agent_fault' (all-time)
-   * - agent in pilot city (from profile primary address city, normalized)
+   * - agent in pilot city: city of the agent's active primary address
+   *   (agent_addresses -> addresses.is_primary), case/accent/whitespace-insensitive
    */
   async isAgentEligibleForCeiling(
     agentId: string,
@@ -202,13 +206,17 @@ export class AgentHoldService {
     }
 
     const query = `
-      query CheckAgentEligibility($agentId: uuid!, $pilotCity: String, $minDeliveries: Int!) {
+      query CheckAgentEligibility($agentId: uuid!) {
         agents_by_pk(id: $agentId) {
           is_verified
           is_internal
-          user {
-            id
-            primary_address {
+          primary_addresses: agent_addresses(
+            where: {
+              address: { is_primary: { _eq: true }, status: { _eq: active } }
+            }
+            limit: 1
+          ) {
+            address {
               city
             }
           }
@@ -216,9 +224,9 @@ export class AgentHoldService {
         completed_deliveries: orders_aggregate(
           where: {
             assigned_agent_id: { _eq: $agentId }
-            current_status: { _eq: "completed" }
-            delivery_pin_verified: { _eq: true }
-            deliveryMethod: { _eq: "agent_delivery" }
+            current_status: { _eq: complete }
+            delivery_pin_hash: { _is_null: false }
+            delivery_overwrite_code_used_at: { _is_null: true }
           }
         ) {
           aggregate {
@@ -227,7 +235,7 @@ export class AgentHoldService {
         }
         agent_faults: failed_deliveries_aggregate(
           where: {
-            resolution_type: { _eq: "agent_fault" }
+            resolution_type: { _eq: agent_fault }
             order: { assigned_agent_id: { _eq: $agentId } }
           }
         ) {
@@ -240,8 +248,6 @@ export class AgentHoldService {
 
     const response = await this.hasuraSystemService.executeQuery(query, {
       agentId,
-      pilotCity: ceilingConfig.pilotCity,
-      minDeliveries: ceilingConfig.minCleanDeliveries,
     });
 
     const agent = response.agents_by_pk;
@@ -264,7 +270,7 @@ export class AgentHoldService {
     }
 
     if (ceilingConfig.pilotCity) {
-      const agentCity = agent.user?.primary_address?.city;
+      const agentCity = agent.primary_addresses?.[0]?.address?.city;
       if (!agentCity) {
         return false;
       }
@@ -325,7 +331,7 @@ export class AgentHoldService {
       this.logger.warn('No agentId provided to resolveOrderHoldWithCeiling, using unverified hold %');
       const config = await this.getHoldPercentageConfigs();
       const holdPercentage = config.unverifiedAgentHoldPercentage;
-      const rawHoldAmount = Math.round((subtotal * holdPercentage) / 100);
+      const rawHoldAmount = (subtotal * holdPercentage) / 100;
       return {
         rail,
         holdPercentage,
@@ -341,7 +347,7 @@ export class AgentHoldService {
       this.logger.warn(`Agent not found: ${agentId}, using unverified hold %`);
       const config = await this.getHoldPercentageConfigs();
       const holdPercentage = config.unverifiedAgentHoldPercentage;
-      const rawHoldAmount = Math.round((subtotal * holdPercentage) / 100);
+      const rawHoldAmount = (subtotal * holdPercentage) / 100;
       return {
         rail,
         holdPercentage,
@@ -354,7 +360,7 @@ export class AgentHoldService {
 
     const config = await this.getHoldPercentageConfigs();
     const holdPercentage = this.getHoldPercentageFromConfig(agent, config);
-    const rawHoldAmount = Math.round((subtotal * holdPercentage) / 100);
+    const rawHoldAmount = (subtotal * holdPercentage) / 100;
 
     if (agent.is_internal) {
       return {
@@ -512,6 +518,7 @@ export class AgentHoldService {
           update_application_configurations(
             where: {
               config_key: { _eq: "agent_hold_ceiling_enabled" }
+              boolean_value: { _eq: true }
             }
             _set: { boolean_value: false }
           ) {

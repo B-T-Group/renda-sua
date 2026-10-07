@@ -7645,7 +7645,7 @@ export class OrdersService {
     // Transform orders for agents to show commission amounts
     const commissionConfig =
       await this.commissionsService.getCommissionConfigs();
-    const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent();
+    const holdPercentage = await this.agentHoldService.getHoldPercentageForAgent(agent.id);
     const transformedOrders = this.transformOrdersForAgentSync(
       filteredOrders,
       agent.is_verified || false,
