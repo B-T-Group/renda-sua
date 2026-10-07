@@ -41,6 +41,8 @@ import {
   emitAuthSiteEvent,
   serverAuthViewer,
 } from './auth-site-events.helper';
+import { LockoutService } from './lockout.service';
+import { buildIdentifierLockoutKey } from './auth-lockout.util';
 import {
   buildOtpIdentifier,
   normalizeOtpDestination,
@@ -186,6 +188,7 @@ export class SignupService {
     private readonly referralProvisioning: ReferralProvisioningService,
     private readonly metaConversionsService: MetaConversionsService,
     private readonly otpSendLimiter: OtpSendLimiterService,
+    private readonly lockout: LockoutService,
     @Optional() private readonly campaigns?: CreditCampaignPublisher,
     @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
@@ -248,6 +251,20 @@ export class SignupService {
       phoneNumber || null
     );
     const identifier = buildOtpIdentifier({ email, phone: phoneNumber });
+    const lockoutKey = buildIdentifierLockoutKey({ email, phone: phoneNumber });
+    
+    if (await this.lockout.isLockedOut(lockoutKey)) {
+      const remainingMs = await this.lockout.getRemainingLockoutMs(lockoutKey);
+      const remainingMin = Math.ceil(remainingMs / 60000);
+      throw new HttpException(
+        {
+          success: false,
+          error: `Too many failed attempts. Try again in ${remainingMin} minute(s).`,
+        },
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
+    
     await this.otpSendLimiter.assertCanSend({
       destination,
       identifier,
@@ -501,6 +518,13 @@ export class SignupService {
     }
     const attempt = await this.loadAttempt(input.flowId);
     if (attempt.status === 'completed' && attempt.completion_result?.user?.id) {
+      // Reject reuse of already-finished flowIds
+      if (attempt.completion_result.tokens == null) {
+        throw new HttpException(
+          { success: false, error: 'This signup has already been completed.' },
+          HttpStatus.CONFLICT
+        );
+      }
       return this.replayFinishedSignup(attempt, input.flowId, platform);
     }
     this.assertAttemptFinishable(attempt);
@@ -1021,6 +1045,17 @@ export class SignupService {
         { context: 'signup', attempts: MAX_VERIFY_ATTEMPTS },
         serverAuthViewer()
       );
+      
+      // Record lockout for identifier-only flows (empty payload)
+      const isIdentifierOnly = !attempt.payload.first_name && !attempt.payload.last_name;
+      if (isIdentifierOnly && (attempt.email || attempt.phone_number)) {
+        const lockoutKey = buildIdentifierLockoutKey({
+          email: attempt.email,
+          phone: attempt.phone_number,
+        });
+        void this.lockout.recordFailure(lockoutKey);
+      }
+      
       throw new HttpException(
         {
           success: false,

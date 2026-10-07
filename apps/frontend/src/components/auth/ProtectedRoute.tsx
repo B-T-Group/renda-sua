@@ -1,6 +1,8 @@
 import { Lock } from '@mui/icons-material';
-import { Box, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import React from 'react';
+import { useAuth0 } from '@auth0/auth0-react';
+import { useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import LoadingPage from '../common/LoadingPage';
 import EmailVerificationPage from '../pages/EmailVerificationPage';
@@ -11,12 +13,51 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, isSessionReady, isLoading, user } = useSessionAuth();
+  const { loginWithRedirect } = useAuth0();
+  const location = useLocation();
 
   if (isLoading || !isSessionReady) {
     return <LoadingPage message="Authenticating" />;
   }
 
   if (!isAuthenticated) {
+    const isAdminRoute = location.pathname.startsWith('/admin') ||
+      location.pathname.startsWith('/business/dashboard/admin');
+
+    if (isAdminRoute) {
+      return (
+        <Box
+          display="flex"
+          flexDirection="column"
+          justifyContent="center"
+          alignItems="center"
+          minHeight="50vh"
+          gap={2}
+        >
+          <Lock color="action" sx={{ fontSize: 64 }} />
+          <Typography variant="h5" component="h2" gutterBottom>
+            Sign In Required
+          </Typography>
+          <Typography variant="body1" color="text.secondary" textAlign="center">
+            You need to sign in to access this admin page.
+          </Typography>
+          <Button
+            variant="contained"
+            size="large"
+            onClick={() =>
+              void loginWithRedirect({
+                appState: {
+                  returnTo: location.pathname,
+                },
+              })
+            }
+          >
+            Sign In
+          </Button>
+        </Box>
+      );
+    }
+
     return (
       <Box
         display="flex"

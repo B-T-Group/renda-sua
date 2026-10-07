@@ -100,6 +100,7 @@ export function useAuthFunnelTracking(context: string) {
 
   return {
     flagOn,
+    trackSiteEvent,
     trackAuthGateShown,
     trackAuthGateDismissed,
     trackAuthLocked,

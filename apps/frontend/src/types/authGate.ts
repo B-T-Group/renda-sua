@@ -16,7 +16,6 @@ export type AuthGateStep =
   | 'identifier'
   | 'code'
   | 'finish'
-  | 'password'
   | 'locked';
 
 export type AuthGateAuthSuccessMeta = {
