@@ -304,7 +304,15 @@ function EmptyState({
       </Text>
       <View style={styles.chips}>
         {chips.map((chip) => {
-          const label = t(chip.translationKey, chip.fallback);
+          // Build interpolation variables from context
+          let interpolation = {};
+          if (context?.type === 'item_detail' && context.itemName) {
+            interpolation = { name: context.itemName };
+          } else if (context?.type === 'delivery_tracking' && context.orderNumber) {
+            interpolation = { orderNumber: context.orderNumber };
+          }
+          
+          const label = t(chip.translationKey, { defaultValue: chip.fallback, ...interpolation });
           const message = buildChipMessage(chip, label, context);
           return (
             <Pressable
