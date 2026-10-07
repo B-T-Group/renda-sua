@@ -103,14 +103,30 @@ function InlineRuns({ inlines }: { inlines: Inline[] }) {
       metadata: { url },
     });
 
-    // Try in-app navigation for known routes
+    // Try in-app navigation for relative paths
     if (url.startsWith('/')) {
       navigate(url);
       return;
     }
 
-    // External URLs open in new tab
+    // Check if absolute URL is same-origin (or *.rendasua.com)
     if (url.startsWith('http://') || url.startsWith('https://')) {
+      try {
+        const urlObj = new URL(url);
+        const currentOrigin = window.location.origin;
+        const isSameOrigin = urlObj.origin === currentOrigin;
+        const isRendasuaDomain = urlObj.hostname.endsWith('.rendasua.com') || urlObj.hostname === 'rendasua.com';
+        
+        if (isSameOrigin || isRendasuaDomain) {
+          // Same origin or Rendasua domain - navigate in-app to pathname + search
+          navigate(urlObj.pathname + urlObj.search);
+          return;
+        }
+      } catch {
+        // Invalid URL - fall through to external open
+      }
+      
+      // External URLs open in new tab
       window.open(url, '_blank', 'noopener,noreferrer');
       return;
     }

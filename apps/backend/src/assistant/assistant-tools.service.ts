@@ -279,15 +279,13 @@ export class AssistantToolsService {
         .filter((s: { kind: string }) => s.kind === 'category')
         .slice(0, 3) as Array<{ kind: 'category'; value: string }>;
 
-      const baseUrl =
-        process.env.FRONTEND_URL || 'https://rendasua.com';
-
       const formatted = [];
       
       if (products.length > 0) {
         formatted.push('**Products:**');
         for (const p of products) {
-          const itemLink = `${baseUrl}/items/${p.inventoryId}`;
+          // Emit relative path for in-app navigation
+          const itemLink = `/items/${p.inventoryId}`;
           const price = p.price && p.currency ? ` - ${p.price} ${p.currency}` : '';
           const availability = p.available === false ? ' (currently unavailable)' : '';
           formatted.push(`- [${p.title}](${itemLink})${price}${availability}`);
@@ -297,12 +295,13 @@ export class AssistantToolsService {
       if (categories.length > 0) {
         formatted.push('\n**Categories:**');
         for (const c of categories) {
-          const catLink = `${baseUrl}/items?search=${encodeURIComponent(c.value)}`;
+          // Emit relative path for in-app navigation
+          const catLink = `/items?search=${encodeURIComponent(c.value)}`;
           formatted.push(`- [${c.value}](${catLink})`);
         }
       }
 
-      const searchLink = `${baseUrl}/items?search=${encodeURIComponent(query)}`;
+      const searchLink = `/items?search=${encodeURIComponent(query)}`;
       formatted.push(`\n[View all results for "${query}"](${searchLink})`);
 
       return { content: formatted.join('\n') };
@@ -348,7 +347,6 @@ export class AssistantToolsService {
       };
     }
 
-    const baseUrl = process.env.FRONTEND_URL || 'https://rendasua.com';
     const formatted = ['**Recent orders you can reorder:**\n'];
 
     for (const order of orders.slice(0, 5)) {
@@ -357,7 +355,8 @@ export class AssistantToolsService {
         { year: 'numeric', month: 'short', day: 'numeric' }
       );
       const amount = `${order.total_amount} ${order.currency}`;
-      const reorderLink = `${baseUrl}/orders/${order.id}/reorder`;
+      // Emit relative path for in-app navigation
+      const reorderLink = `/orders/${order.id}/reorder`;
       formatted.push(
         `- **${order.business.name}** (${date}) - ${amount} [Reorder](${reorderLink})`
       );

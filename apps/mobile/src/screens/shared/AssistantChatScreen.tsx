@@ -33,6 +33,11 @@ import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher
 import type { AssistantContext } from '@/utils/assistantChips';
 import { getContextualChips, buildChipMessage } from '@/utils/assistantChips';
 import { trackSiteEvent } from '@/services/AppEventsService';
+import { useReorderOrder } from '@/hooks/useReorderOrder';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { ClientRootStackParamList } from '@/navigation/types';
+import { reorderNavigator } from '@/utils/reorderNavigator';
 
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
 /** AC9: the composer grows with the text up to 4 rows, then scrolls. */
@@ -158,9 +163,10 @@ interface MessageBubbleProps {
   isUser: boolean;
   showOrb: boolean;
   character: boolean;
+  onLinkPress?: (url: string) => boolean;
 }
 
-function MessageBubble({ item, isUser, showOrb, character }: MessageBubbleProps) {
+function MessageBubble({ item, isUser, showOrb, character, onLinkPress }: MessageBubbleProps) {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const duration = motionDuration('normal', reduceMotion);
@@ -225,6 +231,7 @@ function MessageBubble({ item, isUser, showOrb, character }: MessageBubbleProps)
             content={item.content}
             color={colors.text.primary}
             style={styles.bubbleText}
+            onLinkPress={onLinkPress}
           />
         )}
       </View>
@@ -331,6 +338,8 @@ type AssistantChatScreenProps = {
   };
 };
 
+type Nav = NativeStackNavigationProp<ClientRootStackParamList>;
+
 const AssistantChatScreen = observer(function AssistantChatScreen({
   route,
 }: AssistantChatScreenProps) {
@@ -341,12 +350,16 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   const store = useStore();
   const { assistant } = store;
   const { assistantCharacter } = store;
+  const { cart } = store;
   const listRef = useRef<FlatList<AssistantMessage>>(null);
   const [draft, setDraft] = useState('');
   const [composerFocused, setComposerFocused] = useState(false);
   const character = useShowsRendaCharacter();
   const assistantTransport = useAssistantTransport();
   const context = route?.params?.context;
+  const navigation = useNavigation<Nav>();
+  const { reorder } = useReorderOrder();
+  const [reorderSnack, setReorderSnack] = useState<string | null>(null);
 
   // Hero: Attentive while the composer is focused, Listening once it has text.
   useEffect(() => {
@@ -373,6 +386,63 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
     [assistant, draft, assistantTransport]
   );
 
+  // Handle reorder links from assistant messages
+  const handleReorderLink = useCallback(
+    async (url: string) => {
+      const reorderMatch = url.match(/\/orders\/([^/?]+)\/reorder/);
+      if (!reorderMatch) return false;
+
+      const orderId = reorderMatch[1];
+      try {
+        const payload = await reorder(orderId, false);
+        
+        if (payload.lines.length === 0) {
+          setReorderSnack(t('orders.reorder.unavailable', 'These items are not available to order again.'));
+          return true;
+        }
+
+        // Replace cart lines and navigate to cart/checkout
+        const lines = payload.lines.map((line) => ({
+          businessId: payload.business_id,
+          inventoryId: line.inventory_id,
+          variantId: line.variant_id ?? undefined,
+          quantity: line.quantity,
+        }));
+        cart.replaceLines(lines);
+
+        const stack = reorderNavigator(navigation);
+        if (payload.navigation_hint === 'checkout') {
+          stack.navigate('CartCheckout', {
+            deliveryAddressId: payload.fulfillment.address_id ?? undefined,
+            fulfillmentMethod: payload.fulfillment.type,
+          });
+        } else {
+          let banner: 'business_closed' | 'address_invalid' | undefined;
+          if (!payload.fulfillment.business_accepting_orders) {
+            banner = 'business_closed';
+          } else if (!payload.fulfillment.address_valid) {
+            banner = 'address_invalid';
+          }
+          stack.navigate('Cart', banner ? { reorderBanner: banner } : undefined);
+        }
+
+        if (payload.skipped.length > 0) {
+          const names = payload.skipped.map((s) => s.name).slice(0, 3).join(', ');
+          setReorderSnack(t('orders.reorder.skippedToast', 'Unavailable: {{names}}', { names }));
+        }
+        
+        return true;
+      } catch (error: unknown) {
+        const msg = error instanceof Error
+          ? error.message
+          : t('orders.reorder.failed', 'Could not reorder. Try again.');
+        setReorderSnack(msg);
+        return true;
+      }
+    },
+    [reorder, cart, navigation, t]
+  );
+
   const renderItem = useCallback(
     ({ item, index }: { item: AssistantMessage; index: number }) => {
       const prevMsg = index > 0 ? assistant.messages[index - 1] : null;
@@ -388,11 +458,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
             isUser={item.role === 'user'}
             showOrb={showOrb}
             character={character}
+            onLinkPress={handleReorderLink}
           />
         </View>
       );
     },
-    [assistant.messages, character]
+    [assistant.messages, character, handleReorderLink]
   );
 
   const onRetry = useCallback(() => {
