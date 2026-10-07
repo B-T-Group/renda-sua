@@ -134,8 +134,9 @@ describe('AssistantToolsService', () => {
       locale: 'en',
     });
 
-    expect(result.content).toContain('https://test.rendasua.com/items/inv-123');
+    expect(result.content).toContain('/items/inv-123');
     expect(result.content).not.toContain('/inventory/');
+    expect(result.content).not.toContain('https://'); // Should emit relative paths
     delete process.env.FRONTEND_URL;
   });
 
@@ -158,8 +159,9 @@ describe('AssistantToolsService', () => {
       locale: 'en',
     });
 
-    expect(result.content).toContain('https://test.rendasua.com/items?search=phone%20case');
+    expect(result.content).toContain('/items?search=phone%20case');
     expect(result.content).not.toContain('/shop?q=');
+    expect(result.content).not.toContain('https://'); // Should emit relative paths
     delete process.env.FRONTEND_URL;
   });
 
@@ -182,7 +184,7 @@ describe('AssistantToolsService', () => {
       locale: 'en',
     });
 
-    expect(result.content).toContain('https://rendasua.com/items/inv-123');
+    expect(result.content).toContain('/items/inv-123'); // Should emit relative paths
   });
 
   it('search_catalog shows availability when provided', async () => {
@@ -366,7 +368,7 @@ describe('AssistantToolsService', () => {
       expect(result.content).toContain('Recent orders you can reorder');
       expect(result.content).toContain('Test Store');
       expect(result.content).toContain('15000 XAF');
-      expect(result.content).toContain('https://test.rendasua.com/orders/order-123/reorder');
+      expect(result.content).toContain('/orders/order-123/reorder'); // Should emit relative paths
       expect(result.content).toContain('[Reorder]');
       expect(result.content).toContain('Another Store');
       expect(result.content).toContain('25000 XAF');
