@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { DepositCalculationService } from './deposit-calculation.service';
-import { DepositLedgerService } from './deposit-ledger.service';
+import { DepositLedgerService, depositLedgerKey } from './deposit-ledger.service';
 
 /**
  * Deposit forfeit reason codes (immutable audit trail)
@@ -282,8 +282,7 @@ export class DepositRefundService {
       // A racing forfeit may have succeeded while this one was pending, and the
       // duplicate-key / unique-constraint error from the idempotency insert means
       // the leg is already posted. Re-read the legs to confirm completeness.
-      const isComplete = await this.isLedgerComplete(
-        clientAccountId,
+      const isComplete = await this.isForfeitLedgerComplete(
         order.deposit_mobile_payment_transaction_id
       );
       if (isComplete) {
@@ -310,39 +309,37 @@ export class DepositRefundService {
   }
 
   /**
-   * Check if all forfeit ledger legs exist: release, payment (client debit), and HQ credit.
-   * Used to detect a concurrent forfeit that succeeded while this one was pending.
+   * True only when all three keyed forfeit legs exist: client release, client
+   * payment (debit) and the HQ credit (forfeit_hq). Read by idempotency key,
+   * which is unique per leg, so a concurrent forfeit that posted a leg (and made
+   * this call hit a duplicate key) is recognised, while a half-done ledger is not.
    */
-  private async isLedgerComplete(
-    clientAccountId: string,
+  private async isForfeitLedgerComplete(
     depositTransactionId: string
   ): Promise<boolean> {
+    const keys = (['release', 'payment', 'forfeit_hq'] as const).map((m) =>
+      depositLedgerKey(depositTransactionId, m)
+    );
     try {
       const legs = await this.hasuraSystemService.executeQuery<{
-        account_transactions: Array<{ transaction_type: string }>;
+        account_transactions: Array<{ idempotency_key: string | null }>;
       }>(
         `
-        query GetForfeitLegs($accountId: uuid!, $referenceId: String!) {
-          account_transactions(
-            where: {
-              account_id: { _eq: $accountId }
-              reference_id: { _eq: $referenceId }
-              transaction_type: { _in: [release, payment] }
-            }
-          ) {
-            transaction_type
+        query GetForfeitLegs($keys: [String!]!) {
+          account_transactions(where: { idempotency_key: { _in: $keys } }) {
+            idempotency_key
           }
         }
         `,
-        { accountId: clientAccountId, referenceId: depositTransactionId }
+        { keys }
       );
-      const types = new Set(
-        legs.account_transactions.map((t) => t.transaction_type)
+      const found = new Set(
+        (legs?.account_transactions ?? []).map((t) => t.idempotency_key)
       );
-      return types.has('release') && types.has('payment');
+      return keys.every((k) => found.has(k));
     } catch (error: any) {
       this.logger.error(
-        `Failed to check ledger completeness: ${error?.message}`
+        `Failed to check forfeit ledger completeness: ${error?.message}`
       );
       return false;
     }

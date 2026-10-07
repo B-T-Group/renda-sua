@@ -6778,68 +6778,6 @@ export class OrdersService {
     return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
 
-  /**
-   * Compare-and-set order cancel: atomically update to cancelled only if
-   * current_status is in eligibleFromStatuses. Returns true if exactly one row
-   * was updated (this caller won the race), false otherwise (order already moved).
-   */
-  private async casCancelOrder(
-    orderId: string,
-    eligibleFromStatuses: string[]
-  ): Promise<boolean> {
-    const result = await this.hasuraSystemService.executeMutation<{
-      update_orders: { affected_rows: number } | null;
-    }>(
-      `
-      mutation CasCancelOrder(
-        $orderId: uuid!
-        $eligibleFromStatuses: [order_status!]!
-        $now: timestamptz!
-      ) {
-        update_orders(
-          where: {
-            id: { _eq: $orderId }
-            current_status: { _in: $eligibleFromStatuses }
-          }
-          _set: {
-            current_status: cancelled
-            updated_at: $now
-          }
-        ) { affected_rows }
-      }
-      `,
-      {
-        orderId,
-        eligibleFromStatuses,
-        now: new Date().toISOString(),
-      }
-    );
-    return (result?.update_orders?.affected_rows ?? 0) === 1;
-  }
-
-  /**
-   * Compute cancellable statuses for a business-owned order cancel.
-   */
-  private businessCancellableStatuses(order: Orders): string[] {
-    const early = [
-      'pending_payment',
-      'pending',
-      'confirmed',
-      'preparing',
-      'ready_for_pickup',
-      'assigned_to_agent',
-    ];
-    const cookedFoodPayAfter = (order as any).pay_after_merchant_confirm === true &&
-      isCookedFoodOrderSnapshot(order as any);
-    if (cookedFoodPayAfter) {
-      const payment = ((order as any).payment_status || '').toLowerCase();
-      if (payment === 'paid' || payment === 'authorized') {
-        return early.filter(s => !['confirmed', 'preparing', 'ready_for_pickup'].includes(s));
-      }
-    }
-    return early;
-  }
-
   private async finishNoshowCancel(
     order: Orders,
     request: { orderId: string; notes?: string },
@@ -7008,28 +6946,20 @@ export class OrdersService {
 
     const previousStatus = order.current_status;
 
-    await this.releaseStripeAuthorizationIfNeeded(order);
-
-    // Compare-and-set: atomically transition to cancelled from the expected status.
-    // Only one concurrent request will succeed; losers get 409 with no side effects.
-    const eligibleStatuses = isBusinessOwner
-      ? this.businessCancellableStatuses(order)
-      : clientCancellableStatuses;
-    const casSuccess = await this.casCancelOrder(
+    // Compare-and-set (#498): the conditional update only matches the status
+    // validated above, and cancelled → cancelled is refused. A concurrent loser
+    // gets 409 here, before any write, event, stock release, ledger move,
+    // Stripe release or notification. The winner emits order.status.updated
+    // (notifications) exactly once.
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
-      eligibleStatuses
+      'cancelled',
+      actor,
+      { viaCancelEndpoint: true, expectedFromStatus: previousStatus }
     );
-    if (!casSuccess) {
-      throw new HttpException(
-        'Order status has changed. The order may have already been cancelled or progressed to a non-cancellable state.',
-        HttpStatus.CONFLICT
-      );
-    }
 
-    const updatedOrder = {
-      id: request.orderId,
-      current_status: 'cancelled' as const,
-    };
+    // Only the CAS winner releases the Stripe authorization.
+    await this.releaseStripeAuthorizationIfNeeded(order);
 
     // Persist cancellation metadata on the orders row
     try {
