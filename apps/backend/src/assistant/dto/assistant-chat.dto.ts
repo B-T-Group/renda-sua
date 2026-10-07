@@ -6,11 +6,12 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  IsUUID,
   Length,
   MaxLength,
   ValidateNested,
 } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional} from '@nestjs/swagger';
 
 export class AssistantChatMessageDto {
   @ApiProperty({ enum: ['user', 'assistant'] })
@@ -53,6 +54,14 @@ export class AssistantChatRequestDto {
   @ValidateNested()
   @Type(() => AssistantMarketContextDto)
   market?: AssistantMarketContextDto;
+
+  @ApiPropertyOptional({
+    description: 'Client-generated thread ID for analytics tracking',
+    example: '550e8400-e29b-41d4-a716-446655440000',
+  })
+  @IsOptional()
+  @IsUUID('4')
+  threadId?: string;
 }
 
 export class AssistantChatResponseDto {
