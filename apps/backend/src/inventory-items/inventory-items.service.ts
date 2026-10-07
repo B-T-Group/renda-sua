@@ -2176,7 +2176,7 @@ export class InventoryItemsService {
     const title = row?.item?.name;
     if (!title) return;
     seenProducts.add(row.id);
-    const currency = row.item?.currency || row.business_location?.business?.currency || null;
+    const currency = row.item?.currency || null;
     const available = Number(row.computed_available_quantity ?? 0) > 0;
     suggestions.push({
       kind: 'product',
@@ -2322,7 +2322,6 @@ export class InventoryItemsService {
             business {
               id
               name
-              currency
             }
           }
         }
