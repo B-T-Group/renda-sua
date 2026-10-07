@@ -242,8 +242,8 @@ export class DepositLedgerService {
   }
 
   private async moveForfeitLegs(params: ForfeitDepositParams): Promise<void> {
-    await this.catchUpDepositHold(params);
-    await this.releaseDepositHoldForForfeit(params);
+    const holdReady = await this.catchUpDepositHold(params);
+    await this.releaseDepositHoldForForfeit(params, holdReady);
     await this.debitClientForForfeit(params);
     await this.creditHqForForfeit(params);
     this.logger.log(
@@ -251,20 +251,37 @@ export class DepositLedgerService {
     );
   }
 
-  /** Hold catch-up is best-effort: forfeit can still take available or leftover withheld. */
-  private async catchUpDepositHold(params: ForfeitDepositParams): Promise<void> {
+  /**
+   * Hold catch-up is best-effort: forfeit can still take available or leftover withheld.
+   * Returns false when the catch-up failed, so the release leg can check that this
+   * deposit really has a hold before touching withheld.
+   */
+  private async catchUpDepositHold(
+    params: ForfeitDepositParams
+  ): Promise<boolean> {
     try {
       await this.ensureDepositHeld(params);
+      return true;
     } catch (error: any) {
       this.logger.warn(
         `deposit_forfeit_hold_skipped order=${params.orderNumber}: ${error?.message}`
       );
+      return false;
     }
   }
 
   private async releaseDepositHoldForForfeit(
-    params: ForfeitDepositParams
+    params: ForfeitDepositParams,
+    holdReady: boolean
   ): Promise<void> {
+    // Without a hold under this deposit, a release would drain withheld that
+    // belongs to the client's other orders. Skip it and let the debit take available.
+    if (!holdReady && (await this.netHoldForDepositRef(params)) <= 0) {
+      this.logger.warn(
+        `deposit_forfeit_skip_release_no_hold order=${params.orderNumber} requested=${params.amount}`
+      );
+      return;
+    }
     const release = await this.accountsService.registerReleaseIfNotExists({
       accountId: params.clientAccountId,
       amount: params.amount,
