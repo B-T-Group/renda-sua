@@ -1,4 +1,4 @@
-import { rootNavigationRef } from '@/navigation/RootNavigator';
+import { rootNavigationRef } from '@/navigation/rootNavigationRef';
 import type { AssistantContext } from './assistantChips';
 
 /**

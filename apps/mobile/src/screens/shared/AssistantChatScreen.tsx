@@ -403,59 +403,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
     [assistant, draft, assistantTransport]
   );
 
-  // Handle reorder when pendingReorderId is set
-  useEffect(() => {
-    if (!pendingReorderId) return;
-    
-    const executeReorder = async () => {
-      try {
-        const payload = await reorder(pendingReorderId, false);
-        
-        // No items? Show toast and done
-        if (payload.lines.length === 0) {
-          const skipToast = buildSkipToast(payload);
-          if (skipToast) setReorderSnack(skipToast);
-          else {
-            setReorderSnack(
-              t('orders.reorder.unavailable', 'These items are not available to order again.')
-            );
-          }
-          setPendingReorderId(undefined);
-          return;
-        }
-        
-        // Check cart conflict
-        const cartBizIds = [...new Set(cart.items.map((l) => l.businessId))];
-        const decision = resolveReorderCartAction(cartBizIds, payload.business_id);
-        
-        if (decision === 'replace') {
-          // Auto-replace when cart is empty or same business
-          applyLines(payload, 'replace');
-          setPendingReorderId(undefined);
-          return;
-        }
-        
-        // Show conflict sheet
-        setPendingPayload(payload);
-        setSheetOpen(true);
-        
-        if (decision === 'blocked_other_store') {
-          setReorderSnack(
-            t('orders.reorder.otherStoreToast', 'Your cart has items from another store')
-          );
-        }
-      } catch (err: unknown) {
-        const msg = err instanceof Error 
-          ? err.message 
-          : t('orders.reorder.failed', 'Could not reorder. Try again.');
-        setReorderSnack(msg);
-        setPendingReorderId(undefined);
-      }
-    };
-    
-    void executeReorder();
-  }, [pendingReorderId, reorder, cart.items, t]);
-
+  // Helper callbacks (declared before effect to avoid temporal dead zone)
   const buildSkipToast = useCallback((payload: ReorderOrderResponse) => {
     const names = payload.skipped.map((s) => s.name);
     if (names.length === 0) return null;
@@ -466,8 +414,9 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   }, [t]);
 
   const navigateAfterApply = useCallback((payload: ReorderOrderResponse, cartAction: ReorderCartAction) => {
+    if (!pendingReorderId) return;
     trackReorderEvent('reorder_result', {
-      orderId: pendingReorderId!,
+      orderId: pendingReorderId,
       dest: payload.navigation_hint,
       skipped_count: payload.skipped.length,
       cart_action: cartAction,
@@ -508,6 +457,63 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
     else cart.addLines(lines);
     navigateAfterApply(payload, action);
   }, [cart, navigateAfterApply]);
+
+  // Handle reorder when pendingReorderId is set
+  useEffect(() => {
+    if (!pendingReorderId) return;
+    let cancelled = false;
+    
+    const executeReorder = async () => {
+      try {
+        const payload = await reorder(pendingReorderId, false);
+        if (cancelled) return;
+        
+        // No items? Show toast and done
+        if (payload.lines.length === 0) {
+          const skipToast = buildSkipToast(payload);
+          if (skipToast) setReorderSnack(skipToast);
+          else {
+            setReorderSnack(
+              t('orders.reorder.unavailable', 'These items are not available to order again.')
+            );
+          }
+          setPendingReorderId(undefined);
+          return;
+        }
+        
+        // Check cart conflict
+        const cartBizIds = [...new Set(cart.items.map((l) => l.businessId))];
+        const decision = resolveReorderCartAction(cartBizIds, payload.business_id);
+        
+        if (decision === 'replace') {
+          // Auto-replace when cart is empty or same business
+          applyLines(payload, 'replace');
+          setPendingReorderId(undefined);
+          return;
+        }
+        
+        // Show conflict sheet
+        setPendingPayload(payload);
+        setSheetOpen(true);
+        
+        if (decision === 'blocked_other_store') {
+          setReorderSnack(
+            t('orders.reorder.otherStoreToast', 'Your cart has items from another store')
+          );
+        }
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const msg = err instanceof Error 
+          ? err.message 
+          : t('orders.reorder.failed', 'Could not reorder. Try again.');
+        setReorderSnack(msg);
+        setPendingReorderId(undefined);
+      }
+    };
+    
+    void executeReorder();
+    return () => { cancelled = true; };
+  }, [pendingReorderId, reorder, cart.items, t, buildSkipToast, applyLines]);
 
   const onReplace = useCallback(() => {
     if (!pendingPayload) return;

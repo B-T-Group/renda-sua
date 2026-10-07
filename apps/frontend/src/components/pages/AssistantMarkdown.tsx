@@ -168,57 +168,7 @@ export function AssistantMarkdown({ content, rich = true }: Props) {
   const [pendingPayload, setPendingPayload] = useState<ReorderOrderResponse | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  // Handle reorder when pendingReorderId is set
-  React.useEffect(() => {
-    if (!pendingReorderId) return;
-    
-    const executeReorder = async () => {
-      try {
-        const payload = await reorder(pendingReorderId);
-        
-        // No items? Navigate immediately
-        if (payload.lines.length === 0) {
-          toastSkips(payload);
-          navigateAfter(payload, 'replace');
-          setPendingReorderId(undefined);
-          return;
-        }
-        
-        // Check cart conflict
-        const cartBizIds = [...new Set(cartItems.map((i) => i.businessId))];
-        const decision = resolveReorderCartAction(cartBizIds, payload.business_id);
-        
-        if (decision === 'replace') {
-          // Auto-replace when cart is empty or same business
-          applyLines(payload, 'replace');
-          setPendingReorderId(undefined);
-          return;
-        }
-        
-        // Show conflict sheet
-        setPendingPayload(payload);
-        setSheetOpen(true);
-        
-        if (decision === 'blocked_other_store') {
-          enqueueSnackbar(
-            t('orders.reorder.otherStoreToast', 'Your cart has items from another store'),
-            { variant: 'warning' }
-          );
-        }
-      } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-        enqueueSnackbar(
-          err?.response?.data?.message || 
-          err?.message || 
-          t('orders.reorder.failed', 'Could not reorder. Try again.'),
-          { variant: 'error' }
-        );
-        setPendingReorderId(undefined);
-      }
-    };
-    
-    void executeReorder();
-  }, [pendingReorderId, reorder, cartItems, enqueueSnackbar, t, applyLines, navigateAfter, toastSkips]);
-
+  // Helper callbacks (declared before effect to avoid temporal dead zone)
   const toastSkips = useCallback((payload: ReorderOrderResponse) => {
     const names = payload.skipped.map((s) => s.name);
     if (!names.length) return;
@@ -272,6 +222,61 @@ export function AssistantMarkdown({ content, rich = true }: Props) {
     else addItems(items);
     navigateAfter(payload, action);
   }, [addItems, navigateAfter, replaceItems]);
+
+  // Handle reorder when pendingReorderId is set
+  React.useEffect(() => {
+    if (!pendingReorderId) return;
+    let cancelled = false;
+    
+    const executeReorder = async () => {
+      try {
+        const payload = await reorder(pendingReorderId);
+        if (cancelled) return;
+        
+        // No items? Navigate immediately
+        if (payload.lines.length === 0) {
+          toastSkips(payload);
+          navigateAfter(payload, 'replace');
+          setPendingReorderId(undefined);
+          return;
+        }
+        
+        // Check cart conflict
+        const cartBizIds = [...new Set(cartItems.map((i) => i.businessId))];
+        const decision = resolveReorderCartAction(cartBizIds, payload.business_id);
+        
+        if (decision === 'replace') {
+          // Auto-replace when cart is empty or same business
+          applyLines(payload, 'replace');
+          setPendingReorderId(undefined);
+          return;
+        }
+        
+        // Show conflict sheet
+        setPendingPayload(payload);
+        setSheetOpen(true);
+        
+        if (decision === 'blocked_other_store') {
+          enqueueSnackbar(
+            t('orders.reorder.otherStoreToast', 'Your cart has items from another store'),
+            { variant: 'warning' }
+          );
+        }
+      } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        if (cancelled) return;
+        enqueueSnackbar(
+          err?.response?.data?.message || 
+          err?.message || 
+          t('orders.reorder.failed', 'Could not reorder. Try again.'),
+          { variant: 'error' }
+        );
+        setPendingReorderId(undefined);
+      }
+    };
+    
+    void executeReorder();
+    return () => { cancelled = true; };
+  }, [pendingReorderId, reorder, cartItems, enqueueSnackbar, t, applyLines, navigateAfter, toastSkips]);
 
   const onReplace = useCallback(() => {
     if (!pendingPayload) return;
