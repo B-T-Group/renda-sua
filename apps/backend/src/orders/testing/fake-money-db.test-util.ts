@@ -163,6 +163,17 @@ export class FakeMoneyDb {
         (v.keys as string[]).includes(t.idempotency_key ?? '')
       ),
     }),
+    GetForfeitLegs: (v: Row) => ({
+      account_transactions: this.txns.filter((t) =>
+        (v.keys as string[]).includes(t.idempotency_key ?? '')
+      ),
+      holds: this.txns.filter(
+        (t) =>
+          t.account_id === v.accountId &&
+          t.reference_id === v.referenceId &&
+          ['hold', 'release'].includes(t.transaction_type)
+      ),
+    }),
     InsertTransactionIdempotent: (v: Row) => {
       if (this.txns.some((t) => t.idempotency_key === v.idempotencyKey)) {
         return { insert_account_transactions_one: null }; // ON CONFLICT DO NOTHING
@@ -188,6 +199,14 @@ export class FakeMoneyDb {
           t.account_id === v.accountId &&
           t.reference_id === v.referenceId &&
           ['deposit', 'cash_advance_repayment'].includes(t.transaction_type)
+      ),
+    }),
+    DepositHoldReleaseRows: (v: Row) => ({
+      account_transactions: this.txns.filter(
+        (t) =>
+          t.account_id === v.accountId &&
+          t.reference_id === v.referenceId &&
+          ['hold', 'release'].includes(t.transaction_type)
       ),
     }),
     // ---- DepositRefundService

@@ -6298,7 +6298,8 @@ export class OrdersService {
         request.orderId,
         'business',
         CLIENT_NO_SHOW_REASON,
-        'ready_for_pickup'
+        'ready_for_pickup',
+        `order.cancelled:${request.orderId}`
       );
     } catch (error: any) {
       this.logger.error(
@@ -6498,7 +6499,8 @@ export class OrdersService {
         orderId,
         'business',
         CLIENT_NO_SHOW_REASON,
-        previousStatus
+        previousStatus,
+        `order.cancelled:${orderId}`
       );
     } catch (error: any) {
       this.logger.error(
@@ -6944,15 +6946,20 @@ export class OrdersService {
 
     const previousStatus = order.current_status;
 
-    await this.releaseStripeAuthorizationIfNeeded(order);
-
-    // Update order status to cancelled (dedicated path; not via PATCH status)
+    // Compare-and-set (#498): the conditional update only matches the status
+    // validated above, and cancelled → cancelled is refused. A concurrent loser
+    // gets 409 here, before any write, event, stock release, ledger move,
+    // Stripe release or notification. The winner emits order.status.updated
+    // (notifications) exactly once.
     const updatedOrder = await this.orderStatusService.updateOrderStatus(
       request.orderId,
       'cancelled',
       actor,
-      { viaCancelEndpoint: true }
+      { viaCancelEndpoint: true, expectedFromStatus: previousStatus }
     );
+
+    // Only the CAS winner releases the Stripe authorization.
+    await this.releaseStripeAuthorizationIfNeeded(order);
 
     // Persist cancellation metadata on the orders row
     try {
@@ -10770,12 +10777,50 @@ export class OrdersService {
     sqsReason?: string
   ): Promise<void> {
     await this.applyDepositForfeit(orderId, reason);
+    // Fetch the actual previous status from status history instead of hardcoding
+    const previousStatus = await this.getPreviousStatusBeforeCancelled(orderId);
     await this.enqueueOrderCancelled(
       orderId,
       cancelledBy,
-      'ready_for_pickup',
+      previousStatus ?? 'ready_for_pickup',
       sqsReason
     );
+  }
+
+  /**
+   * Query the status immediately before 'cancelled' from order_status_history.
+   * Returns null if not found (fallback to a reasonable default in the caller).
+   */
+  private async getPreviousStatusBeforeCancelled(
+    orderId: string
+  ): Promise<string | null> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        order_status_history: Array<{ status: string }>;
+      }>(
+        `
+        query GetPreviousStatus($orderId: uuid!) {
+          order_status_history(
+            where: {
+              order_id: { _eq: $orderId }
+              status: { _neq: cancelled }
+            }
+            order_by: { created_at: desc }
+            limit: 1
+          ) {
+            status
+          }
+        }
+        `,
+        { orderId }
+      );
+      return result.order_status_history?.[0]?.status ?? null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to get previous status for order ${orderId}: ${error?.message}`
+      );
+      return null;
+    }
   }
 
   private noshowForfeitResumeResponse(order: Orders) {
@@ -10797,11 +10842,14 @@ export class OrdersService {
     sqsReason?: string
   ): Promise<void> {
     try {
+      // Use dedup ID to prevent duplicate event emissions on retries
+      const dedupId = `order.cancelled:${orderId}`;
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
         cancelledBy,
         sqsReason,
-        previousStatus
+        previousStatus,
+        dedupId
       );
     } catch (error: any) {
       this.logger.error(
