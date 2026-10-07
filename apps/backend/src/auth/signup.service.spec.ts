@@ -45,6 +45,7 @@ describe('SignupService', () => {
       'assertCanSend' | 'recordSend' | 'isEnforcementEnabled'
     >
   >;
+  let lockoutService: jest.Mocked<LockoutService>;
 
   const insertedUser = {
     id: 'user-123',
@@ -188,6 +189,7 @@ describe('SignupService', () => {
     sessionStore = module.get(SessionStoreService);
     metaConversionsService = module.get(MetaConversionsService);
     otpSendLimiter = module.get(OtpSendLimiterService);
+    lockoutService = module.get(LockoutService);
   });
 
   describe('availability checks', () => {
@@ -1230,7 +1232,6 @@ describe('SignupService', () => {
 
   describe('lockout and replay protection (#338)', () => {
     it('startIdentifierOnlyOtp throws 429 when identifier is locked out', async () => {
-      const lockoutService = moduleRef.get(LockoutService);
       jest.spyOn(lockoutService, 'isLockedOut').mockResolvedValue(true);
       jest.spyOn(lockoutService, 'getRemainingLockoutMs').mockResolvedValue(120000);
 
@@ -1245,7 +1246,6 @@ describe('SignupService', () => {
     });
 
     it('verifySignupOtp records lockout failure for identifier-only flows after max attempts', async () => {
-      const lockoutService = moduleRef.get(LockoutService);
       const recordFailureSpy = jest.spyOn(lockoutService, 'recordFailure').mockResolvedValue(undefined);
       
       const identifierOnlyAttempt = {
