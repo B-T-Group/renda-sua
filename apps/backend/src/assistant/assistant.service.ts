@@ -13,6 +13,8 @@ import type {
   AssistantReply,
   AssistantTurnInput,
 } from './assistant.types';
+import { SiteEventsService } from '../site-events/site-events.service';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 
 const NO_REPLY_TOKEN = '[[NO_REPLY]]';
 
@@ -23,7 +25,8 @@ export class AssistantService implements OnModuleInit {
   constructor(
     private readonly config: ConfigService<Configuration>,
     private readonly bedrock: BedrockLunaService,
-    private readonly tools: AssistantToolsService
+    private readonly tools: AssistantToolsService,
+    private readonly siteEvents: SiteEventsService
   ) {}
 
   onModuleInit(): void {
@@ -96,6 +99,7 @@ export class AssistantService implements OnModuleInit {
     const messages = this.toMessages(input.messages, settings?.maxHistoryMessages);
     let handoff = false;
     let usedKnowledge = false;
+    const toolsUsed = new Set<string>();
     const maxLoops = Math.max(1, settings?.maxToolIterations || 5);
     const toolConfig = await this.tools.buildToolConfig(input.identity);
     const hasShoppingTools = toolConfig.tools?.some(
@@ -122,15 +126,87 @@ export class AssistantService implements OnModuleInit {
           usedKnowledge = true;
           continue;
         }
-        return this.finalize(result.text, handoff, input.channel, locale);
+        const reply = this.finalize(result.text, handoff, input.channel, locale);
+        this.emitMessageClassified(input, locale, toolsUsed, handoff);
+        return reply;
       }
       messages.push({ role: 'assistant', content: result.assistantContent });
       const executed = await this.executeTools(result.toolUses, input, locale);
+      result.toolUses.forEach(use => toolsUsed.add(use.name));
       usedKnowledge ||= executed.usedKnowledge;
       handoff ||= executed.handoff;
       messages.push({ role: 'user', content: executed.content });
     }
+    this.emitMessageClassified(input, locale, toolsUsed, handoff);
     return this.fallback(input.channel, locale, false, handoff);
+  }
+
+  /**
+   * Emit assistant.message.classified event for intent share metrics (#451).
+   * Intent is derived from tools used and user message content.
+   */
+  private emitMessageClassified(
+    input: Omit<AssistantChatInput, 'locale'>,
+    locale: AssistantLocale,
+    toolsUsed: Set<string>,
+    handoff: boolean
+  ): void {
+    const intent = this.classifyIntent(input.messages, toolsUsed);
+    const threadId = 'threadId' in input ? input.threadId : undefined;
+    const market = input.identity.market?.country_code;
+    
+    const metadata: Record<string, unknown> = {
+      intent,
+      channel: input.channel,
+      locale,
+    };
+    
+    if (market) metadata.market = market;
+    if (threadId) metadata.thread_id = threadId;
+    
+    emitServerSiteEvent(this.siteEvents, 'assistant.message.classified', metadata);
+  }
+
+  /**
+   * Classify user intent from tools used and message content.
+   * Priority order: explicit tool use > message content heuristics > other.
+   */
+  private classifyIntent(
+    messages: AssistantChatInput['messages'],
+    toolsUsed: Set<string>
+  ): 'buy' | 'availability' | 'reorder' | 'track' | 'support' | 'other' {
+    const latest = [...messages].reverse().find((m) => m.role === 'user');
+    const text = (latest?.content || '').toLowerCase();
+    
+    if (toolsUsed.has('search_catalog')) {
+      if (/\b(available|availability|disponible|stock|en stock)\b/i.test(text)) {
+        return 'availability';
+      }
+      return 'buy';
+    }
+    if (toolsUsed.has('get_reorder_options')) return 'reorder';
+    if (toolsUsed.has('get_order_status') || toolsUsed.has('get_my_recent_orders')) {
+      return 'track';
+    }
+    if (toolsUsed.has('request_human_support')) return 'support';
+    
+    if (/\b(buy|purchase|acheter|vendre|order|commande|prix|price|cost|co[uû]t)\b/i.test(text)) {
+      return 'buy';
+    }
+    if (/\b(available|availability|disponible|stock|en stock)\b/i.test(text)) {
+      return 'availability';
+    }
+    if (/\b(reorder|recommander|re-order|again|encore)\b/i.test(text)) {
+      return 'reorder';
+    }
+    if (/\b(track|tracking|where|o[uù]|delivery|livraison|order|commande|status|statut)\b/i.test(text)) {
+      return 'track';
+    }
+    if (/\b(help|aide|support|assist|problem|probl[eè]me)\b/i.test(text)) {
+      return 'support';
+    }
+    
+    return 'other';
   }
 
   private async injectKnowledgeIfNeeded(
@@ -269,7 +345,7 @@ export class AssistantService implements OnModuleInit {
       : 'The customer market is unknown.';
     
     const shoppingGuidance = hasShoppingTools
-      ? `When the customer expresses buy or availability intent ("I want to buy...", "Do you have...", "Show me..."), call search_catalog (clarify the product if vague). Only call list_supported_country_states for explicit coverage questions ("which countries do you serve?").`
+      ? `When the customer expresses buy or availability intent ("I want to buy...", "Do you have...", "Show me..."), call search_catalog (clarify the product if vague). Only call list_supported_country_states for explicit coverage questions ("which countries do you serve?"). IMPORTANT: Never claim or guess stock availability unless search_catalog explicitly returned availability data for that specific product. If availability is not in the tool result, do not mention stock status.`
       : market
       ? `When the customer expresses buy or availability intent, clarify what they want to buy, then guide them to search in the app. Never ask which country they are in — you already know.`
       : `When the customer expresses buy or availability intent and you don't know their market, ask which country they are in so you can help them find products.`;
@@ -292,7 +368,7 @@ ${shoppingGuidance}
 Before answering about countries, markets, coverage, regions/states, or payment methods/rails (including short follow-ups like "and Brazil?"), you MUST call list_supported_country_states and/or list_supported_payment_systems. Answer only from those tool results. Use get_knowledge for process copy (pay-at-delivery, pickup, support), not as the sole source of live country lists.
 ${market && !hasShoppingTools ? `NEVER ask the customer which country they are in or list ISO country codes when they express buy intent. You already know they are in ${market.country_code}.` : ''}
 If a country is not returned as configured/active, say we are not available there yet. Never invent local payment methods (for example Pix) or claim Groupe BT presence equals Rendasua availability.
-When the customer asks about their orders, recent purchases, deliveries, or a specific order number, call get_my_recent_orders or get_order_status (only available when those tools are provided).
+When the customer asks about their orders, recent purchases, deliveries, or a specific order number, call get_my_recent_orders or get_order_status (only available when those tools are provided). When they express reorder intent ("order again", "reorder", "my previous order"), call get_reorder_options (clients only) to show their recent completed orders with reorder links.
 ${channelRules}
 Be concise and never expose internal tools or implementation details.
 Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reasoning>, or similar metadata in the reply — output only the customer-facing message.`;

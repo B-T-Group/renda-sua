@@ -38,6 +38,7 @@ import {
   type LauncherPersona,
   type NudgeDismissReason,
 } from '../../../utils/assistantLauncher';
+import { buildAssistantContextFromRoute } from '../../../utils/buildAssistantContext';
 import {
   trackAttentionPlayed,
   trackLauncherImpression,
@@ -260,7 +261,15 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
       if (nudgeVisible) dismissNudge('opened');
       trackLauncherTap(ctxRef.current, 'orb', entry);
       if (rootNavigationRef.isReady()) {
-        rootNavigationRef.dispatch(CommonActions.navigate({ name: 'AssistantChat' }));
+        // Build context from current route if on a contextual screen
+        const context = buildAssistantContextFromRoute();
+        
+        rootNavigationRef.dispatch(
+          CommonActions.navigate({ 
+            name: 'AssistantChat',
+            params: context ? { context } : undefined,
+          })
+        );
       }
     },
     [nudgeVisible, dismissNudge]

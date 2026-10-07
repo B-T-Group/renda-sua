@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import {
@@ -30,6 +30,25 @@ import { RendaCharacter } from '@/components/assistant/renda/RendaCharacter';
 import { StageDisc } from '@/components/assistant/renda/rendaCharacterLayers';
 import { useInteractionSettled } from '@/components/assistant/launcher/launcherHooks';
 import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher';
+import type { AssistantContext } from '@/utils/assistantChips';
+import { getContextualChips, buildChipMessage } from '@/utils/assistantChips';
+import { trackSiteEvent } from '@/services/AppEventsService';
+import { useReorderOrder } from '@/hooks/useReorderOrder';
+import { ReorderCartConflictSheet } from '@/components/orders/ReorderCartConflictSheet';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { ClientRootStackParamList } from '@/navigation/types';
+import type { ReorderCartAction, ReorderOrderResponse } from '@/types/reorder';
+import { trackReorderEvent } from '@/utils/reorderAnalytics';
+import { formatSkippedNames, mapReorderLineToCartLine, resolveReorderCartAction } from '@/utils/reorderCart';
+import { reorderNavigator } from '@/utils/reorderNavigator';
+import {
+  trackChatOpened,
+  trackMessageSent,
+  trackHandoffRequested,
+  trackErrorShown,
+  type LauncherEventContext,
+} from '@/services/analytics/assistantLauncherAnalytics';
 
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
 /** AC9: the composer grows with the text up to 4 rows, then scrolls. */
@@ -65,7 +84,7 @@ function useShowsRendaCharacter(): boolean {
  * Wraps postAssistantChat with the current market context from MarketStore.
  */
 function useAssistantTransport() {
-  const { market } = useStore();
+  const { market, assistant } = useStore();
   return useCallback(
     async (messages: { role: 'user' | 'assistant'; content: string }[]) => {
       const marketContext: AssistantMarketContext | null =
@@ -75,9 +94,9 @@ function useAssistantTransport() {
               state: market.selectedStateCode || undefined,
             }
           : null;
-      return postAssistantChat(messages, marketContext);
+      return postAssistantChat(messages, marketContext, assistant.threadId);
     },
-    [market.selectedCountryCode, market.selectedStateCode]
+    [market.selectedCountryCode, market.selectedStateCode, assistant.threadId]
   );
 }
 
@@ -155,9 +174,11 @@ interface MessageBubbleProps {
   isUser: boolean;
   showOrb: boolean;
   character: boolean;
+  onLinkPress?: (url: string) => boolean;
+  analyticsCtx?: LauncherEventContext;
 }
 
-function MessageBubble({ item, isUser, showOrb, character }: MessageBubbleProps) {
+function MessageBubble({ item, isUser, showOrb, character, onLinkPress, analyticsCtx }: MessageBubbleProps) {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const duration = motionDuration('normal', reduceMotion);
@@ -222,6 +243,8 @@ function MessageBubble({ item, isUser, showOrb, character }: MessageBubbleProps)
             content={item.content}
             color={colors.text.primary}
             style={styles.bubbleText}
+            onLinkPress={onLinkPress}
+            analyticsCtx={analyticsCtx}
           />
         )}
       </View>
@@ -253,12 +276,33 @@ const EmptyHero = observer(function EmptyHero() {
   );
 });
 
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+function EmptyState({
+  onPick,
+  context,
+}: {
+  onPick: (text: string) => void;
+  context?: AssistantContext;
+}) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const store = useStore();
   const firstName = store.auth.user?.firstName?.trim();
   const character = useShowsRendaCharacter();
+  const chips = getContextualChips(context);
+
+  const handleChipTap = useCallback(
+    (chipId: string, label: string) => {
+      trackSiteEvent({
+        eventType: 'assistant.chip.tap',
+        metadata: {
+          chip_id: chipId,
+          screen: 'assistant-chat',
+        },
+      });
+      onPick(label);
+    },
+    [onPick]
+  );
 
   return (
     <View style={styles.empty}>
@@ -272,12 +316,21 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
           : t('assistant.emptyTitle', 'Hi! What do you need today?')}
       </Text>
       <View style={styles.chips}>
-        {SUGGESTIONS.map((item) => {
-          const label = t(item.key, item.fallback);
+        {chips.map((chip) => {
+          // Build interpolation variables from context
+          let interpolation = {};
+          if (context?.type === 'item_detail' && context.itemName) {
+            interpolation = { name: context.itemName };
+          } else if (context?.type === 'delivery_tracking' && context.orderNumber) {
+            interpolation = { orderNumber: context.orderNumber };
+          }
+          
+          const label = t(chip.translationKey, { defaultValue: chip.fallback, ...interpolation });
+          const message = buildChipMessage(chip, label, context);
           return (
             <Pressable
-              key={item.key}
-              onPress={() => onPick(label)}
+              key={chip.id}
+              onPress={() => handleChipTap(chip.id, message)}
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4 }}
               style={({ pressed }) => [
@@ -298,41 +351,89 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   );
 }
 
-const SUGGESTIONS = [
-  { key: 'assistant.suggestion.location', fallback: 'Where are you located?' },
-  {
-    key: 'assistant.suggestion.payDelivery',
-    fallback: 'Do you support payment at delivery?',
-  },
-  {
-    key: 'assistant.suggestion.pickup',
-    fallback: 'Do you support in-store pickup?',
-  },
-  {
-    key: 'assistant.suggestion.mobilePay',
-    fallback: 'Do you support mobile payments?',
-  },
-] as const;
+type AssistantChatScreenProps = {
+  route?: {
+    params?: {
+      context?: AssistantContext;
+    };
+  };
+};
 
-const AssistantChatScreen = observer(function AssistantChatScreen() {
-  const { t } = useTranslation();
+type Nav = NativeStackNavigationProp<ClientRootStackParamList>;
+
+const AssistantChatScreen = observer(function AssistantChatScreen({
+  route,
+}: AssistantChatScreenProps) {
+  const { t, i18n } = useTranslation();
   const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const store = useStore();
-  const { assistant } = store;
+  const { assistant, auth, market, persona } = store;
   const { assistantCharacter } = store;
+  const { cart } = store;
   const listRef = useRef<FlatList<AssistantMessage>>(null);
   const [draft, setDraft] = useState('');
   const [composerFocused, setComposerFocused] = useState(false);
   const character = useShowsRendaCharacter();
   const assistantTransport = useAssistantTransport();
+  const context = route?.params?.context;
+  const navigation = useNavigation<Nav>();
+  const { reorder } = useReorderOrder();
+  
+  // Track clicked reorder link and conflict sheet
+  const [pendingReorderId, setPendingReorderId] = useState<string | undefined>(undefined);
+  const [pendingPayload, setPendingPayload] = useState<ReorderOrderResponse | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [reorderSnack, setReorderSnack] = useState<string | null>(null);
+  
+  // Analytics refs for rising-edge detection
+  const chatOpenedEmitted = useRef(false);
+  const prevHandoffRef = useRef(false);
+  const prevErrorRef = useRef<string | null>(null);
+  
+  // Memoized analytics context to prevent spam
+  const analyticsCtx: LauncherEventContext = useMemo(
+    () => ({
+      persona: assistantViewer(auth.isAuthenticated, persona.activePersona),
+      screen: 'assistant-chat' as const,
+      market: market.selectedCountryCode,
+      language: i18n.language,
+      threadId: assistant.threadId,
+    }),
+    [auth.isAuthenticated, persona.activePersona, market.selectedCountryCode, i18n.language, assistant.threadId]
+  );
 
   // Hero: Attentive while the composer is focused, Listening once it has text.
   useEffect(() => {
     assistantCharacter.setComposer(composerFocused, draft.trim().length > 0);
   }, [assistantCharacter, composerFocused, draft]);
   useEffect(() => () => assistantCharacter.setComposer(false, false), [assistantCharacter]);
+
+  // Emit assistant.chat.opened once on screen mount (Phase 0)
+  useEffect(() => {
+    if (!chatOpenedEmitted.current) {
+      chatOpenedEmitted.current = true;
+      trackChatOpened(analyticsCtx);
+    }
+  }, [analyticsCtx]);
+
+  // Emit assistant.handoff.requested when handoff becomes true (rising edge only)
+  useEffect(() => {
+    if (assistant.handoff && !prevHandoffRef.current) {
+      trackHandoffRequested(analyticsCtx);
+    }
+    prevHandoffRef.current = assistant.handoff;
+  }, [assistant.handoff, analyticsCtx]);
+
+  // Emit assistant.error.shown when error is set (rising edge only)
+  useEffect(() => {
+    if (assistant.error && assistant.error !== prevErrorRef.current) {
+      const kind = assistant.errorKind === 'network' ? 'network' : 'server';
+      trackErrorShown(analyticsCtx, kind);
+    }
+    prevErrorRef.current = assistant.error;
+  }, [assistant.error, assistant.errorKind, analyticsCtx]);
 
   // Check idle on screen focus
   useFocusEffect(
@@ -347,10 +448,174 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
       if (!text || assistant.isSending) return;
       // Typed text is now a bubble; on failure it stays there and Retry re-sends it.
       if (override === undefined) setDraft('');
+      // Emit assistant.message.sent (Phase 0)
+      trackMessageSent(analyticsCtx);
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
       await assistant.sendMessage(text, assistantTransport);
     },
-    [assistant, draft, assistantTransport]
+    [assistant, draft, assistantTransport, analyticsCtx]
+  );
+
+  // Helper callbacks (declared before effect to avoid temporal dead zone)
+  const buildSkipToast = useCallback((payload: ReorderOrderResponse) => {
+    const names = payload.skipped.map((s) => s.name);
+    if (names.length === 0) return null;
+    const list = formatSkippedNames(names, (n) =>
+      t('orders.reorder.andMore', 'and {{count}} more', { count: n })
+    );
+    return t('orders.reorder.skippedToast', 'Unavailable: {{names}}', { names: list });
+  }, [t]);
+
+  const navigateAfterApply = useCallback((payload: ReorderOrderResponse, cartAction: ReorderCartAction) => {
+    if (!pendingReorderId) return;
+    trackReorderEvent('reorder_result', {
+      orderId: pendingReorderId,
+      dest: payload.navigation_hint,
+      skipped_count: payload.skipped.length,
+      cart_action: cartAction,
+    });
+    const skipToast = buildSkipToast(payload);
+    if (skipToast) setReorderSnack(skipToast);
+
+    if (payload.navigation_hint === 'none') {
+      if (!skipToast) {
+        setReorderSnack(
+          t('orders.reorder.unavailable', 'These items are not available to order again.')
+        );
+      }
+      return;
+    }
+
+    const stack = reorderNavigator(navigation);
+    if (payload.navigation_hint === 'checkout') {
+      stack.navigate('CartCheckout', {
+        deliveryAddressId: payload.fulfillment.address_id ?? undefined,
+        fulfillmentMethod: payload.fulfillment.type,
+      });
+      return;
+    }
+
+    let banner: 'business_closed' | 'address_invalid' | undefined;
+    if (!payload.fulfillment.business_accepting_orders) {
+      banner = 'business_closed';
+    } else if (!payload.fulfillment.address_valid) {
+      banner = 'address_invalid';
+    }
+    reorderNavigator(navigation).navigate('Cart', banner ? { reorderBanner: banner } : undefined);
+  }, [buildSkipToast, navigation, pendingReorderId, t]);
+
+  const applyLines = useCallback((payload: ReorderOrderResponse, action: 'replace' | 'add') => {
+    const lines = payload.lines.map((line) => mapReorderLineToCartLine(line, payload.business_id));
+    if (action === 'replace') cart.replaceLines(lines);
+    else cart.addLines(lines);
+    navigateAfterApply(payload, action);
+  }, [cart, navigateAfterApply]);
+
+  // Handle reorder when pendingReorderId is set
+  useEffect(() => {
+    if (!pendingReorderId) return;
+    let cancelled = false;
+    
+    const executeReorder = async () => {
+      try {
+        const payload = await reorder(pendingReorderId, false);
+        if (cancelled) return;
+        
+        // No items? Show toast and done
+        if (payload.lines.length === 0) {
+          const skipToast = buildSkipToast(payload);
+          if (skipToast) setReorderSnack(skipToast);
+          else {
+            setReorderSnack(
+              t('orders.reorder.unavailable', 'These items are not available to order again.')
+            );
+          }
+          setPendingReorderId(undefined);
+          return;
+        }
+        
+        // Check cart conflict
+        const cartBizIds = [...new Set(cart.items.map((l) => l.businessId))];
+        const decision = resolveReorderCartAction(cartBizIds, payload.business_id);
+        
+        if (decision === 'replace') {
+          // Auto-replace when cart is empty or same business
+          applyLines(payload, 'replace');
+          setPendingReorderId(undefined);
+          return;
+        }
+        
+        // Show conflict sheet
+        setPendingPayload(payload);
+        setSheetOpen(true);
+        
+        if (decision === 'blocked_other_store') {
+          setReorderSnack(
+            t('orders.reorder.otherStoreToast', 'Your cart has items from another store')
+          );
+        }
+      } catch (err: unknown) {
+        if (cancelled) return;
+        const msg = err instanceof Error 
+          ? err.message 
+          : t('orders.reorder.failed', 'Could not reorder. Try again.');
+        setReorderSnack(msg);
+        setPendingReorderId(undefined);
+      }
+    };
+    
+    void executeReorder();
+    return () => { cancelled = true; };
+  }, [pendingReorderId, reorder, cart.items, t, buildSkipToast, applyLines]);
+
+  const onReplace = useCallback(() => {
+    if (!pendingPayload) return;
+    setSheetOpen(false);
+    applyLines(pendingPayload, 'replace');
+    setPendingPayload(null);
+    setPendingReorderId(undefined);
+  }, [applyLines, pendingPayload]);
+
+  const onAdd = useCallback(() => {
+    if (!pendingPayload) return;
+    const cartBizIds = [...new Set(cart.items.map((l) => l.businessId))];
+    const decision = resolveReorderCartAction(cartBizIds, pendingPayload.business_id);
+    if (decision === 'blocked_other_store') {
+      setReorderSnack(
+        t('orders.reorder.otherStoreToast', 'Your cart has items from another store')
+      );
+      return;
+    }
+    setSheetOpen(false);
+    applyLines(pendingPayload, 'add');
+    setPendingPayload(null);
+    setPendingReorderId(undefined);
+  }, [applyLines, cart.items, pendingPayload, t]);
+
+  const onDismissSheet = useCallback(() => {
+    setSheetOpen(false);
+    setPendingPayload(null);
+    setPendingReorderId(undefined);
+  }, []);
+
+  const allowAdd = !!pendingPayload &&
+    resolveReorderCartAction(
+      [...new Set(cart.items.map((l) => l.businessId))],
+      pendingPayload.business_id
+    ) !== 'blocked_other_store';
+
+  // Handle reorder links from assistant messages
+  const handleReorderLink = useCallback(
+    async (url: string) => {
+      const reorderMatch = url.match(/\/orders\/([^/?]+)\/reorder/);
+      if (!reorderMatch) return false;
+
+      const orderId = reorderMatch[1];
+      trackReorderEvent('reorder_tap', { orderId });
+      setPendingReorderId(orderId);
+      return true;
+    },
+    []
   );
 
   const renderItem = useCallback(
@@ -368,11 +633,13 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
             isUser={item.role === 'user'}
             showOrb={showOrb}
             character={character}
+            onLinkPress={handleReorderLink}
+            analyticsCtx={analyticsCtx}
           />
         </View>
       );
     },
-    [assistant.messages, character]
+    [assistant.messages, character, handleReorderLink, analyticsCtx]
   );
 
   const onRetry = useCallback(() => {
@@ -384,18 +651,19 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
   }, []);
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.root, { backgroundColor: colors.pageBackground }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={headerHeight}
-    >
+    <>
+      <KeyboardAvoidingView
+        style={[styles.root, { backgroundColor: colors.pageBackground }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={headerHeight}
+      >
       <FlatList
         ref={listRef}
         data={assistant.messages.slice()}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={renderItem}
-        ListEmptyComponent={<EmptyState onPick={(text) => void onSend(text)} />}
+        ListEmptyComponent={<EmptyState onPick={(text) => void onSend(text)} context={context} />}
         ListFooterComponent={assistant.isSending ? <TypingIndicator /> : null}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
       />
@@ -529,7 +797,33 @@ const AssistantChatScreen = observer(function AssistantChatScreen() {
           <MaterialIcons name="send" size={20} color={colors.primary.contrast} />
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+      <ReorderCartConflictSheet
+        visible={sheetOpen}
+        allowAdd={allowAdd}
+        otherStoreBlocked={!!pendingPayload && !allowAdd}
+        onReplace={onReplace}
+        onAdd={onAdd}
+        onDismiss={onDismissSheet}
+      />
+      {reorderSnack ? (
+        <View
+          style={{
+            position: 'absolute',
+            bottom: insets.bottom + 80,
+            left: 16,
+            right: 16,
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.card,
+            padding: spacing.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text style={{ color: colors.text.primary }}>{reorderSnack}</Text>
+        </View>
+      ) : null}
+    </>
   );
 });
 
