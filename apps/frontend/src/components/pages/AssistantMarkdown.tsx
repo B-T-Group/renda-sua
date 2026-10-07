@@ -2,6 +2,10 @@ import { Box, Link, Typography } from '@mui/material';
 import React, { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
+import { useReorderOrder } from '../../hooks/useClientFlags';
+import { useCart } from '../../contexts/CartContext';
+import { useSnackbar } from 'notistack';
+import { useTranslation } from 'react-i18next';
 
 type Inline =
   | { type: 'text'; text: string }
@@ -95,13 +99,76 @@ export function stripAssistantMarkdown(source: string): string {
 function InlineRuns({ inlines }: { inlines: Inline[] }) {
   const navigate = useNavigate();
   const { trackSiteEvent } = useTrackSiteEvent();
+  const { reorder } = useReorderOrder();
+  const { cartItems, replaceItems } = useCart();
+  const { enqueueSnackbar } = useSnackbar();
+  const { t } = useTranslation();
 
-  const handleLinkClick = useCallback((e: React.MouseEvent, url: string) => {
+  const handleLinkClick = useCallback(async (e: React.MouseEvent, url: string) => {
     e.preventDefault();
     void trackSiteEvent({
       eventType: 'assistant.deeplink.tap',
       metadata: { url },
     });
+
+    // Check for reorder links first
+    const reorderMatch = url.match(/\/orders\/([^/?]+)\/reorder/);
+    if (reorderMatch) {
+      const orderId = reorderMatch[1];
+      try {
+        const payload = await reorder(orderId);
+        
+        if (payload.lines.length === 0) {
+          enqueueSnackbar(
+            t('orders.reorder.unavailable', 'These items are not available to order again.'),
+            { variant: 'info' }
+          );
+          return;
+        }
+
+        // Replace cart lines and navigate to cart/checkout
+        const lines = payload.lines.map((line) => ({
+          businessId: payload.business_id,
+          inventoryId: line.inventory_id,
+          variantId: line.variant_id ?? undefined,
+          quantity: line.quantity,
+        }));
+        replaceItems(lines);
+
+        if (payload.navigation_hint === 'checkout') {
+          navigate('/checkout', {
+            state: {
+              deliveryAddressId: payload.fulfillment.address_id ?? undefined,
+              fulfillmentMethod: payload.fulfillment.type,
+            },
+          });
+        } else {
+          let banner: 'business_closed' | 'address_invalid' | undefined;
+          if (!payload.fulfillment.business_accepting_orders) {
+            banner = 'business_closed';
+          } else if (!payload.fulfillment.address_valid) {
+            banner = 'address_invalid';
+          }
+          navigate('/cart', banner ? { state: { reorderBanner: banner } } : undefined);
+        }
+
+        if (payload.skipped.length > 0) {
+          const names = payload.skipped.map((s) => s.name).slice(0, 3).join(', ');
+          enqueueSnackbar(
+            t('orders.reorder.skippedToast', 'Unavailable: {{names}}', { names }),
+            { variant: 'warning' }
+          );
+        }
+        
+        return;
+      } catch (error: unknown) {
+        const msg = error instanceof Error
+          ? error.message
+          : t('orders.reorder.failed', 'Could not reorder. Try again.');
+        enqueueSnackbar(msg, { variant: 'error' });
+        return;
+      }
+    }
 
     // Try in-app navigation for relative paths
     if (url.startsWith('/')) {
@@ -133,7 +200,7 @@ function InlineRuns({ inlines }: { inlines: Inline[] }) {
 
     // Relative URLs navigate
     navigate(url);
-  }, [navigate, trackSiteEvent]);
+  }, [navigate, trackSiteEvent, reorder, cartItems, replaceItems, enqueueSnackbar, t]);
 
   return (
     <>

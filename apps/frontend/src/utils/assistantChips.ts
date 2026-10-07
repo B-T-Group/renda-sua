@@ -136,6 +136,7 @@ export function getContextualChips(context?: AssistantContext | null): ChipConfi
         'picked_up',
         'in_transit',
         'out_for_delivery',
+        'pending_payment',
       ].includes(context.orderStatus)) {
         return DELIVERY_TRACKING_CHIPS;
       }
