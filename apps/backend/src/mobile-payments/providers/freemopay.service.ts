@@ -1,5 +1,6 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ModuleRef } from '@nestjs/core';
 import { randomUUID } from 'crypto';
 import axios, { AxiosInstance } from 'axios';
 import { FreemopayConfig } from '../../config/configuration';
@@ -53,7 +54,7 @@ export interface FreemopayTransactionStatus {
 }
 
 @Injectable()
-export class FreemopayService {
+export class FreemopayService implements OnModuleInit {
   private readonly logger = new Logger(FreemopayService.name);
   private readonly httpClient: AxiosInstance;
   private readonly config: FreemopayConfig;
@@ -61,11 +62,11 @@ export class FreemopayService {
   private readonly mockThreshold = 2000;
   private readonly mockCallbackDelayMs = 1500;
   private readonly mockOutcomes = new Map<string, { outcome: 'SUCCESS' | 'FAILED'; amount: number }>();
+  private callbackProcessor: MobilePaymentCallbackProcessor | null = null;
 
   constructor(
     private readonly configService: ConfigService,
-    @Inject(forwardRef(() => 'MobilePaymentCallbackProcessor'))
-    private readonly callbackProcessor: MobilePaymentCallbackProcessor | null
+    private readonly moduleRef: ModuleRef
   ) {
     const freemopayConfig = this.configService.get<FreemopayConfig>('freemopay');
 
@@ -122,6 +123,34 @@ export class FreemopayService {
         return Promise.reject(error);
       }
     );
+  }
+
+  /**
+   * Lazy-resolve the callback processor from the module graph.
+   * This avoids circular DI issues since FreemopayService is in global
+   * MobilePaymentsCoreModule but MobilePaymentCallbackProcessor is in
+   * MobilePaymentsModule (which imports Core).
+   */
+  async onModuleInit(): Promise<void> {
+    try {
+      // Try to resolve the callback processor from the module graph
+      this.callbackProcessor = this.moduleRef.get('MobilePaymentCallbackProcessor', {
+        strict: false,
+      });
+      if (this.callbackProcessor && this.mockEnabled) {
+        this.logger.log(
+          '✅ Callback processor resolved for mock auto-callbacks'
+        );
+      }
+    } catch (error) {
+      // Processor not available (e.g., in isolated unit tests)
+      this.callbackProcessor = null;
+      if (this.mockEnabled) {
+        this.logger.warn(
+          'Callback processor not available - auto-callbacks will be skipped'
+        );
+      }
+    }
   }
 
   /**

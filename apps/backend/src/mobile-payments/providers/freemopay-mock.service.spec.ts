@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { ModuleRef } from '@nestjs/core';
 import { FreemopayService } from './freemopay.service';
 import type { FreemopayConfig } from '../../config/configuration';
 import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
@@ -8,9 +9,14 @@ describe('FreemopayService Mock', () => {
   let service: FreemopayService;
   let configService: ConfigService;
   let mockCallbackProcessor: jest.Mocked<MobilePaymentCallbackProcessor>;
+  let mockModuleRef: jest.Mocked<ModuleRef>;
 
   describe('Mock Disabled (Production Safety)', () => {
     beforeEach(async () => {
+      mockModuleRef = {
+        get: jest.fn().mockReturnValue(null),
+      } as any;
+
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           FreemopayService,
@@ -32,14 +38,17 @@ describe('FreemopayService Mock', () => {
             },
           },
           {
-            provide: 'MobilePaymentCallbackProcessor',
-            useValue: null,
+            provide: ModuleRef,
+            useValue: mockModuleRef,
           },
         ],
       }).compile();
 
       service = module.get<FreemopayService>(FreemopayService);
       configService = module.get<ConfigService>(ConfigService);
+
+      // Initialize the service
+      await service.onModuleInit();
     });
 
     it('should be defined', () => {
@@ -83,6 +92,15 @@ describe('FreemopayService Mock', () => {
         processFreemopayCallback: jest.fn().mockResolvedValue({ received: true, reference: 'mock-ref' }),
       } as any;
 
+      mockModuleRef = {
+        get: jest.fn().mockImplementation((token: string) => {
+          if (token === 'MobilePaymentCallbackProcessor') {
+            return mockCallbackProcessor;
+          }
+          return null;
+        }),
+      } as any;
+
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           FreemopayService,
@@ -104,14 +122,17 @@ describe('FreemopayService Mock', () => {
             },
           },
           {
-            provide: 'MobilePaymentCallbackProcessor',
-            useValue: mockCallbackProcessor,
+            provide: ModuleRef,
+            useValue: mockModuleRef,
           },
         ],
       }).compile();
 
       service = module.get<FreemopayService>(FreemopayService);
       configService = module.get<ConfigService>(ConfigService);
+
+      // Initialize the service to resolve the callback processor
+      await service.onModuleInit();
     });
 
     it('should enable mock when amountMockEnabled is true', () => {
@@ -505,6 +526,10 @@ describe('FreemopayService Mock', () => {
 
       it('should not schedule callback if processor is not available', async () => {
         // Create a service without callback processor
+        const mockModuleRefWithoutProcessor = {
+          get: jest.fn().mockReturnValue(null),
+        } as any;
+
         const moduleWithoutProcessor = await Test.createTestingModule({
           providers: [
             FreemopayService,
@@ -526,13 +551,14 @@ describe('FreemopayService Mock', () => {
               },
             },
             {
-              provide: 'MobilePaymentCallbackProcessor',
-              useValue: null,
+              provide: ModuleRef,
+              useValue: mockModuleRefWithoutProcessor,
             },
           ],
         }).compile();
 
         const serviceWithoutProcessor = moduleWithoutProcessor.get<FreemopayService>(FreemopayService);
+        await serviceWithoutProcessor.onModuleInit();
 
         const result = await serviceWithoutProcessor.initiatePayment({
           payer: '237600000000',
@@ -574,6 +600,28 @@ describe('FreemopayService Mock', () => {
         jest.advanceTimersByTime(500);
         await Promise.resolve();
         expect(mockCallbackProcessor.processFreemopayCallback).toHaveBeenCalledTimes(1);
+      });
+
+      it('should resolve callback processor via ModuleRef on init', async () => {
+        // Verify that ModuleRef.get was called to resolve the processor
+        expect(mockModuleRef.get).toHaveBeenCalledWith(
+          'MobilePaymentCallbackProcessor',
+          { strict: false }
+        );
+
+        // Verify that the resolved processor is used for auto-callbacks
+        await service.initiatePayment({
+          payer: '237600000000',
+          amount: 1000,
+          externalId: 'test-ref',
+          description: 'Test payment',
+          callback: 'http://localhost:3000/callback',
+        });
+
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+
+        expect(mockCallbackProcessor.processFreemopayCallback).toHaveBeenCalled();
       });
     });
   });
