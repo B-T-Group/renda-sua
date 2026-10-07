@@ -24,14 +24,18 @@ export type AssistantChatResponse = {
 
 export async function postAssistantChat(
   messages: AssistantChatMessagePayload[],
-  marketContext?: AssistantMarketContext | null
+  marketContext?: AssistantMarketContext | null,
+  threadId?: string
 ): Promise<AssistantChatResponse> {
   const token = await Auth0DirectService.getAccessToken();
-  const body: { messages: AssistantChatMessagePayload[]; market?: AssistantMarketContext } = {
+  const body: { messages: AssistantChatMessagePayload[]; market?: AssistantMarketContext; threadId?: string } = {
     messages,
   };
   if (marketContext) {
     body.market = marketContext;
+  }
+  if (threadId) {
+    body.threadId = threadId;
   }
   if (token) {
     return api.post<AssistantChatResponse>('/assistant/chat', body);

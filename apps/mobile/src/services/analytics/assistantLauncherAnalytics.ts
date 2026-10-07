@@ -91,3 +91,45 @@ export function trackNudgeDismissed(ctx: LauncherEventContext, reason: NudgeDism
 export function trackAttentionPlayed(ctx: LauncherEventContext, trigger: AttentionTrigger): void {
   send('assistant.attention.played', ctx, { trigger });
 }
+
+/** Phase 0 funnel events (#451 Phase 0) */
+export function trackChatOpened(ctx: LauncherEventContext): void {
+  send('assistant.chat.opened', ctx, {});
+}
+
+export function trackMessageSent(ctx: LauncherEventContext): void {
+  send('assistant.message.sent', ctx, {});
+}
+
+export function trackChipTap(ctx: LauncherEventContext, chipId: string): void {
+  send('assistant.chip.tap', ctx, { chip_id: chipId });
+}
+
+export function trackDeeplinkShown(
+  ctx: LauncherEventContext,
+  type: string,
+  position: number,
+  targetId?: string
+): void {
+  const extra: Record<string, string | number> = { type, position };
+  if (targetId) extra.target_id = targetId;
+  send('assistant.deeplink.shown', ctx, extra as Record<string, string>);
+}
+
+export function trackDeeplinkTap(
+  ctx: LauncherEventContext,
+  type: string,
+  targetId?: string
+): void {
+  const extra: Record<string, string> = { type };
+  if (targetId) extra.target_id = targetId;
+  send('assistant.deeplink.tap', ctx, extra);
+}
+
+export function trackHandoffRequested(ctx: LauncherEventContext): void {
+  send('assistant.handoff.requested', ctx, {});
+}
+
+export function trackErrorShown(ctx: LauncherEventContext, kind: 'network' | 'server' | 'rate_limited'): void {
+  send('assistant.error.shown', ctx, { kind });
+}
