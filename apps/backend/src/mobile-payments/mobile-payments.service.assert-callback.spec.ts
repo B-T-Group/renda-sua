@@ -51,3 +51,31 @@ describe('MobilePaymentsService.assertProviderConfirmsCallback', () => {
     ).rejects.toThrow(/provider reports success/i);
   });
 });
+
+describe('MobilePaymentsService.resolveAdminIntegrationProvider', () => {
+  const service = Object.create(
+    MobilePaymentsService.prototype
+  ) as MobilePaymentsService;
+
+  it('sends every +237 number to FreemoPay for payment and callback', () => {
+    const phone = '+237640448217';
+    expect(service.resolveProviderFromRequest({ customerPhone: phone })).toBe(
+      'freemopay'
+    );
+    expect(service.resolveAdminIntegrationProvider(phone, 'mypvit')).toBe(
+      'freemopay'
+    );
+  });
+
+  it('keeps a stored FreemoPay rail when the phone is not Cameroon', () => {
+    expect(
+      service.resolveAdminIntegrationProvider('+24106123456', 'freemopay')
+    ).toBe('freemopay');
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '+24106123456',
+        provider: 'freemopay',
+      })
+    ).toBe('freemopay');
+  });
+});
