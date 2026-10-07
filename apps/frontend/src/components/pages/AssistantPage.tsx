@@ -831,9 +831,8 @@ const AssistantPage: React.FC = () => {
   // The "Thinking…" subtitle is paired with the character's Thinking (≥ 400 ms).
   const isThinking = isSending || characterState === 'thinking';
   
-  // TODO: Accept context via state/props when navigation supports it
   const location = useLocation();
-  const context: AssistantContext | undefined = (location.state as any)?.context;
+  const context: AssistantContext | undefined = (location.state as { context?: AssistantContext })?.context;
 
   // The page is a viewport-sized column; start it flush under the site top bar.
   useEffect(() => {

@@ -158,9 +158,9 @@ export function getContextualChips(context?: AssistantContext | null): ChipConfi
  * Uses the translated label as-is to preserve i18n interpolation.
  */
 export function buildChipMessage(
-  chip: ChipConfig,
+  _chip: ChipConfig,
   translatedLabel: string,
-  context?: AssistantContext | null
+  _context?: AssistantContext | null
 ): string {
   // Use the translated label as-is - i18n should handle interpolation
   // For context-specific customization, the translation key itself should use placeholders
