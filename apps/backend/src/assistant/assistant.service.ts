@@ -269,7 +269,7 @@ export class AssistantService implements OnModuleInit {
       : 'The customer market is unknown.';
     
     const shoppingGuidance = hasShoppingTools
-      ? `When the customer expresses buy or availability intent ("I want to buy...", "Do you have...", "Show me..."), call search_catalog (clarify the product if vague). Only call list_supported_country_states for explicit coverage questions ("which countries do you serve?").`
+      ? `When the customer expresses buy or availability intent ("I want to buy...", "Do you have...", "Show me..."), call search_catalog (clarify the product if vague). Only call list_supported_country_states for explicit coverage questions ("which countries do you serve?"). IMPORTANT: Never claim or guess stock availability unless search_catalog explicitly returned availability data for that specific product. If availability is not in the tool result, do not mention stock status.`
       : market
       ? `When the customer expresses buy or availability intent, clarify what they want to buy, then guide them to search in the app. Never ask which country they are in — you already know.`
       : `When the customer expresses buy or availability intent and you don't know their market, ask which country they are in so you can help them find products.`;

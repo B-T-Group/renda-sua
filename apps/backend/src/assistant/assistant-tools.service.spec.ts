@@ -96,6 +96,178 @@ describe('AssistantToolsService', () => {
     expect(tools).toContain('get_my_profile_summary');
   });
 
+  it('adds search_catalog tool when assistant_shopping_v1 is enabled', async () => {
+    appConfig.getClientFlags.mockResolvedValue({
+      assistant_shopping_v1: true,
+    });
+    const config = await service.buildToolConfig(anonymous);
+    const tools = config.tools.map((t) => t.toolSpec?.name);
+    expect(tools).toContain('search_catalog');
+  });
+
+  it('omits search_catalog tool when flag is off', async () => {
+    appConfig.getClientFlags.mockResolvedValue({
+      assistant_shopping_v1: false,
+    });
+    const config = await service.buildToolConfig(anonymous);
+    const tools = config.tools.map((t) => t.toolSpec?.name);
+    expect(tools).not.toContain('search_catalog');
+  });
+
+  it('search_catalog builds correct /items/:id routes', async () => {
+    process.env.FRONTEND_URL = 'https://test.rendasua.com';
+    inventoryItems.getInventorySearchSuggestions.mockResolvedValue([
+      {
+        kind: 'product',
+        inventoryId: 'inv-123',
+        title: 'Test Phone',
+        price: 50000,
+        currency: 'XAF',
+        available: true,
+      },
+    ]);
+
+    const result = await service.executeTool({
+      name: 'search_catalog',
+      input: { query: 'phone' },
+      identity: { ...anonymous, market: { country_code: 'CM' } },
+      locale: 'en',
+    });
+
+    expect(result.content).toContain('https://test.rendasua.com/items/inv-123');
+    expect(result.content).not.toContain('/inventory/');
+    delete process.env.FRONTEND_URL;
+  });
+
+  it('search_catalog builds correct search results link', async () => {
+    process.env.FRONTEND_URL = 'https://test.rendasua.com';
+    inventoryItems.getInventorySearchSuggestions.mockResolvedValue([
+      {
+        kind: 'product',
+        inventoryId: 'inv-123',
+        title: 'Test Phone',
+        price: 50000,
+        currency: 'XAF',
+      },
+    ]);
+
+    const result = await service.executeTool({
+      name: 'search_catalog',
+      input: { query: 'phone case' },
+      identity: { ...anonymous, market: { country_code: 'CM' } },
+      locale: 'en',
+    });
+
+    expect(result.content).toContain('https://test.rendasua.com/items?search=phone%20case');
+    expect(result.content).not.toContain('/shop?q=');
+    delete process.env.FRONTEND_URL;
+  });
+
+  it('search_catalog uses production URL by default', async () => {
+    delete process.env.FRONTEND_URL;
+    inventoryItems.getInventorySearchSuggestions.mockResolvedValue([
+      {
+        kind: 'product',
+        inventoryId: 'inv-123',
+        title: 'Test Phone',
+        price: 50000,
+        currency: 'XAF',
+      },
+    ]);
+
+    const result = await service.executeTool({
+      name: 'search_catalog',
+      input: { query: 'phone' },
+      identity: { ...anonymous, market: { country_code: 'CM' } },
+      locale: 'en',
+    });
+
+    expect(result.content).toContain('https://rendasua.com/items/inv-123');
+  });
+
+  it('search_catalog shows availability when provided', async () => {
+    inventoryItems.getInventorySearchSuggestions.mockResolvedValue([
+      {
+        kind: 'product',
+        inventoryId: 'inv-123',
+        title: 'Available Item',
+        price: 5000,
+        currency: 'XAF',
+        available: true,
+      },
+      {
+        kind: 'product',
+        inventoryId: 'inv-456',
+        title: 'Out of Stock Item',
+        price: 10000,
+        currency: 'XAF',
+        available: false,
+      },
+    ]);
+
+    const result = await service.executeTool({
+      name: 'search_catalog',
+      input: { query: 'items' },
+      identity: { ...anonymous, market: { country_code: 'CM' } },
+      locale: 'en',
+    });
+
+    expect(result.content).toContain('Available Item');
+    expect(result.content).not.toContain('Available Item] (currently unavailable)');
+    expect(result.content).toContain('Out of Stock Item');
+    expect(result.content).toContain('(currently unavailable)');
+  });
+
+  it('search_catalog shows price with currency when both present', async () => {
+    inventoryItems.getInventorySearchSuggestions.mockResolvedValue([
+      {
+        kind: 'product',
+        inventoryId: 'inv-123',
+        title: 'Phone XAF',
+        price: 50000,
+        currency: 'XAF',
+      },
+      {
+        kind: 'product',
+        inventoryId: 'inv-456',
+        title: 'Phone CAD',
+        price: 100,
+        currency: 'CAD',
+      },
+      {
+        kind: 'product',
+        inventoryId: 'inv-789',
+        title: 'Phone No Currency',
+        price: 200,
+        currency: null,
+      },
+    ]);
+
+    const result = await service.executeTool({
+      name: 'search_catalog',
+      input: { query: 'phone' },
+      identity: { ...anonymous, market: { country_code: 'CM' } },
+      locale: 'en',
+    });
+
+    expect(result.content).toContain('Phone XAF') && expect(result.content).toContain('50000 XAF');
+    expect(result.content).toContain('Phone CAD') && expect(result.content).toContain('100 CAD');
+    expect(result.content).toContain('Phone No Currency');
+    expect(result.content).not.toContain('200 null');
+  });
+
+  it('search_catalog requires market context', async () => {
+    const result = await service.executeTool({
+      name: 'search_catalog',
+      input: { query: 'phone' },
+      identity: { ...anonymous, market: null },
+      locale: 'en',
+    });
+
+    expect(result.content).toContain('Market information is required');
+    expect(inventoryItems.getInventorySearchSuggestions).not.toHaveBeenCalled();
+  });
+
   it('returns curated knowledge for payments', async () => {
     const result = await service.executeTool({
       name: 'get_knowledge',
@@ -197,7 +369,8 @@ describe('AssistantToolsService', () => {
         include_unavailable: false,
       });
       expect(result.content).toContain('Samsung Galaxy');
-      expect(result.content).toContain('/inventory/item-1');
+      expect(result.content).toContain('/items/item-1');
+      expect(result.content).not.toContain('/inventory/');
       expect(result.content).toContain('150000 XAF');
       expect(result.content).toContain('Electronics');
     });

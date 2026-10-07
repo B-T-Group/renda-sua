@@ -30,6 +30,9 @@ import { RendaCharacter } from '@/components/assistant/renda/RendaCharacter';
 import { StageDisc } from '@/components/assistant/renda/rendaCharacterLayers';
 import { useInteractionSettled } from '@/components/assistant/launcher/launcherHooks';
 import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher';
+import type { AssistantContext } from '@/utils/assistantChips';
+import { getContextualChips, buildChipMessage } from '@/utils/assistantChips';
+import { trackSiteEvent } from '@/services/AppEventsService';
 
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
 /** AC9: the composer grows with the text up to 4 rows, then scrolls. */
@@ -253,12 +256,33 @@ const EmptyHero = observer(function EmptyHero() {
   );
 });
 
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+function EmptyState({
+  onPick,
+  context,
+}: {
+  onPick: (text: string) => void;
+  context?: AssistantContext;
+}) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const store = useStore();
   const firstName = store.auth.user?.firstName?.trim();
   const character = useShowsRendaCharacter();
+  const chips = getContextualChips(context);
+
+  const handleChipTap = useCallback(
+    (chipId: string, label: string) => {
+      trackSiteEvent({
+        eventType: 'assistant.chip.tap',
+        metadata: {
+          chip_id: chipId,
+          context: context?.type || 'generic',
+        },
+      });
+      onPick(label);
+    },
+    [context, onPick]
+  );
 
   return (
     <View style={styles.empty}>
@@ -272,12 +296,13 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
           : t('assistant.emptyTitle', 'Hi! What do you need today?')}
       </Text>
       <View style={styles.chips}>
-        {SUGGESTIONS.map((item) => {
-          const label = t(item.key, item.fallback);
+        {chips.map((chip) => {
+          const label = t(chip.translationKey, chip.fallback);
+          const message = buildChipMessage(chip, label, context);
           return (
             <Pressable
-              key={item.key}
-              onPress={() => onPick(label)}
+              key={chip.id}
+              onPress={() => handleChipTap(chip.id, message)}
               accessibilityRole="button"
               hitSlop={{ top: 4, bottom: 4 }}
               style={({ pressed }) => [
@@ -298,23 +323,17 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   );
 }
 
-const SUGGESTIONS = [
-  { key: 'assistant.suggestion.location', fallback: 'Where are you located?' },
-  {
-    key: 'assistant.suggestion.payDelivery',
-    fallback: 'Do you support payment at delivery?',
-  },
-  {
-    key: 'assistant.suggestion.pickup',
-    fallback: 'Do you support in-store pickup?',
-  },
-  {
-    key: 'assistant.suggestion.mobilePay',
-    fallback: 'Do you support mobile payments?',
-  },
-] as const;
+type AssistantChatScreenProps = {
+  route?: {
+    params?: {
+      context?: AssistantContext;
+    };
+  };
+};
 
-const AssistantChatScreen = observer(function AssistantChatScreen() {
+const AssistantChatScreen = observer(function AssistantChatScreen({
+  route,
+}: AssistantChatScreenProps) {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();

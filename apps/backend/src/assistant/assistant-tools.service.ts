@@ -58,6 +58,7 @@ export class AssistantToolsService {
     }
     
     if (identity.userId) tools.push(...this.userTools(identity));
+    if (identity.clientId) tools.push(this.reorderOptionsTool());
     return { tools };
   }
 
@@ -129,7 +130,8 @@ export class AssistantToolsService {
     if (!request.identity.userId) return { content: 'Authentication is required.' };
     if (
       request.name === 'get_my_recent_orders' ||
-      request.name === 'get_order_status'
+      request.name === 'get_order_status' ||
+      request.name === 'get_reorder_options'
     ) {
       if (!request.identity.clientId) {
         return {
@@ -142,6 +144,7 @@ export class AssistantToolsService {
       return this.getOrders(request.identity.userId!);
     }
     if (request.name === 'get_order_status') return this.getOrder(request);
+    if (request.name === 'get_reorder_options') return this.getReorderOptions(request);
     if (request.name === 'get_my_addresses') {
       return this.getAddresses(request.identity);
     }
@@ -270,6 +273,7 @@ export class AssistantToolsService {
           title: string;
           price: number;
           currency: string;
+          available?: boolean;
         }>;
       const categories = suggestions
         .filter((s: { kind: string }) => s.kind === 'category')
@@ -283,21 +287,22 @@ export class AssistantToolsService {
       if (products.length > 0) {
         formatted.push('**Products:**');
         for (const p of products) {
-          const itemLink = `${baseUrl}/inventory/${p.inventoryId}`;
-          const price = p.price ? ` - ${p.price} ${p.currency}` : '';
-          formatted.push(`- [${p.title}](${itemLink})${price}`);
+          const itemLink = `${baseUrl}/items/${p.inventoryId}`;
+          const price = p.price && p.currency ? ` - ${p.price} ${p.currency}` : '';
+          const availability = p.available === false ? ' (currently unavailable)' : '';
+          formatted.push(`- [${p.title}](${itemLink})${price}${availability}`);
         }
       }
 
       if (categories.length > 0) {
         formatted.push('\n**Categories:**');
         for (const c of categories) {
-          const catLink = `${baseUrl}/shop?category=${encodeURIComponent(c.value)}`;
+          const catLink = `${baseUrl}/items?search=${encodeURIComponent(c.value)}`;
           formatted.push(`- [${c.value}](${catLink})`);
         }
       }
 
-      const searchLink = `${baseUrl}/shop?q=${encodeURIComponent(query)}`;
+      const searchLink = `${baseUrl}/items?search=${encodeURIComponent(query)}`;
       formatted.push(`\n[View all results for "${query}"](${searchLink})`);
 
       return { content: formatted.join('\n') };
@@ -318,6 +323,51 @@ export class AssistantToolsService {
         preferredLanguage: identity.preferredLanguage,
       }),
     };
+  }
+
+  private async getReorderOptions(
+    request: ToolRequest
+  ): Promise<AssistantToolResult> {
+    const result = await this.hasura.executeQuery<{
+      orders: Array<{
+        id: string;
+        order_number: string;
+        current_status: string;
+        total_amount: number;
+        currency: string;
+        created_at: string;
+        business: { id: string; name: string };
+      }>;
+    }>(REORDER_OPTIONS_QUERY, { userId: request.identity.userId });
+
+    const orders = result.orders || [];
+    if (orders.length === 0) {
+      return {
+        content:
+          'No recent completed orders found. The customer has not placed any orders yet.',
+      };
+    }
+
+    const baseUrl = process.env.FRONTEND_URL || 'https://rendasua.com';
+    const formatted = ['**Recent orders you can reorder:**\n'];
+
+    for (const order of orders.slice(0, 5)) {
+      const date = new Date(order.created_at).toLocaleDateString(
+        request.locale === 'fr' ? 'fr-FR' : 'en-US',
+        { year: 'numeric', month: 'short', day: 'numeric' }
+      );
+      const amount = `${order.total_amount} ${order.currency}`;
+      const reorderLink = `${baseUrl}/orders/${order.id}/reorder`;
+      formatted.push(
+        `- **${order.business.name}** (${date}) - ${amount} [Reorder](${reorderLink})`
+      );
+    }
+
+    formatted.push(
+      `\nTap "Reorder" to add these items to your cart at current prices.`
+    );
+
+    return { content: formatted.join('\n') };
   }
 
   private searchCatalogTool(): Tool {
@@ -427,6 +477,22 @@ export class AssistantToolsService {
     };
   }
 
+  private reorderOptionsTool(): Tool {
+    return {
+      toolSpec: {
+        name: 'get_reorder_options',
+        description:
+          'Get the customer\'s recent completed orders with reorder deep links. Use when they express reorder intent ("order again", "reorder", "my previous order"). Returns order details with tappable reorder links. Only call for customers with a client profile.',
+        inputSchema: {
+          json: {
+            type: 'object',
+            properties: {},
+          },
+        },
+      },
+    };
+  }
+
   private userTools(identity: AssistantIdentity): Tool[] {
     const tools: Tool[] = [
       simpleTool('get_my_profile_summary', 'Get the user’s profile summary.'),
@@ -500,4 +566,18 @@ const ORDER_STATUS_QUERY = `query AssistantOrderStatus(
     client: { user_id: { _eq: $userId } }
     order_number: { _eq: $orderNumber }
   }, limit: 1) { ${ORDER_FIELDS} }
+}`;
+
+const REORDER_OPTIONS_QUERY = `query AssistantReorderOptions($userId: uuid!) {
+  orders(
+    where: {
+      client: { user_id: { _eq: $userId } }
+      current_status: { _in: ["complete", "delivered"] }
+    }
+    order_by: { created_at: desc }
+    limit: 5
+  ) {
+    id order_number current_status total_amount currency created_at
+    business { id name }
+  }
 }`;

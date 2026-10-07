@@ -280,7 +280,8 @@ export type InventorySearchSuggestion =
       title: string;
       imageUrl?: string | null;
       price: number;
-      currency: string;
+      currency: string | null;
+      available?: boolean;
     }
   | { kind: 'category'; value: string }
   | {
@@ -2175,6 +2176,8 @@ export class InventoryItemsService {
     const title = row?.item?.name;
     if (!title) return;
     seenProducts.add(row.id);
+    const currency = row.item?.currency || row.business_location?.business?.currency || null;
+    const available = Number(row.computed_available_quantity ?? 0) > 0;
     suggestions.push({
       kind: 'product',
       inventoryId: row.id,
@@ -2184,7 +2187,8 @@ export class InventoryItemsService {
         row.item?.item_images?.[0]?.image_url ??
         null,
       price: Number(row.selling_price ?? 0),
-      currency: row.item?.currency ?? 'XAF',
+      currency,
+      available,
     });
   }
 
@@ -2294,6 +2298,7 @@ export class InventoryItemsService {
         business_inventory(where: $where, limit: $limit, order_by: { created_at: desc }) {
           id
           selling_price
+          computed_available_quantity
           item {
             name
             currency
@@ -2317,6 +2322,7 @@ export class InventoryItemsService {
             business {
               id
               name
+              currency
             }
           }
         }
