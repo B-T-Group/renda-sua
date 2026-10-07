@@ -47,6 +47,13 @@ export class MobilePaymentCallbackProcessor {
     private readonly mobilePaymentsService: MobilePaymentsService
   ) {}
 
+  /**
+   * Check if a transaction was mocked (provider transaction_id starts with mock-).
+   */
+  private isMockedTransaction(tx: MobilePaymentTransaction): boolean {
+    return tx.transaction_id?.startsWith('mock-') ?? false;
+  }
+
   private resolveHandlers(): PaymentCallbackHandler[] {
     return this.paymentCallbackRegistry.getHandlers();
   }
@@ -100,13 +107,22 @@ export class MobilePaymentCallbackProcessor {
     }
 
     await this.databaseService.logCallback(tx.id, callbackData);
+    
+    // Skip live provider confirmation for mocked transactions
     if (callbackData.status === 'SUCCESS' || callbackData.status === 'FAILED') {
-      // Callbacks are public and unsigned — confirm provider live status first.
-      await this.mobilePaymentsService.assertProviderConfirmsCallback(
-        tx,
-        callbackData.status
-      );
+      if (!this.isMockedTransaction(tx)) {
+        // Callbacks are public and unsigned — confirm provider live status first.
+        await this.mobilePaymentsService.assertProviderConfirmsCallback(
+          tx,
+          callbackData.status
+        );
+      } else {
+        this.logger.log(
+          `Skipping live provider confirmation for mocked transaction: ${tx.id}`
+        );
+      }
     }
+    
     await this.processPendingFreemopay(tx, callbackData);
 
     return { received: true, reference: callbackData.reference };
