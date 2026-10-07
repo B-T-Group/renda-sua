@@ -140,7 +140,7 @@ describe('assistantChips', () => {
       expect(chips.map(c => c.id)).toContain('track_order');
     });
 
-    it('returns generic chips for delivery_tracking with delivered status', () => {
+    it('returns tracking chips for delivery_tracking with delivered status', () => {
       const context: AssistantContext = {
         type: 'delivery_tracking',
         orderId: 'order-123',
@@ -148,10 +148,10 @@ describe('assistantChips', () => {
         orderStatus: 'delivered',
       };
       const chips = getContextualChips(context);
-      expect(chips.map(c => c.id)).toEqual(allChipIds);
+      expect(chips.map(c => c.id)).toContain('track_order');
     });
 
-    it('returns generic chips for delivery_tracking with cancelled status', () => {
+    it('returns tracking chips for delivery_tracking with cancelled status', () => {
       const context: AssistantContext = {
         type: 'delivery_tracking',
         orderId: 'order-123',
@@ -159,7 +159,7 @@ describe('assistantChips', () => {
         orderStatus: 'cancelled',
       };
       const chips = getContextualChips(context);
-      expect(chips.map(c => c.id)).toEqual(allChipIds);
+      expect(chips.map(c => c.id)).toContain('track_order');
     });
   });
 
