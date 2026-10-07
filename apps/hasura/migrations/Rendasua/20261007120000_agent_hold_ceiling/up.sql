@@ -50,7 +50,7 @@ INSERT INTO public.application_configurations (
 SELECT
   'agent_hold_ceiling_city',
   'Agent Hold Ceiling Pilot City',
-  'Pilot city for agent hold ceiling eligibility. Agent must have this city (case/accent/whitespace normalized) as their profile primary address city. Default Yaoundé.',
+  'Pilot city for agent hold ceiling eligibility. Agent must have this city (case/accent/whitespace normalized) as the city of their active primary agent address (or, if none is primary, their oldest active address). Default Yaoundé.',
   'string',
   'Yaoundé',
   NULL,
@@ -88,7 +88,7 @@ INSERT INTO public.application_configurations (
 SELECT
   'agent_hold_loss_weekly_cap_xaf',
   'Agent Hold Loss Weekly Cap (XAF)',
-  'Weekly XAF cap on agent-fault losses (sum of failed_deliveries.loss_amount where resolution_type=agent_fault over rolling 7 days). When exceeded and >0, loss guard auto-sets agent_hold_ceiling_enabled=false (idempotent) and alerts. Default 100000 XAF.',
+  'Weekly XAF cap on agent-fault losses (sum of order_holds.agent_hold_amount for orders with failed_deliveries.resolution_type=agent_fault resolved in the rolling last 7 days). When exceeded and >0, loss guard auto-sets agent_hold_ceiling_enabled=false (idempotent) and alerts. Default 100000 XAF.',
   'number',
   100000,
   NULL,
