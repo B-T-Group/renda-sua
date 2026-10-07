@@ -35,6 +35,7 @@ export function PlaceOrderPaymentBlock({
 }: PlaceOrderPaymentBlockProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
+  const waitingForPhone = profileLoading && !linkedPhone;
 
   return (
     <View
@@ -81,7 +82,7 @@ export function PlaceOrderPaymentBlock({
           <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>
             {t('checkout.momoPhoneHelper', 'Must match your MoMo number')}
           </Text>
-          {profileLoading ? (
+          {waitingForPhone ? (
             <ActivityIndicator />
           ) : linkedPhone ? (
             <View
