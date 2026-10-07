@@ -27,6 +27,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
 import { SessionStoreService } from './session-store.service';
 import { SignupService } from './signup.service';
 import { OtpSendLimiterService } from './otp-send-limiter.service';
+import { LockoutService } from './lockout.service';
 
 describe('SignupService', () => {
   let service: SignupService;
@@ -166,7 +167,7 @@ describe('SignupService', () => {
           },
         },
         {
-          provide: 'LockoutService',
+          provide: LockoutService,
           useValue: {
             isLockedOut: jest.fn().mockResolvedValue(false),
             recordFailure: jest.fn().mockResolvedValue(undefined),
