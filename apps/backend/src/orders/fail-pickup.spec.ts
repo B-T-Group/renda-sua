@@ -169,7 +169,8 @@ describe('OrdersService.failPickup', () => {
       'order-1',
       'business',
       'client_no_show',
-      'ready_for_pickup'
+      'ready_for_pickup',
+      'order.cancelled:order-1'
     );
     expect(harness.handleDepositOnCancellation).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'order-1' }),
@@ -260,7 +261,8 @@ describe('OrdersService.failPickup', () => {
       'order-1',
       'business',
       'client_no_show',
-      'ready_for_pickup'
+      'ready_for_pickup',
+      'order.cancelled:order-1'
     );
     expect(harness.handleDepositOnCancellation).toHaveBeenCalledWith(
       expect.objectContaining({
