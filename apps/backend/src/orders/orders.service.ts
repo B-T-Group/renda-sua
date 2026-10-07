@@ -6298,7 +6298,8 @@ export class OrdersService {
         request.orderId,
         'business',
         CLIENT_NO_SHOW_REASON,
-        'ready_for_pickup'
+        'ready_for_pickup',
+        `order.cancelled:${request.orderId}`
       );
     } catch (error: any) {
       this.logger.error(

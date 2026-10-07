@@ -118,7 +118,8 @@ export class OrderSystemJobsService {
         orderId,
         'system',
         'Auto-declined: merchant did not accept within the acceptance window',
-        previousStatus
+        previousStatus,
+        `order.cancelled:${orderId}`
       );
       try {
         await this.notifyClientMerchantUnavailable(order, orderId);
@@ -179,7 +180,8 @@ export class OrderSystemJobsService {
         orderId,
         'system',
         'Auto-declined: merchant did not accept within the acceptance window',
-        previousStatus
+        previousStatus,
+        `order.cancelled:${orderId}`
       )
       .catch((error: any) =>
         this.logger.error(
@@ -634,7 +636,8 @@ export class OrderSystemJobsService {
         orderId,
         cancelledBy,
         notes,
-        previousStatus
+        previousStatus,
+        `order.cancelled:${orderId}`
       );
     } catch (error: any) {
       this.logger.error(
