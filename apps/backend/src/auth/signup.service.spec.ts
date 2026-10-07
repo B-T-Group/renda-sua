@@ -165,6 +165,15 @@ describe('SignupService', () => {
             isEnforcementEnabled: jest.fn().mockReturnValue(false),
           },
         },
+        {
+          provide: 'LockoutService',
+          useValue: {
+            isLockedOut: jest.fn().mockResolvedValue(false),
+            recordFailure: jest.fn().mockResolvedValue(undefined),
+            recordSuccess: jest.fn().mockResolvedValue(undefined),
+            getRemainingLockoutMs: jest.fn().mockResolvedValue(0),
+          },
+        },
       ],
     }).compile();
 
