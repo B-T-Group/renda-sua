@@ -14,6 +14,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@/contexts/ThemeContext';
 import { AppText } from './AppText';
 import { useLauncherSuppressor } from '../assistant/launcher/useLauncherSuppressor';
+import { sheetVisibilityCommand } from './sheetVisibility';
 
 export { BottomSheetTextInput } from '@gorhom/bottom-sheet';
 
@@ -34,12 +35,25 @@ type Props = {
 
 function useSheetVisibility(
   ref: RefObject<BottomSheetModal | null>,
-  visible: boolean
+  visible: boolean,
+  closedBySheet: RefObject<boolean>
 ) {
+  const hasOpened = useRef(false);
   useEffect(() => {
-    if (visible) ref.current?.present();
-    else ref.current?.dismiss();
-  }, [ref, visible]);
+    const command = sheetVisibilityCommand(
+      visible,
+      hasOpened.current,
+      closedBySheet.current
+    );
+    if (visible) {
+      hasOpened.current = true;
+      closedBySheet.current = false;
+    } else if (closedBySheet.current) {
+      closedBySheet.current = false;
+    }
+    if (command === 'present') ref.current?.present();
+    else if (command === 'dismiss') ref.current?.dismiss();
+  }, [closedBySheet, ref, visible]);
 }
 
 function PersistentBackdrop() {
@@ -69,7 +83,8 @@ function usePersistentDismiss(
   ref: RefObject<BottomSheetModal | null>,
   visible: boolean,
   persistent: boolean,
-  onClose: () => void
+  onClose: () => void,
+  closedBySheet: RefObject<boolean>
 ) {
   const visibleRef = useRef(visible);
   const alive = useRef(true);
@@ -79,12 +94,13 @@ function usePersistentDismiss(
   }, []);
   return useCallback(() => {
     if (!persistent) {
+      closedBySheet.current = true;
       onClose();
       return;
     }
     if (!visibleRef.current || !alive.current) return;
     requestAnimationFrame(() => ref.current?.present());
-  }, [onClose, persistent, ref]);
+  }, [closedBySheet, onClose, persistent, ref]);
 }
 
 function CloseButton({ onClose }: { onClose: () => void }) {
@@ -130,11 +146,18 @@ export function BottomSheet({
   unwrapped = false,
 }: Props) {
   const ref = useRef<BottomSheetModal>(null);
+  const closedBySheet = useRef(false);
   const insets = useSafeAreaInsets();
   const { colors, spacing, borderRadius } = useTheme();
   const renderBackdrop = useSheetBackdrop(persistent);
-  const onDismiss = usePersistentDismiss(ref, visible, persistent, onClose);
-  useSheetVisibility(ref, visible);
+  const onDismiss = usePersistentDismiss(
+    ref,
+    visible,
+    persistent,
+    onClose,
+    closedBySheet
+  );
+  useSheetVisibility(ref, visible, closedBySheet);
   useLauncherSuppressor(visible);
   const renderFooter = useCallback(
     (props: BottomSheetFooterProps) => (

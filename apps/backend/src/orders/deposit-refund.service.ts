@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { DepositCalculationService } from './deposit-calculation.service';
-import { DepositLedgerService } from './deposit-ledger.service';
+import { DepositLedgerService, depositLedgerKey } from './deposit-ledger.service';
 
 /**
  * Deposit forfeit reason codes (immutable audit trail)
@@ -278,6 +278,19 @@ export class DepositRefundService {
         depositTransactionId: order.deposit_mobile_payment_transaction_id,
       });
     } catch (error: any) {
+      // Check if the ledger is actually complete (all legs exist, despite the error).
+      // A racing forfeit may have succeeded while this one was pending, and the
+      // duplicate-key / unique-constraint error from the idempotency insert means
+      // the leg is already posted. Re-read the legs to confirm completeness.
+      const isComplete = await this.isForfeitLedgerComplete(
+        order.deposit_mobile_payment_transaction_id
+      );
+      if (isComplete) {
+        this.logger.log(
+          `Deposit forfeit legs already complete for order ${order.order_number} (concurrent forfeit won)`
+        );
+        return { success: true, message: 'Deposit forfeited to Rendasua' };
+      }
       // Claimed but incomplete: stays 'forfeited' (no other flow may touch it).
       // Calling forfeitDeposit again resumes the keyed moves without double posting.
       this.logger.error(
@@ -293,6 +306,43 @@ export class DepositRefundService {
       `Deposit forfeited for order ${order.order_number}: ${reason}`
     );
     return { success: true, message: 'Deposit forfeited to Rendasua' };
+  }
+
+  /**
+   * True only when all three keyed forfeit legs exist: client release, client
+   * payment (debit) and the HQ credit (forfeit_hq). Read by idempotency key,
+   * which is unique per leg, so a concurrent forfeit that posted a leg (and made
+   * this call hit a duplicate key) is recognised, while a half-done ledger is not.
+   */
+  private async isForfeitLedgerComplete(
+    depositTransactionId: string
+  ): Promise<boolean> {
+    const keys = (['release', 'payment', 'forfeit_hq'] as const).map((m) =>
+      depositLedgerKey(depositTransactionId, m)
+    );
+    try {
+      const legs = await this.hasuraSystemService.executeQuery<{
+        account_transactions: Array<{ idempotency_key: string | null }>;
+      }>(
+        `
+        query GetForfeitLegs($keys: [String!]!) {
+          account_transactions(where: { idempotency_key: { _in: $keys } }) {
+            idempotency_key
+          }
+        }
+        `,
+        { keys }
+      );
+      const found = new Set(
+        (legs?.account_transactions ?? []).map((t) => t.idempotency_key)
+      );
+      return keys.every((k) => found.has(k));
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to check forfeit ledger completeness: ${error?.message}`
+      );
+      return false;
+    }
   }
 
   /** Already forfeited: finish any missing keyed ledger move (no-op when complete). */

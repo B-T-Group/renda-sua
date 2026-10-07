@@ -220,7 +220,8 @@ describe('Reservation deposit money flow (service level)', () => {
       ORDER_ID,
       'business',
       'client_no_show',
-      'ready_for_pickup'
+      'ready_for_pickup',
+      `order.cancelled:${ORDER_ID}`
     );
     expect(h.db.unhandled).toEqual([]);
   });
@@ -467,7 +468,8 @@ describe('Reservation deposit money flow (service level)', () => {
       ORDER_ID,
       'business',
       'client_no_show',
-      'ready_for_pickup'
+      'ready_for_pickup',
+      `order.cancelled:${ORDER_ID}`
     );
     expect(releaseStock).toHaveBeenCalledTimes(1);
   });
@@ -495,7 +497,8 @@ describe('Reservation deposit money flow (service level)', () => {
       ORDER_ID,
       'client',
       undefined,
-      'ready_for_pickup'
+      'ready_for_pickup',
+      `order.cancelled:${ORDER_ID}`
     );
     expect(releaseStock).not.toHaveBeenCalled();
   });

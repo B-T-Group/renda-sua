@@ -120,7 +120,8 @@ describe('OrderSystemJobsService stale authorized cancel', () => {
       orderId,
       'system',
       'Auto-cancelled: no agent claimed within timeout',
-      'ready_for_pickup'
+      'ready_for_pickup',
+      `order.cancelled:${orderId}`
     );
   });
 

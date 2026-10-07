@@ -26,6 +26,13 @@ export type OrderStatusUpdateOptions = {
   viaSystem?: boolean;
   /** Business fail-pickup from ready_for_pickup (POST /orders/:id/fail-pickup). */
   viaFailPickupEndpoint?: boolean;
+  /**
+   * Cancel compare-and-set: the status the caller validated. If the order is no
+   * longer in this status (or is already cancelled), throw 409 before any write.
+   * The conditional update then only matches this status, so exactly one
+   * concurrent cancel wins.
+   */
+  expectedFromStatus?: string;
 };
 
 @Injectable()
@@ -157,6 +164,10 @@ export class OrderStatusService {
       // Cooked-food auto prep / auto-ready system transitions
     } else if (newStatus === 'cancelled') {
       this.assertCancelViaDedicatedEndpoint(options?.viaCancelEndpoint);
+      this.assertCancelFromExpectedStatus(
+        order.current_status,
+        options?.expectedFromStatus
+      );
     } else if (
       order.current_status === 'ready_for_pickup' &&
       newStatus === 'failed'
@@ -406,6 +417,30 @@ export class OrderStatusService {
   }
 
   /** Cancel is never a generic status transition — use POST /orders/cancel. */
+  /**
+   * cancelled → cancelled is never a real transition: a concurrent cancel
+   * already won. Also reject when the order moved off the status the caller
+   * validated. Losers get 409 with no write, no event and no side effects.
+   */
+  private assertCancelFromExpectedStatus(
+    currentStatus: string,
+    expectedFromStatus?: string
+  ): void {
+    const alreadyCancelled = currentStatus === 'cancelled';
+    const moved =
+      typeof expectedFromStatus === 'string' &&
+      expectedFromStatus.length > 0 &&
+      currentStatus !== expectedFromStatus;
+    if (!alreadyCancelled && !moved) return;
+    this.logger.warn(
+      `Cancel rejected: order is ${currentStatus}, expected ${expectedFromStatus ?? 'a cancellable status'}`
+    );
+    throw new HttpException(
+      'Order status already changed. Please refresh and try again.',
+      HttpStatus.CONFLICT
+    );
+  }
+
   private assertCancelViaDedicatedEndpoint(
     viaCancelEndpoint?: boolean
   ): void {
