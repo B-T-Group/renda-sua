@@ -1,9 +1,11 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import axios, { AxiosInstance } from 'axios';
 import { FreemopayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
+import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
+import type { FreemopayCallbackDto } from '../mobile-payment-callback.dto';
 
 export interface FreemopayPaymentRequest {
   payer: string;
@@ -57,9 +59,14 @@ export class FreemopayService {
   private readonly config: FreemopayConfig;
   private readonly mockEnabled: boolean;
   private readonly mockThreshold = 2000;
+  private readonly mockCallbackDelayMs = 1500;
   private readonly mockOutcomes = new Map<string, { outcome: 'SUCCESS' | 'FAILED'; amount: number }>();
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Inject(forwardRef(() => 'MobilePaymentCallbackProcessor'))
+    private readonly callbackProcessor: MobilePaymentCallbackProcessor | null
+  ) {
     const freemopayConfig = this.configService.get<FreemopayConfig>('freemopay');
 
     this.config = {
@@ -140,6 +147,54 @@ export class FreemopayService {
   }
 
   /**
+   * Schedule an auto-callback for a mock transaction after a short delay.
+   * This simulates FreemoPay's async callback behavior.
+   */
+  private scheduleAutoCallback(
+    mockReference: string,
+    externalId: string,
+    outcome: 'SUCCESS' | 'FAILED'
+  ): void {
+    if (!this.callbackProcessor) {
+      this.logger.warn(
+        `Cannot schedule auto-callback for ${mockReference}: callback processor not available`
+      );
+      return;
+    }
+
+    setTimeout(async () => {
+      try {
+        const callbackData: FreemopayCallbackDto = {
+          reference: mockReference,
+          status: outcome,
+          merchantRef: externalId,
+          externalId,
+          message:
+            outcome === 'SUCCESS'
+              ? 'Mock payment succeeded'
+              : 'Mock payment failed (amount >= threshold)',
+          reason:
+            outcome === 'FAILED'
+              ? 'Mock failure (amount >= threshold)'
+              : undefined,
+        };
+
+        this.logger.log(
+          `🔨 AUTO-CALLBACK triggered for ${mockReference}: ${outcome} (delay=${this.mockCallbackDelayMs}ms)`
+        );
+
+        await this.callbackProcessor!.processFreemopayCallback(callbackData);
+      } catch (error: any) {
+        this.logger.error(
+          `Failed to process auto-callback for ${mockReference}: ${
+            error?.message || error
+          }`
+        );
+      }
+    }, this.mockCallbackDelayMs);
+  }
+
+  /**
    * Simulate a mock payment initiation.
    */
   private mockInitiatePayment(
@@ -154,8 +209,11 @@ export class FreemopayService {
     this.mockOutcomes.set(mockRef, { outcome, amount: paymentRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FreemoPay payment: amount=${paymentRequest.amount} XAF, payer=${paymentRequest.payer}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome}`
+      `🔨 MOCK FreemoPay payment: amount=${paymentRequest.amount} XAF, payer=${paymentRequest.payer}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
     );
+
+    // Schedule auto-callback
+    this.scheduleAutoCallback(mockRef, externalId, outcome);
 
     return {
       success: true,
@@ -181,8 +239,11 @@ export class FreemopayService {
     this.mockOutcomes.set(mockRef, { outcome, amount: withdrawalRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FreemoPay withdrawal: amount=${withdrawalRequest.amount} XAF, payee=${withdrawalRequest.payee}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome}`
+      `🔨 MOCK FreemoPay withdrawal: amount=${withdrawalRequest.amount} XAF, payee=${withdrawalRequest.payee}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
     );
+
+    // Schedule auto-callback
+    this.scheduleAutoCallback(mockRef, externalId, outcome);
 
     return {
       success: true,

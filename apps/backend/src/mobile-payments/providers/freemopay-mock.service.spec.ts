@@ -2,10 +2,12 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { FreemopayService } from './freemopay.service';
 import type { FreemopayConfig } from '../../config/configuration';
+import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
 
 describe('FreemopayService Mock', () => {
   let service: FreemopayService;
   let configService: ConfigService;
+  let mockCallbackProcessor: jest.Mocked<MobilePaymentCallbackProcessor>;
 
   describe('Mock Disabled (Production Safety)', () => {
     beforeEach(async () => {
@@ -28,6 +30,10 @@ describe('FreemopayService Mock', () => {
                 return undefined;
               }),
             },
+          },
+          {
+            provide: 'MobilePaymentCallbackProcessor',
+            useValue: null,
           },
         ],
       }).compile();
@@ -73,6 +79,10 @@ describe('FreemopayService Mock', () => {
 
   describe('Mock Enabled (DEV/Test)', () => {
     beforeEach(async () => {
+      mockCallbackProcessor = {
+        processFreemopayCallback: jest.fn().mockResolvedValue({ received: true, reference: 'mock-ref' }),
+      } as any;
+
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           FreemopayService,
@@ -92,6 +102,10 @@ describe('FreemopayService Mock', () => {
                 return undefined;
               }),
             },
+          },
+          {
+            provide: 'MobilePaymentCallbackProcessor',
+            useValue: mockCallbackProcessor,
           },
         ],
       }).compile();
@@ -367,6 +381,199 @@ describe('FreemopayService Mock', () => {
         expect(service['isMockedTransaction']('mock-123-abc')).toBe(true);
         expect(service['isMockedTransaction']('live-ref-123')).toBe(false);
         expect(service['isMockedTransaction']('')).toBe(false);
+      });
+    });
+
+    describe('Auto-Callback', () => {
+      beforeEach(() => {
+        jest.useFakeTimers();
+      });
+
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      it('should schedule auto-callback after payment initiation (SUCCESS)', async () => {
+        const result = await service.initiatePayment({
+          payer: '237600000000',
+          amount: 1500,
+          externalId: 'test-ref',
+          description: 'Test payment',
+          callback: 'http://localhost:3000/callback',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.reference).toMatch(/^mock-/);
+
+        // Fast-forward time to trigger callback
+        jest.advanceTimersByTime(1500);
+
+        // Wait for async callback processing
+        await Promise.resolve();
+
+        expect(mockCallbackProcessor.processFreemopayCallback).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reference: result.reference,
+            status: 'SUCCESS',
+            externalId: 'test-ref',
+          })
+        );
+      });
+
+      it('should schedule auto-callback after payment initiation (FAILED)', async () => {
+        const result = await service.initiatePayment({
+          payer: '237600000000',
+          amount: 2500,
+          externalId: 'test-ref',
+          description: 'Test payment',
+          callback: 'http://localhost:3000/callback',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.reference).toMatch(/^mock-/);
+
+        // Fast-forward time to trigger callback
+        jest.advanceTimersByTime(1500);
+
+        // Wait for async callback processing
+        await Promise.resolve();
+
+        expect(mockCallbackProcessor.processFreemopayCallback).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reference: result.reference,
+            status: 'FAILED',
+            externalId: 'test-ref',
+            reason: 'Mock failure (amount >= threshold)',
+          })
+        );
+      });
+
+      it('should schedule auto-callback after withdrawal initiation (SUCCESS)', async () => {
+        const result = await service.withdraw({
+          payee: '237600000000',
+          amount: 1000,
+          externalId: 'test-ref',
+          description: 'Test withdrawal',
+          callback: 'http://localhost:3000/callback',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.reference).toMatch(/^mock-/);
+
+        // Fast-forward time to trigger callback
+        jest.advanceTimersByTime(1500);
+
+        // Wait for async callback processing
+        await Promise.resolve();
+
+        expect(mockCallbackProcessor.processFreemopayCallback).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reference: result.reference,
+            status: 'SUCCESS',
+            externalId: 'test-ref',
+          })
+        );
+      });
+
+      it('should schedule auto-callback after withdrawal initiation (FAILED)', async () => {
+        const result = await service.withdraw({
+          payee: '237600000000',
+          amount: 3000,
+          externalId: 'test-ref',
+          description: 'Test withdrawal',
+          callback: 'http://localhost:3000/callback',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.reference).toMatch(/^mock-/);
+
+        // Fast-forward time to trigger callback
+        jest.advanceTimersByTime(1500);
+
+        // Wait for async callback processing
+        await Promise.resolve();
+
+        expect(mockCallbackProcessor.processFreemopayCallback).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reference: result.reference,
+            status: 'FAILED',
+            externalId: 'test-ref',
+            reason: 'Mock failure (amount >= threshold)',
+          })
+        );
+      });
+
+      it('should not schedule callback if processor is not available', async () => {
+        // Create a service without callback processor
+        const moduleWithoutProcessor = await Test.createTestingModule({
+          providers: [
+            FreemopayService,
+            {
+              provide: ConfigService,
+              useValue: {
+                get: jest.fn((key: string) => {
+                  if (key === 'freemopay') {
+                    return {
+                      baseUrl: 'https://api-v2.freemopay.com',
+                      appKey: 'test-key',
+                      secretKey: 'test-secret',
+                      callbackUrl: 'http://localhost:3000/callback',
+                      amountMockEnabled: true,
+                    } as FreemopayConfig;
+                  }
+                  return undefined;
+                }),
+              },
+            },
+            {
+              provide: 'MobilePaymentCallbackProcessor',
+              useValue: null,
+            },
+          ],
+        }).compile();
+
+        const serviceWithoutProcessor = moduleWithoutProcessor.get<FreemopayService>(FreemopayService);
+
+        const result = await serviceWithoutProcessor.initiatePayment({
+          payer: '237600000000',
+          amount: 1500,
+          externalId: 'test-ref',
+          description: 'Test payment',
+          callback: 'http://localhost:3000/callback',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.reference).toMatch(/^mock-/);
+
+        // Fast-forward time
+        jest.advanceTimersByTime(1500);
+        await Promise.resolve();
+
+        // Callback processor should not have been called
+        expect(mockCallbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
+      });
+
+      it('should use correct delay for auto-callback', async () => {
+        await service.initiatePayment({
+          payer: '237600000000',
+          amount: 1000,
+          externalId: 'test-ref',
+          description: 'Test payment',
+          callback: 'http://localhost:3000/callback',
+        });
+
+        // Callback should not be called yet (before delay)
+        expect(mockCallbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
+
+        // Advance by less than delay
+        jest.advanceTimersByTime(1000);
+        await Promise.resolve();
+        expect(mockCallbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
+
+        // Advance to full delay
+        jest.advanceTimersByTime(500);
+        await Promise.resolve();
+        expect(mockCallbackProcessor.processFreemopayCallback).toHaveBeenCalledTimes(1);
       });
     });
   });
