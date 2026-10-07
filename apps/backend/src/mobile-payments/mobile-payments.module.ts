@@ -25,6 +25,10 @@ import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.se
     PendingWithdrawalResolveService,
     PendingWithdrawalReconcilerService,
     MobileTransactionAccessService,
+    {
+      provide: 'MobilePaymentCallbackProcessor',
+      useExisting: MobilePaymentCallbackProcessor,
+    },
   ],
   exports: [GiveChangePayoutService, PendingWithdrawalResolveService],
 })

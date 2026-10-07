@@ -293,6 +293,8 @@ export interface FreemopayConfig {
   appKey: string;
   secretKey: string;
   callbackUrl: string;
+  /** DEV ONLY: mock collections/withdrawals by amount threshold (< 2000 XAF = success, >= 2000 XAF = fail). Never enabled in production. */
+  amountMockEnabled: boolean;
 }
 
 export interface StripeConfig {
@@ -752,6 +754,10 @@ export default (): Configuration => {
         process.env.FREEMOPAY_APP_KEY || '5b084323-3fff-47e4-bbcb-a1970efe3051',
       secretKey: process.env.FREEMOPAY_SECRET_KEY || '',
       callbackUrl: process.env.FREEMOPAY_CALLBACK_URL || '',
+      // Hard production safety: mock can ONLY be enabled in non-production runtimes
+      amountMockEnabled:
+        process.env.FREEMOPAY_AMOUNT_MOCK === 'true' &&
+        !isProductionRuntime(process.env),
     },
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY || '',
