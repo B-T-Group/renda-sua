@@ -206,8 +206,65 @@ export class DepositLedgerService {
     orderNumber: string;
     depositTransactionId: string;
   }): Promise<void> {
-    await this.ensureDepositHeld(params);
+    const amount = Number(params.amount);
+    if (!(amount > 0)) {
+      throw new Error(`Deposit forfeit amount invalid for ${params.orderNumber}`);
+    }
+    await this.forfeitDepositWithRetries({ ...params, amount });
+  }
 
+  private async forfeitDepositWithRetries(
+    params: ForfeitDepositParams
+  ): Promise<void> {
+    let lastError: unknown;
+    for (const attempt of [1, 2, 3]) {
+      try {
+        await this.moveForfeitLegs(params);
+        return;
+      } catch (error: any) {
+        lastError = error;
+        if (attempt === 3 || !isRetryableForfeitError(error)) break;
+        await this.pauseForfeitRetry(params.orderNumber, attempt, error);
+      }
+    }
+    throw lastError;
+  }
+
+  private async pauseForfeitRetry(
+    orderNumber: string,
+    attempt: number,
+    error: { message?: string }
+  ): Promise<void> {
+    this.logger.warn(
+      `deposit_forfeit_retry order=${orderNumber} attempt=${attempt}: ${error?.message}`
+    );
+    await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+  }
+
+  private async moveForfeitLegs(params: ForfeitDepositParams): Promise<void> {
+    await this.catchUpDepositHold(params);
+    await this.releaseDepositHoldForForfeit(params);
+    await this.debitClientForForfeit(params);
+    await this.creditHqForForfeit(params);
+    this.logger.log(
+      `Deposit ${params.amount} ${params.currency} forfeited to HQ for order ${params.orderNumber}`
+    );
+  }
+
+  /** Hold catch-up is best-effort: forfeit can still take available or leftover withheld. */
+  private async catchUpDepositHold(params: ForfeitDepositParams): Promise<void> {
+    try {
+      await this.ensureDepositHeld(params);
+    } catch (error: any) {
+      this.logger.warn(
+        `deposit_forfeit_hold_skipped order=${params.orderNumber}: ${error?.message}`
+      );
+    }
+  }
+
+  private async releaseDepositHoldForForfeit(
+    params: ForfeitDepositParams
+  ): Promise<void> {
     const release = await this.accountsService.registerReleaseIfNotExists({
       accountId: params.clientAccountId,
       amount: params.amount,
@@ -215,14 +272,48 @@ export class DepositLedgerService {
       memo: `Deposit forfeit release for order ${params.orderNumber}`,
       idempotencyKey: depositLedgerKey(params.depositTransactionId, 'release'),
     });
-    if (!release?.success) {
-      throw new Error(
-        `Deposit forfeit release failed for ${params.orderNumber}: ${release?.error ?? 'unknown'}`
+    if (release?.success) return;
+    if (await this.shouldSkipUnheldDepositRelease(params, release?.error)) {
+      this.logger.warn(
+        `deposit_forfeit_skip_unheld_release order=${params.orderNumber} requested=${params.amount}`
       );
+      return;
     }
+    throw new Error(
+      `Deposit forfeit release failed for ${params.orderNumber}: ${release?.error ?? 'unknown'}`
+    );
+  }
 
-    // Debit client after release (idempotent — safe on forfeit retry).
-    // Reference = deposit txn id (settlement uses orderId — no collision).
+  private async shouldSkipUnheldDepositRelease(
+    params: ForfeitDepositParams,
+    error?: string
+  ): Promise<boolean> {
+    if (!isInsufficientFundsError(error)) return false;
+    if ((await this.netHoldForDepositRef(params)) <= 0) return true;
+    const balance = await this.accountsService.getAccountBalance(
+      params.clientAccountId
+    );
+    return Number(balance?.withheldBalance ?? 0) <= 0;
+  }
+
+  private async netHoldForDepositRef(
+    params: ForfeitDepositParams
+  ): Promise<number> {
+    const result = await this.hasuraSystemService.executeQuery<{
+      account_transactions: Array<{ transaction_type: string; amount?: number }>;
+    }>(DEPOSIT_HOLD_RELEASE_ROWS, {
+      accountId: params.clientAccountId,
+      referenceId: params.depositTransactionId,
+    });
+    const rows = result?.account_transactions ?? [];
+    const held = sumTxnAmounts(rows, 'hold');
+    const released = sumTxnAmounts(rows, 'release');
+    return Number((held - released).toFixed(2));
+  }
+
+  private async debitClientForForfeit(
+    params: ForfeitDepositParams
+  ): Promise<void> {
     const debit = await this.accountsService.registerPaymentIfNotExists({
       accountId: params.clientAccountId,
       amount: params.amount,
@@ -235,28 +326,16 @@ export class DepositLedgerService {
         `Deposit forfeit debit failed for ${params.orderNumber}: ${debit?.error ?? 'unknown'}`
       );
     }
+  }
 
-    const hqUser = await this.hasuraSystemService.getRendasuaHQUser();
-    if (!hqUser?.id) {
-      throw new Error('Rendasua HQ user not found for deposit forfeit');
-    }
-    const hqAccount = await this.hasuraSystemService.getAccount(
-      hqUser.id,
-      params.currency
-    );
-    if (!hqAccount?.id) {
-      throw new Error(
-        `Rendasua HQ account not found for currency ${params.currency}`
-      );
-    }
-
+  private async creditHqForForfeit(params: ForfeitDepositParams): Promise<void> {
+    const hqAccountId = await this.requireHqAccountId(params.currency);
     const credit = await this.accountsService.registerDepositIfNotExists({
-      accountId: hqAccount.id,
+      accountId: hqAccountId,
       amount: params.amount,
       referenceId: params.depositTransactionId,
       memo: `Deposit forfeited from order ${params.orderNumber}`,
       idempotencyKey: depositLedgerKey(params.depositTransactionId, 'forfeit_hq'),
-      // HQ revenue, never a cash-advance repayment.
       skipCashAdvanceRepayment: true,
     });
     if (!credit?.success) {
@@ -264,9 +343,61 @@ export class DepositLedgerService {
         `Deposit forfeit HQ credit failed for ${params.orderNumber}: ${credit?.error ?? 'unknown'}`
       );
     }
-
-    this.logger.log(
-      `Deposit ${params.amount} ${params.currency} forfeited to HQ for order ${params.orderNumber}`
-    );
   }
+
+  private async requireHqAccountId(currency: string): Promise<string> {
+    const hqUser = await this.hasuraSystemService.getRendasuaHQUser();
+    if (!hqUser?.id) {
+      throw new Error('Rendasua HQ user not found for deposit forfeit');
+    }
+    const hqAccount = await this.hasuraSystemService.getAccount(
+      hqUser.id,
+      currency
+    );
+    if (!hqAccount?.id) {
+      throw new Error(`Rendasua HQ account not found for currency ${currency}`);
+    }
+    return hqAccount.id;
+  }
+}
+
+type ForfeitDepositParams = {
+  clientAccountId: string;
+  amount: number;
+  currency: string;
+  orderNumber: string;
+  depositTransactionId: string;
+};
+
+const DEPOSIT_HOLD_RELEASE_ROWS = `
+  query DepositHoldReleaseRows($accountId: uuid!, $referenceId: uuid!) {
+    account_transactions(
+      where: {
+        account_id: { _eq: $accountId }
+        reference_id: { _eq: $referenceId }
+        transaction_type: { _in: [hold, release] }
+      }
+    ) { transaction_type amount }
+  }
+`;
+
+function isInsufficientFundsError(error?: string): boolean {
+  return (error ?? '').toLowerCase().includes('insufficient funds');
+}
+
+function isRetryableForfeitError(error: { message?: string }): boolean {
+  const message = (error?.message ?? '').toLowerCase();
+  if (message.includes('hq user not found')) return false;
+  if (message.includes('hq account not found')) return false;
+  if (message.includes('amount invalid')) return false;
+  return true;
+}
+
+function sumTxnAmounts(
+  rows: Array<{ transaction_type: string; amount?: number }>,
+  type: 'hold' | 'release'
+): number {
+  return rows
+    .filter((row) => row.transaction_type === type)
+    .reduce((sum, row) => sum + Number(row.amount || 0), 0);
 }

@@ -190,6 +190,14 @@ export class FakeMoneyDb {
           ['deposit', 'cash_advance_repayment'].includes(t.transaction_type)
       ),
     }),
+    DepositHoldReleaseRows: (v: Row) => ({
+      account_transactions: this.txns.filter(
+        (t) =>
+          t.account_id === v.accountId &&
+          t.reference_id === v.referenceId &&
+          ['hold', 'release'].includes(t.transaction_type)
+      ),
+    }),
     // ---- DepositRefundService
     DepositConsumedPayment: (v: Row) => ({
       account_transactions: this.txns
