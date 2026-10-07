@@ -346,6 +346,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   const [composerFocused, setComposerFocused] = useState(false);
   const character = useShowsRendaCharacter();
   const assistantTransport = useAssistantTransport();
+  const context = route?.params?.context;
 
   // Hero: Attentive while the composer is focused, Listening once it has text.
   useEffect(() => {
@@ -414,7 +415,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContent}
         renderItem={renderItem}
-        ListEmptyComponent={<EmptyState onPick={(text) => void onSend(text)} />}
+        ListEmptyComponent={<EmptyState onPick={(text) => void onSend(text)} context={context} />}
         ListFooterComponent={assistant.isSending ? <TypingIndicator /> : null}
         onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
       />
