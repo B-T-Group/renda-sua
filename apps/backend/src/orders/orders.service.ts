@@ -6776,6 +6776,68 @@ export class OrdersService {
     return (result?.update_orders?.affected_rows ?? 0) === 1;
   }
 
+  /**
+   * Compare-and-set order cancel: atomically update to cancelled only if
+   * current_status is in eligibleFromStatuses. Returns true if exactly one row
+   * was updated (this caller won the race), false otherwise (order already moved).
+   */
+  private async casCancelOrder(
+    orderId: string,
+    eligibleFromStatuses: string[]
+  ): Promise<boolean> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number } | null;
+    }>(
+      `
+      mutation CasCancelOrder(
+        $orderId: uuid!
+        $eligibleFromStatuses: [order_status!]!
+        $now: timestamptz!
+      ) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            current_status: { _in: $eligibleFromStatuses }
+          }
+          _set: {
+            current_status: cancelled
+            updated_at: $now
+          }
+        ) { affected_rows }
+      }
+      `,
+      {
+        orderId,
+        eligibleFromStatuses,
+        now: new Date().toISOString(),
+      }
+    );
+    return (result?.update_orders?.affected_rows ?? 0) === 1;
+  }
+
+  /**
+   * Compute cancellable statuses for a business-owned order cancel.
+   */
+  private businessCancellableStatuses(order: Orders): string[] {
+    const early = [
+      'pending_payment',
+      'pending',
+      'confirmed',
+      'preparing',
+      'ready_for_pickup',
+      'assigned_to_agent',
+    ];
+    const cookedFoodPayAfter = (order as any).pay_after_merchant_confirm === true &&
+      isCookedFoodOrderSnapshot(order as any);
+    if (cookedFoodPayAfter) {
+      const payment = ((order as any).payment_status || '').toLowerCase();
+      if (payment === 'paid' || payment === 'authorized') {
+        return early.filter(s => !['confirmed', 'preparing', 'ready_for_pickup'].includes(s));
+      }
+    }
+    return early;
+  }
+
   private async finishNoshowCancel(
     order: Orders,
     request: { orderId: string; notes?: string },
@@ -6946,13 +7008,26 @@ export class OrdersService {
 
     await this.releaseStripeAuthorizationIfNeeded(order);
 
-    // Update order status to cancelled (dedicated path; not via PATCH status)
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
+    // Compare-and-set: atomically transition to cancelled from the expected status.
+    // Only one concurrent request will succeed; losers get 409 with no side effects.
+    const eligibleStatuses = isBusinessOwner
+      ? this.businessCancellableStatuses(order)
+      : clientCancellableStatuses;
+    const casSuccess = await this.casCancelOrder(
       request.orderId,
-      'cancelled',
-      actor,
-      { viaCancelEndpoint: true }
+      eligibleStatuses
     );
+    if (!casSuccess) {
+      throw new HttpException(
+        'Order status has changed. The order may have already been cancelled or progressed to a non-cancellable state.',
+        HttpStatus.CONFLICT
+      );
+    }
+
+    const updatedOrder = {
+      id: request.orderId,
+      current_status: 'cancelled' as const,
+    };
 
     // Persist cancellation metadata on the orders row
     try {
@@ -10770,12 +10845,50 @@ export class OrdersService {
     sqsReason?: string
   ): Promise<void> {
     await this.applyDepositForfeit(orderId, reason);
+    // Fetch the actual previous status from status history instead of hardcoding
+    const previousStatus = await this.getPreviousStatusBeforeCancelled(orderId);
     await this.enqueueOrderCancelled(
       orderId,
       cancelledBy,
-      'ready_for_pickup',
+      previousStatus ?? 'ready_for_pickup',
       sqsReason
     );
+  }
+
+  /**
+   * Query the status immediately before 'cancelled' from order_status_history.
+   * Returns null if not found (fallback to a reasonable default in the caller).
+   */
+  private async getPreviousStatusBeforeCancelled(
+    orderId: string
+  ): Promise<string | null> {
+    try {
+      const result = await this.hasuraSystemService.executeQuery<{
+        order_status_history: Array<{ status: string }>;
+      }>(
+        `
+        query GetPreviousStatus($orderId: uuid!) {
+          order_status_history(
+            where: {
+              order_id: { _eq: $orderId }
+              status: { _neq: cancelled }
+            }
+            order_by: { created_at: desc }
+            limit: 1
+          ) {
+            status
+          }
+        }
+        `,
+        { orderId }
+      );
+      return result.order_status_history?.[0]?.status ?? null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to get previous status for order ${orderId}: ${error?.message}`
+      );
+      return null;
+    }
   }
 
   private noshowForfeitResumeResponse(order: Orders) {
@@ -10797,11 +10910,14 @@ export class OrdersService {
     sqsReason?: string
   ): Promise<void> {
     try {
+      // Use dedup ID to prevent duplicate event emissions on retries
+      const dedupId = `order.cancelled:${orderId}`;
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
         cancelledBy,
         sqsReason,
-        previousStatus
+        previousStatus,
+        dedupId
       );
     } catch (error: any) {
       this.logger.error(

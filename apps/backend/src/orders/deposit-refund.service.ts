@@ -278,6 +278,20 @@ export class DepositRefundService {
         depositTransactionId: order.deposit_mobile_payment_transaction_id,
       });
     } catch (error: any) {
+      // Check if the ledger is actually complete (all legs exist, despite the error).
+      // A racing forfeit may have succeeded while this one was pending, and the
+      // duplicate-key / unique-constraint error from the idempotency insert means
+      // the leg is already posted. Re-read the legs to confirm completeness.
+      const isComplete = await this.isLedgerComplete(
+        clientAccountId,
+        order.deposit_mobile_payment_transaction_id
+      );
+      if (isComplete) {
+        this.logger.log(
+          `Deposit forfeit legs already complete for order ${order.order_number} (concurrent forfeit won)`
+        );
+        return { success: true, message: 'Deposit forfeited to Rendasua' };
+      }
       // Claimed but incomplete: stays 'forfeited' (no other flow may touch it).
       // Calling forfeitDeposit again resumes the keyed moves without double posting.
       this.logger.error(
@@ -293,6 +307,45 @@ export class DepositRefundService {
       `Deposit forfeited for order ${order.order_number}: ${reason}`
     );
     return { success: true, message: 'Deposit forfeited to Rendasua' };
+  }
+
+  /**
+   * Check if all forfeit ledger legs exist: release, payment (client debit), and HQ credit.
+   * Used to detect a concurrent forfeit that succeeded while this one was pending.
+   */
+  private async isLedgerComplete(
+    clientAccountId: string,
+    depositTransactionId: string
+  ): Promise<boolean> {
+    try {
+      const legs = await this.hasuraSystemService.executeQuery<{
+        account_transactions: Array<{ transaction_type: string }>;
+      }>(
+        `
+        query GetForfeitLegs($accountId: uuid!, $referenceId: String!) {
+          account_transactions(
+            where: {
+              account_id: { _eq: $accountId }
+              reference_id: { _eq: $referenceId }
+              transaction_type: { _in: [release, payment] }
+            }
+          ) {
+            transaction_type
+          }
+        }
+        `,
+        { accountId: clientAccountId, referenceId: depositTransactionId }
+      );
+      const types = new Set(
+        legs.account_transactions.map((t) => t.transaction_type)
+      );
+      return types.has('release') && types.has('payment');
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to check ledger completeness: ${error?.message}`
+      );
+      return false;
+    }
   }
 
   /** Already forfeited: finish any missing keyed ledger move (no-op when complete). */

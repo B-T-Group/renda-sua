@@ -116,7 +116,8 @@ export class OrderQueueService {
     orderId: string,
     cancelledBy: 'client' | 'business' | 'system',
     cancellationReason?: string,
-    previousStatus?: string
+    previousStatus?: string,
+    dedupId?: string
   ): Promise<void> {
     if (!this.queueUrl) {
       this.logger.debug('Skipping SQS message - queue URL not configured');
@@ -133,13 +134,13 @@ export class OrderQueueService {
       orderStatus: 'cancelled',
     };
 
-    await this.sendMessage(message);
+    await this.sendMessage(message, dedupId);
   }
 
   /**
    * Send message to SQS FIFO queue
    */
-  private async sendMessage(message: Record<string, unknown>): Promise<void> {
+  private async sendMessage(message: Record<string, unknown>, dedupId?: string): Promise<void> {
     if (!this.queueUrl) {
       return;
     }
@@ -158,6 +159,11 @@ export class OrderQueueService {
             ? orderId
             : 'order-status-events',
       };
+
+      // Add explicit deduplication ID if provided (e.g., order.cancelled:<orderId>)
+      if (dedupId && typeof dedupId === 'string' && dedupId.length > 0) {
+        input.MessageDeduplicationId = dedupId;
+      }
 
       const command = new SendMessageCommand(input);
       const response = await this.sqsClient.send(command);
