@@ -6498,7 +6498,8 @@ export class OrdersService {
         orderId,
         'business',
         CLIENT_NO_SHOW_REASON,
-        previousStatus
+        previousStatus,
+        `order.cancelled:${orderId}`
       );
     } catch (error: any) {
       this.logger.error(
