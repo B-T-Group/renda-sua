@@ -261,28 +261,30 @@ const LauncherBody = observer(function LauncherBody({ persona }: { persona: Laun
       trackLauncherTap(ctxRef.current, 'orb', entry);
       if (rootNavigationRef.isReady()) {
         // Build context from current route if on a contextual screen
-        const state = rootNavigationRef.getState();
-        const currentRoute = state?.routes[state.index];
+        const currentRoute = rootNavigationRef.getCurrentRoute() as { name?: string; params?: any } | undefined;
         let context: any = undefined;
         
         if (currentRoute?.name === 'InventoryItemDetail' && currentRoute.params) {
-          const params = currentRoute.params as any;
+          const params = currentRoute.params;
           context = {
             type: 'item_detail',
             inventoryId: params.inventoryItemId,
-            // itemName could be pulled from store/cache if available
+            // TODO: Pull itemName from navigation params if passed, or leave undefined
+            itemName: params.itemName || undefined,
           };
         } else if (currentRoute?.name === 'OrderDetail' && currentRoute.params) {
-          const params = currentRoute.params as any;
+          const params = currentRoute.params;
           context = {
             type: 'order_detail',
             orderId: params.orderId,
-            // orderStatus could be pulled from store/cache if available
+            // TODO: Pull orderStatus/orderNumber from navigation params if passed, or leave undefined
+            orderStatus: params.orderStatus || undefined,
+            orderNumber: params.orderNumber || undefined,
           };
-        } else if (currentRoute?.name === 'ClientOrders' || currentRoute?.name === 'Orders') {
+        } else if (currentRoute?.name === 'ClientOrders' || currentRoute?.name === 'Orders' || currentRoute?.name === 'AgentOrders') {
           context = {
             type: 'orders_list',
-            hasCompletedOrders: true, // Default true; could check store if cheap
+            hasCompletedOrders: true,
           };
         }
         

@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { getContextualChips, buildChipMessage, type AssistantContext, type ChipConfig } from './assistantChips';
 
 describe('assistantChips', () => {
@@ -35,13 +34,14 @@ describe('assistantChips', () => {
       ]);
     });
 
-    it('returns reorder chip for order_detail context without status', () => {
+    it('returns tracking chips for order_detail context without status (safer default)', () => {
       const context: AssistantContext = {
         type: 'order_detail',
         orderId: 'order-123',
+        // No status - defaults to tracking to avoid showing reorder for active orders
       };
       const chips = getContextualChips(context);
-      expect(chips.map(c => c.id)).toContain('reorder');
+      expect(chips.map(c => c.id)).toContain('track_order');
     });
 
     it('returns recent orders chip for orders_list context', () => {
@@ -218,6 +218,50 @@ describe('assistantChips', () => {
       const translatedLabel = 'Commande {{orderNumber}} - Statut?';
       const result = buildChipMessage(chip, translatedLabel);
       expect(result).toBe(translatedLabel);
+    });
+  });
+
+  describe('Named translation keys', () => {
+    it('selects Named keys when item_detail context has itemName', () => {
+      const context: AssistantContext = {
+        type: 'item_detail',
+        inventoryId: '123',
+        itemName: 'Blue Widget',
+      };
+      const chips = getContextualChips(context);
+      expect(chips[0].translationKey).toBe('assistant.suggestion.itemAvailabilityNamed');
+      expect(chips[0].fallback).toContain('{{name}}');
+    });
+
+    it('selects base keys when item_detail context has no itemName', () => {
+      const context: AssistantContext = {
+        type: 'item_detail',
+        inventoryId: '123',
+      };
+      const chips = getContextualChips(context);
+      expect(chips[0].translationKey).toBe('assistant.suggestion.itemAvailability');
+      expect(chips[0].fallback).not.toContain('{{name}}');
+    });
+
+    it('selects Named keys when delivery_tracking context has orderNumber', () => {
+      const context: AssistantContext = {
+        type: 'delivery_tracking',
+        orderId: 'ord_123',
+        orderNumber: 'RDS-42',
+      };
+      const chips = getContextualChips(context);
+      expect(chips[0].translationKey).toBe('assistant.suggestion.trackOrderNamed');
+      expect(chips[0].fallback).toContain('{{orderNumber}}');
+    });
+
+    it('defaults to tracking chips when order_detail has no status', () => {
+      const context: AssistantContext = {
+        type: 'order_detail',
+        orderId: 'ord_123',
+        // No orderStatus - unknown state
+      };
+      const chips = getContextualChips(context);
+      expect(chips[0].translationKey).toContain('track');
     });
   });
 });

@@ -41,28 +41,38 @@ const GENERIC_CHIPS: ChipConfig[] = [
 ];
 
 /** Item detail context chips (AC5) */
-const ITEM_DETAIL_CHIPS: ChipConfig[] = [
-  {
-    id: 'item_availability',
-    translationKey: 'assistant.suggestion.itemAvailability',
-    fallback: 'Is this item available?',
-  },
-  {
-    id: 'item_price',
-    translationKey: 'assistant.suggestion.itemPrice',
-    fallback: 'What is the price?',
-  },
-  {
-    id: 'item_delivery',
-    translationKey: 'assistant.suggestion.itemDelivery',
-    fallback: 'How is this delivered?',
-  },
-  {
-    id: 'similar_items',
-    translationKey: 'assistant.suggestion.similarItems',
-    fallback: 'Show similar items',
-  },
-];
+function getItemDetailChips(hasName: boolean): ChipConfig[] {
+  return [
+    {
+      id: 'item_availability',
+      translationKey: hasName
+        ? 'assistant.suggestion.itemAvailabilityNamed'
+        : 'assistant.suggestion.itemAvailability',
+      fallback: hasName ? 'Is {{name}} available?' : 'Is this item available?',
+    },
+    {
+      id: 'item_price',
+      translationKey: hasName
+        ? 'assistant.suggestion.itemPriceNamed'
+        : 'assistant.suggestion.itemPrice',
+      fallback: hasName ? 'What is the price of {{name}}?' : 'What is the price?',
+    },
+    {
+      id: 'item_delivery',
+      translationKey: hasName
+        ? 'assistant.suggestion.itemDeliveryNamed'
+        : 'assistant.suggestion.itemDelivery',
+      fallback: hasName ? 'How is {{name}} delivered?' : 'How is this delivered?',
+    },
+    {
+      id: 'similar_items',
+      translationKey: hasName
+        ? 'assistant.suggestion.similarItemsNamed'
+        : 'assistant.suggestion.similarItems',
+      fallback: hasName ? 'Show items similar to {{name}}' : 'Show similar items',
+    },
+  ];
+}
 
 /** Order/reorder context chips (AC6) */
 const ORDER_REORDER_CHIPS: ChipConfig[] = [
@@ -89,28 +99,34 @@ const ORDER_REORDER_CHIPS: ChipConfig[] = [
 ];
 
 /** Delivery/tracking context chips (AC8) */
-const DELIVERY_TRACKING_CHIPS: ChipConfig[] = [
-  {
-    id: 'track_order',
-    translationKey: 'assistant.suggestion.trackOrder',
-    fallback: 'Where is my order?',
-  },
-  {
-    id: 'delivery_time',
-    translationKey: 'assistant.suggestion.deliveryTime',
-    fallback: 'When will it arrive?',
-  },
-  {
-    id: 'change_delivery',
-    translationKey: 'assistant.suggestion.changeDelivery',
-    fallback: 'Change delivery address',
-  },
-  {
-    id: 'contact_support',
-    translationKey: 'assistant.suggestion.contactSupport',
-    fallback: 'Contact support',
-  },
-];
+function getDeliveryTrackingChips(hasOrderNumber: boolean): ChipConfig[] {
+  return [
+    {
+      id: 'track_order',
+      translationKey: hasOrderNumber
+        ? 'assistant.suggestion.trackOrderNamed'
+        : 'assistant.suggestion.trackOrder',
+      fallback: hasOrderNumber ? 'Where is order {{orderNumber}}?' : 'Where is my order?',
+    },
+    {
+      id: 'delivery_time',
+      translationKey: hasOrderNumber
+        ? 'assistant.suggestion.deliveryTimeNamed'
+        : 'assistant.suggestion.deliveryTime',
+      fallback: hasOrderNumber ? 'When will order {{orderNumber}} arrive?' : 'When will it arrive?',
+    },
+    {
+      id: 'change_delivery',
+      translationKey: 'assistant.suggestion.changeDelivery',
+      fallback: 'Change delivery address',
+    },
+    {
+      id: 'contact_support',
+      translationKey: 'assistant.suggestion.contactSupport',
+      fallback: 'Contact support',
+    },
+  ];
+}
 
 /**
  * Get contextual chips based on the current context.
@@ -123,11 +139,15 @@ export function getContextualChips(context?: AssistantContext | null): ChipConfi
 
   switch (context.type) {
     case 'item_detail':
-      return ITEM_DETAIL_CHIPS;
+      return getItemDetailChips(!!context.itemName);
     
-    case 'order_detail':
+    case 'order_detail': {
+      // When status is unknown, default to tracking chips (safer than reorder for active orders)
+      if (!context.orderStatus) {
+        return getDeliveryTrackingChips(!!context.orderNumber);
+      }
       // Show delivery tracking chips if order is in progress
-      if (context.orderStatus && [
+      const inProgressStatuses = [
         'pending',
         'confirmed',
         'preparing',
@@ -137,17 +157,19 @@ export function getContextualChips(context?: AssistantContext | null): ChipConfi
         'in_transit',
         'out_for_delivery',
         'pending_payment',
-      ].includes(context.orderStatus)) {
-        return DELIVERY_TRACKING_CHIPS;
+      ];
+      if (inProgressStatuses.includes(context.orderStatus)) {
+        return getDeliveryTrackingChips(!!context.orderNumber);
       }
-      // Show reorder chips if order is completed
+      // Show reorder chips for terminal statuses (delivered, cancelled, etc.)
       return ORDER_REORDER_CHIPS;
+    }
     
     case 'orders_list':
       return ORDER_REORDER_CHIPS;
     
     case 'delivery_tracking':
-      return DELIVERY_TRACKING_CHIPS;
+      return getDeliveryTrackingChips(!!context.orderNumber);
     
     default:
       return GENERIC_CHIPS;
