@@ -6144,6 +6144,8 @@ export class OrdersService {
       'Unauthorized to cancel this pickup'
     );
     const order = await this.requireOrder(request.orderId);
+    const resumed = await this.resumeNoshowDepositForfeit(order);
+    if (resumed) return resumed;
     if (this.isCookedFailPickupOrder(order)) return this.failPickup(request);
     this.assertNoshowCancellable(order);
     await this.requireNoshowWindow(order);
@@ -6915,11 +6917,16 @@ export class OrdersService {
       ? this.businessMayCancelOrder(order)
       : clientCancellableStatuses.includes(order.current_status);
 
-    if (!mayCancel)
+    if (!mayCancel) {
+      const resumed = isOrderOwner
+        ? await this.resumeClientDepositForfeit(order)
+        : null;
+      if (resumed) return resumed;
       throw new HttpException(
         `Cannot cancel order in ${order.current_status} status. Orders can only be cancelled before pickup by delivery agent.`,
         HttpStatus.BAD_REQUEST
       );
+    }
 
     // Create appropriate status history entry based on who cancelled
     const cancelledBy = isBusinessOwner ? 'business' : 'client';
@@ -10644,11 +10651,93 @@ export class OrdersService {
       actorUserId
     );
 
+    await this.enqueueOrderCancelled(
+      orderId,
+      cancelledBy,
+      previousStatus,
+      sqsReason ?? notes
+    );
+  }
+
+  /**
+   * Claimed forfeit whose ledger did not finish. The order is already
+   * cancelled, so the normal transition cannot run again. Finish the keyed
+   * moves and enqueue order.cancelled (also keyed). Do not touch inventory.
+   */
+  private async resumeNoshowDepositForfeit(order: Orders) {
+    if (this.forfeitResumeReason(order) !== 'customer_no_show_pickup') {
+      return null;
+    }
+    await this.finishForfeitResume(
+      order.id,
+      'customer_no_show_pickup',
+      'business',
+      CLIENT_NO_SHOW_REASON
+    );
+    return this.noshowForfeitResumeResponse(order);
+  }
+
+  private async resumeClientDepositForfeit(order: Orders) {
+    if (this.forfeitResumeReason(order) !== 'customer_cancel_after_lock') {
+      return null;
+    }
+    await this.finishForfeitResume(
+      order.id,
+      'customer_cancel_after_lock',
+      'client'
+    );
+    return {
+      success: true as const,
+      order,
+      message: 'Order cancelled successfully',
+    };
+  }
+
+  private forfeitResumeReason(order: Orders): string | null {
+    if (order.current_status !== 'cancelled') return null;
+    if ((order as any).deposit_status !== 'forfeited') return null;
+    const reason = (order as any).deposit_forfeit_reason;
+    return typeof reason === 'string' && reason.length > 0 ? reason : null;
+  }
+
+  private async finishForfeitResume(
+    orderId: string,
+    reason: DepositForfeitReason,
+    cancelledBy: 'client' | 'business',
+    sqsReason?: string
+  ): Promise<void> {
+    await this.applyDepositForfeit(orderId, reason);
+    await this.enqueueOrderCancelled(
+      orderId,
+      cancelledBy,
+      'ready_for_pickup',
+      sqsReason
+    );
+  }
+
+  private noshowForfeitResumeResponse(order: Orders) {
+    return {
+      success: true as const,
+      order,
+      refund_amount: 0,
+      fee_retained: 0,
+      merchant_share: 0,
+      deposit_forfeit_amount: Number((order as any).deposit_amount) || 0,
+      message: 'Pickup cancelled because the client did not collect it',
+    };
+  }
+
+  private async enqueueOrderCancelled(
+    orderId: string,
+    cancelledBy: 'client' | 'business' | 'system',
+    previousStatus: string,
+    sqsReason?: string
+  ): Promise<void> {
     try {
       await this.orderQueueService.sendOrderCancelledMessage(
         orderId,
         cancelledBy,
-        sqsReason ?? notes,
+        sqsReason,
         previousStatus
       );
     } catch (error: any) {
