@@ -1231,77 +1231,111 @@ describe('SignupService', () => {
   });
 
   describe('lockout and replay protection (#338)', () => {
-    it('startIdentifierOnlyOtp throws 429 when identifier is locked out', async () => {
-      jest.spyOn(lockoutService, 'isLockedOut').mockResolvedValue(true);
-      jest.spyOn(lockoutService, 'getRemainingLockoutMs').mockResolvedValue(120000);
+    const lockedMessage = 'Too many failed attempts. Try again in 2 minute(s).';
+    const identifierOnlyAttempt = {
+      ...pendingAttempt,
+      phone_number: null,
+      payload: {},
+    };
+    const finishInput = {
+      flowId: 'attempt-123',
+      accept_terms: true,
+      first_name: 'New',
+      last_name: 'User',
+      personas: ['client' as const],
+      profile: {},
+    };
+    const completedAttempt = (completedAt: string) => ({
+      ...pendingAttempt,
+      status: 'completed' as const,
+      completed_user_id: 'user-123',
+      completion_result: {
+        user: insertedUser,
+        launchPromo: null,
+        tokens: null,
+        completedAt,
+        sessionId: 'sess-1',
+      },
+    });
+
+    it('startIdentifierOnlyOtp returns the login lockout 429 when the identifier is locked', async () => {
+      lockoutService.isLockedOut.mockResolvedValue(true);
+      lockoutService.getRemainingLockoutMs.mockResolvedValue(120000);
 
       await expect(
         service.startIdentifierOnlyOtp('test@example.com', null, '1.2.3.4')
       ).rejects.toMatchObject({
         status: HttpStatus.TOO_MANY_REQUESTS,
-        response: expect.objectContaining({
-          error: expect.stringContaining('Too many failed attempts'),
-        }),
+        response: { success: false, error: lockedMessage },
       });
+      expect(lockoutService.isLockedOut).toHaveBeenCalledWith(
+        'identifier:email:test@example.com'
+      );
     });
 
-    it('verifySignupOtp records lockout failure for identifier-only flows after max attempts', async () => {
-      const recordFailureSpy = jest.spyOn(lockoutService, 'recordFailure').mockResolvedValue(undefined);
-      
-      const identifierOnlyAttempt = {
-        ...pendingAttempt,
-        payload: {},
-        verify_attempts: 5,
-      };
-      
+    it('verifyOtpForAuthFlowV2 returns the same lockout 429 before the per-attempt cap', async () => {
+      lockoutService.isLockedOut.mockResolvedValue(true);
+      lockoutService.getRemainingLockoutMs.mockResolvedValue(120000);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: { ...identifierOnlyAttempt, verify_attempts: 5 },
+      });
+
+      await expect(
+        service.verifyOtpForAuthFlowV2('attempt-123', '1234')
+      ).rejects.toMatchObject({
+        status: HttpStatus.TOO_MANY_REQUESTS,
+        response: { success: false, error: lockedMessage },
+      });
+      expect(auth0Service.verifyEmailOtp).not.toHaveBeenCalled();
+    });
+
+    it('verifyOtpForAuthFlowV2 records an identifier lockout failure on every wrong code', async () => {
+      auth0Service.verifyEmailOtp.mockRejectedValue(
+        new HttpException(
+          { success: false, error: 'Invalid or expired code' },
+          HttpStatus.BAD_REQUEST
+        )
+      );
       hasuraSystemService.executeQuery.mockResolvedValue({
         signup_attempts_by_pk: identifierOnlyAttempt,
       });
 
       await expect(
-        service.verifySignupOtp({ attemptId: 'attempt-123', otp: '1234' })
-      ).rejects.toMatchObject({
-        status: HttpStatus.TOO_MANY_REQUESTS,
-      });
-
-      expect(recordFailureSpy).toHaveBeenCalledWith(
-        expect.stringContaining('identifier:')
+        service.verifyOtpForAuthFlowV2('attempt-123', '1234')
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+      expect(lockoutService.recordFailure).toHaveBeenCalledWith(
+        'identifier:email:new@example.com'
       );
     });
 
-    it('finishSignupAccount rejects already-used flowId when tokens are null', async () => {
-      const completedAttempt = {
-        ...pendingAttempt,
-        status: 'completed',
-        completed_user_id: 'user-123',
-        completion_result: {
-          user: insertedUser,
-          launchPromo: null,
-          tokens: null,
-          completedAt: new Date().toISOString(),
-        },
-      };
-
+    it('finishSignupAccount replays a just-finished flowId (double submit / retry)', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
-        signup_attempts_by_pk: completedAttempt,
+        signup_attempts_by_pk: completedAttempt(new Date().toISOString()),
+      });
+      sessionStore.getSession.mockResolvedValue({
+        userId: 'user-123',
+        auth0AccessToken: 'access',
+        auth0IdToken: 'id',
+      } as any);
+
+      const result = await service.finishSignupAccount(finishInput, 'web');
+
+      expect(result.sessionId).toBe('sess-1');
+      expect(userProvisioning.createPendingUser).not.toHaveBeenCalled();
+    });
+
+    it('finishSignupAccount rejects a finished flowId after the replay window', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: completedAttempt(
+          new Date(Date.now() - 3 * 60 * 1000).toISOString()
+        ),
       });
 
       await expect(
-        service.finishSignupAccount(
-          {
-            flowId: 'attempt-123',
-            email: 'test@example.com',
-            first_name: 'Test',
-            last_name: 'User',
-            accept_terms: true,
-          },
-          'web'
-        )
+        service.finishSignupAccount(finishInput, 'web')
       ).rejects.toMatchObject({
         status: HttpStatus.CONFLICT,
-        response: {
-          error: 'This signup has already been completed.',
-        },
+        response: { error: 'Signup already completed. Please log in.' },
       });
     });
   });

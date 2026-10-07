@@ -27,6 +27,7 @@ import type {
 import { getAuthGateContextCopy } from '../../utils/authGateContextCopy';
 import {
   buildAuthGateIdentifierKey,
+  clearAuthGateLockout,
   readActiveAuthGateLockout,
   readAuthGateLockout,
   writeAuthGateLockout,
@@ -180,14 +181,23 @@ const AuthGate: React.FC<AuthGateProps> = ({
     [applyIdentifierKey, onStepChange, otp]
   );
 
+  const handleUseDifferentIdentifier = useCallback(() => {
+    if (activeIdentifierKey) clearAuthGateLockout(activeIdentifierKey);
+    setPersistedLockoutUntilMs(null);
+    otp.clearLockout();
+    otp.resetFlow();
+    onStepChange('identifier');
+  }, [activeIdentifierKey, onStepChange, otp]);
+
+  /** #338 soak: hand off to Auth0 Universal Login (password) and come back here. */
   const handleUniversalLoginFallback = useCallback(async () => {
-    funnel.trackSiteEvent('auth_ul_fallback_used', 'auth_gate');
+    funnel.trackUlFallbackUsed(intent?.entry ?? 'auth_gate');
     await loginWithRedirect({
       appState: {
-        returnTo: window.location.pathname,
+        returnTo: window.location.pathname + window.location.search,
       },
     });
-  }, [funnel, loginWithRedirect]);
+  }, [funnel, intent?.entry, loginWithRedirect]);
 
   const body = (() => {
     if (step === 'locked' && effectiveLockoutUntilMs) {

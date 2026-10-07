@@ -92,6 +92,7 @@ export const SITE_EVENT_AUTH_LOCKED = 'auth_locked' as const;
 export const SITE_EVENT_AUTH_CODE_VERIFIED = 'auth_code_verified' as const;
 export const SITE_EVENT_AUTH_INTENT_COMPLETED = 'auth_intent_completed' as const;
 export const SITE_EVENT_AUTH_PASSWORD_USED = 'auth_password_used' as const;
+export const SITE_EVENT_AUTH_UL_FALLBACK_USED = 'auth_ul_fallback_used' as const;
 export const SITE_EVENT_AUTH_REAUTH_NOTICE_SHOWN =
   'auth_reauth_notice_shown' as const;
 export const SITE_EVENT_AUTH_REAUTH_NOTICE_ACTION =
@@ -158,6 +159,7 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_AUTH_CODE_VERIFIED
   | typeof SITE_EVENT_AUTH_INTENT_COMPLETED
   | typeof SITE_EVENT_AUTH_PASSWORD_USED
+  | typeof SITE_EVENT_AUTH_UL_FALLBACK_USED
   | typeof SITE_EVENT_AUTH_REAUTH_NOTICE_SHOWN
   | typeof SITE_EVENT_AUTH_REAUTH_NOTICE_ACTION
   | typeof SITE_EVENT_AUTH_SESSION_OBSERVED

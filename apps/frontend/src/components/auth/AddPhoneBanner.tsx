@@ -13,13 +13,38 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useOptionalUserProfileContext } from '../../contexts/UserProfileContext';
-import { nationalDigitsToE164 } from '../../utils/phoneUtils';
+import { isE164, nationalDigitsToE164 } from '../../utils/phoneUtils';
 import { getBrowserDefaultCountryCode } from '../../utils/authDefaults';
 
+/**
+ * "+2376…" / "002376…" are taken as international; anything else as national digits for
+ * the browser country (same normalization the gate uses for SMS sign-in, so the stored
+ * number matches what Auth0 / resolve-user-id will see at the next SMS login).
+ */
+function toE164(raw: string, countryCode: string): string | null {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('+') || trimmed.startsWith('00')) {
+    const digits = trimmed.replace(/\D/g, '').replace(/^00/, '');
+    const candidate = `+${digits}`;
+    return isE164(candidate) ? candidate : null;
+  }
+  try {
+    const candidate = nationalDigitsToE164(trimmed, countryCode);
+    return isE164(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * #338 decision 2: signed-in users with no email and no phone (the accounts that can
+ * only sign in with a password through Auth0 Universal Login) are asked to add a phone
+ * so they can use code sign-in after the soak. Dismiss lasts for the page session.
+ */
 export function AddPhoneBanner() {
   const { t } = useTranslation();
   const apiClient = useApiClient();
@@ -44,11 +69,14 @@ export function AddPhoneBanner() {
       return;
     }
     
-    let e164: string;
-    try {
-      e164 = nationalDigitsToE164(trimmed, browserCountry);
-    } catch (err: any) {
-      setError(err?.message || t('auth.phoneInvalid', 'Invalid phone number'));
+    const e164 = toE164(trimmed, browserCountry);
+    if (!e164) {
+      setError(
+        t(
+          'auth.addPhoneBanner.invalid',
+          'Enter a valid phone number, e.g. 6 12 34 56 78 or +237 6 12 34 56 78.'
+        )
+      );
       return;
     }
 
@@ -63,10 +91,7 @@ export function AddPhoneBanner() {
       if (err?.response?.status === 409) {
         setError(t('auth.phoneAlreadyTaken', 'This phone number is already in use'));
       } else {
-        setError(
-          err?.response?.data?.error ||
-            t('auth.addPhoneFailed', 'Failed to add phone number')
-        );
+        setError(t('auth.addPhoneFailed', 'Failed to add phone number'));
       }
     } finally {
       setBusy(false);

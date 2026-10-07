@@ -2404,7 +2404,13 @@
       "message": "Add a phone number to secure your account and enable SMS notifications",
       "cta": "Add Phone",
       "dialogTitle": "Add Phone Number",
-      "dialogDesc": "Adding a phone number helps secure your account and allows you to sign in via SMS."
+      "dialogDesc": "Adding a phone number helps secure your account and allows you to sign in via SMS.",
+      "invalid": "Enter a valid phone number, e.g. 6 12 34 56 78 or +237 6 12 34 56 78."
+    },
+    "adminSignIn": {
+      "title": "Sign in required",
+      "description": "You need to sign in to access this admin page.",
+      "cta": "Sign in"
     },
     "phoneNumber": "Phone Number",
     "phonePlaceholder": "Phone number",

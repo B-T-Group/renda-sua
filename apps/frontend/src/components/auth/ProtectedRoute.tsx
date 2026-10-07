@@ -1,6 +1,7 @@
 import { Lock } from '@mui/icons-material';
 import { Box, Button, Typography } from '@mui/material';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -13,6 +14,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const { isAuthenticated, isSessionReady, isLoading, user } = useSessionAuth();
+  const { t } = useTranslation();
   const { loginWithRedirect } = useAuth0();
   const location = useLocation();
 
@@ -21,7 +23,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   }
 
   if (!isAuthenticated) {
-    const isAdminRoute = location.pathname.startsWith('/admin') ||
+    // #338 decision 4: admins stay on Auth0 Universal Login (not the in-app code gate).
+    const isAdminRoute =
+      location.pathname.startsWith('/admin/') ||
       location.pathname.startsWith('/business/dashboard/admin');
 
     if (isAdminRoute) {
@@ -36,10 +40,13 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
         >
           <Lock color="action" sx={{ fontSize: 64 }} />
           <Typography variant="h5" component="h2" gutterBottom>
-            Sign In Required
+            {t('auth.adminSignIn.title', 'Sign in required')}
           </Typography>
           <Typography variant="body1" color="text.secondary" textAlign="center">
-            You need to sign in to access this admin page.
+            {t(
+              'auth.adminSignIn.description',
+              'You need to sign in to access this admin page.'
+            )}
           </Typography>
           <Button
             variant="contained"
@@ -47,12 +54,12 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
             onClick={() =>
               void loginWithRedirect({
                 appState: {
-                  returnTo: location.pathname,
+                  returnTo: location.pathname + location.search,
                 },
               })
             }
           >
-            Sign In
+            {t('auth.adminSignIn.cta', 'Sign in')}
           </Button>
         </Box>
       );

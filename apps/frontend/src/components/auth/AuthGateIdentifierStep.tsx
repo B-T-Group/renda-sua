@@ -33,7 +33,7 @@ const AuthGateIdentifierStep: React.FC<AuthGateIdentifierStepProps> = ({
   const { t } = useTranslation();
   const theme = useTheme();
   const { flags } = useClientFlags();
-  const ulFallbackOn = flags.auth_gate_ul_fallback ?? false;
+  const ulFallbackOn = flags.auth_gate_ul_fallback ?? true;
   const browserCountry = getBrowserDefaultCountryCode();
   const otpLen = getAuthOtpCodeLength();
   const [identifierMode, setIdentifierMode] = useState<LoginIdentifierMode>(() =>

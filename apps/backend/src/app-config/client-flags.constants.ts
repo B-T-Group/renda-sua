@@ -27,8 +27,11 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   reorder_v1: isNonProduction,
   /** Off by default for a 2-week baseline before enabling in-app auth gates. */
   auth_web_inapp_gates: false,
-  /** Auth0 Universal Login fallback link; defaults true wherever auth_web_inapp_gates is on. */
-  auth_gate_ul_fallback: false,
+  /**
+   * "Sign in with password" (Auth0 Universal Login) link inside the in-app gate (#338 soak).
+   * Only rendered where auth_web_inapp_gates is on, so defaulting true is safe.
+   */
+  auth_gate_ul_fallback: true,
   /** On in non-production when no DB row exists; off in production until configured. */
   catalog_experience_v1: isNonProduction,
   /** Shopping assistant launcher (orb, nudge, chips) - default off until Phase 0b. */

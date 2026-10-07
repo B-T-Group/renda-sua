@@ -2132,7 +2132,13 @@
       "message": "Ajoutez un numéro de téléphone pour sécuriser votre compte et activer les notifications SMS",
       "cta": "Ajouter un téléphone",
       "dialogTitle": "Ajouter un numéro de téléphone",
-      "dialogDesc": "L'ajout d'un numéro de téléphone aide à sécuriser votre compte et vous permet de vous connecter par SMS."
+      "dialogDesc": "L'ajout d'un numéro de téléphone aide à sécuriser votre compte et vous permet de vous connecter par SMS.",
+      "invalid": "Saisissez un numéro valide, par ex. 6 12 34 56 78 ou +237 6 12 34 56 78."
+    },
+    "adminSignIn": {
+      "title": "Connexion requise",
+      "description": "Vous devez vous connecter pour accéder à cette page d’administration.",
+      "cta": "Se connecter"
     },
     "phoneNumber": "Numéro de téléphone",
     "phonePlaceholder": "Numéro de téléphone",
