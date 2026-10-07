@@ -158,6 +158,168 @@ describe('AccountsService', () => {
     });
   });
 
+  describe('registerHoldIfNotExists idempotencyKey', () => {
+    const key = 'deposit:txn-1:hold';
+
+    function mockOpenLedger() {
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetAccountById')) {
+          return { accounts_by_pk: activeAccount };
+        }
+        return { account_transactions: [] };
+      });
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) => {
+        if (mutation.includes('InsertTransactionIdempotent')) {
+          return { insert_account_transactions_one: { id: 'tx-keyed' } };
+        }
+        return fakeApplyDelta(mutation, vars);
+      });
+    }
+
+    it.each([
+      ['registerHoldIfNotExists', 'hold', 'deposit:txn-1:hold'],
+      ['registerReleaseIfNotExists', 'release', 'deposit:txn-1:release'],
+      ['registerPaymentIfNotExists', 'payment', 'deposit:txn-1:payment'],
+    ] as const)(
+      '%s stores the idempotency key on the unique-key insert',
+      async (method, transactionType, idempotencyKey) => {
+        mockOpenLedger();
+        const result = await service[method]({
+          accountId,
+          amount: 100,
+          memo: 'deposit leg',
+          referenceId,
+          idempotencyKey,
+        });
+        expect(result).toMatchObject({
+          success: true,
+          alreadyExists: false,
+          transactionId: 'tx-keyed',
+        });
+        const insert = executeMutation.mock.calls.find(([mutation]) =>
+          String(mutation).includes('InsertTransactionIdempotent')
+        );
+        expect(insert?.[1]).toMatchObject({
+          transactionType,
+          idempotencyKey,
+          referenceId,
+          amount: 100,
+        });
+      }
+    );
+
+    it('does not insert when that reference already has the transaction', async () => {
+      executeQuery.mockResolvedValue({
+        account_transactions: [{ id: 'held' }],
+      });
+      await expect(
+        service.registerHoldIfNotExists({
+          accountId,
+          amount: 500,
+          memo: 'again',
+          referenceId,
+          idempotencyKey: key,
+        })
+      ).resolves.toEqual({ success: true, alreadyExists: true });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects a missing reference before any ledger write', async () => {
+      await expect(
+        service.registerPaymentIfNotExists({
+          accountId,
+          amount: 500,
+          memo: 'no ref',
+          idempotencyKey: key,
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'referenceId is required',
+      });
+      expect(executeQuery).not.toHaveBeenCalled();
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('fails closed when the hold would overdraw and nothing was posted', async () => {
+      executeQuery.mockImplementation(async (query: string) =>
+        query.includes('GetAccountById')
+          ? { accounts_by_pk: activeAccount }
+          : { account_transactions: [] }
+      );
+      await expect(
+        service.registerHoldIfNotExists({
+          accountId,
+          amount: 5000,
+          memo: 'too big',
+          referenceId,
+          idempotencyKey: key,
+        })
+      ).resolves.toEqual({
+        success: false,
+        error: 'Insufficient funds for this transaction',
+        alreadyExists: false,
+      });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('treats a reference that shows up after a failed hold as already posted', async () => {
+      let referenceChecks = 0;
+      executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('HasAccountTransaction')) {
+          referenceChecks += 1;
+          return {
+            account_transactions: referenceChecks === 1 ? [] : [{ id: 'raced' }],
+          };
+        }
+        if (query.includes('GetAccountById')) {
+          return { accounts_by_pk: activeAccount };
+        }
+        return { account_transactions: [] };
+      });
+      await expect(
+        service.registerHoldIfNotExists({
+          accountId,
+          amount: 5000,
+          memo: 'race',
+          referenceId,
+          idempotencyKey: key,
+        })
+      ).resolves.toEqual({ success: true, alreadyExists: true });
+      expect(executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('reverses a hold when the idempotency key collides', async () => {
+      executeQuery.mockImplementation(async (query: string) =>
+        query.includes('GetAccountById')
+          ? { accounts_by_pk: activeAccount }
+          : { account_transactions: [] }
+      );
+      executeMutation.mockImplementation(async (mutation: string, vars?: any) =>
+        mutation.includes('InsertTransactionIdempotent')
+          ? { insert_account_transactions_one: null }
+          : fakeApplyDelta(mutation, vars)
+      );
+      const result = await service.registerHoldIfNotExists({
+        accountId,
+        amount: 500,
+        memo: 'collide',
+        referenceId,
+        idempotencyKey: key,
+      });
+      expect(result.success).toBe(true);
+      const moved = executeMutation.mock.calls
+        .filter(([mutation]) => String(mutation).includes('ApplyBalanceDelta'))
+        .map(([, vars]) => [
+          vars.inc.available_balance,
+          vars.inc.withheld_balance,
+        ]);
+      expect(moved).toEqual([
+        [-500, 500],
+        [500, -500],
+      ]);
+    });
+  });
+
   describe('registerDepositIfNotExists', () => {
     it('skips insert when a deposit already exists for the reference', async () => {
       executeQuery.mockResolvedValue({
