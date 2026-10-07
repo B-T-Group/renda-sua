@@ -13,6 +13,8 @@ import type {
   AssistantReply,
   AssistantTurnInput,
 } from './assistant.types';
+import { SiteEventsService } from '../site-events/site-events.service';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 
 const NO_REPLY_TOKEN = '[[NO_REPLY]]';
 
@@ -23,7 +25,8 @@ export class AssistantService implements OnModuleInit {
   constructor(
     private readonly config: ConfigService<Configuration>,
     private readonly bedrock: BedrockLunaService,
-    private readonly tools: AssistantToolsService
+    private readonly tools: AssistantToolsService,
+    private readonly siteEvents: SiteEventsService
   ) {}
 
   onModuleInit(): void {
@@ -96,6 +99,7 @@ export class AssistantService implements OnModuleInit {
     const messages = this.toMessages(input.messages, settings?.maxHistoryMessages);
     let handoff = false;
     let usedKnowledge = false;
+    const toolsUsed = new Set<string>();
     const maxLoops = Math.max(1, settings?.maxToolIterations || 5);
     const toolConfig = await this.tools.buildToolConfig(input.identity);
     const hasShoppingTools = toolConfig.tools?.some(
@@ -122,15 +126,87 @@ export class AssistantService implements OnModuleInit {
           usedKnowledge = true;
           continue;
         }
-        return this.finalize(result.text, handoff, input.channel, locale);
+        const reply = this.finalize(result.text, handoff, input.channel, locale);
+        this.emitMessageClassified(input, locale, toolsUsed, handoff);
+        return reply;
       }
       messages.push({ role: 'assistant', content: result.assistantContent });
       const executed = await this.executeTools(result.toolUses, input, locale);
+      result.toolUses.forEach(use => toolsUsed.add(use.name));
       usedKnowledge ||= executed.usedKnowledge;
       handoff ||= executed.handoff;
       messages.push({ role: 'user', content: executed.content });
     }
+    this.emitMessageClassified(input, locale, toolsUsed, handoff);
     return this.fallback(input.channel, locale, false, handoff);
+  }
+
+  /**
+   * Emit assistant.message.classified event for intent share metrics (#451).
+   * Intent is derived from tools used and user message content.
+   */
+  private emitMessageClassified(
+    input: Omit<AssistantChatInput, 'locale'>,
+    locale: AssistantLocale,
+    toolsUsed: Set<string>,
+    handoff: boolean
+  ): void {
+    const intent = this.classifyIntent(input.messages, toolsUsed);
+    const threadId = 'threadId' in input ? input.threadId : undefined;
+    const market = input.identity.market?.country_code;
+    
+    const metadata: Record<string, unknown> = {
+      intent,
+      channel: input.channel,
+      locale,
+    };
+    
+    if (market) metadata.market = market;
+    if (threadId) metadata.thread_id = threadId;
+    
+    emitServerSiteEvent(this.siteEvents, 'assistant.message.classified', metadata);
+  }
+
+  /**
+   * Classify user intent from tools used and message content.
+   * Priority order: explicit tool use > message content heuristics > other.
+   */
+  private classifyIntent(
+    messages: AssistantChatInput['messages'],
+    toolsUsed: Set<string>
+  ): 'buy' | 'availability' | 'reorder' | 'track' | 'support' | 'other' {
+    const latest = [...messages].reverse().find((m) => m.role === 'user');
+    const text = (latest?.content || '').toLowerCase();
+    
+    if (toolsUsed.has('search_catalog')) {
+      if (/\b(available|availability|disponible|stock|en stock)\b/i.test(text)) {
+        return 'availability';
+      }
+      return 'buy';
+    }
+    if (toolsUsed.has('get_reorder_options')) return 'reorder';
+    if (toolsUsed.has('get_order_status') || toolsUsed.has('get_my_recent_orders')) {
+      return 'track';
+    }
+    if (toolsUsed.has('request_human_support')) return 'support';
+    
+    if (/\b(buy|purchase|acheter|vendre|order|commande|prix|price|cost|co[uû]t)\b/i.test(text)) {
+      return 'buy';
+    }
+    if (/\b(available|availability|disponible|stock|en stock)\b/i.test(text)) {
+      return 'availability';
+    }
+    if (/\b(reorder|recommander|re-order|again|encore)\b/i.test(text)) {
+      return 'reorder';
+    }
+    if (/\b(track|tracking|where|o[uù]|delivery|livraison|order|commande|status|statut)\b/i.test(text)) {
+      return 'track';
+    }
+    if (/\b(help|aide|support|assist|problem|probl[eè]me)\b/i.test(text)) {
+      return 'support';
+    }
+    
+    return 'other';
   }
 
   private async injectKnowledgeIfNeeded(

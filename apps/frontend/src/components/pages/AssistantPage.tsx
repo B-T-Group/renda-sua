@@ -38,7 +38,9 @@ import { useRendaChatState } from '../assistant/useRendaChatState';
 import { AssistantMarkdown } from './AssistantMarkdown';
 import type { AssistantContext } from '../../utils/assistantChips';
 import { getContextualChips, buildChipMessage } from '../../utils/assistantChips';
-import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
+import { useTrackSiteEvent, SITE_EVENT_ASSISTANT_CHAT_OPENED } from '../../hooks/useTrackSiteEvent';
+import { useAssistantLauncherAnalytics } from '../assistant/useAssistantLauncherAnalytics';
+import { useSessionAuth } from '../../contexts/SessionAuthContext';
 
 /** Thread and composer are capped and centred on desktop (Product & UX 3b/4b). */
 const THREAD_MAX_WIDTH = 760;
@@ -538,7 +540,7 @@ function EmptyState({
       eventType: 'assistant.chip.tap',
       metadata: {
         chip_id: chipId,
-        context: context?.type || 'generic',
+        screen: 'assistant-chat',
       },
     });
     onPick(message);
@@ -836,6 +838,9 @@ const AssistantPage: React.FC = () => {
     composerFocused,
     composerHasText: draft.trim().length > 0,
   });
+  const { isAuthenticated } = useSessionAuth();
+  const trackEvent = useAssistantLauncherAnalytics(isAuthenticated);
+  
   // The "Thinking…" subtitle is paired with the character's Thinking (≥ 400 ms).
   const isThinking = isSending || characterState === 'thinking';
   
@@ -846,6 +851,11 @@ const AssistantPage: React.FC = () => {
   useEffect(() => {
     if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);
   }, []);
+  
+  // Emit chat.opened when the page mounts (Phase 0)
+  useEffect(() => {
+    trackEvent(SITE_EVENT_ASSISTANT_CHAT_OPENED, {});
+  }, [trackEvent]);
 
   useScrollNewestIntoView(
     scrollRef,

@@ -18,6 +18,13 @@ import {
   STORAGE_KEY_THREAD_ID,
 } from './assistantChatStorage';
 import { useSessionAuth } from './SessionAuthContext';
+import { useTranslation } from 'react-i18next';
+import { useAssistantLauncherAnalytics } from '../components/assistant/useAssistantLauncherAnalytics';
+import {
+  SITE_EVENT_ASSISTANT_MESSAGE_SENT,
+  SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED,
+  SITE_EVENT_ASSISTANT_ERROR_SHOWN,
+} from '../hooks/useTrackSiteEvent';
 
 export type AssistantChatMessage = {
   id: string;
@@ -253,6 +260,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const { selectedMarket } = useMarket();
   const authSettled = !authLoading;
   const owner = assistantOwnerKey(isAuthenticated, user?.sub);
+  const trackEvent = useAssistantLauncherAnalytics(isAuthenticated);
 
   const [messages, setMessagesState] = useState<AssistantChatMessage[]>([]);
   const [threadId, setThreadIdState] = useState('');
@@ -263,6 +271,8 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const [draft, setDraft] = useState('');
   const [isOffline, setIsOffline] = useState(false);
   const [lastReply, setLastReply] = useState<LastAssistantReply>(NO_REPLY);
+  const prevHandoffRef = useRef(false);
+  const prevErrorRef = useRef<string | null>(null);
 
   // Refs mirror state so async callbacks never act on a stale thread.
   const messagesRef = useRef<AssistantChatMessage[]>([]);
@@ -383,6 +393,23 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('pageshow', onPageShow);
   }, []);
 
+  // Emit assistant.handoff.requested when handoff becomes true (rising edge only)
+  useEffect(() => {
+    if (handoff && !prevHandoffRef.current) {
+      trackEvent(SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED, {});
+    }
+    prevHandoffRef.current = handoff;
+  }, [handoff, trackEvent]);
+
+  // Emit assistant.error.shown when error is set (rising edge only)
+  useEffect(() => {
+    if (error && error !== prevErrorRef.current) {
+      const kind = isOffline ? 'network' : 'server';
+      trackEvent(SITE_EVENT_ASSISTANT_ERROR_SHOWN, { kind });
+    }
+    prevErrorRef.current = error;
+  }, [error, isOffline, trackEvent]);
+
   /** Rotates if the thread has been idle; must run before activity is recorded. */
   const rotateIfIdle = useCallback((): boolean => {
     if (!readyRef.current || !isIdleAt(Date.now())) return false;
@@ -440,12 +467,16 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         const body: {
           messages: typeof payload;
           market?: { country_code: string; state?: string };
+          threadId?: string;
         } = { messages: payload };
         if (selectedMarket) {
           body.market = {
             country_code: selectedMarket.countryCode,
             state: selectedMarket.stateCode || undefined,
           };
+        }
+        if (requestThreadId) {
+          body.threadId = requestThreadId;
         }
         const { data } = await apiClient.post<ChatApiResponse>(
           '/assistant/chat',
@@ -490,10 +521,12 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         { id: makeMessageId(), role: 'user', content: trimmed },
       ];
       commitMessages(next);
+      // Emit assistant.message.sent (Phase 0)
+      trackEvent(SITE_EVENT_ASSISTANT_MESSAGE_SENT, {});
       await dispatch(next);
       return true;
     },
-    [commitMessages, dispatch, rotateIfIdle]
+    [commitMessages, dispatch, rotateIfIdle, trackEvent]
   );
 
   const retry = useCallback(async (): Promise<boolean> => {

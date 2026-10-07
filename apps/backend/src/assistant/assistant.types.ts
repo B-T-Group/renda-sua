@@ -34,6 +34,8 @@ export type AssistantChatInput = {
   locale?: AssistantLocale | null;
   /** Market context from the client (optional) */
   marketContext?: AssistantMarket | null;
+  /** Client-generated thread ID for analytics (optional) */
+  threadId?: string;
 };
 
 export type AssistantReply = {

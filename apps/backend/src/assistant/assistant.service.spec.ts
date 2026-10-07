@@ -31,10 +31,14 @@ describe('AssistantService', () => {
         name === 'list_supported_payment_systems'
     ),
   };
+  const siteEvents = {
+    emit: jest.fn(),
+  };
   const service = new AssistantService(
     configService as any,
     bedrock as any,
-    tools as any
+    tools as any,
+    siteEvents as any
   );
 
   beforeEach(() => {
@@ -511,6 +515,99 @@ describe('AssistantService', () => {
       const systemPromptCall = bedrock.converseWithTools.mock.calls[0][0].system;
       expect(systemPromptCall).toContain('The customer market is unknown');
       expect(systemPromptCall).not.toContain('NEVER ask the customer which country');
+    });
+  });
+
+  describe('classifyIntent', () => {
+    it('classifies search_catalog with availability keywords as availability', () => {
+      const messages = [{ role: 'user' as const, content: 'Is milk available?' }];
+      const toolsUsed = new Set(['search_catalog']);
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('availability');
+    });
+
+    it('classifies search_catalog without availability keywords as buy', () => {
+      const messages = [{ role: 'user' as const, content: 'I want to buy milk' }];
+      const toolsUsed = new Set(['search_catalog']);
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('buy');
+    });
+
+    it('classifies get_reorder_options as reorder', () => {
+      const messages = [{ role: 'user' as const, content: 'reorder my last order' }];
+      const toolsUsed = new Set(['get_reorder_options']);
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('reorder');
+    });
+
+    it('classifies get_order_status as track', () => {
+      const messages = [{ role: 'user' as const, content: 'where is my order?' }];
+      const toolsUsed = new Set(['get_order_status']);
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('track');
+    });
+
+    it('classifies request_human_support as support', () => {
+      const messages = [{ role: 'user' as const, content: 'I need help' }];
+      const toolsUsed = new Set(['request_human_support']);
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('support');
+    });
+
+    it('classifies buy keywords without tools as buy', () => {
+      const messages = [{ role: 'user' as const, content: 'I want to purchase a phone' }];
+      const toolsUsed = new Set<string>();
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('buy');
+    });
+
+    it('classifies availability keywords without tools as availability', () => {
+      const messages = [{ role: 'user' as const, content: 'do you have milk in stock?' }];
+      const toolsUsed = new Set<string>();
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('availability');
+    });
+
+    it('classifies reorder keywords without tools as reorder', () => {
+      const messages = [{ role: 'user' as const, content: 'order the same thing again' }];
+      const toolsUsed = new Set<string>();
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('reorder');
+    });
+
+    it('classifies tracking keywords without tools as track', () => {
+      const messages = [{ role: 'user' as const, content: 'where is my delivery?' }];
+      const toolsUsed = new Set<string>();
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('track');
+    });
+
+    it('classifies support keywords without tools as support', () => {
+      const messages = [{ role: 'user' as const, content: 'I have a problem with my account' }];
+      const toolsUsed = new Set<string>();
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('support');
+    });
+
+    it('classifies ambiguous messages as other', () => {
+      const messages = [{ role: 'user' as const, content: 'hello there' }];
+      const toolsUsed = new Set<string>();
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('other');
+    });
+
+    it('handles French availability keywords with search_catalog', () => {
+      const messages = [{ role: 'user' as const, content: 'Le lait est disponible?' }];
+      const toolsUsed = new Set(['search_catalog']);
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('availability');
+    });
+
+    it('handles French buy keywords without tools', () => {
+      const messages = [{ role: 'user' as const, content: 'Je veux acheter du pain' }];
+      const toolsUsed = new Set<string>();
+      const result = (service as any).classifyIntent(messages, toolsUsed);
+      expect(result).toBe('buy');
     });
   });
 });

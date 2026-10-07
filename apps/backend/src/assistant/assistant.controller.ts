@@ -60,6 +60,7 @@ export class AssistantController {
       identity,
       locale: identity.preferredLanguage,
       marketContext: body.market,
+      threadId: body.threadId,
     });
     return { reply: result.reply, handoff: result.handoff };
   }

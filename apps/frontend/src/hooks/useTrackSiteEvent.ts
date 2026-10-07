@@ -113,6 +113,15 @@ export const SITE_EVENT_ASSISTANT_NUDGE_DISMISSED =
 export const SITE_EVENT_ASSISTANT_ATTENTION_PLAYED =
   'assistant.attention.played' as const;
 
+// Assistant chat funnel (#451 Phase 0).
+export const SITE_EVENT_ASSISTANT_CHAT_OPENED = 'assistant.chat.opened' as const;
+export const SITE_EVENT_ASSISTANT_MESSAGE_SENT = 'assistant.message.sent' as const;
+export const SITE_EVENT_ASSISTANT_CHIP_TAP = 'assistant.chip.tap' as const;
+export const SITE_EVENT_ASSISTANT_DEEPLINK_SHOWN = 'assistant.deeplink.shown' as const;
+export const SITE_EVENT_ASSISTANT_DEEPLINK_TAP = 'assistant.deeplink.tap' as const;
+export const SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED = 'assistant.handoff.requested' as const;
+export const SITE_EVENT_ASSISTANT_ERROR_SHOWN = 'assistant.error.shown' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
@@ -158,7 +167,14 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_ASSISTANT_LAUNCHER_TAP
   | typeof SITE_EVENT_ASSISTANT_NUDGE_SHOWN
   | typeof SITE_EVENT_ASSISTANT_NUDGE_DISMISSED
-  | typeof SITE_EVENT_ASSISTANT_ATTENTION_PLAYED;
+  | typeof SITE_EVENT_ASSISTANT_ATTENTION_PLAYED
+  | typeof SITE_EVENT_ASSISTANT_CHAT_OPENED
+  | typeof SITE_EVENT_ASSISTANT_MESSAGE_SENT
+  | typeof SITE_EVENT_ASSISTANT_CHIP_TAP
+  | typeof SITE_EVENT_ASSISTANT_DEEPLINK_SHOWN
+  | typeof SITE_EVENT_ASSISTANT_DEEPLINK_TAP
+  | typeof SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED
+  | typeof SITE_EVENT_ASSISTANT_ERROR_SHOWN;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

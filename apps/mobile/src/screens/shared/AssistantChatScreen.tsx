@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
 import {
@@ -42,6 +42,13 @@ import type { ReorderCartAction, ReorderOrderResponse } from '@/types/reorder';
 import { trackReorderEvent } from '@/utils/reorderAnalytics';
 import { formatSkippedNames, mapReorderLineToCartLine, resolveReorderCartAction } from '@/utils/reorderCart';
 import { reorderNavigator } from '@/utils/reorderNavigator';
+import {
+  trackChatOpened,
+  trackMessageSent,
+  trackHandoffRequested,
+  trackErrorShown,
+  type LauncherEventContext,
+} from '@/services/analytics/assistantLauncherAnalytics';
 
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
 /** AC9: the composer grows with the text up to 4 rows, then scrolls. */
@@ -77,7 +84,7 @@ function useShowsRendaCharacter(): boolean {
  * Wraps postAssistantChat with the current market context from MarketStore.
  */
 function useAssistantTransport() {
-  const { market } = useStore();
+  const { market, assistant } = useStore();
   return useCallback(
     async (messages: { role: 'user' | 'assistant'; content: string }[]) => {
       const marketContext: AssistantMarketContext | null =
@@ -87,9 +94,9 @@ function useAssistantTransport() {
               state: market.selectedStateCode || undefined,
             }
           : null;
-      return postAssistantChat(messages, marketContext);
+      return postAssistantChat(messages, marketContext, assistant.threadId);
     },
-    [market.selectedCountryCode, market.selectedStateCode]
+    [market.selectedCountryCode, market.selectedStateCode, assistant.threadId]
   );
 }
 
@@ -168,9 +175,10 @@ interface MessageBubbleProps {
   showOrb: boolean;
   character: boolean;
   onLinkPress?: (url: string) => boolean;
+  analyticsCtx?: LauncherEventContext;
 }
 
-function MessageBubble({ item, isUser, showOrb, character, onLinkPress }: MessageBubbleProps) {
+function MessageBubble({ item, isUser, showOrb, character, onLinkPress, analyticsCtx }: MessageBubbleProps) {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const duration = motionDuration('normal', reduceMotion);
@@ -236,6 +244,7 @@ function MessageBubble({ item, isUser, showOrb, character, onLinkPress }: Messag
             color={colors.text.primary}
             style={styles.bubbleText}
             onLinkPress={onLinkPress}
+            analyticsCtx={analyticsCtx}
           />
         )}
       </View>
@@ -287,12 +296,12 @@ function EmptyState({
         eventType: 'assistant.chip.tap',
         metadata: {
           chip_id: chipId,
-          context: context?.type || 'generic',
+          screen: 'assistant-chat',
         },
       });
       onPick(label);
     },
-    [context, onPick]
+    [onPick]
   );
 
   return (
@@ -355,12 +364,12 @@ type Nav = NativeStackNavigationProp<ClientRootStackParamList>;
 const AssistantChatScreen = observer(function AssistantChatScreen({
   route,
 }: AssistantChatScreenProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const store = useStore();
-  const { assistant } = store;
+  const { assistant, auth, market, persona } = store;
   const { assistantCharacter } = store;
   const { cart } = store;
   const listRef = useRef<FlatList<AssistantMessage>>(null);
@@ -377,12 +386,54 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   const [pendingPayload, setPendingPayload] = useState<ReorderOrderResponse | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [reorderSnack, setReorderSnack] = useState<string | null>(null);
+  
+  // Analytics refs for rising-edge detection
+  const chatOpenedEmitted = useRef(false);
+  const prevHandoffRef = useRef(false);
+  const prevErrorRef = useRef<string | null>(null);
+  
+  // Memoized analytics context to prevent spam
+  const analyticsCtx: LauncherEventContext = useMemo(
+    () => ({
+      persona: assistantViewer(auth.isAuthenticated, persona.activePersona),
+      screen: 'assistant-chat' as const,
+      market: market.selectedCountryCode,
+      language: i18n.language,
+      threadId: assistant.threadId,
+    }),
+    [auth.isAuthenticated, persona.activePersona, market.selectedCountryCode, i18n.language, assistant.threadId]
+  );
 
   // Hero: Attentive while the composer is focused, Listening once it has text.
   useEffect(() => {
     assistantCharacter.setComposer(composerFocused, draft.trim().length > 0);
   }, [assistantCharacter, composerFocused, draft]);
   useEffect(() => () => assistantCharacter.setComposer(false, false), [assistantCharacter]);
+
+  // Emit assistant.chat.opened once on screen mount (Phase 0)
+  useEffect(() => {
+    if (!chatOpenedEmitted.current) {
+      chatOpenedEmitted.current = true;
+      trackChatOpened(analyticsCtx);
+    }
+  }, [analyticsCtx]);
+
+  // Emit assistant.handoff.requested when handoff becomes true (rising edge only)
+  useEffect(() => {
+    if (assistant.handoff && !prevHandoffRef.current) {
+      trackHandoffRequested(analyticsCtx);
+    }
+    prevHandoffRef.current = assistant.handoff;
+  }, [assistant.handoff, analyticsCtx]);
+
+  // Emit assistant.error.shown when error is set (rising edge only)
+  useEffect(() => {
+    if (assistant.error && assistant.error !== prevErrorRef.current) {
+      const kind = assistant.errorKind === 'network' ? 'network' : 'server';
+      trackErrorShown(analyticsCtx, kind);
+    }
+    prevErrorRef.current = assistant.error;
+  }, [assistant.error, assistant.errorKind, analyticsCtx]);
 
   // Check idle on screen focus
   useFocusEffect(
@@ -397,10 +448,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
       if (!text || assistant.isSending) return;
       // Typed text is now a bubble; on failure it stays there and Retry re-sends it.
       if (override === undefined) setDraft('');
+      // Emit assistant.message.sent (Phase 0)
+      trackMessageSent(analyticsCtx);
       requestAnimationFrame(() => listRef.current?.scrollToEnd({ animated: true }));
       await assistant.sendMessage(text, assistantTransport);
     },
-    [assistant, draft, assistantTransport]
+    [assistant, draft, assistantTransport, analyticsCtx]
   );
 
   // Helper callbacks (declared before effect to avoid temporal dead zone)
@@ -581,11 +634,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
             showOrb={showOrb}
             character={character}
             onLinkPress={handleReorderLink}
+            analyticsCtx={analyticsCtx}
           />
         </View>
       );
     },
-    [assistant.messages, character, handleReorderLink]
+    [assistant.messages, character, handleReorderLink, analyticsCtx]
   );
 
   const onRetry = useCallback(() => {
