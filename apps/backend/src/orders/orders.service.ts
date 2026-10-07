@@ -2645,7 +2645,7 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
-    const { rail, holdPercentage, holdAmount, rawHoldAmount, ceilingApplied, ceilingXaf } =
+    const { rail, holdPercentage, holdAmount } =
       await this.resolveOrderHoldAmount(order, agent.id);
     const agentAccount = await this.hasuraSystemService.getAccount(
       user.id,
@@ -2903,7 +2903,7 @@ export class OrdersService {
 
     // Calculate required hold amount (0 for internal agents and
     // Stripe-enabled orders, which do not require a caution/hold)
-    const { rail, holdPercentage, holdAmount, rawHoldAmount, ceilingApplied, ceilingXaf } =
+    const { rail, holdPercentage, holdAmount } =
       await this.resolveOrderHoldAmount(order, agent.id);
 
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
@@ -7684,7 +7684,7 @@ export class OrdersService {
 
     if (!agent.is_verified) {
       const order = await this.getOrderWithItems(orderId);
-      const { holdAmount, rawHoldAmount, holdPercentage, ceilingApplied, ceilingXaf, rail } =
+      const { holdAmount, rawHoldAmount, holdPercentage, ceilingApplied, ceilingXaf } =
         await this.resolveOrderHoldAmount(order, agent.id);
       return this.createClaimAvailabilityFailure(
         holdAmount,
@@ -7705,7 +7705,7 @@ export class OrdersService {
       );
     } catch (error: any) {
       const order = await this.getOrderWithItems(orderId);
-      const { holdAmount, rawHoldAmount, holdPercentage, ceilingApplied, ceilingXaf, rail } =
+      const { holdAmount, rawHoldAmount, holdPercentage, ceilingApplied, ceilingXaf } =
         await this.resolveOrderHoldAmount(order, agent.id);
       return this.createClaimAvailabilityFailure(
         holdAmount,

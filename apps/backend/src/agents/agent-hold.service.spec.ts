@@ -436,6 +436,7 @@ describe('AgentHoldService', () => {
             return {};
           }
         );
+        jest.spyOn(service, 'isAgentEligibleForCeiling').mockResolvedValue(true);
       });
 
       it('should apply ceiling when raw hold > ceiling', async () => {
@@ -516,6 +517,7 @@ describe('AgentHoldService', () => {
             return {};
           }
         );
+        jest.spyOn(service, 'isAgentEligibleForCeiling').mockResolvedValue(false);
 
         const result = await service.resolveOrderHoldWithCeiling(
           100000,
