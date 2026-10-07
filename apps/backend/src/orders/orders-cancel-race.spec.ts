@@ -203,10 +203,16 @@ describe('Forfeit ledger dup-key handling (DepositRefundService)', () => {
     service = module.get(DepositRefundService);
   });
 
-  const keys = (moves: Array<'release' | 'payment' | 'forfeit_hq'>) => ({
+  const keys = (
+    moves: Array<'release' | 'payment' | 'forfeit_hq'>,
+    holds: Array<{ transaction_type: string; amount: number }> = [
+      { transaction_type: 'hold', amount: 250 },
+    ]
+  ) => ({
     account_transactions: moves.map((m) => ({
       idempotency_key: depositLedgerKey(txnId, m),
     })),
+    holds,
   });
 
   it('dup key but all three keyed legs exist → success (concurrent forfeit won)', async () => {
@@ -219,6 +225,18 @@ describe('Forfeit ledger dup-key handling (DepositRefundService)', () => {
     legsResponse = () => keys(['release', 'payment']);
     const result = await service.forfeitDeposit(orderId, 'customer_cancel_after_lock');
     expect(result.success).toBe(false);
+    expect(result.errorCode).toBe('FORFEIT_LEDGER_INCOMPLETE');
+  });
+
+  it('dup key, release skipped because the deposit had no hold (#503) → success', async () => {
+    legsResponse = () => keys(['payment', 'forfeit_hq'], []);
+    const result = await service.forfeitDeposit(orderId, 'customer_cancel_after_lock');
+    expect(result.success).toBe(true);
+  });
+
+  it('dup key, release missing while the deposit is still held → FORFEIT_LEDGER_INCOMPLETE', async () => {
+    legsResponse = () => keys(['payment', 'forfeit_hq']);
+    const result = await service.forfeitDeposit(orderId, 'customer_cancel_after_lock');
     expect(result.errorCode).toBe('FORFEIT_LEDGER_INCOMPLETE');
   });
 
@@ -236,7 +254,7 @@ describe('Forfeit ledger dup-key handling (DepositRefundService)', () => {
     expect(result.errorCode).toBe('FORFEIT_LEDGER_INCOMPLETE');
   });
 
-  it('re-reads by the three deposit idempotency keys', async () => {
+  it('re-reads by the three deposit idempotency keys and the deposit hold rows', async () => {
     legsResponse = () => keys(['release', 'payment', 'forfeit_hq']);
     await service.forfeitDeposit(orderId, 'customer_cancel_after_lock');
     const call = hasura.executeQuery.mock.calls.find(([q]) =>
@@ -248,6 +266,8 @@ describe('Forfeit ledger dup-key handling (DepositRefundService)', () => {
         `deposit:${txnId}:payment`,
         `deposit:${txnId}:forfeit_hq`,
       ],
+      accountId: 'acct-1',
+      referenceId: txnId,
     });
   });
 });

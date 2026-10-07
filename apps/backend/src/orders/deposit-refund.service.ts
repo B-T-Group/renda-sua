@@ -283,6 +283,7 @@ export class DepositRefundService {
       // duplicate-key / unique-constraint error from the idempotency insert means
       // the leg is already posted. Re-read the legs to confirm completeness.
       const isComplete = await this.isForfeitLedgerComplete(
+        clientAccountId,
         order.deposit_mobile_payment_transaction_id
       );
       if (isComplete) {
@@ -309,34 +310,62 @@ export class DepositRefundService {
   }
 
   /**
-   * True only when all three keyed forfeit legs exist: client release, client
-   * payment (debit) and the HQ credit (forfeit_hq). Read by idempotency key,
-   * which is unique per leg, so a concurrent forfeit that posted a leg (and made
+   * True only when the forfeit is really finished: the keyed client debit
+   * (payment) and HQ credit (forfeit_hq) both exist, and either the keyed
+   * release exists or nothing is still held under this deposit (the ledger may
+   * legitimately skip the release when the deposit has no hold, see
+   * DepositLedgerService.releaseDepositHoldForForfeit). Legs are read by their
+   * unique idempotency keys, so a concurrent forfeit that posted a leg (and made
    * this call hit a duplicate key) is recognised, while a half-done ledger is not.
    */
   private async isForfeitLedgerComplete(
+    clientAccountId: string,
     depositTransactionId: string
   ): Promise<boolean> {
-    const keys = (['release', 'payment', 'forfeit_hq'] as const).map((m) =>
-      depositLedgerKey(depositTransactionId, m)
-    );
+    const key = (m: 'release' | 'payment' | 'forfeit_hq') =>
+      depositLedgerKey(depositTransactionId, m);
     try {
       const legs = await this.hasuraSystemService.executeQuery<{
         account_transactions: Array<{ idempotency_key: string | null }>;
+        holds: Array<{ transaction_type: string; amount?: number | string }>;
       }>(
         `
-        query GetForfeitLegs($keys: [String!]!) {
+        query GetForfeitLegs($keys: [String!]!, $accountId: uuid!, $referenceId: uuid!) {
           account_transactions(where: { idempotency_key: { _in: $keys } }) {
             idempotency_key
           }
+          holds: account_transactions(
+            where: {
+              account_id: { _eq: $accountId }
+              reference_id: { _eq: $referenceId }
+              transaction_type: { _in: [hold, release] }
+            }
+          ) {
+            transaction_type
+            amount
+          }
         }
         `,
-        { keys }
+        {
+          keys: [key('release'), key('payment'), key('forfeit_hq')],
+          accountId: clientAccountId,
+          referenceId: depositTransactionId,
+        }
       );
       const found = new Set(
         (legs?.account_transactions ?? []).map((t) => t.idempotency_key)
       );
-      return keys.every((k) => found.has(k));
+      if (!found.has(key('payment')) || !found.has(key('forfeit_hq'))) {
+        return false;
+      }
+      if (found.has(key('release'))) return true;
+      const net = (legs?.holds ?? []).reduce(
+        (sum, row) =>
+          sum +
+          (row.transaction_type === 'hold' ? 1 : -1) * Number(row.amount || 0),
+        0
+      );
+      return Number(net.toFixed(2)) <= 0;
     } catch (error: any) {
       this.logger.error(
         `Failed to check forfeit ledger completeness: ${error?.message}`
