@@ -759,6 +759,98 @@ describe('MobilePaymentCallbackProcessor Freemopay lookup', () => {
     expect(databaseService.getTransactionById).toHaveBeenCalledWith(depositTx.id);
     expect(onPaymentSuccess).toHaveBeenCalled();
   });
+
+  it('confirms a live provider id before a public SUCCESS callback can pay', async () => {
+    databaseService.getTransactionByTransactionId.mockResolvedValue(depositTx);
+    mobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValueOnce(
+      new Error('provider status is pending')
+    );
+
+    await expect(
+      processor.processFreemopayCallback({
+        reference: 'mock-forged-by-caller',
+        status: 'SUCCESS',
+      })
+    ).rejects.toThrow(/provider status is pending/i);
+
+    expect(
+      mobilePaymentsService.assertProviderConfirmsCallback
+    ).toHaveBeenCalledWith(depositTx, 'SUCCESS');
+    expect(onPaymentSuccess).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it('skips live confirmation only when the stored id starts with mock-', async () => {
+    const mocked = { ...depositTx, transaction_id: 'mock-942b4b0d' };
+    databaseService.getTransactionByTransactionId.mockResolvedValue(mocked);
+
+    await processor.processFreemopayCallback({
+      reference: 'callback-ref',
+      status: 'SUCCESS',
+    });
+
+    expect(
+      mobilePaymentsService.assertProviderConfirmsCallback
+    ).not.toHaveBeenCalled();
+    expect(onPaymentSuccess).toHaveBeenCalledWith(mocked);
+  });
+
+  it.each(['Mock-1', 'mock', 'not-mock-1', ' mock-1', '', undefined])(
+    'still confirms a live id that only looks mocked (%j)',
+    async (transactionId) => {
+      databaseService.getTransactionByTransactionId.mockResolvedValue({
+        ...depositTx,
+        transaction_id: transactionId,
+      });
+
+      await processor.processFreemopayCallback({
+        reference: depositTx.reference,
+        status: 'SUCCESS',
+      });
+
+      expect(
+        mobilePaymentsService.assertProviderConfirmsCallback
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({ transaction_id: transactionId }),
+        'SUCCESS'
+      );
+    }
+  );
+
+  it('confirms a live FAILED callback and skips confirmation for a mock failure', async () => {
+    databaseService.getTransactionByTransactionId.mockResolvedValue(depositTx);
+    mobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValueOnce(
+      new Error('provider status is success')
+    );
+
+    await expect(
+      processor.processFreemopayCallback({
+        reference: depositTx.transaction_id as string,
+        status: 'FAILED',
+      })
+    ).rejects.toThrow(/provider status is success/i);
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+
+    databaseService.getTransactionByTransactionId.mockResolvedValue({
+      ...depositTx,
+      transaction_id: 'mock-failed',
+    });
+    await processor.processFreemopayCallback({
+      reference: 'mock-failed',
+      status: 'FAILED',
+      reason: 'Customer cancelled',
+    });
+    expect(
+      mobilePaymentsService.assertProviderConfirmsCallback
+    ).toHaveBeenCalledTimes(1);
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      depositTx.id,
+      expect.objectContaining({
+        status: 'failed',
+        error_message: 'Customer cancelled',
+      })
+    );
+  });
 });
 
 describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)', () => {

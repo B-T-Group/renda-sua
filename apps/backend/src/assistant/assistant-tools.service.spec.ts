@@ -473,6 +473,91 @@ describe('AssistantToolsService', () => {
       expect(inventoryItems.getInventorySearchSuggestions).not.toHaveBeenCalled();
     });
 
+    it('searches the identity market, not a country the tool asks for', async () => {
+      inventoryItems.getInventorySearchSuggestions.mockResolvedValue([]);
+      const result = await service.executeTool({
+        name: 'search_catalog',
+        input: { q: '  riz  ', country_code: 'US' },
+        identity: {
+          ...anonymous,
+          market: { country_code: 'CM', state: 'Littoral' },
+        },
+        locale: 'en',
+      });
+      expect(inventoryItems.getInventorySearchSuggestions).toHaveBeenCalledWith({
+        q: 'riz',
+        country_code: 'CM',
+        is_active: true,
+        include_unavailable: false,
+      });
+      expect(result.content).toContain('CM');
+    });
+
+    it('rejects a trimmed catalog query shorter than 2 characters', async () => {
+      const result = await service.executeTool({
+        name: 'search_catalog',
+        input: { query: ' a ' },
+        identity: anonymous,
+        locale: 'en',
+      });
+      expect(result.content).toMatch(/at least 2 characters/i);
+      expect(inventoryItems.getInventorySearchSuggestions).not.toHaveBeenCalled();
+    });
+
+    it('refuses catalog search when the market country is blank', async () => {
+      const result = await service.executeTool({
+        name: 'search_catalog',
+        input: { query: 'phone' },
+        identity: { ...anonymous, market: { country_code: '' } },
+        locale: 'en',
+      });
+      expect(result.content).toMatch(/market information is required/i);
+      expect(inventoryItems.getInventorySearchSuggestions).not.toHaveBeenCalled();
+    });
+
+    it('omits a missing price and marks only explicitly unavailable products', async () => {
+      inventoryItems.getInventorySearchSuggestions.mockResolvedValue([
+        {
+          kind: 'product',
+          inventoryId: 'free',
+          title: 'Water',
+          price: 0,
+          currency: 'XAF',
+          available: true,
+        },
+        {
+          kind: 'product',
+          inventoryId: 'nocur',
+          title: 'Soap',
+          price: 500,
+          currency: null,
+          available: false,
+        },
+        {
+          kind: 'product',
+          inventoryId: 'ok',
+          title: 'Rice',
+          price: 800,
+          currency: 'XAF',
+        },
+      ]);
+      const result = await service.executeTool({
+        name: 'search_catalog',
+        input: { query: 'shop' },
+        identity: { ...anonymous, market: { country_code: 'CM' } },
+        locale: 'en',
+      });
+      expect(result.content).toContain('[Water](/items/free)');
+      expect(result.content).not.toMatch(/Water.*XAF/);
+      expect(result.content).toContain(
+        '[Soap](/items/nocur) (currently unavailable)'
+      );
+      expect(result.content).not.toContain('null');
+      expect(result.content).not.toContain('undefined');
+      expect(result.content).toContain('[Rice](/items/ok) - 800 XAF');
+      expect(result.content).not.toMatch(/Rice.*unavailable/);
+    });
+
     it('handles empty search results gracefully', async () => {
       inventoryItems.getInventorySearchSuggestions.mockResolvedValue([]);
       const result = await service.executeTool({
