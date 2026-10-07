@@ -33,11 +33,15 @@ import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher
 import type { AssistantContext } from '@/utils/assistantChips';
 import { getContextualChips, buildChipMessage } from '@/utils/assistantChips';
 import { trackSiteEvent } from '@/services/AppEventsService';
-import { useClientReorderFlow } from '@/hooks/useClientReorderFlow';
+import { useReorderOrder } from '@/hooks/useReorderOrder';
 import { ReorderCartConflictSheet } from '@/components/orders/ReorderCartConflictSheet';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ClientRootStackParamList } from '@/navigation/types';
+import type { ReorderCartAction, ReorderOrderResponse } from '@/types/reorder';
+import { trackReorderEvent } from '@/utils/reorderAnalytics';
+import { formatSkippedNames, mapReorderLineToCartLine, resolveReorderCartAction } from '@/utils/reorderCart';
+import { reorderNavigator } from '@/utils/reorderNavigator';
 
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
 /** AC9: the composer grows with the text up to 4 rows, then scrolls. */
@@ -366,8 +370,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   const assistantTransport = useAssistantTransport();
   const context = route?.params?.context;
   const navigation = useNavigation<Nav>();
+  const { reorder } = useReorderOrder();
+  
+  // Track clicked reorder link and conflict sheet
   const [pendingReorderId, setPendingReorderId] = useState<string | undefined>(undefined);
-  const reorderFlow = useClientReorderFlow(pendingReorderId ?? '', pendingReorderId ? undefined : undefined);
+  const [pendingPayload, setPendingPayload] = useState<ReorderOrderResponse | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
   const [reorderSnack, setReorderSnack] = useState<string | null>(null);
 
   // Hero: Attentive while the composer is focused, Listening once it has text.
@@ -395,19 +403,147 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
     [assistant, draft, assistantTransport]
   );
 
-  // Trigger reorder when orderId is set
+  // Handle reorder when pendingReorderId is set
   useEffect(() => {
-    if (pendingReorderId) {
-      void reorderFlow.onReorderPress();
-    }
-  }, [pendingReorderId, reorderFlow]);
+    if (!pendingReorderId) return;
+    
+    const executeReorder = async () => {
+      try {
+        const payload = await reorder(pendingReorderId, false);
+        
+        // No items? Show toast and done
+        if (payload.lines.length === 0) {
+          const skipToast = buildSkipToast(payload);
+          if (skipToast) setReorderSnack(skipToast);
+          else {
+            setReorderSnack(
+              t('orders.reorder.unavailable', 'These items are not available to order again.')
+            );
+          }
+          setPendingReorderId(undefined);
+          return;
+        }
+        
+        // Check cart conflict
+        const cartBizIds = [...new Set(cart.items.map((l) => l.businessId))];
+        const decision = resolveReorderCartAction(cartBizIds, payload.business_id);
+        
+        if (decision === 'replace') {
+          // Auto-replace when cart is empty or same business
+          applyLines(payload, 'replace');
+          setPendingReorderId(undefined);
+          return;
+        }
+        
+        // Show conflict sheet
+        setPendingPayload(payload);
+        setSheetOpen(true);
+        
+        if (decision === 'blocked_other_store') {
+          setReorderSnack(
+            t('orders.reorder.otherStoreToast', 'Your cart has items from another store')
+          );
+        }
+      } catch (err: unknown) {
+        const msg = err instanceof Error 
+          ? err.message 
+          : t('orders.reorder.failed', 'Could not reorder. Try again.');
+        setReorderSnack(msg);
+        setPendingReorderId(undefined);
+      }
+    };
+    
+    void executeReorder();
+  }, [pendingReorderId, reorder, cart.items, t]);
 
-  // Clear pending id on sheet dismiss/success
-  useEffect(() => {
-    if (!reorderFlow.sheetOpen && pendingReorderId) {
-      setPendingReorderId(undefined);
+  const buildSkipToast = useCallback((payload: ReorderOrderResponse) => {
+    const names = payload.skipped.map((s) => s.name);
+    if (names.length === 0) return null;
+    const list = formatSkippedNames(names, (n) =>
+      t('orders.reorder.andMore', 'and {{count}} more', { count: n })
+    );
+    return t('orders.reorder.skippedToast', 'Unavailable: {{names}}', { names: list });
+  }, [t]);
+
+  const navigateAfterApply = useCallback((payload: ReorderOrderResponse, cartAction: ReorderCartAction) => {
+    trackReorderEvent('reorder_result', {
+      orderId: pendingReorderId!,
+      dest: payload.navigation_hint,
+      skipped_count: payload.skipped.length,
+      cart_action: cartAction,
+    });
+    const skipToast = buildSkipToast(payload);
+    if (skipToast) setReorderSnack(skipToast);
+
+    if (payload.navigation_hint === 'none') {
+      if (!skipToast) {
+        setReorderSnack(
+          t('orders.reorder.unavailable', 'These items are not available to order again.')
+        );
+      }
+      return;
     }
-  }, [reorderFlow.sheetOpen, pendingReorderId]);
+
+    const stack = reorderNavigator(navigation);
+    if (payload.navigation_hint === 'checkout') {
+      stack.navigate('CartCheckout', {
+        deliveryAddressId: payload.fulfillment.address_id ?? undefined,
+        fulfillmentMethod: payload.fulfillment.type,
+      });
+      return;
+    }
+
+    let banner: 'business_closed' | 'address_invalid' | undefined;
+    if (!payload.fulfillment.business_accepting_orders) {
+      banner = 'business_closed';
+    } else if (!payload.fulfillment.address_valid) {
+      banner = 'address_invalid';
+    }
+    reorderNavigator(navigation).navigate('Cart', banner ? { reorderBanner: banner } : undefined);
+  }, [buildSkipToast, navigation, pendingReorderId, t]);
+
+  const applyLines = useCallback((payload: ReorderOrderResponse, action: 'replace' | 'add') => {
+    const lines = payload.lines.map((line) => mapReorderLineToCartLine(line, payload.business_id));
+    if (action === 'replace') cart.replaceLines(lines);
+    else cart.addLines(lines);
+    navigateAfterApply(payload, action);
+  }, [cart, navigateAfterApply]);
+
+  const onReplace = useCallback(() => {
+    if (!pendingPayload) return;
+    setSheetOpen(false);
+    applyLines(pendingPayload, 'replace');
+    setPendingPayload(null);
+    setPendingReorderId(undefined);
+  }, [applyLines, pendingPayload]);
+
+  const onAdd = useCallback(() => {
+    if (!pendingPayload) return;
+    const cartBizIds = [...new Set(cart.items.map((l) => l.businessId))];
+    const decision = resolveReorderCartAction(cartBizIds, pendingPayload.business_id);
+    if (decision === 'blocked_other_store') {
+      setReorderSnack(
+        t('orders.reorder.otherStoreToast', 'Your cart has items from another store')
+      );
+      return;
+    }
+    setSheetOpen(false);
+    applyLines(pendingPayload, 'add');
+    setPendingPayload(null);
+    setPendingReorderId(undefined);
+  }, [applyLines, cart.items, pendingPayload, t]);
+
+  const onDismissSheet = useCallback(() => {
+    setSheetOpen(false);
+    setPendingPayload(null);
+    setPendingReorderId(undefined);
+  }, []);
+
+  const allowAdd = !!pendingPayload &&
+    resolveReorderCartAction(
+      [...new Set(cart.items.map((l) => l.businessId))],
+      pendingPayload.business_id
+    ) !== 'blocked_other_store';
 
   // Handle reorder links from assistant messages
   const handleReorderLink = useCallback(
@@ -416,6 +552,7 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
       if (!reorderMatch) return false;
 
       const orderId = reorderMatch[1];
+      trackReorderEvent('reorder_tap', { orderId });
       setPendingReorderId(orderId);
       return true;
     },
@@ -602,12 +739,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
       </View>
       </KeyboardAvoidingView>
       <ReorderCartConflictSheet
-        visible={reorderFlow.sheetOpen}
-        allowAdd={reorderFlow.allowAdd}
-        otherStoreBlocked={reorderFlow.otherStoreBlocked}
-        onReplace={reorderFlow.onReplace}
-        onAdd={reorderFlow.onAdd}
-        onDismiss={reorderFlow.onDismissSheet}
+        visible={sheetOpen}
+        allowAdd={allowAdd}
+        otherStoreBlocked={!!pendingPayload && !allowAdd}
+        onReplace={onReplace}
+        onAdd={onAdd}
+        onDismiss={onDismissSheet}
       />
       {reorderSnack ? (
         <View

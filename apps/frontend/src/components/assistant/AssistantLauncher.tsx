@@ -28,6 +28,7 @@ import { RendaCharacter } from './RendaCharacter';
 import type { RendaState } from './rendaCharacterEngine';
 import { useAssistantLauncherAnalytics } from './useAssistantLauncherAnalytics';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
+import { buildAssistantContextFromPath } from '../../utils/buildAssistantContext';
 
 /** First-run nudge waits for 3 s of dwell on browse home. */
 export const NUDGE_DWELL_MS = 3000;
@@ -268,35 +269,7 @@ export function AssistantLauncher({
     track(SITE_EVENT_ASSISTANT_LAUNCHER_TAP, { screen, variant, entry });
     if (nudgeOpen) dismissNudge('opened');
     
-    // Build context from current route
-    let context: any = undefined;
-    const path = location.pathname;
-    
-    if (path.startsWith('/items/')) {
-      const inventoryId = path.split('/items/')[1]?.split('/')[0];
-      if (inventoryId) {
-        context = {
-          type: 'item_detail',
-          inventoryId,
-          // itemName could be pulled from page data if available
-        };
-      }
-    } else if (path === '/orders') {
-      context = {
-        type: 'orders_list',
-        hasCompletedOrders: true, // Default true; could check from page data if available
-      };
-    } else if (path.startsWith('/orders/') && !path.includes('/reorder')) {
-      const orderId = path.split('/orders/')[1]?.split('/')[0];
-      if (orderId) {
-        context = {
-          type: 'order_detail',
-          orderId,
-          // orderStatus could be pulled from page data if available
-        };
-      }
-    }
-    
+    const context = buildAssistantContextFromPath(location.pathname);
     navigate('/assistant', context ? { state: { context } } : undefined);
   };
 

@@ -31,6 +31,7 @@ import { LaunchPromoBanner } from '../../components/business/LaunchPromoBanner';
 import { MerchantStatusChip } from '../../components/business/MerchantStatusChip';
 import { NotificationBellButton } from '../../components/common/NotificationBellButton';
 import { AssistantIconButton } from '../../components/common/AssistantIconButton';
+import { buildAssistantContextFromRoute } from '../../utils/buildAssistantContext';
 import { TintedHeaderBlock } from '../../components/common/TintedHeaderBlock';
 import { DashboardSkeleton } from '../../components/common/DashboardSkeleton';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
@@ -202,7 +203,8 @@ export function BusinessDashboardView({
     quietHomeMode && quietNextAction?.id === 'actions_needed';
 
   const openAssistant = useCallback(() => {
-    navigation.navigate('AssistantChat');
+    const context = buildAssistantContextFromRoute();
+    navigation.navigate('AssistantChat', context ? { context } : undefined);
   }, [navigation]);
 
   if (showComposing) {

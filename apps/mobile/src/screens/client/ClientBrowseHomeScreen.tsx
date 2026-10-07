@@ -32,6 +32,7 @@ import { useAssistantEntryTap } from '../../components/assistant/launcher/useAss
 import { useClientFlagsResolved } from '../../components/assistant/launcher/launcherHooks';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { assistantViewer, canSeeRendaCharacter, shouldHideHeaderAssistantButton } from '../../utils/assistantLauncher';
+import { buildAssistantContextFromRoute } from '../../utils/buildAssistantContext';
 import { NotificationBellButton } from '../../components/common/NotificationBellButton';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
@@ -78,7 +79,8 @@ function ClientBrowseHomeScreenBase() {
   );
   const openAssistant = useCallback(() => {
     trackEntryTap('header_icon', 'header_icon');
-    rootNav?.navigate('AssistantChat');
+    const context = buildAssistantContextFromRoute();
+    rootNav?.navigate('AssistantChat', context ? { context } : undefined);
   }, [rootNav, trackEntryTap]);
 
   const { selected: homeOrders, totalActive: homeOrdersTotalActive } = useMemo(
