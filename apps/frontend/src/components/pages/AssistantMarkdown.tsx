@@ -1,10 +1,9 @@
 import { Box, Link, Typography } from '@mui/material';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
-import { useReorderOrder } from '../../hooks/useClientFlags';
-import { useCart } from '../../contexts/CartContext';
-import { useSnackbar } from 'notistack';
+import { useClientReorderFlow } from '../../hooks/useClientReorderFlow';
+import { ReorderCartConflictDialog } from '../orders/ReorderCartConflictDialog';
 import { useTranslation } from 'react-i18next';
 
 type Inline =
@@ -96,111 +95,13 @@ export function stripAssistantMarkdown(source: string): string {
     .replace(/^\s*[-*•]\s+/gm, '• ');
 }
 
-function InlineRuns({ inlines }: { inlines: Inline[] }) {
-  const navigate = useNavigate();
-  const { trackSiteEvent } = useTrackSiteEvent();
-  const { reorder } = useReorderOrder();
-  const { cartItems, replaceItems } = useCart();
-  const { enqueueSnackbar } = useSnackbar();
-  const { t } = useTranslation();
-
-  const handleLinkClick = useCallback(async (e: React.MouseEvent, url: string) => {
-    e.preventDefault();
-    void trackSiteEvent({
-      eventType: 'assistant.deeplink.tap',
-      metadata: { url },
-    });
-
-    // Check for reorder links first
-    const reorderMatch = url.match(/\/orders\/([^/?]+)\/reorder/);
-    if (reorderMatch) {
-      const orderId = reorderMatch[1];
-      try {
-        const payload = await reorder(orderId);
-        
-        if (payload.lines.length === 0) {
-          enqueueSnackbar(
-            t('orders.reorder.unavailable', 'These items are not available to order again.'),
-            { variant: 'info' }
-          );
-          return;
-        }
-
-        // Replace cart lines and navigate to cart/checkout
-        const lines = payload.lines.map((line) => ({
-          businessId: payload.business_id,
-          inventoryId: line.inventory_id,
-          variantId: line.variant_id ?? undefined,
-          quantity: line.quantity,
-        }));
-        replaceItems(lines);
-
-        if (payload.navigation_hint === 'checkout') {
-          navigate('/checkout', {
-            state: {
-              deliveryAddressId: payload.fulfillment.address_id ?? undefined,
-              fulfillmentMethod: payload.fulfillment.type,
-            },
-          });
-        } else {
-          let banner: 'business_closed' | 'address_invalid' | undefined;
-          if (!payload.fulfillment.business_accepting_orders) {
-            banner = 'business_closed';
-          } else if (!payload.fulfillment.address_valid) {
-            banner = 'address_invalid';
-          }
-          navigate('/cart', banner ? { state: { reorderBanner: banner } } : undefined);
-        }
-
-        if (payload.skipped.length > 0) {
-          const names = payload.skipped.map((s) => s.name).slice(0, 3).join(', ');
-          enqueueSnackbar(
-            t('orders.reorder.skippedToast', 'Unavailable: {{names}}', { names }),
-            { variant: 'warning' }
-          );
-        }
-        
-        return;
-      } catch (error: unknown) {
-        const msg = error instanceof Error
-          ? error.message
-          : t('orders.reorder.failed', 'Could not reorder. Try again.');
-        enqueueSnackbar(msg, { variant: 'error' });
-        return;
-      }
-    }
-
-    // Try in-app navigation for relative paths
-    if (url.startsWith('/')) {
-      navigate(url);
-      return;
-    }
-
-    // Check if absolute URL is same-origin (or *.rendasua.com)
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      try {
-        const urlObj = new URL(url);
-        const currentOrigin = window.location.origin;
-        const isSameOrigin = urlObj.origin === currentOrigin;
-        const isRendasuaDomain = urlObj.hostname.endsWith('.rendasua.com') || urlObj.hostname === 'rendasua.com';
-        
-        if (isSameOrigin || isRendasuaDomain) {
-          // Same origin or Rendasua domain - navigate in-app to pathname + search
-          navigate(urlObj.pathname + urlObj.search);
-          return;
-        }
-      } catch {
-        // Invalid URL - fall through to external open
-      }
-      
-      // External URLs open in new tab
-      window.open(url, '_blank', 'noopener,noreferrer');
-      return;
-    }
-
-    // Relative URLs navigate
-    navigate(url);
-  }, [navigate, trackSiteEvent, reorder, cartItems, replaceItems, enqueueSnackbar, t]);
+function InlineRuns({ 
+  inlines, 
+  onLinkClick 
+}: { 
+  inlines: Inline[];
+  onLinkClick: (e: React.MouseEvent, url: string) => void;
+}) {
 
   return (
     <>
@@ -251,6 +152,68 @@ type Props = {
 };
 
 export function AssistantMarkdown({ content, rich = true }: Props) {
+  const navigate = useNavigate();
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const { t } = useTranslation();
+  
+  // Track reorder flow state for cart conflict handling
+  const [pendingReorderId, setPendingReorderId] = useState<string | null>(null);
+  const reorderFlow = useClientReorderFlow(pendingReorderId ?? '', undefined);
+
+  const handleLinkClick = useCallback(
+    async (e: React.MouseEvent, url: string) => {
+      e.preventDefault();
+      void trackSiteEvent({
+        eventType: 'assistant.deeplink.tap',
+        metadata: { url },
+      });
+
+      // Check for reorder links first
+      const reorderMatch = url.match(/\/orders\/([^/?]+)\/reorder/);
+      if (reorderMatch) {
+        const orderId = reorderMatch[1];
+        setPendingReorderId(orderId);
+        // Trigger reorder flow (will show conflict dialog if needed)
+        await reorderFlow.onReorderPress();
+        return;
+      }
+
+      // Try in-app navigation for relative paths
+      if (url.startsWith('/')) {
+        navigate(url);
+        return;
+      }
+
+      // Check if absolute URL is same-origin (or *.rendasua.com)
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        try {
+          const urlObj = new URL(url);
+          const currentOrigin = window.location.origin;
+          const isSameOrigin = urlObj.origin === currentOrigin;
+          const isRendasuaDomain =
+            urlObj.hostname.endsWith('.rendasua.com') ||
+            urlObj.hostname === 'rendasua.com';
+
+          if (isSameOrigin || isRendasuaDomain) {
+            // Same origin or Rendasua domain - navigate in-app to pathname + search
+            navigate(urlObj.pathname + urlObj.search);
+            return;
+          }
+        } catch {
+          // Invalid URL - fall through to external open
+        }
+
+        // External URLs open in new tab
+        window.open(url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+
+      // Relative URLs navigate
+      navigate(url);
+    },
+    [navigate, trackSiteEvent, reorderFlow, t]
+  );
+
   if (!rich) {
     return (
       <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>
@@ -261,33 +224,43 @@ export function AssistantMarkdown({ content, rich = true }: Props) {
 
   const blocks = parseAssistantMarkdown(content);
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-      {blocks.map((block, index) => {
-        if (block.type === 'bullet') {
+    <>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        {blocks.map((block, index) => {
+          if (block.type === 'bullet') {
+            return (
+              <Box
+                key={index}
+                sx={{
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 1,
+                }}
+              >
+                <Typography variant="body2" sx={{ lineHeight: 1.7, fontWeight: 700 }}>
+                  •
+                </Typography>
+                <Typography variant="body2" sx={{ lineHeight: 1.7, flex: 1, minWidth: 0 }}>
+                  <InlineRuns inlines={block.inlines} onLinkClick={handleLinkClick} />
+                </Typography>
+              </Box>
+            );
+          }
           return (
-            <Box
-              key={index}
-              sx={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: 1,
-              }}
-            >
-              <Typography variant="body2" sx={{ lineHeight: 1.7, fontWeight: 700 }}>
-                •
-              </Typography>
-              <Typography variant="body2" sx={{ lineHeight: 1.7, flex: 1, minWidth: 0 }}>
-                <InlineRuns inlines={block.inlines} />
-              </Typography>
-            </Box>
+            <Typography key={index} variant="body2" sx={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+              <InlineRuns inlines={block.inlines} onLinkClick={handleLinkClick} />
+            </Typography>
           );
-        }
-        return (
-          <Typography key={index} variant="body2" sx={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-            <InlineRuns inlines={block.inlines} />
-          </Typography>
-        );
-      })}
-    </Box>
+        })}
+      </Box>
+      <ReorderCartConflictDialog
+        open={reorderFlow.sheetOpen}
+        allowAdd={reorderFlow.allowAdd}
+        otherStoreBlocked={reorderFlow.otherStoreBlocked}
+        onReplace={reorderFlow.onReplace}
+        onAdd={reorderFlow.onAdd}
+        onCancel={reorderFlow.onDismissSheet}
+      />
+    </>
   );
 }

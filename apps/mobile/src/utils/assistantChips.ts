@@ -165,9 +165,9 @@ export function getContextualChips(context?: AssistantContext | null): ChipConfi
  * @returns The message text to send when the chip is tapped
  */
 export function buildChipMessage(
-  chip: ChipConfig, // eslint-disable-line @typescript-eslint/no-unused-vars
+  chip: ChipConfig,
   translatedLabel: string,
-  context?: AssistantContext | null // eslint-disable-line @typescript-eslint/no-unused-vars
+  context?: AssistantContext | null
 ): string {
   // The translated label already includes any context-specific interpolation
   // done by the caller using i18n.t(key, { name, orderNumber, etc. })

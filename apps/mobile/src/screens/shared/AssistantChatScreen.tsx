@@ -33,11 +33,11 @@ import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher
 import type { AssistantContext } from '@/utils/assistantChips';
 import { getContextualChips, buildChipMessage } from '@/utils/assistantChips';
 import { trackSiteEvent } from '@/services/AppEventsService';
-import { useReorderOrder } from '@/hooks/useReorderOrder';
+import { useClientReorderFlow } from '@/hooks/useClientReorderFlow';
+import { ReorderCartConflictSheet } from '@/components/orders/ReorderCartConflictSheet';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ClientRootStackParamList } from '@/navigation/types';
-import { reorderNavigator } from '@/utils/reorderNavigator';
 
 const WHATSAPP_SUPPORT_NUMBER = '18556488855';
 /** AC9: the composer grows with the text up to 4 rows, then scrolls. */
@@ -366,7 +366,8 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   const assistantTransport = useAssistantTransport();
   const context = route?.params?.context;
   const navigation = useNavigation<Nav>();
-  const { reorder } = useReorderOrder();
+  const [pendingReorderId, setPendingReorderId] = useState<string | null>(null);
+  const reorderFlow = useClientReorderFlow(pendingReorderId ?? '', undefined);
   const [reorderSnack, setReorderSnack] = useState<string | null>(null);
 
   // Hero: Attentive while the composer is focused, Listening once it has text.
@@ -401,54 +402,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
       if (!reorderMatch) return false;
 
       const orderId = reorderMatch[1];
-      try {
-        const payload = await reorder(orderId, false);
-        
-        if (payload.lines.length === 0) {
-          setReorderSnack(t('orders.reorder.unavailable', 'These items are not available to order again.'));
-          return true;
-        }
-
-        // Replace cart lines and navigate to cart/checkout
-        const lines = payload.lines.map((line) => ({
-          businessId: payload.business_id,
-          inventoryId: line.inventory_id,
-          variantId: line.variant_id ?? undefined,
-          quantity: line.quantity,
-        }));
-        cart.replaceLines(lines);
-
-        const stack = reorderNavigator(navigation);
-        if (payload.navigation_hint === 'checkout') {
-          stack.navigate('CartCheckout', {
-            deliveryAddressId: payload.fulfillment.address_id ?? undefined,
-            fulfillmentMethod: payload.fulfillment.type,
-          });
-        } else {
-          let banner: 'business_closed' | 'address_invalid' | undefined;
-          if (!payload.fulfillment.business_accepting_orders) {
-            banner = 'business_closed';
-          } else if (!payload.fulfillment.address_valid) {
-            banner = 'address_invalid';
-          }
-          stack.navigate('Cart', banner ? { reorderBanner: banner } : undefined);
-        }
-
-        if (payload.skipped.length > 0) {
-          const names = payload.skipped.map((s) => s.name).slice(0, 3).join(', ');
-          setReorderSnack(t('orders.reorder.skippedToast', 'Unavailable: {{names}}', { names }));
-        }
-        
-        return true;
-      } catch (error: unknown) {
-        const msg = error instanceof Error
-          ? error.message
-          : t('orders.reorder.failed', 'Could not reorder. Try again.');
-        setReorderSnack(msg);
-        return true;
-      }
+      setPendingReorderId(orderId);
+      // Trigger reorder flow (will show conflict sheet if needed)
+      await reorderFlow.onReorderPress();
+      return true;
     },
-    [reorder, cart, navigation, t]
+    [reorderFlow]
   );
 
   const renderItem = useCallback(
@@ -483,11 +442,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   }, []);
 
   return (
-    <KeyboardAvoidingView
-      style={[styles.root, { backgroundColor: colors.pageBackground }]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={headerHeight}
-    >
+    <>
+      <KeyboardAvoidingView
+        style={[styles.root, { backgroundColor: colors.pageBackground }]}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={headerHeight}
+      >
       <FlatList
         ref={listRef}
         data={assistant.messages.slice()}
@@ -628,7 +588,33 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
           <MaterialIcons name="send" size={20} color={colors.primary.contrast} />
         </Pressable>
       </View>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+      <ReorderCartConflictSheet
+        visible={reorderFlow.sheetOpen}
+        allowAdd={reorderFlow.allowAdd}
+        otherStoreBlocked={reorderFlow.otherStoreBlocked}
+        onReplace={reorderFlow.onReplace}
+        onAdd={reorderFlow.onAdd}
+        onDismiss={reorderFlow.onDismissSheet}
+      />
+      {reorderSnack ? (
+        <View
+          style={{
+            position: 'absolute',
+            bottom: insets.bottom + 80,
+            left: 16,
+            right: 16,
+            backgroundColor: colors.surface,
+            borderRadius: borderRadius.card,
+            padding: spacing.md,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text style={{ color: colors.text.primary }}>{reorderSnack}</Text>
+        </View>
+      ) : null}
+    </>
   );
 });
 
