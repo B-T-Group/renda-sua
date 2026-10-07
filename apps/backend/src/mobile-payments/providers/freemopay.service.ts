@@ -461,4 +461,39 @@ export class FreemopayService {
       this.config.callbackUrl
     );
   }
+
+  /**
+   * Generate a mock callback payload for a given mock transaction.
+   * Useful for testing the callback flow with mocked transactions.
+   */
+  generateMockCallback(
+    mockReference: string,
+    externalId?: string,
+    outcome?: 'SUCCESS' | 'FAILED'
+  ): {
+    reference: string;
+    status: 'SUCCESS' | 'FAILED';
+    merchantRef?: string;
+    externalId?: string;
+    message: string;
+    reason?: string;
+  } {
+    const stored = this.mockOutcomes.get(mockReference);
+    const finalOutcome = outcome ?? stored?.outcome ?? 'SUCCESS';
+
+    return {
+      reference: mockReference,
+      status: finalOutcome,
+      merchantRef: externalId,
+      externalId,
+      message:
+        finalOutcome === 'SUCCESS'
+          ? 'Mock payment succeeded'
+          : 'Mock payment failed (amount >= threshold)',
+      reason:
+        finalOutcome === 'FAILED'
+          ? 'Mock failure (amount >= threshold)'
+          : undefined,
+    };
+  }
 }
