@@ -1,4 +1,3 @@
-import { describe, it, expect } from '@jest/globals';
 import { getContextualChips, buildChipMessage, type AssistantContext, type ChipConfig } from './assistantChips';
 
 describe('assistantChips', () => {
