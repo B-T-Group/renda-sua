@@ -5,6 +5,7 @@ import { BusinessReferralPayoutsModule } from '../business-referral-payouts/busi
 import { ReferralsModule } from '../referrals/referrals.module';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { AgentHoldService } from './agent-hold.service';
+import { AgentHoldLossGuardService } from './agent-hold-loss-guard.service';
 import { AgentReferralsService } from './agent-referrals.service';
 import { AgentsController } from './agents.controller';
 
@@ -16,7 +17,12 @@ import { AgentsController } from './agents.controller';
     BusinessReferralPayoutsModule,
   ],
   controllers: [AgentsController],
-  providers: [AgentHoldService, AgentReferralsService, ConfigurationsService],
+  providers: [
+    AgentHoldService,
+    AgentHoldLossGuardService,
+    AgentReferralsService,
+    ConfigurationsService,
+  ],
   exports: [AgentHoldService, AgentReferralsService],
 })
 export class AgentsModule {}
