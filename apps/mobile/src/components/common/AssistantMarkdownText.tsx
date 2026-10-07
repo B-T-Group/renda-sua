@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react';
-import { Linking, Pressable, StyleSheet, TextStyle, View, ViewStyle } from 'react-native';
+import { Linking, StyleSheet, TextStyle, View, ViewStyle } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
