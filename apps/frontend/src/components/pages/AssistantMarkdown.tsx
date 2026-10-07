@@ -125,7 +125,7 @@ function InlineRuns({
             <Link
               key={index}
               href={part.url}
-              onClick={(e) => handleLinkClick(e, part.url)}
+              onClick={(e) => onLinkClick(e, part.url)}
               sx={{
                 color: 'primary.main',
                 textDecorationColor: 'primary.main',
@@ -157,8 +157,22 @@ export function AssistantMarkdown({ content, rich = true }: Props) {
   const { t } = useTranslation();
   
   // Track reorder flow state for cart conflict handling
-  const [pendingReorderId, setPendingReorderId] = useState<string | null>(null);
-  const reorderFlow = useClientReorderFlow(pendingReorderId ?? '', undefined);
+  const [pendingReorderId, setPendingReorderId] = useState<string | undefined>(undefined);
+  const reorderFlow = useClientReorderFlow(pendingReorderId ?? '', pendingReorderId ? undefined : undefined);
+
+  // Trigger reorder when orderId is set
+  React.useEffect(() => {
+    if (pendingReorderId) {
+      void reorderFlow.onReorderPress();
+    }
+  }, [pendingReorderId, reorderFlow]);
+
+  // Clear pending id on dialog dismiss/success
+  React.useEffect(() => {
+    if (!reorderFlow.sheetOpen && pendingReorderId) {
+      setPendingReorderId(undefined);
+    }
+  }, [reorderFlow.sheetOpen, pendingReorderId]);
 
   const handleLinkClick = useCallback(
     async (e: React.MouseEvent, url: string) => {
@@ -173,8 +187,6 @@ export function AssistantMarkdown({ content, rich = true }: Props) {
       if (reorderMatch) {
         const orderId = reorderMatch[1];
         setPendingReorderId(orderId);
-        // Trigger reorder flow (will show conflict dialog if needed)
-        await reorderFlow.onReorderPress();
         return;
       }
 

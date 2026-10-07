@@ -366,8 +366,8 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   const assistantTransport = useAssistantTransport();
   const context = route?.params?.context;
   const navigation = useNavigation<Nav>();
-  const [pendingReorderId, setPendingReorderId] = useState<string | null>(null);
-  const reorderFlow = useClientReorderFlow(pendingReorderId ?? '', undefined);
+  const [pendingReorderId, setPendingReorderId] = useState<string | undefined>(undefined);
+  const reorderFlow = useClientReorderFlow(pendingReorderId ?? '', pendingReorderId ? undefined : undefined);
   const [reorderSnack, setReorderSnack] = useState<string | null>(null);
 
   // Hero: Attentive while the composer is focused, Listening once it has text.
@@ -395,6 +395,20 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
     [assistant, draft, assistantTransport]
   );
 
+  // Trigger reorder when orderId is set
+  useEffect(() => {
+    if (pendingReorderId) {
+      void reorderFlow.onReorderPress();
+    }
+  }, [pendingReorderId, reorderFlow]);
+
+  // Clear pending id on sheet dismiss/success
+  useEffect(() => {
+    if (!reorderFlow.sheetOpen && pendingReorderId) {
+      setPendingReorderId(undefined);
+    }
+  }, [reorderFlow.sheetOpen, pendingReorderId]);
+
   // Handle reorder links from assistant messages
   const handleReorderLink = useCallback(
     async (url: string) => {
@@ -403,11 +417,9 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
 
       const orderId = reorderMatch[1];
       setPendingReorderId(orderId);
-      // Trigger reorder flow (will show conflict sheet if needed)
-      await reorderFlow.onReorderPress();
       return true;
     },
-    [reorderFlow]
+    []
   );
 
   const renderItem = useCallback(
