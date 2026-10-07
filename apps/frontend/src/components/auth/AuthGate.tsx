@@ -27,7 +27,6 @@ import type {
 import { getAuthGateContextCopy } from '../../utils/authGateContextCopy';
 import {
   buildAuthGateIdentifierKey,
-  clearAuthGateLockout,
   readActiveAuthGateLockout,
   readAuthGateLockout,
   writeAuthGateLockout,
