@@ -26,7 +26,10 @@ import type {
 } from './mobile-payment-callback.dto';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
-import { MobilePaymentsService } from './mobile-payments.service';
+import {
+  MobilePaymentsService,
+  type MobileTransactionStatus,
+} from './mobile-payments.service';
 import { MobileTransactionAccessService } from './mobile-transaction-access.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { ReqContext } from '../auth/req-context.decorator';
@@ -469,32 +472,21 @@ export class MobilePaymentsController {
   @Get('transactions/:transactionId/status')
   async checkTransactionStatus(
     @Param('transactionId') transactionId: string,
+    @ReqContext() ctx: RequestContext,
     @Query('provider') provider?: string
   ) {
     try {
+      await this.loadViewableTransactionById(transactionId, ctx);
       const status = await this.mobilePaymentsService.checkTransactionStatus(
         transactionId,
         provider
       );
-
-      // Update database with latest status
-      const transaction = await this.databaseService.getTransactionById(
-        transactionId
-      );
-      if (transaction) {
-        const persistedStatus =
-          status.status === 'ambiguous' ? 'pending' : status.status;
-        await this.databaseService.updateTransaction(transactionId, {
-          status: persistedStatus,
-          error_message: status.message,
-        });
-      }
-
-      return {
-        success: true,
-        data: status,
-      };
+      await this.persistPolledStatus(transactionId, status);
+      return { success: true, data: status };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         {
           success: false,
@@ -512,20 +504,20 @@ export class MobilePaymentsController {
   @Post('transactions/:transactionId/cancel')
   async cancelTransaction(
     @Param('transactionId') transactionId: string,
+    @ReqContext() ctx: RequestContext,
     @Query('provider') provider?: string
   ) {
     try {
+      await this.loadViewableTransactionById(transactionId, ctx);
       const success = await this.mobilePaymentsService.cancelTransaction(
         transactionId,
         provider
       );
-
       if (success) {
         await this.databaseService.updateTransaction(transactionId, {
           status: 'cancelled',
         });
       }
-
       return {
         success,
         message: success
@@ -533,6 +525,9 @@ export class MobilePaymentsController {
           : 'Failed to cancel transaction',
       };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         {
           success: false,
@@ -553,30 +548,11 @@ export class MobilePaymentsController {
     @ReqContext() ctx: RequestContext
   ) {
     try {
-      const user = await this.hasuraUserService.getUser(ctx);
-      const transaction = await this.databaseService.getTransactionById(
-        transactionId
+      const transaction = await this.loadViewableTransactionById(
+        transactionId,
+        ctx
       );
-
-      // Owner of the linked account or mobile-payments admin only. Anyone else
-      // gets the same 404 as a missing id, so ids cannot be probed.
-      if (
-        !transaction ||
-        !(await this.transactionAccessService.canView(transaction, user?.id))
-      ) {
-        throw new HttpException(
-          {
-            success: false,
-            message: 'Transaction not found',
-          },
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      return {
-        success: true,
-        data: transaction,
-      };
+      return { success: true, data: transaction };
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
@@ -596,26 +572,17 @@ export class MobilePaymentsController {
    * Get transaction by reference
    */
   @Get('transactions/reference/:reference')
-  async getTransactionByReference(@Param('reference') reference: string) {
+  async getTransactionByReference(
+    @Param('reference') reference: string,
+    @ReqContext() ctx: RequestContext
+  ) {
     try {
+      const user = await this.hasuraUserService.getUser(ctx);
       const transaction = await this.databaseService.getTransactionByReference(
         reference
       );
-
-      if (!transaction) {
-        throw new HttpException(
-          {
-            success: false,
-            message: 'Transaction not found',
-          },
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      return {
-        success: true,
-        data: transaction,
-      };
+      await this.requireViewableTransaction(transaction, user?.id);
+      return { success: true, data: transaction };
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
@@ -632,10 +599,11 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Get transaction history
+   * Get transaction history (mobile-payments admin only).
    */
   @Get('transactions')
   async getTransactions(
+    @ReqContext() ctx: RequestContext,
     @Query('provider') provider?: string,
     @Query('status') status?: string,
     @Query('startDate') startDate?: string,
@@ -644,6 +612,7 @@ export class MobilePaymentsController {
     @Query('offset') offset?: string
   ) {
     try {
+      await this.requireMobilePaymentsAdmin(ctx);
       const transactions = await this.databaseService.getTransactions({
         provider,
         status,
@@ -652,12 +621,11 @@ export class MobilePaymentsController {
         limit: limit ? parseInt(limit) : undefined,
         offset: offset ? parseInt(offset) : undefined,
       });
-
-      return {
-        success: true,
-        data: transactions,
-      };
+      return { success: true, data: transactions };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         {
           success: false,
@@ -670,26 +638,27 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Get transaction statistics
+   * Get transaction statistics (mobile-payments admin only).
    */
   @Get('statistics')
   async getStatistics(
+    @ReqContext() ctx: RequestContext,
     @Query('provider') provider?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string
   ) {
     try {
+      await this.requireMobilePaymentsAdmin(ctx);
       const stats = await this.databaseService.getTransactionStats({
         provider,
         startDate,
         endDate,
       });
-
-      return {
-        success: true,
-        data: stats,
-      };
+      return { success: true, data: stats };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       throw new HttpException(
         {
           success: false,
@@ -965,5 +934,54 @@ export class MobilePaymentsController {
         },
       };
     }
+  }
+
+  private async loadViewableTransactionById(
+    transactionId: string,
+    ctx: RequestContext
+  ) {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const transaction = await this.databaseService.getTransactionById(
+      transactionId
+    );
+    await this.requireViewableTransaction(transaction, user?.id);
+    return transaction;
+  }
+
+  private async requireViewableTransaction<
+    T extends { account_id?: string | null }
+  >(transaction: T | null, userId: string | null | undefined): Promise<T> {
+    if (
+      !transaction ||
+      !(await this.transactionAccessService.canView(transaction, userId))
+    ) {
+      throw new HttpException(
+        { success: false, message: 'Transaction not found' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return transaction;
+  }
+
+  private async requireMobilePaymentsAdmin(ctx: RequestContext): Promise<void> {
+    const user = await this.hasuraUserService.getUser(ctx);
+    if (!(await this.transactionAccessService.canAdminister(user?.id))) {
+      throw new HttpException(
+        { success: false, message: 'Forbidden' },
+        HttpStatus.FORBIDDEN
+      );
+    }
+  }
+
+  private async persistPolledStatus(
+    transactionId: string,
+    status: Pick<MobileTransactionStatus, 'status' | 'message'>
+  ): Promise<void> {
+    const persistedStatus =
+      status.status === 'ambiguous' ? 'pending' : status.status;
+    await this.databaseService.updateTransaction(transactionId, {
+      status: persistedStatus,
+      error_message: status.message,
+    });
   }
 }
