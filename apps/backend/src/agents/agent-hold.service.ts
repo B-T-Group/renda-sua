@@ -194,8 +194,9 @@ export class AgentHoldService {
    *   delivery_pin_hash IS NOT NULL AND delivery_overwrite_code_used_at IS NULL,
    *   i.e. completed via the customer PIN, not the business overwrite code)
    * - zero failed_deliveries with resolution_type='agent_fault' (all-time)
-   * - agent in pilot city: city of the agent's active primary address
-   *   (agent_addresses -> addresses.is_primary), case/accent/whitespace-insensitive
+   * - agent in pilot city: city of the agent's active primary address, else of
+   *   the oldest active address when none is primary (see resolveAgentCity);
+   *   compared case/accent/whitespace-insensitively
    */
   async isAgentEligibleForCeiling(
     agentId: string,
@@ -210,14 +211,13 @@ export class AgentHoldService {
         agents_by_pk(id: $agentId) {
           is_verified
           is_internal
-          primary_addresses: agent_addresses(
-            where: {
-              address: { is_primary: { _eq: true }, status: { _eq: active } }
-            }
-            limit: 1
+          active_addresses: agent_addresses(
+            where: { address: { status: { _eq: active } } }
+            order_by: { address: { created_at: asc } }
           ) {
             address {
               city
+              is_primary
             }
           }
         }
@@ -270,7 +270,7 @@ export class AgentHoldService {
     }
 
     if (ceilingConfig.pilotCity) {
-      const agentCity = agent.primary_addresses?.[0]?.address?.city;
+      const agentCity = this.resolveAgentCity(agent.active_addresses);
       if (!agentCity) {
         return false;
       }
@@ -282,6 +282,22 @@ export class AgentHoldService {
     }
 
     return true;
+  }
+
+  /**
+   * Pick the agent's city: prefer the active primary address; if no address is
+   * primary, fall back to the first (oldest) active address. A primary address
+   * always wins, even when a non-primary address is in the pilot city.
+   */
+  private resolveAgentCity(
+    addresses: Array<{ address?: { city?: string | null; is_primary?: boolean | null } | null }> | null | undefined
+  ): string | null {
+    const list = (addresses ?? [])
+      .map((a) => a?.address)
+      .filter((a): a is { city?: string | null; is_primary?: boolean | null } => !!a);
+    const chosen = list.find((a) => a.is_primary === true) ?? list[0];
+    const city = chosen?.city?.trim();
+    return city ? city : null;
   }
 
   /**

@@ -17,7 +17,7 @@ All keys are stored in `application_configurations` table as **global rows** (no
 |-----|------|---------|-------------|
 | `agent_hold_ceiling_enabled` | boolean | `false` | Master kill switch. When false, all agents use raw percentage-based holds (legacy behavior). When true, eligible agents get capped holds. |
 | `agent_hold_ceiling_xaf` | number | `50000` | Absolute XAF ceiling for eligible agents. If ≤0 or missing, ceiling is not applied (falls back to raw hold). |
-| `agent_hold_ceiling_city` | string | `Yaoundé` | Pilot city for eligibility. Agent's profile primary address city must match (case/accent/whitespace normalized). |
+| `agent_hold_ceiling_city` | string | `Yaoundé` | Pilot city for eligibility. Agent's active primary address city (else oldest active address if none is primary) must match (case/accent/whitespace normalized). |
 | `agent_hold_ceiling_min_clean_deliveries` | number | `10` | Minimum PIN-confirmed completed deliveries required (`orders.status=completed` AND `delivery_pin_verified=true` AND `deliveryMethod=agent_delivery`). |
 | `agent_hold_loss_weekly_cap_xaf` | number | `100000` | Weekly XAF cap on agent-fault losses. When exceeded and >0, loss guard auto-sets `agent_hold_ceiling_enabled=false` and logs/alerts. |
 
@@ -34,7 +34,7 @@ An agent is eligible for the hold ceiling when **ALL** of the following are true
 2. **Not Internal:** `agents.is_internal = false`
 3. **Clean Deliveries:** ≥ `agent_hold_ceiling_min_clean_deliveries` PIN-confirmed completed deliveries (all-time)
 4. **No Agent Faults:** Zero `failed_deliveries` rows with `resolution_type = 'agent_fault'` for that agent (all-time)
-5. **In Pilot City:** Agent's profile primary address city matches `agent_hold_ceiling_city` (normalized: lowercase, trimmed, accents removed, whitespace collapsed)
+5. **In Pilot City:** Agent's address city (active primary address; if no address is primary, the oldest active address; a primary address always wins) matches `agent_hold_ceiling_city` (normalized: lowercase, trimmed, accents removed, whitespace collapsed)
 
 ## Hold Calculation Logic
 
@@ -195,7 +195,7 @@ Added fields (same as above, plus):
 
 2. **Create Eligible Agent:**
    - `is_verified = true`, `is_internal = false`
-   - Profile primary address city = pilot city
+   - Active primary address city (else oldest active address) = pilot city
    - ≥ N completed deliveries with PIN verification
    - Zero agent-fault failed deliveries
 
@@ -230,7 +230,7 @@ Added fields (same as above, plus):
 2. Check ceiling value: `SELECT number_value FROM application_configurations WHERE config_key = 'agent_hold_ceiling_xaf';` → Must be > 0
 3. Check eligibility:
    - Agent verified: `SELECT is_verified FROM agents WHERE id = '<agent_id>';`
-   - City match: `SELECT city FROM addresses WHERE id = (SELECT primary_address_id FROM users WHERE id = '<user_id>');`
+   - City match: `SELECT a.city, a.is_primary FROM agent_addresses aa JOIN addresses a ON a.id = aa.address_id WHERE aa.agent_id = '<agent_id>' AND a.status = 'active' ORDER BY a.is_primary DESC NULLS LAST, a.created_at;`
    - Deliveries: `SELECT COUNT(*) FROM orders WHERE assigned_agent_id = '<agent_id>' AND current_status = 'completed' AND delivery_pin_verified = true AND deliveryMethod = 'agent_delivery';`
    - No faults: `SELECT COUNT(*) FROM failed_deliveries WHERE order_id IN (SELECT id FROM orders WHERE assigned_agent_id = '<agent_id>') AND resolution_type = 'agent_fault';`
 

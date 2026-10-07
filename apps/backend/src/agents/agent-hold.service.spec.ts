@@ -142,12 +142,58 @@ describe('AgentHoldService', () => {
       expect(result).toBe(false);
     });
 
+    describe('pilot city address selection (prefer primary, else any active)', () => {
+      const run = async (addresses: any[]) => {
+        hasuraSystemService.executeQuery.mockResolvedValue({
+          agents_by_pk: {
+            is_verified: true,
+            is_internal: false,
+            active_addresses: addresses,
+          },
+          completed_deliveries: { aggregate: { count: 15 } },
+          agent_faults: { aggregate: { count: 0 } },
+        });
+        return service.isAgentEligibleForCeiling('agent-id', mockCeilingConfig);
+      };
+
+      it('eligible when the primary address is in the pilot city', async () => {
+        expect(
+          await run([
+            { address: { city: 'Douala', is_primary: false } },
+            { address: { city: 'Yaoundé', is_primary: true } },
+          ])
+        ).toBe(true);
+      });
+
+      it('eligible when no address is primary but an active address is in the pilot city', async () => {
+        expect(
+          await run([{ address: { city: 'Yaounde', is_primary: null } }])
+        ).toBe(true);
+        expect(
+          await run([{ address: { city: 'YAOUNDÉ', is_primary: false } }])
+        ).toBe(true);
+      });
+
+      it('primary wins: primary in another city, non-primary in pilot city => not eligible', async () => {
+        expect(
+          await run([
+            { address: { city: 'Yaoundé', is_primary: false } },
+            { address: { city: 'Douala', is_primary: true } },
+          ])
+        ).toBe(false);
+      });
+
+      it('not eligible when the agent has no addresses', async () => {
+        expect(await run([])).toBe(false);
+      });
+    });
+
     it('queries real schema: complete status, PIN (not overwrite) completions, agent_fault, active primary agent address', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         agents_by_pk: {
           is_verified: true,
           is_internal: false,
-          primary_addresses: [{ address: { city: 'YAOUNDE' } }],
+          active_addresses: [{ address: { city: 'YAOUNDE', is_primary: true } }],
         },
         completed_deliveries: { aggregate: { count: 15 } },
         agent_faults: { aggregate: { count: 0 } },
@@ -165,7 +211,8 @@ describe('AgentHoldService', () => {
       expect(query).toContain('delivery_overwrite_code_used_at: { _is_null: true }');
       expect(query).toContain('resolution_type: { _eq: agent_fault }');
       expect(query).toContain('agent_addresses(');
-      expect(query).toContain('is_primary: { _eq: true }');
+      expect(query).toContain('is_primary');
+      expect(query).toContain('status: { _eq: active }');
       expect(query).not.toContain('delivery_pin_verified');
       expect(query).not.toContain('primary_address {');
       expect(vars).toEqual({ agentId: 'agent-id' });
@@ -176,7 +223,7 @@ describe('AgentHoldService', () => {
         agents_by_pk: {
           is_verified: true,
           is_internal: false,
-          primary_addresses: [{ address: { city: 'Yaoundé' } }],
+          active_addresses: [{ address: { city: 'Yaoundé', is_primary: true } }],
         },
         completed_deliveries: { aggregate: { count: 15 } },
         agent_faults: { aggregate: { count: 0 } },
@@ -195,7 +242,7 @@ describe('AgentHoldService', () => {
         agents_by_pk: {
           is_verified: false,
           is_internal: false,
-          primary_addresses: [{ address: { city: 'Yaoundé' } }],
+          active_addresses: [{ address: { city: 'Yaoundé', is_primary: true } }],
         },
         completed_deliveries: { aggregate: { count: 15 } },
         agent_faults: { aggregate: { count: 0 } },
@@ -214,7 +261,7 @@ describe('AgentHoldService', () => {
         agents_by_pk: {
           is_verified: true,
           is_internal: true,
-          primary_addresses: [{ address: { city: 'Yaoundé' } }],
+          active_addresses: [{ address: { city: 'Yaoundé', is_primary: true } }],
         },
         completed_deliveries: { aggregate: { count: 15 } },
         agent_faults: { aggregate: { count: 0 } },
@@ -233,7 +280,7 @@ describe('AgentHoldService', () => {
         agents_by_pk: {
           is_verified: true,
           is_internal: false,
-          primary_addresses: [{ address: { city: 'Yaoundé' } }],
+          active_addresses: [{ address: { city: 'Yaoundé', is_primary: true } }],
         },
         completed_deliveries: { aggregate: { count: 5 } },
         agent_faults: { aggregate: { count: 0 } },
@@ -252,7 +299,7 @@ describe('AgentHoldService', () => {
         agents_by_pk: {
           is_verified: true,
           is_internal: false,
-          primary_addresses: [{ address: { city: 'Yaoundé' } }],
+          active_addresses: [{ address: { city: 'Yaoundé', is_primary: true } }],
         },
         completed_deliveries: { aggregate: { count: 15 } },
         agent_faults: { aggregate: { count: 1 } },
@@ -271,7 +318,7 @@ describe('AgentHoldService', () => {
         agents_by_pk: {
           is_verified: true,
           is_internal: false,
-          primary_addresses: [{ address: { city: 'Douala' } }],
+          active_addresses: [{ address: { city: 'Douala', is_primary: true } }],
         },
         completed_deliveries: { aggregate: { count: 15 } },
         agent_faults: { aggregate: { count: 0 } },
@@ -290,7 +337,7 @@ describe('AgentHoldService', () => {
         agents_by_pk: {
           is_verified: true,
           is_internal: false,
-          primary_addresses: [{ address: { city: ' yaoundé ' } }],
+          active_addresses: [{ address: { city: ' yaoundé ', is_primary: true } }],
         },
         completed_deliveries: { aggregate: { count: 15 } },
         agent_faults: { aggregate: { count: 0 } },
@@ -432,7 +479,7 @@ describe('AgentHoldService', () => {
                 agents_by_pk: {
                   is_verified: true,
                   is_internal: false,
-                  primary_addresses: [{ address: { city: 'Yaoundé' } }],
+                  active_addresses: [{ address: { city: 'Yaoundé', is_primary: true } }],
                 },
                 completed_deliveries: { aggregate: { count: 15 } },
                 agent_faults: { aggregate: { count: 0 } },
@@ -510,7 +557,7 @@ describe('AgentHoldService', () => {
                 agents_by_pk: {
                   is_verified: true,
                   is_internal: false,
-                  primary_addresses: [{ address: { city: 'Douala' } }],
+                  active_addresses: [{ address: { city: 'Douala', is_primary: true } }],
                 },
                 completed_deliveries: { aggregate: { count: 15 } },
                 agent_faults: { aggregate: { count: 0 } },
@@ -560,7 +607,7 @@ describe('AgentHoldService', () => {
                 agents_by_pk: {
                   is_verified: true,
                   is_internal: false,
-                  primary_addresses: [{ address: { city: 'Yaoundé' } }],
+                  active_addresses: [{ address: { city: 'Yaoundé', is_primary: true } }],
                 },
                 completed_deliveries: { aggregate: { count: 15 } },
                 agent_faults: { aggregate: { count: 0 } },
@@ -607,7 +654,7 @@ describe('AgentHoldService', () => {
                 agents_by_pk: {
                   is_verified: true,
                   is_internal: false,
-                  primary_addresses: [{ address: { city: 'Yaoundé' } }],
+                  active_addresses: [{ address: { city: 'Yaoundé', is_primary: true } }],
                 },
                 completed_deliveries: { aggregate: { count: 15 } },
                 agent_faults: { aggregate: { count: 0 } },
