@@ -2,27 +2,27 @@ import { getContextualChips, buildChipMessage, type AssistantContext, type ChipC
 
 describe('assistantChips', () => {
   describe('getContextualChips', () => {
-    const allChipIds = [
-      'business_locations',
-      'pay_at_delivery',
+    const genericChipIds = [
+      'location',
+      'pay_delivery',
       'pickup',
-      'mobile_payments',
+      'mobile_pay',
     ];
 
     it('returns generic chips when context is null', () => {
       const chips = getContextualChips(null);
-      expect(chips.map(c => c.id)).toEqual(allChipIds);
+      expect(chips.map(c => c.id)).toEqual(genericChipIds);
     });
 
     it('returns generic chips when context is undefined', () => {
       const chips = getContextualChips(undefined);
-      expect(chips.map(c => c.id)).toEqual(allChipIds);
+      expect(chips.map(c => c.id)).toEqual(genericChipIds);
     });
 
     it('returns item-specific chips for item_detail context', () => {
       const context: AssistantContext = {
         type: 'item_detail',
-        itemId: 'item-1',
+        inventoryId: 'item-1',
         itemName: 'Cool T-Shirt',
       };
       const chips = getContextualChips(context);
@@ -34,19 +34,19 @@ describe('assistantChips', () => {
       ]);
     });
 
-    it('returns reorder chip for order_detail context', () => {
+    it('returns reorder chip for order_detail context without status', () => {
       const context: AssistantContext = {
         type: 'order_detail',
         orderId: 'order-123',
-        orderNumber: 'R123',
       };
       const chips = getContextualChips(context);
-      expect(chips.map(c => c.id)).toContain('reorder_this');
+      expect(chips.map(c => c.id)).toContain('reorder');
     });
 
     it('returns recent orders chip for orders_list context', () => {
       const context: AssistantContext = {
         type: 'orders_list',
+        hasCompletedOrders: true,
       };
       const chips = getContextualChips(context);
       expect(chips.map(c => c.id)).toContain('recent_orders');
@@ -180,7 +180,7 @@ describe('assistantChips', () => {
       const translatedLabel = 'Est-ce disponible?';
       const context: AssistantContext = {
         type: 'item_detail',
-        itemId: 'item-1',
+        inventoryId: 'item-1',
         itemName: 'Cool T-Shirt',
       };
       const result = buildChipMessage(chip, translatedLabel, context);
