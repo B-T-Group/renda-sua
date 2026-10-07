@@ -26,6 +26,7 @@ import React, {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 import { useAssistantChat } from '../../contexts/AssistantChatContext';
 import type { AssistantChatMessage } from '../../contexts/AssistantChatContext';
 import { useAppChromeInsets } from '../../hooks/useAppChromeInsets';
@@ -831,7 +832,8 @@ const AssistantPage: React.FC = () => {
   const isThinking = isSending || characterState === 'thinking';
   
   // TODO: Accept context via state/props when navigation supports it
-  const context: AssistantContext | undefined = undefined;
+  const location = useLocation();
+  const context: AssistantContext | undefined = (location.state as any)?.context;
 
   // The page is a viewport-sized column; start it flush under the site top bar.
   useEffect(() => {

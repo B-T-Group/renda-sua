@@ -1,16 +1,19 @@
-import { Box, Typography } from '@mui/material';
-import React from 'react';
+import { Box, Link, Typography } from '@mui/material';
+import React, { useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useTrackSiteEvent } from '../../hooks/useTrackSiteEvent';
 
 type Inline =
   | { type: 'text'; text: string }
   | { type: 'bold'; text: string }
-  | { type: 'italic'; text: string };
+  | { type: 'italic'; text: string }
+  | { type: 'link'; text: string; url: string };
 
 type Block =
   | { type: 'paragraph'; inlines: Inline[] }
   | { type: 'bullet'; inlines: Inline[] };
 
-const INLINE_RE = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
+const INLINE_RE = /(\[([^\]]+)\]\(([^)]+)\)|\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g;
 
 function parseInline(text: string): Inline[] {
   if (!text) return [];
@@ -22,7 +25,17 @@ function parseInline(text: string): Inline[] {
       parts.push({ type: 'text', text: text.slice(last, index) });
     }
     const token = match[0];
-    if (token.startsWith('**') && token.endsWith('**')) {
+    
+    // Check for [text](url) link
+    if (token.startsWith('[')) {
+      const linkText = match[2];
+      const url = match[3];
+      if (linkText && url) {
+        parts.push({ type: 'link', text: linkText, url });
+      } else {
+        parts.push({ type: 'text', text: token });
+      }
+    } else if (token.startsWith('**') && token.endsWith('**')) {
       parts.push({ type: 'bold', text: token.slice(2, -2) });
     } else if (
       (token.startsWith('*') && token.endsWith('*')) ||
@@ -72,6 +85,7 @@ export function parseAssistantMarkdown(source: string): Block[] {
 
 export function stripAssistantMarkdown(source: string): string {
   return source
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [text](url) → text
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/\*([^*]+)\*/g, '$1')
     .replace(/_([^_]+)_/g, '$1')
@@ -79,6 +93,32 @@ export function stripAssistantMarkdown(source: string): string {
 }
 
 function InlineRuns({ inlines }: { inlines: Inline[] }) {
+  const navigate = useNavigate();
+  const { trackSiteEvent } = useTrackSiteEvent();
+
+  const handleLinkClick = useCallback((e: React.MouseEvent, url: string) => {
+    e.preventDefault();
+    void trackSiteEvent({
+      eventType: 'assistant.deeplink.tap',
+      metadata: { url },
+    });
+
+    // Try in-app navigation for known routes
+    if (url.startsWith('/')) {
+      navigate(url);
+      return;
+    }
+
+    // External URLs open in new tab
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // Relative URLs navigate
+    navigate(url);
+  }, [navigate, trackSiteEvent]);
+
   return (
     <>
       {inlines.map((part, index) => {
@@ -94,6 +134,25 @@ function InlineRuns({ inlines }: { inlines: Inline[] }) {
             <Box key={index} component="em" sx={{ fontStyle: 'italic' }}>
               {part.text}
             </Box>
+          );
+        }
+        if (part.type === 'link') {
+          return (
+            <Link
+              key={index}
+              href={part.url}
+              onClick={(e) => handleLinkClick(e, part.url)}
+              sx={{
+                color: 'primary.main',
+                textDecorationColor: 'primary.main',
+                cursor: 'pointer',
+                '&:hover': {
+                  textDecorationColor: 'primary.dark',
+                },
+              }}
+            >
+              {part.text}
+            </Link>
           );
         }
         return <React.Fragment key={index}>{part.text}</React.Fragment>;

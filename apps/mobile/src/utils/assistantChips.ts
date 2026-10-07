@@ -127,7 +127,16 @@ export function getContextualChips(context?: AssistantContext | null): ChipConfi
     
     case 'order_detail':
       // Show delivery tracking chips if order is in progress
-      if (context.orderStatus && ['pending', 'confirmed', 'in_transit'].includes(context.orderStatus)) {
+      if (context.orderStatus && [
+        'pending',
+        'confirmed',
+        'preparing',
+        'ready_for_pickup',
+        'assigned_to_agent',
+        'picked_up',
+        'in_transit',
+        'out_for_delivery',
+      ].includes(context.orderStatus)) {
         return DELIVERY_TRACKING_CHIPS;
       }
       // Show reorder chips if order is completed
@@ -146,36 +155,14 @@ export function getContextualChips(context?: AssistantContext | null): ChipConfi
 
 /**
  * Build the initial message text for a chip tap, optionally injecting context.
- * For item detail, we might say "Is [item name] available?" instead of just "Is this item available?"
+ * Uses the translated label as-is to preserve i18n interpolation.
  */
 export function buildChipMessage(
   chip: ChipConfig,
   translatedLabel: string,
   context?: AssistantContext | null
 ): string {
-  // For most chips, use the label as-is
-  if (!context) return translatedLabel;
-
-  // Special handling for item detail chips - inject item name if available
-  if (context.type === 'item_detail' && context.itemName) {
-    switch (chip.id) {
-      case 'item_availability':
-        return `Is ${context.itemName} available?`;
-      case 'item_price':
-        return `What is the price of ${context.itemName}?`;
-      case 'item_delivery':
-        return `How is ${context.itemName} delivered?`;
-      case 'similar_items':
-        return `Show me items similar to ${context.itemName}`;
-    }
-  }
-
-  // Special handling for delivery tracking - inject order number if available
-  if (context.type === 'delivery_tracking' && context.orderNumber) {
-    if (chip.id === 'track_order') {
-      return `Where is order ${context.orderNumber}?`;
-    }
-  }
-
+  // Use the translated label as-is - i18n should handle interpolation
+  // For context-specific customization, the translation key itself should use placeholders
   return translatedLabel;
 }

@@ -1,10 +1,17 @@
-import React from 'react';
-import { StyleSheet, TextStyle, View, ViewStyle } from 'react-native';
+import React, { useCallback } from 'react';
+import { Linking, Pressable, StyleSheet, TextStyle, View, ViewStyle } from 'react-native';
 import { Text } from 'react-native-paper';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useTheme } from '@/contexts/ThemeContext';
 import {
   parseAssistantMarkdown,
   type AssistantMdInline,
 } from '@/utils/assistantMarkdown';
+import type { ClientRootStackParamList } from '@/navigation/types';
+import { trackSiteEvent } from '@/services/AppEventsService';
+
+type Nav = NativeStackNavigationProp<ClientRootStackParamList>;
 
 type Props = {
   content: string;
@@ -22,6 +29,34 @@ function InlineRuns({
   color: string;
   style?: TextStyle;
 }) {
+  const { colors } = useTheme();
+  const navigation = useNavigation<Nav>();
+
+  const handleLinkPress = useCallback((url: string) => {
+    trackSiteEvent({
+      eventType: 'assistant.deeplink.tap',
+      metadata: { url },
+    });
+
+    // Try in-app navigation for known routes
+    const itemMatch = url.match(/\/items\/([^/?]+)/);
+    if (itemMatch) {
+      const inventoryId = itemMatch[1];
+      navigation.navigate('ItemDetail', { itemId: inventoryId });
+      return;
+    }
+
+    const orderMatch = url.match(/\/orders\/([^/?]+)\/reorder/);
+    if (orderMatch) {
+      const orderId = orderMatch[1];
+      navigation.navigate('OrderDetail', { orderId });
+      return;
+    }
+
+    // Fall back to external browser
+    void Linking.openURL(url);
+  }, [navigation]);
+
   return (
     <Text style={[styles.body, { color }, style]}>
       {inlines.map((part, index) => {
@@ -35,6 +70,22 @@ function InlineRuns({
         if (part.type === 'italic') {
           return (
             <Text key={index} style={[styles.body, styles.italic, { color }]}>
+              {part.text}
+            </Text>
+          );
+        }
+        if (part.type === 'link') {
+          return (
+            <Text
+              key={index}
+              onPress={() => handleLinkPress(part.url)}
+              style={[
+                styles.body,
+                styles.link,
+                { color: colors.primary.main },
+              ]}
+              accessibilityRole="link"
+            >
               {part.text}
             </Text>
           );
@@ -92,6 +143,9 @@ const styles = StyleSheet.create({
   },
   italic: {
     fontStyle: 'italic',
+  },
+  link: {
+    textDecorationLine: 'underline',
   },
   bulletRow: {
     flexDirection: 'row',
