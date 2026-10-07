@@ -1,14 +1,46 @@
 import { Box, Link, Typography } from '@mui/material';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSnackbar } from 'notistack';
 import { useTranslation } from 'react-i18next';
 import { useCart } from '../../contexts/CartContext';
-import { useTrackSiteEvent, SITE_EVENT_ORDERS_REORDER_TAP, SITE_EVENT_ORDERS_REORDER_RESULT } from '../../hooks/useTrackSiteEvent';
+import { useTrackSiteEvent, SITE_EVENT_ORDERS_REORDER_TAP, SITE_EVENT_ORDERS_REORDER_RESULT, SITE_EVENT_ASSISTANT_DEEPLINK_SHOWN, SITE_EVENT_ASSISTANT_DEEPLINK_TAP } from '../../hooks/useTrackSiteEvent';
 import { useReorderOrder } from '../../hooks/useClientFlags';
 import { ReorderCartConflictDialog } from '../orders/ReorderCartConflictDialog';
 import type { ReorderCartAction, ReorderOrderResponse } from '../../types/reorder';
 import { formatSkippedNames, mapReorderLineToCartItem, resolveReorderCartAction } from '../../utils/reorderCart';
+
+type DeeplinkType = 'item' | 'store' | 'cart' | 'reorder' | 'order' | 'search';
+
+/**
+ * Parse a URL to extract deeplink metadata for analytics.
+ * Returns null if the URL doesn't match any known pattern.
+ */
+function parseDeeplinkUrl(url: string): { type: DeeplinkType; targetId?: string } | null {
+  // /items/:id
+  const itemMatch = url.match(/\/items\/([0-9a-f-]{36})/i);
+  if (itemMatch) return { type: 'item', targetId: itemMatch[1] };
+  
+  // /store/:id
+  const storeMatch = url.match(/\/store\/([0-9a-f-]{36})/i);
+  if (storeMatch) return { type: 'store', targetId: storeMatch[1] };
+  
+  // /cart
+  if (url.includes('/cart')) return { type: 'cart' };
+  
+  // /orders/:id/reorder
+  const reorderMatch = url.match(/\/orders\/([0-9a-f-]{36})\/reorder/i);
+  if (reorderMatch) return { type: 'reorder', targetId: reorderMatch[1] };
+  
+  // /orders/:id
+  const orderMatch = url.match(/\/orders\/([0-9a-f-]{36})/i);
+  if (orderMatch) return { type: 'order', targetId: orderMatch[1] };
+  
+  // /shop?q=...
+  if (url.includes('/shop')) return { type: 'search' };
+  
+  return null;
+}
 
 type Inline =
   | { type: 'text'; text: string }
@@ -101,11 +133,37 @@ export function stripAssistantMarkdown(source: string): string {
 
 function InlineRuns({ 
   inlines, 
-  onLinkClick 
+  onLinkClick,
+  trackSiteEvent,
 }: { 
   inlines: Inline[];
   onLinkClick: (e: React.MouseEvent, url: string) => void;
+  trackSiteEvent: ReturnType<typeof useTrackSiteEvent>['trackSiteEvent'];
 }) {
+  const shownLinksRef = useRef(new Set<string>());
+
+  // Track deeplink.shown when links are rendered (once per URL)
+  useEffect(() => {
+    inlines.forEach((part, index) => {
+      if (part.type === 'link') {
+        const key = `${part.url}:${index}`;
+        if (shownLinksRef.current.has(key)) return;
+        shownLinksRef.current.add(key);
+        
+        const metadata = parseDeeplinkUrl(part.url);
+        if (metadata) {
+          void trackSiteEvent({
+            eventType: SITE_EVENT_ASSISTANT_DEEPLINK_SHOWN,
+            metadata: {
+              type: metadata.type,
+              position: index,
+              ...(metadata.targetId && { target_id: metadata.targetId }),
+            },
+          });
+        }
+      }
+    });
+  }, [inlines, trackSiteEvent]);
 
   return (
     <>
@@ -318,10 +376,18 @@ export function AssistantMarkdown({ content, rich = true }: Props) {
   const handleLinkClick = useCallback(
     async (e: React.MouseEvent, url: string) => {
       e.preventDefault();
-      void trackSiteEvent({
-        eventType: 'assistant.deeplink.tap',
-        metadata: { url },
-      });
+      
+      // Track deeplink.tap with allowlisted metadata
+      const deeplinkMetadata = parseDeeplinkUrl(url);
+      if (deeplinkMetadata) {
+        void trackSiteEvent({
+          eventType: SITE_EVENT_ASSISTANT_DEEPLINK_TAP,
+          metadata: {
+            type: deeplinkMetadata.type,
+            ...(deeplinkMetadata.targetId && { target_id: deeplinkMetadata.targetId }),
+          },
+        });
+      }
 
       // Check for reorder links first
       const reorderMatch = url.match(/\/orders\/([^/?]+)\/reorder/);
@@ -400,14 +466,14 @@ export function AssistantMarkdown({ content, rich = true }: Props) {
                   •
                 </Typography>
                 <Typography variant="body2" sx={{ lineHeight: 1.7, flex: 1, minWidth: 0 }}>
-                  <InlineRuns inlines={block.inlines} onLinkClick={handleLinkClick} />
+                  <InlineRuns inlines={block.inlines} onLinkClick={handleLinkClick} trackSiteEvent={trackSiteEvent} />
                 </Typography>
               </Box>
             );
           }
           return (
             <Typography key={index} variant="body2" sx={{ lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-              <InlineRuns inlines={block.inlines} onLinkClick={handleLinkClick} />
+              <InlineRuns inlines={block.inlines} onLinkClick={handleLinkClick} trackSiteEvent={trackSiteEvent} />
             </Typography>
           );
         })}
