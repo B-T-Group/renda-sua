@@ -21,7 +21,6 @@ import { useSessionAuth } from './SessionAuthContext';
 import { useTranslation } from 'react-i18next';
 import { useAssistantLauncherAnalytics } from '../components/assistant/useAssistantLauncherAnalytics';
 import {
-  SITE_EVENT_ASSISTANT_CHAT_OPENED,
   SITE_EVENT_ASSISTANT_MESSAGE_SENT,
   SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED,
   SITE_EVENT_ASSISTANT_ERROR_SHOWN,

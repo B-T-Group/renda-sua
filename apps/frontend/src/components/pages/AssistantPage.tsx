@@ -38,7 +38,7 @@ import { useRendaChatState } from '../assistant/useRendaChatState';
 import { AssistantMarkdown } from './AssistantMarkdown';
 import type { AssistantContext } from '../../utils/assistantChips';
 import { getContextualChips, buildChipMessage } from '../../utils/assistantChips';
-import { useTrackSiteEvent, SITE_EVENT_ASSISTANT_CHAT_OPENED, SITE_EVENT_ASSISTANT_CHIP_TAP } from '../../hooks/useTrackSiteEvent';
+import { useTrackSiteEvent, SITE_EVENT_ASSISTANT_CHAT_OPENED } from '../../hooks/useTrackSiteEvent';
 import { useAssistantLauncherAnalytics } from '../assistant/useAssistantLauncherAnalytics';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 

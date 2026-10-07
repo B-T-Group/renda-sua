@@ -175,9 +175,10 @@ interface MessageBubbleProps {
   showOrb: boolean;
   character: boolean;
   onLinkPress?: (url: string) => boolean;
+  analyticsCtx?: LauncherEventContext;
 }
 
-function MessageBubble({ item, isUser, showOrb, character, onLinkPress }: MessageBubbleProps) {
+function MessageBubble({ item, isUser, showOrb, character, onLinkPress, analyticsCtx }: MessageBubbleProps) {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const duration = motionDuration('normal', reduceMotion);
@@ -633,11 +634,12 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
             showOrb={showOrb}
             character={character}
             onLinkPress={handleReorderLink}
+            analyticsCtx={analyticsCtx}
           />
         </View>
       );
     },
-    [assistant.messages, character, handleReorderLink]
+    [assistant.messages, character, handleReorderLink, analyticsCtx]
   );
 
   const onRetry = useCallback(() => {
