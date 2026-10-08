@@ -23,6 +23,25 @@ describe('validatePhoneNumber', () => {
     const result = validatePhoneNumber('692168717', 'GA');
     expect(result.isValid).toBe(false);
   });
+
+  it('rejects invalid phone numbers', () => {
+    const invalidNigeria = validatePhoneNumber('+23488888888888');
+    expect(invalidNigeria.isValid).toBe(false);
+
+    const invalidCameroon = validatePhoneNumber('+237123');
+    expect(invalidCameroon.isValid).toBe(false);
+  });
+
+  it('accepts valid phone numbers', () => {
+    const validCameroon = validatePhoneNumber('+237691234567');
+    expect(validCameroon.isValid).toBe(true);
+
+    const validGabon = validatePhoneNumber('+24162123456');
+    expect(validGabon.isValid).toBe(true);
+
+    const validCanada = validatePhoneNumber('+14165551234');
+    expect(validCanada.isValid).toBe(true);
+  });
 });
 
 describe('detectCameroonPhone', () => {
@@ -34,8 +53,19 @@ describe('detectCameroonPhone', () => {
   it('treats every +237 number as Cameroon, including new prefixes', () => {
     expect(isCameroonCountryCode('+237640448217')).toBe(true);
     expect(isCameroonCountryCode('00237640448217')).toBe(true);
+    expect(isCameroonCountryCode('+237 640 44 82 17')).toBe(true);
     expect(detectCameroonPhone('+237640448217')?.carrier).toBe('other');
+    expect(detectCameroonPhone('+237 640 44 82 17')?.carrier).toBe('other');
     expect(detectCameroonPhone('640448217')).toBeNull();
+  });
+
+  it('does not treat a blank, Gabon, or embedded 237 number as Cameroon', () => {
+    expect(isCameroonCountryCode(null)).toBe(false);
+    expect(isCameroonCountryCode('')).toBe(false);
+    expect(isCameroonCountryCode('   ')).toBe(false);
+    expect(isCameroonCountryCode('+24106123456')).toBe(false);
+    expect(isCameroonCountryCode('+241237000000')).toBe(false);
+    expect(isCameroonCountryCode('640448217')).toBe(false);
   });
 });
 

@@ -4744,6 +4744,7 @@ export class OrdersService {
         transactionType: 'release',
         memo: `Hold released for order ${order.order_number} (cancelled during payment)`,
         referenceId: order.id,
+        idempotencyKey: this.unpaidHoldReleaseKey(order.id),
       });
       if (!result?.success) {
         throw new HttpException(
@@ -14116,8 +14117,8 @@ export class OrdersService {
     try {
       await this.releaseWalletHoldsForPendingPaymentOrder(orderId);
     } catch (error: any) {
-      this.logger.warn(
-        `Wallet hold release during create compensation failed for ${orderId}: ${error?.message}`
+      this.logger.error(
+        `create_compensation_release_failed orderId=${orderId}: ${error?.message}`
       );
     }
     try {
@@ -14173,29 +14174,65 @@ export class OrdersService {
     );
     if (!clientAccount) return;
 
-    if (clientHold > 0) {
-      await this.accountsService.registerTransaction({
+    // QA B1: the order_holds row is written *before* the ledger hold lands, and a failed
+    // creation (e.g. the second of two parallel wallet pay-now orders) records a hold
+    // amount for a hold that was never placed. Releasing the full amount pulls from the
+    // shared withheld pool, which backs the client's other orders. Release only what the
+    // ledger still holds for THIS order, and nothing when that is zero.
+    const releasable = await this.releasableHoldForOrder(
+      clientAccount.id,
+      orderId,
+      clientHold + deliveryFees
+    );
+    if (releasable > 0) {
+      const result = await this.accountsService.registerTransaction({
         accountId: clientAccount.id,
-        amount: clientHold,
+        amount: releasable,
         transactionType: 'release',
         memo: `Hold released for order ${order.order_number} (create compensation)`,
         referenceId: orderId,
+        idempotencyKey: this.unpaidHoldReleaseKey(orderId),
       });
-    }
-    if (deliveryFees > 0) {
-      await this.accountsService.registerTransaction({
-        accountId: clientAccount.id,
-        amount: deliveryFees,
-        transactionType: 'release',
-        memo: `Delivery fee hold released for order ${order.order_number} (create compensation)`,
-        referenceId: orderId,
-      });
+      const stillHeld = result?.success
+        ? 0
+        : await this.netHoldAmountForOrder(clientAccount.id, orderId);
+      if (!result?.success && stillHeld > 0) {
+        // The CAS funds guard refused while this order still holds money (the shared
+        // withheld pool no longer covers it). Leave the hold row untouched so the
+        // compensation can be retried instead of silently dropping a real hold. When
+        // the net is now 0, a concurrent path (same key) already gave it back: done.
+        throw new Error(
+          result?.error || 'Failed to release hold during create compensation'
+        );
+      }
     }
     await this.updateOrderHold(orderHold.id, {
       client_hold_amount: 0,
       delivery_fees: 0,
       status: 'cancelled',
     });
+  }
+
+  /**
+   * Once-only key shared by every "give an unpaid order's hold back" path (create
+   * compensation and the lost paid-CAS release). Two of them racing on the same order
+   * both read the same net hold; the UNIQUE key lets only one release land.
+   */
+  private unpaidHoldReleaseKey(orderId: string): string {
+    return `unpaid:release:${orderId}`;
+  }
+
+  /**
+   * How much of an order's recorded hold the ledger still backs.
+   * `min(recorded, Σhold − Σrelease for this order)`, floored at 0.
+   */
+  private async releasableHoldForOrder(
+    accountId: string,
+    orderId: string,
+    recorded: number
+  ): Promise<number> {
+    const netHeld = await this.netHoldAmountForOrder(accountId, orderId);
+    return Number(Math.min(Math.max(recorded, 0), Math.max(netHeld, 0)).toFixed(2));
   }
 
   private async initiateMomoForCreatedOrder(params: {
@@ -15500,8 +15537,8 @@ export class OrdersService {
   }
 
   /**
-   * Release the requested amount, or only the order's remaining withheld if the
-   * bookkeeping hold was never placed (pay-after credit sitting in available).
+   * Release the requested amount, or only what is still withheld for this order.
+   * Shared withheld can already have been consumed by another release.
    */
   private async releaseClientSettlementHold(params: {
     accountId: string;
@@ -15510,6 +15547,20 @@ export class OrdersService {
     memo: string;
     idempotencyKey: string;
   }): Promise<{ success?: boolean; error?: string }> {
+    // QA B2: the first attempt used to release the full requested amount and only
+    // checked this order's own outstanding hold after an insufficient-funds failure,
+    // so an order whose hold is missing or short silently took other orders' withheld
+    // whenever the shared pool covered it. Cap the first attempt at the order's own net.
+    // A short hold goes straight to the #509 short-hold path, which only releases
+    // when available + this order's net covers the payment and otherwise keeps it locked.
+    const netHeld = await this.netHoldAmountForOrder(
+      params.accountId,
+      params.orderId
+    );
+    if (netHeld <= 0) return this.skipUnheldRelease(params);
+    if (netHeld < Number(params.amount.toFixed(2))) {
+      return this.releaseRemainingOrderHold(params);
+    }
     const attempted = await this.registerHoldRelease(params, params.amount);
     if (attempted?.success || !this.isInsufficientFundsError(attempted?.error)) {
       return attempted;
@@ -15537,11 +15588,57 @@ export class OrdersService {
       params.orderId
     );
     if (netHeld <= 0) return this.skipUnheldRelease(params);
-    const releaseAmount = Number(Math.min(params.amount, netHeld).toFixed(2));
-    if (await this.partialReleaseCanBeCollected(params, releaseAmount)) {
-      return this.registerHoldRelease(params, releaseAmount);
+    const balance = await this.accountsService.getAccountBalance(params.accountId);
+    if (!balance) throw new Error('account balance unavailable');
+    return this.settleShortClientHold(params, {
+      netHeld,
+      available: Number(balance.availableBalance ?? 0),
+      withheld: Number(balance.withheldBalance ?? 0),
+    });
+  }
+
+  private settleShortClientHold(
+    params: {
+      orderId: string;
+      amount: number;
+      accountId: string;
+      memo: string;
+      idempotencyKey: string;
+    },
+    balances: { netHeld: number; available: number; withheld: number }
+  ): Promise<{ success?: boolean; error?: string }> | { success?: boolean; error?: string } {
+    const needed = Number(
+      Math.min(params.amount, Math.max(balances.netHeld, 0)).toFixed(2)
+    );
+    if (needed <= 0 || balances.withheld <= 0) {
+      return this.skipUnheldRelease(params);
     }
-    return this.keepShortHoldLocked(params, netHeld);
+    if (balances.withheld < needed) {
+      // The leftover withheld may belong to other orders: never use it here.
+      return balances.available >= params.amount
+        ? this.skipConsumedHoldRelease(params, balances.withheld)
+        : this.keepShortHoldLocked(params, balances.netHeld);
+    }
+    return this.releaseCollectableHold(params, balances, needed);
+  }
+
+  private releaseCollectableHold(
+    params: {
+      orderId: string;
+      amount: number;
+      accountId: string;
+      memo: string;
+      idempotencyKey: string;
+    },
+    balances: { netHeld: number; available: number; withheld: number },
+    needed: number
+  ): Promise<{ success?: boolean; error?: string }> | { success?: boolean; error?: string } {
+    const releasable = Number(Math.min(needed, balances.withheld).toFixed(2));
+    const covered = Number((balances.available + releasable).toFixed(2));
+    if (covered >= Number(params.amount.toFixed(2))) {
+      return this.registerHoldRelease(params, releasable);
+    }
+    return this.keepShortHoldLocked(params, balances.netHeld);
   }
 
   /** No ledger hold: the following payment debits whatever is in available. */
@@ -15551,6 +15648,20 @@ export class OrdersService {
   }): { success: true } {
     this.logger.warn(
       `settlement_skip_unheld_release orderId=${params.orderId} requested=${params.amount}: debiting available`
+    );
+    return { success: true };
+  }
+
+  /**
+   * This order still has a ledger hold, but another release already spent the
+   * shared withheld pool. Do not take leftover withheld that belongs elsewhere.
+   */
+  private skipConsumedHoldRelease(
+    params: { orderId: string; amount: number },
+    withheld: number
+  ): { success: true } {
+    this.logger.warn(
+      `settlement_skip_consumed_hold orderId=${params.orderId} requested=${params.amount} withheld=${withheld}: debiting available`
     );
     return { success: true };
   }
@@ -15571,16 +15682,6 @@ export class OrdersService {
       success: false,
       error: 'Insufficient funds for this transaction',
     };
-  }
-
-  private async partialReleaseCanBeCollected(
-    params: { accountId: string; amount: number },
-    releaseAmount: number
-  ): Promise<boolean> {
-    const balance = await this.accountsService.getAccountBalance(params.accountId);
-    const available = Number(balance?.availableBalance ?? 0);
-    const covered = Number((available + releaseAmount).toFixed(2));
-    return covered >= Number(params.amount.toFixed(2));
   }
 
   private async registerHoldRelease(

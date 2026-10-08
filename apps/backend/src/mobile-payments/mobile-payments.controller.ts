@@ -9,7 +9,17 @@ import {
   Post,
   Query,
   Req,
+  ValidationPipe,
 } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AccountsService } from '../accounts/accounts.service';
@@ -35,19 +45,63 @@ import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.se
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 
-export interface InitiatePaymentDto {
-  amount: number;
-  currency: string;
-  description: string;
+export const INITIATE_TRANSACTION_TYPES = ['PAYMENT', 'GIVE_CHANGE'] as const;
+
+/**
+ * Body of POST /mobile-payments/initiate. A class (not an interface) so the
+ * ValidationPipe can reject malformed ids/amounts with a 400 instead of letting
+ * them reach Hasura and surface as a 500 (QA L1). Undeclared fields are kept.
+ */
+export class InitiatePaymentDto {
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  amount!: number;
+
+  @IsString()
+  @IsNotEmpty()
+  currency!: string;
+
+  @IsOptional()
+  @IsString()
+  description!: string;
+
+  @IsOptional()
+  @IsString()
   customerPhone?: string;
+
+  @IsOptional()
+  @IsString()
   customerEmail?: string;
+
+  @IsOptional()
+  @IsString()
   callbackUrl?: string;
+
+  @IsOptional()
+  @IsString()
   returnUrl?: string;
+
+  @IsOptional()
+  @IsString()
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay';
+
+  @IsOptional()
+  @IsString()
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
-  accountId?: string; // Account ID for top-up operations
-  transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
-  withdrawalPin?: string; // Required when business withdrawals require a PIN
+
+  /** Account to top up (PAYMENT) or withdraw from (GIVE_CHANGE). Must be owned by the caller. */
+  @IsOptional()
+  @IsUUID('all')
+  accountId?: string;
+
+  @IsOptional()
+  @IsIn(INITIATE_TRANSACTION_TYPES)
+  transactionType?: (typeof INITIATE_TRANSACTION_TYPES)[number];
+
+  /** Required when business withdrawals require a PIN */
+  @IsOptional()
+  @IsString()
+  withdrawalPin?: string;
 }
 
 export interface PaymentCallbackDto {
@@ -166,10 +220,22 @@ export class MobilePaymentsController {
    * Initiate a mobile payment
    */
   @Post('initiate')
-  async initiatePayment(@ReqContext() ctx: RequestContext, @Body() paymentRequest: InitiatePaymentDto) {
+  async initiatePayment(
+    @ReqContext() ctx: RequestContext,
+    @Body(new ValidationPipe({ transform: true }))
+    paymentRequest: InitiatePaymentDto
+  ) {
     try {
+      if (paymentRequest.transactionType === 'GIVE_CHANGE') {
+        return await this.initiateGiveChangeWithdrawal(ctx, paymentRequest);
+      }
+
       // Validate account balance if accountId is provided
       if (paymentRequest.accountId) {
+        // QA S1: a top-up (or any non-withdrawal type) into someone else's account was
+        // accepted. Same owner/admin gate as GIVE_CHANGE (#511), before any balance read
+        // so the response cannot leak another account's existence or balance.
+        await this.requireOwnedAccountAccess(ctx, paymentRequest.accountId);
         const accountBalance = await this.accountsService.getAccountBalance(
           paymentRequest.accountId
         );
@@ -200,35 +266,12 @@ export class MobilePaymentsController {
             HttpStatus.BAD_REQUEST
           );
         }
-
-        // Validate sufficient funds for GIVE_CHANGE transactions
-        if (paymentRequest.transactionType === 'GIVE_CHANGE') {
-          if (accountBalance.availableBalance < paymentRequest.amount) {
-            throw new HttpException(
-              {
-                success: false,
-                message: 'Insufficient funds',
-                error: 'INSUFFICIENT_FUNDS',
-                data: {
-                  required: paymentRequest.amount,
-                  available: accountBalance.availableBalance,
-                  currency: paymentRequest.currency,
-                },
-              },
-              HttpStatus.BAD_REQUEST
-            );
-          }
-        }
       }
 
       const resolvedProvider =
         this.mobilePaymentsService.resolveProviderFromRequest(paymentRequest);
 
-      const isAccountTopUpPayment =
-        !!paymentRequest.accountId &&
-        paymentRequest.transactionType !== 'GIVE_CHANGE';
-
-      if (isAccountTopUpPayment && paymentRequest.amount < 150) {
+      if (paymentRequest.accountId && paymentRequest.amount < 150) {
         throw new HttpException(
           {
             success: false,
@@ -240,146 +283,7 @@ export class MobilePaymentsController {
         );
       }
 
-      const isAccountWithdrawal =
-        !!paymentRequest.accountId &&
-        paymentRequest.transactionType === 'GIVE_CHANGE';
-
-      if (isAccountWithdrawal) {
-        if (paymentRequest.amount < 150) {
-          throw new HttpException(
-            {
-              success: false,
-              message:
-                'Withdrawal amount must be greater than or equal to 150',
-              error: 'MIN_WITHDRAW_AMOUNT',
-              data: {
-                minAmount: 150,
-                currency: paymentRequest.currency,
-              },
-            },
-            HttpStatus.BAD_REQUEST
-          );
-        }
-        if (
-          !this.mobilePaymentsService.isWithdrawalDestinationCmOrGa(
-            paymentRequest.customerPhone
-          )
-        ) {
-          throw new HttpException(
-            {
-              success: false,
-              message:
-                'Withdrawals are only supported to Cameroon (+237) or Gabon (+241) mobile numbers',
-              error: 'WITHDRAW_PHONE_REGION_NOT_ALLOWED',
-            },
-            HttpStatus.BAD_REQUEST
-          );
-        }
-
-        const pinState =
-          await this.accountsService.getBusinessWithdrawalPinStateByAccountId(
-            paymentRequest.accountId as string
-          );
-        if (pinState?.enabled) {
-          const providedPin = String(paymentRequest.withdrawalPin ?? '').trim();
-          if (!/^\d{4}$/.test(providedPin) || !pinState.hash) {
-            throw new HttpException(
-              {
-                success: false,
-                message: 'Withdrawal PIN is required',
-                error: 'WITHDRAWAL_PIN_REQUIRED',
-              },
-              HttpStatus.FORBIDDEN
-            );
-          }
-          const ok = this.withdrawalPinService.verifyPin(
-            pinState.businessId,
-            providedPin,
-            pinState.hash
-          );
-          if (!ok) {
-            throw new HttpException(
-              {
-                success: false,
-                message: 'Invalid withdrawal PIN',
-                error: 'INVALID_WITHDRAWAL_PIN',
-              },
-              HttpStatus.FORBIDDEN
-            );
-          }
-        }
-      }
-
-      const isMobileMoney =
-        !paymentRequest.paymentMethod ||
-        paymentRequest.paymentMethod === 'mobile_money';
-
-      if (
-        isMobileMoney &&
-        paymentRequest.currency !== 'XAF' &&
-        (resolvedProvider === 'mypvit' ||
-          resolvedProvider === 'freemopay' ||
-          resolvedProvider === 'mtn' ||
-          resolvedProvider === 'orange')
-      ) {
-        throw new HttpException(
-          {
-            success: false,
-            message:
-              'Mobile money payments are only supported for XAF currency',
-            error: 'UNSUPPORTED_CURRENCY',
-            data: {
-              provider: resolvedProvider,
-              currency: paymentRequest.currency,
-              supportedCurrency: 'XAF',
-            },
-          },
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
-      const isGiveChange =
-        paymentRequest.transactionType === 'GIVE_CHANGE' &&
-        !!paymentRequest.accountId;
-
-      if (isGiveChange) {
-        const accountId = paymentRequest.accountId as string;
-        let initiatorUserId: string | undefined;
-        try {
-          const user = await this.hasuraUserService.getUser(ctx);
-          initiatorUserId = user.id;
-        } catch {
-          this.logger.warn('Could not get user ID for payment initiation');
-        }
-        const result =
-          await this.giveChangePayoutService.executeGiveChangePayout(
-            {
-              amount: paymentRequest.amount,
-              currency: paymentRequest.currency,
-              description: paymentRequest.description,
-              customerPhone: paymentRequest.customerPhone ?? '',
-              accountId,
-              provider: resolvedProvider as GiveChangeProvider,
-              paymentMethod: paymentRequest.paymentMethod,
-              callbackUrl: paymentRequest.callbackUrl,
-              withdrawalMemoPrefix: 'Mobile payment give change',
-            },
-            {
-              throwOnWithdrawalFailure: true,
-              initiatorUserId,
-            }
-          );
-        return {
-          success: result.success,
-          data: {
-            transactionId: result.data?.transactionId ?? '',
-            providerTransactionId: result.data?.providerTransactionId,
-            paymentUrl: result.data?.paymentUrl,
-            message: result.data?.message,
-            provider: result.data?.provider,
-          },
-        };
-      }
+      this.assertMobileMoneyCurrency(paymentRequest, resolvedProvider);
 
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
@@ -455,11 +359,13 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
+      // Never echo raw provider/Hasura errors (they can include query text): QA L1.
+      this.logger.error(`initiate_payment_failed: ${error?.message}`);
       throw new HttpException(
         {
           success: false,
           message: 'Failed to initiate payment',
-          error: error.message,
+          error: 'PAYMENT_INITIATION_FAILED',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -971,6 +877,265 @@ export class MobilePaymentsController {
         HttpStatus.FORBIDDEN
       );
     }
+  }
+
+  /**
+   * Wallet withdrawals must never fall through to the collection initiate path.
+   * Without an owned account, FreemoPay/MyPVit GIVE_CHANGE pays the platform merchant.
+   */
+  private async initiateGiveChangeWithdrawal(
+    ctx: RequestContext,
+    request: InitiatePaymentDto
+  ) {
+    const accountId = this.requireGiveChangeAccountId(request);
+    const initiatorUserId = await this.requireOwnedAccountAccess(
+      ctx,
+      accountId
+    );
+    await this.assertGiveChangePrechecks(request, accountId);
+    const resolvedProvider =
+      this.mobilePaymentsService.resolveProviderFromRequest(request);
+    this.assertMobileMoneyCurrency(request, resolvedProvider);
+    return this.executeOwnedGiveChangePayout(
+      request,
+      accountId,
+      resolvedProvider,
+      initiatorUserId
+    );
+  }
+
+  private requireGiveChangeAccountId(request: InitiatePaymentDto): string {
+    const accountId = request.accountId?.trim();
+    if (!accountId) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Account is required for withdrawals',
+          error: 'ACCOUNT_REQUIRED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return accountId;
+  }
+
+  private async requireOwnedAccountAccess(
+    ctx: RequestContext,
+    accountId: string
+  ): Promise<string> {
+    const userId = await this.requireInitiateUserId(ctx);
+    const allowed = await this.transactionAccessService.canView(
+      { account_id: accountId },
+      userId
+    );
+    if (!allowed) {
+      throw new HttpException(
+        { success: false, message: 'Account not found', error: 'ACCOUNT_NOT_FOUND' },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return userId;
+  }
+
+  private async requireInitiateUserId(ctx: RequestContext): Promise<string> {
+    try {
+      const userId = (await this.hasuraUserService.getUser(ctx))?.id;
+      if (userId) return userId;
+    } catch {
+      // fail closed — never payout without a resolved caller
+    }
+    throw new HttpException(
+      { success: false, message: 'User not found', error: 'UNAUTHORIZED' },
+      HttpStatus.UNAUTHORIZED
+    );
+  }
+
+  private async assertGiveChangePrechecks(
+    request: InitiatePaymentDto,
+    accountId: string
+  ): Promise<void> {
+    this.assertGiveChangeAmountAndPhone(request);
+    await this.assertGiveChangeFunds(request, accountId);
+    await this.assertGiveChangePin(request, accountId);
+  }
+
+  private assertGiveChangeAmountAndPhone(request: InitiatePaymentDto): void {
+    if (request.amount < 150) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Withdrawal amount must be greater than or equal to 150',
+          error: 'MIN_WITHDRAW_AMOUNT',
+          data: { minAmount: 150, currency: request.currency },
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (
+      !this.mobilePaymentsService.isWithdrawalDestinationCmOrGa(
+        request.customerPhone
+      )
+    ) {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            'Withdrawals are only supported to Cameroon (+237) or Gabon (+241) mobile numbers',
+          error: 'WITHDRAW_PHONE_REGION_NOT_ALLOWED',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async assertGiveChangeFunds(
+    request: InitiatePaymentDto,
+    accountId: string
+  ): Promise<void> {
+    const balance = await this.accountsService.getAccountBalance(accountId);
+    if (!balance) {
+      throw new HttpException(
+        { success: false, message: 'Account not found', error: 'ACCOUNT_NOT_FOUND' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    this.assertGiveChangeBalance(request, balance);
+  }
+
+  private assertGiveChangeBalance(
+    request: InitiatePaymentDto,
+    balance: { availableBalance: number; currency: string }
+  ): void {
+    if (Number(balance.availableBalance) < 0) {
+      throw new HttpException(
+        {
+          success: false,
+          message:
+            'Account balance is negative. Please top up your account before initiating payments.',
+          error: 'NEGATIVE_BALANCE',
+          data: {
+            currentBalance: balance.availableBalance,
+            currency: balance.currency,
+          },
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (balance.availableBalance < request.amount) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Insufficient funds',
+          error: 'INSUFFICIENT_FUNDS',
+          data: {
+            required: request.amount,
+            available: balance.availableBalance,
+            currency: request.currency,
+          },
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+
+  private async assertGiveChangePin(
+    request: InitiatePaymentDto,
+    accountId: string
+  ): Promise<void> {
+    const pinState =
+      await this.accountsService.getBusinessWithdrawalPinStateByAccountId(
+        accountId
+      );
+    if (!pinState?.enabled) return;
+    const providedPin = String(request.withdrawalPin ?? '').trim();
+    if (!/^\d{4}$/.test(providedPin) || !pinState.hash) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Withdrawal PIN is required',
+          error: 'WITHDRAWAL_PIN_REQUIRED',
+        },
+        HttpStatus.FORBIDDEN
+      );
+    }
+    const ok = this.withdrawalPinService.verifyPin(
+      pinState.businessId,
+      providedPin,
+      pinState.hash
+    );
+    if (!ok) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Invalid withdrawal PIN',
+          error: 'INVALID_WITHDRAWAL_PIN',
+        },
+        HttpStatus.FORBIDDEN
+      );
+    }
+  }
+
+  private assertMobileMoneyCurrency(
+    request: InitiatePaymentDto,
+    resolvedProvider: string
+  ): void {
+    const isMobileMoney =
+      !request.paymentMethod || request.paymentMethod === 'mobile_money';
+    if (
+      !isMobileMoney ||
+      request.currency === 'XAF' ||
+      (resolvedProvider !== 'mypvit' &&
+        resolvedProvider !== 'freemopay' &&
+        resolvedProvider !== 'mtn' &&
+        resolvedProvider !== 'orange')
+    ) {
+      return;
+    }
+    throw new HttpException(
+      {
+        success: false,
+        message: 'Mobile money payments are only supported for XAF currency',
+        error: 'UNSUPPORTED_CURRENCY',
+        data: {
+          provider: resolvedProvider,
+          currency: request.currency,
+          supportedCurrency: 'XAF',
+        },
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private async executeOwnedGiveChangePayout(
+    request: InitiatePaymentDto,
+    accountId: string,
+    resolvedProvider: string,
+    initiatorUserId: string
+  ) {
+    const result = await this.giveChangePayoutService.executeGiveChangePayout(
+      {
+        amount: request.amount,
+        currency: request.currency,
+        description: request.description,
+        customerPhone: request.customerPhone ?? '',
+        accountId,
+        provider: resolvedProvider as GiveChangeProvider,
+        paymentMethod: request.paymentMethod,
+        callbackUrl: request.callbackUrl,
+        withdrawalMemoPrefix: 'Mobile payment give change',
+      },
+      { throwOnWithdrawalFailure: true, initiatorUserId }
+    );
+    return {
+      success: result.success,
+      data: {
+        transactionId: result.data?.transactionId ?? '',
+        providerTransactionId: result.data?.providerTransactionId,
+        paymentUrl: result.data?.paymentUrl,
+        message: result.data?.message,
+        provider: result.data?.provider,
+      },
+    };
   }
 
   private async persistPolledStatus(

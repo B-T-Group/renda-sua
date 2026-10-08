@@ -47,6 +47,7 @@ import {
   userHasPersona,
   type UserPersonaShape,
 } from './persona.util';
+import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
 import { isPersonaId, PersonaId } from './persona.types';
 import {
   DEFAULT_USER_TIMEZONE,
@@ -911,6 +912,13 @@ export class UsersController {
       if (!phone) {
         throw new HttpException(
           { success: false, error: 'Phone number is required' },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      const validation = validatePhoneNumber(phone);
+      if (!validation.isValid) {
+        throw new HttpException(
+          { success: false, error: 'Please enter a valid phone number for the selected country.' },
           HttpStatus.BAD_REQUEST
         );
       }

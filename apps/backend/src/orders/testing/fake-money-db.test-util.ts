@@ -201,6 +201,17 @@ export class FakeMoneyDb {
           ['deposit', 'cash_advance_repayment'].includes(t.transaction_type)
       ),
     }),
+    // OrdersService.sumHoldAmountForOrder (per-order net hold, QA B1/B2)
+    SumOrderHolds: (v: Row) => ({
+      account_transactions: this.txns
+        .filter(
+          (t) =>
+            t.account_id === v.accountId &&
+            t.reference_id === v.orderId &&
+            t.transaction_type === v.transactionType
+        )
+        .map((t) => ({ amount: t.amount })),
+    }),
     DepositHoldReleaseRows: (v: Row) => ({
       account_transactions: this.txns.filter(
         (t) =>

@@ -228,6 +228,13 @@ describe('OrdersService carrier shipping', () => {
       .fn()
       .mockResolvedValueOnce({ id: 'client-acct' })
       .mockResolvedValueOnce({ id: 'biz-acct' });
+    // client ledger hold backing the 1500 shipping fee (net-hold check, QA B2)
+    hasuraSystemService.executeQuery = jest.fn(
+      async (_q: string, vars?: { transactionType?: string }) => ({
+        account_transactions:
+          vars?.transactionType === 'release' ? [] : [{ amount: 1500 }],
+      })
+    );
     const register = jest
       .fn()
       .mockResolvedValue({ success: true, transactionId: 'tx-1' });

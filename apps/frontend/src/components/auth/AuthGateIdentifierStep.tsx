@@ -1,9 +1,10 @@
 import EmailOutlined from '@mui/icons-material/EmailOutlined';
 import SmsOutlined from '@mui/icons-material/SmsOutlined';
-import { Alert, Box, Button, Stack, TextField, Typography } from '@mui/material';
+import { Alert, Box, Button, Link, Stack, TextField, Typography } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import React, { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useClientFlags } from '../../hooks/useClientFlags';
 import {
   getBrowserDefaultCountryCode,
   getDefaultLoginMethod,
@@ -15,24 +16,24 @@ import { getAuthOtpCodeLength } from '../../config/authConfig';
 export interface AuthGateIdentifierStepProps {
   disabled?: boolean;
   error: string | null;
-  showPasswordLink?: boolean;
   onClearError: () => void;
   onValidationError: (message: string) => void;
   onSubmit: (payload: { email?: string; phone_number?: string }) => void;
-  onUsePassword?: () => void;
+  onUniversalLoginFallback?: () => void;
 }
 
 const AuthGateIdentifierStep: React.FC<AuthGateIdentifierStepProps> = ({
   disabled,
   error,
-  showPasswordLink,
   onClearError,
   onValidationError,
   onSubmit,
-  onUsePassword,
+  onUniversalLoginFallback,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
+  const { flags } = useClientFlags();
+  const ulFallbackOn = flags.auth_gate_ul_fallback ?? true;
   const browserCountry = getBrowserDefaultCountryCode();
   const otpLen = getAuthOtpCodeLength();
   const [identifierMode, setIdentifierMode] = useState<LoginIdentifierMode>(() =>
@@ -171,10 +172,17 @@ const AuthGateIdentifierStep: React.FC<AuthGateIdentifierStepProps> = ({
           ? t('auth.useEmailInstead', 'Use email instead')
           : t('auth.usePhoneInstead', 'Use phone instead')}
       </Button>
-      {showPasswordLink && identifierMode === 'email' && onUsePassword ? (
-        <Button variant="text" disabled={disabled} onClick={onUsePassword}>
-          {t('auth.gate.usePasswordInstead', 'Use password instead')}
-        </Button>
+      {ulFallbackOn && onUniversalLoginFallback ? (
+        <Link
+          component="button"
+          type="button"
+          variant="body2"
+          disabled={disabled}
+          onClick={onUniversalLoginFallback}
+          sx={{ alignSelf: 'center', fontWeight: 600, cursor: 'pointer' }}
+        >
+          {t('auth.gate.signInWithPassword', 'Sign in with password')}
+        </Link>
       ) : null}
     </Stack>
   );

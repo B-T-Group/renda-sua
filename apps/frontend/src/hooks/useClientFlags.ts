@@ -9,6 +9,7 @@ export type ClientFlagKey =
   | 'floating_nav_enabled'
   | 'reorder_v1'
   | 'auth_web_inapp_gates'
+  | 'auth_gate_ul_fallback'
   | 'catalog_experience_v1'
   | 'assistant_launcher_v1'
   | 'assistant_shopping_v1';
@@ -22,6 +23,8 @@ const DEFAULT_FLAGS: ClientFlags = {
   floating_nav_enabled: false,
   reorder_v1: false,
   auth_web_inapp_gates: false,
+  /** #338 soak: Universal Login link inside the gate; only rendered where the gate is on. */
+  auth_gate_ul_fallback: true,
   catalog_experience_v1: false,
   assistant_launcher_v1: false,
   assistant_shopping_v1: false,

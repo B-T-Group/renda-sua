@@ -165,6 +165,11 @@ export const AuthGateProvider: React.FC<{ children: ReactNode }> = ({
   );
 };
 
+/** Like useAuthGate, but returns null outside AuthGateProvider (tests, isolated trees). */
+export function useOptionalAuthGate(): AuthGateContextValue | null {
+  return useContext(AuthGateContext);
+}
+
 export function useAuthGate(): AuthGateContextValue {
   const ctx = useContext(AuthGateContext);
   if (!ctx) {

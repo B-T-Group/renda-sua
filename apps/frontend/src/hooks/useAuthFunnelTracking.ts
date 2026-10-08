@@ -6,6 +6,7 @@ import {
   SITE_EVENT_AUTH_GATE_SHOWN,
   SITE_EVENT_AUTH_LOCKED,
   SITE_EVENT_AUTH_PASSWORD_USED,
+  SITE_EVENT_AUTH_UL_FALLBACK_USED,
   useTrackSiteEvent,
 } from './useTrackSiteEvent';
 import {
@@ -52,7 +53,7 @@ export function useAuthFunnelTracking(context: string) {
     (
       entry: string,
       authPath = 'auth0_ul',
-      step?: 'identifier' | 'code' | 'password' | 'locked' | 'finish'
+      step?: 'identifier' | 'code' | 'locked' | 'finish'
     ) => {
       void trackSiteEvent({
         eventType: SITE_EVENT_AUTH_GATE_DISMISSED,
@@ -85,6 +86,16 @@ export function useAuthFunnelTracking(context: string) {
     [baseMetadata, trackSiteEvent]
   );
 
+  const trackUlFallbackUsed = useCallback(
+    (entry: string) => {
+      void trackSiteEvent({
+        eventType: SITE_EVENT_AUTH_UL_FALLBACK_USED,
+        metadata: baseMetadata(entry, 'auth0_ul'),
+      });
+    },
+    [baseMetadata, trackSiteEvent]
+  );
+
   const { loginWithRedirect } = useAuth0();
 
   const loginWithRedirectTracked = useCallback(
@@ -104,6 +115,7 @@ export function useAuthFunnelTracking(context: string) {
     trackAuthGateDismissed,
     trackAuthLocked,
     trackAuthPasswordUsed,
+    trackUlFallbackUsed,
     loginWithRedirectTracked,
   };
 }

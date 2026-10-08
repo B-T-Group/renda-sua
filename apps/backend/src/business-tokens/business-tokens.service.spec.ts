@@ -23,6 +23,7 @@ describe('BusinessTokensService', () => {
   };
   const mobilePaymentsDatabaseService = {
     createTransaction: jest.fn(),
+    updateTransaction: jest.fn(),
   };
 
   let service: BusinessTokensService;
@@ -268,6 +269,50 @@ describe('BusinessTokensService', () => {
     );
     expect(mobilePaymentsService.initiatePayment.mock.calls[1][1]).toBe(
       secondRef
+    );
+    expect(mobilePaymentsDatabaseService.updateTransaction).toHaveBeenCalledWith(
+      'mp-tx-1',
+      { transaction_id: 'provider-tx-9' }
+    );
+  });
+
+  it('marks the mobile payment failed when the provider rejects it', async () => {
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@example.com',
+      phone_number: '+237600000000',
+      business: { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
+    });
+    paymentRoutingService.getBusinessCountryCode.mockResolvedValue('CM');
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      supported_country_states: [{ currency_code: 'XAF' }],
+    });
+    paymentRoutingService.resolveRailForBusiness.mockResolvedValue(
+      'mobile_money'
+    );
+    mobilePaymentsService.getProvider.mockReturnValue('freemopay');
+    mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+      id: 'mp-tx-1',
+    });
+    mobilePaymentsService.initiatePayment.mockResolvedValue({
+      success: false,
+      message: 'Payer declined',
+      errorCode: 'DECLINED',
+    });
+
+    await expect(
+      service.initiatePackPurchase({
+        packId: 'pack_100',
+        phoneNumber: '+237600000000',
+      })
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(mobilePaymentsDatabaseService.updateTransaction).toHaveBeenCalledWith(
+      'mp-tx-1',
+      {
+        status: 'failed',
+        error_message: 'Payer declined',
+        error_code: 'DECLINED',
+      }
     );
   });
 });
