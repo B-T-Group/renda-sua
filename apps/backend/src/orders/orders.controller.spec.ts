@@ -427,6 +427,18 @@ describe('OrdersController', () => {
     });
   });
 
+  describe('route order', () => {
+    it('registers single-segment GET routes before GET :id', () => {
+      // Nest matches routes in declaration order; GET /orders/cancellation-fee
+      // must not be captured by GET /orders/:id.
+      const methods = Object.getOwnPropertyNames(OrdersController.prototype);
+      expect(methods.indexOf('getCancellationFee')).toBeGreaterThan(-1);
+      expect(methods.indexOf('getCancellationFee')).toBeLessThan(
+        methods.indexOf('getOrderById')
+      );
+    });
+  });
+
   describe('getOrderById', () => {
     it('rejects a non-UUID path param before querying', async () => {
       await expect(controller.getOrderById('not-a-uuid')).rejects.toMatchObject({
