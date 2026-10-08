@@ -15500,8 +15500,8 @@ export class OrdersService {
   }
 
   /**
-   * Release the requested amount, or only the order's remaining withheld if the
-   * bookkeeping hold was never placed (pay-after credit sitting in available).
+   * Release the requested amount, or only what is still withheld for this order.
+   * Shared withheld can already have been consumed by another release.
    */
   private async releaseClientSettlementHold(params: {
     accountId: string;
@@ -15537,11 +15537,54 @@ export class OrdersService {
       params.orderId
     );
     if (netHeld <= 0) return this.skipUnheldRelease(params);
-    const releaseAmount = Number(Math.min(params.amount, netHeld).toFixed(2));
-    if (await this.partialReleaseCanBeCollected(params, releaseAmount)) {
-      return this.registerHoldRelease(params, releaseAmount);
+    const balance = await this.accountsService.getAccountBalance(params.accountId);
+    if (!balance) throw new Error('account balance unavailable');
+    return this.settleShortClientHold(params, {
+      netHeld,
+      available: Number(balance.availableBalance ?? 0),
+      withheld: Number(balance.withheldBalance ?? 0),
+    });
+  }
+
+  private settleShortClientHold(
+    params: {
+      orderId: string;
+      amount: number;
+      accountId: string;
+      memo: string;
+      idempotencyKey: string;
+    },
+    balances: { netHeld: number; available: number; withheld: number }
+  ): Promise<{ success?: boolean; error?: string }> | { success?: boolean; error?: string } {
+    const needed = Number(
+      Math.min(params.amount, Math.max(balances.netHeld, 0)).toFixed(2)
+    );
+    if (needed <= 0 || balances.withheld <= 0) {
+      return this.skipUnheldRelease(params);
     }
-    return this.keepShortHoldLocked(params, netHeld);
+    if (balances.withheld < needed && balances.available >= params.amount) {
+      return this.skipConsumedHoldRelease(params, balances.withheld);
+    }
+    return this.releaseCollectableHold(params, balances, needed);
+  }
+
+  private releaseCollectableHold(
+    params: {
+      orderId: string;
+      amount: number;
+      accountId: string;
+      memo: string;
+      idempotencyKey: string;
+    },
+    balances: { netHeld: number; available: number; withheld: number },
+    needed: number
+  ): Promise<{ success?: boolean; error?: string }> | { success?: boolean; error?: string } {
+    const releasable = Number(Math.min(needed, balances.withheld).toFixed(2));
+    const covered = Number((balances.available + releasable).toFixed(2));
+    if (covered >= Number(params.amount.toFixed(2))) {
+      return this.registerHoldRelease(params, releasable);
+    }
+    return this.keepShortHoldLocked(params, balances.netHeld);
   }
 
   /** No ledger hold: the following payment debits whatever is in available. */
@@ -15551,6 +15594,20 @@ export class OrdersService {
   }): { success: true } {
     this.logger.warn(
       `settlement_skip_unheld_release orderId=${params.orderId} requested=${params.amount}: debiting available`
+    );
+    return { success: true };
+  }
+
+  /**
+   * This order still has a ledger hold, but another release already spent the
+   * shared withheld pool. Do not take leftover withheld that belongs elsewhere.
+   */
+  private skipConsumedHoldRelease(
+    params: { orderId: string; amount: number },
+    withheld: number
+  ): { success: true } {
+    this.logger.warn(
+      `settlement_skip_consumed_hold orderId=${params.orderId} requested=${params.amount} withheld=${withheld}: debiting available`
     );
     return { success: true };
   }
@@ -15571,16 +15628,6 @@ export class OrdersService {
       success: false,
       error: 'Insufficient funds for this transaction',
     };
-  }
-
-  private async partialReleaseCanBeCollected(
-    params: { accountId: string; amount: number },
-    releaseAmount: number
-  ): Promise<boolean> {
-    const balance = await this.accountsService.getAccountBalance(params.accountId);
-    const available = Number(balance?.availableBalance ?? 0);
-    const covered = Number((available + releaseAmount).toFixed(2));
-    return covered >= Number(params.amount.toFixed(2));
   }
 
   private async registerHoldRelease(

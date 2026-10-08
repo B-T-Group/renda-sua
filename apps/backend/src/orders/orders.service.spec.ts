@@ -5049,6 +5049,92 @@ describe('OrdersService', () => {
       );
     });
 
+    it('NODE-NESTJS-3P: skips release when shared withheld was consumed and available covers', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release'
+              ? holdRows([])
+              : holdRows([5000]);
+          }
+          return {
+            orders_by_pk: {
+              ...paidPickupOrder,
+              pay_after_merchant_confirm: true,
+            },
+          };
+        }
+      );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 12000,
+        withheldBalance: 4500,
+      });
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release'
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      const releases = accountsService.registerTransaction.mock.calls
+        .map(([row]) => row)
+        .filter((row) => row.transactionType === 'release');
+      expect(releases).toHaveLength(1);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
+    });
+
+    it('releases leftover withheld when it is short and available needs it', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release'
+              ? holdRows([])
+              : holdRows([5000]);
+          }
+          return {
+            orders_by_pk: {
+              ...paidPickupOrder,
+              pay_after_merchant_confirm: true,
+            },
+          };
+        }
+      );
+      accountsService.getAccountBalance.mockResolvedValue({
+        availableBalance: 4000,
+        withheldBalance: 2000,
+      });
+      accountsService.registerTransaction.mockImplementation(async (r: any) =>
+        r.transactionType === 'release' && r.amount === 5000
+          ? { success: false, error: 'Insufficient funds for this transaction' }
+          : { success: true }
+      );
+
+      await expect(service.processOrderPayment('order-123')).resolves.toBe(
+        'settled'
+      );
+
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 2000,
+          transactionType: 'release',
+        })
+      );
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          amount: 5000,
+          transactionType: 'payment',
+        })
+      );
+    });
+
     it('releases only the remaining ledger hold when available covers the payment', async () => {
       hasuraSystemService.executeQuery.mockImplementation(
         async (q: string, vars?: { transactionType?: string }) => {
@@ -5067,6 +5153,7 @@ describe('OrdersService', () => {
       );
       accountsService.getAccountBalance.mockResolvedValue({
         availableBalance: 3000,
+        withheldBalance: 2000,
       });
       accountsService.registerTransaction.mockImplementation(async (r: any) =>
         r.transactionType === 'release' && r.amount === 5000
@@ -5113,6 +5200,7 @@ describe('OrdersService', () => {
       );
       accountsService.getAccountBalance.mockResolvedValue({
         availableBalance: 0,
+        withheldBalance: 2000,
       });
       accountsService.registerTransaction.mockImplementation(async (r: any) =>
         r.transactionType === 'release'
@@ -5164,6 +5252,7 @@ describe('OrdersService', () => {
       );
       accountsService.getAccountBalance.mockResolvedValue({
         availableBalance: 3200,
+        withheldBalance: 1800,
       });
       accountsService.registerTransaction.mockImplementation(async (r: any) =>
         r.transactionType === 'release' && r.amount === 5000
@@ -5194,6 +5283,7 @@ describe('OrdersService', () => {
       );
       accountsService.getAccountBalance.mockResolvedValue({
         availableBalance: 0,
+        withheldBalance: 9000,
       });
       let releaseAttempts = 0;
       accountsService.registerTransaction.mockImplementation(async (r: any) => {
@@ -5256,6 +5346,7 @@ describe('OrdersService', () => {
       );
       accountsService.getAccountBalance.mockResolvedValue({
         availableBalance: 3000,
+        withheldBalance: 2000,
       });
       accountsService.registerTransaction.mockImplementation(async (r: any) =>
         r.transactionType === 'release'
