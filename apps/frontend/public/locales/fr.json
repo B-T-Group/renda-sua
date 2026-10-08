@@ -2133,7 +2133,9 @@
       "cta": "Ajouter un téléphone",
       "dialogTitle": "Ajouter un numéro de téléphone",
       "dialogDesc": "L'ajout d'un numéro de téléphone aide à sécuriser votre compte et vous permet de vous connecter par SMS.",
-      "invalid": "Saisissez un numéro valide, par ex. 6 12 34 56 78 ou +237 6 12 34 56 78."
+      "invalid": "Saisissez un numéro valide, par ex. 6 12 34 56 78 ou +237 6 12 34 56 78.",
+      "phoneTaken": "Ce numéro de téléphone est déjà utilisé",
+      "phoneInvalid": "Veuillez saisir un numéro de téléphone valide pour le pays sélectionné."
     },
     "adminSignIn": {
       "title": "Connexion requise",
@@ -2142,6 +2144,7 @@
     },
     "phoneNumber": "Numéro de téléphone",
     "phonePlaceholder": "Numéro de téléphone",
+    "phoneCountry": "Pays",
     "loginMethodFooterNote": "Vous pouvez changer d’avis à tout moment—ce choix sert uniquement à lancer la bonne méthode de connexion.",
     "loginWithOtp": "Se connecter avec un mot de passe à usage unique",
     "loginWithOtpEmail": "Se connecter avec un mot de passe à usage unique (email)",
