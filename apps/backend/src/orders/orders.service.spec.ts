@@ -5091,13 +5091,16 @@ describe('OrdersService', () => {
       );
     });
 
-    it('releases leftover withheld when it is short and available needs it', async () => {
+    it('keeps the hold locked when withheld is short and available cannot cover', async () => {
       hasuraSystemService.executeQuery.mockImplementation(
         async (q: string, vars?: { transactionType?: string }) => {
           if (q.includes('SumOrderHolds')) {
             return vars?.transactionType === 'release'
               ? holdRows([])
               : holdRows([5000]);
+          }
+          if (q.includes('SettlementRetryCount')) {
+            return { order_holds_by_pk: { settlement_retry_count: 0 } };
           }
           return {
             orders_by_pk: {
@@ -5118,20 +5121,17 @@ describe('OrdersService', () => {
       );
 
       await expect(service.processOrderPayment('order-123')).resolves.toBe(
-        'settled'
+        'queued_for_retry'
       );
 
-      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+      expect(accountsService.registerTransaction).not.toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 2000,
           transactionType: 'release',
         })
       );
-      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
-        expect.objectContaining({
-          amount: 5000,
-          transactionType: 'payment',
-        })
+      expect(accountsService.registerTransaction).not.toHaveBeenCalledWith(
+        expect.objectContaining({ transactionType: 'payment' })
       );
     });
 

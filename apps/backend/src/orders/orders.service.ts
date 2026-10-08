@@ -15562,8 +15562,11 @@ export class OrdersService {
     if (needed <= 0 || balances.withheld <= 0) {
       return this.skipUnheldRelease(params);
     }
-    if (balances.withheld < needed && balances.available >= params.amount) {
-      return this.skipConsumedHoldRelease(params, balances.withheld);
+    if (balances.withheld < needed) {
+      // The leftover withheld may belong to other orders: never use it here.
+      return balances.available >= params.amount
+        ? this.skipConsumedHoldRelease(params, balances.withheld)
+        : this.keepShortHoldLocked(params, balances.netHeld);
     }
     return this.releaseCollectableHold(params, balances, needed);
   }
