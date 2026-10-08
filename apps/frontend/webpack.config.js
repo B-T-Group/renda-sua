@@ -1,8 +1,19 @@
 const { NxAppWebpackPlugin } = require('@nx/webpack/app-plugin');
 const { NxReactWebpackPlugin } = require('@nx/react/webpack-plugin');
-const { join } = require('path');
+const { dirname, join } = require('path');
 const zlib = require('zlib');
 const { InjectManifest } = require('workbox-webpack-plugin');
+
+function pkgDir(name) {
+  return dirname(require.resolve(`${name}/package.json`, { paths: [__dirname] }));
+}
+
+// Mobile hoists react@19.2 to the workspace root while this app pins 19.0 with
+// react-dom@19.0. Multiple copies make MUI ThemeProvider crash on useMemo.
+const reactAliases = {
+  react: pkgDir('react'),
+  'react-dom': pkgDir('react-dom'),
+};
 
 const isProd = process.env['NODE_ENV'] === 'production';
 const isServe = process.env['WEBPACK_SERVE'] === 'true';
@@ -49,6 +60,9 @@ const analyzerPlugins =
     : [];
 
 module.exports = {
+  resolve: {
+    alias: reactAliases,
+  },
   output: {
     path: join(__dirname, '../../dist/apps/frontend'),
   },
