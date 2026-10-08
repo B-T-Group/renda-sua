@@ -9,7 +9,17 @@ import {
   Post,
   Query,
   Req,
+  ValidationPipe,
 } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import {
+  IsIn,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { AccountsService } from '../accounts/accounts.service';
@@ -35,19 +45,63 @@ import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.se
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 
-export interface InitiatePaymentDto {
-  amount: number;
-  currency: string;
-  description: string;
+export const INITIATE_TRANSACTION_TYPES = ['PAYMENT', 'GIVE_CHANGE'] as const;
+
+/**
+ * Body of POST /mobile-payments/initiate. A class (not an interface) so the
+ * ValidationPipe can reject malformed ids/amounts with a 400 instead of letting
+ * them reach Hasura and surface as a 500 (QA L1). Undeclared fields are kept.
+ */
+export class InitiatePaymentDto {
+  @Type(() => Number)
+  @IsNumber({ allowNaN: false, allowInfinity: false })
+  amount!: number;
+
+  @IsString()
+  @IsNotEmpty()
+  currency!: string;
+
+  @IsOptional()
+  @IsString()
+  description!: string;
+
+  @IsOptional()
+  @IsString()
   customerPhone?: string;
+
+  @IsOptional()
+  @IsString()
   customerEmail?: string;
+
+  @IsOptional()
+  @IsString()
   callbackUrl?: string;
+
+  @IsOptional()
+  @IsString()
   returnUrl?: string;
+
+  @IsOptional()
+  @IsString()
   provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay';
+
+  @IsOptional()
+  @IsString()
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
-  accountId?: string; // Account ID for top-up operations
-  transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
-  withdrawalPin?: string; // Required when business withdrawals require a PIN
+
+  /** Account to top up (PAYMENT) or withdraw from (GIVE_CHANGE). Must be owned by the caller. */
+  @IsOptional()
+  @IsUUID('all')
+  accountId?: string;
+
+  @IsOptional()
+  @IsIn(INITIATE_TRANSACTION_TYPES)
+  transactionType?: (typeof INITIATE_TRANSACTION_TYPES)[number];
+
+  /** Required when business withdrawals require a PIN */
+  @IsOptional()
+  @IsString()
+  withdrawalPin?: string;
 }
 
 export interface PaymentCallbackDto {
@@ -166,7 +220,11 @@ export class MobilePaymentsController {
    * Initiate a mobile payment
    */
   @Post('initiate')
-  async initiatePayment(@ReqContext() ctx: RequestContext, @Body() paymentRequest: InitiatePaymentDto) {
+  async initiatePayment(
+    @ReqContext() ctx: RequestContext,
+    @Body(new ValidationPipe({ transform: true }))
+    paymentRequest: InitiatePaymentDto
+  ) {
     try {
       if (paymentRequest.transactionType === 'GIVE_CHANGE') {
         return await this.initiateGiveChangeWithdrawal(ctx, paymentRequest);
@@ -174,6 +232,10 @@ export class MobilePaymentsController {
 
       // Validate account balance if accountId is provided
       if (paymentRequest.accountId) {
+        // QA S1: a top-up (or any non-withdrawal type) into someone else's account was
+        // accepted. Same owner/admin gate as GIVE_CHANGE (#511), before any balance read
+        // so the response cannot leak another account's existence or balance.
+        await this.requireOwnedAccountAccess(ctx, paymentRequest.accountId);
         const accountBalance = await this.accountsService.getAccountBalance(
           paymentRequest.accountId
         );
@@ -297,11 +359,13 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
+      // Never echo raw provider/Hasura errors (they can include query text): QA L1.
+      this.logger.error(`initiate_payment_failed: ${error?.message}`);
       throw new HttpException(
         {
           success: false,
           message: 'Failed to initiate payment',
-          error: error.message,
+          error: 'PAYMENT_INITIATION_FAILED',
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -824,7 +888,7 @@ export class MobilePaymentsController {
     request: InitiatePaymentDto
   ) {
     const accountId = this.requireGiveChangeAccountId(request);
-    const initiatorUserId = await this.requireGiveChangeAccountAccess(
+    const initiatorUserId = await this.requireOwnedAccountAccess(
       ctx,
       accountId
     );
@@ -855,7 +919,7 @@ export class MobilePaymentsController {
     return accountId;
   }
 
-  private async requireGiveChangeAccountAccess(
+  private async requireOwnedAccountAccess(
     ctx: RequestContext,
     accountId: string
   ): Promise<string> {
