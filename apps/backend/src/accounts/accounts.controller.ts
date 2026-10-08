@@ -5,6 +5,7 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -20,6 +21,8 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { GET_ACCOUNT_BY_ID_FOR_USER } from '../hasura/hasura.queries';
 import { AccountsService } from './accounts.service';
+import { PlatformPermissions } from '../rbac/platform-permissions';
+import { RbacService } from '../rbac/rbac.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 
@@ -31,7 +34,8 @@ export class AccountsController {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly accountsService: AccountsService
+    private readonly accountsService: AccountsService,
+    private readonly rbacService: RbacService
   ) {}
 
   @Get('info')
@@ -201,8 +205,16 @@ export class AccountsController {
       },
     },
   })
-  async getWithdrawalConfig(@Param('accountId') accountId: string) {
+  @ApiResponse({ status: 400, description: 'accountId is not a UUID' })
+  @ApiResponse({ status: 404, description: 'Account not found (or not yours)' })
+  async getWithdrawalConfig(
+    @ReqContext() ctx: RequestContext,
+    @Param('accountId', new ParseUUIDPipe()) accountId: string
+  ) {
     try {
+      // QA L3: this returned requirePin for any id (existence + PIN-status oracle).
+      // Same owner-or-mobile-payments-admin rule and 404 as GIVE_CHANGE (#511).
+      await this.assertCanAccessAccount(ctx, accountId);
       const data = await this.accountsService.getWithdrawalConfig(accountId);
       return { success: true, data };
     } catch (error: any) {
@@ -510,5 +522,40 @@ export class AccountsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  /** Owner of the account, or a platform admin with the mobile payments permission. 404 otherwise. */
+  private async assertCanAccessAccount(
+    ctx: RequestContext,
+    accountId: string
+  ): Promise<void> {
+    const user = await this.hasuraUserService.getUser(ctx).catch(() => null);
+    if (!user?.id) {
+      throw new HttpException(
+        { success: false, error: 'User not found' },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+    const result = await this.hasuraSystemService.executeQuery(
+      `query AccountOwnerForAccess($accountId: uuid!) {
+        accounts_by_pk(id: $accountId) { id user_id }
+      }`,
+      { accountId }
+    );
+    const ownerId = result?.accounts_by_pk?.user_id ?? null;
+    if (ownerId && ownerId === user.id) return;
+    if (
+      ownerId &&
+      (await this.rbacService.hasPermission(
+        user.id,
+        PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS
+      ))
+    ) {
+      return;
+    }
+    throw new HttpException(
+      { success: false, error: 'Account not found' },
+      HttpStatus.NOT_FOUND
+    );
   }
 }

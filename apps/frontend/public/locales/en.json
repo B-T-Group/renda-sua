@@ -2405,7 +2405,9 @@
       "cta": "Add Phone",
       "dialogTitle": "Add Phone Number",
       "dialogDesc": "Adding a phone number helps secure your account and allows you to sign in via SMS.",
-      "invalid": "Enter a valid phone number, e.g. 6 12 34 56 78 or +237 6 12 34 56 78."
+      "invalid": "Enter a valid phone number, e.g. 6 12 34 56 78 or +237 6 12 34 56 78.",
+      "phoneTaken": "This phone number is already in use",
+      "phoneInvalid": "Please enter a valid phone number for the selected country."
     },
     "adminSignIn": {
       "title": "Sign in required",
@@ -2414,6 +2416,7 @@
     },
     "phoneNumber": "Phone Number",
     "phonePlaceholder": "Phone number",
+    "phoneCountry": "Country",
     "loginMethodFooterNote": "You can change your mind anytime—we only use your choice to start the right sign-in flow.",
     "loginWithOtp": "Login with one-time password",
     "loginWithOtpEmail": "Login with one-time password (email)",

@@ -47,6 +47,7 @@ import { StorePickupReminderProvider } from '../hooks/useStorePickupReminder';
 import { useMetaPixelAdvancedMatching } from '../hooks/useMetaPixelAdvancedMatching';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
 import { usePushSubscription } from '../hooks/usePushSubscription';
+import { ADMIN_HOME_PATH } from '../utils/adminPaths';
 
 function RouteSuspenseFallback() {
   const { t } = useTranslation();
@@ -623,6 +624,17 @@ function App() {
               <Route
                 path="/admin/:userType/:userId/messages"
                 element={<LazyPages.AdminUserMessagesPage />}
+              />
+              {/* /admin, /admin/ and unknown /admin/* stay behind ProtectedRoute (signed-out
+                  users get the admin sign-in path) instead of falling through to the public
+                  catch-all; signed-in users land on the admin hub. */}
+              <Route
+                path="/admin"
+                element={<Navigate to={ADMIN_HOME_PATH} replace />}
+              />
+              <Route
+                path="/admin/*"
+                element={<Navigate to={ADMIN_HOME_PATH} replace />}
               />
             </Route>
             <Route

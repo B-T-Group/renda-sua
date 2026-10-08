@@ -4961,12 +4961,19 @@ describe('OrdersService', () => {
     });
 
     it('releases hold then pays when pay_after_merchant_confirm despite pay_at_pickup', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...paidPickupOrder,
-          pay_after_merchant_confirm: true,
-        },
-      });
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SumOrderHolds')) {
+            return {
+              account_transactions:
+                vars?.transactionType === 'release' ? [] : [{ amount: 5000 }],
+            };
+          }
+          return {
+            orders_by_pk: { ...paidPickupOrder, pay_after_merchant_confirm: true },
+          };
+        }
+      );
 
       await service.processOrderPayment('order-123');
 
@@ -5304,7 +5311,7 @@ describe('OrdersService', () => {
       expect(releases.map((row) => row.amount)).toEqual([5000, 5000]);
     });
 
-    it('skips a second release when holds and releases already net to zero', async () => {
+    it('does not attempt any release when holds and releases already net to zero (QA B2)', async () => {
       hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
         q.includes('SumOrderHolds') ? holdRows([5000]) : payAfterOrder()
       );
@@ -5321,7 +5328,7 @@ describe('OrdersService', () => {
       const releases = accountsService.registerTransaction.mock.calls.filter(
         ([row]) => row.transactionType === 'release'
       );
-      expect(releases).toHaveLength(1);
+      expect(releases).toHaveLength(0);
       expect(accountsService.registerTransaction).toHaveBeenCalledWith(
         expect.objectContaining({
           amount: 5000,
@@ -5358,10 +5365,12 @@ describe('OrdersService', () => {
         'queued_for_retry'
       );
 
-      const types = accountsService.registerTransaction.mock.calls.map(
-        ([row]) => row.transactionType
+      // QA B2: a short hold (2000 < 5000) never tries the full 5000 first; the only
+      // attempt is the order's own net hold.
+      const moves = accountsService.registerTransaction.mock.calls.map(
+        ([row]) => [row.transactionType, row.amount]
       );
-      expect(types).toEqual(['release', 'release']);
+      expect(moves).toEqual([['release', 2000]]);
       expect(
         (service as any).commissionsService.distributeItemCommissions
       ).not.toHaveBeenCalled();
@@ -5389,13 +5398,18 @@ describe('OrdersService', () => {
       );
     });
 
-    it('does not measure the hold when the release failed for another reason', async () => {
-      hasuraSystemService.executeQuery.mockImplementation(async (q: string) => {
-        if (q.includes('SettlementRetryCount')) {
-          return { order_holds_by_pk: { settlement_retry_count: 0 } };
+    it('does not fall back to the short-hold path when the release failed for another reason', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SettlementRetryCount')) {
+            return { order_holds_by_pk: { settlement_retry_count: 0 } };
+          }
+          if (q.includes('SumOrderHolds')) {
+            return vars?.transactionType === 'release' ? holdRows([]) : holdRows([5000]);
+          }
+          return payAfterOrder();
         }
-        return payAfterOrder();
-      });
+      );
       accountsService.registerTransaction.mockResolvedValue({
         success: false,
         error: 'Account is frozen',
@@ -5405,11 +5419,11 @@ describe('OrdersService', () => {
         'queued_for_retry'
       );
 
-      const queries = hasuraSystemService.executeQuery.mock.calls.map(([q]) =>
-        String(q)
-      );
-      expect(queries.some((q) => q.includes('SumOrderHolds'))).toBe(false);
+      expect(accountsService.getAccountBalance).not.toHaveBeenCalled();
       expect(accountsService.registerTransaction).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({ transactionType: 'release', amount: 5000 })
+      );
     });
 
     it('NODE-NESTJS-3G: delivery settlement skips a missing client hold and still debits the fee', async () => {
@@ -5811,10 +5825,20 @@ describe('OrdersService', () => {
         .mockResolvedValue({ id: 'hold-1' });
       hasuraSystemService.getAccount.mockResolvedValue({ id: 'acct-1' });
       hasuraSystemService.executeQuery.mockReset();
-      hasuraSystemService.executeQuery.mockImplementation(async (q: string) =>
-        q.includes('SettlementRetryCount')
-          ? { order_holds_by_pk: { settlement_retry_count: 0 } }
-          : { orders_by_pk: order }
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) => {
+          if (q.includes('SettlementRetryCount')) {
+            return { order_holds_by_pk: { settlement_retry_count: 0 } };
+          }
+          if (q.includes('SumOrderHolds')) {
+            // client ledger hold for items + delivery fee (5000 + 1000)
+            return {
+              account_transactions:
+                vars?.transactionType === 'release' ? [] : [{ amount: 6000 }],
+            };
+          }
+          return { orders_by_pk: order };
+        }
       );
       hasuraSystemService.executeMutation.mockReset();
       accountsService.registerTransaction.mockReset();
@@ -5929,9 +5953,17 @@ describe('OrdersService', () => {
         .mockResolvedValue(
           itemHold({ item_settlement_completed_at: '2026-01-01T00:00:00Z' }) as any
         );
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...order, current_status: 'out_for_delivery' },
-      });
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (q: string, vars?: { transactionType?: string }) =>
+          q.includes('SumOrderHolds')
+            ? {
+                // item stage already released 5000 of the 6000 hold
+                account_transactions: [
+                  { amount: vars?.transactionType === 'release' ? 5000 : 6000 },
+                ],
+              }
+            : { orders_by_pk: { ...order, current_status: 'out_for_delivery' } }
+      );
       await service.processOrderDeliveryPayment('order-123');
       const keys = accountsService.registerTransaction.mock.calls.map(
         ([r]: [any]) => r.idempotencyKey
