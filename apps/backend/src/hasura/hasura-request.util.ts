@@ -34,6 +34,8 @@ export const DEFAULT_HASURA_RETRY_DELAY_MS = 400;
 export const HASURA_UNAVAILABLE_MESSAGE =
   'Temporarily unable to reach the data service';
 
+export const INVALID_IDENTIFIER_MESSAGE = 'Invalid identifier';
+
 export type HasuraRetryLogger = {
   warn: (message: string) => void;
 };
@@ -101,6 +103,12 @@ export function hasuraUnavailableResponse(): {
   };
 }
 
+export function isInvalidUuidInputError(error: unknown): boolean {
+  return /invalid input syntax for type uuid/i.test(
+    hasuraValidationErrorText(error)
+  );
+}
+
 export function mapExhaustedHasuraQueryError(error: unknown): never {
   if (error instanceof HttpException) {
     throw error;
@@ -111,6 +119,9 @@ export function mapExhaustedHasuraQueryError(error: unknown): never {
       HttpStatus.SERVICE_UNAVAILABLE,
       { cause: error instanceof Error ? error : undefined }
     );
+  }
+  if (isInvalidUuidInputError(error)) {
+    throw invalidIdentifierException(error);
   }
   throw error;
 }
@@ -166,6 +177,19 @@ async function retryQueryWithoutInterestOnly<T>(
     'Hasura schema is missing items.interest_only; retrying without that field'
   );
   return requestHasuraWithRetry(() => request(stripped), logger, options);
+}
+
+function invalidIdentifierException(error: unknown): HttpException {
+  return new HttpException(
+    {
+      success: false,
+      statusCode: HttpStatus.BAD_REQUEST,
+      message: INVALID_IDENTIFIER_MESSAGE,
+      error: INVALID_IDENTIFIER_MESSAGE,
+    },
+    HttpStatus.BAD_REQUEST,
+    { cause: error instanceof Error ? error : undefined }
+  );
 }
 
 function hasuraValidationErrorText(error: unknown): string {

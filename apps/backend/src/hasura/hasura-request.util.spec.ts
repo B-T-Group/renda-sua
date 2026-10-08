@@ -3,6 +3,8 @@ import {
   formatHasuraNetworkError,
   DEFAULT_HASURA_RETRY_DELAY_MS,
   HASURA_UNAVAILABLE_MESSAGE,
+  INVALID_IDENTIFIER_MESSAGE,
+  isInvalidUuidInputError,
   isMissingItemsInterestOnlyField,
   isTransientHasuraNetworkError,
   isWrappedTransientHasuraHttpException,
@@ -185,6 +187,52 @@ describe('hasura-request.util', () => {
       statusCode: 503,
       message: HASURA_UNAVAILABLE_MESSAGE,
     });
+  });
+
+  it('maps Hasura uuid data-exceptions to HTTP 400 without leaking the value', () => {
+    const error = {
+      message:
+        'invalid input syntax for type uuid: "not-a-uuid": {"response":{"errors":[{"message":"invalid input syntax for type uuid: \\"not-a-uuid\\"","extensions":{"path":"$","code":"data-exception"}}],"status":200},"request":{"query":"query GetOrder($orderId: uuid!)"}}',
+      response: {
+        errors: [
+          {
+            message: 'invalid input syntax for type uuid: "not-a-uuid"',
+            extensions: { path: '$', code: 'data-exception' },
+          },
+        ],
+        status: 200,
+        headers: {},
+      },
+    };
+    expect(isInvalidUuidInputError(error)).toBe(true);
+
+    let thrown: unknown;
+    try {
+      mapExhaustedHasuraQueryError(error);
+    } catch (next: unknown) {
+      thrown = next;
+    }
+    expect(thrown).toBeInstanceOf(HttpException);
+    const exception = thrown as HttpException;
+    expect(exception.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    expect(exception.message).toBe(INVALID_IDENTIFIER_MESSAGE);
+    expect(JSON.stringify(exception.getResponse())).not.toContain('not-a-uuid');
+    expect(exception.getResponse()).toMatchObject({
+      success: false,
+      statusCode: 400,
+      message: INVALID_IDENTIFIER_MESSAGE,
+    });
+  });
+
+  it('does not treat unrelated GraphQL errors as invalid UUID input', () => {
+    expect(
+      isInvalidUuidInputError({
+        message: "field 'currency' not found in type: 'businesses'",
+        response: {
+          errors: [{ message: "field 'currency' not found in type: 'businesses'" }],
+        },
+      })
+    ).toBe(false);
   });
 
   it('maps exhausted nginx HTML 404s to HTTP 503', () => {

@@ -55,6 +55,7 @@ import { OrdersService } from './orders.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { isActivePersona } from '../users/persona.util';
+import { requireUuid } from '../common/uuid.util';
 
 export interface UpdateOrderStatusRequest {
   status: string;
@@ -1410,7 +1411,9 @@ export class OrdersController {
   @Get(':id')
   async getOrderById(@Param('id') orderId: string) {
     try {
-      const order = await this.ordersService.getOrderById(orderId);
+      const order = await this.ordersService.getOrderById(
+        requireUuid(orderId, 'id')
+      );
       return {
         success: true,
         order,

@@ -15,6 +15,7 @@ describe('OrdersController', () => {
       completePreparation: jest.fn(),
       completePreparationBatch: jest.fn(),
       getOrder: jest.fn(),
+      getOrderById: jest.fn(),
       pickUpOrder: jest.fn(),
       startTransit: jest.fn(),
       outForDelivery: jest.fn(),
@@ -423,6 +424,30 @@ describe('OrdersController', () => {
 
       expect(result).toEqual(expectedResult);
       expect(ordersService.refundOrder).toHaveBeenCalledWith(request);
+    });
+  });
+
+  describe('getOrderById', () => {
+    it('rejects a non-UUID path param before querying', async () => {
+      await expect(controller.getOrderById('not-a-uuid')).rejects.toMatchObject({
+        status: 400,
+        message: 'id must be a UUID',
+      });
+      expect(ordersService.getOrderById).not.toHaveBeenCalled();
+    });
+
+    it('loads the order when the id is a UUID', async () => {
+      const orderId = '11111111-1111-4111-8111-111111111111';
+      ordersService.getOrderById.mockResolvedValue({ id: orderId } as any);
+
+      const result = await controller.getOrderById(orderId);
+
+      expect(result).toEqual({
+        success: true,
+        order: { id: orderId },
+        message: 'Order retrieved successfully',
+      });
+      expect(ordersService.getOrderById).toHaveBeenCalledWith(orderId);
     });
   });
 
