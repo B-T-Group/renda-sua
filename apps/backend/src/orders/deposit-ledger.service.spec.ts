@@ -442,6 +442,124 @@ describe('DepositLedgerService', () => {
       expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
     });
 
+    it('debits available when this deposit is still on the books but withheld is gone', async () => {
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerReleaseIfNotExists.mockResolvedValue({
+        success: false,
+        error: 'Insufficient funds for this transaction',
+      });
+      accountsService.getAccountBalance.mockResolvedValue({
+        withheldBalance: 0,
+      });
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        account_transactions: [{ transaction_type: 'hold', amount: 150 }],
+      } as any);
+      accountsService.registerPaymentIfNotExists.mockResolvedValue({
+        success: true,
+      });
+      hasuraSystemService.getRendasuaHQUser.mockResolvedValue({
+        id: 'hq-user',
+      } as any);
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'hq-acct' } as any);
+      accountsService.registerDepositIfNotExists.mockResolvedValue({
+        success: true,
+      });
+
+      await service.forfeitDepositToHq({
+        clientAccountId: 'acct-1',
+        amount: 150,
+        currency: 'XAF',
+        orderNumber: '123',
+        depositTransactionId: txnId,
+      });
+
+      expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerPaymentIfNotExists).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId: 'hq-acct', amount: 150 })
+      );
+    });
+
+    it('does not debit when withheld still belongs to other orders', async () => {
+      jest.useFakeTimers();
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerReleaseIfNotExists.mockResolvedValue({
+        success: false,
+        error: 'Insufficient funds for this transaction',
+      });
+      accountsService.getAccountBalance.mockResolvedValue({
+        withheldBalance: 400,
+      });
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        account_transactions: [{ transaction_type: 'hold', amount: 150 }],
+      } as any);
+
+      const done = expect(
+        service.forfeitDepositToHq({
+          clientAccountId: 'acct-1',
+          amount: 150,
+          currency: 'XAF',
+          orderNumber: '123',
+          depositTransactionId: txnId,
+        })
+      ).rejects.toThrow(/forfeit release failed/i);
+      await jest.advanceTimersByTimeAsync(450);
+      await done;
+
+      expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledTimes(3);
+      expect(accountsService.registerPaymentIfNotExists).not.toHaveBeenCalled();
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('does not skip a release that failed for a reason other than insufficient funds', async () => {
+      jest.useFakeTimers();
+      accountsService.hasTransactionForReference.mockResolvedValue(true);
+      accountsService.registerReleaseIfNotExists.mockResolvedValue({
+        success: false,
+        error: 'Account is frozen',
+      });
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        account_transactions: [{ transaction_type: 'hold', amount: 150 }],
+      } as any);
+
+      const done = expect(
+        service.forfeitDepositToHq({
+          clientAccountId: 'acct-1',
+          amount: 150,
+          currency: 'XAF',
+          orderNumber: '123',
+          depositTransactionId: txnId,
+        })
+      ).rejects.toThrow(/Account is frozen/i);
+      await jest.advanceTimersByTimeAsync(450);
+      await done;
+
+      expect(accountsService.getAccountBalance).not.toHaveBeenCalled();
+      expect(accountsService.registerPaymentIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-positive forfeit before any ledger move', async () => {
+      await expect(
+        service.forfeitDepositToHq({
+          clientAccountId: 'acct-1',
+          amount: 0,
+          currency: 'XAF',
+          orderNumber: '123',
+          depositTransactionId: txnId,
+        })
+      ).rejects.toThrow(/amount invalid/i);
+      await expect(
+        service.forfeitDepositToHq({
+          clientAccountId: 'acct-1',
+          amount: -5,
+          currency: 'XAF',
+          orderNumber: '123',
+          depositTransactionId: txnId,
+        })
+      ).rejects.toThrow(/amount invalid/i);
+      expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+    });
+
     it('retries a transient release failure then finishes the HQ credit', async () => {
       jest.useFakeTimers();
       accountsService.hasTransactionForReference.mockResolvedValue(true);

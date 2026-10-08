@@ -34,8 +34,19 @@ describe('detectCameroonPhone', () => {
   it('treats every +237 number as Cameroon, including new prefixes', () => {
     expect(isCameroonCountryCode('+237640448217')).toBe(true);
     expect(isCameroonCountryCode('00237640448217')).toBe(true);
+    expect(isCameroonCountryCode('+237 640 44 82 17')).toBe(true);
     expect(detectCameroonPhone('+237640448217')?.carrier).toBe('other');
+    expect(detectCameroonPhone('+237 640 44 82 17')?.carrier).toBe('other');
     expect(detectCameroonPhone('640448217')).toBeNull();
+  });
+
+  it('does not treat a blank, Gabon, or embedded 237 number as Cameroon', () => {
+    expect(isCameroonCountryCode(null)).toBe(false);
+    expect(isCameroonCountryCode('')).toBe(false);
+    expect(isCameroonCountryCode('   ')).toBe(false);
+    expect(isCameroonCountryCode('+24106123456')).toBe(false);
+    expect(isCameroonCountryCode('+241237000000')).toBe(false);
+    expect(isCameroonCountryCode('640448217')).toBe(false);
   });
 });
 
