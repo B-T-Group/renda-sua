@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth0 } from '@auth0/auth0-react';
 import { useLocation } from 'react-router-dom';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
+import { isAdminPath } from '../../utils/adminPaths';
 import LoadingPage from '../common/LoadingPage';
 import EmailVerificationPage from '../pages/EmailVerificationPage';
 
@@ -24,9 +25,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
 
   if (!isAuthenticated) {
     // #338 decision 4: admins stay on Auth0 Universal Login (not the in-app code gate).
-    const isAdminRoute =
-      location.pathname.startsWith('/admin/') ||
-      location.pathname.startsWith('/business/dashboard/admin');
+    const isAdminRoute = isAdminPath(location.pathname);
 
     if (isAdminRoute) {
       return (
