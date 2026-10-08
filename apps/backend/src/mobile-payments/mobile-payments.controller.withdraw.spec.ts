@@ -15,6 +15,12 @@ describe('MobilePaymentsController GIVE_CHANGE withdraw gates', () => {
   let giveChangePayoutService: {
     executeGiveChangePayout: jest.Mock;
   };
+  let hasuraUserService: {
+    getUser: jest.Mock;
+  };
+  let transactionAccessService: {
+    canView: jest.Mock;
+  };
 
   beforeEach(() => {
     mobilePaymentsService = {
@@ -34,17 +40,23 @@ describe('MobilePaymentsController GIVE_CHANGE withdraw gates', () => {
         data: { transactionId: 'tx-1' },
       }),
     };
+    hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({ id: 'user-1' }),
+    };
+    transactionAccessService = {
+      canView: jest.fn().mockResolvedValue(true),
+    };
 
     controller = new MobilePaymentsController(
       mobilePaymentsService as never,
       {} as never,
       accountsService as never,
       giveChangePayoutService as never,
-      { getUser: jest.fn().mockResolvedValue({ id: 'user-1' }) } as never,
+      hasuraUserService as never,
       {} as never,
       {} as never,
       {} as never,
-      {} as never
+      transactionAccessService as never
     );
   });
 
@@ -70,6 +82,54 @@ describe('MobilePaymentsController GIVE_CHANGE withdraw gates', () => {
     }
     throw new Error('expected HttpException');
   }
+
+  it('rejects GIVE_CHANGE without an account before calling the provider', async () => {
+    const { accountId: _accountId, ...noAccount } = withdrawRequest;
+
+    const error = await expectHttpError(() =>
+      controller.initiatePayment(ctx, noAccount)
+    );
+
+    expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    expect(error.getResponse()).toEqual(
+      expect.objectContaining({ error: 'ACCOUNT_REQUIRED' })
+    );
+    expect(giveChangePayoutService.executeGiveChangePayout).not.toHaveBeenCalled();
+    expect(mobilePaymentsService.resolveProviderFromRequest).not.toHaveBeenCalled();
+  });
+
+  it('rejects GIVE_CHANGE for an account the caller cannot access', async () => {
+    transactionAccessService.canView.mockResolvedValue(false);
+
+    const error = await expectHttpError(() =>
+      controller.initiatePayment(ctx, withdrawRequest)
+    );
+
+    expect(error.getStatus()).toBe(HttpStatus.NOT_FOUND);
+    expect(error.getResponse()).toEqual(
+      expect.objectContaining({ error: 'ACCOUNT_NOT_FOUND' })
+    );
+    expect(transactionAccessService.canView).toHaveBeenCalledWith(
+      { account_id: 'acct-1' },
+      'user-1'
+    );
+    expect(giveChangePayoutService.executeGiveChangePayout).not.toHaveBeenCalled();
+    expect(accountsService.getAccountBalance).not.toHaveBeenCalled();
+  });
+
+  it('rejects GIVE_CHANGE when the caller cannot be resolved', async () => {
+    hasuraUserService.getUser.mockRejectedValue(new Error('no user'));
+
+    const error = await expectHttpError(() =>
+      controller.initiatePayment(ctx, withdrawRequest)
+    );
+
+    expect(error.getStatus()).toBe(HttpStatus.UNAUTHORIZED);
+    expect(error.getResponse()).toEqual(
+      expect.objectContaining({ error: 'UNAUTHORIZED' })
+    );
+    expect(giveChangePayoutService.executeGiveChangePayout).not.toHaveBeenCalled();
+  });
 
   it('rejects withdrawals below the 150 minimum', async () => {
     const error = await expectHttpError(() =>
@@ -103,7 +163,7 @@ describe('MobilePaymentsController GIVE_CHANGE withdraw gates', () => {
     expect(giveChangePayoutService.executeGiveChangePayout).not.toHaveBeenCalled();
   });
 
-  it('pays out after the destination phone and minimum amount pass', async () => {
+  it('pays out after ownership, destination phone, and minimum amount pass', async () => {
     await expect(
       controller.initiatePayment(ctx, withdrawRequest)
     ).resolves.toEqual({
@@ -111,6 +171,10 @@ describe('MobilePaymentsController GIVE_CHANGE withdraw gates', () => {
       data: expect.objectContaining({ transactionId: 'tx-1' }),
     });
 
+    expect(transactionAccessService.canView).toHaveBeenCalledWith(
+      { account_id: 'acct-1' },
+      'user-1'
+    );
     expect(giveChangePayoutService.executeGiveChangePayout).toHaveBeenCalledWith(
       expect.objectContaining({
         accountId: 'acct-1',
