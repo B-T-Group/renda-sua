@@ -1338,6 +1338,147 @@ describe('SignupService', () => {
         response: { error: 'Signup already completed. Please log in.' },
       });
     });
+
+    it('rounds a phone lockout of 1ms up to 1 minute and does not send an OTP', async () => {
+      lockoutService.isLockedOut.mockResolvedValue(true);
+      lockoutService.getRemainingLockoutMs.mockResolvedValue(1);
+
+      await expect(
+        service.startIdentifierOnlyOtp('', '+237600000001', '1.2.3.4')
+      ).rejects.toMatchObject({
+        status: HttpStatus.TOO_MANY_REQUESTS,
+        response: {
+          success: false,
+          error: 'Too many failed attempts. Try again in 1 minute(s).',
+        },
+      });
+      expect(lockoutService.isLockedOut).toHaveBeenCalledWith(
+        'identifier:phone:+237600000001'
+      );
+      expect(otpSendLimiter.assertCanSend).not.toHaveBeenCalled();
+    });
+
+    it('verifyOtpForAuthFlowV2 records a phone lockout failure', async () => {
+      auth0Service.verifySmsOtp.mockRejectedValue(
+        new HttpException(
+          { success: false, error: 'Invalid or expired code' },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...identifierOnlyAttempt,
+          channel: 'sms',
+          email: null,
+          phone_number: '+237600000001',
+        },
+      });
+
+      await expect(
+        service.verifyOtpForAuthFlowV2('attempt-123', '1234')
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+      expect(lockoutService.recordFailure).toHaveBeenCalledWith(
+        'identifier:phone:+237600000001'
+      );
+    });
+
+    it('verifyOtpForAuthFlowV2 clears the identifier lockout after a correct code', async () => {
+      auth0Service.verifyEmailOtp.mockResolvedValue({
+        access_token: 'access',
+        id_token:
+          'eyJhbGciOiJub25lIn0.' +
+          Buffer.from(
+            JSON.stringify({ sub: 'email|abc', email: 'new@example.com' })
+          ).toString('base64url') +
+          '.',
+        token_type: 'Bearer',
+        expires_in: 3600,
+      });
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: identifierOnlyAttempt,
+      });
+
+      await service.verifyOtpForAuthFlowV2('attempt-123', '1234');
+
+      expect(lockoutService.recordSuccess).toHaveBeenCalledWith(
+        'identifier:email:new@example.com'
+      );
+      expect(lockoutService.recordFailure).not.toHaveBeenCalled();
+    });
+
+    it('does not record lockout when the attempt has no email or phone', async () => {
+      auth0Service.verifyEmailOtp.mockRejectedValue(
+        new HttpException(
+          { success: false, error: 'Invalid or expired code' },
+          HttpStatus.BAD_REQUEST
+        )
+      );
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: {
+          ...identifierOnlyAttempt,
+          email: null,
+          phone_number: null,
+        },
+      });
+
+      await expect(
+        service.verifyOtpForAuthFlowV2('attempt-123', '1234')
+      ).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+      expect(lockoutService.isLockedOut).not.toHaveBeenCalled();
+      expect(lockoutService.recordFailure).not.toHaveBeenCalled();
+    });
+
+    it('replays a finished flow at exactly two minutes and rejects one millisecond later', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-10-08T12:00:00.000Z'));
+      try {
+        hasuraSystemService.executeQuery.mockResolvedValue({
+          signup_attempts_by_pk: completedAttempt('2026-10-08T11:58:00.000Z'),
+        });
+        sessionStore.getSession.mockResolvedValue({
+          userId: 'user-123',
+          auth0AccessToken: 'access',
+          auth0IdToken: 'id',
+        } as any);
+
+        await expect(
+          service.finishSignupAccount(finishInput, 'web')
+        ).resolves.toMatchObject({ sessionId: 'sess-1' });
+
+        hasuraSystemService.executeQuery.mockResolvedValue({
+          signup_attempts_by_pk: completedAttempt('2026-10-08T11:57:59.999Z'),
+        });
+        await expect(
+          service.finishSignupAccount(finishInput, 'web')
+        ).rejects.toMatchObject({
+          status: HttpStatus.CONFLICT,
+          response: { error: 'Signup already completed. Please log in.' },
+        });
+        expect(sessionStore.getSession).toHaveBeenCalledTimes(1);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('rejects a finished flow whose completedAt is missing or not a date', async () => {
+      const missing = completedAttempt('');
+      missing.completion_result.completedAt = undefined as unknown as string;
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: missing,
+      });
+
+      await expect(
+        service.finishSignupAccount(finishInput, 'web')
+      ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        signup_attempts_by_pk: completedAttempt('not-a-date'),
+      });
+      await expect(
+        service.finishSignupAccount(finishInput, 'web')
+      ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(sessionStore.getSession).not.toHaveBeenCalled();
+    });
   });
 
   describe('deprecated endpoints', () => {

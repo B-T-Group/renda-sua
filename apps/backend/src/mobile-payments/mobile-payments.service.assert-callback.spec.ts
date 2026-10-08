@@ -78,4 +78,65 @@ describe('MobilePaymentsService.resolveAdminIntegrationProvider', () => {
       })
     ).toBe('freemopay');
   });
+
+  it('lets a Cameroon country code beat a stored MyPVit rail and the item country', () => {
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '+237 640 44 82 17',
+        provider: 'mypvit',
+        itemCountry: 'GA',
+      })
+    ).toBe('freemopay');
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '00237692168717',
+        provider: 'airtel',
+        itemCountry: 'ga',
+      })
+    ).toBe('freemopay');
+    expect(
+      service.resolveAdminIntegrationProvider('00237692168717', 'mypvit')
+    ).toBe('freemopay');
+  });
+
+  it('keeps a direct MTN or Orange rail ahead of a Cameroon number', () => {
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '+237640448217',
+        provider: 'mtn',
+        itemCountry: 'GA',
+      })
+    ).toBe('mtn');
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '+237692168717',
+        provider: 'orange',
+      })
+    ).toBe('orange');
+  });
+
+  it('uses the item country when the number has no Cameroon country code', () => {
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '692168717',
+        provider: 'mypvit',
+        itemCountry: 'GA',
+      })
+    ).toBe('mypvit');
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '+24106123456',
+        itemCountry: 'CM',
+      })
+    ).toBe('freemopay');
+    expect(service.resolveProviderFromRequest({})).toBe('mypvit');
+  });
+
+  it('sends a local Cameroon mobile to FreemoPay only with no item country', () => {
+    expect(service.getProvider('692168717')).toBe('freemopay');
+    expect(service.getProvider('+24106123456')).toBe('mypvit');
+    expect(
+      service.resolveProviderFromRequest({ customerPhone: '692168717' })
+    ).toBe('freemopay');
+  });
 });
