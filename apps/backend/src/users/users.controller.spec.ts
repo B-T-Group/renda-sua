@@ -394,16 +394,24 @@ describe('UsersController', () => {
       );
     });
 
-    it('rejects invalid phone numbers', async () => {
-      await expect(controller.updateCurrentUserPhone(ctx,{ phoneNumber: '+237123' })).rejects.toThrow(
-        new HttpException(
-          { success: false, error: 'Please enter a valid phone number for the selected country.' },
-          HttpStatus.BAD_REQUEST
-        )
-      );
-      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
-      expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
-    });
+    it.each(['+237123', '+23488888888888'])(
+      'rejects invalid phone number %s with 400 before any lookup or save',
+      async (phoneNumber) => {
+        await expect(
+          controller.updateCurrentUserPhone(ctx, { phoneNumber })
+        ).rejects.toThrow(
+          new HttpException(
+            {
+              success: false,
+              error: 'Please enter a valid phone number for the selected country.',
+            },
+            HttpStatus.BAD_REQUEST
+          )
+        );
+        expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+        expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
+      }
+    );
   });
 
   describe('updateCurrentUserEmail', () => {

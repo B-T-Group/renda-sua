@@ -2417,7 +2417,6 @@
     "phoneNumber": "Phone Number",
     "phonePlaceholder": "Phone number",
     "phoneCountry": "Country",
-    "phoneInvalid": "Please enter a valid phone number",
     "loginMethodFooterNote": "You can change your mind anytime—we only use your choice to start the right sign-in flow.",
     "loginWithOtp": "Login with one-time password",
     "loginWithOtpEmail": "Login with one-time password (email)",

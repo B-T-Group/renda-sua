@@ -74,7 +74,6 @@ export function AddPhoneBanner() {
     try {
       await apiClient.post('/users/me/phone', { phoneNumber: phoneE164 });
       setOpen(false);
-      setPhoneCountry('');
       setPhoneNationalNumber('');
       setDismissed(true);
       await profile?.refetch();
@@ -113,7 +112,11 @@ export function AddPhoneBanner() {
             <Button
               size="small"
               variant="outlined"
-              onClick={() => setOpen(true)}
+              color="inherit"
+              onClick={() => {
+                setError(null);
+                setOpen(true);
+              }}
             >
               {t('auth.addPhoneBanner.cta', 'Add Phone')}
             </Button>
@@ -153,7 +156,10 @@ export function AddPhoneBanner() {
               onNationalNumberChange={setPhoneNationalNumber}
               countryLabel={t('auth.phoneCountry', 'Country')}
               phoneLabel={t('auth.phoneNumber', 'Phone Number')}
-              invalidPhoneMessage={t('auth.phoneInvalid', 'Please enter a valid phone number')}
+              invalidPhoneMessage={t(
+                'auth.addPhoneBanner.phoneInvalid',
+                'Please enter a valid phone number for the selected country.'
+              )}
               isPhoneValid={isPhoneValid}
               disabled={busy}
             />

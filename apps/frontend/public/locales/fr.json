@@ -2145,7 +2145,6 @@
     "phoneNumber": "Numéro de téléphone",
     "phonePlaceholder": "Numéro de téléphone",
     "phoneCountry": "Pays",
-    "phoneInvalid": "Veuillez saisir un numéro de téléphone valide",
     "loginMethodFooterNote": "Vous pouvez changer d’avis à tout moment—ce choix sert uniquement à lancer la bonne méthode de connexion.",
     "loginWithOtp": "Se connecter avec un mot de passe à usage unique",
     "loginWithOtpEmail": "Se connecter avec un mot de passe à usage unique (email)",
