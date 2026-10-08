@@ -16,6 +16,7 @@ describe('isUuid', () => {
     expect(isUuid('email|6a95505255ad3b18af9e159f')).toBe(false);
     expect(isUuid('auth0|abc123')).toBe(false);
     expect(isUuid('auth0|test-phone|+24174000000')).toBe(false);
+    expect(isUuid('HTTPS')).toBe(false);
   });
 });
 

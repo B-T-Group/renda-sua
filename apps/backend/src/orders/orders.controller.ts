@@ -55,6 +55,7 @@ import { OrdersService } from './orders.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { isActivePersona } from '../users/persona.util';
+import { requireUuid } from '../common/uuid.util';
 
 export interface UpdateOrderStatusRequest {
   status: string;
@@ -1407,10 +1408,157 @@ export class OrdersController {
     return this.ordersService.checkOrderClaimAvailability(orderId, platform);
   }
 
+  // Must stay above @Get(':id'): Nest matches routes in declaration order, so
+  // a later single-segment GET would be captured as an order id.
+  @Get('cancellation-fee')
+  @ApiOperation({
+    summary: 'Get cancellation fee (percentage of item subtotal) for an order or country',
+    description:
+      'Cancellation fee is `cancellation_fee_percent`% of the item subtotal after discounts (excludes delivery fee and tax). With `orderId` the exact fee for that order is returned (0 for pay-at-delivery / pay-at-pickup orders); with only `country` the configured percent is returned and `cancellationFee` is null.',
+  })
+  @ApiQuery({
+    name: 'country',
+    required: true,
+    type: String,
+    description: 'Country code (ISO 3166-1 alpha-2)',
+    example: 'GA',
+  })
+  @ApiQuery({
+    name: 'orderId',
+    required: false,
+    type: String,
+    description: 'Order to compute the exact fee for (client or business owner only)',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cancellation fee retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: true },
+        cancellationFee: { type: 'number', nullable: true, example: 3000 },
+        cancellationFeePercent: { type: 'number', example: 30 },
+        currency: { type: 'string', example: 'XAF' },
+        country: { type: 'string', example: 'GA' },
+        message: {
+          type: 'string',
+          example: 'Cancellation fee retrieved successfully',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description:
+      'Cancellation fee configuration not found for the specified country',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: {
+          type: 'string',
+          example: 'Cancellation fee configuration not found for country GA',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid country code provided',
+    schema: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean', example: false },
+        error: { type: 'string', example: 'Country code is required' },
+      },
+    },
+  })
+  async getCancellationFee(
+    @Query('country') country: string,
+    @Query('orderId') orderId?: string
+  ) {
+    try {
+      if (!country && !orderId) {
+        throw new HttpException(
+          'Country code is required',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      if (orderId) {
+        const preview = await this.ordersService.getCancellationPreview(orderId);
+        return {
+          success: true,
+          cancellationFee: preview.cancellationFee,
+          cancellationFeePercent: preview.cancellationFeePercent ?? 0,
+          merchantShare: preview.merchantShare,
+          platformShare: preview.platformShare,
+          refundAmount: preview.refundAmount,
+          currency: preview.refundCurrency,
+          country,
+          message: 'Cancellation fee retrieved successfully',
+        };
+      }
+
+      const config = await this.configurationsService.getConfigurationByKey(
+        'cancellation_fee_percent',
+        country
+      );
+      if (!config || config.number_value == null) {
+        this.logger.error(
+          `cancellation_fee_config_missing key=cancellation_fee_percent country=${country}`
+        );
+        throw new HttpException(
+          `Cancellation fee percent configuration not found for country ${country}`,
+          HttpStatus.NOT_FOUND
+        );
+      }
+
+      const currencyMap: Record<string, string> = {
+        GA: 'XAF',
+        CM: 'XAF',
+        CA: 'CAD',
+        US: 'USD',
+      };
+
+      return {
+        success: true,
+        cancellationFee: null,
+        cancellationFeePercent: Number(config.number_value),
+        currency: currencyMap[country] || 'XAF',
+        country,
+        message: 'Cancellation fee percent retrieved successfully',
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      const errorMessage = error.message || 'Internal server error';
+      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
+
+      if (errorMessage.includes('not found')) {
+        statusCode = HttpStatus.NOT_FOUND;
+      } else if (errorMessage.includes('required')) {
+        statusCode = HttpStatus.BAD_REQUEST;
+      }
+
+      throw new HttpException(
+        {
+          success: false,
+          error: errorMessage,
+        },
+        statusCode
+      );
+    }
+  }
+
   @Get(':id')
   async getOrderById(@Param('id') orderId: string) {
     try {
-      const order = await this.ordersService.getOrderById(orderId);
+      const order = await this.ordersService.getOrderById(
+        requireUuid(orderId, 'id')
+      );
       return {
         success: true,
         order,
@@ -2048,149 +2196,6 @@ export class OrdersController {
         errorMessage.includes('access')
       ) {
         statusCode = HttpStatus.FORBIDDEN;
-      }
-
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        statusCode
-      );
-    }
-  }
-
-  @Get('cancellation-fee')
-  @ApiOperation({
-    summary: 'Get cancellation fee (percentage of item subtotal) for an order or country',
-    description:
-      'Cancellation fee is `cancellation_fee_percent`% of the item subtotal after discounts (excludes delivery fee and tax). With `orderId` the exact fee for that order is returned (0 for pay-at-delivery / pay-at-pickup orders); with only `country` the configured percent is returned and `cancellationFee` is null.',
-  })
-  @ApiQuery({
-    name: 'country',
-    required: true,
-    type: String,
-    description: 'Country code (ISO 3166-1 alpha-2)',
-    example: 'GA',
-  })
-  @ApiQuery({
-    name: 'orderId',
-    required: false,
-    type: String,
-    description: 'Order to compute the exact fee for (client or business owner only)',
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Cancellation fee retrieved successfully',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: true },
-        cancellationFee: { type: 'number', nullable: true, example: 3000 },
-        cancellationFeePercent: { type: 'number', example: 30 },
-        currency: { type: 'string', example: 'XAF' },
-        country: { type: 'string', example: 'GA' },
-        message: {
-          type: 'string',
-          example: 'Cancellation fee retrieved successfully',
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 404,
-    description:
-      'Cancellation fee configuration not found for the specified country',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: false },
-        error: {
-          type: 'string',
-          example: 'Cancellation fee configuration not found for country GA',
-        },
-      },
-    },
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid country code provided',
-    schema: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean', example: false },
-        error: { type: 'string', example: 'Country code is required' },
-      },
-    },
-  })
-  async getCancellationFee(
-    @Query('country') country: string,
-    @Query('orderId') orderId?: string
-  ) {
-    try {
-      if (!country && !orderId) {
-        throw new HttpException(
-          'Country code is required',
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
-      if (orderId) {
-        const preview = await this.ordersService.getCancellationPreview(orderId);
-        return {
-          success: true,
-          cancellationFee: preview.cancellationFee,
-          cancellationFeePercent: preview.cancellationFeePercent ?? 0,
-          merchantShare: preview.merchantShare,
-          platformShare: preview.platformShare,
-          refundAmount: preview.refundAmount,
-          currency: preview.refundCurrency,
-          country,
-          message: 'Cancellation fee retrieved successfully',
-        };
-      }
-
-      const config = await this.configurationsService.getConfigurationByKey(
-        'cancellation_fee_percent',
-        country
-      );
-      if (!config || config.number_value == null) {
-        this.logger.error(
-          `cancellation_fee_config_missing key=cancellation_fee_percent country=${country}`
-        );
-        throw new HttpException(
-          `Cancellation fee percent configuration not found for country ${country}`,
-          HttpStatus.NOT_FOUND
-        );
-      }
-
-      const currencyMap: Record<string, string> = {
-        GA: 'XAF',
-        CM: 'XAF',
-        CA: 'CAD',
-        US: 'USD',
-      };
-
-      return {
-        success: true,
-        cancellationFee: null,
-        cancellationFeePercent: Number(config.number_value),
-        currency: currencyMap[country] || 'XAF',
-        country,
-        message: 'Cancellation fee percent retrieved successfully',
-      };
-    } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      const errorMessage = error.message || 'Internal server error';
-      let statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-
-      if (errorMessage.includes('not found')) {
-        statusCode = HttpStatus.NOT_FOUND;
-      } else if (errorMessage.includes('required')) {
-        statusCode = HttpStatus.BAD_REQUEST;
       }
 
       throw new HttpException(
