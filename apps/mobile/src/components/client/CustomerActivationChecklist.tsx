@@ -69,16 +69,18 @@ export function CustomerActivationChecklist({
       },
       {
         id: 'address',
-        label: t('ftue.checklist.customerAddress', 'Save a delivery address'),
+        label: t(
+          'ftue.checklist.customerAddress',
+          'Add an address for faster delivery'
+        ),
         done: hasAddress,
-        current: hasBrowsed && !hasAddress,
         onPress: onAddAddress,
       },
       {
         id: 'phone',
         label: t('ftue.checklist.customerPhone', 'Verify your phone'),
         done: hasPhoneVerified,
-        current: hasAddress && !hasPhoneVerified,
+        current: hasBrowsed && !hasPhoneVerified,
         onPress: onVerifyPhone,
       },
       {

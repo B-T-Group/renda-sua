@@ -12,9 +12,20 @@ export interface PlaceOrderAddressStepProps {
   onChange: (v: DeliveryAddressFormValue) => void;
   saving: boolean;
   onContinue: () => void;
+  locating?: boolean;
+  locationDenied?: boolean;
+  onUseCurrentLocation?: () => void;
 }
 
-export function PlaceOrderAddressStep({ form, onChange, saving, onContinue }: PlaceOrderAddressStepProps) {
+export function PlaceOrderAddressStep({
+  form,
+  onChange,
+  saving,
+  onContinue,
+  locating = false,
+  locationDenied = false,
+  onUseCurrentLocation,
+}: PlaceOrderAddressStepProps) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
@@ -35,8 +46,27 @@ export function PlaceOrderAddressStep({ form, onChange, saving, onContinue }: Pl
           'We pre-filled country and city from this listing. Add your street address to continue.'
         )}
       </Text>
-      <AddressCapture value={form} onChange={onChange} disabled={saving} context="delivery" />
-      <Button mode="contained" onPress={onContinue} loading={saving} disabled={saving} style={{ marginTop: spacing.lg }}>
+      <AddressCapture value={form} onChange={onChange} disabled={saving || locating} context="delivery" />
+      {onUseCurrentLocation && !locationDenied ? (
+        <Button
+          mode="contained"
+          icon="crosshairs-gps"
+          onPress={onUseCurrentLocation}
+          loading={locating}
+          disabled={saving || locating}
+          style={{ marginTop: spacing.lg }}
+        >
+          {locating
+            ? t('orders.currentLocationResolving', 'Finding your current location…')
+            : t('orders.useCurrentLocation', 'Use my current location')}
+        </Button>
+      ) : null}
+      {locationDenied ? (
+        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.md }}>
+          {t('orders.currentLocationDenied', 'Location access was denied')}
+        </Text>
+      ) : null}
+      <Button mode="outlined" onPress={onContinue} loading={saving} disabled={saving || locating} style={{ marginTop: spacing.md }}>
         {t('client.placeOrder.wizard.continue', 'Continue')}
       </Button>
     </ScrollView>

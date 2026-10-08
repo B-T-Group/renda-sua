@@ -20,13 +20,41 @@ import {
 import { AuthGuard } from '../auth/auth.guard';
 import type { CreateAddressDto, UpdateAddressDto } from './addresses.service';
 import { AddressesService } from './addresses.service';
+import { CurrentLocationDto } from './current-location-address.dto';
+import { CurrentLocationAddressService } from './current-location-address.service';
 
 @ApiTags('addresses')
 @Controller('addresses')
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class AddressesController {
-  constructor(private readonly addressesService: AddressesService) {}
+  constructor(
+    private readonly addressesService: AddressesService,
+    private readonly currentLocationAddressService: CurrentLocationAddressService
+  ) {}
+
+  @Post('current-location')
+  @ApiOperation({
+    summary: 'Reuse or create an address from the device location',
+  })
+  @ApiResponse({ status: 201, description: 'Current location address resolved' })
+  @ApiResponse({ status: 400, description: 'Invalid coordinates or geocode failed' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async resolveCurrentLocation(@Body() body: CurrentLocationDto) {
+    try {
+      const result = await this.currentLocationAddressService.resolve(
+        Number(body?.latitude),
+        Number(body?.longitude)
+      );
+      return { success: true, data: result };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, error: error.message },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new address' })

@@ -1,4 +1,4 @@
-import { ArrowBack, Lock } from '@mui/icons-material';
+import { ArrowBack, Lock, MyLocation } from '@mui/icons-material';
 import {
   payAfterCopyVariantForPreflight,
   resolveCreatedPayAfter,
@@ -37,6 +37,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
+import { useCurrentLocationAddress } from '../../hooks/useCurrentLocationAddress';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useCheckout } from '../../hooks/useCheckout';
 import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
@@ -66,6 +67,7 @@ import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import PlacingOrderOverlay from '../common/PlacingOrderOverlay';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
 import DiasporaCheckoutBanner from '../checkout/DiasporaCheckoutBanner';
+import { DeliveryAddressEmptyState } from '../checkout/DeliveryAddressEmptyState';
 import PayerChargeSummary from '../checkout/PayerChargeSummary';
 import RecipientDetailsSection from '../checkout/RecipientDetailsSection';
 import CheckoutProgressStepper from '../common/CheckoutProgressStepper';
@@ -693,11 +695,44 @@ const CheckoutPage: React.FC = () => {
     addresses,
     loading: addressesLoading,
     addAddress,
+    fetchAddresses,
   } = useAddressManager({
     entityType: 'client',
     entityId: profile?.client?.id || '',
     onAddressesChanged: refetchProfile,
   });
+
+  const { status: currentLocationStatus, resolve: resolveCurrentLocation } =
+    useCurrentLocationAddress();
+  const autoLocated = useRef(false);
+  const addressLoadStarted = useRef(false);
+
+  const applyCurrentLocation = useCallback(async () => {
+    const id = await resolveCurrentLocation();
+    if (!id) return;
+    await fetchAddresses();
+    setSelectedAddressId(id);
+  }, [fetchAddresses, resolveCurrentLocation]);
+
+  useEffect(() => {
+    if (addressesLoading) addressLoadStarted.current = true;
+  }, [addressesLoading]);
+
+  useEffect(() => {
+    if (fulfillment !== 'delivery' || sendingToSomeoneElse) return;
+    if (!addressLoadStarted.current || addressesLoading) return;
+    if (addresses.length > 0 || selectedAddressId) return;
+    if (autoLocated.current) return;
+    autoLocated.current = true;
+    void applyCurrentLocation();
+  }, [
+    addresses.length,
+    addressesLoading,
+    applyCurrentLocation,
+    fulfillment,
+    selectedAddressId,
+    sendingToSomeoneElse,
+  ]);
 
   // Get fast delivery configuration
   const selectedAddress = addresses.find(
@@ -1474,6 +1509,12 @@ const CheckoutPage: React.FC = () => {
 
                     {addressesLoading ? (
                       <Skeleton variant="rectangular" height={56} />
+                    ) : addresses.length === 0 ? (
+                      <DeliveryAddressEmptyState
+                        status={currentLocationStatus}
+                        onUseCurrentLocation={() => void applyCurrentLocation()}
+                        onAddAddress={handleOpenAddressDialog}
+                      />
                     ) : (
                       <FormControl fullWidth>
                         <InputLabel>
@@ -1506,13 +1547,48 @@ const CheckoutPage: React.FC = () => {
                       </FormControl>
                     )}
 
-                    <Button
-                      variant="outlined"
-                      onClick={handleOpenAddressDialog}
-                      sx={{ mt: 1 }}
-                    >
-                      {t('checkout.addNewAddress', 'Add New Address')}
-                    </Button>
+                    {addresses.length > 0 ? (
+                      <>
+                        <Button
+                          variant="outlined"
+                          startIcon={<MyLocation />}
+                          onClick={() => void applyCurrentLocation()}
+                          disabled={currentLocationStatus === 'resolving'}
+                          sx={{ mt: 1, mr: 1 }}
+                        >
+                          {currentLocationStatus === 'resolving'
+                            ? t(
+                                'orders.currentLocationResolving',
+                                'Finding your current location…'
+                              )
+                            : t(
+                                'orders.useCurrentLocation',
+                                'Use my current location'
+                              )}
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          onClick={handleOpenAddressDialog}
+                          sx={{ mt: 1 }}
+                        >
+                          {t('checkout.addNewAddress', 'Add New Address')}
+                        </Button>
+                      </>
+                    ) : null}
+                    {currentLocationStatus === 'denied' ||
+                    currentLocationStatus === 'failed' ? (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
+                        {currentLocationStatus === 'denied'
+                          ? t(
+                              'orders.currentLocationDenied',
+                              'Location access was denied'
+                            )
+                          : t(
+                              'orders.currentLocationFailed',
+                              'Could not use your current location. Add an address instead.'
+                            )}
+                      </Typography>
+                    ) : null}
                   </Box>
 
                   {/* Fast Delivery Option */}

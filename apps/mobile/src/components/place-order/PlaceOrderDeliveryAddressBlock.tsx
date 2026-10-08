@@ -90,6 +90,8 @@ export interface PlaceOrderDeliveryAddressBlockProps {
   helperText?: string;
   emptyMessage?: string;
   addCta?: string;
+  currentLocationStatus?: 'idle' | 'resolving' | 'denied' | 'failed' | 'success';
+  onUseCurrentLocation?: () => void;
 }
 
 export function PlaceOrderDeliveryAddressBlock({
@@ -105,6 +107,8 @@ export function PlaceOrderDeliveryAddressBlock({
   helperText,
   emptyMessage,
   addCta,
+  currentLocationStatus = 'idle',
+  onUseCurrentLocation,
 }: PlaceOrderDeliveryAddressBlockProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
@@ -166,8 +170,28 @@ export function PlaceOrderDeliveryAddressBlock({
       {!loading && !error && addresses.length === 0 ? (
         <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
           <Text variant="bodyMedium" style={{ color: colors.text.secondary, lineHeight: 22 }}>
-            {emptyCopy}
+            {currentLocationStatus === 'resolving'
+              ? t('orders.currentLocationResolving', 'Finding your current location…')
+              : currentLocationStatus === 'denied'
+                ? t('orders.currentLocationDenied', 'Location access was denied')
+                : currentLocationStatus === 'failed'
+                  ? t(
+                      'orders.currentLocationFailed',
+                      'Could not use your current location. Add an address instead.'
+                    )
+                  : emptyCopy}
           </Text>
+          {onUseCurrentLocation && currentLocationStatus !== 'denied' ? (
+            <Button
+              mode="contained"
+              icon="crosshairs-gps"
+              loading={currentLocationStatus === 'resolving'}
+              disabled={currentLocationStatus === 'resolving'}
+              onPress={onUseCurrentLocation}
+            >
+              {t('orders.useCurrentLocation', 'Use my current location')}
+            </Button>
+          ) : null}
           <Button mode="contained-tonal" icon="map-marker-plus" onPress={onAddAddress}>
             {addLabel}
           </Button>
@@ -185,6 +209,20 @@ export function PlaceOrderDeliveryAddressBlock({
               showIncompleteWarning={warnIncomplete}
             />
           ))}
+          {onUseCurrentLocation ? (
+            <Button
+              mode="text"
+              compact
+              icon="crosshairs-gps"
+              onPress={onUseCurrentLocation}
+              disabled={currentLocationStatus === 'resolving'}
+              style={{ alignSelf: 'flex-start' }}
+            >
+              {currentLocationStatus === 'resolving'
+                ? t('orders.currentLocationResolving', 'Finding your current location…')
+                : t('orders.useCurrentLocation', 'Use my current location')}
+            </Button>
+          ) : null}
           <Button mode="text" compact icon="map-marker-plus" onPress={onAddAddress} style={{ alignSelf: 'flex-start' }}>
             {addLabel}
           </Button>

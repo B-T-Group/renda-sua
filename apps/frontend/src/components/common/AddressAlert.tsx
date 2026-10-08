@@ -142,10 +142,13 @@ const AddressAlert: React.FC<AddressAlertProps> = ({
         }}
       >
         <AlertTitle sx={{ fontWeight: 600 }}>
-          {t('addresses.missingAddressTitle')}
+          {t('addresses.missingAddressTitle', 'Add an address for faster delivery')}
         </AlertTitle>
         <Typography variant="body2" sx={{ mt: 0.5 }}>
-          {t('addresses.missingAddressMessage')}
+          {t(
+            'addresses.missingAddressMessage',
+            'An address is optional. Add one so delivery checkout is faster next time.'
+          )}
         </Typography>
       </Alert>
 

@@ -155,6 +155,18 @@ describe('OrdersService', () => {
     item_variants: [],
   });
 
+  const pickupInventoryFixture = (id = 'inventory-pickup') => ({
+    ...shippingInventoryFixture(),
+    id,
+    selling_price: 10,
+    item: {
+      ...shippingItemFixture(),
+      id: `item-${id}`,
+      pay_at_pickup_enabled: true,
+      shipping_enabled: false,
+    },
+  });
+
   const mockReadyOrder = {
     ...mockOrder,
     current_status: 'ready_for_pickup',
@@ -608,6 +620,76 @@ describe('OrdersService', () => {
           firstOrderDeliveryFeePromo: false,
           firstOrderBaseDeliveryDiscountAmount: 0,
         })
+      );
+    });
+
+    async function placePickup(items: Array<{ business_inventory_id: string; quantity: number }>, inventories: any[]) {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        available_balance: 100,
+      } as any);
+      jest.spyOn(service as any, 'updateReservedQuantities').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'triggerCommerceInventoryCommit').mockResolvedValue(undefined);
+      jest.spyOn(service as any, 'requireOrderDetailsByNumber').mockResolvedValue({
+        id: 'order-pickup',
+        order_number: '12345678',
+      });
+      jest.spyOn(service as any, 'finalizeClientOrderPayment').mockResolvedValue(undefined);
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ business_inventory: inventories })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      hasuraSystemService.executeMutation
+        .mockResolvedValueOnce({
+          insert_orders_one: {
+            id: 'order-pickup',
+            order_number: '12345678',
+            payment_source: 'wallet',
+          },
+        })
+        .mockResolvedValueOnce({ affected_rows: 1 });
+      return service.createOrder({
+        fulfillment_method: 'pickup',
+        payment_timing: 'pay_now',
+        phone_number: '+14165550123',
+        items,
+      });
+    }
+
+    it('places a pickup order without a delivery address', async () => {
+      await placePickup(
+        [{ business_inventory_id: 'inventory-pickup', quantity: 1 }],
+        [pickupInventoryFixture()]
+      );
+
+      expect(hasuraUserService.getUserAddressById).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ deliveryAddressId: null })
+      );
+    });
+
+    it('places a pickup cart without a delivery address', async () => {
+      await placePickup(
+        [
+          { business_inventory_id: 'inventory-pickup-a', quantity: 1 },
+          { business_inventory_id: 'inventory-pickup-b', quantity: 2 },
+        ],
+        [
+          pickupInventoryFixture('inventory-pickup-a'),
+          pickupInventoryFixture('inventory-pickup-b'),
+        ]
+      );
+
+      expect(hasuraUserService.getUserAddressById).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('mutation CreateOrderWithItems'),
+        expect.objectContaining({ deliveryAddressId: null })
       );
     });
 
