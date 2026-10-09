@@ -33,6 +33,8 @@ export type OrderStatusUpdateOptions = {
    * concurrent cancel wins.
    */
   expectedFromStatus?: string;
+  /** Invoked when current_status already equals the requested status. */
+  onSameStatusReplay?: () => void;
 };
 
 @Injectable()
@@ -177,8 +179,12 @@ export class OrderStatusService {
         isBusinessOwner
       );
     } else if (!validTransitions.includes(newStatus)) {
-      throw new Error(
-        `Invalid status transition from ${order.current_status} to ${newStatus}`
+      const replay = this.replaySameStatus(order, newStatus, options);
+      if (replay) return replay;
+      this.assertValidStatusTransition(
+        order.current_status,
+        newStatus,
+        validTransitions
       );
     }
 
@@ -416,7 +422,34 @@ export class OrderStatusService {
     );
   }
 
-  /** Cancel is never a generic status transition — use POST /orders/cancel. */
+  /**
+   * Retry / double-submit of the same status is a no-op (except cancel, which
+   * must 409 so only one request runs refund and inventory side effects).
+   */
+  private replaySameStatus(
+    order: { id: string; current_status: string },
+    newStatus: string,
+    options?: OrderStatusUpdateOptions
+  ): { id: string; current_status: string } | null {
+    if (newStatus === 'cancelled') return null;
+    if (order.current_status !== newStatus) return null;
+    this.logger.log(`Order ${order.id} already ${newStatus}; skipping transition`);
+    options?.onSameStatusReplay?.();
+    return order;
+  }
+
+  private assertValidStatusTransition(
+    currentStatus: string,
+    newStatus: string,
+    validTransitions: string[]
+  ): void {
+    if (validTransitions.includes(newStatus)) return;
+    throw new HttpException(
+      `Invalid status transition from ${currentStatus} to ${newStatus}`,
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
   /**
    * cancelled → cancelled is never a real transition: a concurrent cancel
    * already won. Also reject when the order moved off the status the caller
