@@ -12,6 +12,8 @@ import {
 const RELEASE_SCRIPT =
   'if redis.call("get", KEYS[1]) == ARGV[1] then return redis.call("del", KEYS[1]) else return 0 end';
 const POLL_MS = 50;
+/** After a failed connect, don't redial (and stall callers) for this long. */
+const CONNECT_BACKOFF_MS = 30_000;
 
 /**
  * Small mutex: `SET key token NX PX ttl` on Redis (shared by every backend instance),
@@ -24,6 +26,7 @@ export class DistributedLockService implements OnModuleDestroy {
   private readonly logger = new Logger(DistributedLockService.name);
   private client: RedisClientType | null = null;
   private connecting: Promise<void> | null = null;
+  private lastConnectFailureAt = 0;
   private readonly local = new Map<string, { token: string; expiresAt: number }>();
 
   constructor(private readonly configService: ConfigService<Configuration>) {}
@@ -103,7 +106,8 @@ export class DistributedLockService implements OnModuleDestroy {
     if (this.client?.isReady) return this.client;
     const config = this.configService.get('redis', { infer: true });
     if (!config?.host) return null;
-    if (!this.client) {
+    const backingOff = Date.now() - this.lastConnectFailureAt < CONNECT_BACKOFF_MS;
+    if (!this.client && !backingOff) {
       this.connecting ??= this.connect(config).finally(() => {
         this.connecting = null;
       });
@@ -124,6 +128,7 @@ export class DistributedLockService implements OnModuleDestroy {
       this.client = client;
     } catch (error) {
       await client.quit().catch(() => undefined);
+      this.lastConnectFailureAt = Date.now();
       this.warn(error);
     }
   }
