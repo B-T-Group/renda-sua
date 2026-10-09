@@ -7,18 +7,20 @@
  *
  * - Email: the exact test domain (default `rendasua-test.com`), or an explicit
  *   entry in AUTH0_TEST_EMAIL_ALLOWLIST.
- * - Phone: ONLY numbers listed in AUTH0_TEST_PHONE_ALLOWLIST. There is no
- *   suffix rule any more: "any number ending in 0000" matched real accounts.
+ * - Phone: digits ending in AUTH0_TEST_PHONE_SUFFIX (default `0000`), or an
+ *   exact entry in AUTH0_TEST_PHONE_ALLOWLIST. Off entirely in production.
  * - The code must be exactly TEST_USER_OTP_CODE; any other code is rejected.
  * - Never active when NODE_ENV or DEPLOYMENT_ENV is `production`, whatever
  *   AUTH0_TEST_USERS_ENABLED says.
  */
 export const TEST_USER_OTP_CODE = '0000';
+export const DEFAULT_TEST_PHONE_SUFFIX = '0000';
 
 export interface TestUserMatchConfig {
   emailDomain: string;
   emailAllowlist: string[];
   phoneAllowlist: string[];
+  phoneSuffix: string;
 }
 
 type EnvLike = Record<string, string | undefined>;
@@ -68,9 +70,16 @@ export function matchesTestPhone(
 ): boolean {
   const digits = normalizeTestPhone(phone);
   if (!digits) return false;
-  return config.phoneAllowlist.some(
+  const allowlisted = config.phoneAllowlist.some(
     (entry) => normalizeTestPhone(entry) === digits
   );
+  return allowlisted || matchesTestPhoneSuffix(digits, config.phoneSuffix);
+}
+
+function matchesTestPhoneSuffix(digits: string, suffix: string): boolean {
+  const needle = normalizeTestPhone(suffix);
+  if (!needle || digits.length <= needle.length) return false;
+  return digits.endsWith(needle);
 }
 
 export function isValidTestOtp(otp: string | null | undefined): boolean {

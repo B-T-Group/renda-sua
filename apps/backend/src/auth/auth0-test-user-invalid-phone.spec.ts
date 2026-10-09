@@ -26,6 +26,7 @@ describe('Auth0Service.ensureTestUser invalid phone', () => {
       emailDomain: 'test.rendasua.com',
       emailAllowlist: [],
       phoneAllowlist: ['+10000000000', '+15555555555'],
+      phoneSuffix: '0000',
       password: 'TestPassword1!',
       emailConnection: 'email',
       phoneConnection: 'sms',

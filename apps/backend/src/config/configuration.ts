@@ -1,4 +1,5 @@
 import {
+  DEFAULT_TEST_PHONE_SUFFIX,
   isProductionRuntime,
   parseTestAllowlist,
 } from '../auth/test-user-bypass.util';
@@ -116,8 +117,10 @@ export interface Auth0TestUsersConfig {
   emailDomain: string;
   /** Extra exact test emails outside the test domain (AUTH0_TEST_EMAIL_ALLOWLIST). */
   emailAllowlist: string[];
-  /** The ONLY phones that may use the test bypass (AUTH0_TEST_PHONE_ALLOWLIST). */
+  /** Extra exact test phones besides the suffix rule (AUTH0_TEST_PHONE_ALLOWLIST). */
   phoneAllowlist: string[];
+  /** Digit suffix for test phones (AUTH0_TEST_PHONE_SUFFIX, default `0000`). */
+  phoneSuffix: string;
 }
 
 export interface Auth0Config {
@@ -1045,8 +1048,9 @@ export default (): Configuration => {
         password: process.env.AUTH0_TEST_USER_PASSWORD || '',
         emailDomain: process.env.AUTH0_TEST_EMAIL_DOMAIN || 'rendasua-test.com',
         emailAllowlist: parseTestAllowlist(process.env.AUTH0_TEST_EMAIL_ALLOWLIST),
-        // No suffix rule: only explicitly listed phones (exact match) qualify.
         phoneAllowlist: parseTestAllowlist(process.env.AUTH0_TEST_PHONE_ALLOWLIST),
+        phoneSuffix:
+          process.env.AUTH0_TEST_PHONE_SUFFIX || DEFAULT_TEST_PHONE_SUFFIX,
       },
     },
     googleCache: {
