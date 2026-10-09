@@ -115,16 +115,16 @@ def get_commission_configs(
         return CommissionConfig(
             rendasua_item_commission_percentage=rendasua_item_commission_percentage,
             unverified_agent_base_delivery_commission=config_map.get(
-                "unverified_agent_base_delivery_commission", 50.0
+                "unverified_agent_base_delivery_commission", 80.0
             ),
             verified_agent_base_delivery_commission=config_map.get(
-                "verified_agent_base_delivery_commission", 0.0
+                "verified_agent_base_delivery_commission", 80.0
             ),
             unverified_agent_per_km_delivery_commission=config_map.get(
                 "unverified_agent_per_km_delivery_commission", 80.0
             ),
             verified_agent_per_km_delivery_commission=config_map.get(
-                "verified_agent_per_km_delivery_commission", 20.0
+                "verified_agent_per_km_delivery_commission", 80.0
             ),
         )
 
@@ -132,10 +132,10 @@ def get_commission_configs(
         log_error("Error fetching commission configs", error=e)
         return CommissionConfig(
             rendasua_item_commission_percentage=get_commission_for_business_account_type(),
-            unverified_agent_base_delivery_commission=50.0,
-            verified_agent_base_delivery_commission=0.0,
+            unverified_agent_base_delivery_commission=80.0,
+            verified_agent_base_delivery_commission=80.0,
             unverified_agent_per_km_delivery_commission=80.0,
-            verified_agent_per_km_delivery_commission=20.0,
+            verified_agent_per_km_delivery_commission=80.0,
         )
 
 
