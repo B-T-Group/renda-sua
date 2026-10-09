@@ -1,48 +1,11 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import type { GeocodingResult } from '../google/google-distance.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { AddressResponse } from './addresses.service';
 import { AddressesService } from './addresses.service';
 import { haversineMeters } from './haversine';
 
 const REUSE_WITHIN_METERS = 75;
-
-const CLIENT_ADDRESSES_WITH_COORDS = `
-  query ClientAddressesWithCoords {
-    client_addresses(
-      where: {
-        address: {
-          status: { _eq: active }
-          latitude: { _is_null: false }
-          longitude: { _is_null: false }
-        }
-      }
-    ) {
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-        is_primary
-        address_type
-        latitude
-        longitude
-        instructions
-        created_at
-        updated_at
-        status
-      }
-    }
-  }
-`;
-
-interface ClientAddressRow {
-  address: AddressResponse;
-}
 
 export interface CurrentLocationResult {
   address: AddressResponse;
@@ -52,7 +15,6 @@ export interface CurrentLocationResult {
 @Injectable()
 export class CurrentLocationAddressService {
   constructor(
-    private readonly hasuraUserService: HasuraUserService,
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly addressesService: AddressesService
   ) {}
@@ -72,7 +34,11 @@ export class CurrentLocationAddressService {
     const lngOk = Number.isFinite(longitude) && longitude >= -180 && longitude <= 180;
     if (latOk && lngOk) return;
     throw new HttpException(
-      { success: false, error: 'latitude and longitude are required' },
+      {
+        success: false,
+        error: 'latitude and longitude are required',
+        message: 'latitude and longitude are required',
+      },
       HttpStatus.BAD_REQUEST
     );
   }
@@ -81,14 +47,10 @@ export class CurrentLocationAddressService {
     latitude: number,
     longitude: number
   ): Promise<AddressResponse | null> {
-    const result = await this.hasuraUserService.executeQuery<{
-      client_addresses: ClientAddressRow[];
-    }>(CLIENT_ADDRESSES_WITH_COORDS);
-    const rows = result.client_addresses ?? [];
+    const addresses = await this.addressesService.getUserAddresses();
     return (
-      rows
-        .map((row) => row.address)
-        .find((address) => this.isNearby(address, latitude, longitude)) ?? null
+      addresses.find((address) => this.isNearby(address, latitude, longitude)) ??
+      null
     );
   }
 
@@ -126,7 +88,11 @@ export class CurrentLocationAddressService {
     const geo = await this.lookup(latitude, longitude);
     if (geo.country_code || geo.country) return geo;
     throw new HttpException(
-      { success: false, error: 'Could not resolve the current location' },
+      {
+        success: false,
+        error: 'Could not resolve the current location',
+        message: 'Could not resolve the current location',
+      },
       HttpStatus.BAD_REQUEST
     );
   }
@@ -137,7 +103,11 @@ export class CurrentLocationAddressService {
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
-        { success: false, error: 'Could not resolve the current location' },
+        {
+          success: false,
+          error: 'Could not resolve the current location',
+          message: 'Could not resolve the current location',
+        },
         HttpStatus.BAD_REQUEST
       );
     }

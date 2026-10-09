@@ -50,7 +50,11 @@ export class AddressesController {
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
-        { success: false, error: error.message },
+        {
+          success: false,
+          error: error.message,
+          message: error.message || 'Failed to resolve current location',
+        },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

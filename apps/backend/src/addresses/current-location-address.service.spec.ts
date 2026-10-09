@@ -21,9 +21,7 @@ describe('CurrentLocationAddressService', () => {
   };
 
   function build(rows: any[], created?: any) {
-    const executeQuery = jest.fn(async () => ({
-      client_addresses: rows.map((address) => ({ address })),
-    }));
+    const getUserAddresses = jest.fn(async () => rows);
     const reverseGeocode = jest.fn(async () => ({
       formatted_address: '5 Rue Neuve, Yaoundé',
       address_line_1: '5 Rue Neuve',
@@ -37,11 +35,10 @@ describe('CurrentLocationAddressService', () => {
       address: created ?? { id: 'addr-new', address_type: 'current_location' },
     }));
     const service = new CurrentLocationAddressService(
-      { executeQuery } as any,
       { reverseGeocode } as any,
-      { createAddress } as any
+      { createAddress, getUserAddresses } as any
     );
-    return { service, createAddress, reverseGeocode, executeQuery };
+    return { service, createAddress, reverseGeocode, getUserAddresses };
   }
 
   async function rejection(run: () => Promise<unknown>): Promise<HttpException> {
@@ -114,7 +111,7 @@ describe('CurrentLocationAddressService', () => {
   });
 
   it('rejects coordinates outside the valid range before any lookup', async () => {
-    const { service, executeQuery, reverseGeocode } = build([]);
+    const { service, getUserAddresses, reverseGeocode } = build([]);
 
     const error = await rejection(() => service.resolve(90.0001, 0));
 
@@ -122,20 +119,21 @@ describe('CurrentLocationAddressService', () => {
     expect(error.getResponse()).toEqual({
       success: false,
       error: 'latitude and longitude are required',
+      message: 'latitude and longitude are required',
     });
-    expect(executeQuery).not.toHaveBeenCalled();
+    expect(getUserAddresses).not.toHaveBeenCalled();
     expect(reverseGeocode).not.toHaveBeenCalled();
     await expect(service.resolve(Number.NaN, 11)).rejects.toBeInstanceOf(HttpException);
     await expect(service.resolve(0, 180.0001)).rejects.toBeInstanceOf(HttpException);
   });
 
   it('accepts the poles and the antimeridian', async () => {
-    const { service, executeQuery } = build([here]);
+    const { service, getUserAddresses } = build([here]);
 
     await service.resolve(90, 180);
     await service.resolve(-90, -180);
 
-    expect(executeQuery).toHaveBeenCalledTimes(2);
+    expect(getUserAddresses).toHaveBeenCalledTimes(2);
   });
 
   it('does not create an address when reverse geocoding has no country', async () => {
@@ -155,6 +153,7 @@ describe('CurrentLocationAddressService', () => {
     expect(error.getResponse()).toEqual({
       success: false,
       error: 'Could not resolve the current location',
+      message: 'Could not resolve the current location',
     });
     expect(createAddress).not.toHaveBeenCalled();
   });
@@ -197,6 +196,18 @@ describe('CurrentLocationAddressService', () => {
         is_primary: false,
       })
     );
+  });
+
+  it('reuses a nearby agent or business address from the persona list', async () => {
+    const agentHome = { ...here, id: 'addr-agent', address_type: 'home' };
+    const { service, createAddress, getUserAddresses } = build([agentHome]);
+
+    const result = await service.resolve(3.8481, 11.502);
+
+    expect(getUserAddresses).toHaveBeenCalled();
+    expect(result.reused).toBe(true);
+    expect(result.address.id).toBe('addr-agent');
+    expect(createAddress).not.toHaveBeenCalled();
   });
 
   it('uses Current location when the geocode has no street text', async () => {
