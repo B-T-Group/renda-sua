@@ -32,9 +32,12 @@ export function buildAddressesSetInput(
   return set;
 }
 
-export function toAddressUpdateHttpException(error: any): HttpException {
+export function toAddressUpdateHttpException(
+  error: any,
+  fallback = 'Failed to update address'
+): HttpException {
   if (error instanceof HttpException) return error;
-  const message = error?.message || 'Failed to update address';
+  const message = error?.message || fallback;
   return new HttpException(
     { success: false, error: message, message },
     HttpStatus.INTERNAL_SERVER_ERROR

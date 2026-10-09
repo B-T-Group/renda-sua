@@ -52,5 +52,12 @@ describe('address-update.util', () => {
     expect(remapped.message).toBe(
       'null value in column "city" violates not-null constraint'
     );
+
+    const created = toAddressUpdateHttpException(new Error(''), 'Failed to create address');
+    expect(created.getResponse()).toEqual({
+      success: false,
+      error: 'Failed to create address',
+      message: 'Failed to create address',
+    });
   });
 });

@@ -49,8 +49,9 @@ export class AddressesController {
       return { success: true, data: result };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
+      const message = error?.message || 'Failed to resolve current location';
       throw new HttpException(
-        { success: false, error: error.message },
+        { success: false, error: message, message },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

@@ -20,10 +20,13 @@ describe('CurrentLocationAddressService', () => {
     longitude: 11.502,
   };
 
-  function build(rows: any[], created?: any) {
-    const executeQuery = jest.fn(async () => ({
-      client_addresses: rows.map((address) => ({ address })),
-    }));
+  function build(
+    rows: any[],
+    created?: any,
+    user: any = { id: 'user-1', client: { id: 'client-1' } }
+  ) {
+    const getUser = jest.fn(async () => user);
+    const getAllUserAddresses = jest.fn(async () => rows);
     const reverseGeocode = jest.fn(async () => ({
       formatted_address: '5 Rue Neuve, Yaoundé',
       address_line_1: '5 Rue Neuve',
@@ -37,11 +40,18 @@ describe('CurrentLocationAddressService', () => {
       address: created ?? { id: 'addr-new', address_type: 'current_location' },
     }));
     const service = new CurrentLocationAddressService(
-      { executeQuery } as any,
+      { getUser } as any,
+      { getAllUserAddresses } as any,
       { reverseGeocode } as any,
       { createAddress } as any
     );
-    return { service, createAddress, reverseGeocode, executeQuery };
+    return {
+      service,
+      createAddress,
+      reverseGeocode,
+      getUser,
+      getAllUserAddresses,
+    };
   }
 
   async function rejection(run: () => Promise<unknown>): Promise<HttpException> {
@@ -55,16 +65,17 @@ describe('CurrentLocationAddressService', () => {
   }
 
   it('reuses a client address within 75 meters', async () => {
-    const { service, createAddress } = build([here]);
+    const { service, createAddress, getAllUserAddresses } = build([here]);
 
     const result = await service.resolve(3.8482, 11.5021);
 
     expect(result.reused).toBe(true);
     expect(result.address.id).toBe('addr-near');
     expect(createAddress).not.toHaveBeenCalled();
+    expect(getAllUserAddresses).toHaveBeenCalledWith('user-1', 'client');
   });
 
-  it('reverse geocodes and creates a current_location address', async () => {
+  it('reverse geocodes and creates a current_location address for the client', async () => {
     const far = { ...here, id: 'addr-far', latitude: 4.05, longitude: 9.7 };
     const { service, createAddress, reverseGeocode } = build([far]);
 
@@ -79,10 +90,40 @@ describe('CurrentLocationAddressService', () => {
         latitude: 3.848,
         longitude: 11.502,
         country: 'CM',
-      })
+      }),
+      { persona: 'client' }
     );
     expect(result.reused).toBe(false);
     expect(result.address.id).toBe('addr-new');
+  });
+
+  it('looks up client addresses via admin GraphQL, not the user JWT schema', async () => {
+    const { service, getUser, getAllUserAddresses } = build([here]);
+
+    await service.resolve(3.8482, 11.5021);
+
+    expect(getUser).toHaveBeenCalledTimes(1);
+    expect(getAllUserAddresses).toHaveBeenCalledWith('user-1', 'client');
+  });
+
+  it('returns 400 when the user has no client profile', async () => {
+    const { service, getAllUserAddresses, reverseGeocode, createAddress } = build(
+      [],
+      undefined,
+      { id: 'user-1', business: { id: 'biz-1' }, client: null }
+    );
+
+    const error = await rejection(() => service.resolve(3.848, 11.502));
+
+    expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    expect(error.getResponse()).toEqual({
+      success: false,
+      error: 'Current location is only available for client checkout',
+      message: 'Current location is only available for client checkout',
+    });
+    expect(getAllUserAddresses).not.toHaveBeenCalled();
+    expect(reverseGeocode).not.toHaveBeenCalled();
+    expect(createAddress).not.toHaveBeenCalled();
   });
 
   it('reuses an address exactly 75 meters away and creates one just past it', async () => {
@@ -114,7 +155,7 @@ describe('CurrentLocationAddressService', () => {
   });
 
   it('rejects coordinates outside the valid range before any lookup', async () => {
-    const { service, executeQuery, reverseGeocode } = build([]);
+    const { service, getAllUserAddresses, reverseGeocode } = build([]);
 
     const error = await rejection(() => service.resolve(90.0001, 0));
 
@@ -123,19 +164,19 @@ describe('CurrentLocationAddressService', () => {
       success: false,
       error: 'latitude and longitude are required',
     });
-    expect(executeQuery).not.toHaveBeenCalled();
+    expect(getAllUserAddresses).not.toHaveBeenCalled();
     expect(reverseGeocode).not.toHaveBeenCalled();
     await expect(service.resolve(Number.NaN, 11)).rejects.toBeInstanceOf(HttpException);
     await expect(service.resolve(0, 180.0001)).rejects.toBeInstanceOf(HttpException);
   });
 
   it('accepts the poles and the antimeridian', async () => {
-    const { service, executeQuery } = build([here]);
+    const { service, getAllUserAddresses } = build([here]);
 
     await service.resolve(90, 180);
     await service.resolve(-90, -180);
 
-    expect(executeQuery).toHaveBeenCalledTimes(2);
+    expect(getAllUserAddresses).toHaveBeenCalledTimes(2);
   });
 
   it('does not create an address when reverse geocoding has no country', async () => {
@@ -195,7 +236,8 @@ describe('CurrentLocationAddressService', () => {
         country: 'CM',
         address_type: 'current_location',
         is_primary: false,
-      })
+      }),
+      { persona: 'client' }
     );
   });
 
@@ -218,7 +260,8 @@ describe('CurrentLocationAddressService', () => {
         city: 'Douala',
         state: 'Douala',
         country: 'Cameroon',
-      })
+      }),
+      { persona: 'client' }
     );
   });
 });

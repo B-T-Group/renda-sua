@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { AddressesService } from './addresses.service';
 
 describe('AddressesService.getAddressesByIds', () => {
@@ -257,5 +258,82 @@ describe('AddressesService.syncUserCountry isolation', () => {
     });
 
     expect(syncSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('AddressesService.createAddress persona override', () => {
+  const delivery = {
+    address_line_1: '12 Market St',
+    city: 'Douala',
+    state: 'Littoral',
+    country: 'CM',
+    postal_code: '00000',
+    is_primary: false,
+    address_type: 'current_location',
+    latitude: 4.05,
+    longitude: 9.7,
+  };
+
+  function createService() {
+    const hasuraUser = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'user-1',
+        active_persona: 'business',
+        client: { id: 'client-1' },
+        business: { id: 'biz-1' },
+      }),
+    };
+    const hasuraSystem = {
+      executeMutation: jest.fn(async (mutation: string) => {
+        if (mutation.includes('CreateAddress')) {
+          return { insert_addresses_one: { id: 'addr-1', ...delivery } };
+        }
+        return { insert_client_addresses_one: { id: 'link-1' } };
+      }),
+      countLinkedAddressesForUser: jest.fn().mockResolvedValue(1),
+      setUserTimezone: jest.fn(),
+    };
+    const service = new AddressesService(
+      hasuraUser as any,
+      hasuraSystem as any,
+      {} as any,
+      { get: jest.fn() } as any
+    );
+    jest.spyOn(service as any, 'getCurrencyFromCountry').mockResolvedValue('XAF');
+    jest.spyOn(service as any, 'checkExistingPersonalAccount').mockResolvedValue(true);
+    return { service, hasuraUser, hasuraSystem };
+  }
+
+  it('links a client address when checkout overrides a business session', async () => {
+    const { service, hasuraSystem } = createService();
+
+    await service.createAddress(delivery, { persona: 'client' });
+
+    const mutations = hasuraSystem.executeMutation.mock.calls.map(([query]) =>
+      String(query)
+    );
+    expect(mutations.some((q) => q.includes('insert_client_addresses_one'))).toBe(
+      true
+    );
+    expect(
+      mutations.some((q) => q.includes('insert_business_addresses_one'))
+    ).toBe(false);
+  });
+
+  it('rejects an override the user does not have', async () => {
+    const { service, hasuraUser } = createService();
+    hasuraUser.getUser.mockResolvedValue({
+      id: 'user-1',
+      active_persona: 'business',
+      business: { id: 'biz-1' },
+    });
+
+    try {
+      await service.createAddress(delivery, { persona: 'client' });
+      throw new Error('expected HttpException');
+    } catch (error) {
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    }
   });
 });

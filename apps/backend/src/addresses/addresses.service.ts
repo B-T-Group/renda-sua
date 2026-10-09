@@ -13,6 +13,7 @@ import type { PersonaId } from '../users/persona.types';
 import {
   getActivePersonaOrThrow,
   resolveActivePersonaWithDefault,
+  userHasPersona,
   type UserPersonaShape,
 } from '../users/persona.util';
 import { timezoneFromAddressCountryCode } from '../users/user-timezone.util';
@@ -372,7 +373,10 @@ export class AddressesService {
     }
   }
 
-  async createAddress(addressData: CreateAddressDto): Promise<{
+  async createAddress(
+    addressData: CreateAddressDto,
+    options?: { persona?: PersonaId }
+  ): Promise<{
     success: boolean;
     address: AddressResponse;
     accountCreated?: any;
@@ -380,7 +384,7 @@ export class AddressesService {
   }> {
     try {
       const user = await this.hasuraUserService.getUser();
-      const persona = getActivePersonaOrThrow(user);
+      const persona = this.resolveCreatePersona(user, options?.persona);
       const addressCountBefore =
         await this.hasuraSystemService.countLinkedAddressesForUser(user.id);
 
@@ -608,17 +612,33 @@ export class AddressesService {
         warning: warning || undefined,
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
+      if (!(error instanceof HttpException)) {
+        this.logger.error(
+          `createAddress failed: ${error?.message ?? error}`,
+          error?.stack
+        );
       }
-      throw new HttpException(
-        {
-          success: false,
-          error: error.message,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      throw toAddressUpdateHttpException(error, 'Failed to create address');
     }
+  }
+
+  private resolveCreatePersona(
+    user: UserPersonaShape & {
+      personas?: PersonaId[];
+      active_persona?: PersonaId | null;
+    },
+    override?: PersonaId
+  ): PersonaId {
+    if (!override) return getActivePersonaOrThrow(user);
+    if (userHasPersona(user, override)) return override;
+    throw new HttpException(
+      {
+        success: false,
+        error: 'Requested persona is not enabled for this account',
+        message: 'Requested persona is not enabled for this account',
+      },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   /**

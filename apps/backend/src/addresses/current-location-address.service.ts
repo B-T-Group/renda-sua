@@ -1,48 +1,15 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import type { GeocodingResult } from '../google/google-distance.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import type { AddressResponse } from './addresses.service';
 import { AddressesService } from './addresses.service';
 import { haversineMeters } from './haversine';
 
 const REUSE_WITHIN_METERS = 75;
-
-const CLIENT_ADDRESSES_WITH_COORDS = `
-  query ClientAddressesWithCoords {
-    client_addresses(
-      where: {
-        address: {
-          status: { _eq: active }
-          latitude: { _is_null: false }
-          longitude: { _is_null: false }
-        }
-      }
-    ) {
-      address {
-        id
-        address_line_1
-        address_line_2
-        city
-        state
-        postal_code
-        country
-        is_primary
-        address_type
-        latitude
-        longitude
-        instructions
-        created_at
-        updated_at
-        status
-      }
-    }
-  }
-`;
-
-interface ClientAddressRow {
-  address: AddressResponse;
-}
+const CLIENT_ONLY_MESSAGE =
+  'Current location is only available for client checkout';
 
 export interface CurrentLocationResult {
   address: AddressResponse;
@@ -53,6 +20,7 @@ export interface CurrentLocationResult {
 export class CurrentLocationAddressService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
+    private readonly hasuraSystemService: HasuraSystemService,
     private readonly googleDistanceService: GoogleDistanceService,
     private readonly addressesService: AddressesService
   ) {}
@@ -81,15 +49,26 @@ export class CurrentLocationAddressService {
     latitude: number,
     longitude: number
   ): Promise<AddressResponse | null> {
-    const result = await this.hasuraUserService.executeQuery<{
-      client_addresses: ClientAddressRow[];
-    }>(CLIENT_ADDRESSES_WITH_COORDS);
-    const rows = result.client_addresses ?? [];
+    const addresses = await this.loadClientAddresses();
     return (
-      rows
-        .map((row) => row.address)
-        .find((address) => this.isNearby(address, latitude, longitude)) ?? null
+      addresses.find((address) => this.isNearby(address, latitude, longitude)) ??
+      null
     );
+  }
+
+  private async loadClientAddresses(): Promise<AddressResponse[]> {
+    const user = await this.hasuraUserService.getUser();
+    if (!user.client?.id) {
+      throw new HttpException(
+        {
+          success: false,
+          error: CLIENT_ONLY_MESSAGE,
+          message: CLIENT_ONLY_MESSAGE,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    return this.hasuraSystemService.getAllUserAddresses(user.id, 'client');
   }
 
   private isNearby(
@@ -108,7 +87,19 @@ export class CurrentLocationAddressService {
     longitude: number
   ): Promise<CurrentLocationResult> {
     const geo = await this.reverse(latitude, longitude);
-    const created = await this.addressesService.createAddress({
+    const created = await this.addressesService.createAddress(
+      this.gpsPayload(geo, latitude, longitude),
+      { persona: 'client' }
+    );
+    return { address: created.address, reused: false };
+  }
+
+  private gpsPayload(
+    geo: GeocodingResult,
+    latitude: number,
+    longitude: number
+  ) {
+    return {
       address_line_1: this.line1(geo),
       city: geo.city || 'Unknown',
       state: geo.state || geo.city || geo.country_code || 'Unknown',
@@ -118,8 +109,7 @@ export class CurrentLocationAddressService {
       is_primary: false,
       latitude,
       longitude,
-    });
-    return { address: created.address, reused: false };
+    };
   }
 
   private async reverse(latitude: number, longitude: number): Promise<GeocodingResult> {
