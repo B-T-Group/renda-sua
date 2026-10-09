@@ -107,6 +107,17 @@ describe('GoogleDistanceService.reverseGeocode', () => {
     expect(result.address_line_1).toBe('Montreal, QC, Canada');
   });
 
+  it('M3: never puts Google error_message into the thrown error', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: { status: 'OVER_QUERY_LIMIT', error_message: 'You have exceeded your daily request quota' },
+    });
+
+    const error = await service.reverseGeocode(3.1, 11.1).catch((e) => e);
+
+    expect(error.getStatus()).toBe(400);
+    expect(JSON.stringify(error.getResponse())).not.toMatch(/quota|key/i);
+  });
+
   it('builds the street line from number and route', async () => {
     mockedAxios.get.mockResolvedValue(
       okGeocode([
@@ -162,11 +173,63 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
       longitude: 0,
       countryCode: 'GH',
       country: 'Ghana',
+      locationType: '',
+      partialMatch: false,
+      hasStreet: false,
+      hasCity: false,
     });
     expect(mockedAxios.get).toHaveBeenCalledWith(
       'https://maps.googleapis.com/maps/api/geocode/json',
       { params: { address: 'Null Island', key: 'test-key' }, timeout: 10_000 }
     );
+  });
+
+  it('M5: reports precision, partial match and street/city presence', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        results: [
+          {
+            geometry: { location: { lat: 3.8, lng: 11.5 }, location_type: 'RANGE_INTERPOLATED' },
+            partial_match: true,
+            types: ['route'],
+            address_components: [
+              component('locality', 'Yaoundé'),
+              component('country', 'Cameroon', 'CM'),
+            ],
+          },
+        ],
+      },
+    });
+
+    await expect(service.geocodeWithCountry('Rue X, Yaoundé')).resolves.toMatchObject({
+      locationType: 'RANGE_INTERPOLATED',
+      partialMatch: true,
+      hasStreet: true,
+      hasCity: true,
+    });
+
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        results: [
+          {
+            geometry: { location: { lat: 3.8, lng: 11.5 }, location_type: 'APPROXIMATE' },
+            types: ['locality', 'political'],
+            address_components: [
+              component('locality', 'Yaoundé'),
+              component('country', 'Cameroon', 'CM'),
+            ],
+          },
+        ],
+      },
+    });
+    await expect(service.geocodeWithCountry('asdf, Yaoundé')).resolves.toMatchObject({
+      locationType: 'APPROXIMATE',
+      partialMatch: false,
+      hasStreet: false,
+      hasCity: true,
+    });
   });
 
   it('does not call Google for a blank address', async () => {
