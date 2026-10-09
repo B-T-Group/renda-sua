@@ -2415,6 +2415,7 @@ export class OrdersService {
       transactionType: 'release',
       memo: `Delivery fee waived after switch to pickup for order ${order.order_number}`,
       referenceId: order.id,
+      idempotencyKey: `pickup-switch:delivery-release:${order.id}`,
     });
     if (!release?.success) {
       throw new HttpException(
@@ -2751,11 +2752,13 @@ export class OrdersService {
       });
 
       if (holdAmount > 0) {
+        const cycle = await this.claimHoldCycle(agentAccount.id, order.id);
         await this.requireSuccessfulHold({
           accountId: agentAccount.id,
           amount: holdAmount,
           memo: `Hold for order ${order.order_number}`,
           referenceId: order.id,
+          idempotencyKey: this.claimHoldKey(order.id, agent.id, String(cycle)),
         });
       }
     } catch (error) {
@@ -4741,6 +4744,7 @@ export class OrdersService {
       amount: missing,
       memo: `Hold for order ${order.order_number}`,
       referenceId: order.id,
+      idempotencyKey: `hold:${order.id}:${accountId}`,
     });
   }
 
@@ -10493,6 +10497,7 @@ export class OrdersService {
     amount: number;
     memo: string;
     referenceId: string;
+    idempotencyKey?: string;
   }): Promise<void> {
     if (request.amount <= 0) return;
     const result = await this.accountsService.registerTransaction({
@@ -11192,6 +11197,7 @@ export class OrdersService {
       amount: transaction.amount,
       order: ctx.order,
       agentId: ctx.agentId,
+      transactionId: String(transaction.id ?? ''),
       freshAssignment: slot === 'assigned',
     });
     if (slot === 'assigned') {
@@ -11293,6 +11299,7 @@ export class OrdersService {
     amount: number;
     order: Orders;
     agentId: string;
+    transactionId: string;
     freshAssignment: boolean;
   }): Promise<void> {
     const orderHold = await this.getOrCreateOrderHold(params.order.id);
@@ -11321,6 +11328,8 @@ export class OrdersService {
     accountId: string;
     amount: number;
     order: Orders;
+    agentId: string;
+    transactionId: string;
     freshAssignment: boolean;
   }): Promise<void> {
     if (!params.freshAssignment) {
@@ -11336,7 +11345,34 @@ export class OrdersService {
       amount: params.amount,
       memo: `Hold for order ${params.order.order_number}`,
       referenceId: params.order.id,
+      idempotencyKey: this.claimHoldKey(
+        params.order.id,
+        params.agentId,
+        params.transactionId
+      ),
     });
+  }
+
+  /** Releases already posted for this account and order. A re-claim after a drop uses the next cycle. */
+  private async claimHoldCycle(accountId: string, orderId: string): Promise<number> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query ClaimHoldReleases($accountId: uuid!, $orderId: uuid!) {
+        account_transactions_aggregate(
+          where: {
+            account_id: { _eq: $accountId }
+            reference_id: { _eq: $orderId }
+            transaction_type: { _eq: release }
+          }
+        ) { aggregate { count } }
+      }`,
+      { accountId, orderId }
+    );
+    const count = result?.account_transactions_aggregate?.aggregate?.count;
+    return Number(count) || 0;
+  }
+
+  private claimHoldKey(orderId: string, agentId: string, cycle: string): string {
+    return `claim:hold:${orderId}:${agentId}:${cycle}`;
   }
 
   private async recordNewClaimAssignment(ctx: {

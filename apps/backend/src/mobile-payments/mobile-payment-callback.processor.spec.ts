@@ -239,6 +239,31 @@ describe('MobilePaymentCallbackProcessor', () => {
     });
   });
 
+  it('fails closed when a claim-order finalize throws', async () => {
+    const onPaymentSuccess = jest.fn().mockRejectedValue(new Error('claim assign failed'));
+    paymentCallbackRegistry.getHandlers.mockReturnValue([
+      {
+        supportsPaymentEntity: (entity: string) => entity === 'claim_order',
+        onPaymentSuccess,
+      },
+    ]);
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...baseTx,
+      payment_entity: 'claim_order',
+      entity_id: 'ORD-9',
+    });
+
+    try {
+      await expect(processor.processMypvitCallback(successCallback)).rejects.toThrow(
+        'claim assign failed'
+      );
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
+      expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+    } finally {
+      paymentCallbackRegistry.getHandlers.mockReturnValue([]);
+    }
+  });
+
   it('skips cash-advance repayment when crediting a claim-order top-up', async () => {
     databaseService.getTransactionByReference.mockResolvedValue({
       ...baseTx,

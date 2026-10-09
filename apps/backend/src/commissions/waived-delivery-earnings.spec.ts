@@ -95,14 +95,15 @@ describe('waived delivery fee: platform funds only the agent pay', () => {
       partners?: unknown[];
       txs?: Array<{ memo: string }>;
       failOn?: (req: any) => boolean;
+      alreadyExistsOn?: (req: any) => boolean;
     } = {}
   ) {
     let n = 0;
-    const registerTransaction = jest.fn(async (req: any) =>
-      opts.failOn?.(req)
-        ? { success: false, error: 'boom' }
-        : { success: true, transactionId: `tx-${++n}` }
-    );
+    const registerTransaction = jest.fn(async (req: any) => {
+      if (opts.failOn?.(req)) return { success: false, error: 'boom' };
+      if (opts.alreadyExistsOn?.(req)) return { success: true, alreadyExists: true };
+      return { success: true, transactionId: `tx-${++n}` };
+    });
     const accounts = {
       'agent-user': { id: 'agent-acc' },
       'hq-user': { id: 'hq-acc' },
@@ -176,6 +177,12 @@ describe('waived delivery fee: platform funds only the agent pay', () => {
       calls.findIndex((r) => r.accountId === 'agent-acc')
     );
     expect(hq[0].memo).toContain('funded by platform');
+    expect(hq[0].idempotencyKey).toBe(
+      'waived-funding:order-1:base_delivery_fee:0'
+    );
+    expect(hq[1].idempotencyKey).toBe(
+      'waived-funding:order-1:per_km_delivery_fee:0'
+    );
     expect(audits(executeMutation).map((p) => [p.commission_type, p.recipient_type, p.amount])).toEqual(
       expect.arrayContaining([
         ['platform_funded_delivery', 'rendasua', 250],
@@ -184,6 +191,16 @@ describe('waived delivery fee: platform funds only the agent pay', () => {
         ['per_km_delivery_fee', 'agent', 240],
       ])
     );
+  });
+
+  it('keeps the HQ debit when a concurrent run already credited the agent', async () => {
+    const { service, registerTransaction, order } = setup({
+      order: { per_km_delivery_fee: 0 },
+      alreadyExistsOn: (r) => r.accountId === 'agent-acc',
+    });
+    await service.distributeDeliveryCommissions(order);
+    const hq = txs(registerTransaction).filter((r) => r.accountId === 'hq-acc');
+    expect(hq.map((r) => r.transactionType)).toEqual(['payment']);
   });
 
   it('reverses the HQ debit and throws when the agent credit fails (nobody paid from nothing)', async () => {

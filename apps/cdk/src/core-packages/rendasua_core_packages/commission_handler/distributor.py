@@ -97,6 +97,9 @@ def pay_commission(
             reference_id=order.id,
             hasura_endpoint=client._config.endpoint,
             hasura_admin_secret=client._config.admin_secret,
+            idempotency_key=(
+                f"commission:{order.id}:{account.id}:{recipient_type}:{commission_type}"
+            ),
         )
         
         if not transaction_id:

@@ -114,15 +114,47 @@ class RegisterAccountTransactionIdempotencyTests(unittest.TestCase):
         self.assertIn("update_accounts", client.queries[1][0])
 
     def test_incomplete_payload_is_not_reported_as_success(self):
-        result, _ = self._run(
+        result, client = self._run(
             [
                 {"account_transactions": []},
                 {"accounts_by_pk": ACCOUNT},
                 {"insert_account_transactions_one": {"id": "tx"}, "update_accounts": {"affected_rows": 0}},
+                {"delete_account_transactions_by_pk": {"id": "tx"}},
             ],
             idempotency_key="k",
         )
         self.assertIsNone(result)
+        self.assertIn("DeleteUnguardedLedgerRow", client.queries[-1][0])
+
+    def test_guard_rejects_a_second_debit_without_going_negative(self):
+        rich = dict(ACCOUNT, available_balance=200, withheld_balance=0)
+        client = _client(
+            [
+                {"account_transactions": []},
+                {"accounts_by_pk": rich},
+                {
+                    "insert_account_transactions_one": {"id": "tx-loser"},
+                    "update_accounts": {"affected_rows": 0, "returning": []},
+                },
+                {"delete_account_transactions_by_pk": {"id": "tx-loser"}},
+            ]
+        )
+        with patch.object(accounts_service, "HasuraClient", return_value=client):
+            result = accounts_service.register_account_transaction(
+                "acct-1",
+                200,
+                "payment",
+                "memo",
+                "order-1",
+                "http://h",
+                "s",
+                idempotency_key="pay-2",
+            )
+        self.assertIsNone(result)
+        _query, variables = client.queries[2]
+        self.assertEqual(variables["minAvailable"], 200)
+        self.assertEqual(variables["inc"]["available_balance"], -200)
+        self.assertIn("DeleteUnguardedLedgerRow", client.queries[-1][0])
 
     def test_negative_balance_after_move_is_logged(self):
         with patch.object(accounts_service, "log_error") as log_error:

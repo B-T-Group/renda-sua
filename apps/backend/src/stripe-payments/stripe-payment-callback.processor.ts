@@ -268,6 +268,10 @@ export class StripePaymentCallbackProcessor {
       return;
     }
 
+    if (tx.payment_entity === 'claim_order') {
+      await this.finalizeClaimCapture(tx);
+    }
+
     const capturedAt = new Date().toISOString();
     await this.databaseService.updateTransaction(tx.id, {
       status: 'success',
@@ -279,10 +283,18 @@ export class StripePaymentCallbackProcessor {
       await this.finalizeOrderTaxIfNeeded(tx, checkoutSession, paymentIntent);
     }
 
+    if (tx.payment_entity === 'claim_order') return;
+
     const updatedTx =
       (await this.databaseService.getTransactionById(tx.id)) ?? tx;
     await this.creditWalletIfNeeded(updatedTx);
     await this.runHandlerSuccess(updatedTx);
+  }
+
+  /** Credit and assign before success, so a failed claim finalize stays pending. */
+  private async finalizeClaimCapture(tx: StripePaymentTransaction): Promise<void> {
+    await this.creditWalletIfNeeded(tx);
+    await this.runHandlerSuccess(tx);
   }
 
   private async finalizeTokenPaymentSuccess(
@@ -416,10 +428,11 @@ export class StripePaymentCallbackProcessor {
       }
     } catch (error: any) {
       this.logger.error(
-        `Stripe payment finalize failed for ${tx.id}: ${String(
+        `Stripe payment finalize failed for ${tx.id} entity=${tx.payment_entity} entityId=${tx.entity_id}: ${String(
           error?.message || error
         )}`
       );
+      if (tx.payment_entity === 'claim_order') throw error;
     }
   }
 
@@ -547,6 +560,7 @@ export class StripePaymentCallbackProcessor {
       transactionType: 'withdrawal',
       memo: `Stripe refund reversal - ${tx.reference}`,
       referenceId: tx.id,
+      idempotencyKey: `stripe-refund:${tx.id}`,
     });
     if (!result.success) {
       this.logger.error(

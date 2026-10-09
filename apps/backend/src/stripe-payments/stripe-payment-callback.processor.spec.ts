@@ -167,6 +167,27 @@ describe('StripePaymentCallbackProcessor', () => {
     expect(callbackHandler.onPaymentFailure).not.toHaveBeenCalled();
   });
 
+  it('leaves a claim-order capture pending when finalize throws', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue(
+      makeTransaction({ status: 'authorized', payment_entity: 'claim_order' })
+    );
+    accountsService.registerDepositIfNotExists.mockResolvedValue({
+      success: true,
+    });
+    callbackHandler.supportsPaymentEntity.mockImplementation(
+      (entity: string) => entity === 'claim_order'
+    );
+    callbackHandler.onPaymentSuccess.mockRejectedValue(new Error('claim assign failed'));
+
+    await expect(
+      processor.onPaymentIntentSucceeded(
+        { id: 'pi_123', metadata: { reference: 'stripe-ref-123' } } as never,
+        req
+      )
+    ).rejects.toThrow('claim assign failed');
+    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
   it('skips cash-advance repayment when crediting a claim-order top-up', async () => {
     databaseService.getTransactionByReference.mockResolvedValue(
       makeTransaction({ status: 'authorized', payment_entity: 'claim_order' })

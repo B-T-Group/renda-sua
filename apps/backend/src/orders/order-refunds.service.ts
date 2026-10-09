@@ -562,12 +562,14 @@ export class OrderRefundsService {
     const memo = suffix
       ? `Refund (${suffix}) for order ${order.order_number}`
       : `Refund for order ${order.order_number}`;
+    const leg = suffix ? 'delivery' : 'items';
     const result = await this.accountsService.registerTransaction({
       accountId: account.id,
       amount,
       transactionType: 'refund',
       memo,
       referenceId: order.id,
+      idempotencyKey: `refund:${order.id}:${leg}`,
     });
     if (!result.success) {
       throw new HttpException(result.error || 'Failed to register refund', HttpStatus.BAD_REQUEST);
