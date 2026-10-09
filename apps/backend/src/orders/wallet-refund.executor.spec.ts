@@ -37,7 +37,15 @@ describe('WalletRefundExecutor', () => {
     await executor.execute({ order, amount: 25, paymentId });
 
     expect(accountsService.registerTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ referenceId: paymentId })
+      expect.objectContaining({
+        referenceId: paymentId,
+        idempotencyKey: `refund:${paymentId}`,
+      })
     );
+    await executor.execute({ order, amount: 25, paymentId });
+    const keys = accountsService.registerTransaction.mock.calls.map(
+      (call) => call[0].idempotencyKey
+    );
+    expect(keys).toEqual([`refund:${paymentId}`, `refund:${paymentId}`]);
   });
 });

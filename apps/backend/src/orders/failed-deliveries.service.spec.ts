@@ -261,6 +261,33 @@ describe('FailedDeliveriesService client-fault fee', () => {
     expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(300);
   });
 
+  it('replays client-fault legs with the same once-only keys', async () => {
+    const { service, registerTransaction } = setup({ clientAvailable: 5000 });
+    const order = {
+      ...FEE_ORDER,
+      id: 'order-1',
+      order_number: 'RS-1',
+      currency: 'XAF',
+      client: { user: { id: 'client-user' } },
+      assigned_agent: { user: { id: 'agent-user' } },
+      business: { user_id: 'biz-user' },
+    };
+    const hold = {
+      client_hold_amount: 1000,
+      agent_hold_amount: 200,
+      delivery_fees: 0,
+    };
+    await (service as any).resolveClientFault(order, hold);
+    await (service as any).resolveClientFault(order, hold);
+    const keys = registerTransaction.mock.calls.map(
+      (call) => call[0].idempotencyKey as string
+    );
+    expect(keys.every(Boolean)).toBe(true);
+    const half = keys.length / 2;
+    expect(keys.slice(half)).toEqual(keys.slice(0, half));
+    expect(keys).toContain('failed-delivery:client-fault:fee:order-1');
+  });
+
   it('excludes the service fee from the client-fault base', async () => {
     const { service, registerTransaction } = setup({
       clientAvailable: 5000,

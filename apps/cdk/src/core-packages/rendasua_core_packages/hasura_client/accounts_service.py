@@ -279,6 +279,29 @@ def determine_transaction_balance_update(
         raise ValueError(f"Unsupported transaction type: {transaction_type}")
 
 
+def _guard_floor(delta: float) -> float:
+    """Balance a decreasing column must already have. An unchanged column uses a floor that always passes."""
+    return abs(delta) if delta < 0 else -1_000_000_000_000.0
+
+
+def _delete_ledger_row(client: HasuraClient, transaction_id: str) -> None:
+    try:
+        client.execute(
+            """
+            mutation DeleteUnguardedLedgerRow($id: uuid!) {
+              delete_account_transactions_by_pk(id: $id) { id }
+            }
+            """,
+            {"id": transaction_id},
+        )
+    except Exception as error:
+        log_error(
+            "ledger_guard_delete_failed",
+            transaction_id=transaction_id,
+            error=error,
+        )
+
+
 def register_account_transaction(
     account_id: str,
     amount: float,
@@ -414,13 +437,16 @@ def register_account_transaction(
         # transaction, so either both land or neither does:
         #   * a duplicate idempotency key (UNIQUE) aborts the insert and the balance
         #     move together, so a retried or concurrent duplicate never moves money;
-        #   * a failed balance update never leaves a keyed row behind that would make
-        #     every retry a silent no-op;
+        #   * a guard that matches 0 rows does not roll the insert back, so that row
+        #     is deleted before we return; a retry is not blocked by a key that
+        #     never moved money;
         #   * `_inc` is applied by Postgres to the current row, so a concurrent backend
         #     move on the same account (the backend also uses `_inc`) is never
         #     overwritten by this snapshot (the old `_set` of absolute balances was a
         #     lost update).
-        # The funds check above is still a snapshot check, as before.
+        # The snapshot check above is a fast reject. The where clause is the authority:
+        # a concurrent debit that already spent the funds matches 0 rows, so this
+        # request does not drive the balance negative.
         mutation = """
         mutation RegisterLedgerMove(
           $accountId: uuid!,
@@ -429,7 +455,9 @@ def register_account_transaction(
           $memo: String,
           $referenceId: uuid,
           $idempotencyKey: String,
-          $inc: accounts_inc_input!
+          $inc: accounts_inc_input!,
+          $minAvailable: numeric!,
+          $minWithheld: numeric!
         ) {
           insert_account_transactions_one(object: {
             account_id: $accountId,
@@ -442,7 +470,11 @@ def register_account_transaction(
             id
           }
           update_accounts(
-            where: { id: { _eq: $accountId } },
+            where: {
+              id: { _eq: $accountId }
+              available_balance: { _gte: $minAvailable }
+              withheld_balance: { _gte: $minWithheld }
+            },
             _inc: $inc,
             _set: { updated_at: "now()" }
           ) {
@@ -469,6 +501,8 @@ def register_account_transaction(
                         "available_balance": balance_update.available,
                         "withheld_balance": balance_update.withheld,
                     },
+                    "minAvailable": _guard_floor(balance_update.available),
+                    "minWithheld": _guard_floor(balance_update.withheld),
                 },
             )
         except Exception:
@@ -490,15 +524,26 @@ def register_account_transaction(
         update_result = transaction_data.get("update_accounts") or {}
 
         if not transaction_id or not update_result.get("affected_rows"):
-            # Cannot happen inside one transaction unless Hasura returned an odd
-            # payload; surface it loudly rather than report success.
-            log_error(
-                "ledger_move_incomplete",
-                account_id=account_id,
-                transaction_id=transaction_id,
-                affected_rows=update_result.get("affected_rows"),
-                idempotency_key=idempotency_key,
-            )
+            # A failed guard still inserts in this request (0 rows is not an error).
+            # Drop that row so the idempotency key does not block a later retry,
+            # and do not report success: the balance did not move.
+            if transaction_id:
+                _delete_ledger_row(client, transaction_id)
+                log_error(
+                    "ledger_guard_rejected",
+                    account_id=account_id,
+                    transaction_id=transaction_id,
+                    transaction_type=transaction_type,
+                    amount=amount,
+                    idempotency_key=idempotency_key,
+                )
+            else:
+                log_error(
+                    "ledger_move_incomplete",
+                    account_id=account_id,
+                    affected_rows=update_result.get("affected_rows"),
+                    idempotency_key=idempotency_key,
+                )
             return None
 
         returned = (update_result.get("returning") or [{}])[0]

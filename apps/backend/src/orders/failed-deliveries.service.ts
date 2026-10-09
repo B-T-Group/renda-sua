@@ -483,6 +483,7 @@ export class FailedDeliveriesService {
         transactionType: 'release',
         memo: `Hold released for failed delivery - order ${order.order_number}`,
         referenceId: order.id,
+        idempotencyKey: this.failedDeliveryKey('agent-fault', 'client-release', order.id),
       });
     }
 
@@ -499,6 +500,7 @@ export class FailedDeliveriesService {
         transactionType: 'release',
         memo: `Hold released for failed delivery - order ${order.order_number}`,
         referenceId: order.id,
+        idempotencyKey: this.failedDeliveryKey('agent-fault', 'agent-release', order.id),
       });
 
       // Deposit agent hold amount to business account
@@ -516,6 +518,7 @@ export class FailedDeliveriesService {
           transactionType: 'deposit',
           memo: `Agent hold retained for failed delivery - order ${order.order_number} (agent fault)`,
           referenceId: order.id,
+          idempotencyKey: this.failedDeliveryKey('agent-fault', 'business-deposit', order.id),
         });
       }
     }
@@ -533,6 +536,7 @@ export class FailedDeliveriesService {
         transactionType: 'release',
         memo: `Delivery fee hold released for failed delivery - order ${order.order_number}`,
         referenceId: order.id,
+        idempotencyKey: this.failedDeliveryKey('agent-fault', 'delivery-release', order.id),
       });
     }
   }
@@ -558,6 +562,7 @@ export class FailedDeliveriesService {
         transactionType: 'release',
         memo: `Hold released for failed delivery - order ${order.order_number}`,
         referenceId: order.id,
+        idempotencyKey: this.failedDeliveryKey('item-fault', 'client-release', order.id),
       });
     }
 
@@ -574,6 +579,7 @@ export class FailedDeliveriesService {
         transactionType: 'release',
         memo: `Hold released for failed delivery - order ${order.order_number}`,
         referenceId: order.id,
+        idempotencyKey: this.failedDeliveryKey('item-fault', 'agent-release', order.id),
       });
     }
 
@@ -590,6 +596,7 @@ export class FailedDeliveriesService {
         transactionType: 'release',
         memo: `Delivery fee hold released for failed delivery - order ${order.order_number}`,
         referenceId: order.id,
+        idempotencyKey: this.failedDeliveryKey('item-fault', 'delivery-release', order.id),
       });
     }
 
@@ -668,7 +675,8 @@ export class FailedDeliveriesService {
           order,
           holdAccount.id,
           clientHold,
-          `Hold released for failed delivery - order ${order.order_number}`
+          `Hold released for failed delivery - order ${order.order_number}`,
+          'client-release'
         );
       }
       if (deliveryHold > 0) {
@@ -676,7 +684,8 @@ export class FailedDeliveriesService {
           order,
           holdAccount.id,
           deliveryHold,
-          `Delivery fee hold released for failed delivery - order ${order.order_number}`
+          `Delivery fee hold released for failed delivery - order ${order.order_number}`,
+          'delivery-release'
         );
       }
     }
@@ -694,6 +703,7 @@ export class FailedDeliveriesService {
         transactionType: 'release',
         memo: `Hold released for failed delivery - order ${order.order_number}`,
         referenceId: order.id,
+        idempotencyKey: this.failedDeliveryKey('client-fault', 'agent-release', order.id),
       });
     }
 
@@ -743,7 +753,12 @@ export class FailedDeliveriesService {
         order.assigned_agent.user.id,
         order.currency
       );
-      await this.creditFailureFeeShare(order, agentAccount.id, agentShare);
+      await this.creditFailureFeeShare(
+        order,
+        agentAccount.id,
+        agentShare,
+        'agent-share'
+      );
     }
 
     const businessUserId = order.business?.user_id;
@@ -755,7 +770,8 @@ export class FailedDeliveriesService {
       await this.creditFailureFeeShare(
         order,
         businessUserAccount.id,
-        businessShare
+        businessShare,
+        'business-share'
       );
     }
     return shortfall;
@@ -766,7 +782,8 @@ export class FailedDeliveriesService {
     order: any,
     accountId: string,
     amount: number,
-    memo: string
+    memo: string,
+    leg: string
   ): Promise<void> {
     const result = await this.accountsService.registerTransaction({
       accountId,
@@ -774,6 +791,7 @@ export class FailedDeliveriesService {
       transactionType: 'release',
       memo,
       referenceId: order.id,
+      idempotencyKey: this.failedDeliveryKey('client-fault', leg, order.id),
     });
     if (!result?.success) {
       reportMoneyAnomaly(
@@ -801,6 +819,7 @@ export class FailedDeliveriesService {
       transactionType: 'withdrawal',
       memo: `Failed delivery fee - order ${order.order_number} (client fault)`,
       referenceId: order.id,
+      idempotencyKey: this.failedDeliveryKey('client-fault', 'fee', order.id),
     });
     if (result?.success) return amount;
     reportMoneyAnomaly(
@@ -816,7 +835,8 @@ export class FailedDeliveriesService {
   private async creditFailureFeeShare(
     order: any,
     accountId: string,
-    amount: number
+    amount: number,
+    leg: string
   ): Promise<void> {
     if (amount <= 0) return;
     const result = await this.accountsService.registerTransaction({
@@ -825,6 +845,7 @@ export class FailedDeliveriesService {
       transactionType: 'deposit',
       memo: `Failed delivery fee split - order ${order.order_number} (client fault)`,
       referenceId: order.id,
+      idempotencyKey: this.failedDeliveryKey('client-fault', leg, order.id),
     });
     if (!result?.success) {
       reportMoneyAnomaly(
@@ -835,6 +856,10 @@ export class FailedDeliveriesService {
         { orderId: order.id, accountId, amount }
       );
     }
+  }
+
+  private failedDeliveryKey(resolution: string, leg: string, orderId: string): string {
+    return `failed-delivery:${resolution}:${leg}:${orderId}`;
   }
 
   private outcomeWithShortfall(
