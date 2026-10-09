@@ -952,7 +952,8 @@ export class BusinessItemsController {
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({
-    summary: 'Soft-delete an item (set status to deleted, clear location inventories)',
+    summary:
+      'Soft-delete an item (set status to deleted; deactivate stock; keep inventory linked to orders)',
   })
   @ApiQuery({ name: 'businessId', required: false })
   @ApiResponse({ status: 204, description: 'Item deleted successfully' })

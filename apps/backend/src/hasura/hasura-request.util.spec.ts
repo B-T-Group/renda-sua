@@ -5,6 +5,7 @@ import {
   HASURA_UNAVAILABLE_MESSAGE,
   INVALID_IDENTIFIER_MESSAGE,
   isInvalidUuidInputError,
+  isOrderItemsInventoryFkViolation,
   isMissingItemsInterestOnlyField,
   isTransientHasuraNetworkError,
   isWrappedTransientHasuraHttpException,
@@ -222,6 +223,28 @@ describe('hasura-request.util', () => {
       statusCode: 400,
       message: INVALID_IDENTIFIER_MESSAGE,
     });
+  });
+
+  it('detects order_items inventory foreign-key violations', () => {
+    expect(
+      isOrderItemsInventoryFkViolation({
+        message:
+          'Foreign key violation. update or delete on table "business_inventory" violates foreign key constraint "order_items_business_inventory_id_fkey" on table "order_items"',
+        response: {
+          errors: [
+            {
+              message:
+                'Foreign key violation. update or delete on table "business_inventory" violates foreign key constraint "order_items_business_inventory_id_fkey" on table "order_items"',
+            },
+          ],
+        },
+      })
+    ).toBe(true);
+    expect(
+      isOrderItemsInventoryFkViolation({
+        message: "field 'currency' not found in type: 'businesses'",
+      })
+    ).toBe(false);
   });
 
   it('does not treat unrelated GraphQL errors as invalid UUID input', () => {

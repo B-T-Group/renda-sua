@@ -10,6 +10,7 @@ import { CreateItemDto } from '../items/dto/create-item.dto';
 import { ItemsService, type ItemsInsertInput } from '../items/items.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { isOrderItemsInventoryFkViolation } from '../hasura/hasura-request.util';
 import { ImageThumbnailsService } from '../image-thumbnails/image-thumbnails.service';
 import { postalCodeForStorage } from '../addresses/postal-code.util';
 import { CreateItemFromImageDto } from './dto/create-item-from-image.dto';
@@ -778,9 +779,26 @@ const GET_ITEM_BY_ID = `
   }
 `;
 
-const DELETE_BUSINESS_INVENTORY_BY_ITEM = `
-  mutation DeleteBusinessInventoryByItem($itemId: uuid!) {
-    delete_business_inventory(where: { item_id: { _eq: $itemId } }) {
+const DEACTIVATE_BUSINESS_INVENTORY_BY_ITEM = `
+  mutation DeactivateBusinessInventoryByItem($itemId: uuid!) {
+    update_business_inventory(
+      where: { item_id: { _eq: $itemId } }
+      _set: { is_active: false }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+const DELETE_UNREFERENCED_BUSINESS_INVENTORY_BY_ITEM = `
+  mutation DeleteUnreferencedBusinessInventoryByItem($itemId: uuid!) {
+    delete_business_inventory(
+      where: {
+        item_id: { _eq: $itemId }
+        reserved_quantity: { _eq: 0 }
+        _not: { order_items: {} }
+      }
+    ) {
       affected_rows
     }
   }
@@ -2710,10 +2728,21 @@ export class BusinessItemsService {
   }
 
   /**
-   * Soft-delete an item: clear business_inventory for the item, then set item status to 'deleted'.
-   * Throws 404 if item not found, 403 if item is not owned by the business.
+   * Soft-delete an item: deactivate location stock, hard-delete unused inventory
+   * rows, keep rows referenced by order_items, then set item status to deleted.
    */
   async deleteItem(businessId: string, itemId: string): Promise<void> {
+    await this.assertOwnedCatalogItem(businessId, itemId);
+    await this.clearInventoriesForItemDelete(itemId);
+    await this.markItemDeleted(itemId);
+    this.triggerLifecycleRecompute(businessId);
+    void this.invalidateCatalogCache();
+  }
+
+  private async assertOwnedCatalogItem(
+    businessId: string,
+    itemId: string
+  ): Promise<void> {
     const itemResult = await this.hasuraUserService.executeQuery<{
       items_by_pk: { id: string; business_id: string } | null;
     }>(GET_ITEM_BY_ID, { itemId });
@@ -2730,15 +2759,37 @@ export class BusinessItemsService {
         HttpStatus.FORBIDDEN
       );
     }
-    await this.hasuraUserService.executeMutation(DELETE_BUSINESS_INVENTORY_BY_ITEM, {
-      itemId,
-    });
+  }
+
+  private async clearInventoriesForItemDelete(itemId: string): Promise<void> {
+    await this.hasuraUserService.executeMutation(
+      DEACTIVATE_BUSINESS_INVENTORY_BY_ITEM,
+      { itemId }
+    );
+    await this.deleteUnreferencedInventories(itemId);
+  }
+
+  private async deleteUnreferencedInventories(itemId: string): Promise<void> {
+    try {
+      await this.hasuraUserService.executeMutation(
+        DELETE_UNREFERENCED_BUSINESS_INVENTORY_BY_ITEM,
+        { itemId }
+      );
+    } catch (error: any) {
+      if (!isOrderItemsInventoryFkViolation(error)) {
+        throw error;
+      }
+      this.logger.warn(
+        `Kept inventory for item ${itemId}: order_items still reference it`
+      );
+    }
+  }
+
+  private async markItemDeleted(itemId: string): Promise<void> {
     await this.hasuraUserService.executeMutation(UPDATE_ITEM_STATUS, {
       itemId,
       status: 'deleted',
     });
-    this.triggerLifecycleRecompute(businessId);
-    void this.invalidateCatalogCache();
   }
 
   async processCsvRows(

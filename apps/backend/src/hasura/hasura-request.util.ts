@@ -109,6 +109,16 @@ export function isInvalidUuidInputError(error: unknown): boolean {
   );
 }
 
+export function isOrderItemsInventoryFkViolation(error: unknown): boolean {
+  const text = hasuraValidationErrorText(error);
+  return (
+    text.includes('order_items_business_inventory_id_fkey') ||
+    (/Foreign key violation/i.test(text) &&
+      /business_inventory/i.test(text) &&
+      /order_items/i.test(text))
+  );
+}
+
 export function mapExhaustedHasuraQueryError(error: unknown): never {
   if (error instanceof HttpException) {
     throw error;
