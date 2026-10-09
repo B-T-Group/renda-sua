@@ -315,6 +315,35 @@ describe('BusinessTokensService', () => {
       }
     );
   });
+
+  it('does not fail a successful charge that has no provider transaction id yet', async () => {
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'user-1',
+      email: 'owner@example.com',
+      phone_number: '+237600000000',
+      business: { id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' },
+    });
+    paymentRoutingService.getBusinessCountryCode.mockResolvedValue('CM');
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      supported_country_states: [{ currency_code: 'XAF' }],
+    });
+    paymentRoutingService.resolveRailForBusiness.mockResolvedValue(
+      'mobile_money'
+    );
+    mobilePaymentsService.getProvider.mockReturnValue('mypvit');
+    mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+      id: 'mp-tx-1',
+    });
+    mobilePaymentsService.initiatePayment.mockResolvedValue({ success: true });
+
+    await expect(
+      service.initiatePackPurchase({
+        packId: 'pack_100',
+        phoneNumber: '+237600000000',
+      })
+    ).resolves.toEqual(expect.objectContaining({ success: true, paymentPending: true }));
+    expect(mobilePaymentsDatabaseService.updateTransaction).not.toHaveBeenCalled();
+  });
 });
 
 function tokenParams() {
