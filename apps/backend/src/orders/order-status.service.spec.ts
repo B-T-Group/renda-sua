@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderStatusService } from './order-status.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -188,6 +189,48 @@ describe('OrderStatusService', () => {
     });
   });
 
+  describe('updateOrderStatus same-status replay', () => {
+    it('treats confirmed → confirmed as a no-op', async () => {
+      const replay = jest.fn();
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...baseOrder,
+          current_status: 'confirmed',
+          fulfillment_method: 'pickup',
+        },
+      });
+
+      const result = await service.updateOrderStatus(
+        'order-123',
+        'confirmed',
+        undefined,
+        { onSameStatusReplay: replay }
+      );
+
+      expect(result.current_status).toBe('confirmed');
+      expect(replay).toHaveBeenCalledTimes(1);
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('still rejects cancelled → cancelled as a conflict', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'cancelled' },
+      });
+
+      const error = await service
+        .updateOrderStatus('order-123', 'cancelled', {
+          viaCancelEndpoint: true,
+          expectedFromStatus: 'confirmed',
+        })
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+  });
+
   describe('updateOrderStatus shipping backdoor', () => {
     it('rejects business confirmed → shipped on the generic status endpoint', async () => {
       hasuraUserService.getUser.mockResolvedValue(businessUser as any);
@@ -195,9 +238,14 @@ describe('OrderStatusService', () => {
         orders_by_pk: { ...baseOrder, current_status: 'confirmed' },
       });
 
-      await expect(
-        service.updateOrderStatus('order-123', 'shipped')
-      ).rejects.toThrow('Invalid status transition from confirmed to shipped');
+      const error = await service
+        .updateOrderStatus('order-123', 'shipped')
+        .catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(HttpException);
+      expect((error as HttpException).message).toBe(
+        'Invalid status transition from confirmed to shipped'
+      );
+      expect((error as HttpException).getStatus()).toBe(HttpStatus.BAD_REQUEST);
     });
 
     it('rejects business confirmed → ready_for_pickup for shipping orders', async () => {
