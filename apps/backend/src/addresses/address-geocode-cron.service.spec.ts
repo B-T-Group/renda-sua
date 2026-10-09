@@ -148,6 +148,26 @@ describe('AddressGeocodeCronService', () => {
     }
   });
 
+  it('leaves a row unmarked when Google fails transiently, so tomorrow retries it', async () => {
+    const executeMutation = jest.fn();
+    const service = new AddressGeocodeCronService(
+      {
+        executeQuery: jest.fn(async () => ({
+          addresses: [{ id: 'a1', address_line_1: '1 Rue', city: 'Douala', country: 'CM' }],
+        })),
+        executeMutation,
+      } as any,
+      {
+        geocodeWithCountry: jest.fn(async () => {
+          throw new Error('Geocoding failed: OVER_QUERY_LIMIT');
+        }),
+      } as any
+    );
+
+    await expect(service.geocodePendingAddresses()).resolves.toBe(0);
+    expect(executeMutation).not.toHaveBeenCalled();
+  });
+
   it('swallows a failed batch so the daily job keeps running', async () => {
     const service = new AddressGeocodeCronService(
       {

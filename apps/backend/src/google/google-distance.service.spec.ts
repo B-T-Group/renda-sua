@@ -165,7 +165,7 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
     });
     expect(mockedAxios.get).toHaveBeenCalledWith(
       'https://maps.googleapis.com/maps/api/geocode/json',
-      { params: { address: 'Null Island', key: 'test-key' } }
+      { params: { address: 'Null Island', key: 'test-key' }, timeout: 10_000 }
     );
   });
 
@@ -174,15 +174,20 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
     expect(mockedAxios.get).not.toHaveBeenCalled();
   });
 
-  it('returns null for no match, a denied request, and a network error', async () => {
+  it('returns null only for a genuine no-match', async () => {
     mockedAxios.get.mockResolvedValueOnce({ data: { status: 'ZERO_RESULTS', results: [] } });
     await expect(service.geocodeWithCountry('nowhere')).resolves.toBeNull();
+  });
 
+  it('throws on a denied/over-quota request and on a network error so the cron does not mark not_found', async () => {
     mockedAxios.get.mockResolvedValueOnce({ data: { status: 'REQUEST_DENIED' } });
-    await expect(service.geocodeWithCountry('denied')).resolves.toBeNull();
+    await expect(service.geocodeWithCountry('denied')).rejects.toThrow(/REQUEST_DENIED/);
+
+    mockedAxios.get.mockResolvedValueOnce({ data: { status: 'OVER_QUERY_LIMIT' } });
+    await expect(service.geocodeWithCountry('quota')).rejects.toThrow(/OVER_QUERY_LIMIT/);
 
     mockedAxios.get.mockRejectedValueOnce(new Error('timeout'));
-    await expect(service.geocodeWithCountry('offline')).resolves.toBeNull();
+    await expect(service.geocodeWithCountry('offline')).rejects.toThrow('timeout');
   });
 
   it('returns null when the hit has no coordinates', async () => {

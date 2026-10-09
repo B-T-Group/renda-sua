@@ -10,6 +10,7 @@ import {
   Post,
   Put,
   UseGuards,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -28,6 +29,8 @@ import { CurrentLocationAddressService } from './current-location-address.servic
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class AddressesController {
+  private readonly logger = new Logger(AddressesController.name);
+
   constructor(
     private readonly addressesService: AddressesService,
     private readonly currentLocationAddressService: CurrentLocationAddressService
@@ -49,8 +52,9 @@ export class AddressesController {
       return { success: true, data: result };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
+      this.logger.error(`current_location_failed: ${error?.message}`);
       throw new HttpException(
-        { success: false, error: error.message },
+        { success: false, error: 'Failed to resolve current location' },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

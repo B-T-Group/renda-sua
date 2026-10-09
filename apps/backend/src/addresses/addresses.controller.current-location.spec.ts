@@ -57,7 +57,10 @@ describe('AddressesController.resolveCurrentLocation', () => {
       expect(caught).toBeInstanceOf(HttpException);
       const error = caught as HttpException;
       expect(error.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
-      expect(error.getResponse()).toEqual({ success: false, error: 'db down' });
+      expect(error.getResponse()).toEqual({
+        success: false,
+        error: 'Failed to resolve current location',
+      });
     }
   });
 });
