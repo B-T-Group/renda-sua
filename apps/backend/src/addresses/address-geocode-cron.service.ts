@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import type { ForwardGeocode } from '../google/google-distance.service';
-import { DistributedLockService } from '../common/distributed-lock.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export type GeocodeStatus = 'success' | 'not_found' | 'country_mismatch';
@@ -18,8 +17,52 @@ export type GeocodeReason =
   | 'no_street_component'
   | 'no_city_component';
 
-const LOCK_KEY = 'cron:address-geocode';
+export const CRON_ENABLED_KEY = 'address_geocode_cron_enabled';
+export const CRON_LOCK_KEY = 'address_geocode_cron_lock';
 const LOCK_TTL_MS = 30 * 60 * 1000;
+const LOCK_FREE = '1970-01-01T00:00:00.000Z';
+
+const READ_CRON_FLAG = `
+  query AddressGeocodeCronFlag($key: String!) {
+    application_configurations(
+      where: { config_key: { _eq: $key }, status: { _eq: "active" }, country_code: { _is_null: true } }
+      limit: 1
+    ) {
+      boolean_value
+    }
+  }
+`;
+
+/**
+ * Atomic compare-and-set on the lock row (date_value = expiry; the epoch means free, because
+ * the table's config_value_not_null check forbids NULL for a date row): only one UPDATE can move
+ * date_value from free/expired to a new expiry, whatever the number of instances. No Redis needed.
+ */
+const ACQUIRE_CRON_LOCK = `
+  mutation AcquireAddressGeocodeCronLock($key: String!, $now: timestamptz!, $expiry: timestamptz!) {
+    update_application_configurations(
+      where: {
+        config_key: { _eq: $key }
+        country_code: { _is_null: true }
+        date_value: { _lt: $now }
+      }
+      _set: { date_value: $expiry }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+const RELEASE_CRON_LOCK = `
+  mutation ReleaseAddressGeocodeCronLock($key: String!, $expiry: timestamptz!, $free: timestamptz!) {
+    update_application_configurations(
+      where: { config_key: { _eq: $key }, country_code: { _is_null: true }, date_value: { _eq: $expiry } }
+      _set: { date_value: $free }
+    ) {
+      affected_rows
+    }
+  }
+`;
 const MIN_ADDRESS_LINE_CHARS = 5;
 const ACCEPTED_PRECISION = new Set(['ROOFTOP', 'RANGE_INTERPOLATED']);
 
@@ -146,27 +189,56 @@ export class AddressGeocodeCronService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly googleDistanceService: GoogleDistanceService,
-    private readonly locks: DistributedLockService
+    private readonly googleDistanceService: GoogleDistanceService
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async handlePendingAddressGeocodes(): Promise<void> {
-    const release = await this.locks.tryAcquire(LOCK_KEY, LOCK_TTL_MS, {
-      requireShared: true,
-    });
-    if (!release) {
-      this.logger.warn('address geocode: another instance holds the lock, skipping');
-      return;
-    }
     try {
-      const n = await this.geocodePendingAddresses();
-      if (n > 0) this.logger.log(`Geocoded ${n} address(es)`);
+      if (!(await this.isEnabled())) {
+        this.logger.log(`address geocode: disabled (${CRON_ENABLED_KEY} is not true), skipping`);
+        return;
+      }
+      const release = await this.acquireLock();
+      if (!release) {
+        this.logger.warn('address geocode: another instance holds the lock, skipping');
+        return;
+      }
+      try {
+        const n = await this.geocodePendingAddresses();
+        if (n > 0) this.logger.log(`Geocoded ${n} address(es)`);
+      } finally {
+        await release();
+      }
     } catch (error: any) {
       this.logger.error(error?.message ?? String(error));
-    } finally {
-      await release();
     }
+  }
+
+  /** Global flag row only (the job is not per country). Missing row = off; read errors are caught by the caller (stay off). */
+  async isEnabled(): Promise<boolean> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      application_configurations: { boolean_value: boolean | null }[];
+    }>(READ_CRON_FLAG, { key: CRON_ENABLED_KEY });
+    return res.application_configurations?.[0]?.boolean_value === true;
+  }
+
+  /** DB compare-and-set lock (works on every env, multi-instance safe). */
+  private async acquireLock(): Promise<(() => Promise<void>) | null> {
+    const expiry = new Date(Date.now() + LOCK_TTL_MS).toISOString();
+    const res = await this.hasuraSystemService.executeMutation<{
+      update_application_configurations: { affected_rows: number };
+    }>(ACQUIRE_CRON_LOCK, {
+      key: CRON_LOCK_KEY,
+      now: new Date().toISOString(),
+      expiry,
+    });
+    if (res.update_application_configurations?.affected_rows !== 1) return null;
+    return async () => {
+      await this.hasuraSystemService
+        .executeMutation(RELEASE_CRON_LOCK, { key: CRON_LOCK_KEY, expiry, free: LOCK_FREE })
+        .catch((e: any) => this.logger.warn(`address geocode: lock release failed: ${e?.message}`));
+    };
   }
 
   async geocodePendingAddresses(): Promise<number> {
