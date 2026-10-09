@@ -28,6 +28,14 @@ export interface ForwardGeocode {
   longitude: number;
   countryCode: string;
   country: string;
+  /** ROOFTOP | RANGE_INTERPOLATED | GEOMETRIC_CENTER | APPROXIMATE */
+  locationType: string;
+  /** Google matched only part of the input (e.g. dropped a junk street). */
+  partialMatch: boolean;
+  /** The match has a street (route/street_address/premise) component. */
+  hasStreet: boolean;
+  /** The match has a city-level component. */
+  hasCity: boolean;
 }
 
 /** Google Distance Matrix legacy API: max 25 origins or destinations per request. */
@@ -343,8 +351,12 @@ export class GoogleDistanceService {
       const response = await axios.get(url, { params });
 
       if (response.data.status !== 'OK') {
+        // Never surface provider text (quota / key state) to callers: log it only.
+        this.logger.warn(
+          `reverse geocode failed status=${response.data.status} message=${response.data.error_message ?? ''}`
+        );
         throw new HttpException(
-          response.data.error_message || 'Google Geocoding API error',
+          'Google Geocoding API error',
           HttpStatus.BAD_REQUEST
         );
       }
@@ -437,7 +449,25 @@ export class GoogleDistanceService {
       longitude: location.lng,
       countryCode: this.countryShortCode(components),
       country: this.getAddressComponent(components, ['country']) || '',
+      locationType: String(result.geometry?.location_type ?? ''),
+      partialMatch: result.partial_match === true,
+      hasStreet: this.hasStreet(result, components),
+      hasCity: Boolean(
+        this.getAddressComponent(components, [
+          'locality',
+          'sublocality',
+          'administrative_area_level_2',
+        ])
+      ),
     };
+  }
+
+  private hasStreet(result: any, components: any[]): boolean {
+    const types: string[] = result.types ?? [];
+    if (types.some((t) => ['street_address', 'route', 'premise', 'subpremise'].includes(t))) {
+      return true;
+    }
+    return Boolean(this.getAddressComponent(components, ['route', 'street_number']));
   }
 
   private countryShortCode(components: any[]): string {
