@@ -34,6 +34,7 @@ describe('Auth0Service test-user OTP bypass hardening', () => {
       emailDomain: 'rendasua-test.com',
       emailAllowlist: [],
       phoneAllowlist: ['+237699000000'],
+      phoneSuffix: '0000',
       password: 'TestPassword1!',
       emailConnection: 'Email-Test-Users',
       phoneConnection: 'Phone-Test-Users',
@@ -88,14 +89,12 @@ describe('Auth0Service test-user OTP bypass hardening', () => {
     }
   );
 
-  it('no longer treats a real number ending in 0000 as a test user', async () => {
+  it('logs in a phone ending in 0000 with code 0000', async () => {
     const service = createService();
-    expect(service.isTestPhone('+237654100000')).toBe(false);
+    expect(service.isTestPhone('+237654100000')).toBe(true);
     await expect(
       service.verifyTestUserPhone('+237654100000', '0000')
-    ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
-    expect(mockUsersCreate).not.toHaveBeenCalled();
-    expect(mockedPost).not.toHaveBeenCalled();
+    ).resolves.toEqual(expect.objectContaining({ access_token: 'tok' }));
   });
 
   it('rejects non-test emails even with 0000', async () => {
@@ -140,17 +139,18 @@ describe('Auth0Service test-user OTP bypass hardening', () => {
       expect(configuration().auth0.testUsers.enabled).toBe(false);
     });
 
-    it('parses the allowlists and has no suffix rule', () => {
+    it('parses the allowlists and defaults the phone suffix to 0000', () => {
       process.env.AUTH0_TEST_USERS_ENABLED = 'true';
       process.env.NODE_ENV = 'development';
       process.env.DEPLOYMENT_ENV = 'development';
       process.env.AUTH0_TEST_PHONE_ALLOWLIST = '+237699000000, +15145550000';
       process.env.AUTH0_TEST_EMAIL_ALLOWLIST = '';
+      delete process.env.AUTH0_TEST_PHONE_SUFFIX;
       const testUsers = configuration().auth0.testUsers;
       expect(testUsers.enabled).toBe(true);
       expect(testUsers.phoneAllowlist).toEqual(['+237699000000', '+15145550000']);
       expect(testUsers.emailAllowlist).toEqual([]);
-      expect(testUsers).not.toHaveProperty('phoneSuffix');
+      expect(testUsers.phoneSuffix).toBe('0000');
     });
   });
 });

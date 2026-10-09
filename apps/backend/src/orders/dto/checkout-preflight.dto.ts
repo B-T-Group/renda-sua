@@ -348,6 +348,12 @@ export class CheckoutGroupDto {
   @ApiPropertyOptional()
   is_first_order_client?: boolean;
 
+  @ApiProperty({
+    description:
+      'Flat Rendasua service fee for this order, snapshotted from configuration. 0 when the seller country has no fee.',
+  })
+  service_fee!: number;
+
   @ApiProperty()
   total!: number;
 

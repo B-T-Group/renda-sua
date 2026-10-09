@@ -13,6 +13,7 @@ const CREATE_ORDER = `
       subtotal
       delivery_fee
       tax_amount
+      service_fee
       total_amount
       currency
       current_status

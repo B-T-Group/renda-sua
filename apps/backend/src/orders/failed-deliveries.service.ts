@@ -234,6 +234,7 @@ export class FailedDeliveriesService {
             per_km_delivery_fee
             delivery_fee_waived
             tax_amount
+            service_fee
             currency
             business_id
             business_location_id
@@ -610,7 +611,7 @@ export class FailedDeliveriesService {
 
   /**
    * Client-fault failed delivery fee = `failed_delivery_fee_percent`% of the item subtotal
-   * after discounts (excludes delivery fee and tax) - the same base and rounding as the
+   * after discounts (excludes delivery fee, tax, and the service fee) - the same base and rounding as the
    * client cancellation fee (`fee-percent.util.ts`). Country = delivery address country.
    * Missing row: logged `failed_delivery_fee_config_missing` (error) + 30% default, never a
    * silent 0; a read error propagates (HTTP 500) before any ledger movement.

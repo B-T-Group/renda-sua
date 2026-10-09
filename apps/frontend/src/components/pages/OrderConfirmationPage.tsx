@@ -41,6 +41,7 @@ interface OrderConfirmationOrder {
   created_at: string;
   payment_source?: PaymentSource;
   payment_timing?: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup';
+  service_fee?: number;
   pay_after_merchant_confirm?: boolean | null;
   fulfillment_method?: 'delivery' | 'pickup' | 'shipping' | null;
   recipient_name?: string | null;
@@ -116,6 +117,10 @@ const OrderConfirmationPage: React.FC = () => {
     0
   );
   const currency = orders[0]?.currency || 'USD';
+  const serviceFeeTotal = orders.reduce(
+    (sum, order) => sum + (Number(order.service_fee) || 0),
+    0
+  );
 
   // Wallet = paid from balance (no phone step). API uses mobile_money for MM; DB enum may use mobile_payment.
   const isWalletPayment = (src?: PaymentSource) => src === 'wallet';
@@ -217,6 +222,17 @@ const OrderConfirmationPage: React.FC = () => {
               <br />
               {t('orders.totalAmount', 'Total Amount')}:{' '}
               {totalAmount.toLocaleString()} {currency}
+              {serviceFeeTotal > 0 ? (
+                <>
+                  <br />
+                  <Typography variant="caption" color="text.secondary" component="span">
+                    {t('checkout.serviceFee', 'Service fee')}:{' '}
+                    {serviceFeeTotal.toLocaleString()} {currency}
+                    {' · '}
+                    {t('checkout.serviceFeeHint', 'Helps us run secure checkout')}
+                  </Typography>
+                </>
+              ) : null}
             </>
           ) : (
             <>
@@ -781,6 +797,14 @@ const OrderConfirmationPage: React.FC = () => {
                     {orders[0].total_amount.toLocaleString()}{' '}
                     {orders[0].currency}
                   </Typography>
+                  {(Number(orders[0].service_fee) || 0) > 0 ? (
+                    <Typography variant="caption" color="text.secondary">
+                      {t('checkout.serviceFee', 'Service fee')}:{' '}
+                      {Number(orders[0].service_fee).toLocaleString()} {orders[0].currency}
+                      {' · '}
+                      {t('checkout.serviceFeeHint', 'Helps us run secure checkout')}
+                    </Typography>
+                  ) : null}
                 </Box>
               </Grid>
 

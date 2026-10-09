@@ -291,6 +291,10 @@ describe('CheckoutPreflightService', () => {
         },
         DepositCalculationService,
         {
+          provide: require('./service-fee.service').ServiceFeeService,
+          useValue: { resolve: jest.fn().mockResolvedValue(0) },
+        },
+        {
           provide: VariantInventoryService,
           useValue: {
             retargetLines: jest.fn(

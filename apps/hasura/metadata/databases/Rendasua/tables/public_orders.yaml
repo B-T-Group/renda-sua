@@ -172,6 +172,7 @@ insert_permissions:
         - per_km_delivery_fee
         - subtotal
         - tax_amount
+        - service_fee
         - tax_status
         - tax_jurisdiction
         - tax_breakdown
@@ -211,6 +212,7 @@ select_permissions:
         - shipped_at
         - received_at
         - tax_amount
+        - service_fee
         - tax_status
         - tax_jurisdiction
         - tax_breakdown
@@ -310,6 +312,7 @@ select_permissions:
         - base_delivery_fee
         - per_km_delivery_fee
         - tax_amount
+        - service_fee
         - tax_status
         - tax_jurisdiction
         - tax_breakdown
@@ -418,6 +421,7 @@ select_permissions:
         - base_delivery_fee
         - per_km_delivery_fee
         - tax_amount
+        - service_fee
         - tax_status
         - tax_jurisdiction
         - tax_breakdown

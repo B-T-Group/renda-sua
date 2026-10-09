@@ -45,6 +45,7 @@ def get_order_with_location(
         base_delivery_fee
         per_km_delivery_fee
         tax_amount
+        service_fee
         total_amount
         requires_fast_delivery
         business_location {
@@ -175,6 +176,7 @@ def get_order_with_location(
             base_delivery_fee=float(order_data.get("base_delivery_fee", 0.0)),
             per_km_delivery_fee=float(order_data.get("per_km_delivery_fee", 0.0)),
             tax_amount=float(order_data.get("tax_amount", 0.0)),
+            service_fee=float(order_data.get("service_fee") or 0),
             total_amount=float(order_data.get("total_amount", 0.0)),
             requires_fast_delivery=bool(order_data.get("requires_fast_delivery", False)),
         )
@@ -219,6 +221,7 @@ def get_complete_order_details(
         per_km_delivery_fee
         delivery_fee_waived
         tax_amount
+        service_fee
         currency
         client_id
         business_id
@@ -334,6 +337,7 @@ def get_complete_order_details(
             per_km_delivery_fee=float(order_data.get("per_km_delivery_fee") or 0),
             delivery_fee_waived=order_data.get("delivery_fee_waived"),
             tax_amount=float(order_data.get("tax_amount") or 0),
+            service_fee=float(order_data.get("service_fee") or 0),
             requires_fast_delivery=False,
         )
         

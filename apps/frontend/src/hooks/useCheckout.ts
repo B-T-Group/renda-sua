@@ -56,6 +56,7 @@ interface OrderResult {
   id: string;
   order_number: string;
   total_amount: number;
+  service_fee?: number;
   currency: string;
   current_status: string;
   business_id: string;

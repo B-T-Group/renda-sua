@@ -36,6 +36,8 @@ export interface PlaceOrderSummaryCardProps {
   discountPercentage: number;
   discountAmount: number;
   grandTotal: number;
+  /** Flat service fee already included in grandTotal. Hidden when 0. */
+  serviceFee?: number;
   showTaxAtCheckoutNotice?: boolean;
   /** Deposit amount (when deposit path is active). */
   depositAmount?: number | null;
@@ -84,6 +86,7 @@ export function PlaceOrderSummaryCard({
   discountPercentage,
   discountAmount,
   grandTotal,
+  serviceFee = 0,
   showTaxAtCheckoutNotice = false,
   depositAmount,
   showDepositBreakdown,
@@ -250,6 +253,19 @@ export function PlaceOrderSummaryCard({
 
         {!hideFinancialSummary ? (
           <>
+            {serviceFee > 0 ? (
+              <Row label={t('checkout.serviceFee', 'Service fee')}>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+                    {formatCatalogMoney(serviceFee, currency)}
+                  </Text>
+                  <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+                    {t('checkout.serviceFeeHint', 'Helps us run secure checkout')}
+                  </Text>
+                </View>
+              </Row>
+            ) : null}
+
             {discountAmount > 0 ? (
               <Row label={t('client.placeOrder.summary.discount', 'Discount')}>
                 <Text variant="bodyMedium" style={{ fontWeight: '600', color: colors.secondary.main }}>

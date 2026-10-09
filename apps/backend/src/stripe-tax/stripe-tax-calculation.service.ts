@@ -12,6 +12,7 @@ export interface CalculateOrderTaxParams {
   orderItems: OrderTaxLineInput[];
   deliveryFee: number;
   discountAmount: number;
+  serviceFee?: number;
   deliveryAddress: {
     address_line_1: string;
     address_line_2?: string | null;
@@ -62,6 +63,7 @@ export class StripeTaxCalculationService {
       orderItems: params.orderItems,
       deliveryFee: 0,
       discountAmount: params.discountAmount,
+      serviceFee: params.serviceFee,
       customerAddress,
     });
     if (lineItems.length === 0 && params.deliveryFee <= 0) return null;

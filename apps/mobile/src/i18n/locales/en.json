@@ -260,6 +260,8 @@
     "taxCalculatedAtCheckout": "Calculated at checkout",
     "totalBeforeTax": "Total (before tax)",
     "deliveryFee": "Delivery",
+    "serviceFee": "Service fee",
+    "serviceFeeHint": "Helps us run secure checkout",
     "discount": "Discount",
     "pickupNoFee": "Waived (store pickup)",
     "incompleteAddress": {

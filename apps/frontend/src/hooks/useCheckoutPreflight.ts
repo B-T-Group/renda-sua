@@ -48,6 +48,8 @@ export interface CheckoutPreflightGroup {
   currency?: string;
   /** Group total in the merchant currency. */
   total?: number;
+  /** Flat service fee included in total. 0 when this seller country has no fee. */
+  service_fee?: number;
   /** True when a MoMo reservation deposit is required. */
   deposit_required?: boolean;
   deposit_amount?: number;

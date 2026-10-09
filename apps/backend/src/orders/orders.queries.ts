@@ -15,6 +15,7 @@ export const GET_ORDERS = gql`
       base_delivery_fee
       per_km_delivery_fee
       tax_amount
+      service_fee
       total_amount
       currency
       current_status
@@ -211,6 +212,7 @@ export const GET_ORDER_BY_ID = gql`
       subtotal
       base_delivery_fee
       tax_amount
+      service_fee
       total_amount
       per_km_delivery_fee
       currency
@@ -469,6 +471,7 @@ export const GET_ORDER_BY_NUMBER = gql`
       base_delivery_fee
       per_km_delivery_fee
       tax_amount
+      service_fee
       total_amount
       currency
       estimated_delivery_time
@@ -629,6 +632,7 @@ export const GET_ORDER_WITH_ITEMS = gql`
       subtotal
       base_delivery_fee
       tax_amount
+      service_fee
       total_amount
       currency
       business_id
@@ -805,6 +809,7 @@ export const GET_OPEN_ORDERS = gql`
       subtotal
       base_delivery_fee
       tax_amount
+      service_fee
       total_amount
       currency
       estimated_delivery_time
@@ -829,6 +834,7 @@ export const GET_ORDER_FOR_RECEIPT = gql`
       base_delivery_fee
       per_km_delivery_fee
       tax_amount
+      service_fee
       tax_jurisdiction
       tax_breakdown
       total_amount

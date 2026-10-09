@@ -56,6 +56,7 @@ export interface FeeBaseOrder {
   per_km_delivery_fee?: number | string | null;
   delivery_fee_waived?: boolean | null;
   tax_amount?: number | string | null;
+  service_fee?: number | string | null;
 }
 
 export function currencyDecimals(currency: string | null | undefined): number {
@@ -75,18 +76,19 @@ export function normalizeFeeCountryCode(
 }
 
 /**
- * Item subtotal AFTER discounts, excluding delivery fee and tax:
- *   max(0, total_amount - collected_delivery_fee - tax_amount)
+ * Item subtotal AFTER discounts, excluding delivery, tax, and the service fee:
+ *   max(0, total_amount - collected_delivery_fee - tax_amount - service_fee)
  *
- * `total_amount` is what the client is actually charged (items + delivery + tax - discount
- * code - purchase credits), so every discount is already netted out. The delivery fee is the
- * fee the customer actually paid (0 when waived). This equals the pay-now `client_hold_amount`
- * (item portion of the hold) used by the lambda.
+ * `total_amount` is what the client is actually charged (items + delivery + service fee +
+ * tax - discount code - purchase credits). The delivery fee is the fee the customer
+ * actually paid (0 when waived).
  */
 export function itemSubtotalAfterDiscounts(order: FeeBaseOrder): number {
   const total = Number(order.total_amount ?? 0);
   const tax = Number(order.tax_amount ?? 0);
-  const base = total - collectedDeliveryFee(order) - tax;
+  const serviceFee = Number(order.service_fee ?? 0);
+  const base =
+    total - collectedDeliveryFee(order) - tax - (Number.isFinite(serviceFee) ? serviceFee : 0);
   if (!Number.isFinite(base) || base <= 0) return 0;
   return Math.round(base * 100) / 100;
 }

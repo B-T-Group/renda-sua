@@ -166,6 +166,18 @@ export const ClientOrderDetails: React.FC<ClientOrderDetailsProps> = ({
               />
             </Stack>
           ) : null}
+          {(vm.summary.serviceFee ?? 0) > 0 ? (
+            <Stack direction="row" spacing={1} alignItems="baseline">
+              <Typography variant="body2" color="text.secondary">
+                {t('checkout.serviceFee', 'Service fee')}:
+              </Typography>
+              <MoneyDisplay
+                amount={vm.summary.serviceFee}
+                currency={vm.summary.currency}
+                variant="body2"
+              />
+            </Stack>
+          ) : null}
           {vm.summary.amountDue != null &&
           vm.summary.depositStatus === 'paid' &&
           order.payment_status !== 'paid' ? (

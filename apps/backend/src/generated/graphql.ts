@@ -24258,6 +24258,8 @@ export type Orders = {
   special_instructions?: Maybe<Scalars['String']['output']>;
   subtotal: Scalars['numeric']['output'];
   tax_amount: Scalars['numeric']['output'];
+  /** Flat Rendasua service fee snapshotted on the order. */
+  service_fee: Scalars['numeric']['output'];
   total_amount: Scalars['numeric']['output'];
   updated_at?: Maybe<Scalars['timestamptz']['output']>;
   /** When true, only verified agents can pick up this order */

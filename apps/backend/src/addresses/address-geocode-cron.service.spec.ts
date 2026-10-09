@@ -23,23 +23,16 @@ const row = {
   country: 'CM',
 };
 
-function locks(acquired = true) {
-  const release = jest.fn(async () => undefined);
-  const tryAcquire = jest.fn(async () => (acquired ? release : null));
-  return { locks: { tryAcquire } as any, tryAcquire, release };
-}
-
-function make(rows: any[], geocode: jest.Mock, lock = locks()) {
+function make(rows: any[], geocode: jest.Mock) {
   const executeQuery = jest.fn(async () => ({ addresses: rows }));
   const executeMutation = jest.fn(async () => ({
     update_addresses_by_pk: { id: 'x' },
   }));
   const service = new AddressGeocodeCronService(
     { executeQuery, executeMutation } as any,
-    { geocodeWithCountry: geocode } as any,
-    lock.locks
+    { geocodeWithCountry: geocode } as any
   );
-  return { service, executeQuery, executeMutation, lock };
+  return { service, executeQuery, executeMutation };
 }
 
 function sets(executeMutation: jest.Mock): Record<string, unknown>[] {
@@ -219,46 +212,114 @@ describe('AddressGeocodeCronService', () => {
     expect(executeMutation).not.toHaveBeenCalled();
   });
 
-  describe('single-run guard', () => {
-    it('runs under the shared lock and releases it', async () => {
-      const lock = locks(true);
-      const { service, executeQuery } = make([], jest.fn(), lock);
-
-      await service.handlePendingAddressGeocodes();
-
-      expect(lock.tryAcquire).toHaveBeenCalledWith('cron:address-geocode', expect.any(Number), {
-        requireShared: true,
+  describe('flag + single-run guard (DB lock, no Redis)', () => {
+    /** Hasura stand-in: flag row, and an atomic compare-and-set lock row. */
+    function world(opts: { flag?: boolean | null; lockExpiry?: string | null } = {}) {
+      const FREE = '1970-01-01T00:00:00.000Z';
+      const state = { lock: (opts.lockExpiry ?? FREE) as string };
+      const calls: string[] = [];
+      const executeQuery = jest.fn(async (q: string) => {
+        if (q.includes('AddressGeocodeCronFlag')) {
+          return {
+            application_configurations:
+              opts.flag === null ? [] : [{ boolean_value: opts.flag ?? true }],
+          };
+        }
+        calls.push('batch');
+        return { addresses: [] };
       });
-      expect(executeQuery).toHaveBeenCalled();
-      expect(lock.release).toHaveBeenCalledTimes(1);
+      const executeMutation = jest.fn(async (q: string, vars: any) => {
+        if (q.includes('AcquireAddressGeocodeCronLock')) {
+          const free = Date.parse(state.lock) < Date.parse(vars.now);
+          if (free) state.lock = vars.expiry;
+          calls.push('acquire');
+          return { update_application_configurations: { affected_rows: free ? 1 : 0 } };
+        }
+        if (q.includes('ReleaseAddressGeocodeCronLock')) {
+          const mine = state.lock === vars.expiry;
+          if (mine) state.lock = vars.free;
+          calls.push('release');
+          return { update_application_configurations: { affected_rows: mine ? 1 : 0 } };
+        }
+        return {};
+      });
+      const service = new AddressGeocodeCronService(
+        { executeQuery, executeMutation } as any,
+        { geocodeWithCountry: jest.fn() } as any
+      );
+      return { service, state, calls, executeQuery, executeMutation };
+    }
+
+    it('is OFF by default: no flag row or false -> nothing runs, lock untouched', async () => {
+      for (const flag of [null, false]) {
+        const w = world({ flag });
+        await w.service.handlePendingAddressGeocodes();
+        expect(w.calls).toEqual([]);
+      }
     });
 
-    it('skips entirely when another instance holds the lock (no query, no Google call)', async () => {
-      const lock = locks(false);
-      const geocode = jest.fn();
-      const { service, executeQuery } = make([row], geocode, lock);
-
-      await service.handlePendingAddressGeocodes();
-
-      expect(executeQuery).not.toHaveBeenCalled();
-      expect(geocode).not.toHaveBeenCalled();
-      expect(lock.release).not.toHaveBeenCalled();
+    it('reads only the global active flag row', async () => {
+      const w = world({ flag: true });
+      await w.service.handlePendingAddressGeocodes();
+      const [query, vars] = w.executeQuery.mock.calls[0] as any[];
+      expect(vars).toEqual({ key: 'address_geocode_cron_enabled' });
+      expect(String(query)).toContain('country_code: { _is_null: true }');
     });
 
-    it('releases the lock even when the batch fails, and swallows the error', async () => {
-      const lock = locks(true);
+    it('flag on: takes the lock, runs the batch, releases the lock', async () => {
+      const w = world({ flag: true });
+      await w.service.handlePendingAddressGeocodes();
+      expect(w.calls).toEqual(['acquire', 'batch', 'release']);
+      expect(Date.parse(w.state.lock)).toBe(0);
+    });
+
+    it('skips (no batch, no Google call) while another instance holds an unexpired lock', async () => {
+      const future = new Date(Date.now() + 60_000).toISOString();
+      const w = world({ flag: true, lockExpiry: future });
+      await w.service.handlePendingAddressGeocodes();
+      expect(w.calls).toEqual(['acquire']);
+      expect(w.state.lock).toBe(future);
+    });
+
+    it('takes over an expired lock (crashed run)', async () => {
+      const past = new Date(Date.now() - 60_000).toISOString();
+      const w = world({ flag: true, lockExpiry: past });
+      await w.service.handlePendingAddressGeocodes();
+      expect(w.calls).toEqual(['acquire', 'batch', 'release']);
+    });
+
+    it('two instances at once: exactly one runs the batch', async () => {
+      const w = world({ flag: true });
+      await Promise.all([
+        w.service.handlePendingAddressGeocodes(),
+        w.service.handlePendingAddressGeocodes(),
+      ]);
+      expect(w.calls.filter((c) => c === 'batch')).toHaveLength(1);
+    });
+
+    it('releases the lock when the batch fails and never throws out of the cron', async () => {
+      const w = world({ flag: true });
+      w.executeQuery.mockImplementation(async (q: string) => {
+        if (q.includes('AddressGeocodeCronFlag')) {
+          return { application_configurations: [{ boolean_value: true }] };
+        }
+        throw new Error('hasura down');
+      });
+      await expect(w.service.handlePendingAddressGeocodes()).resolves.toBeUndefined();
+      expect(Date.parse(w.state.lock)).toBe(0);
+    });
+
+    it('a flag read failure is swallowed (stays off)', async () => {
       const service = new AddressGeocodeCronService(
         {
           executeQuery: jest.fn(async () => {
-            throw new Error('hasura down');
+            throw new Error('down');
           }),
+          executeMutation: jest.fn(),
         } as any,
-        { geocodeWithCountry: jest.fn() } as any,
-        lock.locks
+        { geocodeWithCountry: jest.fn() } as any
       );
-
       await expect(service.handlePendingAddressGeocodes()).resolves.toBeUndefined();
-      expect(lock.release).toHaveBeenCalledTimes(1);
     });
   });
 });

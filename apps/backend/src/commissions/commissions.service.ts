@@ -269,6 +269,24 @@ export class CommissionsService {
       forceZeroItemCommission
     );
     await this.processOrderSubtotalPayment(order, breakdown.orderSubtotal);
+    await this.creditServiceFee(order, rendasuaHQUser);
+  }
+
+  /** Credit HQ the snapshotted service fee. Launch promo does not zero this. */
+  private async creditServiceFee(
+    order: { id: string; order_number: string; currency?: string; service_fee?: number },
+    rendasuaHQUser: { id: string }
+  ): Promise<void> {
+    const amount = this.roundMoney(Number(order.service_fee) || 0);
+    if (amount <= 0) return;
+    await this.payCommission(
+      order,
+      rendasuaHQUser.id,
+      'rendasua',
+      'service_fee',
+      amount,
+      order.currency || 'XAF'
+    );
   }
 
   /**
@@ -1041,7 +1059,8 @@ export class CommissionsService {
       | 'base_delivery_fee'
       | 'per_km_delivery_fee'
       | 'item_sale'
-      | 'order_subtotal',
+      | 'order_subtotal'
+      | 'service_fee',
     amount: number,
     currency: string,
     commissionPercentage?: number,
@@ -1212,10 +1231,12 @@ export class CommissionsService {
       | 'per_km_delivery_fee'
       | 'item_sale'
       | 'order_subtotal'
+      | 'service_fee'
   ): string {
     const labels: Record<string, string> = {
       'business:order_subtotal': `Merchant earnings for order ${orderNumber} (after platform commission)`,
       'rendasua:item_sale': `Platform commission for order ${orderNumber}`,
+      'rendasua:service_fee': `Service fee for order ${orderNumber}`,
       'partner:item_sale': `Partner share of platform commission for order ${orderNumber}`,
       'base_delivery_fee': `Delivery commission (base) for order ${orderNumber} (${recipientType})`,
       'per_km_delivery_fee': `Delivery commission (per km) for order ${orderNumber} (${recipientType})`,

@@ -156,6 +156,7 @@ export class PdfService {
         baseDeliveryFee: orderData.base_delivery_fee,
         perKmDeliveryFee: orderData.per_km_delivery_fee,
         taxAmount: orderData.tax_amount,
+        serviceFee: Number(orderData.service_fee) || 0,
         taxJurisdiction: this.formatTaxJurisdiction(orderData.tax_jurisdiction),
         totalAmount: orderData.total_amount,
         currency: orderData.currency,

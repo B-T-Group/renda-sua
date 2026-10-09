@@ -23,7 +23,8 @@ export interface Commission_Payouts {
     | 'base_delivery_fee'
     | 'per_km_delivery_fee'
     | 'item_sale'
-    | 'order_subtotal';
+    | 'order_subtotal'
+    | 'service_fee';
   amount: number;
   currency: string;
   commission_percentage?: number;
@@ -63,7 +64,8 @@ export interface Commission_Payouts_Insert_Input {
     | 'base_delivery_fee'
     | 'per_km_delivery_fee'
     | 'item_sale'
-    | 'order_subtotal';
+    | 'order_subtotal'
+    | 'service_fee';
   amount: number;
   currency: string;
   commission_percentage?: number;

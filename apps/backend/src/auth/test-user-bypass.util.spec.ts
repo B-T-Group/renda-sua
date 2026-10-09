@@ -11,6 +11,7 @@ const config = {
   emailDomain: 'rendasua-test.com',
   emailAllowlist: ['qa.partner@example.com'],
   phoneAllowlist: ['+237699000000', '+1 514 555 0000'],
+  phoneSuffix: '0000',
 };
 
 describe('test-user bypass rules', () => {
@@ -42,23 +43,38 @@ describe('test-user bypass rules', () => {
   });
 
   describe('matchesTestPhone', () => {
-    it('matches only exact allowlisted numbers (format-insensitive)', () => {
+    it('matches exact allowlisted numbers (format-insensitive)', () => {
       expect(matchesTestPhone('+237699000000', config)).toBe(true);
       expect(matchesTestPhone('237 699 00 00 00', config)).toBe(true);
       expect(matchesTestPhone('+15145550000', config)).toBe(true);
     });
 
-    it('does NOT match other numbers that merely end in 0000', () => {
-      expect(matchesTestPhone('+237654100000', config)).toBe(false);
-      expect(matchesTestPhone('+237670000000', config)).toBe(false);
-      expect(matchesTestPhone('99000000', config)).toBe(false);
+    it('matches numbers that end in the suffix even if not allowlisted', () => {
+      expect(matchesTestPhone('+237654100000', config)).toBe(true);
+      expect(matchesTestPhone('+237670000000', config)).toBe(true);
+      expect(matchesTestPhone('99000000', config)).toBe(true);
     });
 
-    it('matches nothing with an empty allowlist', () => {
-      expect(
-        matchesTestPhone('+237699000000', { ...config, phoneAllowlist: [] })
-      ).toBe(false);
+    it('rejects numbers that do not end in the suffix and are not allowlisted', () => {
+      expect(matchesTestPhone('+237699111111', config)).toBe(false);
+      expect(matchesTestPhone('+15555555555', config)).toBe(false);
+    });
+
+    it('does not treat the suffix alone as a phone number', () => {
+      expect(matchesTestPhone('0000', config)).toBe(false);
+    });
+
+    it('still matches suffix numbers when the allowlist is empty', () => {
+      const noList = { ...config, phoneAllowlist: [] };
+      expect(matchesTestPhone('+237699000000', noList)).toBe(true);
+      expect(matchesTestPhone('+237699111111', noList)).toBe(false);
       expect(matchesTestPhone('', config)).toBe(false);
+    });
+
+    it('falls back to allowlist only when the suffix is blank', () => {
+      const noSuffix = { ...config, phoneSuffix: '' };
+      expect(matchesTestPhone('+237699000000', noSuffix)).toBe(true);
+      expect(matchesTestPhone('+237654100000', noSuffix)).toBe(false);
     });
   });
 

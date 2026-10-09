@@ -4,15 +4,15 @@ Mirror of ``apps/backend/src/orders/fee-percent.util.ts``. Both sides compute:
 
     fee = cancellation_fee_percent % of the ITEM SUBTOTAL AFTER DISCOUNTS
 
-where the base excludes the delivery fee and tax:
+where the base excludes the delivery fee, tax, and the Rendasua service fee:
 
-    base = max(0, total_amount - collected_delivery_fee - tax_amount)
+    base = max(0, total_amount - collected_delivery_fee - tax_amount - service_fee)
 
-``total_amount`` is what the client is charged (items + delivery + tax - discount code -
-purchase credits), so every discount is already netted out; ``collected_delivery_fee`` is
-0 when the fee was waived. Rounding is half-up to the currency minor unit (XAF/XOF whole
-units, others 2 decimals). Keep the test vectors in ``tests/test_cancellation_fee_util.py``
-and ``fee-percent.util.spec.ts`` identical.
+``total_amount`` is what the client is charged (items + delivery + service fee + tax -
+discount code - purchase credits), so every discount is already netted out;
+``collected_delivery_fee`` is 0 when the fee was waived. Rounding is half-up to the
+currency minor unit (XAF/XOF whole units, others 2 decimals). Keep the test vectors in
+``tests/test_cancellation_fee_util.py`` and ``fee-percent.util.spec.ts`` identical.
 """
 from __future__ import annotations
 
@@ -78,14 +78,15 @@ def item_subtotal_after_discounts(
     per_km_delivery_fee: Any = 0,
     delivery_fee_waived: Optional[bool] = False,
     tax_amount: Any = 0,
+    service_fee: Any = 0,
 ) -> float:
-    """max(0, total - delivery fee actually paid - tax), 2-decimal half-up."""
+    """max(0, total - delivery actually paid - tax - service fee), 2-decimal half-up."""
     delivery = (
         Decimal(0)
         if delivery_fee_waived
         else _num(base_delivery_fee) + _num(per_km_delivery_fee)
     )
-    base = _num(total_amount) - delivery - _num(tax_amount)
+    base = _num(total_amount) - delivery - _num(tax_amount) - _num(service_fee)
     if base <= 0:
         return 0.0
     return float(base.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))

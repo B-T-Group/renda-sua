@@ -34,6 +34,8 @@ export interface NotificationData {
   deliveryFee: number;
   fastDeliveryFee?: number;
   taxAmount: number;
+  /** Flat Rendasua service fee included in totalAmount. Omitted or 0 hides the email row. */
+  serviceFee?: number;
   totalAmount: number;
   currency: string;
   deliveryAddress: string;

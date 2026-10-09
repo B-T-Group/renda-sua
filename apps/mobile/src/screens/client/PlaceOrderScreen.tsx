@@ -777,6 +777,7 @@ export default function PlaceOrderScreen() {
   }, [deliveryAmount, discountCode.appliedCode, discountCode.percentage, lineSubtotal]);
 
   const grandTotal = Math.max(0, lineSubtotal + deliveryAmount - discountAmount);
+  const serviceFee = Number(preflightConfig?.groups?.[0]?.service_fee) || 0;
 
   const momoPayNowDeliveryEnabled = preflightConfig?.momo_pay_now_delivery_enabled ?? false;
 
@@ -827,12 +828,13 @@ export default function PlaceOrderScreen() {
       preflightConfig?.amount_due ??
       preflightConfig?.groups?.[0]?.amount_due;
     if (serverDue != null) return Math.max(0, Number(serverDue));
-    return Math.max(0, grandTotal - depositAmount);
+    return Math.max(0, grandTotal + serviceFee - depositAmount);
   }, [
     depositAmount,
     grandTotal,
     preflightConfig?.amount_due,
     preflightConfig?.groups,
+    serviceFee,
   ]);
 
   const depositCopy = useMemo(
@@ -924,6 +926,15 @@ export default function PlaceOrderScreen() {
       });
     }
 
+    if (serviceFee > 0) {
+      lines.push({
+        label: t('checkout.serviceFee', 'Service fee'),
+        hint: t('checkout.serviceFeeHint', 'Helps us run secure checkout'),
+        value: formatCatalogMoney(serviceFee, currency),
+        tone: 'secondary',
+      });
+    }
+
     if (discountAmount > 0) {
       lines.push({
         label: t('client.placeOrder.summary.discount', 'Discount'),
@@ -946,7 +957,9 @@ export default function PlaceOrderScreen() {
       });
     }
 
-    const amountAfterCredit = credit.applied > 0 ? credit.remaining : grandTotal;
+    const amountAfterCredit = Number(
+      ((credit.applied > 0 ? credit.remaining : grandTotal) + serviceFee).toFixed(2)
+    );
     const dueNow =
       depositAmount != null && depositAmount > 0 ? depositAmount : amountAfterCredit;
     lines.push({
@@ -965,8 +978,8 @@ export default function PlaceOrderScreen() {
         label: t('deposit.dueLater', 'Due later'),
         value: formatCatalogMoney(
           credit.applied > 0
-            ? credit.dueAtFulfillment
-            : Math.max(0, grandTotal - depositAmount),
+            ? Number((credit.dueAtFulfillment + serviceFee).toFixed(2))
+            : Math.max(0, grandTotal + serviceFee - depositAmount),
           currency
         ),
         tone: 'secondary',
@@ -987,6 +1000,7 @@ export default function PlaceOrderScreen() {
     fulfillment,
     grandTotal,
     lineSubtotal,
+    serviceFee,
     preflightConfig?.purchase_credits?.total,
     preflightConfig?.tax_notice,
     preflightLoading,
@@ -1555,7 +1569,8 @@ export default function PlaceOrderScreen() {
           appliedDiscountCode={discountCode.appliedCode}
           discountPercentage={discountCode.percentage}
           discountAmount={discountAmount}
-          grandTotal={grandTotal}
+          grandTotal={Number((grandTotal + serviceFee).toFixed(2))}
+          serviceFee={serviceFee}
           depositAmount={depositAmount}
           showDepositBreakdown={depositAmount != null && depositAmount > 0}
           showTaxAtCheckoutNotice={

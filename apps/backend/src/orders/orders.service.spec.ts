@@ -477,6 +477,10 @@ describe('OrdersService', () => {
           },
         },
         {
+          provide: require('./service-fee.service').ServiceFeeService,
+          useValue: { resolve: jest.fn().mockResolvedValue(0) },
+        },
+        {
           provide: require('./deposit-calculation.service').DepositCalculationService,
           useValue: {
             calculateItemDeposit: jest.fn().mockReturnValue({

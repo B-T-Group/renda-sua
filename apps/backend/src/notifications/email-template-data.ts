@@ -153,6 +153,14 @@ export function buildProximityVariables(
   };
 }
 
+function buildServiceFeeRow(data: NotificationData, locale: EmailLocale): string {
+  const fee = Number(data.serviceFee) || 0;
+  if (fee <= 0) return '';
+  const label = locale === 'fr' ? 'Frais de service' : 'Service fee';
+  const cur = esc(data.currency || 'USD');
+  return `<div class="item-row"><span>${label}</span><span>${cur} ${fee}</span></div>`;
+}
+
 export function buildResendTemplateVariables(
   data: NotificationData,
   userType: string,
@@ -179,6 +187,7 @@ export function buildResendTemplateVariables(
         ? buildBusinessLocationSection(data.businessLocationName, locale)
         : '',
     READY_NEXT_STEP_HTML: buildReadyNextStepHtml(data, locale),
+    SERVICE_FEE_ROW_HTML: buildServiceFeeRow(data, locale),
   };
   const estRaw = data.estimatedDeliveryTime;
   const est =

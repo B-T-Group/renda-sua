@@ -73,6 +73,7 @@ import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.servi
 import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
 import { WhatsAppRecipientCompleteService } from './whatsapp-recipient-complete.service';
 import { DepositCalculationService } from './deposit-calculation.service';
+import { ServiceFeeService } from './service-fee.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
@@ -163,6 +164,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     WhatsAppOrderActionService,
     WhatsAppRecipientCompleteService,
     DepositCalculationService,
+    ServiceFeeService,
     DepositLedgerService,
     DepositRefundService,
     CookedFoodPickupFlowService,

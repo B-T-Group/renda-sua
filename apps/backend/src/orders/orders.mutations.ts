@@ -73,6 +73,7 @@ export const CREATE_ORDER = gql`
       subtotal
       base_delivery_fee
       tax_amount
+      service_fee
       total_amount
       currency
       business_id

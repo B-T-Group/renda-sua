@@ -98,6 +98,8 @@ export interface CheckoutGroup {
   subtotal: number;
   delivery_fee?: number | null;
   is_first_order_client?: boolean;
+  /** Flat service fee included in total. 0 when this seller country has no fee. */
+  service_fee?: number;
   total: number;
   mobile_money_provider?: string | null;
   /** Null when the requested fulfillment is pickup. */

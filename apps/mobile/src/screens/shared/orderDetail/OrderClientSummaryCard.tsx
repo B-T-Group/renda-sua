@@ -414,6 +414,13 @@ export function OrderClientSummaryCard({
         value={formatCurrency(pricing.deliveryFee, cur, locale)}
         colors={colors}
       />
+      {pricing.serviceFee > 0.005 ? (
+        <SummaryRow
+          label={t('checkout.serviceFee', 'Service fee')}
+          value={formatCurrency(pricing.serviceFee, cur, locale)}
+          colors={colors}
+        />
+      ) : null}
       {pricing.tax > 0.005 ? (
         <SummaryRow
           label={t('orders.clientManage.taxLabel', 'Tax')}

@@ -261,6 +261,15 @@ describe('FailedDeliveriesService client-fault fee', () => {
     expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(300);
   });
 
+  it('excludes the service fee from the client-fault base', async () => {
+    const { service, registerTransaction } = setup({
+      clientAvailable: 5000,
+      order: { total_amount: 1600, service_fee: 100 },
+    });
+    await resolve(service);
+    expect(calls(registerTransaction, 'client-acc', 'withdrawal')[0].amount).toBe(300);
+  });
+
   it('missing percent row => 30% default with failed_delivery_fee_config_missing error log', async () => {
     const { service, registerTransaction } = setup({ clientAvailable: 5000, feeRows: [] });
     const errorSpy = jest.spyOn((service as any).logger, 'error').mockImplementation();

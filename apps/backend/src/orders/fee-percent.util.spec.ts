@@ -83,6 +83,18 @@ describe('fee-percent.util', () => {
     it('is 0 for NaN inputs', () => {
       expect(itemSubtotalAfterDiscounts({ total_amount: 'x' })).toBe(0);
     });
+
+    it('excludes the service fee from the cancellation base', () => {
+      expect(
+        itemSubtotalAfterDiscounts({
+          total_amount: 10800,
+          base_delivery_fee: 1000,
+          per_km_delivery_fee: 500,
+          tax_amount: 200,
+          service_fee: 100,
+        })
+      ).toBe(9000);
+    });
   });
 
   describe('normalizeFeeCountryCode', () => {

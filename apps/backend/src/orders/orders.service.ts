@@ -177,6 +177,7 @@ import { TERMINAL_ORDER_STATUSES } from '../users/account-deletion.constants';
 import { OrderCleanupService } from './order-cleanup.service';
 import { remainderTimingLabel } from './remainder-timing-label.util';
 import { DepositCalculationService } from './deposit-calculation.service';
+import { ServiceFeeService } from './service-fee.service';
 import { DepositLedgerService } from './deposit-ledger.service';
 import {
   DepositForfeitReason,
@@ -328,6 +329,7 @@ export interface OrderWithDetails {
   base_delivery_fee: number;
   per_km_delivery_fee: number;
   tax_amount: number;
+  service_fee?: number;
   total_amount: number;
   currency: string;
   current_status: string;
@@ -610,6 +612,7 @@ export class OrdersService {
     private readonly foodOrdersService: FoodOrdersService,
     private readonly cookedFoodPickupFlow: CookedFoodPickupFlowService,
     private readonly depositCalculationService: DepositCalculationService,
+    private readonly serviceFeeService: ServiceFeeService,
     private readonly depositLedgerService: DepositLedgerService,
     private readonly depositRefundService: DepositRefundService,
     private readonly variantInventory: VariantInventoryService,
@@ -6421,6 +6424,7 @@ export class OrdersService {
       per_km_delivery_fee: order.per_km_delivery_fee,
       delivery_fee_waived: (order as any).delivery_fee_waived,
       tax_amount: order.tax_amount,
+      service_fee: order.service_fee,
       business_location: { country_code: countryCode },
     };
   }
@@ -7223,6 +7227,7 @@ export class OrdersService {
       per_km_delivery_fee: order.per_km_delivery_fee,
       delivery_fee_waived: (order as any).delivery_fee_waived,
       tax_amount: order.tax_amount,
+      service_fee: order.service_fee,
       currency: order.currency,
       payment_source: (order as any).payment_source,
       payment_status: order.payment_status,
@@ -8259,6 +8264,7 @@ export class OrdersService {
           delivery_fee_waived
           first_order_delivery_fee_promo
           tax_amount
+          service_fee
           total_amount
           currency
           current_status
@@ -8973,6 +8979,7 @@ export class OrdersService {
           first_order_delivery_fee_promo
           first_order_base_delivery_discount_amount
           tax_amount
+          service_fee
           total_amount
           currency
           payment_method
@@ -9179,6 +9186,7 @@ export class OrdersService {
           delivery_fee_waived
           first_order_delivery_fee_promo
           tax_amount
+          service_fee
           total_amount
           currency
           payment_method
@@ -9641,6 +9649,7 @@ export class OrdersService {
                 (orderWithDetails.per_km_delivery_fee || 0),
               fastDeliveryFee: orderWithDetails.per_km_delivery_fee || 0,
               taxAmount: orderWithDetails.tax_amount || 0,
+              serviceFee: Number(orderWithDetails.service_fee) || 0,
               totalAmount: orderWithDetails.total_amount || 0,
               currency: orderWithDetails.currency || 'USD',
               deliveryAddress: this.formatAddress(notifyAddress as Addresses),
@@ -10568,6 +10577,7 @@ export class OrdersService {
           (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
         fastDeliveryFee: order.per_km_delivery_fee || 0,
         taxAmount: order.tax_amount || 0,
+        serviceFee: Number(order.service_fee) || 0,
         totalAmount: order.total_amount || 0,
         currency: order.currency || 'USD',
         deliveryAddress: this.formatAddress(notifyAddress),
@@ -12874,6 +12884,13 @@ export class OrdersService {
       }
     }
 
+    const sellerCountry = resolveItemCountry(
+      businessInventories[0]?.business_location?.address?.country,
+      businessInventories[0]?.business_location?.business?.user?.country
+    );
+    const serviceFee = await this.serviceFeeService.resolve(sellerCountry, currency);
+    total_amount = Number((total_amount + serviceFee).toFixed(2));
+
     const phoneNumber = await this.resolveCheckoutChargePhone({
       userId: user.id,
       mobilePaymentPhoneId: orderData.mobile_payment_phone_id,
@@ -12887,10 +12904,7 @@ export class OrdersService {
     const availableBalance = Number(account.available_balance ?? 0);
     const isZeroOrNegativeOrder = requiredAmountForHold <= 0;
 
-    const itemCountry = resolveItemCountry(
-      businessInventories[0]?.business_location?.address?.country,
-      businessInventories[0]?.business_location?.business?.user?.country
-    );
+    const itemCountry = sellerCountry;
 
     const fulfillmentCountry =
       normalizeCountryCode(
@@ -13267,7 +13281,8 @@ export class OrdersService {
         $metaCapiContext: jsonb,
         $isCookedFoodPickup: Boolean!,
         $payAfterMerchantConfirm: Boolean!,
-        $eatIn: Boolean!
+        $eatIn: Boolean!,
+        $serviceFee: numeric!
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -13286,6 +13301,7 @@ export class OrdersService {
           per_km_delivery_fee: $perKmDeliveryFee,
           subtotal: $subTotal,
           tax_amount: $taxAmount,
+          service_fee: $serviceFee,
           tax_status: $taxStatus,
           pre_tax_total: $preTaxTotal,
           total_amount: $totalAmount,
@@ -13338,6 +13354,7 @@ export class OrdersService {
           per_km_delivery_fee
           subtotal
           tax_amount
+          service_fee
           tax_status
           pre_tax_total
           total_amount
@@ -13447,6 +13464,7 @@ export class OrdersService {
         currency: currency,
         subTotal: subtotal,
         taxAmount: tax_amount,
+        serviceFee: serviceFee,
         taxStatus: tax_status,
         preTaxTotal: pre_tax_total,
         baseDeliveryFee: deliveryFeeInfo.baseDeliveryFee,
@@ -13808,6 +13826,7 @@ export class OrdersService {
                 (orderWithDetails.per_km_delivery_fee || 0),
               fastDeliveryFee: orderWithDetails.per_km_delivery_fee || 0,
               taxAmount: orderWithDetails.tax_amount || 0,
+              serviceFee: Number(orderWithDetails.service_fee) || 0,
               totalAmount: orderWithDetails.total_amount || 0,
               currency: orderWithDetails.currency || 'USD',
               deliveryAddress: this.formatAddress(notifyAddress as Addresses),
@@ -13868,6 +13887,7 @@ export class OrdersService {
           orderItemsData,
           deliveryFee: deliveryFeeInfo.deliveryFee,
           discountAmount: discountAmount ?? 0,
+          serviceFee,
           deliveryAddress: this.usesDestinationTaxAddress(fulfillmentMethod)
             ? address ?? null
             : null,
@@ -14363,6 +14383,7 @@ export class OrdersService {
     }>;
     deliveryFee: number;
     discountAmount: number;
+    serviceFee?: number;
     deliveryAddress: {
       address_line_1: string;
       address_line_2?: string | null;
@@ -14406,6 +14427,7 @@ export class OrdersService {
           orderItems,
           deliveryFee: 0,
           discountAmount: input.discountAmount,
+          serviceFee: input.serviceFee,
           customerAddress,
         })
       : undefined;
@@ -14417,6 +14439,7 @@ export class OrdersService {
       orderItems,
       deliveryFee: input.deliveryFee,
       discountAmount: input.discountAmount,
+      serviceFee: input.serviceFee ?? 0,
     };
   }
 
@@ -14448,6 +14471,7 @@ export class OrdersService {
           per_km_delivery_fee
           delivery_fee_waived
           discount_amount
+          service_fee
           fulfillment_method
           delivery_address {
             address_line_1 address_line_2 city state postal_code country
@@ -14478,6 +14502,7 @@ export class OrdersService {
         per_km_delivery_fee: number;
         delivery_fee_waived?: boolean | null;
         discount_amount?: number | null;
+        service_fee?: number | null;
         fulfillment_method?: string | null;
         delivery_address?: Record<string, string> | null;
         business_location?: { address?: Record<string, string> | null } | null;
@@ -14528,13 +14553,15 @@ export class OrdersService {
       orderItemsData,
       deliveryFee,
       discountAmount,
+      serviceFee: Number(row.service_fee ?? 0),
       deliveryAddress: this.usesDestinationTaxAddress(fulfillmentMethod)
         ? deliveryAddress ?? null
         : null,
       businessLocationAddress: businessLocationAddress ?? null,
       fulfillmentMethod,
     });
-    const preTaxTotal = Number(row.subtotal) + deliveryFee - discountAmount;
+    const preTaxTotal =
+      Number(row.subtotal) + deliveryFee - discountAmount + Number(row.service_fee ?? 0);
     const checkoutAmount = taxCheckoutParams.taxEnabled
       ? preTaxTotal
       : Number(row.total_amount);
@@ -14624,6 +14651,7 @@ export class OrdersService {
         orderItems: tax.orderItems,
         deliveryFee: tax.deliveryFee,
         discountAmount: tax.discountAmount,
+        serviceFee: tax.serviceFee,
         deliveryAddress: tax.deliveryAddress,
         transactionId: result.transactionId,
         finalizeOnSuccess: false,

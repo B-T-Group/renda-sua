@@ -326,6 +326,12 @@
             <span>Per KM Delivery Fee:</span>
             <span>{{currency}} {{perKmDeliveryFee}}</span>
           </div>
+          {{#serviceFee}}
+          <div class="pricing-row">
+            <span>Service fee:</span>
+            <span>{{currency}} {{serviceFee}}</span>
+          </div>
+          {{/serviceFee}}
           <div class="pricing-row">
             <span>Tax Amount:</span>
             <span>{{currency}} {{taxAmount}}</span>

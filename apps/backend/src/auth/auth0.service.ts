@@ -197,7 +197,7 @@ export class Auth0Service {
     return matchesTestEmail(email, this.matchConfig(config));
   }
 
-  /** Explicit phone allowlist only (no suffix matching). */
+  /** Suffix match (default 0000) or explicit phone allowlist. */
   isTestPhone(phoneNumber: string): boolean {
     const config = this.getTestUsersConfig();
     if (!config) return false;
@@ -209,6 +209,7 @@ export class Auth0Service {
       emailDomain: config.emailDomain || '',
       emailAllowlist: config.emailAllowlist ?? [],
       phoneAllowlist: config.phoneAllowlist ?? [],
+      phoneSuffix: config.phoneSuffix || '',
     };
   }
 

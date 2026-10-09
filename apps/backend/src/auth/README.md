@@ -80,9 +80,9 @@ This prevents test users from being enabled in production even if `NODE_ENV` is 
 Matching rules (`test-user-bypass.util.ts`):
 - **Email**: exact `AUTH0_TEST_EMAIL_DOMAIN` (default `rendasua-test.com`, no sub/look-alike domains),
   or an exact entry in `AUTH0_TEST_EMAIL_ALLOWLIST` (comma-separated).
-- **Phone**: ONLY exact numbers in `AUTH0_TEST_PHONE_ALLOWLIST` (comma-separated, compared as digits).
-  The old "any number ending in 0000" suffix rule (`AUTH0_TEST_PHONE_SUFFIX`) was removed because it
-  matched real accounts.
+- **Phone**: digits ending in `AUTH0_TEST_PHONE_SUFFIX` (default `0000`), or an exact entry in
+  `AUTH0_TEST_PHONE_ALLOWLIST` (comma-separated, compared as digits). Production still
+  hard-disables the whole bypass.
 - **Code**: must be exactly `0000`; any other code fails with 400 and counts toward lockout.
 
 ### AUTH0_TEST_USER_PASSWORD

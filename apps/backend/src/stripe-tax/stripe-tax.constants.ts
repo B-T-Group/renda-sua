@@ -1,6 +1,9 @@
 /** Stripe Tax Code: General - Tangible Goods (default for marketplace items). */
 export const STRIPE_TAX_CODE_GENERAL_TANGIBLE = 'txcd_99999999';
 
+/** Stripe Tax code for a general service (the Rendasua service fee). */
+export const STRIPE_TAX_CODE_GENERAL_SERVICES = 'txcd_10000000';
+
 /** Stripe Tax Code: Shipping (delivery fees). */
 export const STRIPE_TAX_CODE_SHIPPING = 'txcd_92010001';
 

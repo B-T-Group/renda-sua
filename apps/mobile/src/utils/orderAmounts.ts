@@ -27,6 +27,7 @@ export function resolveOrderPricing(order: Order): {
   subtotal: number;
   deliveryFee: number;
   tax: number;
+  serviceFee: number;
   total: number;
 } {
   const items = order.order_items ?? [];
@@ -47,6 +48,8 @@ export function resolveOrderPricing(order: Order): {
 
   const rawTax = order.tax_amount != null ? Number(order.tax_amount) : 0;
   const tax = Number.isFinite(rawTax) ? rawTax : 0;
+  const rawServiceFee = order.service_fee != null ? Number(order.service_fee) : 0;
+  const serviceFee = Number.isFinite(rawServiceFee) && rawServiceFee > 0 ? rawServiceFee : 0;
 
   const b = order.base_delivery_fee != null ? Number(order.base_delivery_fee) : 0;
   const p = order.per_km_delivery_fee != null ? Number(order.per_km_delivery_fee) : 0;
@@ -57,13 +60,13 @@ export function resolveOrderPricing(order: Order): {
   const rawTotal = order.total_amount != null ? Number(order.total_amount) : NaN;
 
   if (deliveryFee <= 0 && Number.isFinite(rawTotal) && rawTotal > 0) {
-    const inferred = rawTotal - subtotal - tax;
+    const inferred = rawTotal - subtotal - tax - serviceFee;
     if (inferred > 0.0001) {
       deliveryFee = inferred;
     }
   }
 
-  const partsSum = subtotal + deliveryFee + tax;
+  const partsSum = subtotal + deliveryFee + tax + serviceFee;
   let total = Number.isFinite(rawTotal) && rawTotal > 0 ? rawTotal : partsSum;
   if ((!Number.isFinite(rawTotal) || rawTotal <= 0) && partsSum > 0) {
     total = partsSum;
@@ -73,6 +76,7 @@ export function resolveOrderPricing(order: Order): {
     subtotal: roundMoney(subtotal),
     deliveryFee: roundMoney(deliveryFee),
     tax: roundMoney(tax),
+    serviceFee: roundMoney(serviceFee),
     total: roundMoney(total),
   };
 }

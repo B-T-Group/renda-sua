@@ -107,6 +107,7 @@ export function moneySummary(order: OrderLike): OrderMoneySummary {
     subtotal: order.subtotal,
     deliveryFee: deliveryFee || null,
     tax: order.tax_amount,
+    serviceFee: Number(order.service_fee) || 0,
     total: order.total_amount,
     currency: order.currency,
     depositAmount: depositAmount > 0 ? depositAmount : null,
