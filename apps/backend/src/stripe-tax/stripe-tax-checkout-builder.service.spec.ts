@@ -39,6 +39,26 @@ describe('StripeTaxCheckoutBuilderService', () => {
     expect(service.buildShippingCostForTax(0, 'CAD')).toBeNull();
   });
 
+  it('adds the service fee after the item discount', () => {
+    const lines = service.buildLineItems({
+      currency: 'CAD',
+      orderItems: [{ name: 'A', unitPrice: 100, quantity: 1, taxCode: 'txcd_99999999' }],
+      deliveryFee: 0,
+      discountAmount: 10,
+      serviceFee: 0.99,
+      customerAddress: null,
+    });
+    expect(lines).toHaveLength(2);
+    expect(lines[0].unitAmount).toBe(9000);
+    expect(lines[1]).toMatchObject({
+      name: 'Service fee',
+      unitAmount: 99,
+      quantity: 1,
+      taxCode: 'txcd_10000000',
+      reference: 'service_fee',
+    });
+  });
+
   it('applies proportional discount across item lines', () => {
     const lines = service.buildLineItems({
       currency: 'CAD',

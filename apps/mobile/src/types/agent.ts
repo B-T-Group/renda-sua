@@ -74,6 +74,7 @@ export interface Order {
   base_delivery_fee?: number;
   per_km_delivery_fee?: number;
   tax_amount: number;
+  service_fee?: number;
   total_amount?: number;
   currency: string;
   current_status: string;

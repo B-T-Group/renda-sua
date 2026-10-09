@@ -559,6 +559,7 @@ export class OrderStatusService {
             base_delivery_fee
             per_km_delivery_fee
             tax_amount
+            service_fee
             total_amount
             currency
             estimated_delivery_time
@@ -731,6 +732,7 @@ export class OrderStatusService {
         deliveryFee:
           (order.base_delivery_fee || 0) + (order.per_km_delivery_fee || 0),
         taxAmount: order.tax_amount || 0,
+        serviceFee: Number(order.service_fee) || 0,
         totalAmount: order.total_amount || 0,
         currency: order.currency || 'USD',
         deliveryAddress: this.formatAddress(

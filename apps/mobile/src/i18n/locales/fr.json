@@ -246,6 +246,8 @@
     "taxCalculatedAtCheckout": "Calculée au paiement",
     "totalBeforeTax": "Total (hors taxes)",
     "deliveryFee": "Livraison",
+    "serviceFee": "Frais de service",
+    "serviceFeeHint": "Pour un paiement sécurisé",
     "discount": "Remise",
     "pickupNoFee": "Offert (retrait en magasin)",
     "incompleteAddress": {

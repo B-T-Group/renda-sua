@@ -32,6 +32,7 @@ export interface OrderData {
   base_delivery_fee?: number; // Optional for agents
   per_km_delivery_fee?: number; // Optional for agents
   tax_amount: number;
+  service_fee?: number;
   total_amount?: number; // Optional for agents
   currency: string;
   client_ready_nudge_sent_at?: string | null;

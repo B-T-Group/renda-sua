@@ -6,6 +6,7 @@ import {
   StripeTaxCustomerAddress,
 } from '../stripe-payments/stripe.service';
 import {
+  STRIPE_TAX_CODE_GENERAL_SERVICES,
   STRIPE_TAX_CODE_GENERAL_TANGIBLE,
   STRIPE_TAX_CODE_SHIPPING,
 } from './stripe-tax.constants';
@@ -23,6 +24,8 @@ export interface BuildCheckoutTaxParams {
   orderItems: OrderTaxLineInput[];
   deliveryFee: number;
   discountAmount: number;
+  /** Flat service fee, added after item discounts so a code cannot reduce it. */
+  serviceFee?: number;
   customerAddress?: StripeTaxCustomerAddress | null;
   sellerCountry?: string | null;
 }
@@ -50,11 +53,31 @@ export class StripeTaxCheckoutBuilderService {
       reference: item.reference,
     }));
 
-    return this.applyProportionalDiscount(
+    const discounted = this.applyProportionalDiscount(
       items,
       params.discountAmount,
       params.currency
     ).filter((line) => line.unitAmount > 0 && line.quantity > 0);
+    return this.appendServiceFee(discounted, params.serviceFee, params.currency);
+  }
+
+  private appendServiceFee(
+    lines: StripeCheckoutTaxLineItem[],
+    serviceFee: number | undefined,
+    currency: string
+  ): StripeCheckoutTaxLineItem[] {
+    const amount = this.toMinorUnits(serviceFee ?? 0, currency);
+    if (amount <= 0) return lines;
+    return [
+      ...lines,
+      {
+        name: 'Service fee',
+        unitAmount: amount,
+        quantity: 1,
+        taxCode: STRIPE_TAX_CODE_GENERAL_SERVICES,
+        reference: 'service_fee',
+      },
+    ];
   }
 
   /** Stripe Tax API: shipping must use `shipping_cost`, not a line item tax code. */

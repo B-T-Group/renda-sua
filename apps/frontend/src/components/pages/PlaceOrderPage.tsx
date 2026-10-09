@@ -287,6 +287,8 @@ interface OrderSummaryProps {
   purchaseCreditTotal?: number | null;
   /** Pay-later timing shown in the credit notice. Null means pay now. */
   payLater?: 'delivery' | 'pickup' | null;
+  /** Flat service fee added after discounts and credits. */
+  serviceFee?: number;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -335,6 +337,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   depositPercent = null,
   purchaseCreditTotal = null,
   payLater = null,
+  serviceFee = 0,
 }) => {
   const { t } = useTranslation();
   const hasDealPrices = resolvedPricing.hasDeal;
@@ -358,7 +361,14 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     depositNow: depositAmount,
   });
   const dueLater =
-    credit.applied > 0 ? credit.dueAtFulfillment : amountDueAfterDeposit;
+    credit.applied > 0
+      ? Number((credit.dueAtFulfillment + serviceFee).toFixed(2))
+      : amountDueAfterDeposit;
+  const payableTotal = Number(
+    (
+      (credit.applied > 0 ? credit.remaining : totalAfterDiscount) + serviceFee
+    ).toFixed(2)
+  );
 
   return (
     <Paper
@@ -681,6 +691,22 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               </Box>
             )}
 
+          {serviceFee > 0 ? (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+              <Box>
+                <Typography variant="body2" color="text.secondary">
+                  {t('checkout.serviceFee', 'Service fee')}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {t('checkout.serviceFeeHint', 'Helps us run secure checkout')}
+                </Typography>
+              </Box>
+              <Typography variant="body2" fontWeight="medium">
+                {formatCurrency(serviceFee, selectedItem.item.currency)}
+              </Typography>
+            </Box>
+          ) : null}
+
           <Box sx={{ mt: 2 }}>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 0.75 }}>
               {t('orders.discountCode.label', 'Discount code')}
@@ -769,10 +795,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               )}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
-              {formatCurrency(
-                credit.applied > 0 ? credit.remaining : totalAfterDiscount,
-                selectedItem.item.currency
-              )}
+              {formatCurrency(payableTotal, selectedItem.item.currency)}
             </Typography>
           </Box>
 
@@ -797,7 +820,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                 <Typography variant="body2" fontWeight="medium">
                   {formatCurrency(
                     dueLater ??
-                      Math.max(0, totalAfterDiscount - depositAmount),
+                      Math.max(0, totalAfterDiscount + serviceFee - depositAmount),
                     selectedItem.item.currency
                   )}
                 </Typography>
@@ -2490,7 +2513,9 @@ const PlaceOrderPage: React.FC = () => {
         : 0;
     const mobileOrderGrandTotal = Math.max(
       0,
-      mobileReviewTotalBeforeDiscount - mobileOrderDiscountAmount
+      mobileReviewTotalBeforeDiscount -
+        mobileOrderDiscountAmount +
+        (Number(checkoutPreflight?.groups?.[0]?.service_fee) || 0)
     );
 
     return (
@@ -2997,6 +3022,31 @@ const PlaceOrderPage: React.FC = () => {
                         </Box>
                       )}
 
+                    {(Number(checkoutPreflight?.groups?.[0]?.service_fee) || 0) > 0 ? (
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          mb: 1,
+                        }}
+                      >
+                        <Box>
+                          <Typography variant="body2" color="text.secondary">
+                            {t('checkout.serviceFee', 'Service fee')}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {t('checkout.serviceFeeHint', 'Helps us run secure checkout')}
+                          </Typography>
+                        </Box>
+                        <Typography variant="body2" fontWeight="medium">
+                          {formatCurrency(
+                            Number(checkoutPreflight?.groups?.[0]?.service_fee) || 0,
+                            selectedItem.item.currency
+                          )}
+                        </Typography>
+                      </Box>
+                    ) : null}
+
                     <Box sx={{ mt: 2 }}>
                       <ButtonBase
                         onClick={() => setDiscountDialogOpen(true)}
@@ -3360,6 +3410,7 @@ const PlaceOrderPage: React.FC = () => {
               depositMinimumApplied={preflightDeposit.minimumApplied}
               depositPercent={preflightDeposit.percent}
               purchaseCreditTotal={checkoutPreflight?.purchase_credits?.total}
+              serviceFee={Number(checkoutPreflight?.groups?.[0]?.service_fee) || 0}
               payLater={
                 pickupAtStore
                   ? isStripeStorePickup
@@ -4223,6 +4274,7 @@ const PlaceOrderPage: React.FC = () => {
               depositMinimumApplied={preflightDeposit.minimumApplied}
               depositPercent={preflightDeposit.percent}
               purchaseCreditTotal={checkoutPreflight?.purchase_credits?.total}
+              serviceFee={Number(checkoutPreflight?.groups?.[0]?.service_fee) || 0}
               payLater={
                 pickupAtStore
                   ? isStripeStorePickup

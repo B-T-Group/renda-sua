@@ -13,6 +13,7 @@ export interface ClientOrder {
   base_delivery_fee: number;
   per_km_delivery_fee: number;
   tax_amount: number;
+  service_fee?: number;
   total_amount: number;
   currency: string;
   current_status: string;
@@ -137,6 +138,7 @@ const GET_CLIENT_ORDERS = `
       base_delivery_fee
       per_km_delivery_fee
       tax_amount
+      service_fee
       total_amount
       currency
       current_status

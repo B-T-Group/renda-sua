@@ -47,6 +47,9 @@ class ItemSubtotal(unittest.TestCase):
         self.assertEqual(
             item_subtotal_after_discounts(10700, 1000, 500, False, 200), 9000
         )
+        self.assertEqual(
+            item_subtotal_after_discounts(10800, 1000, 500, False, 200, 100), 9000
+        )
 
     def test_waived_delivery_not_subtracted(self):
         self.assertEqual(item_subtotal_after_discounts(9000, 1000, 500, True, 0), 9000)

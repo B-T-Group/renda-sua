@@ -12,6 +12,8 @@ export interface CheckoutStickyBreakdownLine {
   tone?: 'default' | 'secondary' | 'success' | 'emphasize';
   /** Pre-waiver amount shown struck through beside the value. */
   strike?: string;
+  /** Quiet caption under the label. */
+  hint?: string;
 }
 
 export interface CheckoutStickyActionBarProps {
@@ -80,20 +82,28 @@ export function CheckoutStickyActionBar({
                   : colors.text.primary;
             return (
               <View key={`${line.label}-${line.value}`} style={styles.breakdownRow}>
-                <Text
-                  style={[
-                    emphasize ? typography.caption : typography.caption,
-                    {
-                      color: colors.text.secondary,
-                      fontWeight: emphasize ? '700' : '500',
-                      flex: 1,
-                      paddingRight: spacing.sm,
-                    },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {line.label}
-                </Text>
+                <View style={{ flex: 1, paddingRight: spacing.sm }}>
+                  <Text
+                    style={[
+                      typography.caption,
+                      {
+                        color: colors.text.secondary,
+                        fontWeight: emphasize ? '700' : '500',
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {line.label}
+                  </Text>
+                  {line.hint ? (
+                    <Text
+                      style={[typography.caption, { color: colors.text.secondary }]}
+                      numberOfLines={2}
+                    >
+                      {line.hint}
+                    </Text>
+                  ) : null}
+                </View>
                 <View style={styles.strikeRow}>
                   {line.strike ? (
                     <Text

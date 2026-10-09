@@ -44,6 +44,7 @@ import {
 } from './dto/checkout-preflight.dto';
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { DepositCalculationService } from './deposit-calculation.service';
+import { ServiceFeeService } from './service-fee.service';
 import {
   DIASPORA_ERROR_CODES,
   normalizeCountryCode,
@@ -186,6 +187,7 @@ export class CheckoutPreflightService {
     private readonly fulfillmentPromiseService: FulfillmentPromiseService,
     private readonly fxEstimateService: FxEstimateService,
     private readonly depositCalculationService: DepositCalculationService,
+    private readonly serviceFeeService: ServiceFeeService,
     private readonly variantInventory: VariantInventoryService,
     @Optional()
     private readonly purchaseCreditsService?: PurchaseCreditsService
@@ -782,7 +784,11 @@ export class CheckoutPreflightService {
       }
 
       const totalFee = shippingFee ?? deliveryFee ?? 0;
-      const grandTotal = subtotal + totalFee;
+      const serviceFee = await this.serviceFeeService.resolve(
+        group.sellerCountry,
+        currency
+      );
+      const grandTotal = subtotal + totalFee + serviceFee;
 
       const requestedOrAvailableTiming = dto.payment_timing ?? 
         (allowedPaymentTimings.includes('pay_at_delivery') ? 'pay_at_delivery' :
@@ -874,6 +880,7 @@ export class CheckoutPreflightService {
         subtotal,
         delivery_fee: deliveryFee ?? shippingFee,
         is_first_order_client: isFirstOrderClient,
+        service_fee: serviceFee,
         total: grandTotal,
         deposit_required: depositRequired || undefined,
         deposit_amount: depositRequired ? depositQuote?.depositAmount : undefined,
@@ -918,7 +925,10 @@ export class CheckoutPreflightService {
           dto.discount_code.trim()
         );
         if (validation.valid && validation.percentage) {
-          const totalBeforeDiscount = groups.reduce((s, g) => s + g.total, 0);
+          const totalBeforeDiscount = groups.reduce(
+            (s, g) => s + Number(g.total || 0) - Number(g.service_fee || 0),
+            0
+          );
           const discountAmount = Number(
             ((totalBeforeDiscount * validation.percentage) / 100).toFixed(2)
           );

@@ -544,6 +544,10 @@ export default observer(function CartCheckoutScreen() {
     return Number(((base * discountCode.percentage) / 100).toFixed(2));
   }, [deliveryAmount, discountCode.appliedCode, discountCode.percentage, singleBusiness, subtotal]);
   const grandTotal = Math.max(0, subtotal + deliveryAmount - discountAmount);
+  const serviceFee = (preflightConfig?.groups ?? []).reduce(
+    (sum, group) => sum + (Number(group.service_fee) || 0),
+    0
+  );
 
   // Deposit UI only when the server quotes a deposit. Cooked-food carts never
   // take a reservation deposit.
@@ -596,12 +600,13 @@ export default observer(function CartCheckoutScreen() {
       preflightConfig?.amount_due ??
       preflightConfig?.groups?.[0]?.amount_due;
     if (serverDue != null) return Math.max(0, Number(serverDue));
-    return Math.max(0, grandTotal - depositAmount);
+    return Math.max(0, grandTotal + serviceFee - depositAmount);
   }, [
     depositAmount,
     grandTotal,
     preflightConfig?.amount_due,
     preflightConfig?.groups,
+    serviceFee,
   ]);
 
   const depositCopy = useMemo(
@@ -681,6 +686,15 @@ export default observer(function CartCheckoutScreen() {
       });
     }
 
+    if (serviceFee > 0) {
+      lines.push({
+        label: t('checkout.serviceFee', 'Service fee'),
+        hint: t('checkout.serviceFeeHint', 'Helps us run secure checkout'),
+        value: formatCatalogMoney(serviceFee, currency),
+        tone: 'secondary',
+      });
+    }
+
     if (discountAmount > 0) {
       lines.push({
         label: t('checkout.discount', 'Discount'),
@@ -703,7 +717,9 @@ export default observer(function CartCheckoutScreen() {
       });
     }
 
-    const amountAfterCredit = credit.applied > 0 ? credit.remaining : grandTotal;
+    const amountAfterCredit = Number(
+      ((credit.applied > 0 ? credit.remaining : grandTotal) + serviceFee).toFixed(2)
+    );
     const dueNow =
       depositAmount != null && depositAmount > 0 ? depositAmount : amountAfterCredit;
     lines.push({
@@ -722,8 +738,8 @@ export default observer(function CartCheckoutScreen() {
         label: t('deposit.dueLater', 'Due later'),
         value: formatCatalogMoney(
           credit.applied > 0
-            ? credit.dueAtFulfillment
-            : Math.max(0, grandTotal - depositAmount),
+            ? Number((credit.dueAtFulfillment + serviceFee).toFixed(2))
+            : Math.max(0, grandTotal + serviceFee - depositAmount),
           currency
         ),
         tone: 'secondary',
@@ -744,6 +760,7 @@ export default observer(function CartCheckoutScreen() {
     fulfillmentConfirmed,
     grandTotal,
     preflightConfig?.purchase_credits?.total,
+    serviceFee,
     preflightConfig?.tax_notice,
     subtotal,
     t,

@@ -153,6 +153,7 @@ interface OrderSummaryProps {
     minimumApplied: boolean;
     percent: number | null;
   } | null;
+  serviceFeeByBusinessId?: Record<string, number>;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -173,6 +174,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   discountError,
   showTaxAtCheckoutNotice = false,
   depositBreakdown = null,
+  serviceFeeByBusinessId = {},
 }) => {
   const { t } = useTranslation();
   const { getCartByBusiness } = useCart();
@@ -220,6 +222,13 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
       ? Number(((grandTotal * discountPercentage) / 100).toFixed(2))
       : 0;
   const grandTotalAfterDiscount = Math.max(0, grandTotal - discountAmount);
+  const feeFor = (businessId: string) =>
+    Number(serviceFeeByBusinessId[businessId]) || 0;
+  const serviceFeeTotal = businessTotals.reduce(
+    (sum, business) => sum + feeFor(business.businessId),
+    0
+  );
+  const payableTotal = Number((grandTotalAfterDiscount + serviceFeeTotal).toFixed(2));
 
   return (
     <Paper sx={{ p: 3 }}>
@@ -382,6 +391,22 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               </Box>
             )}
 
+            {feeFor(business.businessId) > 0 ? (
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                <Box>
+                  <Typography variant="body2" color="text.secondary">
+                    {t('checkout.serviceFee', 'Service fee')}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {t('checkout.serviceFeeHint', 'Helps us run secure checkout')}
+                  </Typography>
+                </Box>
+                <Typography variant="body2" fontWeight="medium">
+                  {formatCurrency(feeFor(business.businessId), currency)}
+                </Typography>
+              </Box>
+            ) : null}
+
             <Divider sx={{ my: 1.5 }} />
 
             <CheckoutTaxSummaryLines
@@ -413,7 +438,10 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                 fontWeight="bold"
                 color="primary"
               >
-                {formatCurrency(business.orderTotal, currency)}
+                {formatCurrency(
+                  business.orderTotal + feeFor(business.businessId),
+                  currency
+                )}
               </Typography>
             </Box>
           </Box>
@@ -460,7 +488,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               )}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
-              {formatCurrency(grandTotalAfterDiscount, currency)}
+              {formatCurrency(payableTotal, currency)}
             </Typography>
           </Box>
           {discountAmount > 0 && (
@@ -562,7 +590,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
               )}
             </Typography>
             <Typography variant="h6" fontWeight="bold" color="primary">
-              {formatCurrency(grandTotalAfterDiscount, currency)}
+              {formatCurrency(payableTotal, currency)}
             </Typography>
           </Box>
           <Box>
@@ -1807,6 +1835,12 @@ const CheckoutPage: React.FC = () => {
             discountError={discountError}
             showTaxAtCheckoutNotice={showTaxAtCheckoutNotice}
             depositBreakdown={depositBreakdown}
+            serviceFeeByBusinessId={Object.fromEntries(
+              preflightGroups.map((group) => [
+                group.business_id,
+                Number(group.service_fee) || 0,
+              ])
+            )}
           />
 
           {(crossBorderCheckout || sendingToSomeoneElse) && (

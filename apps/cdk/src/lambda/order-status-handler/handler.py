@@ -590,6 +590,7 @@ def compute_cancellation_fee(
         getattr(order, "per_km_delivery_fee", 0),
         getattr(order, "delivery_fee_waived", False),
         getattr(order, "tax_amount", 0),
+        getattr(order, "service_fee", 0),
     )
     fee = percent_fee(base, percent, order.currency)
     log_info(

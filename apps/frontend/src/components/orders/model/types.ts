@@ -48,6 +48,7 @@ export interface OrderMoneySummary {
   subtotal?: number | null;
   deliveryFee?: number | null;
   tax?: number | null;
+  serviceFee?: number | null;
   total?: number | null;
   currency?: string | null;
   depositAmount?: number | null;
@@ -187,6 +188,7 @@ export interface OrderLike {
   base_delivery_fee?: number | null;
   per_km_delivery_fee?: number | null;
   tax_amount?: number | null;
+  service_fee?: number | null;
   total_amount?: number | null;
   currency?: string | null;
   deposit_amount?: number | null;

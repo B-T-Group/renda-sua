@@ -7518,6 +7518,8 @@
     "businessOrder": "Commande de l'Entreprise",
     "subtotal": "Sous-total",
     "deliveryFee": "Frais de Livraison",
+    "serviceFee": "Frais de service",
+    "serviceFeeHint": "Pour un paiement sécurisé",
     "firstDeliveryDiscount": "Réduction première livraison",
     "deliveryFeeError": "Erreur de calcul",
     "fastDeliveryFee": "Frais de Livraison Rapide",

@@ -43,6 +43,7 @@ class Order(BaseModel):
     special_instructions: Optional[str] | None = None
     subtotal: float
     tax_amount: float
+    service_fee: float = 0.0
     total_amount: float
     updated_at: Optional[datetime.datetime] | None = None
     verified_agent_delivery: Optional[bool] | None = None

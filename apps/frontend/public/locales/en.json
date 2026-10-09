@@ -7802,6 +7802,8 @@
     "businessOrder": "Order from Business",
     "subtotal": "Subtotal",
     "deliveryFee": "Delivery Fee",
+    "serviceFee": "Service fee",
+    "serviceFeeHint": "Helps us run secure checkout",
     "firstDeliveryDiscount": "First delivery discount",
     "deliveryFeeError": "Error calculating",
     "fastDeliveryFee": "Fast Delivery Fee",
