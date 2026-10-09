@@ -145,23 +145,23 @@ describe('VideoGenerationRouter', () => {
     expect(response.fallbackUsed).toBe(true);
   });
 
-  it('6. Google invalid request → Runway is NOT called', async () => {
+  it('6. Google invalid request → Runway is called', async () => {
     google.submit.mockRejectedValue(
       new VideoGenerationError({
-        message: 'bad image',
+        message: 'billing balance',
         category: 'INVALID_REQUEST',
         provider: 'google',
       })
     );
 
-    await expect(router.submit(makeRequest())).rejects.toMatchObject({
-      category: 'INVALID_REQUEST',
-      retryable: false,
-    });
-    expect(runway.submit).not.toHaveBeenCalled();
+    const response = await router.submit(makeRequest());
+
+    expect(runway.submit).toHaveBeenCalledTimes(1);
+    expect(response.fallbackUsed).toBe(true);
+    expect(response.originalProvider).toBe('google');
   });
 
-  it('7. Google authentication error → Runway is NOT called', async () => {
+  it('7. Google authentication error → Runway is called', async () => {
     google.submit.mockRejectedValue(
       new VideoGenerationError({
         message: 'missing key',
@@ -170,11 +170,10 @@ describe('VideoGenerationRouter', () => {
       })
     );
 
-    await expect(router.submit(makeRequest())).rejects.toMatchObject({
-      category: 'AUTHENTICATION_ERROR',
-      retryable: false,
-    });
-    expect(runway.submit).not.toHaveBeenCalled();
+    const response = await router.submit(makeRequest());
+
+    expect(runway.submit).toHaveBeenCalledTimes(1);
+    expect(response.fallbackUsed).toBe(true);
   });
 
   it('8. Runway failure is normalized correctly', async () => {
@@ -294,15 +293,14 @@ describe('VideoGenerationRouter', () => {
     expect(runway.submit).not.toHaveBeenCalled();
   });
 
-  it('wraps unknown primary errors as UNKNOWN_PROVIDER_ERROR without fallback', async () => {
+  it('falls back when the primary throws an unknown error', async () => {
     google.submit.mockRejectedValue(new Error('socket hang up'));
 
-    await expect(router.submit(makeRequest())).rejects.toMatchObject({
-      category: 'UNKNOWN_PROVIDER_ERROR',
-      provider: 'google',
-      retryable: false,
-    });
-    expect(runway.submit).not.toHaveBeenCalled();
+    const response = await router.submit(makeRequest());
+
+    expect(runway.submit).toHaveBeenCalledTimes(1);
+    expect(response.fallbackUsed).toBe(true);
+    expect(response.provider).toBe('runway');
   });
 
   it('does not fall back when Runway does not support the request', async () => {
