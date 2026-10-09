@@ -107,6 +107,17 @@ describe('GoogleDistanceService.reverseGeocode', () => {
     expect(result.address_line_1).toBe('Montreal, QC, Canada');
   });
 
+  it('M3: never puts Google error_message into the thrown error', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: { status: 'OVER_QUERY_LIMIT', error_message: 'You have exceeded your daily request quota' },
+    });
+
+    const error = await service.reverseGeocode(3.1, 11.1).catch((e) => e);
+
+    expect(error.getStatus()).toBe(400);
+    expect(JSON.stringify(error.getResponse())).not.toMatch(/quota|key/i);
+  });
+
   it('builds the street line from number and route', async () => {
     mockedAxios.get.mockResolvedValue(
       okGeocode([
@@ -162,11 +173,63 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
       longitude: 0,
       countryCode: 'GH',
       country: 'Ghana',
+      locationType: '',
+      partialMatch: false,
+      hasStreet: false,
+      hasCity: false,
     });
     expect(mockedAxios.get).toHaveBeenCalledWith(
       'https://maps.googleapis.com/maps/api/geocode/json',
-      { params: { address: 'Null Island', key: 'test-key' } }
+      { params: { address: 'Null Island', key: 'test-key' }, timeout: 10_000 }
     );
+  });
+
+  it('M5: reports precision, partial match and street/city presence', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        results: [
+          {
+            geometry: { location: { lat: 3.8, lng: 11.5 }, location_type: 'RANGE_INTERPOLATED' },
+            partial_match: true,
+            types: ['route'],
+            address_components: [
+              component('locality', 'Yaoundé'),
+              component('country', 'Cameroon', 'CM'),
+            ],
+          },
+        ],
+      },
+    });
+
+    await expect(service.geocodeWithCountry('Rue X, Yaoundé')).resolves.toMatchObject({
+      locationType: 'RANGE_INTERPOLATED',
+      partialMatch: true,
+      hasStreet: true,
+      hasCity: true,
+    });
+
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        results: [
+          {
+            geometry: { location: { lat: 3.8, lng: 11.5 }, location_type: 'APPROXIMATE' },
+            types: ['locality', 'political'],
+            address_components: [
+              component('locality', 'Yaoundé'),
+              component('country', 'Cameroon', 'CM'),
+            ],
+          },
+        ],
+      },
+    });
+    await expect(service.geocodeWithCountry('asdf, Yaoundé')).resolves.toMatchObject({
+      locationType: 'APPROXIMATE',
+      partialMatch: false,
+      hasStreet: false,
+      hasCity: true,
+    });
   });
 
   it('does not call Google for a blank address', async () => {
@@ -174,15 +237,20 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
     expect(mockedAxios.get).not.toHaveBeenCalled();
   });
 
-  it('returns null for no match, a denied request, and a network error', async () => {
+  it('returns null only for a genuine no-match', async () => {
     mockedAxios.get.mockResolvedValueOnce({ data: { status: 'ZERO_RESULTS', results: [] } });
     await expect(service.geocodeWithCountry('nowhere')).resolves.toBeNull();
+  });
 
+  it('throws on a denied/over-quota request and on a network error so the cron does not mark not_found', async () => {
     mockedAxios.get.mockResolvedValueOnce({ data: { status: 'REQUEST_DENIED' } });
-    await expect(service.geocodeWithCountry('denied')).resolves.toBeNull();
+    await expect(service.geocodeWithCountry('denied')).rejects.toThrow(/REQUEST_DENIED/);
+
+    mockedAxios.get.mockResolvedValueOnce({ data: { status: 'OVER_QUERY_LIMIT' } });
+    await expect(service.geocodeWithCountry('quota')).rejects.toThrow(/OVER_QUERY_LIMIT/);
 
     mockedAxios.get.mockRejectedValueOnce(new Error('timeout'));
-    await expect(service.geocodeWithCountry('offline')).resolves.toBeNull();
+    await expect(service.geocodeWithCountry('offline')).rejects.toThrow('timeout');
   });
 
   it('returns null when the hit has no coordinates', async () => {

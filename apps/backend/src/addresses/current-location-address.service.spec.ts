@@ -1,5 +1,8 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
-import { CurrentLocationAddressService } from './current-location-address.service';
+import {
+  CurrentLocationAddressService,
+  DAILY_CREATE_CAP,
+} from './current-location-address.service';
 
 const EARTH_RADIUS_METERS = 6_371_000;
 
@@ -20,7 +23,11 @@ describe('CurrentLocationAddressService', () => {
     longitude: 11.502,
   };
 
-  function build(rows: any[], created?: any) {
+  function build(
+    rows: any[],
+    created?: any,
+    opts: { persona?: string; createdToday?: number; locks?: any } = {}
+  ) {
     const executeQuery = jest.fn(async () => ({
       client_addresses: rows.map((address) => ({ address })),
     }));
@@ -36,12 +43,27 @@ describe('CurrentLocationAddressService', () => {
     const createAddress = jest.fn(async () => ({
       address: created ?? { id: 'addr-new', address_type: 'current_location' },
     }));
+    const getUser = jest.fn(async () => ({
+      id: 'user-1',
+      active_persona: opts.persona ?? 'client',
+      client: { id: 'c1' },
+      agent: { id: 'a1' },
+      business: { id: 'b1' },
+    }));
+    const systemQuery = jest.fn(async () => ({
+      client_addresses: Array.from({ length: opts.createdToday ?? 0 }, (_, i) => ({ id: `a${i}` })),
+    }));
+    const release = jest.fn(async () => undefined);
+    const acquire = jest.fn(async () => release);
+    const locks = opts.locks ?? { acquire };
     const service = new CurrentLocationAddressService(
-      { executeQuery } as any,
+      { executeQuery, getUser } as any,
       { reverseGeocode } as any,
-      { createAddress } as any
+      { createAddress } as any,
+      { executeQuery: systemQuery } as any,
+      locks
     );
-    return { service, createAddress, reverseGeocode, executeQuery };
+    return { service, createAddress, reverseGeocode, executeQuery, systemQuery, acquire, release };
   }
 
   async function rejection(run: () => Promise<unknown>): Promise<HttpException> {
@@ -159,26 +181,125 @@ describe('CurrentLocationAddressService', () => {
     expect(createAddress).not.toHaveBeenCalled();
   });
 
-  it('turns a Google failure into a 400 and rethrows an HttpException', async () => {
-    const network = build([]);
-    network.reverseGeocode.mockRejectedValue(new Error('timeout'));
-    const wrapped = await rejection(() => network.service.resolve(3.848, 11.502));
-    expect(wrapped.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-    expect(network.createAddress).not.toHaveBeenCalled();
-
-    const denied = new HttpException('quota', HttpStatus.TOO_MANY_REQUESTS);
-    const quota = build([]);
-    quota.reverseGeocode.mockRejectedValue(denied);
-    await expect(quota.service.resolve(3.848, 11.502)).rejects.toBe(denied);
-    expect(quota.createAddress).not.toHaveBeenCalled();
+  it('M3: maps every provider failure to the fixed 400, never provider text', async () => {
+    for (const failure of [
+      new Error('timeout'),
+      new HttpException('You have exceeded your daily request quota', HttpStatus.BAD_REQUEST),
+      new HttpException('The provided API key is invalid', HttpStatus.TOO_MANY_REQUESTS),
+      new HttpException('No geocoding results found', HttpStatus.NOT_FOUND),
+    ]) {
+      const t = build([]);
+      t.reverseGeocode.mockRejectedValue(failure);
+      const error = await rejection(() => t.service.resolve(3.848, 11.502));
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(error.getResponse()).toEqual({
+        success: false,
+        error: 'Could not resolve the current location',
+      });
+      expect(t.createAddress).not.toHaveBeenCalled();
+    }
   });
 
-  it('fills a missing street, city, and state from the geocode fallbacks', async () => {
+  it('M2: geocodes a point rounded to 4 decimals but saves the exact coordinates', async () => {
+    const { service, reverseGeocode, createAddress } = build([]);
+
+    await service.resolve(3.848123456, 11.502987654);
+
+    expect(reverseGeocode).toHaveBeenCalledWith(3.8481, 11.503);
+    expect(createAddress).toHaveBeenCalledWith(
+      expect.objectContaining({ latitude: 3.848123456, longitude: 11.502987654 })
+    );
+  });
+
+  it('M2: stops creating new addresses once the 24h cap is reached, but still reuses', async () => {
+    const capped = build([], undefined, { createdToday: DAILY_CREATE_CAP });
+    const error = await rejection(() => capped.service.resolve(3.848, 11.502));
+    expect(error.getStatus()).toBe(HttpStatus.TOO_MANY_REQUESTS);
+    expect(capped.reverseGeocode).not.toHaveBeenCalled();
+    expect(capped.createAddress).not.toHaveBeenCalled();
+
+    const under = build([], undefined, { createdToday: DAILY_CREATE_CAP - 1 });
+    await expect(under.service.resolve(3.848, 11.502)).resolves.toMatchObject({ reused: false });
+
+    const reuse = build([here], undefined, { createdToday: DAILY_CREATE_CAP });
+    await expect(reuse.service.resolve(3.848, 11.502)).resolves.toMatchObject({ reused: true });
+    expect(reuse.systemQuery).not.toHaveBeenCalled();
+  });
+
+  it('A9: agent and business personas get 403 before any lookup or Google call', async () => {
+    for (const persona of ['agent', 'business']) {
+      const t = build([], undefined, { persona });
+      const error = await rejection(() => t.service.resolve(3.848, 11.502));
+      expect(error.getStatus()).toBe(HttpStatus.FORBIDDEN);
+      expect(t.executeQuery).not.toHaveBeenCalled();
+      expect(t.reverseGeocode).not.toHaveBeenCalled();
+      expect(t.acquire).not.toHaveBeenCalled();
+    }
+  });
+
+  it('M1: takes a per-user lock around read + create and always releases it', async () => {
+    const t = build([]);
+    await t.service.resolve(3.848, 11.502);
+    expect(t.acquire).toHaveBeenCalledWith('current-location:user-1', expect.any(Number), expect.any(Number));
+    expect(t.release).toHaveBeenCalledTimes(1);
+
+    const failing = build([]);
+    failing.reverseGeocode.mockRejectedValue(new Error('x'));
+    await expect(failing.service.resolve(3.848, 11.502)).rejects.toBeInstanceOf(HttpException);
+    expect(failing.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('M1: 6 parallel identical requests create exactly one address', async () => {
+    // Real in-process lock + a store that only shows an address after createAddress ran.
+    const { DistributedLockService } = await import('../common/distributed-lock.service');
+    const locks = new DistributedLockService({ get: () => undefined } as never);
+    const stored: any[] = [];
+    const executeQuery = jest.fn(async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      return { client_addresses: stored.map((address) => ({ address })) };
+    });
+    const createAddress = jest.fn(async (input: any) => {
+      await new Promise((r) => setTimeout(r, 20));
+      const address = { id: `addr-${stored.length + 1}`, ...input };
+      stored.push(address);
+      return { address };
+    });
+    const service = new CurrentLocationAddressService(
+      { executeQuery, getUser: async () => ({ id: 'user-1', active_persona: 'client', client: { id: 'c1' } }) } as any,
+      {
+        reverseGeocode: jest.fn(async () => ({
+          address_line_1: '5 Rue Neuve', city: 'Yaoundé', state: 'Centre',
+          country: 'Cameroon', country_code: 'CM', formatted_address: '', postal_code: '',
+        })),
+      } as any,
+      { createAddress } as any,
+      { executeQuery: jest.fn(async () => ({ client_addresses: [] })) } as any,
+      locks
+    );
+
+    const results = await Promise.all(
+      Array.from({ length: 6 }, () => service.resolve(3.848, 11.502))
+    );
+
+    expect(createAddress).toHaveBeenCalledTimes(1);
+    expect(stored).toHaveLength(1);
+    expect(results.filter((r) => !r.reused)).toHaveLength(1);
+    expect(results.filter((r) => r.reused)).toHaveLength(5);
+  });
+
+  it('M1: answers 409 when the per-user lock cannot be taken in time', async () => {
+    const t = build([], undefined, { locks: { acquire: jest.fn(async () => null) } });
+    const error = await rejection(() => t.service.resolve(3.848, 11.502));
+    expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+    expect(t.reverseGeocode).not.toHaveBeenCalled();
+  });
+
+  it('L4: uses the formatted address when there is no street, state falls back to the city', async () => {
     const { service, createAddress, reverseGeocode } = build([]);
     reverseGeocode.mockResolvedValue({
       formatted_address: '  Yaoundé, Cameroon  ',
       address_line_1: '   ',
-      city: '',
+      city: 'Yaoundé',
       state: '',
       country: 'Cameroon',
       country_code: 'CM',
@@ -190,35 +311,23 @@ describe('CurrentLocationAddressService', () => {
     expect(createAddress).toHaveBeenCalledWith(
       expect.objectContaining({
         address_line_1: 'Yaoundé, Cameroon',
-        city: 'Unknown',
-        state: 'CM',
+        city: 'Yaoundé',
+        state: 'Yaoundé',
         country: 'CM',
-        address_type: 'current_location',
-        is_primary: false,
       })
     );
   });
 
-  it('uses Current location when the geocode has no street text', async () => {
-    const { service, createAddress, reverseGeocode } = build([]);
-    reverseGeocode.mockResolvedValue({
-      formatted_address: '  ',
-      address_line_1: '',
-      city: 'Douala',
-      state: '',
-      country: 'Cameroon',
-      country_code: '',
-    });
-
-    await service.resolve(4.05, 9.7);
-
-    expect(createAddress).toHaveBeenCalledWith(
-      expect.objectContaining({
-        address_line_1: 'Current location',
-        city: 'Douala',
-        state: 'Douala',
-        country: 'Cameroon',
-      })
-    );
+  it('L4: never saves "Unknown" / "Current location" placeholders: no city or no text is a 400', async () => {
+    for (const geo of [
+      { formatted_address: 'Somewhere', address_line_1: 'Somewhere', city: '', state: '', country: 'Cameroon', country_code: 'CM' },
+      { formatted_address: '  ', address_line_1: '', city: 'Douala', state: '', country: 'Cameroon', country_code: 'CM' },
+    ]) {
+      const t = build([]);
+      t.reverseGeocode.mockResolvedValue(geo as any);
+      const error = await rejection(() => t.service.resolve(4.05, 9.7));
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(t.createAddress).not.toHaveBeenCalled();
+    }
   });
 });

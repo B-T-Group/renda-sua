@@ -28,6 +28,14 @@ export interface ForwardGeocode {
   longitude: number;
   countryCode: string;
   country: string;
+  /** ROOFTOP | RANGE_INTERPOLATED | GEOMETRIC_CENTER | APPROXIMATE */
+  locationType: string;
+  /** Google matched only part of the input (e.g. dropped a junk street). */
+  partialMatch: boolean;
+  /** The match has a street (route/street_address/premise) component. */
+  hasStreet: boolean;
+  /** The match has a city-level component. */
+  hasCity: boolean;
 }
 
 /** Google Distance Matrix legacy API: max 25 origins or destinations per request. */
@@ -343,8 +351,12 @@ export class GoogleDistanceService {
       const response = await axios.get(url, { params });
 
       if (response.data.status !== 'OK') {
+        // Never surface provider text (quota / key state) to callers: log it only.
+        this.logger.warn(
+          `reverse geocode failed status=${response.data.status} message=${response.data.error_message ?? ''}`
+        );
         throw new HttpException(
-          response.data.error_message || 'Google Geocoding API error',
+          'Google Geocoding API error',
           HttpStatus.BAD_REQUEST
         );
       }
@@ -414,7 +426,21 @@ export class GoogleDistanceService {
    * Returns null when Google has no match.
    */
   async geocodeWithCountry(address: string): Promise<ForwardGeocode | null> {
-    const result = await this.fetchFirstGeocodeResult(address);
+    const trimmed = (address || '').trim();
+    if (!trimmed) return null;
+    // Transport errors and non-ZERO_RESULTS statuses (OVER_QUERY_LIMIT, REQUEST_DENIED,
+    // timeouts) throw so the cron leaves the row untouched and retries tomorrow, instead
+    // of recording a permanent-looking "not_found" for 30 days.
+    const response = await axios.get(
+      'https://maps.googleapis.com/maps/api/geocode/json',
+      { params: { address: trimmed, key: this.apiKey }, timeout: 10_000 }
+    );
+    const data = response.data;
+    if (data?.status === 'ZERO_RESULTS') return null;
+    if (data?.status !== 'OK' || !data.results?.[0]) {
+      throw new Error(`Geocoding failed: ${data?.status ?? 'no status'}`);
+    }
+    const result = data.results[0];
     const location = result?.geometry?.location;
     if (location?.lat == null || location?.lng == null) return null;
     const components = result.address_components || [];
@@ -423,7 +449,25 @@ export class GoogleDistanceService {
       longitude: location.lng,
       countryCode: this.countryShortCode(components),
       country: this.getAddressComponent(components, ['country']) || '',
+      locationType: String(result.geometry?.location_type ?? ''),
+      partialMatch: result.partial_match === true,
+      hasStreet: this.hasStreet(result, components),
+      hasCity: Boolean(
+        this.getAddressComponent(components, [
+          'locality',
+          'sublocality',
+          'administrative_area_level_2',
+        ])
+      ),
     };
+  }
+
+  private hasStreet(result: any, components: any[]): boolean {
+    const types: string[] = result.types ?? [];
+    if (types.some((t) => ['street_address', 'route', 'premise', 'subpremise'].includes(t))) {
+      return true;
+    }
+    return Boolean(this.getAddressComponent(components, ['route', 'street_number']));
   }
 
   private countryShortCode(components: any[]): string {
@@ -436,32 +480,6 @@ export class GoogleDistanceService {
     const number = this.getAddressComponent(components, ['street_number']);
     const route = this.getAddressComponent(components, ['route']);
     return [number, route].filter(Boolean).join(' ');
-  }
-
-  private async fetchFirstGeocodeResult(address: string): Promise<any | null> {
-    const trimmed = (address || '').trim();
-    if (!trimmed) return null;
-    try {
-      const response = await this.requestGeocode(trimmed);
-      return this.firstGeocodeHit(trimmed, response.data);
-    } catch (error: any) {
-      this.logger.error(`Error geocoding address "${trimmed}": ${error.message}`);
-      return null;
-    }
-  }
-
-  private requestGeocode(address: string) {
-    return axios.get('https://maps.googleapis.com/maps/api/geocode/json', {
-      params: { address, key: this.apiKey },
-    });
-  }
-
-  private firstGeocodeHit(address: string, data: any): any | null {
-    if (data?.status === 'OK' && data.results?.[0]) return data.results[0];
-    if (data?.status !== 'ZERO_RESULTS') {
-      this.logger.warn(`Geocoding failed for address "${address}": ${data?.status}`);
-    }
-    return null;
   }
 
   /**

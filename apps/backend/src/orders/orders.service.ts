@@ -1758,11 +1758,11 @@ export class OrdersService {
       }
     }
 
-    const updatedOrder = await this.orderStatusService.updateOrderStatus(
-      request.orderId,
-      'confirmed',
-      actor
-    );
+    const { order: updatedOrder, alreadyConfirmed } =
+      await this.confirmPendingOrderStatus(request.orderId, actor);
+    if (alreadyConfirmed) {
+      return this.alreadyConfirmedResult(updatedOrder);
+    }
 
     try {
       await this.orderAcceptanceService.markAccepted(
@@ -1915,6 +1915,28 @@ export class OrdersService {
       message:
         'Order confirmed. Payment request sent to the client. Start preparing after they pay.',
       payAfterConfirm: true,
+    };
+  }
+
+  private async confirmPendingOrderStatus(
+    orderId: string,
+    actor?: AuthorizedBusinessActor
+  ): Promise<{ order: any; alreadyConfirmed: boolean }> {
+    let alreadyConfirmed = false;
+    const order = await this.orderStatusService.updateOrderStatus(
+      orderId,
+      'confirmed',
+      actor,
+      { onSameStatusReplay: () => { alreadyConfirmed = true; } },
+    );
+    return { order, alreadyConfirmed };
+  }
+
+  private alreadyConfirmedResult(order: any) {
+    return {
+      success: true,
+      order,
+      message: 'Order already confirmed',
     };
   }
 
