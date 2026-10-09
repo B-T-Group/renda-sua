@@ -42,17 +42,16 @@ describe('RendaCharacter', () => {
   });
 
   it.each([
-    [160, 'expressive', 2, 2, 0],
-    [40, 'expressive', 2, 2, 0],
-    [28, 'dot', 0, 0, 2],
-    [16, 'none', 0, 0, 0],
-  ])('derives eyes from size %i → %s', (size, eyes, open, arcs, dots) => {
+    [160, 'expressive', 2, 2],
+    [40, 'expressive', 2, 2],
+    [28, 'dot', 2, 0],
+    [16, 'none', 0, 0],
+  ])('derives eyes from size %i → %s', (size, eyes, pills, arcs) => {
     const { container } = render(<RendaCharacter size={size} />);
     const svg = svgOf(container);
     expect(svg.getAttribute('data-renda-eyes')).toBe(eyes);
-    expect(svg.querySelectorAll('[data-r="open"]')).toHaveLength(open);
+    expect(svg.querySelectorAll('[data-r="open"]')).toHaveLength(pills);
     expect(svg.querySelectorAll('[data-r="arc"]')).toHaveLength(arcs);
-    expect(svg.querySelectorAll('[data-r="eye"] circle')).toHaveLength(dots);
   });
 
   it('runs the animation loop when motion is allowed', () => {
@@ -61,27 +60,27 @@ describe('RendaCharacter', () => {
     expect(rafSpy).toHaveBeenCalled();
   });
 
-  it('reduce motion: static ring (no loop), but the eye shape still switches per state', () => {
+  it('reduce motion: still pose (no loop), but the eye shape still switches per state', () => {
     mockReducedMotion(true);
     const { container, rerender } = render(<RendaCharacter size={160} state="idle" />);
     const svg = svgOf(container);
     expect(svg.getAttribute('data-renda-motion')).toBe('reduced');
-    expect(svg.getAttribute('data-renda-eye-shape')).toBe('arc');
-    expect(openEye(svg).getAttribute('opacity')).toBe('0');
-    expect(arcEye(svg).getAttribute('opacity')).toBe('1');
-
-    act(() => rerender(<RendaCharacter size={160} state="thinking" />));
     expect(svg.getAttribute('data-renda-eye-shape')).toBe('open');
     expect(openEye(svg).getAttribute('opacity')).toBe('1');
     expect(arcEye(svg).getAttribute('opacity')).toBe('0');
-    // Thinking looks up-right instantly; no orbit swirls in reduce motion.
+
+    act(() => rerender(<RendaCharacter size={160} state="thinking" />));
+    expect(svg.getAttribute('data-renda-eye-shape')).toBe('open');
+    // Thinking still reads without motion: eyes up-right, violet body, static dots.
     expect(svg.querySelector('[data-r="eye"]')?.getAttribute('transform')).toBe('translate(2 -2)');
-    expect(svg.querySelector('[data-r="orbits"]')?.getAttribute('opacity')).toBe('0');
-    // No breath: the body is at scale 1.
-    expect(svg.querySelector('[data-r="body"]')?.getAttribute('transform')).toContain('scale(1)');
+    expect(svg.querySelector('[data-r="dots"]')?.getAttribute('opacity')).toBe('1');
+    expect(svg.querySelector('[data-r="shape"]')?.getAttribute('fill')).toBe('#8b5cf6');
+    // No breath or float: the body is at rest.
+    expect(svg.querySelector('[data-r="body"]')?.getAttribute('transform')).toContain('scale(1 1)');
 
     act(() => rerender(<RendaCharacter size={160} state="success" />));
     expect(svg.getAttribute('data-renda-eye-shape')).toBe('arc');
+    expect(arcEye(svg).getAttribute('opacity')).toBe('1');
     // No sparkles in reduce motion.
     svg.querySelectorAll('[data-r="spark"]').forEach((s) => expect(s.getAttribute('opacity')).toBe('0'));
     expect(rafSpy).not.toHaveBeenCalled();
@@ -94,28 +93,26 @@ describe('RendaCharacter', () => {
     expect(rafSpy).not.toHaveBeenCalled();
   });
 
-  it('gives every instance its own SVG ids', () => {
-    const { container } = render(
-      <>
-        <RendaCharacter size={40} />
-        <RendaCharacter size={40} />
-      </>
-    );
-    const ids = Array.from(container.querySelectorAll('mask')).map((m) => m.id);
-    expect(new Set(ids).size).toBe(ids.length);
+  it('the animated character is solid fills only (no gradients, filters, masks or clips) and compact', () => {
+    const { container } = render(<RendaCharacter size={160} />);
+    const svg = svgOf(container);
+    expect(
+      svg.querySelectorAll('linearGradient, radialGradient, filter, mask, clipPath, use, [id]').length
+    ).toBe(0);
+    expect(svg.querySelectorAll('*').length).toBeLessThan(40);
   });
 
-  it('static avatars are lightweight: no filters, masks or wedge ring', () => {
+  it('static avatars are lightweight: solid fills, no gradients, filters or clip paths', () => {
     const { container } = render(<RendaCharacter size={28} surface="avatar" animated={false} />);
     const svg = svgOf(container);
-    expect(svg.querySelectorAll('filter, mask, use').length).toBe(0);
-    expect(svg.querySelectorAll('*').length).toBeLessThan(20);
+    expect(svg.querySelectorAll('linearGradient, radialGradient, filter, mask, use, clipPath').length).toBe(0);
+    expect(svg.querySelectorAll('*').length).toBeLessThan(8);
     expect(svg.getAttribute('aria-hidden')).toBe('true');
     expect(svg.getAttribute('data-renda-eyes')).toBe('dot');
-    expect(svg.querySelectorAll('circle')).toHaveLength(2);
+    expect(svg.querySelectorAll('rect')).toHaveLength(2);
   });
 
-  it('100 message avatars stay under 2,000 SVG nodes in total (the animated character is ~270 each)', () => {
+  it('100 message avatars stay under 2,000 SVG nodes in total', () => {
     const { container } = render(
       <div>
         {Array.from({ length: 100 }, (_, i) => (

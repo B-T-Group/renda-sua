@@ -2,30 +2,34 @@ import {
   CSSProperties,
   memo,
   useEffect,
-  useId,
   useLayoutEffect,
   useRef,
 } from 'react';
 import {
+  ARC_STROKE,
   CX,
-  CY,
-  ECHOES,
+  EYE_DOT,
+  EYE_PILL,
   EYE_X,
   EYE_Y,
   RENDA_COLORS as C,
+  RENDA_REST_PATH,
   RENDA_WIDTH_RATIO,
-  RING_WEDGES,
   RendaEngine,
   RendaEyes,
   RendaNodes,
   RendaSurface,
   RendaState,
-  SWEEP_WEDGES,
+  SPARK_ANGLES,
+  THINK_DOTS,
+  TICKS,
+  eyeArcPath,
   eyeShapeFor,
   eyesForSize,
 } from './rendaCharacterEngine';
 import { msSinceInteraction, onInteraction } from './interactionClock';
 import { RendaAvatar } from './RendaAvatar';
+import { RendaGaze } from './rendaGaze';
 import { usePrefersReducedMotion } from './usePrefersReducedMotion';
 
 export type { RendaEyes, RendaSurface, RendaState } from './rendaCharacterEngine';
@@ -39,7 +43,7 @@ export interface RendaCharacterProps {
   animated?: boolean;
   /** Defaults to the size rule: expressive ≥ 36, dots 20-35, none below 20. */
   eyes?: RendaEyes;
-  /** Spec "Where" column: header idle is static, avatars never move, hero/launcher settle. */
+  /** Spec "Where" column: header idle is gentle, avatars never move, hero/launcher settle. */
   surface?: RendaSurface;
   /**
    * Review / harness only: freeze the Idle eye life cycle on one phase
@@ -55,48 +59,69 @@ export interface RendaCharacterProps {
   'data-testid'?: string;
 }
 
-const MASK_BOX = {
-  maskUnits: 'userSpaceOnUse',
-  x: -60,
-  y: -60,
-  width: 202,
-  height: 220,
-} as const;
-const FILTER_BOX = {
-  x: '-60%',
-  y: '-60%',
-  width: '220%',
-  height: '220%',
-} as const;
-const DIAMOND = 'M0 -1L.7 0L0 1L-.7 0Z';
+function Eyes({ mode }: { mode: RendaEyes }) {
+  if (mode === 'none') return null;
+  const [w, h] = mode === 'dot' ? EYE_DOT : EYE_PILL;
+  return (
+    <g fill={C.eye}>
+      {EYE_X.map((x) => (
+        <g key={x} data-r="eye" data-x={x}>
+          <rect data-r="open" x={x - w / 2} y={EYE_Y - h / 2} width={w} height={h} rx={w / 2} />
+          {mode === 'expressive' && (
+            <path
+              data-r="arc"
+              d={eyeArcPath(x)}
+              fill="none"
+              stroke={C.eye}
+              strokeWidth={ARC_STROKE}
+              strokeLinecap="round"
+              opacity={0}
+            />
+          )}
+        </g>
+      ))}
+    </g>
+  );
+}
+
+/** Thinking dots and the listening / responding signal ticks (top-right, outside the body). */
+function Accents() {
+  return (
+    <>
+      <g data-r="dots" opacity={0}>
+        {THINK_DOTS.map(([cx, cy, r]) => (
+          <circle key={cx} data-r="dot" cx={cx} cy={cy} r={r} fill={C.blue} />
+        ))}
+      </g>
+      <g data-r="ticks" opacity={0} stroke={C.blue} strokeWidth={2.6} strokeLinecap="round">
+        {TICKS.map(([x1, y1, x2, y2]) => (
+          <line key={x1} x1={x1} y1={y1} x2={x2} y2={y2} />
+        ))}
+      </g>
+    </>
+  );
+}
 
 function collectNodes(svg: SVGSVGElement): RendaNodes {
-  const one = <T extends Element>(k: string) =>
+  const one = <T extends SVGElement = SVGElement>(k: string) =>
     svg.querySelector(`[data-r="${k}"]`) as T;
-  const all = <T extends Element>(k: string) =>
+  const all = <T extends SVGElement = SVGElement>(k: string) =>
     Array.from(svg.querySelectorAll(`[data-r="${k}"]`)) as T[];
   return {
+    shape: one('shape'),
     body: one('body'),
-    halo: one('halo'),
-    bloom: one('bloom'),
-    bloomRot: one('bloomRot'),
-    ringRot: one('ringRot'),
-    echoes: one('echoes'),
-    echoG: all('echo'),
-    sweep: one('sweep'),
-    sweepRot: one('sweepRot'),
-    orbits: one('orbits'),
-    orbitRot: all('orbitRot'),
+    shadow: one('shadow'),
+    highlight: one('highlight'),
+    dots: one('dots'),
+    dot: all('dot'),
+    ticks: one('ticks'),
     eyes: all<SVGGElement>('eye').map((g) => ({
       g,
-      open: g.querySelector('[data-r="open"]') as SVGEllipseElement | null,
+      x: Number(g.getAttribute('data-x')),
+      open: g.querySelector('[data-r="open"]') as SVGElement | null,
       arc: g.querySelector('[data-r="arc"]') as SVGPathElement | null,
     })),
-    sparks: all<SVGGElement>('spark').map((g) => ({
-      g,
-      p: g.querySelector('[data-r="sparkP"]') as SVGPathElement,
-      glow: g.querySelector('[data-r="sparkGlow"]') as SVGPathElement,
-    })),
+    sparks: all('spark'),
     ripples: all('ripple'),
   };
 }
@@ -106,11 +131,12 @@ const rafAvailable = () =>
   typeof window.requestAnimationFrame === 'function';
 
 /**
- * "Renda", the assistant character (spec #451 §1): an upright oval ring around a
- * navy face with two white eyes. Decorative only (`aria-hidden`); state changes are
- * never announced through it. Idle on the hero / launcher / catalog header runs the
- * eye life cycle (Rest→Wake→Glance→Blink→Drowse at size ≥36; blink-only at 20–35).
- * Reduce motion gives a static ring whose eye shape still switches per state.
+ * "Renda", the assistant character: a solid-colour jelly blob with pill eyes that
+ * bobs, sways, wobbles and follows the pointer; thinking turns violet with rising dots.
+ * Decorative only (`aria-hidden`); state changes are never announced through it.
+ * Idle on the hero / launcher / catalog header runs the eye life cycle
+ * (Rest→Wake→Glance→Blink→Drowse at size ≥36; blink-only at 20–35).
+ * Reduce motion gives a still pose whose colour, accents and eye shape follow the state.
  */
 function RendaCharacterImpl({
   size,
@@ -126,9 +152,9 @@ function RendaCharacterImpl({
   const eyesMode: RendaEyes = eyes ?? eyesForSize(size);
   const reducedMotion = usePrefersReducedMotion();
   const isStatic = !animated || reducedMotion || surface === 'avatar';
-  const id = `renda${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
   const svgRef = useRef<SVGSVGElement>(null);
   const engineRef = useRef<RendaEngine | null>(null);
+  const gazeRef = useRef<RendaGaze | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastRef = useRef<number | null>(null);
   const staticRef = useRef(isStatic);
@@ -165,6 +191,7 @@ function RendaCharacterImpl({
         lastRef.current == null ? 16 : Math.min(50, now - lastRef.current);
       lastRef.current = now;
       const idleMs = msSinceInteraction();
+      gazeRef.current?.update(engine);
       engine.step(dt, false, idleMs);
       if (engine.isQuiescent(false, idleMs)) {
         lastRef.current = null;
@@ -185,11 +212,13 @@ function RendaCharacterImpl({
       state
     );
     engineRef.current = engine;
+    gazeRef.current = new RendaGaze(svg);
     engine.step(0, true, 0);
     if (!staticRef.current) startLoopRef.current();
     return () => {
       stopLoop();
       engineRef.current = null;
+      gazeRef.current = null;
     };
     // `state` is applied by the effect below; rebuilding on state change would drop motion.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -227,8 +256,8 @@ function RendaCharacterImpl({
   }, [isStatic]);
 
   const width = +(size * RENDA_WIDTH_RATIO).toFixed(2);
-  const url = (k: string) => `url(#${id}${k})`;
   const eyeShape = eyeShapeFor(surface, eyesMode, state);
+  const floats = surface === 'hero' || surface === 'launcher';
 
   return (
     <svg
@@ -255,223 +284,39 @@ function RendaCharacterImpl({
         ...style,
       }}
     >
-      <defs>
-        <mask id={`${id}rm`} {...MASK_BOX}>
-          <ellipse
-            cx={CX}
-            cy={CY}
-            rx={37}
-            ry={46}
-            fill="none"
-            stroke="#fff"
-            strokeWidth={7}
-          />
-        </mask>
-        <mask id={`${id}bm`} {...MASK_BOX}>
-          <ellipse
-            cx={CX}
-            cy={CY}
-            rx={37}
-            ry={46}
-            fill="none"
-            stroke="#fff"
-            strokeWidth={9}
-          />
-        </mask>
-        <mask id={`${id}fo`} {...MASK_BOX}>
-          <rect x={-60} y={-60} width={202} height={220} fill="#fff" />
-          <ellipse cx={CX} cy={CY} rx={33.5} ry={42.5} fill="#000" />
-        </mask>
-        {(
-          [
-            ['b06', 0.9],
-            ['b1', 0.5],
-            ['b2', 2.2],
-            ['b4', 4.5],
-          ] as const
-        ).map(([k, sd]) => (
-          <filter
-            key={k}
-            id={`${id}${k}`}
-            {...FILTER_BOX}
-            colorInterpolationFilters="sRGB"
-          >
-            <feGaussianBlur stdDeviation={sd} />
-          </filter>
-        ))}
-        <radialGradient id={`${id}fg`} cx="50%" cy="46%" r="54%">
-          <stop offset="0%" stopColor={C.navy} />
-          <stop offset="62%" stopColor={C.navy} />
-          <stop offset="100%" stopColor={C.navyEdge} />
-        </radialGradient>
-        <linearGradient id={`${id}og`} x1={0} y1={0} x2={1} y2={0}>
-          <stop offset="0%" stopColor={C.light} stopOpacity={0} />
-          <stop offset="55%" stopColor={C.light} stopOpacity={0.22} />
-          <stop offset="100%" stopColor={C.light} stopOpacity={0.6} />
-        </linearGradient>
-        <g id={`${id}w`}>
-          {RING_WEDGES.map((w, i) => (
-            <path key={i} d={w.d} fill={w.fill} />
-          ))}
+      {floats && (
+        <ellipse data-r="shadow" cx={CX} cy={95} rx={24} ry={3.4} fill={C.blue} opacity={0.22} />
+      )}
+      {[0, 1].map((i) => (
+        <path
+          key={i}
+          data-r="ripple"
+          d={RENDA_REST_PATH}
+          fill="none"
+          stroke={C.blue}
+          strokeWidth={1.6}
+          opacity={0}
+        />
+      ))}
+      <g data-r="body">
+        <path data-r="shape" d={RENDA_REST_PATH} fill={C.blue} />
+        <g data-r="highlight" fill={C.highlight}>
+          <ellipse cx={19} cy={42} rx={7.5} ry={3.8} opacity={0.3} transform="rotate(-38 19 42)" />
+          <circle cx={27.5} cy={35.5} r={1.8} opacity={0.45} />
         </g>
-        <g id={`${id}sw`}>
-          {SWEEP_WEDGES.map((w, i) => (
-            <path key={i} d={w.d} fill={w.fill} fillOpacity={w.opacity} />
-          ))}
-        </g>
-      </defs>
-      <g>
-        {[0, 1].map((i) => (
-          <ellipse
-            key={i}
-            data-r="ripple"
-            cx={CX}
-            cy={CY}
-            rx={37}
-            ry={46}
-            fill="none"
-            stroke={C.light}
-            strokeWidth={4.5}
-            opacity={0}
-          />
-        ))}
-        <g data-r="body">
-          <g data-r="halo">
-            <ellipse
-              cx={CX}
-              cy={CY}
-              rx={44.5}
-              ry={54.5}
-              fill={C.main}
-              filter={url('b4')}
-            />
-          </g>
-          <g data-r="bloom" filter={url('b2')}>
-            <g mask={url('bm')}>
-              <use data-r="bloomRot" href={`#${id}w`} />
-            </g>
-          </g>
-          <g data-r="echoes" mask={url('fo')} opacity={0}>
-            {ECHOES.map(([cx, cy, rx, ry, c, sw], i) => (
-              <g key={i} data-r="echo">
-                <ellipse
-                  cx={cx}
-                  cy={cy}
-                  rx={rx}
-                  ry={ry}
-                  fill="none"
-                  stroke={c}
-                  strokeWidth={sw}
-                  filter={url('b1')}
-                />
-              </g>
-            ))}
-          </g>
-          <g mask={url('rm')}>
-            <use data-r="ringRot" href={`#${id}w`} filter={url('b06')} />
-          </g>
-          <ellipse
-            cx={CX}
-            cy={CY}
-            rx={40.1}
-            ry={49.1}
-            fill="none"
-            stroke={C.tint}
-            strokeOpacity={0.28}
-            strokeWidth={0.7}
-          />
-          <g data-r="sweep" opacity={0}>
-            <g mask={url('rm')}>
-              <use data-r="sweepRot" href={`#${id}sw`} filter={url('b06')} />
-            </g>
-          </g>
-          <ellipse cx={CX} cy={CY} rx={33.5} ry={42.5} fill={url('fg')} />
-          <ellipse
-            cx={CX}
-            cy={CY}
-            rx={33.6}
-            ry={42.6}
-            fill="none"
-            stroke="#000"
-            strokeOpacity={0.18}
-            strokeWidth={0.8}
-          />
-          <g data-r="orbits" mask={url('fo')} opacity={0}>
-            {[-20, 20].map((tilt) => (
-              <g
-                key={tilt}
-                transform={`translate(${CX} ${CY}) rotate(${tilt}) scale(1 .44)`}
-              >
-                <g data-r="orbitRot">
-                  <circle
-                    r={52}
-                    fill="none"
-                    stroke={url('og')}
-                    strokeWidth={(1.5 * size) / 100}
-                    vectorEffect="non-scaling-stroke"
-                  />
-                </g>
-              </g>
-            ))}
-          </g>
-          {eyesMode !== 'none' && (
-            <g>
-              {EYE_X.map((x) => (
-                <g key={x} data-r="eye">
-                  {eyesMode === 'dot' ? (
-                    <circle
-                      data-r="open"
-                      cx={x}
-                      cy={EYE_Y}
-                      r={5}
-                      fill={C.white}
-                    />
-                  ) : (
-                    <>
-                      <ellipse
-                        data-r="open"
-                        cx={x}
-                        cy={EYE_Y}
-                        rx={5}
-                        ry={6}
-                        fill={C.white}
-                      />
-                      <path
-                        data-r="arc"
-                        d={`M${x - 6} 48Q${x} 40 ${x + 6} 48`}
-                        fill="none"
-                        stroke={C.white}
-                        strokeWidth={3.5}
-                        strokeLinecap="round"
-                      />
-                    </>
-                  )}
-                </g>
-              ))}
-            </g>
-          )}
-        </g>
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <g key={i} data-r="spark" opacity={0}>
-            <path
-              data-r="sparkGlow"
-              d={DIAMOND}
-              transform="scale(2.1)"
-              opacity={0.28}
-              filter={url('b1')}
-            />
-            <path data-r="sparkP" d={DIAMOND} />
-          </g>
-        ))}
+        <Eyes mode={eyesMode} />
       </g>
+      <Accents />
+      {SPARK_ANGLES.map((a) => (
+        <circle key={a} data-r="spark" r={2.4} fill={C.mote} opacity={0} />
+      ))}
     </svg>
   );
 }
 
 /**
  * Static surfaces (`surface="avatar"`: 28 px message avatars and the header button)
- * render the lightweight {@link RendaAvatar}; the rAF engine with its 120-wedge ring,
- * blur filters and masks only mounts for the hero, launcher and chat header.
+ * render the lightweight {@link RendaAvatar}; the rAF engine only mounts for the hero, launcher and chat header.
  */
 function RendaCharacterSwitch(props: RendaCharacterProps) {
   if (props.surface === 'avatar') {

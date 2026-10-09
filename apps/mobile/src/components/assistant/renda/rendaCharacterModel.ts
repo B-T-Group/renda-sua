@@ -1,10 +1,9 @@
 /**
- * Renda character model (#451 spec §1): geometry, eye levels, per-state motion
- * config and colour helpers. Pure (no React / RN imports) so vitest covers it.
- * Geometry is in the spec's 0 0 82 100 viewBox.
+ * Renda character model: geometry, eye levels, per-state motion config and
+ * curve helpers. Pure (no React / RN imports) so vitest covers it. Geometry is
+ * in the 0 0 82 100 viewBox and mirrors the web tokens
+ * (`apps/frontend/src/components/assistant/rendaCharacterTokens.ts`).
  */
-import { rendaCharacterTokens as T } from '../../../theme/rendaCharacterTokens';
-
 export type RendaCharacterState =
   | 'idle'
   | 'attentive'
@@ -16,7 +15,6 @@ export type RendaCharacterState =
 
 export type RendaEyes = 'expressive' | 'dot' | 'none';
 export type RendaEyeShape = 'arc' | 'open' | 'dot' | 'none';
-export type RendaHaloMode = 'breath' | 'max' | 'mid';
 
 export const VIEWBOX_W = 82;
 export const VIEWBOX_H = 100;
@@ -25,18 +23,29 @@ export const CY = 50;
 /** Width : height of the character (0.82). */
 export const ASPECT = VIEWBOX_W / VIEWBOX_H;
 
-export const RING = { rx: 37, ry: 46, stroke: 7 } as const;
-export const FACE = { rx: 33.5, ry: 42.5 } as const;
-export const EYE_CENTERS: readonly [number, number][] = [
-  [28, 46],
-  [54, 46],
+/** The jelly blob: wider than tall, sitting low so accents fit above it. */
+export const BLOB = { cx: 41, cy: 58, rx: 38, ry: 29 } as const;
+/** Squash / sway pivot: the blob's base, so it settles like jelly. */
+export const BLOB_BASE_Y = BLOB.cy + BLOB.ry;
+export const EYE_X: readonly [number, number] = [32.5, 49.5];
+export const EYE_Y = 54;
+/** Pill eyes [width, height]; the dot level is chunkier so it reads at 20–35 px. */
+export const EYE_PILL = [6, 12.6] as const;
+export const EYE_DOT = [7, 10.4] as const;
+export const ARC_EYE_STROKE = 3.6;
+/** Thinking dots (cx, cy, r), rising toward the top-right. */
+export const THINK_DOTS: readonly (readonly [number, number, number])[] = [
+  [60, 22, 1.9],
+  [67, 16, 2.4],
+  [75, 9.5, 3],
 ];
-export const OPEN_EYE = { rx: 5, ry: 6 } as const;
-export const DOT_EYE_R = 5;
-/** Happy eye: arc 12 wide × 4 tall (quadratic control 8 above the ends), stroke 3.5. */
-export const ARC_EYE_STROKE = 3.5;
-/** Halo: same oval, ~10% beyond the ring (outer edge rx 40.5 / ry 49.5). */
-export const HALO = { rx: 44.5, ry: 54.5 } as const;
+/** Listening / responding signal ticks (x1, y1, x2, y2) and their pulse pivot. */
+export const TICKS: readonly (readonly [number, number, number, number])[] = [
+  [63, 25, 66, 19.5],
+  [68.5, 28.5, 74.5, 25],
+];
+export const TICK_PIVOT = [62, 30] as const;
+export const SHADOW = { cx: 41, cy: 95, rx: 24, ry: 3.4, opacity: 0.22 } as const;
 
 /** Spec: expressive eyes need ≥ 36 px height, dots from 20–35, none below 20. */
 export const EXPRESSIVE_MIN_SIZE = 36;
@@ -52,69 +61,110 @@ export function characterWidth(size: number): number {
   return size * ASPECT;
 }
 
-/** Arc ("happy") eye path centred on (x, y): ends at y+2, apex 2 above centre. */
-export function arcEyePath(x: number, y: number): string {
-  return `M${x - 6} ${y + 2}Q${x} ${y - 6} ${x + 6} ${y + 2}`;
+/** Happy-arc eye centred on (x, y). */
+export function arcEyePath(x: number, y = EYE_Y): string {
+  return `M${x - 4.6} ${y + 2.2}Q${x} ${y - 5.2} ${x + 4.6} ${y + 2.2}`;
 }
 
+const fmt = (n: number) => +n.toFixed(3);
+
+/** Silhouette sample points: squircle-ish dome, flatter base, a little lopsided. */
+const SHAPE_N = 16;
+function blobPoints(): [number, number][] {
+  const pts: [number, number][] = [];
+  for (let i = 0; i < SHAPE_N; i++) {
+    const a = (i / SHAPE_N) * Math.PI * 2;
+    const s = Math.sin(a);
+    const c = -Math.cos(a);
+    const ey = c > 0 ? 0.7 : 0.92;
+    const lop = 1 + 0.035 * Math.sin(a + 2.3);
+    pts.push([
+      BLOB.cx + BLOB.rx * Math.sign(s) * Math.pow(Math.abs(s), 0.86) * lop,
+      BLOB.cy + BLOB.ry * Math.sign(c) * Math.pow(Math.abs(c), ey) * lop,
+    ]);
+  }
+  return pts;
+}
+
+/** Closed Catmull-Rom path through the blob points (same outline as web at rest). */
+export function blobPath(): string {
+  const p = blobPoints();
+  const n = p.length;
+  let d = `M${fmt(p[0][0])} ${fmt(p[0][1])}`;
+  for (let i = 0; i < n; i++) {
+    const [a, b, c, e] = [p[(i + n - 1) % n], p[i], p[(i + 1) % n], p[(i + 2) % n]];
+    d += `C${fmt(b[0] + (c[0] - a[0]) / 6)} ${fmt(b[1] + (c[1] - a[1]) / 6)} `;
+    d += `${fmt(c[0] - (e[0] - b[0]) / 6)} ${fmt(c[1] - (e[1] - b[1]) / 6)} ${fmt(c[0])} ${fmt(c[1])}`;
+  }
+  return `${d}Z`;
+}
+
+export const BLOB_PATH = blobPath();
+
 // ---------------------------------------------------------------------------
-// Motion config per state (spec §1 state table; prototype STATES)
+// Motion config per state
 // ---------------------------------------------------------------------------
 
 export type RendaStateConfig = {
   eyes: 'arc' | 'open';
   /** Eye offset in viewBox units. */
   offset: readonly [number, number];
-  /** Breath amplitude (scale delta). 0 = ring still. */
+  /** Squash / stretch amplitude (scale delta). */
   amp: number;
-  /** Breath period, ms. */
+  /** Squash period, ms. */
   period: number;
-  /** Ring gradient spins (360° / 10 s) when true. */
-  spin: boolean;
-  halo: RendaHaloMode;
+  /** Bob amplitude, viewBox units. */
+  bob: number;
+  /** Sway amplitude, degrees. */
+  sway: number;
+  /** Tempo of the bob / sway clock (1 = idle). */
+  tempo: number;
+  /** 0 = blue, 1 = violet. */
+  tint: number;
+  dots: boolean;
+  ticks: boolean;
+  /** Thinking: the eyes sweep up-left ↔ up-right. */
+  scan: boolean;
   blink: boolean;
-  orbits: boolean;
 };
 
+const BASE = { offset: [0, 0] as const, tint: 0, dots: false, ticks: false, scan: false, blink: false };
+
 export const RENDA_STATE_CONFIG: Record<RendaCharacterState, RendaStateConfig> = {
-  idle: { eyes: 'arc', offset: [0, 0], amp: 0.03, period: 3200, spin: true, halo: 'breath', blink: false, orbits: false },
-  attentive: { eyes: 'open', offset: [0, 0], amp: 0, period: 3200, spin: false, halo: 'max', blink: true, orbits: false },
-  listening: { eyes: 'open', offset: [0, 2], amp: 0, period: 3200, spin: false, halo: 'max', blink: true, orbits: false },
-  thinking: { eyes: 'open', offset: [2, -2], amp: 0.04, period: 1200, spin: true, halo: 'breath', blink: false, orbits: true },
-  responding: { eyes: 'arc', offset: [0, 0], amp: 0.03, period: 1600, spin: true, halo: 'breath', blink: false, orbits: false },
-  success: { eyes: 'arc', offset: [0, 0], amp: 0, period: 3200, spin: true, halo: 'max', blink: false, orbits: false },
-  attention: { eyes: 'open', offset: [0, 0], amp: 0, period: 3200, spin: true, halo: 'max', blink: false, orbits: false },
+  idle: { ...BASE, eyes: 'open', amp: 0.035, period: 2600, bob: 2, sway: 2.5, tempo: 1 },
+  attentive: { ...BASE, eyes: 'open', amp: 0.03, period: 2200, bob: 1.6, sway: 1.6, tempo: 1.15, ticks: true, blink: true },
+  listening: { ...BASE, eyes: 'open', offset: [0, 2], amp: 0.04, period: 1800, bob: 1.4, sway: 1.4, tempo: 1.25, ticks: true, blink: true },
+  thinking: { ...BASE, eyes: 'open', offset: [2, -2], amp: 0.045, period: 1500, bob: 1.6, sway: 4.5, tempo: 1.6, tint: 1, dots: true, scan: true },
+  responding: { ...BASE, eyes: 'arc', amp: 0.05, period: 1000, bob: 1.4, sway: 2, tempo: 1.8, ticks: true },
+  success: { ...BASE, eyes: 'arc', amp: 0.03, period: 2400, bob: 2, sway: 2, tempo: 1.3 },
+  attention: { ...BASE, eyes: 'open', amp: 0.03, period: 2200, bob: 1.8, sway: 2, tempo: 1.2, ticks: true },
 };
 
 export type RendaRenderMode = {
   /** false = fully static drawing (message avatar, badges). */
   animated: boolean;
-  /** System "Reduce motion": no loops or one-shots, eye shapes still switch. */
+  /** System "Reduce motion": no loops or one-shots; colour, accents and eyes still switch. */
   reducedMotion: boolean;
-  /** Header avatar: idle is static, attentive/listening map to idle. */
+  /** Header avatar: a gentler idle; attentive/listening map to idle. */
   staticIdle?: boolean;
-  /** Battery / settle pause: loops stop, eyes and halo keep their state. */
+  /** Battery / settle pause: loops stop, eyes and colour keep their state. */
   paused?: boolean;
 };
 
 export type ResolvedRendaConfig = RendaStateConfig & {
-  /** True when any continuous loop (breath, spin, orbit) may run. */
+  /** True when any continuous loop (squash, bob, sway, accents, scan) may run. */
   loops: boolean;
-  /** True when one-shots (pops, sweep, sparkles, ripples, blink) may play. */
+  /** True when one-shots (hop, sparkles, ripples, blink) may play. */
   oneShots: boolean;
 };
 
-const STATIC_IDLE: RendaStateConfig = {
-  ...RENDA_STATE_CONFIG.idle,
-  amp: 0,
-  spin: false,
-  halo: 'mid',
-};
+const HEADER_IDLE: RendaStateConfig = { ...RENDA_STATE_CONFIG.idle, amp: 0.02, bob: 0.8, sway: 1 };
+const STILL = { amp: 0, bob: 0, sway: 0, scan: false, blink: false, loops: false, oneShots: false };
 
 /**
  * Effective config for a state under a render mode. Reduced motion and
- * `animated=false` freeze the ring but keep the eye shape and offset per state
- * (spec: "eye shape still switches per state, instantly").
+ * `animated=false` freeze the body but keep the colour, accents, eye shape and
+ * offset per state, so Thinking still reads without motion.
  */
 export function resolveRendaConfig(
   state: RendaCharacterState,
@@ -123,25 +173,13 @@ export function resolveRendaConfig(
   let effective = state;
   if (mode.staticIdle && (state === 'attentive' || state === 'listening')) effective = 'idle';
   let cfg = RENDA_STATE_CONFIG[effective];
-  if (mode.staticIdle && effective === 'idle') cfg = STATIC_IDLE;
-  const still = !mode.animated || mode.reducedMotion;
-  if (still) {
-    return {
-      ...cfg,
-      amp: 0,
-      spin: false,
-      orbits: false,
-      blink: false,
-      halo: cfg.halo === 'max' ? 'max' : 'mid',
-      loops: false,
-      oneShots: false,
-    };
-  }
-  const loops = !mode.paused && (cfg.amp > 0 || cfg.spin || cfg.orbits);
+  if (mode.staticIdle && effective === 'idle') cfg = HEADER_IDLE;
+  if (!mode.animated || mode.reducedMotion) return { ...cfg, ...STILL };
+  const moving = cfg.amp > 0 || cfg.bob > 0 || cfg.sway > 0 || cfg.dots || cfg.ticks || cfg.scan;
   return {
     ...cfg,
     blink: cfg.blink && !mode.paused,
-    loops,
+    loops: !mode.paused && moving,
     oneShots: !mode.paused,
   };
 }
@@ -160,21 +198,22 @@ export function eyeShapeFor(eyes: RendaEyes, cfg: Pick<RendaStateConfig, 'eyes'>
 export const RENDA_TIMING = {
   eyeMorph: 150,
   eyeOffset: 200,
-  haloMax: 200,
   blink: 160,
   blinkMin: 4000,
   blinkMax: 7000,
-  spinPeriod: 10_000,
-  /** Shared clock for orbits (150°/s) and drift echoes; a whole number of turns each. */
-  orbitClock: 36_000,
-  respondingPop: 300,
-  respondingSweep: 900,
-  successTotal: 1200,
-  sparkle: 900,
-  sparkleStagger: 40,
-  ripple: 700,
+  /** Bob / sway clock at tempo 1; the waves complete whole cycles per loop. */
+  motionClock: 12_000,
+  dotsCycle: 1250,
+  tickBeat: 900,
+  scanCycle: 2600,
+  /** Colour / accent / amplitude easing. */
+  tint: 260,
+  accents: 220,
+  amplitude: 500,
+  sparkle: 950,
+  sparkleStagger: 45,
+  ripple: 750,
   rippleGap: 300,
-  attentionTotal: 1600,
   attentionEyesOpen: 1100,
   settleAfter: 20_000,
   settleEase: 320,
@@ -186,13 +225,24 @@ export function nextBlinkDelay(rand: number): number {
   return RENDA_TIMING.blinkMin + r * (RENDA_TIMING.blinkMax - RENDA_TIMING.blinkMin);
 }
 
-/** Orbit / echo turns per `orbitClock` cycle (150°/s → 15 turns in 36 s). */
-export const ORBIT_TURNS = 15;
-export const ECHO_TURNS: readonly number[] = [7, -5, 4];
+const TAU = Math.PI * 2;
+
+/**
+ * Bob wave over one motion-clock loop (y, + = down, in [-1, 1]): layered sines
+ * with whole cycles per loop so the native loop wraps seamlessly.
+ */
+export const bobWave = (p: number) => -(0.72 * Math.sin(TAU * 4 * p) + 0.28 * Math.sin(TAU * 7 * p + 1.3));
+/** Sway wave (deg per unit amplitude, in [-1, 1]). */
+export const swayWave = (p: number) => 0.7 * Math.sin(TAU * 2 * p + 0.5) + 0.3 * Math.sin(TAU * 5 * p + 2.2);
+/** Thinking dot bounce (0..1) for dot `i` over one dots cycle. */
+export const dotBounce = (i: number) => (p: number) => Math.max(0, Math.sin(TAU * p - i * 0.75));
+/** Thinking eye scan over one scan cycle: x in [-3, 0] (dwelling at each side), y lift. */
+const dwell = (s: number) => Math.sign(s) * Math.pow(Math.abs(s), 0.35);
+export const scanX = (p: number) => -3 * (0.5 - 0.5 * dwell(Math.sin(TAU * p)));
+export const scanY = (p: number) => -0.8 * Math.abs(dwell(Math.sin(TAU * p)));
 
 // ---------------------------------------------------------------------------
-// Springs: damped spring from rest with an initial velocity, matching the
-// prototype's springCurve (damping 12, stiffness 180, mass 1).
+// Springs: damped spring from rest with an initial velocity.
 // ---------------------------------------------------------------------------
 
 export type SpringParams = { stiffness: number; damping: number; mass?: number };
@@ -213,255 +263,34 @@ export function springVelocityForPeak(peak: number, params: SpringParams): numbe
   return perV > 0 ? peak / perV : 0;
 }
 
-/** Success pop: 1.00 → 1.08 → 1.00, spring d12 k180 (~450 ms). */
-export const SUCCESS_SPRING: SpringParams = { stiffness: 180, damping: 12 };
-/** Attention pop: 1.10, the same curve 1.5× faster (≤ 400 ms). */
-export const ATTENTION_SPRING: SpringParams = { stiffness: 180 * 2.25, damping: 12 * 1.5 };
-
-// ---------------------------------------------------------------------------
-// Colours
-// ---------------------------------------------------------------------------
-
-function hexToRgb(hex: string): [number, number, number] {
-  const h = hex.replace('#', '');
-  return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)) as [number, number, number];
-}
-
-export function mixHex(a: string, b: string, t: number): string {
-  const A = hexToRgb(a);
-  const B = hexToRgb(b);
-  const k = Math.min(Math.max(t, 0), 1);
-  return (
-    '#' +
-    A.map((v, i) => Math.round(v + (B[i] - v) * k).toString(16).padStart(2, '0')).join('')
-  ).toUpperCase();
-}
-
-/** Face edge: secondary.main shaded 12% toward black. */
-export const FACE_EDGE = mixHex(T.face, '#000000', 0.12);
-
-/**
- * Sweep-gradient stops by angle (deg, 0 = top, clockwise). The highlight sits
- * top-right, ~25% of the ring, as in the approved prototype.
- */
-export const RING_STOPS: readonly [number, string][] = [
-  [0, T.ringLight],
-  [45, T.ringHighlight],
-  [95, T.ringLight],
-  [185, T.ringMain],
-  [290, T.ringMain],
-  [360, T.ringLight],
-];
-
-export function ringColorAt(angle: number): string {
-  const a = ((angle % 360) + 360) % 360;
-  for (let i = 0; i < RING_STOPS.length - 1; i++) {
-    const [a0, c0] = RING_STOPS[i];
-    const [a1, c1] = RING_STOPS[i + 1];
-    if (a >= a0 && a <= a1) return mixHex(c0, c1, (a - a0) / (a1 - a0));
-  }
-  return T.ringLight;
-}
-
-const fmt = (n: number) => +n.toFixed(3);
-
-/** Point at `angle` (deg, 0 = top, clockwise) and radius `r` around (cx, cy). */
-export function polar(angle: number, r: number, cx = CX, cy = CY): [number, number] {
-  const rad = (angle * Math.PI) / 180;
-  return [cx + r * Math.sin(rad), cy - r * Math.cos(rad)];
-}
-
-export type Wedge = { d: string; fill: string };
-
-/**
- * The sweep gradient as `count` wedges (SVG / react-native-svg have no conic
- * gradient). Wedges overlap by 0.4° to hide seams, as in the prototype.
- */
-export function buildRingWedges(count: number, cx: number, cy: number, r: number): Wedge[] {
-  const step = 360 / count;
-  const out: Wedge[] = [];
-  for (let i = 0; i < count; i++) {
-    const a = i * step;
-    const [x0, y0] = polar(a - 0.4, r, cx, cy);
-    const [x1, y1] = polar(a + step + 0.4, r, cx, cy);
-    out.push({
-      d: `M${cx} ${cy}L${fmt(x0)} ${fmt(y0)}L${fmt(x1)} ${fmt(y1)}Z`,
-      fill: ringColorAt(a + step / 2),
-    });
-  }
-  return out;
-}
-
-/** Fewer wedges on small characters: no visible banding, fewer SVG nodes. */
-export function wedgeCountForSize(size: number): number {
-  if (size >= 96) return 120;
-  if (size >= 44) return 72;
-  if (size >= 36) return 48;
-  return 32;
-}
-
-/** Static drawings (message avatars, header button): no rotation, so fewer still. */
-export function staticWedgeCountForSize(size: number): number {
-  return size >= 36 ? wedgeCountForSize(size) : 24;
-}
-
-export type SweepWedge = Wedge & { opacity: number };
-
-/**
- * Responding highlight sweep: bright head at 0°, feathered lead (+12°) and a
- * long decaying tail back to −150° (prototype `sw` group).
- */
-export function buildSweepWedges(cx: number, cy: number, r: number): SweepWedge[] {
-  const out: SweepWedge[] = [];
-  for (let a = 12; a > -150; a -= 2.5) {
-    const lead = a > 0 ? 1 - a / 12 : 1;
-    const tail = a <= 0 ? Math.pow(1 + a / 150, 2.2) : 1;
-    const k = lead * tail;
-    const [x0, y0] = polar(a - 2.5 - 0.3, r, cx, cy);
-    const [x1, y1] = polar(a + 0.3, r, cx, cy);
-    out.push({
-      d: `M${cx} ${cy}L${fmt(x0)} ${fmt(y0)}L${fmt(x1)} ${fmt(y1)}Z`,
-      fill: mixHex(T.ringHighlight, '#FFFFFF', Math.min(1, k * k * 0.75)),
-      opacity: fmt(0.95 * k),
-    });
-  }
-  return out;
-}
-
-// ---------------------------------------------------------------------------
-// Glow: the prototype blurs SVG shapes (feGaussianBlur). Native has no filters,
-// so the blurred profiles are baked into gradient stops with the same falloff
-// (a Gaussian blur of an edge is a normal CDF across that edge).
-// ---------------------------------------------------------------------------
-
-/** Standard normal CDF (Abramowitz-Stegun 7.1.26, |error| < 1.5e-7). */
-export function normalCdf(x: number): number {
-  const z = Math.abs(x) / Math.SQRT2;
-  const t = 1 / (1 + 0.3275911 * z);
-  const poly =
-    t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
-  const erf = 1 - poly * Math.exp(-z * z);
-  return 0.5 * (1 + (x >= 0 ? erf : -erf));
-}
-
-/** Outer edge of the 7-wide ring (rx 37 + 3.5, ry 46 + 3.5). */
-export const RING_OUTER = { rx: RING.rx + RING.stroke / 2, ry: RING.ry + RING.stroke / 2 } as const;
-
-export type GlowStop = { offset: number; opacity: number };
-
-export type OvalGlowSpec = {
-  /** Blurred shape edge, in units beyond the ring's outer edge (prototype halo: 44.5/54.5 → ~4.5). */
-  edge: number;
-  /** Blur sigma in viewBox units (prototype: 4.5 halo core, 14 dark wide halo). */
-  sigma: number;
-  /** Tail length in sigmas before the gradient ends. */
-  tail?: number;
+/** Jelly hop on state entry: soft, a little wobbly. */
+export const HOP_SPRING: SpringParams = { stiffness: 170, damping: 11 };
+/** Hop peak (scale delta) per state entered. */
+export const HOP_PEAK: Record<RendaCharacterState, number> = {
+  idle: 0.02,
+  attentive: 0.03,
+  listening: 0.035,
+  thinking: 0.03,
+  responding: 0.06,
+  success: 0.09,
+  attention: 0.1,
 };
 
-/**
- * Gradient oval (centred on CX, CY) that holds an `OvalGlowSpec`. A radial
- * gradient scales with its oval, so the same stop lands at slightly different
- * distances beyond the ring on the two axes; the oval's aspect is chosen so
- * both axes agree exactly at the blurred edge (where the glow is most visible).
- */
-export function ovalGlowExtent(spec: OvalGlowSpec): { rx: number; ry: number; extent: number } {
-  const extent = spec.edge + (spec.tail ?? 3) * spec.sigma;
-  const ry = RING_OUTER.ry + extent;
-  const rx = (ry * (RING_OUTER.rx + spec.edge)) / (RING_OUTER.ry + spec.edge);
-  return { rx, ry, extent };
-}
+// ---------------------------------------------------------------------------
+// One-shot geometry
+// ---------------------------------------------------------------------------
 
-/**
- * Radial-gradient stops reproducing a blurred oval: opacity Φ((edge − d) / σ)
- * at `d` units beyond the ring's outer edge (mean of the two axes per stop).
- */
-export function ovalGlowStops(spec: OvalGlowSpec, samples = 12): GlowStop[] {
-  const { rx, ry } = ovalGlowExtent(spec);
-  const dAt = (t: number) => (t * rx - RING_OUTER.rx + (t * ry - RING_OUTER.ry)) / 2;
-  const inner = Math.max(0, Math.min(RING_OUTER.rx / rx, RING_OUTER.ry / ry) - 0.08);
-  const stops: GlowStop[] = [{ offset: 0, opacity: 1 }];
-  for (let i = 0; i < samples; i++) {
-    const t = inner + ((1 - inner) * i) / (samples - 1);
-    const d = dAt(t);
-    const v = i === samples - 1 ? 0 : normalCdf((spec.edge - d) / spec.sigma);
-    stops.push({ offset: fmt(t), opacity: fmt(Math.min(1, v)) });
-  }
-  return stops;
-}
-
-/** Prototype halo core: oval 44.5 × 54.5 blurred σ 4.5 (edge ~4.5 beyond the ring). */
-export const HALO_GLOW: OvalGlowSpec = { edge: 4.5, sigma: 4.5 };
-/** Prototype dark-mode wide halo: oval 48 × 58 blurred σ 14, 55% (`primary.light`). */
-export const HALO_WIDE_GLOW: OvalGlowSpec = { edge: 8, sigma: 14, tail: 2.5 };
-export const HALO_WIDE_ALPHA = 0.55;
-
-/**
- * Ring bloom (prototype `r.bloom`): the ring wedges through a 9-wide mask,
- * blurred σ 2.2, so the glow takes the gradient's colour and rotates with it.
- * Drawn in circle space (r 46, squashed like the ring overlay).
- */
-export const BLOOM = { halfWidth: 4.5, sigma: 2.2, inner: 38 } as const;
-export const BLOOM_RADIUS = RING.ry + BLOOM.halfWidth + 3 * BLOOM.sigma;
-
-/** Opacity of the blurred 9-wide band at circle-space radius `r`. */
-export function bloomProfile(r: number): number {
-  const { halfWidth: h, sigma: s } = BLOOM;
-  return normalCdf((RING.ry + h - r) / s) - normalCdf((RING.ry - h - r) / s);
-}
-
-/** userSpace radial-gradient stops (radius `BLOOM_RADIUS`) for the bloom band. */
-export function bloomStops(samples = 8): GlowStop[] {
-  const stops: GlowStop[] = [];
-  const t0 = BLOOM.inner / BLOOM_RADIUS;
-  for (let i = 0; i < samples; i++) {
-    const t = t0 + ((1 - t0) * i) / (samples - 1);
-    const v = i === samples - 1 ? 0 : bloomProfile(t * BLOOM_RADIUS);
-    stops.push({ offset: fmt(t), opacity: fmt(v) });
-  }
-  return stops;
-}
-
-/** Bloom segments: the glow is soft, so fewer than the ring itself. */
-export function bloomSegmentsForSize(size: number): number {
-  return size >= 96 ? 36 : 24;
-}
-
-/** Bloom layer opacity range by halo level (prototype: .22–.32 light, .55–.90 dark). */
-export function bloomAlphaRange(dark: boolean): [number, number] {
-  return dark ? [0.55, 0.9] : [0.22, 0.32];
-}
-
-/** Halo alpha range: 16–28% on light surfaces, 30–45% in dark mode. */
-export function haloAlphaRange(dark: boolean): [number, number] {
-  return dark ? [0.3, 0.45] : [0.16, 0.28];
-}
-
-export function haloColor(dark: boolean): string {
-  return dark ? T.haloDark : T.haloLight;
-}
-
-/** Sparkle fills alternate core/light (light mode) or light/tint (dark). */
-export function sparkleColor(index: number, dark: boolean): string {
-  if (dark) return index % 2 ? T.ringHighlight : T.sparkleLight;
-  return index % 2 ? T.sparkleLight : T.sparkleCore;
-}
-
-/** Six sparkles at 30°, 90°, … 330°. */
+/** Six success motes at 30°, 90°, … 330°. */
 export const SPARKLE_ANGLES: readonly number[] = [30, 90, 150, 210, 270, 330];
 
-/**
- * Sparkle start/end centre (viewBox units): from just outside the ring,
- * travelling outward 14% of the height.
- */
+/** Mote start / end centre (viewBox units): from the blob edge, outward and up. */
 export function sparklePath(angle: number): { from: [number, number]; to: [number, number] } {
   const rad = (angle * Math.PI) / 180;
   const ux = Math.sin(rad);
   const uy = -Math.cos(rad);
-  const ex = RING.rx + RING.stroke / 2 + 3;
-  const ey = RING.ry + RING.stroke / 2 + 3;
   return {
-    from: [CX + ux * ex, CY + uy * ey],
-    to: [CX + ux * (ex + 14), CY + uy * (ey + 14)],
+    from: [fmt(BLOB.cx + ux * 40), fmt(BLOB.cy + uy * 31)],
+    to: [fmt(BLOB.cx + ux * 52), fmt(BLOB.cy + uy * 43 - 4)],
   };
 }
 
@@ -488,105 +317,3 @@ export function sampleCurve(
 }
 
 export const easeOutCubic = (p: number) => 1 - Math.pow(1 - p, 3);
-export const easeInOutCubic = (p: number) =>
-  p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-
-/** Ring overlay drawn as a circle then squashed: x-scale that maps r46 → rx37. */
-export const RING_SQUASH_X = RING.rx / RING.ry;
-/**
- * Stroke of the rotating overlay in circle space. After the x-squash it is
- * 6.1 wide at the sides and 7.6 at top/bottom, within ±0.45 of the exact
- * 7-wide ring drawn underneath.
- */
-export const RING_OVERLAY_STROKE = 7.6;
-
-/** Annulus segments (no masks needed) for the rotating sweep gradient. */
-export function buildRingSegments(
-  count: number,
-  cx: number,
-  cy: number,
-  rMid: number,
-  stroke: number,
-  /** Degrees each side; hides seams between opaque fills. Use 0 for translucent fills (overlaps show as spokes). */
-  overlap = 0.4
-): Wedge[] {
-  const step = 360 / count;
-  const rOut = rMid + stroke / 2;
-  const rIn = rMid - stroke / 2;
-  const out: Wedge[] = [];
-  for (let i = 0; i < count; i++) {
-    const a0 = i * step - overlap;
-    const a1 = (i + 1) * step + overlap;
-    const [ox0, oy0] = polar(a0, rOut, cx, cy);
-    const [ox1, oy1] = polar(a1, rOut, cx, cy);
-    const [ix1, iy1] = polar(a1, rIn, cx, cy);
-    const [ix0, iy0] = polar(a0, rIn, cx, cy);
-    out.push({
-      d: `M${fmt(ox0)} ${fmt(oy0)}L${fmt(ox1)} ${fmt(oy1)}L${fmt(ix1)} ${fmt(iy1)}L${fmt(ix0)} ${fmt(iy0)}Z`,
-      fill: ringColorAt(i * step + step / 2),
-    });
-  }
-  return out;
-}
-
-/** Sweep head + tail as annulus segments (same shape as buildSweepWedges). */
-export function buildSweepSegments(
-  cx: number,
-  cy: number,
-  rMid: number,
-  stroke: number
-): SweepWedge[] {
-  const rOut = rMid + stroke / 2;
-  const rIn = rMid - stroke / 2;
-  return buildSweepWedges(cx, cy, rOut).map((w, i) => {
-    const a = 12 - i * 2.5;
-    const a0 = a - 2.5 - 0.3;
-    const a1 = a + 0.3;
-    const [ox0, oy0] = polar(a0, rOut, cx, cy);
-    const [ox1, oy1] = polar(a1, rOut, cx, cy);
-    const [ix1, iy1] = polar(a1, rIn, cx, cy);
-    const [ix0, iy0] = polar(a0, rIn, cx, cy);
-    return {
-      ...w,
-      d: `M${fmt(ox0)} ${fmt(oy0)}L${fmt(ox1)} ${fmt(oy1)}L${fmt(ix1)} ${fmt(iy1)}L${fmt(ix0)} ${fmt(iy0)}Z`,
-    };
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Dark-mode happy-arc glow
-// ---------------------------------------------------------------------------
-
-/**
- * The prototype glows the eyes in dark mode with a drop shadow of the eye's
- * own shape (σ 1.6). For the 3.5-wide arc that is a soft line hugging the
- * stroke, not a disc, so it is drawn as a few wider strokes of the same path.
- * Kept faint and white (the eyes' colour).
- */
-export const ARC_GLOW = { sigma: 1.6, peak: 0.6, radii: [2.25, 2.75, 3.25, 3.75, 4.5, 5.5] } as const;
-
-/** Opacity of a stroke (half-width `halfWidth`) blurred by `sigma`, at distance `d` from its centreline. */
-export function blurredStrokeProfile(d: number, halfWidth: number, sigma: number): number {
-  return normalCdf((halfWidth - d) / sigma) - normalCdf((-halfWidth - d) / sigma);
-}
-
-export type GlowStroke = { width: number; opacity: number };
-
-/**
- * Same-colour strokes (widest first) whose stacked alpha follows
- * `peak * blurredStrokeProfile` between the arc's edge and the outer radius.
- */
-export function arcGlowStrokes(spec: typeof ARC_GLOW = ARC_GLOW): GlowStroke[] {
-  const half = ARC_EYE_STROKE / 2;
-  const out: GlowStroke[] = [];
-  let transmit = 1;
-  for (let i = spec.radii.length - 1; i >= 0; i -= 1) {
-    const inner = i === 0 ? half : spec.radii[i - 1];
-    const mid = (inner + spec.radii[i]) / 2;
-    const target = spec.peak * blurredStrokeProfile(mid, half, spec.sigma);
-    const opacity = Math.min(1, Math.max(0, 1 - (1 - target) / transmit));
-    transmit *= 1 - opacity;
-    out.push({ width: spec.radii[i] * 2, opacity: Math.round(opacity * 1000) / 1000 });
-  }
-  return out;
-}
