@@ -74,11 +74,12 @@ interface OrderForPolicy {
   current_status: string;
   assigned_agent_id?: string | null;
   total_amount: number;
-  /** Fee base inputs: item subtotal after discounts = total - delivery fee paid - tax. */
+  /** Fee base inputs: item subtotal after discounts = total - delivery fee paid - tax - service fee. */
   base_delivery_fee?: number | string | null;
   per_km_delivery_fee?: number | string | null;
   delivery_fee_waived?: boolean | null;
   tax_amount?: number | string | null;
+  service_fee?: number | string | null;
   currency: string;
   payment_source?: string | null;
   payment_status?: string | null;

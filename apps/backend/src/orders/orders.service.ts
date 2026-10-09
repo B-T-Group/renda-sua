@@ -6424,6 +6424,7 @@ export class OrdersService {
       per_km_delivery_fee: order.per_km_delivery_fee,
       delivery_fee_waived: (order as any).delivery_fee_waived,
       tax_amount: order.tax_amount,
+      service_fee: order.service_fee,
       business_location: { country_code: countryCode },
     };
   }
@@ -7226,6 +7227,7 @@ export class OrdersService {
       per_km_delivery_fee: order.per_km_delivery_fee,
       delivery_fee_waived: (order as any).delivery_fee_waived,
       tax_amount: order.tax_amount,
+      service_fee: order.service_fee,
       currency: order.currency,
       payment_source: (order as any).payment_source,
       payment_status: order.payment_status,
