@@ -608,6 +608,11 @@ const addresses = {
     api.put<{ success: boolean; data?: { address: UserAddress } }>(`/addresses/${id}`, body),
   delete: (id: string) =>
     api.delete<{ success: boolean }>(`/addresses/${id}`),
+  currentLocation: (body: { latitude: number; longitude: number }) =>
+    api.post<{
+      success: boolean;
+      data?: { address: UserAddress; reused: boolean };
+    }>('/addresses/current-location', body),
 };
 
 const recipients = {

@@ -23,6 +23,21 @@ export interface PlacePrediction {
   description: string;
 }
 
+export interface ForwardGeocode {
+  latitude: number;
+  longitude: number;
+  countryCode: string;
+  country: string;
+  /** ROOFTOP | RANGE_INTERPOLATED | GEOMETRIC_CENTER | APPROXIMATE */
+  locationType: string;
+  /** Google matched only part of the input (e.g. dropped a junk street). */
+  partialMatch: boolean;
+  /** The match has a street (route/street_address/premise) component. */
+  hasStreet: boolean;
+  /** The match has a city-level component. */
+  hasCity: boolean;
+}
+
 /** Google Distance Matrix legacy API: max 25 origins or destinations per request. */
 export const DISTANCE_MATRIX_MAX_DESTINATIONS = 25;
 
@@ -336,8 +351,12 @@ export class GoogleDistanceService {
       const response = await axios.get(url, { params });
 
       if (response.data.status !== 'OK') {
+        // Never surface provider text (quota / key state) to callers: log it only.
+        this.logger.warn(
+          `reverse geocode failed status=${response.data.status} message=${response.data.error_message ?? ''}`
+        );
         throw new HttpException(
-          response.data.error_message || 'Google Geocoding API error',
+          'Google Geocoding API error',
           HttpStatus.BAD_REQUEST
         );
       }
@@ -374,6 +393,8 @@ export class GoogleDistanceService {
 
       const geocodingResult = {
         formatted_address: result.formatted_address,
+        address_line_1:
+          this.streetLine(addressComponents) || result.formatted_address || '',
         city: city || '',
         state: state || '',
         country: country || '',
@@ -398,6 +419,67 @@ export class GoogleDistanceService {
       }
       throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  /**
+   * Forward geocode including the result country, for the address cron.
+   * Returns null when Google has no match.
+   */
+  async geocodeWithCountry(address: string): Promise<ForwardGeocode | null> {
+    const trimmed = (address || '').trim();
+    if (!trimmed) return null;
+    // Transport errors and non-ZERO_RESULTS statuses (OVER_QUERY_LIMIT, REQUEST_DENIED,
+    // timeouts) throw so the cron leaves the row untouched and retries tomorrow, instead
+    // of recording a permanent-looking "not_found" for 30 days.
+    const response = await axios.get(
+      'https://maps.googleapis.com/maps/api/geocode/json',
+      { params: { address: trimmed, key: this.apiKey }, timeout: 10_000 }
+    );
+    const data = response.data;
+    if (data?.status === 'ZERO_RESULTS') return null;
+    if (data?.status !== 'OK' || !data.results?.[0]) {
+      throw new Error(`Geocoding failed: ${data?.status ?? 'no status'}`);
+    }
+    const result = data.results[0];
+    const location = result?.geometry?.location;
+    if (location?.lat == null || location?.lng == null) return null;
+    const components = result.address_components || [];
+    return {
+      latitude: location.lat,
+      longitude: location.lng,
+      countryCode: this.countryShortCode(components),
+      country: this.getAddressComponent(components, ['country']) || '',
+      locationType: String(result.geometry?.location_type ?? ''),
+      partialMatch: result.partial_match === true,
+      hasStreet: this.hasStreet(result, components),
+      hasCity: Boolean(
+        this.getAddressComponent(components, [
+          'locality',
+          'sublocality',
+          'administrative_area_level_2',
+        ])
+      ),
+    };
+  }
+
+  private hasStreet(result: any, components: any[]): boolean {
+    const types: string[] = result.types ?? [];
+    if (types.some((t) => ['street_address', 'route', 'premise', 'subpremise'].includes(t))) {
+      return true;
+    }
+    return Boolean(this.getAddressComponent(components, ['route', 'street_number']));
+  }
+
+  private countryShortCode(components: any[]): string {
+    return (
+      this.getAddressComponent(components, ['country'], true) || ''
+    ).toUpperCase();
+  }
+
+  private streetLine(components: any[]): string {
+    const number = this.getAddressComponent(components, ['street_number']);
+    const route = this.getAddressComponent(components, ['route']);
+    return [number, route].filter(Boolean).join(' ');
   }
 
   /**

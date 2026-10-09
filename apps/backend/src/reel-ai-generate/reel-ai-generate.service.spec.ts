@@ -303,7 +303,9 @@ describe('ReelAiGenerateService.generate', () => {
 
   it('refunds reserved tokens only once when two polls see the same failed job', async () => {
     hasura.executeQuery.mockResolvedValue({
-      reel_ai_generations: [pendingJob()],
+      reel_ai_generations: [
+        pendingJob({ provider: 'runway', fallback_used: true }),
+      ],
     });
     videoRouter.getJobStatus.mockResolvedValue({
       jobId: 'operations/1',

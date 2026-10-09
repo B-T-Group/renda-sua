@@ -26,6 +26,15 @@ export type OrderStatusUpdateOptions = {
   viaSystem?: boolean;
   /** Business fail-pickup from ready_for_pickup (POST /orders/:id/fail-pickup). */
   viaFailPickupEndpoint?: boolean;
+  /**
+   * Cancel compare-and-set: the status the caller validated. If the order is no
+   * longer in this status (or is already cancelled), throw 409 before any write.
+   * The conditional update then only matches this status, so exactly one
+   * concurrent cancel wins.
+   */
+  expectedFromStatus?: string;
+  /** Invoked when current_status already equals the requested status. */
+  onSameStatusReplay?: () => void;
 };
 
 @Injectable()
@@ -157,6 +166,10 @@ export class OrderStatusService {
       // Cooked-food auto prep / auto-ready system transitions
     } else if (newStatus === 'cancelled') {
       this.assertCancelViaDedicatedEndpoint(options?.viaCancelEndpoint);
+      this.assertCancelFromExpectedStatus(
+        order.current_status,
+        options?.expectedFromStatus
+      );
     } else if (
       order.current_status === 'ready_for_pickup' &&
       newStatus === 'failed'
@@ -166,8 +179,12 @@ export class OrderStatusService {
         isBusinessOwner
       );
     } else if (!validTransitions.includes(newStatus)) {
-      throw new Error(
-        `Invalid status transition from ${order.current_status} to ${newStatus}`
+      const replay = this.replaySameStatus(order, newStatus, options);
+      if (replay) return replay;
+      this.assertValidStatusTransition(
+        order.current_status,
+        newStatus,
+        validTransitions
       );
     }
 
@@ -405,7 +422,58 @@ export class OrderStatusService {
     );
   }
 
-  /** Cancel is never a generic status transition — use POST /orders/cancel. */
+  /**
+   * Retry / double-submit of the same status is a no-op (except cancel, which
+   * must 409 so only one request runs refund and inventory side effects).
+   */
+  private replaySameStatus(
+    order: { id: string; current_status: string },
+    newStatus: string,
+    options?: OrderStatusUpdateOptions
+  ): { id: string; current_status: string } | null {
+    if (newStatus === 'cancelled') return null;
+    if (order.current_status !== newStatus) return null;
+    this.logger.log(`Order ${order.id} already ${newStatus}; skipping transition`);
+    options?.onSameStatusReplay?.();
+    return order;
+  }
+
+  private assertValidStatusTransition(
+    currentStatus: string,
+    newStatus: string,
+    validTransitions: string[]
+  ): void {
+    if (validTransitions.includes(newStatus)) return;
+    throw new HttpException(
+      `Invalid status transition from ${currentStatus} to ${newStatus}`,
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  /**
+   * cancelled → cancelled is never a real transition: a concurrent cancel
+   * already won. Also reject when the order moved off the status the caller
+   * validated. Losers get 409 with no write, no event and no side effects.
+   */
+  private assertCancelFromExpectedStatus(
+    currentStatus: string,
+    expectedFromStatus?: string
+  ): void {
+    const alreadyCancelled = currentStatus === 'cancelled';
+    const moved =
+      typeof expectedFromStatus === 'string' &&
+      expectedFromStatus.length > 0 &&
+      currentStatus !== expectedFromStatus;
+    if (!alreadyCancelled && !moved) return;
+    this.logger.warn(
+      `Cancel rejected: order is ${currentStatus}, expected ${expectedFromStatus ?? 'a cancellable status'}`
+    );
+    throw new HttpException(
+      'Order status already changed. Please refresh and try again.',
+      HttpStatus.CONFLICT
+    );
+  }
+
   private assertCancelViaDedicatedEndpoint(
     viaCancelEndpoint?: boolean
   ): void {

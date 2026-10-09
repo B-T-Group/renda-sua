@@ -16,9 +16,8 @@ import {
 } from '@mui/material';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuth0 } from '@auth0/auth0-react';
 import { useAuthGateOtp } from '../../hooks/useAuthGateOtp';
-import { useAuthGatePassword } from '../../hooks/useAuthGatePassword';
-import { useAuthGatePasswordAvailability } from '../../hooks/useAuthGatePasswordAvailability';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import type {
   AuthGateAuthSuccessMeta,
@@ -37,7 +36,6 @@ import AuthGateCodeStep from './AuthGateCodeStep';
 import AuthGateFinishStep from './AuthGateFinishStep';
 import AuthGateIdentifierStep from './AuthGateIdentifierStep';
 import AuthGateLockoutStep from './AuthGateLockoutStep';
-import AuthGatePasswordStep from './AuthGatePasswordStep';
 
 export interface AuthGateProps {
   open: boolean;
@@ -77,16 +75,12 @@ const AuthGate: React.FC<AuthGateProps> = ({
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const funnel = useAuthFunnelTracking('auth_gate');
   const otp = useAuthGateOtp();
-  const password = useAuthGatePassword();
-  const passwordAvailable = useAuthGatePasswordAvailability(open);
+  const { loginWithRedirect } = useAuth0();
   const verifyRef = useRef(otp.verifyOtp);
   verifyRef.current = otp.verifyOtp;
   const finishRef = useRef(otp.finishAccount);
   finishRef.current = otp.finishAccount;
-  const loginRef = useRef(password.login);
-  loginRef.current = password.login;
   const [finishFlowId, setFinishFlowId] = useState<string | null>(null);
-  const [passwordEmail, setPasswordEmail] = useState('');
   const [persistedLockoutUntilMs, setPersistedLockoutUntilMs] = useState<
     number | null
   >(null);
@@ -97,10 +91,7 @@ const AuthGate: React.FC<AuthGateProps> = ({
   useEffect(() => {
     if (!open) {
       resetFlow();
-      password.clearLockout();
-      password.setError(null);
       setFinishFlowId(null);
-      setPasswordEmail('');
       setPersistedLockoutUntilMs(null);
       setActiveIdentifierKey('');
       lockoutTrackedUntilRef.current = null;
@@ -120,11 +111,10 @@ const AuthGate: React.FC<AuthGateProps> = ({
     const candidates = [
       persistedLockoutUntilMs,
       otp.lockoutUntilMs,
-      password.lockoutUntilMs,
     ].filter((v): v is number => typeof v === 'number' && v > Date.now());
     if (!candidates.length) return null;
     return Math.max(...candidates);
-  }, [otp.lockoutUntilMs, password.lockoutUntilMs, persistedLockoutUntilMs]);
+  }, [otp.lockoutUntilMs, persistedLockoutUntilMs]);
 
   useEffect(() => {
     if (!effectiveLockoutUntilMs || !activeIdentifierKey) return;
@@ -191,27 +181,23 @@ const AuthGate: React.FC<AuthGateProps> = ({
     [applyIdentifierKey, onStepChange, otp]
   );
 
-  const handlePasswordSubmit = useCallback(
-    async (payload: { email: string; password: string }) => {
-      applyIdentifierKey({ email: payload.email });
-      const result = await loginRef.current(payload);
-      if (result.ok && result.session) {
-        onAuthSuccess(result.session, { usedPassword: true });
-      }
-    },
-    [applyIdentifierKey, onAuthSuccess]
-  );
-
   const handleUseDifferentIdentifier = useCallback(() => {
     if (activeIdentifierKey) clearAuthGateLockout(activeIdentifierKey);
     setPersistedLockoutUntilMs(null);
     otp.clearLockout();
-    password.clearLockout();
     otp.resetFlow();
     onStepChange('identifier');
-  }, [activeIdentifierKey, onStepChange, otp, password]);
+  }, [activeIdentifierKey, onStepChange, otp]);
 
-  const showPasswordLink = passwordAvailable === true;
+  /** #338 soak: hand off to Auth0 Universal Login (password) and come back here. */
+  const handleUniversalLoginFallback = useCallback(async () => {
+    funnel.trackUlFallbackUsed(intent?.entry ?? 'auth_gate');
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname + window.location.search,
+      },
+    });
+  }, [funnel, intent?.entry, loginWithRedirect]);
 
   const body = (() => {
     if (step === 'locked' && effectiveLockoutUntilMs) {
@@ -219,18 +205,6 @@ const AuthGate: React.FC<AuthGateProps> = ({
         <AuthGateLockoutStep
           lockedUntilMs={effectiveLockoutUntilMs}
           onUseDifferentIdentifier={handleUseDifferentIdentifier}
-        />
-      );
-    }
-    if (step === 'password') {
-      return (
-        <AuthGatePasswordStep
-          busy={password.busy}
-          error={password.error}
-          initialEmail={passwordEmail}
-          onClearError={() => password.setError(null)}
-          onSignInWithCode={() => onStepChange('identifier')}
-          onSubmit={handlePasswordSubmit}
         />
       );
     }
@@ -249,14 +223,10 @@ const AuthGate: React.FC<AuthGateProps> = ({
         <AuthGateIdentifierStep
           disabled={otp.busy}
           error={otp.error}
-          showPasswordLink={showPasswordLink}
           onClearError={() => otp.setError(null)}
           onValidationError={(msg) => otp.setError(msg)}
           onSubmit={handleStart}
-          onUsePassword={() => {
-            setPasswordEmail('');
-            onStepChange('password');
-          }}
+          onUniversalLoginFallback={handleUniversalLoginFallback}
         />
       );
     }

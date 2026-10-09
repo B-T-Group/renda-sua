@@ -88,7 +88,7 @@ export class VideoGenerationRouter {
 
   /**
    * Submit-time fallback already attempted. Used when a completed primary job
-   * fails with a retryable category and no fallback was used yet.
+   * fails and no fallback was used yet.
    */
   async fallbackAfterPrimaryJobFailure(params: {
     request: GenerateVideoRequest;
@@ -145,7 +145,7 @@ export class VideoGenerationRouter {
     error: unknown
   ): Promise<GenerateVideoResponse> {
     const videoError = this.asVideoError(error, primaryId);
-    if (!videoError.retryable || !routing.enableFallback) {
+    if (!routing.enableFallback) {
       this.logEvent(VIDEO_GENERATION_EVENTS.FAILED, {
         provider: primaryId,
         category: videoError.category,

@@ -19,6 +19,32 @@ function dest(n: number) {
   };
 }
 
+function mapsConfig(): ConfigService {
+  return {
+    get: jest.fn((key: string, fallback?: unknown) => {
+      if (key === 'GOOGLE_MAPS_API_KEY') return 'test-key';
+      if (key === 'GOOGLE_CACHE_ENABLED') return false;
+      return fallback;
+    }),
+  } as unknown as ConfigService;
+}
+
+function component(type: string, longName: string, shortName = longName) {
+  return { types: [type], long_name: longName, short_name: shortName };
+}
+
+function okGeocode(
+  addressComponents: ReturnType<typeof component>[],
+  formatted = 'Montreal, QC, Canada'
+) {
+  return {
+    data: {
+      status: 'OK',
+      results: [{ formatted_address: formatted, address_components: addressComponents }],
+    },
+  };
+}
+
 function okMatrix(destinationStrings: string[]) {
   return {
     data: {
@@ -43,15 +69,8 @@ describe('GoogleDistanceService.reverseGeocode', () => {
 
   beforeEach(() => {
     mockedAxios.get.mockReset();
-    const configService = {
-      get: jest.fn((key: string, fallback?: unknown) => {
-        if (key === 'GOOGLE_MAPS_API_KEY') return 'test-key';
-        if (key === 'GOOGLE_CACHE_ENABLED') return false;
-        return fallback;
-      }),
-    } as unknown as ConfigService;
     service = new GoogleDistanceService(
-      configService,
+      mapsConfig(),
       {} as unknown as GoogleCacheService
     );
   });
@@ -85,6 +104,164 @@ describe('GoogleDistanceService.reverseGeocode', () => {
     expect(result.country).toBe('Canada');
     expect(result.country_code).toBe('CA');
     expect(result.state).toBe('Québec');
+    expect(result.address_line_1).toBe('Montreal, QC, Canada');
+  });
+
+  it('M3: never puts Google error_message into the thrown error', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: { status: 'OVER_QUERY_LIMIT', error_message: 'You have exceeded your daily request quota' },
+    });
+
+    const error = await service.reverseGeocode(3.1, 11.1).catch((e) => e);
+
+    expect(error.getStatus()).toBe(400);
+    expect(JSON.stringify(error.getResponse())).not.toMatch(/quota|key/i);
+  });
+
+  it('builds the street line from number and route', async () => {
+    mockedAxios.get.mockResolvedValue(
+      okGeocode([
+        component('street_number', '12'),
+        component('route', 'Rue de la Paix'),
+        component('country', 'Cameroon', 'cm'),
+      ])
+    );
+
+    const result = await service.reverseGeocode(3.848, 11.502);
+
+    expect(result.address_line_1).toBe('12 Rue de la Paix');
+    expect(result.country_code).toBe('cm');
+  });
+
+  it('uses the route alone when the street number is missing', async () => {
+    mockedAxios.get.mockResolvedValue(
+      okGeocode([component('route', 'Market Road')], 'Market Road, Douala')
+    );
+
+    const result = await service.reverseGeocode(4.05, 9.7);
+
+    expect(result.address_line_1).toBe('Market Road');
+  });
+});
+
+describe('GoogleDistanceService.geocodeWithCountry', () => {
+  let service: GoogleDistanceService;
+
+  beforeEach(() => {
+    mockedAxios.get.mockReset();
+    service = new GoogleDistanceService(
+      mapsConfig(),
+      {} as unknown as GoogleCacheService
+    );
+  });
+
+  it('uppercases the country code and keeps a zero coordinate', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        results: [
+          {
+            geometry: { location: { lat: 0, lng: 0 } },
+            address_components: [component('country', 'Ghana', 'gh')],
+          },
+        ],
+      },
+    });
+
+    await expect(service.geocodeWithCountry('  Null Island  ')).resolves.toEqual({
+      latitude: 0,
+      longitude: 0,
+      countryCode: 'GH',
+      country: 'Ghana',
+      locationType: '',
+      partialMatch: false,
+      hasStreet: false,
+      hasCity: false,
+    });
+    expect(mockedAxios.get).toHaveBeenCalledWith(
+      'https://maps.googleapis.com/maps/api/geocode/json',
+      { params: { address: 'Null Island', key: 'test-key' }, timeout: 10_000 }
+    );
+  });
+
+  it('M5: reports precision, partial match and street/city presence', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        results: [
+          {
+            geometry: { location: { lat: 3.8, lng: 11.5 }, location_type: 'RANGE_INTERPOLATED' },
+            partial_match: true,
+            types: ['route'],
+            address_components: [
+              component('locality', 'Yaoundé'),
+              component('country', 'Cameroon', 'CM'),
+            ],
+          },
+        ],
+      },
+    });
+
+    await expect(service.geocodeWithCountry('Rue X, Yaoundé')).resolves.toMatchObject({
+      locationType: 'RANGE_INTERPOLATED',
+      partialMatch: true,
+      hasStreet: true,
+      hasCity: true,
+    });
+
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        results: [
+          {
+            geometry: { location: { lat: 3.8, lng: 11.5 }, location_type: 'APPROXIMATE' },
+            types: ['locality', 'political'],
+            address_components: [
+              component('locality', 'Yaoundé'),
+              component('country', 'Cameroon', 'CM'),
+            ],
+          },
+        ],
+      },
+    });
+    await expect(service.geocodeWithCountry('asdf, Yaoundé')).resolves.toMatchObject({
+      locationType: 'APPROXIMATE',
+      partialMatch: false,
+      hasStreet: false,
+      hasCity: true,
+    });
+  });
+
+  it('does not call Google for a blank address', async () => {
+    await expect(service.geocodeWithCountry('   ')).resolves.toBeNull();
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+  });
+
+  it('returns null only for a genuine no-match', async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: { status: 'ZERO_RESULTS', results: [] } });
+    await expect(service.geocodeWithCountry('nowhere')).resolves.toBeNull();
+  });
+
+  it('throws on a denied/over-quota request and on a network error so the cron does not mark not_found', async () => {
+    mockedAxios.get.mockResolvedValueOnce({ data: { status: 'REQUEST_DENIED' } });
+    await expect(service.geocodeWithCountry('denied')).rejects.toThrow(/REQUEST_DENIED/);
+
+    mockedAxios.get.mockResolvedValueOnce({ data: { status: 'OVER_QUERY_LIMIT' } });
+    await expect(service.geocodeWithCountry('quota')).rejects.toThrow(/OVER_QUERY_LIMIT/);
+
+    mockedAxios.get.mockRejectedValueOnce(new Error('timeout'));
+    await expect(service.geocodeWithCountry('offline')).rejects.toThrow('timeout');
+  });
+
+  it('returns null when the hit has no coordinates', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        results: [{ address_components: [component('country', 'Cameroon', 'CM')] }],
+      },
+    });
+
+    await expect(service.geocodeWithCountry('Yaoundé')).resolves.toBeNull();
   });
 });
 

@@ -1,5 +1,4 @@
 import {
-  Add,
   ArrowBack,
   CheckCircle,
   Close,
@@ -66,6 +65,7 @@ import {
 } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAddressManager } from '../../hooks/useAddressManager';
+import { useCurrentLocationAddress } from '../../hooks/useCurrentLocationAddress';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useCheckoutPreflightState } from '../../hooks/useCheckoutPreflight';
 import { useCountryStateCity } from '../../hooks/useCountryStateCity';
@@ -123,6 +123,7 @@ import {
 } from '../common/CheckoutTaxSummaryLines';
 import { ReservationDepositNote } from '../checkout/ReservationDepositNote';
 import AddressDialog, { AddressFormData } from '../dialogs/AddressDialog';
+import { DeliveryAddressEmptyState } from '../checkout/DeliveryAddressEmptyState';
 import MissingEmailDialog from '../dialogs/MissingEmailDialog';
 import { isFoodCatalogItem, placeOrderMaxQuantity } from '../../constants/food';
 
@@ -1391,11 +1392,44 @@ const PlaceOrderPage: React.FC = () => {
     loading: addressesLoading,
     addAddress,
     updateAddress,
+    fetchAddresses,
   } = useAddressManager({
     entityType: 'client',
     entityId: profile?.client?.id || '',
     onAddressesChanged: refetchProfile,
   });
+
+  const { status: currentLocationStatus, resolve: resolveCurrentLocation } =
+    useCurrentLocationAddress();
+  const autoLocated = useRef(false);
+  const addressLoadStarted = useRef(false);
+
+  const applyCurrentLocation = useCallback(async () => {
+    const id = await resolveCurrentLocation();
+    if (!id) return;
+    await fetchAddresses();
+    setSelectedAddressId(id);
+  }, [fetchAddresses, resolveCurrentLocation]);
+
+  useEffect(() => {
+    if (addressesLoading) addressLoadStarted.current = true;
+  }, [addressesLoading]);
+
+  useEffect(() => {
+    if (isPickupOrder || isAnonFlow) return;
+    if (!addressLoadStarted.current || addressesLoading) return;
+    if (addresses.length > 0 || selectedAddressId) return;
+    if (autoLocated.current) return;
+    autoLocated.current = true;
+    void applyCurrentLocation();
+  }, [
+    addresses.length,
+    addressesLoading,
+    applyCurrentLocation,
+    isAnonFlow,
+    isPickupOrder,
+    selectedAddressId,
+  ]);
 
   // Get fast delivery configuration
   const selectedAddress = addresses.find(
@@ -2382,34 +2416,11 @@ const PlaceOrderPage: React.FC = () => {
                     <CircularProgress />
                   </Box>
                 ) : (
-                  <Paper
-                    variant="outlined"
-                    sx={{ p: 2, textAlign: 'center', bgcolor: 'grey.50' }}
-                  >
-                    <LocationOn
-                      sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
-                    />
-                    <Typography variant="subtitle1" gutterBottom>
-                      {t('orders.noAddresses', 'No delivery address found')}
-                    </Typography>
-                    <Typography
-                      variant="body2"
-                      color="text.secondary"
-                      sx={{ mb: 2 }}
-                    >
-                      {t(
-                        'orders.noAddressesMessage',
-                        'Please add a delivery address to continue with your order'
-                      )}
-                    </Typography>
-                    <Button
-                      variant="contained"
-                      onClick={handleOpenAddressDialog}
-                      startIcon={<Add />}
-                    >
-                      {t('orders.addAddress', 'Add Delivery Address')}
-                    </Button>
-                  </Paper>
+                  <DeliveryAddressEmptyState
+                    status={currentLocationStatus}
+                    onUseCurrentLocation={() => void applyCurrentLocation()}
+                    onAddAddress={handleOpenAddressDialog}
+                  />
                 )}
               </CardContent>
             </Card>
@@ -3926,34 +3937,11 @@ const PlaceOrderPage: React.FC = () => {
                       <CircularProgress />
                     </Box>
                   ) : addresses.length === 0 ? (
-                    <Paper
-                      variant="outlined"
-                      sx={{ p: 3, textAlign: 'center', bgcolor: 'grey.50' }}
-                    >
-                      <LocationOn
-                        sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }}
-                      />
-                      <Typography variant="subtitle1" gutterBottom>
-                        {t('orders.noAddresses', 'No delivery address found')}
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mb: 2 }}
-                      >
-                        {t(
-                          'orders.noAddressesMessage',
-                          'Please add a delivery address to continue with your order'
-                        )}
-                      </Typography>
-                      <Button
-                        variant="contained"
-                        onClick={handleOpenAddressDialog}
-                        startIcon={<Add />}
-                      >
-                        {t('orders.addAddress', 'Add Delivery Address')}
-                      </Button>
-                    </Paper>
+                    <DeliveryAddressEmptyState
+                      status={currentLocationStatus}
+                      onUseCurrentLocation={() => void applyCurrentLocation()}
+                      onAddAddress={handleOpenAddressDialog}
+                    />
                   ) : (
                     (() => {
                       const selectedAddressWrapper =
@@ -3989,6 +3977,21 @@ const PlaceOrderPage: React.FC = () => {
                       );
                     })()
                   )}
+                  {addresses.length > 0 ? (
+                    <Button
+                      variant="text"
+                      onClick={() => void applyCurrentLocation()}
+                      disabled={currentLocationStatus === 'resolving'}
+                      sx={{ mt: 1 }}
+                    >
+                      {currentLocationStatus === 'resolving'
+                        ? t(
+                            'orders.currentLocationResolving',
+                            'Finding your current location…'
+                          )
+                        : t('orders.useCurrentLocation', 'Use my current location')}
+                    </Button>
+                  ) : null}
                 </CardContent>
               </Card>
               )}

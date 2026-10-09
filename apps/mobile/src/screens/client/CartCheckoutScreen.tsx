@@ -46,6 +46,7 @@ import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePa
 import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
 import { PlaceOrderAddressStep } from '../../components/place-order/PlaceOrderAddressStep';
 import { PlaceOrderDeliveryAddressBlock } from '../../components/place-order/PlaceOrderDeliveryAddressBlock';
+import { useCurrentLocationDeliveryAddress } from '../../hooks/useCurrentLocationDeliveryAddress';
 import {
   offeredFulfillmentCount,
   PlaceOrderFulfillmentChoice,
@@ -251,6 +252,21 @@ export default observer(function CartCheckoutScreen() {
     sendingOrderHome &&
     !someoneElseReceiving &&
     fulfillmentNeedsAddress(fulfillment);
+
+  const onCurrentLocationResolved = useCallback(async (id: string) => {
+    await refetchAddresses();
+    setSuppressAddressAutoSelect(false);
+    setAddressId(id);
+  }, [refetchAddresses]);
+
+  const currentLocation = useCurrentLocationDeliveryAddress({
+    auto:
+      !addrLoading &&
+      addressesForDelivery.length === 0 &&
+      fulfillmentNeedsAddress(fulfillment) &&
+      !captureRecipientAddress,
+    onResolved: onCurrentLocationResolved,
+  });
 
   const selectDeliveryAddress = useCallback(
     (id: string) => {
@@ -783,7 +799,7 @@ export default observer(function CartCheckoutScreen() {
   const wizardPhase = useMemo((): 'loading' | 'address' | 'checkout' => {
     if (addrLoading || profileLoading || stripeRailLoading) return 'loading';
     if (cart.items.length === 0) return 'loading';
-    if (addresses.length === 0) return 'address';
+    if (fulfillmentNeedsAddress(fulfillment) && addresses.length === 0) return 'address';
     return 'checkout';
   }, [
     addrLoading,
@@ -791,6 +807,7 @@ export default observer(function CartCheckoutScreen() {
     stripeRailLoading,
     cart.items.length,
     addresses.length,
+    fulfillment,
   ]);
 
   const openAddAddressModal = useCallback(() => {
@@ -909,6 +926,11 @@ export default observer(function CartCheckoutScreen() {
     linkedMoMo.selectedPhoneId,
   ]);
 
+  const locatingDelivery =
+    fulfillmentNeedsAddress(fulfillment) &&
+    addressesForDelivery.length === 0 &&
+    !captureRecipientAddress &&
+    (currentLocation.status === 'idle' || currentLocation.status === 'resolving');
   const cartAddressMissing =
     fulfillmentNeedsAddress(fulfillment) && !deliveryAddressId && !hideShopperAddressBook;
   const stickyDisabledReason = checkoutStickyDisabledReason({
@@ -917,21 +939,35 @@ export default observer(function CartCheckoutScreen() {
     momoMissing: needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId,
     blockerCode: checkoutBlocker?.code,
     blockerMessage: checkoutBlocker?.message,
-    addressMissing: cartAddressMissing && !captureRecipientAddress,
+    addressMissing: cartAddressMissing && !captureRecipientAddress && !locatingDelivery,
     windowMissing: fulfillmentNeedsWindow(fulfillment) && !deliveryScheduleOk,
-    loading: preflightLoading || (fulfillment === 'delivery' && feeLoading),
+    loading:
+      preflightLoading ||
+      (fulfillment === 'delivery' && feeLoading) ||
+      currentLocation.status === 'resolving',
     recipientIncompleteText: t('diaspora.selectRecipientToPay', 'Select a recipient before paying'),
     recipientAddressText: t(
       'diaspora.selectRecipientAddressToPay',
       'Add the recipient’s delivery address before paying'
     ),
     momoText: t('checkout.linkMoMoRequired', 'Link a Mobile Money number to continue.'),
-    addressText: t(
-      'client.placeOrder.noAddresses',
-      'Add an address in your profile to place a delivery order.'
-    ),
+    addressText:
+      currentLocation.status === 'denied'
+        ? t('orders.currentLocationDenied', 'Location access was denied')
+        : currentLocation.status === 'failed'
+          ? t(
+              'orders.currentLocationFailed',
+              'Could not use your current location. Add an address instead.'
+            )
+          : t(
+              'client.placeOrder.noAddresses',
+              'Add an address in your profile to place a delivery order.'
+            ),
     windowText: t('client.placeOrder.deliveryWindow.pickSlot', 'Select a time slot'),
-    loadingText: t('checkout.resolving', 'Preparing your checkout…'),
+    loadingText:
+      currentLocation.status === 'resolving'
+        ? t('orders.currentLocationResolving', 'Finding your current location…')
+        : t('checkout.resolving', 'Preparing your checkout…'),
   });
 
   const onSubmit = useCallback(async () => {
@@ -1113,6 +1149,9 @@ export default observer(function CartCheckoutScreen() {
           form={addAddressForm}
           onChange={setAddAddressForm}
           saving={addAddressSaving}
+          locating={currentLocation.status === 'resolving'}
+          locationDenied={currentLocation.status === 'denied'}
+          onUseCurrentLocation={() => void currentLocation.resolve()}
           onContinue={() => void submitAddAddress()}
         />
         <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
@@ -1183,6 +1222,8 @@ export default observer(function CartCheckoutScreen() {
             error={addrError}
             onRetry={() => void refetchAddresses()}
             onAddAddress={openAddAddressModal}
+            currentLocationStatus={currentLocation.status}
+            onUseCurrentLocation={() => void currentLocation.resolve()}
             warnIncomplete={resolvedIsStripeRail}
             title={recipientAddressTitle}
             helperText={t(
@@ -1343,6 +1384,8 @@ export default observer(function CartCheckoutScreen() {
             error={addrError}
             onRetry={() => void refetchAddresses()}
             onAddAddress={openAddAddressModal}
+            currentLocationStatus={currentLocation.status}
+            onUseCurrentLocation={() => void currentLocation.resolve()}
             warnIncomplete={resolvedIsStripeRail}
             title={captureRecipientAddress ? recipientAddressTitle : undefined}
             helperText={

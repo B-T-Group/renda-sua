@@ -382,6 +382,10 @@
     }
   },
   "orders": {
+    "useCurrentLocation": "Utiliser ma position actuelle",
+    "currentLocationResolving": "Recherche de votre position…",
+    "currentLocationDenied": "L'accès à la position a été refusé",
+    "currentLocationFailed": "Impossible d'utiliser votre position. Ajoutez une adresse.",
     "eatIn": {
       "eatIn": "Sur place",
       "takeOut": "À emporter",
@@ -7023,7 +7027,7 @@
       "customerTitle": "Profitez pleinement de RendaSua",
       "customerBrowse": "Parcourir les produits",
       "customerAccount": "Créer un compte",
-      "customerAddress": "Enregistrer une adresse de livraison",
+      "customerAddress": "Ajoutez une adresse pour une livraison plus rapide",
       "customerPhone": "Vérifier votre téléphone",
       "customerOrder": "Passer votre première commande",
       "customerReview": "Laisser un avis",

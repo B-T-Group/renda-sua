@@ -888,5 +888,66 @@ describe('AgentHoldService', () => {
 
       expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     });
+
+    it('does not auto-disable when weekly loss equals the cap', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('failed_deliveries')) {
+            return { failed_deliveries: [{ order_id: 'order-1' }] };
+          }
+          if (query.includes('order_holds')) {
+            return { order_holds: [{ agent_hold_amount: 100000 }] };
+          }
+          return {};
+        }
+      );
+
+      const result = await service.checkAndEnforceLossGuard();
+
+      expect(result).toEqual({
+        exceeded: false,
+        weeklyLoss: 100000,
+        cap: 100000,
+        autoDisabled: false,
+      });
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('ignores null hold amounts and still disables on the remaining loss', async () => {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('failed_deliveries')) {
+            return {
+              failed_deliveries: [
+                { order_id: 'order-1' },
+                { order_id: 'order-2' },
+              ],
+            };
+          }
+          if (query.includes('order_holds')) {
+            return {
+              order_holds: [
+                { agent_hold_amount: null },
+                { agent_hold_amount: undefined },
+                { agent_hold_amount: 120000 },
+              ],
+            };
+          }
+          return {};
+        }
+      );
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_application_configurations: { affected_rows: 1 },
+      });
+
+      const result = await service.checkAndEnforceLossGuard();
+
+      expect(result).toEqual({
+        exceeded: true,
+        weeklyLoss: 120000,
+        cap: 100000,
+        autoDisabled: true,
+      });
+    });
   });
 });

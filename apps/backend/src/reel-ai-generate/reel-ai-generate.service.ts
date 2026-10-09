@@ -45,7 +45,6 @@ import type {
   VideoGenerationTier,
   VideoImageInput,
 } from './video-generation/video-generation.types';
-import { RETRYABLE_ERROR_CATEGORIES } from './video-generation/video-generation.types';
 
 interface ProductSubject {
   name: string;
@@ -379,8 +378,6 @@ export class ReelAiGenerateService {
     const canFallback =
       !row.fallback_used &&
       providerId === 'google' &&
-      category != null &&
-      RETRYABLE_ERROR_CATEGORIES.has(category as never) &&
       this.config.get('videoGeneration')?.enableFallback !== false;
     if (canFallback) {
       const retried = await this.tryPollTimeFallback(

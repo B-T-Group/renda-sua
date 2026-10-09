@@ -132,6 +132,8 @@ select_permissions:
         - is_primary
         - address_type
         - status
+        - geocode_attempted_at
+        - geocode_status
         - created_at
         - updated_at
       filter:
@@ -165,6 +167,8 @@ select_permissions:
         - is_primary
         - address_type
         - status
+        - geocode_attempted_at
+        - geocode_status
         - created_at
         - updated_at
       filter:
@@ -190,6 +194,8 @@ select_permissions:
         - is_primary
         - address_type
         - status
+        - geocode_attempted_at
+        - geocode_status
         - created_at
         - updated_at
       filter:
@@ -228,6 +234,8 @@ select_permissions:
         - is_primary
         - address_type
         - status
+        - geocode_attempted_at
+        - geocode_status
         - created_at
         - updated_at
       filter:

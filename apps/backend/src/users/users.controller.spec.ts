@@ -51,7 +51,7 @@ describe('UsersController', () => {
     email_verified: false,
     first_name: 'Current',
     last_name: 'User',
-    phone_number: '+237600000001',
+    phone_number: '+237691234567',
     phone_number_verified: false,
     preferred_language: 'en',
     timezone: 'Africa/Douala',
@@ -286,7 +286,7 @@ describe('UsersController', () => {
     it('clears phone verification when an unverified phone changes', async () => {
       const updatedUser = {
         ...currentUser,
-        phone_number: '+237600000002',
+        phone_number: '+237692345678',
         phone_number_verified: false,
       };
       hasuraUserService.executeMutation.mockResolvedValue({
@@ -297,14 +297,14 @@ describe('UsersController', () => {
         controller.updateCurrentUser(ctx, {
           firstName: 'Current',
           lastName: 'User',
-          phoneNumber: ' +237600000002 ',
+          phoneNumber: ' +237692345678 ',
           preferredLanguage: 'fr',
         })
       ).resolves.toEqual({ success: true, user: updatedUser });
       expect(hasuraUserService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('mutation UpdateUser'),
         expect.objectContaining({
-          phone_number: '+237600000002',
+          phone_number: '+237692345678',
           phone_number_verified: false,
           preferred_language: 'fr',
         })
@@ -320,7 +320,7 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUserPhone(ctx,{ phoneNumber: '+237600000002' })
+        controller.updateCurrentUserPhone(ctx,{ phoneNumber: '+237692345678' })
       ).rejects.toThrow(
         new HttpException(
           {
@@ -336,7 +336,7 @@ describe('UsersController', () => {
 
     it('returns current user when phone is unchanged', async () => {
       await expect(
-        controller.updateCurrentUserPhone(ctx,{ phoneNumber: ' +237600000001 ' })
+        controller.updateCurrentUserPhone(ctx,{ phoneNumber: ' +237691234567 ' })
       ).resolves.toEqual({ success: true, user: currentUser });
       expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
       expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
@@ -345,7 +345,7 @@ describe('UsersController', () => {
     it('persists phone when unverified and number changes', async () => {
       const updatedUser = {
         ...currentUser,
-        phone_number: '+237600000002',
+        phone_number: '+237692345678',
         phone_number_verified: false,
       };
       hasuraSystemService.executeQuery.mockResolvedValue({ users: [] });
@@ -354,16 +354,16 @@ describe('UsersController', () => {
       });
 
       await expect(
-        controller.updateCurrentUserPhone(ctx,{ phoneNumber: '+237600000002' })
+        controller.updateCurrentUserPhone(ctx,{ phoneNumber: '+237692345678' })
       ).resolves.toEqual({ success: true, user: updatedUser });
       expect(hasuraSystemService.executeQuery).toHaveBeenCalledWith(
         expect.stringContaining('PhoneTakenExclude'),
-        { phone: '+237600000002', excludeId: currentUser.id }
+        { phone: '+237692345678', excludeId: currentUser.id }
       );
       expect(hasuraUserService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('mutation UpdateUserPhone'),
         expect.objectContaining({
-          phone_number: '+237600000002',
+          phone_number: '+237692345678',
           phone_number_verified: false,
         })
       );
@@ -393,6 +393,25 @@ describe('UsersController', () => {
         )
       );
     });
+
+    it.each(['+237123', '+23488888888888'])(
+      'rejects invalid phone number %s with 400 before any lookup or save',
+      async (phoneNumber) => {
+        await expect(
+          controller.updateCurrentUserPhone(ctx, { phoneNumber })
+        ).rejects.toThrow(
+          new HttpException(
+            {
+              success: false,
+              error: 'Please enter a valid phone number for the selected country.',
+            },
+            HttpStatus.BAD_REQUEST
+          )
+        );
+        expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+        expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
+      }
+    );
   });
 
   describe('updateCurrentUserEmail', () => {

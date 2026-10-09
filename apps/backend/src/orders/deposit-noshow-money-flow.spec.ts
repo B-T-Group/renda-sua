@@ -220,7 +220,8 @@ describe('Reservation deposit money flow (service level)', () => {
       ORDER_ID,
       'business',
       'client_no_show',
-      'ready_for_pickup'
+      'ready_for_pickup',
+      `order.cancelled:${ORDER_ID}`
     );
     expect(h.db.unhandled).toEqual([]);
   });
@@ -359,6 +360,79 @@ describe('Reservation deposit money flow (service level)', () => {
     expect(h.sendOrderCancelledMessage).not.toHaveBeenCalled();
   });
 
+  it('(c) forfeits a deposit that was credited but never withheld', async () => {
+    await seedHeldDepositOrder(h);
+    const accounts = (h.service as any).accountsService as AccountsService;
+    await accounts.registerReleaseIfNotExists({
+      accountId: 'acct-client',
+      amount: DEPOSIT,
+      referenceId: TXN_ID,
+      memo: 'test unwind hold',
+      idempotencyKey: `test-unwind-${TXN_ID}`,
+    });
+    expect(h.db.account('acct-client')).toMatchObject({
+      available_balance: DEPOSIT,
+      withheld_balance: 0,
+    });
+    // Drop the deposit-ref hold/release so forfeit sees an unheld credit.
+    h.db.txns = h.db.txns.filter(
+      (t) => t.reference_id !== TXN_ID || t.transaction_type === 'deposit'
+    );
+
+    const result = await cancel(h);
+
+    expect(result).toMatchObject({
+      success: true,
+      deposit_forfeit_amount: DEPOSIT,
+    });
+    expect(h.db.account('acct-client')).toMatchObject({
+      available_balance: 0,
+      withheld_balance: 0,
+    });
+    expect(h.db.account('acct-hq').available_balance).toBe(DEPOSIT);
+    expect(h.db.unhandled).toEqual([]);
+  });
+
+  it('(c) forfeits after another path released withheld without the deposit release key', async () => {
+    await seedHeldDepositOrder(h);
+    const accounts = (h.service as any).accountsService as AccountsService;
+    await accounts.registerTransaction({
+      accountId: 'acct-client',
+      amount: DEPOSIT,
+      transactionType: 'release',
+      referenceId: ORDER_ID,
+      memo: 'Hold released for order ORD-459',
+    });
+    expect(h.db.account('acct-client').withheld_balance).toBe(0);
+
+    const result = await cancel(h);
+
+    expect(result).toMatchObject({
+      success: true,
+      deposit_forfeit_amount: DEPOSIT,
+    });
+    expect(h.db.account('acct-hq').available_balance).toBe(DEPOSIT);
+    expect(h.db.account('acct-client').available_balance).toBe(0);
+    expect(h.db.unhandled).toEqual([]);
+  });
+
+  it('(c) retries a transient forfeit release in-process instead of returning 500', async () => {
+    await seedHeldDepositOrder(h);
+    const accounts = (h.service as any).accountsService as AccountsService;
+    jest
+      .spyOn(accounts, 'registerReleaseIfNotExists')
+      .mockRejectedValueOnce(new Error('GraphQL Error (Code: 503)'));
+
+    const result = await cancel(h);
+
+    expect(result).toMatchObject({
+      success: true,
+      deposit_forfeit_amount: DEPOSIT,
+    });
+    expect(h.db.account('acct-hq').available_balance).toBe(DEPOSIT);
+    expect(h.sendOrderCancelledMessage).toHaveBeenCalledTimes(1);
+  });
+
   it('(c) retrying the no-show finishes the claimed forfeit and enqueues cancel once', async () => {
     await seedHeldDepositOrder(h);
     const ledger = (h.service as any).depositLedgerService as DepositLedgerService;
@@ -394,7 +468,8 @@ describe('Reservation deposit money flow (service level)', () => {
       ORDER_ID,
       'business',
       'client_no_show',
-      'ready_for_pickup'
+      'ready_for_pickup',
+      `order.cancelled:${ORDER_ID}`
     );
     expect(releaseStock).toHaveBeenCalledTimes(1);
   });
@@ -422,7 +497,8 @@ describe('Reservation deposit money flow (service level)', () => {
       ORDER_ID,
       'client',
       undefined,
-      'ready_for_pickup'
+      'ready_for_pickup',
+      `order.cancelled:${ORDER_ID}`
     );
     expect(releaseStock).not.toHaveBeenCalled();
   });

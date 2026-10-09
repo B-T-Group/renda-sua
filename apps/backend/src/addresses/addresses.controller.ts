@@ -10,6 +10,8 @@ import {
   Post,
   Put,
   UseGuards,
+  Logger,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -17,16 +19,54 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthGuard } from '../auth/auth.guard';
 import type { CreateAddressDto, UpdateAddressDto } from './addresses.service';
 import { AddressesService } from './addresses.service';
+import { CurrentLocationDto } from './current-location-address.dto';
+import { CurrentLocationAddressService } from './current-location-address.service';
 
 @ApiTags('addresses')
 @Controller('addresses')
 @UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class AddressesController {
-  constructor(private readonly addressesService: AddressesService) {}
+  private readonly logger = new Logger(AddressesController.name);
+
+  constructor(
+    private readonly addressesService: AddressesService,
+    private readonly currentLocationAddressService: CurrentLocationAddressService
+  ) {}
+
+  @Post('current-location')
+  @ApiOperation({
+    summary: 'Reuse or create an address from the device location',
+  })
+  @ApiResponse({ status: 201, description: 'Current location address resolved' })
+  @ApiResponse({ status: 400, description: 'Invalid coordinates or geocode failed' })
+  @ApiResponse({ status: 403, description: 'Only clients can use the current location' })
+  @ApiResponse({ status: 429, description: 'Rate limited or daily cap reached' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  // Each new point can cost a Google call: 10/min per user (plus a daily creation cap).
+  @Throttle({ short: { limit: 10, ttl: 60000 } })
+  async resolveCurrentLocation(
+    @Body(new ValidationPipe({ transform: true })) body: CurrentLocationDto
+  ) {
+    try {
+      const result = await this.currentLocationAddressService.resolve(
+        body.latitude,
+        body.longitude
+      );
+      return { success: true, data: result };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      this.logger.error(`current_location_failed: ${error?.message}`);
+      throw new HttpException(
+        { success: false, error: 'Failed to resolve current location' },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new address' })

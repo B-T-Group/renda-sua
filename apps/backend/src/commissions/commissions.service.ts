@@ -721,13 +721,13 @@ export class CommissionsService {
     return {
       rendasuaItemCommissionPercentage,
       unverifiedAgentBaseDeliveryCommission:
-        configMap.unverified_agent_base_delivery_commission || 50.0,
+        configMap.unverified_agent_base_delivery_commission || 80.0,
       verifiedAgentBaseDeliveryCommission:
-        configMap.verified_agent_base_delivery_commission || 0.0,
+        configMap.verified_agent_base_delivery_commission || 80.0,
       unverifiedAgentPerKmDeliveryCommission:
         configMap.unverified_agent_per_km_delivery_commission || 80.0,
       verifiedAgentPerKmDeliveryCommission:
-        configMap.verified_agent_per_km_delivery_commission || 20.0,
+        configMap.verified_agent_per_km_delivery_commission || 80.0,
     };
   }
 
