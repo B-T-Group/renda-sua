@@ -1171,7 +1171,8 @@
       "search": "Recherche"
     },
     "tabs": {
-      "account": "Compte"
+      "account": "Compte",
+      "pay": "Argent"
     }
   },
   "public": {
@@ -4734,6 +4735,60 @@
       "lookupLoading": "Recherche de l'agent...",
       "lookupSuccess": "Parrainé par {{name}}",
       "lookupError": "Aucun agent trouvé pour ce code"
+    },
+    "pay": {
+      "earnedLabel": "Gagné jusqu'ici",
+      "pendingLabel": "{{amount}} en attente de paiement",
+      "segments": {
+        "commissions": "Commissions",
+        "objectives": "Objectifs",
+        "wallet": "Portefeuille"
+      },
+      "filter": {
+        "unpaid": "Impayé",
+        "paid": "Payé",
+        "all": "Tout"
+      },
+      "sources": {
+        "merchant_referral": "Bonus de parrainage",
+        "sale_percent": "Pourcentage des ventes",
+        "payment_schedule": "Paie planifiée",
+        "delivery_commission": "Livraisons"
+      },
+      "selfSale": "{{amount}} si vous faites la première vente",
+      "otherSale": "{{amount}} si quelqu'un d'autre fait la première vente",
+      "sameSale": "{{amount}} quand la première vente admissible a lieu",
+      "salePercent": "{{percent}} % de chaque vente",
+      "salePercentEarned": "{{amount}} gagnés",
+      "requirements": "{{approved}}/{{minItems}} articles · {{sales}} sur {{minSales}} de ventes",
+      "deadline": "Vente avant le {{date}}",
+      "paid": "Payé",
+      "unpaid": "À faire",
+      "goalsMet": "Objectifs atteints",
+      "inProgress": "En cours",
+      "planFallback": "Plan de paiement",
+      "stipend": "{{amount}} {{frequency}}",
+      "stipendNote": "L'indemnité est versée selon le calendrier. Ces objectifs ne la bloquent pas.",
+      "unknownTitle": "Gain",
+      "referBusiness": "Parrainer un commerce",
+      "emptyCommissions": "Aucune commission impayée",
+      "emptyObjectives": "Aucun objectif en cours",
+      "emptyPaid": "Rien de payé pour le moment",
+      "frequency": {
+        "daily": "chaque jour",
+        "weekly": "chaque semaine",
+        "biweekly": "toutes les deux semaines",
+        "monthly": "chaque mois"
+      },
+      "nextStep": {
+        "add_items": "Faites approuver au moins 2 articles pour ce commerce.",
+        "reach_sales": "Une vente admissible doit encore avoir lieu avant la date limite.",
+        "awaiting_payout": "Admissible. Le bonus est versé lors du paiement du samedi.",
+        "window_closed": "La fenêtre de vente est fermée, ce bonus ne sera pas payé.",
+        "paid": "Ce bonus a été payé.",
+        "meet_objectives": "Continuez sur l'objectif le plus en retard.",
+        "objectives_met": "Tous les objectifs de ce plan sont atteints."
+      }
     },
     "businessReferrals": {
       "navTitle": "Parrainer un commerce",

@@ -22,6 +22,7 @@ import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
 import AccountManagementScreen from '../screens/shared/AccountManagementScreen';
 import DocumentsScreen from '../screens/shared/DocumentsScreen';
 import MenuTabScreen from '../screens/agent/MenuTabScreen';
+import AgentPayScreen from '../screens/agent/AgentPayScreen';
 import ConfigurePaymentsScreen from '../screens/shared/ConfigurePaymentsScreen';
 import UserMobilePaymentPhonesScreen from '../screens/shared/UserMobilePaymentPhonesScreen';
 import TermsScreen from '../screens/shared/TermsScreen';
@@ -66,10 +67,13 @@ import type { OrdersStackParamList } from '../screens/shared/orderDetail/types';
 const OrdersStack = createNativeStackNavigator<OrdersStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+export type PayTabParams = { segment?: 'commissions' | 'objectives' | 'wallet' };
+
 export type MainTabParamList = {
   Dashboard: undefined;
   OpenOrders: undefined;
   Orders: NavigatorScreenParams<OrdersStackParamList> | undefined;
+  Pay: PayTabParams | undefined;
   Menu: undefined;
 };
 
@@ -209,6 +213,30 @@ function MainTabsScreen() {
                 size={24}
                 color={color}
               />
+            </TabBarIconContent>
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Pay"
+        component={AgentPayScreen}
+        options={{
+          tabBarLabel: t('nav.tabs.pay', 'Money'),
+          tabBarAccessibilityLabel: t('nav.tabs.pay', 'Money'),
+          tabBarIcon: ({ focused }) => (
+            <TabBarIconContent focused={focused} label={t('nav.tabs.pay', 'Money')}>
+              <View
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: 36,
+                  height: 36,
+                  borderRadius: 18,
+                  backgroundColor: focused ? `${colors.primary.main}33` : `${colors.primary.main}1A`,
+                }}
+              >
+                <MaterialCommunityIcons name="cash-multiple" size={22} color={colors.primary.main} />
+              </View>
             </TabBarIconContent>
           ),
         }}

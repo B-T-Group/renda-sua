@@ -30,6 +30,12 @@ export class PaymentScheduleConsentService {
     private readonly notifications: NotificationsService
   ) {}
 
+  async listAcceptedDetails(userId: string) {
+    const result = await this.hasura.executeQuery(FOCUS_ASSIGNMENTS, { userId });
+    const rows = (result.payment_schedule_assignments ?? []) as AssignmentDetail[];
+    return Promise.all(rows.map((row) => this.detailOf(row)));
+  }
+
   async getFocusForAgent(userId: string) {
     const result = await this.hasura.executeQuery(FOCUS_ASSIGNMENTS, { userId });
     const rows = (result.payment_schedule_assignments ?? []) as AssignmentDetail[];

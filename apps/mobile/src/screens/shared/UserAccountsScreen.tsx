@@ -40,7 +40,13 @@ function accountLabel(account: AccountInfoRow, personalLabel: string): string {
   return name ? `${name} · ${account.currency}` : account.currency;
 }
 
-function UserAccountsScreenBase() {
+function UserAccountsScreenBase({
+  embedded = false,
+  contentBottomPadding = 32,
+}: {
+  embedded?: boolean;
+  contentBottomPadding?: number;
+} = {}) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius, spacing } = useTheme();
   const { auth } = useStore();
@@ -138,6 +144,17 @@ function UserAccountsScreenBase() {
     [actions, refetch]
   );
 
+  const openStackScreen = useCallback(
+    (name: string) => {
+      if (embedded) {
+        navigation.getParent()?.navigate(name);
+        return;
+      }
+      navigation.navigate(name);
+    },
+    [embedded, navigation]
+  );
+
   const withdrawDefaultPhone = resolveWithdrawDefaultPhone({
     isLocationAccount: !!activeAccount && !isLegacyWallet(activeAccount),
     locationPhone: activeAccount?.business_location?.phone,
@@ -163,14 +180,20 @@ function UserAccountsScreenBase() {
       />
     ));
 
-  return (
-    <SafeAreaView
-      style={[styles.safe, { backgroundColor: colors.pageBackground }]}
-      edges={['bottom']}
-    >
+  const shellStyle = [styles.safe, { backgroundColor: colors.pageBackground }];
+  const body = (
+    <>
       <ScrollView
         style={styles.flex}
-        contentContainerStyle={[styles.content, { padding: spacing.lg, gap: spacing.md }]}
+        contentContainerStyle={[
+          styles.content,
+          {
+            padding: spacing.md,
+            paddingTop: embedded ? spacing.sm : spacing.lg,
+            paddingBottom: embedded ? contentBottomPadding : 32,
+            gap: spacing.md,
+          },
+        ]}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -182,7 +205,7 @@ function UserAccountsScreenBase() {
         <Button
           mode="outlined"
           icon="ticket-percent-outline"
-          onPress={() => navigation.navigate('UserPurchaseCredits')}
+          onPress={() => openStackScreen('UserPurchaseCredits')}
           style={{ alignSelf: 'stretch' }}
         >
           {t('accounts.purchaseCredits.title', 'Store credits')}
@@ -190,7 +213,7 @@ function UserAccountsScreenBase() {
         <Button
           mode="outlined"
           icon="cash-fast"
-          onPress={() => navigation.navigate('UserPaymentPrograms')}
+          onPress={() => openStackScreen('UserPaymentPrograms')}
           style={{ alignSelf: 'stretch' }}
         >
           {t('accounts.cashAdvance.title', 'Cash advance')}
@@ -344,6 +367,12 @@ function UserAccountsScreenBase() {
       >
         {actions.snack}
       </Snackbar>
+    </>
+  );
+  if (embedded) return <View style={shellStyle}>{body}</View>;
+  return (
+    <SafeAreaView style={shellStyle} edges={['bottom']}>
+      {body}
     </SafeAreaView>
   );
 }

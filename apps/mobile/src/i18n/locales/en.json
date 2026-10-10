@@ -1228,7 +1228,8 @@
       "search": "Search"
     },
     "tabs": {
-      "account": "Account"
+      "account": "Account",
+      "pay": "Money"
     }
   },
   "public": {
@@ -4827,6 +4828,60 @@
       "lookupLoading": "Looking up agent...",
       "lookupSuccess": "Referred by {{name}}",
       "lookupError": "No agent found for this code"
+    },
+    "pay": {
+      "earnedLabel": "Earned so far",
+      "pendingLabel": "{{amount}} waiting to be paid",
+      "segments": {
+        "commissions": "Commissions",
+        "objectives": "Objectives",
+        "wallet": "Wallet"
+      },
+      "filter": {
+        "unpaid": "Unpaid",
+        "paid": "Paid",
+        "all": "All"
+      },
+      "sources": {
+        "merchant_referral": "Referral bonuses",
+        "sale_percent": "Percent of sales",
+        "payment_schedule": "Scheduled pay",
+        "delivery_commission": "Deliveries"
+      },
+      "selfSale": "{{amount}} if you make the first sale",
+      "otherSale": "{{amount}} if someone else makes the first sale",
+      "sameSale": "{{amount}} when the first qualifying sale happens",
+      "salePercent": "{{percent}}% of every sale",
+      "salePercentEarned": "{{amount}} earned",
+      "requirements": "{{approved}}/{{minItems}} items · {{sales}} of {{minSales}} in sales",
+      "deadline": "Sale by {{date}}",
+      "paid": "Paid",
+      "unpaid": "To do",
+      "goalsMet": "Goals met",
+      "inProgress": "In progress",
+      "planFallback": "Payment plan",
+      "stipend": "{{amount}} {{frequency}}",
+      "stipendNote": "The stipend is paid on schedule. These goals do not hold it back.",
+      "unknownTitle": "Earning",
+      "referBusiness": "Refer a business",
+      "emptyCommissions": "No unpaid commissions",
+      "emptyObjectives": "No open objectives",
+      "emptyPaid": "Nothing paid yet",
+      "frequency": {
+        "daily": "each day",
+        "weekly": "each week",
+        "biweekly": "every two weeks",
+        "monthly": "each month"
+      },
+      "nextStep": {
+        "add_items": "Get at least 2 items approved for this shop.",
+        "reach_sales": "A qualifying sale still needs to happen before the deadline.",
+        "awaiting_payout": "Qualified. The bonus is paid on the Saturday payout.",
+        "window_closed": "The sale window has closed, so this bonus will not be paid.",
+        "paid": "This bonus has been paid.",
+        "meet_objectives": "Keep going on the goal that is furthest behind.",
+        "objectives_met": "Every goal on this plan is met."
+      }
     },
     "businessReferrals": {
       "navTitle": "Refer a business",

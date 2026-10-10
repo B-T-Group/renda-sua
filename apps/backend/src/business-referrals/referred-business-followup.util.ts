@@ -60,6 +60,7 @@ export interface ReferredBusinessFollowUp {
   itemsRejected: number;
   itemsPending: number;
   createdAt: string;
+  country: string | null;
   commission: ReferredBusinessCommission;
 }
 
@@ -301,6 +302,7 @@ export function mapReferredBusinessRow(
     itemsRejected: Number(row.items_rejected?.aggregate?.count ?? 0),
     itemsPending: Number(row.items_pending?.aggregate?.count ?? 0),
     createdAt: row.created_at ?? '',
+    country: row.user?.country ?? null,
     commission: mapCommission(row, referrerKind, minSalesTotal),
   };
 }
