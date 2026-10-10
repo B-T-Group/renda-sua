@@ -11,6 +11,7 @@ export const TOOL_SUCCESS_BLOCK_KINDS: ReadonlySet<string> = new Set([
   'item',
   'store',
   'order',
+  'rental',
   'reorder',
 ]);
 
@@ -18,12 +19,14 @@ export type AssistantReplyPayload = {
   reply?: string | null;
   handoff?: boolean | null;
   blocks?: unknown;
+  cards?: unknown;
 };
 
 export function replyHasToolSuccess(data: AssistantReplyPayload | null | undefined): boolean {
   if (!data || data.handoff) return false;
-  if (!Array.isArray(data.blocks)) return false;
-  return data.blocks.some((b) => {
+  const blocks = Array.isArray(data.blocks) ? data.blocks : [];
+  const cards = Array.isArray(data.cards) ? data.cards : [];
+  return [...blocks, ...cards].some((b) => {
     const kind = (b as { kind?: unknown } | null)?.kind;
     return typeof kind === 'string' && TOOL_SUCCESS_BLOCK_KINDS.has(kind);
   });

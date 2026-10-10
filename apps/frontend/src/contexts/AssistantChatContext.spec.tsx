@@ -9,6 +9,7 @@ import {
   STORAGE_KEY_LAST_ACTIVITY,
   STORAGE_KEY_MESSAGES,
   STORAGE_KEY_OWNER,
+  STORAGE_KEY_PENDING,
   STORAGE_KEY_THREAD_ID,
   useAssistantChat,
 } from './AssistantChatContext';
@@ -666,12 +667,12 @@ describe('AssistantChatProvider: back/forward cache restore (QA N3)', () => {
 });
 
 describe('clearAssistantChatStorage (QA N4)', () => {
-  it('removes all four assistant keys and leaves other keys alone', async () => {
+  it('removes every assistant key and leaves other keys alone', async () => {
     await chatAs(USER_A, ['A q']);
     sessionStorage.setItem('unrelated', 'keep');
     expect(sessionStorage.getItem(STORAGE_KEY_MESSAGES)).not.toBeNull();
     clearAssistantChatStorage();
-    for (const key of [STORAGE_KEY_MESSAGES, STORAGE_KEY_THREAD_ID, STORAGE_KEY_LAST_ACTIVITY, STORAGE_KEY_OWNER]) {
+    for (const key of [STORAGE_KEY_MESSAGES, STORAGE_KEY_THREAD_ID, STORAGE_KEY_LAST_ACTIVITY, STORAGE_KEY_OWNER, STORAGE_KEY_PENDING]) {
       expect(sessionStorage.getItem(key)).toBeNull();
     }
     expect(sessionStorage.getItem('unrelated')).toBe('keep');
@@ -750,5 +751,157 @@ describe('AssistantChatProvider: retry, draft and offline', () => {
     // The only request config is the abort signal: no extra headers (no X-Anonymous-Id).
     const config = mockApiClient.post.mock.calls.at(-1)[2];
     expect(Object.keys(config)).toEqual(['signal']);
+  });
+});
+
+function tokenWithSub(sub: string): string {
+  const payload = btoa(JSON.stringify({ sub }))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  return `header.${payload}.sig`;
+}
+
+describe('AssistantChatProvider: follow-ups from #463', () => {
+  it('does not post A history when the access token belongs to B', async () => {
+    const h = await chatAs(USER_A, ['A secret']);
+    expect(mockApiClient.post).toHaveBeenCalledTimes(1);
+    mockUseSessionAuth.mockReturnValue({
+      ...USER_A,
+      getAccessToken: async () => tokenWithSub(USER_B.user.sub),
+    });
+    await act(async () => {
+      h.rerender();
+    });
+    let sent = true;
+    await act(async () => {
+      sent = await h.result.current.sendMessage('hello as A');
+    });
+    expect(sent).toBe(false);
+    expect(mockApiClient.post).toHaveBeenCalledTimes(1);
+    expect(h.result.current.messages).toEqual([]);
+    expect(JSON.stringify({ ...sessionStorage })).not.toContain('A secret');
+  });
+
+  it('rotates a visible tab when the idle timer fires', async () => {
+    const now = { t: Date.now() };
+    jest.spyOn(Date, 'now').mockImplementation(() => now.t);
+    const long = new Map<number, () => void>();
+    let nextId = 1;
+    const realSet = window.setTimeout.bind(window);
+    const realClear = window.clearTimeout.bind(window);
+    jest.spyOn(window, 'setTimeout').mockImplementation(((
+      fn: TimerHandler,
+      ms?: number
+    ) => {
+      if (typeof fn === 'function' && (ms ?? 0) > 60_000) {
+        const handle = nextId++;
+        long.set(handle, fn as () => void);
+        return handle as unknown as ReturnType<typeof setTimeout>;
+      }
+      return realSet(fn, ms);
+    }) as typeof window.setTimeout);
+    jest.spyOn(window, 'clearTimeout').mockImplementation(((handle: number) => {
+      if (long.delete(handle)) return;
+      realClear(handle);
+    }) as typeof window.clearTimeout);
+    try {
+      const h = await chatAs(GUEST, ['x']);
+      expect(h.result.current.messages).toHaveLength(2);
+      expect(long.size).toBeGreaterThan(0);
+      now.t += IDLE_TIMEOUT_MS + 1;
+      await act(async () => {
+        long.forEach((fn) => fn());
+      });
+      expect(h.result.current.messages).toEqual([]);
+    } finally {
+      jest.restoreAllMocks();
+    }
+  });
+
+  it('does not rotate from the idle timer while the tab is hidden', async () => {
+    const now = { t: Date.now() };
+    jest.spyOn(Date, 'now').mockImplementation(() => now.t);
+    const long = new Map<number, () => void>();
+    let nextId = 1;
+    const realSet = window.setTimeout.bind(window);
+    const realClear = window.clearTimeout.bind(window);
+    jest.spyOn(window, 'setTimeout').mockImplementation(((
+      fn: TimerHandler,
+      ms?: number
+    ) => {
+      if (typeof fn === 'function' && (ms ?? 0) > 60_000) {
+        const handle = nextId++;
+        long.set(handle, fn as () => void);
+        return handle as unknown as ReturnType<typeof setTimeout>;
+      }
+      return realSet(fn, ms);
+    }) as typeof window.setTimeout);
+    jest.spyOn(window, 'clearTimeout').mockImplementation(((handle: number) => {
+      if (long.delete(handle)) return;
+      realClear(handle);
+    }) as typeof window.clearTimeout);
+    try {
+      const h = await chatAs(GUEST, ['x']);
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        value: 'hidden',
+      });
+      now.t += IDLE_TIMEOUT_MS + 1;
+      await act(async () => {
+        long.forEach((fn) => fn());
+      });
+      expect(h.result.current.messages).toHaveLength(2);
+    } finally {
+      jest.restoreAllMocks();
+      Object.defineProperty(document, 'visibilityState', {
+        configurable: true,
+        value: 'visible',
+      });
+    }
+  });
+
+  it('keeps the reply when sessionStorage writes fail', async () => {
+    const h = await chatAs(GUEST);
+    const setItem = jest
+      .spyOn(Storage.prototype, 'setItem')
+      .mockImplementation(() => {
+        throw new DOMException('quota', 'QuotaExceededError');
+      });
+    try {
+      await act(async () => {
+        await h.result.current.sendMessage('hi');
+      });
+      expect(contents(h)).toEqual(['hi', 'reply 1']);
+      expect(h.result.current.error).toBeNull();
+    } finally {
+      setItem.mockRestore();
+    }
+  });
+
+  it('offers Retry when a signed-in request is aborted by remount', async () => {
+    const pending = deferred<{ data: { reply: string; handoff: boolean } }>();
+    mockApiClient.post.mockImplementationOnce(() => pending.promise);
+    const first = await chatAs(USER_A);
+    act(() => {
+      void first.result.current.sendMessage('q while navigating');
+    });
+    first.unmount();
+    mockUseSessionAuth.mockReturnValue(USER_A);
+    const second = renderHook(() => useAssistantChat(), { wrapper });
+    expect(contents(second)).toEqual(['q while navigating']);
+    expect(second.result.current.error).toBeTruthy();
+    expect(second.result.current.isSending).toBe(false);
+  });
+
+  it('an aborted request shows no error banner', async () => {
+    mockApiClient.post.mockRejectedValueOnce({
+      code: 'ERR_CANCELED',
+      name: 'CanceledError',
+    });
+    const h = await chatAs(GUEST, ['q']);
+    expect(h.result.current.error).toBeNull();
+    expect(h.result.current.isOffline).toBe(false);
+    expect(contents(h)).toEqual(['q']);
   });
 });

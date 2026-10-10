@@ -7298,7 +7298,26 @@
       "deliveryTime": "When will it arrive?",
       "deliveryTimeNamed": "When will order {{orderNumber}} arrive?",
       "changeDelivery": "Change delivery address",
-      "contactSupport": "Contact support"
+      "contactSupport": "Contact support",
+      "whatWeOffer": "What does Rendasua offer?",
+      "contactUs": "How can I contact you?",
+      "payAndReceive": "How can I pay and receive an order?",
+      "buyOrRent": "What can I buy or rent?",
+      "myRecentOrders": "What are my recent orders?",
+      "myCredits": "What store credits do I have?",
+      "myDeliveries": "What deliveries do I have?",
+      "myEarnings": "How much have I earned?",
+      "ordersNeedMe": "Which orders need me?",
+      "myCatalog": "How is my catalog doing?"
+    },
+    "card": {
+      "viewItem": "View item",
+      "viewOrder": "View order",
+      "viewRental": "View rental",
+      "viewStore": "View restaurant",
+      "reorder": "Reorder",
+      "signIn": "Sign in",
+      "signInTitle": "Sign in to see your account"
     },
     "homeEntryTitle": "Ask the AI assistant",
     "homeEntryBody": "Get quick answers about delivery, payments, pickup, and your account.",

@@ -185,6 +185,7 @@ describe('SessionAuthContext', () => {
       'rendasua.assistant.thread_id.v1',
       'rendasua.assistant.last_activity.v1',
       'rendasua.assistant.owner.v1',
+      'rendasua.assistant.pending.v1',
     ];
     keys.forEach((k) => sessionStorage.setItem(k, 'x'));
     sessionStorage.setItem('unrelated', 'keep');

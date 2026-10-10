@@ -403,6 +403,41 @@ describe('AssistantService', () => {
     expect(result.handoff).toBe(true);
   });
 
+  it('keeps tool cards when the model reply is empty', async () => {
+    const card = { kind: 'order' as const, id: 'o1', title: 'Rice', href: '/orders/o1' };
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'tool_use',
+        text: '',
+        toolUses: [{ toolUseId: 't1', name: 'get_my_recent_orders', input: {} }],
+        assistantContent: [{ toolUse: { toolUseId: 't1', name: 'get_my_recent_orders', input: {} } }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: '',
+        toolUses: [],
+        assistantContent: [],
+      });
+    tools.executeTool.mockResolvedValue({ content: 'One order', cards: [card] });
+    const result = await service.runTurn({
+      channel: 'app',
+      messages: [{ role: 'user', content: 'thanks' }],
+      identity: {
+        isVerified: true,
+        userId: 'u1',
+        firstName: 'Ada',
+        preferredLanguage: 'en',
+        market: { country_code: 'CM' },
+        country: 'CM',
+        phoneE164: null,
+        accountType: 'client',
+        clientId: 'c1',
+      },
+    });
+    expect(result.reply).toMatch(/get back to you shortly/i);
+    expect(result.cards).toEqual([card]);
+  });
+
   it('marks successful WhatsApp answers as not silent', async () => {
     bedrock.converseWithTools.mockResolvedValue({
       stopReason: 'end_turn',
@@ -609,5 +644,65 @@ describe('AssistantService', () => {
       const result = (service as any).classifyIntent(messages, toolsUsed);
       expect(result).toBe('buy');
     });
+  });
+
+  it('does not run tool calls after the client disconnects', async () => {
+    const controller = new AbortController();
+    const identity = {
+      isVerified: true,
+      userId: 'u1',
+      firstName: null,
+      preferredLanguage: 'en' as const,
+      market: null,
+      country: null,
+      phoneE164: null,
+      accountType: 'client',
+      clientId: 'c1',
+    };
+    bedrock.converseWithTools.mockResolvedValue({
+      stopReason: 'tool_use',
+      text: '',
+      toolUses: [
+        { toolUseId: 't1', name: 'get_order_status', input: {} },
+        { toolUseId: 't2', name: 'request_human_support', input: {} },
+      ],
+      assistantContent: [],
+    });
+    tools.executeTool.mockImplementation(async () => {
+      controller.abort();
+      return { content: 'ok', handoff: false };
+    });
+    const result = await service.chat({
+      channel: 'app',
+      messages: [{ role: 'user', content: 'where is my order' }],
+      identity,
+      signal: controller.signal,
+    });
+    expect(tools.executeTool).toHaveBeenCalledTimes(1);
+    expect(result.silent).toBe(true);
+    expect(result.reply).toBe('');
+  });
+
+  it('answers a guest personal question with a sign-in card and no model call', async () => {
+    const result = await service.chat({
+      channel: 'app',
+      messages: [{ role: 'user', content: 'What are my recent orders?' }],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: 'en',
+        market: { country_code: 'CM' },
+        country: 'CM',
+        phoneE164: null,
+        accountType: null,
+        clientId: null,
+      },
+    });
+    expect(bedrock.converseWithTools).not.toHaveBeenCalled();
+    expect(result.reply).toMatch(/sign in/i);
+    expect(result.cards).toEqual([
+      { kind: 'sign_in', id: 'sign_in', href: '/auth/login' },
+    ]);
   });
 });

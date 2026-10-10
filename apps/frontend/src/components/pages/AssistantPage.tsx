@@ -37,7 +37,13 @@ import { useShowsRendaCharacter } from '../assistant/useAssistantPersona';
 import { useRendaChatState } from '../assistant/useRendaChatState';
 import { AssistantMarkdown } from './AssistantMarkdown';
 import type { AssistantContext } from '../../utils/assistantChips';
-import { getContextualChips, buildChipMessage } from '../../utils/assistantChips';
+import { AssistantEntityCards } from '../assistant/AssistantEntityCards';
+import {
+  assistantChipPersona,
+  getContextualChips,
+  buildChipMessage,
+} from '../../utils/assistantChips';
+import { useOptionalUserProfileContext } from '../../contexts/UserProfileContext';
 import { useTrackSiteEvent, SITE_EVENT_ASSISTANT_CHAT_OPENED } from '../../hooks/useTrackSiteEvent';
 import { useAssistantLauncherAnalytics } from '../assistant/useAssistantLauncherAnalytics';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -181,7 +187,9 @@ function MessageBubble({
       transition={{ duration: prefersReducedMotion ? 0 : 0.2 }}
       style={{
         display: 'flex',
-        justifyContent: isUser ? 'flex-end' : 'flex-start',
+        flexDirection: 'column',
+        alignItems: isUser ? 'flex-end' : 'flex-start',
+        width: '100%',
       }}
     >
       <Stack
@@ -234,6 +242,11 @@ function MessageBubble({
           )}
         </Box>
       </Stack>
+      {!isUser && message.cards?.length ? (
+        <Box sx={{ maxWidth: { xs: '80%', sm: '560px' }, pl: showOrb ? 5 : 0 }}>
+          <AssistantEntityCards cards={message.cards} />
+        </Box>
+      ) : null}
     </motion.div>
   );
 }
@@ -533,7 +546,12 @@ function EmptyState({
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
   const { trackSiteEvent } = useTrackSiteEvent();
-  const chips = getContextualChips(context);
+  const { isAuthenticated } = useSessionAuth();
+  const profile = useOptionalUserProfileContext();
+  const chips = getContextualChips(
+    context,
+    assistantChipPersona(isAuthenticated, profile?.userType)
+  );
 
   const handleChipClick = (chipId: string, message: string) => {
     void trackSiteEvent({

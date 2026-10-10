@@ -16,29 +16,59 @@ export type ChipConfig = {
   fallback: string;
 };
 
-/** Generic fallback chips (shown when no context or context doesn't provide specific chips) */
-const GENERIC_CHIPS: ChipConfig[] = [
-  {
-    id: 'location',
-    translationKey: 'assistant.suggestion.location',
-    fallback: 'Where are you located?',
-  },
-  {
-    id: 'pay_delivery',
-    translationKey: 'assistant.suggestion.payDelivery',
-    fallback: 'Do you support payment at delivery?',
-  },
-  {
-    id: 'pickup',
-    translationKey: 'assistant.suggestion.pickup',
-    fallback: 'Do you support in-store pickup?',
-  },
-  {
-    id: 'mobile_pay',
-    translationKey: 'assistant.suggestion.mobilePay',
-    fallback: 'Do you support mobile payments?',
-  },
+/** Signed-out people and anyone whose persona is still unknown. */
+export type AssistantChipPersona = 'guest' | 'client' | 'agent' | 'business';
+
+const chip = (id: string, translationKey: string, fallback: string): ChipConfig => ({
+  id,
+  translationKey,
+  fallback,
+});
+
+const OFFER = chip('what_we_offer', 'assistant.suggestion.whatWeOffer', 'What does Rendasua offer?');
+const CONTACT = chip('contact_us', 'assistant.suggestion.contactUs', 'How can I contact you?');
+const PAY = chip('pay_and_receive', 'assistant.suggestion.payAndReceive', 'How can I pay and receive an order?');
+const BUY_OR_RENT = chip('buy_or_rent', 'assistant.suggestion.buyOrRent', 'What can I buy or rent?');
+
+const GUEST_CHIPS = [OFFER, CONTACT, PAY, BUY_OR_RENT];
+
+const CLIENT_CHIPS = [
+  OFFER,
+  chip('my_recent_orders', 'assistant.suggestion.myRecentOrders', 'What are my recent orders?'),
+  CONTACT,
+  chip('my_credits', 'assistant.suggestion.myCredits', 'What store credits do I have?'),
+  PAY,
 ];
+
+const AGENT_CHIPS = [
+  OFFER,
+  chip('my_deliveries', 'assistant.suggestion.myDeliveries', 'What deliveries do I have?'),
+  chip('my_earnings', 'assistant.suggestion.myEarnings', 'How much have I earned?'),
+  CONTACT,
+];
+
+const BUSINESS_CHIPS = [
+  OFFER,
+  chip('orders_need_me', 'assistant.suggestion.ordersNeedMe', 'Which orders need me?'),
+  chip('my_catalog', 'assistant.suggestion.myCatalog', 'How is my catalog doing?'),
+  CONTACT,
+];
+
+export function assistantChipPersona(
+  isAuthenticated: boolean,
+  userType: string | null | undefined
+): AssistantChipPersona {
+  if (!isAuthenticated) return 'guest';
+  if (userType === 'client' || userType === 'agent' || userType === 'business') return userType;
+  return 'guest';
+}
+
+function genericChips(persona?: AssistantChipPersona | null): ChipConfig[] {
+  if (persona === 'client') return CLIENT_CHIPS;
+  if (persona === 'agent') return AGENT_CHIPS;
+  if (persona === 'business') return BUSINESS_CHIPS;
+  return GUEST_CHIPS;
+}
 
 /** Item detail context chips (AC5) */
 function getItemDetailChips(hasName: boolean): ChipConfig[] {
@@ -129,12 +159,15 @@ function getDeliveryTrackingChips(hasOrderNumber: boolean): ChipConfig[] {
 }
 
 /**
- * Get contextual chips based on the current context.
- * Returns at most 4 chips to avoid overwhelming the user.
+ * Page chips stay specific. The generic set follows the signed-in persona.
+ * Guests, and a missing persona, get the public questions.
  */
-export function getContextualChips(context?: AssistantContext | null): ChipConfig[] {
+export function getContextualChips(
+  context?: AssistantContext | null,
+  persona?: AssistantChipPersona | null
+): ChipConfig[] {
   if (!context || context.type === 'generic') {
-    return GENERIC_CHIPS;
+    return genericChips(persona);
   }
 
   switch (context.type) {
@@ -172,7 +205,7 @@ export function getContextualChips(context?: AssistantContext | null): ChipConfi
       return getDeliveryTrackingChips(!!context.orderNumber);
     
     default:
-      return GENERIC_CHIPS;
+      return genericChips(persona);
   }
 }
 

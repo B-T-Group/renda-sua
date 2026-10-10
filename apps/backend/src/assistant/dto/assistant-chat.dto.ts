@@ -64,10 +64,36 @@ export class AssistantChatRequestDto {
   threadId?: string;
 }
 
+export class AssistantCardDto {
+  @ApiProperty({ enum: ['item', 'order', 'rental', 'store', 'sign_in'] })
+  kind!: string;
+
+  @ApiProperty()
+  id!: string;
+
+  @ApiPropertyOptional()
+  title?: string;
+
+  @ApiPropertyOptional()
+  imageUrl?: string | null;
+
+  @ApiPropertyOptional()
+  priceLabel?: string;
+
+  @ApiPropertyOptional()
+  href?: string;
+
+  @ApiPropertyOptional()
+  secondaryHref?: string;
+}
+
 export class AssistantChatResponseDto {
   @ApiProperty()
   reply!: string;
 
   @ApiProperty({ description: 'Whether human support should take over' })
   handoff!: boolean;
+
+  @ApiPropertyOptional({ type: [AssistantCardDto] })
+  cards?: AssistantCardDto[];
 }

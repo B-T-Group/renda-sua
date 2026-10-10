@@ -13,6 +13,12 @@ describe('assistant reply outcome', () => {
     }
   });
 
+  it('entity cards count, and a sign-in card does not', () => {
+    expect(replyHasToolSuccess({ reply: 'x', cards: [{ kind: 'item' }] })).toBe(true);
+    expect(replyHasToolSuccess({ reply: 'x', cards: [{ kind: 'rental' }] })).toBe(true);
+    expect(replyHasToolSuccess({ reply: 'x', cards: [{ kind: 'sign_in' }] })).toBe(false);
+  });
+
   it('link-only blocks, malformed blocks and handoff are not', () => {
     expect(replyHasToolSuccess({ reply: 'x', blocks: [{ kind: 'link' }] })).toBe(false);
     expect(replyHasToolSuccess({ reply: 'x', blocks: [null, 3, {}] })).toBe(false);

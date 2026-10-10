@@ -9,15 +9,19 @@ import {
   KNOWLEDGE_TOPICS,
   type KnowledgeTopic,
 } from './knowledge';
+import { formatPrice } from './assistant-cards';
+import { AssistantAccountToolsService } from './assistant-account-tools.service';
+import { AssistantAgentToolsService } from './assistant-agent-tools.service';
+import { AssistantBusinessToolsService } from './assistant-business-tools.service';
+import { AssistantClientToolsService } from './assistant-client-tools.service';
 import type {
+  AssistantCard,
   AssistantIdentity,
   AssistantLocale,
+  AssistantToolResult,
 } from './assistant.types';
 
-export interface AssistantToolResult {
-  content: string;
-  handoff?: boolean;
-}
+export type { AssistantToolResult };
 
 interface ToolRequest {
   name: string;
@@ -36,12 +40,22 @@ const MARKET_CATALOG_TOOLS = new Set([
 export class AssistantToolsService {
   private readonly logger = new Logger(AssistantToolsService.name);
 
+  private readonly accountTools: AssistantAccountToolsService;
+  private readonly clientTools: AssistantClientToolsService;
+  private readonly agentTools: AssistantAgentToolsService;
+  private readonly businessTools: AssistantBusinessToolsService;
+
   constructor(
-    private readonly hasura: HasuraSystemService,
+    hasura: HasuraSystemService,
     private readonly marketsCatalog: AssistantMarketsCatalogService,
     private readonly inventoryItems: InventoryItemsService,
     private readonly appConfig: AppConfigService
-  ) {}
+  ) {
+    this.accountTools = new AssistantAccountToolsService(hasura);
+    this.clientTools = new AssistantClientToolsService(hasura);
+    this.agentTools = new AssistantAgentToolsService(hasura);
+    this.businessTools = new AssistantBusinessToolsService(hasura);
+  }
 
   async getToolConfig(identity: AssistantIdentity): Promise<ToolConfiguration> {
     const tools = [
@@ -56,9 +70,13 @@ export class AssistantToolsService {
     if (shoppingEnabled) {
       tools.push(this.searchCatalogTool());
     }
-    
-    if (identity.userId) tools.push(...this.userTools(identity));
-    if (identity.clientId) tools.push(this.reorderOptionsTool());
+    tools.push(...this.clientTools.publicTools());
+    if (identity.userId && identity.accountType !== 'delegate') {
+      tools.push(...this.accountTools.tools(identity));
+      tools.push(...this.clientTools.tools(identity));
+      tools.push(...this.agentTools.tools(identity));
+      tools.push(...this.businessTools.tools(identity));
+    }
     return { tools };
   }
 
@@ -123,33 +141,18 @@ export class AssistantToolsService {
     if (request.name === 'list_supported_payment_systems') {
       return this.listPaymentSystems(request);
     }
-    if (request.name === 'search_catalog') {
-      return this.searchCatalog(request);
-    }
+    if (request.name === 'search_catalog') return this.searchCatalog(request);
     if (request.name === 'request_human_support') return this.handoff(request);
+    if (this.clientTools.handles(request.name)) return this.clientTools.run(request);
     if (!request.identity.userId) return { content: 'Authentication is required.' };
-    if (
-      request.name === 'get_my_recent_orders' ||
-      request.name === 'get_order_status' ||
-      request.name === 'get_reorder_options'
-    ) {
-      if (!request.identity.clientId) {
-        return {
-          content:
-            'No customer order profile is linked to this account, so orders cannot be looked up.',
-        };
-      }
+    if (this.accountTools.handles(request.name)) {
+      return this.accountTools.run(request.name, request.identity, request.locale || 'en');
     }
-    if (request.name === 'get_my_recent_orders') {
-      return this.getOrders(request.identity.userId!);
+    if (this.agentTools.handles(request.name)) {
+      return this.agentTools.run(request.name, request.identity);
     }
-    if (request.name === 'get_order_status') return this.getOrder(request);
-    if (request.name === 'get_reorder_options') return this.getReorderOptions(request);
-    if (request.name === 'get_my_addresses') {
-      return this.getAddresses(request.identity);
-    }
-    if (request.name === 'get_my_profile_summary') {
-      return this.getProfile(request.identity);
+    if (this.businessTools.handles(request.name)) {
+      return this.businessTools.run(request.name, request.identity);
     }
     return { content: `Unknown tool: ${request.name}`, handoff: true };
   }
@@ -203,37 +206,6 @@ export class AssistantToolsService {
     return { content: guidance, handoff: true };
   }
 
-  private async getOrders(userId: string): Promise<AssistantToolResult> {
-    const result = await this.hasura.executeQuery<{ orders: unknown[] }>(
-      RECENT_ORDERS_QUERY,
-      { userId }
-    );
-    return { content: JSON.stringify(result.orders || []) };
-  }
-
-  private async getOrder(request: ToolRequest): Promise<AssistantToolResult> {
-    const orderNumber = String(
-      request.input.order_number || request.input.orderReference || ''
-    ).trim();
-    if (!orderNumber) return { content: 'An order number is required.' };
-    const result = await this.hasura.executeQuery<{ orders: unknown[] }>(
-      ORDER_STATUS_QUERY,
-      { userId: request.identity.userId, orderNumber }
-    );
-    return { content: JSON.stringify(result.orders?.[0] || null) };
-  }
-
-  private async getAddresses(
-    identity: AssistantIdentity
-  ): Promise<AssistantToolResult> {
-    const type = identity.accountType;
-    if (!identity.userId || !['client', 'agent', 'business'].includes(type || '')) {
-      return { content: 'No address profile is available.' };
-    }
-    const addresses = await this.hasura.getAllUserAddresses(identity.userId, type!);
-    return { content: JSON.stringify(addresses.slice(0, 10)) };
-  }
-
   private async searchCatalog(
     request: ToolRequest
   ): Promise<AssistantToolResult> {
@@ -271,6 +243,7 @@ export class AssistantToolsService {
           kind: 'product';
           inventoryId: string;
           title: string;
+          imageUrl?: string | null;
           price: number;
           currency: string;
           available?: boolean;
@@ -304,69 +277,13 @@ export class AssistantToolsService {
       const searchLink = `/items?search=${encodeURIComponent(query)}`;
       formatted.push(`\n[View all results for "${query}"](${searchLink})`);
 
-      return { content: formatted.join('\n') };
+      return { content: formatted.join('\n'), cards: catalogItemCards(products) };
     } catch (error: any) {
       this.logger.error(`Catalog search failed: ${error.message}`, error.stack);
       return {
         content: 'Unable to search the catalog at this time. Please try again.',
       };
     }
-  }
-
-  private getProfile(identity: AssistantIdentity): AssistantToolResult {
-    return {
-      content: JSON.stringify({
-        firstName: identity.firstName,
-        country: identity.country,
-        accountType: identity.accountType,
-        preferredLanguage: identity.preferredLanguage,
-      }),
-    };
-  }
-
-  private async getReorderOptions(
-    request: ToolRequest
-  ): Promise<AssistantToolResult> {
-    const result = await this.hasura.executeQuery<{
-      orders: Array<{
-        id: string;
-        order_number: string;
-        current_status: string;
-        total_amount: number;
-        currency: string;
-        created_at: string;
-        business: { id: string; name: string };
-      }>;
-    }>(REORDER_OPTIONS_QUERY, { userId: request.identity.userId });
-
-    const orders = result.orders || [];
-    if (orders.length === 0) {
-      return {
-        content:
-          'No recent completed orders found. The customer has not placed any orders yet.',
-      };
-    }
-
-    const formatted = ['**Recent orders you can reorder:**\n'];
-
-    for (const order of orders.slice(0, 5)) {
-      const date = new Date(order.created_at).toLocaleDateString(
-        request.locale === 'fr' ? 'fr-FR' : 'en-US',
-        { year: 'numeric', month: 'short', day: 'numeric' }
-      );
-      const amount = `${order.total_amount} ${order.currency}`;
-      // Emit relative path for in-app navigation
-      const reorderLink = `/orders/${order.id}/reorder`;
-      formatted.push(
-        `- **${order.business.name}** (${date}) - ${amount} [Reorder](${reorderLink})`
-      );
-    }
-
-    formatted.push(
-      `\nTap "Reorder" to add these items to your cart at current prices.`
-    );
-
-    return { content: formatted.join('\n') };
   }
 
   private searchCatalogTool(): Tool {
@@ -396,7 +313,7 @@ export class AssistantToolsService {
       toolSpec: {
         name: 'get_knowledge',
         description:
-          'Get curated Rendasua policy copy (pay-at-delivery process, pickup, support). For live country/state lists and payment systems, prefer list_supported_country_states and list_supported_payment_systems.',
+          'Get curated copy. Use what_we_offer for what Rendasua is, support_contact for how to reach us, and the other topics for payments, delivery, pickup, and reels. For live country lists and payment rails, prefer list_supported_country_states and list_supported_payment_systems.',
         inputSchema: {
           json: {
             type: 'object',
@@ -476,107 +393,23 @@ export class AssistantToolsService {
     };
   }
 
-  private reorderOptionsTool(): Tool {
-    return {
-      toolSpec: {
-        name: 'get_reorder_options',
-        description:
-          'Get the customer\'s recent completed orders with reorder deep links. Use when they express reorder intent ("order again", "reorder", "my previous order"). Returns order details with tappable reorder links. Only call for customers with a client profile.',
-        inputSchema: {
-          json: {
-            type: 'object',
-            properties: {},
-          },
-        },
-      },
-    };
-  }
-
-  private userTools(identity: AssistantIdentity): Tool[] {
-    const tools: Tool[] = [
-      simpleTool('get_my_profile_summary', 'Get the user’s profile summary.'),
-    ];
-    if (identity.clientId) {
-      tools.unshift(
-        {
-          toolSpec: {
-            name: 'get_my_recent_orders',
-            description:
-              'Get this customer’s up to five most recent orders (order number, status, total, business). Call when they ask about their orders, recent purchases, deliveries, or order history.',
-            inputSchema: { json: { type: 'object', properties: {} } },
-          },
-        },
-        {
-          toolSpec: {
-            name: 'get_order_status',
-            description:
-              'Look up one of this customer’s orders by order number. Call when they ask about a specific order’s status.',
-            inputSchema: {
-              json: {
-                type: 'object',
-                properties: { order_number: { type: 'string' } },
-                required: ['order_number'],
-              },
-            },
-          },
-        }
-      );
-    }
-    if (
-      identity.accountType === 'client' ||
-      identity.accountType === 'agent' ||
-      identity.accountType === 'business'
-    ) {
-      tools.push(
-        simpleTool('get_my_addresses', 'Get the user’s active saved addresses.')
-      );
-    }
-    return tools;
-  }
 }
 
-function simpleTool(name: string, description: string): Tool {
-  return {
-    toolSpec: {
-      name,
-      description,
-      inputSchema: { json: { type: 'object', properties: {} } },
-    },
-  };
+function catalogItemCards(
+  products: Array<{
+    inventoryId: string;
+    title: string;
+    imageUrl?: string | null;
+    price: number;
+    currency: string;
+  }>
+): AssistantCard[] {
+  return products.slice(0, 6).map((product) => ({
+    kind: 'item',
+    id: product.inventoryId,
+    title: product.title,
+    imageUrl: product.imageUrl || null,
+    priceLabel: formatPrice(product.price, product.currency),
+    href: `/items/${product.inventoryId}`,
+  }));
 }
-
-const ORDER_FIELDS = `
-  id order_number current_status total_amount currency payment_status
-  fulfillment_method created_at estimated_delivery_time business { name }
-`;
-
-const RECENT_ORDERS_QUERY = `query AssistantRecentOrders($userId: uuid!) {
-  orders(
-    where: { client: { user_id: { _eq: $userId } } }
-    order_by: { created_at: desc }
-    limit: 5
-  ) { ${ORDER_FIELDS} }
-}`;
-
-const ORDER_STATUS_QUERY = `query AssistantOrderStatus(
-  $userId: uuid!, $orderNumber: String!
-) {
-  orders(where: {
-    client: { user_id: { _eq: $userId } }
-    order_number: { _eq: $orderNumber }
-  }, limit: 1) { ${ORDER_FIELDS} }
-}`;
-
-const REORDER_OPTIONS_QUERY = `query AssistantReorderOptions($userId: uuid!) {
-  orders(
-    where: {
-      client: { user_id: { _eq: $userId } }
-      current_status: { _in: ["complete", "delivered"] }
-    }
-    order_by: { created_at: desc }
-    limit: 5
-  ) {
-    id order_number current_status total_amount currency created_at
-    business { id name }
-  }
-}`;

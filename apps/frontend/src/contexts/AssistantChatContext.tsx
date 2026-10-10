@@ -11,11 +11,17 @@ import {
 } from 'react';
 import { useApiClient } from '../hooks/useApiClient';
 import { useMarket } from './MarketContext';
+import { decodeAuth0SubFromToken } from '../utils/jwtHasura';
 import {
+  assistantStorageUsable,
+  readAssistantStorage,
+  removeAssistantStorage,
   STORAGE_KEY_LAST_ACTIVITY,
   STORAGE_KEY_MESSAGES,
   STORAGE_KEY_OWNER,
+  STORAGE_KEY_PENDING,
   STORAGE_KEY_THREAD_ID,
+  writeAssistantStorage,
 } from './assistantChatStorage';
 import { useSessionAuth } from './SessionAuthContext';
 import { useTranslation } from 'react-i18next';
@@ -26,21 +32,28 @@ import {
   SITE_EVENT_ASSISTANT_ERROR_SHOWN,
 } from '../hooks/useTrackSiteEvent';
 
+import {
+  readAssistantCards,
+  type AssistantResultCard,
+} from '../components/assistant/assistantResultCards';
+
 export type AssistantChatMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  cards?: AssistantResultCard[];
 };
 
 type ChatApiResponse = {
   reply: string;
   handoff: boolean;
+  cards?: unknown;
   /** Contract v2 (#451 §5.2): structured tool results. Absent on today's backend. */
   blocks?: Array<{ kind?: unknown } | null> | null;
 };
 
 /** Block kinds that only come from a successful tool call (order/item/store found, reorder ready). */
-const TOOL_RESULT_BLOCK_KINDS = new Set(['item', 'store', 'order', 'reorder']);
+const TOOL_RESULT_BLOCK_KINDS = new Set(['item', 'store', 'order', 'rental', 'reorder']);
 
 /**
  * True when a reply carried a successful tool result, which is the only trigger for
@@ -51,10 +64,14 @@ export function replyHasToolSuccess(
   data: Partial<ChatApiResponse> | null | undefined
 ): boolean {
   if (!data || data.handoff) return false;
-  if (!Array.isArray(data.blocks)) return false;
-  return data.blocks.some(
+  const blocks = Array.isArray(data.blocks) ? data.blocks : [];
+  const cards = Array.isArray(data.cards) ? data.cards : [];
+  return [...blocks, ...cards].some(
     (b) =>
-      !!b && typeof b.kind === 'string' && TOOL_RESULT_BLOCK_KINDS.has(b.kind)
+      !!b &&
+      typeof b === 'object' &&
+      typeof (b as { kind?: unknown }).kind === 'string' &&
+      TOOL_RESULT_BLOCK_KINDS.has((b as { kind: string }).kind)
   );
 }
 
@@ -100,6 +117,7 @@ export {
   STORAGE_KEY_THREAD_ID,
   STORAGE_KEY_LAST_ACTIVITY,
   STORAGE_KEY_OWNER,
+  STORAGE_KEY_PENDING,
   clearAssistantChatStorage,
 } from './assistantChatStorage';
 const MAX_API_MESSAGES = 20;
@@ -181,30 +199,45 @@ export function assistantOwnerKey(
 }
 
 function readStorage(key: string): string | null {
-  if (typeof sessionStorage === 'undefined') return null;
-  try {
-    return sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
+  return readAssistantStorage(key);
 }
 
 function writeStorage(key: string, value: string): void {
-  if (typeof sessionStorage === 'undefined') return;
-  try {
-    sessionStorage.setItem(key, value);
-  } catch {
-    /* ignore quota / privacy mode */
-  }
+  writeAssistantStorage(key, value);
 }
 
 function removeStorage(key: string): void {
-  if (typeof sessionStorage === 'undefined') return;
+  removeAssistantStorage(key);
+}
+
+type TokenReader = (options?: { force?: boolean }) => Promise<string | null>;
+
+/**
+ * Owner implied by the access token that the next request would send.
+ * Undefined when this session has no token reader (tests); null when signed in
+ * but the token has no sub.
+ */
+export async function tokenOwnerForPost(
+  getAccessToken: TokenReader | undefined,
+  isAuthenticated: boolean
+): Promise<string | null | undefined> {
+  if (typeof getAccessToken !== 'function') return undefined;
   try {
-    sessionStorage.removeItem(key);
+    const token = await getAccessToken({ force: true });
+    if (!token) return isAuthenticated ? null : 'guest';
+    return assistantOwnerKey(true, decodeAuth0SubFromToken(token));
   } catch {
-    /* ignore */
+    return isAuthenticated ? null : 'guest';
   }
+}
+
+function isAbortError(err: unknown): boolean {
+  const e = err as { code?: string; name?: string } | null;
+  return (
+    e?.code === 'ERR_CANCELED' ||
+    e?.name === 'CanceledError' ||
+    e?.name === 'AbortError'
+  );
 }
 
 function loadStoredMessages(): AssistantChatMessage[] {
@@ -256,7 +289,12 @@ function makeMessageId(): string {
 
 export function AssistantChatProvider({ children }: { children: ReactNode }) {
   const apiClient = useApiClient();
-  const { isAuthenticated, isLoading: authLoading, user } = useSessionAuth();
+  const {
+    isAuthenticated,
+    isLoading: authLoading,
+    user,
+    getAccessToken,
+  } = useSessionAuth();
   const { selectedMarket } = useMarket();
   const authSettled = !authLoading;
   const owner = assistantOwnerKey(isAuthenticated, user?.sub);
@@ -316,6 +354,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         writeStorage(STORAGE_KEY_OWNER, nextOwner);
       }
       removeStorage(STORAGE_KEY_LAST_ACTIVITY);
+      removeStorage(STORAGE_KEY_PENDING);
       commitMessages([]);
       setDraft('');
       setError(null);
@@ -356,6 +395,12 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
       const restored = loadStoredMessages();
       messagesRef.current = restored;
       setMessagesState(restored);
+      if (
+        readStorage(STORAGE_KEY_PENDING) &&
+        restored[restored.length - 1]?.role === 'user'
+      ) {
+        setError('interrupted');
+      }
     }
     readyRef.current = true;
     setReady(true);
@@ -417,20 +462,47 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
     return true;
   }, [rotate]);
 
+  const releaseIfTokenOwnerChanged = useCallback(async (): Promise<boolean> => {
+    const tokenOwner = await tokenOwnerForPost(getAccessToken, isAuthenticated);
+    if (tokenOwner === undefined || tokenOwner === ownerRef.current) return false;
+    if (tokenOwner) rotate(tokenOwner);
+    return true;
+  }, [getAccessToken, isAuthenticated, rotate]);
+
   useEffect(() => {
     const onFocus = () => {
-      rotateIfIdle();
+      if (typeof getAccessToken !== 'function') {
+        rotateIfIdle();
+        return;
+      }
+      void releaseIfTokenOwnerChanged().then((changed) => {
+        if (!changed) rotateIfIdle();
+      });
     };
     const onVisibility = () => {
       if (document.visibilityState === 'visible') rotateIfIdle();
     };
     window.addEventListener('focus', onFocus);
+    window.addEventListener('storage', onFocus);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
       window.removeEventListener('focus', onFocus);
+      window.removeEventListener('storage', onFocus);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [rotateIfIdle]);
+  }, [getAccessToken, releaseIfTokenOwnerChanged, rotateIfIdle]);
+
+  useEffect(() => {
+    if (!ready) return undefined;
+    const raw = readStorage(STORAGE_KEY_LAST_ACTIVITY);
+    const last = Number(raw);
+    if (!raw || !Number.isFinite(last)) return undefined;
+    const delay = Math.max(0, last + IDLE_TIMEOUT_MS - Date.now());
+    const timer = window.setTimeout(() => {
+      if (document.visibilityState === 'visible') rotateIfIdle();
+    }, delay);
+    return () => window.clearTimeout(timer);
+  }, [ready, messages, rotateIfIdle]);
 
   const dispatch = useCallback(
     async (history: AssistantChatMessage[]) => {
@@ -449,11 +521,19 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
        * provider instance in the tab (another instance may have rotated it, or
        * logout may have cleared it).
        */
-      const isCurrent = () =>
-        isOwnRequest() &&
-        readStorage(STORAGE_KEY_THREAD_ID) === requestThreadId &&
-        readStorage(STORAGE_KEY_OWNER) === requestOwner;
+      const isCurrent = () => {
+        if (!isOwnRequest()) return false;
+        const storedThread = readStorage(STORAGE_KEY_THREAD_ID);
+        const storedOwner = readStorage(STORAGE_KEY_OWNER);
+        if (!assistantStorageUsable()) return true;
+        return storedThread === requestThreadId && storedOwner === requestOwner;
+      };
 
+      if (!(await releaseIfTokenOwnerChanged())) {
+        writeStorage(STORAGE_KEY_PENDING, '1');
+      } else {
+        return;
+      }
       writeStorage(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
       setError(null);
       setIsOffline(false);
@@ -484,11 +564,17 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
           controller ? { signal: controller.signal } : undefined
         );
         if (!isCurrent()) return;
+        removeStorage(STORAGE_KEY_PENDING);
         const reply = data?.reply?.trim() || '';
         if (reply) {
           commitMessages([
             ...messagesRef.current,
-            { id: makeMessageId(), role: 'assistant', content: reply },
+            {
+              id: makeMessageId(),
+              role: 'assistant',
+              content: reply,
+              cards: readAssistantCards(data?.cards),
+            },
           ]);
           setLastReply((prev) => ({
             seq: prev.seq + 1,
@@ -499,7 +585,7 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         if (data?.handoff) setHandoff(true);
         writeStorage(STORAGE_KEY_LAST_ACTIVITY, String(Date.now()));
       } catch (err: unknown) {
-        if (!isCurrent()) return;
+        if (!isCurrent() || isAbortError(err)) return;
         // The failed user message stays in the thread so Retry can re-send it.
         setIsOffline(isNetworkError(err));
         setError(errorText(err));
@@ -508,13 +594,14 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
         if (isOwnRequest()) setSending(false);
       }
     },
-    [apiClient, commitMessages, setSending, selectedMarket]
+    [apiClient, commitMessages, releaseIfTokenOwnerChanged, setSending, selectedMarket]
   );
 
   const sendMessage = useCallback(
     async (text: string): Promise<boolean> => {
       const trimmed = text.trim();
       if (!trimmed || !readyRef.current || isSendingRef.current) return false;
+      if (await releaseIfTokenOwnerChanged()) return false;
       rotateIfIdle();
       const next: AssistantChatMessage[] = [
         ...messagesRef.current,
@@ -526,17 +613,18 @@ export function AssistantChatProvider({ children }: { children: ReactNode }) {
       await dispatch(next);
       return true;
     },
-    [commitMessages, dispatch, rotateIfIdle, trackEvent]
+    [commitMessages, dispatch, releaseIfTokenOwnerChanged, rotateIfIdle, trackEvent]
   );
 
   const retry = useCallback(async (): Promise<boolean> => {
     if (!readyRef.current || isSendingRef.current) return false;
+    if (await releaseIfTokenOwnerChanged()) return false;
     if (rotateIfIdle()) return false;
     const history = messagesRef.current;
     if (history[history.length - 1]?.role !== 'user') return false;
     await dispatch(history);
     return true;
-  }, [dispatch, rotateIfIdle]);
+  }, [dispatch, releaseIfTokenOwnerChanged, rotateIfIdle]);
 
   const clearChat = useCallback(() => {
     rotate();

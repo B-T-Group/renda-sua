@@ -56,6 +56,8 @@ describe('AssistantToolsService', () => {
       'list_supported_country_states',
       'list_supported_payment_systems',
       'request_human_support',
+      'search_rentals',
+      'search_restaurants',
     ]);
   });
 
@@ -69,11 +71,13 @@ describe('AssistantToolsService', () => {
       ...verified,
       accountType: 'business',
       clientId: 'c1',
+      businessId: 'b1',
     });
     const businessWithClient = businessWithClientConfig.tools.map(
       (t) => t.toolSpec?.name
     );
-    expect(businessWithClient).toContain('get_my_recent_orders');
+    expect(businessWithClient).not.toContain('get_my_recent_orders');
+    expect(businessWithClient).toContain('get_my_business_orders');
 
     const businessOnlyConfig = await service.buildToolConfig({
       ...verified,
@@ -85,6 +89,16 @@ describe('AssistantToolsService', () => {
     expect(businessOnly).not.toContain('get_order_status');
     expect(businessOnly).toContain('get_my_addresses');
     expect(businessOnly).toContain('get_my_profile_summary');
+
+    const delegateConfig = await service.buildToolConfig({
+      ...verified,
+      accountType: 'delegate',
+      businessId: 'b1',
+    });
+    const delegateTools = delegateConfig.tools.map((t) => t.toolSpec?.name);
+    expect(delegateTools).not.toContain('get_my_profile_summary');
+    expect(delegateTools).not.toContain('get_my_business_orders');
+    expect(delegateTools).toContain('search_rentals');
   });
 
   it('adds user-scoped tools for verified clients', async () => {
@@ -94,6 +108,9 @@ describe('AssistantToolsService', () => {
     expect(tools).toContain('get_order_status');
     expect(tools).toContain('get_my_addresses');
     expect(tools).toContain('get_my_profile_summary');
+    expect(tools).toContain('get_my_purchase_credits');
+    expect(tools).toContain('get_my_wallet');
+    expect(tools).not.toContain('get_my_business_orders');
   });
 
   it('adds search_catalog tool when assistant_shopping_v1 is enabled', async () => {
@@ -135,6 +152,13 @@ describe('AssistantToolsService', () => {
     });
 
     expect(result.content).toContain('/items/inv-123');
+    expect(result.cards?.[0]).toMatchObject({
+      kind: 'item',
+      id: 'inv-123',
+      title: 'Test Phone',
+      priceLabel: '50000 XAF',
+      href: '/items/inv-123',
+    });
     expect(result.content).not.toContain('/inventory/');
     expect(result.content).not.toContain('https://'); // Should emit relative paths
     delete process.env.FRONTEND_URL;

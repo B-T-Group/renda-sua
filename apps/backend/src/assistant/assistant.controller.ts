@@ -4,9 +4,12 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Req,
+  Res,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import type { Request, Response } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import {
   ApiBearerAuth,
@@ -48,11 +51,15 @@ export class AssistantController {
   @ApiResponse({ status: 429, description: 'Too many requests' })
   async chat(
     @ReqContext() context: RequestContext,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
     @Body() body: AssistantChatRequestDto
   ): Promise<AssistantChatResponseDto> {
     const identity = await this.identities.resolveFromUserId(
       context.userId,
-      body.market
+      body.market,
+      context.activePersona,
+      context.activeDelegation
     );
     const result = await this.assistant.chat({
       channel: 'app',
@@ -61,7 +68,23 @@ export class AssistantController {
       locale: identity.preferredLanguage,
       marketContext: body.market,
       threadId: body.threadId,
+      signal: clientDisconnectSignal(req, res),
     });
-    return { reply: result.reply, handoff: result.handoff };
+    return {
+      reply: result.reply,
+      handoff: result.handoff,
+      cards: result.cards,
+    };
   }
+}
+
+/** Aborts once the client goes away, so a closed tab does not keep running tools. */
+function clientDisconnectSignal(req: Request, res: Response): AbortSignal {
+  const controller = new AbortController();
+  const stop = () => {
+    if (!res.writableEnded) controller.abort();
+  };
+  req.on('close', stop);
+  res.on('close', stop);
+  return controller.signal;
 }

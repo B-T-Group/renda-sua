@@ -5,6 +5,7 @@ import { getPaymentsKnowledge } from './payments';
 import { getPickupKnowledge } from './pickup';
 import { getSupportKnowledge } from './support';
 import { getReelsKnowledge } from './reels';
+import { getWhatWeOfferKnowledge } from './what-we-offer';
 import type { KnowledgeLocale, KnowledgeTopic } from './types';
 
 export * from './types';
@@ -29,6 +30,8 @@ export function getKnowledgeSection(params: {
       return getSupportKnowledge(params.locale);
     case 'reels':
       return getReelsKnowledge(params.locale);
+    case 'what_we_offer':
+      return getWhatWeOfferKnowledge(params.locale);
     default:
       return '';
   }

@@ -7,11 +7,16 @@ import { makeAutoObservable } from 'mobx';
 import { randomUUID } from '../utils/uuid';
 import type { ReplyOutcome } from '../utils/assistantCharacterMachine';
 import { replyHasToolSuccess, replyOutcome } from '../utils/assistantReplyOutcome';
+import {
+  readAssistantCards,
+  type AssistantResultCard,
+} from '../utils/assistantResultCards';
 
 export type AssistantMessage = {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  cards?: AssistantResultCard[];
 };
 
 /** `network` = the request never reached the server (offline, DNS, timeout). */
@@ -20,7 +25,7 @@ export type AssistantErrorKind = 'network' | 'server';
 /** Sends the chat history; injected so the store stays testable without the API client. */
 export type AssistantChatTransport = (
   messages: Array<Pick<AssistantMessage, 'role' | 'content'>>
-) => Promise<{ reply?: string | null; handoff?: boolean | null; blocks?: unknown }>;
+) => Promise<{ reply?: string | null; handoff?: boolean | null; blocks?: unknown; cards?: unknown }>;
 
 /** How the latest request on this thread settled (drives the Renda character). */
 export type AssistantSettle = { seq: number; outcome: ReplyOutcome; toolSuccess: boolean };
@@ -92,11 +97,12 @@ export class AssistantStore {
     return msg;
   }
 
-  addAssistantMessage(content: string): void {
+  addAssistantMessage(content: string, cards?: AssistantResultCard[]): void {
     this.messages.push({
       id: makeMessageId(),
       role: 'assistant',
       content,
+      cards: cards?.length ? cards : undefined,
     });
     this.updateActivity();
   }
@@ -198,7 +204,7 @@ export class AssistantStore {
   ): void {
     if (!this.isCurrent(requestId, threadId)) return;
     const reply = data?.reply?.trim();
-    if (reply) this.addAssistantMessage(reply);
+    if (reply) this.addAssistantMessage(reply, readAssistantCards(data?.cards));
     if (data?.handoff) this.handoff = true;
     this.lastSettle = {
       seq: requestId,

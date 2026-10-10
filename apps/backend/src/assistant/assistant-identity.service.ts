@@ -10,6 +10,8 @@ import type {
 interface UserIdentityRow {
   id: string;
   first_name: string | null;
+  last_name?: string | null;
+  email?: string | null;
   preferred_language: string | null;
   phone_number: string | null;
   user_type_id: string | null;
@@ -39,12 +41,14 @@ export class AssistantIdentityService {
     if (!user) return this.anonymous(normalized, null, country);
     const phone164 = normalized;
     const market = await this.resolveMarketFromUser(user, country);
-    return this.fromUser(user, phone164, market);
+    return this.fromUser(user, phone164, market, null, null);
   }
 
   async resolveFromUserId(
     userId: string | null | undefined,
-    marketContext?: AssistantMarket | null
+    marketContext?: AssistantMarket | null,
+    activePersona?: string | null,
+    activeDelegation?: string | null
   ): Promise<AssistantIdentity> {
     if (!userId || userId === 'anonymous') {
       return this.anonymous(null, marketContext, null);
@@ -54,7 +58,7 @@ export class AssistantIdentityService {
     const phone = user.phone_number?.replace(/^\+/, '').trim() || null;
     const phoneCountry = this.inferCountryFromPhone(phone || '');
     const market = await this.resolveMarketFromUser(user, phoneCountry, marketContext);
-    return this.fromUser(user, phone, market);
+    return this.fromUser(user, phone, market, activePersona ?? null, activeDelegation);
   }
 
   /**
@@ -181,6 +185,10 @@ export class AssistantIdentityService {
       phoneE164,
       accountType: null,
       clientId: null,
+      agentId: null,
+      businessId: null,
+      lastName: null,
+      email: null,
     };
   }
 
@@ -220,25 +228,31 @@ export class AssistantIdentityService {
   private fromUser(
     user: UserIdentityRow,
     phoneE164: string | null,
-    market: AssistantMarket | null
+    market: AssistantMarket | null,
+    activePersona: string | null,
+    activeDelegation: string | null
   ): AssistantIdentity {
     return {
       isVerified: true,
       userId: user.id,
       firstName: user.first_name?.trim() || null,
+      lastName: user.last_name?.trim() || null,
+      email: user.email?.trim() || null,
       preferredLanguage: normalizeLocale(user.preferred_language),
       market,
       country: market?.country_code || null,
       phoneE164,
-      accountType: resolveAccountType(user),
+      accountType: resolveAccountType(user, activePersona, activeDelegation),
       clientId: user.client?.id ?? null,
+      agentId: user.agent?.id ?? null,
+      businessId: user.business?.id ?? null,
     };
   }
 }
 
 const USER_QUERY_PREFIX = 'query AssistantUser';
 const USER_FIELDS = `
-  id first_name preferred_language phone_number user_type_id
+  id first_name last_name email preferred_language phone_number user_type_id
   client { id } agent { id } business { id }
 `;
 
@@ -248,7 +262,17 @@ function normalizeLocale(value: string | null): AssistantLocale | null {
   return null;
 }
 
-function resolveAccountType(user: UserIdentityRow): string | null {
+function resolveAccountType(
+  user: UserIdentityRow,
+  activePersona?: string | null,
+  activeDelegation?: string | null
+): string | null {
+  if (activeDelegation?.trim()) return 'delegate';
+  const persona = activePersona?.toLowerCase();
+  if (persona === 'delegate') return 'delegate';
+  if (persona === 'client' && user.client?.id) return 'client';
+  if (persona === 'agent' && user.agent?.id) return 'agent';
+  if (persona === 'business' && user.business?.id) return 'business';
   if (user.business?.id) return 'business';
   if (user.agent?.id) return 'agent';
   if (user.client?.id) return 'client';
