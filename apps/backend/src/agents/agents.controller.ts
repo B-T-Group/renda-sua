@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpException,
+  Query,
   HttpStatus,
   Param,
   Patch,
@@ -12,6 +13,7 @@ import {
   ApiBody,
   ApiOperation,
   ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -22,6 +24,9 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { resolveCurrencyFromCountry } from '../country-currency/country-currency.util';
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
 import { AgentHoldService } from './agent-hold.service';
+import { parsePayBoardStatus } from './agent-pay-board.mapper';
+import { AgentPayBoardService } from './agent-pay-board.service';
+import type { PayBoard } from './agent-pay-board.types';
 import { AgentReferralsService } from './agent-referrals.service';
 import { ReferralProjectedPayoutService } from '../business-referral-payouts/referral-projected-payout.service';
 import { assertLocationConsentTransition } from './agent-location-consent.util';
@@ -130,7 +135,8 @@ export class AgentsController {
     private readonly commissionsService: CommissionsService,
     private readonly agentHoldService: AgentHoldService,
     private readonly agentReferralsService: AgentReferralsService,
-    private readonly referralProjectedPayoutService: ReferralProjectedPayoutService
+    private readonly referralProjectedPayoutService: ReferralProjectedPayoutService,
+    private readonly payBoard: AgentPayBoardService
   ) {}
 
   private requireAgentActor(user: any, ctx: RequestContext): string {
@@ -405,6 +411,27 @@ export class AgentsController {
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+  }
+
+  @Get('me/commissions-and-objectives')
+  @ApiOperation({
+    summary: 'Commissions and scheduled objectives for the current agent',
+  })
+  @ApiQuery({ name: 'status', required: false, enum: ['unpaid', 'paid', 'all'] })
+  @ApiResponse({ status: 200, description: 'Pay board with summary and items' })
+  @ApiResponse({ status: 403, description: 'User is not an agent' })
+  async getCommissionsAndObjectives(
+    @ReqContext() ctx: RequestContext,
+    @Query('status') status?: string
+  ): Promise<PayBoard> {
+    const user = await this.hasuraUserService.getUser(ctx);
+    const agentId = this.requireAgentActor(user, ctx);
+    return this.payBoard.getBoard({
+      agentId,
+      userId: user.id,
+      country: this.resolveCountryFromUserAddresses(user),
+      status: parsePayBoardStatus(status),
+    });
   }
 
   @Get('me/referred-businesses')

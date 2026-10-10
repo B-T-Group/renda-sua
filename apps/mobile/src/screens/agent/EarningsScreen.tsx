@@ -36,7 +36,9 @@ function formatDate(dateStr: string | null): string {
 export default function EarningsScreen() {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
-  const navigation = useNavigation<{ navigate: (name: string) => void }>();
+  const navigation = useNavigation<{
+    navigate: (name: string, params?: { screen: string; params?: { segment: string } }) => void;
+  }>();
 
   const { summary, loading: earningsLoading, error: earningsError, refetch: refetchEarnings } =
     useAgentEarningsSummary(true);
@@ -59,7 +61,7 @@ export default function EarningsScreen() {
   }, [refetchEarnings]);
 
   const handleWithdraw = useCallback(() => {
-    navigation.navigate('AgentAccounts');
+    navigation.navigate('MainTabs', { screen: 'Pay', params: { segment: 'wallet' } });
   }, [navigation]);
 
   if (earningsLoading && !summary) {

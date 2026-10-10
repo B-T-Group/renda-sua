@@ -61,7 +61,7 @@ function MenuTabScreen() {
     dismissSnack: dismissUpdateSnack,
   } = useManualAppUpdateCheck();
   const navigation = useNavigation<{
-    navigate: (name: AppNavScreen) => void;
+    navigate: (name: AppNavScreen, params?: { segment?: 'commissions' | 'objectives' | 'wallet' }) => void;
     getParent: () => { navigate: (name: AppNavScreen) => void } | undefined;
   }>();
   const rootNav = navigation.getParent();
@@ -153,7 +153,7 @@ function MenuTabScreen() {
             icon="wallet-outline"
             label={t('menuTab.accountsTitle', 'My wallet')}
             subtitle={t('menuTab.accountsSubtitle', 'Top up and withdraw')}
-            onPress={() => goTo('AgentAccounts')}
+            onPress={() => navigation.navigate('Pay', { segment: 'wallet' })}
           />
           <UserMenuRow
             icon="ticket-percent-outline"
