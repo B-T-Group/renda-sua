@@ -56,7 +56,7 @@ export function fallbackMarketAmounts(currency: string): MarketAmounts {
 }
 
 export function parsePayBoardStatus(value?: string): PayBoardStatusFilter {
-  if (value === 'paid' || value === 'all') return value;
+  if (value === 'paid' || value === 'all' || value === 'expired') return value;
   return 'unpaid';
 }
 
@@ -65,6 +65,7 @@ export function filterPayBoardItems(
   status: PayBoardStatusFilter
 ): EarningItem[] {
   if (status === 'all') return items;
+  if (status === 'expired') return items.filter((item) => item.nextStep === 'window_closed');
   return items.filter((item) => item.paymentStatus === status);
 }
 
@@ -157,6 +158,9 @@ function merchantStructure(input: MerchantReferralInput, paid: boolean) {
   return {
     type: 'merchant_referral' as const,
     businessId: input.businessId,
+    ownerName: input.ownerName,
+    phone: input.phone,
+    email: input.email,
     selfSaleAmount: input.selfSaleAmount,
     otherBuyerAmount: input.otherBuyerAmount,
     salePercent: input.salePercent,
@@ -233,6 +237,9 @@ function merchantInput(
     ...requirementFields(business),
     businessId: business.businessId,
     businessName: business.businessName,
+    ownerName: joinedName(business.ownerFirstName, business.ownerLastName),
+    phone: business.phone ?? null,
+    email: business.email ?? null,
     currency: business.commission.currency || amounts.currency,
     salePercentEarned: extras.salePercentByBusiness[business.businessId] ?? 0,
     onboardingStatus: resolveClaimStatus(paid, claim?.status),
@@ -240,6 +247,11 @@ function merchantInput(
     paidAt: business.commission.paidAt,
     legacyPaid: paid && claim == null,
   };
+}
+
+function joinedName(first?: string, last?: string): string | null {
+  const name = [first, last].filter(Boolean).join(' ').trim();
+  return name || null;
 }
 
 function requirementFields(business: ReferredBusinessFollowUp) {

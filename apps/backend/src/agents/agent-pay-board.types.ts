@@ -1,6 +1,6 @@
 import type { ObjectiveKey } from '../payment-programs/payment-schedule-progress.service';
 
-export type PayBoardStatusFilter = 'unpaid' | 'paid' | 'all';
+export type PayBoardStatusFilter = 'unpaid' | 'paid' | 'all' | 'expired';
 
 export type PayBoardNextStep =
   | 'add_items'
@@ -45,6 +45,9 @@ export interface MerchantOnboardingView {
 export interface MerchantReferralStructure {
   type: 'merchant_referral';
   businessId: string;
+  ownerName: string | null;
+  phone: string | null;
+  email: string | null;
   selfSaleAmount: number;
   otherBuyerAmount: number;
   salePercent: number;
@@ -97,6 +100,9 @@ export type OnboardingClaimStatus = 'credited' | 'pending' | 'failed' | 'none';
 export interface MerchantReferralInput {
   businessId: string;
   businessName: string;
+  ownerName: string | null;
+  phone: string | null;
+  email: string | null;
   currency: string;
   selfSaleAmount: number;
   otherBuyerAmount: number;

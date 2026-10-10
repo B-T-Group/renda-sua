@@ -16,6 +16,9 @@ function merchant(overrides: Partial<MerchantReferralInput> = {}): MerchantRefer
   return {
     businessId: 'biz-1',
     businessName: 'Shop',
+    ownerName: null,
+    phone: null,
+    email: null,
     currency: 'XAF',
     selfSaleAmount: 5000,
     otherBuyerAmount: 7500,
@@ -36,13 +39,21 @@ function merchant(overrides: Partial<MerchantReferralInput> = {}): MerchantRefer
 
 describe('agent pay board mapper', () => {
   it('exposes the 5000 and 7500 commission structure', () => {
-    const item = toMerchantItem(merchant({ itemsApproved: 2 }));
+    const item = toMerchantItem(
+      merchant({
+        itemsApproved: 2,
+        ownerName: 'Ada Lovelace',
+        phone: '+237600000000',
+        email: 'shop@example.com',
+      })
+    );
     expect(item.structure).toMatchObject({
       type: 'merchant_referral',
       selfSaleAmount: 5000,
       otherBuyerAmount: 7500,
       salePercent: 1,
     });
+    expect(item.structure).toMatchObject({ phone: '+237600000000', email: 'shop@example.com', ownerName: 'Ada Lovelace' });
     expect(item.nextStep).toBe('reach_sales');
     expect(item.paymentStatus).toBe('unpaid');
   });
@@ -79,19 +90,26 @@ describe('agent pay board mapper', () => {
     });
   });
 
-  it('filters paid and unpaid and defaults an unknown status to unpaid', () => {
+  it('filters paid, unpaid, and expired, and defaults an unknown status to unpaid', () => {
     const items = [
       toMerchantItem(merchant({ onboardingStatus: 'credited', paidAmount: 5000 })),
       toMerchantItem(merchant({ businessId: 'biz-2', businessName: 'Other' })),
+      toMerchantItem(merchant({ businessId: 'biz-3', businessName: 'Late', windowEndsAt: PAST })),
+      toMerchantItem(merchant({ businessId: 'biz-4', onboardingStatus: 'pending', windowEndsAt: PAST })),
     ];
     expect(filterPayBoardItems(items, 'unpaid').map((item) => item.id)).toEqual([
       'merchant_referral:biz-2',
+      'merchant_referral:biz-3',
+      'merchant_referral:biz-4',
+    ]);
+    expect(filterPayBoardItems(items, 'expired').map((item) => item.id)).toEqual([
+      'merchant_referral:biz-3',
     ]);
     expect(filterPayBoardItems(items, 'paid')).toHaveLength(1);
-    expect(filterPayBoardItems(items, 'all')).toHaveLength(2);
+    expect(filterPayBoardItems(items, 'all')).toHaveLength(4);
     expect(parsePayBoardStatus(undefined)).toBe('unpaid');
     expect(parsePayBoardStatus('nope')).toBe('unpaid');
-    expect(parsePayBoardStatus('all')).toBe('all');
+    expect(parsePayBoardStatus('expired')).toBe('expired');
   });
 
   it('sums earned sources and keeps pending bonuses out of earned', () => {

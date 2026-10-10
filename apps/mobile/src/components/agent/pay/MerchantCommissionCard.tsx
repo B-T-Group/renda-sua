@@ -1,5 +1,6 @@
-import { StyleSheet, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { StatusPill } from '../../common/StatusPill';
@@ -43,6 +44,7 @@ export function MerchantCommissionCard({
         </Text>
         <StatusPill compact label={status.label} backgroundColor={status.backgroundColor} textColor={status.textColor} />
       </View>
+      <MerchantContacts ownerName={structure.ownerName} phone={structure.phone} email={structure.email} />
       {sameAmount ? (
         <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
           {t('agent.pay.sameSale', '{{amount}} when the first qualifying sale happens', {
@@ -85,6 +87,58 @@ export function MerchantCommissionCard({
       </Text>
     </View>
   );
+}
+
+function MerchantContacts({
+  ownerName,
+  phone,
+  email,
+}: {
+  ownerName: string | null;
+  phone: string | null;
+  email: string | null;
+}) {
+  const { colors, spacing } = useTheme();
+  if (!ownerName && !phone && !email) return null;
+  return (
+    <View style={{ gap: spacing.xxs }}>
+      {ownerName ? <Text variant="bodySmall" style={{ color: colors.text.secondary }}>{ownerName}</Text> : null}
+      {phone ? <ContactLink icon="phone" value={phone} href={telHref(phone)} labelKey="agent.pay.callMerchant" fallback="Call {{phone}}" /> : null}
+      {email ? <ContactLink icon="email-outline" value={email} href={`mailto:${email}`} labelKey="agent.pay.emailMerchant" fallback="Email {{email}}" /> : null}
+    </View>
+  );
+}
+
+function ContactLink({
+  icon,
+  value,
+  href,
+  labelKey,
+  fallback,
+}: {
+  icon: 'phone' | 'email-outline';
+  value: string;
+  href: string;
+  labelKey: string;
+  fallback: string;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t(labelKey, fallback, { phone: value, email: value })}
+      onPress={() => void Linking.openURL(href)}
+      style={styles.contact}
+    >
+      <MaterialCommunityIcons name={icon} size={16} color={colors.primary.main} />
+      <Text variant="bodyMedium" style={{ color: colors.primary.main }}>{value}</Text>
+    </Pressable>
+  );
+}
+
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, '')}`;
 }
 
 function commissionStatus(
@@ -143,4 +197,5 @@ const styles = StyleSheet.create({
   card: {},
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   title: { flex: 1, minWidth: 0 },
+  contact: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
 });

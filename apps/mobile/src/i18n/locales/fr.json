@@ -4747,6 +4747,7 @@
       "filter": {
         "unpaid": "Impayé",
         "paid": "Payé",
+        "expired": "Expiré",
         "all": "Tout"
       },
       "sources": {
@@ -4774,6 +4775,9 @@
       "unknownTitle": "Gain",
       "referBusiness": "Parrainer un commerce",
       "emptyCommissions": "Aucune commission impayée",
+      "emptyExpired": "Aucune commission expirée",
+      "callMerchant": "Appeler {{phone}}",
+      "emailMerchant": "Écrire à {{email}}",
       "emptyObjectives": "Aucun objectif en cours",
       "emptyPaid": "Rien de payé pour le moment",
       "frequency": {
