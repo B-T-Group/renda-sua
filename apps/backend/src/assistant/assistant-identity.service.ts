@@ -58,7 +58,7 @@ export class AssistantIdentityService {
     const phone = user.phone_number?.replace(/^\+/, '').trim() || null;
     const phoneCountry = this.inferCountryFromPhone(phone || '');
     const market = await this.resolveMarketFromUser(user, phoneCountry, marketContext);
-    return this.fromUser(user, phone, market, activePersona ?? null, activeDelegation);
+    return this.fromUser(user, phone, market, activePersona ?? null, activeDelegation ?? null);
   }
 
   /**
