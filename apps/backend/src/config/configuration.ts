@@ -52,6 +52,8 @@ export interface RedisConfig {
   host: string;
   port: number;
   password?: string;
+  /** Set REDIS_TLS=true when ElastiCache transit encryption is on. */
+  tls?: boolean;
 }
 
 export interface CatalogCacheConfig {
@@ -855,6 +857,7 @@ export default (): Configuration => {
       host: process.env.REDIS_HOST || (process.env.NODE_ENV === 'development' && !process.env.DEPLOYMENT_ENV ? 'localhost' : ''),
       port: parseInt(process.env.REDIS_PORT || '6379', 10),
       password: process.env.REDIS_PASSWORD,
+      tls: process.env.REDIS_TLS === 'true',
     },
     catalogCache: {
       enabled: process.env.CATALOG_REDIS_CACHE_ENABLED === 'true',

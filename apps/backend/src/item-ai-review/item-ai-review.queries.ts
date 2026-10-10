@@ -452,6 +452,7 @@ export const OPEN_CLEANUP_JOBS_FOR_ITEMS = `
       id
       item_id
       status
+      updated_at
     }
   }
 `;

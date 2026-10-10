@@ -8,7 +8,10 @@ import {
   isRedisConnectionNoise,
   waitForRedisReady,
 } from '../common/redis-client.util';
-import { redisCommandOrFallback } from '../common/redis-error.util';
+import {
+  isTransientRedisError,
+  redisCommandOrFallback,
+} from '../common/redis-error.util';
 import type { Configuration } from '../config/configuration';
 
 export interface CatalogCacheOptions {
@@ -73,6 +76,7 @@ export class CatalogCacheService implements OnModuleDestroy {
   }): Promise<void> {
     await this.disconnectClient();
     this.redisClient = createAppRedisClient(redis);
+    this.redisClient.on('ready', () => this.clearRedisUnhealthy());
     this.redisClient.on('error', (err: any) => this.onRedisError(err, redis));
     await this.redisClient.connect();
     this.logger.log(`Redis catalog cache connected (${redis.host}:${redis.port})`);
@@ -103,11 +107,21 @@ export class CatalogCacheService implements OnModuleDestroy {
   }
 
   private markRedisUnhealthy(error: unknown): void {
-    this.redisUnhealthy = true;
+    if (!this.isTransientCatalogError(error)) {
+      this.redisUnhealthy = true;
+    }
     const err = error as { message?: string; name?: string };
     this.logger.warn(
       `Redis catalog cache command failed: ${err?.message || err?.name || 'unknown'}`
     );
+  }
+
+  private clearRedisUnhealthy(): void {
+    this.redisUnhealthy = false;
+  }
+
+  private isTransientCatalogError(error: unknown): boolean {
+    return isTransientRedisError(error) || isRedisConnectionNoise(error);
   }
 
   private waitUntilReady(): Promise<boolean> {

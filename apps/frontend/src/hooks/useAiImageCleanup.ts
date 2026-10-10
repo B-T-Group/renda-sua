@@ -37,7 +37,11 @@ export interface AiImageCleanupPendingJob {
   status: string;
   item?: { id: string; name: string } | null;
   item_variant?: { id: string; name: string } | null;
-  results?: Array<{ id: string; status: string }>;
+  results?: Array<{
+    id: string;
+    status: string;
+    rental_item_image_id?: string | null;
+  }>;
 }
 
 export interface AiImageCleanupPendingData {

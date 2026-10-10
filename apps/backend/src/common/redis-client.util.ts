@@ -4,7 +4,10 @@ export type RedisSocketConfig = {
   host: string;
   port: number;
   password?: string;
+  tls?: boolean;
 };
+
+const REDIS_PING_INTERVAL_MS = 30_000;
 
 export const REDIS_READY_WAIT_MS = 2000;
 export const REDIS_CONNECT_RETRY_DELAYS_MS = [500, 1000, 2000, 4000] as const;
@@ -34,14 +37,21 @@ export function createAppRedisClient(
   redis: RedisSocketConfig
 ): RedisClientType {
   return createClient({
-    socket: {
-      host: redis.host,
-      port: redis.port,
-      connectTimeout: 5000,
-      reconnectStrategy: redisReconnectDelay,
-    },
+    pingInterval: REDIS_PING_INTERVAL_MS,
+    socket: redisSocketOptions(redis),
     password: redis.password,
   });
+}
+
+function redisSocketOptions(redis: RedisSocketConfig) {
+  const socket = {
+    host: redis.host,
+    port: redis.port,
+    connectTimeout: 5000,
+    reconnectStrategy: redisReconnectDelay,
+  };
+  if (!redis.tls) return socket;
+  return { ...socket, tls: true as const };
 }
 
 /**

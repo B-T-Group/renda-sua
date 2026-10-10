@@ -1,16 +1,23 @@
 import { Chip } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { PhotoReviewLinkChip } from '../business/PhotoReviewLinkChip';
+import { usePhotoReviewJobId } from '../../hooks/usePhotoReviewJobId';
 
 export interface RentalListingModerationStatusChipProps {
   status?: string | null;
+  rentalImageIds?: string[];
 }
 
 const RentalListingModerationStatusChip: React.FC<
   RentalListingModerationStatusChipProps
-> = ({ status }) => {
+> = ({ status, rentalImageIds }) => {
   const { t } = useTranslation();
   const s = status || 'pending';
+  const photoReviewJobId = usePhotoReviewJobId({
+    enabled: s === 'ai_reviewing' && (rentalImageIds?.length ?? 0) > 0,
+    rentalImageIds,
+  });
   if (s === 'approved') {
     return (
       <Chip
@@ -49,6 +56,17 @@ const RentalListingModerationStatusChip: React.FC<
         label={t(
           'business.rentals.moderation.proposalPending',
           'AI suggestions ready'
+        )}
+      />
+    );
+  }
+  if (s === 'ai_reviewing' && photoReviewJobId) {
+    return (
+      <PhotoReviewLinkChip
+        jobId={photoReviewJobId}
+        label={t(
+          'business.rentals.moderation.reviewCleanedPhotos',
+          'Review cleaned photos'
         )}
       />
     );

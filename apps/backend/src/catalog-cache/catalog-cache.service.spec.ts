@@ -169,6 +169,22 @@ describe('CatalogCacheService', () => {
     });
   });
 
+  describe('redis health', () => {
+    it('does not latch the cache off on a connection timeout', () => {
+      enableRedis(service, {});
+      (service as any).markRedisUnhealthy(new Error('Connection timeout'));
+      expect((service as any).redisUnhealthy).toBe(false);
+    });
+
+    it('latches the cache off on an unexpected Redis error until ready', () => {
+      enableRedis(service, {});
+      (service as any).markRedisUnhealthy(new Error('WRONGPASS'));
+      expect((service as any).redisUnhealthy).toBe(true);
+      (service as any).clearRedisUnhealthy();
+      expect((service as any).redisUnhealthy).toBe(false);
+    });
+  });
+
   describe('generation management', () => {
     it('should return 0 for getGeneration when cache is disabled', async () => {
       const gen = await service.getGeneration('global');

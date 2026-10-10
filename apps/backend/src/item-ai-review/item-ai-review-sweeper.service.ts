@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { cleanupJobBlocksAiReviewSweep } from '../common/ai-review-cleanup-hold';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import * as Q from './item-ai-review.queries';
@@ -33,11 +34,11 @@ export class ItemAiReviewSweeperService {
     try {
       const items = await this.fetchStaleItems();
       if (!items.length) return;
-      const openCleanupIds = await this.fetchOpenCleanupItemIds(
+      const blockingIds = await this.fetchBlockingCleanupItemIds(
         items.map((i) => i.id)
       );
       for (const item of items) {
-        if (openCleanupIds.has(item.id)) continue;
+        if (blockingIds.has(item.id)) continue;
         await this.resetStaleItem(item);
       }
     } catch (error: any) {
@@ -57,15 +58,21 @@ export class ItemAiReviewSweeperService {
     return result.items ?? [];
   }
 
-  private async fetchOpenCleanupItemIds(
+  private async fetchBlockingCleanupItemIds(
     itemIds: string[]
   ): Promise<Set<string>> {
     const result = await this.hasura.executeQuery<{
-      ai_image_cleanup_jobs: Array<{ item_id: string }>;
+      ai_image_cleanup_jobs: Array<{
+        item_id: string;
+        status: string;
+        updated_at?: string | null;
+      }>;
     }>(Q.OPEN_CLEANUP_JOBS_FOR_ITEMS, { itemIds });
-    return new Set(
-      (result.ai_image_cleanup_jobs ?? []).map((j) => j.item_id)
+    const now = Date.now();
+    const blocking = (result.ai_image_cleanup_jobs ?? []).filter((job) =>
+      cleanupJobBlocksAiReviewSweep(job, now)
     );
+    return new Set(blocking.map((job) => job.item_id));
   }
 
   private async resetStaleItem(item: StaleItemRow): Promise<void> {

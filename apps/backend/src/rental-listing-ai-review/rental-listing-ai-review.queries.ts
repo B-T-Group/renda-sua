@@ -422,6 +422,62 @@ export const SET_AI_REVIEW_OVERRIDE = `
   }
 `;
 
+/** Stale ai_reviewing listings older than $staleBefore (sweeper). */
+export const STALE_AI_REVIEWING_LISTINGS = `
+  query StaleAiReviewingListings($staleBefore: timestamptz!, $limit: Int!) {
+    rental_location_listings(
+      where: {
+        moderation_status: { _eq: ai_reviewing }
+        deleted_at: { _is_null: true }
+        updated_at: { _lt: $staleBefore }
+      }
+      order_by: { updated_at: asc }
+      limit: $limit
+    ) {
+      id
+      updated_at
+      rental_item {
+        name
+        rental_item_images { id }
+      }
+    }
+  }
+`;
+
+export const OPEN_CLEANUP_FOR_RENTAL_IMAGE_IDS = `
+  query OpenCleanupForRentalImageIds($imageIds: [uuid!]!) {
+    ai_image_cleanup_results(
+      where: {
+        rental_item_image_id: { _in: $imageIds }
+        status: { _in: [queued, processing, ready] }
+        job: { status: { _in: [queued, processing, ready_for_review] } }
+      }
+    ) {
+      rental_item_image_id
+      job { status updated_at }
+    }
+  }
+`;
+
+export const FAIL_RUNNING_AI_REVIEWS_FOR_LISTING = `
+  mutation FailRunningAiReviewsForListing(
+    $listingId: uuid!
+    $decisionReason: String!
+    $completedAt: timestamptz!
+  ) {
+    update_rental_listing_ai_reviews(
+      where: { listing_id: { _eq: $listingId }, status: { _eq: running } }
+      _set: {
+        status: failed
+        decision_reason: $decisionReason
+        completed_at: $completedAt
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
 export const INSERT_OWNER_MESSAGE = `
   mutation InsertRentalListingOwnerMessage(
     $userId: uuid!

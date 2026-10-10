@@ -588,7 +588,10 @@ const BusinessRentalItemEditPage: React.FC = () => {
                     location: locName,
                   })}
                 </Typography>
-                <RentalListingModerationStatusChip status={l.moderation_status} />
+                <RentalListingModerationStatusChip
+                  status={l.moderation_status}
+                  rentalImageIds={(item.rental_item_images ?? []).map((img) => img.id)}
+                />
               </Stack>
               {l.moderation_status === 'rejected' ? (
                 <Alert severity="warning" sx={{ mb: 2 }}>

@@ -35,6 +35,10 @@ export class RentalListingAiReviewInternalController {
     },
   })
   @ApiResponse({ status: 200, description: 'Review attempt finished' })
+  @ApiResponse({
+    status: 503,
+    description: 'Cleanup still queued or processing; SQS should retry',
+  })
   @ApiResponse({ status: 401, description: 'Invalid or missing internal key' })
   async runAiReview(
     @Param('listingId') listingId: string,

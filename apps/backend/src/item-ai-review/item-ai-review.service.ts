@@ -126,8 +126,10 @@ export class ItemAiReviewService {
     if (!this.isEnabled()) return { success: true, skipped: true };
     try {
       const outcome = await this.executeReview(itemId, expectedVersion);
+      this.throwIfCleanupStillRunning(outcome);
       return { success: true, skipped: outcome !== 'done' };
     } catch (error: any) {
+      if (this.isCleanupRetry(error)) throw error;
       if (this.isStaleOrConflict(error)) {
         this.logger.warn(
           `AI review skipped for ${itemId}: ${error?.message ?? error}`
@@ -146,6 +148,24 @@ export class ItemAiReviewService {
       );
       return { success: false, error: error?.message ?? String(error) };
     }
+  }
+
+  /** SQS must retry while cleanup is still queued or processing. */
+  private throwIfCleanupStillRunning(
+    outcome: 'done' | 'deferred' | 'retry_later'
+  ): void {
+    if (outcome !== 'retry_later') return;
+    throw new HttpException(
+      'AI review waiting on image cleanup',
+      HttpStatus.SERVICE_UNAVAILABLE
+    );
+  }
+
+  private isCleanupRetry(error: unknown): boolean {
+    return (
+      error instanceof HttpException &&
+      error.getStatus() === HttpStatus.SERVICE_UNAVAILABLE
+    );
   }
 
   private isStaleOrConflict(error: unknown): boolean {

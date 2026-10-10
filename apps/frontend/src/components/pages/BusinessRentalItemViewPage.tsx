@@ -234,6 +234,7 @@ const BusinessRentalItemViewPage: React.FC = () => {
                     {!listing.deleted_at ? (
                       <RentalListingModerationStatusChip
                         status={listing.moderation_status}
+                        rentalImageIds={item.rental_item_images.map((img) => img.id)}
                       />
                     ) : null}
                   </Stack>

@@ -10,6 +10,7 @@ import { PutObjectCommand } from '@aws-sdk/client-s3';
 import { createHash } from 'crypto';
 import axios from 'axios';
 import sharp from 'sharp';
+import { fetchFittedCleanupImage } from '../ai/cleanup-image-fetch';
 import { AiService } from '../ai/ai.service';
 import { AwsService } from '../aws/aws.service';
 import { CLEANUP_TOKEN_COST } from '../business-tokens/business-tokens.packs';
@@ -1744,19 +1745,7 @@ export class AiImageCleanupService implements OnModuleInit {
     itemId: string,
     imageUrl: string
   ): Promise<{ url: string; key: string; provider: 'rembg'; model: 'u2net' }> {
-    const { data } = await axios.get<ArrayBuffer>(imageUrl, {
-      responseType: 'arraybuffer',
-      timeout: 25000,
-      maxContentLength: 10 * 1024 * 1024,
-      maxBodyLength: 10 * 1024 * 1024,
-    });
-
-    // Downscale before invoke: smaller payload + faster u2net inference.
-    const jpegBuffer = await sharp(Buffer.from(data))
-      .rotate()
-      .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true })
-      .jpeg({ quality: 90 })
-      .toBuffer();
+    const jpegBuffer = await this.rembgJpegFromUrl(imageUrl);
 
     const result = await this.rembgCleanup.removeBackground({
       imageBase64: jpegBuffer.toString('base64'),
@@ -1885,17 +1874,18 @@ export class AiImageCleanupService implements OnModuleInit {
   }
 
   private async downloadImageBuffer(url: string): Promise<Buffer> {
-    const { data, status } = await axios.get<ArrayBuffer>(url, {
-      responseType: 'arraybuffer',
-      timeout: 25000,
-      maxContentLength: 10 * 1024 * 1024,
-      maxBodyLength: 10 * 1024 * 1024,
-      validateStatus: (s) => s === 200,
-    });
-    if (status !== 200 || !data) {
-      throw new Error('Could not download image for local validation');
-    }
-    return Buffer.from(data);
+    const fitted = await fetchFittedCleanupImage(url);
+    return fitted.buffer;
+  }
+
+  /** Shrink before rembg so a source over 10 MB still fits the Lambda payload. */
+  private async rembgJpegFromUrl(imageUrl: string): Promise<Buffer> {
+    const fitted = await fetchFittedCleanupImage(imageUrl);
+    return sharp(fitted.buffer)
+      .rotate()
+      .resize(1280, 1280, { fit: 'inside', withoutEnlargement: true })
+      .jpeg({ quality: 90 })
+      .toBuffer();
   }
 
   private issuesFromCodes(codes: string[]): CleanupProductImageIssue[] {

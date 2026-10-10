@@ -10,6 +10,7 @@ import { RentalListingAiReviewAdminService } from './rental-listing-ai-review-ad
 import { RentalListingAiReviewInternalController } from './rental-listing-ai-review-internal.controller';
 import { RentalListingAiReviewModelService } from './rental-listing-ai-review-model.service';
 import { RentalListingAiReviewQueueService } from './rental-listing-ai-review-queue.service';
+import { RentalListingAiReviewSweeperService } from './rental-listing-ai-review-sweeper.service';
 import { RentalListingAiReviewService } from './rental-listing-ai-review.service';
 
 @Module({
@@ -30,6 +31,7 @@ import { RentalListingAiReviewService } from './rental-listing-ai-review.service
     RentalListingAiReviewService,
     RentalListingAiProposalService,
     RentalListingAiReviewAdminService,
+    RentalListingAiReviewSweeperService,
   ],
   exports: [
     RentalListingAiReviewService,
