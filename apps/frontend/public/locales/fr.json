@@ -3585,6 +3585,8 @@
         "success": "Image remplacée par la version nettoyée",
         "error": "Échec du nettoyage de l'image",
         "alreadyCleaned": "Cette image a déjà été nettoyée par l'IA",
+        "inProgress": "Le nettoyage de cette photo est déjà en cours",
+        "inProgressAction": "Nettoyage en cours",
         "fixWithAi": "Corriger avec l'IA",
         "issuesAddressed": "L'IA va tenter de corriger : {{issues}}",
         "tokenCost": "Utilise 1 jeton IA",

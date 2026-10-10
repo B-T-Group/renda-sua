@@ -8,6 +8,7 @@ import { BusinessImagesService } from '../business-images/business-images.servic
 import { AiService } from '../ai/ai.service';
 import { CreateItemDto } from '../items/dto/create-item.dto';
 import { ItemsService, type ItemsInsertInput } from '../items/items.service';
+import { loadOpenCleanupKinds } from '../ai-image-cleanup/open-cleanup-kinds';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { isOrderItemsInventoryFkViolation } from '../hasura/hasura-request.util';
@@ -1570,14 +1571,28 @@ export class BusinessItemsService {
     if (!item || item.business_id !== businessId) {
       throw new Error('Item not found or does not belong to this business');
     }
-    if (item.moderation_status !== 'rejected') {
-      return { ...item, rejection_reason: null };
-    }
-    const rejection_reason = await resolveSaleItemRejectionReason(
+    const rejection_reason =
+      item.moderation_status === 'rejected'
+        ? await resolveSaleItemRejectionReason(this.hasuraSystemService, itemId)
+        : null;
+    return this.withOpenCleanupKinds(item, rejection_reason);
+  }
+
+  private async withOpenCleanupKinds(item: any, rejection_reason: string | null) {
+    const images = item.item_images ?? [];
+    const open = await loadOpenCleanupKinds(
       this.hasuraSystemService,
-      itemId
+      images.map((img: { id: string }) => img.id),
+      'item'
     );
-    return { ...item, rejection_reason };
+    return {
+      ...item,
+      rejection_reason,
+      item_images: images.map((img: { id: string }) => ({
+        ...img,
+        open_cleanup_kinds: open.get(img.id) ?? [],
+      })),
+    };
   }
 
   async getAvailableItems() {

@@ -28,6 +28,11 @@ import { useImageEnhancements } from '../../hooks/useImageEnhancements';
 import { Item, useItems } from '../../hooks/useItems';
 import { ItemImage } from '../../types/image';
 import {
+  handoffOpenCleanupPending,
+  isAiCleanupRunning,
+  releaseFinishedCleanupPending,
+} from '../../utils/aiCleanupInProgress';
+import {
   getPrimaryOrFirstItemImage,
   orderedItemImages,
 } from '../../utils/orderedItemImages';
@@ -79,6 +84,9 @@ export default function ItemViewPage() {
   const [viewerImageId, setViewerImageId] = useState<string | null>(null);
   const [itemActiveToggling, setItemActiveToggling] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [cleanupPendingIds, setCleanupPendingIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const { enqueueSnackbar } = useSnackbar();
   const {
@@ -109,9 +117,10 @@ export default function ItemViewPage() {
         const foundItem = await fetchSingleItem(itemId);
         if (foundItem) {
           setItem(foundItem);
-        } else {
-          setError(t('business.inventory.itemNotFound'));
+          return foundItem;
         }
+        setError(t('business.inventory.itemNotFound'));
+        return null;
       } catch (err) {
         setError(
           err instanceof Error ? err.message : 'Failed to fetch item details'
@@ -119,6 +128,7 @@ export default function ItemViewPage() {
       } finally {
         setLoading(false);
       }
+      return null;
     },
     [itemId, fetchSingleItem, t]
   );
@@ -133,9 +143,21 @@ export default function ItemViewPage() {
     const prev = prevInFlightCountRef.current;
     prevInFlightCountRef.current = inFlightJobIds.length;
     if (prev > 0 && inFlightJobIds.length === 0) {
-      void fetchItemDetails({ silent: true });
+      void fetchItemDetails({ silent: true }).then((found) => {
+        const images = found?.item_images;
+        if (!images) return;
+        setCleanupPendingIds((pending) =>
+          releaseFinishedCleanupPending(pending, images)
+        );
+      });
     }
   }, [inFlightJobIds.length, fetchItemDetails]);
+
+  useEffect(() => {
+    const images = item?.item_images;
+    if (!images) return;
+    setCleanupPendingIds((pending) => handoffOpenCleanupPending(pending, images));
+  }, [item]);
 
   useEffect(() => {
     if (effectiveBusinessId) {
@@ -329,6 +351,16 @@ export default function ItemViewPage() {
         );
         return;
       }
+      if (isAiCleanupRunning(img, cleanupPendingIds)) {
+        enqueueSnackbar(
+          t(
+            'business.images.cleanup.inProgress',
+            'Cleanup is already running for this photo'
+          ),
+          { variant: 'info' }
+        );
+        return;
+      }
       enqueueSnackbar(
         t('business.aiImageCleanup.enhancing', 'Enhancing…'),
         { variant: 'info' }
@@ -341,12 +373,22 @@ export default function ItemViewPage() {
         );
         return;
       }
+      setCleanupPendingIds((prev) => new Set(prev).add(img.id));
       if (typeof result.ai_tokens_remaining === 'number') {
         updateBusinessAiTokens(result.ai_tokens_remaining);
       }
       trackJob(result.jobId);
+      void fetchItemDetails();
     },
-    [cleanupImage, enqueueSnackbar, t, trackJob, updateBusinessAiTokens]
+    [
+      cleanupImage,
+      cleanupPendingIds,
+      enqueueSnackbar,
+      fetchItemDetails,
+      t,
+      trackJob,
+      updateBusinessAiTokens,
+    ]
   );
 
   useEffect(() => {
@@ -567,6 +609,7 @@ export default function ItemViewPage() {
           itemName={item.name}
           imageActionsBusy={imageActionsBusy}
           cleanupEnabled={(profile?.business?.ai_tokens ?? 0) > 0}
+          cleanupInProgressIds={cleanupPendingIds}
           aiTokensRemaining={profile?.business?.ai_tokens ?? 0}
           onOpenLightbox={openImageLightbox}
           onSetPrimary={(id) => void handleSetImageAsMain(id)}

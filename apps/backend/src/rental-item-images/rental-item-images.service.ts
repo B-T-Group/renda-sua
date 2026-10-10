@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { AiService } from '../ai/ai.service';
+import { loadOpenCleanupKinds } from '../ai-image-cleanup/open-cleanup-kinds';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { toImageUrlBundle } from '../image-thumbnails/image-thumbnail.mapper';
@@ -42,6 +43,7 @@ export interface RentalItemImage {
   tags: string[];
   status: string;
   is_ai_cleaned: boolean;
+  open_cleanup_kinds?: Array<'ai' | 'rembg'>;
   is_rembg_cleaned?: boolean;
   original_image_url?: string | null;
   enhanced_image_url?: string | null;
@@ -273,7 +275,9 @@ export class RentalItemImagesService {
         rental_item_images: RentalItemImage[];
         rental_item_images_aggregate: { aggregate: { count: number } };
       }>(GET_RENTAL_ITEM_IMAGES, { where, limit, offset });
-      const images = this.withUrlBundles(result.rental_item_images ?? []);
+      const images = await this.attachOpenCleanup(
+        this.withUrlBundles(result.rental_item_images ?? [])
+      );
       const total =
         result.rental_item_images_aggregate?.aggregate?.count ?? 0;
       return { images, total };
@@ -282,11 +286,25 @@ export class RentalItemImagesService {
         const data = await this.hasuraSystemService.executeQuery<{
           rental_item_images: RentalItemImage[];
         }>(GET_RENTAL_ITEM_IMAGES_DATA_ONLY, { where, limit, offset });
-        const images = this.withUrlBundles(data.rental_item_images ?? []);
+        const images = await this.attachOpenCleanup(
+          this.withUrlBundles(data.rental_item_images ?? [])
+        );
         return { images, total: images.length };
       }
       throw error;
     }
+  }
+
+  private async attachOpenCleanup<T extends { id: string }>(images: T[]) {
+    const open = await loadOpenCleanupKinds(
+      this.hasuraSystemService,
+      images.map((img) => img.id),
+      'rental'
+    );
+    return images.map((img) => ({
+      ...img,
+      open_cleanup_kinds: open.get(img.id) ?? [],
+    }));
   }
 
   private withUrlBundles(

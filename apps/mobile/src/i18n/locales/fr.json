@@ -3556,6 +3556,7 @@
           "success": "Image remplacée par la version nettoyée",
           "error": "Échec du nettoyage",
           "alreadyCleaned": "Cette image a déjà une version IA",
+          "inProgress": "Le nettoyage de cette photo est déjà en cours",
           "alreadyRembg": "L'arrière-plan a déjà été retiré pour cette photo",
           "tokenCost": "Chaque nettoyage IA utilise 1 jeton IA",
           "tokenCostWithBalance": "Le nettoyage IA utilise 1 jeton. Il vous en reste {{count}}.",

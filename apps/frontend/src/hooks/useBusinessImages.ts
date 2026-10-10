@@ -18,6 +18,7 @@ export interface BusinessImage {
   tags: string[];
   status: string;
   is_ai_cleaned?: boolean;
+  open_cleanup_kinds?: Array<'ai' | 'rembg'>;
   thumbnail?: string | null;
   thumbnail_status?: string | null;
   display_url?: string | null;
@@ -105,6 +106,7 @@ export const useBusinessImages = () => {
           setTotal(data.total);
           setPage(data.page);
           setPageSize(data.pageSize);
+          return data.images;
         } else {
           setError('Failed to load images');
         }

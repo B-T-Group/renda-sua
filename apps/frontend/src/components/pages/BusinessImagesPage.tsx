@@ -53,6 +53,11 @@ import ConfirmationModal from '../common/ConfirmationModal';
 import { CreateItemFromImageDialog } from '../dialogs/CreateItemFromImageDialog';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useBusinessImages, type BusinessImage } from '../../hooks/useBusinessImages';
+import {
+  handoffOpenCleanupPending,
+  isAiCleanupRunning,
+  releaseFinishedCleanupPending,
+} from '../../utils/aiCleanupInProgress';
 import { useBusinessItemSearch } from '../../hooks/useBusinessItemSearch';
 import { useCategories, useSubcategories } from '../../hooks/useCategories';
 import { useAws } from '../../hooks/useAws';
@@ -298,6 +303,9 @@ const BusinessImagesPage: React.FC = () => {
   const { generateImageUploadUrl } = useAws();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [cleanupPendingIds, setCleanupPendingIds] = useState<Set<string>>(
+    () => new Set()
+  );
   const [filterCategoryId, setFilterCategoryId] = useState<string>('all');
   const [filterSubcategoryId, setFilterSubcategoryId] = useState<string>('all');
   const [uploadCategoryId, setUploadCategoryId] = useState<string>('');
@@ -406,6 +414,11 @@ const BusinessImagesPage: React.FC = () => {
         sub_category_id: effectiveSubcategoryFilter ?? undefined,
         status: effectiveStatusFilter,
         search: search || undefined,
+      }).then((fresh) => {
+        if (!fresh) return;
+        setCleanupPendingIds((pending) =>
+          releaseFinishedCleanupPending(pending, fresh)
+        );
       });
     }
   }, [
@@ -417,6 +430,10 @@ const BusinessImagesPage: React.FC = () => {
     effectiveStatusFilter,
     search,
   ]);
+
+  useEffect(() => {
+    setCleanupPendingIds((pending) => handoffOpenCleanupPending(pending, images));
+  }, [images]);
 
   const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
     setPage(value);
@@ -733,6 +750,16 @@ const BusinessImagesPage: React.FC = () => {
       );
       return;
     }
+    if (isAiCleanupRunning(img, cleanupPendingIds)) {
+      enqueueSnackbar(
+        t(
+          'business.images.cleanup.inProgress',
+          'Cleanup is already running for this photo'
+        ),
+        { variant: 'info' }
+      );
+      return;
+    }
     enqueueSnackbar(
       t('business.aiImageCleanup.enhancing', 'Enhancing…'),
       { variant: 'info' }
@@ -749,6 +776,8 @@ const BusinessImagesPage: React.FC = () => {
       updateBusinessAiTokens(result.ai_tokens_remaining);
     }
     trackJob(result.jobId);
+    setCleanupPendingIds((prev) => new Set(prev).add(img.id));
+    handleRefresh();
   };
 
   const handleEditCaptionAlt = async (
@@ -1669,7 +1698,28 @@ const BusinessImagesPage: React.FC = () => {
                               'Create item from image'
                             )}
                           </Button>
-                          {(profile?.business?.ai_tokens ?? 0) > 0 ? (
+                          {isAiCleanupRunning(img, cleanupPendingIds) ? (
+                            <>
+                              <Button
+                                size="small"
+                                variant="outlined"
+                                startIcon={<AutoFixHighIcon />}
+                                disabled
+                                fullWidth
+                              >
+                                {t(
+                                  'business.images.cleanup.inProgressAction',
+                                  'Cleanup in progress'
+                                )}
+                              </Button>
+                              <Typography variant="caption" color="text.secondary">
+                                {t(
+                                  'business.images.cleanup.inProgress',
+                                  'Cleanup is already running for this photo'
+                                )}
+                              </Typography>
+                            </>
+                          ) : (profile?.business?.ai_tokens ?? 0) > 0 ? (
                             <Button
                               size="small"
                               variant="outlined"

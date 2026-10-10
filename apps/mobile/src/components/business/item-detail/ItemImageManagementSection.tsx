@@ -133,6 +133,24 @@ export function ItemImageManagementSection({
   const handleEnqueueCleanup = useCallback(
     async (img: BusinessItemImage, kind: ImageCleanupKind) => {
       if (!img.id) return;
+      if (kind === 'ai' && img.open_cleanup_kinds?.includes('ai')) {
+        onMessage(
+          t(
+            'business.images.cleanup.inProgress',
+            'Cleanup is already running for this photo'
+          )
+        );
+        return;
+      }
+      if (kind === 'rembg' && img.open_cleanup_kinds?.includes('rembg')) {
+        onMessage(
+          t(
+            'business.images.cleanup.inProgress',
+            'Cleanup is already running for this photo'
+          )
+        );
+        return;
+      }
       if (kind === 'ai' && img.is_ai_cleaned) {
         onMessage(
           t(
@@ -349,6 +367,7 @@ export function ItemImageManagementSection({
                 activeVersion={activeVersion}
                 showEnqueue={showEnqueue}
                 pendingKind={img.id ? pendingKinds[img.id] ?? null : null}
+                openCleanupKinds={img.open_cleanup_kinds ?? []}
                 aiTokensRemaining={aiTokensRemaining}
                 onPreview={onPreviewPhoto ? () => onPreviewPhoto(index) : undefined}
                 onPendingKindChange={(kind) => {
@@ -539,6 +558,7 @@ function ImageCard({
   activeVersion,
   showEnqueue,
   pendingKind,
+  openCleanupKinds,
   aiTokensRemaining,
   onPreview,
   onPendingKindChange,
@@ -559,6 +579,7 @@ function ImageCard({
   activeVersion: ImageActiveVersion;
   showEnqueue?: boolean;
   pendingKind: ImageCleanupKind | null;
+  openCleanupKinds: Array<'ai' | 'rembg'>;
   aiTokensRemaining: number;
   onPendingKindChange: (kind: ImageCleanupKind | null) => void;
   onEnqueue: (kind: ImageCleanupKind) => void;
@@ -575,8 +596,9 @@ function ImageCard({
     ? t('business.items.primary', 'Primary')
     : t('business.items.secondary', 'Secondary');
 
-  const canRembg = !hasRembg;
-  const canAi = !hasEnhanced;
+  const canRembg = !hasRembg && !openCleanupKinds.includes('rembg');
+  const canAi = !hasEnhanced && !openCleanupKinds.includes('ai');
+  const cleanupRunning = openCleanupKinds.length > 0;
   const showKindChips = showEnqueue && (canRembg || canAi);
 
   return (
@@ -665,6 +687,17 @@ function ImageCard({
               }}
             />
           </View>
+        ) : null}
+        {cleanupRunning ? (
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+          >
+            {t(
+              'business.images.cleanup.inProgress',
+              'Cleanup is already running for this photo'
+            )}
+          </Text>
         ) : null}
         <Button
           mode="text"
