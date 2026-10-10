@@ -57,7 +57,10 @@ CREATE TABLE google_geocode_cache (
 
 - `GOOGLE_CACHE_ENABLED`: Enable/disable caching (default: true)
 - `GOOGLE_CACHE_TTL`: Cache time-to-live in seconds (default: 86400 = 1 day)
-- `GOOGLE_INVENTORY_DISTANCE_CACHE_TTL`: TTL in seconds for inventory "closest to you" distance cache (default: 7776000 = 3 months). Used when returning inventory items with distance for logged-in users.
+
+Catalog distance does not call Distance Matrix. It is a haversine approximation from the shopper's current coordinates, and only when the shopper and store share a city, state, and country.
+
+Delivery pricing still calls Distance Matrix. When the origin address has coordinates, a cached route for the same destination is reused if that cached origin is within 75 meters. The cache stores `origin_latitude` and `origin_longitude` for that lookup. Address updates and `expires_at` still invalidate a row.
 
 ### Example .env
 

@@ -1168,7 +1168,9 @@ export default observer(function CartCheckoutScreen() {
           saving={addAddressSaving}
           locating={currentLocation.status === 'resolving'}
           locationDenied={currentLocation.status === 'denied'}
-          onUseCurrentLocation={() => void currentLocation.resolve()}
+          onUseCurrentLocation={
+            isDiaspora ? undefined : () => void currentLocation.resolve()
+          }
           onContinue={() => void submitAddAddress()}
         />
         <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>
@@ -1240,7 +1242,6 @@ export default observer(function CartCheckoutScreen() {
             onRetry={() => void refetchAddresses()}
             onAddAddress={openAddAddressModal}
             currentLocationStatus={currentLocation.status}
-            onUseCurrentLocation={() => void currentLocation.resolve()}
             warnIncomplete={resolvedIsStripeRail}
             title={recipientAddressTitle}
             helperText={t(

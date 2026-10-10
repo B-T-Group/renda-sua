@@ -2,12 +2,49 @@ import { HttpException } from '@nestjs/common';
 import {
   DIASPORA_ERROR_CODES,
   assertDiasporaPaymentTiming,
+  deliveryCountryMismatch,
   normalizeCountryCode,
   normalizeRecipientPhone,
   resolveOrderPayer,
   resolveOrderRecipient,
   trustedPayerCountry,
 } from './diaspora-order.util';
+
+describe('deliveryCountryMismatch', () => {
+  it('allows pickup without an address and a matching delivery country', () => {
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'pickup',
+        dropOffCountry: null,
+        sellerCountries: ['GA'],
+      })
+    ).toBeNull();
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: 'ga',
+        sellerCountries: ['GA'],
+      })
+    ).toBeNull();
+  });
+
+  it('rejects a missing or foreign drop-off for delivery and shipping', () => {
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: null,
+        sellerCountries: ['GA'],
+      })
+    ).toBe('MISSING_ADDRESS_COUNTRY');
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'shipping',
+        dropOffCountry: 'CA',
+        sellerCountries: ['GA'],
+      })
+    ).toBe('GA');
+  });
+});
 
 describe('normalizeCountryCode', () => {
   it('uppercases two-letter codes', () => {

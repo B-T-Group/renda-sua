@@ -388,7 +388,6 @@ const FoodsPage: React.FC = () => {
                   onOrderClick={handleOrderClick}
                   onAddToCart={handleAddToCart}
                   estimatedDistance={inventoryItem.distance_text}
-                  estimatedDuration={inventoryItem.duration_text}
                   isPublicView={!isAuthenticated}
                   canOrder={!isAuthenticated || isClientUser}
                   showCartButtons={isAuthenticated && isClientUser}

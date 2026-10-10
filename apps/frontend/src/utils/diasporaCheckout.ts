@@ -95,6 +95,29 @@ export function formatPayerChargeEstimate(
   }
 }
 
+export function normalizeCountryIso(country: string | null | undefined): string {
+  return (country ?? '').trim().toUpperCase();
+}
+
+/**
+ * Drop-off addresses for delivery. Diaspora checkout keeps only addresses in
+ * the destination country so the payer's home address cannot be selected.
+ */
+export function dropOffAddressesForFulfillment<
+  T extends { country?: string | null }
+>(
+  addresses: T[],
+  dropOffCountryIso: string | null | undefined,
+  needsDropOff: boolean
+): T[] {
+  if (!needsDropOff) return addresses;
+  const iso = normalizeCountryIso(dropOffCountryIso);
+  if (!iso) return [];
+  return addresses.filter(
+    (address) => normalizeCountryIso(address.country) === iso
+  );
+}
+
 /** Country code as shown in the banner, falling back to a readable dash. */
 export function displayCountry(code?: string | null): string {
   const trimmed = code?.trim().toUpperCase();

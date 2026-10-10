@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { haversineMeters } from '../addresses/haversine';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface CachedDistanceElement {
@@ -16,6 +17,65 @@ const UUID_PATTERN =
 function isUuid(value: string): boolean {
   return UUID_PATTERN.test(value);
 }
+
+function finiteCoord(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function originBoundingBox(lat: number, lng: number, meters: number) {
+  const latDelta = meters / 111_320;
+  const cos = Math.cos((lat * Math.PI) / 180);
+  const lngDelta = meters / (111_320 * Math.max(Math.abs(cos), 0.01));
+  return {
+    minLat: lat - latDelta,
+    maxLat: lat + latDelta,
+    minLng: lng - lngDelta,
+    maxLng: lng + lngDelta,
+  };
+}
+
+function nearbyAddressIds(rows: Array<{ origin_address_id?: string; destination_address_id?: string }>): string[] {
+  return [
+    ...new Set(
+      rows.flatMap((row) => [row.origin_address_id, row.destination_address_id].filter(Boolean) as string[])
+    ),
+  ];
+}
+
+const NEARBY_DISTANCE_CACHE_QUERY = `
+  query NearbyDistanceCache(
+    $destinationIds: [uuid!]!
+    $minLat: float8!
+    $maxLat: float8!
+    $minLng: float8!
+    $maxLng: float8!
+  ) {
+    google_distance_cache(
+      where: {
+        destination_address_id: { _in: $destinationIds }
+        expires_at: { _gt: "now()" }
+        status: { _eq: "OK" }
+        origin_latitude: { _gte: $minLat, _lte: $maxLat }
+        origin_longitude: { _gte: $minLng, _lte: $maxLng }
+      }
+      order_by: { created_at: desc }
+      limit: 50
+    ) {
+      origin_address_id
+      destination_address_id
+      origin_address_formatted
+      destination_address_formatted
+      origin_latitude
+      origin_longitude
+      distance_value
+      distance_text
+      duration_value
+      duration_text
+      status
+      created_at
+    }
+  }
+`;
 
 @Injectable()
 export class GoogleCacheService {
@@ -109,6 +169,94 @@ export class GoogleCacheService {
     return result.google_distance_cache || [];
   }
 
+  /**
+   * Reuse a fresh route whose cached origin is within `nearbyMeters` of this one.
+   * Delivery pricing calls this so a small GPS move does not hit Google again.
+   */
+  async findNearbyCachedDistanceElements(
+    origin: { lat: number; lng: number },
+    destinationAddressIds: string[],
+    nearbyMeters: number
+  ): Promise<CachedDistanceElement[]> {
+    const destIds = destinationAddressIds.filter((id) => isUuid(id));
+    if (!this.canSearchNearby(origin, destIds, nearbyMeters)) return [];
+    try {
+      const rows = await this.queryNearbyDistanceRows(origin, destIds, nearbyMeters);
+      return this.closestFreshNearby(origin, rows, nearbyMeters);
+    } catch (error) {
+      console.error('Error fetching nearby distance cache:', error);
+      return [];
+    }
+  }
+
+  private canSearchNearby(
+    origin: { lat: number; lng: number },
+    destinationIds: string[],
+    nearbyMeters: number
+  ): boolean {
+    return (
+      destinationIds.length > 0 &&
+      nearbyMeters > 0 &&
+      Number.isFinite(origin.lat) &&
+      Number.isFinite(origin.lng)
+    );
+  }
+
+  private async queryNearbyDistanceRows(
+    origin: { lat: number; lng: number },
+    destinationIds: string[],
+    nearbyMeters: number
+  ): Promise<any[]> {
+    const box = originBoundingBox(origin.lat, origin.lng, nearbyMeters);
+    const result = await this.hasuraSystemService.executeQuery(
+      NEARBY_DISTANCE_CACHE_QUERY,
+      { destinationIds, ...box }
+    );
+    return result.google_distance_cache || [];
+  }
+
+  private async closestFreshNearby(
+    origin: { lat: number; lng: number },
+    rows: any[],
+    nearbyMeters: number
+  ): Promise<CachedDistanceElement[]> {
+    const addressIds = nearbyAddressIds(rows);
+    const updatedAts = await this.getAddressUpdatedAts(addressIds);
+    if (!updatedAts) return [];
+    const best = new Map<string, { meters: number; entry: any }>();
+    for (const entry of rows) {
+      this.considerNearbyRow(origin, entry, updatedAts, nearbyMeters, best);
+    }
+    return [...best.values()].map((row) => this.toCachedElement(row.entry));
+  }
+
+  private considerNearbyRow(
+    origin: { lat: number; lng: number },
+    entry: any,
+    updatedAts: Map<string, string>,
+    nearbyMeters: number,
+    best: Map<string, { meters: number; entry: any }>
+  ): void {
+    if (!this.isNearbyRowFresh(entry, updatedAts)) return;
+    const meters = haversineMeters(
+      origin.lat,
+      origin.lng,
+      Number(entry.origin_latitude),
+      Number(entry.origin_longitude)
+    );
+    if (!Number.isFinite(meters) || meters > nearbyMeters) return;
+    const current = best.get(entry.destination_address_id);
+    if (!current || meters < current.meters) {
+      best.set(entry.destination_address_id, { meters, entry });
+    }
+  }
+
+  private isNearbyRowFresh(entry: any, updatedAts: Map<string, string>): boolean {
+    const originUpdatedAt = updatedAts.get(entry.origin_address_id);
+    if (!originUpdatedAt) return false;
+    return this.isCacheEntryFresh(entry, originUpdatedAt, updatedAts);
+  }
+
   private async keepFreshCacheRows(
     originAddressId: string,
     destinationAddressIds: string[],
@@ -150,13 +298,13 @@ export class GoogleCacheService {
       origin_address_formatted: entry.origin_address_formatted,
       status: entry.status,
     };
-    if (entry.distance_value && entry.distance_text) {
+    if (entry.distance_value != null && entry.distance_text) {
       element.distance = {
         text: entry.distance_text,
         value: entry.distance_value,
       };
     }
-    if (entry.duration_value && entry.duration_text) {
+    if (entry.duration_value != null && entry.duration_text) {
       element.duration = {
         text: entry.duration_text,
         value: entry.duration_value,
@@ -208,7 +356,8 @@ export class GoogleCacheService {
       formatted: string;
     }>,
     googleResponse: any,
-    ttl: number = this.defaultTTL
+    ttl: number = this.defaultTTL,
+    originCoords?: { lat: number; lng: number } | null
   ): Promise<void> {
     const expiresAt = new Date(Date.now() + ttl * 1000).toISOString();
 
@@ -224,11 +373,13 @@ export class GoogleCacheService {
         destination_address_id: dest.id,
         origin_address_formatted: originAddressFormatted,
         destination_address_formatted: dest.formatted,
-        distance_value: element.distance?.value || null,
+        distance_value: element.distance?.value ?? null,
         distance_text: element.distance?.text || null,
-        duration_value: element.duration?.value || null,
+        duration_value: element.duration?.value ?? null,
         duration_text: element.duration?.text || null,
         status: element.status || 'NOT_FOUND',
+        origin_latitude: finiteCoord(originCoords?.lat),
+        origin_longitude: finiteCoord(originCoords?.lng),
       };
     });
 
@@ -247,7 +398,10 @@ export class GoogleCacheService {
               duration_value,
               duration_text,
               status,
-              expires_at
+              expires_at,
+              created_at,
+              origin_latitude,
+              origin_longitude
             ]
           }
         ) {
@@ -261,6 +415,7 @@ export class GoogleCacheService {
         entries: cacheEntries.map((entry) => ({
           ...entry,
           expires_at: expiresAt,
+          created_at: new Date().toISOString(),
         })),
       });
     } catch (error) {

@@ -2,6 +2,7 @@ import {
   EMPTY_RECIPIENT_DRAFT,
   buildRecipientPayload,
   displayCountry,
+  dropOffAddressesForFulfillment,
   formatPayerChargeEstimate,
   isCrossBorderCheckout,
   isRecipientDraftIncomplete,
@@ -176,5 +177,26 @@ describe('displayCountry', () => {
   it('falls back to a dash for anything else', () => {
     expect(displayCountry('Canada')).toBe('—');
     expect(displayCountry(null)).toBe('—');
+  });
+});
+
+describe('dropOffAddressesForFulfillment', () => {
+  const book = [
+    { id: 'ca', country: 'CA' },
+    { id: 'ga', country: 'ga' },
+  ];
+
+  it('keeps only destination-country addresses when a drop-off is required', () => {
+    expect(dropOffAddressesForFulfillment(book, 'GA', true)).toEqual([
+      { id: 'ga', country: 'ga' },
+    ]);
+  });
+
+  it('returns every address when no drop-off is required', () => {
+    expect(dropOffAddressesForFulfillment(book, 'GA', false)).toEqual(book);
+  });
+
+  it('returns none until the destination country is known', () => {
+    expect(dropOffAddressesForFulfillment(book, null, true)).toEqual([]);
   });
 });

@@ -1304,6 +1304,40 @@ describe('CheckoutPreflightService', () => {
       );
     });
 
+    it('requires a recipient address for diaspora delivery and not for pickup', async () => {
+      mockInventory([makeInventoryRow({ sellerCountry: 'GA' })]);
+      mockDiasporaRail();
+
+      const delivery = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          payer_country: 'CA',
+          fulfillment_method: 'delivery',
+        },
+        false
+      );
+      expect(
+        delivery.blocking_errors.some(
+          (error) => error.code === 'RECIPIENT_ADDRESS_REQUIRED'
+        )
+      ).toBe(true);
+
+      const pickup = await service.resolve(
+        {
+          items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+          payer_country: 'CA',
+          fulfillment_method: 'pickup',
+          payment_timing: 'pay_now',
+        },
+        false
+      );
+      expect(
+        pickup.blocking_errors.some(
+          (error) => error.code === 'RECIPIENT_ADDRESS_REQUIRED'
+        )
+      ).toBe(false);
+    });
+
     it('omits the diaspora block for a purely local order', async () => {
       mockInventory([makeInventoryRow({ sellerCountry: 'CM' })], {
         addressCountry: 'CM',

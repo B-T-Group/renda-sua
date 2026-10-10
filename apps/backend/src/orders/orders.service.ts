@@ -36,7 +36,10 @@ import {
   Order_Items,
   Orders,
 } from '../generated/graphql';
-import { GoogleDistanceService } from '../google/google-distance.service';
+import {
+  DELIVERY_DISTANCE_NEARBY_ORIGIN_METERS,
+  GoogleDistanceService,
+} from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { VariantInventoryService } from '../item-variants/variant-inventory.service';
@@ -62,6 +65,7 @@ import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { RecipientsService } from '../recipients/recipients.service';
 import {
   assertDiasporaPaymentTiming,
+  deliveryCountryMismatch,
   normalizeCountryCode,
   resolveOrderPayer,
   resolveOrderRecipient,
@@ -12302,6 +12306,32 @@ export class OrdersService {
     }));
   }
 
+  private assertDropOffCountryMatchesSellers(
+    fulfillment: 'delivery' | 'pickup' | 'shipping',
+    dropOffCountry: string | null | undefined,
+    inventories: Array<{
+      business_location?: { address?: { country?: string | null } | null } | null;
+    }>
+  ): void {
+    const mismatch = deliveryCountryMismatch({
+      fulfillment,
+      dropOffCountry,
+      sellerCountries: inventories.map(
+        (inv) => inv.business_location?.address?.country
+      ),
+    });
+    if (!mismatch) return;
+    const dropOff = normalizeCountryCode(dropOffCountry);
+    const message =
+      mismatch === 'MISSING_ADDRESS_COUNTRY'
+        ? 'A delivery address in the seller country is required.'
+        : `Your delivery address is in ${dropOff}, but the items are only available for delivery within ${mismatch}.`;
+    throw new HttpException(
+      { statusCode: HttpStatus.BAD_REQUEST, message, error: 'DELIVERY_COUNTRY_MISMATCH' },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
   /**
    * Create a new order with validation and fund withholding
    */
@@ -12781,6 +12811,12 @@ export class OrdersService {
         );
       }
     }
+
+    this.assertDropOffCountryMatchesSellers(
+      fulfillmentMethod,
+      address?.country,
+      businessInventories
+    );
 
     // Hard delivery availability gate — clients must not be able to place a
     // delivery order the platform cannot currently fulfill. The public error
@@ -16263,10 +16299,10 @@ export class OrdersService {
       }
 
       // Create formatted addresses
-      const userFormattedAddress = this.formatAddress(userAddress as Addresses);
-      const businessFormattedAddress = this.formatAddress(
-        businessAddress as Addresses
-      );
+      const userFormattedAddress =
+        this.formatAddressForDistanceMatrix(userAddress);
+      const businessFormattedAddress =
+        this.formatAddressForDistanceMatrix(businessAddress);
 
       // Try to calculate distance-based fee
       try {
@@ -16279,7 +16315,8 @@ export class OrdersService {
                 id: businessAddress.id,
                 formatted: businessFormattedAddress,
               },
-            ]
+            ],
+            this.nearbyOriginCacheOptions(this.matrixPoint(userAddress))
           );
 
         if (
@@ -16462,12 +16499,10 @@ export class OrdersService {
       }
 
       // Create formatted addresses
-      const clientFormattedAddress = this.formatAddress(
-        clientAddress as Addresses
-      );
-      const businessFormattedAddress = this.formatAddress(
-        businessAddress as Addresses
-      );
+      const clientFormattedAddress =
+        this.formatAddressForDistanceMatrix(clientAddress);
+      const businessFormattedAddress =
+        this.formatAddressForDistanceMatrix(businessAddress);
 
       // Try to calculate distance-based fee
       try {
@@ -16480,7 +16515,8 @@ export class OrdersService {
                 id: businessAddress.id,
                 formatted: businessFormattedAddress,
               },
-            ]
+            ],
+            this.nearbyOriginCacheOptions(this.matrixPoint(clientAddress))
           );
 
         if (
@@ -16669,6 +16705,50 @@ export class OrdersService {
         requiresFastDelivery,
       });
     }
+  }
+
+  private matrixPoint(address: {
+    latitude?: number | null;
+    longitude?: number | null;
+  }): { lat: number; lng: number } | undefined {
+    const lat = Number(address.latitude);
+    const lng = Number(address.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return undefined;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return undefined;
+    return { lat, lng };
+  }
+
+  private nearbyOriginCacheOptions(origin?: { lat: number; lng: number }) {
+    if (!origin) return undefined;
+    return {
+      nearbyOriginMeters: DELIVERY_DISTANCE_NEARBY_ORIGIN_METERS,
+      origin,
+    };
+  }
+
+  /** Coordinate string when known, so Google routes from the actual point. */
+  private formatAddressForDistanceMatrix(address: {
+    latitude?: number | null;
+    longitude?: number | null;
+    address_line_1?: string | null;
+    address_line_2?: string | null;
+    city?: string | null;
+    state?: string | null;
+    postal_code?: string | null;
+    country?: string | null;
+  }): string {
+    const point = this.matrixPoint(address);
+    if (point) return `${point.lat},${point.lng}`;
+    return [
+      address.address_line_1,
+      address.address_line_2,
+      address.city,
+      address.state,
+      address.postal_code,
+      address.country,
+    ]
+      .filter(Boolean)
+      .join(', ');
   }
 
   /**

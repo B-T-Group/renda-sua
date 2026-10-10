@@ -27,7 +27,6 @@ describe('InventoryItemsService.resolveOwnerPreview', () => {
       {} as never,
       {} as never,
       {} as never,
-      {} as never,
       rbacService as never
     );
   });

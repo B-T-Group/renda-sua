@@ -2,7 +2,6 @@ import { Box, CircularProgress, Container, TextField, Typography } from '@mui/ma
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import {
   CollectionBrowseCard,
   FeaturedCollectionsRow,
@@ -15,8 +14,7 @@ import { MarketSelector } from '../market/MarketSelector';
 const CollectionsIndexPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { isAuthenticated } = useSessionAuth();
-  const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+  const browserGeo = usePublicBrowserGeo(true);
   const [search, setSearch] = useState('');
   const { collections, loading } = useCollections({
     search,

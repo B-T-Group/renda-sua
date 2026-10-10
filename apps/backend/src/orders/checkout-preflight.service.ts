@@ -492,6 +492,17 @@ export class CheckoutPreflightService {
     const isDiaspora = diasporaRailSource === 'payer';
 
     this.collectRecipientBlockers(dto, fulfillmentCountry, blockers);
+    if (
+      isDiaspora &&
+      this.needsShipToAddress(fulfillment) &&
+      !dto.delivery_address_id?.trim()
+    ) {
+      blockers.push({
+        code: DIASPORA_ERROR_CODES.recipientAddressRequired,
+        message:
+          'Select or enter the recipient address in the destination country.',
+      });
+    }
     if (isDiaspora && (dto.payment_timing ?? 'pay_now') !== 'pay_now') {
       blockers.push({
         code: DIASPORA_ERROR_CODES.requiresPayNow,
