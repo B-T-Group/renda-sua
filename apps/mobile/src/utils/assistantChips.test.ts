@@ -3,10 +3,10 @@ import { getContextualChips, buildChipMessage, type AssistantContext, type ChipC
 describe('assistantChips', () => {
   describe('getContextualChips', () => {
     const genericChipIds = [
-      'location',
-      'pay_delivery',
-      'pickup',
-      'mobile_pay',
+      'what_we_offer',
+      'contact_us',
+      'pay_and_receive',
+      'buy_or_rent',
     ];
 
     it('returns generic chips when context is null', () => {
@@ -17,6 +17,13 @@ describe('assistantChips', () => {
     it('returns generic chips when context is undefined', () => {
       const chips = getContextualChips(undefined);
       expect(chips.map(c => c.id)).toEqual(genericChipIds);
+    });
+
+    it('uses persona chips only when there is no page context', () => {
+      expect(getContextualChips(null, 'client').map((c) => c.id)).toContain('my_recent_orders');
+      expect(getContextualChips(null, 'agent').map((c) => c.id)).toContain('my_deliveries');
+      expect(getContextualChips(null, 'business').map((c) => c.id)).toContain('orders_need_me');
+      expect(getContextualChips(null, 'guest').map((c) => c.id)).not.toContain('my_credits');
     });
 
     it('returns item-specific chips for item_detail context', () => {

@@ -1,18 +1,27 @@
 /**
- * Renda character engine (spec #451 §1, viewBox 0 0 82 100).
+ * Renda character engine (viewBox 0 0 82 100): a solid-colour jelly blob with pill eyes.
  *
- * A port of the approved prototype (`prototypes/renda-character/index.html`):
- * one clock per character drives every motion so periods change without jumps.
- * Only `transform` and `opacity` (plus a few colour attributes on one-shots) are
- * written per frame, straight to the SVG nodes, so React never re-renders per frame.
- * Web has no dark mode, so only the light-surface treatment is ported.
+ * One clock per character drives every motion. Continuous parameters (tempo, wobble,
+ * sway, tint…) ease toward per-state targets, one-shots (pulse) are damped springs,
+ * and the procedural motion comes from incommensurate sines on accumulated clocks,
+ * so speed changes never jump and the loop never visibly repeats. Only attributes
+ * whose value changed are written, straight to the SVG nodes: React never re-renders
+ * per frame and a settled character costs no DOM writes. Fills are solid colours
+ * (no gradients, filters or clip paths), which keeps rasterisation cheap.
  */
 import {
+  BLOB_BASE_Y,
   CX,
-  CY,
   EYE_Y,
   RENDA_COLORS,
+  RENDA_REST_PATH,
+  SHAPE_N,
+  THINK_DOTS,
+  TICK_PIVOT,
   mixHex,
+  rendaShapePath,
+  shapeAngle,
+  shapeY,
 } from './rendaCharacterTokens';
 import type { RendaEyes } from './rendaCharacterTokens';
 import {
@@ -26,17 +35,25 @@ import {
   type GlanceDir,
   type IdleEyeLifeState,
   type IdleEyePhase,
+  type IdleEyePose,
 } from './rendaIdleEyeLife';
 
 export {
+  BLOB,
   CX,
   CY,
+  EYE_DOT,
+  EYE_PILL,
   EYE_X,
   EYE_Y,
+  ARC_STROKE,
   RENDA_COLORS,
+  RENDA_REST_PATH,
   RENDA_WIDTH_RATIO,
+  THINK_DOTS,
+  TICKS,
+  eyeArcPath,
   eyesForSize,
-  mixHex,
 } from './rendaCharacterTokens';
 export type { RendaEyes } from './rendaCharacterTokens';
 export {
@@ -64,103 +81,102 @@ export type RendaSurface = 'hero' | 'header' | 'launcher' | 'avatar';
 /** Eye shape actually drawn for a state (exposed for tests and a11y-neutral styling hooks). */
 export type RendaEyeShape = 'arc' | 'open' | 'dot' | 'none';
 
-type HaloMode = 'breath' | 'max' | 'mid';
-interface StateConfig {
+type ParamKey =
+  | 'amp'
+  | 'flow'
+  | 'deform'
+  | 'wave'
+  | 'float'
+  | 'sway'
+  | 'tint'
+  | 'dots'
+  | 'ticks'
+  | 'scan'
+  | 'look'
+  | 'wander'
+  | 'hold';
+
+export interface StateConfig extends Record<ParamKey, number> {
   eyes: 'arc' | 'open' | 'dot';
+  /** Eye offset (viewBox units). */
   off: [number, number];
-  amp: number;
+  /** Squash/stretch period (ms); `amp` is its amplitude. */
   period: number;
-  grad: number;
-  halo: HaloMode;
+  /** Eye scale [x, y]; y below x reads as focused. */
+  eyeScale: [number, number];
   blink?: boolean;
-  orbit?: boolean;
 }
 
+/**
+ * Per-state profiles. `flow` = tempo of the bob / wobble clocks, `deform` / `wave` =
+ * jelly outline, `float` = bob (units), `sway` = tilt (deg), `tint` = blue → violet,
+ * `dots` / `ticks` = accents, `scan` = thinking eye sweep, `look` = pointer tracking,
+ * `wander` = micro-saccades, `hold` = eyes stay pills (idle life cycle sets openness).
+ */
 export const RENDA_STATES: Record<RendaState, StateConfig> = {
   idle: {
-    eyes: 'arc',
-    off: [0, 0],
-    amp: 0.03,
-    period: 3200,
-    grad: 36,
-    halo: 'breath',
+    eyes: 'open', off: [0, 0], eyeScale: [1, 1], period: 2600,
+    amp: 0.035, flow: 1, deform: 0.9, wave: 0, float: 2, sway: 2.5,
+    tint: 0, dots: 0, ticks: 0, scan: 0, look: 1, wander: 0.45, hold: 1,
   },
   attentive: {
-    eyes: 'open',
-    off: [0, 0],
-    amp: 0,
-    period: 3200,
-    grad: 0,
-    halo: 'max',
-    blink: true,
+    eyes: 'open', off: [0, 0], eyeScale: [1.06, 1.06], period: 2200,
+    amp: 0.03, flow: 1.15, deform: 0.9, wave: 0.2, float: 1.6, sway: 1.6,
+    tint: 0, dots: 0, ticks: 0.6, scan: 0, look: 0.8, wander: 0, hold: 0, blink: true,
   },
   listening: {
-    eyes: 'open',
-    off: [0, 2],
-    amp: 0,
-    period: 3200,
-    grad: 0,
-    halo: 'max',
-    blink: true,
+    eyes: 'open', off: [0, 2], eyeScale: [1.1, 1.1], period: 1800,
+    amp: 0.04, flow: 1.25, deform: 1, wave: 0.8, float: 1.4, sway: 1.4,
+    tint: 0, dots: 0, ticks: 1, scan: 0, look: 0.5, wander: 0, hold: 0, blink: true,
   },
   thinking: {
-    eyes: 'open',
-    off: [2, -2],
-    amp: 0.04,
-    period: 1200,
-    grad: 36,
-    halo: 'breath',
-    orbit: true,
+    eyes: 'open', off: [2, -2], eyeScale: [1, 0.86], period: 1500,
+    amp: 0.045, flow: 1.6, deform: 1.4, wave: 0.3, float: 1.6, sway: 4.5,
+    tint: 1, dots: 1, ticks: 0, scan: 1, look: 0.15, wander: 0.5, hold: 0,
   },
   responding: {
-    eyes: 'arc',
-    off: [0, 0],
-    amp: 0.03,
-    period: 1600,
-    grad: 36,
-    halo: 'breath',
+    eyes: 'arc', off: [0, 0], eyeScale: [1.06, 1.06], period: 1000,
+    amp: 0.05, flow: 1.8, deform: 1.1, wave: 0.5, float: 1.4, sway: 2,
+    tint: 0, dots: 0, ticks: 1, scan: 0, look: 0.6, wander: 0, hold: 0,
   },
   success: {
-    eyes: 'arc',
-    off: [0, 0],
-    amp: 0,
-    period: 3200,
-    grad: 36,
-    halo: 'max',
+    eyes: 'arc', off: [0, 0], eyeScale: [1.12, 1.12], period: 2400,
+    amp: 0.03, flow: 1.3, deform: 0.9, wave: 0.2, float: 2, sway: 2,
+    tint: 0, dots: 0, ticks: 0, scan: 0, look: 0.5, wander: 0, hold: 0,
   },
   attention: {
-    eyes: 'open',
-    off: [0, 0],
-    amp: 0,
-    period: 3200,
-    grad: 36,
-    halo: 'max',
+    eyes: 'open', off: [0, 0], eyeScale: [1.08, 1.08], period: 2200,
+    amp: 0.03, flow: 1.2, deform: 1, wave: 0.3, float: 1.8, sway: 2,
+    tint: 0, dots: 0, ticks: 0.6, scan: 0, look: 0.8, wander: 0, hold: 0,
   },
 };
 
-/** Role filters from the spec "Where" column (header idle is static; avatars never move). */
+const PARAM_KEYS: readonly ParamKey[] = [
+  'amp', 'flow', 'deform', 'wave', 'float', 'sway', 'tint',
+  'dots', 'ticks', 'scan', 'look', 'wander', 'hold',
+];
+/** Easing time constants (ms): colour and accents react first, the body follows. */
+const PARAM_TAU: Record<ParamKey, number> = {
+  amp: 320, flow: 520, deform: 520, wave: 420, float: 600, sway: 600, tint: 260,
+  dots: 220, ticks: 200, scan: 400, look: 300, wander: 300, hold: 160,
+};
+/** The header keeps a gentle idle so it never competes with the page. */
+const HEADER_IDLE = { amp: 0.02, deform: 0.5, float: 0.8, sway: 1, wander: 0 };
+const STILL = { amp: 0, flow: 0, deform: 0, wave: 0, float: 0, sway: 0, scan: 0, wander: 0 };
+
+/** Role filters from the spec "Where" column (header idle is gentle; avatars never move). */
 export function stateConfigFor(
   surface: RendaSurface,
   eyes: RendaEyes,
   state: RendaState
 ): StateConfig {
   if (surface === 'avatar') {
-    return {
-      ...RENDA_STATES.idle,
-      amp: 0,
-      grad: 0,
-      halo: 'mid',
-      eyes: eyes === 'dot' ? 'dot' : 'arc',
-    };
+    return { ...RENDA_STATES.idle, ...STILL, look: 0, eyes: eyes === 'dot' ? 'dot' : 'open' };
   }
   let s = state;
   if (surface === 'header' && (s === 'attentive' || s === 'listening')) s = 'idle';
   const c: StateConfig = { ...RENDA_STATES[s] };
-  if (surface === 'header' && s === 'idle') {
-    c.amp = 0;
-    c.grad = 0;
-    c.halo = 'mid';
-  }
+  if (surface === 'header' && s === 'idle') Object.assign(c, HEADER_IDLE);
   if (eyes === 'dot') c.eyes = 'dot';
   return c;
 }
@@ -175,137 +191,87 @@ export function eyeShapeFor(
   return stateConfigFor(surface, eyes, state).eyes;
 }
 
-/* ------------------------------ geometry ------------------------------ */
-const fmt = (n: number) => +n.toFixed(3);
+const isStill = (c: StateConfig) =>
+  c.amp === 0 && c.flow === 0 && c.deform === 0 && c.wave === 0 &&
+  c.float === 0 && c.sway === 0 && c.scan === 0 && c.wander === 0;
+
+/* ------------------------------ helpers ------------------------------ */
+const DEG = Math.PI / 180;
+const TAU = Math.PI * 2;
+const f2 = (n: number) => Math.round(n * 100) / 100;
+const f3 = (n: number) => Math.round(n * 1000) / 1000;
 const clamp = (v: number, a = 0, b = 1) => Math.max(a, Math.min(b, v));
 const smooth = (cur: number, target: number, dt: number, tau: number) =>
   cur + (target - cur) * (1 - Math.exp(-dt / tau));
-const easeInOut = (p: number) =>
-  p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
 const easeOutCubic = (p: number) => 1 - Math.pow(1 - p, 3);
-const easeOutBack = (p: number) => {
-  const c1 = 1.70158;
-  const c3 = c1 + 1;
-  return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2);
-};
-const polar = (a: number, r: number): [number, number] => [
-  CX + r * Math.sin((a * Math.PI) / 180),
-  CY - r * Math.cos((a * Math.PI) / 180),
-];
+/** Sine reshaped to dwell at the extremes (look left… hold… look right). */
+const dwell = (s: number) => Math.sign(s) * Math.pow(Math.abs(s), 0.35);
 
-function wedge(a0: number, a1: number, r = 72): string {
-  const [x0, y0] = polar(a0, r);
-  const [x1, y1] = polar(a1, r);
-  return `M${CX} ${CY}L${fmt(x0)} ${fmt(y0)}L${fmt(x1)} ${fmt(y1)}Z`;
+interface Spring {
+  x: number;
+  v: number;
+}
+/** Semi-implicit Euler with fixed sub-steps so long frames stay stable. */
+function stepSpring(s: Spring, target: number, dtMs: number, k: number, c: number) {
+  let left = dtMs / 1000;
+  while (left > 1e-6) {
+    const h = Math.min(left, 1 / 120);
+    s.v += (-k * (s.x - target) - c * s.v) * h;
+    s.x += s.v * h;
+    left -= h;
+  }
+}
+const springBusy = (s: Spring, target = 0) =>
+  Math.abs(s.x - target) > 0.0008 || Math.abs(s.v) > 0.002;
+
+/** Scale an element about (x, y) after drawing it at height `y + dy`. */
+const scaleAt = (x: number, y: number, dy: number, ax: number, ay: number) =>
+  `translate(${x} ${f2(y + dy)}) scale(${f3(ax)} ${f3(ay)}) translate(${-x} ${-y})`;
+
+const written = new WeakMap<object, Record<string, string>>();
+/** setAttribute that skips unchanged values (no style invalidation when settled). */
+function put(el: Element | null | undefined, k: string, v: string | number): void {
+  if (!el) return;
+  const s = String(v);
+  let c = written.get(el);
+  if (!c) {
+    c = {};
+    written.set(el, c);
+  }
+  if (c[k] === s) return;
+  c[k] = s;
+  el.setAttribute(k, s);
 }
 
-// Sweep gradient as wedges (SVG has no conic gradient). Highlight arc sits top-right.
-const C = RENDA_COLORS;
-const RING_STOPS: Array<[number, string]> = [
-  [0, C.light],
-  [45, C.tint],
-  [95, C.light],
-  [185, C.main],
-  [290, C.main],
-  [360, C.light],
-];
-function ringColor(a: number): string {
-  for (let i = 0; i < RING_STOPS.length - 1; i++) {
-    const [a0, c0] = RING_STOPS[i];
-    const [a1, c1] = RING_STOPS[i + 1];
-    if (a >= a0 && a <= a1) return mixHex(c0, c1, (a - a0) / (a1 - a0));
-  }
-  return C.light;
-}
-
-export interface WedgePath {
-  d: string;
-  fill: string;
-  opacity?: number;
-}
-
-/** 120 ring wedges (rotated as one group, never the face or eyes). */
-export const RING_WEDGES: WedgePath[] = (() => {
-  const N = 120;
-  const step = 360 / N;
-  const out: WedgePath[] = [];
-  for (let i = 0; i < N; i++) {
-    const a = i * step;
-    out.push({
-      d: wedge(a - 0.4, a + step + 0.4),
-      fill: ringColor(a + step / 2),
-    });
-  }
-  return out;
-})();
-
-/** Responding highlight: feathered leading edge (+12° → 0°), long decaying tail (0° → −150°). */
-export const SWEEP_WEDGES: WedgePath[] = (() => {
-  const out: WedgePath[] = [];
-  for (let a = 12; a > -150; a -= 2.5) {
-    const lead = a > 0 ? 1 - a / 12 : 1;
-    const tail = a <= 0 ? Math.pow(1 + a / 150, 2.2) : 1;
-    const k = lead * tail;
-    out.push({
-      d: wedge(a - 2.5 - 0.3, a + 0.3),
-      fill: mixHex(C.tint, C.white, clamp(k * k * 0.75)),
-      opacity: fmt(0.95 * k),
-    });
-  }
-  return out;
-})();
-
-/** Drift echoes behind the face while thinking. */
-export const ECHOES: Array<[number, number, number, number, string, number]> = [
-  [42.4, 49.0, 38.6, 47.6, C.light, 1.2],
-  [39.6, 51.3, 39.4, 46.8, C.tint, 0.9],
-  [41.0, 48.4, 40.2, 49.0, C.light, 0.8],
-];
+const ANG = Array.from({ length: SHAPE_N }, (_, i) => shapeAngle(i));
+const YS = Array.from({ length: SHAPE_N }, (_, i) => shapeY(i));
 
 export const SPARK_ANGLES = [30, 90, 150, 210, 270, 330] as const;
-
-/** Spring pop (damping 12, stiffness 180, mass 1), normalised to `peak`; index = ms. */
-function springCurve(peak: number): number[] {
-  const k = 180;
-  const c = 12;
-  const out: number[] = [];
-  let x = 0;
-  let v = 1;
-  const dt = 1 / 1000;
-  let maxX = 0;
-  for (let i = 0; i <= 600; i++) {
-    out.push(x);
-    if (x > maxX) maxX = x;
-    const a = -k * x - c * v;
-    v += a * dt;
-    x += v * dt;
-  }
-  return out.map((y) => (y / maxX) * peak);
-}
-const SPRING_108 = springCurve(0.08);
-const SPRING_110 = springCurve(0.1);
+const SPARK_MS = 950;
+const SPARK_STAGGER = 45;
+const RIPPLE_MS = 750;
+const RIPPLE_STAGGER = 300;
+const LOOK_RANGE: readonly [number, number] = [2.6, 1.8];
 
 /* ------------------------------ engine ------------------------------ */
 export interface RendaEyeNodes {
   g: SVGGElement;
-  open?: SVGEllipseElement | null;
+  /** Eye centre x (viewBox units). */
+  x: number;
+  open?: SVGElement | null;
   arc?: SVGPathElement | null;
 }
 export interface RendaNodes {
+  shape: SVGPathElement;
   body: SVGGElement;
-  halo: SVGGElement;
-  bloom: SVGGElement;
-  bloomRot: SVGUseElement;
-  ringRot: SVGUseElement;
-  echoes: SVGGElement;
-  echoG: SVGGElement[];
-  sweep: SVGGElement;
-  sweepRot: SVGUseElement;
-  orbits: SVGGElement;
-  orbitRot: SVGGElement[];
+  shadow: SVGElement | null;
+  highlight: SVGGElement;
+  dots: SVGGElement;
+  dot: SVGElement[];
+  ticks: SVGGElement;
   eyes: RendaEyeNodes[];
-  sparks: Array<{ g: SVGGElement; p: SVGPathElement; glow: SVGPathElement }>;
-  ripples: SVGEllipseElement[];
+  sparks: SVGElement[];
+  ripples: SVGElement[];
 }
 
 export interface RendaEngineOptions {
@@ -314,39 +280,54 @@ export interface RendaEngineOptions {
   surface: RendaSurface;
 }
 
+type IdleEyeForce = { phase: IdleEyePhase; glance?: GlanceDir; blinkProgress?: number };
+
 /** Milliseconds without touch, scroll or pointer before the hero/launcher settles. */
 export const SETTLE_AFTER_MS = 20000;
 
 export class RendaEngine {
   t = 0;
   state: RendaState = 'idle';
+  private readonly p = {} as Record<ParamKey, number>;
+  private period = 2600;
   private phase = 0;
-  private amp = 0;
-  private period = 3200;
-  private gradRot = 0;
-  private gradSpeed = 0;
-  private haloN = 0.5;
-  private orbitO = 0;
-  private orbitA = 0;
-  private echoA = [0, 0, 0];
+  private tau = 0;
+  private floatT = 0;
+  private waveT = 0;
+  private accentT = 0;
+  private ponderT = 0;
+  private motion = 1;
+  private floatY = 0;
+  private gazeX = 0;
+  private color: string = RENDA_COLORS.blue;
+  private readonly pulse: Spring = { x: 0, v: 0 };
+  private readonly eyeSX: Spring = { x: 1, v: 0 };
+  private readonly eyeSY: Spring = { x: 1, v: 0 };
   private eyeMix = 0;
   private eyeX = 0;
   private eyeY = 0;
-  private motion = 1;
+  private lookTX = 0;
+  private lookTY = 0;
+  private lookX = 0;
+  private lookY = 0;
+  private wanderTX = 0;
+  private wanderTY = 0;
+  private wanderX = 0;
+  private wanderY = 0;
+  private nextSaccadeAt = 0;
   private blinkAt = Infinity;
   private blinkStart = -1e9;
-  private blinkScale = 1;
-  /** Idle eye life cycle (hero/launcher expressive). Null when inactive. */
+  /** Idle eye life cycle (hero/launcher/header expressive). Null when inactive. */
   private idleLife: IdleEyeLifeState | null = null;
   /** Dot-eye blink-only scheduler. */
   private dotBlink: DotBlinkState | null = null;
   /** Review harness: freeze a life-cycle pose. */
-  private idleEyeForce: { phase: IdleEyePhase; glance?: GlanceDir; blinkProgress?: number } | null = null;
-  private pops: Array<{ start: number; kind: 'resp' | 'spring' | 'att' }> = [];
-  private sweepStart = -1e9;
+  private idleEyeForce: IdleEyeForce | null = null;
   private sparkStart = -1e9;
   private rippleStart = -1e9;
-  private readonly sparkD: number;
+  private rippleCount = 0;
+  private readonly dyn = new Float64Array(SHAPE_N);
+  private readonly sparkScale: number;
 
   constructor(
     private readonly n: RendaNodes,
@@ -355,11 +336,9 @@ export class RendaEngine {
     private readonly random: () => number = Math.random
   ) {
     this.state = initial;
-    // 4 px diamonds, never smaller than 6 units at hero sizes.
-    this.sparkD = Math.max((4 / o.size) * 100, 6);
+    this.sparkScale = Math.max(1, 104 / o.size);
     this.applyInstant();
-    // A character that mounts already Attentive/Listening (e.g. the hero after
-    // "Start over" with the composer focused) still blinks.
+    // A character that mounts already Attentive/Listening still blinks.
     if (this.cfg().blink) this.blinkAt = 700 + this.random() * 300;
   }
 
@@ -367,61 +346,65 @@ export class RendaEngine {
     return stateConfigFor(this.o.surface, this.o.eyes, state);
   }
 
-  setIdleEyeForce(
-    force: { phase: IdleEyePhase; glance?: GlanceDir; blinkProgress?: number } | null
-  ): void {
+  setIdleEyeForce(force: IdleEyeForce | null): void {
     this.idleEyeForce = force;
   }
 
+  /** Pointer direction relative to the character, each axis in [-1, 1] (0 = none). */
+  setLook(x: number, y: number): void {
+    this.lookTX = clamp(x, -1, 1);
+    this.lookTY = clamp(y, -1, 1);
+  }
+
   setState(state: RendaState, reduced: boolean): void {
-    if (this.o.surface === 'avatar') return;
-    if (state === this.state) return;
-    const prev = this.state;
+    if (this.o.surface === 'avatar' || state === this.state) return;
     this.state = state;
-    const t = this.t;
-    const cfg = this.cfg();
-    // Cancel Idle life cycle on leaving Idle (e.g. Attentive); restart from Rest on return.
-    if (state !== 'idle') {
-      this.idleLife = null;
-      this.dotBlink = null;
-    } else if (prev !== 'idle') {
-      this.idleLife = null;
-      this.dotBlink = null;
+    // Restart the Idle life cycle from Rest on every entry; cancel it on leaving.
+    this.idleLife = null;
+    this.dotBlink = null;
+    // First blink comes quickly, then every 4-7 s (idle life cycle owns idle blinks).
+    this.blinkAt =
+      this.cfg().blink && state !== 'idle' ? this.t + 700 + this.random() * 300 : Infinity;
+    if (reduced) this.applyInstant();
+    else this.kickFor(state);
+  }
+
+  /** A little jelly hop on entering a state; bigger for success / attention. */
+  private kickFor(state: RendaState): void {
+    const kick: Partial<Record<RendaState, number>> = {
+      attentive: 0.4, listening: 0.45, thinking: 0.35, responding: 0.9, success: 1.3, attention: 1.5,
+    };
+    this.pulse.v += kick[state] ?? 0.25;
+    if (state === 'success') {
+      this.sparkStart = this.t;
+      this.rippleStart = this.t;
+      this.rippleCount = 1;
     }
-    // First blink comes quickly (as in the approved prototype), then every 4-7 s.
-    // Idle life cycle owns blinks on hero/launcher; keep attentive/listening blinks.
-    this.blinkAt = cfg.blink && state !== 'idle' ? t + 700 + this.random() * 300 : Infinity;
-    if (!reduced) {
-      if (state === 'responding') {
-        this.pops.push({ start: t, kind: 'resp' });
-        this.sweepStart = t;
-      }
-      if (state === 'success') {
-        this.pops.push({ start: t, kind: 'spring' });
-        this.sparkStart = t;
-      }
-      if (state === 'attention') {
-        this.pops.push({ start: t, kind: 'att' });
-        this.rippleStart = t;
-      }
-    } else {
-      this.applyInstant();
+    if (state === 'attention') {
+      this.rippleStart = this.t;
+      this.rippleCount = 2;
     }
   }
 
   /** Jump every continuous parameter to the state's target (reduce motion / static). */
   applyInstant(): void {
     const cfg = this.cfg();
-    this.eyeMix = cfg.eyes === 'open' ? 1 : 0;
+    for (const k of PARAM_KEYS) this.p[k] = cfg[k];
+    this.period = cfg.period;
+    this.eyeMix = cfg.eyes === 'open' || cfg.eyes === 'dot' ? 1 : 0;
     this.eyeX = cfg.off[0];
     this.eyeY = cfg.off[1];
-    this.haloN = cfg.halo === 'max' ? 1 : 0.5;
-    this.orbitO = 0;
-    this.amp = 0;
-    this.gradSpeed = 0;
-    this.pops = [];
-    this.sweepStart = this.sparkStart = this.rippleStart = -1e9;
+    this.resetSprings(cfg);
+    this.lookX = this.lookY = this.wanderX = this.wanderY = 0;
+    this.sparkStart = this.rippleStart = -1e9;
     this.blinkAt = Infinity;
+  }
+
+  private resetSprings(cfg: StateConfig): void {
+    this.eyeSX.x = cfg.eyeScale[0];
+    this.eyeSY.x = cfg.eyeScale[1];
+    this.pulse.x = 0;
+    this.eyeSX.v = this.eyeSY.v = this.pulse.v = 0;
   }
 
   private settleOn(idleMs: number): boolean {
@@ -434,232 +417,309 @@ export class RendaEngine {
 
   /**
    * Advance by `dt` ms and paint. `reduced` = static character (reduce motion or
-   * `animated=false`): no breath, sweep, orbits, ripple or sparkles, but the eye
-   * shape still follows the state.
+   * `animated=false`): a still pose whose colour, accents and eye shape follow the state.
    */
   step(dt: number, reduced: boolean, idleMs: number): void {
     this.t += dt;
-    const t = this.t;
-    const n = this.n;
-    const rm = reduced;
     const cfg = this.cfg();
+    const m = this.advanceMotion(dt, reduced, idleMs);
+    this.advanceParams(dt, cfg, reduced);
+    this.advanceClocks(dt, m);
+    this.paintEyes(dt, cfg, reduced, idleMs, m);
+    this.paintBody(m);
+    this.paintShape(m);
+    this.paintAccents(m);
+    this.paintSparks(reduced);
+    this.paintRipples(reduced);
+  }
 
-    // Settle: idle + 20 s without interaction → static over 320 ms (hero & launcher).
-    const mTarget = rm || this.settleOn(idleMs) ? 0 : 1;
-    this.motion = rm
+  /** Settle: idle + 20 s without interaction → still over 320 ms (hero & launcher). */
+  private advanceMotion(dt: number, reduced: boolean, idleMs: number): number {
+    const target = reduced || this.settleOn(idleMs) ? 0 : 1;
+    this.motion = reduced
       ? 0
-      : clamp(this.motion + (Math.sign(mTarget - this.motion) * dt) / 320);
-    const m = this.motion * this.motion * (3 - 2 * this.motion);
+      : clamp(this.motion + (Math.sign(target - this.motion) * dt) / 320);
+    return this.motion * this.motion * (3 - 2 * this.motion);
+  }
 
-    // Breath: the phase accumulates so period changes never jump.
-    this.period = smooth(this.period, cfg.period, dt, 180);
-    this.phase += (dt / this.period) * Math.PI * 2;
-    this.amp = rm ? 0 : smooth(this.amp, cfg.amp, dt, 160);
-    const breathN = 0.5 - 0.5 * Math.cos(this.phase);
-    let scale = 1 + this.amp * breathN * m;
-
-    // One-shot pops.
-    this.pops = this.pops.filter((p) => t - p.start < 700);
-    for (const p of this.pops) {
-      const e = t - p.start;
-      if (p.kind === 'resp' && e < 300) {
-        const q = e / 300;
-        scale *=
-          q < 0.45
-            ? 1 + 0.06 * easeOutBack(q / 0.45)
-            : 1 + 0.06 * (1 - easeInOut((q - 0.45) / 0.55));
-      }
-      if (p.kind === 'spring')
-        scale *= 1 + SPRING_108[Math.min(600, Math.round(e))];
-      if (p.kind === 'att' && e < 400)
-        scale *= 1 + SPRING_110[Math.min(600, Math.round(e * 1.5))];
+  private advanceParams(dt: number, cfg: StateConfig, reduced: boolean): void {
+    for (const k of PARAM_KEYS) {
+      this.p[k] = reduced ? cfg[k] : smooth(this.p[k], cfg[k], dt, PARAM_TAU[k]);
     }
-    n.body.setAttribute(
-      'transform',
-      `translate(${CX} ${CY}) scale(${fmt(scale)}) translate(${-CX} ${-CY})`
-    );
+    this.period = smooth(this.period, cfg.period, dt, 260);
+    if (reduced) {
+      this.resetSprings(cfg);
+      return;
+    }
+    stepSpring(this.eyeSX, cfg.eyeScale[0], dt, 260, 22);
+    stepSpring(this.eyeSY, cfg.eyeScale[1], dt, 260, 22);
+    stepSpring(this.pulse, 0, dt, 170, 11);
+  }
 
-    // Gradient rotation (the ring only, never the face).
-    this.gradSpeed = rm ? 0 : smooth(this.gradSpeed, cfg.grad, dt, 220);
-    this.gradRot = (this.gradRot + (this.gradSpeed * m * dt) / 1000) % 360;
-    const rot = `rotate(${fmt(this.gradRot)} ${CX} ${CY})`;
-    n.ringRot.setAttribute('transform', rot);
-    n.bloomRot.setAttribute('transform', rot);
+  /** Clocks accumulate so a tempo change never jumps; all freeze when settled. */
+  private advanceClocks(dt: number, m: number): void {
+    const s = (dt / 1000) * m;
+    this.tau += s * this.p.flow;
+    this.floatT += s * this.p.flow;
+    this.waveT += s * (0.7 + 0.3 * this.p.flow);
+    this.accentT += s;
+    this.ponderT += s;
+    this.phase += (dt / this.period) * TAU * m;
+  }
 
-    // Halo: primary.main at 16-28% on light surfaces, synced to the breath.
-    const hTarget =
-      cfg.halo === 'max'
-        ? 1
-        : cfg.halo === 'mid'
-        ? 0.5
-        : m * breathN + (1 - m) * 0.5;
-    this.haloN = rm ? hTarget : smooth(this.haloN, hTarget, dt, 65);
-    n.halo.setAttribute('opacity', String(fmt(0.16 + 0.12 * this.haloN)));
-    n.bloom.setAttribute('opacity', String(fmt(0.22 + 0.1 * this.haloN)));
+  /**
+   * Jelly body: bob, squash/stretch pivoting on the base (wider as it sinks), sway,
+   * and a lean toward wherever the eyes are looking.
+   */
+  private paintBody(m: number): void {
+    const ft = this.floatT;
+    const fl = this.p.float * m;
+    this.floatY = -fl * (0.72 * Math.sin(ft * 1.85) + 0.28 * Math.sin(ft * 3.1 + 1.3));
+    const q = this.p.amp * m * Math.sin(this.phase) + 0.006 * this.floatY * m;
+    const k = this.pulse.x;
+    const sx = 1 + q + k * 1.1;
+    const sy = 1 - q * 0.9 + k * 0.8;
+    const tilt =
+      this.p.sway * m * (0.7 * Math.sin(ft * 0.83 + 0.5) + 0.3 * Math.sin(ft * 1.71 + 2.2)) +
+      this.gazeX * 0.9;
+    put(this.n.body, 'transform', `translate(${CX} ${f2(BLOB_BASE_Y + this.floatY)}) rotate(${f2(tilt)}) scale(${f3(sx)} ${f3(sy)}) translate(${-CX} ${-BLOB_BASE_Y})`);
+    this.color = mixHex(RENDA_COLORS.blue, RENDA_COLORS.violet, clamp(this.p.tint));
+    put(this.n.shape, 'fill', this.color);
+    put(this.n.highlight, 'transform', `translate(${f2(-this.gazeX * 0.35)} 0)`);
+    const lift = -this.floatY;
+    put(this.n.shadow, 'fill', this.color);
+    put(this.n.shadow, 'transform', `translate(${CX} 95) scale(${f3(1 - lift * 0.035 + k)} 1) translate(${-CX} -95)`);
+    put(this.n.shadow, 'opacity', f2(clamp(0.22 - lift * 0.02, 0.08, 0.3)));
+  }
 
-    // Thinking orbits (2.4 s / rev, opposite directions) + drift echoes.
-    const oT = cfg.orbit && !rm ? 1 : 0;
-    this.orbitO = rm ? 0 : smooth(this.orbitO, oT, dt, 90);
-    this.orbitA = (this.orbitA + (150 * dt) / 1000) % 360;
-    n.orbits.setAttribute('opacity', String(fmt(this.orbitO)));
-    n.orbitRot[0]?.setAttribute('transform', `rotate(${fmt(this.orbitA)})`);
-    n.orbitRot[1]?.setAttribute(
-      'transform',
-      `rotate(${fmt(-this.orbitA + 140)})`
-    );
-    const eSp = [70, -52, 38];
-    this.echoA = this.echoA.map((a, i) => (a + (eSp[i] * dt) / 1000) % 360);
-    n.echoes.setAttribute('opacity', String(fmt(this.orbitO * 0.5)));
-    n.echoG.forEach((g, i) =>
-      g.setAttribute('transform', `rotate(${fmt(this.echoA[i])} ${CX} ${CY})`)
-    );
+  /** Organic outline: low harmonics on the tempo clock plus a wave travelling upward. */
+  private paintShape(m: number): void {
+    const d = this.p.deform * m;
+    const w = this.p.wave * m;
+    if (d < 1e-4 && w < 1e-4) {
+      put(this.n.shape, 'd', RENDA_REST_PATH);
+      return;
+    }
+    const tau = this.tau;
+    const wt = this.waveT;
+    for (let i = 0; i < SHAPE_N; i++) {
+      const a = ANG[i];
+      this.dyn[i] =
+        d * (0.022 * Math.sin(2 * a + 0.9 * tau) +
+          0.016 * Math.sin(3 * a - 0.7 * tau + 1.3) +
+          0.009 * Math.sin(5 * a + 1.25 * tau + 0.4)) +
+        w * 0.02 * Math.sin(2.6 * YS[i] + 4.2 * wt);
+    }
+    put(this.n.shape, 'd', rendaShapePath(this.dyn));
+  }
 
-    // Responding: one 360° highlight sweep over 900 ms, ease-in-out.
-    const se = (t - this.sweepStart) / 900;
-    if (se >= 0 && se <= 1 && !rm) {
-      const a = easeInOut(se) * 360 + 20;
-      n.sweep.setAttribute(
-        'opacity',
-        String(fmt(Math.sin(Math.PI * se) * 0.9))
-      );
-      n.sweepRot.setAttribute('transform', `rotate(${fmt(a)} ${CX} ${CY})`);
-    } else n.sweep.setAttribute('opacity', '0');
-
-    // Eyes: Idle life cycle on hero/launcher/header; otherwise 150 ms morph + blink.
-    if (n.eyes.length) {
-      const mode = idleEyeMode({
-        eyes: this.o.eyes,
-        staticIdle: false,
-        reducedMotion: rm,
-        paused: this.settleOn(idleMs),
-        enabled: this.state === 'idle' && (this.o.surface === 'hero' || this.o.surface === 'launcher' || this.o.surface === 'header'),
-      });
-
-      let blink = 1;
-      if (this.idleEyeForce) {
-        const pose = poseForPhase(this.idleEyeForce.phase, this.idleEyeForce);
-        this.eyeMix = pose.eyeMix;
-        this.eyeX = pose.offset[0];
-        this.eyeY = pose.offset[1];
-        blink = pose.blink;
-        this.idleLife = null;
-        this.dotBlink = null;
-      } else if (mode === 'full') {
-        if (!this.idleLife) this.idleLife = startIdleEyeLife(t, this.random());
-        const { state: next } = advanceIdleEyeLife(
-          this.idleLife,
-          t,
-          this.random(),
-          this.random(),
-          this.random()
-        );
-        this.idleLife = next;
-        // Ease toward the pose (wake morph / glance / drowse already lerp in the module).
-        const pose = next.pose;
-        this.eyeMix = pose.eyeMix;
-        this.eyeX = pose.offset[0];
-        this.eyeY = pose.offset[1];
-        blink = pose.blink;
-        this.dotBlink = null;
-        this.blinkAt = Infinity;
-      } else if (mode === 'blinkOnly') {
-        if (!this.dotBlink) this.dotBlink = startDotBlink(t, this.random());
-        const { state: next, blink: b } = advanceDotBlink(
-          this.dotBlink,
-          t,
-          this.random(),
-          this.random()
-        );
-        this.dotBlink = next;
-        blink = b;
-        this.eyeMix = 0;
-        this.eyeX = 0;
-        this.eyeY = 0;
-        this.idleLife = null;
-        this.blinkAt = Infinity;
-      } else {
-        this.idleLife = null;
-        this.dotBlink = null;
-        let eyeTarget = cfg.eyes === 'open' ? 1 : 0;
-        const ae = t - this.rippleStart;
-        if (this.state === 'attention') eyeTarget = ae < 1100 ? 1 : 0;
-        this.eyeMix = rm ? eyeTarget : smooth(this.eyeMix, eyeTarget, dt, 40);
-        this.eyeX = rm ? cfg.off[0] : smooth(this.eyeX, cfg.off[0], dt, 55);
-        this.eyeY = rm ? cfg.off[1] : smooth(this.eyeY, cfg.off[1], dt, 55);
-        if (!rm && t >= this.blinkAt) {
-          this.blinkStart = t;
-          this.blinkAt = t + 4000 + this.random() * 3000;
-        }
-        const be = (t - this.blinkStart) / 160;
-        blink = be >= 0 && be < 1 && !rm ? 1 - 0.9 * Math.sin(Math.PI * be) : 1;
-      }
-      this.blinkScale = blink;
-      const em = this.eyeMix;
-      for (const e of n.eyes) {
-        e.g.setAttribute(
-          'transform',
-          `translate(${fmt(this.eyeX)} ${fmt(this.eyeY)})`
-        );
-        if (e.open && e.arc) {
-          const sy = (0.3 + 0.7 * em) * blink;
-          e.open.setAttribute(
-            'transform',
-            `translate(0 ${EYE_Y}) scale(1 ${fmt(sy)}) translate(0 ${-EYE_Y})`
-          );
-          e.open.setAttribute('opacity', String(fmt(clamp(em * 1.25))));
-          e.arc.setAttribute('opacity', String(fmt(clamp((1 - em) * 1.25))));
-          e.arc.setAttribute('transform', `translate(0 ${fmt(em * -1.5)})`);
-        } else if (e.open) {
-          // Dot eyes: blink only (scaleY), no arc morph.
-          e.open.setAttribute(
-            'transform',
-            `translate(0 ${EYE_Y}) scale(1 ${fmt(blink)}) translate(0 ${-EYE_Y})`
-          );
-          e.open.setAttribute('opacity', '1');
-        }
+  /** Thinking dots bounce in a wave; listening / responding ticks pulse. Still when reduced. */
+  private paintAccents(m: number): void {
+    put(this.n.dots, 'opacity', f2(this.p.dots));
+    if (this.p.dots > 0.003) {
+      for (let i = 0; i < this.n.dot.length; i++) {
+        const [cx, cy] = THINK_DOTS[i];
+        const b = Math.max(0, Math.sin(this.accentT * (TAU / 1.25) - i * 0.75));
+        put(this.n.dot[i], 'fill', this.color);
+        put(this.n.dot[i], 'transform', scaleAt(cx, cy, -3 * b * m, 1 + m * (0.35 * b - 0.15), 1 + m * (0.35 * b - 0.15)));
       }
     }
+    const beat = 0.5 + 0.5 * Math.sin(this.accentT * (TAU / 0.9));
+    put(this.n.ticks, 'opacity', f2(this.p.ticks * (1 - 0.45 * m * beat)));
+    if (this.p.ticks > 0.003) {
+      put(this.n.ticks, 'stroke', this.color);
+      put(this.n.ticks, 'transform', scaleAt(TICK_PIVOT[0], TICK_PIVOT[1], 0, 1 + 0.14 * m * beat, 1 + 0.14 * m * beat));
+    }
+  }
 
-    // Success: 6 × 4 px diamonds travel 0 → 14% of height, 900 ms ease-out, 40 ms stagger.
-    const sb = t - this.sparkStart;
-    n.sparks.forEach((sp, i) => {
-      const p = (sb - i * 40) / 900;
-      if (rm || p < 0 || p > 1) {
-        sp.g.setAttribute('opacity', '0');
-        return;
+  /* ------------------------------ eyes ------------------------------ */
+  private paintEyes(dt: number, cfg: StateConfig, reduced: boolean, idleMs: number, m: number): void {
+    if (!this.n.eyes.length) return;
+    const blink = this.eyePose(dt, cfg, reduced, idleMs);
+    this.advanceGaze(dt, reduced, m);
+    this.writeEyes(blink, m);
+  }
+
+  /** Eye openness / offset / blink: Idle life cycle on hero/launcher/header, else state morph. */
+  private eyePose(dt: number, cfg: StateConfig, reduced: boolean, idleMs: number): number {
+    const mode = idleEyeMode({
+      eyes: this.o.eyes,
+      staticIdle: false,
+      reducedMotion: reduced,
+      paused: this.settleOn(idleMs),
+      enabled: this.state === 'idle' && this.o.surface !== 'avatar',
+    });
+    if (this.idleEyeForce) return this.forcedPose(this.idleEyeForce);
+    if (mode === 'full') return this.idleLifePose();
+    if (mode === 'blinkOnly') return this.dotBlinkPose();
+    this.idleLife = null;
+    this.dotBlink = null;
+    return this.statePose(dt, cfg, reduced);
+  }
+
+  private applyPose(pose: IdleEyePose): number {
+    this.eyeMix = pose.eyeMix;
+    this.eyeX = pose.offset[0];
+    this.eyeY = pose.offset[1];
+    return pose.blink;
+  }
+
+  private forcedPose(force: IdleEyeForce): number {
+    this.idleLife = null;
+    this.dotBlink = null;
+    return this.applyPose(poseForPhase(force.phase, force));
+  }
+
+  private idleLifePose(): number {
+    if (!this.idleLife) this.idleLife = startIdleEyeLife(this.t, this.random());
+    const r = this.random;
+    this.idleLife = advanceIdleEyeLife(this.idleLife, this.t, r(), r(), r()).state;
+    this.dotBlink = null;
+    this.blinkAt = Infinity;
+    return this.applyPose(this.idleLife.pose);
+  }
+
+  private dotBlinkPose(): number {
+    if (!this.dotBlink) this.dotBlink = startDotBlink(this.t, this.random());
+    const next = advanceDotBlink(this.dotBlink, this.t, this.random(), this.random());
+    this.dotBlink = next.state;
+    this.eyeMix = 1;
+    this.eyeX = this.eyeY = 0;
+    this.idleLife = null;
+    this.blinkAt = Infinity;
+    return next.blink;
+  }
+
+  /** Morph toward the state's eye shape and offset, with natural blinks (fast close, slower open). */
+  private statePose(dt: number, cfg: StateConfig, reduced: boolean): number {
+    let eyeTarget = cfg.eyes === 'arc' ? 0 : 1;
+    if (this.state === 'attention') eyeTarget = this.t - this.rippleStart < 1100 ? 1 : 0;
+    this.eyeMix = reduced ? eyeTarget : smooth(this.eyeMix, eyeTarget, dt, 40);
+    this.eyeX = reduced ? cfg.off[0] : smooth(this.eyeX, cfg.off[0], dt, 70);
+    this.eyeY = reduced ? cfg.off[1] : smooth(this.eyeY, cfg.off[1], dt, 70);
+    if (reduced) return 1;
+    if (this.t >= this.blinkAt) {
+      this.blinkStart = this.t;
+      this.blinkAt = this.t + 4000 + this.random() * 3000;
+    }
+    const be = (this.t - this.blinkStart) / 170;
+    if (be < 0 || be >= 1) return 1;
+    const closing = be < 0.4 ? be / 0.4 : 1 - easeOutCubic((be - 0.4) / 0.6);
+    return 1 - 0.9 * closing;
+  }
+
+  /** Pointer tracking plus small saccades (quick shifts, then holds). */
+  private advanceGaze(dt: number, reduced: boolean, m: number): void {
+    if (reduced) {
+      this.lookX = this.lookY = this.wanderX = this.wanderY = 0;
+      return;
+    }
+    this.lookX = smooth(this.lookX, this.lookTX * m, dt, 140);
+    this.lookY = smooth(this.lookY, this.lookTY * m, dt, 140);
+    if (this.t >= this.nextSaccadeAt) {
+      const a = this.random() * TAU;
+      const r = Math.sqrt(this.random());
+      this.wanderTX = Math.cos(a) * r;
+      this.wanderTY = Math.sin(a) * r * 0.7;
+      this.nextSaccadeAt = this.t + 650 + this.random() * 1700;
+    }
+    this.wanderX = smooth(this.wanderX, this.wanderTX, dt, 45);
+    this.wanderY = smooth(this.wanderY, this.wanderTY, dt, 45);
+  }
+
+  /** Thinking: the eyes sweep up-left ↔ up-right, dwelling at each side as if pondering. */
+  private scanOffset(m: number): [number, number] {
+    const s = this.p.scan * m;
+    if (s < 1e-3) return [0, 0];
+    const d = dwell(Math.sin(this.ponderT * (TAU / 2.6)));
+    return [-3 * (0.5 - 0.5 * d) * s, -0.8 * Math.abs(d) * s];
+  }
+
+  private writeEyes(blink: number, m: number): void {
+    const { look, wander, hold } = this.p;
+    const w = wander * m;
+    const [scanX, scanY] = this.scanOffset(m);
+    const ex = this.eyeX + this.lookX * look * LOOK_RANGE[0] + this.wanderX * w + scanX;
+    const ey = this.eyeY + this.lookY * look * LOOK_RANGE[1] + this.wanderY * w + scanY;
+    this.gazeX = ex;
+    const sx = this.eyeSX.x;
+    const sy = this.eyeSY.x;
+    const em = this.eyeMix;
+    const openH = (0.3 + 0.7 * em + hold * 0.5 * (1 - em)) * blink * sy;
+    const tr = `translate(${f2(ex)} ${f2(ey)})`;
+    for (const e of this.n.eyes) {
+      put(e.g, 'transform', tr);
+      if (e.open && e.arc) {
+        put(e.open, 'transform', scaleAt(e.x, EYE_Y, 0, sx, openH));
+        put(e.open, 'opacity', f2(clamp(em * 1.25 + hold)));
+        put(e.arc, 'opacity', f2(clamp((1 - em) * 1.25) * (1 - clamp(hold))));
+        put(e.arc, 'transform', scaleAt(e.x, EYE_Y, -em * 1.5, sx, sy));
+      } else if (e.open) {
+        put(e.open, 'transform', scaleAt(e.x, EYE_Y, 0, sx, blink * sy));
+        put(e.open, 'opacity', 1);
+      }
+    }
+  }
+
+  /* ------------------------------ one-shots ------------------------------ */
+  /** Success: small motes drift outward and up from the body. */
+  private paintSparks(reduced: boolean): void {
+    const sb = this.t - this.sparkStart;
+    for (let i = 0; i < this.n.sparks.length; i++) {
+      const el = this.n.sparks[i];
+      const p = (sb - i * SPARK_STAGGER) / SPARK_MS;
+      if (reduced || p < 0 || p > 1) {
+        put(el, 'opacity', 0);
+        continue;
       }
       const e = easeOutCubic(p);
-      const rad = (SPARK_ANGLES[i] * Math.PI) / 180;
-      const ux = Math.sin(rad);
-      const uy = -Math.cos(rad);
-      const x = CX + ux * (40.5 + 3 + 14 * e);
-      const y = CY + uy * (49.5 + 3 + 14 * e);
-      const sc = ((0.6 + 0.4 * e) * this.sparkD) / 2;
-      const op = p < 0.25 ? p / 0.25 : 1 - (p - 0.25) / 0.75;
-      const fill = i % 2 ? C.sparkLight : C.sparkCore;
-      sp.p.setAttribute('fill', fill);
-      sp.glow.setAttribute('fill', fill);
-      sp.g.setAttribute('opacity', String(fmt(op)));
-      sp.g.setAttribute(
-        'transform',
-        `translate(${fmt(x)} ${fmt(y)}) scale(${fmt(sc)})`
-      );
-    });
+      const a = SPARK_ANGLES[i % SPARK_ANGLES.length] * DEG;
+      const x = CX + Math.sin(a) * (40 + 12 * e);
+      const y = 58 - Math.cos(a) * (31 + 12 * e) - 4 * e;
+      put(el, 'transform', `translate(${f2(x)} ${f2(y)}) scale(${f3((0.5 + 0.6 * (1 - p)) * this.sparkScale)})`);
+      put(el, 'opacity', f2(p < 0.2 ? p / 0.2 : 1 - (p - 0.2) / 0.8));
+    }
+  }
 
-    // Attention: two oval ripples, scale 1.0 → 1.5, opacity .35 → 0, 700 ms each.
-    n.ripples.forEach((rp, i) => {
-      const p = (t - this.rippleStart - i * 300) / 700;
-      if (rm || p < 0 || p > 1) {
-        rp.setAttribute('opacity', '0');
-        return;
+  /** Attention (two) and success (one): the silhouette ripples outward and fades. */
+  private paintRipples(reduced: boolean): void {
+    for (let i = 0; i < this.n.ripples.length; i++) {
+      const el = this.n.ripples[i];
+      const p = (this.t - this.rippleStart - i * RIPPLE_STAGGER) / RIPPLE_MS;
+      if (reduced || i >= this.rippleCount || p < 0 || p > 1) {
+        put(el, 'opacity', 0);
+        continue;
       }
-      const s = 1 + 0.5 * easeOutCubic(p);
-      rp.setAttribute('opacity', String(fmt(0.35 * (1 - p))));
-      rp.setAttribute(
-        'transform',
-        `translate(${CX} ${CY}) scale(${fmt(s)}) translate(${-CX} ${-CY})`
-      );
-    });
+      const s = 1 + 0.35 * easeOutCubic(p);
+      put(el, 'stroke', this.color);
+      put(el, 'opacity', f2(0.55 * Math.pow(1 - p, 1.5)));
+      put(el, 'transform', `translate(${CX} ${f2(58 + this.floatY)}) scale(${f3(s)}) translate(${-CX} -58)`);
+    }
+  }
+
+  /* ------------------------------ quiescence ------------------------------ */
+  private oneShotsRunning(): boolean {
+    const t = this.t;
+    return (
+      t - this.sparkStart <= SPARK_MS + 5 * SPARK_STAGGER ||
+      t - this.rippleStart <= RIPPLE_MS + RIPPLE_STAGGER
+    );
+  }
+
+  private paramsSettled(cfg: StateConfig): boolean {
+    if (PARAM_KEYS.some((k) => Math.abs(this.p[k] - cfg[k]) > 0.002)) return false;
+    return !springBusy(this.eyeSX, cfg.eyeScale[0]) && !springBusy(this.eyeSY, cfg.eyeScale[1]);
+  }
+
+  private eyesSettled(cfg: StateConfig): boolean {
+    const eyeTarget = cfg.eyes === 'arc' ? 0 : 1;
+    return (
+      Math.abs(this.eyeMix - eyeTarget) <= 0.002 &&
+      Math.abs(this.eyeX - cfg.off[0]) <= 0.01 &&
+      Math.abs(this.eyeY - cfg.off[1]) <= 0.01 &&
+      Math.abs(this.lookX - this.lookTX * this.motion) <= 0.005 &&
+      Math.abs(this.lookY - this.lookTY * this.motion) <= 0.005
+    );
   }
 
   /**
@@ -668,33 +728,11 @@ export class RendaEngine {
    */
   isQuiescent(reduced: boolean, idleMs: number): boolean {
     if (reduced) return true;
-    const t = this.t;
     const cfg = this.cfg();
-    if (this.pops.length) return false;
-    if (t - this.sweepStart <= 900) return false;
-    if (t - this.sparkStart <= 900 + 5 * 40) return false;
-    if (t - this.rippleStart <= 1600) return false;
-    if (this.blinkAt !== Infinity) return false;
-    if (this.idleLife || this.dotBlink || this.idleEyeForce) return false;
-    const eyeTarget = cfg.eyes === 'open' ? 1 : 0;
-    if (Math.abs(this.eyeMix - eyeTarget) > 0.002) return false;
-    if (
-      Math.abs(this.eyeX - cfg.off[0]) > 0.01 ||
-      Math.abs(this.eyeY - cfg.off[1]) > 0.01
-    )
-      return false;
-    if (this.orbitO > 0.002) return false;
-    const hTarget = cfg.halo === 'max' ? 1 : 0.5;
-    if (cfg.halo !== 'breath' && Math.abs(this.haloN - hTarget) > 0.002)
-      return false;
-    const frozen = this.motion < 0.001 && this.settleOn(idleMs);
-    if (frozen) return true;
-    return (
-      this.amp < 0.0005 &&
-      this.gradSpeed < 0.05 &&
-      cfg.amp === 0 &&
-      cfg.grad === 0 &&
-      cfg.halo !== 'breath'
-    );
+    if (this.oneShotsRunning() || springBusy(this.pulse)) return false;
+    if (this.blinkAt !== Infinity || this.idleLife || this.dotBlink || this.idleEyeForce) return false;
+    if (!this.paramsSettled(cfg) || !this.eyesSettled(cfg)) return false;
+    if (this.motion < 0.001 && this.settleOn(idleMs)) return true;
+    return isStill(cfg);
   }
 }

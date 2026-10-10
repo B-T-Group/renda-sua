@@ -12,6 +12,8 @@ const now = () =>
 
 let lastInteraction = now();
 let installed = false;
+/** Last pointer position (client px) and when it was seen; mutated in place. */
+const pointer = { x: 0, y: 0, at: -Infinity };
 const listeners = new Set<Listener>();
 let notifyQueued = false;
 
@@ -26,6 +28,12 @@ function touch(): void {
   }, 0);
 }
 
+function trackPointer(e: PointerEvent): void {
+  pointer.x = e.clientX;
+  pointer.y = e.clientY;
+  pointer.at = now();
+}
+
 function install(): void {
   if (installed || typeof window === 'undefined') return;
   installed = true;
@@ -38,6 +46,9 @@ function install(): void {
     'scroll',
     'touchstart',
   ].forEach((ev) => window.addEventListener(ev, touch, opts));
+  ['pointermove', 'pointerdown'].forEach((ev) =>
+    window.addEventListener(ev, trackPointer as EventListener, opts)
+  );
   window.addEventListener('focus', touch);
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
@@ -48,6 +59,11 @@ function install(): void {
 
 export function msSinceInteraction(): number {
   return now() - lastInteraction;
+}
+
+/** Where the pointer was last seen, so the character's eyes can follow it. */
+export function lastPointer(): Readonly<typeof pointer> {
+  return pointer;
 }
 
 export function onInteraction(listener: Listener): () => void {

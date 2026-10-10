@@ -563,8 +563,8 @@ export class MobilePaymentCallbackProcessor {
 
   /**
    * Run the entity success handler. A failure is always alerted (reportMoneyAnomaly).
-   * For `order_deposit`, and for `order` on the first (pending -> success) pass, it is
-   * rethrown so the transaction is NOT marked success and stays pending: the wallet credit
+   * For `order_deposit`, and for `order` or `claim_order` on the first (pending -> success)
+   * pass, it is rethrown so the transaction is NOT marked success and stays pending: the wallet credit
    * is idempotent on the transaction id, so the provider replay / pending reconciler
    * re-runs the handler instead of leaving a paid-but-unpaid-order silently (UAT S-8).
    * On replays of an already-success tx the error is only alerted (no endless 5xx).
@@ -586,19 +586,21 @@ export class MobilePaymentCallbackProcessor {
       reportMoneyAnomaly(
         this.logger,
         'payment_finalize_failed',
-        `entity=${transaction.payment_entity} reference=${transaction.reference} txId=${transaction.id}${
+        `entity=${transaction.payment_entity} reference=${transaction.reference} entityId=${transaction.entity_id} txId=${transaction.id}${
           options.replay ? ' (replay)' : ''
         }: ${String(error?.message || error)}`,
         {
           transactionId: transaction.id,
           paymentEntity: transaction.payment_entity,
+          entityId: transaction.entity_id,
           replay: options.replay === true,
         }
       );
-      if (
-        transaction.payment_entity === 'order_deposit' ||
-        (transaction.payment_entity === 'order' && options.replay !== true)
-      ) {
+      const firstPassOrder =
+        (transaction.payment_entity === 'order' ||
+          transaction.payment_entity === 'claim_order') &&
+        options.replay !== true;
+      if (transaction.payment_entity === 'order_deposit' || firstPassOrder) {
         throw error;
       }
     }

@@ -3388,6 +3388,7 @@ describe('OrdersService', () => {
           amount: 8000,
           transactionType: 'hold',
           referenceId: 'order-123',
+          idempotencyKey: 'claim:hold:order-123:agent-123:tx-claim-1',
         })
       );
       accountsService.hasTransactionForReference.mockResolvedValue(false);

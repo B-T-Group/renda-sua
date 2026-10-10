@@ -8,6 +8,9 @@ describe('replyHasToolSuccess (Success trigger)', () => {
     ['items found', { reply: 'x', handoff: false, blocks: [{ kind: 'link' }, { kind: 'item' }] }, true],
     ['store found', { reply: 'x', handoff: false, blocks: [{ kind: 'store' }] }, true],
     ['reorder ready', { reply: 'x', handoff: false, blocks: [{ kind: 'reorder' }] }, true],
+    ['rental card', { reply: 'x', handoff: false, cards: [{ kind: 'rental' }] }, true],
+    ['item card', { reply: 'x', handoff: false, cards: [{ kind: 'item' }] }, true],
+    ['sign-in card', { reply: 'x', handoff: false, cards: [{ kind: 'sign_in' }] }, false],
     ['handoff, even with results', { reply: 'x', handoff: true, blocks: [{ kind: 'order' }] }, false],
     ['malformed blocks', { reply: 'x', handoff: false, blocks: [null, { kind: 3 }] }, false],
   ])('%s → %s', (_label, data, expected) => {

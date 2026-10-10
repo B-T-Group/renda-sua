@@ -135,6 +135,36 @@ describe('AssistantIdentityService', () => {
     expect(addressQueries()).toEqual([]);
   });
 
+  it('uses the active persona when that profile exists', async () => {
+    mockIdentityQueries(
+      { ...businessUser, client: { id: 'c1' }, agent: { id: 'a1' } },
+      []
+    );
+    const identity = await service.resolveFromUserId('u-biz', null, 'client');
+    expect(identity.accountType).toBe('client');
+    expect(identity.clientId).toBe('c1');
+    expect(identity.agentId).toBe('a1');
+    expect(identity.businessId).toBe('b1');
+  });
+
+  it('treats an active delegation as a delegate even with a business profile', async () => {
+    mockIdentityQueries(businessUser, []);
+    const identity = await service.resolveFromUserId('u-biz', null, null, 'grant-1');
+    expect(identity.accountType).toBe('delegate');
+    expect(identity.businessId).toBe('b1');
+    expect(identity.userId).toBe('u-biz');
+  });
+
+  it('keeps a signed-out session free of personal ids', async () => {
+    const identity = await service.resolveFromUserId(null, { country_code: 'CM' }, 'client');
+    expect(identity.userId).toBeNull();
+    expect(identity.accountType).toBeNull();
+    expect(identity.clientId).toBeNull();
+    expect(identity.agentId).toBeNull();
+    expect(identity.businessId).toBeNull();
+    expect(hasura.executeQuery).not.toHaveBeenCalled();
+  });
+
   it('does not look up a user for a blank phone', async () => {
     const identity = await service.resolveFromPhone('   ');
     expect(identity.isVerified).toBe(false);

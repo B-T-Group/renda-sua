@@ -46,6 +46,7 @@ export class WalletRefundExecutor {
       transactionType: 'refund',
       memo,
       referenceId: paymentId,
+      idempotencyKey: `refund:${paymentId}`,
     });
     if (!result.success) {
       await this.markPaymentFailed(paymentId, result.error || 'Wallet credit failed');

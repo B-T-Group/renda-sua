@@ -4,10 +4,13 @@ import type { ContentBlock, Message } from '@aws-sdk/client-bedrock-runtime';
 import { BedrockLunaService } from '../ai/bedrock-luna.service';
 import type { Configuration } from '../config/configuration';
 import { GET_BACK_SHORTLY, TECHNICAL_FAILURE } from './assistant-fallback';
+import { collectCards, signInCard } from './assistant-cards';
+import { guestAsksForPersonalData, staticKnowledgeTopic } from './assistant-intents';
 import { needsKnowledgeGrounding } from './needs-knowledge-grounding';
 import { sanitizeAssistantReply } from './sanitize-assistant-reply';
 import { AssistantToolsService } from './assistant-tools.service';
 import type {
+  AssistantCard,
   AssistantChatInput,
   AssistantLocale,
   AssistantReply,
@@ -79,6 +82,8 @@ export class AssistantService implements OnModuleInit {
     localeHint?: AssistantLocale | null
   ): Promise<AssistantReply> {
     const locale = this.resolveLocale(input, localeHint);
+    const guestReply = this.guestPersonalReply(input, locale);
+    if (guestReply) return guestReply;
     if (this.isTechnicalIssue(input)) {
       return this.fallback(input.channel, locale, true);
     }
@@ -99,6 +104,8 @@ export class AssistantService implements OnModuleInit {
     const messages = this.toMessages(input.messages, settings?.maxHistoryMessages);
     let handoff = false;
     let usedKnowledge = false;
+    let groundedStatic = false;
+    let cards: AssistantCard[] = [];
     const toolsUsed = new Set<string>();
     const maxLoops = Math.max(1, settings?.maxToolIterations || 5);
     const toolConfig = await this.tools.buildToolConfig(input.identity);
@@ -106,6 +113,8 @@ export class AssistantService implements OnModuleInit {
       (t) => t.toolSpec?.name === 'search_catalog'
     ) ?? false;
     for (let index = 0; index < maxLoops; index++) {
+      const stopped = this.stoppedReply(input.signal, locale);
+      if (stopped) return stopped;
       const result = await this.bedrock.converseWithTools({
         model: settings?.model || undefined,
         system: this.systemPrompt(input, locale, hasShoppingTools),
@@ -115,6 +124,15 @@ export class AssistantService implements OnModuleInit {
         temperature: 0.2,
       });
       if (!result.toolUses.length) {
+        const stoppedBeforeGrounding = this.stoppedReply(input.signal, locale);
+        if (stoppedBeforeGrounding) return stoppedBeforeGrounding;
+        if (
+          !groundedStatic &&
+          (await this.injectStaticKnowledge(input, locale, messages))
+        ) {
+          groundedStatic = true;
+          continue;
+        }
         if (
           await this.injectKnowledgeIfNeeded(
             input,
@@ -126,19 +144,30 @@ export class AssistantService implements OnModuleInit {
           usedKnowledge = true;
           continue;
         }
-        const reply = this.finalize(result.text, handoff, input.channel, locale);
+        const reply = this.finalize(result.text, handoff, input.channel, locale, cards);
         this.emitMessageClassified(input, locale, toolsUsed, handoff);
         return reply;
       }
       messages.push({ role: 'assistant', content: result.assistantContent });
-      const executed = await this.executeTools(result.toolUses, input, locale);
+      const stoppedBeforeTools = this.stoppedReply(input.signal, locale);
+      if (stoppedBeforeTools) return stoppedBeforeTools;
+      const executed = await this.executeTools(
+        result.toolUses,
+        input,
+        locale,
+        input.signal
+      );
+      const stoppedAfterTools = this.stoppedReply(input.signal, locale);
+      if (stoppedAfterTools) return stoppedAfterTools;
       result.toolUses.forEach(use => toolsUsed.add(use.name));
       usedKnowledge ||= executed.usedKnowledge;
+      groundedStatic ||= executed.usedStaticKnowledge;
       handoff ||= executed.handoff;
+      cards = collectCards([cards, executed.cards]);
       messages.push({ role: 'user', content: executed.content });
     }
     this.emitMessageClassified(input, locale, toolsUsed, handoff);
-    return this.fallback(input.channel, locale, false, handoff);
+    return this.fallback(input.channel, locale, false, handoff, cards);
   }
 
   /**
@@ -189,15 +218,15 @@ export class AssistantService implements OnModuleInit {
       return 'track';
     }
     if (toolsUsed.has('request_human_support')) return 'support';
-    
+
+    if (/\b(reorder|recommander|re-order|again|encore)\b/i.test(text)) {
+      return 'reorder';
+    }
     if (/\b(buy|purchase|acheter|vendre|order|commande|prix|price|cost|co[uû]t)\b/i.test(text)) {
       return 'buy';
     }
     if (/\b(available|availability|disponible|stock|en stock)\b/i.test(text)) {
       return 'availability';
-    }
-    if (/\b(reorder|recommander|re-order|again|encore)\b/i.test(text)) {
-      return 'reorder';
     }
     if (/\b(track|tracking|where|o[uù]|delivery|livraison|order|commande|status|statut)\b/i.test(text)) {
       return 'track';
@@ -271,6 +300,50 @@ export class AssistantService implements OnModuleInit {
     return null;
   }
 
+  private guestPersonalReply(
+    input: Omit<AssistantChatInput, 'locale'>,
+    locale: AssistantLocale
+  ): AssistantReply | null {
+    if (input.identity.userId) return null;
+    const text = latestUserText(input.messages);
+    if (!guestAsksForPersonalData(text)) return null;
+    return {
+      reply: GUEST_SIGN_IN[locale],
+      handoff: false,
+      locale,
+      silent: false,
+      cards: input.channel === 'app' ? [signInCard()] : undefined,
+    };
+  }
+
+  private async injectStaticKnowledge(
+    input: Omit<AssistantChatInput, 'locale'>,
+    locale: AssistantLocale,
+    messages: Message[]
+  ): Promise<boolean> {
+    const topic = staticKnowledgeTopic(latestUserText(input.messages));
+    if (!topic) return false;
+    const section = await this.tools.executeTool({
+      name: 'get_knowledge',
+      input: { topic },
+      identity: input.identity,
+      locale,
+    });
+    messages.push({
+      role: 'user',
+      content: [{ text: `Authoritative Rendasua copy (${topic}):\n${section.content}\nAnswer only from this text.` }],
+    });
+    return true;
+  }
+
+  private stoppedReply(
+    signal: AbortSignal | undefined,
+    locale: AssistantLocale
+  ): AssistantReply | null {
+    if (!signal?.aborted) return null;
+    return { reply: '', handoff: false, locale, silent: true };
+  }
+
   private async executeTools(
     uses: Array<{
       toolUseId: string;
@@ -278,16 +351,22 @@ export class AssistantService implements OnModuleInit {
       input: Record<string, unknown>;
     }>,
     input: Omit<AssistantChatInput, 'locale'>,
-    locale: AssistantLocale
+    locale: AssistantLocale,
+    signal?: AbortSignal
   ): Promise<{
     content: ContentBlock[];
     handoff: boolean;
     usedKnowledge: boolean;
+    usedStaticKnowledge: boolean;
+    cards: AssistantCard[];
   }> {
     const content: ContentBlock[] = [];
+    const cards: AssistantCard[] = [];
     let handoff = false;
     let usedKnowledge = false;
+    let usedStaticKnowledge = false;
     for (const use of uses) {
+      if (signal?.aborted) break;
       const result = await this.tools.executeTool({
         name: use.name,
         input: use.input,
@@ -295,16 +374,18 @@ export class AssistantService implements OnModuleInit {
         locale,
       });
       if (this.tools.isMarketCatalogTool(use.name)) usedKnowledge = true;
+      if (use.name === 'get_knowledge') usedStaticKnowledge = true;
       handoff ||= !!result.handoff;
+      cards.push(...(result.cards || []));
       content.push({
         toolResult: {
           toolUseId: use.toolUseId,
-          content: [{ text: result.content }],
+          content: [{ text: cardNote(result.content, result.cards, input.channel) }],
           status: 'success',
         },
       });
     }
-    return { content, handoff, usedKnowledge };
+    return { content, handoff, usedKnowledge, usedStaticKnowledge, cards };
   }
 
   private toMessages(
@@ -364,6 +445,11 @@ For app errors, bugs, or payment failures, request human support and say the tec
 ${marketContext}
 Mirror the customer's language; the current language is ${locale}.
 Use tools for company facts and private account data. Never invent information.
+${audienceRules(input.identity)}
+When they ask what Rendasua offers, call get_knowledge with topic what_we_offer. When they ask how to contact Rendasua, call get_knowledge with topic support_contact.
+Use get_my_purchase_credits for store credits and get_my_wallet for balance. Use search_rentals and search_restaurants when those tools are available.
+Do not place orders, take payment, cancel, claim a delivery, or withdraw money. Tell them where to do that in the app.
+If tool results include app cards, write one short sentence and do not list names, prices, order numbers, dates, or statuses. On WhatsApp, include names and prices.
 ${shoppingGuidance}
 Before answering about countries, markets, coverage, regions/states, or payment methods/rails (including short follow-ups like "and Brazil?"), you MUST call list_supported_country_states and/or list_supported_payment_systems. Answer only from those tool results. Use get_knowledge for process copy (pay-at-delivery, pickup, support), not as the sole source of live country lists.
 ${market && !hasShoppingTools ? `NEVER ask the customer which country they are in or list ISO country codes when they express buy intent. You already know they are in ${market.country_code}.` : ''}
@@ -398,20 +484,22 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
     text: string,
     handoff: boolean,
     channel: AssistantChatInput['channel'],
-    locale: AssistantLocale
+    locale: AssistantLocale,
+    cards: AssistantCard[]
   ): AssistantReply {
-    const cleaned = sanitizeAssistantReply(text);
+    const cleaned = sanitizeAssistantReply(replyBesideCards(text, channel, cards, locale));
     if (!cleaned || this.isNoReplyToken(cleaned)) {
       if (channel === 'whatsapp') {
         return { reply: '', handoff, locale, silent: true };
       }
-      return this.fallback(channel, locale, false, handoff);
+      return this.fallback(channel, locale, false, handoff, cards);
     }
     return {
       reply: this.cap(cleaned, channel),
       handoff,
       locale,
       silent: false,
+      cards: channel === 'app' && cards.length ? cards : undefined,
     };
   }
 
@@ -423,7 +511,8 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
     channel: AssistantChatInput['channel'],
     locale: AssistantLocale,
     isTechnical: boolean,
-    handoff = true
+    handoff = true,
+    cards: AssistantCard[] = []
   ): AssistantReply {
     if (channel === 'whatsapp') {
       return { reply: '', handoff, locale, silent: true };
@@ -436,6 +525,7 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
       handoff: true,
       locale,
       silent: false,
+      cards: cards.length ? cards : undefined,
     };
   }
 
@@ -445,6 +535,58 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
       this.config.get('assistant.whatsappMaxReplyChars', { infer: true }) || 900;
     return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`;
   }
+}
+
+const GUEST_SIGN_IN: Record<AssistantLocale, string> = {
+  en: 'Sign in to see your orders, credits, addresses, and the rest of your account. I can still help with what Rendasua offers, how to pay, and what you can buy or rent.',
+  fr: 'Connectez-vous pour voir vos commandes, crédits, adresses et le reste de votre compte. Je peux quand même expliquer ce que Rendasua propose, comment payer, et ce que vous pouvez acheter ou louer.',
+};
+
+function latestUserText(messages: AssistantChatInput['messages']): string {
+  return [...messages].reverse().find((item) => item.role === 'user')?.content || '';
+}
+
+function audienceRules(identity: AssistantChatInput['identity']): string {
+  if (!identity.userId) {
+    return 'This person is signed out. Do not invent orders, credits, addresses, earnings, or a name.';
+  }
+  if (identity.accountType === 'delegate') {
+    return 'This person is a location delegate. Do not list orders. Tell them to open Delegate orders in the app.';
+  }
+  const persona = identity.accountType || 'account';
+  return `Active persona: ${persona}. Use only the tools registered for this persona.`;
+}
+
+function cardNote(
+  content: string,
+  cards: AssistantCard[] | undefined,
+  channel: AssistantChatInput['channel']
+): string {
+  if (!cards?.length) return content;
+  if (channel === 'whatsapp') {
+    return `Include each name and price in the reply. There are no tappable cards on WhatsApp.\n${content}`;
+  }
+  return `App cards are attached (${cards.length}). Write one short sentence. Do not list names, prices, order numbers, dates, or statuses.`;
+}
+
+const LIST_LINE = /^\s*(?:[-*•+]|\d+[.)])\s+/;
+
+const CARD_INTRO: Record<AssistantLocale, string> = {
+  en: 'Here is what I found.',
+  fr: "Voici ce que j'ai trouvé.",
+};
+
+function replyBesideCards(
+  text: string,
+  channel: AssistantChatInput['channel'],
+  cards: AssistantCard[],
+  locale: AssistantLocale
+): string {
+  if (channel === 'whatsapp' || !cards.length) return text;
+  const kept = text.split('\n').filter((line) => !LIST_LINE.test(line)).join('\n').trim();
+  if (kept) return kept.replace(/\n{3,}/g, '\n\n');
+  if (!text.trim()) return text;
+  return CARD_INTRO[locale];
 }
 
 function looksFrench(text: string): boolean {

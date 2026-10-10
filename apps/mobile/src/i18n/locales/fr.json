@@ -1159,6 +1159,13 @@
   },
   "nav": {
     "manageRecipients": "Destinataires enregistrés",
+    "guestTabs": {
+      "browse": "Articles",
+      "rentals": "Locations",
+      "foods": "Restauration",
+      "reels": "Reels",
+      "login": "Connexion"
+    },
     "clientTabs": {
       "home": "Accueil",
       "search": "Recherche"
@@ -7220,7 +7227,26 @@
       "deliveryTime": "Quand arrivera-t-elle ?",
       "deliveryTimeNamed": "Quand arrivera la commande {{orderNumber}} ?",
       "changeDelivery": "Changer l'adresse de livraison",
-      "contactSupport": "Contacter le support"
+      "contactSupport": "Contacter le support",
+      "whatWeOffer": "Que propose Rendasua ?",
+      "contactUs": "Comment vous contacter ?",
+      "payAndReceive": "Comment payer et recevoir une commande ?",
+      "buyOrRent": "Que puis-je acheter ou louer ?",
+      "myRecentOrders": "Quelles sont mes commandes récentes ?",
+      "myCredits": "Quels crédits magasin ai-je ?",
+      "myDeliveries": "Quelles livraisons ai-je ?",
+      "myEarnings": "Combien ai-je gagné ?",
+      "ordersNeedMe": "Quelles commandes ont besoin de moi ?",
+      "myCatalog": "Comment va mon catalogue ?"
+    },
+    "card": {
+      "viewItem": "Voir l'article",
+      "viewOrder": "Voir la commande",
+      "viewRental": "Voir la location",
+      "viewStore": "Voir le restaurant",
+      "reorder": "Repasser",
+      "signIn": "Se connecter",
+      "signInTitle": "Connectez-vous pour voir votre compte"
     },
     "homeEntryTitle": "Demandez à l'assistant IA",
     "homeEntryBody": "Obtenez des réponses rapides sur la livraison, les paiements, le retrait et votre compte.",

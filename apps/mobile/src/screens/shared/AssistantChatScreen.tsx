@@ -31,7 +31,9 @@ import { StageDisc } from '@/components/assistant/renda/rendaCharacterLayers';
 import { useInteractionSettled } from '@/components/assistant/launcher/launcherHooks';
 import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher';
 import type { AssistantContext } from '@/utils/assistantChips';
-import { getContextualChips, buildChipMessage } from '@/utils/assistantChips';
+import { assistantChipPersona, getContextualChips, buildChipMessage } from '@/utils/assistantChips';
+import { AssistantEntityCards, openAssistantCard } from '@/components/assistant/AssistantEntityCards';
+import { textBesideCards, type AssistantResultCard } from '@/utils/assistantResultCards';
 import { trackChipTap, type LauncherEventContext } from '@/services/analytics/assistantLauncherAnalytics';
 import { useReorderOrder } from '@/hooks/useReorderOrder';
 import { ReorderCartConflictSheet } from '@/components/orders/ReorderCartConflictSheet';
@@ -175,13 +177,26 @@ interface MessageBubbleProps {
   character: boolean;
   onLinkPress?: (url: string) => boolean;
   analyticsCtx?: LauncherEventContext;
+  onOpenCard?: (card: AssistantResultCard) => void;
+  onReorder?: (href: string) => void;
 }
 
-function MessageBubble({ item, isUser, showOrb, character, onLinkPress, analyticsCtx }: MessageBubbleProps) {
+function MessageBubble({
+  item,
+  isUser,
+  showOrb,
+  character,
+  onLinkPress,
+  analyticsCtx,
+  onOpenCard,
+  onReorder,
+}: MessageBubbleProps) {
   const { colors } = useTheme();
   const reduceMotion = useReducedMotion();
   const duration = motionDuration('normal', reduceMotion);
   const anim = useRef(new Animated.Value(0)).current;
+  const hasCards = !isUser && !!item.cards?.length && !!onOpenCard;
+  const replyText = isUser ? item.content : textBesideCards(item.content, item.cards);
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -194,9 +209,11 @@ function MessageBubble({ item, isUser, showOrb, character, onLinkPress, analytic
   return (
     <Animated.View
       style={[
-        styles.bubbleWrap,
+        hasCards ? styles.withCards : styles.bubbleWrap,
         {
-          alignSelf: isUser ? 'flex-end' : 'flex-start',
+          flexDirection: 'column',
+          alignItems: isUser ? 'flex-end' : 'flex-start',
+          alignSelf: hasCards ? 'stretch' : isUser ? 'flex-end' : 'flex-start',
           opacity: reduceMotion ? 1 : anim,
           transform: reduceMotion
             ? []
@@ -211,6 +228,8 @@ function MessageBubble({ item, isUser, showOrb, character, onLinkPress, analytic
         },
       ]}
     >
+      {replyText.trim() ? (
+      <View style={[styles.bubbleRow, hasCards ? styles.cardBubbleRow : null]}>
       {!isUser && showOrb && character ? (
         // Dot eyes (20–35), static: many on screen, motion in the thread is noise.
         <RendaCharacter size={MESSAGE_AVATAR} state="idle" animated={false} />
@@ -239,7 +258,7 @@ function MessageBubble({ item, isUser, showOrb, character, onLinkPress, analytic
           </Text>
         ) : (
           <AssistantMarkdownText
-            content={item.content}
+            content={replyText}
             color={colors.text.primary}
             style={styles.bubbleText}
             onLinkPress={onLinkPress}
@@ -247,6 +266,11 @@ function MessageBubble({ item, isUser, showOrb, character, onLinkPress, analytic
           />
         )}
       </View>
+      </View>
+      ) : null}
+      {!isUser && item.cards?.length && onOpenCard ? (
+        <AssistantEntityCards cards={item.cards} onOpen={onOpenCard} onReorder={onReorder} />
+      ) : null}
     </Animated.View>
   );
 }
@@ -287,7 +311,10 @@ function EmptyState({
   const store = useStore();
   const firstName = store.auth.user?.firstName?.trim();
   const character = useShowsRendaCharacter();
-  const chips = getContextualChips(context);
+  const chips = getContextualChips(
+    context,
+    assistantChipPersona(store.auth.isAuthenticated, store.persona.activePersona)
+  );
 
   const handleChipTap = useCallback(
     (chipId: string, label: string) => {
@@ -638,11 +665,21 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
             character={character}
             onLinkPress={handleReorderLink}
             analyticsCtx={analyticsCtx}
+            onOpenCard={(card) =>
+              openAssistantCard(
+                navigation as unknown as Parameters<typeof openAssistantCard>[0],
+                card,
+                persona.activePersona
+              )
+            }
+            onReorder={(href) => {
+              void handleReorderLink(href);
+            }}
           />
         </View>
       );
     },
-    [assistant.messages, character, handleReorderLink, analyticsCtx]
+    [assistant.messages, character, handleReorderLink, analyticsCtx, navigation, persona.activePersona]
   );
 
   const onRetry = useCallback(() => {
@@ -866,9 +903,20 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 14, fontWeight: '500' },
   bubbleWrap: {
     maxWidth: '80%',
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  withCards: {
+    width: '100%',
+    maxWidth: '100%',
+    alignItems: 'flex-start',
+  },
+  cardBubbleRow: { maxWidth: '80%' },
+  bubbleRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: spacing.xs,
+    maxWidth: '100%',
   },
   miniOrb: {
     alignItems: 'center',

@@ -397,23 +397,23 @@ export class CommissionsService {
 
     const fundingMemo = `Waived delivery fee funded by platform (agent ${unit.label} pay) - order ${order.order_number}`;
     const reversalMemo = `${fundingMemo} - reversal`;
+    const funding = await this.waivedFundingState(
+      hqAccount.id,
+      order.id,
+      fundingMemo,
+      reversalMemo
+    );
     let fundingTransactionId: string | undefined;
-    if (!(await this.hasOpenWaivedFunding(hqAccount.id, order.id, fundingMemo, reversalMemo))) {
-      const debit = await this.accountsService.registerTransaction({
-        accountId: hqAccount.id,
-        amount: unit.amount,
-        transactionType: 'payment',
-        memo: fundingMemo,
-        referenceId: order.id,
-        allowNegative: true,
-      });
-      if (!debit?.success || !debit.transactionId) {
-        throw new Error(
-          `Waived delivery funding failed for order ${order.order_number} (${unit.commissionType}): ${debit?.error ?? 'unknown error'}`
-        );
-      }
-      fundingTransactionId = debit.transactionId;
-      await this.auditPlatformFunding(order, rendasuaHQUser.id, unit.amount, debit.transactionId);
+    if (!funding.open) {
+      const debit = await this.debitWaivedFunding(
+        order,
+        hqAccount.id,
+        rendasuaHQUser.id,
+        unit,
+        fundingMemo,
+        funding.cycle
+      );
+      fundingTransactionId = debit;
     }
 
     const credit = await this.accountsService.registerTransaction({
@@ -430,17 +430,22 @@ export class CommissionsService {
       ),
     });
     if (credit?.success && credit.alreadyExists) {
-      // A concurrent run credited the agent first: undo any funding this run just made.
-      if (fundingTransactionId) {
-        await this.reverseWaivedFunding(order, hqAccount.id, unit.amount, reversalMemo);
-      }
+      // The other run won the agent credit and did not post a second HQ debit.
+      // This run's debit is the only platform outflow, so it stays.
       this.logger.warn(
         `Waived delivery agent pay already credited (idempotency key), skipping: order=${order.order_number} type=${unit.commissionType}`
       );
       return;
     }
     if (!credit?.success || !credit.transactionId) {
-      await this.reverseWaivedFunding(order, hqAccount.id, unit.amount, reversalMemo);
+      await this.reverseWaivedFunding(
+        order,
+        hqAccount.id,
+        unit.amount,
+        reversalMemo,
+        unit.commissionType,
+        funding.cycle
+      );
       throw new Error(
         `Waived delivery agent credit failed for order ${order.order_number} (${unit.commissionType}); platform funding reversed: ${credit?.error ?? 'unknown error'}`
       );
@@ -494,7 +499,9 @@ export class CommissionsService {
     order: any,
     hqAccountId: string,
     amount: number,
-    reversalMemo: string
+    reversalMemo: string,
+    commissionType: string,
+    cycle: number
   ): Promise<void> {
     const reversal = await this.accountsService.registerTransaction({
       accountId: hqAccountId,
@@ -503,6 +510,11 @@ export class CommissionsService {
       memo: reversalMemo,
       referenceId: order.id,
       skipCashAdvanceRepayment: true,
+      idempotencyKey: this.waivedFundingReversalKey(
+        order.id,
+        commissionType,
+        cycle
+      ),
     });
     if (!reversal?.success) {
       this.logger.error(
@@ -511,13 +523,30 @@ export class CommissionsService {
     }
   }
 
-  /** HQ funding row exists for this unit and has not been reversed. */
-  private async hasOpenWaivedFunding(
+  /** HQ funding is open when a debit has not been reversed. Cycle is the reversal count. */
+  private async waivedFundingState(
     hqAccountId: string,
     orderId: string,
     fundingMemo: string,
     reversalMemo: string
-  ): Promise<boolean> {
+  ): Promise<{ open: boolean; cycle: number }> {
+    const rows = await this.waivedFundingRows(
+      hqAccountId,
+      orderId,
+      fundingMemo,
+      reversalMemo
+    );
+    const funded = rows.filter((r) => r.memo === fundingMemo).length;
+    const reversed = rows.filter((r) => r.memo === reversalMemo).length;
+    return { open: funded > reversed, cycle: reversed };
+  }
+
+  private async waivedFundingRows(
+    hqAccountId: string,
+    orderId: string,
+    fundingMemo: string,
+    reversalMemo: string
+  ): Promise<Array<{ memo: string }>> {
     const result = await this.hasuraSystemService.executeQuery(
       `query WaivedFundingRows($accountId: uuid!, $orderId: uuid!, $memos: [String!]!) {
         account_transactions(
@@ -530,10 +559,47 @@ export class CommissionsService {
       }`,
       { accountId: hqAccountId, orderId, memos: [fundingMemo, reversalMemo] }
     );
-    const rows: Array<{ memo: string }> = result?.account_transactions ?? [];
-    const funded = rows.filter((r) => r.memo === fundingMemo).length;
-    const reversed = rows.filter((r) => r.memo === reversalMemo).length;
-    return funded > reversed;
+    return result?.account_transactions ?? [];
+  }
+
+  private waivedFundingKey(orderId: string, commissionType: string, cycle: number): string {
+    return `waived-funding:${orderId}:${commissionType}:${cycle}`;
+  }
+
+  private waivedFundingReversalKey(
+    orderId: string,
+    commissionType: string,
+    cycle: number
+  ): string {
+    return `waived-funding-reversal:${orderId}:${commissionType}:${cycle}`;
+  }
+
+  /** Debit HQ once for this funding cycle. Returns the new transaction id, or undefined when the key already won. */
+  private async debitWaivedFunding(
+    order: any,
+    hqAccountId: string,
+    hqUserId: string,
+    unit: { commissionType: string; amount: number },
+    fundingMemo: string,
+    cycle: number
+  ): Promise<string | undefined> {
+    const debit = await this.accountsService.registerTransaction({
+      accountId: hqAccountId,
+      amount: unit.amount,
+      transactionType: 'payment',
+      memo: fundingMemo,
+      referenceId: order.id,
+      allowNegative: true,
+      idempotencyKey: this.waivedFundingKey(order.id, unit.commissionType, cycle),
+    });
+    if (!debit?.success || (!debit.alreadyExists && !debit.transactionId)) {
+      throw new Error(
+        `Waived delivery funding failed for order ${order.order_number} (${unit.commissionType}): ${debit?.error ?? 'unknown error'}`
+      );
+    }
+    if (debit.alreadyExists || !debit.transactionId) return undefined;
+    await this.auditPlatformFunding(order, hqUserId, unit.amount, debit.transactionId);
+    return debit.transactionId;
   }
 
   /** Agent already received this component (a deposit, or the cash-advance repayment it became). */
