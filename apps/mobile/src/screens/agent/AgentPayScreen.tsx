@@ -32,6 +32,10 @@ export default function AgentPayScreen() {
     if (route.params?.segment) setSegment(route.params.segment);
   }, [route.params?.segment]);
 
+  useEffect(() => {
+    if (segment !== 'commissions' && status === 'expired') setStatus('unpaid');
+  }, [segment, status]);
+
   const items =
     segment === 'wallet' ? [] : itemsForSegment(board?.items ?? [], segment);
 
@@ -50,6 +54,7 @@ export default function AgentPayScreen() {
           items={items}
           status={status}
           onStatus={setStatus}
+          showExpired={segment === 'commissions'}
           loading={loading}
           error={error}
           bottomPad={bottomPad}
@@ -68,6 +73,7 @@ function PayList({
   items,
   status,
   onStatus,
+  showExpired,
   loading,
   error,
   bottomPad,
@@ -80,6 +86,7 @@ function PayList({
   items: EarningItem[];
   status: PayBoardStatus;
   onStatus: (status: PayBoardStatus) => void;
+  showExpired: boolean;
   loading: boolean;
   error: string | null;
   bottomPad: number;
@@ -120,7 +127,7 @@ function PayList({
       data={items}
       keyExtractor={(item) => item.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      ListHeaderComponent={<PayStatusFilter value={status} onChange={onStatus} />}
+      ListHeaderComponent={<PayStatusFilter value={status} onChange={onStatus} showExpired={showExpired} />}
       contentContainerStyle={{ paddingBottom: bottomPad, flexGrow: 1 }}
       ListEmptyComponent={
         <View style={[styles.centered, { padding: spacing.lg, gap: spacing.sm }]}>
@@ -154,6 +161,7 @@ function emptyTitle(
   t: (key: string, fallback: string) => string
 ): string {
   if (status === 'paid') return t('agent.pay.emptyPaid', 'Nothing paid yet');
+  if (status === 'expired') return t('agent.pay.emptyExpired', 'No expired commissions');
   if (segment === 'objectives') return t('agent.pay.emptyObjectives', 'No open objectives');
   return t('agent.pay.emptyCommissions', 'No unpaid commissions');
 }

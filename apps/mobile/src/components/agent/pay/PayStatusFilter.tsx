@@ -7,22 +7,25 @@ import type { PayBoardStatus } from '../../../types/agentPayBoard';
 const FILTERS: Array<{ id: PayBoardStatus; labelKey: string; fallback: string }> = [
   { id: 'unpaid', labelKey: 'agent.pay.filter.unpaid', fallback: 'Unpaid' },
   { id: 'paid', labelKey: 'agent.pay.filter.paid', fallback: 'Paid' },
+  { id: 'expired', labelKey: 'agent.pay.filter.expired', fallback: 'Expired' },
   { id: 'all', labelKey: 'agent.pay.filter.all', fallback: 'All' },
 ];
 
 export function PayStatusFilter({
   value,
   onChange,
+  showExpired = false,
 }: {
   value: PayBoardStatus;
   onChange: (status: PayBoardStatus) => void;
+  showExpired?: boolean;
 }) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
 
   return (
     <View style={[styles.row, { gap: spacing.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }]}>
-      {FILTERS.map((filter) => {
+      {FILTERS.filter((filter) => showExpired || filter.id !== 'expired').map((filter) => {
         const selected = filter.id === value;
         const label = t(filter.labelKey, filter.fallback);
         return (
@@ -51,6 +54,6 @@ export function PayStatusFilter({
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row' },
+  row: { flexDirection: 'row', flexWrap: 'wrap' },
   pill: { minHeight: 36, alignItems: 'center', justifyContent: 'center' },
 });

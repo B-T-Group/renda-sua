@@ -417,7 +417,7 @@ export class AgentsController {
   @ApiOperation({
     summary: 'Commissions and scheduled objectives for the current agent',
   })
-  @ApiQuery({ name: 'status', required: false, enum: ['unpaid', 'paid', 'all'] })
+  @ApiQuery({ name: 'status', required: false, enum: ['unpaid', 'paid', 'all', 'expired'] })
   @ApiResponse({ status: 200, description: 'Pay board with summary and items' })
   @ApiResponse({ status: 403, description: 'User is not an agent' })
   async getCommissionsAndObjectives(

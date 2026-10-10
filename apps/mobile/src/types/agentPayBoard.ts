@@ -1,4 +1,4 @@
-export type PayBoardStatus = 'unpaid' | 'paid' | 'all';
+export type PayBoardStatus = 'unpaid' | 'paid' | 'all' | 'expired';
 
 export type PaySegment = 'commissions' | 'objectives' | 'wallet';
 
@@ -45,6 +45,9 @@ export interface MerchantOnboardingView {
 export interface MerchantReferralStructure {
   type: 'merchant_referral';
   businessId: string;
+  ownerName: string | null;
+  phone: string | null;
+  email: string | null;
   selfSaleAmount: number;
   otherBuyerAmount: number;
   salePercent: number;

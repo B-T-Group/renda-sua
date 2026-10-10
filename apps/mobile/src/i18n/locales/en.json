@@ -4840,6 +4840,7 @@
       "filter": {
         "unpaid": "Unpaid",
         "paid": "Paid",
+        "expired": "Expired",
         "all": "All"
       },
       "sources": {
@@ -4867,6 +4868,9 @@
       "unknownTitle": "Earning",
       "referBusiness": "Refer a business",
       "emptyCommissions": "No unpaid commissions",
+      "emptyExpired": "No expired commissions",
+      "callMerchant": "Call {{phone}}",
+      "emailMerchant": "Email {{email}}",
       "emptyObjectives": "No open objectives",
       "emptyPaid": "Nothing paid yet",
       "frequency": {
