@@ -39,11 +39,7 @@ export const BusinessReferralPayoutsSection = observer(
           variant="bodySmall"
           style={{ color: colors.text.secondary, marginTop: 4 }}
         >
-          {t(
-            'agent.businessReferrals.payouts.onceNote',
-            'The {{amount}} bonus is paid only once per shop. 1% is paid on every completed sale, including the sale that unlocks the bonus.',
-            { amount: money(schedule.catalog10Amount) }
-          )}
+          {onceNoteCopy(t, money, schedule)}
         </Text>
       </View>
     );
@@ -136,28 +132,93 @@ function PayoutCard({
   );
 }
 
+function onceNoteCopy(
+  t: TFunction,
+  money: (amount: number) => string,
+  schedule: BusinessReferralPayoutSchedule
+): string {
+  const customer = money(schedule.catalog10Amount);
+  const self = money(schedule.catalogSelfAmount);
+  if (self === customer) {
+    return t(
+      'agent.businessReferrals.payouts.onceNote',
+      'The {{amount}} bonus is paid only once per shop. 1% is paid on every completed sale, including the sale that unlocks the bonus.',
+      { amount: customer }
+    );
+  }
+  return t(
+    'agent.businessReferrals.payouts.onceNoteSplit',
+    'The bonus is {{customer}} when a customer buys, or {{self}} when you buy it yourself. It is paid only once per shop.',
+    { customer, self }
+  );
+}
+
+function splitCatalog10Copy(
+  t: TFunction,
+  money: (amount: number) => string,
+  schedule: BusinessReferralPayoutSchedule
+) {
+  const customer = money(schedule.catalog10Amount);
+  const self = money(schedule.catalogSelfAmount);
+  const minSales = money(schedule.catalog10MinSaleTotal);
+  return {
+    amountLabel: splitAmountLabel(t, customer, self),
+    title: t(
+      'agent.businessReferrals.payouts.catalog10TitleWithBuyerSplit',
+      '2 approved products + {{minSales}} in sales in 30 days',
+      { minSales }
+    ),
+    body: t(
+      'agent.businessReferrals.payouts.catalog10BodyWithBuyerSplit',
+      'When a customer’s sale reaches {{minSales}} within 30 days, you receive {{customer}} once. If you buy that sale yourself, you receive {{self}} once.',
+      { minSales, customer, self }
+    ),
+  };
+}
+
+function splitAmountLabel(t: TFunction, customer: string, self: string): string {
+  return t(
+    'agent.businessReferrals.payouts.catalog10AmountSplit',
+    '{{customer}} or {{self}}',
+    { customer, self }
+  );
+}
+
 function catalog10Copy(
   t: TFunction,
   money: (amount: number) => string,
   schedule: BusinessReferralPayoutSchedule
 ) {
+  if (schedule.catalogSelfAmount !== schedule.catalog10Amount) {
+    return splitCatalog10Copy(t, money, schedule);
+  }
   const amount = money(schedule.catalog10Amount);
   const minSales = money(schedule.catalog10MinSaleTotal);
   if (schedule.catalog10MinSaleTotal > 0) {
-    return {
-      title: t(
-        'agent.businessReferrals.payouts.catalog10TitleWithMinSales',
-        '2 approved products + {{minSales}} in sales in 30 days',
-        { minSales }
-      ),
-      body: t(
-        'agent.businessReferrals.payouts.catalog10BodyWithMinSales',
-        'When the shop has at least 2 approved products and at least {{minSales}} in completed sales within 30 days of joining, you receive {{amount}} once.',
-        { amount, minSales }
-      ),
-    };
+    return catalog10WithMinSales(t, amount, minSales);
   }
+  return catalog10WithoutMinSales(t, amount);
+}
+
+function catalog10WithMinSales(t: TFunction, amount: string, minSales: string) {
   return {
+    amountLabel: amount,
+    title: t(
+      'agent.businessReferrals.payouts.catalog10TitleWithMinSales',
+      '2 approved products + {{minSales}} in sales in 30 days',
+      { minSales }
+    ),
+    body: t(
+      'agent.businessReferrals.payouts.catalog10BodyWithMinSales',
+      'When the shop has at least 2 approved products and at least {{minSales}} in completed sales within 30 days of joining, you receive {{amount}} once.',
+      { amount, minSales }
+    ),
+  };
+}
+
+function catalog10WithoutMinSales(t: TFunction, amount: string) {
+  return {
+    amountLabel: amount,
     title: t(
       'agent.businessReferrals.payouts.catalog10Title',
       '2 approved products + a sale in 30 days'
@@ -182,7 +243,7 @@ function payoutRows(
       key: 'catalog10',
       illustration: <Catalog10PayoutVector />,
       title: catalog10.title,
-      amount: money(schedule.catalog10Amount),
+      amount: catalog10.amountLabel,
       body: catalog10.body,
     },
     {

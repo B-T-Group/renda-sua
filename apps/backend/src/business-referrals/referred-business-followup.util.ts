@@ -2,7 +2,9 @@ import { currencyForReferralPayout } from '../business-referral-payouts/business
 import {
   AGENT_ONBOARDING_MIN_ITEMS,
   BUSINESS_REFERRAL_10_ITEMS,
-  ONBOARDING_10_FIRST_SALE,
+  isOnboardingFirstSaleRule,
+  ONBOARDING_X_FIRST_SALE,
+  LEGACY_ONBOARDING_FIRST_SALE,
   BUSINESS_REFERRAL_MIN_ITEMS,
   defaultOnboardingMinSaleTotal,
   inWindowSaleTotal,
@@ -144,8 +146,13 @@ export function inferReferrerKind(
   return fallback;
 }
 
+function thisRuleMatches(ruleCode: string, expected: string): boolean {
+  if (ruleCode === expected) return true;
+  return expected === ONBOARDING_X_FIRST_SALE && isOnboardingFirstSaleRule(ruleCode);
+}
+
 function oneTimeRuleCode(kind: ReferredBusinessReferrerKind): string {
-  return kind === 'agent' ? ONBOARDING_10_FIRST_SALE : BUSINESS_REFERRAL_10_ITEMS;
+  return kind === 'agent' ? ONBOARDING_X_FIRST_SALE : BUSINESS_REFERRAL_10_ITEMS;
 }
 
 function findPaidCommission(
@@ -154,7 +161,7 @@ function findPaidCommission(
 ): { amount: number; currency: string; paidAt: string | null } | null {
   const rule = oneTimeRuleCode(kind);
   const event = (row.representative_compensation_events ?? []).find(
-    (e) => e.rule_code === rule && e.status === 'credited'
+    (e) => thisRuleMatches(e.rule_code, rule) && e.status === 'credited'
   );
   if (event) {
     return {
@@ -358,7 +365,7 @@ export const REFERRED_BUSINESSES_LIST_SELECTION = `
   representative_compensation_events(
     where: {
       rule_code: {
-        _in: ["onboarding_10_first_sale", "business_referral_10_items"]
+        _in: ["${ONBOARDING_X_FIRST_SALE}", "${LEGACY_ONBOARDING_FIRST_SALE}", "business_referral_10_items"]
       }
     }
   ) {

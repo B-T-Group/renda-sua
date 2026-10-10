@@ -1,6 +1,7 @@
 export type BusinessReferralPayoutSchedule = {
   currency: string;
   catalog10Amount: number;
+  catalogSelfAmount: number;
   catalog10MinSaleTotal: number;
   salePercent: number;
 };
@@ -8,6 +9,7 @@ export type BusinessReferralPayoutSchedule = {
 const CAD_SCHEDULE: BusinessReferralPayoutSchedule = {
   currency: 'CAD',
   catalog10Amount: 25,
+  catalogSelfAmount: 25,
   catalog10MinSaleTotal: 0,
   salePercent: 1,
 };
@@ -15,6 +17,7 @@ const CAD_SCHEDULE: BusinessReferralPayoutSchedule = {
 const XAF_SCHEDULE: BusinessReferralPayoutSchedule = {
   currency: 'XAF',
   catalog10Amount: 7500,
+  catalogSelfAmount: 5000,
   catalog10MinSaleTotal: 2500,
   salePercent: 1,
 };

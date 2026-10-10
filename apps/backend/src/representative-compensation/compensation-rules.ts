@@ -1,10 +1,24 @@
-export const ONBOARDING_10_FIRST_SALE = 'onboarding_10_first_sale';
+export const ONBOARDING_X_FIRST_SALE = 'onboarding_x_first_sale';
+export const ONBOARDING_X_FIRST_SALE_AMOUNT_KEY =
+  'onboarding_x_first_sale_amount';
+export const ONBOARDING_X_SELF_SALE_AMOUNT_KEY = 'onboarding_x_self_sale_amount';
+/** Rule code stored before the onboarding_x_first_sale rename. */
+export const LEGACY_ONBOARDING_FIRST_SALE = 'onboarding_10_first_sale';
+export const LEGACY_ONBOARDING_FIRST_SALE_AMOUNT_KEY =
+  'onboarding_10_first_sale_amount';
 export const ONBOARDING_25_SMALL_SALE = 'onboarding_25_small_sale';
 export const ONBOARDING_25_LARGE_SALE = 'onboarding_25_large_sale';
 export const SALE_PERCENT = 'sale_percent';
 export const BUSINESS_REFERRAL_10_ITEMS = 'business_referral_10_items';
 
-export const ONBOARDING_RULES = [ONBOARDING_10_FIRST_SALE] as const;
+export const ONBOARDING_RULES = [ONBOARDING_X_FIRST_SALE] as const;
+
+export function isOnboardingFirstSaleRule(ruleCode: string): boolean {
+  return (
+    ruleCode === ONBOARDING_X_FIRST_SALE ||
+    ruleCode === LEGACY_ONBOARDING_FIRST_SALE
+  );
+}
 
 export type OnboardingRuleCode = (typeof ONBOARDING_RULES)[number];
 
@@ -29,7 +43,8 @@ export function defaultOnboardingMinSaleTotal(currency: string): number {
 
 export interface CompensationMarketConfig {
   currency: string;
-  onboarding10FirstSale: number;
+  onboardingXFirstSale: number;
+  onboardingXSelfSale: number;
   onboarding10MinSaleTotal: number;
   salePercent: number;
   businessReferral10Items: number;
@@ -40,6 +55,7 @@ export interface CompletedSale {
   subtotal: number;
   currency: string;
   completedAt?: string;
+  placedByReferringAgent?: boolean;
 }
 
 export interface CompensationAction {
@@ -178,35 +194,53 @@ function onboardingBonusAction(
   params: Parameters<typeof evaluateCompensation>[0],
   sale: CompletedSale
 ): CompensationAction | null {
-  if (params.paidOnboardingRules.includes(ONBOARDING_10_FIRST_SALE)) {
-    return null;
-  }
-  if (params.approvedItemCount < AGENT_ONBOARDING_MIN_ITEMS) return null;
-  if (!saleWithinOnboardingWindow(params.businessOnboardedAt, sale.completedAt)) {
-    return null;
-  }
-  const minTotal = params.config.onboarding10MinSaleTotal;
-  if (minTotal > 0) {
-    const total = inWindowSaleTotal({
-      completedSales: params.completedSales,
-      payoutCurrency: params.payoutCurrency,
-      onboardedAt: params.businessOnboardedAt,
-      upToSale: sale,
-    });
-    if (total < minTotal) return null;
-  }
-  const amount = roundCompensationAmount(
-    params.config.onboarding10FirstSale,
-    params.payoutCurrency
-  );
+  if (!qualifiesForOnboardingBonus(params, sale)) return null;
+  const amount = onboardingBonusAmount(params.config, sale);
   if (amount <= 0) return null;
   return {
-    ruleCode: ONBOARDING_10_FIRST_SALE,
+    ruleCode: ONBOARDING_X_FIRST_SALE,
     amount,
     grossMilestoneAmount: amount,
     orderId: sale.id,
     saleAmount: sale.subtotal,
   };
+}
+
+function qualifiesForOnboardingBonus(
+  params: Parameters<typeof evaluateCompensation>[0],
+  sale: CompletedSale
+): boolean {
+  if (params.paidOnboardingRules.includes(ONBOARDING_X_FIRST_SALE)) return false;
+  if (params.approvedItemCount < AGENT_ONBOARDING_MIN_ITEMS) return false;
+  if (!saleWithinOnboardingWindow(params.businessOnboardedAt, sale.completedAt)) {
+    return false;
+  }
+  return meetsMinSaleTotal(params, sale);
+}
+
+function meetsMinSaleTotal(
+  params: Parameters<typeof evaluateCompensation>[0],
+  sale: CompletedSale
+): boolean {
+  const minTotal = params.config.onboarding10MinSaleTotal;
+  if (minTotal <= 0) return true;
+  const total = inWindowSaleTotal({
+    completedSales: params.completedSales,
+    payoutCurrency: params.payoutCurrency,
+    onboardedAt: params.businessOnboardedAt,
+    upToSale: sale,
+  });
+  return total >= minTotal;
+}
+
+function onboardingBonusAmount(
+  config: CompensationMarketConfig,
+  sale: CompletedSale
+): number {
+  const gross = sale.placedByReferringAgent
+    ? config.onboardingXSelfSale
+    : config.onboardingXFirstSale;
+  return roundCompensationAmount(gross, config.currency);
 }
 
 function salePercentAction(

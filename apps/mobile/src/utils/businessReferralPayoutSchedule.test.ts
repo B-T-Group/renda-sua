@@ -9,6 +9,7 @@ describe('businessReferralPayoutSchedule', () => {
     expect(businessReferralPayoutSchedule('CA')).toEqual({
       currency: 'CAD',
       catalog10Amount: 25,
+      catalogSelfAmount: 25,
       catalog10MinSaleTotal: 0,
       salePercent: 1,
     });
@@ -17,6 +18,7 @@ describe('businessReferralPayoutSchedule', () => {
   it('uses XAF amounts for Cameroon, Gabon, and unknown markets', () => {
     expect(businessReferralPayoutSchedule('CM').currency).toBe('XAF');
     expect(businessReferralPayoutSchedule('GA').catalog10Amount).toBe(7500);
+    expect(businessReferralPayoutSchedule('CM').catalogSelfAmount).toBe(5000);
     expect(businessReferralPayoutSchedule('CM').catalog10MinSaleTotal).toBe(2500);
     expect(businessReferralPayoutSchedule('xx').salePercent).toBe(1);
   });

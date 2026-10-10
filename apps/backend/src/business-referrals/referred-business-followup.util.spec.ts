@@ -87,7 +87,7 @@ describe('referred-business-followup', () => {
         items_approved: { aggregate: { count: 12 } },
         representative_compensation_events: [
           {
-            rule_code: 'onboarding_10_first_sale',
+            rule_code: 'onboarding_x_first_sale',
             amount: 7500,
             currency: 'XAF',
             status: 'credited',
@@ -113,7 +113,7 @@ describe('referred-business-followup', () => {
         items_approved: { aggregate: { count: 12 } },
         representative_compensation_events: [
           {
-            rule_code: 'onboarding_10_first_sale',
+            rule_code: 'onboarding_x_first_sale',
             amount: 7500,
             currency: 'XAF',
             status: 'pending',

@@ -12,7 +12,12 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import {
   BUSINESS_REFERRAL_10_ITEMS,
   evaluateCompensation,
-  ONBOARDING_10_FIRST_SALE,
+  isOnboardingFirstSaleRule,
+  LEGACY_ONBOARDING_FIRST_SALE,
+  LEGACY_ONBOARDING_FIRST_SALE_AMOUNT_KEY,
+  ONBOARDING_X_FIRST_SALE,
+  ONBOARDING_X_FIRST_SALE_AMOUNT_KEY,
+  ONBOARDING_X_SELF_SALE_AMOUNT_KEY,
   ONBOARDING_10_MIN_SALE_TOTAL_KEY,
   ONBOARDING_RULES,
   SALE_PERCENT,
@@ -35,26 +40,37 @@ const BIND_ORDER_MUTATION = `
 const DEFAULTS: Record<string, CompensationMarketConfig> = {
   CM: {
     currency: 'XAF',
-    onboarding10FirstSale: 7500,
+    onboardingXFirstSale: 7500,
+    onboardingXSelfSale: 5000,
     onboarding10MinSaleTotal: 2500,
     salePercent: 1,
     businessReferral10Items: 1000,
   },
   GA: {
     currency: 'XAF',
-    onboarding10FirstSale: 7500,
+    onboardingXFirstSale: 7500,
+    onboardingXSelfSale: 5000,
     onboarding10MinSaleTotal: 2500,
     salePercent: 1,
     businessReferral10Items: 1000,
   },
   CA: {
     currency: 'CAD',
-    onboarding10FirstSale: 25,
+    onboardingXFirstSale: 25,
+    onboardingXSelfSale: 25,
     onboarding10MinSaleTotal: 0,
     salePercent: 1,
     businessReferral10Items: 10,
   },
 };
+
+interface SaleRow {
+  id: string;
+  subtotal?: number;
+  currency?: string;
+  completed_at?: string;
+  client?: { user_id?: string | null } | null;
+}
 
 export interface CompensationCreditResult {
   credited: number;
@@ -325,11 +341,35 @@ export class RepresentativeCompensationService {
     actions: CompensationAction[]
   ): Promise<void> {
     for (const action of actions) {
-      const credited = await this.creditAction(snapshot, context, action);
-      if (credited === true) result.credited += 1;
-      else if (credited === false) result.failed += 1;
-      else result.skipped += 1;
+      await this.creditOneAction(result, snapshot, context, action);
     }
+  }
+
+  private async creditOneAction(
+    result: CompensationCreditResult,
+    snapshot: BusinessSnapshot,
+    context: NonNullable<
+      Awaited<ReturnType<RepresentativeCompensationService['buildContext']>>
+    >,
+    action: CompensationAction
+  ): Promise<void> {
+    try {
+      this.recordCredit(result, await this.creditAction(snapshot, context, action));
+    } catch (error: any) {
+      result.failed += 1;
+      this.logger.error(
+        `Compensation ${action.ruleCode} for ${snapshot.id} failed: ${error.message}`
+      );
+    }
+  }
+
+  private recordCredit(
+    result: CompensationCreditResult,
+    credited: boolean | null
+  ): void {
+    if (credited === true) result.credited += 1;
+    else if (credited === false) result.failed += 1;
+    else result.skipped += 1;
   }
 
   private async previewBusiness(
@@ -361,12 +401,12 @@ export class RepresentativeCompensationService {
     return events
       .filter(
         (event) =>
-          event.rule_code === ONBOARDING_10_FIRST_SALE &&
+          isOnboardingFirstSaleRule(event.rule_code) &&
           event.status === 'pending'
       )
       .map((event) =>
         this.toPreviewRow(snapshot, context, {
-          ruleCode: ONBOARDING_10_FIRST_SALE,
+          ruleCode: ONBOARDING_X_FIRST_SALE,
           amount: Number(event.amount),
           grossMilestoneAmount: null,
           orderId: event.triggering_order_id,
@@ -469,7 +509,10 @@ export class RepresentativeCompensationService {
     ).toUpperCase();
     const currency = currencyForReferralPayout(countryCode);
     const [sales, events, legacyTenItemPaid, config, rail] = await Promise.all([
-      this.loadCompletedSales(snapshot.id),
+      this.loadCompletedSales(
+        snapshot.id,
+        snapshot.referring_agent?.user_id ?? null
+      ),
       this.loadEvents(snapshot.id),
       this.loadLegacyHas10ItemPayout(snapshot.id),
       this.loadMarketConfig(countryCode, currency),
@@ -479,16 +522,12 @@ export class RepresentativeCompensationService {
       ['credited', 'pending', 'failed'].includes(event.status)
     );
     const creditedEvents = events.filter((event) => event.status === 'credited');
-    const paidOnboardingRules = claimedEvents
-      .filter((event) =>
-        (ONBOARDING_RULES as readonly string[]).includes(event.rule_code)
-      )
-      .map((event) => event.rule_code as OnboardingRuleCode);
+    const paidOnboardingRules = this.claimedOnboardingRules(claimedEvents);
     if (
       legacyTenItemPaid &&
-      !paidOnboardingRules.includes(ONBOARDING_10_FIRST_SALE)
+      !paidOnboardingRules.includes(ONBOARDING_X_FIRST_SALE)
     ) {
-      paidOnboardingRules.push(ONBOARDING_10_FIRST_SALE);
+      paidOnboardingRules.push(ONBOARDING_X_FIRST_SALE);
     }
     const paidSalePercentOrderIds = creditedEvents
       .filter(
@@ -568,7 +607,7 @@ export class RepresentativeCompensationService {
     action: CompensationAction
   ): boolean {
     const rule = event.rule_code ?? action.ruleCode;
-    return rule === ONBOARDING_10_FIRST_SALE;
+    return isOnboardingFirstSaleRule(rule);
   }
 
   private actionForExisting(
@@ -836,7 +875,7 @@ export class RepresentativeCompensationService {
       query PendingOnboardingCompensation {
         representative_compensation_events(
           where: {
-            rule_code: { _eq: "${ONBOARDING_10_FIRST_SALE}" }
+            rule_code: { _in: [${this.onboardingRuleList()}] }
             status: { _in: ["pending", "failed"] }
           }
           limit: 200
@@ -869,7 +908,7 @@ export class RepresentativeCompensationService {
 
   private onboardingActionFromClaim(event: EventClaim): CompensationAction {
     return {
-      ruleCode: ONBOARDING_10_FIRST_SALE,
+      ruleCode: ONBOARDING_X_FIRST_SALE,
       amount: Number(event.amount ?? 0),
       grossMilestoneAmount: event.gross_milestone_amount ?? null,
       orderId: event.triggering_order_id ?? null,
@@ -884,7 +923,7 @@ export class RepresentativeCompensationService {
       query PendingOnboardingCompensationPreview {
         representative_compensation_events(
           where: {
-            rule_code: { _eq: "${ONBOARDING_10_FIRST_SALE}" }
+            rule_code: { _in: [${this.onboardingRuleList()}] }
             status: { _eq: "pending" }
           }
           limit: 200
@@ -914,7 +953,7 @@ export class RepresentativeCompensationService {
     return {
       businessId: row.business?.id ?? '',
       businessName: row.business?.name ?? '',
-      ruleCode: ONBOARDING_10_FIRST_SALE,
+      ruleCode: ONBOARDING_X_FIRST_SALE,
       amount: Number(row.amount ?? 0),
       currency: String(row.currency ?? 'XAF'),
       countryCode: String(row.country_code ?? ''),
@@ -960,7 +999,15 @@ export class RepresentativeCompensationService {
     return result?.businesses_by_pk ?? null;
   }
 
-  private async loadCompletedSales(businessId: string): Promise<CompletedSale[]> {
+  private async loadCompletedSales(
+    businessId: string,
+    referringAgentUserId: string | null
+  ): Promise<CompletedSale[]> {
+    const rows = await this.fetchCompletedSaleRows(businessId);
+    return rows.map((row) => this.toCompletedSale(row, referringAgentUserId));
+  }
+
+  private async fetchCompletedSaleRows(businessId: string): Promise<SaleRow[]> {
     const query = `
       query CompensationSales($businessId: uuid!) {
         orders(
@@ -968,18 +1015,37 @@ export class RepresentativeCompensationService {
             business_id: { _eq: $businessId }
             current_status: { _in: [complete, delivered] }
           }
-        ) { id subtotal currency completed_at }
+        ) { id subtotal currency completed_at client { user_id } }
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
       businessId,
     });
-    return (result?.orders ?? []).map((row: any) => ({
+    return result?.orders ?? [];
+  }
+
+  private toCompletedSale(
+    row: SaleRow,
+    referringAgentUserId: string | null
+  ): CompletedSale {
+    const clientUserId = row.client?.user_id ?? null;
+    return {
       id: row.id,
       subtotal: Number(row.subtotal ?? 0),
       currency: String(row.currency ?? ''),
       completedAt: row.completed_at ? String(row.completed_at) : undefined,
-    }));
+      placedByReferringAgent: this.salePlacedByAgent(
+        clientUserId,
+        referringAgentUserId
+      ),
+    };
+  }
+
+  private salePlacedByAgent(
+    clientUserId: string | null,
+    referringAgentUserId: string | null
+  ): boolean {
+    return Boolean(referringAgentUserId && clientUserId === referringAgentUserId);
   }
 
   private async loadEvents(
@@ -1020,6 +1086,65 @@ export class RepresentativeCompensationService {
     return (result?.business_referral_payouts ?? []).length > 0;
   }
 
+  private claimedOnboardingRules(
+    events: Array<{ rule_code: string }>
+  ): OnboardingRuleCode[] {
+    const codes = events
+      .filter((event) =>
+        (ONBOARDING_RULES as readonly string[]).includes(event.rule_code)
+      )
+      .map((event) => event.rule_code as OnboardingRuleCode);
+    if (this.hasLegacyOnboardingClaim(events, codes)) {
+      codes.push(ONBOARDING_X_FIRST_SALE);
+    }
+    return codes;
+  }
+
+  private hasLegacyOnboardingClaim(
+    events: Array<{ rule_code: string }>,
+    codes: OnboardingRuleCode[]
+  ): boolean {
+    return (
+      !codes.includes(ONBOARDING_X_FIRST_SALE) &&
+      events.some((event) => event.rule_code === LEGACY_ONBOARDING_FIRST_SALE)
+    );
+  }
+
+  private onboardingRuleList(): string {
+    return [ONBOARDING_X_FIRST_SALE, LEGACY_ONBOARDING_FIRST_SALE]
+      .map((code) => `"${code}"`)
+      .join(', ');
+  }
+
+  private async amountOrLegacy(
+    countryCode: string,
+    currentKey: string,
+    legacyKey: string,
+    fallbackValue: number
+  ): Promise<number> {
+    const current = await this.optionalAmount(countryCode, currentKey);
+    if (current != null) return current;
+    const legacy = await this.optionalAmount(countryCode, legacyKey);
+    return legacy ?? fallbackValue;
+  }
+
+  private async optionalAmount(
+    countryCode: string,
+    key: string
+  ): Promise<number | null> {
+    try {
+      const config = await this.configurationsService.getConfigurationByKey(
+        key,
+        countryCode
+      );
+      const value = Number(config?.number_value);
+      if (!Number.isFinite(value) || value <= 0) return null;
+      return value;
+    } catch {
+      return null;
+    }
+  }
+
   private async loadMarketConfig(
     countryCode: string,
     currency: string
@@ -1041,9 +1166,15 @@ export class RepresentativeCompensationService {
     };
     return {
       currency,
-      onboarding10FirstSale: await read(
-        'onboarding_10_first_sale_amount',
-        fallback.onboarding10FirstSale
+      onboardingXFirstSale: await this.amountOrLegacy(
+        countryCode,
+        ONBOARDING_X_FIRST_SALE_AMOUNT_KEY,
+        LEGACY_ONBOARDING_FIRST_SALE_AMOUNT_KEY,
+        fallback.onboardingXFirstSale
+      ),
+      onboardingXSelfSale: await read(
+        ONBOARDING_X_SELF_SALE_AMOUNT_KEY,
+        fallback.onboardingXSelfSale
       ),
       onboarding10MinSaleTotal: await read(
         ONBOARDING_10_MIN_SALE_TOTAL_KEY,
