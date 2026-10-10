@@ -16,6 +16,7 @@ import {
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { ItemImage } from '../../../types/image';
+import { isAiCleanupRunning } from '../../../utils/aiCleanupInProgress';
 import { isPrimaryItemImageType } from '../../../utils/orderedItemImages';
 
 interface ItemImagesTabProps {
@@ -23,6 +24,7 @@ interface ItemImagesTabProps {
   itemName: string;
   imageActionsBusy: boolean;
   cleanupEnabled: boolean;
+  cleanupInProgressIds?: ReadonlySet<string>;
   aiTokensRemaining?: number;
   onOpenLightbox: (index: number) => void;
   onSetPrimary: (imageId: string) => void;
@@ -40,6 +42,7 @@ interface ImageCardProps {
   showSetSecondary: boolean;
   imageActionsBusy: boolean;
   cleanupEnabled: boolean;
+  cleanupInProgressIds?: ReadonlySet<string>;
   aiTokensRemaining?: number;
   onOpenLightbox: (index: number) => void;
   onSetPrimary: (imageId: string) => void;
@@ -56,6 +59,7 @@ const ImageCard: React.FC<ImageCardProps> = ({
   showSetSecondary,
   imageActionsBusy,
   cleanupEnabled,
+  cleanupInProgressIds,
   aiTokensRemaining = 0,
   onOpenLightbox,
   onSetPrimary,
@@ -64,6 +68,7 @@ const ImageCard: React.FC<ImageCardProps> = ({
   onBuyTokens,
 }) => {
   const { t } = useTranslation();
+  const cleanupRunning = isAiCleanupRunning(image, cleanupInProgressIds);
 
   return (
     <Card
@@ -133,20 +138,22 @@ const ImageCard: React.FC<ImageCardProps> = ({
             )}
           </Stack>
         )}
-        {cleanupEnabled && (
+        {(cleanupEnabled || cleanupRunning) && (
           <Button
             size="small"
             variant="outlined"
             fullWidth
             startIcon={<AutoFixHighIcon />}
             onClick={() => onOpenCleanup(image)}
-            disabled={imageActionsBusy || !!image.is_ai_cleaned}
+            disabled={imageActionsBusy || !!image.is_ai_cleaned || cleanupRunning}
             sx={{ mb: 1 }}
           >
-            {t('business.images.actions.cleanup', 'Cleanup picture')}
+            {cleanupRunning
+              ? t('business.images.cleanup.inProgressAction', 'Cleanup in progress')
+              : t('business.images.actions.cleanup', 'Cleanup picture')}
           </Button>
         )}
-        {!cleanupEnabled && onBuyTokens && !image.is_ai_cleaned && (
+        {!cleanupEnabled && !cleanupRunning && onBuyTokens && !image.is_ai_cleaned && (
           <Button
             size="small"
             variant="outlined"
@@ -159,13 +166,18 @@ const ImageCard: React.FC<ImageCardProps> = ({
             {t('business.tokens.buyToCleanup', 'Buy tokens to cleanup')}
           </Button>
         )}
-        {cleanupEnabled && (
+        {(cleanupEnabled || cleanupRunning) && (
           <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-            {t(
-              'business.images.cleanup.tokenCostWithBalance',
-              'This uses 1 AI token. You have {{count}} left.',
-              { count: aiTokensRemaining }
-            )}
+            {cleanupRunning
+              ? t(
+                  'business.images.cleanup.inProgress',
+                  'Cleanup is already running for this photo'
+                )
+              : t(
+                  'business.images.cleanup.tokenCostWithBalance',
+                  'This uses 1 AI token. You have {{count}} left.',
+                  { count: aiTokensRemaining }
+                )}
           </Typography>
         )}
         {image.alt_text && (
@@ -188,6 +200,7 @@ const ItemImagesTab: React.FC<ItemImagesTabProps> = ({
   itemName,
   imageActionsBusy,
   cleanupEnabled,
+  cleanupInProgressIds,
   aiTokensRemaining = 0,
   onOpenLightbox,
   onSetPrimary,
@@ -245,6 +258,7 @@ const ItemImagesTab: React.FC<ItemImagesTabProps> = ({
                     showSetSecondary={isMain && images.length > 1}
                     imageActionsBusy={imageActionsBusy}
                     cleanupEnabled={cleanupEnabled}
+                    cleanupInProgressIds={cleanupInProgressIds}
                     aiTokensRemaining={aiTokensRemaining}
                     onOpenLightbox={onOpenLightbox}
                     onSetPrimary={onSetPrimary}

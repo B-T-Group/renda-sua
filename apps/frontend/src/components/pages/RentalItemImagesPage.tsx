@@ -38,7 +38,7 @@ import {
 } from '@mui/material';
 import axios from 'axios';
 import { useSnackbar } from 'notistack';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -52,6 +52,11 @@ import {
 } from '../dialogs/CreateRentalFromImageDialog';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useImageEnhancements } from '../../hooks/useImageEnhancements';
+import {
+  handoffOpenCleanupPending,
+  isAiCleanupRunning,
+  releaseFinishedCleanupPending,
+} from '../../utils/aiCleanupInProgress';
 import {
   useRentalItemImages,
   type RentalItemImage,
@@ -215,7 +220,8 @@ const RentalItemImagesPage: React.FC = () => {
     setPage,
   } = useRentalItemImages();
   const { generateImageUploadUrl } = useAws();
-  const { trackJob } = useImageEnhancements();
+  const { trackJob, inFlightJobIds } = useImageEnhancements();
+  const prevInFlightCountRef = useRef(0);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [filterCategoryId, setFilterCategoryId] = useState('all');
@@ -232,6 +238,9 @@ const RentalItemImagesPage: React.FC = () => {
   const [createEntrySource, setCreateEntrySource] =
     useState<CreateRentalFromImageEntrySource>('manual');
   const [delImage, setDelImage] = useState<RentalItemImage | null>(null);
+  const [cleanupPendingIds, setCleanupPendingIds] = useState<Set<string>>(
+    () => new Set()
+  );
 
   const bucketName = useMemo(
     () => process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads',
@@ -258,6 +267,37 @@ const RentalItemImagesPage: React.FC = () => {
     statusParam,
     search,
   ]);
+
+  useEffect(() => {
+    const prev = prevInFlightCountRef.current;
+    prevInFlightCountRef.current = inFlightJobIds.length;
+    if (prev > 0 && inFlightJobIds.length === 0) {
+      void fetchImages({
+        page,
+        pageSize,
+        rental_category_id: categoryParam,
+        status: statusParam,
+        search: search || undefined,
+      }).then((fresh) => {
+        if (!fresh) return;
+        setCleanupPendingIds((pending) =>
+          releaseFinishedCleanupPending(pending, fresh)
+        );
+      });
+    }
+  }, [
+    inFlightJobIds.length,
+    fetchImages,
+    page,
+    pageSize,
+    categoryParam,
+    statusParam,
+    search,
+  ]);
+
+  useEffect(() => {
+    setCleanupPendingIds((pending) => handoffOpenCleanupPending(pending, images));
+  }, [images]);
 
   const uploadFileToS3 = async (file: File) => {
     const presigned = await generateImageUploadUrl({
@@ -342,6 +382,16 @@ const RentalItemImagesPage: React.FC = () => {
       );
       return;
     }
+    if (isAiCleanupRunning(img, cleanupPendingIds)) {
+      enqueueSnackbar(
+        t(
+          'business.images.cleanup.inProgress',
+          'Cleanup is already running for this photo'
+        ),
+        { variant: 'info' }
+      );
+      return;
+    }
     enqueueSnackbar(
       t('business.aiImageCleanup.enhancing', 'Enhancing…'),
       { variant: 'info' }
@@ -358,6 +408,14 @@ const RentalItemImagesPage: React.FC = () => {
       updateBusinessAiTokens(result.ai_tokens_remaining);
     }
     trackJob(result.jobId);
+    setCleanupPendingIds((prev) => new Set(prev).add(img.id));
+    void fetchImages({
+      page,
+      pageSize,
+      rental_category_id: categoryParam,
+      status: statusParam,
+      search: search || undefined,
+    });
   };
 
   if (profileLoading) {
@@ -719,18 +777,35 @@ const RentalItemImagesPage: React.FC = () => {
                       </IconButton>
                     </span>
                   </Tooltip>
-                  {(profile?.business?.ai_tokens ?? 0) > 0 ? (
-                    <IconButton
-                      size="small"
-                      onClick={() => void openCleanup(img)}
-                      disabled={img.is_ai_cleaned}
-                      aria-label={t(
-                        'business.images.actions.cleanup',
-                        'Cleanup picture'
-                      )}
+                  {(profile?.business?.ai_tokens ?? 0) > 0 ||
+                  isAiCleanupRunning(img, cleanupPendingIds) ? (
+                    <Tooltip
+                      title={
+                        isAiCleanupRunning(img, cleanupPendingIds)
+                          ? t(
+                              'business.images.cleanup.inProgress',
+                              'Cleanup is already running for this photo'
+                            )
+                          : t('business.images.actions.cleanup', 'Cleanup picture')
+                      }
                     >
-                      <AutoFixHighIcon fontSize="small" />
-                    </IconButton>
+                      <span>
+                        <IconButton
+                          size="small"
+                          onClick={() => void openCleanup(img)}
+                          disabled={
+                            img.is_ai_cleaned ||
+                            isAiCleanupRunning(img, cleanupPendingIds)
+                          }
+                          aria-label={t(
+                            'business.images.actions.cleanup',
+                            'Cleanup picture'
+                          )}
+                        >
+                          <AutoFixHighIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                   ) : (
                     <IconButton
                       size="small"

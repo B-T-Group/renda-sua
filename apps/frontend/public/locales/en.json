@@ -3891,6 +3891,8 @@
         "success": "Image replaced with cleaned version",
         "error": "Failed to cleanup image",
         "alreadyCleaned": "Image was already cleaned with AI",
+        "inProgress": "Cleanup is already running for this photo",
+        "inProgressAction": "Cleanup in progress",
         "fixWithAi": "Fix with AI",
         "issuesAddressed": "AI will try to fix: {{issues}}",
         "tokenCost": "Uses 1 AI token",

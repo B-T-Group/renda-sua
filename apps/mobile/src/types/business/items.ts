@@ -18,6 +18,8 @@ export interface BusinessItemImage {
   alt_text?: string | null;
   /** True when an AI-enhanced version exists (not “currently showing”). */
   is_ai_cleaned?: boolean | null;
+  /** Cleanup kinds already queued, processing, or waiting for review. */
+  open_cleanup_kinds?: Array<'ai' | 'rembg'> | null;
   /** True when a rembg version exists. */
   is_rembg_cleaned?: boolean | null;
   rembg_image_url?: string | null;

@@ -3649,6 +3649,7 @@
           "success": "Image replaced with cleaned version",
           "error": "Cleanup failed",
           "alreadyCleaned": "Image already has an AI version",
+          "inProgress": "Cleanup is already running for this photo",
           "alreadyRembg": "Background already removed for this photo",
           "tokenCost": "Each AI cleanup uses 1 AI token",
           "tokenCostWithBalance": "AI cleanup uses 1 token. You have {{count}} left.",

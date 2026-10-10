@@ -18,6 +18,7 @@ export interface RentalItemImage {
   tags: string[];
   status: string;
   is_ai_cleaned?: boolean;
+  open_cleanup_kinds?: Array<'ai' | 'rembg'>;
   display_order?: number;
   thumbnail?: string | null;
   thumbnail_status?: string | null;
@@ -107,6 +108,7 @@ export const useRentalItemImages = () => {
           setTotal(data.total);
           setPage(data.page);
           setPageSize(data.pageSize);
+          return data.images;
         } else {
           setError('Failed to load images');
         }

@@ -19,6 +19,8 @@ export interface ItemImage {
   display_order?: number;
   uploaded_by?: string;
   is_ai_cleaned?: boolean;
+  /** Kinds with a queued, processing, or unreviewed cleanup for this photo. */
+  open_cleanup_kinds?: Array<'ai' | 'rembg'>;
   thumbnail?: string | null;
   thumbnail_status?: ThumbnailStatus;
   display_url?: string;
