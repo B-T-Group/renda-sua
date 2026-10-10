@@ -33,7 +33,7 @@ import { assistantViewer, canSeeRendaCharacter } from '@/utils/assistantLauncher
 import type { AssistantContext } from '@/utils/assistantChips';
 import { assistantChipPersona, getContextualChips, buildChipMessage } from '@/utils/assistantChips';
 import { AssistantEntityCards, openAssistantCard } from '@/components/assistant/AssistantEntityCards';
-import type { AssistantResultCard } from '@/utils/assistantResultCards';
+import { textBesideCards, type AssistantResultCard } from '@/utils/assistantResultCards';
 import { trackChipTap, type LauncherEventContext } from '@/services/analytics/assistantLauncherAnalytics';
 import { useReorderOrder } from '@/hooks/useReorderOrder';
 import { ReorderCartConflictSheet } from '@/components/orders/ReorderCartConflictSheet';
@@ -195,6 +195,8 @@ function MessageBubble({
   const reduceMotion = useReducedMotion();
   const duration = motionDuration('normal', reduceMotion);
   const anim = useRef(new Animated.Value(0)).current;
+  const hasCards = !isUser && !!item.cards?.length && !!onOpenCard;
+  const replyText = isUser ? item.content : textBesideCards(item.content, item.cards);
 
   useEffect(() => {
     Animated.timing(anim, {
@@ -207,11 +209,11 @@ function MessageBubble({
   return (
     <Animated.View
       style={[
-        styles.bubbleWrap,
+        hasCards ? styles.withCards : styles.bubbleWrap,
         {
           flexDirection: 'column',
           alignItems: isUser ? 'flex-end' : 'flex-start',
-          alignSelf: isUser ? 'flex-end' : 'flex-start',
+          alignSelf: hasCards ? 'stretch' : isUser ? 'flex-end' : 'flex-start',
           opacity: reduceMotion ? 1 : anim,
           transform: reduceMotion
             ? []
@@ -226,7 +228,8 @@ function MessageBubble({
         },
       ]}
     >
-      <View style={styles.bubbleRow}>
+      {replyText.trim() ? (
+      <View style={[styles.bubbleRow, hasCards ? styles.cardBubbleRow : null]}>
       {!isUser && showOrb && character ? (
         // Dot eyes (20–35), static: many on screen, motion in the thread is noise.
         <RendaCharacter size={MESSAGE_AVATAR} state="idle" animated={false} />
@@ -255,7 +258,7 @@ function MessageBubble({
           </Text>
         ) : (
           <AssistantMarkdownText
-            content={item.content}
+            content={replyText}
             color={colors.text.primary}
             style={styles.bubbleText}
             onLinkPress={onLinkPress}
@@ -264,6 +267,7 @@ function MessageBubble({
         )}
       </View>
       </View>
+      ) : null}
       {!isUser && item.cards?.length && onOpenCard ? (
         <AssistantEntityCards cards={item.cards} onOpen={onOpenCard} onReorder={onReorder} />
       ) : null}
@@ -902,6 +906,12 @@ const styles = StyleSheet.create({
     flexDirection: 'column',
     alignItems: 'flex-start',
   },
+  withCards: {
+    width: '100%',
+    maxWidth: '100%',
+    alignItems: 'flex-start',
+  },
+  cardBubbleRow: { maxWidth: '80%' },
   bubbleRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',

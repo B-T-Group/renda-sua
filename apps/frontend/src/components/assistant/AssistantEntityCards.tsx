@@ -1,4 +1,4 @@
-import { Box, Button, Stack, Typography } from '@mui/material';
+import { Box, Stack, Typography } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -50,24 +50,33 @@ function EntityCard({
     : card.title || '';
   return (
     <Box
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') onOpen();
+      }}
       sx={{
         display: 'flex',
+        alignItems: 'center',
         gap: 1.5,
-        p: 1.25,
-        borderRadius: 2,
-        border: 1,
+        p: 1.5,
+        borderRadius: '20px',
+        border: '1px solid',
         borderColor: 'divider',
         bgcolor: 'background.paper',
+        cursor: 'pointer',
+        '&:hover': { opacity: 0.84 },
       }}
     >
       {card.kind !== 'sign_in' ? <CardImage url={card.imageUrl} title={title} /> : null}
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography variant="subtitle2" noWrap>{title}</Typography>
+        <Typography variant="body1" noWrap sx={{ fontWeight: 600 }}>{title}</Typography>
         {card.priceLabel ? (
           <Typography variant="body2" color="text.secondary">{card.priceLabel}</Typography>
         ) : null}
-        <Stack direction="row" spacing={1} sx={{ mt: 1 }} alignItems="center">
-          <Button size="small" variant="contained" onClick={onOpen}>{actionLabel}</Button>
+        <Stack direction="row" spacing={1.5} sx={{ mt: 0.5 }} alignItems="center">
+          <Typography variant="body2" color="primary" sx={{ fontWeight: 600 }}>{actionLabel}</Typography>
           {card.secondaryHref ? <ReorderLink href={card.secondaryHref} /> : null}
         </Stack>
       </Box>
@@ -78,7 +87,7 @@ function EntityCard({
 function CardImage({ url, title }: { url?: string | null; title: string }) {
   const [failed, setFailed] = useState(false);
   if (!url || failed) {
-    return <Box sx={{ width: 72, height: 72, borderRadius: 1, bgcolor: 'action.hover', flexShrink: 0 }} />;
+    return <Box sx={{ width: 64, height: 64, borderRadius: '16px', bgcolor: 'action.hover', flexShrink: 0 }} />;
   }
   return (
     <Box
@@ -86,7 +95,7 @@ function CardImage({ url, title }: { url?: string | null; title: string }) {
       src={url}
       alt={title}
       onError={() => setFailed(true)}
-      sx={{ width: 72, height: 72, borderRadius: 1, objectFit: 'cover', flexShrink: 0 }}
+      sx={{ width: 64, height: 64, borderRadius: '16px', objectFit: 'cover', flexShrink: 0 }}
     />
   );
 }
@@ -95,7 +104,11 @@ function ReorderLink({ href }: { href: string }) {
   const { t } = useTranslation();
   const label = t('assistant.card.reorder', 'Reorder');
   return (
-    <Box sx={{ '& p': { m: 0 }, '& a': { fontWeight: 600 } }}>
+    <Box
+      onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
+      sx={{ '& p': { m: 0 }, '& a': { fontWeight: 600, color: 'text.secondary' } }}
+    >
       <AssistantMarkdown content={`[${label}](${href})`} rich />
     </Box>
   );

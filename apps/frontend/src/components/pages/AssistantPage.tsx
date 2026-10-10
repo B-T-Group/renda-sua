@@ -38,6 +38,7 @@ import { useRendaChatState } from '../assistant/useRendaChatState';
 import { AssistantMarkdown } from './AssistantMarkdown';
 import type { AssistantContext } from '../../utils/assistantChips';
 import { AssistantEntityCards } from '../assistant/AssistantEntityCards';
+import { textBesideCards } from '../assistant/assistantResultCards';
 import {
   assistantChipPersona,
   getContextualChips,
@@ -177,6 +178,7 @@ function MessageBubble({
   const isUser = message.role === 'user';
   const theme = useTheme();
   const prefersReducedMotion = useReducedMotion();
+  const replyText = isUser ? message.content : textBesideCards(message.content, message.cards);
 
   return (
     <motion.div
@@ -192,6 +194,7 @@ function MessageBubble({
         width: '100%',
       }}
     >
+      {replyText.trim() ? (
       <Stack
         direction="row"
         spacing={1}
@@ -238,10 +241,11 @@ function MessageBubble({
               {message.content}
             </Typography>
           ) : (
-            <AssistantMarkdown content={message.content} rich />
+            <AssistantMarkdown content={replyText} rich />
           )}
         </Box>
       </Stack>
+      ) : null}
       {!isUser && message.cards?.length ? (
         <Box sx={{ maxWidth: { xs: '80%', sm: '560px' }, pl: showOrb ? 5 : 0 }}>
           <AssistantEntityCards cards={message.cards} />

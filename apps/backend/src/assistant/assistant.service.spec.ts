@@ -438,6 +438,48 @@ describe('AssistantService', () => {
     expect(result.cards).toEqual([card]);
   });
 
+  it('drops listed rows from the app reply when cards are attached', async () => {
+    const card = {
+      kind: 'order' as const,
+      id: 'o1',
+      title: 'Jus Oasis',
+      priceLabel: '200 XAF',
+      href: '/orders/o1',
+    };
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'tool_use',
+        text: '',
+        toolUses: [{ toolUseId: 't1', name: 'get_my_recent_orders', input: {} }],
+        assistantContent: [{ toolUse: { toolUseId: 't1', name: 'get_my_recent_orders', input: {} } }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: 'Voici vos commandes récentes :\n1. **Commande n° 32261431**\n- **Total:** 200 XAF\n- **Article:** Jus Oasis',
+        toolUses: [],
+        assistantContent: [],
+      });
+    tools.executeTool.mockResolvedValue({ content: 'orders', cards: [card] });
+    const result = await service.runTurn({
+      channel: 'app',
+      messages: [{ role: 'user', content: 'mes commandes' }],
+      identity: {
+        isVerified: true,
+        userId: 'u1',
+        firstName: 'Ada',
+        preferredLanguage: 'fr',
+        market: { country_code: 'CM' },
+        country: 'CM',
+        phoneE164: null,
+        accountType: 'client',
+        clientId: 'c1',
+      },
+    });
+    expect(result.reply).toBe('Voici vos commandes récentes :');
+    expect(result.reply).not.toMatch(/32261431/);
+    expect(result.cards).toEqual([card]);
+  });
+
   it('marks successful WhatsApp answers as not silent', async () => {
     bedrock.converseWithTools.mockResolvedValue({
       stopReason: 'end_turn',

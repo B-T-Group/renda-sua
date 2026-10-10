@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
-import { Button, Text } from 'react-native-paper';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { AppText } from '@/components/common/AppText';
 import { useTheme } from '@/contexts/ThemeContext';
-import { borderRadius, spacing } from '@/theme/spacing';
+import { spacing } from '@/theme/spacing';
 import type { AssistantResultCard } from '@/utils/assistantResultCards';
 
 const ACTION_KEYS = {
@@ -28,38 +28,89 @@ export function AssistantEntityCards({
   onOpen: (card: AssistantResultCard) => void;
   onReorder?: (href: string) => void;
 }) {
-  const { t } = useTranslation();
-  const { colors, shadows } = useTheme();
   if (!cards.length) return null;
   return (
     <View style={styles.list}>
       {cards.map((card) => (
-        <View
-          key={`${card.kind}:${card.id}`}
-          style={[styles.card, shadows.sm, { borderColor: colors.border, backgroundColor: colors.background.paper }]}
-        >
-          {card.kind !== 'sign_in' ? <CardImage url={card.imageUrl} /> : null}
-          <View style={styles.body}>
-            <Text variant="titleSmall">
-              {cardTitle(card, t('assistant.card.signInTitle', 'Sign in to see your account'))}
-            </Text>
-            {card.priceLabel ? (
-              <Text variant="bodySmall" style={{ color: colors.text.secondary }}>{card.priceLabel}</Text>
-            ) : null}
-            <View style={styles.actions}>
-              <Button mode="contained" compact onPress={() => onOpen(card)}>
-                {t(ACTION_KEYS[card.kind][0], ACTION_KEYS[card.kind][1])}
-              </Button>
-              {card.secondaryHref && onReorder ? (
-                <Button mode="text" compact onPress={() => onReorder(card.secondaryHref!)}>
-                  {t('assistant.card.reorder', 'Reorder')}
-                </Button>
-              ) : null}
-            </View>
-          </View>
-        </View>
+        <ResultCard key={`${card.kind}:${card.id}`} card={card} onOpen={onOpen} onReorder={onReorder} />
       ))}
     </View>
+  );
+}
+
+function ResultCard({
+  card,
+  onOpen,
+  onReorder,
+}: {
+  card: AssistantResultCard;
+  onOpen: (card: AssistantResultCard) => void;
+  onReorder?: (href: string) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const title = cardTitle(card, t('assistant.card.signInTitle', 'Sign in to see your account'));
+  const action = ACTION_KEYS[card.kind];
+  const label = t(action[0], action[1]);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      onPress={() => onOpen(card)}
+      style={({ pressed }) => [
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.divider,
+          opacity: pressed ? 0.72 : 1,
+        },
+      ]}
+    >
+      {card.kind !== 'sign_in' ? <CardImage url={card.imageUrl} /> : null}
+      <View style={styles.body}>
+        <AppText role="body" color={colors.text.primary} numberOfLines={2} style={styles.title}>{title}</AppText>
+        {card.priceLabel ? <AppText role="bodySmall" color={colors.text.secondary}>{card.priceLabel}</AppText> : null}
+        <CardActions card={card} label={label} onReorder={onReorder} />
+      </View>
+    </Pressable>
+  );
+}
+
+function CardActions({
+  card,
+  label,
+  onReorder,
+}: {
+  card: AssistantResultCard;
+  label: string;
+  onReorder?: (href: string) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <View style={styles.actions}>
+      <AppText role="bodySmall" color={colors.primary.main} style={styles.actionLabel}>{label}</AppText>
+      {card.secondaryHref && onReorder ? (
+        <ReorderLink label={t('assistant.card.reorder', 'Reorder')} href={card.secondaryHref} onReorder={onReorder} />
+      ) : null}
+    </View>
+  );
+}
+
+function ReorderLink({
+  label,
+  href,
+  onReorder,
+}: {
+  label: string;
+  href: string;
+  onReorder: (href: string) => void;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable accessibilityRole="button" accessibilityLabel={label} hitSlop={8} onPress={() => onReorder(href)}>
+      <AppText role="bodySmall" color={colors.text.secondary} style={styles.actionLabel}>{label}</AppText>
+    </Pressable>
   );
 }
 
@@ -67,23 +118,29 @@ function CardImage({ url }: { url?: string | null }) {
   const { colors } = useTheme();
   const [failed, setFailed] = useState(false);
   if (!url || failed) {
-    return <View style={[styles.image, { backgroundColor: colors.background.default }]} />;
+    return <View style={[styles.image, { backgroundColor: colors.primaryTint }]} />;
   }
-  return <Image source={{ uri: url }} style={styles.image} onError={() => setFailed(true)} />;
+  return (
+    <Image source={{ uri: url }} style={styles.image} resizeMode="cover" onError={() => setFailed(true)} />
+  );
 }
 
 const styles = StyleSheet.create({
-  list: { gap: spacing.sm, marginTop: spacing.sm, width: '100%' },
+  list: { gap: spacing.xs, marginTop: spacing.sm, width: '100%', alignSelf: 'stretch' },
   card: {
+    width: '100%',
     flexDirection: 'row',
+    alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.sm,
-    borderWidth: 1,
-    borderRadius: borderRadius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: 20,
   },
-  image: { width: 72, height: 72, borderRadius: borderRadius.sm },
-  body: { flex: 1, minWidth: 0 },
-  actions: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs },
+  image: { width: 64, height: 64, borderRadius: 16 },
+  body: { flex: 1, minWidth: 0, gap: 2 },
+  title: { fontWeight: '600' },
+  actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: 2 },
+  actionLabel: { fontWeight: '600' },
 });
 
 export function openAssistantCard(

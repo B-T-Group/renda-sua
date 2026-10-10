@@ -380,7 +380,7 @@ export class AssistantService implements OnModuleInit {
       content.push({
         toolResult: {
           toolUseId: use.toolUseId,
-          content: [{ text: cardNote(result.content, result.cards) }],
+          content: [{ text: cardNote(result.content, result.cards, input.channel) }],
           status: 'success',
         },
       });
@@ -449,7 +449,7 @@ ${audienceRules(input.identity)}
 When they ask what Rendasua offers, call get_knowledge with topic what_we_offer. When they ask how to contact Rendasua, call get_knowledge with topic support_contact.
 Use get_my_purchase_credits for store credits and get_my_wallet for balance. Use search_rentals and search_restaurants when those tools are available.
 Do not place orders, take payment, cancel, claim a delivery, or withdraw money. Tell them where to do that in the app.
-If tool results include app cards, write one short sentence in the app and do not repeat every row. On WhatsApp, include names and prices.
+If tool results include app cards, write one short sentence and do not list names, prices, order numbers, dates, or statuses. On WhatsApp, include names and prices.
 ${shoppingGuidance}
 Before answering about countries, markets, coverage, regions/states, or payment methods/rails (including short follow-ups like "and Brazil?"), you MUST call list_supported_country_states and/or list_supported_payment_systems. Answer only from those tool results. Use get_knowledge for process copy (pay-at-delivery, pickup, support), not as the sole source of live country lists.
 ${market && !hasShoppingTools ? `NEVER ask the customer which country they are in or list ISO country codes when they express buy intent. You already know they are in ${market.country_code}.` : ''}
@@ -487,7 +487,7 @@ Never include chain-of-thought, scratchpads, or tags such as <thinking>, <reason
     locale: AssistantLocale,
     cards: AssistantCard[]
   ): AssistantReply {
-    const cleaned = sanitizeAssistantReply(text);
+    const cleaned = sanitizeAssistantReply(replyBesideCards(text, channel, cards, locale));
     if (!cleaned || this.isNoReplyToken(cleaned)) {
       if (channel === 'whatsapp') {
         return { reply: '', handoff, locale, silent: true };
@@ -557,9 +557,36 @@ function audienceRules(identity: AssistantChatInput['identity']): string {
   return `Active persona: ${persona}. Use only the tools registered for this persona.`;
 }
 
-function cardNote(content: string, cards: AssistantCard[] | undefined): string {
+function cardNote(
+  content: string,
+  cards: AssistantCard[] | undefined,
+  channel: AssistantChatInput['channel']
+): string {
   if (!cards?.length) return content;
-  return `App cards are attached. In the app, write one short sentence. On WhatsApp, include names and prices.\n${content}`;
+  if (channel === 'whatsapp') {
+    return `Include each name and price in the reply. There are no tappable cards on WhatsApp.\n${content}`;
+  }
+  return `App cards are attached (${cards.length}). Write one short sentence. Do not list names, prices, order numbers, dates, or statuses.`;
+}
+
+const LIST_LINE = /^\s*(?:[-*•+]|\d+[.)])\s+/;
+
+const CARD_INTRO: Record<AssistantLocale, string> = {
+  en: 'Here is what I found.',
+  fr: "Voici ce que j'ai trouvé.",
+};
+
+function replyBesideCards(
+  text: string,
+  channel: AssistantChatInput['channel'],
+  cards: AssistantCard[],
+  locale: AssistantLocale
+): string {
+  if (channel === 'whatsapp' || !cards.length) return text;
+  const kept = text.split('\n').filter((line) => !LIST_LINE.test(line)).join('\n').trim();
+  if (kept) return kept.replace(/\n{3,}/g, '\n\n');
+  if (!text.trim()) return text;
+  return CARD_INTRO[locale];
 }
 
 function looksFrench(text: string): boolean {
