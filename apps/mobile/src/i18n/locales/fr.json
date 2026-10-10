@@ -4755,10 +4755,14 @@
         "catalog10Body": "Quand le commerce a au moins 2 produits approuvés et termine une vente dans les 30 jours après l’inscription, vous recevez {{amount}} une fois.",
         "catalog10TitleWithMinSales": "2 produits approuvés + {{minSales}} de ventes sous 30 jours",
         "catalog10BodyWithMinSales": "Quand le commerce a au moins 2 produits approuvés et au moins {{minSales}} de ventes terminées dans les 30 jours après l’inscription, vous recevez {{amount}} une fois.",
+        "catalog10TitleWithBuyerSplit": "2 produits approuvés + {{minSales}} de ventes sous 30 jours",
+        "catalog10AmountSplit": "{{customer}} ou {{self}}",
+        "catalog10BodyWithBuyerSplit": "Quand la vente d’un client atteint {{minSales}} dans les 30 jours, vous recevez {{customer}} une fois. Si vous achetez cette vente vous-même, vous recevez {{self}} une fois.",
         "percentTitle": "Chaque vente terminée",
         "percentAmount": "{{percent}} % de la vente",
         "percentBody": "Vous gagnez aussi {{percent}} % de chaque vente terminée, y compris la vente qui déclenche le bonus unique.",
-        "onceNote": "Le bonus de {{amount}} n’est versé qu’une fois par commerce. Le 1 % est versé sur chaque vente terminée, y compris celle qui débloque le bonus."
+        "onceNote": "Le bonus de {{amount}} n’est versé qu’une fois par commerce. Le 1 % est versé sur chaque vente terminée, y compris celle qui débloque le bonus.",
+        "onceNoteSplit": "Le bonus est de {{customer}} si un client achète, ou de {{self}} si vous achetez vous-même. Il n’est versé qu’une fois par commerce."
       },
       "responsibilityTitle": "Votre responsabilité",
       "responsibilityBody": "Accompagnez-les dans l'onboarding : aidez à ajouter des produits, à configurer leur compte jusqu'à ce qu'il soit pleinement opérationnel, et restez disponibles.",

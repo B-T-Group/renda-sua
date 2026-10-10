@@ -43,7 +43,7 @@ describe('ReferralPayoutPreviewService', () => {
       {
         businessId: 'biz-1',
         businessName: 'Shop One',
-        ruleCode: 'onboarding_10_first_sale',
+        ruleCode: 'onboarding_x_first_sale',
         amount: 7500,
         currency: 'XAF',
         countryCode: 'CM',
@@ -195,7 +195,7 @@ describe('ReferralPayoutPreviewService', () => {
       {
         businessId: 'biz-skip',
         businessName: 'Empty Config Shop',
-        ruleCode: 'onboarding_10_first_sale',
+        ruleCode: 'onboarding_x_first_sale',
         amount: 0,
         currency: 'XAF',
         countryCode: 'CM',

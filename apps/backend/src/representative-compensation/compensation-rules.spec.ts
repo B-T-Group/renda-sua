@@ -1,6 +1,6 @@
 import {
   BUSINESS_REFERRAL_10_ITEMS,
-  ONBOARDING_10_FIRST_SALE,
+  ONBOARDING_X_FIRST_SALE,
   SALE_PERCENT,
   defaultOnboardingMinSaleTotal,
   evaluateCompensation,
@@ -13,7 +13,8 @@ import {
 
 const XAF: CompensationMarketConfig = {
   currency: 'XAF',
-  onboarding10FirstSale: 7500,
+  onboardingXFirstSale: 7500,
+  onboardingXSelfSale: 5000,
   onboarding10MinSaleTotal: 2500,
   salePercent: 1,
   businessReferral10Items: 1000,
@@ -21,7 +22,8 @@ const XAF: CompensationMarketConfig = {
 
 const CAD: CompensationMarketConfig = {
   currency: 'CAD',
-  onboarding10FirstSale: 25,
+  onboardingXFirstSale: 25,
+  onboardingXSelfSale: 25,
   onboarding10MinSaleTotal: 0,
   salePercent: 1,
   businessReferral10Items: 10,
@@ -95,7 +97,7 @@ describe('compensation-rules', () => {
     it('pays 7500 when in-window sales reach exactly 2500 XAF', () => {
       expect(agentEval({ completedSales: [sale('o1', 2500)] })).toEqual([
         expect.objectContaining({
-          ruleCode: ONBOARDING_10_FIRST_SALE,
+          ruleCode: ONBOARDING_X_FIRST_SALE,
           amount: 7500,
           orderId: 'o1',
         }),
@@ -121,7 +123,7 @@ describe('compensation-rules', () => {
         })
       ).toEqual([
         expect.objectContaining({
-          ruleCode: ONBOARDING_10_FIRST_SALE,
+          ruleCode: ONBOARDING_X_FIRST_SALE,
           amount: 7500,
           orderId: 'o2',
         }),
@@ -133,11 +135,42 @@ describe('compensation-rules', () => {
       ]);
     });
 
+    it('pays 5000 when the referring agent bought the qualifying sale', () => {
+      const boughtByAgent = { ...sale('o1', 2500), placedByReferringAgent: true };
+      expect(agentEval({ completedSales: [boughtByAgent] })).toEqual([
+        expect.objectContaining({
+          ruleCode: ONBOARDING_X_FIRST_SALE,
+          amount: 5000,
+          orderId: 'o1',
+        }),
+        expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 25 }),
+      ]);
+    });
+
+    it('pays CAD 25 when the referring agent bought the qualifying sale', () => {
+      const boughtByAgent = {
+        ...sale('o1', 80, '2026-05-10T00:00:00.000Z', 'CAD'),
+        placedByReferringAgent: true,
+      };
+      const actions = agentEval({
+        completedSales: [boughtByAgent],
+        payoutCurrency: 'CAD',
+        config: CAD,
+      });
+      expect(actions).toEqual([
+        expect.objectContaining({
+          ruleCode: ONBOARDING_X_FIRST_SALE,
+          amount: 25,
+        }),
+        expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 0.8 }),
+      ]);
+    });
+
     it('pays 7500 and 1% on the qualifying first sale', () => {
       const actions = agentEval({});
       expect(actions).toEqual([
         expect.objectContaining({
-          ruleCode: ONBOARDING_10_FIRST_SALE,
+          ruleCode: ONBOARDING_X_FIRST_SALE,
           amount: 7500,
           orderId: 'o1',
         }),
@@ -157,7 +190,7 @@ describe('compensation-rules', () => {
       });
       expect(actions).toEqual([
         expect.objectContaining({
-          ruleCode: ONBOARDING_10_FIRST_SALE,
+          ruleCode: ONBOARDING_X_FIRST_SALE,
           amount: 25,
         }),
         expect.objectContaining({ ruleCode: SALE_PERCENT, amount: 0.8 }),
@@ -167,7 +200,7 @@ describe('compensation-rules', () => {
     it('pays only 1% after the 7500 is already credited', () => {
       const actions = agentEval({
         completedSales: [sale('o1', 20000), sale('o2', 50000, '2026-06-01T00:00:00.000Z')],
-        paidOnboardingRules: [ONBOARDING_10_FIRST_SALE],
+        paidOnboardingRules: [ONBOARDING_X_FIRST_SALE],
         triggeringOrderId: 'o2',
         paidSalePercentOrderIds: ['o1'],
       });
@@ -197,7 +230,7 @@ describe('compensation-rules', () => {
       const actions = agentEval({ approvedItemCount: 2 });
       expect(actions).toEqual(
         expect.arrayContaining([
-          expect.objectContaining({ ruleCode: ONBOARDING_10_FIRST_SALE }),
+          expect.objectContaining({ ruleCode: ONBOARDING_X_FIRST_SALE }),
         ])
       );
     });
@@ -212,7 +245,7 @@ describe('compensation-rules', () => {
     it('does not pay 1% again on an order that already has it', () => {
       expect(
         agentEval({
-          paidOnboardingRules: [ONBOARDING_10_FIRST_SALE],
+          paidOnboardingRules: [ONBOARDING_X_FIRST_SALE],
           paidSalePercentOrderIds: ['o1'],
         })
       ).toEqual([]);

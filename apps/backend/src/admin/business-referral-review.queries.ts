@@ -1,3 +1,8 @@
+import {
+  LEGACY_ONBOARDING_FIRST_SALE,
+  ONBOARDING_X_FIRST_SALE,
+} from '../representative-compensation/compensation-rules';
+
 export const BUSINESS_CUTOFF_DATE = '2026-04-01';
 export const MIN_ITEM_COUNT = 10;
 
@@ -271,7 +276,7 @@ export const REVIEWS_FOR_BUSINESS_IDS_QUERY = `
     representative_compensation_events(
       where: {
         business_id: { _in: $ids }
-        rule_code: { _eq: "onboarding_10_first_sale" }
+        rule_code: { _in: ["${ONBOARDING_X_FIRST_SALE}", "${LEGACY_ONBOARDING_FIRST_SALE}"] }
         status: { _eq: "credited" }
       }
     ) {

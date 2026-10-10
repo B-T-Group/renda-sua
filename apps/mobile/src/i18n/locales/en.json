@@ -4848,10 +4848,14 @@
         "catalog10Body": "When the shop has at least 2 approved products and completes a sale within 30 days of joining, you receive {{amount}} once.",
         "catalog10TitleWithMinSales": "2 approved products + {{minSales}} in sales in 30 days",
         "catalog10BodyWithMinSales": "When the shop has at least 2 approved products and at least {{minSales}} in completed sales within 30 days of joining, you receive {{amount}} once.",
+        "catalog10TitleWithBuyerSplit": "2 approved products + {{minSales}} in sales in 30 days",
+        "catalog10AmountSplit": "{{customer}} or {{self}}",
+        "catalog10BodyWithBuyerSplit": "When a customer’s sale reaches {{minSales}} within 30 days, you receive {{customer}} once. If you buy that sale yourself, you receive {{self}} once.",
         "percentTitle": "Every completed sale",
         "percentAmount": "{{percent}}% of the sale",
         "percentBody": "You also earn {{percent}}% of every completed sale, including the sale that pays the one-time bonus.",
-        "onceNote": "The {{amount}} bonus is paid only once per shop. 1% is paid on every completed sale, including the sale that unlocks the bonus."
+        "onceNote": "The {{amount}} bonus is paid only once per shop. 1% is paid on every completed sale, including the sale that unlocks the bonus.",
+        "onceNoteSplit": "The bonus is {{customer}} when a customer buys, or {{self}} when you buy it yourself. It is paid only once per shop."
       },
       "responsibilityTitle": "Your responsibility",
       "responsibilityBody": "Accompany them through onboarding: help add products, set up their account until it is fully operational, and stay available when they need you.",

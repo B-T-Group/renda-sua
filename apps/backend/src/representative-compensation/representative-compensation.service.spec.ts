@@ -1,5 +1,9 @@
 import { RepresentativeCompensationService } from './representative-compensation.service';
-import { ONBOARDING_10_FIRST_SALE, SALE_PERCENT } from './compensation-rules';
+import {
+  LEGACY_ONBOARDING_FIRST_SALE,
+  ONBOARDING_X_FIRST_SALE,
+  SALE_PERCENT,
+} from './compensation-rules';
 
 describe('RepresentativeCompensationService', () => {
   const hasuraSystemService = {
@@ -74,7 +78,12 @@ describe('RepresentativeCompensationService', () => {
   });
 
   function mockBusinessQueries(
-    sales: Array<{ id: string; subtotal: number; completedAt?: string }>,
+    sales: Array<{
+      id: string;
+      subtotal: number;
+      completedAt?: string;
+      clientUserId?: string;
+    }>,
     events: Array<Record<string, unknown>> = [],
     itemCount = 12
   ) {
@@ -94,6 +103,7 @@ describe('RepresentativeCompensationService', () => {
             subtotal: sale.subtotal,
             currency: 'XAF',
             completed_at: sale.completedAt ?? '2026-05-10T00:00:00.000Z',
+            client: { user_id: sale.clientUserId ?? 'client-user' },
           })),
         };
       }
@@ -136,8 +146,85 @@ describe('RepresentativeCompensationService', () => {
     const inserts = hasuraSystemService.executeMutation.mock.calls
       .filter(([q]) => String(q).includes('InsertCompensationEvent'))
       .map(([, vars]) => vars.object.rule_code);
-    expect(inserts).toEqual([ONBOARDING_10_FIRST_SALE, SALE_PERCENT]);
+    expect(inserts).toEqual([ONBOARDING_X_FIRST_SALE, SALE_PERCENT]);
+    expect(onboardingInsertAmount()).toBe(7500);
   });
+
+  it('claims 5000 when the referring agent bought the qualifying sale', async () => {
+    mockBusinessQueries([
+      { id: 'order-1', subtotal: 20000, clientUserId: 'user-1' },
+    ]);
+    stubSaleCredit();
+
+    await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(onboardingInsertAmount()).toBe(5000);
+  });
+
+  it('does not claim the bonus again when the legacy rule is already pending', async () => {
+    mockBusinessQueries(
+      [
+        { id: 'order-1', subtotal: 8000 },
+        { id: 'order-2', subtotal: 5000 },
+      ],
+      [
+        {
+          rule_code: LEGACY_ONBOARDING_FIRST_SALE,
+          amount: 7500,
+          status: 'pending',
+          triggering_order_id: 'order-1',
+        },
+      ]
+    );
+    stubSaleCredit();
+
+    const result = await service.evaluateForOrder('order-2', 'biz-1');
+
+    expect(result.credited).toBe(2);
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([query]) => String(query).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([SALE_PERCENT, SALE_PERCENT]);
+  });
+
+  it('still credits 1% when the onboarding insert is rejected', async () => {
+    mockBusinessQueries([{ id: 'order-1', subtotal: 20000 }]);
+    stubSaleCredit();
+    hasuraSystemService.executeMutation.mockImplementation(
+      async (mutation: string, vars?: { object?: { rule_code?: string } }) => {
+        if (
+          String(mutation).includes('InsertCompensationEvent') &&
+          vars?.object?.rule_code === ONBOARDING_X_FIRST_SALE
+        ) {
+          throw new Error('Check constraint violation');
+        }
+        return {
+          insert_representative_compensation_events_one: {
+            id: 'evt-2',
+            reference_id: 'ref-2',
+            status: 'pending',
+            rule_code: vars?.object?.rule_code,
+          },
+        };
+      }
+    );
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(result.failed).toBe(1);
+    expect(result.credited).toBe(1);
+    expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 200, transactionType: 'deposit' })
+    );
+  });
+
+  function onboardingInsertAmount(): number | undefined {
+    const inserted = hasuraSystemService.executeMutation.mock.calls
+      .filter(([query]) => String(query).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object)
+      .find((object) => object.rule_code === ONBOARDING_X_FIRST_SALE);
+    return inserted?.amount;
+  }
 
   it('credits only 1% when the first sale is below 2500 XAF', async () => {
     mockBusinessQueries([{ id: 'order-1', subtotal: 1000 }]);
@@ -178,7 +265,7 @@ describe('RepresentativeCompensationService', () => {
     const inserts = hasuraSystemService.executeMutation.mock.calls
       .filter(([q]) => String(q).includes('InsertCompensationEvent'))
       .map(([, vars]) => vars.object.rule_code);
-    expect(inserts).toEqual([ONBOARDING_10_FIRST_SALE, SALE_PERCENT]);
+    expect(inserts).toEqual([ONBOARDING_X_FIRST_SALE, SALE_PERCENT]);
   });
 
   it('falls back to 2500 XAF when the min sale config is negative', async () => {
@@ -218,7 +305,7 @@ describe('RepresentativeCompensationService', () => {
       ],
       [
         {
-          rule_code: ONBOARDING_10_FIRST_SALE,
+          rule_code: ONBOARDING_X_FIRST_SALE,
           amount: 7500,
           status: 'pending',
           triggering_order_id: 'order-1',
@@ -241,7 +328,7 @@ describe('RepresentativeCompensationService', () => {
       [{ id: 'order-1', subtotal: 20000 }],
       [
         {
-          rule_code: ONBOARDING_10_FIRST_SALE,
+          rule_code: ONBOARDING_X_FIRST_SALE,
           amount: 7500,
           status: 'pending',
           triggering_order_id: 'order-1',
@@ -270,7 +357,7 @@ describe('RepresentativeCompensationService', () => {
     hasuraSystemService.executeMutation.mockImplementation(
       async (mutation: string, vars?: any) => {
         if (String(mutation).includes('InsertCompensationEvent')) {
-          if (vars?.object?.rule_code === ONBOARDING_10_FIRST_SALE) {
+          if (vars?.object?.rule_code === ONBOARDING_X_FIRST_SALE) {
             throw new Error(
               'Uniqueness violation on uq_rce_business_onboarding_rule'
             );
@@ -339,7 +426,7 @@ describe('RepresentativeCompensationService', () => {
               id: 'evt-old',
               reference_id: 'ref-old',
               status: 'pending',
-              rule_code: ONBOARDING_10_FIRST_SALE,
+              rule_code: ONBOARDING_X_FIRST_SALE,
               amount: 7500,
               triggering_order_id: null,
             },
@@ -356,7 +443,7 @@ describe('RepresentativeCompensationService', () => {
     expect(accountsService.registerTransaction).toHaveBeenCalled();
   });
 
-  it('credits only pending onboarding_10_first_sale rows on Saturday', async () => {
+  it('credits only pending onboarding_x_first_sale rows on Saturday', async () => {
     configurationsService.getConfigurationByKey.mockResolvedValue({
       boolean_value: true,
       status: 'active',
@@ -369,7 +456,7 @@ describe('RepresentativeCompensationService', () => {
               id: 'evt-bonus',
               reference_id: 'ref-bonus',
               status: 'pending',
-              rule_code: ONBOARDING_10_FIRST_SALE,
+              rule_code: ONBOARDING_X_FIRST_SALE,
               amount: 7500,
               business_id: 'biz-1',
               triggering_order_id: 'order-1',
@@ -394,7 +481,7 @@ describe('RepresentativeCompensationService', () => {
         return {
           representative_compensation_events: [
             {
-              rule_code: ONBOARDING_10_FIRST_SALE,
+              rule_code: ONBOARDING_X_FIRST_SALE,
               amount: 7500,
               status: 'pending',
               triggering_order_id: 'order-1',
@@ -445,7 +532,7 @@ describe('RepresentativeCompensationService', () => {
     expect(rows).toEqual([
       expect.objectContaining({
         businessId: 'biz-1',
-        ruleCode: ONBOARDING_10_FIRST_SALE,
+        ruleCode: ONBOARDING_X_FIRST_SALE,
         amount: 7500,
         earnerKind: 'agent',
         earnerName: 'Ada Agent',
@@ -453,7 +540,7 @@ describe('RepresentativeCompensationService', () => {
     ]);
   });
 
-  it('retries a failed onboarding_10_first_sale on Saturday', async () => {
+  it('retries a failed onboarding_x_first_sale on Saturday', async () => {
     configurationsService.getConfigurationByKey.mockResolvedValue({
       boolean_value: true,
       status: 'active',
@@ -466,7 +553,7 @@ describe('RepresentativeCompensationService', () => {
               id: 'evt-failed',
               reference_id: 'ref-failed',
               status: 'failed',
-              rule_code: ONBOARDING_10_FIRST_SALE,
+              rule_code: ONBOARDING_X_FIRST_SALE,
               amount: 7500,
               business_id: 'biz-1',
               triggering_order_id: 'order-1',
@@ -491,7 +578,7 @@ describe('RepresentativeCompensationService', () => {
         return {
           representative_compensation_events: [
             {
-              rule_code: ONBOARDING_10_FIRST_SALE,
+              rule_code: ONBOARDING_X_FIRST_SALE,
               amount: 7500,
               status: 'failed',
               triggering_order_id: 'order-1',
@@ -521,7 +608,7 @@ describe('RepresentativeCompensationService', () => {
       ],
       [
         {
-          rule_code: ONBOARDING_10_FIRST_SALE,
+          rule_code: ONBOARDING_X_FIRST_SALE,
           amount: 7500,
           status: 'pending',
           triggering_order_id: 'order-1',
@@ -583,7 +670,7 @@ describe('RepresentativeCompensationService', () => {
         return {
           representative_compensation_events: [
             {
-              rule_code: ONBOARDING_10_FIRST_SALE,
+              rule_code: ONBOARDING_X_FIRST_SALE,
               amount: 7500,
               status: 'pending',
               triggering_order_id: 'order-1',

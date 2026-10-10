@@ -990,7 +990,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
     new events.Rule(this, `BusinessReferralPayoutsRule-${environment}`, {
       ruleName: `business-referral-payouts-rule-${environment}`,
       description:
-        'Credits pending onboarding_10_first_sale rows every Saturday at 19:00 UTC (3pm Eastern DST)',
+        'Credits pending onboarding_x_first_sale rows every Saturday at 19:00 UTC (3pm Eastern DST)',
       schedule: events.Schedule.cron({ weekDay: 'SAT', hour: '19', minute: '0' }),
       targets: [new targets.LambdaFunction(businessReferralPayoutsFunction)],
     });
