@@ -4623,7 +4623,7 @@
     "available": "disponible",
     "back": "Retour",
     "brand": "Marque",
-    "browseItems": "Parcourir les Articles",
+    "browseItems": "Parcourir les articles",
     "business": "Entreprise",
     "cancel": "Annuler",
     "category": "Catégorie",
@@ -5051,6 +5051,7 @@
     "viewAll": "Voir Tous les Messages"
   },
   "nav": {
+    "rentals": "Locations",
     "forBusiness": "Pour les entreprises",
     "becomeAgent": "Devenir agent",
     "downloadApp": "Télécharger l'appli",

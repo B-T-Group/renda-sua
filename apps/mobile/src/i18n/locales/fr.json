@@ -1159,6 +1159,13 @@
   },
   "nav": {
     "manageRecipients": "Destinataires enregistrés",
+    "guestTabs": {
+      "browse": "Articles",
+      "rentals": "Locations",
+      "foods": "Restauration",
+      "reels": "Reels",
+      "login": "Connexion"
+    },
     "clientTabs": {
       "home": "Accueil",
       "search": "Recherche"

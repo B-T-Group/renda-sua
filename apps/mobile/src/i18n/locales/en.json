@@ -1216,6 +1216,13 @@
   },
   "nav": {
     "manageRecipients": "Saved recipients",
+    "guestTabs": {
+      "browse": "Items",
+      "rentals": "Rentals",
+      "foods": "Food",
+      "reels": "Reels",
+      "login": "Sign in"
+    },
     "clientTabs": {
       "home": "Home",
       "search": "Search"
