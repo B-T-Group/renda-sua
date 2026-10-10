@@ -58,6 +58,10 @@ class ItemSubtotal(unittest.TestCase):
         self.assertEqual(item_subtotal_after_discounts("1000", "1500", "0"), 0)
         self.assertEqual(item_subtotal_after_discounts("x"), 0)
 
+    def test_service_fee_string_and_non_numeric(self):
+        self.assertEqual(item_subtotal_after_discounts(1100, 0, 0, False, 0, "100"), 1000)
+        self.assertEqual(item_subtotal_after_discounts(1000, 0, 0, False, 0, "x"), 1000)
+
 
 class CountryAndConfig(unittest.TestCase):
     def test_normalize_country(self):

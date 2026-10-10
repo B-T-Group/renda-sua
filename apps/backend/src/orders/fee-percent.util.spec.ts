@@ -95,6 +95,15 @@ describe('fee-percent.util', () => {
         })
       ).toBe(9000);
     });
+
+    it('subtracts a numeric-string service fee and ignores a non-finite one', () => {
+      expect(
+        itemSubtotalAfterDiscounts({ total_amount: 1100, service_fee: '100' })
+      ).toBe(1000);
+      expect(
+        itemSubtotalAfterDiscounts({ total_amount: 1000, service_fee: 'x' })
+      ).toBe(1000);
+    });
   });
 
   describe('normalizeFeeCountryCode', () => {

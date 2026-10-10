@@ -108,6 +108,16 @@ describe('CancellationPolicyService', () => {
       expect(policy.cancellationFee).toBe(1200);
     });
 
+    it('keeps the service fee out of the cancellation base and the refund', async () => {
+      mockFeeRows([{ country_code: 'GA', number_value: 30 }]);
+      const policy = await service.getPolicy(
+        { ...orderWithParts, total_amount: 5200, service_fee: 200 },
+        'client'
+      );
+      expect(policy.cancellationFee).toBe(1200);
+      expect(policy.refundAmount).toBe(4000);
+    });
+
     it('Cameroon (country name from the address) uses the CM row', async () => {
       mockFeeRows([{ country_code: 'CM', number_value: 30 }]);
       const policy = await service.getPolicy(
