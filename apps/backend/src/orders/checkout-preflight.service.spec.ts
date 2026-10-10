@@ -153,6 +153,7 @@ function makeFoodInventoryRow(overrides: {
 
 describe('CheckoutPreflightService', () => {
   let service: CheckoutPreflightService;
+  let serviceFee: { resolve: jest.Mock };
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let hasuraUserService: jest.Mocked<HasuraUserService>;
   let paymentRoutingService: jest.Mocked<PaymentRoutingService>;
@@ -321,6 +322,7 @@ describe('CheckoutPreflightService', () => {
     }).compile();
 
     service = module.get<CheckoutPreflightService>(CheckoutPreflightService);
+    serviceFee = module.get(require('./service-fee.service').ServiceFeeService);
     hasuraSystemService = module.get(HasuraSystemService);
     hasuraUserService = module.get(HasuraUserService);
     paymentRoutingService = module.get(PaymentRoutingService);
@@ -385,6 +387,30 @@ describe('CheckoutPreflightService', () => {
     expect(result.can_proceed).toBe(true);
     expect(result.blocking_errors).toHaveLength(0);
     expect(result.groups[0].payment_rail).toBe('stripe');
+  });
+
+  it('adds the service fee to the group total and keeps it out of the discount', async () => {
+    serviceFee.resolve.mockResolvedValue(100);
+    (loyaltyService.validateDiscountCode as jest.Mock).mockResolvedValue({
+      valid: true,
+      percentage: 10,
+    });
+    mockInventory([makeInventoryRow({ price: 1000, sellerCountry: 'CM' })]);
+
+    const result = await service.resolve(
+      {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+        discount_code: 'SAVE10',
+      },
+      true
+    );
+
+    expect(serviceFee.resolve).toHaveBeenCalledWith('CM', 'XAF');
+    expect(result.groups[0].service_fee).toBe(100);
+    expect(result.groups[0].subtotal).toBe(1000);
+    expect(result.groups[0].total).toBe(1100);
+    expect(result.discount).toMatchObject({ valid: true, discount_amount: 100 });
   });
 
   // -------------------------------------------------------------------------

@@ -171,6 +171,25 @@ describe('AssistantIdentityService', () => {
     expect(identity.market).toBeNull();
     expect(hasura.executeQuery).not.toHaveBeenCalled();
   });
+
+  it('does not grant the client persona when that profile is missing', async () => {
+    mockIdentityQueries(businessUser, []);
+    const identity = await service.resolveFromUserId('u-biz', null, 'client');
+    expect(identity.accountType).toBe('business');
+    expect(identity.clientId).toBeNull();
+  });
+
+  it('accepts the persona in any case when the profile exists', async () => {
+    mockIdentityQueries({ ...businessUser, client: { id: 'c1' } }, []);
+    const identity = await service.resolveFromUserId('u-biz', null, 'CLIENT');
+    expect(identity.accountType).toBe('client');
+  });
+
+  it('does not treat a blank delegation id as a delegate', async () => {
+    mockIdentityQueries(businessUser, []);
+    const identity = await service.resolveFromUserId('u-biz', null, 'business', '   ');
+    expect(identity.accountType).toBe('business');
+  });
 });
 
 function address(country: string, state: string | null) {

@@ -12,6 +12,13 @@ describe('assistant intents', () => {
     expect(guestAsksForPersonalData('my store credits')).toBe(true);
   });
 
+  it('does not treat a blank question or a public wallet explanation as personal', () => {
+    expect(guestAsksForPersonalData('   ')).toBe(false);
+    expect(guestAsksForPersonalData('How do wallets work?')).toBe(false);
+    expect(guestAsksForPersonalData('my wallet')).toBe(true);
+    expect(guestAsksForPersonalData('mes livraisons')).toBe(true);
+  });
+
   it('routes offer and contact questions to static knowledge', () => {
     expect(staticKnowledgeTopic('What does Rendasua offer?')).toBe('what_we_offer');
     expect(staticKnowledgeTopic('How can I contact you?')).toBe('support_contact');

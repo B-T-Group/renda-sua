@@ -220,4 +220,154 @@ describe('CommissionsService launch promo settle/restore', () => {
       'order-1'
     );
   });
+
+  it('credits the service fee to HQ when launch promo zeros item commission', async () => {
+    const { service, launchPromo } = createService();
+    launchPromo.consumePromoOrder.mockResolvedValue(true);
+    const paySpy = mockItemSettle(service);
+
+    await service.distributeItemCommissions({
+      ...order,
+      service_fee: 150.456,
+      currency: 'XAF',
+    });
+
+    expect(paySpy).toHaveBeenCalledTimes(1);
+    expect(paySpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'order-1', service_fee: 150.456 }),
+      'hq-1',
+      'rendasua',
+      'service_fee',
+      150.46,
+      'XAF'
+    );
+    expect(launchPromo.restorePromoOrder).not.toHaveBeenCalled();
+  });
+
+  it('still credits the service fee when the promo is not consumed', async () => {
+    const { service, launchPromo } = createService();
+    launchPromo.consumePromoOrder.mockResolvedValue(false);
+    const paySpy = mockItemSettle(service);
+
+    await service.distributeItemCommissions({ ...order, service_fee: 75 });
+
+    expect(paySpy).toHaveBeenCalledWith(
+      expect.anything(),
+      'hq-1',
+      'rendasua',
+      'service_fee',
+      75,
+      'XAF'
+    );
+  });
+
+  it.each([0, undefined, 'nope', -5])(
+    'does not move money for service fee %p',
+    async (serviceFee) => {
+      const { service, launchPromo } = createService();
+      launchPromo.consumePromoOrder.mockResolvedValue(true);
+      const paySpy = mockItemSettle(service);
+
+      await service.distributeItemCommissions({
+        ...order,
+        service_fee: serviceFee,
+      });
+
+      expect(paySpy).not.toHaveBeenCalled();
+      expect(launchPromo.restorePromoOrder).not.toHaveBeenCalled();
+    }
+  );
+
+  it('defaults a missing service-fee currency to XAF', async () => {
+    const { service, launchPromo } = createService();
+    launchPromo.consumePromoOrder.mockResolvedValue(false);
+    const paySpy = mockItemSettle(service);
+
+    await service.distributeItemCommissions({
+      ...order,
+      currency: undefined,
+      service_fee: 10,
+    });
+
+    expect(paySpy).toHaveBeenCalledWith(
+      expect.anything(),
+      'hq-1',
+      'rendasua',
+      'service_fee',
+      10,
+      'XAF'
+    );
+  });
+
+  it('restores the promo when the service fee credit fails', async () => {
+    const { service, launchPromo } = createService();
+    launchPromo.consumePromoOrder.mockResolvedValue(true);
+    const paySpy = mockItemSettle(service);
+    paySpy.mockRejectedValue(new Error('ledger down'));
+
+    await expect(
+      service.distributeItemCommissions({ ...order, service_fee: 100 })
+    ).rejects.toThrow('ledger down');
+    expect(launchPromo.restorePromoOrder).toHaveBeenCalledWith('biz-1', 'order-1');
+  });
 });
+
+describe('delivery commission config defaults', () => {
+  function createService() {
+    const hasura = { executeQuery: jest.fn(), executeMutation: jest.fn() };
+    const service = new CommissionsService(
+      {} as any,
+      hasura as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { consumePromoOrder: jest.fn(), restorePromoOrder: jest.fn() } as any
+    );
+    return { service, hasura };
+  }
+
+  it('falls back to 80 when the delivery rate rows are missing', async () => {
+    const { service, hasura } = createService();
+    hasura.executeQuery.mockResolvedValue({ application_configurations: [] });
+
+    await expect(service.getCommissionConfigs()).resolves.toMatchObject({
+      unverifiedAgentBaseDeliveryCommission: 80,
+      verifiedAgentBaseDeliveryCommission: 80,
+      unverifiedAgentPerKmDeliveryCommission: 80,
+      verifiedAgentPerKmDeliveryCommission: 80,
+    });
+  });
+
+  it('keeps a stored rate and treats 0 or null as missing', async () => {
+    const { service, hasura } = createService();
+    hasura.executeQuery.mockResolvedValue({
+      application_configurations: [
+        { config_key: 'unverified_agent_base_delivery_commission', number_value: 60 },
+        { config_key: 'verified_agent_base_delivery_commission', number_value: 0 },
+        { config_key: 'unverified_agent_per_km_delivery_commission', number_value: null },
+      ],
+    });
+
+    await expect(service.getCommissionConfigs()).resolves.toMatchObject({
+      unverifiedAgentBaseDeliveryCommission: 60,
+      verifiedAgentBaseDeliveryCommission: 80,
+      unverifiedAgentPerKmDeliveryCommission: 80,
+      verifiedAgentPerKmDeliveryCommission: 80,
+    });
+  });
+});
+
+function mockItemSettle(service: CommissionsService) {
+  jest.spyOn(service, 'calculateCommissions').mockResolvedValue({
+    baseDeliveryFee: { agent: 0, partner: 0, rendasua: 0 },
+    perKmDeliveryFee: { agent: 0, partner: 0, rendasua: 0 },
+    itemCommission: { partner: 50, rendasua: 50 },
+    orderSubtotal: { business: 1000, rendasua: 0 },
+  } as any);
+  jest.spyOn(service, 'getRendasuaHQUser').mockResolvedValue({ id: 'hq-1' });
+  jest.spyOn(service, 'getActivePartners').mockResolvedValue([]);
+  jest.spyOn(service as any, 'processItemCommissions').mockResolvedValue(undefined);
+  jest.spyOn(service as any, 'processOrderSubtotalPayment').mockResolvedValue(undefined);
+  return jest.spyOn(service as any, 'payCommission').mockResolvedValue(undefined);
+}
