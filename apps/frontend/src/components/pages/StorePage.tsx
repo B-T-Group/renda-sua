@@ -72,7 +72,7 @@ const StorePage: React.FC = () => {
   const { profile } = useUserProfileContext();
   const { addToCart } = useCart();
   const [currentPage, setCurrentPage] = useState(1);
-  const browserGeo = usePublicBrowserGeo(!isAuthenticated || foodMenu);
+  const browserGeo = usePublicBrowserGeo(true);
   const isClientUser = profile?.user_type_id === 'client';
   const wantsOwnerPreview =
     previewMode && Boolean(profile?.business?.id);

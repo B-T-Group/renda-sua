@@ -18,6 +18,8 @@ insert_permissions:
         - status
         - created_at
         - expires_at
+        - origin_latitude
+        - origin_longitude
 select_permissions:
   - role: anonymous
     permission:
@@ -34,6 +36,8 @@ select_permissions:
         - status
         - created_at
         - expires_at
+        - origin_latitude
+        - origin_longitude
       filter: {}
 update_permissions:
   - role: anonymous
@@ -47,5 +51,7 @@ update_permissions:
         - duration_text
         - status
         - expires_at
+        - origin_latitude
+        - origin_longitude
       filter: {}
       check: {}

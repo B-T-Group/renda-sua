@@ -1,4 +1,4 @@
-import { sameCountryAndState } from './same-region.util';
+import { sameCityStateAndCountry, sameCountryAndState } from './same-region.util';
 
 describe('sameCountryAndState', () => {
   it('matches the same country code and state, ignoring case and accents', () => {
@@ -12,6 +12,15 @@ describe('sameCountryAndState', () => {
       sameCountryAndState(
         { country: 'CA', state: 'Québec' },
         { country: 'CA', state: 'Quebec' }
+      )
+    ).toBe(true);
+  });
+
+  it('matches a French region label with the stored state name', () => {
+    expect(
+      sameCityStateAndCountry(
+        { country: 'CM', state: 'Région du Centre', city: 'Yaoundé' },
+        { country: 'CM', state: 'Centre', city: 'Yaoundé' }
       )
     ).toBe(true);
   });
@@ -36,6 +45,36 @@ describe('sameCountryAndState', () => {
       sameCountryAndState(
         { country: 'CM', state: 'Littoral' },
         { country: 'CM', state: 'Centre' }
+      )
+    ).toBe(false);
+  });
+
+  it('matches the same city after accents and a city label are ignored', () => {
+    expect(
+      sameCityStateAndCountry(
+        { country: 'CM', state: 'Littoral', city: 'Douala' },
+        { country: 'CM', state: 'Littoral Region', city: 'Douala City' }
+      )
+    ).toBe(true);
+    expect(
+      sameCityStateAndCountry(
+        { country: 'CM', state: 'Centre', city: 'Yaoundé' },
+        { country: 'cm', state: 'Centre', city: 'Yaounde' }
+      )
+    ).toBe(true);
+  });
+
+  it('rejects a different city or a missing city', () => {
+    expect(
+      sameCityStateAndCountry(
+        { country: 'CM', state: 'Littoral', city: 'Douala' },
+        { country: 'CM', state: 'Littoral', city: 'Nkongsamba' }
+      )
+    ).toBe(false);
+    expect(
+      sameCityStateAndCountry(
+        { country: 'CM', state: 'Littoral', city: 'Douala' },
+        { country: 'CM', state: 'Littoral' }
       )
     ).toBe(false);
   });

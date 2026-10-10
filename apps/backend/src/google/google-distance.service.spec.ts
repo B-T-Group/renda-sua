@@ -268,6 +268,7 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
 describe('GoogleDistanceService.getDistanceMatrixWithCaching', () => {
   let cacheService: {
     getValidCachedDistanceElements: jest.Mock;
+    findNearbyCachedDistanceElements: jest.Mock;
     cacheDistanceMatrixResults: jest.Mock;
   };
   let service: GoogleDistanceService;
@@ -276,6 +277,7 @@ describe('GoogleDistanceService.getDistanceMatrixWithCaching', () => {
     mockedAxios.get.mockReset();
     cacheService = {
       getValidCachedDistanceElements: jest.fn().mockResolvedValue([]),
+      findNearbyCachedDistanceElements: jest.fn().mockResolvedValue([]),
       cacheDistanceMatrixResults: jest.fn().mockResolvedValue(undefined),
     };
     service = new GoogleDistanceService(
@@ -388,6 +390,52 @@ describe('GoogleDistanceService.getDistanceMatrixWithCaching', () => {
 
     expect(mockedAxios.get).not.toHaveBeenCalled();
     expect(matrix.rows[0].elements[0].distance?.value).toBe(50);
+  });
+
+  it('reuses a nearby cached origin without calling Google', async () => {
+    cacheService.findNearbyCachedDistanceElements.mockResolvedValue([
+      {
+        destination_address_id: dest(1).id,
+        destination_address_formatted: dest(1).formatted,
+        origin_address_formatted: '4.05000,9.70000',
+        status: 'OK',
+        distance: { text: 'nearby', value: 80 },
+        duration: { text: '1 min', value: 60 },
+      },
+    ]);
+
+    const matrix = await service.getDistanceMatrixWithCaching(
+      ORIGIN_ID,
+      '4.05020,9.70010',
+      [dest(1)],
+      {
+        nearbyOriginMeters: 75,
+        origin: { lat: 4.0502, lng: 9.7001 },
+      }
+    );
+
+    expect(mockedAxios.get).not.toHaveBeenCalled();
+    expect(cacheService.cacheDistanceMatrixResults).not.toHaveBeenCalled();
+    expect(matrix.rows[0].elements[0].distance?.value).toBe(80);
+  });
+
+  it('stores origin coordinates when a nearby lookup misses', async () => {
+    mockedAxios.get.mockResolvedValue(okMatrix([dest(1).formatted]));
+    const origin = { lat: 4.05, lng: 9.7 };
+
+    await service.getDistanceMatrixWithCaching(ORIGIN_ID, '4.05,9.7', [dest(1)], {
+      nearbyOriginMeters: 75,
+      origin,
+    });
+
+    expect(cacheService.cacheDistanceMatrixResults).toHaveBeenCalledWith(
+      ORIGIN_ID,
+      '4.05,9.7',
+      [dest(1)],
+      expect.anything(),
+      expect.any(Number),
+      origin
+    );
   });
 });
 

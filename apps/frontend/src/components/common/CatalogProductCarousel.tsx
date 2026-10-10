@@ -128,7 +128,6 @@ export function CatalogProductCarousel({
                   onOrderClick={onOrderClick}
                   onAddToCart={onAddToCart}
                   estimatedDistance={inventoryItem.distance_text}
-                  estimatedDuration={inventoryItem.duration_text}
                   isPublicView={isPublicView}
                   canOrder={canOrder}
                   showCartButtons={showCartButtons}

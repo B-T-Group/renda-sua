@@ -58,3 +58,68 @@ describe('GoogleCacheService.getValidCachedDistanceElements', () => {
     expect(partial[0].destination_address_id).toBe(DEST_A);
   });
 });
+
+describe('GoogleCacheService.findNearbyCachedDistanceElements', () => {
+  const nearbyOrigin = '00000000-0000-4000-8000-0000000000aa';
+
+  function row(latitude: number, longitude: number) {
+    return {
+      origin_address_id: nearbyOrigin,
+      destination_address_id: DEST_A,
+      origin_address_formatted: `${latitude},${longitude}`,
+      destination_address_formatted: 'store',
+      origin_latitude: latitude,
+      origin_longitude: longitude,
+      distance_value: 1200,
+      distance_text: '1.2 km',
+      duration_value: 180,
+      duration_text: '3 mins',
+      status: 'OK',
+      created_at: '2026-01-02T00:00:00Z',
+    };
+  }
+
+  it('reuses a route whose origin is within 75 m and skips one farther away', async () => {
+    const executeQuery = jest.fn().mockImplementation((query: string) => {
+      if (query.includes('NearbyDistanceCache')) {
+        return { google_distance_cache: [row(4.0503, 9.7), row(4.052, 9.7)] };
+      }
+      if (query.includes('GetAddressUpdatedAts')) {
+        return {
+          addresses: [
+            { id: nearbyOrigin, updated_at: '2026-01-01T00:00:00Z' },
+            { id: DEST_A, updated_at: '2026-01-01T00:00:00Z' },
+          ],
+        };
+      }
+      return {};
+    });
+    const service = new GoogleCacheService({ executeQuery } as any);
+
+    const near = await service.findNearbyCachedDistanceElements(
+      { lat: 4.05, lng: 9.7 },
+      [DEST_A],
+      75
+    );
+    expect(near).toHaveLength(1);
+    expect(near[0].distance?.value).toBe(1200);
+
+    executeQuery.mockImplementation((query: string) => {
+      if (query.includes('NearbyDistanceCache')) {
+        return { google_distance_cache: [row(4.052, 9.7)] };
+      }
+      return {
+        addresses: [
+          { id: nearbyOrigin, updated_at: '2026-01-01T00:00:00Z' },
+          { id: DEST_A, updated_at: '2026-01-01T00:00:00Z' },
+        ],
+      };
+    });
+    const far = await service.findNearbyCachedDistanceElements(
+      { lat: 4.05, lng: 9.7 },
+      [DEST_A],
+      75
+    );
+    expect(far).toEqual([]);
+  });
+});

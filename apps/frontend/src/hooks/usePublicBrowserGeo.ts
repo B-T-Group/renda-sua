@@ -27,8 +27,51 @@ function readStored(): PublicBrowserGeo | null {
   return null;
 }
 
+function persist(coords: PublicBrowserGeo): void {
+  try {
+    localStorage.setItem(PUBLIC_BROWSER_GEO_STORAGE_KEY, JSON.stringify(coords));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+type BrowserGeoReader = {
+  getCurrentPosition: (
+    success: (pos: { coords: { latitude: number; longitude: number } }) => void,
+    error: () => void,
+    options: PositionOptions
+  ) => void;
+};
+
+/** Requests a fresh catalog fix and keeps the last saved one if the browser refuses. */
+export function subscribeBrowserCatalogGeo(
+  geolocation: BrowserGeoReader | null | undefined,
+  onCoords: (coords: PublicBrowserGeo) => void
+): () => void {
+  const stored = readStored();
+  if (stored) onCoords(stored);
+  if (!geolocation) return () => undefined;
+  let cancelled = false;
+  geolocation.getCurrentPosition(
+    (pos) => {
+      if (cancelled) return;
+      const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      persist(next);
+      onCoords(next);
+    },
+    () => {
+      /* denied or timeout — keep a previously saved fix */
+    },
+    { enableHighAccuracy: false, timeout: 12_000, maximumAge: 600_000 }
+  );
+  return () => {
+    cancelled = true;
+  };
+}
+
 /**
- * For anonymous users: reuse coordinates from localStorage or request once via Geolocation API.
+ * Current browser coordinates for catalog distance.
+ * A saved fix paints immediately; a fresh reading replaces it when permission allows.
  */
 export function usePublicBrowserGeo(enabled: boolean): PublicBrowserGeo | null {
   const [coords, setCoords] = useState<PublicBrowserGeo | null>(() =>
@@ -40,35 +83,7 @@ export function usePublicBrowserGeo(enabled: boolean): PublicBrowserGeo | null {
       setCoords(null);
       return;
     }
-    const stored = readStored();
-    if (stored) {
-      setCoords(stored);
-      return;
-    }
-    if (typeof navigator === 'undefined' || !navigator.geolocation) {
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const next = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        };
-        try {
-          localStorage.setItem(
-            PUBLIC_BROWSER_GEO_STORAGE_KEY,
-            JSON.stringify(next)
-          );
-        } catch {
-          /* ignore quota */
-        }
-        setCoords(next);
-      },
-      () => {
-        /* denied or timeout — leave null */
-      },
-      { enableHighAccuracy: false, timeout: 12_000, maximumAge: 600_000 }
-    );
+    return subscribeBrowserCatalogGeo(navigator?.geolocation, setCoords);
   }, [enabled]);
 
   return enabled ? coords : null;

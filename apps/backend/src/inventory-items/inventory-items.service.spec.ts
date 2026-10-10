@@ -46,7 +46,6 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       {} as any
     );
 
@@ -221,7 +220,6 @@ describe('InventoryItemsService.resolveSemanticSearch', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       itemEmbeddingService as any,
       {} as any
     );
@@ -238,7 +236,6 @@ describe('InventoryItemsService.resolveSemanticSearch', () => {
       embedSearchQuery: jest.fn(),
     };
     const service = new InventoryItemsService(
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -260,7 +257,6 @@ describe('InventoryItemsService.resolveSemanticSearch', () => {
       embedSearchQuery: jest.fn(),
     };
     const service = new InventoryItemsService(
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -289,7 +285,6 @@ describe('InventoryItemsService food catalog helpers', () => {
     };
     const service = new InventoryItemsService(
       hasuraSystemService as any,
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -401,7 +396,6 @@ describe('InventoryItemsService.clampInventoryListLimit', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       {} as any
     );
     const clamp = (limit?: number) =>
@@ -426,7 +420,6 @@ describe('InventoryItemsService.getInventoryItems export flags', () => {
     const service = new InventoryItemsService(
       {} as any,
       hasuraUser as any,
-      {} as any,
       {} as any,
       {} as any,
       itemEmbeddingService as any,
@@ -514,7 +507,6 @@ describe('InventoryItemsService.getSimilarInventoryItems', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       {} as any
     );
 
@@ -531,7 +523,6 @@ describe('InventoryItemsService.getInventoryItemById', () => {
     const cause = new Error('graphql validation failed');
     const service = new InventoryItemsService(
       { executeQuery: jest.fn().mockRejectedValue(cause) } as any,
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -557,7 +548,6 @@ describe('InventoryItemsService.getInventoryStoreById', () => {
     };
     const service = new InventoryItemsService(
       hasuraSystemService as any,
-      {} as any,
       {} as any,
       {} as any,
       {} as any,
@@ -710,7 +700,6 @@ describe('InventoryItemsService store directory partner filters', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       {} as any
     );
     jest
@@ -839,7 +828,6 @@ describe('InventoryItemsService pay-after storefront badge', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       {} as any
     );
     return { service, executeQuery };
@@ -902,7 +890,6 @@ describe('InventoryItemsService store distance region', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       {} as any
     );
   }
@@ -911,33 +898,41 @@ describe('InventoryItemsService store distance region', () => {
   const store = {
     country: 'CM',
     state: 'Littoral',
+    city: 'Douala',
     latitude: 4.051,
     longitude: 9.708,
   };
+  const region = { country: 'CM', state: 'Littoral', city: 'Douala' };
 
-  it('computes meters only when the shopper and store share country and state', () => {
+  it('computes meters only when the shopper and store share city, state, and country', () => {
     const meters = (service() as any).metersWithinRegion(
       origin,
-      { country: 'CM', state: 'Littoral Region' },
+      { country: 'CM', state: 'Littoral Region', city: 'Douala City' },
       store
     );
     expect(meters).toEqual(expect.any(Number));
     expect(meters).toBeGreaterThan(0);
   });
 
-  it('returns no distance for a different state or country', () => {
+  it('returns no distance for a different city, state, or country', () => {
     const api = service() as any;
     expect(
-      api.metersWithinRegion(origin, { country: 'CM', state: 'Centre' }, store)
+      api.metersWithinRegion(origin, { ...region, city: 'Nkongsamba' }, store)
     ).toBeNull();
     expect(
-      api.metersWithinRegion(origin, { country: 'CA', state: 'Ontario' }, store)
+      api.metersWithinRegion(origin, { ...region, state: 'Centre' }, store)
+    ).toBeNull();
+    expect(
+      api.metersWithinRegion(
+        origin,
+        { country: 'CA', state: 'Ontario', city: 'Toronto' },
+        store
+      )
     ).toBeNull();
   });
 
   it('returns no distance without an origin, a region, or finite coordinates', () => {
     const api = service() as any;
-    const region = { country: 'CM', state: 'Littoral' };
     expect(api.metersWithinRegion(null, region, store)).toBeNull();
     expect(api.metersWithinRegion(origin, null, store)).toBeNull();
     expect(
@@ -964,22 +959,36 @@ describe('InventoryItemsService store distance region', () => {
         },
       },
     };
-    const stripped = api.withHaversineDistance(abroad, origin, {
-      country: 'CM',
-      state: 'Littoral',
-    });
+    const stripped = api.withHaversineDistance(abroad, origin, region);
     expect(stripped.distance_text).toBeUndefined();
     expect(stripped.duration_text).toBeUndefined();
     expect(stripped.distance_value).toBeUndefined();
 
-    const unknownRegion = api.omitDistanceOutsideRegion([abroad], null);
-    expect(unknownRegion[0].distance_text).toBeUndefined();
-    expect(unknownRegion[0].distance_value).toBeUndefined();
+    const unknownRegion = api.withHaversineDistance(abroad, origin, null);
+    expect(unknownRegion.distance_text).toBeUndefined();
+    expect(unknownRegion.distance_value).toBeUndefined();
+  });
+
+  it('keeps the straight-line meters and does not invent a driving duration', () => {
+    const api = service() as any;
+    const local = api.withHaversineDistance(
+      {
+        id: 'local',
+        business_location: { address: store },
+      },
+      origin,
+      region
+    );
+    expect(local.distance_value).toEqual(expect.any(Number));
+    expect(local.distance_value).toBeGreaterThan(0);
+    expect(local.distance_text).toBeUndefined();
+    expect(local.duration_text).toBeUndefined();
+    expect(api.fetchGoogleDistances).toBeUndefined();
+    expect(api.enrichWithDistanceOnly).toBeUndefined();
   });
 
   it('ranks same-region stores by distance and hides the rest', () => {
     const api = service() as any;
-    const region = { country: 'CM', state: 'Littoral' };
     const counts = new Map([
       ['near', 1],
       ['far', 8],
@@ -991,18 +1000,19 @@ describe('InventoryItemsService store distance region', () => {
       latitude: number,
       longitude: number,
       country = 'CM',
-      state = 'Littoral'
+      state = 'Littoral',
+      city = 'Douala'
     ) => ({
       name: latitude.toString(),
       logo_url: null,
-      address: { country, state, latitude, longitude },
+      address: { country, state, city, latitude, longitude },
     });
     const byId = new Map([
       ['near', address(4.051, 9.708)],
       ['far', address(4.2, 9.7)],
       ['tie-low', address(4.051, 9.708)],
       ['tie-high', address(4.051, 9.708)],
-      ['abroad', address(43.6, -79.3, 'CA', 'Ontario')],
+      ['abroad', address(43.6, -79.3, 'CA', 'Ontario', 'Toronto')],
     ]);
 
     const ranked = api.rankTopLocationsByOrigin(counts, byId, origin, region, 5);

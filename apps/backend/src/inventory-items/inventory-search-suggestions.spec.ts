@@ -26,7 +26,6 @@ describe('InventoryItemsService.getInventorySearchSuggestions', () => {
       { getUser: jest.fn().mockRejectedValue(new Error('anonymous')) } as any,
       {} as any,
       {} as any,
-      {} as any,
       {
         normalizeSearchQuery: (q: string) => q.trim(),
         isEmbeddingsSearchEnabled: () => false,

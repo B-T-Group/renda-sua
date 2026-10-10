@@ -105,7 +105,7 @@ function StoreDetailScreen({ route, navigation }: Props) {
   const withAuth = auth.isAuthenticated;
   const catalogReady = withAuth || !guestCountry.loading;
   const countryCode = withAuth ? undefined : guestCountry.countryCode;
-  const { origin } = useCatalogOrigin('relevance', catalogReady, foodOnly === true);
+  const { origin } = useCatalogOrigin(catalogReady);
 
   const storeQuery = useInventoryStore({
     businessId: locationOrBusinessId,

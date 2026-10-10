@@ -16,7 +16,6 @@ import {
   Container,
   Divider,
   FormControl,
-  FormControlLabel,
   Grid,
   IconButton,
   InputLabel,
@@ -25,7 +24,6 @@ import {
   Select,
   Skeleton,
   Stack,
-  Switch,
   TextField,
   Typography,
   useMediaQuery,
@@ -74,6 +72,7 @@ import CheckoutProgressStepper from '../common/CheckoutProgressStepper';
 import {
   EMPTY_RECIPIENT_DRAFT,
   buildRecipientPayload,
+  dropOffAddressesForFulfillment,
   isCrossBorderCheckout,
   isRecipientDraftIncomplete,
   type RecipientDraft,
@@ -746,27 +745,6 @@ const CheckoutPage: React.FC = () => {
     if (addressesLoading) addressLoadStarted.current = true;
   }, [addressesLoading]);
 
-  useEffect(() => {
-    if (fulfillment !== 'delivery' || sendingToSomeoneElse) return;
-    if (!addressLoadStarted.current || addressesLoading) return;
-    if (addresses.length > 0 || selectedAddressId) return;
-    if (autoLocated.current) return;
-    autoLocated.current = true;
-    void applyCurrentLocation();
-  }, [
-    addresses.length,
-    addressesLoading,
-    applyCurrentLocation,
-    fulfillment,
-    selectedAddressId,
-    sendingToSomeoneElse,
-  ]);
-
-  // Get fast delivery configuration
-  const selectedAddress = addresses.find(
-    (addr) => addr.address.id === selectedAddressId
-  )?.address;
-
   const recipientPayload = useMemo(
     () => buildRecipientPayload({ sendingToSomeoneElse, recipient }),
     [sendingToSomeoneElse, recipient]
@@ -806,6 +784,56 @@ const CheckoutPage: React.FC = () => {
 
   const diaspora = checkoutPreflight?.diaspora ?? null;
   const crossBorderCheckout = isCrossBorderCheckout(diaspora);
+  const diasporaNeedsRecipientAddress =
+    diaspora?.is_diaspora === true && fulfillment === 'delivery';
+  const selectableAddresses = useMemo(() => {
+    if (!diasporaNeedsRecipientAddress) return addresses;
+    const allowed = new Set(
+      dropOffAddressesForFulfillment(
+        addresses.map((row) => ({
+          id: row.address.id,
+          country: row.address.country,
+        })),
+        diaspora?.fulfillment_country,
+        true
+      ).map((row) => row.id)
+    );
+    return addresses.filter((row) => allowed.has(row.address.id));
+  }, [
+    addresses,
+    diaspora?.fulfillment_country,
+    diasporaNeedsRecipientAddress,
+  ]);
+  const selectedAddress = selectableAddresses.find(
+    (addr) => addr.address.id === selectedAddressId
+  )?.address;
+
+  useEffect(() => {
+    if (fulfillment !== 'delivery' || sendingToSomeoneElse) return;
+    if (diaspora?.is_diaspora) return;
+    if (!addressLoadStarted.current || addressesLoading) return;
+    if (addresses.length > 0 || selectedAddressId) return;
+    if (autoLocated.current) return;
+    autoLocated.current = true;
+    void applyCurrentLocation();
+  }, [
+    addresses.length,
+    addressesLoading,
+    applyCurrentLocation,
+    diaspora?.is_diaspora,
+    fulfillment,
+    selectedAddressId,
+    sendingToSomeoneElse,
+  ]);
+
+  useEffect(() => {
+    if (!selectedAddressId) return;
+    const stillSelectable = selectableAddresses.some(
+      (row) => row.address.id === selectedAddressId
+    );
+    if (!stillSelectable) setSelectedAddressId('');
+  }, [selectableAddresses, selectedAddressId]);
+
   const recipientIncomplete = isRecipientDraftIncomplete({
     sendingToSomeoneElse,
     recipient,
@@ -1318,6 +1346,12 @@ const CheckoutPage: React.FC = () => {
 
   // Address Dialog Handlers
   const handleOpenAddressDialog = () => {
+    if (diasporaNeedsRecipientAddress && diaspora?.fulfillment_country) {
+      setAddressFormData((prev) => ({
+        ...prev,
+        country: diaspora.fulfillment_country ?? prev.country,
+      }));
+    }
     setAddressDialogOpen(true);
   };
 
@@ -1532,14 +1566,52 @@ const CheckoutPage: React.FC = () => {
                   {/* Address Selection */}
                   <Box sx={{ mb: 3 }}>
                     <Typography variant="subtitle1" sx={{ mb: 2 }}>
-                      {t('checkout.deliveryAddress', 'Delivery Address')}
+                      {diasporaNeedsRecipientAddress
+                        ? t(
+                            'diaspora.recipientAddress',
+                            'Recipient address'
+                          )
+                        : t('checkout.deliveryAddress', 'Delivery Address')}
                     </Typography>
+                    {diasporaNeedsRecipientAddress ? (
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                        {t(
+                          'diaspora.recipientAddressHelp',
+                          'Enter the address where the recipient will receive this order. We share it with the delivery agent.'
+                        )}
+                      </Typography>
+                    ) : null}
 
                     {addressesLoading ? (
                       <Skeleton variant="rectangular" height={56} />
-                    ) : addresses.length === 0 ? (
+                    ) : selectableAddresses.length === 0 ? (
                       <DeliveryAddressEmptyState
                         status={currentLocationStatus}
+                        allowCurrentLocation={!diasporaNeedsRecipientAddress}
+                        title={
+                          diasporaNeedsRecipientAddress
+                            ? t(
+                                'diaspora.recipientAddressEmpty',
+                                'Add the recipient’s delivery address in the destination country.'
+                              )
+                            : undefined
+                        }
+                        hint={
+                          diasporaNeedsRecipientAddress
+                            ? t(
+                                'diaspora.recipientAddressHelp',
+                                'Enter the address where the recipient will receive this order. We share it with the delivery agent.'
+                              )
+                            : undefined
+                        }
+                        addLabel={
+                          diasporaNeedsRecipientAddress
+                            ? t(
+                                'diaspora.addRecipientAddress',
+                                'Add recipient address'
+                              )
+                            : undefined
+                        }
                         onUseCurrentLocation={() => void applyCurrentLocation()}
                         onAddAddress={handleOpenAddressDialog}
                       />
@@ -1555,7 +1627,7 @@ const CheckoutPage: React.FC = () => {
                           }
                           label={t('checkout.selectAddress', 'Select Address')}
                         >
-                          {addresses.map((addr) => (
+                          {selectableAddresses.map((addr) => (
                             <MenuItem key={addr.address.id} value={addr.address.id}>
                               <Box>
                                 <Typography variant="body2">
@@ -1575,8 +1647,9 @@ const CheckoutPage: React.FC = () => {
                       </FormControl>
                     )}
 
-                    {addresses.length > 0 ? (
+                    {selectableAddresses.length > 0 ? (
                       <>
+                        {diasporaNeedsRecipientAddress ? null : (
                         <Button
                           variant="outlined"
                           startIcon={<MyLocation />}
@@ -1594,17 +1667,24 @@ const CheckoutPage: React.FC = () => {
                                 'Use my current location'
                               )}
                         </Button>
+                        )}
                         <Button
                           variant="outlined"
                           onClick={handleOpenAddressDialog}
                           sx={{ mt: 1 }}
                         >
-                          {t('checkout.addNewAddress', 'Add New Address')}
+                          {diasporaNeedsRecipientAddress
+                            ? t(
+                                'diaspora.addRecipientAddress',
+                                'Add recipient address'
+                              )
+                            : t('checkout.addNewAddress', 'Add New Address')}
                         </Button>
                       </>
                     ) : null}
-                    {currentLocationStatus === 'denied' ||
-                    currentLocationStatus === 'failed' ? (
+                    {!diasporaNeedsRecipientAddress &&
+                    (currentLocationStatus === 'denied' ||
+                    currentLocationStatus === 'failed') ? (
                       <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
                         {currentLocationStatus === 'denied'
                           ? t(

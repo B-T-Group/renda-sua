@@ -1,50 +1,43 @@
 import { useCallback, useEffect, useState } from 'react';
 import * as Location from 'expo-location';
-import type { InventorySortMode } from '@/types/inventoryCatalog';
 
 export interface CatalogOrigin {
   lat: number;
   lng: number;
 }
 
+/** Reads the device fix used as the catalog distance origin. */
+export async function readDeviceCatalogOrigin(): Promise<CatalogOrigin | null> {
+  try {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') return null;
+    const pos = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Resolves device coordinates for “Nearest” sort, or whenever `always` is set
- * (the Food tab, so distance can show without changing sort).
+ * Device coordinates for catalog distance. Requested for every shopper
+ * while the catalog is enabled, including signed-in users.
  */
-export function useCatalogOrigin(
-  sort: InventorySortMode,
-  enabled = true,
-  always = false
-) {
+export function useCatalogOrigin(enabled = true) {
   const [origin, setOrigin] = useState<CatalogOrigin | null>(null);
-  const needsOrigin = always || sort === 'fastest';
 
   const resolveOrigin = useCallback(async () => {
-    if (!needsOrigin || !enabled) {
+    if (!enabled) {
       setOrigin(null);
       return;
     }
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setOrigin(null);
-        return;
-      }
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      setOrigin({
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-      });
-    } catch {
-      setOrigin(null);
-    }
-  }, [enabled, needsOrigin]);
+    setOrigin(await readDeviceCatalogOrigin());
+  }, [enabled]);
 
   useEffect(() => {
     void resolveOrigin();
   }, [resolveOrigin]);
 
-  return { origin, needsOrigin, refreshOrigin: resolveOrigin };
+  return { origin, needsOrigin: enabled, refreshOrigin: resolveOrigin };
 }

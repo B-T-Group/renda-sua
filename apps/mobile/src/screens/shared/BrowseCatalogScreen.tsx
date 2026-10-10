@@ -324,7 +324,7 @@ function BrowseCatalogScreenInner({
   const catalogState = selectedMarket?.stateCode ?? undefined;
   const catalogReady = marketHydrated;
 
-  const { origin: catalogOrigin } = useCatalogOrigin(sort, catalogReady, foodOnly);
+  const { origin: catalogOrigin } = useCatalogOrigin(catalogReady);
 
   const { facetItems, facetLoading, refetchFacets } = useInventoryCatalogFacets({
     withAuth: inventoryRequestsWithAuth,

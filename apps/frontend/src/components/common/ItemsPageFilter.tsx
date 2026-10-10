@@ -47,7 +47,6 @@ import {
 } from '../../hooks/useTrackSiteEvent';
 import { InventoryItem } from '../../hooks/useInventoryItems';
 import { useCollections } from '../../hooks/useCollections';
-import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { usePublicBrowserGeo } from '../../hooks/usePublicBrowserGeo';
 import { useCatalogGeoParams } from '../../hooks/useCatalogGeoParams';
 
@@ -98,8 +97,7 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
   onClearFilters,
 }) => {
   const { t } = useTranslation();
-  const { isAuthenticated } = useSessionAuth();
-  const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+  const browserGeo = usePublicBrowserGeo(true);
   const catalogGeo = useCatalogGeoParams();
   const { collections: collectionOptions } = useCollections({
     anonymousOrigin: browserGeo,

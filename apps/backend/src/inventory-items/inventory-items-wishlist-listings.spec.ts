@@ -45,7 +45,6 @@ describe('InventoryItemsService wishlist listings', () => {
       {} as any,
       {} as any,
       {} as any,
-      {} as any,
       {} as any
     );
     return { service, hasuraSystem, hasuraUser };

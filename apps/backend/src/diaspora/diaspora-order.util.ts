@@ -36,9 +36,29 @@ export interface ResolvedOrderPayer {
 
 export const DIASPORA_ERROR_CODES = {
   recipientContactRequired: 'RECIPIENT_CONTACT_REQUIRED',
+  recipientAddressRequired: 'RECIPIENT_ADDRESS_REQUIRED',
   recipientPhoneInvalid: 'RECIPIENT_PHONE_INVALID_FOR_COUNTRY',
   requiresPayNow: 'DIASPORA_REQUIRES_PAY_NOW',
 } as const;
+
+/**
+ * Pickup needs no drop-off. Delivery and shipping must use an address in the
+ * seller country. Returns the mismatched seller country, or a missing-country
+ * marker, when the drop-off cannot be used.
+ */
+export function deliveryCountryMismatch(params: {
+  fulfillment: 'delivery' | 'pickup' | 'shipping';
+  dropOffCountry?: string | null;
+  sellerCountries: Array<string | null | undefined>;
+}): string | null {
+  if (params.fulfillment === 'pickup') return null;
+  const dropOff = normalizeCountryCode(params.dropOffCountry);
+  const sellers = params.sellerCountries
+    .map((country) => normalizeCountryCode(country))
+    .filter((country): country is string => Boolean(country));
+  if (!dropOff) return 'MISSING_ADDRESS_COUNTRY';
+  return sellers.find((country) => country !== dropOff) ?? null;
+}
 
 export function normalizeCountryCode(
   value?: string | null

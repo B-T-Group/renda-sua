@@ -41,6 +41,15 @@ export interface ForwardGeocode {
 /** Google Distance Matrix legacy API: max 25 origins or destinations per request. */
 export const DISTANCE_MATRIX_MAX_DESTINATIONS = 25;
 
+/** Delivery-fee cache reuse when the shopper has moved only a little. */
+export const DELIVERY_DISTANCE_NEARBY_ORIGIN_METERS = 75;
+
+export interface DistanceMatrixCacheOptions {
+  ttlSeconds?: number;
+  nearbyOriginMeters?: number;
+  origin?: { lat: number; lng: number };
+}
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -75,7 +84,7 @@ export class GoogleDistanceService {
     originAddressId: string,
     originAddressFormatted: string,
     destinationAddresses: DestinationAddress[],
-    options?: { ttlSeconds?: number }
+    options?: DistanceMatrixCacheOptions
   ): Promise<DistanceMatrixResponse> {
     const ttl = options?.ttlSeconds ?? this.cacheTTL;
     try {
@@ -83,7 +92,8 @@ export class GoogleDistanceService {
         originAddressId,
         originAddressFormatted,
         destinationAddresses,
-        ttl
+        ttl,
+        options
       );
       return this.buildDistanceMatrix(
         originAddressFormatted,
@@ -113,12 +123,14 @@ export class GoogleDistanceService {
     originId: string,
     originFormatted: string,
     destinations: DestinationAddress[],
-    ttl: number
+    ttl: number,
+    options?: DistanceMatrixCacheOptions
   ): Promise<ElementMaps> {
     if (destinations.length === 0) {
       return { elements: new Map(), addresses: new Map() };
     }
     const cached = await this.loadCachedElements(originId, destinations);
+    await this.applyNearbyOriginCache(destinations, cached, options);
     const missing = destinations.filter((d) => !cached.elements.has(d.id));
     if (missing.length === 0) return cached;
     this.logger.log(
@@ -128,9 +140,35 @@ export class GoogleDistanceService {
       originId,
       originFormatted,
       missing,
-      ttl
+      ttl,
+      options
     );
     return this.mergeElementMaps(cached, fetched);
+  }
+
+  private async applyNearbyOriginCache(
+    destinations: DestinationAddress[],
+    cached: ElementMaps,
+    options?: DistanceMatrixCacheOptions
+  ): Promise<void> {
+    const origin = options?.origin;
+    const meters = options?.nearbyOriginMeters;
+    if (!origin || !meters || meters <= 0 || !this.cacheEnabled) return;
+    const missingIds = destinations
+      .filter((dest) => !cached.elements.has(dest.id))
+      .map((dest) => dest.id);
+    if (missingIds.length === 0) return;
+    const nearby = await this.cacheService.findNearbyCachedDistanceElements(
+      origin,
+      missingIds,
+      meters
+    );
+    this.mergeElementMapsInto(cached, this.mapsFromCachedEntries(nearby));
+  }
+
+  private mergeElementMapsInto(target: ElementMaps, extra: ElementMaps): void {
+    for (const [id, element] of extra.elements) target.elements.set(id, element);
+    for (const [id, address] of extra.addresses) target.addresses.set(id, address);
   }
 
   private async loadCachedElements(
@@ -150,7 +188,8 @@ export class GoogleDistanceService {
     originId: string,
     originFormatted: string,
     missing: DestinationAddress[],
-    ttl: number
+    ttl: number,
+    options?: DistanceMatrixCacheOptions
   ): Promise<ElementMaps> {
     const maps: ElementMaps = { elements: new Map(), addresses: new Map() };
     for (const chunk of this.chunkDestinations(missing)) {
@@ -164,7 +203,8 @@ export class GoogleDistanceService {
         originFormatted,
         chunk,
         response,
-        ttl
+        ttl,
+        options
       );
     }
     return maps;
@@ -175,7 +215,8 @@ export class GoogleDistanceService {
     originFormatted: string,
     chunk: DestinationAddress[],
     response: DistanceMatrixResponse,
-    ttl: number
+    ttl: number,
+    options?: DistanceMatrixCacheOptions
   ): Promise<void> {
     if (!this.cacheEnabled || !UUID_PATTERN.test(originId)) return;
     await this.cacheService.cacheDistanceMatrixResults(
@@ -183,7 +224,8 @@ export class GoogleDistanceService {
       originFormatted,
       chunk,
       response,
-      ttl
+      ttl,
+      options?.origin ?? null
     );
   }
 

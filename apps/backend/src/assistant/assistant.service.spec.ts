@@ -480,6 +480,85 @@ describe('AssistantService', () => {
     expect(result.cards).toEqual([card]);
   });
 
+  it('keeps the row list on WhatsApp when there are no cards', async () => {
+    const card = {
+      kind: 'order' as const,
+      id: 'o1',
+      title: 'Jus Oasis',
+      priceLabel: '200 XAF',
+      href: '/orders/o1',
+    };
+    const listed = 'Voici vos commandes :\n1. **Commande n° 32261431**\n- Jus Oasis — 200 XAF';
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'tool_use',
+        text: '',
+        toolUses: [{ toolUseId: 't1', name: 'get_my_recent_orders', input: {} }],
+        assistantContent: [{ toolUse: { toolUseId: 't1', name: 'get_my_recent_orders', input: {} } }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: listed,
+        toolUses: [],
+        assistantContent: [],
+      });
+    tools.executeTool.mockResolvedValue({ content: 'orders', cards: [card] });
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [{ role: 'user', content: 'mes commandes' }],
+      identity: {
+        isVerified: true,
+        userId: 'u1',
+        firstName: 'Ada',
+        preferredLanguage: 'fr',
+        market: { country_code: 'CM' },
+        country: 'CM',
+        phoneE164: null,
+        accountType: 'client',
+        clientId: 'c1',
+      },
+    });
+    expect(result.reply).toContain('32261431');
+    expect(result.reply).toContain('Jus Oasis');
+    expect(result.cards).toBeUndefined();
+  });
+
+  it('replaces an app reply that is only a list with a short intro', async () => {
+    const card = { kind: 'order' as const, id: 'o1', title: 'Rice', href: '/orders/o1' };
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'tool_use',
+        text: '',
+        toolUses: [{ toolUseId: 't1', name: 'get_my_recent_orders', input: {} }],
+        assistantContent: [{ toolUse: { toolUseId: 't1', name: 'get_my_recent_orders', input: {} } }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: '- Rice — 200 XAF\n1. Soap — 100 XAF',
+        toolUses: [],
+        assistantContent: [],
+      });
+    tools.executeTool.mockResolvedValue({ content: 'orders', cards: [card] });
+    const result = await service.runTurn({
+      channel: 'app',
+      messages: [{ role: 'user', content: 'mes commandes' }],
+      identity: {
+        isVerified: true,
+        userId: 'u1',
+        firstName: 'Ada',
+        preferredLanguage: 'en',
+        market: { country_code: 'CM' },
+        country: 'CM',
+        phoneE164: null,
+        accountType: 'client',
+        clientId: 'c1',
+      },
+    });
+    expect(result.reply).toBe('Here is what I found.');
+    expect(result.reply).not.toMatch(/200/);
+    expect(result.cards).toEqual([card]);
+  });
+
   it('marks successful WhatsApp answers as not silent', async () => {
     bedrock.converseWithTools.mockResolvedValue({
       stopReason: 'end_turn',

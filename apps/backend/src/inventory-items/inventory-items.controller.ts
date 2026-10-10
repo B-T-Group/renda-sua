@@ -84,7 +84,7 @@ export class InventoryItemsController {
   @Get('top-locations')
   @ApiOperation({
     summary:
-      'Nearest catalog locations when user address or origin_lat/origin_lng is available; otherwise ranked by item count',
+      'Nearest catalog locations when origin_lat/origin_lng is sent; otherwise ranked by item count',
   })
   @ApiQuery({
     name: 'limit',
@@ -109,14 +109,14 @@ export class InventoryItemsController {
     required: false,
     type: Number,
     description:
-      'Browser latitude for nearest ranking (ignored when user has a primary address)',
+      'Current device latitude. Catalog distance uses these coordinates, not a saved address',
   })
   @ApiQuery({
     name: 'origin_lng',
     required: false,
     type: Number,
     description:
-      'Browser longitude for nearest ranking (ignored when user has a primary address)',
+      'Current device longitude. Catalog distance uses these coordinates, not a saved address',
   })
   @ApiResponse({
     status: 200,
@@ -402,7 +402,7 @@ export class InventoryItemsController {
   @ApiResponse({
     status: 200,
     description:
-      'Successfully retrieved inventory items. For each product (catalog `item_id`), a single best listing is returned: nearest to the user when address coordinates (or `origin_lat`/`origin_lng`) are available, otherwise the best by the selected sort. When the user is logged in with a primary address, each item may include distance_text, duration_text (and distance_value in meters). Items may include avg_rating and rating_count for display. Results are ordered by the requested sort (relevance, fastest, cheapest, top_rated, or deals).',
+      'Successfully retrieved inventory items. For each product (catalog `item_id`), a single best listing is returned: nearest by straight-line distance when `origin_lat`/`origin_lng` are sent, otherwise the best by the selected sort. `distance_value` is haversine meters and is set only when the device location and the store share a city, state, and country. Items may include avg_rating and rating_count. Results are ordered by the requested sort (relevance, fastest, cheapest, top_rated, or deals).',
     schema: {
       type: 'object',
       properties: {
@@ -415,7 +415,7 @@ export class InventoryItemsController {
               items: {
                 type: 'object',
                 description:
-                  'Item may include distance_text, duration_text, distance_value, avg_rating, rating_count',
+                  'Item may include distance_value (haversine meters), avg_rating, rating_count',
               },
             },
             total: { type: 'number' },
@@ -552,14 +552,14 @@ export class InventoryItemsController {
     required: false,
     type: Number,
     description:
-      'Approximate latitude for distance (anonymous users; ignored when primary address exists)',
+      'Current device latitude for straight-line catalog distance',
   })
   @ApiQuery({
     name: 'origin_lng',
     required: false,
     type: Number,
     description:
-      'Approximate longitude for distance (anonymous users; ignored when primary address exists)',
+      'Current device longitude for straight-line catalog distance',
   })
   @ApiQuery({
     name: 'collection',
@@ -766,7 +766,7 @@ export class InventoryItemsController {
     name: 'country_code',
     required: false,
     type: String,
-    description: 'Anonymous catalog scope (overridden by primary address)',
+    description: 'Market country filter. Does not replace device coordinates for distance',
   })
   @ApiQuery({
     name: 'state',
@@ -785,14 +785,14 @@ export class InventoryItemsController {
     required: false,
     type: Number,
     description:
-      'Approximate latitude for anonymous distance scoping (ignored when primary address exists)',
+      'Current device latitude for straight-line catalog distance',
   })
   @ApiQuery({
     name: 'origin_lng',
     required: false,
     type: Number,
     description:
-      'Approximate longitude for anonymous distance scoping (ignored when primary address exists)',
+      'Current device longitude for straight-line catalog distance',
   })
   async getSearchSuggestions(
     @Query() query: GetInventorySearchSuggestionsQueryParams

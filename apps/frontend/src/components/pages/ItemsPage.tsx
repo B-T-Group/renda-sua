@@ -218,7 +218,6 @@ function CatalogSection({
                   onOrderClick={onOrderClick}
                   onAddToCart={onAddToCart}
                   estimatedDistance={inventoryItem.distance_text}
-                  estimatedDuration={inventoryItem.duration_text}
                   isPublicView={isPublicView}
                   canOrder={canOrder}
                   showCartButtons={showCartButtons}
@@ -337,7 +336,7 @@ const ItemsPage: React.FC = () => {
   );
   const [trackOrderId, setTrackOrderId] = useState<string | null>(null);
 
-  const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+  const browserGeo = usePublicBrowserGeo(true);
 
   const inventorySearch =
     searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
@@ -1392,7 +1391,6 @@ const ItemsPage: React.FC = () => {
                       onOrderClick={handleOrderClick}
                       onAddToCart={handleAddToCart}
                       estimatedDistance={inventoryItem.distance_text}
-                      estimatedDuration={inventoryItem.duration_text}
                       isPublicView={!isAuthenticated}
                       canOrder={!isAuthenticated || isClientUser}
                       showCartButtons={isAuthenticated && isClientUser}

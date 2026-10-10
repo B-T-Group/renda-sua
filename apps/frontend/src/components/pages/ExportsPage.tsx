@@ -42,7 +42,7 @@ const ExportsPage: React.FC = () => {
   const { addToCart } = useCart();
   const { selectedMarket } = useMarket();
   const [currentPage, setCurrentPage] = useState(1);
-  const browserGeo = usePublicBrowserGeo(!isAuthenticated);
+  const browserGeo = usePublicBrowserGeo(true);
   const isClientUser = profile?.user_type_id === 'client';
 
   useEffect(() => {
