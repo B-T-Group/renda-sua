@@ -146,9 +146,15 @@ export function inferReferrerKind(
   return fallback;
 }
 
-function thisRuleMatches(ruleCode: string, expected: string): boolean {
+function thisRuleMatches(
+  ruleCode: string | null | undefined,
+  expected: string
+): boolean {
+  if (!ruleCode) return false;
   if (ruleCode === expected) return true;
-  return expected === ONBOARDING_X_FIRST_SALE && isOnboardingFirstSaleRule(ruleCode);
+  return (
+    expected === ONBOARDING_X_FIRST_SALE && isOnboardingFirstSaleRule(ruleCode)
+  );
 }
 
 function oneTimeRuleCode(kind: ReferredBusinessReferrerKind): string {
