@@ -14,7 +14,12 @@ describe('ItemAiReviewSweeperService', () => {
       if (query.includes('OpenCleanupJobsForItems')) {
         return {
           ai_image_cleanup_jobs: (opts?.openCleanupItemIds ?? []).map(
-            (item_id) => ({ item_id, id: 'job', status: 'ready_for_review' })
+            (item_id) => ({
+              item_id,
+              id: 'job',
+              status: 'ready_for_review',
+              updated_at: new Date().toISOString(),
+            })
           ),
         };
       }

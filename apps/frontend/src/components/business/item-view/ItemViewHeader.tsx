@@ -19,6 +19,7 @@ import ItemModerationStatusChip from '../ItemModerationStatusChip';
 interface ItemViewHeaderProps {
   name: string;
   sku?: string | null;
+  itemId?: string | null;
   isActive: boolean;
   moderationStatus?: string | null;
   canToggleActive?: boolean;
@@ -31,6 +32,7 @@ interface ItemViewHeaderProps {
 const ItemViewHeader: React.FC<ItemViewHeaderProps> = ({
   name,
   sku,
+  itemId,
   isActive,
   moderationStatus,
   canToggleActive = true,
@@ -99,7 +101,10 @@ const ItemViewHeader: React.FC<ItemViewHeaderProps> = ({
               >
                 {name}
               </Typography>
-              <ItemModerationStatusChip status={moderationStatus} />
+              <ItemModerationStatusChip
+                status={moderationStatus}
+                itemId={itemId}
+              />
             </Stack>
             {sku && (
               <Typography variant="body2" color="text.secondary" noWrap>

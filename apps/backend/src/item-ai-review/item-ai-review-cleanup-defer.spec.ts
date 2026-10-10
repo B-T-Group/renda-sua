@@ -1,3 +1,4 @@
+import { HttpException } from '@nestjs/common';
 import { ItemAiReviewService } from './item-ai-review.service';
 
 // These modules form circular import chains (notifications <-> orchestration);
@@ -113,11 +114,13 @@ describe('ItemAiReviewService cleanup deferral', () => {
     return { service, enqueue, model, hasura };
   }
 
-  it('defers review while a cleanup job is open', async () => {
-    const { service, model } = buildService({ cleanupOpen: true });
-    const result = await service.runReview('item-1', 3);
-    expect(result).toEqual({ success: true, skipped: true });
+  it('asks SQS to retry while a cleanup job is still running', async () => {
+    const { service, model, hasura } = buildService({ cleanupOpen: true });
+    const error = await service.runReview('item-1', 3).catch((err) => err);
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(503);
     expect(model.reviewItem).not.toHaveBeenCalled();
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 
   it('soft-defers while cleanup awaits merchant review', async () => {

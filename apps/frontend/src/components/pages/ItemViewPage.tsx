@@ -404,6 +404,7 @@ export default function ItemViewPage() {
 
       <ItemViewHeader
         name={item.name}
+        itemId={item.id}
         sku={item.sku}
         isActive={Boolean(item.is_active)}
         moderationStatus={item.moderation_status}

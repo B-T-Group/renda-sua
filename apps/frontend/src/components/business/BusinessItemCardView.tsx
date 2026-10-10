@@ -423,7 +423,10 @@ const BusinessItemCardView: React.FC<BusinessItemCardViewProps> = ({
             />
           )}
           {item.moderation_status && item.moderation_status !== 'approved' ? (
-            <ItemModerationStatusChip status={item.moderation_status} />
+            <ItemModerationStatusChip
+              status={item.moderation_status}
+              itemId={item.id}
+            />
           ) : null}
           {isOutOfStock && (
             <Chip
