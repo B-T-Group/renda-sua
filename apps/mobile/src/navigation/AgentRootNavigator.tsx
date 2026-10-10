@@ -229,13 +229,13 @@ function MainTabsScreen() {
                 style={{
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: 36,
-                  height: 36,
-                  borderRadius: 18,
-                  backgroundColor: focused ? `${colors.primary.main}33` : `${colors.primary.main}1A`,
+                  width: 32,
+                  height: 32,
+                  borderRadius: 16,
+                  backgroundColor: focused ? 'transparent' : `${colors.cta.main}22`,
                 }}
               >
-                <MaterialCommunityIcons name="cash-multiple" size={22} color={colors.primary.main} />
+                <MaterialCommunityIcons name="cash-multiple" size={22} color={colors.cta.main} />
               </View>
             </TabBarIconContent>
           ),
