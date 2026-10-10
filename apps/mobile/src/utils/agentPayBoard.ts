@@ -29,6 +29,21 @@ export function progressFromObjectives(objectives: ScheduleObjectiveView[]): Obj
   return progress;
 }
 
+const EXPIRING_SOON_MS = 3 * 24 * 60 * 60 * 1000;
+
+export type CommissionDeadlineTone = 'normal' | 'soon' | 'expired';
+
+export function commissionDeadlineTone(
+  deadline: string | null | undefined,
+  settled: boolean,
+  now = Date.now()
+): CommissionDeadlineTone {
+  if (settled || !deadline) return 'normal';
+  const ends = Date.parse(deadline);
+  if (Number.isNaN(ends) || ends - now > EXPIRING_SOON_MS) return 'normal';
+  return ends <= now ? 'expired' : 'soon';
+}
+
 export function itemsForSegment(items: EarningItem[], segment: 'commissions' | 'objectives') {
   if (segment === 'objectives') return items.filter(isScheduleItem);
   return items.filter((item) => !isScheduleItem(item));
