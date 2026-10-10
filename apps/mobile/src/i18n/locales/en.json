@@ -4855,6 +4855,8 @@
       "salePercentEarned": "{{amount}} earned",
       "requirements": "{{approved}}/{{minItems}} items · {{sales}} of {{minSales}} in sales",
       "deadline": "Sale by {{date}}",
+      "expired": "Expired",
+      "expiringSoon": "Expiring soon",
       "paid": "Paid",
       "unpaid": "To do",
       "goalsMet": "Goals met",

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { StatusPill } from '../../common/StatusPill';
 import { formatCurrency } from '../../../utils/formatters';
+import { commissionDeadlineTone, type CommissionDeadlineTone } from '../../../utils/agentPayBoard';
 import type { EarningItem, MerchantReferralStructure } from '../../../types/agentPayBoard';
 
 export function MerchantCommissionCard({
@@ -18,6 +19,8 @@ export function MerchantCommissionCard({
   const onboarding = structure.onboarding;
   const sameAmount = structure.selfSaleAmount === structure.otherBuyerAmount;
   const paid = item.paymentStatus === 'paid';
+  const tone = commissionDeadlineTone(item.deadline, paid || item.nextStep === 'awaiting_payout');
+  const status = commissionStatus(paid, tone, t, colors);
 
   return (
     <View
@@ -38,12 +41,7 @@ export function MerchantCommissionCard({
         <Text variant="titleMedium" numberOfLines={2} style={[styles.title, { color: colors.text.primary }]}>
           {item.title}
         </Text>
-        <StatusPill
-          compact
-          label={paid ? t('agent.pay.paid', 'Paid') : t('agent.pay.unpaid', 'To do')}
-          backgroundColor={paid ? colors.successTint : colors.primaryTint}
-          textColor={paid ? colors.success.dark : colors.primary.main}
-        />
+        <StatusPill compact label={status.label} backgroundColor={status.backgroundColor} textColor={status.textColor} />
       </View>
       {sameAmount ? (
         <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
@@ -81,15 +79,46 @@ export function MerchantCommissionCard({
           minSales: formatCurrency(onboarding.minSalesTotal, item.currency),
         })}
       </Text>
-      {item.deadline ? (
-        <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-          {t('agent.pay.deadline', 'Sale by {{date}}', { date: formatDeadline(item.deadline) })}
-        </Text>
-      ) : null}
+      {item.deadline ? <DeadlineLine deadline={item.deadline} tone={tone} /> : null}
       <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
         {t(`agent.pay.nextStep.${item.nextStep}`, nextStepFallback(item.nextStep))}
       </Text>
     </View>
+  );
+}
+
+function commissionStatus(
+  paid: boolean,
+  tone: CommissionDeadlineTone,
+  t: (key: string, fallback: string) => string,
+  colors: { successTint: string; success: { dark: string }; errorTint: string; error: { main: string }; warningTint: string; warning: { dark: string }; primaryTint: string; primary: { main: string } }
+) {
+  if (paid) return pill(t('agent.pay.paid', 'Paid'), colors.successTint, colors.success.dark);
+  if (tone === 'expired') return pill(t('agent.pay.expired', 'Expired'), colors.errorTint, colors.error.main);
+  if (tone === 'soon') return pill(t('agent.pay.expiringSoon', 'Expiring soon'), colors.warningTint, colors.warning.dark);
+  return pill(t('agent.pay.unpaid', 'To do'), colors.primaryTint, colors.primary.main);
+}
+
+function pill(label: string, backgroundColor: string, textColor: string) {
+  return { label, backgroundColor, textColor };
+}
+
+function DeadlineLine({ deadline, tone }: { deadline: string; tone: CommissionDeadlineTone }) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const date = formatDeadline(deadline);
+  const color = tone === 'expired' ? colors.error.main : tone === 'soon' ? colors.warning.dark : colors.text.secondary;
+  const label =
+    tone === 'expired'
+      ? t('agent.pay.expired', 'Expired')
+      : tone === 'soon'
+        ? t('agent.pay.expiringSoon', 'Expiring soon')
+        : null;
+  return (
+    <Text variant="bodySmall" style={{ color }}>
+      {label ? `${label} · ` : ''}
+      {t('agent.pay.deadline', 'Sale by {{date}}', { date })}
+    </Text>
   );
 }
 

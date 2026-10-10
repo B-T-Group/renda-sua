@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { itemsForSegment, progressFromObjectives } from './agentPayBoard';
+import { commissionDeadlineTone, itemsForSegment, progressFromObjectives } from './agentPayBoard';
 import type { EarningItem } from '../types/agentPayBoard';
 
 describe('agentPayBoard', () => {
@@ -23,6 +23,15 @@ describe('agentPayBoard', () => {
       'future_bonus',
     ]);
     expect(itemsForSegment(items, 'objectives')).toHaveLength(1);
+  });
+
+  it('marks a past commission deadline expired and a near one as soon', () => {
+    const now = Date.parse('2026-10-10T12:00:00.000Z');
+    const day = 24 * 60 * 60 * 1000;
+    expect(commissionDeadlineTone('2026-10-09T12:00:00.000Z', false, now)).toBe('expired');
+    expect(commissionDeadlineTone(new Date(now + 2 * day).toISOString(), false, now)).toBe('soon');
+    expect(commissionDeadlineTone(new Date(now + 4 * day).toISOString(), false, now)).toBe('normal');
+    expect(commissionDeadlineTone('2026-10-01T00:00:00.000Z', true, now)).toBe('normal');
   });
 });
 

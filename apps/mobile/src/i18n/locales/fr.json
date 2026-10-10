@@ -4762,6 +4762,8 @@
       "salePercentEarned": "{{amount}} gagnés",
       "requirements": "{{approved}}/{{minItems}} articles · {{sales}} sur {{minSales}} de ventes",
       "deadline": "Vente avant le {{date}}",
+      "expired": "Expiré",
+      "expiringSoon": "Expire bientôt",
       "paid": "Payé",
       "unpaid": "À faire",
       "goalsMet": "Objectifs atteints",
