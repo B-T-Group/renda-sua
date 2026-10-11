@@ -76,7 +76,7 @@ describe('deliveryCountryMismatch', () => {
     ).toBe('CM');
   });
 
-  it('returns the first real mismatch and ignores a non-ISO seller country', () => {
+  it('returns the first real mismatch, matching seller names to ISO codes and ignoring a null seller', () => {
     expect(
       deliveryCountryMismatch({
         fulfillment: 'delivery',
@@ -89,6 +89,13 @@ describe('deliveryCountryMismatch', () => {
         fulfillment: 'delivery',
         dropOffCountry: 'CA',
         sellerCountries: ['Cameroon', null],
+      })
+    ).toBe('CM');
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: 'CA',
+        sellerCountries: ['Canada', 'ca', null],
       })
     ).toBeNull();
   });
