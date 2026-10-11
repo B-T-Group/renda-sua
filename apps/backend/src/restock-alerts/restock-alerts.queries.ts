@@ -131,6 +131,7 @@ export const RESTOCK_QUERIES = {
         state
         alert_enabled
         armed_at
+        expires_at
         last_alert_at
         last_event_id
       }
