@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { isMissingRestockGraphqlSchema } from '../hasura/hasura-request.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { InventoryItemsService } from '../inventory-items/inventory-items.service';
 import { NotificationActionTokenService } from '../notifications/orchestration/notification-action-token.service';
@@ -103,6 +104,13 @@ const Q_USER_LIKES = `
     }
   }
 `;
+const Q_SCHEMA_PROBE = `
+  query RestockSchemaProbe {
+    restock_alerts(limit: 0) {
+      id
+    }
+  }
+`;
 const Q_STOCK_FOR_ITEMS = `
   query RestockStockForItems($itemIds: [uuid!]!) {
     business_inventory(where: { item_id: { _in: $itemIds } }) {
@@ -144,26 +152,18 @@ export class RestockAlertsApiService {
   ) {}
 
   async isEnabledForUser(userId: string): Promise<boolean> {
-    const res = await this.hasura.executeQuery<{ users_by_pk: { country: string | null } | null }>(
-      Q_USER_COUNTRY,
-      { userId }
-    );
-    const rows = await this.repo.flagRows(RESTOCK_FLAG_KEY);
-    return resolveFlag(rows, res.users_by_pk?.country ?? null);
+    if (!(await this.flagOnForUser(userId))) return false;
+    return this.schemaReady();
   }
 
   async assertEnabled(userId: string): Promise<void> {
     if (!(await this.isEnabledForUser(userId))) {
-      throw new NotFoundException({
-        success: false,
-        code: 'restock_alerts_disabled',
-        message: 'Restock alerts are not available',
-      });
+      throw this.disabledError();
     }
   }
 
   async getPreferences(userId: string) {
-    const res = await this.hasura.executeQuery<any>(Q_PREFS, { userId });
+    const res = await this.runQuery<any>(Q_PREFS, { userId });
     const p = res.user_notification_preferences_by_pk ?? {};
     const u = res.users_by_pk ?? {};
     const hasPhone = !!u.phone_number?.trim();
@@ -182,9 +182,9 @@ export class RestockAlertsApiService {
   ) {
     const set = this.preferenceColumnSet(patch);
     if (Object.keys(set).length === 0) return this.getPreferences(userId);
-    await this.hasura.executeMutation(M_ENSURE_PREFS, { userId });
+    await this.runMutation(M_ENSURE_PREFS, { userId });
     set.updated_at = new Date().toISOString();
-    await this.hasura.executeMutation(M_SET_PREFS, { userId, set });
+    await this.runMutation(M_SET_PREFS, { userId, set });
     await this.trackPreferenceOptOuts(userId, patch);
     return this.getPreferences(userId);
   }
@@ -235,7 +235,7 @@ export class RestockAlertsApiService {
   }
 
   async setItemAlert(userId: string, itemId: string, enabled: boolean) {
-    const res = await this.hasura.executeQuery<any>(Q_LIKE_AND_ALERT, { userId, itemId });
+    const res = await this.runQuery<any>(Q_LIKE_AND_ALERT, { userId, itemId });
     if (!res.user_item_likes?.length) {
       throw new NotFoundException({
         success: false,
@@ -267,7 +267,7 @@ export class RestockAlertsApiService {
       cols = ['alert_enabled', 'state', 'disarm_reason', 'armed_at', 'expires_at', 'updated_at'];
     }
     object.updated_at = now.toISOString();
-    const out = await this.hasura.executeMutation<any>(M_UPSERT_ALERT, { object, cols });
+    const out = await this.runMutation<any>(M_UPSERT_ALERT, { object, cols });
     const row = out.insert_restock_alerts_one;
     await this.analytics.track({
       notificationType: enabled ? 'restock.armed' : 'restock.disarmed',
@@ -295,8 +295,8 @@ export class RestockAlertsApiService {
     now = new Date()
   ) {
     const [likesRes, userRes] = await Promise.all([
-      this.hasura.executeQuery<any>(Q_USER_LIKES, { userId, limit: 500 }),
-      this.hasura.executeQuery<any>(Q_USER_COUNTRY, { userId }),
+      this.runQuery<any>(Q_USER_LIKES, { userId, limit: 500 }),
+      this.runQuery<any>(Q_USER_COUNTRY, { userId }),
     ]);
     const country: string | null = userRes.users_by_pk?.country ?? null;
     const likes: Array<{ item_id: string; created_at: string }> = likesRes.user_item_likes ?? [];
@@ -305,7 +305,7 @@ export class RestockAlertsApiService {
     );
     const itemIds = likes.map((l) => l.item_id);
     const stockRows: any[] = itemIds.length
-      ? (await this.hasura.executeQuery<any>(Q_STOCK_FOR_ITEMS, { itemIds })).business_inventory ?? []
+      ? (await this.runQuery<any>(Q_STOCK_FOR_ITEMS, { itemIds })).business_inventory ?? []
       : [];
     const byItem = new Map<string, any[]>();
     for (const r of stockRows) byItem.set(r.item_id, [...(byItem.get(r.item_id) ?? []), r]);
@@ -406,8 +406,8 @@ export class RestockAlertsApiService {
       [`restock_alerts_${channel}_enabled`]: false,
       updated_at: new Date().toISOString(),
     };
-    await this.hasura.executeMutation(M_ENSURE_PREFS, { userId: payload.userId });
-    await this.hasura.executeMutation(M_SET_PREFS, { userId: payload.userId, set });
+    await this.runMutation(M_ENSURE_PREFS, { userId: payload.userId });
+    await this.runMutation(M_SET_PREFS, { userId: payload.userId, set });
     await this.analytics.track({
       notificationType: 'restock.opt_out',
       category: 'informational',
@@ -418,5 +418,53 @@ export class RestockAlertsApiService {
       meta: { surface: 'message', channel },
     });
     return { channel, stopped: true };
+  }
+
+  private async flagOnForUser(userId: string): Promise<boolean> {
+    const res = await this.runQuery<{ users_by_pk: { country: string | null } | null }>(
+      Q_USER_COUNTRY,
+      { userId }
+    );
+    const rows = await this.repo.flagRows(RESTOCK_FLAG_KEY);
+    return resolveFlag(rows, res.users_by_pk?.country ?? null);
+  }
+
+  private async schemaReady(): Promise<boolean> {
+    try {
+      await this.runQuery(Q_SCHEMA_PROBE);
+      return true;
+    } catch (error: any) {
+      if (error instanceof NotFoundException) return false;
+      throw error;
+    }
+  }
+
+  private async runQuery<T>(query: string, variables?: unknown): Promise<T> {
+    try {
+      return await this.hasura.executeQuery<T>(query, variables);
+    } catch (error: any) {
+      this.rethrowIfSchemaMissing(error);
+    }
+  }
+
+  private async runMutation<T>(query: string, variables?: unknown): Promise<T> {
+    try {
+      return await this.hasura.executeMutation<T>(query, variables);
+    } catch (error: any) {
+      this.rethrowIfSchemaMissing(error);
+    }
+  }
+
+  private rethrowIfSchemaMissing(error: unknown): never {
+    if (isMissingRestockGraphqlSchema(error)) throw this.disabledError();
+    throw error;
+  }
+
+  private disabledError(): NotFoundException {
+    return new NotFoundException({
+      success: false,
+      code: 'restock_alerts_disabled',
+      message: 'Restock alerts are not available',
+    });
   }
 }

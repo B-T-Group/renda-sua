@@ -24,6 +24,7 @@ import {
   type RestockRepository,
   type UserInfo,
 } from './restock-alerts.types';
+import { isRestockSchemaUnavailable } from './restock-alerts.errors';
 import { isQuietHour, nextQuietEnd, resolveTimeZone } from './restock-time.util';
 
 export interface RunSummary {
@@ -100,18 +101,26 @@ export class RestockAlertsProcessor {
     }
     summary.ran = true;
     try {
-      await this.repo.recoverStale(
-        new Date(now.getTime() - RESTOCK_RULES.staleSendingMs),
-        now
-      );
-      await this.fanOutDueEvents(now, summary);
-      await this.deliverQueued(now, summary);
+      await this.processLocked(now, summary);
+    } catch (e: any) {
+      if (!isRestockSchemaUnavailable(e)) throw e;
+      this.logger.warn('restock alerts skipped: Hasura schema is missing restock tables');
+      summary.ran = false;
     } finally {
       await this.repo
         .releaseLock(expiry)
         .catch((e: any) => this.logger.warn(`restock lock release failed: ${e?.message}`));
     }
     return summary;
+  }
+
+  private async processLocked(now: Date, summary: RunSummary): Promise<void> {
+    await this.repo.recoverStale(
+      new Date(now.getTime() - RESTOCK_RULES.staleSendingMs),
+      now
+    );
+    await this.fanOutDueEvents(now, summary);
+    await this.deliverQueued(now, summary);
   }
 
   // ---------------------------------------------------------------- fan-out

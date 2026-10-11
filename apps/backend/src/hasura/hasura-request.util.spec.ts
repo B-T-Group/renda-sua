@@ -10,6 +10,7 @@ import {
   remapHasuraDataException,
   isOrderItemsInventoryFkViolation,
   isMissingItemsInterestOnlyField,
+  isMissingRestockGraphqlSchema,
   isTransientHasuraNetworkError,
   isWrappedTransientHasuraHttpException,
   mapExhaustedHasuraQueryError,
@@ -402,6 +403,36 @@ describe('hasura-request.util', () => {
       )
     ).rejects.toBe(error);
     expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('detects a missing restock_alerts root field (NODE-NESTJS-3W)', () => {
+    const error = {
+      message:
+        "field 'restock_alerts' not found in type: 'query_root': {\"response\":{\"errors\":[{\"message\":\"field 'restock_alerts' not found in type: 'query_root'\",\"extensions\":{\"path\":\"$.selectionSet.restock_alerts\",\"code\":\"validation-failed\"}}],\"status\":200}}",
+      response: {
+        errors: [
+          {
+            message: "field 'restock_alerts' not found in type: 'query_root'",
+            extensions: {
+              path: '$.selectionSet.restock_alerts',
+              code: 'validation-failed',
+            },
+          },
+        ],
+        status: 200,
+      },
+    };
+    expect(isMissingRestockGraphqlSchema(error)).toBe(true);
+    expect(
+      isMissingRestockGraphqlSchema({
+        message: "field 'restock_alert_sends' not found in type: 'query_root'",
+      })
+    ).toBe(true);
+    expect(
+      isMissingRestockGraphqlSchema({
+        message: "field 'interest_only' not found in type: 'items'",
+      })
+    ).toBe(false);
   });
 
   it('detects controller-wrapped 500s that hide a Hasura 503', () => {
