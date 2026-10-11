@@ -8457,6 +8457,7 @@
   },
   "search": {
     "emptyTitle": "Rien pour « {{query}} » pour le moment",
+    "emptyTitleNoQuery": "Rien pour le moment",
     "emptySubtitle": "Essayez plutôt ceci",
     "showingResultsFor": "Résultats pour **{{corrected}}**",
     "searchInsteadFor": "Rechercher plutôt « {{original}} »",

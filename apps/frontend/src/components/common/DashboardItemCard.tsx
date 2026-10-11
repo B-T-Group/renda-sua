@@ -765,6 +765,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                   gap: 0.5,
                   mb: 0.75,
                 }}
+                role="img"
                 aria-label={t('catalog.ratingDisplay', {
                   rating: inventory.rating_display.rating,
                   count: inventory.rating_display.count,
@@ -783,7 +784,7 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 </Typography>
               </Box>
             )}
-            {!inventory.rating_display && !inventory.is_new && showAggregateRating && (
+            {inventory.rating_display === undefined && !inventory.is_new && showAggregateRating && (
               <Box
                 sx={{
                   display: 'flex',

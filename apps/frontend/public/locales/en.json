@@ -8440,6 +8440,7 @@
   },
   "search": {
     "emptyTitle": "Nothing for \"{{query}}\" yet",
+    "emptyTitleNoQuery": "Nothing here yet",
     "emptySubtitle": "Try these instead",
     "showingResultsFor": "Showing results for **{{corrected}}**",
     "searchInsteadFor": "Search instead for \"{{original}}\"",

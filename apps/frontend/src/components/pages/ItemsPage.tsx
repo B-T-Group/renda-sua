@@ -39,11 +39,15 @@ import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { useClientFlags } from '../../hooks/useClientFlags';
+import {
+  catalogGeoQueryParams,
+  useCatalogGeoParams,
+} from '../../hooks/useCatalogGeoParams';
 import { useSearchRecovery } from '../../hooks/useSearchRecovery';
 import { CatalogExperience } from '../catalog-experience/CatalogExperience';
 import DashboardComposingOverlay from '../common/DashboardComposingOverlay';
 import CatalogSortControl from '../common/CatalogSortControl';
-import EmptySearchRecovery from '../common/EmptySearchRecovery';
+import EmptySearchRecovery, { SearchCorrectionBanner } from '../common/EmptySearchRecovery';
 import {
   SITE_EVENT_INVENTORY_SORT_SELECT,
   SITE_EVENT_SEARCH_RESULTS_SHOWN,
@@ -242,6 +246,9 @@ function CatalogSection({
   );
 }
 
+const DISCOVERY_SORTS = ['recommended', 'relevance', 'popular', 'rating', 'newest'] as const;
+type DiscoverySort = (typeof DISCOVERY_SORTS)[number];
+
 const ItemsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -339,14 +346,8 @@ const ItemsPage: React.FC = () => {
     [setSearchParams]
   );
   const [currentPage, setCurrentPage] = useState(1);
-  const sortFromUrl = useMemo(() => {
-    const param = new URLSearchParams(location.search).get('sort');
-    if (param && ['relevance', 'fastest', 'cheapest', 'top_rated', 'deals', 'recommended', 'popular', 'rating', 'newest'].includes(param)) {
-      return param as InventorySortMode;
-    }
-    return null;
-  }, [location.search]);
-  const [sort, setSort] = useState<InventorySortMode>(sortFromUrl ?? 'relevance');
+  // Legacy sort (flag off, unchanged). Also holds quick-pick modes such as 'deals'.
+  const [sort, setSort] = useState<InventorySortMode>('relevance');
   const [businessLocationId, setBusinessLocationId] = useState<string | null>(
     null
   );
@@ -354,57 +355,80 @@ const ItemsPage: React.FC = () => {
   const { flags: clientFlags } = useClientFlags();
   const discoveryEnabled = clientFlags.discovery_sort_v1;
   const { recovery, fetchRecovery, reset: resetRecovery } = useSearchRecovery();
+  // R1: corrected query auto-applied; forceOriginal = "Search instead for ..." (never re-corrects).
+  const [correction, setCorrection] = useState<{ original: string; corrected: string } | null>(null);
+  const [forceOriginal, setForceOriginal] = useState(false);
 
   const browserGeo = usePublicBrowserGeo(true);
-  
-  useEffect(() => {
-    if (sortFromUrl && sortFromUrl !== sort) {
-      setSort(sortFromUrl);
-    }
-  }, [sortFromUrl]);
-
-  const handleSortChange = useCallback(
-    (newSort: InventorySortMode) => {
-      const oldSort = sort;
-      setSort(newSort);
-      setCurrentPage(1);
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          const defaultSort = inventorySearch ? 'relevance' : 'recommended';
-          if (discoveryEnabled && newSort === defaultSort) {
-            next.delete('sort');
-          } else if (newSort !== 'relevance') {
-            next.set('sort', newSort);
-          } else {
-            next.delete('sort');
-          }
-          return next;
-        },
-        { replace: true }
-      );
-      if (discoveryEnabled) {
-        void trackSiteEvent({
-          eventType: SITE_EVENT_SEARCH_SORT_CHANGED,
-          metadata: { from: oldSort, to: newSort, surface: 'catalog' },
-        });
-      }
-    },
-    [sort, inventorySearch, discoveryEnabled, setSearchParams, trackSiteEvent]
-  );
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const catalogGeo = useCatalogGeoParams();
 
   const inventorySearch =
     searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
-  
+
+  // Discovery sort (#342, flag on only). URL `?sort=` holds the user's choice; omitted = default.
+  const discoveryDefaultSort: DiscoverySort = inventorySearch ? 'relevance' : 'recommended';
+  const urlDiscoverySort = useMemo(() => {
+    const param = new URLSearchParams(location.search).get('sort');
+    return param && (DISCOVERY_SORTS as readonly string[]).includes(param)
+      ? (param as DiscoverySort)
+      : null;
+  }, [location.search]);
+  const currentDiscoverySort: DiscoverySort = (() => {
+    const chosen = urlDiscoverySort ?? discoveryDefaultSort;
+    if (chosen === 'recommended' && inventorySearch) return 'relevance';
+    if (chosen === 'relevance' && !inventorySearch) return 'recommended';
+    return chosen;
+  })();
+  // Legacy quick picks (deals, nearest, ...) bypass discovery sorts, as in the API contract.
+  const requestSort: InventorySortMode =
+    discoveryEnabled && sort === 'relevance' ? currentDiscoverySort : sort;
+
+  const handleDiscoverySortChange = useCallback(
+    (newSort: InventorySortMode) => {
+      const next = newSort as DiscoverySort;
+      void trackSiteEvent({
+        eventType: SITE_EVENT_SEARCH_SORT_CHANGED,
+        metadata: {
+          from: currentDiscoverySort,
+          to: next,
+          surface: inventorySearch ? 'search' : 'browse',
+        },
+      });
+      setSort('relevance');
+      setCurrentPage(1);
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next === discoveryDefaultSort) params.delete('sort');
+          else params.set('sort', next);
+          return params;
+        },
+        { replace: true }
+      );
+    },
+    [currentDiscoverySort, discoveryDefaultSort, inventorySearch, setSearchParams, trackSiteEvent]
+  );
+
+  // AC-1.4: a new search text resets the sort to the default; filters keep it.
+  const prevSearchRef = useRef(inventorySearch);
   useEffect(() => {
-    if (inventorySearch && sort !== sortFromUrl) {
-      const searchParams = new URLSearchParams(location.search);
-      if (!searchParams.has('sort') && sort !== 'relevance') {
-        setSort('relevance');
-      }
-    }
-  }, [inventorySearch, location.search]);
-  
+    if (prevSearchRef.current === inventorySearch) return;
+    prevSearchRef.current = inventorySearch;
+    setCorrection(null);
+    setForceOriginal(false);
+    if (!discoveryEnabled) return;
+    setSearchParams(
+      (prev) => {
+        if (!prev.has('sort')) return prev;
+        const params = new URLSearchParams(prev);
+        params.delete('sort');
+        return params;
+      },
+      { replace: true }
+    );
+  }, [inventorySearch, discoveryEnabled, setSearchParams]);
+
   useEffect(() => {
     if (!discoveryEnabled || !inventorySearch) {
       resetRecovery();
@@ -433,10 +457,10 @@ const ItemsPage: React.FC = () => {
     page: currentPage,
     limit: ITEMS_CATALOG_PAGE_SIZE,
     is_active: true,
-    sort,
+    sort: requestSort,
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
-    search: inventorySearch,
+    search: discoveryEnabled && correction ? correction.corrected : inventorySearch,
     category: filters.category.trim() || undefined,
     brand: filters.brand.trim() || undefined,
     subcategory: filters.subcategory.trim() || undefined,
@@ -458,66 +482,84 @@ const ItemsPage: React.FC = () => {
       businessLocationId
   );
   
+  // Empty-result recovery (#342 §2): call only when the list returned total = 0.
+  const recoveryKeyRef = useRef('');
   useEffect(() => {
-    if (!discoveryEnabled || loading) return;
-    if (pagination && pagination.total === 0 && inventorySearch && hasActiveFilters) {
-      fetchRecovery({
-        search: inventorySearch,
-        category: filters.category || undefined,
-        subcategory: filters.subcategory || undefined,
-        brand: filters.brand || undefined,
-        location_name: undefined,
-        business_name: filters.business || undefined,
-        collection: filters.collection || collectionSlug || undefined,
-        country_code: browserGeo.country_code,
-        state: browserGeo.state,
-      });
-      void trackSiteEvent({
-        eventType: SITE_EVENT_SEARCH_EMPTY_SHOWN,
-        metadata: { query_len: inventorySearch.length },
-      });
-    }
+    if (!discoveryEnabled || loading || !pagination || pagination.total !== 0) return;
+    if (correction || (!inventorySearch && !hasActiveFilters)) return;
+    const key = JSON.stringify([inventorySearch, filters, collectionSlug, forceOriginal]);
+    if (recoveryKeyRef.current === key) return;
+    recoveryKeyRef.current = key;
+    const geo = catalogGeoQueryParams(catalogGeo);
+    void fetchRecovery({
+      search: inventorySearch,
+      category: filters.category || undefined,
+      subcategory: filters.subcategory || undefined,
+      brand: filters.brand || undefined,
+      business_name: filters.business || undefined,
+      collection: filters.collection || collectionSlug || undefined,
+      country_code: geo.country_code,
+      state: geo.state,
+    }).then((data) => {
+      if (!data || !data.enabled) return;
+      if (data.corrected_query && data.corrected_total > 0 && !forceOriginal && inventorySearch) {
+        setCorrection({ original: inventorySearch, corrected: data.corrected_query });
+        return;
+      }
+      void trackSiteEvent({ eventType: SITE_EVENT_SEARCH_EMPTY_SHOWN });
+    });
   }, [
     discoveryEnabled,
     loading,
     pagination,
+    correction,
+    forceOriginal,
     inventorySearch,
     hasActiveFilters,
     filters,
     collectionSlug,
-    browserGeo.country_code,
-    browserGeo.state,
+    catalogGeo,
     fetchRecovery,
     trackSiteEvent,
   ]);
-  
+
+  // search.results_shown once per settled result set; card.rating_shown once per item.
+  const resultsShownKeyRef = useRef('');
+  const ratingShownRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!discoveryEnabled || !pagination || loading) return;
-    if (pagination.total > 0 && inventoryItems.length > 0) {
-      void trackSiteEvent({
-        eventType: SITE_EVENT_SEARCH_RESULTS_SHOWN,
-        metadata: {
-          query_len: inventorySearch?.length ?? 0,
-          count: pagination.total,
-          mode: pagination.discovery?.sort ?? sort,
-        },
-      });
-      inventoryItems.forEach((item) => {
-        if (item.rating_display) {
-          void trackSiteEvent({
-            eventType: SITE_EVENT_CARD_RATING_SHOWN,
-            subject: { type: 'inventory_item', id: item.id },
-          });
-        }
-      });
+    if (inventorySearch) {
+      const key = `${correction?.corrected ?? inventorySearch}|${currentDiscoverySort}|${pagination.total}`;
+      if (resultsShownKeyRef.current !== key) {
+        resultsShownKeyRef.current = key;
+        void trackSiteEvent({
+          eventType: SITE_EVENT_SEARCH_RESULTS_SHOWN,
+          metadata: {
+            query_len: (correction?.corrected ?? inventorySearch).length,
+            count: pagination.total,
+            mode: pagination.discovery?.sort ?? currentDiscoverySort,
+          },
+        });
+      }
     }
+    inventoryItems.forEach((item) => {
+      if (item.rating_display && !item.is_new && !ratingShownRef.current.has(item.id)) {
+        ratingShownRef.current.add(item.id);
+        void trackSiteEvent({
+          eventType: SITE_EVENT_CARD_RATING_SHOWN,
+          subjectType: 'inventory_item',
+          subjectId: item.id,
+        });
+      }
+    });
   }, [
     discoveryEnabled,
     pagination,
     inventoryItems,
     loading,
     inventorySearch,
-    sort,
+    correction,
+    currentDiscoverySort,
     trackSiteEvent,
   ]);
 
@@ -748,7 +790,6 @@ const ItemsPage: React.FC = () => {
 
   const { trackView } = useTrackItemView(null);
   const trackAddToCart = useMetaAddToCartTrack();
-  const { trackSiteEvent } = useTrackSiteEvent();
 
   const onCartBuilt = useCallback(
     (cartItem: CartItem, item: InventoryItem) => {
@@ -1211,11 +1252,11 @@ const ItemsPage: React.FC = () => {
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
           {discoveryEnabled && pagination?.discovery ? (
             <CatalogSortControl
-              currentSort={pagination.discovery.sort as InventorySortMode}
-              defaultSort={inventorySearch ? 'relevance' : 'recommended'}
+              currentSort={currentDiscoverySort as InventorySortMode}
+              defaultSort={discoveryDefaultSort}
               isSearchMode={Boolean(inventorySearch)}
               controlState={pagination.discovery.sort_control}
-              onSortChange={handleSortChange}
+              onSortChange={handleDiscoverySortChange}
             />
           ) : (
             <>
@@ -1247,7 +1288,7 @@ const ItemsPage: React.FC = () => {
                         eventType: SITE_EVENT_INVENTORY_SORT_SELECT,
                         metadata: { sort: mode },
                       });
-                      handleSortChange(mode);
+                      setSort(mode);
                     }}
                     color={isDealsSelected ? 'default' : isSelected ? 'primary' : 'default'}
                     variant={isSelected ? 'filled' : 'outlined'}
@@ -1281,12 +1322,27 @@ const ItemsPage: React.FC = () => {
               })}
             </>
           )}
-          {pagination && pagination.total > 0 && (
+          {discoveryEnabled && pagination && pagination.total > 0 && (
             <Typography variant="body2" color="text.secondary">
               {t('catalog.results', { n: pagination.total, defaultValue: '{{n}} results' })}
             </Typography>
           )}
         </Box>
+
+        {discoveryEnabled && correction ? (
+          <SearchCorrectionBanner
+            corrected={correction.corrected}
+            original={correction.original}
+            onSearchOriginal={() => {
+              void trackSiteEvent({
+                eventType: SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
+                metadata: { rung: 'R1' },
+              });
+              setForceOriginal(true);
+              setCorrection(null);
+            }}
+          />
+        ) : null}
 
         {showExperience ? (
           <CatalogExperience
@@ -1472,15 +1528,9 @@ const ItemsPage: React.FC = () => {
           discoveryEnabled && recovery && recovery.enabled ? (
             <EmptySearchRecovery
               recovery={recovery}
-              originalQuery={inventorySearch || ''}
-              onSearchOriginal={() => {
-                setSearchTerm(inventorySearch || '');
-                resetRecovery();
-              }}
               onRemoveFilter={(filter) => {
                 void trackSiteEvent({
                   eventType: SITE_EVENT_SEARCH_FILTER_REMOVED_FROM_EMPTY,
-                  metadata: { filter },
                 });
                 if (filter === 'category') {
                   setFilters((f) => ({ ...f, category: '', subcategory: '' }));
@@ -1490,23 +1540,13 @@ const ItemsPage: React.FC = () => {
                   setFilters((f) => ({ ...f, brand: '' }));
                 } else if (filter === 'business_name') {
                   setFilters((f) => ({ ...f, business: '' }));
-                } else if (filter === 'collection') {
-                  setFilters((f) => ({ ...f, collection: '' }));
                 }
               }}
-              onBrowseCategory={(id, name) => {
-                void trackSiteEvent({
-                  eventType: SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
-                  metadata: { rung: 'R4' },
-                });
+              onBrowseCategory={(_id, name) => {
                 setFilters((f) => ({ ...f, category: name, subcategory: '' }));
                 setSearchTerm('');
               }}
               onAskRenda={(query) => {
-                void trackSiteEvent({
-                  eventType: SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
-                  metadata: { rung: 'R5' },
-                });
                 navigate(`/assistant?prefill=${encodeURIComponent(query)}`);
               }}
               onRungClick={(rung) => {

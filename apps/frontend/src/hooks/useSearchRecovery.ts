@@ -51,8 +51,8 @@ export function useSearchRecovery() {
   const [error, setError] = useState<string | null>(null);
 
   const fetchRecovery = useCallback(
-    async (params: RecoveryParams) => {
-      if (!apiClient) return;
+    async (params: RecoveryParams): Promise<SearchRecoveryData | null> => {
+      if (!apiClient) return null;
 
       setLoading(true);
       setError(null);
@@ -66,10 +66,11 @@ export function useSearchRecovery() {
 
         if (response.data.success) {
           setRecovery(response.data.data);
-        } else {
-          setError(response.data.message || 'Failed to fetch recovery suggestions');
-          setRecovery(null);
+          return response.data.data;
         }
+        setError(response.data.message || 'Failed to fetch recovery suggestions');
+        setRecovery(null);
+        return null;
       } catch (err: unknown) {
         const errorMessage =
           (err as { response?: { data?: { message?: string } } })?.response?.data?.message ||
@@ -77,6 +78,7 @@ export function useSearchRecovery() {
           'Failed to fetch recovery suggestions';
         setError(errorMessage);
         setRecovery(null);
+        return null;
       } finally {
         setLoading(false);
       }

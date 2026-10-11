@@ -227,6 +227,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     page: number;
     limit: number;
     totalPages: number;
+    discovery?: PaginatedInventoryItems['discovery'];
   } | null>(null);
 
   const apiClient = useApiClient();
@@ -364,6 +365,9 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           page: response.data.data.page,
           limit: response.data.data.limit,
           totalPages: leakedNonFood ? 1 : response.data.data.totalPages,
+          ...(response.data.data.discovery && {
+            discovery: response.data.data.discovery,
+          }),
         });
       } else {
         setError(response.data.message || 'Failed to fetch inventory items');

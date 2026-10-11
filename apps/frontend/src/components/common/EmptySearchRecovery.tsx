@@ -10,11 +10,9 @@ import {
   Link as MuiLink,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import type {
   SearchRecoveryData,
   RecoveryFilterRemoval,
-  RecoveryCategory,
   RecoveryRung,
 } from '../../hooks/useSearchRecovery';
 import type { InventoryItem } from '../../hooks/useInventoryItems';
@@ -22,21 +20,17 @@ import DashboardItemCard from './DashboardItemCard';
 
 export interface EmptySearchRecoveryProps {
   recovery: SearchRecoveryData;
-  originalQuery: string;
-  onSearchOriginal: () => void;
   onRemoveFilter: (filter: RecoveryFilterRemoval['filter']) => void;
   onBrowseCategory: (categoryId: number | null, categoryName: string) => void;
   onAskRenda: (query: string) => void;
   onRungClick: (rung: RecoveryRung) => void;
-  formatCurrency: (amount: number, currency: string) => string;
-  onOrderClick: (item: InventoryItem) => void;
-  onAddToCart: (item: InventoryItem) => void;
+  formatCurrency: (amount: number, currency?: string) => string;
+  onOrderClick: (item: InventoryItem, selectionId?: string | null) => void;
+  onAddToCart: (item: InventoryItem, selectionId?: string | null, quantity?: number) => void;
 }
 
 export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
   recovery,
-  originalQuery,
-  onSearchOriginal,
   onRemoveFilter,
   onBrowseCategory,
   onAskRenda,
@@ -46,7 +40,6 @@ export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
   onAddToCart,
 }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
 
   const getFilterLabel = useCallback(
     (filter: RecoveryFilterRemoval['filter']): string => {
@@ -54,33 +47,6 @@ export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
     },
     [t]
   );
-
-  const renderR1 = () => {
-    if (!recovery.corrected_query) return null;
-
-    return (
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          <span dangerouslySetInnerHTML={{ 
-            __html: t('search.showingResultsFor', { 
-              corrected: recovery.corrected_query 
-            }).replace('**', '<strong>').replace('**', '</strong>')
-          }} />
-        </Typography>
-        <MuiLink
-          component="button"
-          variant="body2"
-          onClick={() => {
-            onRungClick('R1');
-            onSearchOriginal();
-          }}
-          sx={{ cursor: 'pointer', textDecoration: 'underline' }}
-        >
-          {t('search.searchInsteadFor', { original: originalQuery })}
-        </MuiLink>
-      </Box>
-    );
-  };
 
   const renderR2 = () => {
     if (recovery.relax.length === 0) return null;
@@ -90,9 +56,9 @@ export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
         <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
           {recovery.relax.map((removal) => (
             <Chip
-              key={removal.filter}
+              key={`${removal.filter}-${removal.value}`}
               label={t('search.removeFilter', {
-                filter: getFilterLabel(removal.filter),
+                filter: removal.value || getFilterLabel(removal.filter),
                 n: removal.count,
               })}
               onClick={() => {
@@ -119,7 +85,7 @@ export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
         </Typography>
         <Grid container spacing={3}>
           {recovery.similar.slice(0, 6).map((item) => (
-            <Grid item xs={12} sm={6} md={4} key={item.id}>
+            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.id}>
               <DashboardItemCard
                 item={item}
                 formatCurrency={formatCurrency}
@@ -169,7 +135,7 @@ export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
             </Typography>
             <Grid container spacing={3}>
               {recovery.popular_near_you.slice(0, 6).map((item) => (
-                <Grid item xs={12} sm={6} md={4} key={item.id}>
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={item.id}>
                   <DashboardItemCard
                     item={item}
                     formatCurrency={formatCurrency}
@@ -215,13 +181,14 @@ export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
     <Box sx={{ py: 4 }}>
       <Paper elevation={0} sx={{ p: 4, backgroundColor: 'background.default' }}>
         <Typography variant="h5" gutterBottom align="center">
-          {t('search.emptyTitle', { query: recovery.query })}
+          {recovery.query.trim()
+            ? t('search.emptyTitle', { query: recovery.query })
+            : t('search.emptyTitleNoQuery', 'Nothing here yet')}
         </Typography>
         <Typography variant="body1" color="text.secondary" align="center" sx={{ mb: 4 }}>
           {t('search.emptySubtitle', 'Try these instead')}
         </Typography>
 
-        {renderR1()}
         {renderR2()}
         {renderR3()}
         {renderR4()}
@@ -232,3 +199,35 @@ export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
 };
 
 export default EmptySearchRecovery;
+
+/** R1 banner: shown above results after the corrected query was auto-run. */
+export const SearchCorrectionBanner: React.FC<{
+  corrected: string;
+  original: string;
+  onSearchOriginal: () => void;
+}> = ({ corrected, original, onSearchOriginal }) => {
+  const { t } = useTranslation();
+  // Render the **bold** marker as a React node (no HTML injection from query text).
+  const template = t('search.showingResultsFor', {
+    corrected: '\u0000',
+    interpolation: { escapeValue: false },
+  }).replace(/\*\*/g, '');
+  const [before, after] = template.split('\u0000');
+  return (
+    <Box sx={{ mb: 2 }} data-testid="search-correction-banner">
+      <Typography variant="body1">
+        {before}
+        <strong>{corrected}</strong>
+        {after}
+      </Typography>
+      <MuiLink
+        component="button"
+        variant="body2"
+        onClick={onSearchOriginal}
+        sx={{ cursor: 'pointer', textDecoration: 'underline' }}
+      >
+        {t('search.searchInsteadFor', { original })}
+      </MuiLink>
+    </Box>
+  );
+};
