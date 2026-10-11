@@ -1,4 +1,5 @@
 import type { InventoryItem } from '../inventory-items/inventory-items.service';
+import { bayesianRating } from '../inventory-items/discovery/discovery-sort.util';
 import {
   rankBySignals,
   type CatalogRankSignals,
@@ -10,9 +11,14 @@ const MS_PER_DAY = 86_400_000;
 
 export function listingRankSignals(
   item: InventoryItem,
-  personalization = 0
+  personalization = 0,
+  options: { ratingMean?: number } = {}
 ): CatalogRankSignals {
   return {
+    // Only set when a caller opts in (discovery_sort_v1), so existing carousels rank identically.
+    ...(options.ratingMean !== undefined && {
+      rating: ratingSignal(item, options.ratingMean),
+    }),
     popularity: item.viewsCount ?? 0,
     promotion: item.hasActiveDeal || item.promotion ? 1 : 0,
     inventory: item.computed_available_quantity > 0 ? 1 : 0,
@@ -32,6 +38,12 @@ export function rankListings(
     (item) => listingRankSignals(item, personalization.get(item.item_id) ?? 0),
     limit
   );
+}
+
+/** Bayesian rating scaled to 0..1; unrated items contribute nothing. */
+export function ratingSignal(item: InventoryItem, mean: number): number {
+  const b = bayesianRating(item.avg_rating, item.rating_count, mean);
+  return b === null ? 0 : Math.max(0, Math.min(1, b / 5));
 }
 
 function localSignal(distance?: number): number {
