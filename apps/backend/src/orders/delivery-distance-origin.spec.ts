@@ -103,9 +103,16 @@ describe('delivery distance origin', () => {
       expect(error.getResponse().message).toContain('within CM');
     }
 
+    // A seller stored under its country name still counts: Canada drop-off vs a Cameroon seller mismatches.
     expect(() =>
       orders.assertDropOffCountryMatchesSellers('delivery', 'CA', [
         { business_location: { address: { country: 'Cameroon' } } },
+        { business_location: null },
+      ])
+    ).toThrow(/within CM/);
+    expect(() =>
+      orders.assertDropOffCountryMatchesSellers('delivery', 'CA', [
+        { business_location: { address: { country: 'Canada' } } },
         { business_location: null },
       ])
     ).not.toThrow();

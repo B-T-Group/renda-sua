@@ -28,6 +28,23 @@ describe('deliveryCountryMismatch', () => {
     ).toBeNull();
   });
 
+  it('treats a stored country name as the same market as its code', () => {
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: 'Cameroon',
+        sellerCountries: ['CM'],
+      })
+    ).toBeNull();
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'shipping',
+        dropOffCountry: 'GA',
+        sellerCountries: ['Gabon'],
+      })
+    ).toBeNull();
+  });
+
   it('rejects a missing or foreign drop-off for delivery and shipping', () => {
     expect(
       deliveryCountryMismatch({
@@ -50,9 +67,16 @@ describe('deliveryCountryMismatch', () => {
         sellerCountries: ['GA'],
       })
     ).toBe('MISSING_ADDRESS_COUNTRY');
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: 'Canada',
+        sellerCountries: ['Cameroon'],
+      })
+    ).toBe('CM');
   });
 
-  it('returns the first real mismatch and ignores a non-ISO seller country', () => {
+  it('returns the first real mismatch, matching seller names to ISO codes and ignoring a null seller', () => {
     expect(
       deliveryCountryMismatch({
         fulfillment: 'delivery',
@@ -65,6 +89,13 @@ describe('deliveryCountryMismatch', () => {
         fulfillment: 'delivery',
         dropOffCountry: 'CA',
         sellerCountries: ['Cameroon', null],
+      })
+    ).toBe('CM');
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: 'CA',
+        sellerCountries: ['Canada', 'ca', null],
       })
     ).toBeNull();
   });

@@ -1,5 +1,6 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { validatePhoneNumber } from '../mobile-payments/phone-validation.util';
+import { comparableCountry } from '../orders/delivery-pricing.util';
 
 /** Recipient block collected at checkout when buying for someone else. */
 export interface OrderRecipientInput {
@@ -52,9 +53,9 @@ export function deliveryCountryMismatch(params: {
   sellerCountries: Array<string | null | undefined>;
 }): string | null {
   if (params.fulfillment === 'pickup') return null;
-  const dropOff = normalizeCountryCode(params.dropOffCountry);
+  const dropOff = comparableCountry(params.dropOffCountry);
   const sellers = params.sellerCountries
-    .map((country) => normalizeCountryCode(country))
+    .map((country) => comparableCountry(country))
     .filter((country): country is string => Boolean(country));
   if (!dropOff) return 'MISSING_ADDRESS_COUNTRY';
   return sellers.find((country) => country !== dropOff) ?? null;
