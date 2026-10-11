@@ -8441,7 +8441,41 @@
   "catalog": {
     "paymentsComingSoon": "Bientôt disponible",
     "paymentsComingSoonDetail": "Les paiements pour ce marchand arrivent bientôt.",
-    "payAfterConfirmBadge": "Payez après confirmation du magasin"
+    "payAfterConfirmBadge": "Payez après confirmation du magasin",
+    "sortBy": "Trier par",
+    "sort": "Trier : {{mode}}",
+    "sortModes": {
+      "recommended": "Recommandés",
+      "relevance": "Pertinence",
+      "popular": "Populaires",
+      "rating": "Mieux notés",
+      "newest": "Nouveautés"
+    },
+    "results": "{{n}} résultats",
+    "ratingDisplay": "Note de {{rating}} sur 5, {{count}} avis",
+    "newChip": "Nouveau"
+  },
+  "search": {
+    "emptyTitle": "Rien pour « {{query}} » pour le moment",
+    "emptyTitleNoQuery": "Rien pour le moment",
+    "emptySubtitle": "Essayez plutôt ceci",
+    "showingResultsFor": "Résultats pour **{{corrected}}**",
+    "searchInsteadFor": "Rechercher plutôt « {{original}} »",
+    "removeFilter": "Retirer {{filter}} · {{n}}",
+    "similarTo": "Similaire à « {{query}} »",
+    "browseCategory": "Parcourir {{category}}",
+    "popularNearYou": "Populaires près de vous",
+    "askRenda": "Demander à Renda",
+    "filterLabels": {
+      "category": "catégorie",
+      "subcategory": "sous-catégorie",
+      "brand": "marque",
+      "min_price": "prix min",
+      "max_price": "prix max",
+      "location_name": "magasin",
+      "business_name": "vendeur",
+      "currency": "devise"
+    }
   },
   "delegation": {
     "invite": {

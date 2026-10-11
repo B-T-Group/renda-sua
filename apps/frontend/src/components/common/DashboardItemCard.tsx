@@ -747,7 +747,44 @@ const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
                 {descriptionPreview}
               </Typography>
             ) : null}
-            {showAggregateRating && (
+            {inventory.is_new && (
+              <Box sx={{ mb: 0.75 }}>
+                <Chip
+                  label={t('catalog.newChip', 'New')}
+                  size="small"
+                  color="success"
+                  sx={{ fontWeight: 600, height: 20 }}
+                />
+              </Box>
+            )}
+            {!inventory.is_new && inventory.rating_display && (
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 0.5,
+                  mb: 0.75,
+                }}
+                role="img"
+                aria-label={t('catalog.ratingDisplay', {
+                  rating: inventory.rating_display.rating,
+                  count: inventory.rating_display.count,
+                  defaultValue:
+                    'Rated {{rating}} out of 5, {{count}} reviews',
+                })}
+              >
+                <Typography
+                  component="span"
+                  variant="caption"
+                  fontWeight={600}
+                  color="text.primary"
+                  sx={{ display: 'flex', alignItems: 'center', gap: 0.25 }}
+                >
+                  <span style={{ color: '#f57c00' }}>★</span> {inventory.rating_display.rating} ({inventory.rating_display.count})
+                </Typography>
+              </Box>
+            )}
+            {inventory.rating_display === undefined && !inventory.is_new && showAggregateRating && (
               <Box
                 sx={{
                   display: 'flex',

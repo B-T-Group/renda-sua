@@ -8424,7 +8424,41 @@
   "catalog": {
     "paymentsComingSoon": "Coming soon",
     "paymentsComingSoonDetail": "Payments for this merchant are coming soon.",
-    "payAfterConfirmBadge": "Pay after the store confirms"
+    "payAfterConfirmBadge": "Pay after the store confirms",
+    "sortBy": "Sort by",
+    "sort": "Sort: {{mode}}",
+    "sortModes": {
+      "recommended": "Recommended",
+      "relevance": "Best match",
+      "popular": "Popular",
+      "rating": "Top rated",
+      "newest": "Newest"
+    },
+    "results": "{{n}} results",
+    "ratingDisplay": "Rated {{rating}} out of 5, {{count}} reviews",
+    "newChip": "New"
+  },
+  "search": {
+    "emptyTitle": "Nothing for \"{{query}}\" yet",
+    "emptyTitleNoQuery": "Nothing here yet",
+    "emptySubtitle": "Try these instead",
+    "showingResultsFor": "Showing results for **{{corrected}}**",
+    "searchInsteadFor": "Search instead for \"{{original}}\"",
+    "removeFilter": "Remove {{filter}} · {{n}}",
+    "similarTo": "Similar to \"{{query}}\"",
+    "browseCategory": "Browse {{category}}",
+    "popularNearYou": "Popular near you",
+    "askRenda": "Ask Renda to find it",
+    "filterLabels": {
+      "category": "category",
+      "subcategory": "subcategory",
+      "brand": "brand",
+      "min_price": "min price",
+      "max_price": "max price",
+      "location_name": "store",
+      "business_name": "seller",
+      "currency": "currency"
+    }
   },
   "delegation": {
     "invite": {

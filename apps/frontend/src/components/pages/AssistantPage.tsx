@@ -869,6 +869,12 @@ const AssistantPage: React.FC = () => {
   const location = useLocation();
   const context: AssistantContext | undefined = (location.state as { context?: AssistantContext })?.context;
 
+  // #342 R5: "Ask Renda to find it" opens the assistant with the query prefilled (not sent).
+  useEffect(() => {
+    const prefill = new URLSearchParams(location.search).get('prefill')?.trim();
+    if (prefill) setDraft(prefill);
+  }, []);
+
   // The page is a viewport-sized column; start it flush under the site top bar.
   useEffect(() => {
     if (typeof window.scrollTo === 'function') window.scrollTo(0, 0);

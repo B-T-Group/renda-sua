@@ -8,6 +8,7 @@ describe('AdminOrdersController.updateStatus', () => {
   };
 
   function buildController(opts?: {
+    deny?: boolean;
     cancelResult?: { success: boolean; message: string };
     cancelError?: Error;
   }) {
@@ -43,7 +44,9 @@ describe('AdminOrdersController.updateStatus', () => {
       {} as any, // creditsService
       {
         require: jest.fn().mockResolvedValue({ all: true }),
-        assertOrder: jest.fn().mockResolvedValue(undefined),
+        assertOrder: jest.fn().mockImplementation(async () => {
+          if (opts?.deny) throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+        }),
         assertIncident: jest.fn().mockResolvedValue(undefined),
       } as any
     );
@@ -67,6 +70,26 @@ describe('AdminOrdersController.updateStatus', () => {
       success: true,
       message: 'Order cancelled successfully',
     });
+  });
+
+  it('F-CA1: a country admin outside the order scope cannot cancel (nothing is released or restored)', async () => {
+    const { controller, ordersService, hasuraSystemService } = buildController({ deny: true });
+    await expect(
+      controller.updateStatus('cm-order', { status: 'cancelled', notes: 'x' })
+    ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+    expect(ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('F-CA1: scope is checked before any status branch', async () => {
+    for (const status of ['cancelled', 'delivered', 'preparing']) {
+      const { controller, ordersService, hasuraSystemService } = buildController({ deny: true });
+      await expect(
+        controller.updateStatus('cm-order', { status } as any)
+      ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
+      expect(ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    }
   });
 
   it('rejects delivered so capture and settlement cannot be skipped', async () => {

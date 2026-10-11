@@ -22,6 +22,7 @@ import { CatalogCategoryRail } from '../../components/browse/CatalogCategoryRail
 import { useCatalogCategoryRail } from '../../hooks/useCatalogCategoryRail';
 import { observer } from 'mobx-react-lite';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
+import { useNavigation } from '@react-navigation/native';
 import { Chip, Text } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -40,7 +41,13 @@ import { useStore } from '../../stores/RootStore';
 import { useMarket } from '../../hooks/useMarket';
 import { MarketSelector } from '../../components/market/MarketSelector';
 import { MarketSwitchBanner } from '../../components/market/MarketSwitchBanner';
-import type { CatalogInventoryItem, InventorySortMode } from '../../types/inventoryCatalog';
+import type {
+  CatalogInventoryItem,
+  DiscoveryRecovery,
+  DiscoverySortMode,
+  InventorySortMode,
+  RecoveryFilterName,
+} from '../../types/inventoryCatalog';
 import type { CatalogFilterState } from '../../types/catalogFilter';
 import type { Order } from '../../types/agent';
 import type { CatalogFeedRow } from '../../hooks/useCatalogFeedComposition';
@@ -55,6 +62,13 @@ import {
 import { CatalogBrowseSearchBar } from '../../components/browse/CatalogBrowseSearchBar';
 import { CatalogBrowseFilterSheet } from '../../components/browse/CatalogBrowseFilterSheet';
 import { CatalogItemSkeleton } from '../../components/browse/CatalogItemSkeleton';
+import { DiscoverySortSheet } from '../../components/browse/DiscoverySortSheet';
+import {
+  DiscoveryCorrectionBanner,
+  DiscoveryRecoveryLadder,
+} from '../../components/browse/DiscoveryRecoveryLadder';
+import { fetchSearchRecovery } from '../../services/inventoryItemsApi';
+import { trackDiscoveryEvent } from '../../utils/discoveryAnalytics';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { CatalogEmptyIllustration } from '../../components/illustrations/CatalogEmptyIllustration';
@@ -274,10 +288,17 @@ function BrowseCatalogScreenInner({
     overflow: 'hidden',
   }));
 
-  // Guests default to "Nearest" so results are proximity-ordered.
-  // Authenticated users keep "For you" (relevance) as the default.
+  // Legacy sort (flag off, byte-identical to before). Also holds 'deals' from the home stop.
   const defaultSort: InventorySortMode = inventoryRequestsWithAuth ? 'relevance' : 'fastest';
   const [sort, setSort] = useState<InventorySortMode>(defaultSort);
+  // Discovery sort (#342, flag on only). null = default for the surface.
+  const [discoverySort, setDiscoverySort] = useState<DiscoverySortMode | null>(null);
+  const [sortSheetVisible, setSortSheetVisible] = useState(false);
+  const [recovery, setRecovery] = useState<DiscoveryRecovery | null>(null);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  // R1: corrected query auto-applied; forceOriginal = "Search instead for ..." (no re-correction).
+  const [correction, setCorrection] = useState<{ original: string; corrected: string } | null>(null);
+  const [forceOriginal, setForceOriginal] = useState(false);
 
   const [searchDraft, setSearchDraft] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -346,9 +367,34 @@ function BrowseCatalogScreenInner({
   const stopsEnabled =
     catalogReady && debouncedSearch.length === 0 && !foodOnly;
 
-  const { items, loading, loadingMore, error, loadMore, refetch, total } = useInventoryCatalog({
-    search: debouncedSearch,
-    sort,
+  const discoveryOn = flags.discovery_sort_v1;
+  const listSearch = discoveryOn && correction ? correction.corrected : debouncedSearch;
+  const discoveryDefaultSort: DiscoverySortMode =
+    debouncedSearch.length > 0 ? 'relevance' : 'recommended';
+  const currentDiscoverySort: DiscoverySortMode = (() => {
+    const chosen = discoverySort ?? discoveryDefaultSort;
+    if (chosen === 'recommended' && debouncedSearch.length > 0) return 'relevance';
+    if (chosen === 'relevance' && debouncedSearch.length === 0) return 'recommended';
+    return chosen;
+  })();
+  const requestSort: InventorySortMode | DiscoverySortMode = !discoveryOn
+    ? sort
+    : sort === 'deals'
+      ? 'deals'
+      : currentDiscoverySort;
+
+  const {
+    items,
+    loading,
+    loadingMore,
+    error,
+    loadMore,
+    refetch,
+    total,
+    sortControl,
+  } = useInventoryCatalog({
+    search: listSearch,
+    sort: requestSort,
     countryCode: catalogCountryCode,
     state: catalogState,
     origin: catalogOrigin,
@@ -361,6 +407,7 @@ function BrowseCatalogScreenInner({
     export_only: exportOnly || undefined,
     withAuth: inventoryRequestsWithAuth,
     enabled: catalogReady && !showAllRestaurants,
+    includeUnavailable: discoveryOn,
   });
 
   const {
@@ -403,6 +450,99 @@ function BrowseCatalogScreenInner({
     if (exportOnly) n += 1;
     return n;
   }, [catalogFilters, exportOnly]);
+
+  // AC-1.4: a new search text resets sort to the default; filter changes keep it.
+  useEffect(() => {
+    setDiscoverySort(null);
+    setCorrection(null);
+    setForceOriginal(false);
+  }, [debouncedSearch]);
+
+  // Empty-result recovery (#342 §2): only when the list returned total = 0.
+  useEffect(() => {
+    if (!discoveryOn || total !== 0 || loading || correction) {
+      setRecovery(null);
+      return;
+    }
+    if (debouncedSearch.length === 0 && activeFilterCount === 0) {
+      setRecovery(null);
+      return;
+    }
+    const controller = new AbortController();
+    setRecoveryLoading(true);
+    void fetchSearchRecovery(
+      {
+        search: debouncedSearch || undefined,
+        category: catalogFilters.category || undefined,
+        subcategory: catalogFilters.subcategory || undefined,
+        brand: catalogFilters.brand || undefined,
+        business_name: catalogFilters.business || undefined,
+        collection: catalogFilters.collection || undefined,
+        country_code: catalogCountryCode,
+        state: catalogState,
+        food_only: foodOnly || undefined,
+      },
+      { signal: controller.signal }
+    )
+      .then((envelope) => {
+        if (controller.signal.aborted) return;
+        if (!(envelope.success && envelope.data.enabled)) {
+          setRecovery(null);
+          return;
+        }
+        const data = envelope.data;
+        if (
+          data.corrected_query &&
+          data.corrected_total > 0 &&
+          !forceOriginal &&
+          debouncedSearch.length > 0
+        ) {
+          // R1: auto-run the corrected query.
+          setCorrection({ original: debouncedSearch, corrected: data.corrected_query });
+          setRecovery(null);
+          return;
+        }
+        setRecovery(data);
+        trackDiscoveryEvent('search_empty_shown');
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRecovery(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRecoveryLoading(false);
+      });
+    return () => controller.abort();
+  }, [
+    discoveryOn,
+    total,
+    loading,
+    correction,
+    forceOriginal,
+    debouncedSearch,
+    activeFilterCount,
+    catalogFilters.category,
+    catalogFilters.subcategory,
+    catalogFilters.brand,
+    catalogFilters.business,
+    catalogFilters.collection,
+    catalogCountryCode,
+    catalogState,
+    foodOnly,
+  ]);
+
+  // search.results_shown: once per settled result set for a search query.
+  const lastShownRef = useRef('');
+  useEffect(() => {
+    if (!discoveryOn || loading || debouncedSearch.length === 0) return;
+    const key = `${listSearch}|${currentDiscoverySort}|${total}`;
+    if (lastShownRef.current === key) return;
+    lastShownRef.current = key;
+    trackDiscoveryEvent('search_results_shown', {
+      query_len: listSearch.length,
+      count: total,
+      mode: currentDiscoverySort,
+    });
+  }, [discoveryOn, loading, debouncedSearch, listSearch, currentDiscoverySort, total]);
 
   const isClientHome =
     auth.isAuthenticated && persona.activePersona === 'client' && !foodOnly;
@@ -716,6 +856,111 @@ function BrowseCatalogScreenInner({
     setSort('deals');
   }, []);
 
+  // Discovery sort handlers
+  const handleOpenSortSheet = useCallback(() => {
+    if (sortControl === 'disabled') return;
+    setSortSheetVisible(true);
+  }, [sortControl]);
+
+  const handleSelectSort = useCallback(
+    (newSort: DiscoverySortMode) => {
+      if (newSort !== currentDiscoverySort) {
+        trackDiscoveryEvent('search_sort_changed', {
+          from: currentDiscoverySort,
+          to: newSort,
+          surface: debouncedSearch.length > 0 ? 'search' : 'browse',
+        });
+      }
+      if (sort === 'deals') setSort(defaultSort);
+      setDiscoverySort(newSort);
+    },
+    [currentDiscoverySort, debouncedSearch.length, sort, defaultSort]
+  );
+
+  // Recovery ladder handlers
+  const handleSearchOriginal = useCallback((query: string) => {
+    setForceOriginal(true);
+    setCorrection(null);
+    setSearchDraft(query);
+    setDebouncedSearch(query);
+  }, []);
+
+  const handleRemoveFilter = useCallback((filter: RecoveryFilterName) => {
+    trackDiscoveryEvent('search_empty_rung_clicked', { rung: 'R2' });
+    trackDiscoveryEvent('search_filter_removed_from_empty');
+    setCatalogFilters((prev) => {
+      const next = { ...prev };
+      if (filter === 'category') {
+        next.category = '';
+        next.subcategory = '';
+      } else if (filter === 'subcategory') {
+        next.subcategory = '';
+      } else if (filter === 'brand') {
+        next.brand = '';
+      } else if (filter === 'business_name') {
+        next.business = '';
+      }
+      return next;
+    });
+  }, []);
+
+  const handleBrowseCategory = useCallback((categoryName: string) => {
+    trackDiscoveryEvent('search_empty_rung_clicked', { rung: 'R4' });
+    setCatalogFilters((prev) => ({ ...prev, category: categoryName, subcategory: '' }));
+    setSearchDraft('');
+    setDebouncedSearch('');
+  }, []);
+
+  const navigation = useNavigation<{ navigate: (name: string, params?: object) => void }>();
+  const handleAskRenda = useCallback(
+    (query: string) => {
+      trackDiscoveryEvent('search_empty_rung_clicked', { rung: 'R5' });
+      navigation.navigate('AssistantChat', { prefill: query });
+    },
+    [navigation]
+  );
+
+  const discoverySortLabel = useCallback(
+    (mode: DiscoverySortMode) => t(`public.items.discoverySort.${mode}`, mode),
+    [t]
+  );
+  const discoverySortControl = useMemo(
+    () =>
+      discoveryOn
+        ? {
+            control: sortControl ?? ('enabled' as const),
+            chipLabel:
+              currentDiscoverySort === discoveryDefaultSort
+                ? null
+                : discoverySortLabel(currentDiscoverySort),
+            a11yLabel: t('public.items.discoverySort.label', 'Sort: {{mode}}', {
+              mode: discoverySortLabel(currentDiscoverySort),
+            }),
+            onPress: handleOpenSortSheet,
+          }
+        : undefined,
+    [
+      discoveryOn,
+      sortControl,
+      currentDiscoverySort,
+      discoveryDefaultSort,
+      discoverySortLabel,
+      handleOpenSortSheet,
+      t,
+    ]
+  );
+  const discoveryBanner =
+    discoveryOn && correction ? (
+      <DiscoveryCorrectionBanner
+        corrected={correction.corrected}
+        original={correction.original}
+        onSearchOriginal={() => {
+          trackDiscoveryEvent('search_empty_rung_clicked', { rung: 'R1' });
+          handleSearchOriginal(correction.original);
+        }}
+      />
+    ) : null;
+
   const showExportsChip =
     !foodOnly &&
     (exportOnly || exportStopLoading || exportStopItems.length > 0);
@@ -812,6 +1057,8 @@ function BrowseCatalogScreenInner({
           onOpenFilterSheet={() => setFilterSheetVisible(true)}
           activeFilterCount={activeFilterCount}
           sortSummaryLabel={sortSummaryLabel}
+          discoverySort={discoverySortControl}
+          discoveryBanner={discoveryBanner}
           error={error}
           itemsLength={items.length}
           onListRefresh={onListRefresh}
@@ -846,6 +1093,8 @@ function BrowseCatalogScreenInner({
       onClearAllFilters,
       activeFilterCount,
       sortSummaryLabel,
+      discoverySortControl,
+      discoveryBanner,
       error,
       items.length,
       onListRefresh,
@@ -934,6 +1183,21 @@ function BrowseCatalogScreenInner({
       return <CatalogItemSkeleton count={6} />;
     }
     if (error) return null;
+    if (discoveryOn && recoveryLoading) return <CatalogItemSkeleton count={6} />;
+
+    // Discovery: recovery ladder (flag on, total = 0)
+    if (discoveryOn && recovery && !recoveryLoading) {
+      return (
+        <DiscoveryRecoveryLadder
+          recovery={recovery}
+          onRemoveFilter={handleRemoveFilter}
+          onBrowseCategory={handleBrowseCategory}
+          onItemPress={onItemPress ? handleItemPress : undefined}
+          onAskRenda={flags.assistant_shopping_v1 ? handleAskRenda : undefined}
+        />
+      );
+    }
+
     const hasFilters =
       activeFilterCount > 0 || debouncedSearch.length > 0;
     return (
@@ -966,6 +1230,15 @@ function BrowseCatalogScreenInner({
       </View>
     );
   }, [
+    discoveryOn,
+    recovery,
+    recoveryLoading,
+    flags.assistant_shopping_v1,
+    handleRemoveFilter,
+    handleBrowseCategory,
+    handleAskRenda,
+    handleItemPress,
+    onItemPress,
     activeFilterCount,
     colors.text.disabled,
     colors.text.secondary,
@@ -1065,6 +1338,7 @@ function BrowseCatalogScreenInner({
         onDismiss={() => setFilterSheetVisible(false)}
         sort={sort}
         onSortChange={setSort}
+        hideSort={discoveryOn}
         values={catalogFilters}
         onChange={setCatalogFilters}
         categories={filterOptions.categories}
@@ -1085,6 +1359,17 @@ function BrowseCatalogScreenInner({
       >
         {availabilitySnack ?? snack}
       </TabAwareSnackbar>
+      
+      {/* Discovery sort bottom sheet */}
+      {discoveryOn ? (
+        <DiscoverySortSheet
+          visible={sortSheetVisible}
+          onDismiss={() => setSortSheetVisible(false)}
+          selectedSort={currentDiscoverySort}
+          onSelectSort={handleSelectSort}
+          isSearch={debouncedSearch.length > 0}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

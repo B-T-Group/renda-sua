@@ -281,10 +281,12 @@ export class AdminOrdersController {
     @Body() dto: UpdateOrderStatusDto,
   ) {
     try {
-      if (dto.status === 'cancelled') {
-        return this.ordersService.cancelOrderAsAdmin(orderId, dto.notes);
-      }
+      // Geo/scope check first, for EVERY status including cancel (F-CA1: a country admin must
+      // never cancel an order outside their grants).
       const order = await this.requireOrder(orderId);
+      if (dto.status === 'cancelled') {
+        return await this.ordersService.cancelOrderAsAdmin(orderId, dto.notes);
+      }
       this.assertOperationalAdminStatus(dto.status);
       await this.writeOperationalAdminStatus(order, dto);
       return {
