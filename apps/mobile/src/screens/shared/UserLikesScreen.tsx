@@ -339,7 +339,7 @@ function UserLikesScreenBase() {
               restockLikes.filter === 'back_in_stock'
                 ? t(
                     'restockAlerts.emptyBackInStock',
-                    'Nothing back yet. We'll tell you.'
+                    "Nothing back yet. We'll tell you."
                   )
                 : t('items.likes.emptyTitle', 'No favorites yet')}
             </Text>
