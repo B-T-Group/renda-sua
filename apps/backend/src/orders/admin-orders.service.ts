@@ -1,6 +1,9 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { DateTime } from 'luxon';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { andWhere } from '../rbac/geo-scope.util';
+import { GeoScopeService } from '../rbac/geo-scope.service';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { DEFAULT_USER_TIMEZONE } from '../users/user-timezone.util';
 import {
   computeOrderStatsAverages,
@@ -116,12 +119,16 @@ const STATS_QUERY = `query AdminOrderStats(
 
 @Injectable()
 export class AdminOrdersService {
-  constructor(private readonly hasura: HasuraSystemService) {}
+  constructor(
+    private readonly hasura: HasuraSystemService,
+    private readonly geo: GeoScopeService
+  ) {}
 
   async list(query: GetAdminOrdersDto): Promise<AdminOrdersResponse> {
     const limit = Number(query.limit ?? 25);
     const offset = Number(query.offset ?? 0);
-    const where = this.buildWhere(query);
+    const geoWhere = await this.orderScope();
+    const where = andWhere(this.buildWhere(query), geoWhere);
     const res = await this.hasura.executeQuery(
       `query AdminOrdersQueue(
         $where: orders_bool_exp!
@@ -147,7 +154,10 @@ export class AdminOrdersService {
       }`,
       {
         where,
-        countWhere: { current_status: { _in: RISK_ACTIONABLE_STATUSES } },
+        countWhere: andWhere(
+          { current_status: { _in: RISK_ACTIONABLE_STATUSES } },
+          geoWhere
+        ),
         orderBy: this.buildOrderBy(query),
         limit,
         offset,
@@ -167,9 +177,10 @@ export class AdminOrdersService {
   ): Promise<AdminOrderStatsResponse> {
     const period = query.period ?? AdminOrderStatsPeriod.LAST_7_DAYS;
     const since = this.statsPeriodStart(period);
+    const geoWhere = await this.orderScope();
     const res = await this.hasura.executeQuery(
       STATS_QUERY,
-      this.buildStatsVariables(since)
+      this.buildStatsVariables(since, geoWhere)
     );
     const counts = this.buildStatsCounts(res);
     return {
@@ -181,10 +192,14 @@ export class AdminOrdersService {
     };
   }
 
-  private buildStatsVariables(since: string | null): Record<string, unknown> {
-    const base: Record<string, unknown> = since
-      ? { created_at: { _gte: since } }
-      : {};
+  private buildStatsVariables(
+    since: string | null,
+    geoWhere: Record<string, unknown> | null
+  ): Record<string, unknown> {
+    const base = andWhere(
+      since ? { created_at: { _gte: since } } : {},
+      geoWhere
+    );
     return {
       totalWhere: base,
       completedWhere: this.statusScope(base, COMPLETED_STATUSES),
@@ -235,6 +250,13 @@ export class AdminOrdersService {
   }
 
   async getDetail(orderId: string): Promise<AdminOrderDetail> {
+    await this.geo.assertOrder(
+      await this.geo.requireAny([
+        PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        PlatformPermissions.OPS_CREDITS,
+      ]),
+      orderId
+    );
     const res = await this.hasura.executeQuery(
       `query AdminOrderDetail($id: uuid!) {
         orders_by_pk(id: $id) { ${ORDER_FIELDS} }
@@ -328,6 +350,13 @@ export class AdminOrdersService {
       return { _eq: query.status };
     }
     return { _in: RISK_ACTIONABLE_STATUSES };
+  }
+
+  private async orderScope() {
+    const scope = await this.geo.require(
+      PlatformPermissions.ORDERS_CROSS_BUSINESS
+    );
+    return this.geo.orderWhere(scope);
   }
 
   private searchFilter(search: string): Record<string, unknown> {

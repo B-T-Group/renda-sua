@@ -1,6 +1,14 @@
 table:
   name: supported_country_states
   schema: public
+array_relationships:
+  - name: user_roles
+    using:
+      foreign_key_constraint_on:
+        column: supported_country_state_id
+        table:
+          name: user_roles
+          schema: public
 select_permissions:
   - role: agent
     permission:

@@ -131,6 +131,8 @@ export interface UserProfile {
   roles?: string[];
   permissions?: string[];
   is_superuser?: boolean;
+  /** Geographic grants from GET /users/me. null states means every state. */
+  admin_scopes?: Array<{ countryCode: string; states: string[] | null }>;
 }
 
 export interface UserProfileResponse {

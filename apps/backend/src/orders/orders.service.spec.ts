@@ -435,6 +435,10 @@ describe('OrdersService', () => {
         },
         { provide: RbacService, useValue: {} },
         {
+          provide: require('../rbac/geo-scope.service').GeoScopeService,
+          useValue: { coversOrder: jest.fn().mockResolvedValue(false) },
+        },
+        {
           provide: DeliveryAvailabilityService,
           useValue: {
             evaluate: jest.fn().mockResolvedValue({

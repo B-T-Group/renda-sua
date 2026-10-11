@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { DeepLinkService } from '../notifications/deep-link.service';
 import { NotificationAnalyticsService } from '../notifications/orchestration/notification-analytics.service';
+import { isRestockSchemaUnavailable } from './restock-alerts.errors';
 import { RestockAlertsProcessor, type LinkBuilder } from './restock-alerts.processor';
 import { HasuraRestockRepository } from './restock-alerts.repository';
 import { NotificationRestockAnalytics, OrchestratorRestockNotifier } from './restock-alerts.notifier';
@@ -52,7 +53,16 @@ export class RestockAlertsCron {
         );
       }
     } catch (e: any) {
-      this.logger.error(`restock alerts run failed: ${e?.message}`);
+      logRestockCronFailure(this.logger, e);
     }
   }
+}
+
+export function logRestockCronFailure(logger: Logger, error: any): void {
+  const message = error?.message ?? error;
+  if (isRestockSchemaUnavailable(error)) {
+    logger.warn(`restock alerts skipped: ${message}`);
+    return;
+  }
+  logger.error(`restock alerts run failed: ${message}`);
 }

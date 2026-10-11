@@ -20,6 +20,8 @@ export const PlatformPermissions = {
   CONFIG_APPLICATION_SETUP: 'platform.config.application_setup',
   OPS_SITE_EVENTS: 'platform.ops.site_events',
   OPS_CREDITS: 'platform.ops.credits',
+  OPS_MAP: 'platform.ops.map',
+  USERS_READ: 'platform.users.read',
   CATALOG_CROSS_BUSINESS: 'platform.catalog.cross_business',
   ORDERS_CROSS_BUSINESS: 'platform.orders.cross_business',
   LOCATIONS_TRANSFERS_ADMIN: 'platform.locations.transfers_admin',

@@ -565,6 +565,23 @@
     }
   },
   "admin": {
+    "countryAdmins": {
+      "moduleTitle": "Country admins",
+      "moduleDescription": "Assign admins for a country or specific states",
+      "title": "Country admins",
+      "subtitle": "Give someone admin tools for a country or its states.",
+      "add": "Add country admin",
+      "addTitle": "Add country admin",
+      "editTitle": "Edit country admin",
+      "empty": "No country admins yet.",
+      "email": "Email",
+      "lookup": "Find",
+      "country": "Country",
+      "states": "States",
+      "allStates": "All states",
+      "removeTitle": "Remove country admin",
+      "removeMessage": "This person will lose country admin access."
+    },
     "map": {
       "title": "Map",
       "subtitle": "Agents and merchants in your markets",
@@ -582,7 +599,7 @@
       "loading": "Loading map…",
       "empty": "No agents or merchants with a location in this view.",
       "loadError": "Could not load the map.",
-      "accessDenied": "Only a superuser can open the map.",
+      "accessDenied": "You do not have access to the map.",
       "close": "Close",
       "phone": "Phone",
       "email": "Email",

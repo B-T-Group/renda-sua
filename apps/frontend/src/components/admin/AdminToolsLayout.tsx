@@ -21,6 +21,7 @@ import { findSelectedAdminPath } from '../../constants/adminModuleSections';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
 import AdminToolsNav from './AdminToolsNav';
+import AdminScopeChip from './AdminScopeChip';
 
 /** Wide enough for FR admin labels without ellipsis on a single line. */
 const NAV_WIDTH = 300;
@@ -177,6 +178,7 @@ const AdminToolsLayout: React.FC = () => {
       >
         {t('business.dashboard.backToDashboard', 'Back to dashboard')}
       </Button>
+      <AdminScopeChip />
 
       {isMobile ? (
         <MobileAdminBar onOpen={() => setDrawerOpen(true)} />

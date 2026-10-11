@@ -34,6 +34,7 @@ export interface AdminBusinessOverviewCardProps {
   onSuspend: () => void;
   onReinstate: () => void;
   onApplyReferral?: () => void;
+  canManage?: boolean;
 }
 
 function primaryLocationLabel(business: AdminBusiness): string | null {
@@ -50,7 +51,15 @@ function primaryLocationLabel(business: AdminBusiness): string | null {
 
 export const AdminBusinessOverviewCard: React.FC<
   AdminBusinessOverviewCardProps
-> = ({ business, onVerify, onEdit, onSuspend, onReinstate, onApplyReferral }) => {
+> = ({
+  business,
+  onVerify,
+  onEdit,
+  onSuspend,
+  onReinstate,
+  onApplyReferral,
+  canManage = true,
+}) => {
   const { t } = useTranslation();
   const summary = business.verificationSummary;
   const rail = summary?.rail;
@@ -202,7 +211,9 @@ export const AdminBusinessOverviewCard: React.FC<
           referralCode={business.referralCode}
           referredBy={business.referredBy}
           createdAt={business.created_at}
-          onApply={business.referredBy ? undefined : onApplyReferral}
+          onApply={
+            !canManage || business.referredBy ? undefined : onApplyReferral
+          }
         />
 
         <Divider />
@@ -258,6 +269,8 @@ export const AdminBusinessOverviewCard: React.FC<
           }}
         >
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+            {canManage ? (
+              <>
             <Button
               size="small"
               variant="outlined"
@@ -288,6 +301,8 @@ export const AdminBusinessOverviewCard: React.FC<
             >
               {t('common.edit', 'Edit')}
             </Button>
+              </>
+            ) : null}
           </Stack>
           {business.user_id ? (
             <Stack direction="row" spacing={0.5}>

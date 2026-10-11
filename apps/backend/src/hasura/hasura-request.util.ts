@@ -153,6 +153,14 @@ export function isMissingItemsInterestOnlyField(error: unknown): boolean {
   return MISSING_ITEMS_INTEREST_ONLY.test(hasuraValidationErrorText(error));
 }
 
+const MISSING_RESTOCK_GRAPHQL_FIELD =
+  /field 'restock_[^']+' not found in type/i;
+
+/** Hasura hides untracked tables (and columns the role cannot see) as this validation error. */
+export function isMissingRestockGraphqlSchema(error: unknown): boolean {
+  return MISSING_RESTOCK_GRAPHQL_FIELD.test(hasuraValidationErrorText(error));
+}
+
 export function stripItemsInterestOnlyFromGraphql(query: string): string {
   return query
     .replace(/^\s*interest_only\s*$/gm, '')

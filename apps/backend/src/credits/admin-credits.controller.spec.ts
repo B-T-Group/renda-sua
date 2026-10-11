@@ -53,7 +53,14 @@ describe('AdminCreditsController', () => {
     controller = new AdminCreditsController(
       credits as any,
       queues as any,
-      users as any
+      users as any,
+      {
+        require: jest.fn().mockResolvedValue({ all: true }),
+        assertOrder: jest.fn().mockResolvedValue(undefined),
+        assertIncident: jest.fn().mockResolvedValue(undefined),
+        creditWhere: jest.fn().mockResolvedValue(null),
+        orderWhere: jest.fn().mockResolvedValue(null),
+      } as any
     );
   });
 

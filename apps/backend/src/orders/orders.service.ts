@@ -72,7 +72,7 @@ import {
 } from '../diaspora/diaspora-order.util';
 import { PdfService } from '../pdf/pdf.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
-import { RbacService } from '../rbac/rbac.service';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { SiteEventsService } from '../site-events/site-events.service';
 import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -610,7 +610,7 @@ export class OrdersService {
     private readonly orderPickupMonitorService: OrderPickupMonitorService,
     private readonly orderReassignmentService: OrderReassignmentService,
     private readonly orderEventsService: OrderEventsService,
-    private readonly rbacService: RbacService,
+    private readonly geoScope: GeoScopeService,
     private readonly deliveryAvailabilityService: DeliveryAvailabilityService,
     private readonly eventEmitter: EventEmitter2,
     private readonly foodOrdersService: FoodOrdersService,
@@ -646,10 +646,11 @@ export class OrdersService {
     );
   }
 
-  private async canAccessAnyOrder(userId: string): Promise<boolean> {
-    return this.rbacService.hasPermission(
+  private async canAccessOrder(userId: string, orderId: string): Promise<boolean> {
+    return this.geoScope.coversOrder(
       userId,
-      PlatformPermissions.ORDERS_CROSS_BUSINESS
+      PlatformPermissions.ORDERS_CROSS_BUSINESS,
+      orderId
     );
   }
 
@@ -7967,7 +7968,7 @@ export class OrdersService {
       if (order.business_id === user.business.id) {
         hasAccess = true;
         accessReason = 'business_owner';
-      } else if (await this.canAccessAnyOrder(user.id)) {
+      } else if (await this.canAccessOrder(user.id, orderId)) {
         hasAccess = true;
         accessReason = 'platform_orders';
       }
@@ -7987,6 +7988,11 @@ export class OrdersService {
       // Agent can access orders assigned to them
       hasAccess = true;
       accessReason = 'assigned_agent';
+    }
+
+    if (!hasAccess && (await this.canAccessOrder(user.id, orderId))) {
+      hasAccess = true;
+      accessReason = 'platform_orders';
     }
 
     if (!hasAccess) {
@@ -8582,7 +8588,7 @@ export class OrdersService {
     if (isActivePersona(user, 'business') && user.business) {
       if (
         order.business_id === user.business.id ||
-        (await this.canAccessAnyOrder(user.id))
+        (await this.canAccessOrder(user.id, orderId))
       ) {
         hasAccess = true;
       }
@@ -8597,6 +8603,10 @@ export class OrdersService {
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)
     ) {
+      hasAccess = true;
+    }
+
+    if (!hasAccess && (await this.canAccessOrder(user.id, orderId))) {
       hasAccess = true;
     }
 
@@ -8668,7 +8678,7 @@ export class OrdersService {
     if (isActivePersona(user, 'business') && user.business) {
       if (
         order.business_id === user.business.id ||
-        (await this.canAccessAnyOrder(user.id))
+        (await this.canAccessOrder(user.id, orderId))
       ) {
         hasAccess = true;
       }
@@ -8683,6 +8693,10 @@ export class OrdersService {
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)
     ) {
+      hasAccess = true;
+    }
+
+    if (!hasAccess && (await this.canAccessOrder(user.id, orderId))) {
       hasAccess = true;
     }
 
@@ -15024,7 +15038,7 @@ export class OrdersService {
     reason: 'support_hold' | 'merchant_delay' = 'support_hold'
   ) {
     const user = await this.hasuraUserService.getUser();
-    const canAccess = await this.canAccessAnyOrder(user.id);
+    const canAccess = await this.canAccessOrder(user.id, orderId);
     if (!canAccess) {
       throw new HttpException('Unauthorized', HttpStatus.FORBIDDEN);
     }
@@ -15054,7 +15068,7 @@ export class OrdersService {
       );
     }
     const user = await this.hasuraUserService.getUser();
-    const canAccess = await this.canAccessAnyOrder(user.id);
+    const canAccess = await this.canAccessOrder(user.id, orderId);
     if (canAccess) {
       return this.orderPickupMonitorService.resumePickup(
         orderId,
@@ -15106,7 +15120,7 @@ export class OrdersService {
   }
 
   private async assertCanViewOrder(user: any, order: any): Promise<void> {
-    if (await this.canAccessAnyOrder(user.id)) return;
+    if (await this.canAccessOrder(user.id, order.id)) return;
     const isClient = order.client?.user_id === user.id;
     const isBusiness = order.business?.user_id === user.id;
     const isAgent = order.assigned_agent?.user_id === user.id;

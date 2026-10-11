@@ -30,6 +30,7 @@ import {
   PlatformPermissions,
   PlatformRoles,
 } from '../rbac/platform-permissions';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { ApplicationSetupService } from './application-setup.service';
 import { CountryOnboardingService } from './country-onboarding.service';
 import { BusinessLocationTransferService } from '../business-items/business-location-transfer.service';
@@ -99,6 +100,7 @@ export class AdminController {
     private readonly threadsService: ThreadsService,
     private readonly businessAccountTypeService: BusinessAccountTypeService,
     private readonly aiImageCleanupService: AiImageCleanupService,
+    private readonly geo: GeoScopeService,
     @Inject(forwardRef(() => BusinessVerificationService))
     private readonly businessVerificationService: BusinessVerificationService
   ) {}
@@ -527,7 +529,10 @@ export class AdminController {
   }
 
   @Get('agents')
-  @RequirePermissions(PlatformPermissions.MANAGE_AGENTS)
+  @RequirePermissions(
+    PlatformPermissions.MANAGE_AGENTS,
+    PlatformPermissions.USERS_READ
+  )
   async getAgents(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -540,6 +545,9 @@ export class AdminController {
         limit: Number(limit) || 10,
         search: search || '',
         unverifiedOnly: unverified === 'true',
+        geo: await this.peopleWhere(PlatformPermissions.MANAGE_AGENTS, [
+          'agent_addresses',
+        ]),
       });
       return { success: true, ...result };
     } catch (error: any) {
@@ -651,9 +659,16 @@ export class AdminController {
   }
 
   @Get('agents/:agentId/id-documents')
-  @RequirePermissions(PlatformPermissions.MANAGE_AGENTS)
+  @RequirePermissions(
+    PlatformPermissions.MANAGE_AGENTS,
+    PlatformPermissions.USERS_READ
+  )
   async getAgentIdDocuments(@Param('agentId') agentId: string) {
     try {
+      await this.geo.assertAgent(
+        await this.peopleScope(PlatformPermissions.MANAGE_AGENTS),
+        agentId
+      );
       const result = await this.adminService.getAgentIdDocuments(agentId);
       return { success: true, ...result };
     } catch (error: any) {
@@ -666,7 +681,10 @@ export class AdminController {
   }
 
   @Get('clients')
-  @RequirePermissions(PlatformPermissions.MANAGE_CLIENTS)
+  @RequirePermissions(
+    PlatformPermissions.MANAGE_CLIENTS,
+    PlatformPermissions.USERS_READ
+  )
   async getClients(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
@@ -677,6 +695,9 @@ export class AdminController {
         page: Number(page) || 1,
         limit: Number(limit) || 10,
         search: search || '',
+        geo: await this.peopleWhere(PlatformPermissions.MANAGE_CLIENTS, [
+          'client_addresses',
+        ]),
       });
       return { success: true, ...result };
     } catch (error: any) {
@@ -761,8 +782,19 @@ export class AdminController {
     }
   }
 
+  private async peopleScope(manageKey: string) {
+    return this.geo.requireAny([manageKey, PlatformPermissions.USERS_READ]);
+  }
+
+  private async peopleWhere(manageKey: string, paths: string[]) {
+    return this.geo.personaWhere(await this.peopleScope(manageKey), paths);
+  }
+
   @Get('businesses')
-  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
+  @RequirePermissions(
+    PlatformPermissions.MANAGE_BUSINESSES,
+    PlatformPermissions.USERS_READ
+  )
   @ApiOperation({ summary: 'List businesses with optional triage filters' })
   @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
@@ -801,6 +833,10 @@ export class AdminController {
         idDocumentStatus: idDocumentStatus || undefined,
         needsAttention:
           needsAttention === 'true' || needsAttention === '1',
+        geo: await this.peopleWhere(PlatformPermissions.MANAGE_BUSINESSES, [
+          'business_addresses',
+          'business_locations',
+        ]),
       });
       return { success: true, ...result };
     } catch (error: any) {
@@ -830,11 +866,18 @@ export class AdminController {
   }
 
   @Get('businesses/:id/verification')
-  @RequirePermissions(PlatformPermissions.MANAGE_BUSINESSES)
+  @RequirePermissions(
+    PlatformPermissions.MANAGE_BUSINESSES,
+    PlatformPermissions.USERS_READ
+  )
   @ApiOperation({ summary: 'Get business verification details for admin review' })
   @ApiParam({ name: 'id', description: 'Business UUID' })
   async getBusinessVerification(@Param('id') businessId: string) {
     try {
+      await this.geo.assertBusiness(
+        await this.peopleScope(PlatformPermissions.MANAGE_BUSINESSES),
+        businessId
+      );
       const data = await this.adminService.getBusinessVerificationDetails(businessId);
       return { success: true, data };
     } catch (error: any) {
@@ -1200,9 +1243,16 @@ export class AdminController {
   }
 
   @Get('users/:id')
-  @RequirePermissions(PlatformPermissions.MANAGE_CLIENTS)
+  @RequirePermissions(
+    PlatformPermissions.MANAGE_CLIENTS,
+    PlatformPermissions.USERS_READ
+  )
   async getUserDetails(@Param('id') userId: string) {
     try {
+      await this.geo.assertPerson(
+        await this.peopleScope(PlatformPermissions.MANAGE_CLIENTS),
+        userId
+      );
       const result = await this.adminService.getUserDetails(userId);
       return { success: true, user: result };
     } catch (error: any) {
