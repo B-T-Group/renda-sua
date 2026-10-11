@@ -4,20 +4,39 @@ import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { Banner, Divider, List, Switch, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import {
   useNotificationPreferences,
   type NotificationPreferencesPatch,
 } from '../../hooks/useNotificationPreferences';
+import { useRestockAlerts } from '../../hooks/useRestockAlerts';
 
 export default function NotificationPreferencesScreen() {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
+  const { flags } = useClientFlags();
   const { prefs, loading, saving, error, refresh, update } =
     useNotificationPreferences();
+  const restockAlerts = useRestockAlerts();
+
+  const restockEnabled = flags.restock_alerts_v1 && restockAlerts.enabled;
+
+  React.useEffect(() => {
+    if (restockEnabled && !restockAlerts.preferences) {
+      void restockAlerts.loadPreferences();
+    }
+  }, [restockEnabled]);
 
   const onToggle = (key: keyof NotificationPreferencesPatch, value: boolean) => {
     void update({ [key]: value }).catch(() => undefined);
+  };
+
+  const onRestockToggle = (
+    key: 'push' | 'whatsapp' | 'sms',
+    value: boolean
+  ) => {
+    void restockAlerts.updatePreferences({ [key]: value }).catch(() => undefined);
   };
 
   if (loading) {
@@ -156,6 +175,45 @@ export default function NotificationPreferencesScreen() {
         disabled={saving}
         onChange={(v) => onToggle('marketingEnabled', v)}
       />
+
+      {restockEnabled && restockAlerts.preferences && (
+        <>
+          <Divider style={{ marginVertical: spacing.md }} />
+          <Text variant="labelLarge" style={styles.section}>
+            {t('restockAlerts.settingsTitle', 'Restock alerts')}
+          </Text>
+          <Text
+            variant="bodySmall"
+            style={{ color: colors.text.secondary, paddingHorizontal: 16, marginBottom: spacing.sm }}
+          >
+            {t(
+              'restockAlerts.settingsSubtitle',
+              'Items you liked that come back in stock'
+            )}
+          </Text>
+          <PrefRow
+            title={t('notifications.preferences.push', 'Push notifications')}
+            value={restockAlerts.preferences.push}
+            disabled={restockAlerts.prefsSaving}
+            onChange={(v) => onRestockToggle('push', v)}
+          />
+          <PrefRow
+            title={t('notifications.preferences.whatsapp', 'WhatsApp')}
+            value={restockAlerts.preferences.whatsapp}
+            disabled={
+              restockAlerts.prefsSaving ||
+              (waBlocked && !restockAlerts.preferences.whatsapp)
+            }
+            onChange={(v) => onRestockToggle('whatsapp', v)}
+          />
+          <PrefRow
+            title={t('notifications.preferences.sms', 'SMS (fallback)')}
+            value={restockAlerts.preferences.sms}
+            disabled={restockAlerts.prefsSaving}
+            onChange={(v) => onRestockToggle('sms', v)}
+          />
+        </>
+      )}
     </ScrollView>
   );
 }
