@@ -1,4 +1,5 @@
 import type { PersonaSlug } from '../types/persona';
+import { restockPathToTarget } from './restockDeepLink';
 
 /** Parse https://…/app/…, https://…/store/:id and rendasua://… into an app-relative path. */
 export function extractAppPath(url: string): string | null {
@@ -31,6 +32,7 @@ export function targetPersonaForDeepLinkPath(path: string): PersonaSlug | null {
   if (head === 'admin' || head === 'items') return 'business';
   if (head === 'rentals' && segments[1] === 'requests') return 'business';
   if (head === 'deliveries') return 'agent';
+  if (head === 'restock') return 'client';
   return null;
 }
 
@@ -45,6 +47,8 @@ export type DeepLinkTarget =
   | { type: 'rental'; id: string }
   | { type: 'food'; id?: string }
   | { type: 'store'; id: string }
+  | { type: 'restockItem'; itemId: string }
+  | { type: 'restockLikes'; filter: 'all' | 'back_in_stock' }
   | { type: 'dashboard' };
 
 export function resolveDeepLinkTarget(path: string): DeepLinkTarget {
@@ -54,6 +58,12 @@ export function resolveDeepLinkTarget(path: string): DeepLinkTarget {
 
 function matchDeepLinkHead(segments: string[]): DeepLinkTarget | null {
   const [head, id, adminOrderId] = segments;
+  if (head === 'restock') {
+    const restock = restockPathToTarget(segments.join('/'));
+    if (restock?.type === 'item') return { type: 'restockItem', itemId: restock.itemId };
+    if (restock?.type === 'likes') return { type: 'restockLikes', filter: restock.filter };
+    return null;
+  }
   if (head === 'admin' && id === 'orders' && adminOrderId) {
     return { type: 'adminOrder', id: adminOrderId };
   }

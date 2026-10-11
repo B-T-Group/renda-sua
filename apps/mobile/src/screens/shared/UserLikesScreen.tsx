@@ -18,9 +18,11 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { ClientRootStackParamList } from '../../navigation/types';
 import { fetchItemLikes } from '../../services/itemLikesApi';
 import { useStore } from '../../stores/RootStore';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { RestockLikesView } from './RestockLikesView';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
 
-function UserLikesScreenBase() {
+function UserLikesClassic() {
   const { t } = useTranslation();
   const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
@@ -227,5 +229,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
 });
+
+/**
+ * `restock_alerts_v1` off (default, or server says disabled for this market):
+ * the classic Likes list, untouched. On: Likes with restock bell states.
+ */
+function UserLikesScreenBase() {
+  const { flags } = useClientFlags();
+  const [restockUnavailable, setRestockUnavailable] = useState(false);
+  if (flags.restock_alerts_v1 && !restockUnavailable) {
+    return <RestockLikesView onUnavailable={() => setRestockUnavailable(true)} />;
+  }
+  return <UserLikesClassic />;
+}
 
 export default observer(UserLikesScreenBase);

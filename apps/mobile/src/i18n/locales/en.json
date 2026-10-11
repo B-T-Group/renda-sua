@@ -7497,5 +7497,24 @@
       "submit": "Submit report",
       "blockMerchant": "Block this store"
     }
+  },
+  "restockAlerts": {
+    "bellOn": "We'll tell you when it's back",
+    "bellOff": "Notify me when it's back",
+    "hint": "We'll let you know when it's back.",
+    "alertOn": "Alert on",
+    "alertOff": "Alert off",
+    "backInStock": "Back in stock",
+    "goneAgain": "Gone again. We'll tell you next time.",
+    "emptyBackInStock": "Nothing back yet. We'll tell you.",
+    "filterAll": "All",
+    "filterBackInStock": "Back in stock",
+    "settingsTitle": "Restock alerts",
+    "settingsSubtitle": "Items you liked that come back in stock",
+    "bellAccessibilityOn": "Restock alert for {{item}}: on",
+    "bellAccessibilityOff": "Restock alert for {{item}}: off",
+    "undo": "Undo",
+    "stopAction": "Stop restock alerts",
+    "toggleError": "Could not update the alert. Try again."
   }
 }
