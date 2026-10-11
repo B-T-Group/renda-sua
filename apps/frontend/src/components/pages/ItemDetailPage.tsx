@@ -87,6 +87,8 @@ import PageShareMenu from '../common/PageShareMenu';
 import ItemLikeButton from '../common/ItemLikeButton';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import VariantSelector from '../common/VariantSelector';
+import { RestockAlertPdpSection } from '../common/RestockAlertPdpSection';
+import { useClientFlags } from '../../hooks/useClientFlags';
 import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import { orderedItemImages } from '../../utils/orderedItemImages';
@@ -473,6 +475,7 @@ export default function ItemDetailPage() {
   const { enqueueSnackbar } = useSnackbar();
   const { submitInterest } = useProductInterest();
   const { selectedMarket, markets, setMarket } = useMarket();
+  const { flags } = useClientFlags();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const { isStripeRail } = useIsStripeRail();
@@ -964,6 +967,7 @@ export default function ItemDetailPage() {
   const showCartChip = isClientUser && inCart && !exportAvailable;
   const showOrderCtaStack =
     exportAvailable || showAddToCart || showInlineOrderNow || showCartChip;
+  const showRestockAlerts = flags.restock_alerts_v1 && isClientUser && !hasStock;
 
   const ratingCount = ratings.length;
   const ratingAvg =
@@ -1651,6 +1655,13 @@ export default function ItemDetailPage() {
                 ) : null}
               </Stack>
             ) : null}
+            {showRestockAlerts && inventoryItem && (
+              <RestockAlertPdpSection
+                inventoryItem={inventoryItem}
+                isClientUser={isClientUser}
+                hasStock={hasStock}
+              />
+            )}
           </Stack>
         </Grid>
       </Grid>
