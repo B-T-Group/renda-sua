@@ -19,6 +19,7 @@ import {
   hasuraUnavailableResponse,
   isTransientHasuraNetworkError,
   isWrappedTransientHasuraHttpException,
+  remapHasuraDataException,
 } from '../../hasura/hasura-request.util';
 import { getRequestLogContext } from '../request-context-log.util';
 
@@ -48,6 +49,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       return exception.getStatus();
     }
+    const dataException = remapHasuraDataException(exception);
+    if (dataException) {
+      return dataException.getStatus();
+    }
     if (isTransientHasuraNetworkError(exception)) {
       return HttpStatus.SERVICE_UNAVAILABLE;
     }
@@ -61,13 +66,28 @@ export class AllExceptionsFilter implements ExceptionFilter {
     if (isWrappedTransientHasuraHttpException(exception)) {
       return hasuraUnavailableResponse();
     }
-    if (exception instanceof HttpException) {
-      const response = exception.getResponse();
-      if (typeof response === 'string') {
-        return { statusCode: status, message: response };
-      }
-      return response as object;
+    const httpBody = this.httpExceptionBody(exception, status);
+    if (httpBody) return httpBody;
+    const dataException = remapHasuraDataException(exception);
+    if (dataException) {
+      return dataException.getResponse() as object;
     }
+    return this.fallbackBody(exception, status);
+  }
+
+  private httpExceptionBody(
+    exception: unknown,
+    status: number
+  ): object | null {
+    if (!(exception instanceof HttpException)) return null;
+    const response = exception.getResponse();
+    if (typeof response === 'string') {
+      return { statusCode: status, message: response };
+    }
+    return response as object;
+  }
+
+  private fallbackBody(exception: unknown, status: number): object {
     if (isTransientHasuraNetworkError(exception)) {
       return {
         success: false,

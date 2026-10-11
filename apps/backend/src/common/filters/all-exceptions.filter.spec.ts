@@ -189,6 +189,46 @@ describe('AllExceptionsFilter', () => {
     expect(Sentry.captureException).not.toHaveBeenCalled();
   });
 
+  it('maps Hasura boolean data-exceptions to 400 and does not report to Sentry', () => {
+    (Sentry.getClient as jest.Mock).mockReturnValue({});
+    const exception = new Error(
+      'invalid input syntax for type boolean: "nope": {"response":{"errors":[{"message":"invalid input syntax for type boolean: \\"nope\\"","extensions":{"path":"$","code":"data-exception"}}],"status":200},"request":{"query":"mutation UpdateFlag"}}'
+    );
+
+    filter.catch(exception, host);
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith({
+      success: false,
+      statusCode: 400,
+      message: 'Invalid value',
+      error: 'Invalid value',
+    });
+    expect(JSON.stringify(response.json.mock.calls[0][0])).not.toContain(
+      'nope'
+    );
+    expect(logger.warn).toHaveBeenCalled();
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
+  it('maps Hasura uuid data-exceptions to 400 and does not report to Sentry', () => {
+    (Sentry.getClient as jest.Mock).mockReturnValue({});
+    const exception = new Error(
+      'invalid input syntax for type uuid: "not-a-uuid"'
+    );
+
+    filter.catch(exception, host);
+
+    expect(response.status).toHaveBeenCalledWith(400);
+    expect(response.json).toHaveBeenCalledWith({
+      success: false,
+      statusCode: 400,
+      message: 'Invalid identifier',
+      error: 'Invalid identifier',
+    });
+    expect(Sentry.captureException).not.toHaveBeenCalled();
+  });
+
   it('does not report remapped Hasura 503 HttpExceptions to Sentry', () => {
     (Sentry.getClient as jest.Mock).mockReturnValue({});
     const exception = new HttpException(

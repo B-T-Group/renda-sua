@@ -180,28 +180,58 @@ export class RestockAlertsApiService {
     userId: string,
     patch: { push?: boolean; whatsapp?: boolean; sms?: boolean }
   ) {
-    const set: Record<string, unknown> = {};
-    if (patch.push !== undefined) set.restock_alerts_push_enabled = patch.push;
-    if (patch.whatsapp !== undefined) set.restock_alerts_whatsapp_enabled = patch.whatsapp;
-    if (patch.sms !== undefined) set.restock_alerts_sms_enabled = patch.sms;
+    const set = this.preferenceColumnSet(patch);
     if (Object.keys(set).length === 0) return this.getPreferences(userId);
     await this.runMutation(M_ENSURE_PREFS, { userId });
     set.updated_at = new Date().toISOString();
     await this.runMutation(M_SET_PREFS, { userId, set });
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === false) {
-        await this.analytics.track({
-          notificationType: 'restock.opt_out',
-          category: 'informational',
-          userId,
-          channel: key as RestockChannel,
-          status: 'skipped',
-          entityType: 'restock',
-          meta: { surface: 'settings', channel: key },
-        });
-      }
-    }
+    await this.trackPreferenceOptOuts(userId, patch);
     return this.getPreferences(userId);
+  }
+
+  private preferenceColumnSet(patch: {
+    push?: boolean;
+    whatsapp?: boolean;
+    sms?: boolean;
+  }): Record<string, unknown> {
+    const set: Record<string, unknown> = {};
+    this.assignBool(set, 'restock_alerts_push_enabled', patch.push);
+    this.assignBool(set, 'restock_alerts_whatsapp_enabled', patch.whatsapp);
+    this.assignBool(set, 'restock_alerts_sms_enabled', patch.sms);
+    return set;
+  }
+
+  private assignBool(
+    set: Record<string, unknown>,
+    column: string,
+    value: unknown
+  ): void {
+    if (value === undefined) return;
+    if (typeof value !== 'boolean') {
+      throw new BadRequestException({
+        success: false,
+        message: 'Invalid value',
+      });
+    }
+    set[column] = value;
+  }
+
+  private async trackPreferenceOptOuts(
+    userId: string,
+    patch: { push?: boolean; whatsapp?: boolean; sms?: boolean }
+  ): Promise<void> {
+    for (const [key, value] of Object.entries(patch)) {
+      if (value !== false) continue;
+      await this.analytics.track({
+        notificationType: 'restock.opt_out',
+        category: 'informational',
+        userId,
+        channel: key as RestockChannel,
+        status: 'skipped',
+        entityType: 'restock',
+        meta: { surface: 'settings', channel: key },
+      });
+    }
   }
 
   async setItemAlert(userId: string, itemId: string, enabled: boolean) {
