@@ -106,6 +106,7 @@ import { ReelsModule } from '../reels/reels.module';
 import { ReelCommentsModule } from '../reel-comments/reel-comments.module';
 import { ReelBoostsModule } from '../reel-boosts/reel-boosts.module';
 import { ReelAiGenerateModule } from '../reel-ai-generate/reel-ai-generate.module';
+import { InventoryRestockModule } from '../inventory-restock/inventory-restock.module';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 
@@ -194,6 +195,7 @@ import { AppService } from './app.service';
     ItemVariantsModule,
     ItemViewsModule,
     ItemLikesModule,
+    InventoryRestockModule,
     BusinessFollowsModule,
     ProductInterestModule,
     MetaConversionsModule,

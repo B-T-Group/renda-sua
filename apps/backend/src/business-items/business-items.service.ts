@@ -26,6 +26,7 @@ import { StripeTaxCodesService } from '../stripe-tax/stripe-tax-codes.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { ItemAiReviewService } from '../item-ai-review/item-ai-review.service';
 import { CollectionAutoAssignService } from '../collections/collection-auto-assign.service';
+import { InventoryRestockEventService } from '../inventory-restock/inventory-restock-event.service';
 import { resolveSaleItemRejectionReason } from '../common/moderation-rejection-reason';
 import { resolvePayOnDeliveryDefault } from './item-payment-defaults.util';
 import {
@@ -876,7 +877,8 @@ export class BusinessItemsService {
     private readonly imageThumbnailsService: ImageThumbnailsService,
     private readonly categoriesService: CategoriesService,
     private readonly collectionAutoAssignService: CollectionAutoAssignService,
-    private readonly catalogCacheService: CatalogCacheService
+    private readonly catalogCacheService: CatalogCacheService,
+    private readonly inventoryRestockEvent: InventoryRestockEventService
   ) {}
 
   private async invalidateCatalogCache(): Promise<void> {
@@ -1910,6 +1912,8 @@ export class BusinessItemsService {
         id: string;
         item_id: string;
         business_location_id: string;
+        quantity: number;
+        reserved_quantity: number;
         business_location: { business_id: string };
         item?: {
           export_available?: boolean;
@@ -1926,6 +1930,8 @@ export class BusinessItemsService {
           id
           item_id
           business_location_id
+          quantity
+          reserved_quantity
           business_location {
             business_id
           }
@@ -1978,6 +1984,23 @@ export class BusinessItemsService {
     const updated = result.update_business_inventory_by_pk;
     this.triggerLifecycleRecompute(businessId);
     void this.invalidateCatalogCache();
+
+    // AC-0: Emit restock event if quantity increased from 0 to >=1 (fire-and-forget)
+    if (updated && (sanitized.quantity !== undefined || sanitized.reserved_quantity !== undefined)) {
+      const previousAvailableQuantity = inv.quantity - (inv.reserved_quantity || 0);
+      const newTotalQuantity = sanitized.quantity !== undefined ? sanitized.quantity : inv.quantity;
+      const newReservedQuantity = sanitized.reserved_quantity !== undefined ? sanitized.reserved_quantity : (inv.reserved_quantity || 0);
+      
+      void this.inventoryRestockEvent.emitRestockEventIfApplicable({
+        inventoryId: updated.id,
+        itemId: updated.item_id,
+        businessLocationId: updated.business_location_id,
+        previousAvailableQuantity,
+        newTotalQuantity,
+        newReservedQuantity,
+      });
+    }
+
     return updated;
   }
 
@@ -2124,6 +2147,19 @@ export class BusinessItemsService {
     }
     this.triggerLifecycleRecompute(businessId);
     void this.invalidateCatalogCache();
+
+    // AC-0: Emit restock event for new inventory if quantity >=1 (fire-and-forget)
+    if (quantity >= 1) {
+      void this.inventoryRestockEvent.emitRestockEventIfApplicable({
+        inventoryId: created.id,
+        itemId: created.item_id,
+        businessLocationId: created.business_location_id,
+        previousAvailableQuantity: 0, // New inventory, was previously 0
+        newTotalQuantity: quantity,
+        newReservedQuantity: reservedQuantity,
+      });
+    }
+
     return created;
   }
 
