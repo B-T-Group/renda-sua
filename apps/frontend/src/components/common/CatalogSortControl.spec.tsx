@@ -100,6 +100,6 @@ describe('CatalogSortControl', () => {
   it('disables button when control state is disabled', () => {
     renderWithI18n(<CatalogSortControl {...defaultProps} controlState="disabled" />);
     const button = screen.getByRole('button');
-    expect(button).toHaveAttribute('disabled');
+    expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 });
