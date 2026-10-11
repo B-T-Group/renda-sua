@@ -8405,7 +8405,6 @@
     "bellAriaLabel": "Restock alert for {{item}}: {{state}}",
     "bellTooltipOn": "We'll tell you when it's back",
     "bellTooltipOff": "Notify me when it's back",
-    "bellTooltipExpired": "Alert expired",
     "hint": "We'll let you know when it's back.",
     "filter": {
       "all": "All",
@@ -8413,9 +8412,7 @@
     },
     "backInStockChip": "Back in stock",
     "emptyFilterTitle": "Nothing back yet. We'll tell you.",
-    "emptyFilterMessage": "When items you liked come back in stock, they'll show up here.",
-    "goneAgainBanner": "Gone again. We'll tell you next time.",
-    "browseMore": "Browse similar"
+    "goneAgainBanner": "Gone again. We'll tell you next time."
   },
   "deepLink": {
     "openingApp": "Opening Rendasua…",

@@ -39,7 +39,12 @@ import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { useSnackbar } from 'notistack';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link as RouterLink, useNavigate, useParams } from 'react-router-dom';
+import {
+  Link as RouterLink,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom';
 import NoImage from '../../assets/no-image.svg';
 import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
@@ -67,6 +72,8 @@ import {
   SITE_EVENT_INVENTORY_FAQ_TOGGLE,
   SITE_EVENT_INVENTORY_ORDER_NOW_CLICK,
   SITE_EVENT_INVENTORY_RATING_SUMMARY_CLICK,
+  SITE_EVENT_RESTOCK_ADD_TO_CART_FROM_ALERT,
+  SITE_EVENT_RESTOCK_ALERT_OPENED,
   SITE_EVENT_SUBJECT_INVENTORY_ITEM,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
@@ -88,7 +95,7 @@ import ItemLikeButton from '../common/ItemLikeButton';
 import AnonymousBuyNowDialog from '../dialogs/AnonymousBuyNowDialog';
 import VariantSelector from '../common/VariantSelector';
 import { RestockAlertPdpSection } from '../common/RestockAlertPdpSection';
-import { useClientFlags } from '../../hooks/useClientFlags';
+import { useRestockAlertsEnabled } from '../../hooks/useRestockAlerts';
 import SEOHead from '../seo/SEOHead';
 import { buildInventoryItemSeoShareUrl } from '../../utils/buildInventoryItemSeoShareUrl';
 import { orderedItemImages } from '../../utils/orderedItemImages';
@@ -475,7 +482,6 @@ export default function ItemDetailPage() {
   const { enqueueSnackbar } = useSnackbar();
   const { submitInterest } = useProductInterest();
   const { selectedMarket, markets, setMarket } = useMarket();
-  const { flags } = useClientFlags();
 
   const { inventoryItem, loading, error } = useInventoryItem(id || null);
   const { isStripeRail } = useIsStripeRail();
@@ -519,6 +525,30 @@ export default function ItemDetailPage() {
 
   const { trackView } = useTrackItemView(id || null);
   const { trackSiteEvent } = useTrackSiteEvent();
+
+  // Restock alerts v1 (#343): everything below is inert unless the flag is on.
+  const [pdpSearchParams] = useSearchParams();
+  const fromRestockAlert = pdpSearchParams.get('src') === 'restock_alert';
+  const { enabled: restockEnabled, flagOn: restockFlagOn } =
+    useRestockAlertsEnabled();
+  const [pdpLiked, setPdpLiked] = React.useState<boolean | null>(null);
+  const [likeButtonKey, setLikeButtonKey] = React.useState(0);
+  const restockOpenedRef = React.useRef<string | null>(null);
+  const restockItemId = inventoryItem?.id ?? null;
+  React.useEffect(() => {
+    setPdpLiked(null);
+  }, [id]);
+  React.useEffect(() => {
+    if (!restockFlagOn || !fromRestockAlert || !restockItemId) return;
+    if (restockOpenedRef.current === restockItemId) return;
+    restockOpenedRef.current = restockItemId;
+    void trackSiteEvent({
+      eventType: SITE_EVENT_RESTOCK_ALERT_OPENED,
+      subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+      subjectId: restockItemId,
+      metadata: { surface: 'pdp' },
+    });
+  }, [restockFlagOn, fromRestockAlert, restockItemId, trackSiteEvent]);
 
   React.useLayoutEffect(() => {
     window.scrollTo(0, 0);
@@ -650,6 +680,14 @@ export default function ItemDetailPage() {
       return;
     }
     trackView(item.id);
+    if (restockFlagOn && fromRestockAlert) {
+      void trackSiteEvent({
+        eventType: SITE_EVENT_RESTOCK_ADD_TO_CART_FROM_ALERT,
+        subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+        subjectId: item.id,
+        metadata: { surface: 'pdp' },
+      });
+    }
     const lp = variantSel.listingUnitPricing;
     const unitPrice = lp.unit;
     const contentCategory = metaPixelContentCategoryFromItem(item.item);
@@ -967,7 +1005,22 @@ export default function ItemDetailPage() {
   const showCartChip = isClientUser && inCart && !exportAvailable;
   const showOrderCtaStack =
     exportAvailable || showAddToCart || showInlineOrderNow || showCartChip;
-  const showRestockAlerts = flags.restock_alerts_v1 && isClientUser && !hasStock;
+  const restockSoldOut =
+    inventoryItem.is_active &&
+    !exportAvailable &&
+    !listingHasSellableStock(
+      inventoryItem.computed_available_quantity,
+      item.item_variants
+    );
+  const showRestockAlerts =
+    restockEnabled === true && isClientUser && restockSoldOut;
+  const pdpLikedValue = pdpLiked ?? inventoryItem.liked === true;
+  const similarInStock = similarItems.filter((sim) =>
+    listingHasSellableStock(
+      sim.computed_available_quantity,
+      sim.item?.item_variants
+    )
+  );
 
   const ratingCount = ratings.length;
   const ratingAvg =
@@ -1074,7 +1127,9 @@ export default function ItemDetailPage() {
               <Stack direction="row" spacing={0.5} alignItems="center">
                 <ItemLikeButton
                   itemId={inventoryItem.item_id || item.id}
-                  initiallyLiked={inventoryItem.liked === true}
+                  key={likeButtonKey}
+                  initiallyLiked={pdpLikedValue}
+                  onLikedChange={setPdpLiked}
                   size="medium"
                 />
                 <PageShareMenu
@@ -1655,13 +1710,19 @@ export default function ItemDetailPage() {
                 ) : null}
               </Stack>
             ) : null}
-            {showRestockAlerts && inventoryItem && (
+            {showRestockAlerts ? (
               <RestockAlertPdpSection
                 inventoryItem={inventoryItem}
-                isClientUser={isClientUser}
-                hasStock={hasStock}
+                liked={pdpLikedValue}
+                onLiked={() => {
+                  setPdpLiked(true);
+                  setLikeButtonKey((k) => k + 1);
+                }}
+                fromAlert={fromRestockAlert}
+                similarInStock={similarInStock}
+                formatCurrency={formatCurrency}
               />
-            )}
+            ) : null}
           </Stack>
         </Grid>
       </Grid>

@@ -15,33 +15,47 @@ import {
   useNotificationPreferences,
   type NotificationPreferencesPatch,
 } from '../../hooks/useNotificationPreferences';
-import { useRestockAlerts } from '../../hooks/useRestockAlerts';
-import { useClientFlags } from '../../hooks/useClientFlags';
+import {
+  useRestockAlertsApi,
+  useRestockAlertsEnabled,
+} from '../../hooks/useRestockAlerts';
 import type { RestockAlertPreferences } from '../../hooks/useRestockAlerts';
+import {
+  SITE_EVENT_RESTOCK_OPT_OUT,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 
 const NotificationPreferencesPage: React.FC = () => {
   const { t } = useTranslation();
   const { prefs, loading, saving, error, update } = useNotificationPreferences();
-  const { enabled: restockEnabled, getPreferences, patchPreferences } = useRestockAlerts();
-  const { flags } = useClientFlags();
-  const [restockPrefs, setRestockPrefs] = useState<RestockAlertPreferences | null>(null);
+  const { enabled: restockEnabled } = useRestockAlertsEnabled();
+  const { getPreferences, patchPreferences } = useRestockAlertsApi();
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const [restockPrefs, setRestockPrefs] =
+    useState<RestockAlertPreferences | null>(null);
   const [restockSaving, setRestockSaving] = useState(false);
+  const [restockError, setRestockError] = useState<string | null>(null);
 
-  const showRestockAlerts = flags.restock_alerts_v1 && restockEnabled;
+  const showRestockAlerts = restockEnabled === true;
 
   useEffect(() => {
     if (!showRestockAlerts) return;
-    void loadRestockPrefs();
-  }, [showRestockAlerts]);
-
-  const loadRestockPrefs = async () => {
-    try {
-      const prefs = await getPreferences();
-      setRestockPrefs(prefs);
-    } catch {
-      // Silently fail
-    }
-  };
+    let cancelled = false;
+    getPreferences()
+      .then((loaded) => {
+        if (!cancelled) setRestockPrefs(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRestockError(
+            t('common.error', 'Something went wrong')
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showRestockAlerts, getPreferences, t]);
 
   const onToggle = async (
     key: keyof NotificationPreferencesPatch,
@@ -59,11 +73,18 @@ const NotificationPreferencesPage: React.FC = () => {
     value: boolean
   ) => {
     setRestockSaving(true);
+    setRestockError(null);
     try {
       const updated = await patchPreferences({ [channel]: value });
       setRestockPrefs(updated);
+      if (!value) {
+        void trackSiteEvent({
+          eventType: SITE_EVENT_RESTOCK_OPT_OUT,
+          metadata: { surface: 'settings', channel },
+        });
+      }
     } catch {
-      // error surfaced via API
+      setRestockError(t('common.error', 'Something went wrong'));
     } finally {
       setRestockSaving(false);
     }
@@ -167,7 +188,7 @@ const NotificationPreferencesPage: React.FC = () => {
           )}
         />
 
-        {showRestockAlerts && restockPrefs && (
+        {showRestockAlerts && (restockPrefs || restockError) && (
           <>
             <Divider sx={{ my: 2 }} />
             <Typography variant="subtitle2" color="text.secondary">
@@ -179,7 +200,13 @@ const NotificationPreferencesPage: React.FC = () => {
                 'Items you liked that come back in stock'
               )}
             </Typography>
-            <Stack direction="row" spacing={2} sx={{ pl: 2 }}>
+            {restockError && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                {restockError}
+              </Alert>
+            )}
+            {restockPrefs && (
+            <Stack direction="row" spacing={2} sx={{ pl: 2 }} flexWrap="wrap">
               <FormControlLabel
                 control={
                   <Switch
@@ -211,6 +238,7 @@ const NotificationPreferencesPage: React.FC = () => {
                 label={t('notifications.preferences.sms', 'SMS')}
               />
             </Stack>
+            )}
           </>
         )}
 

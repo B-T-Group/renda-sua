@@ -6,11 +6,13 @@ import {
   CircularProgress,
   Container,
   Grid,
+  IconButton,
   Stack,
   Typography,
 } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import FavoriteBorder from '@mui/icons-material/FavoriteBorder';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link as RouterLink, useSearchParams } from 'react-router-dom';
 import DashboardItemCard from '../common/DashboardItemCard';
@@ -18,54 +20,108 @@ import { RestockAlertBellButton } from '../common/RestockAlertBellButton';
 import { useCart } from '../../contexts/CartContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useItemLikes } from '../../hooks/useItemLikes';
-import { useRestockAlerts } from '../../hooks/useRestockAlerts';
-import { useClientFlags } from '../../hooks/useClientFlags';
+import {
+  useRestockAlertsApi,
+  useRestockAlertsEnabled,
+} from '../../hooks/useRestockAlerts';
 import type { InventoryItem } from '../../hooks/useInventoryItems';
-import type { ItemAlertState } from '../../hooks/useRestockAlerts';
+import type {
+  ItemAlertState,
+  RestockLikesResponse,
+} from '../../hooks/useRestockAlerts';
+import {
+  SITE_EVENT_RESTOCK_ALERT_OPENED,
+  SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 import { buildCartItemFromInventory } from '../../utils/catalogVariantCart';
+
+const RESTOCK_HINT_SEEN_KEY = 'rs_restock_hint_seen';
+
+function readHintSeen(): boolean {
+  try {
+    return window.localStorage.getItem(RESTOCK_HINT_SEEN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function writeHintSeen(): void {
+  try {
+    window.localStorage.setItem(RESTOCK_HINT_SEEN_KEY, '1');
+  } catch {
+    /* private mode: the hint just shows again next visit */
+  }
+}
 
 const LikesPage: React.FC = () => {
   const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const [page, setPage] = useState(1);
   const [hiddenItemIds, setHiddenItemIds] = useState<Set<string>>(new Set());
-  const [restockData, setRestockData] = useState<any>(null);
+  const [restockData, setRestockData] = useState<RestockLikesResponse | null>(
+    null
+  );
   const [restockLoading, setRestockLoading] = useState(false);
   const [restockError, setRestockError] = useState<string | null>(null);
-  const [hintDismissed, setHintDismissed] = useState(() => {
-    return localStorage.getItem('restock_hint_dismissed') === 'true';
-  });
+  const [hintHidden, setHintHidden] = useState(readHintSeen);
 
-  const { data, loading, error, refresh } = useItemLikes(page, 20);
-  const { enabled: restockEnabled, getLikes } = useRestockAlerts();
-  const { flags } = useClientFlags();
+  const { enabled: restockEnabled, flagOn } = useRestockAlertsEnabled();
+  const useRestockApi = restockEnabled === true;
+  // Flag on and status still loading: wait instead of flashing the old list.
+  const restockPending = flagOn && restockEnabled === null;
+  const { data, loading, error, refresh } = useItemLikes(
+    page,
+    20,
+    !(flagOn && restockEnabled !== false)
+  );
+  const { getLikes } = useRestockAlertsApi();
+  const { trackSiteEvent } = useTrackSiteEvent();
   const { addToCart } = useCart();
   const { userType } = useUserProfileContext();
   const canOrder = userType === 'client';
 
-  const filter = (searchParams.get('filter') as 'back-in-stock' | null) || 'all';
-  const useRestockApi = flags.restock_alerts_v1 && restockEnabled;
+  // `?filter=back-in-stock` (spec) and `back_in_stock` (what the digest push sends).
+  const rawFilter = searchParams.get('filter');
+  const backInStockFilter =
+    useRestockApi && (rawFilter === 'back-in-stock' || rawFilter === 'back_in_stock');
+  const filterValue: 'all' | 'back_in_stock' = backInStockFilter
+    ? 'back_in_stock'
+    : 'all';
+  const fromAlert = searchParams.get('src') === 'restock_alert';
 
-  const filterValue: 'all' | 'back_in_stock' =
-    filter === 'back-in-stock' ? 'back_in_stock' : 'all';
+  const loadRestockLikes = useCallback(async () => {
+    setRestockLoading(true);
+    setRestockError(null);
+    try {
+      setRestockData(await getLikes(filterValue, page, 20));
+    } catch (err: any) {
+      setRestockError(
+        err?.response?.data?.message ||
+          err?.message ||
+          t('items.likes.loadError', 'Failed to load liked items')
+      );
+      setRestockData(null);
+    } finally {
+      setRestockLoading(false);
+    }
+  }, [getLikes, filterValue, page, t]);
 
   useEffect(() => {
     if (!useRestockApi) return;
-    const loadRestockLikes = async () => {
-      setRestockLoading(true);
-      setRestockError(null);
-      try {
-        const data = await getLikes(filterValue, page, 20);
-        setRestockData(data);
-      } catch (err: any) {
-        setRestockError(err?.message || 'Failed to load liked items');
-        setRestockData(null);
-      } finally {
-        setRestockLoading(false);
-      }
-    };
     void loadRestockLikes();
-  }, [useRestockApi, getLikes, filterValue, page]);
+  }, [useRestockApi, loadRestockLikes]);
+
+  useEffect(() => {
+    if (!useRestockApi || !fromAlert) return;
+    void trackSiteEvent({
+      eventType: SITE_EVENT_RESTOCK_ALERT_OPENED,
+      subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+      metadata: { surface: 'likes' },
+    });
+    // once per visit of the digest deep link
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useRestockApi, fromAlert]);
 
   const formatCurrency = useMemo(
     () => (amount: number, currency = 'XAF') =>
@@ -107,35 +163,58 @@ const LikesPage: React.FC = () => {
   };
 
   const handleAlertChange = (itemId: string, newState: ItemAlertState) => {
-    if (!restockData) return;
-    setRestockData({
-      ...restockData,
-      items: restockData.items.map((item: any) =>
-        item.id === itemId ? { ...item, restock_alert: newState } : item
-      ),
-    });
+    setRestockData((prev) =>
+      prev
+        ? {
+            ...prev,
+            items: prev.items.map((item: any) =>
+              item.id === itemId ? { ...item, restock_alert: newState } : item
+            ),
+          }
+        : prev
+    );
   };
 
   const handleDismissHint = () => {
-    setHintDismissed(true);
-    localStorage.setItem('restock_hint_dismissed', 'true');
+    setHintHidden(true);
+    writeHintSeen();
   };
 
-  const handleFilterChange = (newFilter: 'all' | 'back-in-stock') => {
+  const handleFilterChange = (next: 'all' | 'back-in-stock') => {
     setPage(1);
-    if (newFilter === 'all') {
-      searchParams.delete('filter');
+    const params = new URLSearchParams(searchParams);
+    if (next === 'all') {
+      params.delete('filter');
     } else {
-      searchParams.set('filter', newFilter);
+      params.set('filter', next);
     }
-    setSearchParams(searchParams);
+    setSearchParams(params);
   };
 
-  const isLoading = useRestockApi ? restockLoading : loading;
-  const hasError = useRestockApi ? restockError : error;
-  const currentData = useRestockApi ? restockData : data;
+  const isLoading = useRestockApi ? restockLoading : restockPending || loading;
+  const hasError = useRestockApi ? restockError : restockPending ? null : error;
+  const currentData: {
+    items: any[];
+    total: number;
+    totalPages: number;
+  } | null = useRestockApi ? restockData : data;
 
-  if (isLoading && !currentData) {
+  const items: any[] = (currentData?.items ?? []).filter(
+    (item: any) => !hiddenItemIds.has(item.item_id || item.item?.id || item.id)
+  );
+
+  // Spec §6: the hint shows once, under the first sold-out like, and is remembered.
+  const firstSoldOutId: string | null = useRestockApi
+    ? items.find(
+        (item: any) => item.in_stock === false && item.restock_alert?.state
+      )?.id ?? null
+    : null;
+  const showHint = !!firstSoldOutId && !hintHidden;
+  useEffect(() => {
+    if (showHint) writeHintSeen();
+  }, [showHint]);
+
+  if ((isLoading && !currentData) || (restockPending && !currentData)) {
     return (
       <Container maxWidth="lg" sx={{ py: 6, textAlign: 'center' }}>
         <CircularProgress />
@@ -152,7 +231,9 @@ const LikesPage: React.FC = () => {
             <Button
               color="inherit"
               size="small"
-              onClick={() => (useRestockApi ? void getLikes(filterValue, page, 20) : void refresh())}
+              onClick={() =>
+                useRestockApi ? void loadRestockLikes() : void refresh()
+              }
             >
               {t('common.retry', 'Retry')}
             </Button>
@@ -164,31 +245,31 @@ const LikesPage: React.FC = () => {
     );
   }
 
-  const items = (currentData?.items ?? []).filter(
-    (item) => !hiddenItemIds.has(item.item_id || item.item?.id || item.id)
-  );
-
-  const hasBackInStockItems = useRestockApi
-    ? items.some((item: any) => item.back_in_stock)
-    : false;
-
-  const showHint =
-    useRestockApi &&
-    !hintDismissed &&
-    items.some((item: any) => !item.in_stock && item.restock_alert?.state !== null);
-
   const renderBellForItem = (item: any) => {
     if (!useRestockApi || !item.restock_alert || item.restock_alert.state === null) {
       return null;
     }
+    const catalogItemId = item.item_id || item.item?.id;
+    if (!catalogItemId) return null;
     return (
-      <RestockAlertBellButton
-        itemId={item.id}
-        itemName={item.title || item.name || ''}
-        alertState={item.restock_alert}
-        onAlertChange={(newState) => handleAlertChange(item.id, newState)}
-        size="small"
-      />
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 4,
+          right: 4,
+          bgcolor: 'background.paper',
+          borderRadius: '50%',
+          boxShadow: 1,
+        }}
+      >
+        <RestockAlertBellButton
+          itemId={catalogItemId}
+          itemName={item.item?.name || ''}
+          alertState={item.restock_alert}
+          onAlertChange={(newState) => handleAlertChange(item.id, newState)}
+          size="small"
+        />
+      </Box>
     );
   };
 
@@ -202,27 +283,22 @@ const LikesPage: React.FC = () => {
       </Typography>
 
       {useRestockApi && (
-        <Stack direction="row" spacing={1} sx={{ mb: 3 }}>
+        <Stack direction="row" spacing={1} sx={{ mb: 3 }} role="group">
           <Chip
             label={t('restock.filter.all', 'All')}
             onClick={() => handleFilterChange('all')}
-            color={filter === 'all' ? 'primary' : 'default'}
-            variant={filter === 'all' ? 'filled' : 'outlined'}
+            aria-pressed={!backInStockFilter}
+            color={!backInStockFilter ? 'primary' : 'default'}
+            variant={!backInStockFilter ? 'filled' : 'outlined'}
           />
           <Chip
             label={t('restock.filter.backInStock', 'Back in stock')}
             onClick={() => handleFilterChange('back-in-stock')}
-            color={filter === 'back-in-stock' ? 'primary' : 'default'}
-            variant={filter === 'back-in-stock' ? 'filled' : 'outlined'}
-            disabled={!hasBackInStockItems}
+            aria-pressed={backInStockFilter}
+            color={backInStockFilter ? 'primary' : 'default'}
+            variant={backInStockFilter ? 'filled' : 'outlined'}
           />
         </Stack>
-      )}
-
-      {showHint && (
-        <Alert severity="info" onClose={handleDismissHint} sx={{ mb: 3 }}>
-          {t('restock.hint', "We'll let you know when it's back.")}
-        </Alert>
       )}
 
       {items.length === 0 ? (
@@ -237,33 +313,32 @@ const LikesPage: React.FC = () => {
           }}
         >
           <FavoriteBorder sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
-          <Typography variant="h6" sx={{ mb: 1 }}>
-            {filterValue === 'back_in_stock'
-              ? t('restock.emptyFilterTitle', "Nothing back yet. We'll tell you.")
-              : (currentData?.total ?? 0) > 0
-              ? t('items.likes.unavailableTitle', 'Favorites unavailable right now')
-              : t('items.likes.emptyTitle', 'No favorites yet')}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            {filterValue === 'back_in_stock'
-              ? t(
-                  'restock.emptyFilterMessage',
-                  "When items you liked come back in stock, they'll show up here."
-                )
-              : (currentData?.total ?? 0) > 0
-              ? t(
-                  'items.likes.unavailableMessage',
-                  'We could not load listings for your saved items. Try again later.'
-                )
-              : t(
-                  'items.likes.emptyMessage',
-                  'Tap the heart on any product to save it here.'
-                )}
-          </Typography>
-          {filterValue !== 'back_in_stock' && (
-            <Button component={RouterLink} to="/items" variant="contained">
-              {t('items.likes.browseCta', 'Browse items')}
-            </Button>
+          {backInStockFilter ? (
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              {t('restock.emptyFilterTitle', "Nothing back yet. We'll tell you.")}
+            </Typography>
+          ) : (
+            <>
+              <Typography variant="h6" sx={{ mb: 1 }}>
+                {(currentData?.total ?? 0) > 0
+                  ? t('items.likes.unavailableTitle', 'Favorites unavailable right now')
+                  : t('items.likes.emptyTitle', 'No favorites yet')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {(currentData?.total ?? 0) > 0
+                  ? t(
+                      'items.likes.unavailableMessage',
+                      'We could not load listings for your saved items. Try again later.'
+                    )
+                  : t(
+                      'items.likes.emptyMessage',
+                      'Tap the heart on any product to save it here.'
+                    )}
+              </Typography>
+              <Button component={RouterLink} to="/items" variant="contained">
+                {t('items.likes.browseCta', 'Browse items')}
+              </Button>
+            </>
           )}
         </Box>
       ) : (
@@ -295,21 +370,28 @@ const LikesPage: React.FC = () => {
                       }}
                     />
                   )}
-                  {renderBellForItem(item) && (
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: 4,
-                        right: 4,
-                        bgcolor: 'background.paper',
-                        borderRadius: '50%',
-                        boxShadow: 1,
-                      }}
-                    >
-                      {renderBellForItem(item)}
-                    </Box>
-                  )}
+                  {renderBellForItem(item)}
                 </Box>
+                {showHint && item.id === firstSoldOutId && (
+                  <Stack
+                    direction="row"
+                    alignItems="center"
+                    justifyContent="space-between"
+                    role="status"
+                    sx={{ mt: 0.5, px: 1 }}
+                  >
+                    <Typography variant="caption" color="text.secondary">
+                      {t('restock.hint', "We'll let you know when it's back.")}
+                    </Typography>
+                    <IconButton
+                      size="small"
+                      onClick={handleDismissHint}
+                      aria-label={t('common.close', 'Close')}
+                    >
+                      <CloseIcon fontSize="inherit" />
+                    </IconButton>
+                  </Stack>
+                )}
               </Grid>
             ))}
           </Grid>

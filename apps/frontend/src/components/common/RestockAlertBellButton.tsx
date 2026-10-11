@@ -1,24 +1,34 @@
-import React, { useState } from 'react';
-import { IconButton, Tooltip } from '@mui/material';
 import {
   NotificationsActive,
   NotificationsNone,
-  NotificationsOff,
 } from '@mui/icons-material';
-import { useTranslation } from 'react-i18next';
+import { Button, IconButton, Tooltip } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import { useRestockAlerts } from '../../hooks/useRestockAlerts';
+import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import {
+  alertStateFromResult,
+  isAlertOn,
+  useRestockAlertsApi,
+} from '../../hooks/useRestockAlerts';
 import type { ItemAlertState } from '../../hooks/useRestockAlerts';
 import {
+  SITE_EVENT_RESTOCK_OPT_OUT,
   SITE_EVENT_SUBJECT_INVENTORY_ITEM,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 
 interface RestockAlertBellButtonProps {
+  /** Catalog item id (`items.id` / `item_id`), NOT the listing (business_inventory) id. */
   itemId: string;
   itemName: string;
   alertState: ItemAlertState;
   onAlertChange?: (newState: ItemAlertState) => void;
+  /**
+   * Called instead of the PUT when the item is not liked yet (PDP): the parent likes
+   * the item and arms the bell.
+   */
+  onTurnOn?: () => Promise<ItemAlertState | null>;
   size?: 'small' | 'medium';
 }
 
@@ -27,127 +37,134 @@ export const RestockAlertBellButton: React.FC<RestockAlertBellButtonProps> = ({
   itemName,
   alertState,
   onAlertChange,
+  onTurnOn,
   size = 'medium',
 }) => {
   const { t } = useTranslation();
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
-  const { setItemAlert } = useRestockAlerts();
+  const { setItemAlert } = useRestockAlertsApi();
+  const { trackSiteEvent } = useTrackSiteEvent();
   const [loading, setLoading] = useState(false);
-  const trackSiteEvent = useTrackSiteEvent();
+
+  const isOn = isAlertOn(alertState);
+
+  const showError = (error?: any) =>
+    enqueueSnackbar(
+      error?.response?.data?.message ||
+        t('common.error', 'Something went wrong'),
+      { variant: 'error' }
+    );
+
+  const showAlertOn = () =>
+    enqueueSnackbar(t('restock.alertOn', 'Alert on'), {
+      variant: 'default',
+      autoHideDuration: 3000,
+    });
+
+  const turnOn = async () => {
+    const next = onTurnOn
+      ? await onTurnOn()
+      : alertStateFromResult(await setItemAlert(itemId, true));
+    if (next) onAlertChange?.(next);
+    return next;
+  };
+
+  const handleUndo = async (key: string | number) => {
+    closeSnackbar(key);
+    try {
+      if (await turnOn()) showAlertOn();
+    } catch (error) {
+      showError(error);
+    }
+  };
+
+  const showAlertOffToast = () => {
+    // "Alert off · Undo": the Undo part is a real button inside the toast.
+    const [offText, undoText] = t('restock.alertOff.withUndo', 'Alert off · Undo')
+      .split('·')
+      .map((part) => part.trim());
+    const key = enqueueSnackbar(
+      <span>
+        {offText}
+        {undoText ? (
+          <>
+            {' · '}
+            <Button
+              size="small"
+              color="inherit"
+              sx={{ minWidth: 0, p: 0, ml: 0.25, textDecoration: 'underline' }}
+              onClick={() => void handleUndo(key)}
+            >
+              {undoText}
+            </Button>
+          </>
+        ) : null}
+      </span>,
+      { variant: 'default', autoHideDuration: 6000 }
+    );
+  };
 
   const handleToggle = async () => {
     if (loading) return;
-
-    const newEnabled = !alertState.enabled;
-    const previousState = { ...alertState };
-
     setLoading(true);
     try {
-      const result = await setItemAlert(itemId, newEnabled);
-
-      const newState: ItemAlertState = {
-        state: result.state as ItemAlertState['state'],
-        enabled: result.enabled,
-        expires_at: result.expires_at,
-      };
-
-      onAlertChange?.(newState);
-
-      const message = newEnabled
-        ? t('restock.alertOn', 'Alert on')
-        : t('restock.alertOff.withUndo', 'Alert off · Undo');
-
-      const snackbarKey = enqueueSnackbar(message, {
-        variant: 'default',
-        autoHideDuration: newEnabled ? 3000 : 5000,
-        action: !newEnabled
-          ? (key) => (
-              <IconButton
-                size="small"
-                color="inherit"
-                onClick={async () => {
-                  closeSnackbar(key);
-                  try {
-                    const undoResult = await setItemAlert(itemId, true);
-                    onAlertChange?.({
-                      state: undoResult.state as ItemAlertState['state'],
-                      enabled: undoResult.enabled,
-                      expires_at: undoResult.expires_at,
-                    });
-                    enqueueSnackbar(t('restock.alertOn', 'Alert on'), {
-                      variant: 'default',
-                      autoHideDuration: 3000,
-                    });
-                  } catch {
-                    enqueueSnackbar(t('common.error', 'Something went wrong'), {
-                      variant: 'error',
-                    });
-                  }
-                }}
-              >
-                {t('restock.undo', 'Undo')}
-              </IconButton>
-            )
-          : undefined,
-      });
-
-      void trackSiteEvent({
-        eventType: newEnabled ? 'restock.alert_opened' : 'restock.opt_out',
-        subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
-        subjectId: itemId,
-        metadata: newEnabled ? { surface: 'bell' } : { surface: 'bell' },
-      });
-    } catch (error: any) {
-      onAlertChange?.(previousState);
-      enqueueSnackbar(
-        error?.response?.data?.message || t('common.error', 'Something went wrong'),
-        { variant: 'error' }
-      );
+      if (isOn) {
+        const result = await setItemAlert(itemId, false);
+        onAlertChange?.(alertStateFromResult(result));
+        showAlertOffToast();
+        void trackSiteEvent({
+          eventType: SITE_EVENT_RESTOCK_OPT_OUT,
+          subjectType: SITE_EVENT_SUBJECT_INVENTORY_ITEM,
+          subjectId: itemId,
+          metadata: { surface: 'bell' },
+        });
+      } else if (await turnOn()) {
+        showAlertOn();
+      }
+    } catch (error) {
+      showError(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const renderBellIcon = () => {
-    if (alertState.state === 'on') {
-      return <NotificationsActive sx={{ color: 'primary.main' }} />;
-    }
-    if (alertState.state === 'expired') {
-      return <NotificationsOff sx={{ color: 'text.disabled' }} />;
-    }
-    return <NotificationsNone sx={{ color: 'text.secondary' }} />;
-  };
+  // Spec §5: on = filled bell; off = outline, muted; expired = outline.
+  const icon = isOn ? (
+    <NotificationsActive sx={{ color: 'primary.main' }} />
+  ) : (
+    <NotificationsNone
+      sx={{
+        color: alertState.state === 'expired' ? 'text.secondary' : 'text.disabled',
+      }}
+    />
+  );
 
-  const getAriaLabel = () => {
-    const stateText = alertState.enabled
-      ? t('restock.bellOn', 'on')
-      : t('restock.bellOff', 'off');
-    return t('restock.bellAriaLabel', 'Restock alert for {{item}}: {{state}}', {
+  const tooltip = isOn
+    ? t('restock.bellTooltipOn', "We'll tell you when it's back")
+    : t('restock.bellTooltipOff', "Notify me when it's back");
+
+  const ariaLabel = t(
+    'restock.bellAriaLabel',
+    'Restock alert for {{item}}: {{state}}',
+    {
       item: itemName,
-      state: stateText,
-    });
-  };
-
-  const getTooltip = () => {
-    if (alertState.state === 'on') {
-      return t('restock.bellTooltipOn', "We'll tell you when it's back");
+      state: isOn ? t('restock.bellOn', 'on') : t('restock.bellOff', 'off'),
     }
-    if (alertState.state === 'expired') {
-      return t('restock.bellTooltipExpired', 'Alert expired');
-    }
-    return t('restock.bellTooltipOff', "Notify me when it's back");
-  };
+  );
 
   return (
-    <Tooltip title={getTooltip()}>
-      <IconButton
-        size={size}
-        onClick={handleToggle}
-        disabled={loading}
-        aria-label={getAriaLabel()}
-      >
-        {renderBellIcon()}
-      </IconButton>
+    <Tooltip title={tooltip}>
+      <span>
+        <IconButton
+          size={size}
+          onClick={() => void handleToggle()}
+          disabled={loading}
+          aria-label={ariaLabel}
+          aria-pressed={isOn}
+        >
+          {icon}
+        </IconButton>
+      </span>
     </Tooltip>
   );
 };

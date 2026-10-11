@@ -8422,7 +8422,6 @@
     "bellAriaLabel": "Alerte de retour pour {{item}} : {{state}}",
     "bellTooltipOn": "Nous vous prévenons à son retour",
     "bellTooltipOff": "Me prévenir à son retour",
-    "bellTooltipExpired": "Alerte expirée",
     "hint": "Nous vous prévenons à son retour.",
     "filter": {
       "all": "Tous",
@@ -8430,9 +8429,7 @@
     },
     "backInStockChip": "De retour",
     "emptyFilterTitle": "Rien de retour pour l'instant. Nous vous prévenons.",
-    "emptyFilterMessage": "Quand des articles aimés reviennent en stock, ils s'afficheront ici.",
-    "goneAgainBanner": "Déjà épuisé. Nous vous prévenons au prochain retour.",
-    "browseMore": "Voir similaires"
+    "goneAgainBanner": "Déjà épuisé. Nous vous prévenons au prochain retour."
   },
   "deepLink": {
     "openingApp": "Ouverture de Rendasua…",
