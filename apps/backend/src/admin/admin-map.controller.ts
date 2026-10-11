@@ -13,8 +13,9 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { RequireRoles } from '../rbac/permissions.decorator';
-import { PlatformRoles } from '../rbac/platform-permissions';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminMapService } from './admin-map.service';
 import { AdminMapPinsQueryDto } from './dto/admin-map-query.dto';
@@ -27,17 +28,20 @@ const QUERY_PIPE = new ValidationPipe({
 @ApiTags('admin-map')
 @Controller('admin/map')
 @UseGuards(AdminAuthGuard)
-@RequireRoles(PlatformRoles.SUPERUSER)
+@RequirePermissions(PlatformPermissions.OPS_MAP)
 @ApiBearerAuth()
 export class AdminMapController {
-  constructor(private readonly adminMapService: AdminMapService) {}
+  constructor(
+    private readonly adminMapService: AdminMapService,
+    private readonly geo: GeoScopeService
+  ) {}
 
   @Get('search')
   @ApiOperation({ summary: 'Find an agent or merchant on the map' })
   @ApiQuery({ name: 'q', required: true, example: 'Awa' })
   @ApiResponse({ status: 200, description: 'Matching agents and merchants' })
   search(@Query('q') q = '') {
-    return this.adminMapService.search(q);
+    return this.withAddress((addressWhere) => this.adminMapService.search(q, addressWhere));
   }
 
   @Get('active-orders')
@@ -45,15 +49,16 @@ export class AdminMapController {
   @ApiQuery({ name: 'q', required: false, example: 'ORD-2026' })
   @ApiResponse({ status: 200, description: 'Open orders, newest first' })
   activeOrders(@Query('q') q = '') {
-    return this.adminMapService.activeOrders(q);
+    return this.withOrders((orderWhere) => this.adminMapService.activeOrders(q, orderWhere));
   }
 
   @Get('regions')
   @ApiOperation({ summary: 'Market regions configured for a country' })
   @ApiQuery({ name: 'country', required: true, example: 'CM' })
   @ApiResponse({ status: 200, description: 'Region names for the country' })
-  regions(@Query('country') country = '') {
-    return this.adminMapService.getRegions(country);
+  async regions(@Query('country') country = '') {
+    const scope = await this.geo.require(PlatformPermissions.OPS_MAP);
+    return this.adminMapService.getRegions(country, scope);
   }
 
   @Get('pins')
@@ -63,7 +68,22 @@ export class AdminMapController {
     status: 200,
     description: 'Pins for the map, plus agent and merchant counts by status for the selected market',
   })
-  pins(@Query() query: AdminMapPinsQueryDto) {
-    return this.adminMapService.getPins(query);
+  async pins(@Query() query: AdminMapPinsQueryDto) {
+    const scope = await this.geo.require(PlatformPermissions.OPS_MAP);
+    return this.adminMapService.getPins(query, scope, await this.geo.markets());
+  }
+
+  private async withAddress<T>(
+    run: (addressWhere: Record<string, unknown> | null) => Promise<T>
+  ): Promise<T> {
+    const scope = await this.geo.require(PlatformPermissions.OPS_MAP);
+    return run(await this.geo.addressWhere(scope));
+  }
+
+  private async withOrders<T>(
+    run: (orderWhere: Record<string, unknown> | null) => Promise<T>
+  ): Promise<T> {
+    const scope = await this.geo.require(PlatformPermissions.OPS_MAP);
+    return run(await this.geo.orderWhere(scope));
   }
 }

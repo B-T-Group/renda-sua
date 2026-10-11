@@ -9,6 +9,7 @@ import { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { PlatformRoles } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { SmsService } from '../sms/sms.service';
 import { WhatsAppService } from '../whatsapp/whatsapp.service';
 import { DeepLinkService } from './deep-link.service';
@@ -274,6 +275,7 @@ export class NotificationsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly smsService: SmsService,
     private readonly rbacService: RbacService,
+    private readonly geoScope: GeoScopeService,
     @Inject(forwardRef(() => NotificationOrchestrator))
     private readonly orchestrator: NotificationOrchestrator,
     private readonly deepLinkService: DeepLinkService,
@@ -5351,14 +5353,16 @@ export class NotificationsService {
     params: OrderRiskAlertParams
   ): Promise<OrderRiskRecipient[]> {
     const agentUserId = params.action?.referringAgentUserId?.trim();
-    const [staff, agent] = await Promise.all([
+    const [staff, agent, countryCode] = await Promise.all([
       this.rbacService.listUsersWithRoles(),
       agentUserId ? this.getUserRowForEmail(agentUserId) : null,
+      this.geoScope.normalizeCountry(params.action?.shopCountryCode),
     ]);
     return buildOrderRiskRecipients({
       staff,
       roleKeys: [PlatformRoles.SUPERUSER, PlatformRoles.ORDER_MANAGER],
-      orderCountryCode: params.action?.shopCountryCode,
+      orderCountryCode: countryCode,
+      orderStateName: params.action?.shopStateName,
       referringAgentUserId: agentUserId,
       referringAgentLanguage: agent?.preferred_language,
       singleStaffRecipient: true,

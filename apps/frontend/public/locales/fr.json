@@ -308,6 +308,23 @@
     }
   },
   "admin": {
+    "countryAdmins": {
+      "moduleTitle": "Administrateurs pays",
+      "moduleDescription": "Attribuer des administrateurs pour un pays ou des régions",
+      "title": "Administrateurs pays",
+      "subtitle": "Donner à quelqu’un les outils d’administration pour un pays ou ses régions.",
+      "add": "Ajouter un administrateur pays",
+      "addTitle": "Ajouter un administrateur pays",
+      "editTitle": "Modifier l’administrateur pays",
+      "empty": "Aucun administrateur pays pour le moment.",
+      "email": "E-mail",
+      "lookup": "Rechercher",
+      "country": "Pays",
+      "states": "Régions",
+      "allStates": "Toutes les régions",
+      "removeTitle": "Retirer l’administrateur pays",
+      "removeMessage": "Cette personne perdra l’accès d’administrateur pays."
+    },
     "map": {
       "title": "Carte",
       "subtitle": "Agents et commerçants dans vos marchés",
@@ -325,7 +342,7 @@
       "loading": "Chargement de la carte…",
       "empty": "Aucun agent ou commerçant avec une position dans cette vue.",
       "loadError": "Impossible de charger la carte.",
-      "accessDenied": "Seul un super utilisateur peut ouvrir la carte.",
+      "accessDenied": "Vous n’avez pas accès à la carte.",
       "close": "Fermer",
       "phone": "Téléphone",
       "email": "E-mail",

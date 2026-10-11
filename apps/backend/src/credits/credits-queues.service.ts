@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { andWhere } from '../rbac/geo-scope.util';
 import {
   CREDIT_FEEDBACK_WINDOW_DAYS,
   CREDIT_WEIGHTS,
@@ -17,6 +18,7 @@ export interface CreditsLedgerQuery {
   userId?: string;
   eventType?: CreditEventType;
   country?: string;
+  geo?: Record<string, unknown> | null;
 }
 
 export interface CreditsSummaryQuery {
@@ -24,12 +26,14 @@ export interface CreditsSummaryQuery {
   offset: number;
   eventType?: CreditEventType;
   country?: string;
+  geo?: Record<string, unknown> | null;
 }
 
 export interface CreditsQueueParams {
   limit: number;
   offset: number;
   country?: string;
+  orderGeo?: Record<string, unknown> | null;
 }
 
 interface CreditsSummaryUser {
@@ -140,6 +144,7 @@ export class CreditsQueuesService {
     const where = this.buildCreditWhere({
       eventType: query.eventType,
       country: query.country,
+      geo: query.geo,
     });
     const res = await this.hasura.executeQuery<{
       user_credits: Array<{
@@ -177,10 +182,13 @@ export class CreditsQueuesService {
   async listOpenEscalations(
     params: CreditsQueueParams
   ): Promise<{ items: unknown[]; total: number }> {
-    const where = {
-      resolved_at: { _is_null: true },
-      ...this.orderClientCountryFilter(params.country),
-    };
+    const where = andWhere(
+      {
+        resolved_at: { _is_null: true },
+        ...this.orderClientCountryFilter(params.country),
+      },
+      params.orderGeo ? { order: params.orderGeo } : null
+    );
     const res = await this.hasura.executeQuery<{
       order_risk_incidents: unknown[];
       order_risk_incidents_aggregate: {
@@ -232,15 +240,18 @@ export class CreditsQueuesService {
     params: CreditsQueueParams
   ): Promise<{ items: CreditsFeedbackOrderRow[]; total: number }> {
     const cutoff = this.feedbackCutoffIso();
-    const where = {
-      current_status: { _eq: 'cancelled' },
-      cancelled_at: { _gte: cutoff },
-      ops_classification: { _is_null: true },
-      _not: {
-        user_credits: { event_type: { _eq: 'cancelled_feedback' } },
+    const where = andWhere(
+      {
+        current_status: { _eq: 'cancelled' },
+        cancelled_at: { _gte: cutoff },
+        ops_classification: { _is_null: true },
+        _not: {
+          user_credits: { event_type: { _eq: 'cancelled_feedback' } },
+        },
+        ...this.clientCountryFilter(params.country),
       },
-      ...this.clientCountryFilter(params.country),
-    };
+      params.orderGeo
+    );
     return this.listOrdersQueue(where, params);
   }
 
@@ -248,17 +259,20 @@ export class CreditsQueuesService {
     params: CreditsQueueParams
   ): Promise<{ items: CreditsFeedbackOrderRow[]; total: number }> {
     const cutoff = this.feedbackCutoffIso();
-    const where = {
-      current_status: { _eq: 'complete' },
-      completed_at: { _gte: cutoff },
-      ops_classification: { _is_null: true },
-      _not: {
-        user_credits: {
-          event_type: { _eq: 'first_order_completed_feedback' },
+    const where = andWhere(
+      {
+        current_status: { _eq: 'complete' },
+        completed_at: { _gte: cutoff },
+        ops_classification: { _is_null: true },
+        _not: {
+          user_credits: {
+            event_type: { _eq: 'first_order_completed_feedback' },
+          },
         },
+        ...this.clientCountryFilter(params.country),
       },
-      ...this.clientCountryFilter(params.country),
-    };
+      params.orderGeo
+    );
     // Scan the full 14-day candidate set (ops-scale), then filter to true
     // first completions before applying page limit/offset.
     const candidateLimit = 5000;
@@ -490,12 +504,14 @@ export class CreditsQueuesService {
     userId?: string;
     eventType?: CreditEventType;
     country?: string;
+    geo?: Record<string, unknown> | null;
   }): Record<string, unknown> {
     const parts: Record<string, unknown>[] = [];
     if (query.userId) parts.push({ user_id: { _eq: query.userId } });
     if (query.eventType) parts.push({ event_type: { _eq: query.eventType } });
     const code = this.normalizeCountry(query.country);
     if (code) parts.push({ user: { country: { _eq: code } } });
+    if (query.geo) parts.push(query.geo);
     if (!parts.length) return {};
     return parts.length === 1 ? parts[0] : { _and: parts };
   }

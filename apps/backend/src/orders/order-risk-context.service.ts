@@ -35,9 +35,9 @@ export class OrderRiskContextService {
             business_location {
               name
               phone
-              address { country }
+              address { country state }
             }
-            delivery_address { country }
+            delivery_address { country state }
           }
         }`,
         { id: orderId }

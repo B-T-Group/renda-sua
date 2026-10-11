@@ -13,6 +13,7 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { AuthorizedBusinessActor } from '../orders/authorized-business-actor';
 import { PlatformPermissions } from '../rbac/platform-permissions';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { RbacService } from '../rbac/rbac.service';
 import type { PersonaId } from '../users/persona.types';
 import { isActivePersona } from '../users/persona.util';
@@ -78,7 +79,8 @@ export class MessagingService {
     private readonly configService: ConfigService<Configuration>,
     private readonly notificationsService: NotificationsService,
     private readonly structuredMessageRegistry: StructuredMessageTypeRegistry,
-    private readonly rbacService: RbacService
+    private readonly rbacService: RbacService,
+    private readonly geoScope: GeoScopeService
   ) {}
 
   actorAsBusinessUser(actor: AuthorizedBusinessActor) {
@@ -550,6 +552,17 @@ export class MessagingService {
       user.agent &&
       (order.assigned_agent_id === user.agent.id ||
         order.assigned_agent_id === null)
+    ) {
+      hasAccess = true;
+    }
+
+    if (
+      !hasAccess &&
+      (await this.geoScope.coversOrder(
+        user.id,
+        PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        order.id
+      ))
     ) {
       hasAccess = true;
     }
