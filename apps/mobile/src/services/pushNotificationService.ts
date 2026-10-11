@@ -33,6 +33,7 @@ export const ORDER_OFFERS_CHANNEL_ID = 'order_offers_alarm';
 export const ORDER_UPDATES_CHANNEL_ID = 'order_updates';
 export const BUSINESS_TRANSFERS_CHANNEL_ID = 'business_transfers';
 export const ORDER_INCOMING_CHANNEL_ID = 'order_incoming_alarm';
+export const RESTOCK_ALERTS_CHANNEL_ID = 'restock_alerts';
 
 export const PushNotificationService = {
   setupAndroidChannel: async (): Promise<void> => {
@@ -75,5 +76,15 @@ export const PushNotificationService = {
           Notifications.AndroidNotificationVisibility.PUBLIC,
       }
     );
+    // Restock alerts for liked items that come back in stock.
+    await Notifications.setNotificationChannelAsync(RESTOCK_ALERTS_CHANNEL_ID, {
+      name: 'Restock alerts',
+      importance: Notifications.AndroidImportance.DEFAULT,
+      sound: 'default',
+      vibrationPattern: [0, 250, 250, 250],
+      enableVibrate: true,
+      lockscreenVisibility:
+        Notifications.AndroidNotificationVisibility.PUBLIC,
+    });
   },
 };

@@ -83,6 +83,12 @@ export const SITE_EVENT_ORDERS_REORDER_TAP = 'orders.reorder.tap' as const;
 export const SITE_EVENT_ORDERS_REORDER_RESULT =
   'orders.reorder.result' as const;
 
+// Restock alerts v1 (#343), client-emitted. Server-side alert events are separate.
+export const SITE_EVENT_RESTOCK_ALERT_OPENED = 'restock.alert_opened' as const;
+export const SITE_EVENT_RESTOCK_ADD_TO_CART_FROM_ALERT =
+  'restock.add_to_cart_from_alert' as const;
+export const SITE_EVENT_RESTOCK_OPT_OUT = 'restock.opt_out' as const;
+
 export const SITE_EVENT_AUTH_GATE_SHOWN = 'auth_gate_shown' as const;
 export const SITE_EVENT_AUTH_GATE_DISMISSED = 'auth_gate_dismissed' as const;
 export const SITE_EVENT_AUTH_CODE_SENT = 'auth_code_sent' as const;
@@ -176,7 +182,10 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_ASSISTANT_DEEPLINK_SHOWN
   | typeof SITE_EVENT_ASSISTANT_DEEPLINK_TAP
   | typeof SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED
-  | typeof SITE_EVENT_ASSISTANT_ERROR_SHOWN;
+  | typeof SITE_EVENT_ASSISTANT_ERROR_SHOWN
+  | typeof SITE_EVENT_RESTOCK_ALERT_OPENED
+  | typeof SITE_EVENT_RESTOCK_ADD_TO_CART_FROM_ALERT
+  | typeof SITE_EVENT_RESTOCK_OPT_OUT;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

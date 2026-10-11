@@ -8406,8 +8406,30 @@
       "chat": "Chat et mentions",
       "marketplace": "Marketplace",
       "reminders": "Rappels",
+      "restockAlerts": "Alertes de retour en stock",
+      "restockAlertsDesc": "Articles aimés qui reviennent en stock",
       "marketing": "Marketing"
     }
+  },
+  "restock": {
+    "alertOn": "Alerte activée",
+    "alertOff": {
+      "withUndo": "Alerte désactivée · Annuler"
+    },
+    "undo": "Annuler",
+    "bellOn": "activée",
+    "bellOff": "désactivée",
+    "bellAriaLabel": "Alerte de retour pour {{item}} : {{state}}",
+    "bellTooltipOn": "Nous vous prévenons à son retour",
+    "bellTooltipOff": "Me prévenir à son retour",
+    "hint": "Nous vous prévenons à son retour.",
+    "filter": {
+      "all": "Tous",
+      "backInStock": "De retour"
+    },
+    "backInStockChip": "De retour",
+    "emptyFilterTitle": "Rien de retour pour l'instant. Nous vous prévenons.",
+    "goneAgainBanner": "Déjà épuisé. Nous vous prévenons au prochain retour."
   },
   "deepLink": {
     "openingApp": "Ouverture de Rendasua…",

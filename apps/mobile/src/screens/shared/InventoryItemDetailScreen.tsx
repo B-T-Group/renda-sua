@@ -9,6 +9,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PublicItemCheckoutSheet } from '../../components/dialogs/PublicItemCheckoutSheet';
 import { InventoryItemShareButton } from '../../components/browse/InventoryItemShareButton';
 import { ItemLikeButton } from '../../components/browse/ItemLikeButton';
+import { RestockGoneAgainBanner } from '../../components/browse/RestockGoneAgainBanner';
+import { RestockSoldOutBar } from '../../components/browse/RestockSoldOutBar';
+import { RestockToast } from '../../components/browse/RestockToast';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { useRestockBellToggle } from '../../hooks/useRestockBellToggle';
+import { useRestockItemAlert } from '../../hooks/useRestockItemAlert';
+import { useSimilarInStockItems } from '../../hooks/useSimilarInStockItems';
+import { trackRestockEvent } from '../../utils/restockAnalytics';
 import { InventoryItemDetailImageGallery } from '../../components/browse/InventoryItemDetailImageGallery';
 import { DetailVariantCarousel } from '../../components/browse/DetailVariantCarousel';
 import { InventoryItemDetailProductInfo } from '../../components/browse/InventoryItemDetailProductInfo';
@@ -90,13 +98,17 @@ function InventoryItemDetailScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<{ InventoryItemDetail: InventoryItemDetailParams }, 'InventoryItemDetail'>>();
-  const { inventoryItemId, availabilityResult, availabilityQuantity } = route.params;
+  const { inventoryItemId, availabilityResult, availabilityQuantity, src } = route.params;
+  const fromRestockAlert = src === 'restock_alert';
+  const { flags } = useClientFlags();
+  const restockOn = flags.restock_alerts_v1 === true;
   const { auth, cart, ftue } = useStore();
   const { selectedMarket } = useMarket();
   const { item, loading, error, refetch } = useInventoryItemDetail(inventoryItemId, {
     withAuth: auth.isAuthenticated,
   });
   const [snack, setSnack] = useState<string | null>(null);
+  const [likedOverride, setLikedOverride] = useState<boolean | null>(null);
   const [interestOpen, setInterestOpen] = useState(false);
   const [interestSubmitting, setInterestSubmitting] = useState(false);
   const { submitInterest } = useProductInterest();
@@ -107,6 +119,30 @@ function InventoryItemDetailScreen() {
   const [availabilitySending, setAvailabilitySending] = useState(false);
   const { trackView } = useTrackItemView();
   const { isStripeRail } = useIsStripeRail(auth.isAuthenticated);
+
+  // Restock alerts (#343): all of this is inert unless `restock_alerts_v1` is on.
+  const catalogItemId = item ? item.item_id || item.item.id : undefined;
+  const restockSoldOut =
+    restockOn &&
+    item != null &&
+    !isFoodCatalogItem(item) &&
+    !listingHasSellableStock(item.computed_available_quantity, item.item.item_variants);
+  const restockLiked = likedOverride ?? item?.liked === true;
+  const restockBellActive = restockSoldOut && restockLiked && auth.isAuthenticated;
+  const restockAlert = useRestockItemAlert({
+    active: restockBellActive,
+    catalogItemId,
+  });
+  const restockToggle = useRestockBellToggle(restockAlert.applied);
+  const similarInStock = useSimilarInStockItems(
+    item?.id,
+    restockOn && fromRestockAlert && restockSoldOut
+  );
+
+  useEffect(() => {
+    if (!restockOn || !fromRestockAlert) return;
+    trackRestockEvent('restock.alert_opened', { inventoryItemId });
+  }, [restockOn, fromRestockAlert, inventoryItemId]);
 
   useEffect(() => {
     if (!item) return;
@@ -204,6 +240,7 @@ function InventoryItemDetailScreen() {
                 <ItemLikeButton
                   itemId={item.item_id || item.item.id}
                   initiallyLiked={item.liked === true}
+                  onLikedChange={setLikedOverride}
                 />
                 <InventoryItemShareButton
                   shareUrl={buildInventoryItemSeoShareUrl(inventoryItemId)}
@@ -214,7 +251,7 @@ function InventoryItemDetailScreen() {
             )
           : undefined,
     });
-  }, [inventoryItemId, item, navigation, sharePriceLine, t]);
+  }, [inventoryItemId, item, navigation, sharePriceLine, t, setLikedOverride]);
 
   const onAddToCart = useCallback(() => {
     if (!item || !selectionHasStock(item, effectiveVariantId)) return;
@@ -238,8 +275,16 @@ function InventoryItemDetailScreen() {
         auth.isAuthenticated
       );
       setSnack(t('cart.itemAdded', 'Added to cart'));
+      if (restockOn && fromRestockAlert) {
+        trackRestockEvent('restock.add_to_cart_from_alert', {
+          itemId: item.item_id || item.item.id,
+          inventoryItemId: item.id,
+        });
+      }
     }
   }, [
+    restockOn,
+    fromRestockAlert,
     auth.isAuthenticated,
     cart,
     defaultVariantLabel,
@@ -530,7 +575,8 @@ function InventoryItemDetailScreen() {
   const paymentsEnabled = item.payments_enabled !== false;
   const canPurchase =
     !orderBlocked && paymentsEnabled && acceptsOrders && variantSelectionReady;
-  const showStickyBar = isExportInterestOnly || !orderBlocked;
+  const showRestockBar = restockSoldOut && outOfStock && !isExportInterestOnly;
+  const showStickyBar = isExportInterestOnly || !orderBlocked || showRestockBar;
   const showLowStock = !isFood && qty > 0 && qty <= LOW_STOCK_THRESHOLD;
   const showInStock = !isFood && qty > LOW_STOCK_THRESHOLD;
 
@@ -544,6 +590,19 @@ function InventoryItemDetailScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
+        {restockSoldOut && fromRestockAlert ? (
+          <View style={{ paddingTop: spacing.md }}>
+            <RestockGoneAgainBanner
+              similar={similarInStock}
+              onOpenSimilar={(id) =>
+                (navigation as unknown as { push: (name: string, params: object) => void }).push(
+                  'InventoryItemDetail',
+                  { inventoryItemId: id }
+                )
+              }
+            />
+          </View>
+        ) : null}
         {/* Amazon-style: brand / title / rating above the gallery */}
         <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.sm }}>
           <View style={styles.brandRatingRow}>
@@ -1081,6 +1140,16 @@ function InventoryItemDetailScreen() {
             </Button>
           </View>
           ) : null}
+          {showRestockBar ? (
+            <RestockSoldOutBar
+              itemId={catalogItemId ?? ''}
+              itemName={item.item.name}
+              bellOn={restockAlert.enabled}
+              busy={restockToggle.pendingId === catalogItemId}
+              showBell={restockBellActive}
+              onToggle={(id, next) => void restockToggle.toggle(id, next)}
+            />
+          ) : null}
           {!isExportInterestOnly && inCart ? (
             <View style={{ alignItems: 'center', marginTop: spacing.sm }}>
               <StatusPill
@@ -1117,6 +1186,12 @@ function InventoryItemDetailScreen() {
             setInterestSubmitting(false);
           }
         }}
+      />
+
+      <RestockToast
+        toast={restockToggle.toast}
+        onUndo={restockToggle.undo}
+        onDismiss={restockToggle.dismissToast}
       />
 
       <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={4000}>

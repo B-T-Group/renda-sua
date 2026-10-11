@@ -12,7 +12,8 @@ export type ClientFlagKey =
   | 'auth_gate_ul_fallback'
   | 'catalog_experience_v1'
   | 'assistant_launcher_v1'
-  | 'assistant_shopping_v1';
+  | 'assistant_shopping_v1'
+  | 'restock_alerts_v1';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -28,6 +29,7 @@ const DEFAULT_FLAGS: ClientFlags = {
   catalog_experience_v1: false,
   assistant_launcher_v1: false,
   assistant_shopping_v1: false,
+  restock_alerts_v1: false,
 };
 
 /**

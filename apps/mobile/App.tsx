@@ -32,6 +32,7 @@ import { useNotificationOpenedIdDocumentNavigation } from './src/hooks/useNotifi
 import { useNotificationOpenedStockAvailabilityResultNavigation } from './src/hooks/useNotificationOpenedStockAvailabilityResultNavigation';
 import { useNotificationOpenedAdminOrderNavigation } from './src/hooks/useNotificationOpenedAdminOrderNavigation';
 import { useNotificationOpenedWhatsAppInboxNavigation } from './src/hooks/useNotificationOpenedWhatsAppInboxNavigation';
+import { useNotificationOpenedRestockAlertNavigation } from './src/hooks/useNotificationOpenedRestockAlertNavigation';
 import { useNotificationInterrupts } from './src/hooks/useNotificationInterrupts';
 import { useAdminBroadcastNotifications } from './src/hooks/useAdminBroadcastNotifications';
 import { useReferralRejectionNotifications } from './src/hooks/useReferralRejectionNotifications';
@@ -84,6 +85,7 @@ function AppContentBase() {
   useNotificationOpenedThreadNavigation(navReady);
   useNotificationOpenedAdminOrderNavigation(navReady);
   useNotificationOpenedWhatsAppInboxNavigation(navReady);
+  useNotificationOpenedRestockAlertNavigation(navReady);
   useNotificationInterrupts(navReady);
   useAdminBroadcastNotifications(navReady);
   useReferralRejectionNotifications(navReady);
