@@ -68,17 +68,29 @@ export class RestockAlertsProcessor {
 
   /** Country row first, then global row, then default false. */
   async flagEnabled(key: string, country: string | null): Promise<boolean> {
-    const rows = await this.repo.flagRows(key);
-    return resolveFlag(rows, country);
+    return resolveFlag(await this.flagRows(key), country);
   }
 
   async anyEnabled(): Promise<boolean> {
-    const rows = await this.repo.flagRows(RESTOCK_FLAG_KEY);
+    const rows = await this.flagRows(RESTOCK_FLAG_KEY, true);
     return rows.some((r) => r.value);
+  }
+
+  /** Flag rows are read once per run (a handful of rows), not once per candidate. */
+  private flagCache = new Map<string, Array<{ country: string | null; value: boolean }>>();
+  private async flagRows(key: string, fresh = false) {
+    if (!fresh) {
+      const hit = this.flagCache.get(key);
+      if (hit) return hit;
+    }
+    const rows = await this.repo.flagRows(key);
+    this.flagCache.set(key, rows);
+    return rows;
   }
 
   /** One locked pass: fan out due events, then deliver queued sends. */
   async run(now: Date): Promise<RunSummary> {
+    this.flagCache = new Map();
     const summary: RunSummary = { ran: false, eventsFannedOut: 0, sendsQueued: 0, messagesSent: 0 };
     if (!(await this.anyEnabled())) return summary;
     const expiry = new Date(now.getTime() + RESTOCK_RULES.lockTtlMs);
