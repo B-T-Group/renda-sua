@@ -1,138 +1,87 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import * as apiClient from './apiClient';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+const { get, put, patch } = vi.hoisted(() => ({
+  get: vi.fn(),
+  put: vi.fn(),
+  patch: vi.fn(),
+}));
+const publicPost = vi.hoisted(() => vi.fn());
+
+vi.mock('./apiClient', () => ({ api: { get, put, patch } }));
+vi.mock('./publicApiClient', () => ({ publicApiPost: publicPost }));
+
 import {
-  checkRestockAlertsEnabled,
+  findLikedRestockItem,
+  getLikesWithAlerts,
   getRestockPreferences,
+  isRestockDisabledError,
   patchRestockPreferences,
   setItemAlert,
-  getLikesWithAlerts,
+  stopRestockAlertsFromMessage,
 } from './restockAlertsApi';
 
-vi.mock('./apiClient');
+const ITEM = '11111111-2222-4333-8444-555555555555';
 
-describe('restockAlertsApi', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
+function likesPage(items: Array<{ id: string; item_id: string }>, page: number, totalPages: number) {
+  return { success: true, data: { items, total: items.length, page, limit: 50, totalPages } };
+}
+
+describe('restockAlertsApi (real backend routes and shapes)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('reads preferences incl. availability flags', async () => {
+    const data = { push: true, whatsapp: false, sms: false, whatsapp_available: false, sms_available: true };
+    get.mockResolvedValue({ success: true, data });
+    await expect(getRestockPreferences()).resolves.toEqual(data);
+    expect(get).toHaveBeenCalledWith('/restock-alerts/preferences');
   });
 
-  describe('checkRestockAlertsEnabled', () => {
-    it('should return enabled status', async () => {
-      const mockResponse = { success: true, data: { enabled: true } };
-      vi.spyOn(apiClient.api, 'get').mockResolvedValue(mockResponse);
-
-      const result = await checkRestockAlertsEnabled();
-
-      expect(result).toBe(true);
-      expect(apiClient.api.get).toHaveBeenCalledWith('/restock-alerts/status');
-    });
-
-    it('should return false when disabled', async () => {
-      const mockResponse = { success: true, data: { enabled: false } };
-      vi.spyOn(apiClient.api, 'get').mockResolvedValue(mockResponse);
-
-      const result = await checkRestockAlertsEnabled();
-
-      expect(result).toBe(false);
-    });
+  it('patches only the given channels', async () => {
+    const data = { push: false, whatsapp: false, sms: false, whatsapp_available: false, sms_available: false };
+    patch.mockResolvedValue({ success: true, data });
+    await patchRestockPreferences({ push: false });
+    expect(patch).toHaveBeenCalledWith('/restock-alerts/preferences', { push: false });
   });
 
-  describe('getRestockPreferences', () => {
-    it('should fetch preferences', async () => {
-      const mockPrefs = { push: true, whatsapp: false, sms: false };
-      const mockResponse = { success: true, data: mockPrefs };
-      vi.spyOn(apiClient.api, 'get').mockResolvedValue(mockResponse);
-
-      const result = await getRestockPreferences();
-
-      expect(result).toEqual(mockPrefs);
-      expect(apiClient.api.get).toHaveBeenCalledWith('/restock-alerts/preferences');
-    });
+  it('PUTs the bell with the catalog item id and returns state/expires_at', async () => {
+    const data = { item_id: ITEM, enabled: false, state: 'disarmed', expires_at: null };
+    put.mockResolvedValue({ success: true, data });
+    await expect(setItemAlert(ITEM, false)).resolves.toEqual(data);
+    expect(put).toHaveBeenCalledWith(`/restock-alerts/items/${ITEM}`, { enabled: false });
   });
 
-  describe('patchRestockPreferences', () => {
-    it('should update preferences', async () => {
-      const patch = { whatsapp: true };
-      const mockUpdated = { push: true, whatsapp: true, sms: false };
-      const mockResponse = { success: true, data: mockUpdated };
-      vi.spyOn(apiClient.api, 'patch').mockResolvedValue(mockResponse);
-
-      const result = await patchRestockPreferences(patch);
-
-      expect(result).toEqual(mockUpdated);
-      expect(apiClient.api.patch).toHaveBeenCalledWith(
-        '/restock-alerts/preferences',
-        patch
-      );
-    });
+  it('requests likes with filter, page and limit and uses totalPages', async () => {
+    get.mockResolvedValue(likesPage([], 2, 3));
+    const res = await getLikesWithAlerts('back_in_stock', 2, 20);
+    expect(get).toHaveBeenCalledWith('/restock-alerts/likes?filter=back_in_stock&page=2&limit=20');
+    expect(res.totalPages).toBe(3);
   });
 
-  describe('setItemAlert', () => {
-    it('should enable alert for item', async () => {
-      const itemId = 'item-123';
-      const mockResponse = { success: true, data: { enabled: true } };
-      vi.spyOn(apiClient.api, 'put').mockResolvedValue(mockResponse);
-
-      const result = await setItemAlert(itemId, true);
-
-      expect(result).toEqual({ enabled: true });
-      expect(apiClient.api.put).toHaveBeenCalledWith(
-        `/restock-alerts/items/${itemId}`,
-        { enabled: true }
-      );
-    });
-
-    it('should disable alert for item', async () => {
-      const itemId = 'item-456';
-      const mockResponse = { success: true, data: { enabled: false } };
-      vi.spyOn(apiClient.api, 'put').mockResolvedValue(mockResponse);
-
-      const result = await setItemAlert(itemId, false);
-
-      expect(result).toEqual({ enabled: false });
-      expect(apiClient.api.put).toHaveBeenCalledWith(
-        `/restock-alerts/items/${itemId}`,
-        { enabled: false }
-      );
-    });
+  it('findLikedRestockItem pages until the catalog item id matches', async () => {
+    get
+      .mockResolvedValueOnce(likesPage([{ id: 'l1', item_id: 'x' }], 1, 2))
+      .mockResolvedValueOnce(likesPage([{ id: 'l2', item_id: ITEM }], 2, 2));
+    const hit = await findLikedRestockItem(ITEM);
+    expect(hit?.id).toBe('l2');
+    expect(get).toHaveBeenCalledTimes(2);
   });
 
-  describe('getLikesWithAlerts', () => {
-    it('should fetch all likes with default params', async () => {
-      const mockData = {
-        items: [],
-        total: 0,
-        page: 1,
-        limit: 20,
-        total_pages: 0,
-      };
-      const mockResponse = { success: true, data: mockData };
-      vi.spyOn(apiClient.api, 'get').mockResolvedValue(mockResponse);
+  it('findLikedRestockItem returns null when not liked', async () => {
+    get.mockResolvedValue(likesPage([{ id: 'l1', item_id: 'x' }], 1, 1));
+    await expect(findLikedRestockItem(ITEM)).resolves.toBeNull();
+  });
 
-      const result = await getLikesWithAlerts();
-
-      expect(result).toEqual(mockData);
-      expect(apiClient.api.get).toHaveBeenCalledWith(
-        '/restock-alerts/likes?filter=all&page=1&limit=20'
-      );
+  it('stop uses the public route with the token', async () => {
+    publicPost.mockResolvedValue({ success: true, data: { channel: 'push', stopped: true } });
+    await expect(stopRestockAlertsFromMessage('tok')).resolves.toEqual({
+      channel: 'push',
+      stopped: true,
     });
+    expect(publicPost).toHaveBeenCalledWith('/restock-alerts/stop', { token: 'tok' });
+  });
 
-    it('should fetch back_in_stock likes with custom pagination', async () => {
-      const mockData = {
-        items: [],
-        total: 5,
-        page: 2,
-        limit: 10,
-        total_pages: 1,
-      };
-      const mockResponse = { success: true, data: mockData };
-      vi.spyOn(apiClient.api, 'get').mockResolvedValue(mockResponse);
-
-      const result = await getLikesWithAlerts('back_in_stock', 2, 10);
-
-      expect(result).toEqual(mockData);
-      expect(apiClient.api.get).toHaveBeenCalledWith(
-        '/restock-alerts/likes?filter=back_in_stock&page=2&limit=10'
-      );
-    });
+  it('detects the server-disabled error code', () => {
+    expect(isRestockDisabledError(Object.assign(new Error('x'), { code: 'restock_alerts_disabled' }))).toBe(true);
+    expect(isRestockDisabledError(new Error('x'))).toBe(false);
   });
 });

@@ -1,61 +1,51 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { AppState } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import i18n from '../i18n';
 import { loadExpoNotifications } from '../services/expoNotificationsLoader';
-import { useStore } from '../stores/RootStore';
-import type { ClientRootStackParamList } from '../navigation/types';
+import { stopRestockAlertsFromMessage } from '../services/restockAlertsApi';
+import { enqueueAppDeepLink } from './useAppDeepLinkNavigation';
+import {
+  parseRestockPush,
+  RESTOCK_PUSH_CATEGORY_ID,
+  STOP_ACTION_ID,
+} from '../utils/restockDeepLink';
 
-type ParsedRestockPayload =
-  | { type: 'single'; inventoryItemId: string }
-  | { type: 'digest' }
-  | null;
+type NotificationsModule = NonNullable<Awaited<ReturnType<typeof loadExpoNotifications>>>;
 
-function parseRestockPayload(
-  data: Record<string, unknown> | undefined
-): ParsedRestockPayload {
-  if (!data || data.src !== 'restock_alert') return null;
+type PushResponse = {
+  actionIdentifier?: string;
+  notification: { request: { content: { data?: unknown } } };
+};
 
-  if (data.digest === true) {
-    return { type: 'digest' };
+function handleResponse(response: PushResponse): boolean {
+  const data = response.notification.request.content.data as
+    | Record<string, unknown>
+    | undefined;
+  const parsed = parseRestockPush(data, response.actionIdentifier);
+  if (!parsed) return false;
+  if (parsed.kind === 'stop') {
+    // Notification action: works without a session (token is the credential).
+    void stopRestockAlertsFromMessage(parsed.token).catch(() => undefined);
+    return true;
   }
-
-  if (typeof data.inventory_item_id === 'string') {
-    return { type: 'single', inventoryItemId: data.inventory_item_id };
-  }
-
-  return null;
-}
-
-let pendingRestockPayload: ParsedRestockPayload | null = null;
-let pendingRetryTimer: ReturnType<typeof setTimeout> | null = null;
-
-const PENDING_RETRY_DELAY_MS = 150;
-const PENDING_RETRY_ATTEMPTS = 12;
-
-function schedulePendingRetry(flush: () => boolean, attemptsLeft: number): void {
-  if (pendingRetryTimer) clearTimeout(pendingRetryTimer);
-  if (attemptsLeft <= 0) return;
-  pendingRetryTimer = setTimeout(() => {
-    pendingRetryTimer = null;
-    if (!flush()) schedulePendingRetry(flush, attemptsLeft - 1);
-  }, PENDING_RETRY_DELAY_MS);
+  // Same queue as rendasua:// and https://…/app links: waits for auth, switches
+  // to the client persona, then opens the item or Likes > Back in stock.
+  enqueueAppDeepLink(parsed.url);
+  return true;
 }
 
 /**
- * Opens item detail or Likes screen when user taps a restock alert push.
- * Single item: navigates to InventoryItemDetail
- * Digest: navigates to UserLikes with 'back_in_stock' filter preselected
+ * Handles restock push taps (contract §2): `restock.alert` opens the live item
+ * (`src=restock_alert`), `restock.digest` opens Likes with "Back in stock", and
+ * the `stop_restock_alerts` action POSTs the single-use token.
+ *
+ * The notification category registered here only produces a visible action
+ * button when the push carries `categoryId: 'restock_alert'` (backend follow-up).
  */
-export function useNotificationOpenedRestockAlertNavigation(
-  navReady: boolean
-): void {
-  const navigation = useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
-  const { auth, persona } = useStore();
+export function useNotificationOpenedRestockAlertNavigation(navReady: boolean): void {
   const handledInitialResponse = useRef(false);
-  const [notificationsMod, setNotificationsMod] = useState<Awaited<
-    ReturnType<typeof loadExpoNotifications>
-  > | null>(null);
+  const [notificationsMod, setNotificationsMod] = useState<NotificationsModule | null>(
+    null
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -67,125 +57,38 @@ export function useNotificationOpenedRestockAlertNavigation(
     };
   }, []);
 
-  const canOpenMainApp = auth.isAuthenticated && persona.showMainApp;
-  const isOnClient =
-    persona.activePersona === 'client' && !persona.isDelegationContext;
-
-  const tryOpenRestock = useCallback(
-    (payload: ParsedRestockPayload): boolean => {
-      if (!payload || !canOpenMainApp || !isOnClient) return false;
-
-      if (payload.type === 'digest') {
-        navigation.navigate('UserLikes', { filter: 'back_in_stock' });
-        return true;
-      }
-
-      if (payload.type === 'single') {
-        navigation.navigate('InventoryItemDetail', {
-          inventoryItemId: payload.inventoryItemId,
-        });
-        return true;
-      }
-
-      return false;
-    },
-    [canOpenMainApp, isOnClient, navigation]
-  );
-
-  const flushPending = useCallback((): boolean => {
-    const pending = pendingRestockPayload;
-    if (!pending) return true;
-
-    // Wait until we're on client persona
-    if (!isOnClient && persona.personas.includes('client')) {
-      if (!persona.pickingPersona) {
-        void persona.selectPersona('client');
-      }
-      return false;
-    }
-
-    if (!tryOpenRestock(pending)) return false;
-    pendingRestockPayload = null;
-    return true;
-  }, [isOnClient, persona, tryOpenRestock]);
+  useEffect(() => {
+    if (!notificationsMod) return;
+    const setCategory = (
+      notificationsMod as { setNotificationCategoryAsync?: unknown }
+    ).setNotificationCategoryAsync as
+      | ((id: string, actions: unknown[]) => Promise<unknown>)
+      | undefined;
+    if (typeof setCategory !== 'function') return;
+    void setCategory(RESTOCK_PUSH_CATEGORY_ID, [
+      {
+        identifier: STOP_ACTION_ID,
+        buttonTitle: i18n.t('restockAlerts.stopAction', 'Stop restock alerts'),
+        options: { opensAppToForeground: false },
+      },
+    ]).catch(() => undefined);
+  }, [notificationsMod]);
 
   useEffect(() => {
     if (!notificationsMod || !navReady) return;
-
-    const openFromResponse = (
-      data: Record<string, unknown> | undefined
-    ): void => {
-      const parsed = parseRestockPayload(data);
-      if (!parsed) return;
-
-      // If not on client, queue and switch persona
-      if (!isOnClient && persona.personas.includes('client')) {
-        pendingRestockPayload = parsed;
-        if (!persona.pickingPersona) {
-          void persona.selectPersona('client');
-        }
-        schedulePendingRetry(flushPending, PENDING_RETRY_ATTEMPTS);
-        return;
-      }
-
-      if (tryOpenRestock(parsed)) return;
-      pendingRestockPayload = parsed;
-      schedulePendingRetry(flushPending, PENDING_RETRY_ATTEMPTS);
-    };
-
-    const sub = notificationsMod.addNotificationResponseReceivedListener(
-      (response) => {
-        const data = response.notification.request.content.data as
-          | Record<string, unknown>
-          | undefined;
-        openFromResponse(data);
-      }
-    );
-
+    const sub = notificationsMod.addNotificationResponseReceivedListener((response) => {
+      handleResponse(response as PushResponse);
+    });
     if (!handledInitialResponse.current) {
       handledInitialResponse.current = true;
       void notificationsMod.getLastNotificationResponseAsync().then((last) => {
         if (!last) return;
-        const data = last.notification.request.content.data as
-          | Record<string, unknown>
-          | undefined;
-        if (parseRestockPayload(data) === null) return;
-        openFromResponse(data);
-        if (
-          typeof notificationsMod.clearLastNotificationResponseAsync ===
-          'function'
-        ) {
+        if (!handleResponse(last as PushResponse)) return;
+        if (typeof notificationsMod.clearLastNotificationResponseAsync === 'function') {
           void notificationsMod.clearLastNotificationResponseAsync();
         }
       });
     }
-
     return () => sub.remove();
-  }, [
-    notificationsMod,
-    navReady,
-    canOpenMainApp,
-    isOnClient,
-    flushPending,
-    tryOpenRestock,
-    persona,
-  ]);
-
-  useEffect(() => {
-    if (!navReady) return;
-    flushPending();
-  }, [
-    navReady,
-    flushPending,
-    persona.activePersona,
-    persona.pickingPersona,
-    isOnClient,
-  ]);
-
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') flushPending();
-    });
-    return () => sub.remove();
-  }, [flushPending]);
+  }, [notificationsMod, navReady]);
 }

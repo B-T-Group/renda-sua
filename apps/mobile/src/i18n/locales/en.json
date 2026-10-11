@@ -7504,7 +7504,6 @@
     "hint": "We'll let you know when it's back.",
     "alertOn": "Alert on",
     "alertOff": "Alert off",
-    "alertOffWithUndo": "Alert off · Undo",
     "backInStock": "Back in stock",
     "goneAgain": "Gone again. We'll tell you next time.",
     "emptyBackInStock": "Nothing back yet. We'll tell you.",
@@ -7513,6 +7512,9 @@
     "settingsTitle": "Restock alerts",
     "settingsSubtitle": "Items you liked that come back in stock",
     "bellAccessibilityOn": "Restock alert for {{item}}: on",
-    "bellAccessibilityOff": "Restock alert for {{item}}: off"
+    "bellAccessibilityOff": "Restock alert for {{item}}: off",
+    "undo": "Undo",
+    "stopAction": "Stop restock alerts",
+    "toggleError": "Could not update the alert. Try again."
   }
 }
