@@ -10,6 +10,7 @@ function make(opts: {
 }) {
   const handlers: Record<string, Handler> = {
     RestockUserCountry: () => ({ users_by_pk: { country: 'CM' } }),
+    RestockSchemaProbe: () => ({ restock_alerts: [] }),
     ...opts.handlers,
   };
   const calls: Array<{ op: string; vars: any }> = [];
@@ -40,6 +41,35 @@ describe('RestockAlertsApiService', () => {
     const { svc } = make({ flags: [{ country: null, value: true }, { country: 'CM', value: false }] });
     await expect(svc.assertEnabled('u1')).rejects.toBeInstanceOf(NotFoundException);
     expect(await svc.isEnabledForUser('u1')).toBe(false);
+  });
+
+  it('treats a missing restock_alerts Hasura field as disabled, not a 500', async () => {
+    const missing = {
+      message: "field 'restock_alerts' not found in type: 'query_root'",
+      response: {
+        errors: [
+          {
+            message: "field 'restock_alerts' not found in type: 'query_root'",
+            extensions: { path: '$.selectionSet.restock_alerts', code: 'validation-failed' },
+          },
+        ],
+        status: 200,
+      },
+    };
+    const throwMissing = () => {
+      throw missing;
+    };
+    const { svc } = make({
+      handlers: {
+        RestockSchemaProbe: throwMissing,
+        RestockLikeAndAlert: throwMissing,
+        RestockUserLikes: throwMissing,
+      },
+    });
+    expect(await svc.isEnabledForUser('u1')).toBe(false);
+    await expect(svc.assertEnabled('u1')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.setItemAlert('u1', 'i1', true)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(svc.listLikes('u1', 'all', 1, 20)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('refuses to toggle an alert for an item the user has not liked', async () => {
