@@ -39,10 +39,19 @@ import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { useClientFlags } from '../../hooks/useClientFlags';
+import { useSearchRecovery } from '../../hooks/useSearchRecovery';
 import { CatalogExperience } from '../catalog-experience/CatalogExperience';
 import DashboardComposingOverlay from '../common/DashboardComposingOverlay';
+import CatalogSortControl from '../common/CatalogSortControl';
+import EmptySearchRecovery from '../common/EmptySearchRecovery';
 import {
   SITE_EVENT_INVENTORY_SORT_SELECT,
+  SITE_EVENT_SEARCH_RESULTS_SHOWN,
+  SITE_EVENT_SEARCH_SORT_CHANGED,
+  SITE_EVENT_SEARCH_EMPTY_SHOWN,
+  SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
+  SITE_EVENT_SEARCH_FILTER_REMOVED_FROM_EMPTY,
+  SITE_EVENT_CARD_RATING_SHOWN,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 import {
@@ -330,16 +339,77 @@ const ItemsPage: React.FC = () => {
     [setSearchParams]
   );
   const [currentPage, setCurrentPage] = useState(1);
-  const [sort, setSort] = useState<InventorySortMode>('relevance');
+  const sortFromUrl = useMemo(() => {
+    const param = new URLSearchParams(location.search).get('sort');
+    if (param && ['relevance', 'fastest', 'cheapest', 'top_rated', 'deals', 'recommended', 'popular', 'rating', 'newest'].includes(param)) {
+      return param as InventorySortMode;
+    }
+    return null;
+  }, [location.search]);
+  const [sort, setSort] = useState<InventorySortMode>(sortFromUrl ?? 'relevance');
   const [businessLocationId, setBusinessLocationId] = useState<string | null>(
     null
   );
   const [trackOrderId, setTrackOrderId] = useState<string | null>(null);
+  const { flags: clientFlags } = useClientFlags();
+  const discoveryEnabled = clientFlags.discovery_sort_v1;
+  const { recovery, fetchRecovery, reset: resetRecovery } = useSearchRecovery();
 
   const browserGeo = usePublicBrowserGeo(true);
+  
+  useEffect(() => {
+    if (sortFromUrl && sortFromUrl !== sort) {
+      setSort(sortFromUrl);
+    }
+  }, [sortFromUrl]);
+
+  const handleSortChange = useCallback(
+    (newSort: InventorySortMode) => {
+      const oldSort = sort;
+      setSort(newSort);
+      setCurrentPage(1);
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          const defaultSort = inventorySearch ? 'relevance' : 'recommended';
+          if (discoveryEnabled && newSort === defaultSort) {
+            next.delete('sort');
+          } else if (newSort !== 'relevance') {
+            next.set('sort', newSort);
+          } else {
+            next.delete('sort');
+          }
+          return next;
+        },
+        { replace: true }
+      );
+      if (discoveryEnabled) {
+        void trackSiteEvent({
+          eventType: SITE_EVENT_SEARCH_SORT_CHANGED,
+          metadata: { from: oldSort, to: newSort, surface: 'catalog' },
+        });
+      }
+    },
+    [sort, inventorySearch, discoveryEnabled, setSearchParams, trackSiteEvent]
+  );
 
   const inventorySearch =
     searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
+  
+  useEffect(() => {
+    if (inventorySearch && sort !== sortFromUrl) {
+      const searchParams = new URLSearchParams(location.search);
+      if (!searchParams.has('sort') && sort !== 'relevance') {
+        setSort('relevance');
+      }
+    }
+  }, [inventorySearch, location.search]);
+  
+  useEffect(() => {
+    if (!discoveryEnabled || !inventorySearch) {
+      resetRecovery();
+    }
+  }, [discoveryEnabled, inventorySearch, resetRecovery]);
 
   const {
     inventoryItems: facetInventoryItems,
@@ -373,6 +443,7 @@ const ItemsPage: React.FC = () => {
     business_name: filters.business.trim() || undefined,
     collection:
       filters.collection.trim() || collectionSlug.trim() || undefined,
+    include_unavailable: discoveryEnabled ? true : undefined,
   });
 
   // Check if any filters are active
@@ -386,6 +457,69 @@ const ItemsPage: React.FC = () => {
       collectionSlug ||
       businessLocationId
   );
+  
+  useEffect(() => {
+    if (!discoveryEnabled || loading) return;
+    if (pagination && pagination.total === 0 && inventorySearch && hasActiveFilters) {
+      fetchRecovery({
+        search: inventorySearch,
+        category: filters.category || undefined,
+        subcategory: filters.subcategory || undefined,
+        brand: filters.brand || undefined,
+        location_name: undefined,
+        business_name: filters.business || undefined,
+        collection: filters.collection || collectionSlug || undefined,
+        country_code: browserGeo.country_code,
+        state: browserGeo.state,
+      });
+      void trackSiteEvent({
+        eventType: SITE_EVENT_SEARCH_EMPTY_SHOWN,
+        metadata: { query_len: inventorySearch.length },
+      });
+    }
+  }, [
+    discoveryEnabled,
+    loading,
+    pagination,
+    inventorySearch,
+    hasActiveFilters,
+    filters,
+    collectionSlug,
+    browserGeo.country_code,
+    browserGeo.state,
+    fetchRecovery,
+    trackSiteEvent,
+  ]);
+  
+  useEffect(() => {
+    if (!discoveryEnabled || !pagination || loading) return;
+    if (pagination.total > 0 && inventoryItems.length > 0) {
+      void trackSiteEvent({
+        eventType: SITE_EVENT_SEARCH_RESULTS_SHOWN,
+        metadata: {
+          query_len: inventorySearch?.length ?? 0,
+          count: pagination.total,
+          mode: pagination.discovery?.sort ?? sort,
+        },
+      });
+      inventoryItems.forEach((item) => {
+        if (item.rating_display) {
+          void trackSiteEvent({
+            eventType: SITE_EVENT_CARD_RATING_SHOWN,
+            subject: { type: 'inventory_item', id: item.id },
+          });
+        }
+      });
+    }
+  }, [
+    discoveryEnabled,
+    pagination,
+    inventoryItems,
+    loading,
+    inventorySearch,
+    sort,
+    trackSiteEvent,
+  ]);
 
   const { flags } = useClientFlags();
   const [experienceUnavailable, setExperienceUnavailable] = useState(false);
@@ -1074,67 +1208,84 @@ const ItemsPage: React.FC = () => {
         </Typography>
 
         {/* Sort / filter bar */}
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-          {(
-            [
-              'relevance',
-              'fastest',
-              'cheapest',
-              'top_rated',
-              'deals',
-            ] as const
-          ).map((mode) => {
-            const isDeals = mode === 'deals';
-            const isSelected = sort === mode;
-            const isDealsSelected = isDeals && isSelected;
-            return (
-              <Chip
-                key={mode}
-                label={t(
-                  `public.items.sort.${mode === 'top_rated' ? 'topRated' : mode}`,
-                  mode === 'top_rated'
-                    ? 'Top rated'
-                    : mode === 'fastest'
-                      ? 'Closest to you'
-                      : mode
-                )}
-                onClick={() => {
-                  void trackSiteEvent({
-                    eventType: SITE_EVENT_INVENTORY_SORT_SELECT,
-                    metadata: { sort: mode },
-                  });
-                  setSort(mode);
-                }}
-                color={isDealsSelected ? 'default' : isSelected ? 'primary' : 'default'}
-                variant={isSelected ? 'filled' : 'outlined'}
-                size="medium"
-                sx={
-                  isDeals
-                    ? {
-                        ...(isDealsSelected
-                          ? {
-                              backgroundColor: '#c9972a',
-                              color: '#1a1a1a',
-                              border: '2px solid #b8860b',
-                              fontWeight: 600,
-                              '&:hover': {
-                                backgroundColor: '#d4a84b',
-                              },
-                            }
-                          : {
-                              border: '2px solid #c9972a',
-                              color: '#b8860b',
-                              '&:hover': {
-                                borderColor: '#d4a84b',
-                                bgcolor: 'rgba(201, 151, 42, 0.08)',
-                              },
-                            }),
-                      }
-                    : undefined
-                }
-              />
-            );
-          })}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+          {discoveryEnabled && pagination?.discovery ? (
+            <CatalogSortControl
+              currentSort={pagination.discovery.sort as InventorySortMode}
+              defaultSort={inventorySearch ? 'relevance' : 'recommended'}
+              isSearchMode={Boolean(inventorySearch)}
+              controlState={pagination.discovery.sort_control}
+              onSortChange={handleSortChange}
+            />
+          ) : (
+            <>
+              {(
+                [
+                  'relevance',
+                  'fastest',
+                  'cheapest',
+                  'top_rated',
+                  'deals',
+                ] as const
+              ).map((mode) => {
+                const isDeals = mode === 'deals';
+                const isSelected = sort === mode;
+                const isDealsSelected = isDeals && isSelected;
+                return (
+                  <Chip
+                    key={mode}
+                    label={t(
+                      `public.items.sort.${mode === 'top_rated' ? 'topRated' : mode}`,
+                      mode === 'top_rated'
+                        ? 'Top rated'
+                        : mode === 'fastest'
+                          ? 'Closest to you'
+                          : mode
+                    )}
+                    onClick={() => {
+                      void trackSiteEvent({
+                        eventType: SITE_EVENT_INVENTORY_SORT_SELECT,
+                        metadata: { sort: mode },
+                      });
+                      handleSortChange(mode);
+                    }}
+                    color={isDealsSelected ? 'default' : isSelected ? 'primary' : 'default'}
+                    variant={isSelected ? 'filled' : 'outlined'}
+                    size="medium"
+                    sx={
+                      isDeals
+                        ? {
+                            ...(isDealsSelected
+                              ? {
+                                  backgroundColor: '#c9972a',
+                                  color: '#1a1a1a',
+                                  border: '2px solid #b8860b',
+                                  fontWeight: 600,
+                                  '&:hover': {
+                                    backgroundColor: '#d4a84b',
+                                  },
+                                }
+                              : {
+                                  border: '2px solid #c9972a',
+                                  color: '#b8860b',
+                                  '&:hover': {
+                                    borderColor: '#d4a84b',
+                                    bgcolor: 'rgba(201, 151, 42, 0.08)',
+                                  },
+                                }),
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              })}
+            </>
+          )}
+          {pagination && pagination.total > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {t('catalog.results', { n: pagination.total, defaultValue: '{{n}} results' })}
+            </Typography>
+          )}
         </Box>
 
         {showExperience ? (
@@ -1318,62 +1469,114 @@ const ItemsPage: React.FC = () => {
             ))}
           </Box>
         ) : inventoryItems.length === 0 ? (
-          /* Enhanced Empty State */
-          <Box
-            sx={{
-              textAlign: 'center',
-              py: 8,
-              px: 2,
-            }}
-          >
+          discoveryEnabled && recovery && recovery.enabled ? (
+            <EmptySearchRecovery
+              recovery={recovery}
+              originalQuery={inventorySearch || ''}
+              onSearchOriginal={() => {
+                setSearchTerm(inventorySearch || '');
+                resetRecovery();
+              }}
+              onRemoveFilter={(filter) => {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_SEARCH_FILTER_REMOVED_FROM_EMPTY,
+                  metadata: { filter },
+                });
+                if (filter === 'category') {
+                  setFilters((f) => ({ ...f, category: '', subcategory: '' }));
+                } else if (filter === 'subcategory') {
+                  setFilters((f) => ({ ...f, subcategory: '' }));
+                } else if (filter === 'brand') {
+                  setFilters((f) => ({ ...f, brand: '' }));
+                } else if (filter === 'business_name') {
+                  setFilters((f) => ({ ...f, business: '' }));
+                } else if (filter === 'collection') {
+                  setFilters((f) => ({ ...f, collection: '' }));
+                }
+              }}
+              onBrowseCategory={(id, name) => {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
+                  metadata: { rung: 'R4' },
+                });
+                setFilters((f) => ({ ...f, category: name, subcategory: '' }));
+                setSearchTerm('');
+              }}
+              onAskRenda={(query) => {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
+                  metadata: { rung: 'R5' },
+                });
+                navigate(`/assistant?prefill=${encodeURIComponent(query)}`);
+              }}
+              onRungClick={(rung) => {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
+                  metadata: { rung },
+                });
+              }}
+              formatCurrency={formatCurrency}
+              onOrderClick={handleOrderClick}
+              onAddToCart={handleAddToCart}
+            />
+          ) : (
+            /* Enhanced Empty State */
             <Box
               sx={{
-                width: 80,
-                height: 80,
-                borderRadius: '50%',
-                bgcolor: 'grey.100',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                mx: 'auto',
-                mb: 3,
+                textAlign: 'center',
+                py: 8,
+                px: 2,
               }}
             >
-              <SearchIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
-            </Box>
-            <Typography variant="h5" gutterBottom fontWeight={600}>
-              {hasActiveFilters
-                ? t(
-                    'public.items.noMatchingItems',
-                    'No items match your filters'
-                  )
-                : t('public.items.noItemsAvailable', 'No items available yet')}
-            </Typography>
-            <Typography
-              variant="body1"
-              color="text.secondary"
-              sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}
-            >
-              {hasActiveFilters
-                ? t(
-                    'public.items.tryDifferentFilters',
-                    "Try adjusting your filters or search terms to find what you're looking for."
-                  )
-                : t(
-                    'public.items.checkBackSoon',
-                    'Check back soon for new items from our sellers.'
-                  )}
-            </Typography>
-            {hasActiveFilters && (
-              <Button
-                variant="outlined"
-                size="large"
-                onClick={handleClearAllFilters}
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  bgcolor: 'grey.100',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mx: 'auto',
+                  mb: 3,
+                }}
               >
-                {t('public.items.clearSearch', 'Clear filters')}
-              </Button>
-            )}
-          </Box>
+                <SearchIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
+              </Box>
+              <Typography variant="h5" gutterBottom fontWeight={600}>
+                {hasActiveFilters
+                  ? t(
+                      'public.items.noMatchingItems',
+                      'No items match your filters'
+                    )
+                  : t('public.items.noItemsAvailable', 'No items available yet')}
+              </Typography>
+              <Typography
+                variant="body1"
+                color="text.secondary"
+                sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}
+              >
+                {hasActiveFilters
+                  ? t(
+                      'public.items.tryDifferentFilters',
+                      "Try adjusting your filters or search terms to find what you're looking for."
+                    )
+                  : t(
+                      'public.items.checkBackSoon',
+                      'Check back soon for new items from our sellers.'
+                    )}
+              </Typography>
+              {hasActiveFilters && (
+                <Button
+                  variant="outlined"
+                  size="large"
+                  onClick={handleClearAllFilters}
+                >
+                  {t('public.items.clearSearch', 'Clear filters')}
+                </Button>
+              )}
+            </Box>
+          )
         ) : (
           <>
             {catalogDisplay.length > 0 ? (
