@@ -42,9 +42,13 @@ function InventoryCatalogGridTileInner({
   onPress,
   onLikedChange,
 }: InventoryCatalogGridTileProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, typography, borderRadius, spacing, shadows } = useTheme();
   const exportAvailable = item.item.export_available === true;
+  
+  // Discovery: rating display (≥3 reviews) or "New" chip (replaces rating)
+  const ratingDisplay = item.rating_display;
+  const isNew = item.is_new === true;
 
   const variantOptionCount = useMemo(
     () => shopperVariantOptionCount(item),
@@ -141,6 +145,16 @@ function InventoryCatalogGridTileInner({
           style={styles.image}
           accessibilityLabel={item.item.name}
         />
+        {/* Discovery: "New" chip overlaid on image (top-right, below like button) */}
+        {isNew && !hasDeal && !exportAvailable ? (
+          <View style={styles.newChipOverlay}>
+            <StatusPill
+              label={t('public.items.new', 'New')}
+              color={colors.primary.main}
+              textColor={colors.primary.contrast}
+            />
+          </View>
+        ) : null}
       </View>
 
       <View style={[styles.content, { padding: spacing.xs }]}>
@@ -150,6 +164,30 @@ function InventoryCatalogGridTileInner({
         >
           {item.item.name}
         </Text>
+
+        {/* Discovery: rating display (never shown with "New" chip) */}
+        {ratingDisplay && !isNew ? (
+          <Text
+            variant="bodySmall"
+            style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}
+            accessibilityLabel={
+              i18n.language === 'fr'
+                ? t('public.items.ratedA11yFr', 'Note de {{rating}} sur 5, {{count}} avis', {
+                    rating: ratingDisplay.rating,
+                    count: ratingDisplay.count,
+                  })
+                : t('public.items.ratedA11yEn', 'Rated {{rating}} out of 5, {{count}} reviews', {
+                    rating: ratingDisplay.rating,
+                    count: ratingDisplay.count,
+                  })
+            }
+          >
+            {t('public.items.ratedStars', '★ {{rating}} ({{count}})', {
+              rating: ratingDisplay.rating,
+              count: ratingDisplay.count,
+            })}
+          </Text>
+        ) : null}
 
         {exportAvailable ? (
           <Text
@@ -283,6 +321,12 @@ const styles = StyleSheet.create({
     top: 6,
     right: 6,
     zIndex: 3,
+  },
+  newChipOverlay: {
+    position: 'absolute',
+    top: 40,
+    right: 6,
+    zIndex: 2,
   },
   imagePlaceholder: {
     alignItems: 'center',

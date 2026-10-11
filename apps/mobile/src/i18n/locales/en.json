@@ -1275,6 +1275,29 @@
         "topRated": "Top rated",
         "deals": "Deals"
       },
+      "discoverySort": {
+        "title": "Sort by",
+        "recommended": "Recommended",
+        "relevance": "Best match",
+        "popular": "Popular",
+        "rating": "Top rated",
+        "newest": "Newest",
+        "label": "Sort: {{mode}}"
+      },
+      "discoveryEmptyResult": {
+        "title": "Nothing for \"{{query}}\" yet",
+        "subtitle": "Try these instead",
+        "corrected": "Showing results for **{{corrected}}**",
+        "searchInstead": "Search instead for \"{{original}}\"",
+        "removeFilter": "Remove {{filter}} · {{n}}",
+        "similarTitle": "Similar to \"{{query}}\"",
+        "browseCategory": "Browse {{category}}",
+        "popularNearYou": "Popular near you",
+        "askRenda": "Ask Renda to find it"
+      },
+      "new": "New",
+      "ratedStars": "★ {{rating}} ({{count}})",
+      "ratedA11yEn": "Rated {{rating}} out of 5, {{count}} reviews",
       "filters": {
         "heading": "Filters",
         "category": "Category",

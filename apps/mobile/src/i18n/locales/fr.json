@@ -1208,6 +1208,29 @@
         "topRated": "Mieux notés",
         "deals": "Offres"
       },
+      "discoverySort": {
+        "title": "Trier par",
+        "recommended": "Recommandés",
+        "relevance": "Pertinence",
+        "popular": "Populaires",
+        "rating": "Mieux notés",
+        "newest": "Nouveautés",
+        "label": "Trier : {{mode}}"
+      },
+      "discoveryEmptyResult": {
+        "title": "Rien pour « {{query}} » pour le moment",
+        "subtitle": "Essayez plutôt ceci",
+        "corrected": "Résultats pour **{{corrected}}**",
+        "searchInstead": "Rechercher plutôt « {{original}} »",
+        "removeFilter": "Retirer {{filter}} · {{n}}",
+        "similarTitle": "Similaire à « {{query}} »",
+        "browseCategory": "Parcourir {{category}}",
+        "popularNearYou": "Populaires près de vous",
+        "askRenda": "Demander à Renda"
+      },
+      "new": "Nouveau",
+      "ratedStars": "★ {{rating}} ({{count}})",
+      "ratedA11yFr": "Note de {{rating}} sur 5, {{count}} avis",
       "filters": {
         "heading": "Filtres",
         "category": "Catégorie",
