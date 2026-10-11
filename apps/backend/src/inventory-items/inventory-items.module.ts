@@ -6,6 +6,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { InventoryItemsController } from './inventory-items.controller';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
+import { InventoryRestockModule } from '../inventory-restock/inventory-restock.module';
 import { InventoryItemsService } from './inventory-items.service';
 import { StockAvailabilityController } from './stock-availability.controller';
 import { StockAvailabilityService } from './stock-availability.service';
@@ -19,6 +20,7 @@ import { StockAvailabilityService } from './stock-availability.service';
     RbacModule,
     NotificationsModule,
     ItemVariantsModule,
+    InventoryRestockModule,
   ],
   controllers: [InventoryItemsController, StockAvailabilityController],
   providers: [InventoryItemsService, StockAvailabilityService],

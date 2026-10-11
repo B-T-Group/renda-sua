@@ -20,6 +20,7 @@ import {
   PAYMENT_FAILED_GRACE_MINUTES,
 } from './order-cleanup.constants';
 import { OrderQueueService } from './order-queue.service';
+import { InventoryRestockEventService } from '../inventory-restock/inventory-restock-event.service';
 import { releaseReservedInventory } from './release-reserved-inventory.util';
 
 interface CleanupOrderRow extends CleanupWindowOrder {
@@ -77,6 +78,7 @@ export class OrderCleanupService {
     private readonly notificationsService: NotificationsService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly configService: ConfigService<Configuration>,
+    private readonly inventoryRestockEvent: InventoryRestockEventService,
     @Optional() private readonly purchaseCredits?: PurchaseCreditsService
   ) {}
 
@@ -1162,7 +1164,15 @@ export class OrderCleanupService {
   ): Promise<void> {
     const result = await releaseReservedInventory(
       this.hasuraSystemService,
-      orderItems
+      orderItems,
+      // AC-0: Emit restock event after successful release (fire-and-forget)
+      async (inventoryId) => {
+        await this.inventoryRestockEvent.emitRestockEventAfterUpdate(
+          inventoryId,
+          0, // Will be queried by the service
+          0
+        );
+      }
     );
     if (result.skipped > 0) {
       this.logger.warn(

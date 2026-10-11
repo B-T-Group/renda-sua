@@ -11,6 +11,7 @@ import { CANCEL_REASON_NOT_PICKED_UP_IN_TIME } from './order-cleanup.constants';
 import { DepositRefundService } from './deposit-refund.service';
 import { OrderQueueService } from './order-queue.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import { InventoryRestockEventService } from '../inventory-restock/inventory-restock-event.service';
 import { releaseReservedInventory } from './release-reserved-inventory.util';
 import { insertOrderStatusHistory } from './order-status-history.util';
 
@@ -31,7 +32,8 @@ export class OrderSystemJobsService {
     private readonly notificationsService: NotificationsService,
     private readonly configService: ConfigService<Configuration>,
     private readonly orderCleanupService: OrderCleanupService,
-    private readonly depositRefundService: DepositRefundService
+    private readonly depositRefundService: DepositRefundService,
+    private readonly inventoryRestockEvent: InventoryRestockEventService
   ) {}
 
   /** Daily cleanup: unpaid pending_payment past grace. */
@@ -669,7 +671,15 @@ export class OrderSystemJobsService {
   private async decrementReservedQuantities(orderItems: any[]): Promise<void> {
     const result = await releaseReservedInventory(
       this.hasuraSystemService,
-      orderItems
+      orderItems,
+      // AC-0: Emit restock event after successful release (fire-and-forget)
+      async (inventoryId) => {
+        await this.inventoryRestockEvent.emitRestockEventAfterUpdate(
+          inventoryId,
+          0, // Will be queried by the service
+          0
+        );
+      }
     );
     if (result.skipped > 0) {
       this.logger.warn(

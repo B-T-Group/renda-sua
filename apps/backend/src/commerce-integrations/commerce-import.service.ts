@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { InventoryRestockEventService } from '../inventory-restock/inventory-restock-event.service';
 import { BusinessItemsAccessService } from '../business-items/business-items-access.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { CommerceConnectionService } from './commerce-connection.service';
@@ -18,7 +19,8 @@ export class CommerceImportService {
     private readonly db: CommerceIntegrationsDatabaseService,
     private readonly connection: CommerceConnectionService,
     private readonly access: BusinessItemsAccessService,
-    private readonly hasura: HasuraSystemService
+    private readonly hasura: HasuraSystemService,
+    private readonly inventoryRestockEvent: InventoryRestockEventService
   ) {}
 
   async previewProducts(
@@ -483,6 +485,12 @@ export class CommerceImportService {
           sellingPrice: params.sellingPrice,
         }
       );
+      // AC-0: Emit restock event after commerce import update (fire-and-forget)
+      void this.inventoryRestockEvent.emitRestockEventAfterUpdate(
+        existingId,
+        params.quantity,
+        0 // Commerce imports don't handle reserved quantity
+      );
       return;
     }
     await this.hasura.executeMutation(
@@ -503,6 +511,17 @@ export class CommerceImportService {
         },
       }
     );
+    // AC-0: For new inventory, emit restock event if quantity >=1 (fire-and-forget)
+    if (params.quantity >= 1) {
+      void this.inventoryRestockEvent.emitRestockEventIfApplicable({
+        inventoryId: '', // Will be fetched by helper
+        itemId: params.itemId,
+        businessLocationId: params.businessLocationId,
+        previousAvailableQuantity: 0,
+        newTotalQuantity: params.quantity,
+        newReservedQuantity: 0,
+      });
+    }
   }
 
   private async findInventoryId(

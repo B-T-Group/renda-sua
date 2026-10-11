@@ -78,6 +78,7 @@ import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
+import { InventoryRestockModule } from '../inventory-restock/inventory-restock.module';
 
 @Module({
   imports: [
@@ -111,6 +112,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     CreditsModule,
     FoodModule,
     ItemVariantsModule,
+    InventoryRestockModule,
   ],
   controllers: [
     OrdersController,

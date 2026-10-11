@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { InventoryRestockEventService } from '../inventory-restock/inventory-restock-event.service';
 import { BusinessItemsAccessService } from '../business-items/business-items-access.service';
 import { cookedFoodIgnoresStock } from '../food/food-inventory-quantity.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -18,7 +19,8 @@ export class CommerceInventorySyncService {
     private readonly connection: CommerceConnectionService,
     private readonly access: BusinessItemsAccessService,
     private readonly hasura: HasuraSystemService,
-    private readonly queue: CommerceQueueService
+    private readonly queue: CommerceQueueService,
+    private readonly inventoryRestockEvent: InventoryRestockEventService
   ) {}
 
   async manualSync(integrationId: string, businessId?: string) {
@@ -169,6 +171,16 @@ export class CommerceInventorySyncService {
     `,
       { id: inventory.id, quantity: targetQuantity }
     );
+
+    // AC-0: Emit restock event after Shopify inventory sync (fire-and-forget)
+    void this.inventoryRestockEvent.emitRestockEventIfApplicable({
+      inventoryId: inventory.id,
+      itemId: inventory.item_id,
+      businessLocationId: inventory.business_location_id,
+      previousAvailableQuantity: inventory.quantity - reserved,
+      newTotalQuantity: targetQuantity,
+      newReservedQuantity: reserved,
+    });
 
     await this.db.recordSyncEvent({
       sync_run_id: params.syncRunId,

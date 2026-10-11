@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
 } from '@nestjs/common';
+import { InventoryRestockEventService } from '../inventory-restock/inventory-restock-event.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -72,7 +73,8 @@ export class StockAvailabilityService {
   constructor(
     private readonly hasuraUserService: HasuraUserService,
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly notificationsService: NotificationsService
+    private readonly notificationsService: NotificationsService,
+    private readonly inventoryRestockEvent: InventoryRestockEventService
   ) {}
 
   async requestCheck(inventoryId: string): Promise<{ messageId: string }> {
@@ -480,6 +482,12 @@ export class StockAvailabilityService {
         ) { id }
       }`,
       { id: inventoryId, updates: { quantity } }
+    );
+    // AC-0: Emit restock event after availability check update (fire-and-forget)
+    void this.inventoryRestockEvent.emitRestockEventAfterUpdate(
+      inventoryId,
+      quantity,
+      0 // Will be queried by service
     );
   }
 

@@ -18,9 +18,10 @@ import { CommerceConnectorRegistry } from './connectors/connector.registry';
 import { ShopifyGraphqlClient } from './connectors/shopify/shopify-graphql.client';
 import { ShopifyConnector } from './connectors/shopify/shopify.connector';
 import { CommerceOrderInventoryHook } from './commerce-order-inventory.hook';
+import { InventoryRestockModule } from '../inventory-restock/inventory-restock.module';
 
 @Module({
-  imports: [BusinessItemsModule],
+  imports: [BusinessItemsModule, InventoryRestockModule],
   controllers: [
     CommerceIntegrationsController,
     CommerceIntegrationsWebhookController,
