@@ -149,8 +149,22 @@ export async function requestHasuraWithRetry<T>(
 const MISSING_ITEMS_INTEREST_ONLY =
   /field 'interest_only' not found in type: 'items'/i;
 
+/** Restock tables/columns from migration 20261011150000 — absent until Hasura apply. */
+const MISSING_RESTOCK_SCHEMA = [
+  /field '(?:insert_|update_)?restock_alerts(?:_one|_aggregate)?' not found in type: '(?:query_root|mutation_root)'/i,
+  /field '(?:insert_|update_)?restock_events(?:_one|_aggregate)?' not found in type: '(?:query_root|mutation_root)'/i,
+  /field '(?:insert_|update_)?restock_alert_sends(?:_one|_aggregate)?' not found in type: '(?:query_root|mutation_root)'/i,
+  /field '(?:insert_|update_)?restock_item_fanouts(?:_one|_aggregate)?' not found in type: '(?:query_root|mutation_root)'/i,
+  /field 'restock_alerts_(?:push|whatsapp|sms)_enabled' not found in type: 'user_notification_preferences(?:_set_input)?'/i,
+];
+
 export function isMissingItemsInterestOnlyField(error: unknown): boolean {
   return MISSING_ITEMS_INTEREST_ONLY.test(hasuraValidationErrorText(error));
+}
+
+export function isMissingRestockAlertsSchema(error: unknown): boolean {
+  const text = hasuraValidationErrorText(error);
+  return MISSING_RESTOCK_SCHEMA.some((pattern) => pattern.test(text));
 }
 
 export function stripItemsInterestOnlyFromGraphql(query: string): string {

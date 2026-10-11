@@ -9,6 +9,7 @@ import {
   min,
 } from './restock-alerts.fakes';
 import { RestockAlertsProcessor, resolveFlag, sameMarket } from './restock-alerts.processor';
+import { RestockSchemaMissingError } from './restock-alerts.types';
 
 /** Item "i1" at one CM location, out of stock, liked by u1; restock event at T0. */
 function oneItemWorld() {
@@ -40,6 +41,18 @@ describe('flag gating (nothing sends when off)', () => {
     expect(resolveFlag([{ country: null, value: true }], 'CA')).toBe(true);
     expect(resolveFlag([], 'CM')).toBe(false);
     expect(resolveFlag([{ country: 'GA', value: true }], 'CM')).toBe(false);
+  });
+
+  it('skips fan-out when Hasura has not tracked restock tables', async () => {
+    const w = oneItemWorld();
+    w.repo.recoverStale = async () => {
+      throw new RestockSchemaMissingError();
+    };
+    const r = await w.processor.run(AFTER_DEBOUNCE);
+    expect(r.ran).toBe(true);
+    expect(w.notifier.calls).toHaveLength(0);
+    expect(w.repo.events[0].status).toBe('pending');
+    expect(w.repo.lockExpiry.getTime()).toBe(0);
   });
 
   it('a market with its own false row gets nothing even when the global row is on', async () => {

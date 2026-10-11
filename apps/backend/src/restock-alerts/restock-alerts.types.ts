@@ -1,3 +1,5 @@
+import { isMissingRestockAlertsSchema } from '../hasura/hasura-request.util';
+
 export const RESTOCK_FLAG_KEY = 'restock_alerts_v1';
 export const RESTOCK_WA_TEMPLATE_FLAG_KEY =
   'restock_alerts_whatsapp_template_approved';
@@ -222,4 +224,17 @@ export interface RestockAnalytics {
     userId: string | null,
     meta: Record<string, string | number | boolean>
   ): Promise<void>;
+}
+
+/** Hasura has not tracked restock tables (or the role cannot see them). */
+export class RestockSchemaMissingError extends Error {
+  constructor(cause?: unknown) {
+    super("field 'restock_alerts' not found in type: 'query_root'");
+    this.name = 'RestockSchemaMissingError';
+    if (cause instanceof Error) this.cause = cause;
+  }
+}
+
+export function isRestockSchemaMissing(error: unknown): boolean {
+  return error instanceof RestockSchemaMissingError || isMissingRestockAlertsSchema(error);
 }

@@ -44,7 +44,7 @@ describe('RestockAlertsApiService', () => {
 
   it('refuses to toggle an alert for an item the user has not liked', async () => {
     const { svc } = make({
-      handlers: { RestockLikeAndAlert: () => ({ user_item_likes: [], restock_alerts: [] }) },
+      handlers: { RestockLike: () => ({ user_item_likes: [] }) },
     });
     await expect(svc.setItemAlert('u1', 'i1', true)).rejects.toBeInstanceOf(NotFoundException);
   });
@@ -55,7 +55,8 @@ describe('RestockAlertsApiService', () => {
     }));
     const disarmed = make({
       handlers: {
-        RestockLikeAndAlert: () => ({ user_item_likes: [{ id: 'l' }], restock_alerts: [{ state: 'disarmed', alert_enabled: false }] }),
+        RestockLike: () => ({ user_item_likes: [{ id: 'l' }] }),
+        RestockAlert: () => ({ restock_alerts: [{ state: 'disarmed', alert_enabled: false }] }),
         RestockUpsertAlert: upsert,
       },
     });
@@ -65,7 +66,8 @@ describe('RestockAlertsApiService', () => {
 
     const sent = make({
       handlers: {
-        RestockLikeAndAlert: () => ({ user_item_likes: [{ id: 'l' }], restock_alerts: [{ state: 'sent', alert_enabled: false }] }),
+        RestockLike: () => ({ user_item_likes: [{ id: 'l' }] }),
+        RestockAlert: () => ({ restock_alerts: [{ state: 'sent', alert_enabled: false }] }),
         RestockUpsertAlert: upsert,
       },
     });
@@ -78,7 +80,8 @@ describe('RestockAlertsApiService', () => {
   it('turning the bell off records a no-PII analytics event', async () => {
     const { svc, tracked } = make({
       handlers: {
-        RestockLikeAndAlert: () => ({ user_item_likes: [{ id: 'l' }], restock_alerts: [] }),
+        RestockLike: () => ({ user_item_likes: [{ id: 'l' }] }),
+        RestockAlert: () => ({ restock_alerts: [] }),
         RestockUpsertAlert: () => ({ insert_restock_alerts_one: { state: 'armed', alert_enabled: false, expires_at: null } }),
       },
     });
@@ -123,6 +126,8 @@ describe('RestockAlertsApiService', () => {
           { item_id: 'old', created_at: '2026-01-01T00:00:00Z' },
           { item_id: 'othermarket', created_at: '2026-10-04T00:00:00Z' },
         ],
+      }),
+      RestockUserAlerts: () => ({
         restock_alerts: [{ item_id: 'old', state: 'armed', disarm_reason: null, alert_enabled: true, expires_at: '2026-04-01T00:00:00Z' }],
       }),
       RestockStockForItems: () => ({
@@ -176,6 +181,55 @@ describe('RestockAlertsApiService', () => {
     it('rejects tokens minted for another action', async () => {
       const { svc } = make({ tokenPayload: { userId: 'u1', action: 'order_confirm', entityId: 'o1' } });
       await expect(svc.stopFromMessage('tok')).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
+  describe('Hasura missing restock_alerts field', () => {
+    const missing = new Error("field 'restock_alerts' not found in type: 'query_root'");
+
+    it('404s setItemAlert instead of throwing a raw GraphQL Error', async () => {
+      const { svc } = make({
+        handlers: {
+          RestockLike: () => ({ user_item_likes: [{ id: 'l' }] }),
+          RestockAlert: () => {
+            throw missing;
+          },
+        },
+      });
+      await expect(svc.setItemAlert('u1', 'i1', true)).rejects.toMatchObject({
+        response: { code: 'restock_alerts_disabled' },
+      });
+    });
+
+    it('lists likes with default bells when restock_alerts is not tracked', async () => {
+      const now = new Date('2026-10-12T15:00:00Z');
+      const { svc } = make({
+        handlers: {
+          RestockUserLikes: () => ({
+            user_item_likes: [{ item_id: 'soldout', created_at: '2026-10-01T00:00:00Z' }],
+          }),
+          RestockUserAlerts: () => {
+            throw missing;
+          },
+          RestockStockForItems: () => ({
+            business_inventory: [
+              {
+                item_id: 'soldout',
+                id: 'inv-soldout',
+                quantity: 0,
+                reserved_quantity: 0,
+                is_active: true,
+                last_restocked_at: null,
+                item_variant: null,
+                business_location: { is_active: true, address: { country: 'Cameroon' } },
+              },
+            ],
+          }),
+        },
+      });
+      const res = await svc.listLikes('u1', 'all', 1, 20, now);
+      expect(res.items).toHaveLength(1);
+      expect(res.items[0].restock_alert).toMatchObject({ state: 'on', enabled: true });
     });
   });
 });

@@ -7,6 +7,7 @@ import {
   isInvalidUuidInputError,
   isOrderItemsInventoryFkViolation,
   isMissingItemsInterestOnlyField,
+  isMissingRestockAlertsSchema,
   isTransientHasuraNetworkError,
   isWrappedTransientHasuraHttpException,
   mapExhaustedHasuraQueryError,
@@ -269,6 +270,37 @@ describe('hasura-request.util', () => {
     expect((thrown as HttpException).getStatus()).toBe(
       HttpStatus.SERVICE_UNAVAILABLE
     );
+  });
+
+  it('detects a missing restock_alerts query_root field', () => {
+    const error = {
+      message: "field 'restock_alerts' not found in type: 'query_root'",
+      response: {
+        errors: [
+          {
+            message: "field 'restock_alerts' not found in type: 'query_root'",
+            extensions: { path: '$.selectionSet.restock_alerts', code: 'validation-failed' },
+          },
+        ],
+      },
+    };
+    expect(isMissingRestockAlertsSchema(error)).toBe(true);
+    expect(
+      isMissingRestockAlertsSchema({
+        message: "field 'insert_restock_alerts_one' not found in type: 'mutation_root'",
+      })
+    ).toBe(true);
+    expect(
+      isMissingRestockAlertsSchema({
+        message:
+          "field 'restock_alerts_push_enabled' not found in type: 'user_notification_preferences'",
+      })
+    ).toBe(true);
+    expect(
+      isMissingRestockAlertsSchema({
+        message: "field 'interest_only' not found in type: 'items'",
+      })
+    ).toBe(false);
   });
 
   it('detects missing items.interest_only GraphQL validation errors', () => {

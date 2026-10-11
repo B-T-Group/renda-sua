@@ -2,8 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { RESTOCK_QUERIES as Q } from './restock-alerts.queries';
 import {
+  RestockSchemaMissingError,
   RESTOCK_LOCK_FREE,
   RESTOCK_LOCK_KEY,
+  isRestockSchemaMissing,
   type AlertRow,
   type FinishSend,
   type InventoryRow,
@@ -53,10 +55,19 @@ export class HasuraRestockRepository implements RestockRepository {
   constructor(private readonly hasura: HasuraSystemService) {}
 
   private q<T = any>(query: string, variables?: any) {
-    return this.hasura.executeQuery<T>(query, variables);
+    return this.guardSchema(() => this.hasura.executeQuery<T>(query, variables));
   }
   private m<T = any>(query: string, variables?: any) {
-    return this.hasura.executeMutation<T>(query, variables);
+    return this.guardSchema(() => this.hasura.executeMutation<T>(query, variables));
+  }
+
+  private async guardSchema<T>(run: () => Promise<T>): Promise<T> {
+    try {
+      return await run();
+    } catch (error: any) {
+      if (isRestockSchemaMissing(error)) throw new RestockSchemaMissingError(error);
+      throw error;
+    }
   }
 
   async flagRows(key: string) {

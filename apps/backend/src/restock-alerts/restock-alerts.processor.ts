@@ -11,6 +11,7 @@ import {
   RESTOCK_FLAG_KEY,
   RESTOCK_RULES,
   RESTOCK_WA_TEMPLATE_FLAG_KEY,
+  isRestockSchemaMissing,
   type AlertRow,
   type InventoryRow,
   type ItemStock,
@@ -106,6 +107,9 @@ export class RestockAlertsProcessor {
       );
       await this.fanOutDueEvents(now, summary);
       await this.deliverQueued(now, summary);
+    } catch (error: any) {
+      if (!isRestockSchemaMissing(error)) throw error;
+      this.logger.warn(`restock alerts schema is not ready; skipping: ${error?.message}`);
     } finally {
       await this.repo
         .releaseLock(expiry)
