@@ -385,6 +385,7 @@ type AssistantChatScreenProps = {
   route?: {
     params?: {
       context?: AssistantContext;
+      prefill?: string;
     };
   };
 };
@@ -408,6 +409,10 @@ const AssistantChatScreen = observer(function AssistantChatScreen({
   const character = useShowsRendaCharacter();
   const assistantTransport = useAssistantTransport();
   const context = route?.params?.context;
+  const prefill = route?.params?.prefill;
+  useEffect(() => {
+    if (prefill?.trim()) setDraft(prefill.trim());
+  }, [prefill]);
   const navigation = useNavigation<Nav>();
   const { reorder } = useReorderOrder();
   

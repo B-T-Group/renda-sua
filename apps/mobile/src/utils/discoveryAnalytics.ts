@@ -40,23 +40,11 @@ export interface SearchEmptyRungClickedProperties {
 }
 
 export function trackDiscoveryEvent(
-  event: 'search_results_shown',
-  properties: SearchResultsShownProperties
-): void;
-export function trackDiscoveryEvent(
-  event: 'search_sort_changed',
-  properties: SearchSortChangedProperties
-): void;
-export function trackDiscoveryEvent(
-  event: 'search_empty_shown' | 'search_filter_removed_from_empty' | 'card_rating_shown'
-): void;
-export function trackDiscoveryEvent(
-  event: 'search_empty_rung_clicked',
-  properties: SearchEmptyRungClickedProperties
-): void;
-export function trackDiscoveryEvent(
   event: DiscoveryEventName,
-  properties?: Record<string, unknown>
+  properties?:
+    | SearchResultsShownProperties
+    | SearchSortChangedProperties
+    | SearchEmptyRungClickedProperties
 ): void {
   AppEventsService.track({
     eventType: EVENT_TYPE_MAP[event],

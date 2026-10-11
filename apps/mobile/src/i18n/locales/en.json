@@ -1287,6 +1287,7 @@
       "discoveryEmptyResult": {
         "title": "Nothing for \"{{query}}\" yet",
         "subtitle": "Try these instead",
+        "titleNoQuery": "Nothing here yet",
         "corrected": "Showing results for **{{corrected}}**",
         "searchInstead": "Search instead for \"{{original}}\"",
         "removeFilter": "Remove {{filter}} · {{n}}",
@@ -1297,7 +1298,7 @@
       },
       "new": "New",
       "ratedStars": "★ {{rating}} ({{count}})",
-      "ratedA11yEn": "Rated {{rating}} out of 5, {{count}} reviews",
+      "ratedA11y": "Rated {{rating}} out of 5, {{count}} reviews",
       "filters": {
         "heading": "Filters",
         "category": "Category",

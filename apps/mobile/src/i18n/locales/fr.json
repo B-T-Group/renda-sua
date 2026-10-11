@@ -1220,6 +1220,7 @@
       "discoveryEmptyResult": {
         "title": "Rien pour « {{query}} » pour le moment",
         "subtitle": "Essayez plutôt ceci",
+        "titleNoQuery": "Rien pour le moment",
         "corrected": "Résultats pour **{{corrected}}**",
         "searchInstead": "Rechercher plutôt « {{original}} »",
         "removeFilter": "Retirer {{filter}} · {{n}}",
@@ -1230,7 +1231,7 @@
       },
       "new": "Nouveau",
       "ratedStars": "★ {{rating}} ({{count}})",
-      "ratedA11yFr": "Note de {{rating}} sur 5, {{count}} avis",
+      "ratedA11y": "Note de {{rating}} sur 5, {{count}} avis",
       "filters": {
         "heading": "Filtres",
         "category": "Catégorie",

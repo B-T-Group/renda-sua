@@ -1,5 +1,5 @@
 import React, { memo, useCallback } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Button, Chip, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -11,8 +11,6 @@ import type {
 
 export interface DiscoveryRecoveryLadderProps {
   recovery: DiscoveryRecovery;
-  onSearchCorrected: (query: string) => void;
-  onSearchOriginal: (query: string) => void;
   onRemoveFilter: (filter: RecoveryFilterName) => void;
   onBrowseCategory: (categoryName: string) => void;
   onItemPress?: (inventoryItemId: string) => void;
@@ -21,14 +19,12 @@ export interface DiscoveryRecoveryLadderProps {
 
 export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
   recovery,
-  onSearchCorrected,
-  onSearchOriginal,
   onRemoveFilter,
   onBrowseCategory,
   onItemPress,
   onAskRenda,
 }: DiscoveryRecoveryLadderProps) {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { colors, spacing, typography, borderRadius } = useTheme();
 
   const getFilterLabel = useCallback(
@@ -62,9 +58,6 @@ export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
     [onItemPress]
   );
 
-  // R1: Auto-corrected query
-  const showR1 = recovery.corrected_query && recovery.corrected_total > 0;
-
   // R2: Removable filters
   const showR2 = recovery.relax.length > 0;
 
@@ -75,25 +68,23 @@ export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
   const showR4 = recovery.categories.length > 0 || recovery.popular_near_you.length > 0;
 
   // R5: Ask Renda
-  const showR5 = recovery.ask_renda.enabled && onAskRenda;
+  const showR5 = recovery.ask_renda.enabled && !!onAskRenda;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={{ padding: spacing.md }}
-      showsVerticalScrollIndicator={false}
-    >
+    <View style={[styles.container, { padding: spacing.md }]}>
       {/* Title */}
       <Text
         variant="headlineSmall"
         style={[
-          typography.headlineSmall,
+          typography.h4,
           { color: colors.text.primary, marginBottom: spacing.xs, textAlign: 'center' },
         ]}
       >
-        {t('public.items.discoveryEmptyResult.title', 'Nothing for "{{query}}" yet', {
-          query: recovery.query,
-        })}
+        {recovery.query.trim()
+          ? t('public.items.discoveryEmptyResult.title', 'Nothing for "{{query}}" yet', {
+              query: recovery.query,
+            })
+          : t('public.items.discoveryEmptyResult.titleNoQuery', 'Nothing here yet')}
       </Text>
       <Text
         variant="bodyMedium"
@@ -105,42 +96,17 @@ export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
         {t('public.items.discoveryEmptyResult.subtitle', 'Try these instead')}
       </Text>
 
-      {/* R1: Corrected query */}
-      {showR1 && (
-        <View style={{ marginBottom: spacing.md }}>
-          <Text
-            style={[
-              typography.body1,
-              { color: colors.text.primary, marginBottom: spacing.sm },
-            ]}
-          >
-            {t(
-              'public.items.discoveryEmptyResult.corrected',
-              'Showing results for **{{corrected}}**',
-              { corrected: recovery.corrected_query }
-            ).replace(/\*\*([^*]+)\*\*/g, '$1')}
-          </Text>
-          <Pressable
-            onPress={() => onSearchOriginal(recovery.query)}
-            style={{ paddingVertical: spacing.xs }}
-          >
-            <Text style={[typography.body2, { color: colors.primary.main }]}>
-              {t(
-                'public.items.discoveryEmptyResult.searchInstead',
-                'Search instead for "{{original}}"',
-                { original: recovery.query }
-              )}
-            </Text>
-          </Pressable>
-        </View>
-      )}
-
       {/* R2: Remove filter chips */}
       {showR2 && (
         <View style={{ marginBottom: spacing.md }}>
           <View style={styles.chipRow}>
             {recovery.relax.map((item) => {
-              const label = `${getFilterLabel(item.filter)}: ${item.value}`;
+              const label =
+                item.filter === 'min_price' ||
+                item.filter === 'max_price' ||
+                item.filter === 'currency'
+                  ? `${getFilterLabel(item.filter)} ${item.value}`
+                  : item.value;
               const chipLabel = t(
                 'public.items.discoveryEmptyResult.removeFilter',
                 'Remove {{filter}} · {{n}}',
@@ -169,7 +135,7 @@ export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
           <Text
             variant="titleMedium"
             style={[
-              typography.titleMedium,
+              typography.h5,
               { color: colors.text.primary, marginBottom: spacing.sm },
             ]}
           >
@@ -197,6 +163,7 @@ export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
                   <Chip
                     key={cat.id ?? cat.name}
                     onPress={() => onBrowseCategory(cat.name)}
+                    accessibilityRole="button"
                     icon="tag-outline"
                     mode="outlined"
                     style={[styles.chip, { borderColor: colors.divider }]}
@@ -216,7 +183,7 @@ export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
               <Text
                 variant="titleMedium"
                 style={[
-                  typography.titleMedium,
+                  typography.h5,
                   { color: colors.text.primary, marginBottom: spacing.sm },
                 ]}
               >
@@ -239,7 +206,7 @@ export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
         <View style={{ marginTop: spacing.md, alignItems: 'center' }}>
           <Button
             mode="contained"
-            onPress={() => onAskRenda!(recovery.ask_renda.query)}
+            onPress={() => onAskRenda?.(recovery.ask_renda.query)}
             icon="chat-question-outline"
             style={{ borderRadius: borderRadius.md }}
           >
@@ -247,7 +214,7 @@ export const DiscoveryRecoveryLadder = memo(function DiscoveryRecoveryLadder({
           </Button>
         </View>
       )}
-    </ScrollView>
+    </View>
   );
 });
 
@@ -269,4 +236,44 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     marginHorizontal: -4,
   },
+});
+
+/** R1 banner: shown above results after the corrected query was auto-run. */
+export const DiscoveryCorrectionBanner = memo(function DiscoveryCorrectionBanner({
+  corrected,
+  original,
+  onSearchOriginal,
+}: {
+  corrected: string;
+  original: string;
+  onSearchOriginal: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colors, spacing, typography } = useTheme();
+  const template = t(
+    'public.items.discoveryEmptyResult.corrected',
+    'Showing results for **{{corrected}}**',
+    { corrected: '\u0000' }
+  );
+  const [before, after] = template.replace(/\*\*/g, '').split('\u0000');
+  return (
+    <View style={{ marginTop: spacing.sm }}>
+      <Text style={[typography.body1, { color: colors.text.primary }]}>
+        {before}
+        <Text style={{ fontWeight: '700' }}>{corrected}</Text>
+        {after}
+      </Text>
+      <Pressable
+        onPress={onSearchOriginal}
+        accessibilityRole="link"
+        style={{ paddingVertical: spacing.xs }}
+      >
+        <Text style={[typography.body2, { color: colors.primary.main }]}>
+          {t('public.items.discoveryEmptyResult.searchInstead', 'Search instead for "{{original}}"', {
+            original,
+          })}
+        </Text>
+      </Pressable>
+    </View>
+  );
 });

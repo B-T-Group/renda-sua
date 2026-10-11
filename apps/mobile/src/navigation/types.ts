@@ -170,7 +170,7 @@ export type GuestRootStackParamList = {
     | undefined;
   RentalListingDetail: { listingId: string };
   CategoriesBrowse: undefined;
-  AssistantChat: { context?: AssistantContext } | undefined;
+  AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
 };
 
 /** Guest shell: browse catalog + rentals + food + auth stack in bottom tabs. */
@@ -242,7 +242,7 @@ export type ClientRootStackParamList = {
   Terms: undefined;
   Privacy: undefined;
   FAQ: undefined;
-  AssistantChat: { context?: AssistantContext } | undefined;
+  AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
   Messages: undefined;
   ThreadDetail: { threadId: string };
   SupportTickets: undefined;
@@ -388,7 +388,7 @@ export type BusinessRootStackParamList = {
   Terms: undefined;
   Privacy: undefined;
   FAQ: undefined;
-  AssistantChat: { context?: AssistantContext } | undefined;
+  AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
   Messages: undefined;
   ThreadDetail: { threadId: string };
   SupportTickets: undefined;

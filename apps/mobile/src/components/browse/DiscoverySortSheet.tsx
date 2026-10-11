@@ -1,5 +1,5 @@
-import React, { memo } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { memo, useEffect, useState } from 'react';
+import { AccessibilityInfo, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -28,6 +28,10 @@ export const DiscoverySortSheet = memo(function DiscoverySortSheet({
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const insets = useSafeAreaInsets();
+  const [reduceMotion, setReduceMotion] = useState(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion).catch(() => undefined);
+  }, []);
   const modes = isSearch ? SEARCH_MODES : BROWSE_MODES;
 
   const handleSelect = (sort: DiscoverySortMode) => {
@@ -54,7 +58,7 @@ export const DiscoverySortSheet = memo(function DiscoverySortSheet({
     <Modal
       visible={visible}
       transparent
-      animationType="fade"
+      animationType={reduceMotion ? 'none' : 'fade'}
       onRequestClose={onDismiss}
       statusBarTranslucent
     >
@@ -74,7 +78,7 @@ export const DiscoverySortSheet = memo(function DiscoverySortSheet({
           <View style={[styles.handle, { backgroundColor: colors.divider }]} />
           <Text
             variant="titleLarge"
-            style={[styles.title, typography.titleLarge, { color: colors.text.primary }]}
+            style={[styles.title, typography.h4, { color: colors.text.primary }]}
           >
             {t('public.items.discoverySort.title', 'Sort by')}
           </Text>
@@ -96,7 +100,7 @@ export const DiscoverySortSheet = memo(function DiscoverySortSheet({
                   accessibilityRole="radio"
                   accessibilityState={{ checked: isSelected }}
                 >
-                  <View style={styles.radioOuter}>
+                  <View style={[styles.radioOuter, { borderColor: colors.text.secondary }]}>
                     {isSelected ? (
                       <View
                         style={[styles.radioInner, { backgroundColor: colors.primary.main }]}
@@ -158,7 +162,6 @@ const styles = StyleSheet.create({
     height: 20,
     borderRadius: 10,
     borderWidth: 2,
-    borderColor: 'currentColor',
     marginRight: 16,
     justifyContent: 'center',
     alignItems: 'center',
