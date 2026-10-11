@@ -13,7 +13,6 @@ import { useTranslation } from 'react-i18next';
 import type {
   SearchRecoveryData,
   RecoveryFilterRemoval,
-  RecoveryCategory,
   RecoveryRung,
 } from '../../hooks/useSearchRecovery';
 import type { InventoryItem } from '../../hooks/useInventoryItems';
