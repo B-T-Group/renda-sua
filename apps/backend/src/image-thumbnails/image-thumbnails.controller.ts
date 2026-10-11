@@ -15,6 +15,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { BackfillThumbnailsDto } from './dto/process-thumbnail.dto';
 import { ImageThumbnailsService } from './image-thumbnails.service';
 import {
@@ -28,6 +30,8 @@ const MAX_BACKFILL_LIMIT = 500;
 @ApiTags('image-thumbnails')
 @Controller('admin/image-thumbnails')
 @UseGuards(AdminAuthGuard)
+// Without a permission the guard lets in ANY role holder (e.g. a country admin) on global jobs.
+@RequirePermissions(PlatformPermissions.CATALOG_CROSS_BUSINESS)
 @ApiBearerAuth()
 export class ImageThumbnailsController {
   constructor(private readonly thumbnailsService: ImageThumbnailsService) {}

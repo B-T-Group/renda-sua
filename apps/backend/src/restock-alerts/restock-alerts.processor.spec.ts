@@ -336,7 +336,10 @@ describe('AC-2.5 3/day cap and AC-2.6 digest', () => {
     const w = multiItemWorld(4, min(65)); // four restocks 65 min apart, run at 20:40 local
     await w.processor.run(at(T0, min(280)));
     expect(w.notifier.calls).toHaveLength(3);
-    expect(w.repo.sends.filter((s) => s.reason === 'daily_cap')).toHaveLength(1);
+    // F-R3: the 4th lone alert is NOT dropped; it stays queued for the next window
+    const held = w.repo.sends.filter((s) => s.status === 'queued');
+    expect(held).toHaveLength(1);
+    expect(w.repo.sends.filter((s) => s.reason === 'daily_cap')).toHaveLength(0);
     // two more restock at once for a user already at the cap: digest allowed once per 24h
     const w2 = multiItemWorld(5, min(1));
     for (let i = 1; i <= 3; i++) {
@@ -346,6 +349,75 @@ describe('AC-2.5 3/day cap and AC-2.6 digest', () => {
     expect(w2.notifier.calls).toHaveLength(1);
     expect(w2.notifier.calls[0].kind).toBe('digest');
     expect(w2.notifier.calls[0].title).toBe('5 items you liked are back');
+  });
+});
+
+describe('F-R3 past the daily cap a lone alert rolls into the next window instead of being dropped', () => {
+  function cappedWorld() {
+    const w = makeWorld();
+    w.repo.addUser('u1', { timezone: 'UTC' } as any);
+    w.repo.addItem('i1', { name: 'Thing 1' });
+    w.repo.addRow('i1', 'inv1', { available: 9, lastRestockedAt: T0 });
+    w.repo.like('u1', 'i1');
+    w.repo.event('e1', 'i1', 'inv1', T0, at(T0, -hour(30)));
+    for (let i = 1; i <= 3; i++) {
+      w.repo.sends.push({ id: `old${i}`, userId: 'u1', itemId: `x${i}`, eventId: 'old', idempotencyKey: `old${i}`, status: 'sent', isDigest: false, digestKey: null, attempts: 1, notBefore: T0, sentAt: at(T0, -hour(i + 2)), updatedAt: T0, channel: 'push' });
+    }
+    return w;
+  }
+
+  it('keeps the capped alert queued, not before the oldest message leaves the 24 h window', async () => {
+    const w = cappedWorld();
+    await w.processor.run(AFTER_DEBOUNCE);
+    expect(w.notifier.calls).toHaveLength(0);
+    const send = w.repo.sends.find((x) => x.itemId === 'i1')!;
+    expect(send.status).toBe('queued');
+    expect(send.reason ?? null).not.toBe('daily_cap');
+    // oldest sent message was at T0-5h, so the window frees at T0+19h
+    expect(send.notBefore.getTime()).toBe(at(T0, hour(19)).getTime());
+  });
+
+  it('is not retried every minute while capped', async () => {
+    const w = cappedWorld();
+    await w.processor.run(AFTER_DEBOUNCE);
+    await w.processor.run(at(T0, min(12)));
+    await w.processor.run(at(T0, hour(5)));
+    expect(w.notifier.calls).toHaveLength(0);
+    expect(w.repo.sends.find((x) => x.itemId === 'i1')!.status).toBe('queued');
+  });
+
+  it('goes out once the window frees up (stock re-checked then)', async () => {
+    const w = cappedWorld();
+    await w.processor.run(AFTER_DEBOUNCE);
+    await w.processor.run(at(T0, hour(19) + min(5)));
+    expect(w.notifier.calls).toHaveLength(1);
+    expect(w.repo.sends.find((x) => x.itemId === 'i1')!.status).toBe('sent');
+  });
+
+  it('is dropped (sold out) if the item is gone again when the window frees up', async () => {
+    const w = cappedWorld();
+    await w.processor.run(AFTER_DEBOUNCE);
+    w.repo.rows.get('i1')![0].available = 0;
+    await w.processor.run(at(T0, hour(19) + min(5)));
+    expect(w.notifier.calls).toHaveLength(0);
+    expect(w.repo.sends.find((x) => x.itemId === 'i1')!).toMatchObject({ status: 'dropped', reason: 'sold_out' });
+  });
+});
+
+describe('F-R4 expires_at is honoured', () => {
+  it('does not send when the alert row has expired, even though the like is recent', async () => {
+    const w = oneItemWorld();
+    w.repo.alerts.push({ userId: 'u1', itemId: 'i1', state: 'armed', enabled: true, armedAt: at(T0, -hour(24 * 100)), expiresAt: at(T0, -hour(24 * 10)), lastAlertAt: null, lastEventId: null });
+    await w.processor.run(AFTER_DEBOUNCE);
+    expect(w.notifier.calls).toHaveLength(0);
+    expect(w.repo.alerts[0].state).toBe('disarmed');
+  });
+
+  it('still sends when expires_at is in the future', async () => {
+    const w = oneItemWorld();
+    w.repo.alerts.push({ userId: 'u1', itemId: 'i1', state: 'armed', enabled: true, armedAt: at(T0, -hour(24 * 5)), expiresAt: at(T0, hour(24 * 80)), lastAlertAt: null, lastEventId: null });
+    await w.processor.run(AFTER_DEBOUNCE);
+    expect(w.notifier.calls).toHaveLength(1);
   });
 });
 

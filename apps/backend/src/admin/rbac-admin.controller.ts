@@ -4,7 +4,9 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Logger,
   Param,
+  ParseUUIDPipe,
   Put,
   Query,
   UseGuards,
@@ -24,7 +26,7 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
 import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
 import { RbacService } from '../rbac/rbac.service';
-import { ScopedRolesService } from '../rbac/scoped-roles.service';
+import { ScopedGrantError, ScopedRolesService } from '../rbac/scoped-roles.service';
 import { AdminAuthGuard } from './admin-auth.guard';
 import { AdminService } from './admin.service';
 import { ReqContext } from '../auth/req-context.decorator';
@@ -39,6 +41,8 @@ import {
 @UseGuards(AdminAuthGuard)
 @ApiBearerAuth()
 export class RbacAdminController {
+  private readonly logger = new Logger(RbacAdminController.name);
+
   constructor(
     private readonly rbacService: RbacService,
     private readonly scopedRoles: ScopedRolesService,
@@ -113,7 +117,7 @@ export class RbacAdminController {
   @ApiResponse({ status: 400, description: 'Invalid grant' })
   async setScopedRoles(
     @ReqContext() ctx: RequestContext,
-    @Param('userId') userId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
     @Body() body: SetScopedRolesDto
   ) {
     try {
@@ -125,10 +129,14 @@ export class RbacAdminController {
       );
       return { success: true, grants };
     } catch (error: any) {
-      throw new HttpException(
-        { success: false, message: error.message || 'Failed to set scoped roles' },
-        HttpStatus.BAD_REQUEST
-      );
+      if (error instanceof HttpException) throw error; // 404 user not found, etc.
+      // Only our own validation messages are shown; raw database errors never reach the client.
+      const message =
+        error instanceof ScopedGrantError ? error.message : 'Failed to set scoped roles';
+      if (!(error instanceof ScopedGrantError)) {
+        this.logger.error(`setScopedRoles failed: ${error?.message ?? error}`);
+      }
+      throw new HttpException({ success: false, message }, HttpStatus.BAD_REQUEST);
     }
   }
 
@@ -137,7 +145,7 @@ export class RbacAdminController {
   @ApiOperation({ summary: 'Get roles for a user' })
   @ApiParam({ name: 'userId', type: String })
   @ApiResponse({ status: 200, description: 'User roles returned' })
-  async getUserRoles(@Param('userId') userId: string) {
+  async getUserRoles(@Param('userId', ParseUUIDPipe) userId: string) {
     return {
       success: true,
       roles: await this.rbacService.getUserRoleKeys(userId),
@@ -161,7 +169,7 @@ export class RbacAdminController {
   @ApiResponse({ status: 400, description: 'Invalid roles' })
   async setUserRoles(
     @ReqContext() ctx: RequestContext,
-    @Param('userId') userId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
     @Body() body: { roles: string[] }
   ) {
     try {
