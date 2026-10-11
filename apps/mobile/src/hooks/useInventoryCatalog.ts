@@ -3,14 +3,19 @@ import {
   fetchAuthenticatedInventoryItems,
   fetchPublicInventoryItems,
 } from '../services/inventoryItemsApi';
-import type { CatalogInventoryItem, InventorySortMode } from '../types/inventoryCatalog';
+import type {
+  CatalogInventoryItem,
+  DiscoverySortMode,
+  InventorySortMode,
+  SortControlState,
+} from '../types/inventoryCatalog';
 import { filterFoodCatalogItems } from '../utils/foodAvailability';
 
 const PAGE_SIZE = 25;
 
 export interface UseInventoryCatalogOptions {
   search: string;
-  sort: InventorySortMode;
+  sort: InventorySortMode | DiscoverySortMode;
   countryCode?: string;
   state?: string;
   origin?: { lat: number; lng: number } | null;
@@ -35,6 +40,8 @@ export interface UseInventoryCatalogOptions {
    * supported-country list) are ready.
    */
   enabled?: boolean;
+  /** When true (discovery flag on), send include_unavailable=true so sold-out items appear after in-stock ones. */
+  includeUnavailable?: boolean;
 }
 
 export function useInventoryCatalog({
@@ -55,6 +62,7 @@ export function useInventoryCatalog({
   export_only,
   withAuth = false,
   enabled = true,
+  includeUnavailable = false,
 }: UseInventoryCatalogOptions) {
   const [items, setItems] = useState<CatalogInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +71,8 @@ export function useInventoryCatalog({
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
   const [total, setTotal] = useState(0);
+  const [effectiveSort, setEffectiveSort] = useState<DiscoverySortMode | undefined>(undefined);
+  const [sortControl, setSortControl] = useState<SortControlState | undefined>(undefined);
   const abortRef = useRef<AbortController | null>(null);
 
   const runFetch = useCallback(
@@ -99,6 +109,7 @@ export function useInventoryCatalog({
             ...(collection?.trim() && { collection: collection.trim() }),
             ...(food_only === true && { food_only: true }),
             ...(export_only === true && { export_only: true }),
+            ...(includeUnavailable && { include_unavailable: true }),
           },
           { signal: controller.signal }
         );
@@ -107,7 +118,7 @@ export function useInventoryCatalog({
           setError(envelope.message || 'Request failed');
           return;
         }
-        const { items: chunk, totalPages: tp, total: t } = envelope.data;
+        const { items: chunk, totalPages: tp, total: t, discovery } = envelope.data;
         const visible =
           food_only === true ? filterFoodCatalogItems(chunk) : chunk;
         // If the API ignored food_only, do not keep a marketplace-sized total
@@ -117,6 +128,8 @@ export function useInventoryCatalog({
         setTotal(leakedNonFood ? visible.length : t);
         setPage(nextPage);
         setItems((prev) => (append ? [...prev, ...visible] : visible));
+        setEffectiveSort(discovery?.sort);
+        setSortControl(discovery?.sort_control);
       } catch (e: unknown) {
         if (controller.signal.aborted) return;
         if (e instanceof Error && e.name === 'AbortError') return;
@@ -149,6 +162,7 @@ export function useInventoryCatalog({
       export_only,
       withAuth,
       enabled,
+      includeUnavailable,
     ]
   );
 
@@ -178,5 +192,17 @@ export function useInventoryCatalog({
 
   const refetch = useCallback(() => runFetch(1, false), [runFetch]);
 
-  return { items, loading, loadingMore, error, page, totalPages, total, loadMore, refetch };
+  return {
+    items,
+    loading,
+    loadingMore,
+    error,
+    page,
+    totalPages,
+    total,
+    loadMore,
+    refetch,
+    effectiveSort,
+    sortControl,
+  };
 }

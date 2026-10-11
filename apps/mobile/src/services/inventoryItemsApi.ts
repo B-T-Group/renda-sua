@@ -1,4 +1,6 @@
 import type {
+  DiscoveryRecoveryEnvelope,
+  DiscoverySortMode,
   InventoryItemByIdEnvelope,
   InventoryItemsApiEnvelope,
   InventorySortMode,
@@ -19,7 +21,7 @@ export interface FetchInventoryItemsParams {
   business_location_id?: string;
   brand?: string;
   collection?: string;
-  sort?: InventorySortMode;
+  sort?: InventorySortMode | DiscoverySortMode;
   is_active?: boolean;
   include_unavailable?: boolean;
   owner_preview?: boolean;
@@ -248,4 +250,46 @@ export async function respondStockAvailabilityCheck(
     { method: 'POST', body: JSON.stringify(body) },
     headerOverrides
   );
+}
+
+export interface FetchSearchRecoveryParams {
+  search?: string;
+  category?: string;
+  subcategory?: string;
+  brand?: string;
+  location_name?: string;
+  business_name?: string;
+  min_price?: number;
+  max_price?: number;
+  currency?: string;
+  country_code?: string;
+  state?: string;
+  collection?: string;
+  food_only?: boolean;
+}
+
+export function searchRecoveryPath(params: FetchSearchRecoveryParams): string {
+  const search = new URLSearchParams();
+  if (params.search?.trim()) search.set('search', params.search.trim());
+  if (params.category?.trim()) search.set('category', params.category.trim());
+  if (params.subcategory?.trim()) search.set('subcategory', params.subcategory.trim());
+  if (params.brand?.trim()) search.set('brand', params.brand.trim());
+  if (params.location_name?.trim()) search.set('location_name', params.location_name.trim());
+  if (params.business_name?.trim()) search.set('business_name', params.business_name.trim());
+  if (typeof params.min_price === 'number') search.set('min_price', String(params.min_price));
+  if (typeof params.max_price === 'number') search.set('max_price', String(params.max_price));
+  if (params.currency?.trim()) search.set('currency', params.currency.trim());
+  if (params.country_code?.trim()) search.set('country_code', params.country_code.trim());
+  if (params.state?.trim()) search.set('state', params.state.trim());
+  if (params.collection?.trim()) search.set('collection', params.collection.trim());
+  if (params.food_only === true) search.set('food_only', 'true');
+  const q = search.toString();
+  return q ? `/inventory-items/search/recovery?${q}` : '/inventory-items/search/recovery';
+}
+
+export async function fetchSearchRecovery(
+  params: FetchSearchRecoveryParams,
+  init?: { signal?: AbortSignal }
+): Promise<DiscoveryRecoveryEnvelope> {
+  return publicApiGet<DiscoveryRecoveryEnvelope>(searchRecoveryPath(params), undefined, init);
 }
