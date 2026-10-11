@@ -10,13 +10,18 @@ interface PaginatedLikes {
   totalPages: number;
 }
 
-export function useItemLikes(page = 1, limit = 20) {
+/** `enabled=false` skips the request (the restock-alerts likes route replaces it). */
+export function useItemLikes(page = 1, limit = 20, enabled = true) {
   const apiClient = useApiClient();
   const [data, setData] = useState<PaginatedLikes | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -31,7 +36,7 @@ export function useItemLikes(page = 1, limit = 20) {
     } finally {
       setLoading(false);
     }
-  }, [apiClient, page, limit]);
+  }, [apiClient, page, limit, enabled]);
 
   useEffect(() => {
     void refresh();

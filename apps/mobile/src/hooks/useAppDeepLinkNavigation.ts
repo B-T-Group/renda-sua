@@ -23,10 +23,21 @@ import {
 } from '../utils/appDeepLink';
 import { isGuestAccessibleDeepLinkPath } from '../utils/appDeepLinkPath';
 import { storeWebUrl } from '../utils/storeWebUrl';
+import { openRestockTarget, restockRoutesReady } from '../navigation/restockNavigation';
+import { parseRestockLink, restockTargetToPath } from '../utils/restockDeepLink';
 import {
   canSwitchToPersona,
   isOnPersona,
 } from '../utils/notificationPersona';
+
+let externalEnqueue: ((url: string) => void) | null = null;
+const earlyQueue: string[] = [];
+
+/** Lets other handlers (e.g. push taps) reuse the queue + persona switching. */
+export function enqueueAppDeepLink(url: string): void {
+  if (externalEnqueue) externalEnqueue(url);
+  else earlyQueue.push(url);
+}
 
 type PendingDeepLink = {
   path: string;
@@ -118,6 +129,20 @@ function dispatchDeepLinkTarget(
   if (target.type === 'itemProposal') {
     return navigateToItemAiProposalFromPush(target.id);
   }
+  if (
+    (target.type === 'restockItem' || target.type === 'restockLikes') &&
+    !restockRoutesReady()
+  ) {
+    return false;
+  }
+  if (target.type === 'restockItem') {
+    void openRestockTarget({ type: 'item', itemId: target.itemId });
+    return true;
+  }
+  if (target.type === 'restockLikes') {
+    void openRestockTarget({ type: 'likes', filter: target.filter });
+    return true;
+  }
   if (target.type === 'store' && isDelegation) {
     void WebBrowser.openBrowserAsync(storeWebUrl(target.id, getEnv().apiUrl));
     return true;
@@ -200,11 +225,22 @@ export function useAppDeepLinkNavigation(navReady: boolean): void {
       void WebBrowser.openBrowserAsync(url);
       return;
     }
-    const path = extractAppPath(url);
+    // Restock links share `items/:id` with business item proposals; the
+    // `src=restock_alert` query (dropped by extractAppPath) tells them apart.
+    const restock = parseRestockLink(url);
+    const path = restock ? restockTargetToPath(restock) : extractAppPath(url);
     if (!path) return;
     pendingRef.current = { path, routeAttempts: 0 };
     flushPending.current();
   });
+
+  useEffect(() => {
+    externalEnqueue = (url) => queue.current(url);
+    while (earlyQueue.length) queue.current(earlyQueue.shift() as string);
+    return () => {
+      externalEnqueue = null;
+    };
+  }, []);
 
   useEffect(() => {
     if (!navReady) return;

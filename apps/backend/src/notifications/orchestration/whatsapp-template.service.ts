@@ -47,6 +47,7 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
     en: 'rs_recipient_order_update',
     fr: 'rs_recipient_order_update',
   },
+  restock_alert: { en: 'rs_restock_alert', fr: 'rs_restock_alert' },
 };
 
 /** Ordered body variables per template (Meta positional params). */
@@ -70,6 +71,7 @@ const BODY_VARS: Record<string, string[]> = {
   recipient_order_ready: ['orderNumber', 'storeName'],
   recipient_complete_pickup: ['orderNumber', 'storeName'],
   recipient_order_update: ['orderNumber', 'statusLabel'],
+  restock_alert: ['itemName', 'storeName'],
 };
 
 /**
@@ -91,6 +93,7 @@ const AUTH_CODE_VARS: Record<string, string> = {
 const TEMPLATE_CATEGORIES: Record<string, WhatsAppTemplateCategory> = {
   delivery_pin: 'AUTHENTICATION',
   order_offer_agent: 'MARKETING',
+  restock_alert: 'MARKETING',
 };
 
 /** Static URL buttons (no send-time {{1}}). Auth / no-CTA templates skip URL params. */

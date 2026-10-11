@@ -6,6 +6,8 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { RbacModule } from '../rbac/rbac.module';
 import { InventoryItemsController } from './inventory-items.controller';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
+import { DiscoveryRecoveryService } from './discovery/discovery-recovery.service';
+import { DiscoverySignalsService } from './discovery/discovery-signals.service';
 import { InventoryItemsService } from './inventory-items.service';
 import { StockAvailabilityController } from './stock-availability.controller';
 import { StockAvailabilityService } from './stock-availability.service';
@@ -21,7 +23,12 @@ import { StockAvailabilityService } from './stock-availability.service';
     ItemVariantsModule,
   ],
   controllers: [InventoryItemsController, StockAvailabilityController],
-  providers: [InventoryItemsService, StockAvailabilityService],
+  providers: [
+    InventoryItemsService,
+    StockAvailabilityService,
+    DiscoverySignalsService,
+    DiscoveryRecoveryService,
+  ],
   exports: [InventoryItemsService, StockAvailabilityService],
 })
 export class InventoryItemsModule {}

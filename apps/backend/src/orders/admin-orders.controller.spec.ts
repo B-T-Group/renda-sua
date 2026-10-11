@@ -40,7 +40,12 @@ describe('AdminOrdersController.updateStatus', () => {
       {} as any, // hasuraUserService
       {} as any, // notificationsService
       {} as any, // adminOrderContactService
-      {} as any  // creditsService
+      {} as any, // creditsService
+      {
+        require: jest.fn().mockResolvedValue({ all: true }),
+        assertOrder: jest.fn().mockResolvedValue(undefined),
+        assertIncident: jest.fn().mockResolvedValue(undefined),
+      } as any
     );
     return { controller, ordersService, hasuraSystemService, orderEventsService };
   }

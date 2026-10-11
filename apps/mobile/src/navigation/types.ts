@@ -70,6 +70,8 @@ export type InventoryItemDetailParams = {
   inventoryItemId: string;
   availabilityResult?: 'confirmed' | 'adjusted' | 'unavailable';
   availabilityQuantity?: number;
+  /** `restock_alert` when opened from a restock push/link (#343). */
+  src?: 'restock_alert';
 };
 
 /** Client stack: place order for one catalog line (mirrors web place order). */
@@ -229,7 +231,7 @@ export type ClientRootStackParamList = {
   };
   Profile: undefined;
   ManageRecipients: undefined;
-  UserLikes: undefined;
+  UserLikes: { filter?: 'all' | 'back_in_stock' } | undefined;
   FollowingStores: undefined;
   ClientProductInterest: undefined;
   ProductInterestSuccess: undefined;

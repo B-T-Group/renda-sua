@@ -20,6 +20,8 @@ export const PlatformPermissions = {
   CONFIG_APPLICATION_SETUP: 'platform.config.application_setup',
   OPS_SITE_EVENTS: 'platform.ops.site_events',
   OPS_CREDITS: 'platform.ops.credits',
+  OPS_MAP: 'platform.ops.map',
+  USERS_READ: 'platform.users.read',
   CATALOG_CROSS_BUSINESS: 'platform.catalog.cross_business',
   ORDERS_CROSS_BUSINESS: 'platform.orders.cross_business',
   LOCATIONS_TRANSFERS_ADMIN: 'platform.locations.transfers_admin',
@@ -41,12 +43,37 @@ export const PlatformRoles = {
   CONTENT: 'content',
   ORDER_MANAGER: 'order_manager',
   WHATSAPP_MANAGER: 'whatsapp_manager',
+  COUNTRY_ADMIN: 'country_admin',
 } as const;
 
 export type PlatformRole = (typeof PlatformRoles)[keyof typeof PlatformRoles];
 
+export type GeoScope =
+  | { all: true }
+  | {
+      all: false;
+      countries: string[];
+      states: Array<{ countryCode: string; stateKey: string }>;
+    };
+
+export interface RoleGrant {
+  role: string;
+  countryCode: string | null;
+  stateKey: string | null;
+  stateName: string | null;
+}
+
+/** null states means every state in the country. */
+export interface AdminScope {
+  countryCode: string;
+  states: string[] | null;
+}
+
 export interface EffectiveAccess {
   roles: string[];
+  /** Union of held keys, including scoped grants. Used by route gates. */
   permissions: string[];
   isSuperuser: boolean;
+  scopes: Record<string, GeoScope>;
+  grants: RoleGrant[];
 }

@@ -10,7 +10,11 @@ describe('subscribeBrowserCatalogGeo', () => {
 
   it('requests a fresh fix and saves it for signed-in and signed-out catalogs', () => {
     const getCurrentPosition = jest.fn(
-      (success: (pos: { coords: { latitude: number; longitude: number } }) => void) => {
+      (
+        success: (pos: {
+          coords: { latitude: number; longitude: number };
+        }) => void
+      ) => {
         success({ coords: { latitude: 4.05, longitude: 9.7 } });
       }
     );
@@ -24,7 +28,9 @@ describe('subscribeBrowserCatalogGeo', () => {
       expect.objectContaining({ maximumAge: 600_000, timeout: 12_000 })
     );
     expect(onCoords).toHaveBeenCalledWith({ lat: 4.05, lng: 9.7 });
-    expect(JSON.parse(localStorage.getItem(PUBLIC_BROWSER_GEO_STORAGE_KEY) ?? '{}')).toEqual({
+    expect(
+      JSON.parse(localStorage.getItem(PUBLIC_BROWSER_GEO_STORAGE_KEY) ?? '{}')
+    ).toEqual({
       lat: 4.05,
       lng: 9.7,
     });
@@ -37,7 +43,9 @@ describe('subscribeBrowserCatalogGeo', () => {
     );
     const getCurrentPosition = jest.fn(
       (
-        _success: (pos: { coords: { latitude: number; longitude: number } }) => void,
+        _success: (pos: {
+          coords: { latitude: number; longitude: number };
+        }) => void,
         error: () => void
       ) => {
         error();
@@ -52,10 +60,15 @@ describe('subscribeBrowserCatalogGeo', () => {
   });
 
   it('ignores a late reading after the catalog unsubscribes', () => {
-    let succeed: ((pos: { coords: { latitude: number; longitude: number } }) => void) | null =
-      null;
+    let succeed:
+      | ((pos: { coords: { latitude: number; longitude: number } }) => void)
+      | null = null;
     const getCurrentPosition = jest.fn(
-      (success: (pos: { coords: { latitude: number; longitude: number } }) => void) => {
+      (
+        success: (pos: {
+          coords: { latitude: number; longitude: number };
+        }) => void
+      ) => {
         succeed = success;
       }
     );
@@ -66,5 +79,30 @@ describe('subscribeBrowserCatalogGeo', () => {
     succeed?.({ coords: { latitude: 1, longitude: 2 } });
 
     expect(onCoords).not.toHaveBeenCalled();
+  });
+
+  it('ignores a corrupt or non-finite saved fix', () => {
+    localStorage.setItem(PUBLIC_BROWSER_GEO_STORAGE_KEY, '{');
+    const onCorrupt = jest.fn();
+    subscribeBrowserCatalogGeo(null, onCorrupt);
+    expect(onCorrupt).not.toHaveBeenCalled();
+
+    localStorage.setItem(
+      PUBLIC_BROWSER_GEO_STORAGE_KEY,
+      JSON.stringify({ lat: Number.POSITIVE_INFINITY, lng: 9.7 })
+    );
+    const getCurrentPosition = jest.fn(
+      (
+        success: (pos: {
+          coords: { latitude: number; longitude: number };
+        }) => void
+      ) => {
+        success({ coords: { latitude: 4.05, longitude: 9.7 } });
+      }
+    );
+    const onCoords = jest.fn();
+    subscribeBrowserCatalogGeo({ getCurrentPosition }, onCoords);
+    expect(onCoords).toHaveBeenCalledTimes(1);
+    expect(onCoords).toHaveBeenCalledWith({ lat: 4.05, lng: 9.7 });
   });
 });

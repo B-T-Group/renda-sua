@@ -112,6 +112,8 @@ export interface OrderRiskActionContext {
   referringAgentUserId?: string | null;
   /** Shop market ISO alpha-2 (location address, else delivery address). */
   shopCountryCode?: string | null;
+  /** Shop state name used to match a state-scoped country admin. */
+  shopStateName?: string | null;
 }
 
 export interface OrderRiskIncident {

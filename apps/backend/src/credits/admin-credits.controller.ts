@@ -23,6 +23,7 @@ import {
 } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import {
@@ -58,18 +59,21 @@ export class AdminCreditsController {
   constructor(
     private readonly creditsService: CreditsService,
     private readonly queuesService: CreditsQueuesService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    private readonly geo: GeoScopeService
   ) {}
 
   @Get('summary')
   @ApiOperation({ summary: 'Credit leaderboard (weighted totals)' })
   @ApiResponse({ status: 200, description: 'Leaderboard rows' })
   async summary(@Query() query: AdminCreditsSummaryQueryDto) {
+    const filters = await this.scopeFilters();
     return this.queuesService.listSummary({
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
       eventType: query.eventType,
       country: query.country,
+      geo: filters.geo,
     });
   }
 
@@ -77,22 +81,26 @@ export class AdminCreditsController {
   @ApiOperation({ summary: 'Credit ledger (paginated)' })
   @ApiResponse({ status: 200, description: 'Credit rows' })
   async list(@Query() query: AdminCreditsListQueryDto) {
+    const filters = await this.scopeFilters();
     return this.queuesService.listCredits({
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
       userId: query.userId,
       eventType: query.eventType,
       country: query.country,
+      geo: filters.geo,
     });
   }
 
   @Get('queues/escalations')
   @ApiOperation({ summary: 'Open order risk incidents' })
   async escalationsQueue(@Query() query: AdminCreditsQueueQueryDto) {
+    const filters = await this.scopeFilters();
     return this.queuesService.listOpenEscalations({
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
       country: query.country,
+      orderGeo: filters.orderGeo,
     });
   }
 
@@ -101,10 +109,12 @@ export class AdminCreditsController {
     summary: 'Cancelled orders in the last 14 days without feedback credit',
   })
   async cancelledQueue(@Query() query: AdminCreditsQueueQueryDto) {
+    const filters = await this.scopeFilters();
     return this.queuesService.listCancelledWithoutFeedback({
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
       country: query.country,
+      orderGeo: filters.orderGeo,
     });
   }
 
@@ -113,10 +123,12 @@ export class AdminCreditsController {
     summary: 'First completed orders in the last 14 days without feedback',
   })
   async firstOrderQueue(@Query() query: AdminCreditsQueueQueryDto) {
+    const filters = await this.scopeFilters();
     return this.queuesService.listFirstOrderWithoutFeedback({
       limit: query.limit ?? 50,
       offset: query.offset ?? 0,
       country: query.country,
+      orderGeo: filters.orderGeo,
     });
   }
 
@@ -129,6 +141,8 @@ export class AdminCreditsController {
     @Param('incidentId') incidentId: string,
     @Body() dto: ResolveEscalationCreditDto
   ) {
+    const scope = await this.geo.require(PlatformPermissions.OPS_CREDITS);
+    await this.geo.assertIncident(scope, incidentId);
     const actor = await this.hasuraUserService.getUser();
     const incident = await this.creditsService.resolveIncidentForCredit({
       incidentId,
@@ -169,11 +183,21 @@ export class AdminCreditsController {
     return this.handleOrderFeedback(orderId, dto, 'complete');
   }
 
+  private async scopeFilters() {
+    const scope = await this.geo.require(PlatformPermissions.OPS_CREDITS);
+    return {
+      geo: await this.geo.creditWhere(scope),
+      orderGeo: await this.geo.orderWhere(scope),
+    };
+  }
+
   private async handleOrderFeedback(
     orderId: string,
     dto: OrderFeedbackCreditDto,
     status: 'cancelled' | 'complete'
   ) {
+    const scope = await this.geo.require(PlatformPermissions.OPS_CREDITS);
+    await this.geo.assertOrder(scope, orderId);
     const actor = await this.hasuraUserService.getUser();
     const order = await this.requireOrderInWindow(orderId, status);
     if (status === 'complete') await this.requireFirstCompletion(order);

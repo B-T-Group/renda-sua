@@ -646,9 +646,10 @@ export class OrderAcceptanceService {
     limit?: number;
     tier?: string;
     minAutoDeclines30d?: number;
+    geoWhere?: Record<string, unknown> | null;
   }) {
     const limit = Math.min(Math.max(params.limit ?? 25, 1), 100);
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = params.geoWhere ?? {};
     if (params.tier?.trim()) {
       where.reliability_tier = { _eq: params.tier.trim() };
     }

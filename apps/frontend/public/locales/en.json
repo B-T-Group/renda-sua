@@ -565,6 +565,23 @@
     }
   },
   "admin": {
+    "countryAdmins": {
+      "moduleTitle": "Country admins",
+      "moduleDescription": "Assign admins for a country or specific states",
+      "title": "Country admins",
+      "subtitle": "Give someone admin tools for a country or its states.",
+      "add": "Add country admin",
+      "addTitle": "Add country admin",
+      "editTitle": "Edit country admin",
+      "empty": "No country admins yet.",
+      "email": "Email",
+      "lookup": "Find",
+      "country": "Country",
+      "states": "States",
+      "allStates": "All states",
+      "removeTitle": "Remove country admin",
+      "removeMessage": "This person will lose country admin access."
+    },
     "map": {
       "title": "Map",
       "subtitle": "Agents and merchants in your markets",
@@ -582,7 +599,7 @@
       "loading": "Loading map…",
       "empty": "No agents or merchants with a location in this view.",
       "loadError": "Could not load the map.",
-      "accessDenied": "Only a superuser can open the map.",
+      "accessDenied": "You do not have access to the map.",
       "close": "Close",
       "phone": "Phone",
       "email": "Email",
@@ -8368,12 +8385,34 @@
       "whatsapp": "WhatsApp",
       "whatsappInformational": "WhatsApp tips & digests (optional)",
       "whatsappNeedsPhone": "Verify your phone number in Profile before enabling WhatsApp.",
+      "restockAlerts": "Restock alerts",
+      "restockAlertsDesc": "Items you liked that come back in stock",
       "orderUpdates": "Order updates",
       "chat": "Chat & mentions",
       "marketplace": "Marketplace",
       "reminders": "Reminders",
       "marketing": "Marketing"
     }
+  },
+  "restock": {
+    "alertOn": "Alert on",
+    "alertOff": {
+      "withUndo": "Alert off · Undo"
+    },
+    "undo": "Undo",
+    "bellOn": "on",
+    "bellOff": "off",
+    "bellAriaLabel": "Restock alert for {{item}}: {{state}}",
+    "bellTooltipOn": "We'll tell you when it's back",
+    "bellTooltipOff": "Notify me when it's back",
+    "hint": "We'll let you know when it's back.",
+    "filter": {
+      "all": "All",
+      "backInStock": "Back in stock"
+    },
+    "backInStockChip": "Back in stock",
+    "emptyFilterTitle": "Nothing back yet. We'll tell you.",
+    "goneAgainBanner": "Gone again. We'll tell you next time."
   },
   "deepLink": {
     "openingApp": "Opening Rendasua…",

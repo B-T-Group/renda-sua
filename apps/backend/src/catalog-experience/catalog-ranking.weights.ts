@@ -5,6 +5,8 @@ export const CATALOG_RANKING_WEIGHTS = {
   local: 2,
   inventory: 1,
   freshness: 1,
+  /** #342 AC-1.6: Bayesian rating, same tier as freshness. */
+  rating: 1,
   promotion: 5,
   personalization: 6,
 } as const;
@@ -18,6 +20,7 @@ export interface CatalogRankSignals {
   local?: number;
   inventory?: number;
   freshness?: number;
+  rating?: number;
   promotion?: number;
   personalization?: number;
 }
@@ -33,6 +36,7 @@ export function scoreCatalogCandidate(
     (signals.local ?? 0) * weights.local +
     (signals.inventory ?? 0) * weights.inventory +
     (signals.freshness ?? 0) * weights.freshness +
+    (signals.rating ?? 0) * weights.rating +
     (signals.promotion ?? 0) * weights.promotion +
     (signals.personalization ?? 0) * weights.personalization
   );

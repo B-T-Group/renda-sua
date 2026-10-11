@@ -2,6 +2,8 @@ import { Alert, Box, Stack, Typography } from '@mui/material';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePermissions } from '../../../hooks/usePermissions';
+import { PlatformPermissions } from '../../../constants/platformPermissions';
+import { useUserProfileContext } from '../../../contexts/UserProfileContext';
 import { useSupportedCountries } from '../../../hooks/useSupportedCountries';
 import { useAdminMapPins, useSeededMapMarket } from '../../../hooks/useAdminMap';
 import AdminMapCanvas from '../../admin/map/AdminMapCanvas';
@@ -18,8 +20,8 @@ import {
 } from '../../admin/map/adminMap.types';
 
 const AdminMapPage: React.FC = () => {
-  const { isSuperuser } = usePermissions();
-  if (!isSuperuser) return <Denied />;
+  const { can } = usePermissions();
+  if (!can(PlatformPermissions.OPS_MAP)) return <Denied />;
   return <MapWorkspace />;
 };
 
@@ -27,7 +29,7 @@ function Denied() {
   const { t } = useTranslation();
   return (
     <Alert severity="error" sx={{ m: 2 }}>
-      {t('admin.map.accessDenied', 'Only a superuser can open the map.')}
+      {t('admin.map.accessDenied', 'You do not have access to the map.')}
     </Alert>
   );
 }
@@ -175,13 +177,16 @@ function focusedPin(
 }
 
 function useMapFilters() {
-  const { countries } = useSupportedCountries();
+  const { profile } = useUserProfileContext();
+  const scopes = profile?.admin_scopes ?? [];
+  const { countries: allCountries } = useSupportedCountries();
   const place = useSeededMapMarket();
+  useClampMapPlace(place, scopes);
   const choice = useKindAndActivity();
   const [live, setLive] = useState(false);
   return {
-    countries,
-    regions: place.regions,
+    countries: countriesForScopes(allCountries, scopes),
+    regions: regionsForScope(place.regions, scopes, place.country),
     country: place.country,
     region: place.region,
     live,
@@ -205,6 +210,51 @@ function useKindAndActivity() {
 function keepActivity(kind: AdminMapKind, activity: AdminMapActivityFilter): AdminMapActivityFilter {
   if (!activity || activitiesForKind(kind).includes(activity)) return activity;
   return '';
+}
+
+type AdminScope = { countryCode: string; states: string[] | null };
+
+function useClampMapPlace(
+  place: {
+    country: string;
+    region: string;
+    regions: string[];
+    onCountry: (value: string) => void;
+    onRegion: (value: string) => void;
+  },
+  scopes: AdminScope[]
+) {
+  const allowed = regionsForScope(place.regions, scopes, place.country);
+  useEffect(() => {
+    const next = fallbackCountry(scopes, place.country);
+    if (next) place.onCountry(next);
+  }, [place, scopes]);
+  useEffect(() => {
+    if (place.region && !allowed.includes(place.region)) place.onRegion('');
+  }, [allowed, place]);
+}
+
+function fallbackCountry(scopes: AdminScope[], country: string): string | null {
+  if (!scopes.length || scopes.some((scope) => scope.countryCode === country)) {
+    return null;
+  }
+  return scopes[0].countryCode;
+}
+
+function countriesForScopes<T extends { code: string }>(
+  countries: T[],
+  scopes: AdminScope[]
+): T[] {
+  if (!scopes.length) return countries;
+  const codes = new Set(scopes.map((scope) => scope.countryCode));
+  return countries.filter((country) => codes.has(country.code));
+}
+
+function regionsForScope(regions: string[], scopes: AdminScope[], country: string) {
+  const scope = scopes.find((item) => item.countryCode === country);
+  if (!scope || scope.states === null) return regions;
+  const allowed = new Set(scope.states.map((name) => name.toLowerCase()));
+  return regions.filter((name) => allowed.has(name.toLowerCase()));
 }
 
 export default AdminMapPage;

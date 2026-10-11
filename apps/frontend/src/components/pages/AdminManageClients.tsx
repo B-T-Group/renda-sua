@@ -21,6 +21,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAdminClients } from '../../hooks/useAdminClients';
 import { usePermissions } from '../../hooks/usePermissions';
+import { PlatformPermissions } from '../../constants/platformPermissions';
 import { AdminReferralMeta } from '../admin/AdminReferralMeta';
 import AdminUserCard from '../common/AdminUserCard';
 
@@ -41,7 +42,8 @@ const AdminManageClients: React.FC = () => {
     setUserInternal,
   } = useAdminClients();
   const { t } = useTranslation();
-  const { isSuperuser } = usePermissions();
+  const { isSuperuser, can } = usePermissions();
+  const canManage = can(PlatformPermissions.MANAGE_CLIENTS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
 
@@ -173,6 +175,7 @@ const AdminManageClients: React.FC = () => {
                     />
                   }
                   footer={
+                    canManage ? (
                     <Button
                       size="small"
                       variant="contained"
@@ -181,6 +184,7 @@ const AdminManageClients: React.FC = () => {
                     >
                       Edit
                     </Button>
+                    ) : null
                   }
                 />
               ))}

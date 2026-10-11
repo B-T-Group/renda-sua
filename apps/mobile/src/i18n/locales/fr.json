@@ -7419,5 +7419,24 @@
       "submit": "Envoyer le signalement",
       "blockMerchant": "Bloquer cette boutique"
     }
+  },
+  "restockAlerts": {
+    "bellOn": "Nous vous prévenons à son retour",
+    "bellOff": "Me prévenir à son retour",
+    "hint": "Nous vous prévenons à son retour.",
+    "alertOn": "Alerte activée",
+    "alertOff": "Alerte désactivée",
+    "backInStock": "De retour",
+    "goneAgain": "Déjà épuisé. Nous vous prévenons au prochain retour.",
+    "emptyBackInStock": "Rien de retour pour l'instant. Nous vous prévenons.",
+    "filterAll": "Tous",
+    "filterBackInStock": "De retour",
+    "settingsTitle": "Alertes de retour en stock",
+    "settingsSubtitle": "Articles aimés qui reviennent en stock",
+    "bellAccessibilityOn": "Alerte de retour pour {{item}} : activée",
+    "bellAccessibilityOff": "Alerte de retour pour {{item}} : désactivée",
+    "undo": "Annuler",
+    "stopAction": "Arrêter les alertes",
+    "toggleError": "Impossible de mettre à jour l'alerte. Réessayez."
   }
 }

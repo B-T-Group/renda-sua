@@ -40,7 +40,9 @@ function okGeocode(
   return {
     data: {
       status: 'OK',
-      results: [{ formatted_address: formatted, address_components: addressComponents }],
+      results: [
+        { formatted_address: formatted, address_components: addressComponents },
+      ],
     },
   };
 }
@@ -109,7 +111,10 @@ describe('GoogleDistanceService.reverseGeocode', () => {
 
   it('M3: never puts Google error_message into the thrown error', async () => {
     mockedAxios.get.mockResolvedValue({
-      data: { status: 'OVER_QUERY_LIMIT', error_message: 'You have exceeded your daily request quota' },
+      data: {
+        status: 'OVER_QUERY_LIMIT',
+        error_message: 'You have exceeded your daily request quota',
+      },
     });
 
     const error = await service.reverseGeocode(3.1, 11.1).catch((e) => e);
@@ -168,7 +173,9 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
       },
     });
 
-    await expect(service.geocodeWithCountry('  Null Island  ')).resolves.toEqual({
+    await expect(
+      service.geocodeWithCountry('  Null Island  ')
+    ).resolves.toEqual({
       latitude: 0,
       longitude: 0,
       countryCode: 'GH',
@@ -190,7 +197,10 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
         status: 'OK',
         results: [
           {
-            geometry: { location: { lat: 3.8, lng: 11.5 }, location_type: 'RANGE_INTERPOLATED' },
+            geometry: {
+              location: { lat: 3.8, lng: 11.5 },
+              location_type: 'RANGE_INTERPOLATED',
+            },
             partial_match: true,
             types: ['route'],
             address_components: [
@@ -202,7 +212,9 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
       },
     });
 
-    await expect(service.geocodeWithCountry('Rue X, Yaoundé')).resolves.toMatchObject({
+    await expect(
+      service.geocodeWithCountry('Rue X, Yaoundé')
+    ).resolves.toMatchObject({
       locationType: 'RANGE_INTERPOLATED',
       partialMatch: true,
       hasStreet: true,
@@ -214,7 +226,10 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
         status: 'OK',
         results: [
           {
-            geometry: { location: { lat: 3.8, lng: 11.5 }, location_type: 'APPROXIMATE' },
+            geometry: {
+              location: { lat: 3.8, lng: 11.5 },
+              location_type: 'APPROXIMATE',
+            },
             types: ['locality', 'political'],
             address_components: [
               component('locality', 'Yaoundé'),
@@ -224,7 +239,9 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
         ],
       },
     });
-    await expect(service.geocodeWithCountry('asdf, Yaoundé')).resolves.toMatchObject({
+    await expect(
+      service.geocodeWithCountry('asdf, Yaoundé')
+    ).resolves.toMatchObject({
       locationType: 'APPROXIMATE',
       partialMatch: false,
       hasStreet: false,
@@ -238,26 +255,40 @@ describe('GoogleDistanceService.geocodeWithCountry', () => {
   });
 
   it('returns null only for a genuine no-match', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: { status: 'ZERO_RESULTS', results: [] } });
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { status: 'ZERO_RESULTS', results: [] },
+    });
     await expect(service.geocodeWithCountry('nowhere')).resolves.toBeNull();
   });
 
   it('throws on a denied/over-quota request and on a network error so the cron does not mark not_found', async () => {
-    mockedAxios.get.mockResolvedValueOnce({ data: { status: 'REQUEST_DENIED' } });
-    await expect(service.geocodeWithCountry('denied')).rejects.toThrow(/REQUEST_DENIED/);
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { status: 'REQUEST_DENIED' },
+    });
+    await expect(service.geocodeWithCountry('denied')).rejects.toThrow(
+      /REQUEST_DENIED/
+    );
 
-    mockedAxios.get.mockResolvedValueOnce({ data: { status: 'OVER_QUERY_LIMIT' } });
-    await expect(service.geocodeWithCountry('quota')).rejects.toThrow(/OVER_QUERY_LIMIT/);
+    mockedAxios.get.mockResolvedValueOnce({
+      data: { status: 'OVER_QUERY_LIMIT' },
+    });
+    await expect(service.geocodeWithCountry('quota')).rejects.toThrow(
+      /OVER_QUERY_LIMIT/
+    );
 
     mockedAxios.get.mockRejectedValueOnce(new Error('timeout'));
-    await expect(service.geocodeWithCountry('offline')).rejects.toThrow('timeout');
+    await expect(service.geocodeWithCountry('offline')).rejects.toThrow(
+      'timeout'
+    );
   });
 
   it('returns null when the hit has no coordinates', async () => {
     mockedAxios.get.mockResolvedValue({
       data: {
         status: 'OK',
-        results: [{ address_components: [component('country', 'Cameroon', 'CM')] }],
+        results: [
+          { address_components: [component('country', 'Cameroon', 'CM')] },
+        ],
       },
     });
 
@@ -300,7 +331,8 @@ describe('GoogleDistanceService.getDistanceMatrixWithCaching', () => {
 
   it('chunks destinations into groups of 25', async () => {
     mockedAxios.get.mockImplementation(async (_url, config) => {
-      const destinations = (config?.params as { destinations: string }).destinations;
+      const destinations = (config?.params as { destinations: string })
+        .destinations;
       return okMatrix(destinations.split('|'));
     });
     const destinations = Array.from({ length: 63 }, (_, i) => dest(i + 1));
@@ -328,7 +360,9 @@ describe('GoogleDistanceService.getDistanceMatrixWithCaching', () => {
         duration: { text: '1 min', value: 60 },
       },
     ]);
-    mockedAxios.get.mockResolvedValue(okMatrix([dest(2).formatted, dest(3).formatted]));
+    mockedAxios.get.mockResolvedValue(
+      okMatrix([dest(2).formatted, dest(3).formatted])
+    );
 
     const matrix = await service.getDistanceMatrixWithCaching(
       ORIGIN_ID,
@@ -423,10 +457,15 @@ describe('GoogleDistanceService.getDistanceMatrixWithCaching', () => {
     mockedAxios.get.mockResolvedValue(okMatrix([dest(1).formatted]));
     const origin = { lat: 4.05, lng: 9.7 };
 
-    await service.getDistanceMatrixWithCaching(ORIGIN_ID, '4.05,9.7', [dest(1)], {
-      nearbyOriginMeters: 75,
-      origin,
-    });
+    await service.getDistanceMatrixWithCaching(
+      ORIGIN_ID,
+      '4.05,9.7',
+      [dest(1)],
+      {
+        nearbyOriginMeters: 75,
+        origin,
+      }
+    );
 
     expect(cacheService.cacheDistanceMatrixResults).toHaveBeenCalledWith(
       ORIGIN_ID,
@@ -436,6 +475,88 @@ describe('GoogleDistanceService.getDistanceMatrixWithCaching', () => {
       expect.any(Number),
       origin
     );
+  });
+
+  it('prices a nearby hit and asks Google only for the remaining store', async () => {
+    cacheService.findNearbyCachedDistanceElements.mockResolvedValue([
+      {
+        destination_address_id: dest(1).id,
+        destination_address_formatted: dest(1).formatted,
+        origin_address_formatted: '4.05,9.7',
+        status: 'OK',
+        distance: { text: 'nearby', value: 80 },
+        duration: { text: '1 min', value: 60 },
+      },
+    ]);
+    mockedAxios.get.mockResolvedValue(okMatrix([dest(2).formatted]));
+
+    const matrix = await service.getDistanceMatrixWithCaching(
+      ORIGIN_ID,
+      '4.05,9.7',
+      [dest(1), dest(2)],
+      { nearbyOriginMeters: 75, origin: { lat: 4.05, lng: 9.7 } }
+    );
+
+    expect(destinationParamSizes()).toEqual([1]);
+    expect(matrix.rows[0].elements[0].distance?.value).toBe(80);
+    expect(matrix.rows[0].elements[1].distance?.value).toBe(1000);
+    expect(cacheService.cacheDistanceMatrixResults).toHaveBeenCalledWith(
+      ORIGIN_ID,
+      '4.05,9.7',
+      [dest(2)],
+      expect.anything(),
+      expect.any(Number),
+      { lat: 4.05, lng: 9.7 }
+    );
+  });
+
+  it('marks a missing Google element NOT_FOUND instead of shifting later fees', async () => {
+    mockedAxios.get.mockResolvedValue({
+      data: {
+        status: 'OK',
+        origin_addresses: ['1,1'],
+        destination_addresses: [dest(1).formatted],
+        rows: [
+          {
+            elements: [
+              {
+                status: 'OK',
+                distance: { text: '1 km', value: 1000 },
+                duration: { text: '2 mins', value: 120 },
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    const matrix = await service.getDistanceMatrixWithCaching(
+      ORIGIN_ID,
+      '1,1',
+      [dest(1), dest(2)]
+    );
+
+    expect(matrix.rows[0].elements[0].distance?.value).toBe(1000);
+    expect(matrix.rows[0].elements[1]).toEqual({ status: 'NOT_FOUND' });
+  });
+
+  it('does not search nearby when the radius is off or there is nothing to price', async () => {
+    const empty = await service.getDistanceMatrixWithCaching(
+      ORIGIN_ID,
+      '1,1',
+      []
+    );
+    expect(empty.rows[0].elements).toEqual([]);
+    expect(cacheService.getValidCachedDistanceElements).not.toHaveBeenCalled();
+
+    mockedAxios.get.mockResolvedValue(okMatrix([dest(1).formatted]));
+    await service.getDistanceMatrixWithCaching(ORIGIN_ID, '1,1', [dest(1)], {
+      nearbyOriginMeters: 0,
+      origin: { lat: 4.05, lng: 9.7 },
+    });
+    expect(
+      cacheService.findNearbyCachedDistanceElements
+    ).not.toHaveBeenCalled();
   });
 });
 
@@ -460,7 +581,8 @@ describe('GoogleDistanceService.getDistanceMatrix', () => {
 
   it('chunks a single-origin request over the destination cap', async () => {
     mockedAxios.get.mockImplementation(async (_url, config) => {
-      const destinations = (config?.params as { destinations: string }).destinations;
+      const destinations = (config?.params as { destinations: string })
+        .destinations;
       return okMatrix(destinations.split('|'));
     });
     const destinations = Array.from(

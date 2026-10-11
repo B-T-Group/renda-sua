@@ -15,7 +15,12 @@ function setup(orders: any[] = []) {
     critical: { aggregate: { count: 1 } },
     warning: { aggregate: { count: 3 } },
   });
-  const service = new AdminOrdersService({ executeQuery } as never);
+  const service = new AdminOrdersService({ executeQuery } as never, {
+    require: async () => ({ all: true }),
+    orderWhere: async () => null,
+    requireAny: async () => ({ all: true }),
+    assertOrder: async () => undefined,
+  } as never);
   return { service, executeQuery };
 }
 

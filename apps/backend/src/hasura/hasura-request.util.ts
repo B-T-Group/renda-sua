@@ -36,6 +36,8 @@ export const HASURA_UNAVAILABLE_MESSAGE =
 
 export const INVALID_IDENTIFIER_MESSAGE = 'Invalid identifier';
 
+export const INVALID_VALUE_MESSAGE = 'Invalid value';
+
 export type HasuraRetryLogger = {
   warn: (message: string) => void;
 };
@@ -109,6 +111,26 @@ export function isInvalidUuidInputError(error: unknown): boolean {
   );
 }
 
+export function isInvalidBooleanInputError(error: unknown): boolean {
+  return /invalid input syntax for type boolean/i.test(
+    hasuraValidationErrorText(error)
+  );
+}
+
+/** Remap Hasura Postgres scalar data-exceptions that are client input, not bugs. */
+export function remapHasuraDataException(
+  error: unknown
+): HttpException | null {
+  if (error instanceof HttpException) return null;
+  if (isInvalidUuidInputError(error)) {
+    return invalidIdentifierException(error);
+  }
+  if (isInvalidBooleanInputError(error)) {
+    return invalidValueException(error);
+  }
+  return null;
+}
+
 export function isOrderItemsInventoryFkViolation(error: unknown): boolean {
   const text = hasuraValidationErrorText(error);
   return (
@@ -130,8 +152,9 @@ export function mapExhaustedHasuraQueryError(error: unknown): never {
       { cause: error instanceof Error ? error : undefined }
     );
   }
-  if (isInvalidUuidInputError(error)) {
-    throw invalidIdentifierException(error);
+  const dataException = remapHasuraDataException(error);
+  if (dataException) {
+    throw dataException;
   }
   throw error;
 }
@@ -151,6 +174,14 @@ const MISSING_ITEMS_INTEREST_ONLY =
 
 export function isMissingItemsInterestOnlyField(error: unknown): boolean {
   return MISSING_ITEMS_INTEREST_ONLY.test(hasuraValidationErrorText(error));
+}
+
+const MISSING_RESTOCK_GRAPHQL_FIELD =
+  /field 'restock_[^']+' not found in type/i;
+
+/** Hasura hides untracked tables (and columns the role cannot see) as this validation error. */
+export function isMissingRestockGraphqlSchema(error: unknown): boolean {
+  return MISSING_RESTOCK_GRAPHQL_FIELD.test(hasuraValidationErrorText(error));
 }
 
 export function stripItemsInterestOnlyFromGraphql(query: string): string {
@@ -190,12 +221,23 @@ async function retryQueryWithoutInterestOnly<T>(
 }
 
 function invalidIdentifierException(error: unknown): HttpException {
+  return clientInputException(error, INVALID_IDENTIFIER_MESSAGE);
+}
+
+function invalidValueException(error: unknown): HttpException {
+  return clientInputException(error, INVALID_VALUE_MESSAGE);
+}
+
+function clientInputException(
+  error: unknown,
+  message: string
+): HttpException {
   return new HttpException(
     {
       success: false,
       statusCode: HttpStatus.BAD_REQUEST,
-      message: INVALID_IDENTIFIER_MESSAGE,
-      error: INVALID_IDENTIFIER_MESSAGE,
+      message,
+      error: message,
     },
     HttpStatus.BAD_REQUEST,
     { cause: error instanceof Error ? error : undefined }

@@ -68,7 +68,9 @@ export type NotificationType =
   | 'reel.processing.failed'
   | 'reel.engagement'
   | 'reel.followed_store'
-  | 'reel.comment.reply';
+  | 'reel.comment.reply'
+  | 'restock.alert'
+  | 'restock.digest';
 
 export type NotificationPreferenceCategory =
   | 'order_updates'

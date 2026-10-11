@@ -37,6 +37,22 @@ const STAFF = [
 
 const ROLE_KEYS = ['superuser', 'order_manager'];
 
+function admin(userId: string, countryCode: string, stateKey: string | null) {
+  return {
+    userId,
+    email: `${userId}@rendasua.com`,
+    roles: ['country_admin'],
+    grants: [
+      {
+        role: 'country_admin',
+        countryCode,
+        stateKey,
+        stateName: stateKey,
+      },
+    ],
+  };
+}
+
 describe('buildOrderRiskRecipients', () => {
   it('alerts superusers and order managers, but not other platform staff', () => {
     const recipients = buildOrderRiskRecipients({
@@ -184,6 +200,48 @@ describe('buildOrderRiskRecipients', () => {
         referringAgentUserId: null,
       })
     ).toHaveLength(3);
+  });
+
+  it('pages every covering country admin and skips superusers', () => {
+    const recipients = buildOrderRiskRecipients({
+      staff: [
+        ...STAFF,
+        admin('cm-all', 'CM', null),
+        admin('cm-littoral', 'CM', 'littoral'),
+        admin('ga-all', 'GA', null),
+      ],
+      roleKeys: ROLE_KEYS,
+      orderCountryCode: 'CM',
+      orderStateName: 'Littoral Region',
+      singleStaffRecipient: true,
+      random: () => 0,
+    });
+    expect(recipients.map((row) => row.userId).sort()).toEqual(['cm-all', 'cm-littoral']);
+  });
+
+  it('keeps a state admin off an order in another state', () => {
+    const recipients = buildOrderRiskRecipients({
+      staff: [admin('cm-littoral', 'CM', 'littoral'), ...STAFF],
+      roleKeys: ROLE_KEYS,
+      orderCountryCode: 'CM',
+      orderStateName: 'Centre',
+      singleStaffRecipient: true,
+      random: () => 0,
+    });
+    expect(recipients.map((row) => row.userId)).toEqual(['super-1']);
+  });
+
+  it('falls back to one superuser or order manager when no country admin covers the order', () => {
+    const recipients = buildOrderRiskRecipients({
+      staff: STAFF,
+      roleKeys: ROLE_KEYS,
+      orderCountryCode: 'CM',
+      orderStateName: 'Littoral',
+      singleStaffRecipient: true,
+      random: () => 0,
+    });
+    expect(recipients).toHaveLength(1);
+    expect(['super-1', 'ops-1', 'super-global']).toContain(recipients[0].userId);
   });
 });
 

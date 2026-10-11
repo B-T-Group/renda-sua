@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { BusinessContractTemplatesService } from '../business-contracts/business-contract-templates.service';
 import { BusinessContractsService } from '../business-contracts/business-contracts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { andWhere } from '../rbac/geo-scope.util';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import {
   aggregatePaymentCapabilityForProvider,
@@ -306,8 +307,9 @@ export class AdminService {
     limit: number;
     search: string;
     unverifiedOnly?: boolean;
+    geo?: Record<string, unknown> | null;
   }) {
-    const { page, limit, search, unverifiedOnly } = params;
+    const { page, limit, search, unverifiedOnly, geo } = params;
     const offset = (page - 1) * limit;
     const idTypeNames = AdminService.ID_DOCUMENT_TYPE_NAMES;
     const query = `
@@ -331,7 +333,7 @@ export class AdminService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      where: this.buildAgentWhere(search, unverifiedOnly),
+      where: andWhere(this.buildAgentWhere(search, unverifiedOnly), geo),
       limit,
       offset,
       idTypeNames,
@@ -347,8 +349,9 @@ export class AdminService {
     page: number;
     limit: number;
     search: string;
+    geo?: Record<string, unknown> | null;
   }) {
-    const { page, limit, search } = params;
+    const { page, limit, search, geo } = params;
     const offset = (page - 1) * limit;
     const query = `
       query GetClients($where: clients_bool_exp, $limit: Int!, $offset: Int!) {
@@ -361,7 +364,7 @@ export class AdminService {
       }
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
-      where: this.buildClientWhere(search),
+      where: andWhere(this.buildClientWhere(search), geo),
       limit,
       offset,
     });
@@ -380,6 +383,7 @@ export class AdminService {
     lifecycleStatus?: string;
     idDocumentStatus?: string;
     needsAttention?: boolean;
+    geo?: Record<string, unknown> | null;
   }) {
     const {
       page,
@@ -388,9 +392,13 @@ export class AdminService {
       lifecycleStatus,
       idDocumentStatus,
       needsAttention,
+      geo,
     } = params;
     const offset = (page - 1) * limit;
-    const where = this.buildBusinessWhere(search, { lifecycleStatus });
+    const where = andWhere(
+      this.buildBusinessWhere(search, { lifecycleStatus }),
+      geo
+    );
     const needsIdPostFilter = Boolean(idDocumentStatus) || Boolean(needsAttention);
 
     const query = `
