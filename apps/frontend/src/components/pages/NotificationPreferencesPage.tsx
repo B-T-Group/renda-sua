@@ -9,16 +9,53 @@ import {
   Switch,
   Typography,
 } from '@mui/material';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useNotificationPreferences,
   type NotificationPreferencesPatch,
 } from '../../hooks/useNotificationPreferences';
+import {
+  useRestockAlertsApi,
+  useRestockAlertsEnabled,
+} from '../../hooks/useRestockAlerts';
+import type { RestockAlertPreferences } from '../../hooks/useRestockAlerts';
+import {
+  SITE_EVENT_RESTOCK_OPT_OUT,
+  useTrackSiteEvent,
+} from '../../hooks/useTrackSiteEvent';
 
 const NotificationPreferencesPage: React.FC = () => {
   const { t } = useTranslation();
   const { prefs, loading, saving, error, update } = useNotificationPreferences();
+  const { enabled: restockEnabled } = useRestockAlertsEnabled();
+  const { getPreferences, patchPreferences } = useRestockAlertsApi();
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const [restockPrefs, setRestockPrefs] =
+    useState<RestockAlertPreferences | null>(null);
+  const [restockSaving, setRestockSaving] = useState(false);
+  const [restockError, setRestockError] = useState<string | null>(null);
+
+  const showRestockAlerts = restockEnabled === true;
+
+  useEffect(() => {
+    if (!showRestockAlerts) return;
+    let cancelled = false;
+    getPreferences()
+      .then((loaded) => {
+        if (!cancelled) setRestockPrefs(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setRestockError(
+            t('common.error', 'Something went wrong')
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showRestockAlerts, getPreferences, t]);
 
   const onToggle = async (
     key: keyof NotificationPreferencesPatch,
@@ -28,6 +65,28 @@ const NotificationPreferencesPage: React.FC = () => {
       await update({ [key]: value });
     } catch {
       // error surfaced via hook state
+    }
+  };
+
+  const onRestockToggle = async (
+    channel: 'push' | 'whatsapp' | 'sms',
+    value: boolean
+  ) => {
+    setRestockSaving(true);
+    setRestockError(null);
+    try {
+      const updated = await patchPreferences({ [channel]: value });
+      setRestockPrefs(updated);
+      if (!value) {
+        void trackSiteEvent({
+          eventType: SITE_EVENT_RESTOCK_OPT_OUT,
+          metadata: { surface: 'settings', channel },
+        });
+      }
+    } catch {
+      setRestockError(t('common.error', 'Something went wrong'));
+    } finally {
+      setRestockSaving(false);
     }
   };
 
@@ -128,6 +187,60 @@ const NotificationPreferencesPage: React.FC = () => {
             'WhatsApp tips & digests (optional)'
           )}
         />
+
+        {showRestockAlerts && (restockPrefs || restockError) && (
+          <>
+            <Divider sx={{ my: 2 }} />
+            <Typography variant="subtitle2" color="text.secondary">
+              {t('notifications.preferences.restockAlerts', 'Restock alerts')}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              {t(
+                'notifications.preferences.restockAlertsDesc',
+                'Items you liked that come back in stock'
+              )}
+            </Typography>
+            {restockError && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                {restockError}
+              </Alert>
+            )}
+            {restockPrefs && (
+            <Stack direction="row" spacing={2} sx={{ pl: 2 }} flexWrap="wrap">
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={restockPrefs.push}
+                    disabled={restockSaving}
+                    onChange={(_, v) => void onRestockToggle('push', v)}
+                  />
+                }
+                label={t('notifications.preferences.push', 'Push')}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={restockPrefs.whatsapp}
+                    disabled={restockSaving || !restockPrefs.whatsapp_available}
+                    onChange={(_, v) => void onRestockToggle('whatsapp', v)}
+                  />
+                }
+                label={t('notifications.preferences.whatsapp', 'WhatsApp')}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={restockPrefs.sms}
+                    disabled={restockSaving || !restockPrefs.sms_available}
+                    onChange={(_, v) => void onRestockToggle('sms', v)}
+                  />
+                }
+                label={t('notifications.preferences.sms', 'SMS')}
+              />
+            </Stack>
+            )}
+          </>
+        )}
 
         <Divider sx={{ my: 2 }} />
         <Typography variant="subtitle2" color="text.secondary">
