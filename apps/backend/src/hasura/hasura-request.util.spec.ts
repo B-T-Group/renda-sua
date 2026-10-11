@@ -5,6 +5,9 @@ import {
   HASURA_UNAVAILABLE_MESSAGE,
   INVALID_IDENTIFIER_MESSAGE,
   isInvalidUuidInputError,
+  isInvalidBooleanInputError,
+  INVALID_VALUE_MESSAGE,
+  remapHasuraDataException,
   isOrderItemsInventoryFkViolation,
   isMissingItemsInterestOnlyField,
   isTransientHasuraNetworkError,
@@ -35,6 +38,22 @@ function graphqlNginxHtml404Error() {
       error:
         '<html>\r\n<head><title>404 Not Found</title></head>\r\n<body>\r\n<center><h1>404 Not Found</h1></center>\r\n<hr><center>nginx/1.24.0 (Ubuntu)</center>\r\n</body>\r\n</html>\r\n',
       status: 404,
+      headers: {},
+    },
+  };
+}
+
+function booleanDataException(value: string) {
+  return {
+    message: `invalid input syntax for type boolean: "${value}"`,
+    response: {
+      errors: [
+        {
+          message: `invalid input syntax for type boolean: "${value}"`,
+          extensions: { path: '$', code: 'data-exception' },
+        },
+      ],
+      status: 200,
       headers: {},
     },
   };
@@ -223,6 +242,37 @@ describe('hasura-request.util', () => {
       statusCode: 400,
       message: INVALID_IDENTIFIER_MESSAGE,
     });
+  });
+
+  it('maps Hasura boolean data-exceptions to HTTP 400 without leaking the value', () => {
+    const error = booleanDataException('nope');
+    expect(isInvalidBooleanInputError(error)).toBe(true);
+    expect(remapHasuraDataException(error)?.getStatus()).toBe(
+      HttpStatus.BAD_REQUEST
+    );
+
+    let thrown: unknown;
+    try {
+      mapExhaustedHasuraQueryError(error);
+    } catch (next: unknown) {
+      thrown = next;
+    }
+    expect(thrown).toBeInstanceOf(HttpException);
+    const exception = thrown as HttpException;
+    expect(exception.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+    expect(exception.message).toBe(INVALID_VALUE_MESSAGE);
+    expect(JSON.stringify(exception.getResponse())).not.toContain('nope');
+    expect(exception.getResponse()).toMatchObject({
+      success: false,
+      statusCode: 400,
+      message: INVALID_VALUE_MESSAGE,
+    });
+    expect(isInvalidBooleanInputError({ message: 'Foreign key violation' })).toBe(
+      false
+    );
+    expect(remapHasuraDataException({ message: 'Foreign key violation' })).toBe(
+      null
+    );
   });
 
   it('detects order_items inventory foreign-key violations', () => {

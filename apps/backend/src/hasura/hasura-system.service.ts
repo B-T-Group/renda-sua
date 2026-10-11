@@ -106,7 +106,11 @@ export class HasuraSystemService {
     mutation: string,
     variables?: any
   ): Promise<T> {
-    return this.client.request<T>(mutation, variables);
+    try {
+      return await this.client.request<T>(mutation, variables);
+    } catch (error: any) {
+      mapExhaustedHasuraQueryError(error);
+    }
   }
 
   /**

@@ -243,7 +243,14 @@ export class HasuraUserService {
     variables?: any,
     ctx?: RequestContext
   ): Promise<T> {
-    return this.createGraphQLClient(ctx).request<T>(mutation, variables);
+    try {
+      return await this.createGraphQLClient(ctx).request<T>(
+        mutation,
+        variables
+      );
+    } catch (error: any) {
+      mapExhaustedHasuraQueryError(error);
+    }
   }
 
   /**
