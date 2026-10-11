@@ -121,6 +121,14 @@ export function collectedDeliveryFee(order: {
   return Number(order.base_delivery_fee ?? 0) + Number(order.per_km_delivery_fee ?? 0);
 }
 
+/** ISO code, or a known country name. Unknown text stays as entered. */
+export function comparableCountry(value?: string | null): string | null {
+  const raw = String(value ?? '').trim().toUpperCase();
+  if (!raw) return null;
+  if (/^[A-Z]{2}$/.test(raw)) return raw;
+  return COUNTRY_NAMES[raw] ?? raw;
+}
+
 export function normalizeDeliveryCountryCode(
   country: string | null | undefined
 ): string {

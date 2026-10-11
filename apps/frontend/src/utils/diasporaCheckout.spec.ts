@@ -199,4 +199,11 @@ describe('dropOffAddressesForFulfillment', () => {
   it('returns none until the destination country is known', () => {
     expect(dropOffAddressesForFulfillment(book, null, true)).toEqual([]);
   });
+
+  it('keeps a Gabon address stored under its country name', () => {
+    const named = [{ id: 'libreville', country: 'Gabon' }, { id: 'ca', country: 'CA' }];
+    expect(dropOffAddressesForFulfillment(named, 'GA', true)).toEqual([
+      { id: 'libreville', country: 'Gabon' },
+    ]);
+  });
 });

@@ -95,8 +95,22 @@ export function formatPayerChargeEstimate(
   }
 }
 
+const COUNTRY_NAMES: Record<string, string> = {
+  CAMEROON: 'CM',
+  GABON: 'GA',
+  CANADA: 'CA',
+  TOGO: 'TG',
+  BENIN: 'BJ',
+  "COTE D'IVOIRE": 'CI',
+  'IVORY COAST': 'CI',
+  CONGO: 'CG',
+  PHILIPPINES: 'PH',
+};
+
 export function normalizeCountryIso(country: string | null | undefined): string {
-  return (country ?? '').trim().toUpperCase();
+  const raw = (country ?? '').trim().toUpperCase();
+  if (/^[A-Z]{2}$/.test(raw)) return raw;
+  return COUNTRY_NAMES[raw] ?? raw;
 }
 
 /**
