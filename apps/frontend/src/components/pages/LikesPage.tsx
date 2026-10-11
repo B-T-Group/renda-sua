@@ -239,7 +239,7 @@ const LikesPage: React.FC = () => {
           <FavoriteBorder sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
           <Typography variant="h6" sx={{ mb: 1 }}>
             {filterValue === 'back_in_stock'
-              ? t('restock.emptyFilterTitle', 'Nothing back yet. We'll tell you.')
+              ? t('restock.emptyFilterTitle', "Nothing back yet. We'll tell you.")
               : (currentData?.total ?? 0) > 0
               ? t('items.likes.unavailableTitle', 'Favorites unavailable right now')
               : t('items.likes.emptyTitle', 'No favorites yet')}
@@ -248,7 +248,7 @@ const LikesPage: React.FC = () => {
             {filterValue === 'back_in_stock'
               ? t(
                   'restock.emptyFilterMessage',
-                  'When items you liked come back in stock, they'll show up here.'
+                  "When items you liked come back in stock, they'll show up here."
                 )
               : (currentData?.total ?? 0) > 0
               ? t(
