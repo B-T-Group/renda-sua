@@ -1,0 +1,70 @@
+table:
+  name: restock_alert_sends
+  schema: public
+object_relationships:
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: event
+    using:
+      foreign_key_constraint_on: event_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - item_id
+        - channel
+        - is_digest
+        - digest_item_count
+        - quantity_shown
+        - status
+        - sent_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - item_id
+        - channel
+        - is_digest
+        - digest_item_count
+        - quantity_shown
+        - status
+        - sent_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - item_id
+        - channel
+        - is_digest
+        - digest_item_count
+        - quantity_shown
+        - status
+        - sent_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id
+  - role: user
+    permission:
+      columns:
+        - id
+        - item_id
+        - channel
+        - is_digest
+        - digest_item_count
+        - quantity_shown
+        - status
+        - sent_at
+      filter:
+        user_id:
+          _eq: X-Hasura-User-Id

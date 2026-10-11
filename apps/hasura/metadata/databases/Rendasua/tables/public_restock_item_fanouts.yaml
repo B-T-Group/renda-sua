@@ -1,0 +1,10 @@
+table:
+  name: restock_item_fanouts
+  schema: public
+object_relationships:
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: event
+    using:
+      foreign_key_constraint_on: event_id
