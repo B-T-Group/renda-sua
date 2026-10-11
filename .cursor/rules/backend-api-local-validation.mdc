@@ -1,5 +1,5 @@
 ---
-description: Validate a new or updated Nest HTTP API by serving the backend locally, signing in as besongsamueloru+mm@gmail.com with phone OTP 0000, and calling the changed route
+description: Validate a new or updated Nest HTTP API by deploying its Hasura migrations to dev first, then serving the backend locally, signing in with the account phone OTP 0000, and calling the changed route
 globs: apps/backend/src/**/*.controller.ts
 alwaysApply: false
 ---
@@ -8,32 +8,43 @@ alwaysApply: false
 
 When you **add or change** a Nest HTTP route (or the request/response behavior of one), do not finish until that route succeeds against a locally served backend. Unit tests do not replace this call.
 
-## 1. Serve
+The development server reads `HASURA_GRAPHQL_ENDPOINT` (`https://hasura-dev.rendasua.com`). Applying SQL to a local Hasura on port 8080 does not satisfy this check.
+
+## 1. Deploy migrations first
+
+If this change adds or edits anything under `apps/hasura/migrations/` or the metadata those queries need, deploy that Hasura change to **dev** before serving or calling the API.
+
+1. Commit and push **only** that migration directory and the metadata YAML that tracks its new columns and relationships. Leave application code out of the commit. Metadata apply publishes the whole metadata tree in the commit, so a new GraphQL field is missing until its YAML is in this push.
+2. The version must be unique against `origin/main`. A duplicate timestamp fails apply (`found duplicate migrations for version`). Rename or recreate with `hasura migrate create` before pushing.
+3. Rebase onto `origin/main` when the branch is behind, then push to `main` only. That runs `.github/workflows/hasura-apply.yml` → **Apply Hasura (dev)** against `https://hasura-dev.rendasua.com`. Do not push `prod`.
+4. Wait until that job succeeds (`gh run watch`). Do not call the API while it is queued, in progress, or failing.
+
+## 2. Serve
 
 If `nx serve backend --configuration=development` is not already listening, start it and wait until Nest logs that it is listening. Base URL: `http://localhost:3000/api`. Fix boot failures before calling the API.
 
-## 2. Sign in
+## 3. Sign in
 
-Send the OTP to the phone on the account, then confirm with `0000`. Header `x-client-platform: mobile` so the JSON body includes `access_token`.
+Look up the phone number on `besongsamueloru+mm@gmail.com`. That number is on the OTP allow list. Send and verify the OTP with `phone_number`, not the email. Header `x-client-platform: mobile` so the JSON body includes `access_token`. OTP is `0000`.
 
 ```http
 POST /auth/login/start-otp
-{ "email": "besongsamueloru+mm@gmail.com", "channel": "sms" }
+{ "phone_number": "<account phone>", "channel": "sms" }
 
 POST /auth/login/verify-otp
-{ "email": "besongsamueloru+mm@gmail.com", "channel": "sms", "otp": "0000" }
+{ "phone_number": "<account phone>", "channel": "sms", "otp": "0000" }
 ```
 
-Later calls: `Authorization: Bearer <token>` and, when the route is persona-scoped, `X-Active-Persona: client|business|agent`. Do not print or commit the token. If verify fails, stop.
+Do not print the phone number. Later calls: `Authorization: Bearer <token>` and, when the route is persona-scoped, `X-Active-Persona: client|business|agent`. Do not print or commit the token. If verify fails, stop.
 
-## 3. Call the changed API
+## 4. Call the changed API
 
 Exercise the new or updated route with a real request and the persona it requires. Assert the status and the fields the change is supposed to return or persist. If the call fails, fix the API and call it again.
 
-## 4. Order state
+## 5. Order state
 
 When the route needs an order in a given status, place one on this local server and move it there before the call. Use quantity 1 and keep any Mobile Money charge under 2000 XAF. Drive client, business, and agent with `X-Active-Persona` the same way as `.cursor/skills/run-order-flows/reference.md` (confirm, ready, claim, delivery, or pickup), against `localhost` rather than the dev host. Do not cancel the order unless the route under test is cancel.
 
-## 5. Report
+## 6. Report
 
 Say the local URL, the route, the HTTP status, and the order id and status when an order was required.

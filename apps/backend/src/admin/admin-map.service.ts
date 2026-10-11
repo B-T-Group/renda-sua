@@ -1,6 +1,14 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
+  andWhere,
+  countryInScope,
+  scopeCovers,
+  stateInScope,
+  type MarketRow,
+} from '../rbac/geo-scope.util';
+import type { GeoScope } from '../rbac/platform-permissions';
+import {
   ADMIN_MAP_AGENTS_QUERY,
   ADMIN_MAP_LOCATIONS_QUERY,
   ADMIN_MAP_REGIONS_QUERY,
@@ -49,37 +57,58 @@ interface RegionRow {
 export class AdminMapService {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
 
-  async getRegions(countryCode: string): Promise<{ regions: { stateName: string }[] }> {
+  async getRegions(
+    countryCode: string,
+    scope?: GeoScope
+  ): Promise<{ regions: { stateName: string }[] }> {
     const code = normalizeCountryCode(countryCode);
     if (!code) throw new BadRequestException('country is required');
+    this.assertCountry(scope, code);
     const rows = await this.loadRegions(code);
-    return { regions: uniqueStateNames(rows).map((stateName) => ({ stateName })) };
+    const names = uniqueStateNames(rows).filter((stateName) =>
+      this.regionAllowed(scope, code, stateName)
+    );
+    return { regions: names.map((stateName) => ({ stateName })) };
   }
 
-  async search(term: string): Promise<{ results: AdminMapSearchHit[] }> {
+  async search(
+    term: string,
+    addressWhere?: Record<string, unknown> | null
+  ): Promise<{ results: AdminMapSearchHit[] }> {
     const tokens = searchTokens(term);
     if (tokens.join('').length < 2) return { results: [] };
     const [agents, locations] = await Promise.all([
-      this.findAgents(tokens),
-      this.findLocations(tokens),
+      this.findAgents(tokens, addressWhere),
+      this.findLocations(tokens, addressWhere),
     ]);
     return { results: peopleHits(agents, locations) };
   }
 
-  async activeOrders(term: string): Promise<{ results: AdminMapSearchHit[] }> {
-    const orders = await this.loadOrders(activeOrdersWhere(term), 30);
+  async activeOrders(
+    term: string,
+    orderWhere?: Record<string, unknown> | null
+  ): Promise<{ results: AdminMapSearchHit[] }> {
+    const orders = await this.loadOrders(
+      andWhere(activeOrdersWhere(term), orderWhere),
+      30
+    );
     return { results: orders.map(orderSearchHit) };
   }
 
   async getPins(
-    query: AdminMapPinsQueryDto
+    query: AdminMapPinsQueryDto,
+    scope?: GeoScope,
+    markets: MarketRow[] = []
   ): Promise<{ pins: AdminMapPin[]; summary: AdminMapSummary }> {
     const filter = await this.buildFilter(query);
+    this.assertCountry(scope, filter.countryCode);
+    this.assertState(scope, filter);
     const [agents, locations] = await this.loadRows();
-    const matched = mergePins(agents, locations, filter);
+    const visible = this.rowsInScope(agents, locations, scope, markets);
+    const matched = mergePins(visible.agents, visible.locations, filter);
     return {
       pins: pinsForKind(matched, query.kind ?? 'all'),
-      summary: summarizeMarket(agents, locations, filter),
+      summary: summarizeMarket(visible.agents, visible.locations, filter),
     };
   }
 
@@ -111,18 +140,31 @@ export class AdminMapService {
     return data.business_locations ?? [];
   }
 
-  private async findAgents(tokens: string[]): Promise<AgentMapSource[]> {
+  private async findAgents(
+    tokens: string[],
+    addressWhere?: Record<string, unknown> | null
+  ): Promise<AgentMapSource[]> {
     const data = await this.hasuraSystemService.executeQuery<{ agents: AgentMapSource[] }>(
       ADMIN_MAP_SEARCH_AGENTS_QUERY,
-      { where: personNameWhere(tokens) }
+      {
+        where: andWhere(
+          personNameWhere(tokens),
+          addressWhere ? { agent_addresses: { address: addressWhere } } : null
+        ),
+      }
     );
     return data.agents ?? [];
   }
 
-  private async findLocations(tokens: string[]): Promise<LocationMapSource[]> {
+  private async findLocations(
+    tokens: string[],
+    addressWhere?: Record<string, unknown> | null
+  ): Promise<LocationMapSource[]> {
     const data = await this.hasuraSystemService.executeQuery<{
       business_locations: LocationMapSource[];
-    }>(ADMIN_MAP_SEARCH_LOCATIONS_QUERY, { where: merchantNameWhere(tokens) });
+    }>(ADMIN_MAP_SEARCH_LOCATIONS_QUERY, {
+      where: andWhere(merchantNameWhere(tokens), addressWhere ? { address: addressWhere } : null),
+    });
     return data.business_locations ?? [];
   }
 
@@ -140,4 +182,59 @@ export class AdminMapService {
     }>(ADMIN_MAP_REGIONS_QUERY, { code });
     return data.supported_country_states ?? [];
   }
+
+  private assertCountry(scope: GeoScope | undefined, code?: string): void {
+    if (!scope || scope.all || !code) return;
+    if (!countryInScope(scope, code)) {
+      throw new BadRequestException('Country is outside your scope');
+    }
+  }
+
+  private assertState(scope: GeoScope | undefined, filter: AdminMapFilter): void {
+    if (!filter.state || !scope || scope.all) return;
+    if (!stateInScope(scope, filter.countryCode ?? '', filter.state)) {
+      throw new BadRequestException('Region is outside your scope');
+    }
+  }
+
+  private rowsInScope(
+    agents: AgentMapSource[],
+    locations: LocationMapSource[],
+    scope: GeoScope | undefined,
+    markets: MarketRow[]
+  ) {
+    return {
+      agents: agents.filter((row) => this.addressAllowed(scope, markets, this.agentAddress(row))),
+      locations: locations.filter((row) => this.addressAllowed(scope, markets, row.address)),
+    };
+  }
+
+  private addressAllowed(
+    scope: GeoScope | undefined,
+    markets: MarketRow[],
+    address?: { country?: string | null; state?: string | null } | null
+  ): boolean {
+    if (!scope || scope.all) return true;
+    return scopeCovers(scope, {
+      countryCode: address?.country ?? null,
+      stateName: address?.state,
+    }, markets);
+  }
+
+  private agentAddress(agent: AgentMapSource) {
+    const rows = (agent.agent_addresses ?? [])
+      .map((row) => row.address)
+      .filter((address): address is NonNullable<typeof address> => Boolean(address));
+    return rows.find((address) => address.is_primary) ?? rows[0] ?? null;
+  }
+
+  private regionAllowed(
+    scope: GeoScope | undefined,
+    code: string,
+    stateName: string
+  ): boolean {
+    if (!scope || scope.all) return true;
+    return stateInScope(scope, code, stateName);
+  }
+
 }

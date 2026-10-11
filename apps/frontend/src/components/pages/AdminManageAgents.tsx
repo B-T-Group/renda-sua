@@ -34,6 +34,7 @@ import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { usePermissions } from '../../hooks/usePermissions';
+import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 import { AdminApplyReferralDialog } from '../admin/AdminApplyReferralDialog';
 import { AdminReferralMeta } from '../admin/AdminReferralMeta';
@@ -77,7 +78,8 @@ const AdminManageAgents: React.FC = () => {
   const { vehicleTypes } = useVehicleTypes();
   const apiClient = useApiClient();
   const { t } = useTranslation();
-  const { isSuperuser } = usePermissions();
+  const { isSuperuser, can } = usePermissions();
+  const canManage = can(PlatformPermissions.MANAGE_AGENTS);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [verificationAgentId, setVerificationAgentId] = useState<string | null>(
@@ -360,13 +362,14 @@ const AdminManageAgents: React.FC = () => {
                       referredBy={a.referredBy}
                       createdAt={a.created_at}
                       onApply={
-                        a.referredBy
+                        !canManage || a.referredBy
                           ? undefined
                           : () => setApplyAgentId(a.id)
                       }
                     />
                   }
                   footer={
+                    canManage ? (
                     <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                       <Button
                         size="small"
@@ -386,9 +389,10 @@ const AdminManageAgents: React.FC = () => {
                             onClick={() => setVerificationAgentId(a.id)}
                           >
                             {t('admin.agents.verification', 'Verification')}
-                          </Button>
-                        )}
+                      </Button>
+                      )}
                     </Box>
+                    ) : null
                   }
                 />
               ))}

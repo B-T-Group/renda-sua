@@ -6,6 +6,7 @@ export interface PlatformRole {
   key: string;
   name: string;
   description: string;
+  requiresGeoScope?: boolean;
 }
 
 export function useAdminRbac() {

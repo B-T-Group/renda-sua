@@ -64,6 +64,7 @@ import UserRatingSummary from '../common/UserRatingSummary';
 import { MarketSelector } from '../market/MarketSelector';
 import { HeaderSearchPopover } from './HeaderSearchPopover';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
+import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import type { MarketStatesCatalog } from '../../hooks/useMarketStates';
 import { brandTokens } from '../../theme/brandTokens';
 import {
@@ -126,6 +127,10 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
     activeDelegation,
     delegations,
   } = useUserProfileContext();
+  const { hasAdminAccess } = useBusinessDashboardModules({
+    aggregates: null,
+    isRentalFocused: false,
+  });
   const { enqueueSnackbar } = useSnackbar();
   const { t } = useTranslation();
   const { showDelivery } = useAgentFocus();
@@ -1094,6 +1099,20 @@ const Header: React.FC<HeaderProps> = ({ assistantEntry = 'icon' }) => {
                       </ListItemIcon>
                       Documents
                     </MenuItem>
+
+                    {hasAdminAccess ? (
+                      <MenuItem
+                        component={RouterLink}
+                        to="/business/dashboard/admin"
+                        onClick={handleUserMenuClose}
+                        sx={{ py: 1.5 }}
+                      >
+                        <ListItemIcon>
+                          <Dashboard fontSize="small" />
+                        </ListItemIcon>
+                        {t('business.dashboard.adminMenuTitle', 'Admin tools')}
+                      </MenuItem>
+                    ) : null}
 
                     {personas.length > 1 &&
                       personas

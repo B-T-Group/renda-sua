@@ -27,6 +27,7 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { RequirePermissions } from '../rbac/permissions.decorator';
 import { PlatformPermissions } from '../rbac/platform-permissions';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { AdminOrdersService } from './admin-orders.service';
 import type {
@@ -80,7 +81,8 @@ export class AdminOrdersController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly notificationsService: NotificationsService,
     private readonly adminOrderContactService: AdminOrderContactService,
-    private readonly creditsService: CreditsService
+    private readonly creditsService: CreditsService,
+    private readonly geo: GeoScopeService
   ) {}
 
   @Get()
@@ -379,6 +381,8 @@ export class AdminOrdersController {
     @Param('incidentId') incidentId: string,
     @Body() dto: AcknowledgeRiskIncidentDto
   ) {
+    const scope = await this.geo.require(PlatformPermissions.ORDERS_CROSS_BUSINESS);
+    await this.geo.assertIncident(scope, incidentId);
     const actor = await this.hasuraUserService.getUser();
     const { incident, applied } = await this.riskIncidentsService.acknowledge({
       incidentId,
@@ -465,6 +469,8 @@ export class AdminOrdersController {
   }
 
   private async requireOrder(orderId: string): Promise<any> {
+    const scope = await this.geo.require(PlatformPermissions.ORDERS_CROSS_BUSINESS);
+    await this.geo.assertOrder(scope, orderId);
     const order = await this.ordersService.getOrderById(orderId);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);

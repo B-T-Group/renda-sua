@@ -506,6 +506,10 @@ function App() {
                 element={<LazyPages.AdminManageBusinesses />}
               />
               <Route
+                path="/admin/country-admins"
+                element={<LazyPages.AdminCountryAdminsPage />}
+              />
+              <Route
                 path="/admin/business-reliability"
                 element={<LazyPages.AdminBusinessReliabilityPage />}
               />

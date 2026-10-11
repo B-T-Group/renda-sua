@@ -92,6 +92,86 @@ describe('AdminMapService.activeOrders', () => {
   });
 });
 
+describe('AdminMapService.getPins', () => {
+  const littoral = {
+    all: false as const,
+    countries: [] as string[],
+    states: [{ countryCode: 'CM', stateKey: 'littoral' }],
+  };
+  const markets = [
+    { countryCode: 'CM', countryName: 'Cameroon' },
+    { countryCode: 'GA', countryName: 'Gabon' },
+  ];
+
+  function service() {
+    const executeQuery = jest.fn(async (query: string) => {
+      const text = String(query);
+      if (text.includes('AdminMapAgents')) return { agents: mapAgents() };
+      if (text.includes('AdminMapLocations')) return { business_locations: mapShops() };
+      if (text.includes('AdminMapRegions')) {
+        return {
+          supported_country_states: [{ state_name: 'Littoral', country_name: 'Cameroon' }],
+        };
+      }
+      return {};
+    });
+    return new AdminMapService({ executeQuery } as any);
+  }
+
+  it('keeps pins and summary inside the grant when country is omitted', async () => {
+    const result = await service().getPins({}, littoral, markets);
+
+    expect(result.pins.map((pin) => pin.id).sort()).toEqual(['littoral', 'open-littoral']);
+    expect(result.summary).toEqual({
+      agents: { active: 1, unavailable: 0, suspended: 0 },
+      merchants: { open: 1, inactive: 0 },
+    });
+  });
+
+  it('does not count other states when the selected country is wider than the grant', async () => {
+    const result = await service().getPins({ country: 'CM' }, littoral, markets);
+
+    expect(result.pins.map((pin) => pin.id)).not.toContain('centre');
+    expect(result.summary.agents.active).toBe(1);
+    expect(result.summary.merchants).toEqual({ open: 1, inactive: 0 });
+  });
+});
+
+function mapAgents() {
+  return [
+    placed('littoral', 'Cameroon', 'Littoral'),
+    placed('centre', 'Cameroon', 'Centre'),
+    placed('estuaire', 'Gabon', 'Estuaire'),
+  ];
+}
+
+function mapShops() {
+  return [
+    shop('open-littoral', 'Cameroon', 'Littoral', true),
+    shop('closed-centre', 'Cameroon', 'Centre', false),
+  ];
+}
+
+function placed(id: string, country: string, state: string) {
+  return {
+    id,
+    status: 'active',
+    is_available: true,
+    user: { first_name: 'Awa', last_name: 'Ngo', email: `${id}@example.com` },
+    agent_locations: [],
+    agent_addresses: [{ address: { country, state, latitude: 4.05, longitude: 9.7, is_primary: true } }],
+  };
+}
+
+function shop(id: string, country: string, state: string, isActive: boolean) {
+  return {
+    id,
+    name: id,
+    is_active: isActive,
+    address: { country, state, latitude: 4.05, longitude: 9.7 },
+  };
+}
+
 function agentSource() {
   return {
     id: 'agent-1',
