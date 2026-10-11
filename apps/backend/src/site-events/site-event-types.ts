@@ -123,6 +123,13 @@ export const SITE_EVENT_TYPES_V1 = [
   'restock.add_to_cart_from_alert',
   'restock.order_from_alert',
   'restock.opt_out',
+  // Discovery sort v1 (#342) - client-emitted events (web)
+  'search.results_shown',
+  'search.sort_changed',
+  'search.empty_shown',
+  'search.empty_rung_clicked',
+  'search.filter_removed_from_empty',
+  'card.rating_shown',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event
