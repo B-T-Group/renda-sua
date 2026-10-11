@@ -120,7 +120,8 @@ describe('RestockAlertBellButton', () => {
     );
 
     const button = screen.getByRole('button');
-    expect(button).toHaveAttribute('aria-label');
-    expect(button.getAttribute('aria-label')).toContain('Test Item');
+    const ariaLabel = button.getAttribute('aria-label');
+    expect(ariaLabel).toBeTruthy();
+    expect(ariaLabel).toContain('Test Item');
   });
 });
