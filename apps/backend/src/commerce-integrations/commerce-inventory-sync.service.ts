@@ -307,6 +307,8 @@ export class CommerceInventorySyncService {
     variantId: string
   ): Promise<{
     id: string;
+    item_id: string;
+    business_location_id: string;
     quantity: number;
     reserved_quantity: number;
     categoryName?: string | null;
@@ -320,7 +322,7 @@ export class CommerceInventorySyncService {
           }
           limit: 1
         ) {
-          id quantity reserved_quantity
+          id item_id business_location_id quantity reserved_quantity
           item {
             item_sub_category {
               item_category { name }
@@ -332,6 +334,8 @@ export class CommerceInventorySyncService {
     const res = await this.hasura.executeQuery<{
       business_inventory: Array<{
         id: string;
+        item_id: string;
+        business_location_id: string;
         quantity: number;
         reserved_quantity: number;
         item?: {
@@ -345,6 +349,8 @@ export class CommerceInventorySyncService {
     if (!row) return null;
     return {
       id: row.id,
+      item_id: row.item_id,
+      business_location_id: row.business_location_id,
       quantity: row.quantity,
       reserved_quantity: row.reserved_quantity,
       categoryName: row.item?.item_sub_category?.item_category?.name,

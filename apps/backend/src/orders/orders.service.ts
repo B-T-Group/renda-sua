@@ -43,6 +43,7 @@ import {
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService, OrderItem } from '../hasura/hasura-user.service';
 import { VariantInventoryService } from '../item-variants/variant-inventory.service';
+import { RestockAlertStateService } from '../inventory-restock/restock-alert-state.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
 import { resolveOrderNotificationAddress } from './order-notification-address.util';
 import { resetOrderPaymentFailure as writePaymentFailureReset } from './reset-order-payment-failure.util';
@@ -620,6 +621,7 @@ export class OrdersService {
     private readonly depositLedgerService: DepositLedgerService,
     private readonly depositRefundService: DepositRefundService,
     private readonly variantInventory: VariantInventoryService,
+    private readonly restockAlertState: RestockAlertStateService,
     private readonly siteEventsService: SiteEventsService,
     @Optional()
     private readonly commerceOrderInventoryHook?: CommerceOrderInventoryHook,
@@ -13613,6 +13615,17 @@ export class OrdersService {
         { releaseInventory: false, allowPendingUnpaid: true }
       );
       throw error;
+    }
+
+    // AC-§1: Disarm restock alerts for purchased items (fire-and-forget)
+    const itemIds = orderItemsData
+      .filter((item: any) => item.item_id)
+      .map((item: any) => item.item_id);
+    if (itemIds.length > 0 && client?.user_id) {
+      void this.restockAlertState.disarmAlertsForOrderItems(
+        client.user_id,
+        itemIds
+      );
     }
 
     await writeOrderStatusHistory(this.hasuraSystemService, {
