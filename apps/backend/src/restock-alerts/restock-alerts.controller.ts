@@ -14,6 +14,7 @@ import {
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
+import { Public } from '../auth/public.decorator';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -109,6 +110,7 @@ export class RestockAlertsController {
 
   /** Public on purpose: the signed single-use token is the credential (push action, link). */
   @Post('stop')
+  @Public()
   @HttpCode(200)
   @ApiOperation({ summary: 'Stop restock alerts for one channel from a message' })
   async stop(@Body() body: StopRestockAlertsDto) {
