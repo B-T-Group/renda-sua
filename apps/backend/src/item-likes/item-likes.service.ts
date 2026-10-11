@@ -5,6 +5,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { RestockAlertStateService } from '../inventory-restock/restock-alert-state.service';
 import {
   InventoryItem,
   InventoryItemsService,
@@ -101,7 +102,8 @@ export class ItemLikesService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly inventoryItemsService: InventoryItemsService
+    private readonly inventoryItemsService: InventoryItemsService,
+    private readonly restockAlertState: RestockAlertStateService
   ) {}
 
   async setLike(
@@ -132,11 +134,15 @@ export class ItemLikesService {
         userId,
         itemId,
       });
+      // AC-§1: Arm alert when user likes an OOS item (fire-and-forget)
+      void this.restockAlertState.armAlertOnLike(userId, itemId);
     } else {
       await this.hasuraSystemService.executeMutation(DELETE_LIKE, {
         userId,
         itemId,
       });
+      // AC-§1: Disarm alert when user unlikes (fire-and-forget)
+      void this.restockAlertState.disarmAlertOnUnlike(userId, itemId);
     }
 
     const refreshed = await this.hasuraSystemService.executeQuery<{

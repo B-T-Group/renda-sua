@@ -1,8 +1,10 @@
 import { Controller, Get, Patch, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { AuthGuard } from '../auth/auth.guard';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
-import { CurrentUser } from '../auth/current-user.decorator';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { IsBoolean, IsOptional, IsUUID } from 'class-validator';
 
 const GET_USER_RESTOCK_PREFERENCES = `
   query GetUserRestockPreferences($userId: uuid!) {
@@ -49,19 +51,30 @@ const TOGGLE_ITEM_ALERT = `
 `;
 
 class PatchRestockPreferencesDto {
+  @IsOptional()
+  @IsBoolean()
   restock_alerts_push_enabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   restock_alerts_whatsapp_enabled?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   restock_alerts_sms_enabled?: boolean;
 }
 
 class ToggleItemAlertDto {
-  item_id: string;
-  alert_enabled: boolean;
+  @IsUUID()
+  item_id!: string;
+
+  @IsBoolean()
+  alert_enabled!: boolean;
 }
 
 @ApiTags('restock-alerts')
 @Controller('restock-alerts')
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(AuthGuard)
 @ApiBearerAuth()
 export class RestockAlertsController {
   constructor(private readonly hasuraSystemService: HasuraSystemService) {}
@@ -80,14 +93,18 @@ export class RestockAlertsController {
       },
     },
   })
-  async getPreferences(@CurrentUser() user: { id: string }) {
+  async getPreferences(@ReqContext() ctx: RequestContext) {
+    const userId = ctx.userId;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
     const result = await this.hasuraSystemService.executeQuery<{
       user_notification_preferences: Array<{
         restock_alerts_push_enabled: boolean;
         restock_alerts_whatsapp_enabled: boolean;
         restock_alerts_sms_enabled: boolean;
       }>;
-    }>(GET_USER_RESTOCK_PREFERENCES, { userId: user.id });
+    }>(GET_USER_RESTOCK_PREFERENCES, { userId });
 
     const prefs = result.user_notification_preferences[0] || {
       restock_alerts_push_enabled: true,
@@ -116,11 +133,15 @@ export class RestockAlertsController {
     },
   })
   async updatePreferences(
-    @CurrentUser() user: { id: string },
+    @ReqContext() ctx: RequestContext,
     @Body() dto: PatchRestockPreferencesDto
   ) {
+    const userId = ctx.userId;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
     await this.hasuraSystemService.executeMutation(UPDATE_RESTOCK_PREFERENCES, {
-      userId: user.id,
+      userId,
       pushEnabled: dto.restock_alerts_push_enabled,
       whatsappEnabled: dto.restock_alerts_whatsapp_enabled,
       smsEnabled: dto.restock_alerts_sms_enabled,
@@ -144,11 +165,15 @@ export class RestockAlertsController {
     },
   })
   async toggleItemAlert(
-    @CurrentUser() user: { id: string },
+    @ReqContext() ctx: RequestContext,
     @Body() dto: ToggleItemAlertDto
   ) {
+    const userId = ctx.userId;
+    if (!userId) {
+      throw new Error('User not authenticated');
+    }
     await this.hasuraSystemService.executeMutation(TOGGLE_ITEM_ALERT, {
-      userId: user.id,
+      userId,
       itemId: dto.item_id,
       enabled: dto.alert_enabled,
     });

@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
+import { InventoryRestockModule } from '../inventory-restock/inventory-restock.module';
 import { BusinessItemsController } from './business-items.controller';
 import { BusinessItemsService } from './business-items.service';
 import { BusinessItemsAccessService } from './business-items-access.service';
@@ -36,6 +37,7 @@ import { CollectionsModule } from '../collections/collections.module';
     StripeTaxModule,
     MerchantLifecycleModule,
     NotificationsModule,
+    InventoryRestockModule,
   ],
   controllers: [BusinessItemsController],
   providers: [

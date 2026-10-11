@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { NotificationOrchestratorService } from '../notifications/orchestration/notification-orchestrator.service';
-import { DeepLinkService } from '../notifications/deep-link.service';
+import { NotificationOrchestrator } from '../notifications/orchestration/notification-orchestrator.service';
 
 const GET_UNPROCESSED_RESTOCK_EVENTS = `
   query GetUnprocessedRestockEvents($since: timestamptz!) {
@@ -222,9 +221,6 @@ export class RestockAlertsService {
   // AC-2.4: Per-item fan-out cap window
   private readonly FANOUT_CAP_HOURS = 6;
   
-  // AC-2.6: Digest window
-  private readonly DIGEST_WINDOW_MINUTES = 60;
-  
   // AC-2.7: Quiet hours
   private readonly QUIET_HOURS_START = 21;
   private readonly QUIET_HOURS_END = 8;
@@ -237,8 +233,7 @@ export class RestockAlertsService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly notificationOrchestrator: NotificationOrchestratorService,
-    private readonly deepLinkService: DeepLinkService
+    private readonly notificationOrchestrator: NotificationOrchestrator
   ) {}
 
   /**
@@ -483,7 +478,8 @@ export class RestockAlertsService {
     channel: 'push' | 'whatsapp' | 'sms',
     locale: string
   ): Promise<void> {
-    const deepLink = this.deepLinkService.inventoryItem(item.id, 'restock_alert');
+    // Use general deep link format until we verify the correct method
+    const deepLink = `https://rendasua.com/item/${item.id}?src=restock_alert`;
     
     const title = locale === 'fr' 
       ? `${item.name} est de retour`
