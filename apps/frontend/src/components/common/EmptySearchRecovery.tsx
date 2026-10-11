@@ -10,7 +10,6 @@ import {
   Link as MuiLink,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import type {
   SearchRecoveryData,
   RecoveryFilterRemoval,
@@ -46,8 +45,6 @@ export const EmptySearchRecovery: React.FC<EmptySearchRecoveryProps> = ({
   onAddToCart,
 }) => {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-
   const getFilterLabel = useCallback(
     (filter: RecoveryFilterRemoval['filter']): string => {
       return t(`search.filterLabels.${filter}`, filter);

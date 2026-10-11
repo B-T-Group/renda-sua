@@ -351,12 +351,18 @@ const ItemsPage: React.FC = () => {
     null
   );
   const [trackOrderId, setTrackOrderId] = useState<string | null>(null);
-  const { flags: clientFlags } = useClientFlags();
-  const discoveryEnabled = clientFlags.discovery_sort_v1;
+  const { flags } = useClientFlags();
+  const discoveryEnabled = flags.discovery_sort_v1;
   const { recovery, fetchRecovery, reset: resetRecovery } = useSearchRecovery();
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const resultsShownKeyRef = useRef<string | null>(null);
+  const ratingShownIdsRef = useRef<Set<string>>(new Set());
 
   const browserGeo = usePublicBrowserGeo(true);
-  
+
+  const inventorySearch =
+    searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
+
   useEffect(() => {
     if (sortFromUrl && sortFromUrl !== sort) {
       setSort(sortFromUrl);
@@ -393,9 +399,6 @@ const ItemsPage: React.FC = () => {
     [sort, inventorySearch, discoveryEnabled, setSearchParams, trackSiteEvent]
   );
 
-  const inventorySearch =
-    searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
-  
   useEffect(() => {
     if (inventorySearch && sort !== sortFromUrl) {
       const searchParams = new URLSearchParams(location.search);
@@ -410,6 +413,11 @@ const ItemsPage: React.FC = () => {
       resetRecovery();
     }
   }, [discoveryEnabled, inventorySearch, resetRecovery]);
+
+  useEffect(() => {
+    ratingShownIdsRef.current = new Set();
+    resultsShownKeyRef.current = null;
+  }, [inventorySearch]);
 
   const {
     inventoryItems: facetInventoryItems,
@@ -460,7 +468,7 @@ const ItemsPage: React.FC = () => {
   
   useEffect(() => {
     if (!discoveryEnabled || loading) return;
-    if (pagination && pagination.total === 0 && inventorySearch && hasActiveFilters) {
+    if (pagination && pagination.total === 0 && inventorySearch) {
       fetchRecovery({
         search: inventorySearch,
         category: filters.category || undefined,
@@ -482,7 +490,6 @@ const ItemsPage: React.FC = () => {
     loading,
     pagination,
     inventorySearch,
-    hasActiveFilters,
     filters,
     collectionSlug,
     browserGeo.country_code,
@@ -494,16 +501,22 @@ const ItemsPage: React.FC = () => {
   useEffect(() => {
     if (!discoveryEnabled || !pagination || loading) return;
     if (pagination.total > 0 && inventoryItems.length > 0) {
-      void trackSiteEvent({
-        eventType: SITE_EVENT_SEARCH_RESULTS_SHOWN,
-        metadata: {
-          query_len: inventorySearch?.length ?? 0,
-          count: pagination.total,
-          mode: pagination.discovery?.sort ?? sort,
-        },
-      });
+      const mode = pagination.discovery?.sort ?? sort;
+      const key = `${inventorySearch ?? ''}|${mode}|${pagination.total}`;
+      if (resultsShownKeyRef.current !== key) {
+        resultsShownKeyRef.current = key;
+        void trackSiteEvent({
+          eventType: SITE_EVENT_SEARCH_RESULTS_SHOWN,
+          metadata: {
+            query_len: inventorySearch?.length ?? 0,
+            count: pagination.total,
+            mode,
+          },
+        });
+      }
       inventoryItems.forEach((item) => {
-        if (item.rating_display) {
+        if (item.rating_display && !ratingShownIdsRef.current.has(item.id)) {
+          ratingShownIdsRef.current.add(item.id);
           void trackSiteEvent({
             eventType: SITE_EVENT_CARD_RATING_SHOWN,
             subject: { type: 'inventory_item', id: item.id },
@@ -521,7 +534,6 @@ const ItemsPage: React.FC = () => {
     trackSiteEvent,
   ]);
 
-  const { flags } = useClientFlags();
   const [experienceUnavailable, setExperienceUnavailable] = useState(false);
   const markExperienceUnavailable = useCallback(() => {
     setExperienceUnavailable(true);
@@ -748,7 +760,6 @@ const ItemsPage: React.FC = () => {
 
   const { trackView } = useTrackItemView(null);
   const trackAddToCart = useMetaAddToCartTrack();
-  const { trackSiteEvent } = useTrackSiteEvent();
 
   const onCartBuilt = useCallback(
     (cartItem: CartItem, item: InventoryItem) => {

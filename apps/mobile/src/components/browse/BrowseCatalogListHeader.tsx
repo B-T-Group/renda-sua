@@ -1,7 +1,7 @@
 import React, { memo } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Button, Chip, Text } from 'react-native-paper';
+import { Button, Chip, IconButton, Text } from 'react-native-paper';
 import { CatalogBrowseHero } from './CatalogBrowseHero';
 import { FoodsMenuHero } from './FoodsMenuHero';
 import { ClientHomeOrdersStrip } from '../client/ClientHomeOrdersStrip';
@@ -11,7 +11,19 @@ import type { CatalogFilterState } from '../../types/catalogFilter';
 import type { Theme } from '../../theme';
 import type { HeroSlideId } from './HeroCarousel/heroSlideConfig';
 
+/** Discovery sort control (#342, flag on only). Replaces the legacy sort chip. */
+export interface DiscoverySortControlProps {
+  control: 'enabled' | 'disabled' | 'hidden';
+  /** Mode name chip; null when the current mode is the default. */
+  chipLabel: string | null;
+  a11yLabel: string;
+  onPress: () => void;
+}
+
 export interface BrowseCatalogListHeaderProps {
+  discoverySort?: DiscoverySortControlProps;
+  /** "Showing results for X" banner (R1). */
+  discoveryBanner?: React.ReactNode;
   scrollY: Animated.Value;
   theme: Theme;
   isWideHero: boolean;
@@ -50,6 +62,8 @@ export interface BrowseCatalogListHeaderProps {
 }
 
 export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
+  discoverySort,
+  discoveryBanner,
   scrollY,
   theme,
   isWideHero,
@@ -141,15 +155,35 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
                 ? `${t('public.items.filters.heading', 'Filters')} (${activeFilterCount})`
                 : t('public.items.filters.heading', 'Filters')}
             </Button>
-            <Chip
-              icon="sort-variant"
-              mode="outlined"
-              onPress={onOpenFilterSheet}
-              style={styles.sortChip}
-              elevated
-            >
-              {sortSummaryLabel}
-            </Chip>
+            {discoverySort ? (
+              discoverySort.control === 'hidden' ? null : (
+                <>
+                  <IconButton
+                    icon="sort-variant"
+                    mode="outlined"
+                    size={20}
+                    disabled={discoverySort.control === 'disabled'}
+                    onPress={discoverySort.onPress}
+                    accessibilityLabel={discoverySort.a11yLabel}
+                  />
+                  {discoverySort.chipLabel ? (
+                    <Chip mode="outlined" onPress={discoverySort.onPress} style={styles.sortChip}>
+                      {discoverySort.chipLabel}
+                    </Chip>
+                  ) : null}
+                </>
+              )
+            ) : (
+              <Chip
+                icon="sort-variant"
+                mode="outlined"
+                onPress={onOpenFilterSheet}
+                style={styles.sortChip}
+                elevated
+              >
+                {sortSummaryLabel}
+              </Chip>
+            )}
             {!foodOnly && showExportsChip && onToggleExportOnly ? (
               <Chip
                 icon="airplane"
@@ -163,6 +197,8 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
               </Chip>
             ) : null}
           </View>
+
+          {discoveryBanner}
 
           <CatalogBrowseActiveFilterChips
             values={catalogFilters}

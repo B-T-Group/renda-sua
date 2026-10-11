@@ -22,6 +22,14 @@ interface RoleScopeRow {
   role_permissions: Array<{ permission?: { geo_scopable?: boolean } }>;
 }
 
+/** A validation problem the superuser can fix; its message is safe to show. */
+export class ScopedGrantError extends Error {}
+
+/** Escape LIKE wildcards so '%' and '_' in an email match themselves. */
+export function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
 @Injectable()
 export class ScopedRolesService {
   constructor(
@@ -46,7 +54,7 @@ export class ScopedRolesService {
           id email first_name last_name
         }
       }`,
-      { email: email.trim() }
+      { email: escapeLike(email.trim()) }
     );
     const user = result.users?.[0];
     if (!user) throw new NotFoundException('User not found');
@@ -68,11 +76,20 @@ export class ScopedRolesService {
     grants: ScopedGrantInput[],
     grantedBy: string | null
   ) {
-    const objects = await this.expandGrants(userId, grants, grantedBy);
-    await this.clearScoped(userId);
-    await this.insertScoped(objects);
+    await this.requireUser(userId);
+    // Validate and expand everything first, so a bad request never touches existing grants.
+    const objects = dedupeRows(await this.expandGrants(userId, grants, grantedBy));
+    await this.replaceScoped(userId, objects);
     this.rbac.invalidateUser(userId);
     return this.grantsFor(userId);
+  }
+
+  private async requireUser(userId: string): Promise<void> {
+    const result = await this.hasura.executeQuery(
+      `query ScopedRoleUser($id: uuid!) { users_by_pk(id: $id) { id } }`,
+      { id: userId }
+    );
+    if (!result.users_by_pk) throw new NotFoundException('User not found');
   }
 
   private async expandGrants(
@@ -97,7 +114,7 @@ export class ScopedRolesService {
     const role = await this.requireScopedRole(grant.role);
     const country = grant.countryCode.trim().toUpperCase();
     const inCountry = states.filter((state) => state.countryCode === country);
-    if (!inCountry.length) throw new Error(`Unknown country: ${country}`);
+    if (!inCountry.length) throw new ScopedGrantError(`Unknown country: ${country}`);
     const selected = this.selectedStates(grant.stateIds, inCountry, country);
     if (!selected) return [row(userId, role.id, country, null, grantedBy)];
     return selected.map((state) => row(userId, role.id, country, state.id, grantedBy));
@@ -111,13 +128,13 @@ export class ScopedRolesService {
     const ids = Array.from(new Set(stateIds ?? []));
     if (!ids.length || ids.length >= inCountry.length) {
       if (ids.length && ids.some((id) => !inCountry.some((state) => state.id === id))) {
-        throw new Error(`State is not in ${country}`);
+        throw new ScopedGrantError(`State is not in ${country}`);
       }
       return null;
     }
     return ids.map((id) => {
       const state = inCountry.find((item) => item.id === id);
-      if (!state) throw new Error(`State is not in ${country}`);
+      if (!state) throw new ScopedGrantError(`State is not in ${country}`);
       return state;
     });
   }
@@ -133,12 +150,12 @@ export class ScopedRolesService {
       { key }
     );
     const role = result.roles?.[0] as RoleScopeRow | undefined;
-    if (!role) throw new Error(`Unknown role: ${key}`);
-    if (!role.requires_geo_scope) throw new Error(`Role ${key} is assigned globally`);
+    if (!role) throw new ScopedGrantError(`Unknown role: ${key}`);
+    if (!role.requires_geo_scope) throw new ScopedGrantError(`Role ${key} is assigned globally`);
     const globalPerm = (role.role_permissions ?? []).some(
       (item) => item.permission?.geo_scopable !== true
     );
-    if (globalPerm) throw new Error(`Role ${key} includes a global permission`);
+    if (globalPerm) throw new ScopedGrantError(`Role ${key} includes a global permission`);
     return role;
   }
 
@@ -156,25 +173,23 @@ export class ScopedRolesService {
     }));
   }
 
-  private async clearScoped(userId: string): Promise<void> {
+  /**
+   * Delete + insert in ONE Hasura mutation: root fields of a mutation run in a single
+   * transaction, so a rejected insert rolls the delete back (no user left with zero grants).
+   */
+  private async replaceScoped(
+    userId: string,
+    objects: Array<Record<string, unknown>>
+  ): Promise<void> {
     await this.hasura.executeQuery(
-      `mutation ClearScopedRoles($userId: uuid!) {
+      `mutation ReplaceScopedRoles($userId: uuid!, $objects: [user_roles_insert_input!]!) {
         delete_user_roles(where: {
           user_id: { _eq: $userId }
           country_code: { _is_null: false }
         }) { affected_rows }
-      }`,
-      { userId }
-    );
-  }
-
-  private async insertScoped(objects: Array<Record<string, unknown>>): Promise<void> {
-    if (!objects.length) return;
-    await this.hasura.executeQuery(
-      `mutation InsertScopedRoles($objects: [user_roles_insert_input!]!) {
         insert_user_roles(objects: $objects) { affected_rows }
       }`,
-      { objects }
+      { userId, objects }
     );
   }
 
@@ -183,6 +198,16 @@ export class ScopedRolesService {
     const user = users.find((item) => item.userId === userId);
     return (user?.grants ?? []).filter((grant) => grant.countryCode);
   }
+}
+
+export function dedupeRows<T extends Record<string, unknown>>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    const key = [r.user_id, r.role_id, r.country_code, r.supported_country_state_id].join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function row(

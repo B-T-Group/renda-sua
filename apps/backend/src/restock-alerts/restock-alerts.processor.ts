@@ -49,6 +49,16 @@ export function sameMarket(userCountry: string | null, rowCountry: string | null
   return !!r && r === u;
 }
 
+/** When the oldest message of the rolling 24 h window ages out (at least a minute from now). */
+export function capWindowFreeAt(
+  recent: Array<{ sentAt: Date }>,
+  now: Date
+): Date {
+  const oldest = Math.min(...recent.map((r) => r.sentAt.getTime()));
+  const free = Number.isFinite(oldest) ? oldest + 24 * 60 * 60 * 1000 : now.getTime();
+  return new Date(Math.max(free, now.getTime() + 60_000));
+}
+
 export function marketRows(stock: ItemStock, country: string | null): InventoryRow[] {
   return stock.rows.filter((r) => r.locationActive && sameMarket(country, r.country));
 }
@@ -221,6 +231,12 @@ export class RestockAlertsProcessor {
         return 'skip';
       }
     }
+    // Hard expiry stamped on the alert row (the API shows the bell as expired from this moment).
+    if (alert?.expiresAt && ev.createdAt.getTime() >= alert.expiresAt.getTime()) {
+      await this.repo.markExpired(like.userId, ev.itemId);
+      await this.analytics.track('restock.disarmed', like.userId, { reason: 'expired' });
+      return 'skip';
+    }
     // 90 days armed with no restock: expire silently (armed at like time, or when the item sold out).
     const armedSince = Math.max(
       (alert?.armedAt ?? like.createdAt).getTime(),
@@ -335,6 +351,11 @@ export class RestockAlertsProcessor {
         await this.repo.settleSends([s.id], 'dropped', 'already_alerted', now);
         continue;
       }
+      if (alert?.expiresAt && s.eventCreatedAt.getTime() >= alert.expiresAt.getTime()) {
+        await this.repo.settleSends([s.id], 'dropped', 'expired', now);
+        await this.analytics.track('restock.disarmed', userId, { reason: 'expired' });
+        continue;
+      }
       if (activeOrderItems.has(s.itemId)) {
         await this.repo.settleSends([s.id], 'suppressed', 'in_order', now);
         await this.analytics.track('restock.alert_suppressed', userId, { reason: 'in_cart' });
@@ -390,9 +411,14 @@ export class RestockAlertsProcessor {
     for (const group of groups) {
       const isDigest = group.length >= 2;
       if (messagesToday >= RESTOCK_RULES.dailyCap) {
-        // AC-2.5: past 3/day only a digest may go out (once per 24 h); a lone item is held back.
+        // AC-2.5: past 3/day only a digest may go out (once per 24 h). Everything else is NOT
+        // dropped: it stays queued until the 24 h window frees up and then rolls into the next
+        // message/digest (stock, quiet hours and caps are re-checked then).
         if (!(isDigest && !digestUsed)) {
-          await this.repo.settleSends(ids(group.map((g) => g.send)), 'suppressed', 'daily_cap', now);
+          await this.repo.deferSends(
+            ids(group.map((g) => g.send)),
+            capWindowFreeAt(recent, now)
+          );
           await this.analytics.track('restock.alert_suppressed', userId, { reason: 'cap' });
           continue;
         }
