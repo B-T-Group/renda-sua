@@ -3,6 +3,7 @@ import {
   Get,
   HttpException,
   HttpStatus,
+  Optional,
   Param,
   ParseUUIDPipe,
   Query,
@@ -37,6 +38,8 @@ import type {
   TopInventoryStoreRow,
 } from './inventory-items.service';
 import { InventoryItemsService } from './inventory-items.service';
+import { DiscoveryRecoveryService } from './discovery/discovery-recovery.service';
+import { resolveDiscoverySort } from './discovery/discovery-sort.util';
 
 // Interface for query parameters as they come from HTTP requests (all strings)
 interface GetInventoryItemsQueryParams {
@@ -77,8 +80,30 @@ export class InventoryItemsController {
   constructor(
     private readonly inventoryItemsService: InventoryItemsService,
     private readonly catalogCacheService: CatalogCacheService,
-    private readonly hasuraUserService: HasuraUserService
+    private readonly hasuraUserService: HasuraUserService,
+    @Optional()
+    private readonly discoveryRecovery?: DiscoveryRecoveryService
   ) {}
+
+  /**
+   * #342: with `discovery_sort_v1` on for the market, resolve the effective sort (Recommended on
+   * browse, Best match on search, or the requested mode). Flag off (or any error) returns
+   * undefined, which leaves the request on the original code path.
+   */
+  private async resolveDiscovery(
+    query: GetInventoryItemsQueryParams,
+    legacySort: string | undefined
+  ) {
+    if (!this.discoveryRecovery) return undefined;
+    if (!(await this.discoveryRecovery.flagEnabled(query.country_code?.trim() || undefined))) {
+      return undefined;
+    }
+    return resolveDiscoverySort({
+      requested: query.sort,
+      hasSearch: Boolean(query.search?.trim()),
+      legacySort,
+    });
+  }
 
   @Public()
   @Get('top-locations')
@@ -519,7 +544,7 @@ export class InventoryItemsController {
     required: false,
     enum: ['relevance', 'fastest', 'cheapest', 'top_rated', 'deals'],
     description:
-      'Sort order: relevance (views + past orders), fastest (by distance), cheapest, top_rated, or deals only',
+      'Sort order: relevance (views + past orders), fastest (by distance), cheapest, top_rated, or deals only. With discovery_sort_v1 on for the market, also recommended | popular | rating | newest (see 342 contract).',
   })
   @ApiQuery({
     name: 'include_unavailable',
@@ -602,6 +627,8 @@ export class InventoryItemsController {
           ? (sortParam as (typeof validSorts)[number])
           : undefined;
 
+      const discoverySort = await this.resolveDiscovery(query, sort);
+
       const oLat = query.origin_lat
         ? Number.parseFloat(query.origin_lat)
         : undefined;
@@ -640,6 +667,7 @@ export class InventoryItemsController {
         collection: query.collection?.trim() || undefined,
         food_only: query.food_only === 'true',
         export_only: query.export_only === 'true',
+        ...(discoverySort && { discovery: { sort: discoverySort } }),
       };
 
       const requestedLimit = processedQuery.limit || 20;
@@ -658,7 +686,8 @@ export class InventoryItemsController {
           generation,
           page: processedQuery.page,
           limit: clampedLimit,
-          sort,
+          // Flag-on responses carry extra fields and a different order: never share a cache entry.
+          sort: discoverySort ? `d_${discoverySort}` : sort,
           search: processedQuery.search,
           category: processedQuery.category,
           subcategory: processedQuery.subcategory,
@@ -690,7 +719,12 @@ export class InventoryItemsController {
               message: 'Inventory items retrieved successfully',
             };
           },
-          { ttlSeconds: inventoryItemsCacheTtlSeconds(processedQuery.search, sort) }
+          {
+            ttlSeconds: inventoryItemsCacheTtlSeconds(
+              processedQuery.search,
+              discoverySort ? `d_${discoverySort}` : sort
+            ),
+          }
         );
       }
 
@@ -714,6 +748,45 @@ export class InventoryItemsController {
           message: 'Failed to retrieve inventory items',
           error: error.message,
         },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Public()
+  @Get('search/recovery')
+  @ApiOperation({
+    summary:
+      'Empty-result recovery ladder (#342): typo fix, relaxable filters with counts, similar items, categories and popular near you. Requires discovery_sort_v1.',
+  })
+  async getSearchRecovery(@Query() query: GetInventoryItemsQueryParams) {
+    const country = query.country_code?.trim() || undefined;
+    if (!this.discoveryRecovery || !(await this.discoveryRecovery.flagEnabled(country))) {
+      return { success: true, data: { enabled: false }, message: 'Discovery disabled' };
+    }
+    const num = (v?: string) => (v !== undefined && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined);
+    const text = (v?: string) => v?.trim() || undefined;
+    try {
+      const data = await this.discoveryRecovery.recover({
+        search: text(query.search),
+        category: text(query.category),
+        subcategory: text(query.subcategory),
+        brand: text(query.brand),
+        location_name: text(query.location_name),
+        business_name: text(query.business_name),
+        min_price: num(query.min_price),
+        max_price: num(query.max_price),
+        currency: text(query.currency),
+        country_code: country,
+        state: text(query.state),
+        collection: text(query.collection),
+        food_only: query.food_only === 'true',
+      });
+      return { success: true, data, message: 'Recovery suggestions retrieved' };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        { success: false, message: 'Failed to build recovery suggestions', error: error.message },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }

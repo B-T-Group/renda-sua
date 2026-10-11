@@ -36,6 +36,20 @@ import {
 } from '../food/food-item-availability.mapper';
 import { FOOD_CATEGORY_NAME } from '../food/food.constants';
 import { PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY } from '../food/pay-after-confirm.util';
+import {
+  firstListedByItem,
+  marketMeanRating,
+  preferInStockListings,
+  sortControlState,
+  sortDiscovery,
+  stockFirstStable,
+  trustSignals,
+  type DiscoverySort,
+  type SortControlState,
+} from './discovery/discovery-sort.util';
+import { DiscoverySignalsService } from './discovery/discovery-signals.service';
+import { listingRankSignals } from '../catalog-experience/catalog-listing-rank';
+import { scoreCatalogCandidate } from '../catalog-experience/catalog-ranking.weights';
 
 export type InventorySortMode =
   | 'relevance'
@@ -269,6 +283,13 @@ export interface GetInventoryItemsQuery {
    * (no home-location country filter).
    */
   export_only?: boolean;
+  /**
+   * #342: set by the controller only when `discovery_sort_v1` is on for the market. Absent means
+   * the pre-existing code path runs untouched.
+   */
+  discovery?: { sort: DiscoverySort };
+  /** #342 recovery (internal, never read from the HTTP query): restrict to these catalog items. */
+  similar_item_ids?: string[];
 }
 
 export type InventorySearchSuggestion =
@@ -322,6 +343,8 @@ export interface PaginatedInventoryItems {
   page: number;
   limit: number;
   totalPages: number;
+  /** Present only when `discovery_sort_v1` is on (#342). */
+  discovery?: { sort: DiscoverySort; sort_control: SortControlState };
 }
 
 type CatalogShopperRegion = {
@@ -568,7 +591,9 @@ export class InventoryItemsService {
     private readonly itemEmbeddingService: ItemEmbeddingService,
     private readonly rbacService: RbacService,
     @Optional()
-    private readonly variantInventory?: VariantInventoryService
+    private readonly variantInventory?: VariantInventoryService,
+    @Optional()
+    private readonly discoverySignals?: DiscoverySignalsService
   ) {}
 
   private async resolveInventoryListGeo(
@@ -1776,7 +1801,9 @@ export class InventoryItemsService {
       searchSkuQuery?: string;
       searchTextQuery?: string;
     } = {};
-    if (search?.trim()) {
+    if (query.similar_item_ids) {
+      catalogSearch = { searchItemIds: query.similar_item_ids };
+    } else if (search?.trim()) {
       const semantic = await this.resolveSemanticSearch(search);
       if ('empty' in semantic) {
         return {
@@ -1898,20 +1925,32 @@ export class InventoryItemsService {
         shopperRegion
       );
       const withRatings = await this.attachRatingAggregates(withHaversine);
-      const winners = await this.pickBestListingPerItem(
-        withRatings,
-        sort,
-        clientId,
-        relevanceSignals
-      );
-      let sorted = await this.applySortByMode(
-        winners,
-        sort,
-        clientId,
-        relevanceSignals
-      );
-      if (semanticScores?.size) {
-        sorted = this.applySemanticPrimarySort(sorted, semanticScores);
+      let sorted: InventoryItem[];
+      if (query.discovery) {
+        sorted = await this.rankForDiscovery({
+          items: withRatings,
+          mode: query.discovery.sort,
+          clientId,
+          relevanceSignals,
+          semanticScores,
+          country: country_code,
+        });
+      } else {
+        const winners = await this.pickBestListingPerItem(
+          withRatings,
+          sort,
+          clientId,
+          relevanceSignals
+        );
+        sorted = await this.applySortByMode(
+          winners,
+          sort,
+          clientId,
+          relevanceSignals
+        );
+        if (semanticScores?.size) {
+          sorted = this.applySemanticPrimarySort(sorted, semanticScores);
+        }
       }
       sorted = this.attachFoodAvailability(sorted);
       if (food_only) {
@@ -1921,6 +1960,20 @@ export class InventoryItemsService {
       const listOffset = (page - 1) * limit;
       const pageItems = sorted.slice(listOffset, listOffset + limit);
       const withLikes = await this.attachLikeState(pageItems);
+      if (query.discovery) {
+        const nowMs = Date.now();
+        return {
+          items: withLikes.map((item) => ({ ...item, ...trustSignals(item, nowMs) })),
+          total,
+          page,
+          limit,
+          totalPages,
+          discovery: {
+            sort: query.discovery.sort,
+            sort_control: sortControlState(total),
+          },
+        };
+      }
       return {
         items: withLikes,
         total,
@@ -1938,6 +1991,144 @@ export class InventoryItemsService {
         HttpStatus.INTERNAL_SERVER_ERROR,
         { cause: error instanceof Error ? error : undefined }
       );
+    }
+  }
+
+  /**
+   * #342 ranking (flag on only). One listing per catalog item (in-stock listings preferred), then the
+   * selected mode, always with in-stock items before sold-out ones (AC-1.2) and a total order so
+   * pagination never reshuffles (AC-1.5).
+   */
+  private async rankForDiscovery(input: {
+    items: InventoryItem[];
+    mode: DiscoverySort;
+    clientId: string | null;
+    relevanceSignals: Awaited<
+      ReturnType<InventoryItemsService['getRelevanceSignalsFromPastOrders']>
+    >;
+    semanticScores?: Map<string, number>;
+    country?: string;
+  }): Promise<InventoryItem[]> {
+    const { items, mode, clientId, relevanceSignals, semanticScores, country } =
+      input;
+    const firstListed = firstListedByItem(items);
+    const winners = await this.pickBestListingPerItem(
+      preferInStockListings(items),
+      'relevance',
+      clientId,
+      relevanceSignals
+    );
+    if (mode === 'relevance') {
+      let ranked = await this.applySortByMode(
+        winners,
+        'relevance',
+        clientId,
+        relevanceSignals
+      );
+      if (semanticScores?.size) {
+        ranked = this.applySemanticPrimarySort(ranked, semanticScores);
+      }
+      return stockFirstStable(ranked);
+    }
+    const ratingMean = marketMeanRating(winners);
+    const popularity =
+      mode === 'popular'
+        ? await this.discoverySignals?.getPopularity(country)
+        : undefined;
+    const blendScore =
+      mode === 'recommended'
+        ? new Map(
+            winners.map((w) => [
+              w.item_id,
+              scoreCatalogCandidate(listingRankSignals(w, 0, { ratingMean })),
+            ])
+          )
+        : undefined;
+    return sortDiscovery(winners, mode, {
+      popularity,
+      firstListed,
+      ratingMean,
+      blendScore,
+    });
+  }
+
+  // ------------------------------------------------------------ #342 recovery helpers
+
+  /**
+   * Resolves the catalog search scope for a query once (embedding call included) so the recovery
+   * ladder can count many filter variants without re-embedding. null = the query is too short.
+   */
+  async resolveSearchScope(search?: string): Promise<{
+    searchItemIds?: string[];
+    searchSkuQuery?: string;
+    searchTextQuery?: string;
+  } | null> {
+    if (!search?.trim()) return {};
+    const semantic = await this.resolveSemanticSearch(search);
+    if ('empty' in semantic) return null;
+    const q = this.itemEmbeddingService.normalizeSearchQuery(search);
+    return this.catalogSearchFromSemantic(q, semantic);
+  }
+
+  /** Distinct in-market catalog items matching the query (sold-out included). Count only. */
+  async countCatalogMatches(
+    query: GetInventoryItemsQuery,
+    scope: {
+      searchItemIds?: string[];
+      searchSkuQuery?: string;
+      searchTextQuery?: string;
+    }
+  ): Promise<number> {
+    const { country_code, state } = await this.resolveInventoryListGeo(query);
+    const built = await this.buildInventoryCatalogWhere({
+      is_active: query.is_active ?? true,
+      include_unavailable: true,
+      ...scope,
+      category: query.category,
+      subcategory: query.subcategory,
+      location_name: query.location_name,
+      business_name: query.business_name,
+      brand: query.brand,
+      min_price: query.min_price,
+      max_price: query.max_price,
+      currency: query.currency,
+      business_location_id: query.business_location_id,
+      business_id: query.business_id,
+      country_code,
+      state,
+      collection: query.collection,
+      food_only: query.food_only ?? false,
+      includeExportInSearch: Boolean(query.search?.trim()),
+    });
+    if ('unsupported' in built) return 0;
+    return this.countDistinctCatalogItemIds(built.where);
+  }
+
+  /**
+   * R3: embedding neighbours with a looser similarity floor than search uses, so "similar to"
+   * can answer queries the strict search missed. Empty when embeddings are not available.
+   */
+  async similarItemIdsForQuery(search: string, limit = 60): Promise<string[]> {
+    const q = this.itemEmbeddingService.normalizeSearchQuery(search);
+    if (q.length < 2 || !this.itemEmbeddingService.isEmbeddingsSearchEnabled()) {
+      return [];
+    }
+    try {
+      if (!(await this.itemEmbeddingService.hasAnyItemEmbeddings())) return [];
+      const vector = await this.itemEmbeddingService.embedSearchQuery(q);
+      const floor = Math.max(
+        0.2,
+        Math.round(this.itemEmbeddingService.getMinSimilarity() * 0.8 * 100) / 100
+      );
+      const matches = await this.itemEmbeddingService.findSimilarItemIds(
+        vector,
+        floor,
+        limit
+      );
+      return matches.map((m) => m.item_id);
+    } catch (e: any) {
+      this.logger.warn(`Similar-items lookup skipped: ${e?.message ?? e}`);
+      return [];
     }
   }
 
