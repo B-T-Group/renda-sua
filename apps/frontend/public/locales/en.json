@@ -8368,12 +8368,37 @@
       "whatsapp": "WhatsApp",
       "whatsappInformational": "WhatsApp tips & digests (optional)",
       "whatsappNeedsPhone": "Verify your phone number in Profile before enabling WhatsApp.",
+      "restockAlerts": "Restock alerts",
+      "restockAlertsDesc": "Items you liked that come back in stock",
       "orderUpdates": "Order updates",
       "chat": "Chat & mentions",
       "marketplace": "Marketplace",
       "reminders": "Reminders",
       "marketing": "Marketing"
     }
+  },
+  "restock": {
+    "alertOn": "Alert on",
+    "alertOff": {
+      "withUndo": "Alert off · Undo"
+    },
+    "undo": "Undo",
+    "bellOn": "on",
+    "bellOff": "off",
+    "bellAriaLabel": "Restock alert for {{item}}: {{state}}",
+    "bellTooltipOn": "We'll tell you when it's back",
+    "bellTooltipOff": "Notify me when it's back",
+    "bellTooltipExpired": "Alert expired",
+    "hint": "We'll let you know when it's back.",
+    "filter": {
+      "all": "All",
+      "backInStock": "Back in stock"
+    },
+    "backInStockChip": "Back in stock",
+    "emptyFilterTitle": "Nothing back yet. We'll tell you.",
+    "emptyFilterMessage": "When items you liked come back in stock, they'll show up here.",
+    "goneAgainBanner": "Gone again. We'll tell you next time.",
+    "browseMore": "Browse similar"
   },
   "deepLink": {
     "openingApp": "Opening Rendasua…",
