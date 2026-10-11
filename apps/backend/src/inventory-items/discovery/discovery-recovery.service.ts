@@ -67,6 +67,8 @@ interface FlagRow {
   boolean_value: boolean | null;
 }
 const FLAG_TTL_MS = 30_000;
+const RESULT_TTL_MS = 60_000;
+const RESULT_CACHE_MAX = 200;
 const FLAGS_GQL = `
   query DiscoveryFlags($keys: [String!]!) {
     application_configurations(where: { config_key: { _in: $keys }, status: { _eq: "active" } }) {
@@ -94,6 +96,7 @@ export class DiscoveryRecoveryService {
   private readonly logger = new Logger(DiscoveryRecoveryService.name);
   private readonly vocab = new Map<string, { at: number; value: Vocabulary }>();
   private flagCache: { at: number; rows: FlagRow[] } | null = null;
+  private readonly results = new Map<string, { at: number; value: DiscoveryRecovery }>();
   private flagInflight: Promise<FlagRow[]> | null = null;
 
   constructor(
@@ -143,9 +146,28 @@ export class DiscoveryRecoveryService {
     return this.flagInflight;
   }
 
+  /**
+   * The route is public and each rung runs catalog reads, so identical requests within 60 s share
+   * one result (bounded, in memory). Results are market data only: nothing user specific.
+   */
   async recover(
     query: GetInventoryItemsQuery,
     now: number = Date.now()
+  ): Promise<DiscoveryRecovery> {
+    const key = JSON.stringify(query);
+    const hit = this.results.get(key);
+    if (hit && now - hit.at < RESULT_TTL_MS) return hit.value;
+    const value = await this.build(query, now);
+    if (this.results.size >= RESULT_CACHE_MAX) {
+      this.results.delete(this.results.keys().next().value as string);
+    }
+    this.results.set(key, { at: now, value });
+    return value;
+  }
+
+  private async build(
+    query: GetInventoryItemsQuery,
+    now: number
   ): Promise<DiscoveryRecovery> {
     const text = (query.search ?? '').trim();
     const base: DiscoveryRecovery = {

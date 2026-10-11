@@ -109,6 +109,16 @@ describe('DiscoveryRecoveryService', () => {
     expect(r.enabled).toBe(true);
   });
 
+  it('identical requests within 60 s share one result (public route protection)', async () => {
+    const { svc, items } = make();
+    await svc.recover({ search: 'zzqq', country_code: 'CM' }, NOW);
+    const calls = items.getInventoryItems.mock.calls.length;
+    await svc.recover({ search: 'zzqq', country_code: 'CM' }, NOW + 30_000);
+    expect(items.getInventoryItems.mock.calls.length).toBe(calls);
+    await svc.recover({ search: 'zzqq', country_code: 'CM' }, NOW + 61_000);
+    expect(items.getInventoryItems.mock.calls.length).toBeGreaterThan(calls);
+  });
+
   it('R5 follows assistant_shopping_v1 only', async () => {
     expect((await make({ flags: { assistant_shopping_v1: true } }).svc.recover({ search: 'q', country_code: 'CM' }, NOW)).ask_renda).toEqual({ enabled: true, query: 'q' });
     expect((await make().svc.recover({ search: 'q', country_code: 'CM' }, NOW)).ask_renda.enabled).toBe(false);
