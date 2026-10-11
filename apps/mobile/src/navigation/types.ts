@@ -229,7 +229,7 @@ export type ClientRootStackParamList = {
   };
   Profile: undefined;
   ManageRecipients: undefined;
-  UserLikes: undefined;
+  UserLikes: { filter?: 'all' | 'back_in_stock' } | undefined;
   FollowingStores: undefined;
   ClientProductInterest: undefined;
   ProductInterestSuccess: undefined;

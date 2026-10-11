@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Chip, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -36,12 +36,20 @@ function UserLikesScreenBase() {
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<ClientRootStackParamList>>();
+  const route = useRoute<RouteProp<ClientRootStackParamList, 'UserLikes'>>();
   const { cart } = useStore();
   const { flags } = useClientFlags();
   const restockEnabled = flags.restock_alerts_v1;
 
   const restockAlerts = useRestockAlerts();
   const restockLikes = useRestockLikes();
+
+  // Apply filter from route params if provided
+  useEffect(() => {
+    if (route.params?.filter && restockEnabled && restockAlerts.enabled) {
+      restockLikes.setFilter(route.params.filter);
+    }
+  }, [route.params?.filter, restockEnabled, restockAlerts.enabled]);
 
   const [items, setItems] = useState<CatalogInventoryItem[]>([]);
   const [page, setPage] = useState(1);
