@@ -12,8 +12,8 @@ import {
 import { ApiBody, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
-import { RbacService } from '../rbac/rbac.service';
 import { isActivePersona } from '../users/persona.util';
 import { OrderAcceptanceService } from './order-acceptance.service';
 
@@ -24,7 +24,7 @@ export class BusinessAvailabilityController {
   constructor(
     private readonly orderAcceptanceService: OrderAcceptanceService,
     private readonly hasuraUserService: HasuraUserService,
-    private readonly rbacService: RbacService
+    private readonly geo: GeoScopeService
   ) {}
 
   private async requireBusinessId(): Promise<string> {
@@ -38,15 +38,8 @@ export class BusinessAvailabilityController {
     return user.business.id;
   }
 
-  private async requireCrossBusinessAdmin(): Promise<void> {
-    const user = await this.hasuraUserService.getUser();
-    const allowed = await this.rbacService.hasPermission(
-      user.id,
-      PlatformPermissions.ORDERS_CROSS_BUSINESS
-    );
-    if (!allowed) {
-      throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
-    }
+  private async requireCrossBusinessAdmin() {
+    return this.geo.require(PlatformPermissions.ORDERS_CROSS_BUSINESS);
   }
 
   @Get('business/reliability')
@@ -72,7 +65,7 @@ export class BusinessAvailabilityController {
     @Query('tier') tier?: string,
     @Query('minAutoDeclines30d') minAutoDeclines30d?: string
   ) {
-    await this.requireCrossBusinessAdmin();
+    const scope = await this.requireCrossBusinessAdmin();
     const parsedLimit = limit != null ? Number(limit) : undefined;
     const parsedMin =
       minAutoDeclines30d != null ? Number(minAutoDeclines30d) : undefined;
@@ -80,13 +73,15 @@ export class BusinessAvailabilityController {
       limit: Number.isFinite(parsedLimit) ? parsedLimit : undefined,
       tier,
       minAutoDeclines30d: Number.isFinite(parsedMin) ? parsedMin : undefined,
+      geoWhere: await this.geo.businessWhere(scope),
     });
   }
 
   @Get('admin/businesses/:id/reliability')
   @ApiOperation({ summary: 'Get reliability KPIs for a business (admin)' })
   async getAdminReliability(@Param('id') id: string) {
-    await this.requireCrossBusinessAdmin();
+    const scope = await this.requireCrossBusinessAdmin();
+    await this.geo.assertBusiness(scope, id);
     return this.orderAcceptanceService.getReliability(id);
   }
 

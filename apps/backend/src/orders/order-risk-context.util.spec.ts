@@ -107,6 +107,7 @@ describe('mapOrderRiskContext', () => {
       minutesUntilAutoDecline: 15,
       referringAgentUserId: 'agent-1',
       shopCountryCode: 'CM',
+      shopStateName: null,
     });
   });
 

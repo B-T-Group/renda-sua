@@ -96,6 +96,8 @@ describe('UsersController Auth0 /me contract sync', () => {
         roles: [],
         permissions: [],
         isSuperuser: false,
+        scopes: {},
+        grants: [],
       }),
     };
     locationDelegationsFlag = {

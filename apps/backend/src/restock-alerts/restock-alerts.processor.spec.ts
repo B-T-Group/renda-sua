@@ -8,6 +8,7 @@ import {
   makeWorld,
   min,
 } from './restock-alerts.fakes';
+import { RestockSchemaUnavailableError } from './restock-alerts.errors';
 import { RestockAlertsProcessor, resolveFlag, sameMarket } from './restock-alerts.processor';
 
 /** Item "i1" at one CM location, out of stock, liked by u1; restock event at T0. */
@@ -23,6 +24,19 @@ function oneItemWorld() {
 const AFTER_DEBOUNCE = at(T0, min(11));
 
 describe('flag gating (nothing sends when off)', () => {
+  it('does not send when Hasura has not tracked restock tables yet', async () => {
+    const w = oneItemWorld();
+    w.repo.recoverStale = async () => {
+      throw new RestockSchemaUnavailableError({
+        message: "field 'restock_alert_sends' not found in type: 'query_root'",
+      });
+    };
+    const r = await w.processor.run(AFTER_DEBOUNCE);
+    expect(r.ran).toBe(false);
+    expect(w.notifier.calls).toHaveLength(0);
+    expect(w.repo.sends).toHaveLength(0);
+  });
+
   it('does not even take the lock when the flag is off', async () => {
     const w = oneItemWorld();
     w.repo.setFlag(RESTOCK_FLAG_KEY, null, false);

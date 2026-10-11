@@ -1,5 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { isMissingRestockGraphqlSchema } from '../hasura/hasura-request.util';
+import { RestockSchemaUnavailableError } from './restock-alerts.errors';
 import { RESTOCK_QUERIES as Q } from './restock-alerts.queries';
 import {
   RESTOCK_LOCK_FREE,
@@ -52,11 +54,25 @@ export function sellableUnits(row: {
 export class HasuraRestockRepository implements RestockRepository {
   constructor(private readonly hasura: HasuraSystemService) {}
 
-  private q<T = any>(query: string, variables?: any) {
-    return this.hasura.executeQuery<T>(query, variables);
+  private async q<T = any>(query: string, variables?: any) {
+    try {
+      return await this.hasura.executeQuery<T>(query, variables);
+    } catch (error: any) {
+      this.rethrowIfSchemaMissing(error);
+    }
   }
-  private m<T = any>(query: string, variables?: any) {
-    return this.hasura.executeMutation<T>(query, variables);
+  private async m<T = any>(query: string, variables?: any) {
+    try {
+      return await this.hasura.executeMutation<T>(query, variables);
+    } catch (error: any) {
+      this.rethrowIfSchemaMissing(error);
+    }
+  }
+  private rethrowIfSchemaMissing(error: unknown): never {
+    if (isMissingRestockGraphqlSchema(error)) {
+      throw new RestockSchemaUnavailableError(error);
+    }
+    throw error;
   }
 
   async flagRows(key: string) {

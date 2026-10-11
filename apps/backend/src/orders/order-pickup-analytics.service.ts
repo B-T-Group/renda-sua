@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { andWhere } from '../rbac/geo-scope.util';
 
 export interface PickupOpsHealthRow {
   id: string;
@@ -34,16 +35,23 @@ export interface PickupKpis {
 export class OrderPickupAnalyticsService {
   constructor(private readonly hasura: HasuraSystemService) {}
 
-  async getOperationalHealth(limit = 50): Promise<{
+  async getOperationalHealth(
+    limit = 50,
+    orderWhere?: Record<string, unknown> | null
+  ): Promise<{
     orders: PickupOpsHealthRow[];
   }> {
+    const where = andWhere(
+      {
+        current_status: { _eq: 'assigned_to_agent' },
+        pickup_state: { _is_null: false },
+      },
+      orderWhere
+    );
     const res = await this.hasura.executeQuery(
-      `query PickupHealth($limit: Int!) {
+      `query PickupHealth($limit: Int!, $where: orders_bool_exp!) {
         orders(
-          where: {
-            current_status: { _eq: assigned_to_agent }
-            pickup_state: { _is_null: false }
-          }
+          where: $where
           order_by: { pickup_due_at: asc_nulls_last }
           limit: $limit
         ) {
@@ -53,7 +61,7 @@ export class OrderPickupAnalyticsService {
           assigned_agent { user { first_name last_name } }
         }
       }`,
-      { limit: Math.min(Math.max(limit, 1), 200) }
+      { limit: Math.min(Math.max(limit, 1), 200), where }
     );
     const orders = (res.orders || []).map((row: any) => ({
       ...row,
@@ -62,14 +70,17 @@ export class OrderPickupAnalyticsService {
     return { orders };
   }
 
-  async getPickupKpis(sinceIso?: string): Promise<PickupKpis> {
+  async getPickupKpis(
+    sinceIso?: string,
+    orderWhere?: Record<string, unknown> | null
+  ): Promise<PickupKpis> {
     const since =
       sinceIso ||
       new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const [live, events, completed] = await Promise.all([
-      this.countLiveByState(),
-      this.countEvents(since),
-      this.completedPickupStats(since),
+      this.countLiveByState(orderWhere),
+      this.countEvents(since, orderWhere),
+      this.completedPickupStats(since, orderWhere),
     ]);
     const assignments = events.agent_assigned || 0;
     const reassignments = events.reassignment_started || 0;
@@ -122,19 +133,24 @@ export class OrderPickupAnalyticsService {
     return ms > 0 && ms <= 5 * 60 * 1000;
   }
 
-  private async countLiveByState(): Promise<{
+  private async countLiveByState(
+    orderWhere?: Record<string, unknown> | null
+  ): Promise<{
     total: number;
     byState: Record<string, number>;
   }> {
+    const where = andWhere(
+      {
+        current_status: { _eq: 'assigned_to_agent' },
+        pickup_state: { _is_null: false },
+      },
+      orderWhere
+    );
     const res = await this.hasura.executeQuery(
-      `query LivePickup {
-        orders(
-          where: {
-            current_status: { _eq: assigned_to_agent }
-            pickup_state: { _is_null: false }
-          }
-        ) { pickup_state }
-      }`
+      `query LivePickup($where: orders_bool_exp!) {
+        orders(where: $where) { pickup_state }
+      }`,
+      { where }
     );
     const byState: Record<string, number> = {};
     for (const row of res.orders || []) {
@@ -145,29 +161,32 @@ export class OrderPickupAnalyticsService {
   }
 
   private async countEvents(
-    since: string
+    since: string,
+    orderWhere?: Record<string, unknown> | null
   ): Promise<Record<string, number>> {
+    const where = andWhere(
+      {
+        created_at: { _gte: since },
+        event_type: {
+          _in: [
+            'agent_assigned',
+            'pickup_reminder_sent',
+            'pickup_at_risk',
+            'pickup_overdue',
+            'reassignment_started',
+            'reassigned',
+            'customer_notified_delay',
+            'merchant_delay_started',
+          ],
+        },
+      },
+      orderWhere ? { order: orderWhere } : null
+    );
     const res = await this.hasura.executeQuery(
-      `query PickupEvents($since: timestamptz!) {
-        order_events(
-          where: {
-            created_at: { _gte: $since }
-            event_type: {
-              _in: [
-                "agent_assigned",
-                "pickup_reminder_sent",
-                "pickup_at_risk",
-                "pickup_overdue",
-                "reassignment_started",
-                "reassigned",
-                "customer_notified_delay",
-                "merchant_delay_started"
-              ]
-            }
-          }
-        ) { event_type }
+      `query PickupEvents($where: order_events_bool_exp!) {
+        order_events(where: $where) { event_type }
       }`,
-      { since }
+      { where }
     );
     const counts: Record<string, number> = {};
     for (const row of res.order_events || []) {
@@ -176,17 +195,24 @@ export class OrderPickupAnalyticsService {
     return counts;
   }
 
-  private async completedPickupStats(since: string): Promise<{
+  private async completedPickupStats(
+    since: string,
+    orderWhere?: Record<string, unknown> | null
+  ): Promise<{
     slaComplianceRate: number | null;
     averagePickupDelayMinutes: number | null;
   }> {
+    const where = andWhere(
+      {
+        status: { _eq: 'picked_up' },
+        created_at: { _gte: since },
+      },
+      orderWhere ? { order: orderWhere } : null
+    );
     const res = await this.hasura.executeQuery(
-      `query CompletedPickups($since: timestamptz!) {
+      `query CompletedPickups($where: order_status_history_bool_exp!) {
         order_status_history(
-          where: {
-            status: { _eq: picked_up }
-            created_at: { _gte: $since }
-          }
+          where: $where
           limit: 500
         ) {
           order_id
@@ -194,7 +220,7 @@ export class OrderPickupAnalyticsService {
           order { pickup_due_at assigned_at }
         }
       }`,
-      { since }
+      { where }
     );
     const rows = res.order_status_history || [];
     if (!rows.length) {

@@ -7,6 +7,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { GeoScopeService } from '../rbac/geo-scope.service';
 import { PlatformPermissions } from '../rbac/platform-permissions';
 import { RequirePermissions } from '../rbac/permissions.decorator';
 import { OrderPickupAnalyticsService } from './order-pickup-analytics.service';
@@ -18,7 +19,8 @@ import { OrderPickupAnalyticsService } from './order-pickup-analytics.service';
 @RequirePermissions(PlatformPermissions.ORDERS_CROSS_BUSINESS)
 export class AdminPickupOpsController {
   constructor(
-    private readonly pickupAnalytics: OrderPickupAnalyticsService
+    private readonly pickupAnalytics: OrderPickupAnalyticsService,
+    private readonly geo: GeoScopeService
   ) {}
 
   @Get('health')
@@ -29,8 +31,10 @@ export class AdminPickupOpsController {
   @ApiResponse({ status: 200, description: 'Assigned orders with health state' })
   async getHealth(@Query('limit') limit?: string) {
     const parsed = limit ? parseInt(limit, 10) : 50;
+    const orderWhere = await this.orderWhere();
     return this.pickupAnalytics.getOperationalHealth(
-      Number.isFinite(parsed) ? parsed : 50
+      Number.isFinite(parsed) ? parsed : 50,
+      orderWhere
     );
   }
 
@@ -43,6 +47,11 @@ export class AdminPickupOpsController {
   })
   @ApiResponse({ status: 200, description: 'Pickup KPI summary' })
   async getKpis(@Query('since') since?: string) {
-    return this.pickupAnalytics.getPickupKpis(since);
+    return this.pickupAnalytics.getPickupKpis(since, await this.orderWhere());
+  }
+
+  private async orderWhere() {
+    const scope = await this.geo.require(PlatformPermissions.ORDERS_CROSS_BUSINESS);
+    return this.geo.orderWhere(scope);
   }
 }
