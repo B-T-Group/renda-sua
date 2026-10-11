@@ -816,6 +816,72 @@ function BrowseCatalogScreenInner({
   const onSeeAllDeals = useCallback(() => {
     setSort('deals');
   }, []);
+  
+  // Discovery sort handlers
+  const handleOpenSortSheet = useCallback(() => {
+    if (!flags.discovery_sort_v1) {
+      setFilterSheetVisible(true);
+      return;
+    }
+    if (sortControl === 'enabled') {
+      setSortSheetVisible(true);
+    }
+  }, [flags.discovery_sort_v1, sortControl]);
+  
+  const handleSelectSort = useCallback(
+    (newSort: DiscoverySortMode) => {
+      if (effectiveSort) {
+        // Track analytics: sort changed
+      }
+      setSort(newSort);
+    },
+    [effectiveSort]
+  );
+  
+  // Recovery ladder handlers
+  const handleSearchCorrected = useCallback(
+    (query: string) => {
+      setSearchDraft(query);
+      setDebouncedSearch(query);
+    },
+    []
+  );
+  
+  const handleSearchOriginal = useCallback(
+    (query: string) => {
+      setSearchDraft(query);
+      setDebouncedSearch(query);
+    },
+    []
+  );
+  
+  const handleRemoveFilter = useCallback((filter: RecoveryFilterName) => {
+    setCatalogFilters((prev) => {
+      const next = { ...prev };
+      if (filter === 'category') {
+        next.category = '';
+        next.subcategory = '';
+      } else if (filter === 'subcategory') {
+        next.subcategory = '';
+      } else if (filter === 'brand') {
+        next.brand = '';
+      } else if (filter === 'business_name') {
+        next.business = '';
+      } else if (filter === 'location_name') {
+        // location_name not in catalogFilters
+      }
+      return next;
+    });
+    if (filter === 'collection') {
+      setCatalogFilters((prev) => ({ ...prev, collection: '' }));
+    }
+  }, []);
+  
+  const handleBrowseCategory = useCallback((categoryName: string) => {
+    setCatalogFilters((prev) => ({ ...prev, category: categoryName, subcategory: '' }));
+    setSearchDraft('');
+    setDebouncedSearch('');
+  }, []);
 
   const showExportsChip =
     !foodOnly &&
@@ -1035,6 +1101,21 @@ function BrowseCatalogScreenInner({
       return <CatalogItemSkeleton count={6} />;
     }
     if (error) return null;
+    
+    // Discovery: show recovery ladder when flag on and recovery available
+    if (flags.discovery_sort_v1 && recovery && !recoveryLoading) {
+      return (
+        <DiscoveryRecoveryLadder
+          recovery={recovery}
+          onSearchCorrected={handleSearchCorrected}
+          onSearchOriginal={handleSearchOriginal}
+          onRemoveFilter={handleRemoveFilter}
+          onBrowseCategory={handleBrowseCategory}
+          onItemPress={onItemPress ? handleItemPress : undefined}
+        />
+      );
+    }
+    
     const hasFilters =
       activeFilterCount > 0 || debouncedSearch.length > 0;
     return (
@@ -1186,6 +1267,17 @@ function BrowseCatalogScreenInner({
       >
         {availabilitySnack ?? snack}
       </TabAwareSnackbar>
+      
+      {/* Discovery sort bottom sheet */}
+      {flags.discovery_sort_v1 && effectiveSort && (
+        <DiscoverySortSheet
+          visible={sortSheetVisible}
+          onDismiss={() => setSortSheetVisible(false)}
+          selectedSort={effectiveSort}
+          onSelectSort={handleSelectSort}
+          isSearch={debouncedSearch.length > 0}
+        />
+      )}
     </SafeAreaView>
   );
 }
