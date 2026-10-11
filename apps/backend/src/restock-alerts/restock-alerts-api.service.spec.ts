@@ -1,4 +1,8 @@
-import { NotFoundException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { RestockAlertsApiService } from './restock-alerts-api.service';
 
 type Handler = (vars: any) => any;
@@ -100,6 +104,20 @@ describe('RestockAlertsApiService', () => {
     expect(set).toHaveBeenCalledWith(expect.objectContaining({ set: expect.objectContaining({ restock_alerts_sms_enabled: true }) }));
     expect((set.mock.calls[0] as any)[0].set).not.toHaveProperty('restock_alerts_push_enabled');
     expect(prefs).toMatchObject({ push: true, whatsapp: false, sms: false });
+  });
+
+  it('rejects a non-boolean preference before RestockSetPrefs', async () => {
+    const set = jest.fn(() => ({}));
+    const { svc } = make({
+      handlers: {
+        RestockEnsurePrefs: () => ({}),
+        RestockSetPrefs: set,
+      },
+    });
+    await expect(
+      svc.patchPreferences('u1', { push: 'nope' as unknown as boolean })
+    ).rejects.toBeInstanceOf(BadRequestException);
+    expect(set).not.toHaveBeenCalled();
   });
 
   describe('likes with bell state', () => {

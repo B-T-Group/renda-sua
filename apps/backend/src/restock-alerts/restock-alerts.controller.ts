@@ -11,6 +11,8 @@ import {
   Query,
   UnauthorizedException,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
@@ -29,6 +31,7 @@ import { RestockAlertsApiService } from './restock-alerts-api.service';
 
 @ApiTags('restock-alerts')
 @Controller('restock-alerts')
+@UsePipes(new ValidationPipe({ whitelist: true, transform: true }))
 export class RestockAlertsController {
   constructor(
     private readonly api: RestockAlertsApiService,
