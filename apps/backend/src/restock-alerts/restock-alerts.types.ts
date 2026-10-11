@@ -80,6 +80,8 @@ export interface AlertRow {
   state: 'armed' | 'sent' | 'disarmed';
   enabled: boolean;
   armedAt: Date;
+  /** Hard expiry stamped when the alert is armed (90 days); null/absent means none recorded. */
+  expiresAt?: Date | null;
   lastAlertAt: Date | null;
   lastEventId: string | null;
 }

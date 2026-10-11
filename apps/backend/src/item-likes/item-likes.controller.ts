@@ -5,10 +5,13 @@ import {
   HttpException,
   HttpStatus,
   Param,
+  ParseUUIDPipe,
   Put,
   Query,
   UnauthorizedException,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -37,14 +40,18 @@ export class ItemLikesController {
   ) {}
 
   @Put(':itemId')
+  // Scoped to this route (no global ValidationPipe): `liked` must be a real boolean, `{}`, null,
+  // 0 and 'false' used to be accepted and silently like/unlike (QA F-R1).
+  @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
   @ApiOperation({ summary: 'Like or unlike a catalog item' })
   @ApiParam({ name: 'itemId', description: 'Catalog item UUID (items.id)' })
   @ApiBody({ type: SetItemLikeDto })
   @ApiResponse({ status: 200, description: 'Like state updated' })
+  @ApiResponse({ status: 400, description: 'liked must be a boolean / itemId must be a UUID' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Item not found' })
   async setLike(
-    @Param('itemId') itemId: string,
+    @Param('itemId', ParseUUIDPipe) itemId: string,
     @Body() body: SetItemLikeDto,
     @ReqContext() ctx: RequestContext
   ) {

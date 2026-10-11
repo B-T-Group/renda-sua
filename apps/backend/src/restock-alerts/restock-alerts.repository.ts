@@ -29,6 +29,7 @@ function toAlert(r: any): AlertRow {
     state: r.state,
     enabled: r.alert_enabled,
     armedAt: new Date(r.armed_at),
+    expiresAt: d(r.expires_at),
     lastAlertAt: d(r.last_alert_at),
     lastEventId: r.last_event_id ?? null,
   };
