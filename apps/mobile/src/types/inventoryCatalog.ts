@@ -6,6 +6,8 @@ import type {
 import type { FoodAvailability } from './food';
 
 export type InventorySortMode = 'relevance' | 'fastest' | 'cheapest' | 'top_rated' | 'deals';
+export type DiscoverySortMode = 'recommended' | 'relevance' | 'popular' | 'rating' | 'newest';
+export type SortControlState = 'enabled' | 'disabled' | 'hidden';
 
 export interface CatalogInventoryItem {
   id: string;
@@ -34,6 +36,10 @@ export interface CatalogInventoryItem {
   distance_value?: number;
   avg_rating?: number | null;
   rating_count?: number | null;
+  /** Discovery rating display (≥3 reviews) or null. Flag on only. */
+  rating_display?: { rating: number; count: number } | null;
+  /** Show "New" chip (< 14 days, no rating). Flag on only. */
+  is_new?: boolean;
   /** Present only for items in the cooked-food category. */
   food_availability?: FoodAvailability | null;
   item: {
@@ -116,6 +122,11 @@ export interface PaginatedCatalogInventory {
   page: number;
   limit: number;
   totalPages: number;
+  /** Discovery metadata when flag is on. */
+  discovery?: {
+    sort: DiscoverySortMode;
+    sort_control: SortControlState;
+  };
 }
 
 export interface InventoryItemsApiEnvelope {
@@ -127,5 +138,47 @@ export interface InventoryItemsApiEnvelope {
 export interface InventoryItemByIdEnvelope {
   success: boolean;
   data: CatalogInventoryItem;
+  message: string;
+}
+
+/** Empty-result recovery (#342). */
+export type RecoveryRung = 'R1' | 'R2' | 'R3' | 'R4' | 'R5';
+export type RecoveryFilterName =
+  | 'category'
+  | 'subcategory'
+  | 'brand'
+  | 'min_price'
+  | 'max_price'
+  | 'location_name'
+  | 'business_name'
+  | 'currency';
+
+export interface RecoveryFilterRemoval {
+  filter: RecoveryFilterName;
+  value: string;
+  count: number;
+}
+
+export interface RecoveryCategory {
+  id: number | null;
+  name: string;
+}
+
+export interface DiscoveryRecovery {
+  enabled: boolean;
+  query: string;
+  corrected_query: string | null;
+  corrected_total: number;
+  relax: RecoveryFilterRemoval[];
+  similar: CatalogInventoryItem[];
+  categories: RecoveryCategory[];
+  popular_near_you: CatalogInventoryItem[];
+  ask_renda: { enabled: boolean; query: string };
+  first_rung: RecoveryRung | null;
+}
+
+export interface DiscoveryRecoveryEnvelope {
+  success: boolean;
+  data: DiscoveryRecovery;
   message: string;
 }

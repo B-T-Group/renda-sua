@@ -9,7 +9,8 @@ export type ClientFlagKey =
   | 'catalog_experience_v1'
   | 'assistant_launcher_v1'
   | 'assistant_shopping_v1'
-  | 'restock_alerts_v1';
+  | 'restock_alerts_v1'
+  | 'discovery_sort_v1';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -25,6 +26,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   assistant_shopping_v1: false,
   /** Restock alerts for liked items (#343). Backend default off. */
   restock_alerts_v1: false,
+  /** Discovery sort modes + empty-result recovery (#342). Backend default off. */
+  discovery_sort_v1: false,
 };
 
 type ClientFlagsResponse = {

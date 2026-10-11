@@ -21,6 +21,20 @@ describe('TrackSiteEventDto', () => {
     expect(errors).toHaveLength(0);
   });
 
+  it.each([
+    'search.results_shown',
+    'search.sort_changed',
+    'search.empty_shown',
+    'search.empty_rung_clicked',
+    'search.filter_removed_from_empty',
+    'card.rating_shown',
+  ])('accepts discovery event %s (#342)', async (eventType) => {
+    const dto = new TrackSiteEventDto();
+    dto.eventType = eventType as any;
+    const errors = await validate(dto);
+    expect(errors).toHaveLength(0);
+  });
+
   it('rejects assistant.message.classified (server-only)', async () => {
     const dto = new TrackSiteEventDto();
     dto.eventType = 'assistant.message.classified' as any;

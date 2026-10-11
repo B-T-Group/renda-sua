@@ -23,6 +23,8 @@ export interface CatalogBrowseFilterSheetProps {
   onDismiss: () => void;
   sort: InventorySortMode;
   onSortChange: (mode: InventorySortMode) => void;
+  /** Discovery sort (#342) lives in its own sheet; hide the legacy sort chips. */
+  hideSort?: boolean;
   values: CatalogFilterState;
   onChange: (next: CatalogFilterState) => void;
   categories: string[];
@@ -76,6 +78,7 @@ export function CatalogBrowseFilterSheet({
   onDismiss,
   sort,
   onSortChange,
+  hideSort = false,
   values,
   onChange,
   categories,
@@ -135,6 +138,8 @@ export function CatalogBrowseFilterSheet({
         </View>
       }
     >
+          {hideSort ? null : (
+            <>
           <Text variant="labelLarge" style={{ color: colors.text.secondary, marginBottom: spacing.xs }}>
             {t('public.items.sortLabel', 'Sort')}
           </Text>
@@ -160,6 +165,8 @@ export function CatalogBrowseFilterSheet({
             ))}
           </ScrollView>
           <Divider style={{ marginVertical: spacing.md }} />
+            </>
+          )}
           {foodOnly ? null : (
             <RadioBlock
               title={t('public.items.filters.category', 'Category')}

@@ -123,7 +123,7 @@ export const SITE_EVENT_TYPES_V1 = [
   'restock.add_to_cart_from_alert',
   'restock.order_from_alert',
   'restock.opt_out',
-  // Discovery sort v1 (#342) - client-emitted events (web)
+  // Discovery sort + empty-result recovery (#342) - client-emitted events (web + mobile)
   'search.results_shown',
   'search.sort_changed',
   'search.empty_shown',

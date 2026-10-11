@@ -116,3 +116,32 @@ describe('ItemLikesController', () => {
     expect(result.message).toBe('Liked items retrieved successfully');
   });
 });
+
+describe('PUT /item-likes/:itemId validation (QA F-R1)', () => {
+  const { ValidationPipe } = jest.requireActual('@nestjs/common');
+  const { SetItemLikeDto } = jest.requireActual('./dto/set-item-like.dto');
+  const pipe = new ValidationPipe({ transform: true, whitelist: true });
+  const run = (value: unknown) =>
+    pipe.transform(value, { type: 'body', metatype: SetItemLikeDto });
+
+  it.each([{}, { liked: null }, { liked: 0 }, { liked: 1 }, { liked: 'false' }, { liked: 'true' }, { liked: [] }, null, undefined])(
+    'rejects %j with 400',
+    async (body: unknown) => {
+      await expect(run(body)).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    }
+  );
+
+  it('accepts real booleans and strips extra fields', async () => {
+    await expect(run({ liked: true, admin: true })).resolves.toEqual({ liked: true });
+    await expect(run({ liked: false })).resolves.toEqual({ liked: false });
+  });
+
+  it('the route carries the pipe and a UUID check on itemId', () => {
+    const { PIPES_METADATA } = jest.requireActual('@nestjs/common/constants');
+    const pipes = Reflect.getMetadata(PIPES_METADATA, ItemLikesController.prototype.setLike);
+    expect(pipes?.[0]).toBeInstanceOf(ValidationPipe);
+    const args = Reflect.getMetadata('__routeArguments__', ItemLikesController, 'setLike');
+    const withPipes = Object.values(args as Record<string, any>).filter((a: any) => a.pipes?.length);
+    expect(withPipes.length).toBeGreaterThan(0);
+  });
+});
