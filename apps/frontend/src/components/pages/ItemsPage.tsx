@@ -39,10 +39,23 @@ import { useTrackItemView } from '../../hooks/useTrackItemView';
 import { useMetaAddToCartTrack } from '../../hooks/useMetaAddToCartTrack';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { useClientFlags } from '../../hooks/useClientFlags';
+import {
+  catalogGeoQueryParams,
+  useCatalogGeoParams,
+} from '../../hooks/useCatalogGeoParams';
+import { useSearchRecovery } from '../../hooks/useSearchRecovery';
 import { CatalogExperience } from '../catalog-experience/CatalogExperience';
 import DashboardComposingOverlay from '../common/DashboardComposingOverlay';
+import CatalogSortControl from '../common/CatalogSortControl';
+import EmptySearchRecovery, { SearchCorrectionBanner } from '../common/EmptySearchRecovery';
 import {
   SITE_EVENT_INVENTORY_SORT_SELECT,
+  SITE_EVENT_SEARCH_RESULTS_SHOWN,
+  SITE_EVENT_SEARCH_SORT_CHANGED,
+  SITE_EVENT_SEARCH_EMPTY_SHOWN,
+  SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
+  SITE_EVENT_SEARCH_FILTER_REMOVED_FROM_EMPTY,
+  SITE_EVENT_CARD_RATING_SHOWN,
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 import {
@@ -233,6 +246,9 @@ function CatalogSection({
   );
 }
 
+const DISCOVERY_SORTS = ['recommended', 'relevance', 'popular', 'rating', 'newest'] as const;
+type DiscoverySort = (typeof DISCOVERY_SORTS)[number];
+
 const ItemsPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -330,16 +346,94 @@ const ItemsPage: React.FC = () => {
     [setSearchParams]
   );
   const [currentPage, setCurrentPage] = useState(1);
+  // Legacy sort (flag off, unchanged). Also holds quick-pick modes such as 'deals'.
   const [sort, setSort] = useState<InventorySortMode>('relevance');
   const [businessLocationId, setBusinessLocationId] = useState<string | null>(
     null
   );
   const [trackOrderId, setTrackOrderId] = useState<string | null>(null);
+  const { flags: clientFlags } = useClientFlags();
+  const discoveryEnabled = clientFlags.discovery_sort_v1;
+  const { recovery, fetchRecovery, reset: resetRecovery } = useSearchRecovery();
+  // R1: corrected query auto-applied; forceOriginal = "Search instead for ..." (never re-corrects).
+  const [correction, setCorrection] = useState<{ original: string; corrected: string } | null>(null);
+  const [forceOriginal, setForceOriginal] = useState(false);
 
   const browserGeo = usePublicBrowserGeo(true);
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const catalogGeo = useCatalogGeoParams();
 
   const inventorySearch =
     searchTerm.trim() !== '' ? searchTerm.trim() : undefined;
+
+  // Discovery sort (#342, flag on only). URL `?sort=` holds the user's choice; omitted = default.
+  const discoveryDefaultSort: DiscoverySort = inventorySearch ? 'relevance' : 'recommended';
+  const urlDiscoverySort = useMemo(() => {
+    const param = new URLSearchParams(location.search).get('sort');
+    return param && (DISCOVERY_SORTS as readonly string[]).includes(param)
+      ? (param as DiscoverySort)
+      : null;
+  }, [location.search]);
+  const currentDiscoverySort: DiscoverySort = (() => {
+    const chosen = urlDiscoverySort ?? discoveryDefaultSort;
+    if (chosen === 'recommended' && inventorySearch) return 'relevance';
+    if (chosen === 'relevance' && !inventorySearch) return 'recommended';
+    return chosen;
+  })();
+  // Legacy quick picks (deals, nearest, ...) bypass discovery sorts, as in the API contract.
+  const requestSort: InventorySortMode =
+    discoveryEnabled && sort === 'relevance' ? currentDiscoverySort : sort;
+
+  const handleDiscoverySortChange = useCallback(
+    (newSort: InventorySortMode) => {
+      const next = newSort as DiscoverySort;
+      void trackSiteEvent({
+        eventType: SITE_EVENT_SEARCH_SORT_CHANGED,
+        metadata: {
+          from: currentDiscoverySort,
+          to: next,
+          surface: inventorySearch ? 'search' : 'browse',
+        },
+      });
+      setSort('relevance');
+      setCurrentPage(1);
+      setSearchParams(
+        (prev) => {
+          const params = new URLSearchParams(prev);
+          if (next === discoveryDefaultSort) params.delete('sort');
+          else params.set('sort', next);
+          return params;
+        },
+        { replace: true }
+      );
+    },
+    [currentDiscoverySort, discoveryDefaultSort, inventorySearch, setSearchParams, trackSiteEvent]
+  );
+
+  // AC-1.4: a new search text resets the sort to the default; filters keep it.
+  const prevSearchRef = useRef(inventorySearch);
+  useEffect(() => {
+    if (prevSearchRef.current === inventorySearch) return;
+    prevSearchRef.current = inventorySearch;
+    setCorrection(null);
+    setForceOriginal(false);
+    if (!discoveryEnabled) return;
+    setSearchParams(
+      (prev) => {
+        if (!prev.has('sort')) return prev;
+        const params = new URLSearchParams(prev);
+        params.delete('sort');
+        return params;
+      },
+      { replace: true }
+    );
+  }, [inventorySearch, discoveryEnabled, setSearchParams]);
+
+  useEffect(() => {
+    if (!discoveryEnabled || !inventorySearch) {
+      resetRecovery();
+    }
+  }, [discoveryEnabled, inventorySearch, resetRecovery]);
 
   const {
     inventoryItems: facetInventoryItems,
@@ -363,16 +457,17 @@ const ItemsPage: React.FC = () => {
     page: currentPage,
     limit: ITEMS_CATALOG_PAGE_SIZE,
     is_active: true,
-    sort,
+    sort: requestSort,
     business_location_id: businessLocationId ?? undefined,
     anonymousOrigin: browserGeo,
-    search: inventorySearch,
+    search: discoveryEnabled && correction ? correction.corrected : inventorySearch,
     category: filters.category.trim() || undefined,
     brand: filters.brand.trim() || undefined,
     subcategory: filters.subcategory.trim() || undefined,
     business_name: filters.business.trim() || undefined,
     collection:
       filters.collection.trim() || collectionSlug.trim() || undefined,
+    include_unavailable: discoveryEnabled ? true : undefined,
   });
 
   // Check if any filters are active
@@ -386,6 +481,87 @@ const ItemsPage: React.FC = () => {
       collectionSlug ||
       businessLocationId
   );
+  
+  // Empty-result recovery (#342 §2): call only when the list returned total = 0.
+  const recoveryKeyRef = useRef('');
+  useEffect(() => {
+    if (!discoveryEnabled || loading || !pagination || pagination.total !== 0) return;
+    if (correction || (!inventorySearch && !hasActiveFilters)) return;
+    const key = JSON.stringify([inventorySearch, filters, collectionSlug, forceOriginal]);
+    if (recoveryKeyRef.current === key) return;
+    recoveryKeyRef.current = key;
+    const geo = catalogGeoQueryParams(catalogGeo);
+    void fetchRecovery({
+      search: inventorySearch,
+      category: filters.category || undefined,
+      subcategory: filters.subcategory || undefined,
+      brand: filters.brand || undefined,
+      business_name: filters.business || undefined,
+      collection: filters.collection || collectionSlug || undefined,
+      country_code: geo.country_code,
+      state: geo.state,
+    }).then((data) => {
+      if (!data || !data.enabled) return;
+      if (data.corrected_query && data.corrected_total > 0 && !forceOriginal && inventorySearch) {
+        setCorrection({ original: inventorySearch, corrected: data.corrected_query });
+        return;
+      }
+      void trackSiteEvent({ eventType: SITE_EVENT_SEARCH_EMPTY_SHOWN });
+    });
+  }, [
+    discoveryEnabled,
+    loading,
+    pagination,
+    correction,
+    forceOriginal,
+    inventorySearch,
+    hasActiveFilters,
+    filters,
+    collectionSlug,
+    catalogGeo,
+    fetchRecovery,
+    trackSiteEvent,
+  ]);
+
+  // search.results_shown once per settled result set; card.rating_shown once per item.
+  const resultsShownKeyRef = useRef('');
+  const ratingShownRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!discoveryEnabled || !pagination || loading) return;
+    if (inventorySearch) {
+      const key = `${correction?.corrected ?? inventorySearch}|${currentDiscoverySort}|${pagination.total}`;
+      if (resultsShownKeyRef.current !== key) {
+        resultsShownKeyRef.current = key;
+        void trackSiteEvent({
+          eventType: SITE_EVENT_SEARCH_RESULTS_SHOWN,
+          metadata: {
+            query_len: (correction?.corrected ?? inventorySearch).length,
+            count: pagination.total,
+            mode: pagination.discovery?.sort ?? currentDiscoverySort,
+          },
+        });
+      }
+    }
+    inventoryItems.forEach((item) => {
+      if (item.rating_display && !item.is_new && !ratingShownRef.current.has(item.id)) {
+        ratingShownRef.current.add(item.id);
+        void trackSiteEvent({
+          eventType: SITE_EVENT_CARD_RATING_SHOWN,
+          subjectType: 'inventory_item',
+          subjectId: item.id,
+        });
+      }
+    });
+  }, [
+    discoveryEnabled,
+    pagination,
+    inventoryItems,
+    loading,
+    inventorySearch,
+    correction,
+    currentDiscoverySort,
+    trackSiteEvent,
+  ]);
 
   const { flags } = useClientFlags();
   const [experienceUnavailable, setExperienceUnavailable] = useState(false);
@@ -614,7 +790,6 @@ const ItemsPage: React.FC = () => {
 
   const { trackView } = useTrackItemView(null);
   const trackAddToCart = useMetaAddToCartTrack();
-  const { trackSiteEvent } = useTrackSiteEvent();
 
   const onCartBuilt = useCallback(
     (cartItem: CartItem, item: InventoryItem) => {
@@ -1074,68 +1249,100 @@ const ItemsPage: React.FC = () => {
         </Typography>
 
         {/* Sort / filter bar */}
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-          {(
-            [
-              'relevance',
-              'fastest',
-              'cheapest',
-              'top_rated',
-              'deals',
-            ] as const
-          ).map((mode) => {
-            const isDeals = mode === 'deals';
-            const isSelected = sort === mode;
-            const isDealsSelected = isDeals && isSelected;
-            return (
-              <Chip
-                key={mode}
-                label={t(
-                  `public.items.sort.${mode === 'top_rated' ? 'topRated' : mode}`,
-                  mode === 'top_rated'
-                    ? 'Top rated'
-                    : mode === 'fastest'
-                      ? 'Closest to you'
-                      : mode
-                )}
-                onClick={() => {
-                  void trackSiteEvent({
-                    eventType: SITE_EVENT_INVENTORY_SORT_SELECT,
-                    metadata: { sort: mode },
-                  });
-                  setSort(mode);
-                }}
-                color={isDealsSelected ? 'default' : isSelected ? 'primary' : 'default'}
-                variant={isSelected ? 'filled' : 'outlined'}
-                size="medium"
-                sx={
-                  isDeals
-                    ? {
-                        ...(isDealsSelected
-                          ? {
-                              backgroundColor: '#c9972a',
-                              color: '#1a1a1a',
-                              border: '2px solid #b8860b',
-                              fontWeight: 600,
-                              '&:hover': {
-                                backgroundColor: '#d4a84b',
-                              },
-                            }
-                          : {
-                              border: '2px solid #c9972a',
-                              color: '#b8860b',
-                              '&:hover': {
-                                borderColor: '#d4a84b',
-                                bgcolor: 'rgba(201, 151, 42, 0.08)',
-                              },
-                            }),
-                      }
-                    : undefined
-                }
-              />
-            );
-          })}
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2, alignItems: 'center', justifyContent: 'space-between' }}>
+          {discoveryEnabled && pagination?.discovery ? (
+            <CatalogSortControl
+              currentSort={currentDiscoverySort as InventorySortMode}
+              defaultSort={discoveryDefaultSort}
+              isSearchMode={Boolean(inventorySearch)}
+              controlState={pagination.discovery.sort_control}
+              onSortChange={handleDiscoverySortChange}
+            />
+          ) : (
+            <>
+              {(
+                [
+                  'relevance',
+                  'fastest',
+                  'cheapest',
+                  'top_rated',
+                  'deals',
+                ] as const
+              ).map((mode) => {
+                const isDeals = mode === 'deals';
+                const isSelected = sort === mode;
+                const isDealsSelected = isDeals && isSelected;
+                return (
+                  <Chip
+                    key={mode}
+                    label={t(
+                      `public.items.sort.${mode === 'top_rated' ? 'topRated' : mode}`,
+                      mode === 'top_rated'
+                        ? 'Top rated'
+                        : mode === 'fastest'
+                          ? 'Closest to you'
+                          : mode
+                    )}
+                    onClick={() => {
+                      void trackSiteEvent({
+                        eventType: SITE_EVENT_INVENTORY_SORT_SELECT,
+                        metadata: { sort: mode },
+                      });
+                      setSort(mode);
+                    }}
+                    color={isDealsSelected ? 'default' : isSelected ? 'primary' : 'default'}
+                    variant={isSelected ? 'filled' : 'outlined'}
+                    size="medium"
+                    sx={
+                      isDeals
+                        ? {
+                            ...(isDealsSelected
+                              ? {
+                                  backgroundColor: '#c9972a',
+                                  color: '#1a1a1a',
+                                  border: '2px solid #b8860b',
+                                  fontWeight: 600,
+                                  '&:hover': {
+                                    backgroundColor: '#d4a84b',
+                                  },
+                                }
+                              : {
+                                  border: '2px solid #c9972a',
+                                  color: '#b8860b',
+                                  '&:hover': {
+                                    borderColor: '#d4a84b',
+                                    bgcolor: 'rgba(201, 151, 42, 0.08)',
+                                  },
+                                }),
+                          }
+                        : undefined
+                    }
+                  />
+                );
+              })}
+            </>
+          )}
+          {discoveryEnabled && pagination && pagination.total > 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {t('catalog.results', { n: pagination.total, defaultValue: '{{n}} results' })}
+            </Typography>
+          )}
         </Box>
+
+        {discoveryEnabled && correction ? (
+          <SearchCorrectionBanner
+            corrected={correction.corrected}
+            original={correction.original}
+            onSearchOriginal={() => {
+              void trackSiteEvent({
+                eventType: SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
+                metadata: { rung: 'R1' },
+              });
+              setForceOriginal(true);
+              setCorrection(null);
+            }}
+          />
+        ) : null}
 
         {showExperience ? (
           <CatalogExperience
@@ -1318,62 +1525,98 @@ const ItemsPage: React.FC = () => {
             ))}
           </Box>
         ) : inventoryItems.length === 0 ? (
-          /* Enhanced Empty State */
-          <Box
-            sx={{
-              textAlign: 'center',
-              py: 8,
-              px: 2,
-            }}
-          >
+          discoveryEnabled && recovery && recovery.enabled ? (
+            <EmptySearchRecovery
+              recovery={recovery}
+              onRemoveFilter={(filter) => {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_SEARCH_FILTER_REMOVED_FROM_EMPTY,
+                });
+                if (filter === 'category') {
+                  setFilters((f) => ({ ...f, category: '', subcategory: '' }));
+                } else if (filter === 'subcategory') {
+                  setFilters((f) => ({ ...f, subcategory: '' }));
+                } else if (filter === 'brand') {
+                  setFilters((f) => ({ ...f, brand: '' }));
+                } else if (filter === 'business_name') {
+                  setFilters((f) => ({ ...f, business: '' }));
+                }
+              }}
+              onBrowseCategory={(_id, name) => {
+                setFilters((f) => ({ ...f, category: name, subcategory: '' }));
+                setSearchTerm('');
+              }}
+              onAskRenda={(query) => {
+                navigate(`/assistant?prefill=${encodeURIComponent(query)}`);
+              }}
+              onRungClick={(rung) => {
+                void trackSiteEvent({
+                  eventType: SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED,
+                  metadata: { rung },
+                });
+              }}
+              formatCurrency={formatCurrency}
+              onOrderClick={handleOrderClick}
+              onAddToCart={handleAddToCart}
+            />
+          ) : (
+            /* Enhanced Empty State */
             <Box
               sx={{
-                width: 80,
-                height: 80,
-                borderRadius: '50%',
-                bgcolor: 'grey.100',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                mx: 'auto',
-                mb: 3,
+                textAlign: 'center',
+                py: 8,
+                px: 2,
               }}
             >
-              <SearchIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
-            </Box>
-            <Typography variant="h5" gutterBottom fontWeight={600}>
-              {hasActiveFilters
-                ? t(
-                    'public.items.noMatchingItems',
-                    'No items match your filters'
-                  )
-                : t('public.items.noItemsAvailable', 'No items available yet')}
-            </Typography>
-            <Typography
-              variant="body1"
-              color="text.secondary"
-              sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}
-            >
-              {hasActiveFilters
-                ? t(
-                    'public.items.tryDifferentFilters',
-                    "Try adjusting your filters or search terms to find what you're looking for."
-                  )
-                : t(
-                    'public.items.checkBackSoon',
-                    'Check back soon for new items from our sellers.'
-                  )}
-            </Typography>
-            {hasActiveFilters && (
-              <Button
-                variant="outlined"
-                size="large"
-                onClick={handleClearAllFilters}
+              <Box
+                sx={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: '50%',
+                  bgcolor: 'grey.100',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  mx: 'auto',
+                  mb: 3,
+                }}
               >
-                {t('public.items.clearSearch', 'Clear filters')}
-              </Button>
-            )}
-          </Box>
+                <SearchIcon sx={{ fontSize: 40, color: 'text.secondary' }} />
+              </Box>
+              <Typography variant="h5" gutterBottom fontWeight={600}>
+                {hasActiveFilters
+                  ? t(
+                      'public.items.noMatchingItems',
+                      'No items match your filters'
+                    )
+                  : t('public.items.noItemsAvailable', 'No items available yet')}
+              </Typography>
+              <Typography
+                variant="body1"
+                color="text.secondary"
+                sx={{ mb: 3, maxWidth: 500, mx: 'auto' }}
+              >
+                {hasActiveFilters
+                  ? t(
+                      'public.items.tryDifferentFilters',
+                      "Try adjusting your filters or search terms to find what you're looking for."
+                    )
+                  : t(
+                      'public.items.checkBackSoon',
+                      'Check back soon for new items from our sellers.'
+                    )}
+              </Typography>
+              {hasActiveFilters && (
+                <Button
+                  variant="outlined"
+                  size="large"
+                  onClick={handleClearAllFilters}
+                >
+                  {t('public.items.clearSearch', 'Clear filters')}
+                </Button>
+              )}
+            </Box>
+          )
         ) : (
           <>
             {catalogDisplay.length > 0 ? (

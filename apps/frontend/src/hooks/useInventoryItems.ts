@@ -50,6 +50,10 @@ export interface InventoryItem {
   variant_price_overrides?: VariantPriceOverride[];
   /** Present only for items in the cooked-food category. */
   food_availability?: FoodAvailability | null;
+  /** Discovery sort v1: rating display (only when non-null). */
+  rating_display?: { rating: number; count: number } | null;
+  /** Discovery sort v1: New chip (shows instead of rating). */
+  is_new?: boolean;
   item: {
     id: string;
     name: string;
@@ -147,7 +151,11 @@ export type InventorySortMode =
   | 'fastest'
   | 'cheapest'
   | 'top_rated'
-  | 'deals';
+  | 'deals'
+  | 'recommended'
+  | 'popular'
+  | 'rating'
+  | 'newest';
 
 export interface GetInventoryItemsQuery {
   page?: number;
@@ -185,6 +193,11 @@ export interface PaginatedInventoryItems {
   page: number;
   limit: number;
   totalPages: number;
+  /** Discovery sort v1: sort control metadata. */
+  discovery?: {
+    sort: InventorySortMode;
+    sort_control: 'hidden' | 'disabled' | 'enabled';
+  };
 }
 
 export interface ApiResponse {
@@ -214,6 +227,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     page: number;
     limit: number;
     totalPages: number;
+    discovery?: PaginatedInventoryItems['discovery'];
   } | null>(null);
 
   const apiClient = useApiClient();
@@ -351,6 +365,9 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
           page: response.data.data.page,
           limit: response.data.data.limit,
           totalPages: leakedNonFood ? 1 : response.data.data.totalPages,
+          ...(response.data.data.discovery && {
+            discovery: response.data.data.discovery,
+          }),
         });
       } else {
         setError(response.data.message || 'Failed to fetch inventory items');

@@ -38,6 +38,24 @@ export const SITE_EVENT_INVENTORY_FILTER_CHANGE =
 export const SITE_EVENT_INVENTORY_FILTER_CLEAR =
   'inventory.filter.clear' as const;
 
+export const SITE_EVENT_SEARCH_RESULTS_SHOWN =
+  'search.results_shown' as const;
+
+export const SITE_EVENT_SEARCH_SORT_CHANGED =
+  'search.sort_changed' as const;
+
+export const SITE_EVENT_SEARCH_EMPTY_SHOWN =
+  'search.empty_shown' as const;
+
+export const SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED =
+  'search.empty_rung_clicked' as const;
+
+export const SITE_EVENT_SEARCH_FILTER_REMOVED_FROM_EMPTY =
+  'search.filter_removed_from_empty' as const;
+
+export const SITE_EVENT_CARD_RATING_SHOWN =
+  'card.rating_shown' as const;
+
 export const SITE_EVENT_INVENTORY_LOCATION_SELECT =
   'inventory.location.select' as const;
 
@@ -139,6 +157,12 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_SEARCH_SUBMIT
   | typeof SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT
   | typeof SITE_EVENT_INVENTORY_SORT_SELECT
+  | typeof SITE_EVENT_SEARCH_RESULTS_SHOWN
+  | typeof SITE_EVENT_SEARCH_SORT_CHANGED
+  | typeof SITE_EVENT_SEARCH_EMPTY_SHOWN
+  | typeof SITE_EVENT_SEARCH_EMPTY_RUNG_CLICKED
+  | typeof SITE_EVENT_SEARCH_FILTER_REMOVED_FROM_EMPTY
+  | typeof SITE_EVENT_CARD_RATING_SHOWN
   | typeof SITE_EVENT_INVENTORY_FILTER_CHANGE
   | typeof SITE_EVENT_INVENTORY_FILTER_CLEAR
   | typeof SITE_EVENT_INVENTORY_LOCATION_SELECT
