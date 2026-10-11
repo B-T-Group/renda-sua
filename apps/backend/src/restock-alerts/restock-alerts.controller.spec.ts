@@ -1,4 +1,6 @@
+import { ValidationPipe } from '@nestjs/common';
 import { IS_PUBLIC_KEY } from '../auth/public.decorator';
+import { PatchRestockPreferencesDto } from './dto/restock-alerts.dto';
 import { RestockAlertsController } from './restock-alerts.controller';
 
 describe('RestockAlertsController access', () => {
@@ -11,4 +13,27 @@ describe('RestockAlertsController access', () => {
       expect(isPublic(name)).toBe(false);
     }
   });
+});
+
+describe('PATCH restock-alerts/preferences ValidationPipe', () => {
+  const pipe = new ValidationPipe({ whitelist: true, transform: true });
+  const validate = (body: unknown) =>
+    pipe.transform(body, {
+      type: 'body',
+      metatype: PatchRestockPreferencesDto,
+    });
+
+  it('keeps boolean channel flags', async () => {
+    await expect(validate({ push: true, sms: false })).resolves.toEqual({
+      push: true,
+      sms: false,
+    });
+  });
+
+  it.each([{ push: 'nope' }, { whatsapp: 'true' }, { sms: 1 }])(
+    'rejects a non-boolean channel flag %p',
+    async (body) => {
+      await expect(validate(body)).rejects.toBeInstanceOf(Error);
+    }
+  );
 });
