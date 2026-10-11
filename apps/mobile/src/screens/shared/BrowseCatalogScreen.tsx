@@ -40,7 +40,13 @@ import { useStore } from '../../stores/RootStore';
 import { useMarket } from '../../hooks/useMarket';
 import { MarketSelector } from '../../components/market/MarketSelector';
 import { MarketSwitchBanner } from '../../components/market/MarketSwitchBanner';
-import type { CatalogInventoryItem, InventorySortMode } from '../../types/inventoryCatalog';
+import type {
+  CatalogInventoryItem,
+  DiscoveryRecovery,
+  DiscoverySortMode,
+  InventorySortMode,
+  RecoveryFilterName,
+} from '../../types/inventoryCatalog';
 import type { CatalogFilterState } from '../../types/catalogFilter';
 import type { Order } from '../../types/agent';
 import type { CatalogFeedRow } from '../../hooks/useCatalogFeedComposition';
@@ -55,6 +61,8 @@ import {
 import { CatalogBrowseSearchBar } from '../../components/browse/CatalogBrowseSearchBar';
 import { CatalogBrowseFilterSheet } from '../../components/browse/CatalogBrowseFilterSheet';
 import { CatalogItemSkeleton } from '../../components/browse/CatalogItemSkeleton';
+import { DiscoverySortSheet } from '../../components/browse/DiscoverySortSheet';
+import { DiscoveryRecoveryLadder } from '../../components/browse/DiscoveryRecoveryLadder';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { CatalogEmptyIllustration } from '../../components/illustrations/CatalogEmptyIllustration';
@@ -274,10 +282,92 @@ function BrowseCatalogScreenInner({
     overflow: 'hidden',
   }));
 
-  // Guests default to "Nearest" so results are proximity-ordered.
-  // Authenticated users keep "For you" (relevance) as the default.
-  const defaultSort: InventorySortMode = inventoryRequestsWithAuth ? 'relevance' : 'fastest';
-  const [sort, setSort] = useState<InventorySortMode>(defaultSort);
+  // Discovery sort state (flag on: recommended/popular/rating/newest; flag off: legacy)
+  const [sort, setSort] = useState<InventorySortMode | DiscoverySortMode>(() => {
+    if (flags.discovery_sort_v1) {
+      return debouncedSearch.length > 0 ? 'relevance' : 'recommended';
+    }
+    return inventoryRequestsWithAuth ? 'relevance' : 'fastest';
+  });
+  const [sortSheetVisible, setSortSheetVisible] = useState(false);
+  const [lastSearchText, setLastSearchText] = useState('');
+  const [recovery, setRecovery] = useState<DiscoveryRecovery | null>(null);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  
+  // Reset sort to default when search text changes (flag on only)
+  useEffect(() => {
+    if (!flags.discovery_sort_v1) return;
+    const currentSearch = debouncedSearch.trim();
+    if (currentSearch !== lastSearchText) {
+      setLastSearchText(currentSearch);
+      if (currentSearch.length === 0) {
+        // Browse: default to Recommended
+        setSort('recommended');
+      } else if (lastSearchText.length === 0) {
+        // New search: reset to Best match
+        setSort('relevance');
+      }
+      // Otherwise keep the current sort when refining the search
+    }
+  }, [debouncedSearch, flags.discovery_sort_v1, lastSearchText]);
+  
+  // Fetch recovery suggestions when empty results (flag on, total === 0, include_unavailable=true sent)
+  useEffect(() => {
+    if (!flags.discovery_sort_v1 || total !== 0 || loading) {
+      setRecovery(null);
+      return;
+    }
+    if (debouncedSearch.length === 0 && activeFilterCount === 0) {
+      // Empty browse with no filters: no recovery needed
+      setRecovery(null);
+      return;
+    }
+    const controller = new AbortController();
+    setRecoveryLoading(true);
+    void fetchSearchRecovery(
+      {
+        search: debouncedSearch || undefined,
+        category: catalogFilters.category || undefined,
+        subcategory: catalogFilters.subcategory || undefined,
+        brand: catalogFilters.brand || undefined,
+        business_name: catalogFilters.business || undefined,
+        collection: catalogFilters.collection || undefined,
+        country_code: catalogCountryCode,
+        state: catalogState,
+        food_only: foodOnly || undefined,
+      },
+      { signal: controller.signal }
+    )
+      .then((envelope) => {
+        if (controller.signal.aborted) return;
+        if (envelope.success && envelope.data.enabled) {
+          setRecovery(envelope.data);
+        } else {
+          setRecovery(null);
+        }
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRecovery(null);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRecoveryLoading(false);
+      });
+    return () => controller.abort();
+  }, [
+    flags.discovery_sort_v1,
+    total,
+    loading,
+    debouncedSearch,
+    activeFilterCount,
+    catalogFilters.category,
+    catalogFilters.subcategory,
+    catalogFilters.brand,
+    catalogFilters.business,
+    catalogFilters.collection,
+    catalogCountryCode,
+    catalogState,
+    foodOnly,
+  ]);
 
   const [searchDraft, setSearchDraft] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -346,7 +436,17 @@ function BrowseCatalogScreenInner({
   const stopsEnabled =
     catalogReady && debouncedSearch.length === 0 && !foodOnly;
 
-  const { items, loading, loadingMore, error, loadMore, refetch, total } = useInventoryCatalog({
+  const {
+    items,
+    loading,
+    loadingMore,
+    error,
+    loadMore,
+    refetch,
+    total,
+    effectiveSort,
+    sortControl,
+  } = useInventoryCatalog({
     search: debouncedSearch,
     sort,
     countryCode: catalogCountryCode,
@@ -361,6 +461,7 @@ function BrowseCatalogScreenInner({
     export_only: exportOnly || undefined,
     withAuth: inventoryRequestsWithAuth,
     enabled: catalogReady && !showAllRestaurants,
+    includeUnavailable: flags.discovery_sort_v1,
   });
 
   const {
