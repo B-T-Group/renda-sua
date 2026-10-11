@@ -314,7 +314,10 @@ export function useBusinessDashboardModules({
               }
             : undefined,
         color: brandTokens.secondary.main,
-        requiredPermission: PlatformPermissions.MANAGE_AGENTS,
+        requiredAnyPermission: [
+          PlatformPermissions.MANAGE_AGENTS,
+          PlatformPermissions.USERS_READ,
+        ],
         section: 'people',
         path: '/admin/agents',
       },
@@ -324,7 +327,10 @@ export function useBusinessDashboardModules({
         icon: <UsersIcon sx={{ fontSize: 40 }} />,
         count: aggregates?.clientCount ?? null,
         color: brandTokens.info.main,
-        requiredPermission: PlatformPermissions.MANAGE_CLIENTS,
+        requiredAnyPermission: [
+          PlatformPermissions.MANAGE_CLIENTS,
+          PlatformPermissions.USERS_READ,
+        ],
         section: 'people',
         path: '/admin/clients',
       },
@@ -345,9 +351,25 @@ export function useBusinessDashboardModules({
               }
             : undefined,
         color: brandTokens.text.muted,
-        requiredPermission: PlatformPermissions.MANAGE_BUSINESSES,
+        requiredAnyPermission: [
+          PlatformPermissions.MANAGE_BUSINESSES,
+          PlatformPermissions.USERS_READ,
+        ],
         section: 'people',
         path: '/admin/businesses',
+      },
+      {
+        title: t('admin.countryAdmins.moduleTitle', 'Country admins'),
+        description: t(
+          'admin.countryAdmins.moduleDescription',
+          'Assign admins for a country or specific states'
+        ),
+        icon: <PublicIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: brandTokens.primary.main,
+        superuserOnly: true,
+        section: 'people',
+        path: '/admin/country-admins',
       },
       {
         title: t(
@@ -387,7 +409,7 @@ export function useBusinessDashboardModules({
         icon: <MapIcon sx={{ fontSize: 40 }} />,
         count: null,
         color: brandTokens.primary.main,
-        superuserOnly: true,
+        requiredPermission: PlatformPermissions.OPS_MAP,
         section: 'operations',
         path: '/admin/map',
       },
@@ -700,7 +722,8 @@ export function useBusinessDashboardModules({
     const visibleAdminModules = adminModules.filter(
       (m) =>
         (!m.superuserOnly || isSuperuser) &&
-        (!m.requiredPermission || can(m.requiredPermission))
+        (!m.requiredPermission || can(m.requiredPermission)) &&
+        (!m.requiredAnyPermission || m.requiredAnyPermission.some(can))
     );
 
     return {

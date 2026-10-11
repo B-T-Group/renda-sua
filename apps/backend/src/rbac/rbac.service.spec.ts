@@ -7,6 +7,17 @@ import { RbacService, rbacRequestStore } from './rbac.service';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 
+function grant(role: string, keys: string[], country: string | null = null) {
+  return {
+    country_code: country,
+    supported_country_state: null,
+    role: {
+      key: role,
+      role_permissions: keys.map((key) => ({ permission: { key } })),
+    },
+  };
+}
+
 describe('RbacService', () => {
   let executeQuery: jest.Mock;
   let service: RbacService;
@@ -20,10 +31,11 @@ describe('RbacService', () => {
 
   it('applies direct denies over role permissions', async () => {
     executeQuery.mockResolvedValue({
-      user_roles: [{ role: { key: PlatformRoles.MODERATOR } }],
-      role_permissions: [
-        { permission: { key: PlatformPermissions.MODERATE_ITEMS } },
-        { permission: { key: PlatformPermissions.MODERATE_RENTALS } },
+      user_roles: [
+        grant(PlatformRoles.MODERATOR, [
+          PlatformPermissions.MODERATE_ITEMS,
+          PlatformPermissions.MODERATE_RENTALS,
+        ]),
       ],
       user_permissions: [
         {
@@ -37,20 +49,20 @@ describe('RbacService', () => {
       ],
     });
 
-    await expect(service.getEffectiveAccess(USER_ID)).resolves.toEqual({
-      roles: [PlatformRoles.MODERATOR],
-      permissions: [
-        PlatformPermissions.MODERATE_RENTALS,
-        PlatformPermissions.OPS_USER_DOCUMENTS,
-      ],
-      isSuperuser: false,
-    });
+    const access = await service.getEffectiveAccess(USER_ID);
+    expect(access.roles).toEqual([PlatformRoles.MODERATOR]);
+    expect(access.isSuperuser).toBe(false);
+    expect(access.permissions).toEqual([
+      PlatformPermissions.MODERATE_RENTALS,
+      PlatformPermissions.OPS_USER_DOCUMENTS,
+    ]);
+    expect(access.scopes[PlatformPermissions.MODERATE_ITEMS]).toBeUndefined();
+    expect(access.scopes[PlatformPermissions.MODERATE_RENTALS]).toEqual({ all: true });
   });
 
   it('grants every permission to superusers', async () => {
     executeQuery.mockResolvedValue({
-      user_roles: [{ role: { key: PlatformRoles.SUPERUSER } }],
-      role_permissions: [],
+      user_roles: [grant(PlatformRoles.SUPERUSER, [])],
       user_permissions: [],
     });
 
@@ -68,7 +80,6 @@ describe('RbacService', () => {
   it('invalidates effective access cached for the current request', async () => {
     executeQuery.mockResolvedValue({
       user_roles: [],
-      role_permissions: [],
       user_permissions: [],
     });
 
@@ -90,6 +101,7 @@ describe('RbacService', () => {
           key: PlatformRoles.MODERATOR,
           name: 'Moderator',
           description: 'Moderates content',
+          requires_geo_scope: false,
         },
       ],
     });
@@ -98,5 +110,41 @@ describe('RbacService', () => {
       service.setUserRoles(USER_ID, ['unknown-role'], null)
     ).rejects.toThrow('Unknown role: unknown-role');
     expect(executeQuery).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not treat a country grant as a global permission', async () => {
+    executeQuery.mockResolvedValue({
+      user_roles: [
+        grant(PlatformRoles.COUNTRY_ADMIN, [PlatformPermissions.ORDERS_CROSS_BUSINESS], 'CM'),
+      ],
+      user_permissions: [],
+    });
+
+    await rbacRequestStore.run(new Map(), async () => {
+      await expect(
+        service.hasPermission(USER_ID, PlatformPermissions.ORDERS_CROSS_BUSINESS)
+      ).resolves.toBe(false);
+      await expect(
+        service.getScope(USER_ID, PlatformPermissions.ORDERS_CROSS_BUSINESS)
+      ).resolves.toEqual({ all: false, countries: ['CM'], states: [] });
+    });
+  });
+
+  it('rejects geo-scoped roles on the global assignment path', async () => {
+    executeQuery.mockResolvedValue({
+      roles: [
+        {
+          id: '22222222-2222-4222-8222-222222222222',
+          key: PlatformRoles.COUNTRY_ADMIN,
+          name: 'Country admin',
+          description: 'Scoped',
+          requires_geo_scope: true,
+        },
+      ],
+    });
+
+    await expect(
+      service.setUserRoles(USER_ID, [PlatformRoles.COUNTRY_ADMIN], null)
+    ).rejects.toThrow('must be assigned with a country');
   });
 });

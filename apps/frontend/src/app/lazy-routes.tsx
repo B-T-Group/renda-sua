@@ -48,6 +48,9 @@ export const AdminPerformancePage = lazy(() =>
 export const AdminMapPage = lazy(() =>
   import('../components/pages/admin/AdminMapPage')
 );
+export const AdminCountryAdminsPage = lazy(() =>
+  import('../components/pages/admin/AdminCountryAdminsPage')
+);
 export const AdminCreditsPage = lazy(() =>
   import('../components/pages/AdminCreditsPage')
 );

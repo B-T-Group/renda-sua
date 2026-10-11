@@ -15,9 +15,9 @@ export interface OrderRiskContextRow {
   business_location?: {
     name?: string | null;
     phone?: string | null;
-    address?: { country?: string | null } | null;
+    address?: { country?: string | null; state?: string | null } | null;
   } | null;
-  delivery_address?: { country?: string | null } | null;
+  delivery_address?: { country?: string | null; state?: string | null } | null;
 }
 
 /** Location address wins so ops is paged for the shop market, not the drop-off. */
@@ -30,6 +30,16 @@ export function shopCountryCode(
     null;
   if (!raw) return null;
   const trimmed = String(raw).trim().toUpperCase();
+  return trimmed || null;
+}
+
+/** Shop state when the shop country is known; otherwise the delivery state. */
+export function shopStateName(
+  order: Pick<OrderRiskContextRow, 'business_location' | 'delivery_address'>
+): string | null {
+  const shop = order.business_location?.address;
+  const raw = shop?.country ? shop.state : order.delivery_address?.state;
+  const trimmed = raw?.trim();
   return trimmed || null;
 }
 
@@ -81,5 +91,6 @@ export function mapOrderRiskContext(
     minutesUntilAutoDecline: minutesUntil(order.grace_deadline_at, nowMs),
     referringAgentUserId: order.business?.referring_agent?.user_id ?? null,
     shopCountryCode: shopCountryCode(order),
+    shopStateName: shopStateName(order),
   };
 }

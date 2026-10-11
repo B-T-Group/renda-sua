@@ -87,7 +87,8 @@ const AdminManageBusinesses: React.FC = () => {
     setUserRoles,
   } = useAdminRbac();
   const canManageRbac = usePermission(PlatformPermissions.RBAC_MANAGE);
-  const { isSuperuser } = usePermissions();
+  const { isSuperuser, can } = usePermissions();
+  const canManage = can(PlatformPermissions.MANAGE_BUSINESSES);
   const { t } = useTranslation();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
@@ -449,7 +450,10 @@ const AdminManageBusinesses: React.FC = () => {
               onEdit={() => void openEdit(b.id)}
               onSuspend={() => void handleSuspendBusiness(b.id)}
               onReinstate={() => void handleReinstateBusiness(b.id)}
-              onApplyReferral={() => setApplyBusinessId(b.id)}
+              onApplyReferral={
+                canManage ? () => setApplyBusinessId(b.id) : undefined
+              }
+              canManage={canManage}
             />
           ))}
           <Box
@@ -539,7 +543,9 @@ const AdminManageBusinesses: React.FC = () => {
                   <Autocomplete
                     multiple
                     loading={rolesLoading}
-                    options={platformRoles.map((r) => r.key)}
+                    options={platformRoles
+                      .filter((role) => !role.requiresGeoScope)
+                      .map((r) => r.key)}
                     value={selectedRoleKeys}
                     onChange={(_e, value) => setSelectedRoleKeys(value)}
                     getOptionLabel={(key) =>

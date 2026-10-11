@@ -41,6 +41,7 @@ import { AccountDeletionService } from './account-deletion.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { RbacService } from '../rbac/rbac.service';
+import { adminScopesFromGrants } from '../rbac/geo-access.util';
 import {
   derivePersonas,
   resolveSessionPersona,
@@ -398,6 +399,7 @@ export class UsersController {
           roles: access.roles,
           permissions: access.isSuperuser ? ['*'] : access.permissions,
           is_superuser: access.isSuperuser,
+          admin_scopes: adminScopesFromGrants(access.grants),
         },
         personalAccountCreated,
         userId: this.hasuraUserService.getUserId(ctx),
@@ -537,6 +539,7 @@ export class UsersController {
         roles: access.roles,
         permissions: access.isSuperuser ? ['*'] : access.permissions,
         is_superuser: access.isSuperuser,
+        admin_scopes: adminScopesFromGrants(access.grants),
       },
       personalAccountCreated,
       userId: this.hasuraUserService.getUserId(ctx),
