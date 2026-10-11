@@ -45,6 +45,7 @@ import {
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { ServiceFeeService } from './service-fee.service';
+import { comparableCountry } from './delivery-pricing.util';
 import {
   DIASPORA_ERROR_CODES,
   normalizeCountryCode,
@@ -1247,8 +1248,11 @@ export class CheckoutPreflightService {
     deliveryCountry: string,
     sellerCountries: string[]
   ): void {
-    const mismatch = sellerCountries.find((c) => c !== deliveryCountry);
-    if (!mismatch) return;
+    const dropOff = comparableCountry(deliveryCountry);
+    const mismatch = sellerCountries.find(
+      (country) => comparableCountry(country) !== dropOff
+    );
+    if (!dropOff || !mismatch) return;
     blockers.push({
       code: 'DELIVERY_COUNTRY_MISMATCH',
       message: `Your delivery address is in ${deliveryCountry}, but the items are only available for delivery within ${mismatch}. Please use an address in ${mismatch} or change the items in your cart.`,

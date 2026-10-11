@@ -6,7 +6,8 @@ const getCurrentPositionAsync = vi.fn();
 vi.mock('expo-location', () => ({
   requestForegroundPermissionsAsync: (...args: unknown[]) =>
     requestForegroundPermissionsAsync(...args),
-  getCurrentPositionAsync: (...args: unknown[]) => getCurrentPositionAsync(...args),
+  getCurrentPositionAsync: (...args: unknown[]) =>
+    getCurrentPositionAsync(...args),
   Accuracy: { Balanced: 3 },
 }));
 
@@ -35,5 +36,16 @@ describe('readDeviceCatalogOrigin', () => {
 
     await expect(readDeviceCatalogOrigin()).resolves.toBeNull();
     expect(getCurrentPositionAsync).not.toHaveBeenCalled();
+  });
+
+  it('returns null when the location APIs throw', async () => {
+    requestForegroundPermissionsAsync.mockRejectedValue(
+      new Error('unavailable')
+    );
+    await expect(readDeviceCatalogOrigin()).resolves.toBeNull();
+
+    requestForegroundPermissionsAsync.mockResolvedValue({ status: 'granted' });
+    getCurrentPositionAsync.mockRejectedValue(new Error('timeout'));
+    await expect(readDeviceCatalogOrigin()).resolves.toBeNull();
   });
 });
