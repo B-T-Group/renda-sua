@@ -1,3 +1,4 @@
+import { haversineMeters } from '../addresses/haversine';
 import { GoogleCacheService } from './google-cache.service';
 
 const ORIGIN_ID = 'd4182b35-9abc-4619-aa3f-f3244c4ef29c';
@@ -121,5 +122,104 @@ describe('GoogleCacheService.findNearbyCachedDistanceElements', () => {
       75
     );
     expect(far).toEqual([]);
+  });
+
+  it('keeps an origin at 75 m and prefers the closer route', async () => {
+    const edgeLat = 4.05 + (75 * 180) / (Math.PI * 6_371_000);
+    const nearLat = 4.05 + (20 * 180) / (Math.PI * 6_371_000);
+    expect(haversineMeters(4.05, 9.7, edgeLat, 9.7)).toBeLessThanOrEqual(75);
+    expect(haversineMeters(4.05, 9.7, nearLat, 9.7)).toBeLessThan(75);
+    const executeQuery = jest.fn().mockImplementation((query: string) => {
+      if (query.includes('NearbyDistanceCache')) {
+        return {
+          google_distance_cache: [
+            {
+              ...row(edgeLat, 9.7),
+              distance_value: 900,
+              distance_text: '900 m',
+            },
+            {
+              ...row(nearLat, 9.7),
+              distance_value: 400,
+              distance_text: '400 m',
+            },
+          ],
+        };
+      }
+      return {
+        addresses: [
+          { id: nearbyOrigin, updated_at: '2026-01-01T00:00:00Z' },
+          { id: DEST_A, updated_at: '2026-01-01T00:00:00Z' },
+        ],
+      };
+    });
+    const service = new GoogleCacheService({ executeQuery } as any);
+
+    const reused = await service.findNearbyCachedDistanceElements(
+      { lat: 4.05, lng: 9.7 },
+      [DEST_A],
+      75
+    );
+
+    expect(reused).toHaveLength(1);
+    expect(reused[0].distance?.value).toBe(400);
+  });
+
+  it('does not reuse a route cached before the address changed', async () => {
+    const executeQuery = jest.fn().mockImplementation((query: string) => {
+      if (query.includes('NearbyDistanceCache')) {
+        return { google_distance_cache: [row(4.0501, 9.7)] };
+      }
+      return {
+        addresses: [
+          { id: nearbyOrigin, updated_at: '2026-01-01T00:00:00Z' },
+          { id: DEST_A, updated_at: '2026-02-01T00:00:00Z' },
+        ],
+      };
+    });
+    const service = new GoogleCacheService({ executeQuery } as any);
+
+    await expect(
+      service.findNearbyCachedDistanceElements(
+        { lat: 4.05, lng: 9.7 },
+        [DEST_A],
+        75
+      )
+    ).resolves.toEqual([]);
+  });
+
+  it('returns nothing when the cache lookup fails or the origin cannot be searched', async () => {
+    const executeQuery = jest.fn().mockRejectedValue(new Error('hasura down'));
+    const service = new GoogleCacheService({ executeQuery } as any);
+
+    await expect(
+      service.findNearbyCachedDistanceElements(
+        { lat: 4.05, lng: 9.7 },
+        [DEST_A],
+        75
+      )
+    ).resolves.toEqual([]);
+    await expect(
+      service.findNearbyCachedDistanceElements(
+        { lat: 4.05, lng: 9.7 },
+        ['not-a-uuid'],
+        75
+      )
+    ).resolves.toEqual([]);
+    await expect(
+      service.findNearbyCachedDistanceElements(
+        { lat: Number.NaN, lng: 9.7 },
+        [DEST_A],
+        75
+      )
+    ).resolves.toEqual([]);
+    await expect(
+      service.findNearbyCachedDistanceElements(
+        { lat: 4.05, lng: 9.7 },
+        [DEST_A],
+        0
+      )
+    ).resolves.toEqual([]);
+    expect(executeQuery).toHaveBeenCalledTimes(1);
   });
 });

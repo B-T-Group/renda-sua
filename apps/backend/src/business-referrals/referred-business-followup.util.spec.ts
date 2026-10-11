@@ -102,6 +102,58 @@ describe('referred-business-followup', () => {
     expect(item.commission.currency).toBe('XAF');
   });
 
+  it('does not treat a missing rule code as a paid onboarding bonus', () => {
+    for (const ruleCode of [null, '', undefined]) {
+      const item = mapReferredBusinessRow(
+        {
+          id: 'b1',
+          name: 'Shop',
+          created_at: daysAgo(10),
+          referred_by_agent_id: 'agent-1',
+          user: { country: 'CM' },
+          items_approved: { aggregate: { count: 12 } },
+          representative_compensation_events: [
+            {
+              rule_code: ruleCode,
+              amount: 7500,
+              currency: 'XAF',
+              status: 'credited',
+              created_at: '2026-08-20T00:00:00.000Z',
+            },
+          ],
+        },
+        'agent'
+      );
+      expect(item.commission.status).toBe('pending');
+      expect(item.commission.paidAmount).toBeNull();
+    }
+  });
+
+  it('still counts the legacy onboarding rule code as paid', () => {
+    const item = mapReferredBusinessRow(
+      {
+        id: 'b1',
+        name: 'Shop',
+        lifecycle_status: 'active',
+        created_at: daysAgo(10),
+        referred_by_agent_id: 'agent-1',
+        user: { country: 'CM' },
+        representative_compensation_events: [
+          {
+            rule_code: 'onboarding_10_first_sale',
+            amount: 7500,
+            currency: 'XAF',
+            status: 'credited',
+            created_at: '2026-08-20T00:00:00.000Z',
+          },
+        ],
+      },
+      'agent'
+    );
+    expect(item.commission.status).toBe('paid');
+    expect(item.commission.paidAmount).toBe(7500);
+  });
+
   it('does not treat a pending compensation event as paid', () => {
     const item = mapReferredBusinessRow(
       {
@@ -136,7 +188,11 @@ describe('referred-business-followup', () => {
         user: { country: 'CM' },
         items_approved: { aggregate: { count: 12 } },
         business_referral_payouts: [
-          { amount: 7500, currency: 'XAF', created_at: '2026-08-15T00:00:00.000Z' },
+          {
+            amount: 7500,
+            currency: 'XAF',
+            created_at: '2026-08-15T00:00:00.000Z',
+          },
         ],
       },
       'business'
@@ -155,7 +211,11 @@ describe('referred-business-followup', () => {
         user: { country: 'CM' },
         items_approved: { aggregate: { count: 10 } },
         business_referral_payouts: [
-          { amount: 7500, currency: 'XAF', created_at: '2026-08-15T00:00:00.000Z' },
+          {
+            amount: 7500,
+            currency: 'XAF',
+            created_at: '2026-08-15T00:00:00.000Z',
+          },
         ],
       },
       'agent'
@@ -217,7 +277,11 @@ describe('referred-business-followup', () => {
         user: { country: 'CM' },
         items_approved: { aggregate: { count: 12 } },
         completed_orders: [
-          { subtotal: 5000, currency: 'XAF', completed_at: '2026-05-10T00:00:00.000Z' },
+          {
+            subtotal: 5000,
+            currency: 'XAF',
+            completed_at: '2026-05-10T00:00:00.000Z',
+          },
         ],
       },
       'agent'
@@ -270,9 +334,21 @@ describe('referred-business-followup', () => {
         referred_by_agent_id: 'agent-1',
         user: { country: 'CM' },
         completed_orders: [
-          { subtotal: 1200, currency: 'XAF', completed_at: '2026-08-12T00:00:00.000Z' },
-          { subtotal: 800, currency: 'CAD', completed_at: '2026-08-12T00:00:00.000Z' },
-          { subtotal: 4000, currency: 'XAF', completed_at: '2026-10-01T00:00:00.000Z' },
+          {
+            subtotal: 1200,
+            currency: 'XAF',
+            completed_at: '2026-08-12T00:00:00.000Z',
+          },
+          {
+            subtotal: 800,
+            currency: 'CAD',
+            completed_at: '2026-08-12T00:00:00.000Z',
+          },
+          {
+            subtotal: 4000,
+            currency: 'XAF',
+            completed_at: '2026-10-01T00:00:00.000Z',
+          },
         ],
       },
       'agent'
@@ -323,9 +399,9 @@ describe('referred-business-followup', () => {
     expect(readMinSaleTotal).toHaveBeenCalledTimes(2);
     expect(readMinSaleTotal).toHaveBeenCalledWith('CM');
     expect(readMinSaleTotal).toHaveBeenCalledWith('CA');
-    expect(items.map((row) => row.commission.requirements.minSalesTotal)).toEqual([
-      4000, 4000, 0, 2500,
-    ]);
+    expect(
+      items.map((row) => row.commission.requirements.minSalesTotal)
+    ).toEqual([4000, 4000, 0, 2500]);
   });
 
   it('honors a configured zero min sale total', async () => {

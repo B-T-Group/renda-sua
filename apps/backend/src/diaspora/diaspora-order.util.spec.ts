@@ -43,6 +43,30 @@ describe('deliveryCountryMismatch', () => {
         sellerCountries: ['GA'],
       })
     ).toBe('GA');
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'shipping',
+        dropOffCountry: '  ',
+        sellerCountries: ['GA'],
+      })
+    ).toBe('MISSING_ADDRESS_COUNTRY');
+  });
+
+  it('returns the first real mismatch and ignores a non-ISO seller country', () => {
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: 'GA',
+        sellerCountries: ['GA', 'cm', 'Cameroon', null],
+      })
+    ).toBe('CM');
+    expect(
+      deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: 'CA',
+        sellerCountries: ['Cameroon', null],
+      })
+    ).toBeNull();
   });
 });
 
@@ -228,7 +252,10 @@ describe('resolveOrderPayer', () => {
 describe('assertDiasporaPaymentTiming', () => {
   it('allows pay_now for a diaspora order', () => {
     expect(() =>
-      assertDiasporaPaymentTiming({ isDiaspora: true, paymentTiming: 'pay_now' })
+      assertDiasporaPaymentTiming({
+        isDiaspora: true,
+        paymentTiming: 'pay_now',
+      })
     ).not.toThrow();
   });
 
