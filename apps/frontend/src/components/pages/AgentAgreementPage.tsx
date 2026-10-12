@@ -8,7 +8,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAgentContractContext } from '../../contexts/AgentContractContext';
@@ -17,6 +17,8 @@ import { useApiClient } from '../../hooks/useApiClient';
 import { useSupportedCountries } from '../../hooks/useSupportedCountries';
 import type { AgentContractStatus } from '../../hooks/useAgentContract';
 import { AgentAgreementIllustration } from '../agent/AgentAgreementIllustration';
+import { SignatureCheckPanel } from '../agent/SignatureCheckPanel';
+import { waitForAgentSignature, type SignatureCheckResult } from '../../utils/waitForAgentSignature';
 
 const AgentAgreementPage: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -51,10 +53,46 @@ const AgentAgreementPage: React.FC = () => {
     });
   };
 
+  // "I have signed": wait up to 60 s for the BoldSign webhook, then show the real status.
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<SignatureCheckResult | null>(null);
+  const cancelled = useRef(false);
+  const polls = useRef(0);
+  useEffect(() => () => { cancelled.current = true; }, []);
   const refresh = async () => {
     setNotSignedYet(false);
-    const next = await submit('refresh');
-    if (next && !next.signed) setNotSignedYet(true);
+    setChecking(true);
+    setCheckResult(null);
+    polls.current = 0;
+    const result = await waitForAgentSignature(
+      async () => {
+        // Poll the stored status (set by the BoldSign webhook); every 5th check also
+        // asks BoldSign directly in case the webhook was missed.
+        polls.current += 1;
+        if (polls.current % 5 === 1) {
+          const next = await submit('refresh');
+          if (!next) throw new Error('refresh failed');
+          return { signed: next.signed, status: next.status };
+        }
+        const res = await apiClient.get<{ data: AgentContractStatus }>('/agent-contracts/status');
+        return { signed: res.data.data.signed, status: res.data.data.status };
+      },
+      { isCancelled: () => cancelled.current }
+    );
+    if (!result) return;
+    if (result.signed) {
+      // Update the shared agreement state so claiming is unlocked on the dashboard.
+      await submit('refresh');
+      setChecking(false);
+      navigate('/dashboard', { replace: true });
+      return;
+    }
+    setCheckResult(result);
+  };
+  const resumeSigning = async () => {
+    setChecking(false);
+    setCheckResult(null);
+    await submit('resend');
   };
 
   useEffect(() => {
@@ -79,7 +117,14 @@ const AgentAgreementPage: React.FC = () => {
           )}
         </Typography>
         {error ? <Alert severity="error">{error}</Alert> : null}
-        {status?.signed ? (
+        {checking && !status?.signed ? (
+          <SignatureCheckPanel
+            result={checkResult}
+            busy={loading && !!checkResult}
+            onCheckAgain={() => void refresh()}
+            onResume={() => void resumeSigning()}
+          />
+        ) : status?.signed ? (
           <SignedState onDone={() => navigate('/dashboard')} />
         ) : (
           <PendingState
@@ -120,7 +165,7 @@ function SignedState({ onDone }: { onDone: () => void }) {
 
 function PendingState(props: {
   loading: boolean;
-  status: ReturnType<typeof useAgentContract>['status'];
+  status: AgentContractStatus | null;
   nationality: string;
   idNumber: string;
   language: 'en' | 'fr';
@@ -139,7 +184,7 @@ function PendingState(props: {
   const waiting = status?.status === 'sent' || status?.status === 'viewed';
   return (
     <Stack spacing={2} sx={{ width: '100%' }}>
-      {status?.missingEmail || status?.missingPhone ? (
+      {status?.missingEmail ? (
         <Alert
           severity="info"
           action={
@@ -148,7 +193,7 @@ function PendingState(props: {
             </Button>
           }
         >
-          {t('agentContract.contact', 'Add your email and phone on your profile before we can send the agreement.')}
+          {t('agentContract.contact', 'Add your email on your profile before we can send the agreement.')}
         </Alert>
       ) : null}
       {status?.signerEmail ? (
@@ -194,7 +239,7 @@ function PendingState(props: {
               {t('agentContract.resend', 'Resend email')}
             </Button>
             <Button variant="contained" disabled={props.loading} onClick={props.onRefresh}>
-              {t('agentContract.refresh', 'I have signed')}
+              {t('agentContract.refresh', 'I have signed – return to dashboard')}
             </Button>
           </Stack>
         ) : (
@@ -269,7 +314,7 @@ function canSend(
   status: AgentContractStatus | null,
   props: { nationality: string; idNumber: string; needsNationality: boolean; needsIdNumber: boolean }
 ): boolean {
-  if (!status || status.missingEmail || status.missingPhone) return false;
+  if (!status || status.missingEmail) return false;
   if (props.needsNationality && !props.nationality.trim()) return false;
   if (props.needsIdNumber && !props.idNumber.trim()) return false;
   return true;

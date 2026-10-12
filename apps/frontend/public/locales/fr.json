@@ -8786,7 +8786,7 @@
     "body": "Lisez et signez votre contrat d'agent. Vous pourrez ensuite réclamer des livraisons et gagner des commissions.",
     "signed": "Votre contrat est signé. Vous pouvez réclamer des livraisons et gagner des commissions.",
     "back": "Retour au tableau de bord",
-    "contact": "Ajoutez votre e-mail et votre téléphone sur votre profil avant l'envoi du contrat.",
+    "contact": "Ajoutez votre e-mail sur votre profil avant l'envoi du contrat.",
     "sendTo": "Nous enverrons le contrat à {{email}}.",
     "language": "Langue du contrat",
     "languageEn": "Anglais",
@@ -8798,8 +8798,24 @@
     "nationality": "Nationalité",
     "idNumber": "Numéro de pièce d'identité",
     "resend": "Renvoyer le courriel",
-    "refresh": "J'ai signé",
+    "refresh": "J'ai signé – retour au tableau de bord",
     "send": "Recevoir le contrat par e-mail",
-    "loadError": "Impossible de charger le contrat."
+    "loadError": "Impossible de charger le contrat.",
+    "checkTitle": "Vérification de la signature du document",
+    "checkBody": "Nous attendons que BoldSign confirme votre signature. Cela peut prendre jusqu'à une minute.",
+    "checkResult": "Votre document n'est pas encore signé. Statut actuel : {{status}}.",
+    "checkAgain": "Vérifier à nouveau",
+    "resume": "Reprendre la signature",
+    "resumeHint": "Ouvrez le courriel BoldSign pour terminer la signature, ou nous pouvons vous renvoyer le lien.",
+    "state": {
+      "not_sent": "Pas encore envoyé",
+      "sent": "Envoyé, en attente de votre signature",
+      "viewed": "Ouvert, pas encore signé",
+      "declined": "Refusé",
+      "expired": "Expiré",
+      "cancelled": "Annulé",
+      "failed": "Échec de l'envoi",
+      "unknown": "Inconnu"
+    }
   }
 }
