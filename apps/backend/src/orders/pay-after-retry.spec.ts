@@ -702,6 +702,12 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     expect(res.idempotent_replay).toBe(true);
   });
 
+  it('F4: same key without a phone in the body replays (payer phone not yet persisted)', async () => {
+    db.getOrderTransactionByIdempotencyKey.mockResolvedValue({ ...store.rows[0], customer_phone: PB, idempotency_key: 'k1' });
+    const res = await retry({ idempotencyKey: 'k1' });
+    expect(res.idempotent_replay).toBe(true);
+  });
+
   it('F5: order cancel supersedes its pending MoMo attempts (late approval is classified)', async () => {
     await svc.supersedePendingOrderTxsOnCancel(order);
     expect(store.rows[0]).toMatchObject({

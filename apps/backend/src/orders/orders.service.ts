@@ -5037,7 +5037,8 @@ export class OrdersService {
     const currentPhone = this.resolveOrderMobileMoneyPhone(order as any);
     const phone = newPhone ?? currentPhone;
     if (key) {
-      const replay = await this.replayIdempotentPayAfterRetry(order, key, phone);
+      // F4 compares the body: only an explicit phone_number can differ.
+      const replay = await this.replayIdempotentPayAfterRetry(order, key, newPhone ?? '');
       if (replay) return replay;
     }
 
