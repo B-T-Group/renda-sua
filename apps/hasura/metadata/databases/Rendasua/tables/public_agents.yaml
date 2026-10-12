@@ -25,6 +25,13 @@ array_relationships:
         table:
           name: representative_compensation_events
           schema: public
+  - name: agent_contracts
+    using:
+      foreign_key_constraint_on:
+        column: agent_id
+        table:
+          name: agent_contracts
+          schema: public
   - name: agent_addresses
     using:
       manual_configuration:
