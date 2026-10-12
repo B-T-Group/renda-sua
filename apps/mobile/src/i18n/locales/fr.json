@@ -7462,5 +7462,23 @@
     "undo": "Annuler",
     "stopAction": "Arrêter les alertes",
     "toggleError": "Impossible de mettre à jour l'alerte. Réessayez."
+  },
+  "agentContract": {
+    "banner": "Signez votre contrat d'agent pour commencer à réclamer des livraisons.",
+    "review": "Voir le contrat",
+    "illustration": "Contrat d'agent",
+    "title": "Signez votre contrat d'agent",
+    "body": "Nous envoyons le contrat selon votre région et votre langue. Vous pourrez réclamer des livraisons après l'avoir signé.",
+    "signed": "Votre contrat est signé. Vous pouvez réclamer des livraisons.",
+    "back": "Retour au tableau de bord",
+    "contact": "Ajoutez votre e-mail et votre téléphone sur votre profil avant l'envoi du contrat.",
+    "emailed": "Consultez {{email}} pour le courriel BoldSign, puis actualisez.",
+    "yourEmail": "votre e-mail",
+    "nationality": "Nationalité",
+    "idNumber": "Numéro de pièce d'identité",
+    "resend": "Renvoyer le courriel",
+    "refresh": "J'ai signé",
+    "send": "Recevoir le contrat par e-mail",
+    "loadError": "Impossible de charger le contrat."
   }
 }

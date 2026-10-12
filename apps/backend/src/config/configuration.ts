@@ -1233,8 +1233,9 @@ export default (): Configuration => {
     boldsign: {
       enabled: process.env.BOLDSIGN_ENABLED === 'true',
       apiKey: process.env.BOLDSIGN_API_KEY || '',
+      // US API. Templates and the API key are on api.boldsign.com, not api-ca.
       baseUrl: (
-        process.env.BOLDSIGN_BASE_URL || 'https://api-ca.boldsign.com'
+        process.env.BOLDSIGN_BASE_URL || 'https://api.boldsign.com'
       ).replace(/\/$/, ''),
       webhookSigningSecret: process.env.BOLDSIGN_WEBHOOK_SECRET || '',
       reminderIntervalDays: parseInt(

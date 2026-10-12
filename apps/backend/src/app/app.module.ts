@@ -28,6 +28,7 @@ import { BusinessAgentsModule } from '../business-agents/business-agents.module'
 import { BusinessItemsModule } from '../business-items/business-items.module';
 import { BusinessImagesModule } from '../business-images/business-images.module';
 import { BusinessVerificationModule } from '../business-verification/business-verification.module';
+import { AgentContractsModule } from '../agent-contracts/agent-contracts.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { CategoriesModule } from '../categories/categories.module';
 import { ClientsModule } from '../clients/clients.module';
@@ -224,6 +225,7 @@ import { AppService } from './app.service';
     ImageValidationModule,
     BusinessVerificationModule,
     BusinessContractsModule,
+    AgentContractsModule,
     CategoriesModule,
     SubcategoriesModule,
     AiModule,

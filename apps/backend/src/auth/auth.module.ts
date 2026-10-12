@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AddressesModule } from '../addresses/addresses.module';
+import { AgentContractsModule } from '../agent-contracts/agent-contracts.module';
 import { AgentsModule } from '../agents/agents.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
 import { BusinessReferralsModule } from '../business-referrals/business-referrals.module';
@@ -41,6 +42,7 @@ import { UserProvisioningService } from './provisioning/user-provisioning.servic
     BusinessReferralsModule,
     CreditsModule,
     BusinessContractsModule,
+    AgentContractsModule,
     LaunchPromoModule,
     MobilePaymentPhoneSeedModule,
     MetaConversionsModule,

@@ -17,6 +17,7 @@ import { Text } from 'react-native-paper';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { AgentContractBanner } from '../../components/agent/AgentContractBanner';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useAgentVerificationStatus } from '../../hooks/useAgentVerificationStatus';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
@@ -39,10 +40,13 @@ import { useStore } from '../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
 import { claimAwaitingParams } from '../../utils/claimAwaitingNav';
 import {
+  agentClaimEnabled,
   agentIdVerificationPending,
+  agentNeedsContract,
   agentNeedsIdUpload,
   agentNeedsMomoSetup,
 } from '../../utils/agentClaimSetupGate';
+import { useAgentContractStatus } from '../../hooks/useAgentContractStatus';
 
 export default function OpenOrdersScreen() {
   const { t } = useTranslation();
@@ -65,7 +69,15 @@ export default function OpenOrdersScreen() {
     !!connectStatus?.connected &&
     (connectStatus?.status === 'active' ||
       (!!connectStatus?.chargesEnabled && !!connectStatus?.payoutsEnabled));
-  const effectiveCanClaim = ordersCanClaim || (isStripeRail && stripeReady);
+  const contractStatus = useAgentContractStatus();
+  const needsContract = Boolean(
+    contractStatus && agentNeedsContract(contractStatus)
+  );
+  const effectiveCanClaim = agentClaimEnabled({
+    ordersCanClaim,
+    stripeBypass: isStripeRail && stripeReady,
+    contract: contractStatus,
+  });
 
   useEffect(() => {
     if (stripeReady && !isVerified) {
@@ -204,6 +216,9 @@ export default function OpenOrdersScreen() {
   const idRejected = !isStripeRail && !isVerified && idDocumentStatus === 'rejected';
 
   const claimBlockedLabel = useMemo(() => {
+    if (needsContract) {
+      return t('agentContract.review', 'Review agreement');
+    }
     if (isStripeRail) {
       return t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim');
     }
@@ -217,13 +232,17 @@ export default function OpenOrdersScreen() {
       return t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim');
     }
     return t('agent.openOrders.uploadIdToClaim', 'Upload ID to claim');
-  }, [idRejected, idVerificationPending, isStripeRail, needsMomoSetup, t]);
+  }, [idRejected, idVerificationPending, isStripeRail, needsContract, needsMomoSetup, t]);
 
   const goToMomoSetup = useCallback(() => {
     navigation.navigate('MobilePaymentPhones');
   }, [navigation]);
 
   const handleSetupRequired = useCallback(() => {
+    if (needsContract) {
+      navigation.navigate('AgentAgreement');
+      return;
+    }
     if (isStripeRail) {
       if (!stripeActionLoading) void startOnboarding();
       return;
@@ -248,6 +267,7 @@ export default function OpenOrdersScreen() {
     idVerificationPending,
     isStripeRail,
     navigation,
+    needsContract,
     needsMomoSetup,
     startOnboarding,
     stripeActionLoading,
@@ -443,6 +463,7 @@ export default function OpenOrdersScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.pageBackground }]} edges={[]}>
+      <AgentContractBanner />
       {/* Header */}
       <View style={[styles.header, { paddingHorizontal: spacing.md }]}>
         <View style={styles.headerRow}>

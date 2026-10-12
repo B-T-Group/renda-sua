@@ -1,4 +1,5 @@
 import { forwardRef, Module } from '@nestjs/common';
+import { AgentContractsModule } from '../agent-contracts/agent-contracts.module';
 import { AwsModule } from '../aws/aws.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycle.module';
@@ -16,6 +17,7 @@ import { MerchantAgreementProviderService } from './merchant-agreement-provider.
   imports: [
     HasuraModule,
     AwsModule,
+    forwardRef(() => AgentContractsModule),
     forwardRef(() => NotificationsModule),
     forwardRef(() => MerchantLifecycleModule),
   ],
@@ -29,6 +31,7 @@ import { MerchantAgreementProviderService } from './merchant-agreement-provider.
     MerchantAgreementProviderService,
   ],
   exports: [
+    BoldsignClientService,
     BusinessContractsService,
     BusinessContractTemplatesService,
     MerchantAgreementProviderService,

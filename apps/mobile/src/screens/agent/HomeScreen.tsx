@@ -12,6 +12,7 @@ import { Button, Text } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
+import { AgentContractBanner } from '../../components/agent/AgentContractBanner';
 import { useStore } from '../../stores/RootStore';
 import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import { useAgentXafWallet } from '../../hooks/useAgentXafWallet';
@@ -65,10 +66,13 @@ import { EarnDeliveringIllustration } from '../../components/illustrations/EarnD
 import { ProfilePhotoTipIllustration } from '../../components/illustrations/ProfilePhotoTipIllustration';
 import { useProfileMe } from '../../hooks/useProfileMe';
 import {
+  agentClaimEnabled,
   agentIdVerificationPending,
+  agentNeedsContract,
   agentNeedsIdUpload,
   agentNeedsMomoSetup,
 } from '../../utils/agentClaimSetupGate';
+import { useAgentContractStatus } from '../../hooks/useAgentContractStatus';
 import { resolveClaimReadiness } from '../../utils/claimReadiness';
 
 const MAX_HOME_ORDERS = 3;
@@ -94,6 +98,7 @@ export default function HomeScreen() {
     useReferralProjectedPayout('agent', !!auth.isAuthenticated);
   const { currency: meCurrency } = useUserCurrency(!!auth.isAuthenticated);
   const { openOrders, loading: openOrdersLoading, refetch: refetchOpenOrders, canClaim: ordersCanClaim } = useOpenOrders();
+  const contractStatus = useAgentContractStatus();
   const {
     isVerified,
     idDocumentStatus,
@@ -367,6 +372,10 @@ export default function HomeScreen() {
   }, [fetchPhones, goTo, phones, refetchOpenOrders, refetchVerification]);
 
   const handlePreviewOrderAction = useCallback(() => {
+    if (contractStatus && agentNeedsContract(contractStatus)) {
+      (navigation as any).navigate('AgentAgreement');
+      return;
+    }
     if (!ordersCanClaim && walletIsStripeRail && !walletStripeReady) {
       void startStripeOnboarding();
       return;
@@ -392,11 +401,13 @@ export default function HomeScreen() {
     goToAvailableOrders();
   }, [
     goToAvailableOrders,
+    contractStatus,
     goToDocuments,
     goToMomoSetup,
     idVerificationPending,
     needsIdUpload,
     needsMomoSetup,
+    navigation,
     ordersCanClaim,
     startStripeOnboarding,
     t,
@@ -404,9 +415,16 @@ export default function HomeScreen() {
     walletStripeReady,
   ]);
 
-  const homeClaimEnabled = ordersCanClaim || (walletIsStripeRail && walletStripeReady);
+  const homeClaimEnabled = agentClaimEnabled({
+    ordersCanClaim,
+    stripeBypass: walletIsStripeRail && walletStripeReady,
+    contract: contractStatus,
+  });
+  const needsContract = Boolean(contractStatus && agentNeedsContract(contractStatus));
   const claimBlockedLabel = !homeClaimEnabled
-    ? walletIsStripeRail
+    ? needsContract
+      ? t('agentContract.review', 'Review agreement')
+      : walletIsStripeRail
       ? t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim')
       : idVerificationPending
         ? t('agent.openOrders.idPendingCta', 'Pending ID approval')
@@ -463,6 +481,7 @@ export default function HomeScreen() {
               onPress={() => (navigation as any).navigate('NotificationsCenter')}
             />
           </View>
+          <AgentContractBanner />
           <AgentNowSection readiness={claimReadiness} />
           <ActionsNeededSection
             items={actionsNeededItems}

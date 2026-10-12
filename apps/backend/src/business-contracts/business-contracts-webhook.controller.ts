@@ -4,13 +4,16 @@ import {
   HttpCode,
   HttpException,
   HttpStatus,
+  Inject,
   Logger,
   Post,
   Req,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
+import { AgentContractsService } from '../agent-contracts/agent-contracts.service';
 import { Public } from '../auth/public.decorator';
 import type { BoldSignConfig, Configuration } from '../config/configuration';
 import { verifyBoldSignWebhookSecret } from './boldsign-webhook-auth.util';
@@ -24,6 +27,8 @@ export class BusinessContractsWebhookController {
 
   constructor(
     private readonly contractsService: BusinessContractsService,
+    @Inject(forwardRef(() => AgentContractsService))
+    private readonly agentContracts: AgentContractsService,
     private readonly configService: ConfigService<Configuration>
   ) {}
 
@@ -70,7 +75,13 @@ export class BusinessContractsWebhookController {
     }
 
     try {
-      await this.contractsService.handleWebhookEvent(payload, authValid);
+      const ownedByBusiness = await this.contractsService.handleWebhookEvent(
+        payload,
+        authValid
+      );
+      if (!ownedByBusiness) {
+        await this.agentContracts.handleWebhookEvent(payload);
+      }
       return { received: true };
     } catch (error: any) {
       this.logger.error(`BoldSign webhook processing failed: ${error?.message}`);

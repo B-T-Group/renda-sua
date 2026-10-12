@@ -1,4 +1,5 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
+import { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import { showsDeliveryChrome } from '../agents/agent-focus.util';
 import {
   agentMatchesRegion,
@@ -88,7 +89,8 @@ const ELIGIBLE_AGENTS_QUERY = `
 export class EligibleAgentsQueryService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly googleDistanceService: GoogleDistanceService
+    private readonly googleDistanceService: GoogleDistanceService,
+    @Optional() private readonly agentContractGate?: AgentContractGateService
   ) {}
 
   /**
@@ -104,6 +106,9 @@ export class EligibleAgentsQueryService {
     params: EligibleAgentSearchParams
   ): Promise<EligibleAgentCandidate[]> {
     const rows = await this.fetchAgentLocations();
+    const signedIds = await this.agentContractGate?.signedIdsOrSkip(
+      rows.map((row) => row.agent?.id).filter((id): id is string => !!id)
+    );
 
     const candidates: EligibleAgentCandidate[] = [];
     for (const row of rows) {
@@ -112,6 +117,7 @@ export class EligibleAgentsQueryService {
       if (!agent.is_available || !agent.is_verified) continue;
       if (!showsDeliveryChrome(agent.focus)) continue;
       if (agent.status === 'suspended') continue;
+      if (signedIds && !signedIds.has(agent.id)) continue;
       if (params.internalOnly && !agent.is_internal) continue;
 
       const matches = await agentMatchesRegion({

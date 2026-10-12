@@ -28,6 +28,25 @@ export function agentNeedsMomoSetup(input: AgentClaimGateInput): boolean {
   );
 }
 
+export function agentNeedsContract(input: {
+  required: boolean;
+  signed: boolean;
+}): boolean {
+  return input.required && !input.signed;
+}
+
+/** Stripe-ready agents may claim before verification, but not before the agreement. */
+export function agentClaimEnabled(input: {
+  ordersCanClaim: boolean;
+  stripeBypass: boolean;
+  contract: { required: boolean; signed: boolean } | null;
+}): boolean {
+  if (!input.contract || agentNeedsContract(input.contract)) {
+    return input.ordersCanClaim;
+  }
+  return input.ordersCanClaim || input.stripeBypass;
+}
+
 export function agentIdVerificationPending(input: AgentClaimGateInput): boolean {
   return (
     !input.isStripeRail &&

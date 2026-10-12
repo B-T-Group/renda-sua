@@ -293,6 +293,9 @@ export const SignupPage = lazy(() =>
 export const AgentDashboard = lazy(() =>
   import('../components/pages/AgentDashboard')
 );
+export const AgentAgreementPage = lazy(() =>
+  import('../components/pages/AgentAgreementPage')
+);
 export const FAQ = lazy(() => import('../components/pages/FAQ'));
 export const ItemDetailPage = lazy(
   () =>

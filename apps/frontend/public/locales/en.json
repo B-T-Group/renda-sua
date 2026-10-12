@@ -8760,5 +8760,23 @@
     "appliedToTotal": "Applied to your order — not an extra fee",
     "dueNow": "Due now (deposit)",
     "amountDue": "Amount due"
+  },
+  "agentContract": {
+    "banner": "Sign your agent agreement to start claiming deliveries.",
+    "review": "Review agreement",
+    "illustration": "Agent agreement",
+    "title": "Sign your agent agreement",
+    "body": "We email the agreement for your region and language. Claim deliveries after you sign it.",
+    "signed": "Your agreement is signed. You can claim deliveries.",
+    "back": "Return to dashboard",
+    "contact": "Add your email and phone on your profile before we can send the agreement.",
+    "emailed": "Check {{email}} for the BoldSign email, then refresh.",
+    "yourEmail": "your email",
+    "nationality": "Nationality",
+    "idNumber": "ID number",
+    "resend": "Resend email",
+    "refresh": "I have signed",
+    "send": "Email me the agreement",
+    "loadError": "Could not load the agreement."
   }
 }

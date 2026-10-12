@@ -21,6 +21,7 @@ import NotificationPreferencesScreen from '../screens/shared/NotificationPrefere
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
 import AccountManagementScreen from '../screens/shared/AccountManagementScreen';
 import DocumentsScreen from '../screens/shared/DocumentsScreen';
+import AgentAgreementScreen from '../screens/agent/AgentAgreementScreen';
 import MenuTabScreen from '../screens/agent/MenuTabScreen';
 import AgentPayScreen from '../screens/agent/AgentPayScreen';
 import ConfigurePaymentsScreen from '../screens/shared/ConfigurePaymentsScreen';
@@ -98,6 +99,7 @@ export type RootStackParamList = {
   ConfigurePayments: undefined;
   MobilePaymentPhones: undefined;
   Documents: undefined;
+  AgentAgreement: undefined;
   Terms: undefined;
   Privacy: undefined;
   FAQ: undefined;
@@ -379,6 +381,11 @@ export function AgentRootNavigator() {
             }}
           />
           <RootStack.Screen name="Documents" component={DocumentsScreen} options={{ title: 'Documents' }} />
+          <RootStack.Screen
+            name="AgentAgreement"
+            component={AgentAgreementScreen}
+            options={{ title: t('agentContract.title', 'Sign your agent agreement') }}
+          />
           <RootStack.Screen name="Terms" component={TermsScreen} options={{ title: 'Conditions de service' }} />
           <RootStack.Screen
             name="Privacy"

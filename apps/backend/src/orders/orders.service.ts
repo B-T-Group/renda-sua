@@ -7,6 +7,7 @@ import { DateTime } from 'luxon';
 import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
+import { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import { assertMobileLocationConsentAccepted } from '../agents/agent-location-claim.util';
 import { CommerceOrderInventoryHook } from '../commerce-integrations/commerce-order-inventory.hook';
 import { RepresentativeCompensationService } from '../representative-compensation/representative-compensation.service';
@@ -691,7 +692,9 @@ export class OrdersService {
     @Optional()
     private readonly purchaseCreditsService?: PurchaseCreditsService,
     @Optional()
-    private readonly moduleRef?: ModuleRef
+    private readonly moduleRef?: ModuleRef,
+    @Optional()
+    private readonly agentContractGate?: AgentContractGateService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -2709,6 +2712,7 @@ export class OrdersService {
     );
     const agent = this.requireAgentRecord(user);
     this.assertAgentVerifiedForClaim(agent);
+    await this.agentContractGate?.assertCanOperate(agent.id);
     await assertMobileLocationConsentAccepted(
       this.hasuraSystemService,
       agent.id,
@@ -2961,6 +2965,7 @@ export class OrdersService {
     );
     const agent = this.requireAgentRecord(user);
     this.assertAgentVerifiedForClaim(agent);
+    await this.agentContractGate?.assertCanOperate(agent.id);
     await assertMobileLocationConsentAccepted(
       this.hasuraSystemService,
       agent.id,
@@ -8471,6 +8476,10 @@ export class OrdersService {
       return { success: true, orders: [], canClaim: false };
     }
 
+    if (canClaim && this.agentContractGate) {
+      canClaim = await this.agentContractGate.canOperate(agent.id);
+    }
+
     // Query for orders in ready_for_pickup and assigned_agent_id is null
     // Note: base_delivery_fee and per_km_delivery_fee are kept in query for commission calculation
     // subtotal is kept for agent_hold_amount calculation
@@ -8632,6 +8641,20 @@ export class OrdersService {
         rawHoldAmount,
         ceilingApplied,
         ceilingXaf,
+        0
+      );
+    }
+
+    if (this.agentContractGate && !(await this.agentContractGate.canOperate(agent.id))) {
+      const order = await this.getOrderWithItems(orderId);
+      const hold = await this.resolveOrderHoldAmount(order, agent.id);
+      return this.createClaimAvailabilityFailure(
+        hold.holdAmount,
+        'Sign your agent agreement before claiming orders.',
+        hold.holdPercentage,
+        hold.rawHoldAmount,
+        hold.ceilingApplied,
+        hold.ceilingXaf,
         0
       );
     }

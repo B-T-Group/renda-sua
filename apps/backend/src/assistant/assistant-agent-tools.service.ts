@@ -36,7 +36,7 @@ export class AssistantAgentToolsService {
     return [
       simpleTool('get_my_active_deliveries', 'Orders currently assigned to this agent. No customer phone numbers.'),
       simpleTool('get_my_earnings_summary', 'Completed delivery count for this agent. Balance is on get_my_wallet.'),
-      simpleTool('get_my_agent_status', 'Verification, availability, and a count of open delivery work in the agent market.'),
+      simpleTool('get_my_agent_status', 'Verification, availability, whether the agent agreement is still required, and a count of open delivery work in the agent market.'),
     ];
   }
 
@@ -46,7 +46,9 @@ export class AssistantAgentToolsService {
     }
     if (name === 'get_my_active_deliveries') return this.deliveries(identity.agentId);
     if (name === 'get_my_earnings_summary') return this.earnings(identity.agentId);
-    if (name === 'get_my_agent_status') return this.status(identity);
+    if (name === 'get_my_agent_status') {
+      return this.status(identity.agentId, identity.country);
+    }
     return Promise.resolve({ content: `Unknown tool: ${name}`, handoff: true });
   }
 
@@ -69,19 +71,38 @@ export class AssistantAgentToolsService {
     };
   }
 
-  private async status(identity: AssistantIdentity): Promise<AssistantToolResult> {
+  private async status(
+    agentId: string,
+    country: string | null
+  ): Promise<AssistantToolResult> {
     const agent = await this.hasura.executeQuery<{
       agents_by_pk: { is_verified: boolean; is_available: boolean } | null;
-    }>(AGENT_QUERY, { agentId: identity.agentId });
-    const open = await this.openWorkCount(identity.country);
+    }>(AGENT_QUERY, { agentId });
+    const open = await this.openWorkCount(country);
     const row = agent.agents_by_pk;
+    const contract = await this.contractState(agentId);
     return {
       content: JSON.stringify({
         verified: row?.is_verified === true,
         available: row?.is_available === true,
+        contractRequired: contract.required,
+        contractSigned: contract.signed,
         openDeliveriesInMarket: open,
       }),
     };
+  }
+
+  private async contractState(
+    agentId: string
+  ): Promise<{ required: boolean; signed: boolean }> {
+    const result = await this.hasura.executeQuery<{
+      agent_contracts: Array<{ id: string }>;
+      application_configurations: Array<{ boolean_value: boolean | null }>;
+    }>(CONTRACT_QUERY, { agentId });
+    const flag = result.application_configurations?.[0];
+    const flagOn = !flag || flag.boolean_value !== false;
+    const signed = (result.agent_contracts?.length ?? 0) > 0;
+    return { required: flagOn && !signed, signed };
   }
 
   private async openWorkCount(country: string | null): Promise<number | null> {
@@ -145,6 +166,21 @@ const EARNINGS_QUERY = `query AssistantAgentEarnings($agentId: uuid!) {
 
 const AGENT_QUERY = `query AssistantAgent($agentId: uuid!) {
   agents_by_pk(id: $agentId) { is_verified is_available }
+}`;
+
+const CONTRACT_QUERY = `query AssistantAgentContract($agentId: uuid!) {
+  application_configurations(
+    where: {
+      config_key: { _eq: "agent_contract_required" }
+      status: { _eq: active }
+      country_code: { _is_null: true }
+    }
+    limit: 1
+  ) { boolean_value }
+  agent_contracts(
+    where: { agent_id: { _eq: $agentId }, status: { _eq: signed } }
+    limit: 1
+  ) { id }
 }`;
 
 const OPEN_WORK_QUERY = `query AssistantOpenWork($country: String!) {
