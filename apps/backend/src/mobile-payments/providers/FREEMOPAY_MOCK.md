@@ -431,3 +431,14 @@ For mocked transactions, the provider confirmation is automatically skipped. Sid
 - [ ] Test claim order flow end-to-end with auto-callback
 - [ ] Wait at least 2 seconds between initiate and verification
 - [ ] Disable mock, verify live API resumes
+
+## Stuck-pending numbers (#545, DEV only)
+
+With `FREEMOPAY_AMOUNT_MOCK=true`, collections to the numbers in
+`FREEMOPAY_MOCK_PENDING_PHONES` (comma separated, digits; default
+`237650000099,237690000099`) stay `PENDING`: no auto-callback, and the mock status check
+answers `PENDING`. Use them to test the pay-at-confirm retry (resend / change number).
+To simulate a late approval of such a request, POST a SUCCESS callback for its mock
+reference to `/mobile-payments/callback/freemopay`
+(`{"reference":"mock-…","externalId":"<tx reference>","status":"SUCCESS"}`). The setting
+is ignored whenever the amount mock is off, and the amount mock is hard-off in production.

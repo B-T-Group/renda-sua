@@ -2823,6 +2823,41 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * #545: a MoMo payment arrived for an order that was already paid or cancelled.
+   * The amount was credited to the client's Rendasua wallet; tell them where it went.
+   */
+  async sendDuplicatePaymentCreditedPush(params: {
+    userId: string | undefined | null;
+    orderId: string;
+    orderNumber: string;
+    amount: number;
+    currency: string;
+    reason: 'duplicate' | 'order_cancelled';
+  }): Promise<void> {
+    const uid = params.userId?.trim();
+    if (!uid) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      const amount = `${Number(params.amount).toLocaleString('en-US')} ${params.currency}`;
+      const body =
+        params.reason === 'order_cancelled'
+          ? `Order ${params.orderNumber} was already cancelled. Your ${amount} payment was added to your Rendasua wallet.`
+          : `Order ${params.orderNumber} was already paid. Your extra ${amount} payment was added to your Rendasua wallet.`;
+      const links = this.deepLinkService.order(params.orderId);
+      await this.sendPushNotificationByUserId(uid, 'Payment added to your wallet', body, {
+        url: links.path,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        event: 'duplicate_payment_credited',
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `sendDuplicatePaymentCreditedPush failed: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
   async sendRentalPeriodEndedEmails(
     payload: RentalPeriodEndedEmailPayload
   ): Promise<void> {

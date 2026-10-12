@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import * as crypto from 'crypto';
@@ -50,6 +51,32 @@ import {
   MobilePaymentsDatabaseService,
   type MobilePaymentTransaction,
 } from '../mobile-payments/mobile-payments-database.service';
+import {
+  buildFreemopayReplayDto,
+  buildMypvitReplayDto,
+} from '../mobile-payments/callback-replay.util';
+import type { MobileTransactionStatus } from '../mobile-payments/mobile-payments.service';
+import {
+  DUPLICATE_PAYMENT_CREDITED,
+  ORDER_MOMO_IDEMPOTENCY_WINDOW_SECONDS,
+  ORDER_MOMO_PROMPT_LIFETIME_SECONDS,
+  ORDER_MOMO_RETRY_LIMIT,
+  ORDER_MOMO_RETRY_WINDOW_SECONDS,
+  PAY_AFTER_RETRY_DESCRIPTION_MARKER,
+  SUPERSEDED_BY_LATE_SUCCESS,
+  SUPERSEDED_BY_RETRY,
+  type PayAfterRetryResult,
+  ageSeconds,
+  decideOnPendingTx,
+  isUniqueViolation,
+  maskPhone,
+  normalizeIdempotencyKey,
+  paymentError,
+  promptExpiresAt,
+  requireValidRetryPhone,
+  resendMinAgeSeconds,
+  samePhone,
+} from './pay-after-retry.util';
 import {
   MobilePaymentIntegrationProvider,
   MobilePaymentsService,
@@ -249,9 +276,36 @@ export interface GetOrderRequest {
   phone_number?: string;
 }
 
+/** Order payment_status values meaning the order has been paid at some point. */
+const ORDER_WAS_PAID_STATUSES: ReadonlySet<string> = new Set([
+  'paid',
+  'authorized',
+  'refunded',
+  'partially_refunded',
+]);
+
 export interface RetryOrderPaymentOptions {
   stripePaymentMethod?: 'payment_sheet';
   phoneNumber?: string;
+  /** Client Idempotency-Key (header or body); same key within 10 min sends nothing new. */
+  idempotencyKey?: string;
+  /** Pay-after retry only: also save a changed number to the client's payment phones (D3). */
+  savePhone?: boolean;
+}
+
+/** #545 response for a pay-after-confirm MoMo retry. */
+export interface PayAfterRetryResponse {
+  success: true;
+  payment_rail: 'mobile_money' | 'wallet';
+  result: PayAfterRetryResult;
+  message: string;
+  phone_masked: string | null;
+  superseded_transaction_id: string | null;
+  payment_transaction: { id: string; reference: string; status: string } | null;
+  prompt_expires_at: string | null;
+  retry_after_seconds?: number;
+  idempotent_replay?: boolean;
+  pay_by: string | null;
 }
 
 export interface ClaimAvailabilityResponse {
@@ -629,7 +683,9 @@ export class OrdersService {
     @Optional()
     private readonly creditsService?: CreditsService,
     @Optional()
-    private readonly purchaseCreditsService?: PurchaseCreditsService
+    private readonly purchaseCreditsService?: PurchaseCreditsService,
+    @Optional()
+    private readonly moduleRef?: ModuleRef
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -4900,28 +4956,27 @@ export class OrdersService {
       return { success: true, message: 'Order is already paid' };
     }
 
-    if (
-      (order as any).pay_after_merchant_confirm === true &&
-      order.current_status === 'confirmed'
-    ) {
-      const settlement = await this.initiateCookedFoodFullPaymentAfterConfirm(
-        orderId
-      );
-      if (settlement === 'wallet' || settlement === 'skipped') {
-        return {
-          success: true,
-          message:
-            settlement === 'wallet'
-              ? 'Paid from your Rendasua wallet.'
-              : 'Order is already paid',
-          payment_rail: 'wallet' as const,
-        };
+    if ((order as any).pay_after_merchant_confirm === true) {
+      if (order.current_status === 'confirmed') {
+        return this.retryPayAfterConfirmMomo(order, options ?? {});
       }
-      return {
-        success: true,
-        message: 'Payment request sent. Approve it on your phone.',
-        payment_rail: 'mobile_money' as const,
-      };
+      if (
+        this.isTerminalOrderStatus(order.current_status) ||
+        this.isTerminalOrderForPaymentFinalize(order as any)
+      ) {
+        throw paymentError(
+          HttpStatus.CONFLICT,
+          'ORDER_NOT_PAYABLE',
+          'This order can no longer be paid.'
+        );
+      }
+      if (order.current_status === 'pending') {
+        throw paymentError(
+          HttpStatus.BAD_REQUEST,
+          'ORDER_NOT_CONFIRMED',
+          'Payment can only be requested after the merchant confirms the order.'
+        );
+      }
     }
 
     const paymentTiming = (order as any).payment_timing as
@@ -4946,6 +5001,703 @@ export class OrdersService {
     }
 
     return this.retryMobileMoneyOrderPayment(order, orderId, options?.phoneNumber);
+  }
+
+  // ---------------------------------------------------------------------------
+  // #545 pay-at-confirm retry: resend / change number, supersede, idempotency.
+  // ---------------------------------------------------------------------------
+
+  private orderMomoResendMinAgeSeconds(): number {
+    return resendMinAgeSeconds(process.env.ORDER_MOMO_RESEND_MIN_AGE_SECONDS);
+  }
+
+  /**
+   * Client retry for a confirmed pay-after-confirm MoMo order. Never sends a second
+   * live prompt blind: the old pending attempt is checked with the provider first and
+   * only replaced when it is older than the resend age or the phone changed (D1/D2).
+   * A late approval of the replaced prompt is handled by
+   * handleLateSuccessOnSupersededOrderTx (wallet credit, first success wins).
+   */
+  private async retryPayAfterConfirmMomo(
+    order: Orders,
+    options: RetryOrderPaymentOptions
+  ): Promise<PayAfterRetryResponse> {
+    const momo = this.orderMomoContext(order);
+    // Validate everything before any side effect.
+    const newPhone = options.phoneNumber?.trim()
+      ? requireValidRetryPhone(options.phoneNumber, momo.itemCountry)
+      : null;
+    const key = normalizeIdempotencyKey(options.idempotencyKey);
+    if (key) {
+      const replay = await this.replayIdempotentPayAfterRetry(order, key);
+      if (replay) return replay;
+    }
+
+    const currentPhone = this.resolveOrderMobileMoneyPhone(order as any);
+    const phone = newPhone ?? currentPhone;
+    if (!phone.trim()) {
+      throw new HttpException(
+        'Phone number is required to retry payment',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const phoneChanged = !!newPhone && !samePhone(newPhone, currentPhone);
+
+    const existing =
+      await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
+        order.order_number
+      );
+    let superseded: MobilePaymentTransaction | null = null;
+    if (existing) {
+      const early = await this.resolvePendingPayAfterAttempt(
+        order,
+        existing,
+        phone,
+        phoneChanged
+      );
+      if (early) return early;
+      await this.assertPayAfterRetryRateLimit(order);
+      if (existing.status === 'pending') {
+        const raced = await this.supersedePendingOrderPaymentTx(
+          order,
+          existing,
+          phoneChanged ? 'phone_changed' : 'resend_after_min_age',
+          key
+        );
+        if (raced) return raced;
+        superseded = existing;
+      }
+    } else {
+      const chargeAmount = Number(order.total_amount) || 0;
+      if (chargeAmount <= 0) {
+        await this.finalizeCookedFoodPayAfterConfirm(order);
+        return this.payAfterRetryResponse('paid', {
+          rail: 'wallet',
+          message: 'Nothing to pay for this order.',
+        });
+      }
+      if (await this.trySettleCookedFoodPayAfterFromWallet(order, chargeAmount)) {
+        return this.payAfterRetryResponse('wallet', {
+          rail: 'wallet',
+          message: 'Paid from your Rendasua wallet.',
+        });
+      }
+      await this.assertPayAfterRetryRateLimit(order);
+    }
+
+    return this.sendPayAfterRetryRequest(order, {
+      phone,
+      phoneChanged,
+      key,
+      superseded,
+      savePhone: options.savePhone === true,
+    });
+  }
+
+  private payAfterRetryResponse(
+    result: PayAfterRetryResult,
+    fields: {
+      rail?: 'mobile_money' | 'wallet';
+      message: string;
+      phone?: string | null;
+      tx?: MobilePaymentTransaction | null;
+      superseded?: MobilePaymentTransaction | null;
+      retryAfterSeconds?: number;
+      idempotentReplay?: boolean;
+    }
+  ): PayAfterRetryResponse {
+    const tx = fields.tx ?? null;
+    return {
+      success: true,
+      payment_rail: fields.rail ?? 'mobile_money',
+      result,
+      message: fields.message,
+      phone_masked: maskPhone(fields.phone ?? tx?.customer_phone ?? null),
+      superseded_transaction_id: fields.superseded?.id ?? null,
+      payment_transaction: tx
+        ? { id: tx.id, reference: tx.reference, status: tx.status }
+        : null,
+      prompt_expires_at:
+        tx && tx.status === 'pending' ? promptExpiresAt(tx.created_at) : null,
+      ...(fields.retryAfterSeconds !== undefined
+        ? { retry_after_seconds: fields.retryAfterSeconds }
+        : {}),
+      ...(fields.idempotentReplay ? { idempotent_replay: true } : {}),
+      pay_by: null,
+    };
+  }
+
+  /** Same Idempotency-Key within 10 minutes: answer from the stored attempt, send nothing. */
+  private async replayIdempotentPayAfterRetry(
+    order: Orders,
+    key: string
+  ): Promise<PayAfterRetryResponse | null> {
+    const since = new Date(
+      Date.now() - ORDER_MOMO_IDEMPOTENCY_WINDOW_SECONDS * 1000
+    ).toISOString();
+    const tx =
+      await this.mobilePaymentsDatabaseService.getOrderTransactionByIdempotencyKey(
+        order.order_number,
+        key,
+        since
+      );
+    if (!tx) return null;
+    if (tx.status === 'failed') {
+      throw paymentError(
+        HttpStatus.BAD_REQUEST,
+        'PROVIDER_REJECTED',
+        tx.error_message || 'The payment provider rejected the request.',
+        { idempotent_replay: true }
+      );
+    }
+    if (tx.status === 'success') {
+      return this.payAfterRetryResponse('paid', {
+        message: 'Payment received.',
+        tx,
+        idempotentReplay: true,
+      });
+    }
+    if (tx.status === 'cancelled' && tx.superseded_reason === 'send_outcome_unknown') {
+      throw this.paymentStateUncertain();
+    }
+    if (tx.status === 'cancelled' && tx.error_code === 'ORDER_SETTLED_BEFORE_SEND') {
+      const fresh = await this.getOrderDetails(order.id);
+      if ((fresh as any)?.payment_status === 'paid') {
+        return this.payAfterRetryResponse('paid', {
+          message: 'Payment received.',
+          idempotentReplay: true,
+        });
+      }
+      throw paymentError(
+        HttpStatus.CONFLICT,
+        'ORDER_NOT_PAYABLE',
+        'This order can no longer be paid.'
+      );
+    }
+    const previous =
+      await this.mobilePaymentsDatabaseService.getTransactionSupersededBy(tx.id);
+    const masked = maskPhone(tx.customer_phone);
+    return this.payAfterRetryResponse(previous ? 'resent' : 'sent', {
+      message: `Payment request sent to ${masked ?? 'your phone'}. Approve it on your phone.`,
+      tx,
+      superseded: previous,
+      idempotentReplay: true,
+    });
+  }
+
+  /**
+   * Old attempt still pending in our DB: ask the provider before doing anything.
+   * Returns a response to send now, or null to continue (old attempt failed, or it
+   * must be superseded; existing.status tells which).
+   */
+  private async resolvePendingPayAfterAttempt(
+    order: Orders,
+    existing: MobilePaymentTransaction,
+    phone: string,
+    phoneChanged: boolean
+  ): Promise<PayAfterRetryResponse | null> {
+    const age = ageSeconds(existing.created_at);
+    if (!existing.transaction_id && age >= ORDER_MOMO_PROMPT_LIFETIME_SECONDS) {
+      // Never reached the provider (or we lost its id) and older than any live prompt:
+      // nothing to ask the provider about; supersede it.
+      return null;
+    }
+    let live: MobileTransactionStatus;
+    try {
+      live = await this.mobilePaymentsService.checkTransactionStatus(
+        existing.transaction_id || existing.reference,
+        existing.provider,
+        existing.customer_phone ?? undefined
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Provider status check failed for ${existing.id} during retry: ${error?.message ?? error}`
+      );
+      throw this.paymentStateUncertain();
+    }
+
+    if (live.status === 'success') {
+      await this.replayProviderSuccess(existing, live);
+      return this.payAfterRetryResponse('paid', {
+        message: 'Your earlier payment request was approved. Payment received.',
+        tx: { ...existing, status: 'success' },
+      });
+    }
+    if (live.status === 'failed' || live.status === 'cancelled') {
+      await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(
+        existing.id,
+        'pending',
+        {
+          status: 'failed',
+          error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+          error_message: live.message || 'Provider reported the request as failed',
+        }
+      );
+      existing.status = 'failed';
+      return null;
+    }
+    if (live.status !== 'pending') throw this.paymentStateUncertain();
+
+    const minAge = this.orderMomoResendMinAgeSeconds();
+    if (decideOnPendingTx({ ageSeconds: age, phoneChanged, minAgeSeconds: minAge }) === 'already_pending') {
+      const retryAfter = Math.max(1, Math.ceil(minAge - age));
+      const masked = maskPhone(existing.customer_phone || phone);
+      return this.payAfterRetryResponse('already_pending', {
+        message: `A payment request was sent to ${masked ?? 'your phone'} moments ago. Approve it on your phone, or try again in ${retryAfter} seconds.`,
+        tx: existing,
+        retryAfterSeconds: retryAfter,
+      });
+    }
+    return null;
+  }
+
+  private paymentStateUncertain(): HttpException {
+    return paymentError(
+      HttpStatus.CONFLICT,
+      'PAYMENT_STATE_UNCERTAIN',
+      'We could not confirm the status of your last payment request. Please try again in a minute.'
+    );
+  }
+
+  private resolveCallbackProcessor(): any | null {
+    try {
+      return (
+        this.moduleRef?.get('MobilePaymentCallbackProcessor', { strict: false }) ??
+        null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  /** Provider already says SUCCESS for the old attempt: run the normal callback path. */
+  private async replayProviderSuccess(
+    tx: MobilePaymentTransaction,
+    live: MobileTransactionStatus
+  ): Promise<void> {
+    const processor = this.resolveCallbackProcessor();
+    if (!processor) throw this.paymentStateUncertain();
+    if (tx.provider === 'mypvit') {
+      await processor.processMypvitCallback(
+        buildMypvitReplayDto(
+          tx,
+          live,
+          this.mobilePaymentsService.nationalCustomerIdForMypvit(tx.customer_phone)
+        )
+      );
+      return;
+    }
+    if (tx.provider === 'freemopay') {
+      await processor.processFreemopayCallback(buildFreemopayReplayDto(tx, live));
+      return;
+    }
+    throw this.paymentStateUncertain();
+  }
+
+  /** D2: at most 5 new retry requests per order per 10 minutes. */
+  private async assertPayAfterRetryRateLimit(order: Orders): Promise<void> {
+    const since = new Date(
+      Date.now() - ORDER_MOMO_RETRY_WINDOW_SECONDS * 1000
+    ).toISOString();
+    const count =
+      await this.mobilePaymentsDatabaseService.countOrderRetryAttemptsSince(
+        order.order_number,
+        since,
+        PAY_AFTER_RETRY_DESCRIPTION_MARKER
+      );
+    if (count >= ORDER_MOMO_RETRY_LIMIT) {
+      throw paymentError(
+        HttpStatus.TOO_MANY_REQUESTS,
+        'RETRY_RATE_LIMITED',
+        'Too many payment requests for this order. Please wait a few minutes and try again.'
+      );
+    }
+  }
+
+  /**
+   * CAS the old attempt pending -> cancelled (SUPERSEDED_BY_RETRY) before creating the
+   * new one. Returns a response when another request won the race, else null.
+   */
+  private async supersedePendingOrderPaymentTx(
+    order: Orders,
+    existing: MobilePaymentTransaction,
+    reason: 'phone_changed' | 'resend_after_min_age',
+    key: string | null
+  ): Promise<PayAfterRetryResponse | null> {
+    const moved = await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(
+      existing.id,
+      'pending',
+      {
+        status: 'cancelled',
+        error_code: SUPERSEDED_BY_RETRY,
+        error_message: `Superseded by client retry (${reason})`,
+        superseded_reason: reason,
+        superseded_at: new Date().toISOString(),
+      }
+    );
+    if (!moved) return this.respondToConcurrentRetry(order, key);
+    existing.status = 'cancelled';
+    // Best effort: MyPVit can cancel; Freemopay cancel is a documented no-op.
+    if (existing.transaction_id) {
+      void this.mobilePaymentsService
+        .cancelTransaction(existing.transaction_id, existing.provider)
+        .catch(() => undefined);
+    }
+    return null;
+  }
+
+  /** Lost a CAS / unique index race: report what the winner left behind. */
+  private async respondToConcurrentRetry(
+    order: Orders,
+    key: string | null
+  ): Promise<PayAfterRetryResponse> {
+    if (key) {
+      const replay = await this.replayIdempotentPayAfterRetry(order, key);
+      if (replay) return replay;
+    }
+    const pending =
+      await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
+        order.order_number
+      );
+    if (pending) {
+      const masked = maskPhone(pending.customer_phone);
+      return this.payAfterRetryResponse('already_pending', {
+        message: `A payment request was just sent to ${masked ?? 'your phone'}. Approve it on your phone.`,
+        tx: pending,
+      });
+    }
+    const fresh = await this.getOrderDetails(order.id);
+    if ((fresh as any)?.payment_status === 'paid') {
+      return this.payAfterRetryResponse('paid', { message: 'Payment received.' });
+    }
+    throw this.paymentStateUncertain();
+  }
+
+  private async sendPayAfterRetryRequest(
+    order: Orders,
+    params: {
+      phone: string;
+      phoneChanged: boolean;
+      key: string | null;
+      superseded: MobilePaymentTransaction | null;
+      savePhone: boolean;
+    }
+  ): Promise<PayAfterRetryResponse> {
+    // Fast path on this instance; the unique pending index is the real guard.
+    if (this.payAfterMomoInFlight.has(order.id)) {
+      return this.respondToConcurrentRetry(order, params.key);
+    }
+    this.payAfterMomoInFlight.add(order.id);
+    try {
+      return await this.sendPayAfterRetryRequestOnce(order, params);
+    } finally {
+      this.payAfterMomoInFlight.delete(order.id);
+    }
+  }
+
+  private async sendPayAfterRetryRequestOnce(
+    order: Orders,
+    params: {
+      phone: string;
+      phoneChanged: boolean;
+      key: string | null;
+      superseded: MobilePaymentTransaction | null;
+      savePhone: boolean;
+    }
+  ): Promise<PayAfterRetryResponse> {
+    const momo = this.orderMomoContext(order);
+    const account = await this.hasuraSystemService.getAccount(
+      order.client.user_id,
+      order.currency
+    );
+    const reference = this.buildOrderPaymentAttemptReference(order.order_number);
+    const chargeAmount = Number(order.total_amount) || 0;
+
+    let tx: MobilePaymentTransaction;
+    try {
+      tx = await this.mobilePaymentsDatabaseService.createTransaction({
+        reference,
+        amount: chargeAmount,
+        currency: order.currency,
+        description: `order ${order.order_number} ${PAY_AFTER_RETRY_DESCRIPTION_MARKER}`,
+        provider: momo.provider,
+        payment_method: 'mobile_money',
+        customer_phone: params.phone,
+        ...(order.client.user.email
+          ? { customer_email: order.client.user.email }
+          : {}),
+        account_id: account.id,
+        transaction_type: 'PAYMENT',
+        payment_entity: 'order' as const,
+        entity_id: order.order_number,
+        ...(params.key ? { idempotency_key: params.key } : {}),
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) {
+        return this.respondToConcurrentRetry(order, params.key);
+      }
+      throw error;
+    }
+    if (params.superseded) {
+      await this.mobilePaymentsDatabaseService
+        .updateTransaction(params.superseded.id, { superseded_by_id: tx.id })
+        .catch((e: any) =>
+          this.logger.warn(`Could not link superseded tx ${params.superseded!.id}: ${e?.message}`)
+        );
+    }
+
+    // A late approval of the old prompt may have paid the order meanwhile.
+    const fresh = (await this.getOrderDetails(order.id)) ?? order;
+    if (
+      (fresh as any).payment_status === 'paid' ||
+      fresh.current_status !== 'confirmed'
+    ) {
+      await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(tx.id, 'pending', {
+        status: 'cancelled',
+        error_code: 'ORDER_SETTLED_BEFORE_SEND',
+        error_message: 'Order was paid or closed before the request was sent',
+      });
+      if ((fresh as any).payment_status === 'paid') {
+        return this.payAfterRetryResponse('paid', { message: 'Payment received.' });
+      }
+      throw paymentError(
+        HttpStatus.CONFLICT,
+        'ORDER_NOT_PAYABLE',
+        'This order can no longer be paid.'
+      );
+    }
+
+    let sent: { success: boolean; message?: string; errorCode?: string; transactionId?: string };
+    let sendThrew = false;
+    try {
+      sent = await this.mobilePaymentsService.initiatePayment(
+        {
+          amount: chargeAmount,
+          currency: order.currency,
+          description: `Order ${order.order_number}`,
+          customerPhone: params.phone,
+          provider: momo.provider,
+          itemCountry: momo.itemCountry ?? undefined,
+          ownerCharge: 'MERCHANT' as const,
+          transactionType: 'PAYMENT' as const,
+        },
+        reference,
+        momo.payerUserId
+      );
+    } catch (error: any) {
+      sendThrew = true;
+      sent = { success: false, message: error?.message || 'Failed to initiate payment' };
+    }
+
+    if (sendThrew) {
+      // Outcome unknown: the provider may have created the prompt. Keep the row in the
+      // superseded state so a later approval is credited by the late-success handler.
+      await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(tx.id, 'pending', {
+        status: 'cancelled',
+        error_code: SUPERSEDED_BY_RETRY,
+        error_message: `Send outcome unknown: ${sent.message}`,
+        superseded_reason: 'send_outcome_unknown',
+        superseded_at: new Date().toISOString(),
+      });
+      throw this.paymentStateUncertain();
+    }
+    if (!sent.success) {
+      await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(tx.id, 'pending', {
+        status: 'failed',
+        error_message: sent.message,
+        error_code: sent.errorCode,
+      });
+      throw paymentError(
+        HttpStatus.BAD_REQUEST,
+        'PROVIDER_REJECTED',
+        sent.message || 'We could not send the payment request. Please try again.'
+      );
+    }
+    if (sent.transactionId) {
+      await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
+        transaction_id: sent.transactionId,
+      });
+    }
+    // D3: persist the new number only after the provider accepted the request.
+    if (params.phoneChanged) {
+      await this.persistOrderPayerPhone(order.id, params.phone);
+      if (params.savePhone) await this.saveRetryPhoneForClient(order, params.phone);
+    }
+    await this.resetOrderPaymentFailure(order.id);
+
+    const masked = maskPhone(params.phone);
+    const result: PayAfterRetryResult = params.superseded ? 'resent' : 'sent';
+    return this.payAfterRetryResponse(result, {
+      message:
+        result === 'resent'
+          ? `New payment request sent to ${masked ?? 'your phone'}. Approve it on your phone and ignore any earlier request.`
+          : `Payment request sent to ${masked ?? 'your phone'}. Approve it on your phone.`,
+      phone: params.phone,
+      tx: { ...tx, status: 'pending' },
+      superseded: params.superseded,
+    });
+  }
+
+  /** Conditional: never rewrite the payer of an order that is already paid. */
+  private async persistOrderPayerPhone(orderId: string, phone: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation PersistRetryPayerPhone($id: uuid!, $phone: String!) {
+          update_orders(
+            where: { id: { _eq: $id }, payment_status: { _neq: "paid" } }
+            _set: { payer_phone: $phone }
+          ) { affected_rows }
+        }`,
+        { id: orderId, phone }
+      );
+    } catch (error: any) {
+      // The request is already on the customer's phone; do not fail the retry.
+      this.logger.error(
+        `Could not persist payer_phone for order ${orderId}: ${error?.message ?? error}`
+      );
+    }
+  }
+
+  private async saveRetryPhoneForClient(order: Orders, phoneE164: string): Promise<void> {
+    try {
+      const region = (this.orderMomoContext(order).itemCountry || 'CM').toUpperCase();
+      await this.mobilePaymentPhonesService.createForUser(
+        order.client.user_id,
+        region,
+        phoneE164
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not save retry phone for user ${order.client.user_id}: ${error?.message ?? error}`
+      );
+    }
+  }
+
+  /**
+   * Provider SUCCESS for an order attempt we cancelled as superseded (called by the
+   * callback processor after it verified the provider status and credited the wallet).
+   * First success wins: an unpaid live order is finalized with this attempt and any
+   * newer pending attempt is cancelled. A paid or cancelled order keeps the money in
+   * the client's wallet (D5) and raises an alert.
+   */
+  async handleLateSuccessOnSupersededOrderTx(
+    tx: MobilePaymentTransaction
+  ): Promise<'applied' | 'duplicate'> {
+    const order = await this.requireOrderDetailsByNumber(tx.entity_id || tx.reference);
+    const extra = await this.classifyExtraOrderPayment(order, tx);
+    if (extra) {
+      await this.recordDuplicateOrderPayment(order, tx, extra, false);
+      return 'duplicate';
+    }
+    if ((order as any).payment_status !== 'paid') {
+      // Unpaid and live: this approval came first, so it pays the order.
+      await this.cancelNewerPendingOrderTxs(order, tx);
+    }
+    // Paid by this very attempt on an earlier delivery: idempotent repair.
+    await this.finalizeOrderAfterIncomingPayment(tx);
+    // A concurrent success of the newer attempt may have been applied at the same
+    // moment (holds are idempotent, so the extra stays in the wallet): surface it.
+    const others = await this.mobilePaymentsDatabaseService.listOrderTransactionsByStatus(
+      order.order_number,
+      'success'
+    );
+    const concurrent = others.find((other) => other.id !== tx.id);
+    if (concurrent) {
+      await this.recordDuplicateOrderPayment(order, tx, 'duplicate', false);
+      return 'duplicate';
+    }
+    return 'applied';
+  }
+
+  private async cancelNewerPendingOrderTxs(
+    order: Orders,
+    winner: MobilePaymentTransaction
+  ): Promise<void> {
+    const pending = await this.mobilePaymentsDatabaseService.listOrderTransactionsByStatus(
+      order.order_number,
+      'pending'
+    );
+    for (const other of pending) {
+      if (other.id === winner.id) continue;
+      await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(other.id, 'pending', {
+        status: 'cancelled',
+        error_code: SUPERSEDED_BY_LATE_SUCCESS,
+        error_message: `Superseded: earlier request ${winner.reference} was approved first`,
+      });
+    }
+  }
+
+  /**
+   * A MoMo SUCCESS that must not be applied to the order (#545):
+   * - 'duplicate': the order was already paid by something else (another successful
+   *   attempt or the wallet);
+   * - 'order_cancelled': the order was never paid and is now terminal.
+   * null: apply normally (first success, or a replay of the attempt that paid it).
+   */
+  private async classifyExtraOrderPayment(
+    order: Orders,
+    tx: MobilePaymentTransaction
+  ): Promise<'duplicate' | 'order_cancelled' | null> {
+    const o = order as any;
+    const wasPaid = ORDER_WAS_PAID_STATUSES.has(String(o.payment_status || ''));
+    if (!wasPaid) {
+      return this.isTerminalOrderStatus(order.current_status) ||
+        this.isTerminalOrderForPaymentFinalize(o)
+        ? 'order_cancelled'
+        : null;
+    }
+    if (o.payment_source === 'wallet' || o.payer_payment_rail === 'wallet') {
+      return 'duplicate';
+    }
+    const successes = await this.mobilePaymentsDatabaseService.listOrderTransactionsByStatus(
+      order.order_number,
+      'success'
+    );
+    return successes.some((other) => other.id !== tx.id) ? 'duplicate' : null;
+  }
+
+  /**
+   * D5: the duplicate amount is already in the client's wallet (the callback processor
+   * credits every order MoMo payment, idempotent on the tx id, before finalize; skipping
+   * the order hold leaves it available). Alert on-call and tell the client, once per tx.
+   */
+  private async recordDuplicateOrderPayment(
+    order: Orders,
+    tx: MobilePaymentTransaction,
+    reason: 'duplicate' | 'order_cancelled',
+    persistMarker: boolean
+  ): Promise<void> {
+    if (tx.error_code === DUPLICATE_PAYMENT_CREDITED) return;
+    reportMoneyAnomaly(
+      this.logger,
+      'duplicate_momo_collect',
+      `order=${order.order_number} tx=${tx.id} ref=${tx.reference} amount=${tx.amount} ${tx.currency} reason=${reason}: credited to client wallet`,
+      {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        transactionId: tx.id,
+        amount: Number(tx.amount),
+        currency: tx.currency,
+        reason,
+      }
+    );
+    if (persistMarker) {
+      await this.mobilePaymentsDatabaseService
+        .updateTransaction(tx.id, { error_code: DUPLICATE_PAYMENT_CREDITED })
+        .catch((e: any) =>
+          this.logger.warn(`Could not mark duplicate tx ${tx.id}: ${e?.message}`)
+        );
+    }
+    await this.notificationsService
+      .sendDuplicatePaymentCreditedPush({
+        userId: order.client?.user_id,
+        orderId: order.id,
+        orderNumber: order.order_number,
+        amount: Number(tx.amount),
+        currency: tx.currency,
+        reason,
+      })
+      .catch(() => undefined);
   }
 
   private async retryStripeOrderPayment(
@@ -9475,6 +10227,15 @@ export class OrdersService {
     try {
       const orderNumber = transaction.entity_id || transaction.reference;
       const order = await this.requireOrderDetailsByNumber(orderNumber);
+      if (this.isPayAfterMomoTx(order, transaction)) {
+        // #545: duplicate / post-cancel SUCCESS stays in the wallet (D5) + alert, once per tx.
+        if (transaction.error_code === DUPLICATE_PAYMENT_CREDITED) return;
+        const extra = await this.classifyExtraOrderPayment(order, transaction);
+        if (extra) {
+          await this.recordDuplicateOrderPayment(order, transaction, extra, true);
+          return;
+        }
+      }
       if (await this.abortFinalizeOnTerminalOrder(order, 'payment')) {
         return;
       }
@@ -11131,6 +11892,14 @@ export class OrdersService {
    * Late payment callback on a terminal order: do not place holds or mark paid.
    * MoMo wallet credit already happened in the callback processor — skipping finalize is the refund.
    */
+  private isPayAfterMomoTx(order: Orders, transaction: any): boolean {
+    return (
+      (order as any).pay_after_merchant_confirm === true &&
+      transaction?.payment_method === 'mobile_money' &&
+      !!transaction?.id
+    );
+  }
+
   private async abortFinalizeOnTerminalOrder(
     order: Orders,
     context: 'payment' | 'authorization'

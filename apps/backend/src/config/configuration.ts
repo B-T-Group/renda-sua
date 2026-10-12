@@ -300,6 +300,12 @@ export interface FreemopayConfig {
   callbackUrl: string;
   /** DEV ONLY: mock collections/withdrawals by amount threshold (< 2000 XAF = success, >= 2000 XAF = fail). Never enabled in production. */
   amountMockEnabled: boolean;
+  /**
+   * DEV ONLY (#545, D7): with the amount mock on, collections to these payer numbers stay
+   * PENDING forever (no auto-callback) to simulate a stuck / unanswered MoMo prompt.
+   * Ignored unless amountMockEnabled, which is hard-off in production.
+   */
+  mockPendingPhones: string[];
 }
 
 export interface StripeConfig {
@@ -763,6 +769,12 @@ export default (): Configuration => {
       amountMockEnabled:
         process.env.FREEMOPAY_AMOUNT_MOCK === 'true' &&
         !isProductionRuntime(process.env),
+      mockPendingPhones: (
+        process.env.FREEMOPAY_MOCK_PENDING_PHONES ?? '237650000099,237690000099'
+      )
+        .split(',')
+        .map((p) => p.replace(/\D/g, ''))
+        .filter((p) => p.length >= 8),
     },
     stripe: {
       secretKey: process.env.STRIPE_SECRET_KEY || '',

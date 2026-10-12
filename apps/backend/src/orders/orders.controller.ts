@@ -11,9 +11,11 @@ import {
   Post,
   Query,
   Request,
+  ValidationPipe,
 } from '@nestjs/common';
 import {
   ApiBody,
+  ApiHeader,
   ApiOperation,
   ApiParam,
   ApiQuery,
@@ -38,6 +40,7 @@ import {
 } from './dto/checkout-preflight.dto';
 import { ReorderOrderResponseDto } from './dto/reorder-order.dto';
 import { RetryDepositPaymentDto } from './dto/retry-deposit-payment.dto';
+import { RetryOrderPaymentDto } from './dto/retry-order-payment.dto';
 import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderMarkReadyService } from './order-mark-ready.service';
 import { OrderReorderService } from './order-reorder.service';
@@ -1625,37 +1628,44 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Retry order payment (client only)',
     description:
-      'Re-initiates payment for a pending_payment pay-now order, or for a confirmed cooked-food MoMo pay-after-confirm order awaiting client payment. Mobile money creates a new MM request; Stripe (credit_card) returns a Checkout URL or PaymentIntent client secret when stripe_payment_method is payment_sheet.',
+      'Re-initiates payment for a pending_payment pay-now order, or for a confirmed pay-after-confirm MoMo order awaiting client payment. ' +
+      'Pay-after-confirm (#545): checks the previous request with the provider first; resends to the same phone only after 90 s, ' +
+      'or immediately to a changed (validated) phone; at most 5 new requests per order per 10 min. ' +
+      'Send an Idempotency-Key per user tap: the same key within 10 min returns the original result and sends nothing. ' +
+      'Stripe (credit_card) returns a Checkout URL or PaymentIntent client secret when stripe_payment_method is payment_sheet.',
   })
-  @ApiBody({
+  @ApiHeader({
+    name: 'Idempotency-Key',
     required: false,
-    schema: {
-      type: 'object',
-      properties: {
-        stripe_payment_method: {
-          type: 'string',
-          enum: ['payment_sheet'],
-          description:
-            'For Stripe-rail orders, return a PaymentIntent client secret for native PaymentSheet instead of a hosted Checkout URL.',
-        },
-        phone_number: {
-          type: 'string',
-          description:
-            'For mobile money orders, optionally override the phone number for this payment attempt. Must be in E.164 format.',
-        },
-      },
-    },
+    description: 'UUID per user tap / phone value (1-128 chars of A-Z a-z 0-9 . _ : -).',
   })
-  @ApiResponse({ status: 200, description: 'Payment retry initiated' })
-  @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
+  @ApiBody({ required: false, type: RetryOrderPaymentDto })
+  @ApiResponse({
+    status: 200,
+    description:
+      'Pay-after MoMo: { success, payment_rail, result: sent|resent|already_pending|paid|wallet, message, phone_masked, superseded_transaction_id, payment_transaction, prompt_expires_at, retry_after_seconds?, idempotent_replay?, pay_by }',
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      'INVALID_MOMO_PHONE, INVALID_IDEMPOTENCY_KEY, ORDER_NOT_CONFIRMED, PROVIDER_REJECTED, or invalid order state',
+  })
   @ApiResponse({ status: 403, description: 'Not authorized for this order' })
+  @ApiResponse({
+    status: 409,
+    description: 'PAYMENT_STATE_UNCERTAIN (try again in a minute) or ORDER_NOT_PAYABLE',
+  })
+  @ApiResponse({ status: 429, description: 'RETRY_RATE_LIMITED' })
   async retryOrderPayment(
     @Param('id') orderId: string,
-    @Body() body?: { stripe_payment_method?: 'payment_sheet'; phone_number?: string }
+    @Body(new ValidationPipe({ transform: true })) body?: RetryOrderPaymentDto,
+    @Headers('idempotency-key') idempotencyKeyHeader?: string
   ) {
     return this.ordersService.retryOrderPayment(orderId, {
       stripePaymentMethod: body?.stripe_payment_method,
       phoneNumber: body?.phone_number,
+      savePhone: body?.save_phone === true,
+      idempotencyKey: idempotencyKeyHeader?.trim() || body?.idempotency_key,
     });
   }
 

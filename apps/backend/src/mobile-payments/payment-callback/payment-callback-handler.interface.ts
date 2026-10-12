@@ -9,6 +9,14 @@ export interface PaymentCallbackHandler {
   ): Promise<void>;
   onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void>;
   onPaymentAuthorized?(transaction: MobilePaymentTransaction): Promise<void>;
+  /**
+   * Provider SUCCESS arrived for an attempt we had cancelled as superseded (#545).
+   * The amount is already credited to the payer wallet. Returns whether the payment
+   * was applied to the entity (first success wins) or kept as a wallet credit.
+   */
+  onLateSuccessAfterSupersede?(
+    transaction: MobilePaymentTransaction
+  ): Promise<'applied' | 'duplicate'>;
   onPaymentFailure(
     transaction: MobilePaymentTransaction,
     message: string

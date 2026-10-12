@@ -32,6 +32,11 @@ export interface MobilePaymentTransaction {
   entity_id?: string;
   created_at: string;
   updated_at: string;
+  /** #545 attempt tracking (only selected by the order-retry queries). */
+  idempotency_key?: string | null;
+  superseded_by_id?: string | null;
+  superseded_reason?: string | null;
+  superseded_at?: string | null;
 }
 
 export interface CreateTransactionData {
@@ -58,6 +63,8 @@ export interface CreateTransactionData {
     | 'reel_ai_token'
     | 'phone_verification';
   entity_id?: string;
+  /** Client Idempotency-Key for order payment retries (#545). Unique per entity_id. */
+  idempotency_key?: string;
 }
 
 export interface UpdateTransactionData {
@@ -66,7 +73,24 @@ export interface UpdateTransactionData {
   /** May arrive as bilingual provider object; coerced to string before write. */
   error_message?: string | Record<string, unknown> | null;
   error_code?: string;
+  superseded_by_id?: string | null;
+  superseded_reason?: string | null;
+  superseded_at?: string | null;
 }
+
+/** Columns that exist before the #545 migration (safe on hot paths during deploy). */
+const LEGACY_TX_FIELDS = `
+  id reference amount currency description provider payment_method status
+  transaction_id customer_phone customer_email error_message error_code
+  account_id transaction_type payment_entity entity_id created_at updated_at
+`;
+
+const ORDER_ATTEMPT_FIELDS = `
+  id reference amount currency description provider payment_method status
+  transaction_id customer_phone customer_email error_message error_code
+  account_id transaction_type payment_entity entity_id created_at updated_at
+  idempotency_key superseded_by_id superseded_reason superseded_at
+`;
 
 export interface PendingClaimOrderTransaction {
   id: string;
@@ -523,6 +547,133 @@ export class MobilePaymentsDatabaseService {
     const response = await this.hasuraService.executeQuery<{
       mobile_payment_transactions: MobilePaymentTransaction[];
     }>(query, { orderNumber });
+    return response.mobile_payment_transactions?.[0] ?? null;
+  }
+
+  /**
+   * Conditional update (compare-and-set on status). Returns true only when this call
+   * moved the row; false means another writer changed the status first.
+   */
+  async updateTransactionIfStatus(
+    id: string,
+    expectedStatus: MobilePaymentTransaction['status'],
+    data: UpdateTransactionData
+  ): Promise<boolean> {
+    const response = await this.hasuraService.executeMutation<{
+      update_mobile_payment_transactions: { affected_rows: number };
+    }>(
+      `mutation CasMobilePaymentTransaction($id: uuid!, $expected: String!, $data: mobile_payment_transactions_set_input!) {
+        update_mobile_payment_transactions(
+          where: { id: { _eq: $id }, status: { _eq: $expected } }
+          _set: $data
+        ) { affected_rows }
+      }`,
+      {
+        id,
+        expected: expectedStatus,
+        data: {
+          ...data,
+          ...(data.error_message !== undefined
+            ? {
+                error_message: normalizeProviderMessage(
+                  data.error_message,
+                  'Payment failed'
+                ),
+              }
+            : {}),
+          updated_at: new Date().toISOString(),
+        },
+      }
+    );
+    return (response.update_mobile_payment_transactions?.affected_rows ?? 0) > 0;
+  }
+
+  /** Retry-created order payment attempts since `sinceIso` (rate limit, #545). */
+  async countOrderRetryAttemptsSince(
+    orderNumber: string,
+    sinceIso: string,
+    descriptionMarker: string
+  ): Promise<number> {
+    const response = await this.hasuraService.executeQuery<{
+      mobile_payment_transactions_aggregate: { aggregate: { count: number } };
+    }>(
+      `query CountOrderRetryAttempts($orderNumber: String!, $since: timestamptz!, $like: String!) {
+        mobile_payment_transactions_aggregate(
+          where: {
+            payment_entity: { _eq: order }
+            entity_id: { _eq: $orderNumber }
+            created_at: { _gte: $since }
+            description: { _like: $like }
+          }
+        ) { aggregate { count } }
+      }`,
+      { orderNumber, since: sinceIso, like: `%${descriptionMarker}%` }
+    );
+    return response.mobile_payment_transactions_aggregate?.aggregate?.count ?? 0;
+  }
+
+  /** Order attempt created with this Idempotency-Key since `sinceIso`, if any. */
+  async getOrderTransactionByIdempotencyKey(
+    orderNumber: string,
+    idempotencyKey: string,
+    sinceIso: string
+  ): Promise<MobilePaymentTransaction | null> {
+    const response = await this.hasuraService.executeQuery<{
+      mobile_payment_transactions: MobilePaymentTransaction[];
+    }>(
+      `query OrderTxByIdempotencyKey($orderNumber: String!, $key: String!, $since: timestamptz!) {
+        mobile_payment_transactions(
+          where: {
+            payment_entity: { _eq: order }
+            entity_id: { _eq: $orderNumber }
+            idempotency_key: { _eq: $key }
+            created_at: { _gte: $since }
+          }
+          limit: 1
+        ) { ${ORDER_ATTEMPT_FIELDS} }
+      }`,
+      { orderNumber, key: idempotencyKey, since: sinceIso }
+    );
+    return response.mobile_payment_transactions?.[0] ?? null;
+  }
+
+  /** All order payment attempts for an order with the given status. */
+  async listOrderTransactionsByStatus(
+    orderNumber: string,
+    status: MobilePaymentTransaction['status']
+  ): Promise<MobilePaymentTransaction[]> {
+    const response = await this.hasuraService.executeQuery<{
+      mobile_payment_transactions: MobilePaymentTransaction[];
+    }>(
+      `query OrderTxsByStatus($orderNumber: String!, $status: String!) {
+        mobile_payment_transactions(
+          where: {
+            payment_entity: { _eq: order }
+            entity_id: { _eq: $orderNumber }
+            status: { _eq: $status }
+          }
+          order_by: { created_at: asc }
+        ) { ${LEGACY_TX_FIELDS} }
+      }`,
+      { orderNumber, status }
+    );
+    return response.mobile_payment_transactions ?? [];
+  }
+
+  /** The attempt this attempt replaced, if any (for idempotent replays). */
+  async getTransactionSupersededBy(
+    newTransactionId: string
+  ): Promise<MobilePaymentTransaction | null> {
+    const response = await this.hasuraService.executeQuery<{
+      mobile_payment_transactions: MobilePaymentTransaction[];
+    }>(
+      `query TxSupersededBy($id: uuid!) {
+        mobile_payment_transactions(where: { superseded_by_id: { _eq: $id } }, limit: 1) {
+          ${ORDER_ATTEMPT_FIELDS}
+        }
+      }`,
+      { id: newTransactionId }
+    );
     return response.mobile_payment_transactions?.[0] ?? null;
   }
 
