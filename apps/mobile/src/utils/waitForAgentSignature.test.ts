@@ -1,4 +1,4 @@
-/* global jest */
+import { describe, expect, it, vi } from 'vitest';
 import { signatureStatusKey, waitForAgentSignature } from './waitForAgentSignature';
 
 function clock() {
@@ -9,7 +9,7 @@ function clock() {
 describe('waitForAgentSignature', () => {
   it('returns as soon as the contract is signed', async () => {
     const c = clock();
-    const check = jest
+    const check = vi
       .fn()
       .mockResolvedValueOnce({ signed: false, status: 'viewed' })
       .mockResolvedValueOnce({ signed: true, status: 'signed' });
@@ -20,7 +20,7 @@ describe('waitForAgentSignature', () => {
 
   it('gives up after 60 s and reports the real status', async () => {
     const c = clock();
-    const check = jest.fn().mockResolvedValue({ signed: false, status: 'sent' });
+    const check = vi.fn().mockResolvedValue({ signed: false, status: 'sent' });
     const r = await waitForAgentSignature(check, { ...c, intervalMs: 3000, timeoutMs: 60000 });
     expect(r).toEqual({ signed: false, status: 'sent', timedOut: true });
     expect(c.now()).toBeLessThanOrEqual(60000);
@@ -29,7 +29,7 @@ describe('waitForAgentSignature', () => {
 
   it('stops early on a terminal status (declined)', async () => {
     const c = clock();
-    const check = jest.fn().mockResolvedValue({ signed: false, status: 'declined' });
+    const check = vi.fn().mockResolvedValue({ signed: false, status: 'declined' });
     const r = await waitForAgentSignature(check, c);
     expect(r).toEqual({ signed: false, status: 'declined', timedOut: false });
     expect(check).toHaveBeenCalledTimes(1);
@@ -37,7 +37,7 @@ describe('waitForAgentSignature', () => {
 
   it('keeps polling through transient errors', async () => {
     const c = clock();
-    const check = jest
+    const check = vi
       .fn()
       .mockRejectedValueOnce(new Error('network'))
       .mockResolvedValueOnce({ signed: true, status: 'signed' });
@@ -48,7 +48,7 @@ describe('waitForAgentSignature', () => {
   it('returns null when cancelled (screen left)', async () => {
     const c = clock();
     let cancelled = false;
-    const check = jest.fn().mockImplementation(async () => {
+    const check = vi.fn().mockImplementation(async () => {
       cancelled = true;
       return { signed: false, status: 'sent' };
     });
