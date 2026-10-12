@@ -16,6 +16,11 @@ import {
   type PaymentCallbackHandler,
 } from './payment-callback/payment-callback-handler.interface';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
+import {
+  DUPLICATE_PAYMENT_CREDITED,
+  LATE_SUCCESS_APPLIED,
+  SUPERSEDED_ERROR_CODES,
+} from '../orders/pay-after-retry.util';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -177,6 +182,17 @@ export class MobilePaymentCallbackProcessor {
         transactionId: callbackData.transactionId,
       };
     }
+    if (this.isSupersededOrderTx(tx) && callbackData.status === 'SUCCESS') {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.handleLateSuccessOnSupersededOrderTx(
+        tx,
+        callbackData.transactionId
+      );
+      return {
+        responseCode: callbackData.code,
+        transactionId: callbackData.transactionId,
+      };
+    }
     if (tx.status === 'success' && callbackData.status === 'SUCCESS') {
       await this.retrySuccessSideEffects(tx);
     }
@@ -204,6 +220,14 @@ export class MobilePaymentCallbackProcessor {
       );
       return { received: true, reference: callbackData.reference };
     }
+    if (this.isSupersededOrderTx(tx) && callbackData.status === 'SUCCESS') {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.handleLateSuccessOnSupersededOrderTx(
+        tx,
+        callbackData.reference || tx.transaction_id || ''
+      );
+      return { received: true, reference: callbackData.reference };
+    }
     if (tx.status === 'success' && callbackData.status === 'SUCCESS') {
       await this.retrySuccessSideEffects(tx);
     }
@@ -215,6 +239,65 @@ export class MobilePaymentCallbackProcessor {
       reference: callbackData.reference,
       skipped: true,
     };
+  }
+
+  /** Order attempt we cancelled to make room for a retry (or a late winner), #545. */
+  private isSupersededOrderTx(tx: MobilePaymentTransaction): boolean {
+    return (
+      tx.payment_entity === 'order' &&
+      tx.status === 'cancelled' &&
+      SUPERSEDED_ERROR_CODES.has(String(tx.error_code || ''))
+    );
+  }
+
+  /**
+   * The customer approved a prompt we had already superseded. The provider took the
+   * money, so it must never be dropped (#545, plan section 3):
+   * 1. confirm SUCCESS with the provider (callbacks are unsigned),
+   * 2. credit the payer wallet (idempotent on the tx id),
+   * 3. let the order decide: first success wins and is applied to the order; a
+   *    duplicate or post-cancel success stays in the wallet and raises an alert,
+   * 4. only then flip the row cancelled -> success (CAS). A failure before step 4 leaves
+   *    it cancelled + superseded, so the provider retry runs this path again.
+   */
+  private async handleLateSuccessOnSupersededOrderTx(
+    tx: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    if (!this.isMockedTransaction(tx)) {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(
+        tx,
+        'SUCCESS'
+      );
+    }
+    const credited = await this.creditWalletIfNeeded(tx);
+    if (!credited) {
+      throw new Error(
+        `Wallet credit failed for late success on superseded tx ${tx.id}; will retry`
+      );
+    }
+    const handler = findPaymentCallbackHandler(
+      this.resolveHandlers(),
+      tx.payment_entity
+    );
+    const outcome = handler?.onLateSuccessAfterSupersede
+      ? await handler.onLateSuccessAfterSupersede(tx)
+      : 'duplicate';
+    const moved = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'cancelled',
+      {
+        status: 'success',
+        ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+        error_code:
+          outcome === 'applied' ? LATE_SUCCESS_APPLIED : DUPLICATE_PAYMENT_CREDITED,
+      }
+    );
+    this.logger.warn(
+      `Late success on superseded order tx ${tx.id} (${tx.reference}): ${outcome}${
+        moved ? '' : ' (row already moved by a concurrent delivery)'
+      }`
+    );
   }
 
   private async processPendingMypvit(

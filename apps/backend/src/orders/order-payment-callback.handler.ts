@@ -52,6 +52,12 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
     }
   }
 
+  async onLateSuccessAfterSupersede(
+    transaction: MobilePaymentTransaction
+  ): Promise<'applied' | 'duplicate'> {
+    return this.ordersService.handleLateSuccessOnSupersededOrderTx(transaction);
+  }
+
   async onPaymentAuthorized(
     transaction: MobilePaymentTransaction
   ): Promise<void> {

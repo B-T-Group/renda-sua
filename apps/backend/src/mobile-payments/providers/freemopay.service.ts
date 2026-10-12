@@ -61,7 +61,8 @@ export class FreemopayService implements OnModuleInit {
   private readonly mockEnabled: boolean;
   private readonly mockThreshold = 2000;
   private readonly mockCallbackDelayMs = 1500;
-  private readonly mockOutcomes = new Map<string, { outcome: 'SUCCESS' | 'FAILED'; amount: number }>();
+  private readonly mockOutcomes = new Map<string, { outcome: 'SUCCESS' | 'FAILED' | 'PENDING'; amount: number }>();
+  private readonly mockPendingPhones: string[];
   private callbackProcessor: MobilePaymentCallbackProcessor | null = null;
 
   constructor(
@@ -76,9 +77,11 @@ export class FreemopayService implements OnModuleInit {
       secretKey: freemopayConfig?.secretKey || '',
       callbackUrl: freemopayConfig?.callbackUrl || '',
       amountMockEnabled: freemopayConfig?.amountMockEnabled ?? false,
+      mockPendingPhones: freemopayConfig?.mockPendingPhones ?? [],
     };
 
     this.mockEnabled = this.config.amountMockEnabled;
+    this.mockPendingPhones = this.mockEnabled ? this.config.mockPendingPhones : [];
 
     this.logger.log('Freemopay configuration loaded');
     this.logger.log(`- Base URL: ${this.config.baseUrl}`);
@@ -223,6 +226,15 @@ export class FreemopayService implements OnModuleInit {
     }, this.mockCallbackDelayMs);
   }
 
+  /** DEV mock (#545): payer on the stuck list never gets a callback. */
+  private isMockPendingPayer(payer?: string): boolean {
+    const digits = String(payer || '').replace(/\D/g, '');
+    if (!digits) return false;
+    return this.mockPendingPhones.some(
+      (p) => digits === p || digits.slice(-9) === p.slice(-9)
+    );
+  }
+
   /**
    * Simulate a mock payment initiation.
    */
@@ -232,6 +244,19 @@ export class FreemopayService implements OnModuleInit {
   ): FreemopayPaymentResponse {
     const externalId = reference || paymentRequest.externalId;
     const mockRef = this.generateMockReference();
+    if (this.isMockPendingPayer(paymentRequest.payer)) {
+      this.mockOutcomes.set(mockRef, { outcome: 'PENDING', amount: paymentRequest.amount });
+      this.logger.log(
+        `🔨 MOCK FreemoPay payment: payer=${paymentRequest.payer} is on FREEMOPAY_MOCK_PENDING_PHONES, reference=${externalId}, mock_ref=${mockRef}: stays PENDING (no auto-callback)`
+      );
+      return {
+        success: true,
+        transactionId: mockRef,
+        reference: mockRef,
+        status: 'PENDING',
+        message: normalizeProviderMessage(null, 'Mock payment initiated (stuck pending)'),
+      };
+    }
     const outcome = this.getMockOutcome(paymentRequest.amount);
 
     // Store the outcome for later status checks
@@ -569,7 +594,9 @@ export class FreemopayService implements OnModuleInit {
     reason?: string;
   } {
     const stored = this.mockOutcomes.get(mockReference);
-    const finalOutcome = outcome ?? stored?.outcome ?? 'SUCCESS';
+    // A stuck-PENDING mock (#545) is approved by default when a callback is generated.
+    const storedOutcome = stored?.outcome === 'PENDING' ? undefined : stored?.outcome;
+    const finalOutcome = outcome ?? storedOutcome ?? 'SUCCESS';
 
     return {
       reference: mockReference,
