@@ -24,6 +24,9 @@ function resolveCreateOrderStatus(error: any, errorMessage: string): number {
     return HttpStatus.BAD_REQUEST;
   }
   if (errorMessage.includes('User not found')) return HttpStatus.NOT_FOUND;
+  if (errorMessage.includes('Delivery address not found')) {
+    return HttpStatus.NOT_FOUND;
+  }
   if (CLIENT_ERROR_MARKERS.some((marker) => errorMessage.includes(marker))) {
     return HttpStatus.BAD_REQUEST;
   }

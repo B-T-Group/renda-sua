@@ -12347,6 +12347,25 @@ export class OrdersService {
     );
   }
 
+  private async requireClientDeliveryAddress(userId: string, addressId: string) {
+    const addresses = await this.hasuraSystemService.getAllUserAddresses(
+      userId,
+      'client'
+    );
+    const address = addresses.find((row) => row.id === addressId);
+    if (!address) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.NOT_FOUND,
+          message: 'Delivery address not found',
+          error: 'DELIVERY_ADDRESS_NOT_FOUND',
+        },
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return address;
+  }
+
   /**
    * Create a new order with validation and fund withholding
    */
@@ -12386,12 +12405,10 @@ export class OrdersService {
           HttpStatus.BAD_REQUEST
         );
       }
-      address = await this.hasuraUserService.getUserAddressById(
+      address = await this.requireClientDeliveryAddress(
+        user.id,
         clientDeliveryAddressId
       );
-      if (!address) {
-        throw new Error('Delivery address not found');
-      }
     }
 
     // Validate that we have items

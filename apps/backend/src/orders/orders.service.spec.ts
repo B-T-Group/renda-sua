@@ -186,7 +186,6 @@ describe('OrdersService', () => {
         jwtDefaultRole: undefined,
         jwtAllowedRoles: [],
       }),
-      getUserAddressById: jest.fn(),
       updateOrderStatus: jest.fn(),
       executeQuery: jest.fn(),
       executeMutation: jest.fn(),
@@ -196,6 +195,16 @@ describe('OrdersService', () => {
       executeQuery: jest.fn(),
       executeMutation: jest.fn(),
       getAccount: jest.fn(),
+      getAllUserAddresses: jest.fn().mockResolvedValue([
+        {
+          id: 'address-123',
+          address_line_1: '123 Main St',
+          city: 'Toronto',
+          state: 'ON',
+          postal_code: 'M5V 1A1',
+          country: 'CA',
+        },
+      ]),
     };
 
     const mockConfigService = {
@@ -568,14 +577,6 @@ describe('OrdersService', () => {
         jwtDefaultRole: 'client',
         jwtAllowedRoles: ['client'],
       });
-      hasuraUserService.getUserAddressById.mockResolvedValue({
-        id: 'address-123',
-        address_line_1: '123 Main St',
-        city: 'Toronto',
-        state: 'ON',
-        postal_code: 'M5V 1A1',
-        country: 'CA',
-      } as any);
       hasuraSystemService.getAccount.mockResolvedValue({
         id: 'account-123',
         available_balance: 100,
@@ -669,13 +670,51 @@ describe('OrdersService', () => {
       });
     }
 
+    it('returns 404 when the delivery address is not in the client address book', async () => {
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraSystemService.getAllUserAddresses.mockResolvedValue([
+        {
+          id: 'address-other',
+          address_line_1: '9 Other St',
+          city: 'Douala',
+          state: 'Littoral',
+          postal_code: '00237',
+          country: 'CM',
+        },
+      ] as any);
+
+      await expect(
+        service.createOrder({
+          delivery_address_id: 'address-missing',
+          fulfillment_method: 'delivery',
+          items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
+        })
+      ).rejects.toMatchObject({
+        status: HttpStatus.NOT_FOUND,
+        response: {
+          statusCode: HttpStatus.NOT_FOUND,
+          message: 'Delivery address not found',
+          error: 'DELIVERY_ADDRESS_NOT_FOUND',
+        },
+      });
+      expect(hasuraSystemService.getAllUserAddresses).toHaveBeenCalledWith(
+        mockClientUser.id,
+        'client'
+      );
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+    });
+
     it('places a pickup order without a delivery address', async () => {
       await placePickup(
         [{ business_inventory_id: 'inventory-pickup', quantity: 1 }],
         [pickupInventoryFixture()]
       );
 
-      expect(hasuraUserService.getUserAddressById).not.toHaveBeenCalled();
+      expect(hasuraSystemService.getAllUserAddresses).not.toHaveBeenCalled();
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('mutation CreateOrderWithItems'),
         expect.objectContaining({ deliveryAddressId: null })
@@ -694,7 +733,7 @@ describe('OrdersService', () => {
         ]
       );
 
-      expect(hasuraUserService.getUserAddressById).not.toHaveBeenCalled();
+      expect(hasuraSystemService.getAllUserAddresses).not.toHaveBeenCalled();
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('mutation CreateOrderWithItems'),
         expect.objectContaining({ deliveryAddressId: null })
@@ -707,14 +746,16 @@ describe('OrdersService', () => {
         jwtDefaultRole: 'client',
         jwtAllowedRoles: ['client'],
       });
-      hasuraUserService.getUserAddressById.mockResolvedValue({
-        id: 'address-123',
-        address_line_1: '123 Main St',
-        city: 'Douala',
-        state: 'Littoral',
-        postal_code: '00237',
-        country: 'CM',
-      } as any);
+      hasuraSystemService.getAllUserAddresses.mockResolvedValue([
+        {
+          id: 'address-123',
+          address_line_1: '123 Main St',
+          city: 'Douala',
+          state: 'Littoral',
+          postal_code: '00237',
+          country: 'CM',
+        },
+      ] as any);
 
       const padInventoryFixture = {
         id: 'inventory-pad-123',
@@ -1765,14 +1806,16 @@ describe('OrdersService', () => {
         jwtDefaultRole: 'client',
         jwtAllowedRoles: ['client'],
       });
-      hasuraUserService.getUserAddressById.mockResolvedValue({
-        id: 'address-123',
-        address_line_1: '123 Main St',
-        city: 'Douala',
-        state: 'Littoral',
-        postal_code: '00237',
-        country: 'CM',
-      } as any);
+      hasuraSystemService.getAllUserAddresses.mockResolvedValue([
+        {
+          id: 'address-123',
+          address_line_1: '123 Main St',
+          city: 'Douala',
+          state: 'Littoral',
+          postal_code: '00237',
+          country: 'CM',
+        },
+      ] as any);
       hasuraSystemService.getAccount.mockResolvedValue({
         id: 'account-pad-123',
         available_balance: 0,
