@@ -128,6 +128,8 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
       getOrderTransactionByIdempotencyKey: jest.fn().mockResolvedValue(null),
       getTransactionSupersededBy: jest.fn().mockResolvedValue(null),
       countOrderRetryAttemptsSince: jest.fn().mockResolvedValue(0),
+      summarizeRetryAttemptsSince: jest.fn().mockResolvedValue({ count: 0, latestAt: null }),
+      getTransactionById: jest.fn().mockResolvedValue(null),
       updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
       updateTransaction: jest.fn().mockResolvedValue({}),
       listOrderTransactionsByStatus: jest.fn().mockResolvedValue([]),
@@ -506,6 +508,212 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
       await svc.finalizeOrderAfterIncomingPayment(tx);
       expect(svc.finalizeCookedFoodPayAfterConfirm).toHaveBeenCalledTimes(1);
       expect(reportMoneyAnomaly).not.toHaveBeenCalled();
+    });
+  });
+});
+
+describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
+  const PA = '+237650000099';
+  const PB = '+237690000099';
+  let svc: any;
+  let db: any;
+  let mps: any;
+  let order: any;
+  let store: { rows: any[] };
+
+  const baseOrder = () => ({
+    id: 'order-1',
+    order_number: 'ORD1',
+    current_status: 'confirmed',
+    payment_status: 'pending',
+    pay_after_merchant_confirm: true,
+    total_amount: 600,
+    currency: 'XAF',
+    payer_phone: PA,
+    client: { user_id: 'client-user', user: { phone_number: PA, email: 'c@x.com' } },
+    business_location: { address: { country: 'CM' } },
+  });
+
+  beforeEach(() => {
+    order = baseOrder();
+    store = {
+      rows: [
+        {
+          id: 'tx-old', reference: 'ORD1-old', status: 'pending', provider: 'freemopay',
+          transaction_id: 'mock-old', customer_phone: PA, payment_entity: 'order',
+          entity_id: 'ORD1', created_at: new Date(Date.now() - 20_000).toISOString(),
+        },
+      ],
+    };
+    let n = 0;
+    db = {
+      getPendingOrderPaymentTransactionByOrderNumber: jest.fn(async () => {
+        const p = store.rows.find((r) => r.status === 'pending');
+        return p ? { ...p } : null;
+      }),
+      getOrderTransactionByIdempotencyKey: jest.fn().mockResolvedValue(null),
+      getTransactionSupersededBy: jest.fn().mockResolvedValue(null),
+      countOrderRetryAttemptsSince: jest.fn().mockResolvedValue(0),
+      summarizeRetryAttemptsSince: jest.fn().mockResolvedValue({ count: 0, latestAt: null }),
+      updateTransactionIfStatus: jest.fn(async (id: string, expected: string, data: any) => {
+        const r = store.rows.find((x) => x.id === id);
+        if (!r || r.status !== expected) return false;
+        Object.assign(r, data);
+        return true;
+      }),
+      updateTransaction: jest.fn(async (id: string, data: any) => {
+        Object.assign(store.rows.find((x) => x.id === id) || {}, data);
+        return {};
+      }),
+      listOrderTransactionsByStatus: jest.fn(async (_o: string, status: string) =>
+        store.rows.filter((r) => r.status === status).map((r) => ({ ...r }))
+      ),
+      createTransaction: jest.fn(async (data: any) => {
+        if (store.rows.some((r) => r.status === 'pending')) {
+          throw new Error('Uniqueness violation. duplicate key value');
+        }
+        const row = {
+          id: `tx-new-${++n}`, reference: data.reference, status: 'pending',
+          customer_phone: data.customer_phone, payment_entity: 'order', entity_id: 'ORD1',
+          idempotency_key: data.idempotency_key, created_at: new Date().toISOString(),
+        };
+        store.rows.push(row);
+        return { ...row };
+      }),
+    };
+    mps = {
+      getProviderForCountry: jest.fn().mockReturnValue('freemopay'),
+      checkTransactionStatus: jest.fn().mockResolvedValue({ status: 'pending' }),
+      initiatePayment: jest.fn().mockResolvedValue({ success: true, transactionId: 'mock-x' }),
+      cancelTransaction: jest.fn().mockResolvedValue(true),
+    };
+    svc = Object.create(OrdersService.prototype);
+    Object.assign(svc, {
+      logger: { log: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() },
+      payAfterMomoInFlight: new Set<string>(),
+      mobilePaymentsDatabaseService: db,
+      mobilePaymentsService: mps,
+      hasuraSystemService: {
+        getAccount: jest.fn().mockResolvedValue({ id: 'acct-1', available_balance: 0 }),
+        // payer_phone is persisted, but the order object the next request read is stale
+        // (exactly the QA F1 window).
+        executeMutation: jest.fn().mockResolvedValue({ update_orders: { affected_rows: 1 } }),
+        executeQuery: jest.fn(),
+      },
+      hasuraUserService: { getUser: jest.fn().mockResolvedValue({ id: 'client-user', active_persona: 'client' }) },
+      mobilePaymentPhonesService: { createForUser: jest.fn().mockResolvedValue({}) },
+      notificationsService: { sendDuplicatePaymentCreditedPush: jest.fn().mockResolvedValue(undefined) },
+      moduleRef: { get: jest.fn().mockReturnValue({}) },
+    });
+    jest.spyOn(svc, 'requireActivePersona').mockImplementation(() => undefined);
+    jest.spyOn(svc, 'getOrderDetails').mockImplementation(async () => ({ ...order }));
+    jest.spyOn(svc, 'resetOrderPaymentFailure').mockResolvedValue(undefined);
+    jest.spyOn(svc, 'requireOrderDetailsByNumber').mockImplementation(async () => ({ ...order }));
+  });
+
+  const retry = (opts: any = {}) => svc.retryOrderPayment('order-1', opts);
+
+  it('F1 race: second identical phone change 1 s later -> already_pending, ONE prompt', async () => {
+    const first = await retry({ phoneNumber: PB });
+    expect(first.result).toBe('resent');
+    // order.payer_phone is still A for the second request (stale read).
+    const second = await retry({ phoneNumber: PB });
+    expect(second.result).toBe('already_pending');
+    expect(mps.initiatePayment).toHaveBeenCalledTimes(1);
+    expect(store.rows.filter((r) => r.status === 'pending')).toHaveLength(1);
+  });
+
+  it('F1 race: parallel identical phone changes -> at most one prompt', async () => {
+    const results = await Promise.allSettled([
+      retry({ phoneNumber: PB }),
+      retry({ phoneNumber: PB }),
+      retry({ phoneNumber: PB }),
+    ]);
+    expect(mps.initiatePayment).toHaveBeenCalledTimes(1);
+    const resent = results.filter((r) => r.status === 'fulfilled' && (r as any).value.result === 'resent');
+    expect(resent).toHaveLength(1);
+  });
+
+  it('F1: a real change away from the live attempt number still supersedes immediately', async () => {
+    store.rows[0].customer_phone = PB;
+    const res = await retry({ phoneNumber: PA });
+    expect(res.result).toBe('resent');
+  });
+
+  it('F2 (retry side): success claimed but order not finalized yet -> paid, no new prompt', async () => {
+    store.rows[0].status = 'success';
+    const res = await retry({ phoneNumber: PB });
+    expect(res.result).toBe('paid');
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(db.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('F2: after a success is applied, other pending attempts on the paid order are cancelled', async () => {
+    store.rows.push({ id: 'tx-live', status: 'pending', reference: 'r2', payment_entity: 'order', entity_id: 'ORD1' });
+    store.rows[0].status = 'success';
+    order.payment_status = 'paid';
+    await svc.closeOtherPendingAttemptsAfterSuccess(store.rows[0]);
+    expect(store.rows.find((r) => r.id === 'tx-live')).toMatchObject({
+      status: 'cancelled',
+      error_code: 'SUPERSEDED_BY_LATE_SUCCESS',
+    });
+  });
+
+  it('F2: no cleanup while the order is still unpaid', async () => {
+    await svc.closeOtherPendingAttemptsAfterSuccess({ ...store.rows[0], id: 'tx-other' });
+    expect(store.rows[0].status).toBe('pending');
+  });
+
+  it('F3: a prompt to the same number within 90 s (any order) -> 429 scope number', async () => {
+    db.summarizeRetryAttemptsSince.mockImplementation(async (p: any) =>
+      p.phones ? { count: 1, latestAt: new Date(Date.now() - 10_000).toISOString() } : { count: 1, latestAt: null }
+    );
+    const r = await codeOf(retry({ phoneNumber: PB }));
+    expect(r).toEqual({ status: 429, code: 'RETRY_RATE_LIMITED' });
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(store.rows[0].status).toBe('pending');
+  });
+
+  it('F3: 5 prompts to a number in the last hour -> 429', async () => {
+    db.summarizeRetryAttemptsSince.mockImplementation(async (p: any) =>
+      p.phones ? { count: 5, latestAt: new Date(Date.now() - 600_000).toISOString() } : { count: 0, latestAt: null }
+    );
+    expect(await codeOf(retry({ phoneNumber: PB }))).toEqual({ status: 429, code: 'RETRY_RATE_LIMITED' });
+  });
+
+  it('F3: 10 prompts by the user in the last hour (across orders) -> 429', async () => {
+    db.summarizeRetryAttemptsSince.mockImplementation(async (p: any) =>
+      p.userId ? { count: 10, latestAt: null } : { count: 0, latestAt: null }
+    );
+    expect(await codeOf(retry({ phoneNumber: PB }))).toEqual({ status: 429, code: 'RETRY_RATE_LIMITED' });
+    expect(db.summarizeRetryAttemptsSince).toHaveBeenCalledWith(expect.objectContaining({ userId: 'client-user' }));
+  });
+
+  it('F4: same Idempotency-Key with a different phone -> 422 IDEMPOTENCY_KEY_REUSED', async () => {
+    db.getOrderTransactionByIdempotencyKey.mockResolvedValue({ ...store.rows[0], idempotency_key: 'k1' });
+    const r = await codeOf(retry({ phoneNumber: PB, idempotencyKey: 'k1' }));
+    expect(r).toEqual({ status: 422, code: 'IDEMPOTENCY_KEY_REUSED' });
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+  });
+
+  it('F4: same key with the same phone still replays', async () => {
+    db.getOrderTransactionByIdempotencyKey.mockResolvedValue({ ...store.rows[0], idempotency_key: 'k1' });
+    const res = await retry({ phoneNumber: '650000099', idempotencyKey: 'k1' });
+    expect(res.idempotent_replay).toBe(true);
+  });
+
+  it('F4: same key without a phone in the body replays (payer phone not yet persisted)', async () => {
+    db.getOrderTransactionByIdempotencyKey.mockResolvedValue({ ...store.rows[0], customer_phone: PB, idempotency_key: 'k1' });
+    const res = await retry({ idempotencyKey: 'k1' });
+    expect(res.idempotent_replay).toBe(true);
+  });
+
+  it('F5: order cancel supersedes its pending MoMo attempts (late approval is classified)', async () => {
+    await svc.supersedePendingOrderTxsOnCancel(order);
+    expect(store.rows[0]).toMatchObject({
+      status: 'cancelled',
+      error_code: 'SUPERSEDED_BY_ORDER_CANCEL',
+      superseded_reason: 'order_cancelled',
     });
   });
 });
