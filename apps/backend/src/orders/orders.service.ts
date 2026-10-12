@@ -59,6 +59,7 @@ import type { MobileTransactionStatus } from '../mobile-payments/mobile-payments
 import {
   DUPLICATE_PAYMENT_CREDITED,
   ORDER_MOMO_IDEMPOTENCY_WINDOW_SECONDS,
+  ORDER_MOMO_PROMPT_LIFETIME_SECONDS,
   ORDER_MOMO_RETRY_LIMIT,
   ORDER_MOMO_RETRY_WINDOW_SECONDS,
   PAY_AFTER_RETRY_DESCRIPTION_MARKER,
@@ -5156,6 +5157,23 @@ export class OrdersService {
         idempotentReplay: true,
       });
     }
+    if (tx.status === 'cancelled' && tx.superseded_reason === 'send_outcome_unknown') {
+      throw this.paymentStateUncertain();
+    }
+    if (tx.status === 'cancelled' && tx.error_code === 'ORDER_SETTLED_BEFORE_SEND') {
+      const fresh = await this.getOrderDetails(order.id);
+      if ((fresh as any)?.payment_status === 'paid') {
+        return this.payAfterRetryResponse('paid', {
+          message: 'Payment received.',
+          idempotentReplay: true,
+        });
+      }
+      throw paymentError(
+        HttpStatus.CONFLICT,
+        'ORDER_NOT_PAYABLE',
+        'This order can no longer be paid.'
+      );
+    }
     const previous =
       await this.mobilePaymentsDatabaseService.getTransactionSupersededBy(tx.id);
     const masked = maskPhone(tx.customer_phone);
@@ -5178,6 +5196,12 @@ export class OrdersService {
     phone: string,
     phoneChanged: boolean
   ): Promise<PayAfterRetryResponse | null> {
+    const age = ageSeconds(existing.created_at);
+    if (!existing.transaction_id && age >= ORDER_MOMO_PROMPT_LIFETIME_SECONDS) {
+      // Never reached the provider (or we lost its id) and older than any live prompt:
+      // nothing to ask the provider about; supersede it.
+      return null;
+    }
     let live: MobileTransactionStatus;
     try {
       live = await this.mobilePaymentsService.checkTransactionStatus(
@@ -5214,7 +5238,6 @@ export class OrdersService {
     }
     if (live.status !== 'pending') throw this.paymentStateUncertain();
 
-    const age = ageSeconds(existing.created_at);
     const minAge = this.orderMomoResendMinAgeSeconds();
     if (decideOnPendingTx({ ageSeconds: age, phoneChanged, minAgeSeconds: minAge }) === 'already_pending') {
       const retryAfter = Math.max(1, Math.ceil(minAge - age));
@@ -5445,6 +5468,7 @@ export class OrdersService {
     }
 
     let sent: { success: boolean; message?: string; errorCode?: string; transactionId?: string };
+    let sendThrew = false;
     try {
       sent = await this.mobilePaymentsService.initiatePayment(
         {
@@ -5461,9 +5485,22 @@ export class OrdersService {
         momo.payerUserId
       );
     } catch (error: any) {
+      sendThrew = true;
       sent = { success: false, message: error?.message || 'Failed to initiate payment' };
     }
 
+    if (sendThrew) {
+      // Outcome unknown: the provider may have created the prompt. Keep the row in the
+      // superseded state so a later approval is credited by the late-success handler.
+      await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(tx.id, 'pending', {
+        status: 'cancelled',
+        error_code: SUPERSEDED_BY_RETRY,
+        error_message: `Send outcome unknown: ${sent.message}`,
+        superseded_reason: 'send_outcome_unknown',
+        superseded_at: new Date().toISOString(),
+      });
+      throw this.paymentStateUncertain();
+    }
     if (!sent.success) {
       await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(tx.id, 'pending', {
         status: 'failed',
@@ -5558,6 +5595,17 @@ export class OrdersService {
     }
     // Paid by this very attempt on an earlier delivery: idempotent repair.
     await this.finalizeOrderAfterIncomingPayment(tx);
+    // A concurrent success of the newer attempt may have been applied at the same
+    // moment (holds are idempotent, so the extra stays in the wallet): surface it.
+    const others = await this.mobilePaymentsDatabaseService.listOrderTransactionsByStatus(
+      order.order_number,
+      'success'
+    );
+    const concurrent = others.find((other) => other.id !== tx.id);
+    if (concurrent) {
+      await this.recordDuplicateOrderPayment(order, tx, 'duplicate', false);
+      return 'duplicate';
+    }
     return 'applied';
   }
 

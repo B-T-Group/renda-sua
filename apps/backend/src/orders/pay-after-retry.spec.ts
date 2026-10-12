@@ -325,10 +325,29 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
     expect(hasura.executeMutation).not.toHaveBeenCalledWith(expect.stringContaining('PersistRetryPayerPhone'), expect.anything());
   });
 
-  it('case 9: provider throws -> treated as rejected', async () => {
+  it('F1: provider send throws (outcome unknown) -> attempt kept superseded for late success, 409', async () => {
     mps.initiatePayment.mockRejectedValue(new Error('ECONNRESET'));
-    const r = await codeOf(retry());
-    expect(r.code).toBe('PROVIDER_REJECTED');
+    const r = await codeOf(retry({ phoneNumber: PHONE_B }));
+    expect(r).toEqual({ status: 409, code: 'PAYMENT_STATE_UNCERTAIN' });
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith('tx-new', 'pending', expect.objectContaining({
+      status: 'cancelled', error_code: 'SUPERSEDED_BY_RETRY', superseded_reason: 'send_outcome_unknown',
+    }));
+    expect(hasura.executeMutation).not.toHaveBeenCalledWith(expect.stringContaining('PersistRetryPayerPhone'), expect.anything());
+  });
+
+  it('F2: old attempt without provider id and older than 5 min -> superseded without status check', async () => {
+    db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ transaction_id: null, created_at: iso(400) }));
+    const res = await retry();
+    expect(mps.checkTransactionStatus).not.toHaveBeenCalled();
+    expect(res.result).toBe('resent');
+  });
+
+  it('F4: idempotent replay of an attempt cancelled before send on a paid order -> paid', async () => {
+    db.getOrderTransactionByIdempotencyKey.mockResolvedValue(pendingTx({ id: 'tx-k', status: 'cancelled', error_code: 'ORDER_SETTLED_BEFORE_SEND' }));
+    order = { ...baseOrder(), payment_status: 'paid' };
+    // retryOrderPayment short-circuits paid orders; call the replay directly.
+    const res = await svc.replayIdempotentPayAfterRetry(order, 'k1');
+    expect(res).toMatchObject({ result: 'paid', idempotent_replay: true });
   });
 
   it('D2: 5 retries in 10 min -> 429 RETRY_RATE_LIMITED, nothing superseded or sent', async () => {
@@ -387,7 +406,8 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
     const lateTx = () => ({ ...pendingTx(), status: 'cancelled', error_code: 'SUPERSEDED_BY_RETRY' });
 
     it('unpaid live order -> first success wins: newer pending cancelled, order finalized once', async () => {
-      db.listOrderTransactionsByStatus.mockResolvedValue([{ id: 'tx-new', reference: 'ORD1-2-new' }]);
+      db.listOrderTransactionsByStatus.mockImplementation(async (_n: string, status: string) =>
+        status === 'pending' ? [{ id: 'tx-new', reference: 'ORD1-2-new' }] : []);
       const out = await svc.handleLateSuccessOnSupersededOrderTx(lateTx());
       expect(out).toBe('applied');
       expect(db.updateTransactionIfStatus).toHaveBeenCalledWith('tx-new', 'pending', expect.objectContaining({ status: 'cancelled', error_code: 'SUPERSEDED_BY_LATE_SUCCESS' }));
@@ -405,6 +425,15 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
       expect(svc.notificationsService.sendDuplicatePaymentCreditedPush).toHaveBeenCalledWith(expect.objectContaining({ reason: 'duplicate', amount: 1500 }));
       // Processor owns the status/marker write on this path.
       expect(db.updateTransaction).not.toHaveBeenCalled();
+    });
+
+    it('F3: newer attempt succeeded concurrently -> both applied but duplicate surfaced', async () => {
+      db.listOrderTransactionsByStatus.mockImplementation(async (_n: string, status: string) =>
+        status === 'success' ? [{ id: 'tx-new' }] : []);
+      const out = await svc.handleLateSuccessOnSupersededOrderTx(lateTx());
+      expect(out).toBe('duplicate');
+      expect(svc.finalizeOrderAfterIncomingPayment).toHaveBeenCalledTimes(1);
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(expect.anything(), 'duplicate_momo_collect', expect.any(String), expect.any(Object));
     });
 
     it('order cancelled -> wallet credit + alert, no resurrection', async () => {
