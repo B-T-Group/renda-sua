@@ -63,6 +63,7 @@ describe('AgentsController location tracking consent', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
       {} as any
     );
   });

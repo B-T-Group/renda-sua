@@ -24,6 +24,9 @@ import { HasuraUserService } from '../hasura/hasura-user.service';
 import { resolveCurrencyFromCountry } from '../country-currency/country-currency.util';
 import { resolveActivePersonaWithDefault } from '../users/persona.util';
 import { AgentHoldService } from './agent-hold.service';
+import { parseDeliveryPeriod } from './agent-delivery-earnings.mapper';
+import { AgentDeliveryEarningsService } from './agent-delivery-earnings.service';
+import type { DeliveryEarnings } from './agent-delivery-earnings.types';
 import { parsePayBoardStatus } from './agent-pay-board.mapper';
 import { AgentPayBoardService } from './agent-pay-board.service';
 import type { PayBoard } from './agent-pay-board.types';
@@ -136,7 +139,8 @@ export class AgentsController {
     private readonly agentHoldService: AgentHoldService,
     private readonly agentReferralsService: AgentReferralsService,
     private readonly referralProjectedPayoutService: ReferralProjectedPayoutService,
-    private readonly payBoard: AgentPayBoardService
+    private readonly payBoard: AgentPayBoardService,
+    private readonly deliveryEarnings: AgentDeliveryEarningsService
   ) {}
 
   private requireAgentActor(user: any, ctx: RequestContext): string {
@@ -431,6 +435,26 @@ export class AgentsController {
       userId: user.id,
       country: this.resolveCountryFromUserAddresses(user),
       status: parsePayBoardStatus(status),
+    });
+  }
+
+  @Get('me/delivery-earnings')
+  @ApiOperation({
+    summary: 'Delivery pay rates and credited trips for the current agent',
+  })
+  @ApiQuery({ name: 'period', required: false, enum: ['month', 'last_month', 'all'] })
+  @ApiResponse({ status: 200, description: 'Delivery earnings for the period' })
+  @ApiResponse({ status: 403, description: 'User is not an agent' })
+  async getDeliveryEarnings(
+    @ReqContext() ctx: RequestContext,
+    @Query('period') period?: string
+  ): Promise<DeliveryEarnings> {
+    const user = await this.hasuraUserService.getUser(ctx);
+    this.requireAgentActor(user, ctx);
+    return this.deliveryEarnings.getEarnings({
+      userId: user.id,
+      country: this.resolveCountryFromUserAddresses(user),
+      period: parseDeliveryPeriod(period),
     });
   }
 

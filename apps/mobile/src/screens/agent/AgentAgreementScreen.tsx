@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +15,9 @@ import {
   type AgentContractStatus,
 } from '../../services/agentContractApi';
 import { agentApi } from '../../services/agentApi';
+import { openAgentDashboard } from '../../navigation/rootNavigationRef';
+import { SignatureCheckPanel } from '../../components/agent/SignatureCheckPanel';
+import { waitForAgentSignature, type SignatureCheckResult } from '../../utils/waitForAgentSignature';
 import { spacing } from '../../theme';
 
 export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => void }) {
@@ -47,16 +50,55 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
     }, [load])
   );
 
-  const refresh = () => {
+  // "I have signed": wait up to 60 s for the BoldSign webhook, then show the real status.
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<SignatureCheckResult | null>(null);
+  const cancelled = useRef(false);
+  const polls = useRef(0);
+  useEffect(() => {
+    cancelled.current = false;
+    return () => {
+      cancelled.current = true;
+    };
+  }, []);
+  const leave = useCallback(() => openAgentDashboard(onEntered), [onEntered]);
+  const refresh = async () => {
     setNotSignedYet(false);
-    void run(async () => {
-      const res = await agentContractApi.refresh();
-      if (res.data.signed) onEntered?.();
-      else setNotSignedYet(true);
-      return res;
-    });
+    setChecking(true);
+    setCheckResult(null);
+    polls.current = 0;
+    const result = await waitForAgentSignature(
+      async () => {
+        // Poll the stored status (set by the BoldSign webhook); every 5th check also
+        // asks BoldSign directly in case the webhook was missed.
+        polls.current += 1;
+        const res =
+          polls.current % 5 === 1 ? await agentContractApi.refresh() : await agentContractApi.status();
+        setStatus(res.data);
+        return { signed: res.data.signed, status: res.data.status };
+      },
+      { isCancelled: () => cancelled.current }
+    );
+    if (!result) {
+      setChecking(false);
+      return;
+    }
+    if (result.signed) {
+      setChecking(false);
+      leave();
+      return;
+    }
+    setCheckResult(result);
+  };
+  const resumeSigning = () => {
+    setChecking(false);
+    setCheckResult(null);
+    void run(() => agentContractApi.resend());
   };
 
+  useEffect(() => {
+    if (status?.signed) leave();
+  }, [leave, status?.signed]);
   const contractLanguage = chosenLanguage(language, status, i18n.language);
   const needs = fieldNeeds(status, contractLanguage);
   const waiting = status?.status === 'sent' || status?.status === 'viewed';
@@ -111,8 +153,15 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
         )}
       </Text>
       {error ? <Text style={{ color: colors.error.main }}>{error}</Text> : null}
-      {status?.signed ? (
-        <Button mode="contained" onPress={() => (onEntered ? onEntered() : navigation.goBack())}>
+      {checking && !status?.signed ? (
+        <SignatureCheckPanel
+          result={checkResult}
+          busy={loading}
+          onCheckAgain={() => void refresh()}
+          onResume={resumeSigning}
+        />
+      ) : status?.signed ? (
+        <Button mode="contained" onPress={leave}>
           {t('agentContract.back', 'Return to dashboard')}
         </Button>
       ) : (
@@ -131,7 +180,7 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
           onLanguage={selectLanguage}
           onSend={send}
           onResend={() => void run(() => agentContractApi.resend())}
-          onRefresh={refresh}
+          onRefresh={() => void refresh()}
           onProfile={() => navigation.navigate('Profile')}
         />
       )}
@@ -161,10 +210,10 @@ function AgreementForm(props: {
   const blocked = !canSend(props.status, props.nationality, props.idNumber, props);
   return (
     <View style={styles.form}>
-      {props.status?.missingEmail || props.status?.missingPhone ? (
+      {props.status?.missingEmail ? (
         <>
           <Text>
-            {t('agentContract.contact', 'Add your email and phone on your profile before we can send the agreement.')}
+            {t('agentContract.contact', 'Add your email on your profile before we can send the agreement.')}
           </Text>
           <Button mode="outlined" onPress={() => props.onProfile()}>
             {t('agentContract.updateProfile', 'Update profile')}
@@ -208,8 +257,8 @@ function AgreementForm(props: {
         />
       ) : null}
       {props.waiting ? (
-        <Button mode="contained" loading={props.loading} onPress={props.onRefresh}>
-          {t('agentContract.refresh', 'I have signed')}
+        <Button mode="contained" onPress={props.onRefresh}>
+          {t('agentContract.refresh', 'I have signed – return to dashboard')}
         </Button>
       ) : (
         <Button mode="contained" disabled={blocked || props.loading} onPress={props.onSend}>
@@ -295,7 +344,7 @@ function canSend(
   idNumber: string,
   needs: { needsNationality: boolean; needsIdNumber: boolean }
 ): boolean {
-  if (!status || status.missingEmail || status.missingPhone) return false;
+  if (!status || status.missingEmail) return false;
   if (needs.needsNationality && !nationality.trim()) return false;
   if (needs.needsIdNumber && !idNumber.trim()) return false;
   return true;

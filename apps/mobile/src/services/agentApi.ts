@@ -5,6 +5,7 @@
 
 import { api } from './apiClient';
 import type { ActionsNeededDto } from '../types/actions';
+import type { DeliveryEarnings, DeliveryEarningsPeriod } from '../types/agentDeliveryEarnings';
 import type { PayBoard, PayBoardStatus } from '../types/agentPayBoard';
 import { getLocationConsentPlatform } from '../utils/agentLocationConsentPlatform';
 import type {
@@ -508,6 +509,9 @@ const agents = {
 
   getPayBoard: (status: PayBoardStatus = 'unpaid'): Promise<PayBoard> =>
     api.get<PayBoard>(`/agents/me/commissions-and-objectives?status=${status}`),
+
+  getDeliveryEarnings: (period: DeliveryEarningsPeriod = 'month'): Promise<DeliveryEarnings> =>
+    api.get<DeliveryEarnings>(`/agents/me/delivery-earnings?period=${period}`),
 
   getReferredBusinessesSummary: (): Promise<{
     success: boolean;

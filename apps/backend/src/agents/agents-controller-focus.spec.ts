@@ -67,6 +67,7 @@ describe('AgentsController updateMyFocus', () => {
       {} as any,
       {} as any,
       {} as any,
+      {} as any,
       {} as any
     );
   });

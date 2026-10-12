@@ -708,6 +708,13 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     expect(res.idempotent_replay).toBe(true);
   });
 
+  it('N2: an already-paid order answers result: paid (same field as the retry contract)', async () => {
+    order.payment_status = 'paid';
+    const res = await retry({ phoneNumber: PB });
+    expect(res).toMatchObject({ success: true, result: 'paid' });
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+  });
+
   it('F5: order cancel supersedes its pending MoMo attempts (late approval is classified)', async () => {
     await svc.supersedePendingOrderTxsOnCancel(order);
     expect(store.rows[0]).toMatchObject({

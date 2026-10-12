@@ -24,7 +24,7 @@ const AgentBottomNav: React.FC = () => {
   if (userType !== 'agent' || !isMobile) {
     return null;
   }
-  if (agentAppLocked(userType, contract.status, contract.loading)) {
+  if (agentAppLocked(userType, contract.status, contract.loading, contract.lockReleased)) {
     return null;
   }
 
