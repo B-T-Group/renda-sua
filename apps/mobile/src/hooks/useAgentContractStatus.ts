@@ -35,9 +35,10 @@ export function useAgentEntryGate() {
     };
   }, []);
 
+  const enter = useCallback(() => setEntered(true), []);
   const locked = !entered && (loading || !status || agentNeedsContract(status));
   const phase = loading && !status ? 'loading' : locked ? 'locked' : 'open';
-  return { phase: phase as 'loading' | 'locked' | 'open', enter: () => setEntered(true) };
+  return { phase: phase as 'loading' | 'locked' | 'open', enter };
 }
 
 function loadContractStatus(

@@ -45,6 +45,17 @@ describe('waitForAgentSignature', () => {
     expect(r?.signed).toBe(true);
   });
 
+  it('keeps a signed result when the screen unmounts during the check', async () => {
+    const c = clock();
+    let cancelled = false;
+    const check = vi.fn().mockImplementation(async () => {
+      cancelled = true;
+      return { signed: true, status: 'signed' };
+    });
+    const r = await waitForAgentSignature(check, { ...c, isCancelled: () => cancelled });
+    expect(r).toEqual({ signed: true, status: 'signed', timedOut: false });
+  });
+
   it('returns null when cancelled (screen left)', async () => {
     const c = clock();
     let cancelled = false;

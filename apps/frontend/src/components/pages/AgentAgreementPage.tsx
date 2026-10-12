@@ -8,9 +8,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate, type NavigateFunction } from 'react-router-dom';
 import { useAgentContractContext } from '../../contexts/AgentContractContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useApiClient } from '../../hooks/useApiClient';
@@ -24,7 +24,7 @@ const AgentAgreementPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
-  const { status, loading, error, submit } = useAgentContractContext();
+  const { status, loading, error, submit, releaseLock } = useAgentContractContext();
   const { profile, refetch } = useUserProfileContext();
   const apiClient = useApiClient();
   const [nationality, setNationality] = useState('');
@@ -58,7 +58,16 @@ const AgentAgreementPage: React.FC = () => {
   const [checkResult, setCheckResult] = useState<SignatureCheckResult | null>(null);
   const cancelled = useRef(false);
   const polls = useRef(0);
-  useEffect(() => () => { cancelled.current = true; }, []);
+  useEffect(() => {
+    cancelled.current = false;
+    return () => {
+      cancelled.current = true;
+    };
+  }, []);
+  const goDashboard = useCallback(
+    () => openDashboard(navigate, location.pathname, releaseLock),
+    [location.pathname, navigate, releaseLock]
+  );
   const refresh = async () => {
     setNotSignedYet(false);
     setChecking(true);
@@ -79,15 +88,12 @@ const AgentAgreementPage: React.FC = () => {
       },
       { isCancelled: () => cancelled.current }
     );
-    if (!result) return;
-    if (result.signed) {
-      // Update the shared agreement state so claiming is unlocked on the dashboard.
-      await submit('refresh');
-      setChecking(false);
-      navigate('/dashboard', { replace: true });
-      return;
-    }
-    setCheckResult(result);
+    await finishSignatureCheck(result, {
+      submit,
+      goDashboard,
+      setChecking,
+      setCheckResult,
+    });
   };
   const resumeSigning = async () => {
     setChecking(false);
@@ -96,10 +102,8 @@ const AgentAgreementPage: React.FC = () => {
   };
 
   useEffect(() => {
-    if (status?.signed && location.pathname === '/agent/agreement') {
-      navigate('/dashboard', { replace: true });
-    }
-  }, [location.pathname, navigate, status?.signed]);
+    if (status?.signed) goDashboard();
+  }, [goDashboard, status?.signed]);
 
   return (
     <Container maxWidth="sm" sx={{ py: 4 }}>
@@ -125,7 +129,7 @@ const AgentAgreementPage: React.FC = () => {
             onResume={() => void resumeSigning()}
           />
         ) : status?.signed ? (
-          <SignedState onDone={() => navigate('/dashboard')} />
+          <SignedState onDone={goDashboard} />
         ) : (
           <PendingState
             loading={loading}
@@ -148,6 +152,37 @@ const AgentAgreementPage: React.FC = () => {
     </Container>
   );
 };
+
+function openDashboard(
+  navigate: NavigateFunction,
+  pathname: string,
+  releaseLock: () => void
+) {
+  releaseLock();
+  if (pathname !== '/dashboard') navigate('/dashboard', { replace: true });
+}
+
+async function finishSignatureCheck(
+  result: SignatureCheckResult | null,
+  actions: {
+    submit: (path: 'refresh') => Promise<unknown>;
+    goDashboard: () => void;
+    setChecking: (value: boolean) => void;
+    setCheckResult: (value: SignatureCheckResult | null) => void;
+  }
+) {
+  if (!result) {
+    actions.setChecking(false);
+    return;
+  }
+  if (!result.signed) {
+    actions.setCheckResult(result);
+    return;
+  }
+  await actions.submit('refresh');
+  actions.setChecking(false);
+  actions.goDashboard();
+}
 
 function SignedState({ onDone }: { onDone: () => void }) {
   const { t } = useTranslation();
@@ -238,7 +273,7 @@ function PendingState(props: {
             <Button variant="outlined" disabled={props.loading} onClick={props.onResend}>
               {t('agentContract.resend', 'Resend email')}
             </Button>
-            <Button variant="contained" disabled={props.loading} onClick={props.onRefresh}>
+            <Button variant="contained" onClick={props.onRefresh}>
               {t('agentContract.refresh', 'I have signed – return to dashboard')}
             </Button>
           </Stack>

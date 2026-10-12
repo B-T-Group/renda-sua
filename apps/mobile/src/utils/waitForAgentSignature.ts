@@ -54,8 +54,8 @@ export async function waitForAgentSignature(
     } catch {
       // A failed poll is retried until the timeout; the last known status is kept.
     }
-    if (opts.isCancelled?.()) return null;
     if (last.signed) return { ...last, timedOut: false };
+    if (opts.isCancelled?.()) return null;
     if (TERMINAL_SIGNATURE_STATUSES.includes(String(last.status))) {
       return { ...last, timedOut: false };
     }

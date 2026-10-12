@@ -10,6 +10,25 @@ const PERSONA_DASHBOARD_RESET: Record<PersonaSlug, { root: string; tabScreen: st
   business: { root: 'BusinessMainTabs', tabScreen: 'BusinessDashboard' },
 };
 
+let dashboardAttempt = 0;
+
+/** Open the agent dashboard, including after the agreement lock swaps navigators. */
+export function openAgentDashboard(enter?: () => void): void {
+  enter?.();
+  const attemptId = ++dashboardAttempt;
+  retryAgentDashboard(attemptId, 0);
+}
+
+function retryAgentDashboard(attemptId: number, attempt: number): void {
+  if (attemptId !== dashboardAttempt) return;
+  const names = rootNavigationRef.getRootState()?.routeNames ?? [];
+  if (names.includes('MainTabs')) {
+    resetToPersonaDashboard('agent');
+    return;
+  }
+  if (attempt < 20) setTimeout(() => retryAgentDashboard(attemptId, attempt + 1), 50);
+}
+
 /** Reset the active persona shell to its home tab (browse / dashboard). */
 export function resetToPersonaDashboard(persona: PersonaSlug): void {
   if (!rootNavigationRef.isReady()) return;

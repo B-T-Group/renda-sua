@@ -15,6 +15,7 @@ import {
   type AgentContractStatus,
 } from '../../services/agentContractApi';
 import { agentApi } from '../../services/agentApi';
+import { openAgentDashboard } from '../../navigation/rootNavigationRef';
 import { SignatureCheckPanel } from '../../components/agent/SignatureCheckPanel';
 import { waitForAgentSignature, type SignatureCheckResult } from '../../utils/waitForAgentSignature';
 import { spacing } from '../../theme';
@@ -54,7 +55,13 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
   const [checkResult, setCheckResult] = useState<SignatureCheckResult | null>(null);
   const cancelled = useRef(false);
   const polls = useRef(0);
-  useEffect(() => () => { cancelled.current = true; }, []);
+  useEffect(() => {
+    cancelled.current = false;
+    return () => {
+      cancelled.current = true;
+    };
+  }, []);
+  const leave = useCallback(() => openAgentDashboard(onEntered), [onEntered]);
   const refresh = async () => {
     setNotSignedYet(false);
     setChecking(true);
@@ -72,11 +79,13 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
       },
       { isCancelled: () => cancelled.current }
     );
-    if (!result) return;
+    if (!result) {
+      setChecking(false);
+      return;
+    }
     if (result.signed) {
       setChecking(false);
-      if (onEntered) onEntered();
-      else navigation.goBack();
+      leave();
       return;
     }
     setCheckResult(result);
@@ -87,6 +96,9 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
     void run(() => agentContractApi.resend());
   };
 
+  useEffect(() => {
+    if (status?.signed) leave();
+  }, [leave, status?.signed]);
   const contractLanguage = chosenLanguage(language, status, i18n.language);
   const needs = fieldNeeds(status, contractLanguage);
   const waiting = status?.status === 'sent' || status?.status === 'viewed';
@@ -149,7 +161,7 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
           onResume={resumeSigning}
         />
       ) : status?.signed ? (
-        <Button mode="contained" onPress={() => (onEntered ? onEntered() : navigation.goBack())}>
+        <Button mode="contained" onPress={leave}>
           {t('agentContract.back', 'Return to dashboard')}
         </Button>
       ) : (
@@ -245,7 +257,7 @@ function AgreementForm(props: {
         />
       ) : null}
       {props.waiting ? (
-        <Button mode="contained" loading={props.loading} onPress={props.onRefresh}>
+        <Button mode="contained" onPress={props.onRefresh}>
           {t('agentContract.refresh', 'I have signed – return to dashboard')}
         </Button>
       ) : (

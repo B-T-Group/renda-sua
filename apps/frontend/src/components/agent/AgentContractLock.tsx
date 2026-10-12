@@ -12,7 +12,12 @@ export function AgentContractLock({ children }: { children: React.ReactNode }) {
   const { userType } = useUserProfileContext();
   const location = useLocation();
   const contract = useAgentContractContext();
-  const locked = agentAppLocked(userType, contract.status, contract.loading);
+  const locked = agentAppLocked(
+    userType,
+    contract.status,
+    contract.loading,
+    contract.lockReleased
+  );
   if (userType === 'agent' && contract.loading && !contract.status) {
     return (
       <Box display="flex" justifyContent="center" py={8}>
