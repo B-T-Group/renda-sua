@@ -1,0 +1,47 @@
+table:
+  name: representative_commission_grids
+  schema: public
+array_relationships:
+  - name: tiers
+    using:
+      foreign_key_constraint_on:
+        column: grid_id
+        table:
+          name: representative_commission_grid_tiers
+          schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - currency
+        - effective_from
+        - effective_to
+        - base_percent
+        - cap_percent
+        - hold_percent
+        - hold_days
+        - registration_target
+        - objective_threshold_percent
+        - activation_amount
+        - activation_min_sales
+        - activation_window_days
+        - fast_start_amount
+        - fast_start_min_registrations
+        - fast_start_window_days
+        - fast_start_weekly_sales
+        - quarterly_amount
+        - quarterly_min_weeks
+        - quarterly_week_span
+        - quarterly_min_registrations_per_week
+        - quarterly_min_weekly_sales
+        - courier_amount
+        - courier_min_deliveries
+        - courier_window_days
+        - courier_max_per_month
+        - ambassador_amount
+        - ambassador_min_registrations
+        - ambassador_window_days
+        - inactive_days
+      filter: {}
+      allow_aggregations: false

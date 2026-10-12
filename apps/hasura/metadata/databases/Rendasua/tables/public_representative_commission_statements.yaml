@@ -1,0 +1,39 @@
+table:
+  name: representative_commission_statements
+  schema: public
+object_relationships:
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - agent_id
+        - currency
+        - period_start
+        - eligible_total
+        - gmv_total
+        - registration_count
+        - objective_met
+        - growth_percent
+        - base_amount
+        - growth_amount
+        - activation_earned
+        - activation_paid
+        - fast_start_earned
+        - fast_start_paid
+        - quarterly_earned
+        - quarterly_paid
+        - in_cap_total
+        - payable_amount
+        - hold_amount
+        - recruitment_amount
+        - status
+        - credited_at
+      filter:
+        agent:
+          user:
+            id:
+              _eq: X-Hasura-User-Id

@@ -1,0 +1,26 @@
+table:
+  name: representative_commission_premiums
+  schema: public
+object_relationships:
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - agent_id
+        - currency
+        - kind
+        - subject_id
+        - earned_amount
+        - paid_amount
+        - status
+        - qualified_at
+        - period_start
+      filter:
+        agent:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
