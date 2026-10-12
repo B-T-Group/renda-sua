@@ -1,4 +1,5 @@
 import { AgentContractsService } from './agent-contracts.service';
+import { AgentContractProfileService } from './agent-contract-profile.service';
 
 describe('AgentContractsService webhook', () => {
   it('marks the agent contract signed when BoldSign completes it', async () => {
@@ -13,10 +14,11 @@ describe('AgentContractsService webhook', () => {
       updateContract: jest.fn().mockResolvedValue(undefined),
     };
     const artifacts = { storeSigned: jest.fn().mockResolvedValue(undefined) };
+    const profiles = { verifyEmailAfterSign: jest.fn().mockResolvedValue(undefined) };
     const service = new AgentContractsService(
       db as never,
       {} as never,
-      {} as never,
+      profiles as never,
       {} as never,
       artifacts as never,
       {} as never
@@ -32,6 +34,7 @@ describe('AgentContractsService webhook', () => {
       status: 'signed',
       signed_at: expect.any(String),
     });
+    expect(profiles.verifyEmailAfterSign).toHaveBeenCalledWith('a1', undefined);
   });
 
   it('ignores documents that are not agent contracts', async () => {
@@ -211,5 +214,50 @@ describe('AgentContractsService status', () => {
     });
     await service.statusForUser('u1');
     expect(boldsign.sendUsingTemplate).not.toHaveBeenCalled();
+  });
+});
+
+describe('AgentContractProfileService.verifyEmailAfterSign', () => {
+  function serviceFor(user: Record<string, unknown> | null) {
+    const hasura = {
+      executeQuery: jest.fn().mockResolvedValue({
+        agents_by_pk: user ? { user } : null,
+      }),
+      executeMutation: jest.fn().mockResolvedValue({}),
+    };
+    return { hasura, profiles: new AgentContractProfileService(hasura as never) };
+  }
+
+  it('marks the matching unverified email as verified', async () => {
+    const { hasura, profiles } = serviceFor({
+      id: 'u1',
+      email: 'agent@example.com',
+      email_verified: false,
+    });
+    await profiles.verifyEmailAfterSign('a1', 'Agent@example.com');
+    expect(hasura.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('email_verified: true'),
+      { id: 'u1' }
+    );
+  });
+
+  it('does not verify a different email than the one that signed', async () => {
+    const { hasura, profiles } = serviceFor({
+      id: 'u1',
+      email: 'new@example.com',
+      email_verified: false,
+    });
+    await profiles.verifyEmailAfterSign('a1', 'old@example.com');
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('leaves an already verified email unchanged', async () => {
+    const { hasura, profiles } = serviceFor({
+      id: 'u1',
+      email: 'agent@example.com',
+      email_verified: true,
+    });
+    await profiles.verifyEmailAfterSign('a1', 'agent@example.com');
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
   });
 });

@@ -44,6 +44,19 @@ export class AgentContractProfileService {
     const user = res.agents_by_pk?.user;
     return user?.agent ? toProfile(user) : null;
   }
+
+  async verifyEmailAfterSign(agentId: string, signerEmail?: string | null): Promise<void> {
+    const user = await this.signerUser(agentId);
+    if (!shouldVerifyEmail(user, signerEmail)) return;
+    await this.hasura.executeMutation(VERIFY_SIGNER_EMAIL, { id: user!.id });
+  }
+
+  private async signerUser(agentId: string): Promise<SignerUser | null> {
+    const res = await this.hasura.executeQuery<{
+      agents_by_pk: { user: SignerUser | null } | null;
+    }>(SIGNER_EMAIL_QUERY, { agentId });
+    return res.agents_by_pk?.user ?? null;
+  }
 }
 
 interface UserRow {
@@ -146,3 +159,33 @@ const AGENT_PROFILE_QUERY = `
     agents_by_pk(id: $agentId) { user { ${PROFILE_FIELDS} } }
   }
 `;
+
+const SIGNER_EMAIL_QUERY = `
+  query AgentSignerEmail($agentId: uuid!) {
+    agents_by_pk(id: $agentId) {
+      user { id email email_verified }
+    }
+  }
+`;
+
+const VERIFY_SIGNER_EMAIL = `
+  mutation VerifyAgentSignerEmail($id: uuid!) {
+    update_users_by_pk(
+      pk_columns: { id: $id }
+      _set: { email_verified: true }
+    ) { id }
+  }
+`;
+
+interface SignerUser {
+  id: string;
+  email?: string | null;
+  email_verified?: boolean | null;
+}
+
+function shouldVerifyEmail(user: SignerUser | null, signerEmail?: string | null): boolean {
+  if (!user?.id || !user.email?.trim() || user.email_verified === true) return false;
+  const signedTo = signerEmail?.trim().toLowerCase();
+  if (!signedTo) return true;
+  return user.email.trim().toLowerCase() === signedTo;
+}

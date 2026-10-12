@@ -8,15 +8,18 @@ import { AgentAgreementIllustration } from '../../components/illustrations/Agent
 import { SearchablePickerModal, type PickerRow } from '../../components/forms/SearchablePickerModal';
 import { useTheme } from '../../contexts/ThemeContext';
 import { filterSignupEnabledCountries, useSupportedCountries } from '../../hooks/useSupportedCountries';
+import { useLanguage } from '../../hooks/useLanguage';
 import { useProfileMe } from '../../hooks/useProfileMe';
 import {
   agentContractApi,
   type AgentContractStatus,
 } from '../../services/agentContractApi';
+import { agentApi } from '../../services/agentApi';
 import { spacing } from '../../theme';
 
 export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => void }) {
   const { t, i18n } = useTranslation();
+  const { changeLanguage } = useLanguage();
   const navigation = useNavigation<any>();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -57,6 +60,16 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
   const contractLanguage = chosenLanguage(language, status, i18n.language);
   const needs = fieldNeeds(status, contractLanguage);
   const waiting = status?.status === 'sent' || status?.status === 'viewed';
+
+  useEffect(() => {
+    if (appLocale(i18n.language) === contractLanguage) return;
+    void changeLanguage(contractLanguage);
+  }, [changeLanguage, contractLanguage, i18n.language]);
+
+  const selectLanguage = (next: 'en' | 'fr') => {
+    setLanguage(next);
+    void savePreferredLanguage(next);
+  };
 
   const send = () => {
     setNotSignedYet(false);
@@ -115,7 +128,7 @@ export default function AgentAgreementScreen({ onEntered }: { onEntered?: () => 
           needsIdNumber={needs.needsIdNumber}
           onNationality={setNationality}
           onIdNumber={setIdNumber}
-          onLanguage={setLanguage}
+          onLanguage={selectLanguage}
           onSend={send}
           onResend={() => void run(() => agentContractApi.resend())}
           onRefresh={refresh}
@@ -288,6 +301,25 @@ function canSend(
   return true;
 }
 
+function appLocale(language?: string | null): 'en' | 'fr' {
+  return (language ?? '').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+}
+
+async function savePreferredLanguage(language: 'en' | 'fr') {
+  try {
+    const me = await agentApi.users.getMe();
+    const user = me.user;
+    if (!user || appLocale(user.preferred_language) === language) return;
+    await agentApi.users.updateMe({
+      firstName: user.first_name ?? '',
+      lastName: user.last_name ?? '',
+      preferredLanguage: language,
+    });
+  } catch {
+    // The screen language already switched.
+  }
+}
+
 function chosenLanguage(
   picked: 'en' | 'fr' | null,
   status: AgentContractStatus | null,
@@ -295,7 +327,7 @@ function chosenLanguage(
 ): 'en' | 'fr' {
   if (picked) return picked;
   if (status?.language) return status.language;
-  return appLanguage.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+  return appLocale(appLanguage);
 }
 
 function fieldNeeds(status: AgentContractStatus | null, language: 'en' | 'fr') {

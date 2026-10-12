@@ -297,6 +297,15 @@ export class AgentContractsService {
       status: 'signed',
       signed_at: new Date().toISOString(),
     });
+    await this.verifySignerEmail(contract);
+  }
+
+  private async verifySignerEmail(contract: AgentContractRow): Promise<void> {
+    try {
+      await this.profiles.verifyEmailAfterSign(contract.agent_id, contract.signer_email);
+    } catch (error: any) {
+      this.logger.warn(`Agent email verify after sign failed: ${error?.message}`);
+    }
   }
 
   private async readStatus(userId: string): Promise<AgentContractStatusView> {

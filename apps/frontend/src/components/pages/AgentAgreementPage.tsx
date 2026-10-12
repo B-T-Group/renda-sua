@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAgentContractContext } from '../../contexts/AgentContractContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useApiClient } from '../../hooks/useApiClient';
 import { useSupportedCountries } from '../../hooks/useSupportedCountries';
 import type { AgentContractStatus } from '../../hooks/useAgentContract';
 import { AgentAgreementIllustration } from '../agent/AgentAgreementIllustration';
@@ -22,12 +23,24 @@ const AgentAgreementPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { status, loading, error, submit } = useAgentContractContext();
+  const { profile, refetch } = useUserProfileContext();
+  const apiClient = useApiClient();
   const [nationality, setNationality] = useState('');
   const [idNumber, setIdNumber] = useState('');
   const [language, setLanguage] = useState<'en' | 'fr' | null>(null);
   const [notSignedYet, setNotSignedYet] = useState(false);
   const contractLanguage = chosenLanguage(language, status, i18n.language);
   const needs = fieldNeeds(status, contractLanguage);
+
+  useEffect(() => {
+    if (appLocale(i18n.language) === contractLanguage) return;
+    void i18n.changeLanguage(contractLanguage);
+  }, [contractLanguage, i18n]);
+
+  const selectLanguage = (next: 'en' | 'fr') => {
+    setLanguage(next);
+    void savePreferredLanguage(apiClient, profile, next, refetch);
+  };
 
   const send = () => {
     setNotSignedYet(false);
@@ -79,7 +92,7 @@ const AgentAgreementPage: React.FC = () => {
             needsIdNumber={needs.needsIdNumber}
             onNationality={setNationality}
             onIdNumber={setIdNumber}
-            onLanguage={setLanguage}
+            onLanguage={selectLanguage}
             onSend={send}
             onResend={() => void submit('resend')}
             onRefresh={() => void refresh()}
@@ -260,6 +273,29 @@ function canSend(
   if (props.needsNationality && !props.nationality.trim()) return false;
   if (props.needsIdNumber && !props.idNumber.trim()) return false;
   return true;
+}
+
+function appLocale(language?: string | null): 'en' | 'fr' {
+  return (language ?? '').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+}
+
+async function savePreferredLanguage(
+  api: ReturnType<typeof useApiClient>,
+  profile: { first_name: string; last_name: string; preferred_language?: string | null } | null,
+  language: 'en' | 'fr',
+  refetch: () => Promise<unknown>
+) {
+  if (!profile || appLocale(profile.preferred_language) === language) return;
+  try {
+    await api.post('/users/me/update', {
+      firstName: profile.first_name,
+      lastName: profile.last_name,
+      preferredLanguage: language,
+    });
+    await refetch();
+  } catch {
+    // The screen language already switched.
+  }
 }
 
 function chosenLanguage(
