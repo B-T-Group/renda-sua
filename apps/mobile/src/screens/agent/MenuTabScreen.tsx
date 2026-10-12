@@ -61,7 +61,7 @@ function MenuTabScreen() {
     dismissSnack: dismissUpdateSnack,
   } = useManualAppUpdateCheck();
   const navigation = useNavigation<{
-    navigate: (name: AppNavScreen, params?: { segment?: 'commissions' | 'objectives' | 'wallet' }) => void;
+    navigate: (name: AppNavScreen, params?: { segment?: 'commissions' | 'deliveries' | 'objectives' | 'wallet' }) => void;
     getParent: () => { navigate: (name: AppNavScreen) => void } | undefined;
   }>();
   const rootNav = navigation.getParent();

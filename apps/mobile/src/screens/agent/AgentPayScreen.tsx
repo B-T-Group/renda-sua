@@ -8,6 +8,7 @@ import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBot
 import { useAgentPayBoard } from '../../hooks/useAgentPayBoard';
 import { PayEarningsHero } from '../../components/agent/pay/PayEarningsHero';
 import { PaySegmentBar } from '../../components/agent/pay/PaySegmentBar';
+import { DeliveryEarningsPanel } from '../../components/agent/pay/DeliveryEarningsPanel';
 import { PayStatusFilter } from '../../components/agent/pay/PayStatusFilter';
 import { MerchantCommissionCard } from '../../components/agent/pay/MerchantCommissionCard';
 import { ScheduleObjectiveCard } from '../../components/agent/pay/ScheduleObjectiveCard';
@@ -37,7 +38,9 @@ export default function AgentPayScreen() {
   }, [segment, status]);
 
   const items =
-    segment === 'wallet' ? [] : itemsForSegment(board?.items ?? [], segment);
+    segment === 'commissions' || segment === 'objectives'
+      ? itemsForSegment(board?.items ?? [], segment)
+      : [];
 
   const openReferrals = useCallback(() => {
     navigation.getParent()?.navigate('AgentBusinessReferral');
@@ -49,6 +52,8 @@ export default function AgentPayScreen() {
       <PaySegmentBar value={segment} onChange={setSegment} />
       {segment === 'wallet' ? (
         <UserAccountsScreen embedded contentBottomPadding={bottomPad} />
+      ) : segment === 'deliveries' ? (
+        <DeliveryEarningsPanel bottomPad={bottomPad} />
       ) : (
         <PayList
           items={items}

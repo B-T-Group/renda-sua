@@ -6,6 +6,7 @@ import type { PaySegment } from '../../../types/agentPayBoard';
 
 const SEGMENTS: Array<{ id: PaySegment; labelKey: string; fallback: string }> = [
   { id: 'commissions', labelKey: 'agent.pay.segments.commissions', fallback: 'Commissions' },
+  { id: 'deliveries', labelKey: 'agent.pay.segments.deliveries', fallback: 'Deliveries' },
   { id: 'objectives', labelKey: 'agent.pay.segments.objectives', fallback: 'Objectives' },
   { id: 'wallet', labelKey: 'agent.pay.segments.wallet', fallback: 'Wallet' },
 ];

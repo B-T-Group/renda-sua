@@ -72,7 +72,7 @@ import type { OrdersStackParamList } from '../screens/shared/orderDetail/types';
 const OrdersStack = createNativeStackNavigator<OrdersStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-export type PayTabParams = { segment?: 'commissions' | 'objectives' | 'wallet' };
+export type PayTabParams = { segment?: 'commissions' | 'deliveries' | 'objectives' | 'wallet' };
 
 export type MainTabParamList = {
   Dashboard: undefined;

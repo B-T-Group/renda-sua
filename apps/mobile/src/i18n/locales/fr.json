@@ -4765,6 +4765,7 @@
       "pendingLabel": "{{amount}} en attente de paiement",
       "segments": {
         "commissions": "Commissions",
+        "deliveries": "Livraisons",
         "objectives": "Objectifs",
         "wallet": "Portefeuille"
       },
@@ -4803,6 +4804,16 @@
       "callMerchant": "Appeler {{phone}}",
       "emailMerchant": "Écrire à {{email}}",
       "emptyObjectives": "Aucun objectif en cours",
+      "deliveries": {
+        "month": "Ce mois",
+        "lastMonth": "Mois dernier",
+        "all": "Tout",
+        "payLine": "Chaque livraison vous rapporte {{base}}, plus {{perKm}} par kilomètre.",
+        "fastPay": "Les livraisons rapides rapportent {{base}}.",
+        "tripCount": "{{count}} courses",
+        "empty": "Aucune livraison sur cette période",
+        "orderNumber": "Commande {{number}}"
+      },
       "emptyPaid": "Rien de payé pour le moment",
       "frequency": {
         "daily": "chaque jour",

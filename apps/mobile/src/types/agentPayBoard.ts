@@ -1,6 +1,6 @@
 export type PayBoardStatus = 'unpaid' | 'paid' | 'all' | 'expired';
 
-export type PaySegment = 'commissions' | 'objectives' | 'wallet';
+export type PaySegment = 'commissions' | 'deliveries' | 'objectives' | 'wallet';
 
 export type PayBoardNextStep =
   | 'add_items'
