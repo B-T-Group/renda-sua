@@ -27,8 +27,14 @@ import {
 import { buildAgentContractFormFields } from './boldsign-agent-form-fields';
 
 export interface AgentContractEnsureInput {
+  language?: 'en' | 'fr' | null;
   nationality?: string | null;
   idNumber?: string | null;
+}
+
+export interface AgentContractLanguageNeeds {
+  needsNationality: boolean;
+  needsIdNumber: boolean;
 }
 
 export interface AgentContractStatusView {
@@ -36,6 +42,8 @@ export interface AgentContractStatusView {
   signed: boolean;
   status: string | null;
   templateKey: string | null;
+  language: 'en' | 'fr';
+  byLanguage: Record<'en' | 'fr', AgentContractLanguageNeeds>;
   needsNationality: boolean;
   needsIdNumber: boolean;
   missingPhone: boolean;
@@ -58,10 +66,8 @@ export class AgentContractsService {
     private readonly configService: ConfigService<Configuration>
   ) {}
 
-  scheduleForUser(userId: string): void {
-    void this.ensureForUser(userId).catch((error: any) => {
-      this.logger.warn(`Agent contract ensure failed: ${error?.message}`);
-    });
+  scheduleForUser(_userId: string): void {
+    // The agreement screen sends the contract after the agent picks a language.
   }
 
   async ensureForUser(
@@ -76,7 +82,6 @@ export class AgentContractsService {
   }
 
   async statusForUser(userId: string): Promise<AgentContractStatusView> {
-    await this.ensureForUser(userId, undefined, false);
     return this.readStatus(userId);
   }
 
@@ -129,7 +134,7 @@ export class AgentContractsService {
     const latest = await this.db.getLatest(profile.agentId);
     if (skipExistingContract(latest, retryFailures)) return;
     const merged = mergeEnsureInput(snapshotInput(latest?.prefill_snapshot), input);
-    const template = this.templateFor(profile);
+    const template = this.templateFor(profile, merged);
     if (!this.canSend(profile, template, merged)) return;
     await this.createAndSend(profile, template, merged);
   }
@@ -142,7 +147,7 @@ export class AgentContractsService {
     if (!contract.boldsign_document_id.startsWith('pending:')) return;
     if (contract.status !== 'not_sent' && contract.status !== 'failed') return;
     const merged = mergeEnsureInput(snapshotInput(contract.prefill_snapshot), input);
-    if (!this.canSend(profile, this.templateFor(profile), merged)) return;
+    if (!this.canSend(profile, this.templateFor(profile, merged), merged)) return;
     await this.sendExisting(contract, profile, merged);
   }
 
@@ -194,7 +199,7 @@ export class AgentContractsService {
     profile: AgentContractProfile,
     input?: AgentContractEnsureInput
   ): Promise<void> {
-    const template = this.templateFor(profile);
+    const template = this.templateFor(profile, input);
     try {
       const { documentId } = await this.boldsign.sendUsingTemplate({
         templateId: template.boldsignTemplateId,
@@ -302,14 +307,18 @@ export class AgentContractsService {
     const signed = await this.db.hasSigned(profile.agentId);
     const latest = await this.db.getLatest(profile.agentId);
     const awaiting = !latest || RETRYABLE.includes(latest.status);
-    return statusView(profile, template, required, signed, latest?.status ?? null, awaiting);
+    const language = contractLocale(profile.preferredLanguage);
+    return statusView(profile, template, required, signed, latest?.status ?? null, awaiting, language);
   }
 
-  private templateFor(profile: AgentContractProfile): AgentContractTemplate {
+  private templateFor(
+    profile: AgentContractProfile,
+    input?: AgentContractEnsureInput
+  ): AgentContractTemplate {
     return resolveAgentContractTemplate({
       country: profile.country,
       addressCountry: profile.addressCountry,
-      preferredLanguage: profile.preferredLanguage,
+      preferredLanguage: input?.language ?? profile.preferredLanguage,
     });
   }
 
@@ -322,7 +331,9 @@ export class AgentContractsService {
   }
 
   private snapshot(input?: AgentContractEnsureInput): Record<string, string> {
+    const language = input?.language;
     return {
+      ...(language === 'en' || language === 'fr' ? { language } : {}),
       ...(this.nationality(input) ? { nationality: this.nationality(input)! } : {}),
       ...(this.idNumber(input) ? { idNumber: this.idNumber(input)! } : {}),
     };
@@ -356,19 +367,57 @@ function statusView(
   required: boolean,
   signed: boolean,
   status: string | null,
-  awaiting: boolean
+  awaiting: boolean,
+  language: 'en' | 'fr'
 ): AgentContractStatusView {
+  const byLanguage = languageNeeds(profile, required, signed, awaiting);
   return {
     required,
     signed: !required || signed,
     status,
     templateKey: template.key,
-    needsNationality: needsDetail(required, signed, awaiting, template.needsNationality),
-    needsIdNumber: needsDetail(required, signed, awaiting, template.needsIdNumber),
+    language,
+    byLanguage,
+    needsNationality: byLanguage[language].needsNationality,
+    needsIdNumber: byLanguage[language].needsIdNumber,
     missingPhone: !profile.phone,
     missingEmail: !profile.email,
     signerEmail: profile.email || null,
   };
+}
+
+function languageNeeds(
+  profile: AgentContractProfile,
+  required: boolean,
+  signed: boolean,
+  awaiting: boolean
+): Record<'en' | 'fr', AgentContractLanguageNeeds> {
+  return {
+    en: needsForLocale(profile, 'en', required, signed, awaiting),
+    fr: needsForLocale(profile, 'fr', required, signed, awaiting),
+  };
+}
+
+function needsForLocale(
+  profile: AgentContractProfile,
+  locale: 'en' | 'fr',
+  required: boolean,
+  signed: boolean,
+  awaiting: boolean
+): AgentContractLanguageNeeds {
+  const template = resolveAgentContractTemplate({
+    country: profile.country,
+    addressCountry: profile.addressCountry,
+    preferredLanguage: locale,
+  });
+  return {
+    needsNationality: needsDetail(required, signed, awaiting, template.needsNationality),
+    needsIdNumber: needsDetail(required, signed, awaiting, template.needsIdNumber),
+  };
+}
+
+function contractLocale(preferred?: string | null): 'en' | 'fr' {
+  return (preferred ?? '').toLowerCase().startsWith('fr') ? 'fr' : 'en';
 }
 
 function idleStatus(required: boolean): AgentContractStatusView {
@@ -377,6 +426,11 @@ function idleStatus(required: boolean): AgentContractStatusView {
     signed: !required,
     status: null,
     templateKey: null,
+    language: 'en',
+    byLanguage: {
+      en: { needsNationality: false, needsIdNumber: false },
+      fr: { needsNationality: false, needsIdNumber: false },
+    },
     needsNationality: false,
     needsIdNumber: false,
     missingPhone: false,
@@ -415,6 +469,7 @@ function snapshotInput(
   snapshot?: Record<string, unknown> | null
 ): AgentContractEnsureInput {
   return {
+    language: snapshotLocale(snapshot?.language),
     nationality: snapshotText(snapshot?.nationality),
     idNumber: snapshotText(snapshot?.idNumber),
   };
@@ -425,9 +480,14 @@ function mergeEnsureInput(
   input?: AgentContractEnsureInput
 ): AgentContractEnsureInput {
   return {
+    language: input?.language || saved.language || null,
     nationality: input?.nationality?.trim() || saved.nationality || null,
     idNumber: input?.idNumber?.trim() || saved.idNumber || null,
   };
+}
+
+function snapshotLocale(value: unknown): 'en' | 'fr' | null {
+  return value === 'en' || value === 'fr' ? value : null;
 }
 
 function snapshotText(value: unknown): string | null {

@@ -109,6 +109,40 @@ describe('AgentContractsService ensure', () => {
       expect.arrayContaining([{ id: 'rep_nationality', value: 'Canadian' }])
     );
   });
+
+  it('sends the French Canada template when the agent chooses French', async () => {
+    const db = {
+      getInFlight: jest.fn().mockResolvedValue(null),
+      getLatest: jest.fn().mockResolvedValue(null),
+      hasSigned: jest.fn().mockResolvedValue(false),
+      insertContract: jest.fn().mockImplementation(async (row) => ({ id: 'c-new', ...row })),
+      updateContract: jest.fn().mockResolvedValue(undefined),
+    };
+    const boldsign = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      sendUsingTemplate: jest.fn().mockResolvedValue({ documentId: 'doc-fr' }),
+    };
+    const service = new AgentContractsService(
+      db as never,
+      { isRequired: jest.fn().mockResolvedValue(true) } as never,
+      { forUser: jest.fn().mockResolvedValue(profile) } as never,
+      boldsign as never,
+      {} as never,
+      { get: jest.fn().mockReturnValue({ expirationDays: 30, reminderIntervalDays: 3 }) } as never
+    );
+
+    await service.ensureForUser('u1', {
+      language: 'fr',
+      nationality: 'Canadian',
+      idNumber: 'AB123',
+    });
+
+    expect(boldsign.sendUsingTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateId: 'a6d79255-d0d4-4b02-b218-d55a8dcd367b',
+      })
+    );
+  });
 });
 
 describe('AgentContractsService status', () => {
@@ -150,10 +184,10 @@ describe('AgentContractsService status', () => {
     return { service, boldsign, db };
   }
 
-  it('emails the agreement once when the agent has no contract', async () => {
+  it('does not email until the agent confirms language on the agreement screen', async () => {
     const { service, boldsign } = serviceFor(null);
     await service.statusForUser('u1');
-    expect(boldsign.sendUsingTemplate).toHaveBeenCalledTimes(1);
+    expect(boldsign.sendUsingTemplate).not.toHaveBeenCalled();
   });
 
   it('does not send again when the latest contract already failed', async () => {

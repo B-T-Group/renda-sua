@@ -17,7 +17,8 @@ import { DeferredFloatingWhatsApp } from '../components/common/DeferredFloatingW
 import { DeferredAssistantLauncher } from '../components/assistant/DeferredAssistantLauncher';
 import { assistantScreenName } from '../components/assistant/assistantLauncherRoutes';
 import { useAssistantEntryGate } from '../components/assistant/useAssistantEntryGate';
-import LoadingPage from '../components/common/LoadingPage';
+import { AgentContractProvider } from '../contexts/AgentContractContext';
+import { AgentContractLock } from '../components/agent/AgentContractLock';
 import AgentOnboardingModal from '../components/dialogs/AgentOnboardingModal';
 import AgentLocationDisclosureModal from '../components/dialogs/AgentLocationDisclosureModal';
 import AgentBottomNav from '../components/layout/AgentBottomNav';
@@ -213,6 +214,7 @@ function App() {
     <BusinessOrdersLiveProvider>
     <IncomingOrderInterruptProvider>
       <StorePickupReminderProvider>
+      <AgentContractProvider>
       <Box
         sx={{
           minHeight: '100vh',
@@ -254,6 +256,7 @@ function App() {
             }}
           >
             <Suspense fallback={<RouteSuspenseFallback />}>
+              <AgentContractLock>
               <Routes>
             <Route path="/" element={<SmartHome />} />
             {/* Legacy marketing page — redirect to homepage */}
@@ -1114,6 +1117,7 @@ function App() {
             {/* Unknown paths: same persona rules as home */}
             <Route path="*" element={<SmartHome />} />
               </Routes>
+              </AgentContractLock>
             </Suspense>
           </Container>
         </Box>
@@ -1161,6 +1165,7 @@ function App() {
         <StorePickupReminderOverlay />
         <StickyDownloadBar />
       </Box>
+      </AgentContractProvider>
       </StorePickupReminderProvider>
     </IncomingOrderInterruptProvider>
     </BusinessOrdersLiveProvider>

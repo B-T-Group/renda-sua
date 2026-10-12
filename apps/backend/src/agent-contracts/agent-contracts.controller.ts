@@ -32,7 +32,7 @@ export class AgentContractsController {
   ) {}
 
   @Get('status')
-  @ApiOperation({ summary: 'Agent agreement status. Sends the email when it can.' })
+  @ApiOperation({ summary: 'Agent agreement status' })
   @ApiResponse({ status: 200, description: 'Agreement status' })
   async status(@ReqContext() ctx: RequestContext) {
     const userId = await this.requireUserId(ctx);

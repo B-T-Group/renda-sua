@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useApiClient } from './useApiClient';
 
+export interface AgentContractLanguageNeeds {
+  needsNationality: boolean;
+  needsIdNumber: boolean;
+}
+
 export interface AgentContractStatus {
   required: boolean;
   signed: boolean;
   status: string | null;
   templateKey: string | null;
+  language?: 'en' | 'fr';
+  byLanguage?: Record<'en' | 'fr', AgentContractLanguageNeeds>;
   needsNationality: boolean;
   needsIdNumber: boolean;
   missingPhone: boolean;
@@ -43,14 +50,19 @@ export function useAgentContract(enabled = true) {
   }, [load]);
 
   const submit = useCallback(
-    async (path: 'ensure' | 'resend' | 'refresh', body?: { nationality?: string; idNumber?: string }) => {
+    async (
+      path: 'ensure' | 'resend' | 'refresh',
+      body?: { language?: 'en' | 'fr'; nationality?: string; idNumber?: string }
+    ): Promise<AgentContractStatus | null> => {
       setLoading(true);
       setError(null);
       try {
         const res = await api.post<StatusResponse>(`/agent-contracts/${path}`, body ?? {});
         setStatus(res.data.data);
+        return res.data.data;
       } catch (err: any) {
         setError(err?.response?.data?.message || err?.message || 'Failed to update agreement');
+        return null;
       } finally {
         setLoading(false);
       }

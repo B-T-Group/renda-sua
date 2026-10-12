@@ -3,29 +3,52 @@ import {
   Box,
   Button,
   Container,
+  MenuItem,
   Stack,
   TextField,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { useAgentContract } from '../../hooks/useAgentContract';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAgentContractContext } from '../../contexts/AgentContractContext';
+import { useUserProfileContext } from '../../contexts/UserProfileContext';
+import { useSupportedCountries } from '../../hooks/useSupportedCountries';
+import type { AgentContractStatus } from '../../hooks/useAgentContract';
 import { AgentAgreementIllustration } from '../agent/AgentAgreementIllustration';
 
 const AgentAgreementPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
-  const { status, loading, error, submit } = useAgentContract(true);
+  const location = useLocation();
+  const { status, loading, error, submit } = useAgentContractContext();
   const [nationality, setNationality] = useState('');
   const [idNumber, setIdNumber] = useState('');
+  const [language, setLanguage] = useState<'en' | 'fr' | null>(null);
+  const [notSignedYet, setNotSignedYet] = useState(false);
+  const contractLanguage = chosenLanguage(language, status, i18n.language);
+  const needs = fieldNeeds(status, contractLanguage);
 
   const send = () => {
+    setNotSignedYet(false);
     void submit('ensure', {
-      nationality: nationality.trim() || undefined,
-      idNumber: idNumber.trim() || undefined,
+      language: contractLanguage,
+      nationality: needs.needsNationality ? nationality.trim() || undefined : undefined,
+      idNumber: needs.needsIdNumber ? idNumber.trim() || undefined : undefined,
     });
   };
+
+  const refresh = async () => {
+    setNotSignedYet(false);
+    const next = await submit('refresh');
+    if (next && !next.signed) setNotSignedYet(true);
+  };
+
+  useEffect(() => {
+    if (status?.signed && location.pathname === '/agent/agreement') {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [location.pathname, navigate, status?.signed]);
 
   return (
     <Container maxWidth="sm" sx={{ py: 4 }}>
@@ -39,7 +62,7 @@ const AgentAgreementPage: React.FC = () => {
         <Typography color="text.secondary">
           {t(
             'agentContract.body',
-            'We email the agreement for your region and language. Claim deliveries after you sign it.'
+            'Read and sign your agent agreement. You can then claim deliveries and earn commissions.'
           )}
         </Typography>
         {error ? <Alert severity="error">{error}</Alert> : null}
@@ -51,11 +74,16 @@ const AgentAgreementPage: React.FC = () => {
             status={status}
             nationality={nationality}
             idNumber={idNumber}
+            language={contractLanguage}
+            needsNationality={needs.needsNationality}
+            needsIdNumber={needs.needsIdNumber}
             onNationality={setNationality}
             onIdNumber={setIdNumber}
+            onLanguage={setLanguage}
             onSend={send}
             onResend={() => void submit('resend')}
-            onRefresh={() => void submit('refresh')}
+            onRefresh={() => void refresh()}
+            notSignedYet={notSignedYet}
           />
         )}
       </Stack>
@@ -68,7 +96,7 @@ function SignedState({ onDone }: { onDone: () => void }) {
   return (
     <>
       <Alert severity="success">
-        {t('agentContract.signed', 'Your agreement is signed. You can claim deliveries.')}
+        {t('agentContract.signed', 'Your agreement is signed. You can claim deliveries and earn commissions.')}
       </Alert>
       <Button variant="contained" onClick={onDone}>
         {t('agentContract.back', 'Return to dashboard')}
@@ -82,11 +110,16 @@ function PendingState(props: {
   status: ReturnType<typeof useAgentContract>['status'];
   nationality: string;
   idNumber: string;
+  language: 'en' | 'fr';
+  needsNationality: boolean;
+  needsIdNumber: boolean;
   onNationality: (value: string) => void;
   onIdNumber: (value: string) => void;
+  onLanguage: (value: 'en' | 'fr') => void;
   onSend: () => void;
   onResend: () => void;
   onRefresh: () => void;
+  notSignedYet: boolean;
 }) {
   const { t } = useTranslation();
   const status = props.status;
@@ -94,8 +127,30 @@ function PendingState(props: {
   return (
     <Stack spacing={2} sx={{ width: '100%' }}>
       {status?.missingEmail || status?.missingPhone ? (
-        <Alert severity="info">
+        <Alert
+          severity="info"
+          action={
+            <Button color="inherit" size="small" component={Link} to="/profile">
+              {t('agentContract.updateProfile', 'Update profile')}
+            </Button>
+          }
+        >
           {t('agentContract.contact', 'Add your email and phone on your profile before we can send the agreement.')}
+        </Alert>
+      ) : null}
+      {status?.signerEmail ? (
+        <Alert severity="info">
+          {t('agentContract.sendTo', 'We will send the agreement to {{email}}.', {
+            email: status.signerEmail,
+          })}
+        </Alert>
+      ) : null}
+      {props.notSignedYet ? (
+        <Alert severity="warning">
+          {t(
+            'agentContract.notSignedYet',
+            'We have not received your signature yet. Sign the BoldSign email, then try again.'
+          )}
         </Alert>
       ) : null}
       {waiting ? (
@@ -105,15 +160,13 @@ function PendingState(props: {
           })}
         </Alert>
       ) : null}
-      {status?.needsNationality ? (
-        <TextField
-          label={t('agentContract.nationality', 'Nationality')}
-          value={props.nationality}
-          onChange={(event) => props.onNationality(event.target.value)}
-          fullWidth
-        />
+      {waiting ? null : (
+        <LanguageSelect value={props.language} onChange={props.onLanguage} />
+      )}
+      {props.needsNationality ? (
+        <NationalitySelect value={props.nationality} onChange={props.onNationality} />
       ) : null}
-      {status?.needsIdNumber ? (
+      {props.needsIdNumber ? (
         <TextField
           label={t('agentContract.idNumber', 'ID number')}
           value={props.idNumber}
@@ -141,14 +194,98 @@ function PendingState(props: {
   );
 }
 
+function NationalitySelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const { t } = useTranslation();
+  const { profile } = useUserProfileContext();
+  const { countries, loading } = useSupportedCountries();
+  const options = countries.filter((country) => country.signupEnabled !== false);
+  useEffect(() => {
+    if (value) return;
+    const match = countryMatch(options, profile?.country);
+    if (match) onChange(match);
+  }, [onChange, options, profile?.country, value]);
+  return (
+    <TextField
+      select
+      fullWidth
+      required
+      disabled={loading}
+      label={t('agentContract.nationality', 'Nationality')}
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    >
+      {options.map((country) => (
+        <MenuItem key={country.code} value={country.name || country.code}>
+          {country.name || country.code}
+        </MenuItem>
+      ))}
+    </TextField>
+  );
+}
+
+function LanguageSelect({
+  value,
+  onChange,
+}: {
+  value: 'en' | 'fr';
+  onChange: (value: 'en' | 'fr') => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <TextField
+      select
+      fullWidth
+      required
+      label={t('agentContract.language', 'Contract language')}
+      value={value}
+      onChange={(event) => onChange(event.target.value as 'en' | 'fr')}
+    >
+      <MenuItem value="en">{t('agentContract.languageEn', 'English')}</MenuItem>
+      <MenuItem value="fr">{t('agentContract.languageFr', 'French')}</MenuItem>
+    </TextField>
+  );
+}
+
 function canSend(
-  status: ReturnType<typeof useAgentContract>['status'],
-  props: { nationality: string; idNumber: string }
+  status: AgentContractStatus | null,
+  props: { nationality: string; idNumber: string; needsNationality: boolean; needsIdNumber: boolean }
 ): boolean {
   if (!status || status.missingEmail || status.missingPhone) return false;
-  if (status.needsNationality && !props.nationality.trim()) return false;
-  if (status.needsIdNumber && !props.idNumber.trim()) return false;
+  if (props.needsNationality && !props.nationality.trim()) return false;
+  if (props.needsIdNumber && !props.idNumber.trim()) return false;
   return true;
+}
+
+function chosenLanguage(
+  picked: 'en' | 'fr' | null,
+  status: AgentContractStatus | null,
+  appLanguage: string
+): 'en' | 'fr' {
+  if (picked) return picked;
+  if (status?.language) return status.language;
+  return appLanguage.toLowerCase().startsWith('fr') ? 'fr' : 'en';
+}
+
+function fieldNeeds(status: AgentContractStatus | null, language: 'en' | 'fr') {
+  return status?.byLanguage?.[language] ?? {
+    needsNationality: Boolean(status?.needsNationality),
+    needsIdNumber: Boolean(status?.needsIdNumber),
+  };
+}
+
+function countryMatch(
+  options: Array<{ code: string; name: string }>,
+  country?: string | null
+): string | null {
+  const code = country?.trim().toUpperCase();
+  const match = options.find((option) => option.code.toUpperCase() === code);
+  return match ? match.name || match.code : null;
 }
 
 export default AgentAgreementPage;

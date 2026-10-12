@@ -1,7 +1,12 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class EnsureAgentContractDto {
+  @ApiPropertyOptional({ enum: ['en', 'fr'], description: 'Contract language' })
+  @IsOptional()
+  @IsIn(['en', 'fr'])
+  language?: 'en' | 'fr';
+
   @ApiPropertyOptional({ description: 'Nationality written into the agreement' })
   @IsOptional()
   @IsString()

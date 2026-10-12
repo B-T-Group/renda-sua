@@ -5,13 +5,14 @@ import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAgentFocus } from '../../hooks/useAgentFocus';
+import { agentAppLocked, useAgentContractContext } from '../../contexts/AgentContractContext';
 
 const AgentBottomNav: React.FC = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const { userType } = useUserProfileContext();
+  const contract = useAgentContractContext();
   const { showDelivery } = useAgentFocus();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -21,6 +22,9 @@ const AgentBottomNav: React.FC = () => {
 
   // Only show for agents on mobile
   if (userType !== 'agent' || !isMobile) {
+    return null;
+  }
+  if (agentAppLocked(userType, contract.status, contract.loading)) {
     return null;
   }
 
