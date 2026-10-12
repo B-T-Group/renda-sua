@@ -393,6 +393,10 @@ export class MobilePaymentCallbackProcessor {
         `Wallet credit failed for mobile payment ${transaction.id}; leaving pending for retry`
       );
     }
+    if (transaction.payment_entity === 'order') {
+      await this.finalizeOrderPaymentSuccess(transaction, providerTransactionId);
+      return;
+    }
     await this.runHandlerSuccess(transaction);
     await this.databaseService.updateTransaction(transaction.id, {
       status: 'success',
@@ -400,6 +404,74 @@ export class MobilePaymentCallbackProcessor {
     });
     this.logger.log(
       `Updated transaction ${transaction.id} with status: success`
+    );
+  }
+
+  /**
+   * Order MoMo success (#545 QA F2). The row is claimed pending -> success with a
+   * conditional write BEFORE the order is finalized, so a concurrent retry can no longer
+   * supersede an attempt that is being applied (its own CAS on 'pending' fails), and a
+   * row the retry already superseded is never overwritten: it goes to the late-success
+   * handler instead. If finalizing throws, the claim is undone (success -> pending) so
+   * the provider retry runs the whole path again.
+   */
+  private async finalizeOrderPaymentSuccess(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    const claimed = await this.databaseService.updateTransactionIfStatus(
+      transaction.id,
+      'pending',
+      {
+        status: 'success',
+        ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+      }
+    );
+    if (!claimed) {
+      await this.routeUnclaimedOrderSuccess(transaction, providerTransactionId);
+      return;
+    }
+    try {
+      await this.runHandlerSuccess(transaction);
+    } catch (error) {
+      await this.databaseService
+        .updateTransactionIfStatus(transaction.id, 'success', { status: 'pending' })
+        .catch((e: any) =>
+          this.logger.error(
+            `Could not release success claim on ${transaction.id}: ${e?.message ?? e}`
+          )
+        );
+      throw error;
+    }
+    this.logger.log(`Updated transaction ${transaction.id} with status: success`);
+  }
+
+  /** The row left 'pending' between our read and the claim: re-read and route it. */
+  private async routeUnclaimedOrderSuccess(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    const fresh = await this.databaseService.getTransactionById(transaction.id);
+    if (fresh && this.isSupersededOrderTx(fresh)) {
+      await this.handleLateSuccessOnSupersededOrderTx(fresh, providerTransactionId);
+      return;
+    }
+    if (fresh?.status === 'success') {
+      await this.retrySuccessSideEffects(fresh);
+      return;
+    }
+    // Provider confirmed SUCCESS but our row is failed / cancelled for another reason:
+    // the wallet is already credited (idempotent), so the money is safe; flag it.
+    reportMoneyAnomaly(
+      this.logger,
+      'payment_finalize_failed',
+      `Order MoMo success on non-pending row ${transaction.id} (status=${fresh?.status ?? 'missing'}, error_code=${fresh?.error_code ?? ''}); amount left in wallet`,
+      {
+        transactionId: transaction.id,
+        paymentEntity: transaction.payment_entity,
+        entityId: transaction.entity_id,
+        replay: false,
+      }
     );
   }
 

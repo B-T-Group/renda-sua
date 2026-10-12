@@ -122,3 +122,21 @@ Per `.cursor/rules/platform-capabilities.mdc`, update `docs/platform-capabilitie
 - The replaced attempt is kept as `cancelled` with `error_code=SUPERSEDED_BY_RETRY`, `superseded_reason`, `superseded_at`, `superseded_by_id` on `mobile_payment_transactions`.
 - A changed number is used for this order only and written to `orders.payer_phone` only after the provider accepts the request; `save_phone: true` also adds it to the client's payment phones.
 - Late approval of a replaced prompt: first success wins and pays the order (any newer pending request is cancelled). A duplicate or post-cancel success stays in the client's Rendasua wallet, raises Sentry `duplicate_momo_collect` (grouped by that marker; unique order / tx text is extras, not a new issue) and pushes the client ("Payment added to your wallet"). Support: no MoMo refund needed, the client can spend or withdraw the wallet balance.
+
+## QA follow-up (#545 PR-1b)
+
+- Order MoMo success is claimed with a conditional write (`pending -> success`) before the
+  order is finalized; a row a retry superseded goes to the late-success handler. After a
+  success applies, other pending attempts on the paid order are cancelled.
+- Retry caps across orders: one prompt per target number per 90 s, 5 per number per hour,
+  10 per payer user per hour (`RETRY_RATE_LIMITED`, `scope: number|user`).
+- `Idempotency-Key` reused with a different phone returns 422 `IDEMPOTENCY_KEY_REUSED`.
+- Order cancel closes pending MoMo attempts (`SUPERSEDED_BY_ORDER_CANCEL`); the operator
+  prompt itself cannot be withdrawn, a late approval is credited to the wallet.
+- `CREATE INDEX CONCURRENTLY`: the DEV/prod Hasura server (v2.48) and CLI support
+  `-- hasura:no-transaction`, but only with `--per-migration-transaction`, which
+  `.github/actions/apply-hasura` does not pass, and the indexes already exist on DEV.
+  Not changed here. Before the prod apply, run the read-only precheck in
+  `/workspace/qa/pr545/results.md`; if the table is large, enable the flag in the apply
+  action and pre-create the indexes concurrently, then the existing `IF NOT EXISTS`
+  statements become no-ops.

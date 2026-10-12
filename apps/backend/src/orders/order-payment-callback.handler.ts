@@ -45,6 +45,8 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
     }
     if (transaction.payment_entity === 'order') {
       await this.ordersService.finalizeOrderAfterIncomingPayment(transaction);
+      // #545 QA F2: no live attempt may stay pending on a paid order.
+      await this.ordersService.closeOtherPendingAttemptsAfterSuccess(transaction);
       return;
     }
     if (transaction.payment_entity === 'claim_order') {

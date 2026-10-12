@@ -612,6 +612,39 @@ export class MobilePaymentsDatabaseService {
     return response.mobile_payment_transactions_aggregate?.aggregate?.count ?? 0;
   }
 
+  /**
+   * Retry-created order attempts since `sinceIso` for a payer user or a target number
+   * (#545 QA F3 caps). Returns the count and the newest created_at.
+   */
+  async summarizeRetryAttemptsSince(params: {
+    sinceIso: string;
+    descriptionMarker: string;
+    userId?: string;
+    phones?: string[];
+  }): Promise<{ count: number; latestAt: string | null }> {
+    const where: Record<string, unknown> = {
+      payment_entity: { _eq: 'order' },
+      created_at: { _gte: params.sinceIso },
+      description: { _like: `%${params.descriptionMarker}%` },
+    };
+    if (params.userId) where.account = { user_id: { _eq: params.userId } };
+    if (params.phones) where.customer_phone = { _in: params.phones };
+    const response = await this.hasuraService.executeQuery<{
+      mobile_payment_transactions_aggregate: {
+        aggregate: { count: number; max: { created_at: string | null } | null };
+      };
+    }>(
+      `query SummarizeRetryAttempts($where: mobile_payment_transactions_bool_exp!) {
+        mobile_payment_transactions_aggregate(where: $where) {
+          aggregate { count max { created_at } }
+        }
+      }`,
+      { where }
+    );
+    const agg = response.mobile_payment_transactions_aggregate?.aggregate;
+    return { count: agg?.count ?? 0, latestAt: agg?.max?.created_at ?? null };
+  }
+
   /** Order attempt created with this Idempotency-Key since `sinceIso`, if any. */
   async getOrderTransactionByIdempotencyKey(
     orderNumber: string,

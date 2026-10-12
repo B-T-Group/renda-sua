@@ -16,15 +16,29 @@ export const ORDER_MOMO_RESEND_MIN_AGE_SECONDS_DEFAULT = 90;
 export const ORDER_MOMO_RETRY_LIMIT = 5;
 export const ORDER_MOMO_RETRY_WINDOW_SECONDS = 600;
 export const ORDER_MOMO_IDEMPOTENCY_WINDOW_SECONDS = 600;
+/**
+ * Anti prompt-bombing caps across orders (#545 QA F3). A phone change skips the 90 s
+ * per-attempt rule, so the number and the user are capped too:
+ * - one retry prompt per target number per 90 s (any order, any user),
+ * - 5 retry prompts per target number per hour,
+ * - 10 retry prompts per user per hour.
+ */
+export const ORDER_MOMO_TARGET_MIN_GAP_SECONDS = 90;
+export const ORDER_MOMO_TARGET_LIMIT = 5;
+export const ORDER_MOMO_USER_LIMIT = 10;
+export const ORDER_MOMO_CAP_WINDOW_SECONDS = 3600;
 /** Description marker on retry-created attempts; the rate limit counts these rows. */
 export const PAY_AFTER_RETRY_DESCRIPTION_MARKER = '(after confirm retry)';
 
 /** error_code values that mark an order tx we cancelled to make room for another one. */
 export const SUPERSEDED_BY_RETRY = 'SUPERSEDED_BY_RETRY';
 export const SUPERSEDED_BY_LATE_SUCCESS = 'SUPERSEDED_BY_LATE_SUCCESS';
+/** Pending attempt closed because the order was cancelled (#545 QA F5). */
+export const SUPERSEDED_BY_ORDER_CANCEL = 'SUPERSEDED_BY_ORDER_CANCEL';
 export const SUPERSEDED_ERROR_CODES: ReadonlySet<string> = new Set([
   SUPERSEDED_BY_RETRY,
   SUPERSEDED_BY_LATE_SUCCESS,
+  SUPERSEDED_BY_ORDER_CANCEL,
 ]);
 export const LATE_SUCCESS_APPLIED = 'LATE_SUCCESS_APPLIED';
 export const DUPLICATE_PAYMENT_CREDITED = 'DUPLICATE_PAYMENT_CREDITED';
@@ -148,4 +162,11 @@ export function isUniqueViolation(error: unknown): boolean {
   return (
     text.includes('uniqueness violation') || text.includes('duplicate key')
   );
+}
+
+/** Stored forms a phone may take (E.164, digits only) for exact-match queries. */
+export function phoneVariants(phone: string): string[] {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return [];
+  return [...new Set([`+${digits}`, digits, String(phone).trim()])];
 }
