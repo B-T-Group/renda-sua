@@ -130,6 +130,18 @@ describe('MobilePaymentsService.resolveAdminIntegrationProvider', () => {
       })
     ).toBe('freemopay');
     expect(service.resolveProviderFromRequest({})).toBe('mypvit');
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '692168717',
+        itemCountry: 'Cameroon',
+      })
+    ).toBe('freemopay');
+    expect(
+      service.resolveProviderFromRequest({
+        customerPhone: '692168717',
+        itemCountry: 'Cameroun',
+      })
+    ).toBe('freemopay');
   });
 
   it('sends a local Cameroon mobile to FreemoPay only with no item country', () => {

@@ -5,6 +5,7 @@ import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service'
 import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
 import type { OrangeCollectionRequest } from '../orange-momo/orange-momo.types';
 import { OrangeMomoService } from '../orange-momo/orange-momo.service';
+import { isoCountryCode } from '../orders/delivery-pricing.util';
 import { mapCountryToMobileMoneyProvider } from './item-country.util';
 import {
   detectCameroonPhone,
@@ -997,10 +998,11 @@ export class MobilePaymentsService {
     phone?: string,
     itemCountry?: string
   ): Promise<string> {
-    const fromItem = itemCountry?.trim().toUpperCase();
+    const fromItem = isoCountryCode(itemCountry);
     if (fromItem) return fromItem;
     const fromUser = userId ? await this.getUserCountryOrAddress(userId) : null;
-    return resolveWalletPhoneRegion({ phone, userCountry: fromUser });
+    const region = resolveWalletPhoneRegion({ phone, userCountry: fromUser });
+    return isoCountryCode(region) ?? region;
   }
 
   private async getUserCountryOrAddress(userId: string): Promise<string | null> {

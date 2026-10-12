@@ -129,6 +129,7 @@ describe('delivery pricing', () => {
   it('maps country names to the ISO codes used by delivery config', () => {
     expect(normalizeDeliveryCountryCode('Gabon')).toBe('GA');
     expect(normalizeDeliveryCountryCode('cameroon')).toBe('CM');
+    expect(normalizeDeliveryCountryCode('Cameroun')).toBe('CM');
     expect(normalizeDeliveryCountryCode('GA')).toBe('GA');
     expect(normalizeDeliveryCountryCode("Cote d'Ivoire")).toBe('CI');
     expect(normalizeDeliveryCountryCode('Ivory Coast')).toBe('CI');

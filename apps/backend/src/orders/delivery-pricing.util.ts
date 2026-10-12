@@ -78,11 +78,14 @@ function rounded(baseFee: number, perKmFee: number): CappedDeliveryFee {
 
 const COUNTRY_NAMES: Record<string, string> = {
   CAMEROON: 'CM',
+  CAMEROUN: 'CM',
   GABON: 'GA',
   CANADA: 'CA',
   TOGO: 'TG',
   BENIN: 'BJ',
+  'BÉNIN': 'BJ',
   "COTE D'IVOIRE": 'CI',
+  "CÔTE D'IVOIRE": 'CI',
   'IVORY COAST': 'CI',
   CONGO: 'CG',
   PHILIPPINES: 'PH',
@@ -127,6 +130,12 @@ export function comparableCountry(value?: string | null): string | null {
   if (!raw) return null;
   if (/^[A-Z]{2}$/.test(raw)) return raw;
   return COUNTRY_NAMES[raw] ?? raw;
+}
+
+/** ISO alpha-2 when the value is a code or a known market name; otherwise null. */
+export function isoCountryCode(value?: string | null): string | null {
+  const mapped = comparableCountry(value);
+  return mapped && /^[A-Z]{2}$/.test(mapped) ? mapped : null;
 }
 
 export function normalizeDeliveryCountryCode(
