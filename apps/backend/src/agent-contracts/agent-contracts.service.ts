@@ -240,7 +240,9 @@ export class AgentContractsService {
       contractNumber: contract.contract_number,
       signerName: profile.signerName,
       nationality: this.nationality(input),
-      phone: profile.phone,
+      // The BoldSign templates mark the phone label as required; a phone is optional
+      // for agents (email-only signing), so send a placeholder when there is none.
+      phone: profile.phone || '—',
       email: profile.email,
       referralCode: referral,
       country: displayCountry(profile, template.locale),

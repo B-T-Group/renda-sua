@@ -177,14 +177,17 @@ describe('AgentContractsService email-only signer (no phone required)', () => {
     return { service, boldsign };
   }
 
-  it('sends to an agent with an email and no phone; signer is email only, no phone field', async () => {
+  it('sends to an agent with an email and no phone; signer is email only, phone label gets a placeholder', async () => {
     const { service, boldsign } = build(noPhone);
     await service.ensureForUser('u2', { nationality: 'Cameroonian', idNumber: 'ID1' } as never);
     expect(boldsign.sendUsingTemplate).toHaveBeenCalledTimes(1);
     const params = boldsign.sendUsingTemplate.mock.calls[0][0];
     expect(params.signerEmail).toBe('nophone@example.com');
     expect(Object.keys(params).some((k) => /phone|sms/i.test(k))).toBe(false);
-    expect(params.existingFormFields.some((f: { id: string }) => /phone/i.test(f.id))).toBe(false);
+    // Template phone label is required by BoldSign: a placeholder, never a real number.
+    const phoneFields = params.existingFormFields.filter((f: { id: string }) => /phone/i.test(f.id));
+    expect(phoneFields.length).toBeGreaterThan(0);
+    expect(phoneFields.every((f: { value: string }) => f.value === '—')).toBe(true);
   });
 
   it('status never reports missingPhone', async () => {
