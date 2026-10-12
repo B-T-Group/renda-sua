@@ -38,6 +38,13 @@ describe('deliveryCountryMismatch', () => {
     ).toBeNull();
     expect(
       deliveryCountryMismatch({
+        fulfillment: 'delivery',
+        dropOffCountry: 'Cameroun',
+        sellerCountries: ['CM'],
+      })
+    ).toBeNull();
+    expect(
+      deliveryCountryMismatch({
         fulfillment: 'shipping',
         dropOffCountry: 'GA',
         sellerCountries: ['Gabon'],

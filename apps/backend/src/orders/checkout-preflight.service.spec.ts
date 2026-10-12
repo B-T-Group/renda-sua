@@ -518,6 +518,24 @@ describe('CheckoutPreflightService', () => {
     ).toBe(false);
   });
 
+  it('allows delivery when the address uses the French Cameroon name', async () => {
+    mockInventory([makeInventoryRow({ sellerCountry: 'CM' })], {
+      addressCountry: 'Cameroun',
+    });
+
+    const dto: CheckoutPreflightDto = {
+      items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+      delivery_address_id: 'addr-douala',
+      provisional_country: 'CM',
+    };
+
+    const result = await service.resolve(dto, false);
+
+    expect(
+      result.blocking_errors.some((e) => e.code === 'DELIVERY_COUNTRY_MISMATCH')
+    ).toBe(false);
+  });
+
   // -------------------------------------------------------------------------
   // 6. Blocks mixed-country carts
   // -------------------------------------------------------------------------
