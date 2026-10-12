@@ -45,7 +45,7 @@ import {
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { ServiceFeeService } from './service-fee.service';
-import { comparableCountry } from './delivery-pricing.util';
+import { comparableCountry, isoCountryCode } from './delivery-pricing.util';
 import {
   DIASPORA_ERROR_CODES,
   normalizeCountryCode,
@@ -472,9 +472,9 @@ export class CheckoutPreflightService {
     // -----------------------------------------------------------------------
     const payerCountry = await this.resolvePayerCountry(dto, isAuthenticated);
     const fulfillmentCountry =
-      deliveryCountry ??
-      normalizeCountryCode(guestCountry) ??
-      normalizeCountryCode(sellerCountries[0]);
+      isoCountryCode(deliveryCountry) ??
+      isoCountryCode(guestCountry) ??
+      isoCountryCode(sellerCountries[0]);
 
     const groupRails = new Map<string, 'stripe' | 'mobile_money'>();
     let diasporaRailSource: 'seller' | 'payer' = 'seller';

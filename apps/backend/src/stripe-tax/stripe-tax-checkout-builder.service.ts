@@ -135,6 +135,7 @@ export class StripeTaxCheckoutBuilderService {
     const map: Record<string, string> = {
       canada: 'CA',
       cameroon: 'CM',
+      cameroun: 'CM',
       'united states': 'US',
       'united states of america': 'US',
     };

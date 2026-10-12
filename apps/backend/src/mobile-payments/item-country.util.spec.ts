@@ -6,6 +6,8 @@ import {
 describe('resolveItemCountry', () => {
   it('prefers the item location country over the owner country', () => {
     expect(resolveItemCountry('cm', 'GA')).toBe('CM');
+    expect(resolveItemCountry('Cameroon', 'GA')).toBe('CM');
+    expect(resolveItemCountry('Cameroun', 'CA')).toBe('CM');
   });
 
   it('falls back to the owner country when the location has none', () => {
@@ -22,6 +24,8 @@ describe('mapCountryToMobileMoneyProvider', () => {
   it('maps Cameroon to Freemopay', () => {
     expect(mapCountryToMobileMoneyProvider('cm')).toBe('freemopay');
     expect(mapCountryToMobileMoneyProvider('CM')).toBe('freemopay');
+    expect(mapCountryToMobileMoneyProvider('Cameroon')).toBe('freemopay');
+    expect(mapCountryToMobileMoneyProvider('Cameroun')).toBe('freemopay');
   });
 
   it('maps Gabon and unknown markets to MyPVit', () => {

@@ -120,6 +120,7 @@ import { getCommissionForBusinessAccountType } from '../commissions/business-acc
 import {
   capDeliveryFee,
   collectedDeliveryFee,
+  isoCountryCode,
   maxClientDistanceKm,
   normalizeDeliveryCountryCode,
   shouldWaiveDeliveryFee,
@@ -13010,11 +13011,11 @@ export class OrdersService {
     const itemCountry = sellerCountry;
 
     const fulfillmentCountry =
-      normalizeCountryCode(
+      isoCountryCode(
         fulfillmentMethod === 'pickup'
           ? businessInventories[0]?.business_location?.address?.country
           : address?.country
-      ) ?? normalizeCountryCode(itemCountry);
+      ) ?? isoCountryCode(itemCountry);
 
     const payer = this.applyCheckoutPaymentPhone(
       await this.resolveTrustedOrderPayer(user, orderData.payer_country),

@@ -72,6 +72,8 @@ describe('StripeTaxCheckoutBuilderService', () => {
 
   it('normalizes Canada country name', () => {
     expect(service.normalizeCountryCode('Canada')).toBe('CA');
+    expect(service.normalizeCountryCode('Cameroon')).toBe('CM');
+    expect(service.normalizeCountryCode('Cameroun')).toBe('CM');
   });
 
   it('detects tax-enabled country when configured', () => {

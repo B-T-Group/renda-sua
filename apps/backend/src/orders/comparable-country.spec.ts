@@ -1,4 +1,8 @@
-import { comparableCountry } from './delivery-pricing.util';
+import {
+  comparableCountry,
+  isoCountryCode,
+  normalizeDeliveryCountryCode,
+} from './delivery-pricing.util';
 
 describe('comparableCountry', () => {
   it('keeps ISO codes, ignoring case and space', () => {
@@ -14,6 +18,17 @@ describe('comparableCountry', () => {
     expect(comparableCountry("Cote d'Ivoire")).toBe('CI');
   });
 
+  it('maps French Cameroon to CM, never to Canada', () => {
+    expect(comparableCountry('Cameroun')).toBe('CM');
+    expect(comparableCountry('  cameroun ')).toBe('CM');
+    expect(comparableCountry('Cameroun')).toBe(comparableCountry('CM'));
+    expect(comparableCountry('Cameroun')).not.toBe(comparableCountry('Canada'));
+    expect(normalizeDeliveryCountryCode('Cameroun')).toBe('CM');
+    expect(normalizeDeliveryCountryCode('Cameroun')).not.toBe('CA');
+    expect(isoCountryCode('Cameroun')).toBe('CM');
+    expect(isoCountryCode('Cameroon')).toBe('CM');
+  });
+
   it('keeps Canada and Cameroon distinct (name or code on either side)', () => {
     expect(comparableCountry('Canada')).not.toBe(comparableCountry('Cameroon'));
     expect(comparableCountry('Canada')).toBe(comparableCountry('CA'));
@@ -24,6 +39,7 @@ describe('comparableCountry', () => {
     expect(comparableCountry(null)).toBeNull();
     expect(comparableCountry('   ')).toBeNull();
     expect(comparableCountry('Narnia')).toBe('NARNIA');
-    expect(comparableCountry('Cameroun')).toBe('CAMEROUN');
+    expect(isoCountryCode('Narnia')).toBeNull();
+    expect(isoCountryCode(null)).toBeNull();
   });
 });
