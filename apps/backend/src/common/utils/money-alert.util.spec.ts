@@ -3,9 +3,18 @@ import * as Sentry from '@sentry/nestjs';
 import { reportMoneyAnomaly } from './money-alert.util';
 
 describe('reportMoneyAnomaly', () => {
-  it('logs at error level with the marker and raises a Sentry message', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('logs at error level with the marker and raises a fingerprinted Sentry message', () => {
     const logger = { error: jest.fn() } as unknown as Logger;
-    const scope = { setTag: jest.fn(), setLevel: jest.fn(), setExtras: jest.fn() };
+    const scope = {
+      setTag: jest.fn(),
+      setLevel: jest.fn(),
+      setExtras: jest.fn(),
+      setFingerprint: jest.fn(),
+    };
     jest
       .spyOn(Sentry, 'withScope')
       .mockImplementation(((cb: (s: unknown) => void) => cb(scope)) as never);
@@ -17,8 +26,55 @@ describe('reportMoneyAnomaly', () => {
 
     expect(logger.error).toHaveBeenCalledWith('some_marker order=1 broke');
     expect(scope.setTag).toHaveBeenCalledWith('money_anomaly', 'some_marker');
-    expect(scope.setExtras).toHaveBeenCalledWith({ orderId: '1' });
-    expect(capture).toHaveBeenCalledWith('some_marker: order=1 broke', 'error');
+    expect(scope.setExtras).toHaveBeenCalledWith({
+      orderId: '1',
+      detail: 'order=1 broke',
+    });
+    expect(scope.setFingerprint).toHaveBeenCalledWith([
+      'money_anomaly',
+      'some_marker',
+    ]);
+    expect(capture).toHaveBeenCalledWith('some_marker', 'error');
+  });
+
+  it('groups two unique payment details under the same marker fingerprint', () => {
+    const logger = { error: jest.fn() } as unknown as Logger;
+    const scope = {
+      setTag: jest.fn(),
+      setLevel: jest.fn(),
+      setExtras: jest.fn(),
+      setFingerprint: jest.fn(),
+    };
+    jest
+      .spyOn(Sentry, 'withScope')
+      .mockImplementation(((cb: (s: unknown) => void) => cb(scope)) as never);
+    jest.spyOn(Sentry, 'captureMessage').mockReturnValue('id');
+
+    reportMoneyAnomaly(logger, 'duplicate_momo_collect', 'order=A tx=1', {
+      orderNumber: 'A',
+    });
+    reportMoneyAnomaly(logger, 'duplicate_momo_collect', 'order=B tx=2', {
+      orderNumber: 'B',
+    });
+
+    expect(scope.setFingerprint).toHaveBeenNthCalledWith(1, [
+      'money_anomaly',
+      'duplicate_momo_collect',
+    ]);
+    expect(scope.setFingerprint).toHaveBeenNthCalledWith(2, [
+      'money_anomaly',
+      'duplicate_momo_collect',
+    ]);
+    expect(Sentry.captureMessage).toHaveBeenNthCalledWith(
+      1,
+      'duplicate_momo_collect',
+      'error'
+    );
+    expect(Sentry.captureMessage).toHaveBeenNthCalledWith(
+      2,
+      'duplicate_momo_collect',
+      'error'
+    );
   });
 
   it('never throws when Sentry throws', () => {
