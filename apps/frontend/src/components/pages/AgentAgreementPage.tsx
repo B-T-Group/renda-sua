@@ -139,7 +139,7 @@ function PendingState(props: {
   const waiting = status?.status === 'sent' || status?.status === 'viewed';
   return (
     <Stack spacing={2} sx={{ width: '100%' }}>
-      {status?.missingEmail || status?.missingPhone ? (
+      {status?.missingEmail ? (
         <Alert
           severity="info"
           action={
@@ -148,7 +148,7 @@ function PendingState(props: {
             </Button>
           }
         >
-          {t('agentContract.contact', 'Add your email and phone on your profile before we can send the agreement.')}
+          {t('agentContract.contact', 'Add your email on your profile before we can send the agreement.')}
         </Alert>
       ) : null}
       {status?.signerEmail ? (
@@ -269,7 +269,7 @@ function canSend(
   status: AgentContractStatus | null,
   props: { nationality: string; idNumber: string; needsNationality: boolean; needsIdNumber: boolean }
 ): boolean {
-  if (!status || status.missingEmail || status.missingPhone) return false;
+  if (!status || status.missingEmail) return false;
   if (props.needsNationality && !props.nationality.trim()) return false;
   if (props.needsIdNumber && !props.idNumber.trim()) return false;
   return true;
