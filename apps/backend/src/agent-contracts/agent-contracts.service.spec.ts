@@ -148,6 +148,59 @@ describe('AgentContractsService ensure', () => {
   });
 });
 
+describe('AgentContractsService email-only signer (no phone required)', () => {
+  const noPhone = {
+    userId: 'u2', agentId: 'a2', agentCode: 'X2', email: 'nophone@example.com', phone: '',
+    signerName: 'No Phone', preferredLanguage: 'en', country: 'CM', addressCountry: null,
+    addressLine: null, city: null, referralCode: null,
+  };
+  function build(profile: Record<string, unknown>) {
+    const db = {
+      getInFlight: jest.fn().mockResolvedValue(null),
+      getLatest: jest.fn().mockResolvedValue(null),
+      hasSigned: jest.fn().mockResolvedValue(false),
+      insertContract: jest.fn().mockImplementation(async (row) => ({ id: 'c-new', ...row })),
+      updateContract: jest.fn().mockResolvedValue(undefined),
+    };
+    const boldsign = {
+      isConfigured: jest.fn().mockReturnValue(true),
+      sendUsingTemplate: jest.fn().mockResolvedValue({ documentId: 'doc-new' }),
+    };
+    const service = new AgentContractsService(
+      db as never,
+      { isRequired: jest.fn().mockResolvedValue(true) } as never,
+      { forUser: jest.fn().mockResolvedValue(profile) } as never,
+      boldsign as never,
+      {} as never,
+      { get: jest.fn().mockReturnValue({ expirationDays: 30, reminderIntervalDays: 3 }) } as never
+    );
+    return { service, boldsign };
+  }
+
+  it('sends to an agent with an email and no phone; signer is email only, no phone field', async () => {
+    const { service, boldsign } = build(noPhone);
+    await service.ensureForUser('u2', { nationality: 'Cameroonian', idNumber: 'ID1' } as never);
+    expect(boldsign.sendUsingTemplate).toHaveBeenCalledTimes(1);
+    const params = boldsign.sendUsingTemplate.mock.calls[0][0];
+    expect(params.signerEmail).toBe('nophone@example.com');
+    expect(Object.keys(params).some((k) => /phone|sms/i.test(k))).toBe(false);
+    expect(params.existingFormFields.some((f: { id: string }) => /phone/i.test(f.id))).toBe(false);
+  });
+
+  it('status never reports missingPhone', async () => {
+    const { service } = build(noPhone);
+    const status = await service.statusForUser('u2');
+    expect(status.missingPhone).toBe(false);
+    expect(status.missingEmail).toBe(false);
+  });
+
+  it('still requires an email', async () => {
+    const { service, boldsign } = build({ ...noPhone, email: '' });
+    await service.ensureForUser('u2', { nationality: 'Cameroonian', idNumber: 'ID1' } as never);
+    expect(boldsign.sendUsingTemplate).not.toHaveBeenCalled();
+  });
+});
+
 describe('AgentContractsService status', () => {
   const profile = {
     userId: 'u1',

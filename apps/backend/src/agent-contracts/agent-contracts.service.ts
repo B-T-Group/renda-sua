@@ -156,7 +156,8 @@ export class AgentContractsService {
     template: AgentContractTemplate,
     input?: AgentContractEnsureInput
   ): boolean {
-    if (!profile.email || !profile.phone) return false;
+    // Email only: BoldSign sends the signing link by email; a phone is never required.
+    if (!profile.email) return false;
     if (template.needsNationality && !this.nationality(input)) return false;
     if (template.needsIdNumber && !this.idNumber(input)) return false;
     return true;
@@ -389,7 +390,8 @@ function statusView(
     byLanguage,
     needsNationality: byLanguage[language].needsNationality,
     needsIdNumber: byLanguage[language].needsIdNumber,
-    missingPhone: !profile.phone,
+    // Kept for older clients; a phone is no longer required (email-only signing).
+    missingPhone: false,
     missingEmail: !profile.email,
     signerEmail: profile.email || null,
   };

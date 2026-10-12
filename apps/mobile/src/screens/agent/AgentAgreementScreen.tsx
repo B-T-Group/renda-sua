@@ -161,10 +161,10 @@ function AgreementForm(props: {
   const blocked = !canSend(props.status, props.nationality, props.idNumber, props);
   return (
     <View style={styles.form}>
-      {props.status?.missingEmail || props.status?.missingPhone ? (
+      {props.status?.missingEmail ? (
         <>
           <Text>
-            {t('agentContract.contact', 'Add your email and phone on your profile before we can send the agreement.')}
+            {t('agentContract.contact', 'Add your email on your profile before we can send the agreement.')}
           </Text>
           <Button mode="outlined" onPress={() => props.onProfile()}>
             {t('agentContract.updateProfile', 'Update profile')}
@@ -295,7 +295,7 @@ function canSend(
   idNumber: string,
   needs: { needsNationality: boolean; needsIdNumber: boolean }
 ): boolean {
-  if (!status || status.missingEmail || status.missingPhone) return false;
+  if (!status || status.missingEmail) return false;
   if (needs.needsNationality && !nationality.trim()) return false;
   if (needs.needsIdNumber && !idNumber.trim()) return false;
   return true;
