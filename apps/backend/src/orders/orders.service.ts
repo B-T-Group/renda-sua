@@ -4964,7 +4964,7 @@ export class OrdersService {
     }
 
     if ((order as any).payment_status === 'paid') {
-      return { success: true, message: 'Order is already paid' };
+      return { success: true, message: 'Order is already paid', result: 'paid' as const };
     }
 
     if ((order as any).pay_after_merchant_confirm === true) {
