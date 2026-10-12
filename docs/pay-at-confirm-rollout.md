@@ -140,3 +140,32 @@ Per `.cursor/rules/platform-capabilities.mdc`, update `docs/platform-capabilitie
   `/workspace/qa/pr545/results.md`; if the table is large, enable the flag in the apply
   action and pre-create the indexes concurrently, then the existing `IF NOT EXISTS`
   statements become no-ops.
+
+## Client contract notes (N1, N2)
+
+- **N2:** every "already paid" answer from `POST /orders/:id/retry-payment` carries `result: 'paid'`, including the short `{ success, message: 'Order is already paid' }` shape, so clients can switch on `result` alone.
+- **N1:** when several retries race, for example a double tap, the losers may get 409 `PAYMENT_STATE_UNCERTAIN`; the winner already sent the prompt. Clients (PR-2 web, PR-3 mobile) should treat that 409 like `already_pending`. Show "A payment request was just sent, approve it on your phone", keep the order screen polling, and do not show an error or offer an immediate resend. A real uncertain state (the provider status check failed) resolves itself on the next retry after about a minute.
+
+## Prod migration precheck and impact (N3)
+
+Run these read-only queries on prod before applying `20261012120000_order_pending_tx_unique`:
+
+```sql
+-- table size: plain CREATE INDEX holds a write lock for the whole build
+select count(*), pg_size_pretty(pg_total_relation_size('mobile_payment_transactions')) total
+  from mobile_payment_transactions;
+-- duplicate pending order payments the cleanup would cancel (all but the newest per order)
+select entity_id, count(*), min(created_at), max(created_at) from mobile_payment_transactions
+ where payment_entity='order' and status='pending' and entity_id is not null
+ group by 1 having count(*) > 1;
+-- of those, ones under 1 day old (possibly live prompts): must be 0 to proceed
+select count(*) from (
+  select row_number() over (partition by entity_id order by created_at desc) rn, created_at
+    from mobile_payment_transactions
+   where payment_entity='order' and status='pending' and entity_id is not null) t
+ where rn > 1 and created_at > now() - interval '1 day';
+```
+
+- **Locking:** the migration builds its 2 unique indexes and 1 btree index **without `CONCURRENTLY`**, so writes to `mobile_payment_transactions` (every payment, callback and retry) block until each build finishes. That takes milliseconds for thousands of rows; if the table reaches millions of rows, pre-create the indexes concurrently (see above).
+- **Dedupe impact:** for each order with more than one pending payment, every row except the newest becomes `cancelled`, with `error_code='SUPERSEDED_BY_RETRY'` and `superseded_reason='migration_duplicate_cleanup'`. Nothing is refunded or charged. If a customer later approves one of those prompts, the late-success handler credits the amount to their wallet and raises an alert. Rows with a NULL `entity_id` are not touched or covered by the index.
+- **Prod result (2026-10-12):** 934 rows (688 kB), 0 duplicate pending order payments, 0 recent, 0 pending order payments overall. These numbers are from after the migration had already been applied in the 12:17 ET promote.
