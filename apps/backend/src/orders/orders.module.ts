@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { AgentContractsModule } from '../agent-contracts/agent-contracts.module';
 import { AdminModule } from '../admin/admin.module';
 import { AgentsModule } from '../agents/agents.module';
 import { CommerceIntegrationsModule } from '../commerce-integrations/commerce-integrations.module';
@@ -92,6 +93,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     AgentsModule,
     DeliveryModule,
     DeliveryAvailabilityModule,
+    AgentContractsModule,
     DeliveryConfigModule,
     CommissionsModule,
     PdfModule,

@@ -49,7 +49,6 @@ describe('OrdersService - Saved Recipient Auth', () => {
       getUser: jest.fn(),
       resolveContext: jest.fn(),
       sessionPersonaContext: jest.fn(),
-      getUserAddressById: jest.fn(),
       executeQuery: jest.fn(),
       executeMutation: jest.fn(),
     };

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import * as jwt from 'jsonwebtoken';
 import { AddressesService } from '../addresses/addresses.service';
+import { AgentContractsService } from '../agent-contracts/agent-contracts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
   metaRegistrationEventId,
@@ -192,7 +193,8 @@ export class SignupService {
     private readonly otpSendLimiter: OtpSendLimiterService,
     private readonly lockout: LockoutService,
     @Optional() private readonly campaigns?: CreditCampaignPublisher,
-    @Optional() private readonly siteEvents?: SiteEventsService
+    @Optional() private readonly siteEvents?: SiteEventsService,
+    @Optional() private readonly agentContracts?: AgentContractsService
   ) {}
 
   normalizeEmail(email?: string | null): string {
@@ -2031,6 +2033,7 @@ export class SignupService {
     });
     await this.publishSignupCampaign(user.id, personas, normalizedAddress?.country, signupReferral);
     await this.businessProvisioning.scheduleEnsureContractForUser(user.id);
+    this.agentContracts?.scheduleForUser(user.id);
     this.emitCompleteRegistration(user, payload);
     return {
       user: {

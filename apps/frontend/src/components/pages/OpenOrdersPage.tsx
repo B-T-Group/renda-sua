@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useAgentHasIdDocument } from '../../hooks/useAgentHasIdDocument';
+import { useAgentContract } from '../../hooks/useAgentContract';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { orderModifiedAtMs } from '../../utils/orderListSort';
@@ -45,6 +46,10 @@ const OpenOrdersPage: React.FC = () => {
   } = useStripeConnect();
 
   const isAgent = Boolean(profile?.agent);
+  const { status: contractStatus } = useAgentContract(isAgent);
+  const agreementRequired = Boolean(
+    contractStatus?.required && !contractStatus.signed
+  );
   const isStripeRail = connectStatus?.paymentRail === 'stripe';
   const stripeReady =
     !!connectStatus?.connected &&
@@ -68,6 +73,10 @@ const OpenOrdersPage: React.FC = () => {
       void refetch();
     }
   }, [isAgent, stripeReady, refetch]);
+
+  const stripeClaimBypass =
+    isStripeRail && stripeReady && contractStatus != null && !agreementRequired;
+  const canClaimOrders = Boolean(ordersCanClaim) || stripeClaimBypass;
 
   const [filters, setFilters] = useState<OrderFilters>({
     search: '',
@@ -372,7 +381,8 @@ const OpenOrdersPage: React.FC = () => {
                       order={order}
                       onClaimSuccess={refetch}
                       isStripeRail={isStripeRail}
-                      canClaimOrders={ordersCanClaim || (isStripeRail && stripeReady)}
+                      canClaimOrders={canClaimOrders}
+                      agreementRequired={agreementRequired}
                     />
                   ))}
                 </Box>

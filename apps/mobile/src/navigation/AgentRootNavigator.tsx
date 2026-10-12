@@ -1,13 +1,16 @@
 import React from 'react';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { observer } from 'mobx-react-lite';
+import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, View } from 'react-native';
 import { SafeAreaInsetsContext, useSafeAreaInsets } from 'react-native-safe-area-context';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { NavigatorScreenParams, StackActions } from '@react-navigation/native';
 import { useTheme } from '../contexts/ThemeContext';
 import { useStore } from '../stores/RootStore';
+import { PersonaQuickSwitch } from '../components/persona/PersonaQuickSwitch';
 
 import HomeScreen from '../screens/agent/HomeScreen';
 import OpenOrdersScreen from '../screens/agent/OpenOrdersScreen';
@@ -21,6 +24,7 @@ import NotificationPreferencesScreen from '../screens/shared/NotificationPrefere
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
 import AccountManagementScreen from '../screens/shared/AccountManagementScreen';
 import DocumentsScreen from '../screens/shared/DocumentsScreen';
+import AgentAgreementScreen from '../screens/agent/AgentAgreementScreen';
 import MenuTabScreen from '../screens/agent/MenuTabScreen';
 import AgentPayScreen from '../screens/agent/AgentPayScreen';
 import ConfigurePaymentsScreen from '../screens/shared/ConfigurePaymentsScreen';
@@ -63,6 +67,7 @@ import { usePersonaAttentionBadge } from '../hooks/usePersonaAttentionBadge';
 import { useAppIconBadge } from '../hooks/useAppIconBadge';
 import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotificationPermissionOnStart';
 
+import { useAgentEntryGate } from '../hooks/useAgentContractStatus';
 import type { OrdersStackParamList } from '../screens/shared/orderDetail/types';
 const OrdersStack = createNativeStackNavigator<OrdersStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -98,6 +103,7 @@ export type RootStackParamList = {
   ConfigurePayments: undefined;
   MobilePaymentPhones: undefined;
   Documents: undefined;
+  AgentAgreement: undefined;
   Terms: undefined;
   Privacy: undefined;
   FAQ: undefined;
@@ -259,6 +265,14 @@ function MainTabsScreen() {
 }
 
 export function AgentRootNavigator() {
+  const gate = useAgentEntryGate();
+  if (gate.phase !== 'open') {
+    return <AgentEntryLock phase={gate.phase} onEntered={gate.enter} />;
+  }
+  return <AgentNavigatorChrome />;
+}
+
+function AgentNavigatorChrome() {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
   const insets = useSafeAreaInsets();
@@ -379,6 +393,11 @@ export function AgentRootNavigator() {
             }}
           />
           <RootStack.Screen name="Documents" component={DocumentsScreen} options={{ title: 'Documents' }} />
+          <RootStack.Screen
+            name="AgentAgreement"
+            component={AgentAgreementScreen}
+            options={{ title: t('agentContract.title', 'Sign your agent agreement') }}
+          />
           <RootStack.Screen name="Terms" component={TermsScreen} options={{ title: 'Conditions de service' }} />
           <RootStack.Screen
             name="Privacy"
@@ -425,4 +444,77 @@ export function AgentRootNavigator() {
   );
 }
 
-const styles = StyleSheet.create({ flex: { flex: 1 } });
+const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  center: { alignItems: 'center', justifyContent: 'center' },
+  switchFooter: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    gap: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+});
+
+const LockStack = createNativeStackNavigator();
+
+const AgentEntryLock = observer(function AgentEntryLock({
+  phase,
+  onEntered,
+}: {
+  phase: 'loading' | 'locked';
+  onEntered: () => void;
+}) {
+  const { t } = useTranslation();
+  const { colors, typography } = useTheme();
+  if (phase === 'loading') {
+    return (
+      <View style={[styles.flex, styles.center, { backgroundColor: colors.pageBackground }]}>
+        <ActivityIndicator color={colors.primary.main} />
+      </View>
+    );
+  }
+  return (
+    <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
+      <LockStack.Navigator
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.pageBackground },
+          headerTintColor: colors.text.primary,
+          headerTitleStyle: typography.h6,
+          headerShadowVisible: false,
+        }}
+      >
+        <LockStack.Screen
+          name="AgentAgreement"
+          options={{ title: t('agentContract.title', 'Sign your agent agreement') }}
+        >
+          {() => <AgentAgreementScreen onEntered={onEntered} />}
+        </LockStack.Screen>
+        <LockStack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profil' }} />
+      </LockStack.Navigator>
+      <LockPersonaFooter />
+    </View>
+  );
+});
+
+function LockPersonaFooter() {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  return (
+    <View
+      style={[
+        styles.switchFooter,
+        {
+          backgroundColor: colors.pageBackground,
+          borderTopColor: colors.divider,
+          paddingBottom: insets.bottom + 8,
+        },
+      ]}
+    >
+      <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+        {t('agentContract.switchHint', 'Shop or run your business while you sign.')}
+      </Text>
+      <PersonaQuickSwitch switchesOnly />
+    </View>
+  );
+}

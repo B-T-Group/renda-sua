@@ -32,7 +32,19 @@ function switchCtaDefault(p: Switchable): string {
   return 'Switch to client';
 }
 
-function PersonaQuickSwitchBase() {
+function descriptionKey(p: Switchable): string {
+  if (p === 'agent') return 'persona.agentDescription';
+  if (p === 'business') return 'persona.businessDescription';
+  return 'persona.clientDescription';
+}
+
+function descriptionDefault(p: Switchable): string {
+  if (p === 'agent') return 'Deliver nearby and get paid.';
+  if (p === 'business') return 'Sell from your storefront.';
+  return 'Shop nearby and track delivery.';
+}
+
+function PersonaQuickSwitchBase({ switchesOnly = false }: { switchesOnly?: boolean }) {
   const { t } = useTranslation();
   const { colors, typography, borderRadius } = useTheme();
   const { persona } = useStore();
@@ -56,16 +68,19 @@ function PersonaQuickSwitchBase() {
   const showPersonaSwitch = personaTargets.length > 0 && enrolled.length + persona.delegations.length > 1;
   const showDelegationSwitch = delegationTargets.length > 0;
   const showSwitch = showPersonaSwitch || showDelegationSwitch;
+  const showMissing = !switchesOnly && missing.length > 0 && !persona.isDelegationContext;
 
-  if (!showSwitch && missing.length === 0) return null;
+  if (!showSwitch && !showMissing) return null;
 
   return (
-    <View style={styles.wrap}>
+    <View style={switchesOnly ? styles.embedded : styles.wrap}>
       {showSwitch ? (
         <>
-          <Text style={[styles.sectionTitle, { color: colors.text.secondary }, typography.overline]}>
-            {t('menuTab.switchPersonaSection', { defaultValue: 'Switch mode' })}
-          </Text>
+          {switchesOnly ? null : (
+            <Text style={[styles.sectionTitle, { color: colors.text.secondary }, typography.overline]}>
+              {t('menuTab.switchPersonaSection', { defaultValue: 'Switch mode' })}
+            </Text>
+          )}
           {showPersonaSwitch
             ? personaTargets.map((p) => {
                 const accent = PERSONA_ACCENT[p];
@@ -91,9 +106,15 @@ function PersonaQuickSwitchBase() {
                     <View style={styles.textCol}>
                       <Text
                         style={[typography.subtitle2, { color: colors.text.primary }]}
-                        numberOfLines={2}
+                        numberOfLines={1}
                       >
                         {t(switchCtaKey(p), switchCtaDefault(p))}
+                      </Text>
+                      <Text
+                        style={[typography.caption, { color: colors.text.secondary }]}
+                        numberOfLines={2}
+                      >
+                        {t(descriptionKey(p), descriptionDefault(p))}
                       </Text>
                     </View>
                     {selecting ? (
@@ -121,7 +142,7 @@ function PersonaQuickSwitchBase() {
         </>
       ) : null}
 
-      {missing.length > 0 && !persona.isDelegationContext ? (
+      {showMissing ? (
         <>
           <Text
             style={[
@@ -203,6 +224,7 @@ export const PersonaQuickSwitch = observer(PersonaQuickSwitchBase);
 
 const styles = StyleSheet.create({
   wrap: { marginBottom: 24 },
+  embedded: { marginBottom: 0 },
   sectionTitle: {
     marginBottom: 12,
     marginLeft: 4,

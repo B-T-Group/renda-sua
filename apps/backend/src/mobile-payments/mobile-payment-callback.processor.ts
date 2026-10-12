@@ -16,6 +16,11 @@ import {
   type PaymentCallbackHandler,
 } from './payment-callback/payment-callback-handler.interface';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
+import {
+  DUPLICATE_PAYMENT_CREDITED,
+  LATE_SUCCESS_APPLIED,
+  SUPERSEDED_ERROR_CODES,
+} from '../orders/pay-after-retry.util';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -177,6 +182,17 @@ export class MobilePaymentCallbackProcessor {
         transactionId: callbackData.transactionId,
       };
     }
+    if (this.isSupersededOrderTx(tx) && callbackData.status === 'SUCCESS') {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.handleLateSuccessOnSupersededOrderTx(
+        tx,
+        callbackData.transactionId
+      );
+      return {
+        responseCode: callbackData.code,
+        transactionId: callbackData.transactionId,
+      };
+    }
     if (tx.status === 'success' && callbackData.status === 'SUCCESS') {
       await this.retrySuccessSideEffects(tx);
     }
@@ -204,6 +220,14 @@ export class MobilePaymentCallbackProcessor {
       );
       return { received: true, reference: callbackData.reference };
     }
+    if (this.isSupersededOrderTx(tx) && callbackData.status === 'SUCCESS') {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.handleLateSuccessOnSupersededOrderTx(
+        tx,
+        callbackData.reference || tx.transaction_id || ''
+      );
+      return { received: true, reference: callbackData.reference };
+    }
     if (tx.status === 'success' && callbackData.status === 'SUCCESS') {
       await this.retrySuccessSideEffects(tx);
     }
@@ -215,6 +239,65 @@ export class MobilePaymentCallbackProcessor {
       reference: callbackData.reference,
       skipped: true,
     };
+  }
+
+  /** Order attempt we cancelled to make room for a retry (or a late winner), #545. */
+  private isSupersededOrderTx(tx: MobilePaymentTransaction): boolean {
+    return (
+      tx.payment_entity === 'order' &&
+      tx.status === 'cancelled' &&
+      SUPERSEDED_ERROR_CODES.has(String(tx.error_code || ''))
+    );
+  }
+
+  /**
+   * The customer approved a prompt we had already superseded. The provider took the
+   * money, so it must never be dropped (#545, plan section 3):
+   * 1. confirm SUCCESS with the provider (callbacks are unsigned),
+   * 2. credit the payer wallet (idempotent on the tx id),
+   * 3. let the order decide: first success wins and is applied to the order; a
+   *    duplicate or post-cancel success stays in the wallet and raises an alert,
+   * 4. only then flip the row cancelled -> success (CAS). A failure before step 4 leaves
+   *    it cancelled + superseded, so the provider retry runs this path again.
+   */
+  private async handleLateSuccessOnSupersededOrderTx(
+    tx: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    if (!this.isMockedTransaction(tx)) {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(
+        tx,
+        'SUCCESS'
+      );
+    }
+    const credited = await this.creditWalletIfNeeded(tx);
+    if (!credited) {
+      throw new Error(
+        `Wallet credit failed for late success on superseded tx ${tx.id}; will retry`
+      );
+    }
+    const handler = findPaymentCallbackHandler(
+      this.resolveHandlers(),
+      tx.payment_entity
+    );
+    const outcome = handler?.onLateSuccessAfterSupersede
+      ? await handler.onLateSuccessAfterSupersede(tx)
+      : 'duplicate';
+    const moved = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'cancelled',
+      {
+        status: 'success',
+        ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+        error_code:
+          outcome === 'applied' ? LATE_SUCCESS_APPLIED : DUPLICATE_PAYMENT_CREDITED,
+      }
+    );
+    this.logger.warn(
+      `Late success on superseded order tx ${tx.id} (${tx.reference}): ${outcome}${
+        moved ? '' : ' (row already moved by a concurrent delivery)'
+      }`
+    );
   }
 
   private async processPendingMypvit(
@@ -310,6 +393,10 @@ export class MobilePaymentCallbackProcessor {
         `Wallet credit failed for mobile payment ${transaction.id}; leaving pending for retry`
       );
     }
+    if (transaction.payment_entity === 'order') {
+      await this.finalizeOrderPaymentSuccess(transaction, providerTransactionId);
+      return;
+    }
     await this.runHandlerSuccess(transaction);
     await this.databaseService.updateTransaction(transaction.id, {
       status: 'success',
@@ -317,6 +404,74 @@ export class MobilePaymentCallbackProcessor {
     });
     this.logger.log(
       `Updated transaction ${transaction.id} with status: success`
+    );
+  }
+
+  /**
+   * Order MoMo success (#545 QA F2). The row is claimed pending -> success with a
+   * conditional write BEFORE the order is finalized, so a concurrent retry can no longer
+   * supersede an attempt that is being applied (its own CAS on 'pending' fails), and a
+   * row the retry already superseded is never overwritten: it goes to the late-success
+   * handler instead. If finalizing throws, the claim is undone (success -> pending) so
+   * the provider retry runs the whole path again.
+   */
+  private async finalizeOrderPaymentSuccess(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    const claimed = await this.databaseService.updateTransactionIfStatus(
+      transaction.id,
+      'pending',
+      {
+        status: 'success',
+        ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+      }
+    );
+    if (!claimed) {
+      await this.routeUnclaimedOrderSuccess(transaction, providerTransactionId);
+      return;
+    }
+    try {
+      await this.runHandlerSuccess(transaction);
+    } catch (error) {
+      await this.databaseService
+        .updateTransactionIfStatus(transaction.id, 'success', { status: 'pending' })
+        .catch((e: any) =>
+          this.logger.error(
+            `Could not release success claim on ${transaction.id}: ${e?.message ?? e}`
+          )
+        );
+      throw error;
+    }
+    this.logger.log(`Updated transaction ${transaction.id} with status: success`);
+  }
+
+  /** The row left 'pending' between our read and the claim: re-read and route it. */
+  private async routeUnclaimedOrderSuccess(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    const fresh = await this.databaseService.getTransactionById(transaction.id);
+    if (fresh && this.isSupersededOrderTx(fresh)) {
+      await this.handleLateSuccessOnSupersededOrderTx(fresh, providerTransactionId);
+      return;
+    }
+    if (fresh?.status === 'success') {
+      await this.retrySuccessSideEffects(fresh);
+      return;
+    }
+    // Provider confirmed SUCCESS but our row is failed / cancelled for another reason:
+    // the wallet is already credited (idempotent), so the money is safe; flag it.
+    reportMoneyAnomaly(
+      this.logger,
+      'payment_finalize_failed',
+      `Order MoMo success on non-pending row ${transaction.id} (status=${fresh?.status ?? 'missing'}, error_code=${fresh?.error_code ?? ''}); amount left in wallet`,
+      {
+        transactionId: transaction.id,
+        paymentEntity: transaction.payment_entity,
+        entityId: transaction.entity_id,
+        replay: false,
+      }
     );
   }
 

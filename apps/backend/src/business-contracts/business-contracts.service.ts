@@ -300,13 +300,14 @@ export class BusinessContractsService {
   async handleWebhookEvent(
     payload: BoldSignWebhookPayload,
     signatureValid: boolean
-  ): Promise<void> {
+  ): Promise<boolean> {
     const eventType = payload.event?.eventType ?? 'Unknown';
     const documentId = payload.data?.documentId;
-    if (!documentId) return;
+    if (!documentId) return true;
 
-    const eventId = this.buildEventId(payload, documentId, eventType);
     const contract = await this.db.getContractByBoldsignId(documentId);
+    if (!contract) return false;
+    const eventId = this.buildEventId(payload, documentId, eventType);
     const isNew = await this.db.recordEvent({
       eventId,
       eventType,
@@ -323,11 +324,11 @@ export class BusinessContractsService {
         eventType,
         payload
       );
-      return;
+      return true;
     }
     if (!signatureValid) {
       await this.db.markEventProcessed(eventId, 'Invalid webhook secret');
-      return;
+      return true;
     }
 
     try {
@@ -337,6 +338,7 @@ export class BusinessContractsService {
       await this.db.markEventProcessed(eventId, error?.message);
       throw error;
     }
+    return true;
   }
 
   private async retryUnprocessedWebhookEvent(

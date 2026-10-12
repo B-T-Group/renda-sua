@@ -30,4 +30,17 @@ describe('toCreateOrderHttpException', () => {
     expect(exception.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
     expect(exception.message).toBe('Stripe account is not configured');
   });
+
+  it('maps a missing delivery address to HTTP 404', () => {
+    const exception = toCreateOrderHttpException(
+      new Error('Delivery address not found')
+    );
+
+    expect(exception.getStatus()).toBe(HttpStatus.NOT_FOUND);
+    expect(exception.getResponse()).toEqual({
+      success: false,
+      error: 'Delivery address not found',
+      message: 'Delivery address not found',
+    });
+  });
 });

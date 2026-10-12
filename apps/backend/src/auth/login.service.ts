@@ -10,6 +10,7 @@ import * as jwt from 'jsonwebtoken';
 import { Auth0Service, Auth0TokenResponse } from './auth0.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { BusinessProvisioningService } from './provisioning/business-provisioning.service';
+import { AgentContractsService } from '../agent-contracts/agent-contracts.service';
 import {
   SessionData,
   SessionStoreService,
@@ -159,7 +160,8 @@ export class LoginService {
     private readonly otpSendLimiter: OtpSendLimiterService,
     private readonly authFlowV2Store: AuthFlowV2StoreService,
     private readonly signupService: SignupService,
-    @Optional() private readonly siteEvents?: SiteEventsService
+    @Optional() private readonly siteEvents?: SiteEventsService,
+    @Optional() private readonly agentContracts?: AgentContractsService
   ) {}
 
   private normalizeEmail(email: string): string {
@@ -765,8 +767,9 @@ export class LoginService {
     try {
       await this.businessProvisioning.ensureContractForUser(user.id);
     } catch {
-      // Continue even if contract provisioning fails
+      // Continue even if merchant contract provisioning fails
     }
+    this.agentContracts?.scheduleForUser(user.id);
     if (channel === 'email') {
       await this.markEmailVerifiedIfNeeded(user.id, true);
       return;

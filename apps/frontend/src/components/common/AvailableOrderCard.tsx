@@ -49,6 +49,8 @@ interface AvailableOrderCardProps {
   isStripeRail?: boolean;
   /** When false, agent can preview but must complete verification to claim. */
   canClaimOrders?: boolean;
+  /** Unsigned agent agreement blocks claim even when Stripe setup is complete. */
+  agreementRequired?: boolean;
 }
 
 interface ClaimAvailabilityResult {
@@ -60,11 +62,30 @@ interface ClaimAvailabilityResult {
   message: string;
 }
 
+function openBlockedClaim(
+  agreementRequired: boolean,
+  isStripeRail: boolean,
+  connectLoading: boolean,
+  navigate: (path: string) => void,
+  startOnboarding: () => void
+): void {
+  if (agreementRequired) {
+    navigate('/agent/agreement');
+    return;
+  }
+  if (isStripeRail) {
+    if (!connectLoading) startOnboarding();
+    return;
+  }
+  navigate('/documents');
+}
+
 const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
   order,
   onClaimSuccess,
   isStripeRail = false,
   canClaimOrders = true,
+  agreementRequired = false,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -170,11 +191,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
 
   const handleClaim = async () => {
     if (!canClaimOrders) {
-      if (isStripeRail) {
-        if (!connectLoading) await startOnboarding();
-      } else {
-        navigate('/documents');
-      }
+      openBlockedClaim(agreementRequired, isStripeRail, connectLoading, navigate, startOnboarding);
       return;
     }
 
@@ -768,7 +785,9 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               ? t('orderActions.claiming', 'Claiming...')
               : canClaimOrders
                 ? t('orderActions.claimOrder', 'Claim Order')
-                : t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim')}
+                : agreementRequired
+                  ? t('agentContract.review', 'Review agreement')
+                  : t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim')}
           </Button>
         </Box>
       </CardContent>

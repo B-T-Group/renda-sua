@@ -46,6 +46,7 @@ describe('LoginService OTP merchant agreement gating', () => {
   let businessProvisioning: {
     ensureContractForUser: jest.Mock;
   };
+  let agentContracts: { scheduleForUser: jest.Mock };
   let service: LoginService;
   const lockout = {
     isLockedOut: jest.fn().mockResolvedValue(false),
@@ -82,6 +83,7 @@ describe('LoginService OTP merchant agreement gating', () => {
     businessProvisioning = {
       ensureContractForUser: jest.fn().mockResolvedValue(undefined),
     };
+    agentContracts = { scheduleForUser: jest.fn() };
     service = new LoginService(
       hasuraSystemService as never,
       auth0Service as never,
@@ -93,7 +95,9 @@ describe('LoginService OTP merchant agreement gating', () => {
       {
         startIdentifierOnlyOtp: jest.fn(),
         verifyOtpForAuthFlowV2: jest.fn(),
-      } as never
+      } as never,
+      undefined,
+      agentContracts as never
     );
   });
 
@@ -117,6 +121,7 @@ describe('LoginService OTP merchant agreement gating', () => {
     expect(businessProvisioning.ensureContractForUser).toHaveBeenCalledWith(
       'user-1'
     );
+    expect(agentContracts.scheduleForUser).toHaveBeenCalledWith('user-1');
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('VerifyLoginEmail'),
       { id: 'user-1' }
@@ -149,6 +154,7 @@ describe('LoginService OTP merchant agreement gating', () => {
     expect(businessProvisioning.ensureContractForUser).toHaveBeenCalledWith(
       'user-1'
     );
+    expect(agentContracts.scheduleForUser).toHaveBeenCalledWith('user-1');
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('VerifyLoginEmail'),
       { id: 'user-1' }
@@ -172,6 +178,7 @@ describe('LoginService OTP merchant agreement gating', () => {
     );
 
     expect(businessProvisioning.ensureContractForUser).not.toHaveBeenCalled();
+    expect(agentContracts.scheduleForUser).not.toHaveBeenCalled();
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
@@ -229,6 +236,7 @@ describe('LoginService OTP merchant agreement gating', () => {
       'mobile'
     );
 
+    expect(agentContracts.scheduleForUser).toHaveBeenCalledWith('user-2');
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('VerifyLoginPhone'),
       { id: 'user-2' }

@@ -92,7 +92,7 @@ Also track (from logs/analytics): unpaid auto-cancel count; payment failure/retr
 | Situation | What to do |
 |---|---|
 | Client says they were not asked to pay | Check the order is `confirmed` with `pay_after_merchant_confirm = true`; ask the client to open the order and use the pay prompt (the pay request is also sent as a notification when the store confirms). |
-| MoMo payment failed | Client can retry from the order; the order stays unpaid until the unpaid window ends. If it is about to expire and the client is paying, ask the store to re-place the order after cancel. |
+| MoMo payment failed | Client can retry from the order (resend, or send to a different number); the order stays unpaid until the unpaid window ends. If it is about to expire and the client is paying, ask the store to re-place the order after cancel. |
 | Order auto-cancelled while client was paying | If money was received after cancel, treat as a refund case via the existing refund-request flow (do not re-open). |
 | Store cannot fulfil after payment | Store cancels the paid order; the client is refunded automatically. Confirm the refund appears. |
 | Disputed fee | Fee rules by phase: cancellation fee applies only after a pay-after order is paid. Check the order's fee lines and the fee matrix in `docs/platform-capabilities.md`. |
@@ -111,3 +111,32 @@ Suggested (agree thresholds with the team before the pilot starts):
 ## 8. Docs
 
 Per `.cursor/rules/platform-capabilities.mdc`, update `docs/platform-capabilities.md` (Changes since, flags table, gaps register) whenever this feature changes.
+
+## Client retry semantics (#545 PR-1)
+
+`POST /orders/:id/retry-payment` on a confirmed pay-after-confirm MoMo order:
+
+- Body `{ phone_number?, save_phone? }`, header `Idempotency-Key` (one per tap). Same key within 10 min returns the first result and sends nothing.
+- The previous pending request is checked with the provider first. Provider SUCCESS -> order finalized, `result: paid`. Provider FAILED -> new request. Status unknown -> 409 `PAYMENT_STATE_UNCERTAIN` (never a blind second charge).
+- Same phone: a new prompt replaces a pending one only after 90 s (`ORDER_MOMO_RESEND_MIN_AGE_SECONDS`), otherwise `result: already_pending`. A changed number (validated, MoMo operator, order country) replaces it immediately. Max 5 new requests per order per 10 min (429 `RETRY_RATE_LIMITED`). Operator prompts expire after about 5 min (`prompt_expires_at`).
+- The replaced attempt is kept as `cancelled` with `error_code=SUPERSEDED_BY_RETRY`, `superseded_reason`, `superseded_at`, `superseded_by_id` on `mobile_payment_transactions`.
+- A changed number is used for this order only and written to `orders.payer_phone` only after the provider accepts the request; `save_phone: true` also adds it to the client's payment phones.
+- Late approval of a replaced prompt: first success wins and pays the order (any newer pending request is cancelled). A duplicate or post-cancel success stays in the client's Rendasua wallet, raises Sentry `duplicate_momo_collect` (grouped by that marker; unique order / tx text is extras, not a new issue) and pushes the client ("Payment added to your wallet"). Support: no MoMo refund needed, the client can spend or withdraw the wallet balance.
+
+## QA follow-up (#545 PR-1b)
+
+- Order MoMo success is claimed with a conditional write (`pending -> success`) before the
+  order is finalized; a row a retry superseded goes to the late-success handler. After a
+  success applies, other pending attempts on the paid order are cancelled.
+- Retry caps across orders: one prompt per target number per 90 s, 5 per number per hour,
+  10 per payer user per hour (`RETRY_RATE_LIMITED`, `scope: number|user`).
+- `Idempotency-Key` reused with a different phone returns 422 `IDEMPOTENCY_KEY_REUSED`.
+- Order cancel closes pending MoMo attempts (`SUPERSEDED_BY_ORDER_CANCEL`); the operator
+  prompt itself cannot be withdrawn, a late approval is credited to the wallet.
+- `CREATE INDEX CONCURRENTLY`: the DEV/prod Hasura server (v2.48) and CLI support
+  `-- hasura:no-transaction`, but only with `--per-migration-transaction`, which
+  `.github/actions/apply-hasura` does not pass, and the indexes already exist on DEV.
+  Not changed here. Before the prod apply, run the read-only precheck in
+  `/workspace/qa/pr545/results.md`; if the table is large, enable the flag in the apply
+  action and pre-create the indexes concurrently, then the existing `IF NOT EXISTS`
+  statements become no-ops.

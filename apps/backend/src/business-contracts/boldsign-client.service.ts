@@ -8,7 +8,7 @@ export interface SendFromTemplateParams {
   templateId: string;
   signerName: string;
   signerEmail: string;
-  title: string;
+  title?: string;
   message?: string;
   expirationDays?: number;
   reminderIntervalDays?: number;
@@ -52,10 +52,8 @@ export class BoldsignClientService {
       role.existingFormFields = params.existingFormFields;
     }
 
-    const body: Record<string, unknown> = {
-      title: params.title,
-      roles: [role],
-    };
+    const body: Record<string, unknown> = { roles: [role] };
+    if (params.title) body.title = params.title;
     if (params.message) body.message = params.message;
     if (params.expirationDays) body.expiryDays = params.expirationDays;
     if (params.reminderIntervalDays) {

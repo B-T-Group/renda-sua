@@ -12,6 +12,7 @@ export const CLIENT_FLAG_KEYS = [
   'assistant_shopping_v1',
   'restock_alerts_v1',
   'discovery_sort_v1',
+  'agent_contract_required',
 ] as const;
 
 export type ClientFlagKey = (typeof CLIENT_FLAG_KEYS)[number];
@@ -44,4 +45,6 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   restock_alerts_v1: false,
   /** Discovery sort modes, rating trust signal and empty-result recovery (#342). Per market. */
   discovery_sort_v1: false,
+  /** Agents must sign a BoldSign agreement before they can claim orders. */
+  agent_contract_required: true,
 };

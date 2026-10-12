@@ -1,5 +1,7 @@
 import {
+  agentClaimEnabled,
   agentIdVerificationPending,
+  agentNeedsContract,
   agentNeedsIdUpload,
   agentNeedsMomoSetup,
 } from './agentClaimSetupGate';
@@ -60,5 +62,35 @@ describe('agentClaimSetupGate', () => {
     expect(agentIdVerificationPending(input)).toBe(true);
     expect(agentNeedsIdUpload(input)).toBe(false);
     expect(agentNeedsMomoSetup(input)).toBe(false);
+  });
+
+  it('requires a signature only while the agreement is still unsigned', () => {
+    expect(agentNeedsContract({ required: true, signed: false })).toBe(true);
+    expect(agentNeedsContract({ required: true, signed: true })).toBe(false);
+    expect(agentNeedsContract({ required: false, signed: false })).toBe(false);
+  });
+
+  it('does not let Stripe readiness bypass an unsigned agreement', () => {
+    expect(
+      agentClaimEnabled({
+        ordersCanClaim: false,
+        stripeBypass: true,
+        contract: { required: true, signed: false },
+      })
+    ).toBe(false);
+    expect(
+      agentClaimEnabled({
+        ordersCanClaim: false,
+        stripeBypass: true,
+        contract: { required: true, signed: true },
+      })
+    ).toBe(true);
+    expect(
+      agentClaimEnabled({
+        ordersCanClaim: false,
+        stripeBypass: true,
+        contract: null,
+      })
+    ).toBe(false);
   });
 });

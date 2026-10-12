@@ -141,6 +141,7 @@ describe('MobilePaymentCallbackProcessor', () => {
     getTransactionByTransactionId: jest.fn(),
     logCallback: jest.fn(),
     updateTransaction: jest.fn(),
+    updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
   };
   const accountsService = {
     hasTransactionForReference: jest.fn(),
@@ -883,6 +884,8 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     getTransactionByReference: jest.fn(),
     logCallback: jest.fn(),
     updateTransaction: jest.fn(),
+    updateTransactionIfStatus: jest.fn(),
+    getTransactionById: jest.fn(),
   };
   const accountsService = {
     registerDepositIfNotExists: jest.fn(),
@@ -940,13 +943,14 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     databaseService.getTransactionByReference.mockResolvedValue(orderTx);
     databaseService.logCallback.mockResolvedValue(undefined);
     databaseService.updateTransaction.mockResolvedValue(undefined);
+    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
     accountsService.registerDepositIfNotExists.mockResolvedValue({
       success: true,
     });
     orderHandler.onPaymentSuccess.mockResolvedValue(undefined);
   });
 
-  it('does not mark the tx success when the order finalize fails; alerts and leaves it pending for replay', async () => {
+  it('does not leave the tx success when the order finalize fails; alerts and releases the claim to pending for replay', async () => {
     orderHandler.onPaymentSuccess.mockRejectedValue(new Error('hold failed'));
 
     await expect(processor.processMypvitCallback(callback)).rejects.toThrow(
@@ -954,6 +958,18 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     );
 
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
+      1,
+      orderTx.id,
+      'pending',
+      { status: 'success', transaction_id: 'provider-1' }
+    );
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
+      2,
+      orderTx.id,
+      'success',
+      { status: 'pending' }
+    );
     expect(reportMoneyAnomaly).toHaveBeenCalledWith(
       expect.anything(),
       'payment_finalize_failed',
@@ -964,10 +980,12 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
 
   it('marks success normally when the order finalize succeeds (no alert)', async () => {
     await processor.processMypvitCallback(callback);
-    expect(databaseService.updateTransaction).toHaveBeenCalledWith(orderTx.id, {
-      status: 'success',
-      transaction_id: 'provider-1',
-    });
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderTx.id,
+      'pending',
+      { status: 'success', transaction_id: 'provider-1' }
+    );
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(1);
     expect(reportMoneyAnomaly).not.toHaveBeenCalled();
   });
 

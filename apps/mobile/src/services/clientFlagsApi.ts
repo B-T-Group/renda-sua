@@ -10,7 +10,8 @@ export type ClientFlagKey =
   | 'assistant_launcher_v1'
   | 'assistant_shopping_v1'
   | 'restock_alerts_v1'
-  | 'discovery_sort_v1';
+  | 'discovery_sort_v1'
+  | 'agent_contract_required';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -28,6 +29,7 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   restock_alerts_v1: false,
   /** Discovery sort modes + empty-result recovery (#342). Backend default off. */
   discovery_sort_v1: false,
+  agent_contract_required: true,
 };
 
 type ClientFlagsResponse = {

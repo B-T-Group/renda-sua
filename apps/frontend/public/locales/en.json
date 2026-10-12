@@ -8760,5 +8760,29 @@
     "appliedToTotal": "Applied to your order — not an extra fee",
     "dueNow": "Due now (deposit)",
     "amountDue": "Amount due"
+  },
+  "agentContract": {
+    "banner": "Read and sign your agreement to claim deliveries and earn commissions.",
+    "review": "Review agreement",
+    "illustration": "Agent agreement",
+    "title": "Sign your agent agreement",
+    "body": "Read and sign your agent agreement. You can then claim deliveries and earn commissions.",
+    "signed": "Your agreement is signed. You can claim deliveries and earn commissions.",
+    "back": "Return to dashboard",
+    "contact": "Add your email and phone on your profile before we can send the agreement.",
+    "sendTo": "We will send the agreement to {{email}}.",
+    "language": "Contract language",
+    "languageEn": "English",
+    "languageFr": "French",
+    "updateProfile": "Update profile",
+    "notSignedYet": "We have not received your signature yet. Sign the BoldSign email, then try again.",
+    "emailed": "Check {{email}} for the BoldSign email, then refresh.",
+    "yourEmail": "your email",
+    "nationality": "Nationality",
+    "idNumber": "ID number",
+    "resend": "Resend email",
+    "refresh": "I have signed",
+    "send": "Email me the agreement",
+    "loadError": "Could not load the agreement."
   }
 }
