@@ -81,12 +81,17 @@ export function growthBonusPercent(
   return match?.bonusPercent ?? 0;
 }
 
+export function registrationsNeeded(
+  grid: Pick<CommissionGrid, 'registrationTarget' | 'objectiveThresholdPercent'>
+): number {
+  return Math.ceil((grid.registrationTarget * grid.objectiveThresholdPercent) / 100);
+}
+
 export function registrationsMeetObjective(
   registrations: number,
   grid: Pick<CommissionGrid, 'registrationTarget' | 'objectiveThresholdPercent'>
 ): boolean {
-  const needed = (grid.registrationTarget * grid.objectiveThresholdPercent) / 100;
-  return registrations >= needed;
+  return registrations >= registrationsNeeded(grid);
 }
 
 export function month3WeeklyPace(salesInWindow: number): number {

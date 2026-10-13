@@ -12,6 +12,7 @@ import { RepresentativeCommissionGridService, type StoredCommissionGrid } from '
 import {
   computeStatement,
   eligibleOrderAmount,
+  registrationsNeeded,
   uncollectedDeliveryAmount,
   type StatementMath,
 } from './representative-commission.rules';
@@ -43,6 +44,7 @@ export interface PortfolioCommissionMonth {
   eligible: number;
   registrations: number;
   registrationTarget: number;
+  registrationsNeeded: number;
   objectiveMet: boolean;
   growthPercent: number;
   baseAmount: number;
@@ -858,6 +860,7 @@ function monthView(
     eligible: totals.eligible,
     registrations,
     registrationTarget: grid.registrationTarget,
+    registrationsNeeded: registrationsNeeded(grid),
     objectiveMet: math.objectiveMet,
     growthPercent: math.growthPercent,
     baseAmount: math.baseAmount,
@@ -891,6 +894,7 @@ function monthFromStatement(
     eligible: Number(row.eligible_total),
     registrations: row.registration_count,
     registrationTarget: grid.registrationTarget,
+    registrationsNeeded: registrationsNeeded(grid),
     objectiveMet: row.objective_met,
     growthPercent: Number(row.growth_percent),
     baseAmount: Number(row.base_amount),

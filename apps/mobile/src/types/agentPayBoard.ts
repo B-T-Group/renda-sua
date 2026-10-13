@@ -109,6 +109,7 @@ export interface PortfolioCommissionMonth {
   eligible: number;
   registrations: number;
   registrationTarget: number;
+  registrationsNeeded: number;
   objectiveMet: boolean;
   growthPercent: number;
   baseAmount: number;

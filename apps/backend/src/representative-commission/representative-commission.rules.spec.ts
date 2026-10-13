@@ -4,6 +4,7 @@ import {
   growthBonusPercent,
   month3WeeklyPace,
   registrationsMeetObjective,
+  registrationsNeeded,
   uncollectedDeliveryAmount,
   type CommissionGrid,
 } from './representative-commission.rules';
@@ -84,6 +85,8 @@ describe('representative commission rules', () => {
       quarterlyEarned: 100_000,
       grid: xafGrid(),
     });
+    expect(registrationsNeeded(xafGrid())).toBe(28);
+    expect(registrationsMeetObjective(28, xafGrid())).toBe(true);
     expect(registrationsMeetObjective(27, xafGrid())).toBe(false);
     expect(actual.growthAmount).toBe(0);
     expect(actual.activationPaid).toBe(0);

@@ -138,7 +138,7 @@ function PayList({
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       ListHeaderComponent={
         <View>
-          {portfolio ? <CommissionGridCard view={portfolio} /> : null}
+          {portfolio ? <CommissionGridCard view={portfolio} onRefer={onRefer} /> : null}
           <PayStatusFilter value={status} onChange={onStatus} showExpired={showExpired} />
         </View>
       }
