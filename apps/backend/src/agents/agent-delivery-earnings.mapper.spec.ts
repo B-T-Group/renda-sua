@@ -1,6 +1,7 @@
 import {
   deliveryPayRates,
   groupDeliveryTrips,
+  parseDeliveryPeriod,
   periodBounds,
 } from './agent-delivery-earnings.mapper';
 import type { DeliveryPayoutRow } from './agent-delivery-earnings.types';
@@ -40,6 +41,14 @@ describe('agent delivery earnings mapper', () => {
     expect(last.start).toBe('2026-08-31T23:00:00.000Z');
     expect(last.end).toBe(month.start);
     expect(periodBounds('all', now, 'UTC')).toEqual({ start: null, end: null });
+  });
+
+  it('keeps last month and all, and treats any other period as this month', () => {
+    expect(parseDeliveryPeriod('last_month')).toBe('last_month');
+    expect(parseDeliveryPeriod('all')).toBe('all');
+    expect(parseDeliveryPeriod(undefined)).toBe('month');
+    expect(parseDeliveryPeriod('week')).toBe('month');
+    expect(parseDeliveryPeriod('ALL')).toBe('month');
   });
 
   it('groups base and per-km pay for one order and ignores item sales', () => {

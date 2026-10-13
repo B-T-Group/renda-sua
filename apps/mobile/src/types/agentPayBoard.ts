@@ -15,7 +15,8 @@ export type PaySourceKind =
   | 'merchant_referral'
   | 'sale_percent'
   | 'payment_schedule'
-  | 'delivery_commission';
+  | 'delivery_commission'
+  | 'portfolio_commission';
 
 export interface PayBoardSource {
   kind: PaySourceKind;
@@ -93,4 +94,50 @@ export interface EarningItem {
 export interface PayBoard {
   summary: PayBoardSummary;
   items: EarningItem[];
+  portfolio?: PortfolioCommissionView | null;
+}
+
+export interface PortfolioCommissionTier {
+  minMonthlySales: number;
+  maxMonthlySales: number | null;
+  bonusPercent: number;
+}
+
+export interface PortfolioCommissionMonth {
+  periodStart: string;
+  gmv: number;
+  eligible: number;
+  registrations: number;
+  registrationTarget: number;
+  registrationsNeeded: number;
+  objectiveMet: boolean;
+  growthPercent: number;
+  baseAmount: number;
+  growthAmount: number;
+  activationPaid: number;
+  fastStartEarned: number;
+  fastStartPaid: number;
+  quarterlyEarned: number;
+  quarterlyPaid: number;
+  payableAmount: number;
+  holdAmount: number;
+  holdReleaseAt: string | null;
+  recruitmentAmount: number;
+  status: 'open' | 'credited';
+}
+
+export interface PortfolioCommissionView {
+  currency: string;
+  basePercent: number;
+  capPercent: number;
+  holdPercent: number;
+  holdDays: number;
+  registrationTarget: number;
+  tiers: PortfolioCommissionTier[];
+  activationAmount: number;
+  fastStartAmount: number;
+  quarterlyAmount: number;
+  courierAmount: number;
+  ambassadorAmount: number;
+  month: PortfolioCommissionMonth | null;
 }

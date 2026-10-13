@@ -21,7 +21,7 @@ Endpoint bodies and sequences: [reference.md](reference.md).
 - Never print, log, or commit the access token. Redact `Authorization` and tokens in the report.
 - Do not send `x-rendasua-platform: mobile` (claim then requires in-app location consent).
 - Do not cancel the order. On the first failed step, stop **that** flow, restore flags, and continue if more flows were selected.
-- Quantity is always 1. Every Mobile Money charge (order total, deposit, pay-after charge, remainder, agent hold top-up) must be **under 2000 XAF**. Dev FreemoPay mock succeeds below 2000 and fails at 2000 or above, then callbacks in about 1.5s.
+- Quantity is always 1. Every Mobile Money charge (order total, deposit, pay-after charge, remainder, agent hold top-up) must be **under 1,000,000 XAF**. Dev FreemoPay mock succeeds below 1,000,000 and fails at 1,000,000 or above, then callbacks in about 1.5s.
 - Restore every location or item flag you changed, including after a failure.
 
 ## 1. Choose the flow
@@ -63,7 +63,7 @@ Enable a flag only when preflight rejects the timing or does not show pay-after 
 
 Re-run preflight after a flag change. If pay-after is still ineligible, stop and say the location kill switch is off. Do not edit `application_configurations`.
 
-Refuse create when any charge that MoMo will collect is **>= 2000**:
+Refuse create when any charge that MoMo will collect is **>= 1,000,000**:
 
 - pay now / pay after: `groups[0].total`
 - pay at delivery or pickup with a deposit: `deposit_amount`, and later the remainder `amount_due`

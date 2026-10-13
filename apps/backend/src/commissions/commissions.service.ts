@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { LaunchPromoService } from '../launch-promo/launch-promo.service';
@@ -13,6 +13,7 @@ import { StripePayoutService } from '../stripe-payments/stripe-payout.service';
 import { Partners } from './generated-types';
 import { CommissionBreakdown, CommissionConfig } from './types';
 import { getCommissionForBusinessAccountType } from './business-account-type';
+import { RepresentativeCommissionService } from '../representative-commission/representative-commission.service';
 
 @Injectable()
 export class CommissionsService {
@@ -25,7 +26,8 @@ export class CommissionsService {
     private readonly notificationsService: NotificationsService,
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly stripePayoutService: StripePayoutService,
-    private readonly launchPromoService: LaunchPromoService
+    private readonly launchPromoService: LaunchPromoService,
+    @Optional() private readonly portfolio?: RepresentativeCommissionService
   ) {}
 
   /**
@@ -270,6 +272,90 @@ export class CommissionsService {
     );
     await this.processOrderSubtotalPayment(order, breakdown.orderSubtotal);
     await this.creditServiceFee(order, rendasuaHQUser);
+    await this.recordPortfolioAccrual(order, forceZeroItemCommission);
+  }
+
+  private async recordPortfolioAccrual(order: any, forceZero: boolean): Promise<void> {
+    if (!this.portfolio || !order?.id || !order.business_id) return;
+    try {
+      await this.portfolio.accrue(await this.portfolioOrder(order, forceZero));
+    } catch (error: any) {
+      this.logger.error(`Portfolio accrual failed: ${error.message}`);
+    }
+  }
+
+  private async portfolioOrder(order: any, forceZero: boolean) {
+    const locationId = order.business_location_id ?? order.business_location?.id ?? null;
+    const config = await this.getCommissionConfigs(locationId);
+    const percent = forceZero ? 0 : config.rendasuaItemCommissionPercentage;
+    return {
+      orderId: order.id,
+      businessId: order.business_id,
+      currency: order.currency,
+      subtotal: Number(order.subtotal) || 0,
+      itemCommission: ((Number(order.subtotal) || 0) * percent) / 100,
+      deliveryFeeWaived: !!order.delivery_fee_waived,
+      baseDeliveryFee: Number(order.base_delivery_fee) || 0,
+      perKmDeliveryFee: Number(order.per_km_delivery_fee) || 0,
+      firstOrderDiscount: Number(order.first_order_base_delivery_discount_amount) || 0,
+      clientUserId: order.client?.user_id ?? null,
+      countryCode: await this.portfolioCountry(order.business_id),
+      completedAt: order.completed_at ?? null,
+    };
+  }
+
+  /** Same ISO country the legacy 1% payout uses for this shop's agent. */
+  private async portfolioCountry(businessId?: string | null): Promise<string> {
+    const userId = await this.referringAgentUser(businessId);
+    const country = userId ? await this.paymentRoutingService.getUserCountryCode(userId) : null;
+    return (country || 'CM').toUpperCase();
+  }
+
+  private async referringAgentUser(businessId?: string | null): Promise<string | null> {
+    if (!businessId) return null;
+    const result = await this.hasuraSystemService.executeQuery(
+      `query PortfolioAgentUser($id: uuid!) {
+        businesses_by_pk(id: $id) { referring_agent { user_id } }
+      }`,
+      { id: businessId }
+    );
+    return result?.businesses_by_pk?.referring_agent?.user_id ?? null;
+  }
+
+  async portfolioReplacesLegacy(
+    country: string | null,
+    currency: string,
+    at: Date
+  ): Promise<boolean> {
+    try {
+      return (await this.portfolio?.replacesLegacy(country, currency, at)) === true;
+    } catch (error: any) {
+      this.logger.error(`Portfolio replace check failed: ${error.message}`);
+      return false;
+    }
+  }
+
+  async accruePortfolioForCompletedOrder(orderId: string): Promise<void> {
+    try {
+      const order = await this.completedPortfolioOrder(orderId);
+      if (!order) return;
+      const promo = await this.launchPromoService.orderConsumedPromo(orderId);
+      await this.recordPortfolioAccrual(order, promo);
+    } catch (error: any) {
+      this.logger.error(`Portfolio completion accrual failed: ${error.message}`);
+    }
+  }
+
+  private async completedPortfolioOrder(orderId: string): Promise<any | null> {
+    const response = await this.hasuraSystemService.executeQuery(
+      completedPortfolioOrderQuery(),
+      { orderId }
+    );
+    const order = response?.orders_by_pk;
+    if (!order || (order.current_status !== 'complete' && order.current_status !== 'delivered')) {
+      return null;
+    }
+    return order;
   }
 
   /** Credit HQ the snapshotted service fee. Launch promo does not zero this. */
@@ -1533,4 +1619,25 @@ export class CommissionsService {
 
     await this.hasuraSystemService.executeMutation(mutation, variables);
   }
+}
+
+function completedPortfolioOrderQuery(): string {
+  return `
+    query CompletedPortfolioOrder($orderId: uuid!) {
+      orders_by_pk(id: $orderId) {
+        id
+        business_id
+        business_location_id
+        currency
+        subtotal
+        current_status
+        completed_at
+        delivery_fee_waived
+        base_delivery_fee
+        per_km_delivery_fee
+        first_order_base_delivery_discount_amount
+        client { user_id }
+      }
+    }
+  `;
 }

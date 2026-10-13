@@ -149,9 +149,25 @@ export function buildPayBoardSummary(input: {
 export function assemblePayBoard(
   items: EarningItem[],
   status: PayBoardStatusFilter,
-  summary: PayBoardSummary
+  summary: PayBoardSummary,
+  portfolio: PayBoard['portfolio'] = null
 ): PayBoard {
-  return { summary, items: filterPayBoardItems(items, status) };
+  const board: PayBoard = { summary, items: filterPayBoardItems(items, status) };
+  if (portfolio) board.portfolio = portfolio;
+  return board;
+}
+
+export function applyPortfolioSummary(
+  summary: PayBoardSummary,
+  totals: { earned: number; pending: number } | null
+): PayBoardSummary {
+  if (!totals || (totals.earned <= 0 && totals.pending <= 0)) return summary;
+  return {
+    ...summary,
+    earnedAmount: summary.earnedAmount + totals.earned,
+    pendingAmount: summary.pendingAmount + totals.pending,
+    sources: [...summary.sources, source('portfolio_commission', totals.earned, totals.pending)],
+  };
 }
 
 function merchantStructure(input: MerchantReferralInput, paid: boolean) {

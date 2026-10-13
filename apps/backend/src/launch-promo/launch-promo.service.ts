@@ -99,6 +99,21 @@ export class LaunchPromoService {
     }
   }
 
+  /** True when this order already consumed a 0% launch-promo slot. */
+  async orderConsumedPromo(orderId: string): Promise<boolean> {
+    if (!orderId) return false;
+    try {
+      const rows = await this.databaseService.query<{ order_id: string }>(
+        `SELECT order_id FROM public.business_launch_promo_consumptions WHERE order_id = $1 LIMIT 1`,
+        [orderId]
+      );
+      return rows.length > 0;
+    } catch (error: any) {
+      this.logger.warn(`Launch promo lookup failed for ${orderId}: ${error?.message}`);
+      return false;
+    }
+  }
+
   /** Restore one consumed promo order when settlement fails after consume. */
   async restorePromoOrder(businessId: string, orderId: string): Promise<void> {
     if (!businessId || !orderId) return;

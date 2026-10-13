@@ -276,8 +276,10 @@ describe('AssistantToolsService', () => {
       locale: 'en',
     });
 
-    expect(result.content).toContain('Phone XAF') && expect(result.content).toContain('50000 XAF');
-    expect(result.content).toContain('Phone CAD') && expect(result.content).toContain('100 CAD');
+    expect(result.content).toContain('Phone XAF');
+    expect(result.content).toContain('50000 XAF');
+    expect(result.content).toContain('Phone CAD');
+    expect(result.content).toContain('100 CAD');
     expect(result.content).toContain('Phone No Currency');
     expect(result.content).not.toContain('200 null');
   });

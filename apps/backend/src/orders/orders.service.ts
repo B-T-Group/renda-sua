@@ -71,6 +71,7 @@ import {
   ORDER_MOMO_TARGET_MIN_GAP_SECONDS,
   ORDER_MOMO_USER_LIMIT,
   phoneVariants,
+  PROVIDER_TERMINAL_ON_RETRY,
   SUPERSEDED_BY_RETRY,
   type PayAfterRetryResult,
   ageSeconds,
@@ -181,7 +182,10 @@ import {
 import { OrderOffersService } from './order-offers.service';
 import { OrderQueueService } from './order-queue.service';
 import { OrderRefundsService } from './order-refunds.service';
-import { OrderStatusService } from './order-status.service';
+import {
+  OrderStatusService,
+  OrderStatusUpdateOptions,
+} from './order-status.service';
 import { OrderAcceptanceService } from './order-acceptance.service';
 import { OrderMarkReadyService } from './order-mark-ready.service';
 import { FulfillmentPromiseService } from './fulfillment-promise.service';
@@ -3664,11 +3668,22 @@ export class OrdersService {
 
     await this.processOrderDeliveryPayment(request.orderId);
 
+    let lostCompletionRace = false;
     const updatedOrder = await this.updateOrderStatusWithSingleRetry(
       request.orderId,
-      'complete'
+      'complete',
+      { onSameStatusReplay: () => { lostCompletionRace = true; } }
     );
-    await this.setOrderCompletedAt(request.orderId);
+    if (lostCompletionRace) {
+      // A parallel complete-delivery already flipped the order and owns the
+      // completion tail (inventory, history, receipt, messages, loyalty).
+      // completed_at was set atomically by that update; never rewrite it.
+      return {
+        success: true,
+        order: updatedOrder,
+        message: 'Delivery already completed',
+      };
+    }
     await this.createStatusHistoryEntry(
       request.orderId,
       'complete',
@@ -3728,24 +3743,6 @@ export class OrdersService {
       order: updatedOrder,
       message: 'Delivery completed successfully',
     };
-  }
-
-  private async setOrderCompletedAt(orderId: string): Promise<void> {
-    const at = new Date().toISOString();
-    const mutation = `
-      mutation SetOrderCompletedAt($orderId: uuid!, $at: timestamptz!) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: { completed_at: $at, updated_at: "now()" }
-        ) {
-          id
-        }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      at,
-    });
   }
 
   private async handleOrderCompletionRewards(orderId: string): Promise<void> {
@@ -5273,7 +5270,7 @@ export class OrdersService {
         'pending',
         {
           status: 'failed',
-          error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+          error_code: PROVIDER_TERMINAL_ON_RETRY,
           error_message: live.message || 'Provider reported the request as failed',
         }
       );
@@ -11305,15 +11302,24 @@ export class OrdersService {
 
   private async updateOrderStatusWithSingleRetry(
     orderId: string,
-    newStatus: string
+    newStatus: string,
+    options?: OrderStatusUpdateOptions
   ): Promise<any> {
     try {
-      return await this.orderStatusService.updateOrderStatus(orderId, newStatus);
+      return await this.orderStatusService.updateOrderStatus(
+        orderId,
+        newStatus,
+        options
+      );
     } catch (error: any) {
       this.logger.warn(
         `Retrying status update for ${orderId} to ${newStatus}: ${error?.message}`
       );
-      return this.orderStatusService.updateOrderStatus(orderId, newStatus);
+      return this.orderStatusService.updateOrderStatus(
+        orderId,
+        newStatus,
+        options
+      );
     }
   }
 

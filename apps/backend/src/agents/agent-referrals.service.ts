@@ -10,6 +10,11 @@ import {
 import { ONBOARDING_10_MIN_SALE_TOTAL_KEY } from '../representative-compensation/compensation-rules';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
+import {
+  portfolioCommissionApplies,
+  flagReader,
+  readPortfolioEnabled,
+} from '../representative-commission/portfolio-commission-flag';
 
 interface ReferralConfig {
   referralAmount: number;
@@ -117,6 +122,7 @@ export class AgentReferralsService {
     countryCode: string
   ): Promise<void> {
     if (!countryCode) return;
+    if (await this.portfolioReplacesFirstDelivery(countryCode)) return;
     if (await this.hasCreditedReferral(referredAgentId)) return;
     if (!(await this.hasCompletedDelivery(referredAgentId))) return;
     const context = await this.loadReferrerCreditContext(referredAgentId);
@@ -127,6 +133,14 @@ export class AgentReferralsService {
       countryCode,
       context.referredAgentName
     );
+  }
+
+  private async portfolioReplacesFirstDelivery(countryCode: string): Promise<boolean> {
+    const enabled = await readPortfolioEnabled(
+      flagReader(this.configurationsService),
+      countryCode
+    );
+    return portfolioCommissionApplies(enabled);
   }
 
   async creditResolvedAgentReferral(

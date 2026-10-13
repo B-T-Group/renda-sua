@@ -712,6 +712,57 @@ describe('RepresentativeCompensationService', () => {
     expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
   });
 
+  it('keeps 1% when portfolio is on but there is no grid for the payout currency', async () => {
+    const commissions = {
+      portfolioReplacesLegacy: jest.fn().mockResolvedValue(false),
+      accruePortfolioForCompletedOrder: jest.fn(),
+    };
+    service = new RepresentativeCompensationService(
+      hasuraSystemService as never,
+      paymentRoutingService as never,
+      configurationsService as never,
+      referralPyramidService as never,
+      accountsService as never,
+      commissions as never
+    );
+    mockBusinessQueries([{ id: 'order-1', subtotal: 20000 }]);
+    stubSaleCredit();
+
+    await service.evaluateForOrder('order-1', 'biz-1');
+
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toContain(SALE_PERCENT);
+    expect(commissions.portfolioReplacesLegacy).toHaveBeenCalled();
+  });
+
+  it('drops 1% when portfolio replaces legacy for that currency', async () => {
+    const commissions = {
+      portfolioReplacesLegacy: jest.fn().mockResolvedValue(true),
+      accruePortfolioForCompletedOrder: jest.fn(),
+    };
+    service = new RepresentativeCompensationService(
+      hasuraSystemService as never,
+      paymentRoutingService as never,
+      configurationsService as never,
+      referralPyramidService as never,
+      accountsService as never,
+      commissions as never
+    );
+    mockBusinessQueries([{ id: 'order-1', subtotal: 20000 }]);
+    stubSaleCredit();
+
+    await service.evaluateForOrder('order-1', 'biz-1');
+
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).not.toContain(SALE_PERCENT);
+    expect(inserts).not.toContain(ONBOARDING_X_FIRST_SALE);
+    expect(commissions.accruePortfolioForCompletedOrder).toHaveBeenCalledWith('order-1');
+  });
+
   it('does nothing when the payout flag is off', async () => {
     configurationsService.getConfigurationByKey.mockResolvedValue({
       boolean_value: false,
@@ -722,5 +773,22 @@ describe('RepresentativeCompensationService', () => {
 
     expect(result).toEqual({ credited: 0, skipped: 0, failed: 0 });
     expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('pays 1% when sale is missing completedAt (portfolio not applied)', async () => {
+    mockBusinessQueries([{ id: 'order-1', subtotal: 20000, completedAt: undefined }]);
+    stubSaleCredit();
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    // 1% is credited; the 7500 onboarding bonus is only claimed (pending).
+    expect(result.credited).toBe(1);
+    expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 200, transactionType: 'deposit' })
+    );
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([ONBOARDING_X_FIRST_SALE, SALE_PERCENT]);
   });
 });

@@ -19,6 +19,7 @@ import { PaymentCallbackRegistryService } from './payment-callback/payment-callb
 import {
   DUPLICATE_PAYMENT_CREDITED,
   LATE_SUCCESS_APPLIED,
+  PROVIDER_TERMINAL_ON_RETRY,
   SUPERSEDED_ERROR_CODES,
 } from '../orders/pay-after-retry.util';
 
@@ -182,7 +183,7 @@ export class MobilePaymentCallbackProcessor {
         transactionId: callbackData.transactionId,
       };
     }
-    if (this.isSupersededOrderTx(tx) && callbackData.status === 'SUCCESS') {
+    if (this.isRecoverableLateOrderSuccess(tx) && callbackData.status === 'SUCCESS') {
       await this.databaseService.logCallback(tx.id, callbackData);
       await this.handleLateSuccessOnSupersededOrderTx(
         tx,
@@ -220,7 +221,7 @@ export class MobilePaymentCallbackProcessor {
       );
       return { received: true, reference: callbackData.reference };
     }
-    if (this.isSupersededOrderTx(tx) && callbackData.status === 'SUCCESS') {
+    if (this.isRecoverableLateOrderSuccess(tx) && callbackData.status === 'SUCCESS') {
       await this.databaseService.logCallback(tx.id, callbackData);
       await this.handleLateSuccessOnSupersededOrderTx(
         tx,
@@ -247,6 +248,19 @@ export class MobilePaymentCallbackProcessor {
       tx.payment_entity === 'order' &&
       tx.status === 'cancelled' &&
       SUPERSEDED_ERROR_CODES.has(String(tx.error_code || ''))
+    );
+  }
+
+  /**
+   * SUCCESS after we closed the row. Superseded cancels, and a retry poll that
+   * stored PROVIDER_TERMINAL_ON_RETRY before the debit callback arrived.
+   */
+  private isRecoverableLateOrderSuccess(tx: MobilePaymentTransaction): boolean {
+    if (this.isSupersededOrderTx(tx)) return true;
+    return (
+      tx.payment_entity === 'order' &&
+      tx.status === 'failed' &&
+      tx.error_code === PROVIDER_TERMINAL_ON_RETRY
     );
   }
 
@@ -283,9 +297,10 @@ export class MobilePaymentCallbackProcessor {
     const outcome = handler?.onLateSuccessAfterSupersede
       ? await handler.onLateSuccessAfterSupersede(tx)
       : 'duplicate';
+    const fromStatus = tx.status === 'failed' ? 'failed' : 'cancelled';
     const moved = await this.databaseService.updateTransactionIfStatus(
       tx.id,
-      'cancelled',
+      fromStatus,
       {
         status: 'success',
         ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
@@ -452,7 +467,7 @@ export class MobilePaymentCallbackProcessor {
     providerTransactionId: string
   ): Promise<void> {
     const fresh = await this.databaseService.getTransactionById(transaction.id);
-    if (fresh && this.isSupersededOrderTx(fresh)) {
+    if (fresh && this.isRecoverableLateOrderSuccess(fresh)) {
       await this.handleLateSuccessOnSupersededOrderTx(fresh, providerTransactionId);
       return;
     }

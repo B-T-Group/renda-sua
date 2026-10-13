@@ -90,6 +90,7 @@ import { ThreadsModule } from '../threads/threads.module';
 import { BusinessReferralPayoutsModule } from '../business-referral-payouts/business-referral-payouts.module';
 import { PaymentProgramsModule } from '../payment-programs/payment-programs.module';
 import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
+import { RepresentativeCommissionModule } from '../representative-commission/representative-commission.module';
 import { CreditsModule } from '../credits/credits.module';
 import { AccountRechargeModule } from '../admin/account-recharge/account-recharge.module';
 import { MobilePaymentPhonesModule } from '../mobile-payment-phones/mobile-payment-phones.module';
@@ -239,6 +240,7 @@ import { AppService } from './app.service';
     BusinessReferralPayoutsModule,
     PaymentProgramsModule,
     RepresentativeCompensationModule,
+    RepresentativeCommissionModule,
     CreditsModule,
     LaunchPromoModule,
     BusinessesModule,

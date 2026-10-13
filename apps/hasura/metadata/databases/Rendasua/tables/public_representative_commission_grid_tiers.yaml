@@ -1,0 +1,18 @@
+table:
+  name: representative_commission_grid_tiers
+  schema: public
+object_relationships:
+  - name: grid
+    using:
+      foreign_key_constraint_on: grid_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - grid_id
+        - min_monthly_sales
+        - max_monthly_sales
+        - bonus_percent
+        - sort_order
+      filter: {}

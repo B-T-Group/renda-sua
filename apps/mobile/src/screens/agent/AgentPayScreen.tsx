@@ -10,6 +10,7 @@ import { PayEarningsHero } from '../../components/agent/pay/PayEarningsHero';
 import { PaySegmentBar } from '../../components/agent/pay/PaySegmentBar';
 import { DeliveryEarningsPanel } from '../../components/agent/pay/DeliveryEarningsPanel';
 import { PayStatusFilter } from '../../components/agent/pay/PayStatusFilter';
+import { CommissionGridCard } from '../../components/agent/pay/CommissionGridCard';
 import { MerchantCommissionCard } from '../../components/agent/pay/MerchantCommissionCard';
 import { ScheduleObjectiveCard } from '../../components/agent/pay/ScheduleObjectiveCard';
 import { PayGenericCard } from '../../components/agent/pay/PayGenericCard';
@@ -17,7 +18,7 @@ import { PayEmptyIllustration } from '../../components/illustrations/PayEmptyIll
 import UserAccountsScreen from '../shared/UserAccountsScreen';
 import { isMerchantItem, isScheduleItem, itemsForSegment } from '../../utils/agentPayBoard';
 import type { MainTabParamList } from '../../navigation/AgentRootNavigator';
-import type { EarningItem, PayBoardStatus, PaySegment } from '../../types/agentPayBoard';
+import type { EarningItem, PayBoardStatus, PaySegment, PortfolioCommissionView } from '../../types/agentPayBoard';
 
 export default function AgentPayScreen() {
   const { t } = useTranslation();
@@ -60,6 +61,7 @@ export default function AgentPayScreen() {
           status={status}
           onStatus={setStatus}
           showExpired={segment === 'commissions'}
+          portfolio={segment === 'commissions' ? board?.portfolio ?? null : null}
           loading={loading}
           error={error}
           bottomPad={bottomPad}
@@ -79,6 +81,7 @@ function PayList({
   status,
   onStatus,
   showExpired,
+  portfolio,
   loading,
   error,
   bottomPad,
@@ -92,6 +95,7 @@ function PayList({
   status: PayBoardStatus;
   onStatus: (status: PayBoardStatus) => void;
   showExpired: boolean;
+  portfolio: PortfolioCommissionView | null;
   loading: boolean;
   error: string | null;
   bottomPad: number;
@@ -132,7 +136,12 @@ function PayList({
       data={items}
       keyExtractor={(item) => item.id}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-      ListHeaderComponent={<PayStatusFilter value={status} onChange={onStatus} showExpired={showExpired} />}
+      ListHeaderComponent={
+        <View>
+          {portfolio ? <CommissionGridCard view={portfolio} onRefer={onRefer} /> : null}
+          <PayStatusFilter value={status} onChange={onStatus} showExpired={showExpired} />
+        </View>
+      }
       contentContainerStyle={{ paddingBottom: bottomPad, flexGrow: 1 }}
       ListEmptyComponent={
         <View style={[styles.centered, { padding: spacing.lg, gap: spacing.sm }]}>
@@ -149,13 +158,15 @@ function PayList({
           ) : null}
         </View>
       }
-      renderItem={({ item }) => <PayRow item={item} />}
+      renderItem={({ item }) => <PayRow item={item} portfolioActive={!!portfolio} />}
     />
   );
 }
 
-function PayRow({ item }: { item: EarningItem }) {
-  if (isMerchantItem(item)) return <MerchantCommissionCard item={item} structure={item.structure} />;
+function PayRow({ item, portfolioActive }: { item: EarningItem; portfolioActive: boolean }) {
+  if (isMerchantItem(item)) {
+    return <MerchantCommissionCard item={item} structure={item.structure} portfolioActive={portfolioActive} />;
+  }
   if (isScheduleItem(item)) return <ScheduleObjectiveCard item={item} structure={item.structure} />;
   return <PayGenericCard item={item} />;
 }
