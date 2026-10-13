@@ -71,6 +71,7 @@ import {
   ORDER_MOMO_TARGET_MIN_GAP_SECONDS,
   ORDER_MOMO_USER_LIMIT,
   phoneVariants,
+  PROVIDER_TERMINAL_ON_RETRY,
   SUPERSEDED_BY_RETRY,
   type PayAfterRetryResult,
   ageSeconds,
@@ -5273,7 +5274,7 @@ export class OrdersService {
         'pending',
         {
           status: 'failed',
-          error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+          error_code: PROVIDER_TERMINAL_ON_RETRY,
           error_message: live.message || 'Provider reported the request as failed',
         }
       );

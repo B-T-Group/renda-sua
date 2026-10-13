@@ -167,7 +167,10 @@ interface EvalContext {
 
 function saleInstant(sales: CompletedSale[], orderId: string | null): Date {
   const sale = sales.find((row) => row.id === orderId);
-  const parsed = Date.parse(sale?.completedAt ?? '');
+  if (!sale?.completedAt) {
+    return new Date(Date.now());
+  }
+  const parsed = Date.parse(sale.completedAt);
   return new Date(Number.isNaN(parsed) ? Date.now() : parsed);
 }
 
@@ -379,6 +382,8 @@ export class RepresentativeCompensationService {
     context: { input: Parameters<typeof evaluateCompensation>[0] }
   ): boolean {
     if (action.ruleCode !== SALE_PERCENT && !isOnboardingFirstSaleRule(action.ruleCode)) return false;
+    const sale = context.input.completedSales.find((s) => s.id === action.orderId);
+    if (!sale?.completedAt) return false;
     return portfolioCommissionApplies(true, saleInstant(context.input.completedSales, action.orderId));
   }
 
