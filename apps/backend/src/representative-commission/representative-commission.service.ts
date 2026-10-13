@@ -89,12 +89,15 @@ export class RepresentativeCommissionService {
   ) {}
 
   async accrue(order: AccrualOrder): Promise<void> {
+    // Item settlement runs at agent pickup, before completed_at exists. Using
+    // "now" there passed the cutover clock and could lapse the shop for good.
     const at = saleInstant(order.completedAt);
+    if (!at) return;
     if (!(await this.enabled(order.countryCode, at))) return;
     const business = await this.loadBusiness(order.businessId);
     if (!business?.referred_by_agent_id || !business.merchant_agreement_accepted_at) return;
     const grid = await this.grids.loadFor(order.currency, at);
-    if (!grid || (await this.blocked(business, grid))) return;
+    if (!grid || (await this.blocked(business, grid, order.completedAt))) return;
     await this.insertAccrual(order, business);
   }
 
@@ -192,17 +195,22 @@ export class RepresentativeCommissionService {
 
   private async blocked(
     business: ReferredBusiness,
-    grid: StoredCommissionGrid
+    grid: StoredCommissionGrid,
+    completedAt?: string | null
   ): Promise<boolean> {
     if (business.exit) return true;
     if (await this.agreementEnded(business.referred_by_agent_id)) return true;
-    return this.exitIfInactive(business, grid);
+    return this.exitIfInactive(business, grid, completedAt);
   }
 
   private async exitIfInactive(
     business: ReferredBusiness,
-    grid: StoredCommissionGrid
+    grid: StoredCommissionGrid,
+    completedAt?: string | null
   ): Promise<boolean> {
+    // This completed sale is activity. Do not lapse the shop because an older
+    // sale is the only row lastSaleAt can see (pickup raced completion).
+    if (saleIsWithin(completedAt, grid.inactiveDays)) return false;
     const anchor = (await this.lastSaleAt(business.id)) ?? business.merchant_agreement_accepted_at;
     if (!anchor || Date.now() - Date.parse(anchor) < grid.inactiveDays * 86400000) return false;
     await this.insertExit(business.id, business.referred_by_agent_id);
@@ -1269,9 +1277,15 @@ function inPeriod(at: number, period: { start: string; end: string }): boolean {
   return at >= Date.parse(range.start) && at < Date.parse(range.end);
 }
 
-function saleInstant(completedAt?: string | null): Date {
+function saleInstant(completedAt?: string | null): Date | null {
   const parsed = Date.parse(completedAt ?? '');
-  return new Date(Number.isNaN(parsed) ? Date.now() : parsed);
+  return Number.isNaN(parsed) ? null : new Date(parsed);
+}
+
+function saleIsWithin(completedAt: string | null | undefined, inactiveDays: number): boolean {
+  const at = Date.parse(completedAt ?? '');
+  if (!Number.isFinite(at)) return false;
+  return Date.now() - at < inactiveDays * 86400000;
 }
 
 function monthIsEmpty(month: PortfolioCommissionMonth): boolean {
