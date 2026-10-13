@@ -3,6 +3,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { referralReferenceUuid } from '../referrals/referral-pyramid.util';
+import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { addDays, currentPeriod, doualaMidnight, doualaNoon, periodRange, previousPeriod } from './douala-period';
 import {
   portfolioCommissionApplies,
@@ -86,7 +87,8 @@ export class RepresentativeCommissionService {
     private readonly hasura: HasuraSystemService,
     private readonly configurations: ConfigurationsService,
     private readonly grids: RepresentativeCommissionGridService,
-    private readonly accounts: AccountsService
+    private readonly accounts: AccountsService,
+    private readonly paymentRouting: PaymentRoutingService
   ) {}
 
   async accrue(order: AccrualOrder): Promise<void> {
@@ -208,9 +210,15 @@ export class RepresentativeCommissionService {
     return this.enabled(await this.agentCountry(agentId), doualaMidnight(periodStart));
   }
 
-  private async agentCountry(agentId: string): Promise<string | null> {
-    const result = await this.hasura.executeQuery(agentCountryQuery(), { agentId });
-    return result?.agents_by_pk?.user?.country ?? null;
+  private async agentCountry(agentId: string): Promise<string> {
+    const userId = await this.agentUserId(agentId);
+    const country = userId ? await this.paymentRouting.getUserCountryCode(userId) : null;
+    return (country || 'CM').toUpperCase();
+  }
+
+  private async agentUserId(agentId: string): Promise<string | null> {
+    const result = await this.hasura.executeQuery(agentUserIdQuery(), { agentId });
+    return result?.agents_by_pk?.user_id ?? null;
   }
 
   private async blocked(
@@ -1257,10 +1265,10 @@ function insertHoldMutation(): string {
   `;
 }
 
-function agentCountryQuery(): string {
+function agentUserIdQuery(): string {
   return `
-    query PortfolioAgentCountry($agentId: uuid!) {
-      agents_by_pk(id: $agentId) { user { country } }
+    query PortfolioAgentUserId($agentId: uuid!) {
+      agents_by_pk(id: $agentId) { user_id }
     }
   `;
 }

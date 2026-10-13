@@ -11,11 +11,13 @@ describe('RepresentativeCommissionService month close', () => {
   const configurations = { getConfigurationByKey: jest.fn() };
   const grids = { loadFor: jest.fn() };
   const accounts = { registerDepositIfNotExists: jest.fn() };
+  const paymentRouting = { getUserCountryCode: jest.fn() };
   const service = new RepresentativeCommissionService(
     hasura as never,
     configurations as never,
     grids as never,
-    accounts as never
+    accounts as never,
+    paymentRouting as never
   );
 
   beforeEach(() => {
@@ -26,6 +28,7 @@ describe('RepresentativeCommissionService month close', () => {
     accountId = 'acct-1';
     grids.loadFor.mockResolvedValue(grid());
     accounts.registerDepositIfNotExists.mockResolvedValue({ success: true });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CM');
     configurations.getConfigurationByKey.mockResolvedValue({
       boolean_value: true,
       status: 'active',
@@ -227,6 +230,14 @@ describe('RepresentativeCommissionService month close', () => {
     ).resolves.toBe(true);
   });
 
+  it('checks grid existence in order currency, not payout currency', async () => {
+    grids.loadFor.mockImplementation(async (currency: string) => {
+      return currency === 'XAF' ? { id: 'grid-xaf' } : null;
+    });
+    await expect(service.replacesLegacy('CA', 'CAD', new Date('2026-11-02T00:00:00.000Z'))).resolves.toBe(false);
+    await expect(service.replacesLegacy('CA', 'XAF', new Date('2026-11-02T00:00:00.000Z'))).resolves.toBe(true);
+  });
+
   function base() {
     return {
       AgentsInPortfolioPeriod: {
@@ -249,7 +260,7 @@ describe('RepresentativeCommissionService month close', () => {
       PortfolioAgentAccount: () => ({
         agents_by_pk: { user: { accounts: accountId ? [{ id: accountId }] : [] } },
       }),
-      PortfolioAgentCountry: { agents_by_pk: { user: { country: 'CM' } } },
+      PortfolioAgentUserId: { agents_by_pk: { user_id: 'agent-user' } },
       InsertPortfolioStatement: () => {
         statement = { id: 'stmt-1', status: 'open' };
         return { insert_representative_commission_statements_one: { id: 'stmt-1' } };
@@ -299,7 +310,8 @@ describe('RepresentativeCommissionService hold release', () => {
     hasura as never,
     { getConfigurationByKey: jest.fn() } as never,
     { loadFor: jest.fn() } as never,
-    accounts as never
+    accounts as never,
+    { getUserCountryCode: jest.fn() } as never
   );
 
   beforeEach(() => {

@@ -373,7 +373,8 @@ export class RepresentativeCompensationService {
       return false;
     }
     const at = saleInstant(context.input.completedSales, action.orderId);
-    const currency = currencyForReferralPayout(context.eval.countryCode);
+    const sale = context.input.completedSales.find((s) => s.id === action.orderId);
+    const currency = sale?.currency ?? currencyForReferralPayout(context.eval.countryCode);
     return (
       (await this.commissions?.portfolioReplacesLegacy(
         context.eval.countryCode,

@@ -13,12 +13,15 @@ import { RepresentativeCompensationService } from './representative-compensation
 describe('portfolio replacement of the 1% sale pay', () => {
   const previousEnv = process.env.NODE_ENV;
   const configurations = { getConfigurationByKey: jest.fn() };
+  const grids = { loadFor: jest.fn() };
+  const commissions = { portfolioReplacesLegacy: jest.fn() };
   const service = new RepresentativeCompensationService(
     {} as never,
     {} as never,
     configurations as never,
     {} as never,
-    {} as never
+    {} as never,
+    commissions as never
   );
 
   beforeEach(() => {
@@ -29,6 +32,13 @@ describe('portfolio replacement of the 1% sale pay', () => {
       if (country === 'CM') return { boolean_value: true, status: 'active' };
       return null;
     });
+    commissions.portfolioReplacesLegacy.mockImplementation(async (country: string, currency: string) => {
+      const hasFlag = await configurations.getConfigurationByKey('representative_portfolio_commission_enabled', country);
+      if (!hasFlag?.boolean_value || hasFlag.status !== 'active') return false;
+      const grid = await grids.loadFor(currency, new Date());
+      return !!grid;
+    });
+    grids.loadFor.mockResolvedValue({ id: 'grid-xaf' });
   });
 
   afterEach(() => {

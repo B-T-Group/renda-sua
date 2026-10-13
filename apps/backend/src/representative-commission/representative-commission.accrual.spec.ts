@@ -47,7 +47,8 @@ describe('RepresentativeCommissionService.accrue', () => {
     hasura as never,
     configurations as never,
     grids as never,
-    accounts as never
+    accounts as never,
+    { getUserCountryCode: jest.fn() } as never
   );
   const previousEnv = process.env.NODE_ENV;
 
