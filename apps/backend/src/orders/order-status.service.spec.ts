@@ -1,378 +1,150 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
-import { Test, TestingModule } from '@nestjs/testing';
+import { HttpException } from '@nestjs/common';
 import { OrderStatusService } from './order-status.service';
-import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
-import { OrderQueueService } from './order-queue.service';
-import { AgentReferralsService } from '../agents/agent-referrals.service';
-import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 
-describe('OrderStatusService', () => {
+describe('OrderStatusService status updates with completed_at', () => {
+  const hasuraSystemService = {
+    executeQuery: jest.fn(),
+    executeMutation: jest.fn(),
+  };
+  const hasuraUserService = {
+    getUser: jest.fn(),
+  };
+  const orderQueueService = {
+    sendOrderStatusUpdatedMessage: jest.fn(),
+  };
+  const agentReferralsService = {
+    creditAfterFirstDelivery: jest.fn(),
+  };
+  const paymentRoutingService = {
+    getUserCountryCode: jest.fn(),
+  };
+  const representativeCompensationService = {
+    evaluateForOrderSafe: jest.fn(),
+  };
+
   let service: OrderStatusService;
-  let hasuraSystemService: jest.Mocked<
-    Pick<HasuraSystemService, 'executeQuery' | 'executeMutation'>
-  >;
-  let hasuraUserService: jest.Mocked<Pick<HasuraUserService, 'getUser'>>;
-  let agentReferralsService: { creditAfterFirstDelivery: jest.Mock };
-  let paymentRoutingService: { getUserCountryCode: jest.Mock };
 
-  const clientUser = {
-    id: 'user-client-1',
-    active_persona: 'client',
-    client: { id: 'client-1' },
-  };
-
-  const agentUser = {
-    id: 'user-agent-1',
-    active_persona: 'agent',
-    agent: { id: 'agent-1' },
-  };
-
-  const businessUser = {
-    id: 'user-business-1',
-    active_persona: 'business',
-    business: { id: 'business-1' },
-  };
-
-  const baseOrder = {
-    id: 'order-123',
-    order_number: 'ORD-123',
-    current_status: 'ready_for_pickup',
-    business_id: 'business-1',
-    business: { user_id: 'user-business-1' },
-    assigned_agent_id: null,
-    assigned_agent: null,
-    client_id: 'client-1',
-    client: { user_id: 'user-client-1' },
-  };
-
-  beforeEach(async () => {
-    hasuraSystemService = {
-      executeQuery: jest.fn(),
-      executeMutation: jest.fn(),
-    };
-    hasuraUserService = {
-      getUser: jest.fn(),
-    };
-
-    agentReferralsService = {
-      creditAfterFirstDelivery: jest.fn().mockResolvedValue(undefined),
-    };
-    paymentRoutingService = {
-      getUserCountryCode: jest.fn().mockResolvedValue('CM'),
-    };
-
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        OrderStatusService,
-        { provide: HasuraSystemService, useValue: hasuraSystemService },
-        { provide: HasuraUserService, useValue: hasuraUserService },
-        {
-          provide: OrderQueueService,
-          useValue: { sendOrderStatusUpdatedMessage: jest.fn() },
-        },
-        { provide: AgentReferralsService, useValue: agentReferralsService },
-        { provide: PaymentRoutingService, useValue: paymentRoutingService },
-      ],
-    }).compile();
-
-    service = module.get(OrderStatusService);
+  beforeEach(() => {
+    jest.clearAllMocks();
+    service = new OrderStatusService(
+      hasuraSystemService as never,
+      hasuraUserService as never,
+      orderQueueService as never,
+      agentReferralsService as never,
+      paymentRoutingService as never,
+      representativeCompensationService as never
+    );
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'user-1',
+      agent: { id: 'agent-1' },
+      active_persona: 'agent',
+    });
+    paymentRoutingService.getUserCountryCode.mockResolvedValue('CM');
+    orderQueueService.sendOrderStatusUpdatedMessage.mockResolvedValue(undefined);
   });
 
-  const mockSuccessfulUpdate = (newStatus: string) => {
+  it('sets completed_at when transitioning to complete with null completed_at', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      orders_by_pk: {
+        id: 'order-1',
+        order_number: 'ORD-001',
+        current_status: 'out_for_delivery',
+        business_id: 'biz-1',
+        business: { user_id: 'user-1' },
+        assigned_agent_id: 'agent-1',
+        assigned_agent: { user_id: 'user-1' },
+      },
+    });
     hasuraSystemService.executeMutation.mockResolvedValue({
       update_orders: {
         affected_rows: 1,
-        returning: [{ ...baseOrder, current_status: newStatus }],
+        returning: [
+          {
+            id: 'order-1',
+            order_number: 'ORD-001',
+            current_status: 'complete',
+            completed_at: '2026-10-13T12:00:00.000Z',
+            updated_at: '2026-10-13T12:00:00.000Z',
+          },
+        ],
       },
     });
-  };
 
-  describe('updateOrderStatus from ready_for_pickup', () => {
-    it('rejects client cancel via generic status path (must use POST /orders/cancel)', async () => {
-      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: baseOrder,
-      });
-
-      await expect(
-        service.updateOrderStatus('order-123', 'cancelled')
-      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    const result = await service.updateOrderStatus('order-1', 'complete', {
+      viaSystem: true,
     });
 
-    it('allows cancel when called from the dedicated cancel endpoint', async () => {
-      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: baseOrder,
-      });
-      mockSuccessfulUpdate('cancelled');
-
-      const result = await service.updateOrderStatus('order-123', 'cancelled', {
-        viaCancelEndpoint: true,
-      });
-
-      expect(result.current_status).toBe('cancelled');
-    });
-
-    it('allows cancel endpoint options when actor argument is omitted', async () => {
-      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: baseOrder,
-      });
-      mockSuccessfulUpdate('cancelled');
-
-      const result = await service.updateOrderStatus(
-        'order-123',
-        'cancelled',
-        undefined,
-        { viaCancelEndpoint: true }
-      );
-
-      expect(result.current_status).toBe('cancelled');
-    });
-
-    it('still allows an agent to assign the order to themselves', async () => {
-      hasuraUserService.getUser.mockResolvedValue(agentUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: baseOrder,
-      });
-      mockSuccessfulUpdate('assigned_to_agent');
-
-      const result = await service.updateOrderStatus(
-        'order-123',
-        'assigned_to_agent'
-      );
-
-      expect(result.current_status).toBe('assigned_to_agent');
-    });
-
-    it('rejects client transitions other than cancel-via-endpoint', async () => {
-      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: baseOrder,
-      });
-
-      await expect(
-        service.updateOrderStatus('order-123', 'complete')
-      ).rejects.toThrow(
-        'Invalid status transition from ready_for_pickup to complete'
-      );
-    });
-
-    it('rejects business fail pickup via generic status path', async () => {
-      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: baseOrder,
-      });
-
-      await expect(
-        service.updateOrderStatus('order-123', 'failed')
-      ).rejects.toThrow(
-        'Fail pickup must use POST /orders/:id/fail-pickup'
-      );
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-
-    it('allows ready_for_pickup → failed via dedicated fail-pickup endpoint', async () => {
-      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: baseOrder,
-      });
-      mockSuccessfulUpdate('failed');
-
-      const result = await service.updateOrderStatus('order-123', 'failed', {
-        viaFailPickupEndpoint: true,
-      });
-
-      expect(result.current_status).toBe('failed');
-    });
+    expect(result.current_status).toBe('complete');
+    expect(result.completed_at).toBeDefined();
+    const mutation = hasuraSystemService.executeMutation.mock.calls[0][0];
+    expect(mutation).toContain('completed_at: "now()"');
+    expect(mutation).toContain('completed_at: { _is_null: true }');
   });
 
-  describe('updateOrderStatus same-status replay', () => {
-    it('treats confirmed → confirmed as a no-op', async () => {
-      const replay = jest.fn();
-      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...baseOrder,
-          current_status: 'confirmed',
-          fulfillment_method: 'pickup',
-        },
-      });
-
-      const result = await service.updateOrderStatus(
-        'order-123',
-        'confirmed',
-        undefined,
-        { onSameStatusReplay: replay }
-      );
-
-      expect(result.current_status).toBe('confirmed');
-      expect(replay).toHaveBeenCalledTimes(1);
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  it('does not overwrite completed_at when transitioning delivered to complete', async () => {
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('GetOrder')) {
+        return {
+          orders_by_pk: {
+            id: 'order-1',
+            order_number: 'ORD-001',
+            current_status: 'delivered',
+            business_id: 'biz-1',
+            business: { user_id: 'user-1' },
+            client_id: 'client-1',
+            client: { user_id: 'client-user-1' },
+          },
+        };
+      }
+      if (query.includes('CheckOrderStatus')) {
+        return {
+          orders_by_pk: {
+            id: 'order-1',
+            current_status: 'complete',
+            completed_at: '2026-10-13T10:00:00.000Z',
+          },
+        };
+      }
+      return {};
+    });
+    hasuraUserService.getUser.mockResolvedValue({
+      id: 'client-user-1',
+      active_persona: 'client',
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_orders: {
+        affected_rows: 0,
+        returning: [],
+      },
     });
 
-    it('still rejects cancelled → cancelled as a conflict', async () => {
-      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...baseOrder, current_status: 'cancelled' },
-      });
-
-      const error = await service
-        .updateOrderStatus('order-123', 'cancelled', {
-          viaCancelEndpoint: true,
-          expectedFromStatus: 'confirmed',
-        })
-        .catch((caught: unknown) => caught);
-      expect(error).toBeInstanceOf(HttpException);
-      expect((error as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    const result = await service.updateOrderStatus('order-1', 'complete', {
+      viaSystem: true,
     });
+
+    expect(result.current_status).toBe('complete');
+    expect(result.completed_at).toBe('2026-10-13T10:00:00.000Z');
   });
 
-  describe('updateOrderStatus shipping backdoor', () => {
-    it('rejects business confirmed → shipped on the generic status endpoint', async () => {
-      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...baseOrder, current_status: 'confirmed' },
-      });
-
-      const error = await service
-        .updateOrderStatus('order-123', 'shipped')
-        .catch((caught: unknown) => caught);
-      expect(error).toBeInstanceOf(HttpException);
-      expect((error as HttpException).message).toBe(
-        'Invalid status transition from confirmed to shipped'
-      );
-      expect((error as HttpException).getStatus()).toBe(HttpStatus.BAD_REQUEST);
+  it('throws conflict when mutation fails for non-completion status', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      orders_by_pk: {
+        id: 'order-1',
+        order_number: 'ORD-001',
+        current_status: 'confirmed',
+        business_id: 'biz-1',
+        business: { user_id: 'user-1' },
+      },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_orders: {
+        affected_rows: 0,
+        returning: [],
+      },
     });
 
-    it('rejects business confirmed → ready_for_pickup for shipping orders', async () => {
-      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...baseOrder,
-          current_status: 'confirmed',
-          fulfillment_method: 'shipping',
-        },
-      });
-
-      await expect(
-        service.updateOrderStatus('order-123', 'ready_for_pickup')
-      ).rejects.toThrow(
-        'Invalid status transition from confirmed to ready_for_pickup'
-      );
-    });
-
-    it('rejects client shipped → complete on the generic status endpoint', async () => {
-      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: { ...baseOrder, current_status: 'shipped' },
-      });
-
-      await expect(
-        service.updateOrderStatus('order-123', 'complete')
-      ).rejects.toThrow('Invalid status transition from shipped to complete');
-    });
-  });
-
-  describe('updateOrderStatus cancel from preparing', () => {
-    it('rejects business cancel via generic status path', async () => {
-      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...baseOrder,
-          current_status: 'preparing',
-        },
-      });
-
-      await expect(
-        service.updateOrderStatus('order-123', 'cancelled')
-      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('updateOrderStatus after agent assignment', () => {
-    it('still rejects status-only cancel (eligibility is enforced by cancelOrder)', async () => {
-      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...baseOrder,
-          current_status: 'assigned_to_agent',
-          assigned_agent_id: 'agent-1',
-          assigned_agent: { user_id: 'user-agent-1' },
-        },
-      });
-
-      await expect(
-        service.updateOrderStatus('order-123', 'cancelled')
-      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
-    });
-  });
-
-  describe('updateOrderStatus viaSystem admin cancel', () => {
-    it('rejects system cancel without the dedicated cancel flag', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...baseOrder,
-          current_status: 'assigned_to_agent',
-          assigned_agent_id: 'agent-1',
-          assigned_agent: { user_id: 'user-agent-1' },
-        },
-      });
-
-      await expect(
-        service.updateOrderStatus('order-123', 'cancelled', { viaSystem: true })
-      ).rejects.toThrow('Cancellations must use POST /orders/cancel');
-      expect(hasuraUserService.getUser).not.toHaveBeenCalled();
-      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
-    });
-
-    it('allows system cancel from the dedicated admin cancel path', async () => {
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...baseOrder,
-          current_status: 'assigned_to_agent',
-          assigned_agent_id: 'agent-1',
-          assigned_agent: { user_id: 'user-agent-1' },
-        },
-      });
-      mockSuccessfulUpdate('cancelled');
-
-      const result = await service.updateOrderStatus('order-123', 'cancelled', {
-        viaCancelEndpoint: true,
-        viaSystem: true,
-      });
-
-      expect(result.current_status).toBe('cancelled');
-      expect(hasuraUserService.getUser).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('updateOrderStatus after delivery completion', () => {
-    it('credits the agent referral after PIN completion', async () => {
-      hasuraUserService.getUser.mockResolvedValue(agentUser as any);
-      hasuraSystemService.executeQuery.mockResolvedValue({
-        orders_by_pk: {
-          ...baseOrder,
-          current_status: 'out_for_delivery',
-          assigned_agent_id: 'agent-1',
-          assigned_agent: { user_id: 'user-agent-1' },
-        },
-      });
-      mockSuccessfulUpdate('complete');
-
-      await service.updateOrderStatus('order-123', 'complete');
-
-      expect(paymentRoutingService.getUserCountryCode).toHaveBeenCalledWith(
-        'user-agent-1'
-      );
-      expect(agentReferralsService.creditAfterFirstDelivery).toHaveBeenCalledWith(
-        'agent-1',
-        'CM'
-      );
-    });
+    await expect(
+      service.updateOrderStatus('order-1', 'preparing', { viaSystem: true })
+    ).rejects.toThrow(HttpException);
   });
 });

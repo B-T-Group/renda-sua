@@ -214,12 +214,13 @@ export class OrderStatusService {
     }>(updateOrderMutation, mutationVariables);
 
     const batch = updateResult.update_orders;
-    this.ensureSingleStatusRowUpdated(
+    const updatedRow = await this.handleStatusUpdateResult(
+      orderId,
       batch?.affected_rows,
+      batch?.returning?.[0],
       previousStatus,
       newStatus
     );
-    const updatedRow = batch.returning[0];
 
     try {
       await this.orderQueueService.sendOrderStatusUpdatedMessage(
@@ -328,6 +329,7 @@ export class OrderStatusService {
     assignToAgent: boolean,
     agentId?: string
   ): { mutation: string; variables: Record<string, string> } {
+    const isCompletionStatus = newStatus === 'complete' || newStatus === 'delivered';
     if (assignToAgent) {
       if (!agentId) {
         throw new Error('Agent id required for assign mutation');
@@ -344,10 +346,12 @@ export class OrderStatusService {
             where: {
               id: { _eq: $orderId }
               current_status: { _eq: $previousStatus }
+              ${isCompletionStatus ? 'completed_at: { _is_null: true }' : ''}
             }
             _set: {
               current_status: $newStatus
               assigned_agent_id: $agentId
+              ${isCompletionStatus ? 'completed_at: "now()"' : ''}
               updated_at: "now()"
             }
           ) {
@@ -357,6 +361,7 @@ export class OrderStatusService {
               order_number
               current_status
               assigned_agent_id
+              ${isCompletionStatus ? 'completed_at' : ''}
               updated_at
             }
           }
@@ -381,9 +386,11 @@ export class OrderStatusService {
             where: {
               id: { _eq: $orderId }
               current_status: { _eq: $previousStatus }
+              ${isCompletionStatus ? 'completed_at: { _is_null: true }' : ''}
             }
             _set: {
               current_status: $newStatus
+              ${isCompletionStatus ? 'completed_at: "now()"' : ''}
               updated_at: "now()"
             }
           ) {
@@ -392,6 +399,7 @@ export class OrderStatusService {
               id
               order_number
               current_status
+              ${isCompletionStatus ? 'completed_at' : ''}
               updated_at
             }
           }
@@ -403,6 +411,53 @@ export class OrderStatusService {
         newStatus,
       },
     };
+  }
+
+  private async handleStatusUpdateResult(
+    orderId: string,
+    affectedRows: number | undefined,
+    returnedRow: any,
+    previousStatus: string,
+    newStatus: string
+  ): Promise<any> {
+    if (affectedRows === 1) {
+      return returnedRow;
+    }
+    const isCompletionStatus = newStatus === 'complete' || newStatus === 'delivered';
+    if (affectedRows === 0 && isCompletionStatus) {
+      const current = await this.checkOrderStatus(orderId);
+      if (current?.current_status === newStatus && current?.completed_at) {
+        this.logger.log(
+          `Order ${orderId} already ${newStatus} with completed_at set; skipping update`
+        );
+        return current;
+      }
+    }
+    this.logger.warn(
+      `Conditional order status update affected ${affectedRows ?? 0} row(s): ${previousStatus} → ${newStatus}`
+    );
+    throw new HttpException(
+      'Order status already changed. Please refresh and try again.',
+      HttpStatus.CONFLICT
+    );
+  }
+
+  private async checkOrderStatus(orderId: string): Promise<{
+    id: string;
+    current_status: string;
+    completed_at: string | null;
+  } | null> {
+    const query = `
+      query CheckOrderStatus($orderId: uuid!) {
+        orders_by_pk(id: $orderId) {
+          id
+          current_status
+          completed_at
+        }
+      }
+    `;
+    const result = await this.hasuraSystemService.executeQuery(query, { orderId });
+    return result.orders_by_pk;
   }
 
   private ensureSingleStatusRowUpdated(
