@@ -35,6 +35,11 @@ export const SUPERSEDED_BY_RETRY = 'SUPERSEDED_BY_RETRY';
 export const SUPERSEDED_BY_LATE_SUCCESS = 'SUPERSEDED_BY_LATE_SUCCESS';
 /** Pending attempt closed because the order was cancelled (#545 QA F5). */
 export const SUPERSEDED_BY_ORDER_CANCEL = 'SUPERSEDED_BY_ORDER_CANCEL';
+/**
+ * Retry poll said the provider attempt was already failed or cancelled.
+ * A later SUCCESS callback must still be recovered: the poll can lose to the debit.
+ */
+export const PROVIDER_TERMINAL_ON_RETRY = 'PROVIDER_TERMINAL_ON_RETRY';
 export const SUPERSEDED_ERROR_CODES: ReadonlySet<string> = new Set([
   SUPERSEDED_BY_RETRY,
   SUPERSEDED_BY_LATE_SUCCESS,

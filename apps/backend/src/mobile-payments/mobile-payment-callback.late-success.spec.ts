@@ -150,6 +150,25 @@ describe('MobilePaymentCallbackProcessor late success on superseded order tx', (
     expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
   });
 
+  it('recovers SUCCESS after a retry poll marked the attempt failed', async () => {
+    const failedPoll = {
+      ...supersededTx,
+      status: 'failed' as const,
+      error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+    };
+    const { processor, databaseService, accountsService, handler } = build(failedPoll, 'applied');
+    await processor.processFreemopayCallback(callback('SUCCESS') as any);
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceId: 'tx-old', amount: 1500 })
+    );
+    expect(handler.onLateSuccessAfterSupersede).toHaveBeenCalledWith(failedPoll);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'failed',
+      expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' })
+    );
+  });
+
   it('ignores cancelled order txs that were not superseded by us', async () => {
     const plainCancelled = { ...supersededTx, error_code: undefined };
     const { processor, handler } = build(plainCancelled);
