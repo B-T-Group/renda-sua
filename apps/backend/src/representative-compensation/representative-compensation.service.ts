@@ -163,7 +163,10 @@ interface EvalContext {
 
 function saleInstant(sales: CompletedSale[], orderId: string | null): Date {
   const sale = sales.find((row) => row.id === orderId);
-  const parsed = Date.parse(sale?.completedAt ?? '');
+  if (!sale?.completedAt) {
+    return new Date(Date.now());
+  }
+  const parsed = Date.parse(sale.completedAt);
   return new Date(Number.isNaN(parsed) ? Date.now() : parsed);
 }
 
@@ -372,8 +375,9 @@ export class RepresentativeCompensationService {
     if (action.ruleCode !== SALE_PERCENT && !isOnboardingFirstSaleRule(action.ruleCode)) {
       return false;
     }
-    const at = saleInstant(context.input.completedSales, action.orderId);
     const sale = context.input.completedSales.find((s) => s.id === action.orderId);
+    if (!sale?.completedAt) return false;
+    const at = saleInstant(context.input.completedSales, action.orderId);
     const currency = sale?.currency ?? currencyForReferralPayout(context.eval.countryCode);
     return (
       (await this.commissions?.portfolioReplacesLegacy(

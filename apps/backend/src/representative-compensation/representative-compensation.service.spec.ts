@@ -774,4 +774,20 @@ describe('RepresentativeCompensationService', () => {
     expect(result).toEqual({ credited: 0, skipped: 0, failed: 0 });
     expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
   });
+
+  it('pays 1% when sale is missing completedAt (portfolio not applied)', async () => {
+    mockBusinessQueries([{ id: 'order-1', subtotal: 20000, completedAt: undefined }]);
+    stubSaleCredit();
+
+    const result = await service.evaluateForOrder('order-1', 'biz-1');
+
+    expect(result.credited).toBe(2);
+    expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 200, transactionType: 'deposit' })
+    );
+    const inserts = hasuraSystemService.executeMutation.mock.calls
+      .filter(([q]) => String(q).includes('InsertCompensationEvent'))
+      .map(([, vars]) => vars.object.rule_code);
+    expect(inserts).toEqual([ONBOARDING_X_FIRST_SALE, SALE_PERCENT]);
+  });
 });
