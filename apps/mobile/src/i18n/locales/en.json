@@ -4875,7 +4875,12 @@
         "delivery_commission": "Deliveries",
         "portfolio_commission": "Portfolio commission"
       },
-      "portfolioShop": "This shop is in your portfolio. Its sales count toward this month’s commission.",
+      "portfolioList": "Add a product",
+      "portfolioListBody": "Help this shop publish a product, then ask them to sell.",
+      "portfolioSale": "Get a sale",
+      "portfolioSaleBody": "Ask this shop for a sale. Call or email them above.",
+      "portfolioSelling": "Selling",
+      "portfolioSellingBody": "Sales from this shop count this month.",
       "grid": {
         "title": "Portfolio commission",
         "base": "{{percent}}% of item commission",

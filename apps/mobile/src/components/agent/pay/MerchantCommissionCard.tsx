@@ -6,7 +6,7 @@ import { useTheme } from '../../../contexts/ThemeContext';
 import { StatusPill } from '../../common/StatusPill';
 import { formatCurrency } from '../../../utils/formatters';
 import { commissionDeadlineTone, type CommissionDeadlineTone } from '../../../utils/agentPayBoard';
-import type { EarningItem, MerchantReferralStructure } from '../../../types/agentPayBoard';
+import type { EarningItem, MerchantOnboardingView, MerchantReferralStructure } from '../../../types/agentPayBoard';
 
 export function MerchantCommissionCard({
   item,
@@ -23,7 +23,9 @@ export function MerchantCommissionCard({
   const sameAmount = structure.selfSaleAmount === structure.otherBuyerAmount;
   const paid = item.paymentStatus === 'paid';
   const tone = commissionDeadlineTone(item.deadline, paid || item.nextStep === 'awaiting_payout');
-  const status = commissionStatus(paid, tone, t, colors);
+  const status = portfolioActive
+    ? portfolioStatus(onboarding, t, colors)
+    : commissionStatus(paid, tone, t, colors);
 
   return (
     <View
@@ -49,7 +51,7 @@ export function MerchantCommissionCard({
       <MerchantContacts ownerName={structure.ownerName} phone={structure.phone} email={structure.email} />
       {portfolioActive ? (
         <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
-          {t('agent.pay.portfolioShop', 'This shop is in your portfolio. Its sales count toward this month’s commission.')}
+          {portfolioAction(onboarding, t)}
         </Text>
       ) : sameAmount ? (
         <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
@@ -154,19 +156,44 @@ function ContactLink({
   const { colors } = useTheme();
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole="link"
       accessibilityLabel={t(labelKey, fallback, { phone: value, email: value })}
+      hitSlop={8}
       onPress={() => void Linking.openURL(href)}
       style={styles.contact}
     >
-      <MaterialCommunityIcons name={icon} size={16} color={colors.primary.main} />
-      <Text variant="bodyMedium" style={{ color: colors.primary.main }}>{value}</Text>
+      <MaterialCommunityIcons pointerEvents="none" name={icon} size={16} color={colors.primary.main} />
+      <Text pointerEvents="none" variant="bodyMedium" style={{ color: colors.primary.main }}>{value}</Text>
     </Pressable>
   );
 }
 
 function telHref(phone: string): string {
   return `tel:${phone.replace(/[^\d+]/g, '')}`;
+}
+
+function portfolioStatus(
+  onboarding: MerchantOnboardingView,
+  t: (key: string, fallback: string) => string,
+  colors: { successTint: string; success: { dark: string }; primaryTint: string; primary: { main: string } }
+) {
+  const kind = portfolioKind(onboarding);
+  if (kind === 'selling') return pill(t('agent.pay.portfolioSelling', 'Selling'), colors.successTint, colors.success.dark);
+  if (kind === 'list') return pill(t('agent.pay.portfolioList', 'Add a product'), colors.primaryTint, colors.primary.main);
+  return pill(t('agent.pay.portfolioSale', 'Get a sale'), colors.primaryTint, colors.primary.main);
+}
+
+function portfolioAction(onboarding: MerchantOnboardingView, t: (key: string, fallback: string) => string) {
+  const kind = portfolioKind(onboarding);
+  if (kind === 'selling') return t('agent.pay.portfolioSellingBody', 'Sales from this shop count this month.');
+  if (kind === 'list') return t('agent.pay.portfolioListBody', 'Help this shop publish a product, then ask them to sell.');
+  return t('agent.pay.portfolioSaleBody', 'Ask this shop for a sale. Call or email them above.');
+}
+
+function portfolioKind(onboarding: MerchantOnboardingView): 'list' | 'sale' | 'selling' {
+  if (onboarding.itemsApproved <= 0) return 'list';
+  if (onboarding.salesTotal <= 0) return 'sale';
+  return 'selling';
 }
 
 function commissionStatus(
@@ -225,5 +252,12 @@ const styles = StyleSheet.create({
   card: {},
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
   title: { flex: 1, minWidth: 0 },
-  contact: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start' },
+  contact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    minHeight: 32,
+    paddingVertical: 4,
+  },
 });

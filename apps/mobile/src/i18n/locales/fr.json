@@ -4782,7 +4782,12 @@
         "delivery_commission": "Livraisons",
         "portfolio_commission": "Commission de portefeuille"
       },
-      "portfolioShop": "Cette boutique est dans votre portefeuille. Ses ventes comptent dans la commission du mois.",
+      "portfolioList": "Publier",
+      "portfolioListBody": "Aidez cette boutique à publier un produit, puis demandez-lui de vendre.",
+      "portfolioSale": "Une vente",
+      "portfolioSaleBody": "Demandez une vente. Appelez ou écrivez avec les coordonnées ci-dessus.",
+      "portfolioSelling": "Ventes",
+      "portfolioSellingBody": "Les ventes de cette boutique comptent ce mois-ci.",
       "grid": {
         "title": "Commission de portefeuille",
         "base": "{{percent}} % de la commission article",
