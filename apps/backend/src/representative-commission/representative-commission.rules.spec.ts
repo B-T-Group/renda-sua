@@ -119,4 +119,10 @@ describe('representative commission rules', () => {
   it('treats month 3 pace as sales times 7 over 30', () => {
     expect(month3WeeklyPace(17_142_858)).toBeGreaterThanOrEqual(4_000_000);
   });
+
+  it('rounds a CAD net to cents and an XAF net to a whole franc', () => {
+    expect(eligibleOrderAmount(10.005, 0, 'CAD')).toBe(10.01);
+    expect(eligibleOrderAmount(10.004, 0, 'USD')).toBe(10);
+    expect(eligibleOrderAmount(10.6, 0, 'XAF')).toBe(11);
+  });
 });
