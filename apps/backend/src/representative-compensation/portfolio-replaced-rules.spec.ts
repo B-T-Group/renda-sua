@@ -7,7 +7,10 @@ import {
   type CompensationAction,
   type CompensationRuleCode,
 } from './compensation-rules';
-import { PORTFOLIO_COMMISSION_CUTOVER } from '../representative-commission/portfolio-commission-flag';
+import {
+  PORTFOLIO_COMMISSION_CUTOVER,
+  shouldReplaceLegacySalePay,
+} from '../representative-commission/portfolio-commission-flag';
 import { RepresentativeCompensationService } from './representative-compensation.service';
 
 describe('portfolio replacement of the 1% sale pay', () => {
@@ -32,11 +35,11 @@ describe('portfolio replacement of the 1% sale pay', () => {
       if (country === 'CM') return { boolean_value: true, status: 'active' };
       return null;
     });
-    commissions.portfolioReplacesLegacy.mockImplementation(async (country: string, currency: string) => {
+    commissions.portfolioReplacesLegacy.mockImplementation(async (country: string, currency: string, at: Date) => {
       const hasFlag = await configurations.getConfigurationByKey('representative_portfolio_commission_enabled', country);
-      if (!hasFlag?.boolean_value || hasFlag.status !== 'active') return false;
-      const grid = await grids.loadFor(currency, new Date());
-      return !!grid;
+      const enabled = hasFlag?.boolean_value === true && hasFlag.status === 'active';
+      const grid = await grids.loadFor(currency, at);
+      return shouldReplaceLegacySalePay(enabled, at, !!grid);
     });
     grids.loadFor.mockResolvedValue({ id: 'grid-xaf' });
   });
