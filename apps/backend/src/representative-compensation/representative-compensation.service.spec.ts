@@ -781,7 +781,8 @@ describe('RepresentativeCompensationService', () => {
 
     const result = await service.evaluateForOrder('order-1', 'biz-1');
 
-    expect(result.credited).toBe(2);
+    // 1% is credited; the 7500 onboarding bonus is only claimed (pending).
+    expect(result.credited).toBe(1);
     expect(accountsService.registerTransaction).toHaveBeenCalledWith(
       expect.objectContaining({ amount: 200, transactionType: 'deposit' })
     );

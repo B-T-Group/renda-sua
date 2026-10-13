@@ -18,7 +18,13 @@ const order = (completedAt: string | null): AccrualOrder => ({
 
 describe('RepresentativeCommissionService.accrue', () => {
   const hasura = { executeQuery: jest.fn() };
-  const configurations = { getConfigurationByKey: jest.fn() };
+  const configurations = {
+    getConfigurationByKey: jest.fn(),
+    // Global lookup = the country-less read (country_code IS NULL).
+    getGlobalConfigurationByKey: jest.fn((key: string) =>
+      configurations.getConfigurationByKey(key, undefined)
+    ),
+  };
   const grids = { loadFor: jest.fn() };
   const accounts = {};
   const service = new RepresentativeCommissionService(

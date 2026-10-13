@@ -24,6 +24,26 @@ export function shouldReplaceLegacySalePay(
 
 type FlagRow = { boolean_value?: boolean; status?: string } | null;
 
+type ConfigLookups = {
+  getConfigurationByKey: (key: string, country?: string) => Promise<FlagRow>;
+  getGlobalConfigurationByKey: (key: string) => Promise<FlagRow>;
+};
+
+/**
+ * Flag reader for readPortfolioEnabled: a country lookup when a country is
+ * given, otherwise strictly the global row (country_code IS NULL). A CM-only
+ * row must never be read as the default for CA/US agents.
+ */
+export function flagReader(
+  configurations: ConfigLookups
+): (key: string, country?: string) => Promise<FlagRow> {
+  return (key, country) =>
+    country
+      ? configurations.getConfigurationByKey(key, country)
+      : configurations.getGlobalConfigurationByKey(key);
+}
+
+/** `read(key, undefined)` must return only the country_code IS NULL row (see flagReader). */
 export async function readPortfolioEnabled(
   read: (key: string, country?: string) => Promise<FlagRow>,
   country: string | null

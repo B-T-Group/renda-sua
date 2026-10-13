@@ -12,6 +12,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 import {
   portfolioCommissionApplies,
+  flagReader,
   readPortfolioEnabled,
 } from '../representative-commission/portfolio-commission-flag';
 
@@ -136,7 +137,7 @@ export class AgentReferralsService {
 
   private async portfolioReplacesFirstDelivery(countryCode: string): Promise<boolean> {
     const enabled = await readPortfolioEnabled(
-      (key, country) => this.configurationsService.getConfigurationByKey(key, country),
+      flagReader(this.configurationsService),
       countryCode
     );
     return portfolioCommissionApplies(enabled);

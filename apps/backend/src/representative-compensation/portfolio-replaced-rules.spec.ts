@@ -15,7 +15,13 @@ import { RepresentativeCompensationService } from './representative-compensation
 
 describe('portfolio replacement of the 1% sale pay', () => {
   const previousEnv = process.env.NODE_ENV;
-  const configurations = { getConfigurationByKey: jest.fn() };
+  const configurations = {
+    getConfigurationByKey: jest.fn(),
+    // Global lookup = the country-less read (country_code IS NULL).
+    getGlobalConfigurationByKey: jest.fn((key: string) =>
+      configurations.getConfigurationByKey(key, undefined)
+    ),
+  };
   const grids = { loadFor: jest.fn() };
   const commissions = { portfolioReplacesLegacy: jest.fn() };
   const service = new RepresentativeCompensationService(

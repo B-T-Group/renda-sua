@@ -24,7 +24,7 @@ describe('AgentReferralsService.creditAfterFirstDelivery', () => {
     service = new AgentReferralsService(
       hasura as unknown as HasuraSystemService,
       {} as ReferralPyramidService,
-      { getConfigurationByKey: jest.fn() } as never
+      { getConfigurationByKey: jest.fn(), getGlobalConfigurationByKey: jest.fn() } as never
     );
     creditSpy = jest
       .spyOn(service, 'creditResolvedAgentReferral')
@@ -132,7 +132,13 @@ describe('AgentReferralsService.creditAfterFirstDelivery', () => {
 
 describe('AgentReferralsService.listReferredBusinesses', () => {
   const hasura = { executeQuery: jest.fn(), executeMutation: jest.fn() };
-  const configurationsService = { getConfigurationByKey: jest.fn() };
+  const configurationsService = {
+    getConfigurationByKey: jest.fn(),
+    // Global lookup = the country-less read (country_code IS NULL).
+    getGlobalConfigurationByKey: jest.fn((key: string) =>
+      configurationsService.getConfigurationByKey(key, undefined)
+    ),
+  };
   let service: AgentReferralsService;
 
   beforeEach(() => {

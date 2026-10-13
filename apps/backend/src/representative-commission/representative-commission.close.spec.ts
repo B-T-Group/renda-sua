@@ -8,7 +8,13 @@ describe('RepresentativeCommissionService month close', () => {
   let statement: { id: string; status: string } | null = null;
   let accountId: string | null = 'acct-1';
   const hasura = { executeQuery: jest.fn() };
-  const configurations = { getConfigurationByKey: jest.fn() };
+  const configurations = {
+    getConfigurationByKey: jest.fn(),
+    // Global lookup = the country-less read (country_code IS NULL).
+    getGlobalConfigurationByKey: jest.fn((key: string) =>
+      configurations.getConfigurationByKey(key, undefined)
+    ),
+  };
   const grids = { loadFor: jest.fn() };
   const accounts = { registerDepositIfNotExists: jest.fn() };
   const paymentRouting = { getUserCountryCode: jest.fn() };
@@ -308,7 +314,7 @@ describe('RepresentativeCommissionService hold release', () => {
   const accounts = { registerDepositIfNotExists: jest.fn() };
   const service = new RepresentativeCommissionService(
     hasura as never,
-    { getConfigurationByKey: jest.fn() } as never,
+    { getConfigurationByKey: jest.fn(), getGlobalConfigurationByKey: jest.fn() } as never,
     { loadFor: jest.fn() } as never,
     accounts as never,
     { getUserCountryCode: jest.fn() } as never

@@ -149,6 +149,34 @@ export class ConfigurationsService {
     }
   }
 
+  /**
+   * Global (country_code IS NULL) row for a key. Never falls back to an
+   * arbitrary country-scoped row.
+   */
+  async getGlobalConfigurationByKey(
+    configKey: string
+  ): Promise<ApplicationConfiguration | null> {
+    const query = `
+      query GetGlobalConfigurationByKey($config_key: String!) {
+        application_configurations(
+          where: {
+            config_key: { _eq: $config_key },
+            country_code: { _is_null: true },
+            status: { _eq: "active" }
+          }
+          order_by: { updated_at: desc }
+          limit: 1
+        ) {
+          ${CONFIGURATION_FIELDS}
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, {
+      config_key: configKey,
+    });
+    return response.application_configurations[0] || null;
+  }
+
   async getConfigurationByKey(
     configKey: string,
     countryCode?: string
