@@ -1,12 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { referralReferenceUuid } from '../referrals/referral-pyramid.util';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
-import { addDays, currentPeriod, doualaMidnight, doualaNoon, periodRange, previousPeriod } from './douala-period';
+import { addDays, currentPeriod, doualaMidnight, doualaNoon, periodRange, periodBounds, previousPeriod } from './douala-period';
 import {
   portfolioCommissionApplies,
+  flagReader,
   readPortfolioEnabled,
   shouldReplaceLegacySalePay,
 } from './portfolio-commission-flag';
@@ -110,7 +111,7 @@ export class RepresentativeCommissionService {
     at: Date
   ): Promise<boolean> {
     const on = await readPortfolioEnabled(
-      (key, code) => this.configurations.getConfigurationByKey(key, code),
+      flagReader(this.configurations),
       country
     );
     const grid = await this.grids.loadFor(currency, at);
@@ -173,7 +174,36 @@ export class RepresentativeCommissionService {
     return this.closePeriod(currentPeriod(new Date()));
   }
 
-  private async closePeriod(period: { start: string; end: string }): Promise<number> {
+  /**
+   * DEV-only admin trigger (see RepresentativeCommissionAdminController).
+   * `period` is YYYY-MM (Douala month); defaults to the previous month, like
+   * the cron. Safe to call twice or in parallel: same-period calls in this
+   * process share one run, and across processes the statement period unique
+   * key, deterministic wallet references, the one-hold-per-statement
+   * constraint and the credited status make a second close a no-op.
+   */
+  async closeMonthForAdmin(
+    period?: string
+  ): Promise<{ period: { start: string; end: string }; closed: number; joined: boolean }> {
+    const bounds = period ? parseAdminPeriod(period) : previousPeriod(new Date());
+    const joined = this.closesInFlight.has(bounds.start);
+    const closed = await this.closePeriod(bounds);
+    return { period: bounds, closed, joined };
+  }
+
+  private readonly closesInFlight = new Map<string, Promise<number>>();
+
+  private closePeriod(period: { start: string; end: string }): Promise<number> {
+    const running = this.closesInFlight.get(period.start);
+    if (running) return running;
+    const run = this.closePeriodOnce(period).finally(() =>
+      this.closesInFlight.delete(period.start)
+    );
+    this.closesInFlight.set(period.start, run);
+    return run;
+  }
+
+  private async closePeriodOnce(period: { start: string; end: string }): Promise<number> {
     const agents = uniqueAgents([
       ...(await this.agentsWithAccruals(period)),
       ...(await this.premiumAgents(period)),
@@ -203,7 +233,7 @@ export class RepresentativeCommissionService {
 
   private async enabled(country: string | null, at: Date = new Date()): Promise<boolean> {
     const on = await readPortfolioEnabled(
-      (key, code) => this.configurations.getConfigurationByKey(key, code),
+      flagReader(this.configurations),
       country
     );
     return portfolioCommissionApplies(on, at);
@@ -1557,3 +1587,19 @@ function personalAccountQuery(): string {
   `;
 }
 
+/** `YYYY-MM` → Douala month bounds. Rejects anything else and future months. */
+export function parseAdminPeriod(
+  value: string,
+  now: Date = new Date()
+): { start: string; end: string } {
+  const match = /^(\d{4})-(\d{2})$/.exec(value.trim());
+  const month = match ? Number(match[2]) : 0;
+  if (!match || month < 1 || month > 12) {
+    throw new BadRequestException('period must be YYYY-MM');
+  }
+  const bounds = periodBounds(Number(match[1]), month);
+  if (bounds.start > currentPeriod(now).start) {
+    throw new BadRequestException('period cannot be in the future');
+  }
+  return bounds;
+}

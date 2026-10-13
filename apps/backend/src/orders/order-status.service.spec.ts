@@ -449,9 +449,7 @@ describe('OrderStatusService status updates with completed_at', () => {
       },
     });
 
-    const result = await service.updateOrderStatus('order-1', 'complete', {
-      viaSystem: true,
-    });
+    const result = await service.updateOrderStatus('order-1', 'complete');
 
     expect(result.current_status).toBe('complete');
     expect(result.completed_at).toBeDefined();
@@ -497,9 +495,7 @@ describe('OrderStatusService status updates with completed_at', () => {
       },
     });
 
-    const result = await service.updateOrderStatus('order-1', 'complete', {
-      viaSystem: true,
-    });
+    const result = await service.updateOrderStatus('order-1', 'complete');
 
     expect(result.current_status).toBe('complete');
     expect(result.completed_at).toBe('2026-10-13T10:00:00.000Z');

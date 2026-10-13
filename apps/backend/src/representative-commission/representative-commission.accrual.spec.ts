@@ -40,7 +40,13 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 describe('RepresentativeCommissionService.accrue', () => {
   const hasura = { executeQuery: jest.fn() };
-  const configurations = { getConfigurationByKey: jest.fn() };
+  const configurations = {
+    getConfigurationByKey: jest.fn(),
+    // Global lookup = the country-less read (country_code IS NULL).
+    getGlobalConfigurationByKey: jest.fn((key: string) =>
+      configurations.getConfigurationByKey(key, undefined)
+    ),
+  };
   const grids = { loadFor: jest.fn() };
   const accounts = { registerDepositIfNotExists: jest.fn() };
   const service = new RepresentativeCommissionService(
@@ -138,16 +144,21 @@ describe('RepresentativeCommissionService.accrue', () => {
   });
 
   it('exits a shop that has been idle for 90 days and keeps one that sold 1ms sooner', async () => {
-    const idle = new Date(FROZEN.getTime() - 90 * DAY_MS).toISOString();
+    // Past the production cutover so a 90-day-old sale is still in scope.
+    const now = new Date('2027-03-01T12:00:00.000Z');
+    jest.setSystemTime(now);
+    const idle = new Date(now.getTime() - 90 * DAY_MS).toISOString();
     hasura.executeQuery.mockImplementation(async (query: string) => {
       if (query.includes('LastPortfolioSale')) return { orders: [{ completed_at: idle }] };
       return answer(query);
     });
-    await service.accrue(order());
+    // The accruing sale itself is activity (#560), so the idle case needs a
+    // sale that is itself at least 90 days old.
+    await service.accrue(order({ completedAt: idle }));
     expect(named(hasura, 'ExitPortfolio')[0][1].object.reason).toBe('inactive_90_days');
     expect(named(hasura, 'InsertPortfolioAccrual')).toHaveLength(0);
 
-    const active = new Date(FROZEN.getTime() - 90 * DAY_MS + 1).toISOString();
+    const active = new Date(now.getTime() - 90 * DAY_MS + 1).toISOString();
     hasura.executeQuery.mockImplementation(async (query: string) => {
       if (query.includes('LastPortfolioSale')) return { orders: [{ completed_at: active }] };
       return answer(query);

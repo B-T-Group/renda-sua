@@ -37,6 +37,13 @@ export type OrderStatusUpdateOptions = {
   onSameStatusReplay?: () => void;
 };
 
+export function isDeliveredToComplete(
+  previousStatus: string,
+  newStatus: string
+): boolean {
+  return previousStatus === 'delivered' && newStatus === 'complete';
+}
+
 @Injectable()
 export class OrderStatusService {
   private readonly logger = new Logger(OrderStatusService.name);
@@ -214,13 +221,19 @@ export class OrderStatusService {
     }>(updateOrderMutation, mutationVariables);
 
     const batch = updateResult.update_orders;
-    const updatedRow = await this.handleStatusUpdateResult(
+    const { row: updatedRow, replay } = await this.handleStatusUpdateResult(
       orderId,
       batch?.affected_rows,
       batch?.returning?.[0],
       previousStatus,
       newStatus
     );
+    if (replay) {
+      // A concurrent request already won this transition and ran (or is
+      // running) the side effects. Do not emit them a second time.
+      options?.onSameStatusReplay?.();
+      return updatedRow;
+    }
 
     try {
       await this.orderQueueService.sendOrderStatusUpdatedMessage(
@@ -330,6 +343,13 @@ export class OrderStatusService {
     agentId?: string
   ): { mutation: string; variables: Record<string, string> } {
     const isCompletionStatus = newStatus === 'complete' || newStatus === 'delivered';
+    // delivered → complete: the order may already carry completed_at from the
+    // delivered step (or legacy flows). Guarding on completed_at IS NULL would
+    // make that valid transition 0 rows → permanent 409. The current_status
+    // compare-and-set alone keeps it single-winner; completed_at is preserved
+    // and only backfilled when missing (see backfillCompletedAtIfMissing).
+    const guardCompletedAt =
+      isCompletionStatus && !isDeliveredToComplete(previousStatus, newStatus);
     if (assignToAgent) {
       if (!agentId) {
         throw new Error('Agent id required for assign mutation');
@@ -386,11 +406,11 @@ export class OrderStatusService {
             where: {
               id: { _eq: $orderId }
               current_status: { _eq: $previousStatus }
-              ${isCompletionStatus ? 'completed_at: { _is_null: true }' : ''}
+              ${guardCompletedAt ? 'completed_at: { _is_null: true }' : ''}
             }
             _set: {
               current_status: $newStatus
-              ${isCompletionStatus ? 'completed_at: "now()"' : ''}
+              ${guardCompletedAt ? 'completed_at: "now()"' : ''}
               updated_at: "now()"
             }
           ) {
@@ -419,26 +439,44 @@ export class OrderStatusService {
     returnedRow: any,
     previousStatus: string,
     newStatus: string
-  ): Promise<any> {
+  ): Promise<{ row: any; replay: boolean }> {
     if (affectedRows === 1) {
-      return returnedRow;
+      if (
+        isDeliveredToComplete(previousStatus, newStatus) &&
+        !returnedRow?.completed_at
+      ) {
+        await this.backfillCompletedAtIfMissing(orderId);
+      }
+      return { row: returnedRow, replay: false };
     }
     const isCompletionStatus = newStatus === 'complete' || newStatus === 'delivered';
     if (affectedRows === 0 && isCompletionStatus) {
       const current = await this.checkOrderStatus(orderId);
       if (current?.current_status === newStatus && current?.completed_at) {
         this.logger.log(
-          `Order ${orderId} already ${newStatus} with completed_at set; skipping update`
+          `Order ${orderId} already ${newStatus} with completed_at set; concurrent request won, skipping side effects`
         );
-        return current;
+        return { row: current, replay: true };
       }
     }
-    this.logger.warn(
-      `Conditional order status update affected ${affectedRows ?? 0} row(s): ${previousStatus} → ${newStatus}`
-    );
-    throw new HttpException(
-      'Order status already changed. Please refresh and try again.',
-      HttpStatus.CONFLICT
+    this.ensureSingleStatusRowUpdated(affectedRows, previousStatus, newStatus);
+    return { row: returnedRow, replay: false };
+  }
+
+  /** Sets completed_at only when still NULL; never rewrites an existing value. */
+  private async backfillCompletedAtIfMissing(orderId: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation BackfillOrderCompletedAt($orderId: uuid!) {
+        update_orders(
+          where: { id: { _eq: $orderId }, completed_at: { _is_null: true } }
+          _set: { completed_at: "now()" }
+        ) {
+          affected_rows
+        }
+      }
+    `,
+      { orderId }
     );
   }
 
