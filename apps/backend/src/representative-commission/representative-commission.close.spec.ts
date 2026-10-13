@@ -11,11 +11,13 @@ describe('RepresentativeCommissionService month close', () => {
   const configurations = { getConfigurationByKey: jest.fn() };
   const grids = { loadFor: jest.fn() };
   const accounts = { registerDepositIfNotExists: jest.fn() };
+  const paymentRouting = { getUserCountryCode: jest.fn() };
   const service = new RepresentativeCommissionService(
     hasura as never,
     configurations as never,
     grids as never,
-    accounts as never
+    accounts as never,
+    paymentRouting as never
   );
 
   beforeEach(() => {
@@ -26,6 +28,11 @@ describe('RepresentativeCommissionService month close', () => {
     accountId = 'acct-1';
     grids.loadFor.mockResolvedValue(grid());
     accounts.registerDepositIfNotExists.mockResolvedValue({ success: true });
+    paymentRouting.getUserCountryCode.mockResolvedValue('CM');
+    configurations.getConfigurationByKey.mockResolvedValue({
+      boolean_value: true,
+      status: 'active',
+    });
     route(hasura, base());
   });
 
@@ -33,10 +40,25 @@ describe('RepresentativeCommissionService month close', () => {
     jest.useRealTimers();
   });
 
-  it('does not open a statement for an empty month, and does not read the flag', async () => {
+  it('does not close or pay while the portfolio flag is off', async () => {
+    configurations.getConfigurationByKey.mockResolvedValue({
+      boolean_value: false,
+      status: 'active',
+    });
+    await expect(service.closePreviousMonth()).resolves.toBe(0);
+    expect(accounts.registerDepositIfNotExists).not.toHaveBeenCalled();
+    expect(hasura.executeQuery.mock.calls.some(([query]) =>
+      String(query).includes('InsertPortfolioStatement')
+    )).toBe(false);
+    expect(hasura.executeQuery.mock.calls.some(([query]) =>
+      String(query).includes('InsertPortfolioPremium')
+    )).toBe(false);
+  });
+
+  it('does not open a statement for an empty month, but checks the flag', async () => {
     await expect(service.closePreviousMonth()).resolves.toBe(0);
     expect(named(hasura, 'InsertPortfolioStatement')).toHaveLength(0);
-    expect(configurations.getConfigurationByKey).not.toHaveBeenCalled();
+    expect(configurations.getConfigurationByKey).toHaveBeenCalled();
   });
 
   it('does not write a statement when the month has no grid', async () => {
@@ -194,6 +216,28 @@ describe('RepresentativeCommissionService month close', () => {
     expect(accounts.registerDepositIfNotExists).not.toHaveBeenCalled();
   });
 
+  it('does not replace 1% when the currency has no grid', async () => {
+    grids.loadFor.mockResolvedValue(null);
+    await expect(
+      service.replacesLegacy('CA', 'CAD', new Date('2026-11-02T00:00:00.000+01:00'))
+    ).resolves.toBe(false);
+  });
+
+  it('replaces 1% when the flag is on and a grid exists', async () => {
+    grids.loadFor.mockResolvedValue({ id: 'grid-xaf' });
+    await expect(
+      service.replacesLegacy('CM', 'XAF', new Date('2026-11-02T00:00:00.000+01:00'))
+    ).resolves.toBe(true);
+  });
+
+  it('checks grid existence in order currency, not payout currency', async () => {
+    grids.loadFor.mockImplementation(async (currency: string) => {
+      return currency === 'XAF' ? { id: 'grid-xaf' } : null;
+    });
+    await expect(service.replacesLegacy('CA', 'CAD', new Date('2026-11-02T00:00:00.000Z'))).resolves.toBe(false);
+    await expect(service.replacesLegacy('CA', 'XAF', new Date('2026-11-02T00:00:00.000Z'))).resolves.toBe(true);
+  });
+
   function base() {
     return {
       AgentsInPortfolioPeriod: {
@@ -216,6 +260,7 @@ describe('RepresentativeCommissionService month close', () => {
       PortfolioAgentAccount: () => ({
         agents_by_pk: { user: { accounts: accountId ? [{ id: accountId }] : [] } },
       }),
+      PortfolioAgentUserId: { agents_by_pk: { user_id: 'agent-user' } },
       InsertPortfolioStatement: () => {
         statement = { id: 'stmt-1', status: 'open' };
         return { insert_representative_commission_statements_one: { id: 'stmt-1' } };
@@ -265,7 +310,8 @@ describe('RepresentativeCommissionService hold release', () => {
     hasura as never,
     { getConfigurationByKey: jest.fn() } as never,
     { loadFor: jest.fn() } as never,
-    accounts as never
+    accounts as never,
+    { getUserCountryCode: jest.fn() } as never
   );
 
   beforeEach(() => {

@@ -9,10 +9,6 @@ import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 import { referralReferenceUuid } from '../referrals/referral-pyramid.util';
-import {
-  portfolioCommissionApplies,
-  readPortfolioEnabled,
-} from '../representative-commission/portfolio-commission-flag';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
   BUSINESS_REFERRAL_10_ITEMS,
@@ -365,26 +361,31 @@ export class RepresentativeCompensationService {
     actions: CompensationAction[],
     context: { input: Parameters<typeof evaluateCompensation>[0]; eval: EvalContext }
   ): Promise<CompensationAction[]> {
-    const enabled = await this.portfolioEnabled(context.eval.countryCode);
-    if (!enabled) return actions;
-    return actions.filter((action) => !this.replacedByPortfolio(action, context));
+    const kept: CompensationAction[] = [];
+    for (const action of actions) {
+      if (!(await this.replacedByPortfolio(action, context))) kept.push(action);
+    }
+    return kept;
   }
 
-  private async portfolioEnabled(country: string): Promise<boolean> {
-    return readPortfolioEnabled(
-      (key, code) => this.configurationsService.getConfigurationByKey(key, code),
-      country
-    );
-  }
-
-  private replacedByPortfolio(
+  private async replacedByPortfolio(
     action: CompensationAction,
-    context: { input: Parameters<typeof evaluateCompensation>[0] }
-  ): boolean {
-    if (action.ruleCode !== SALE_PERCENT && !isOnboardingFirstSaleRule(action.ruleCode)) return false;
+    context: { input: Parameters<typeof evaluateCompensation>[0]; eval: EvalContext }
+  ): Promise<boolean> {
+    if (action.ruleCode !== SALE_PERCENT && !isOnboardingFirstSaleRule(action.ruleCode)) {
+      return false;
+    }
     const sale = context.input.completedSales.find((s) => s.id === action.orderId);
     if (!sale?.completedAt) return false;
-    return portfolioCommissionApplies(true, saleInstant(context.input.completedSales, action.orderId));
+    const at = saleInstant(context.input.completedSales, action.orderId);
+    const currency = sale?.currency ?? currencyForReferralPayout(context.eval.countryCode);
+    return (
+      (await this.commissions?.portfolioReplacesLegacy(
+        context.eval.countryCode,
+        currency,
+        at
+      )) === true
+    );
   }
 
   private async creditActions(

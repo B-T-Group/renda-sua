@@ -1,0 +1,2 @@
+ALTER TABLE public.representative_commission_holds
+  DROP CONSTRAINT IF EXISTS uq_representative_commission_holds_statement;

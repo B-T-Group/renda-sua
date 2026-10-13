@@ -7,18 +7,24 @@ import {
   type CompensationAction,
   type CompensationRuleCode,
 } from './compensation-rules';
-import { PORTFOLIO_COMMISSION_CUTOVER } from '../representative-commission/portfolio-commission-flag';
+import {
+  PORTFOLIO_COMMISSION_CUTOVER,
+  shouldReplaceLegacySalePay,
+} from '../representative-commission/portfolio-commission-flag';
 import { RepresentativeCompensationService } from './representative-compensation.service';
 
 describe('portfolio replacement of the 1% sale pay', () => {
   const previousEnv = process.env.NODE_ENV;
   const configurations = { getConfigurationByKey: jest.fn() };
+  const grids = { loadFor: jest.fn() };
+  const commissions = { portfolioReplacesLegacy: jest.fn() };
   const service = new RepresentativeCompensationService(
     {} as never,
     {} as never,
     configurations as never,
     {} as never,
-    {} as never
+    {} as never,
+    commissions as never
   );
 
   beforeEach(() => {
@@ -29,6 +35,13 @@ describe('portfolio replacement of the 1% sale pay', () => {
       if (country === 'CM') return { boolean_value: true, status: 'active' };
       return null;
     });
+    commissions.portfolioReplacesLegacy.mockImplementation(async (country: string, currency: string, at: Date) => {
+      const hasFlag = await configurations.getConfigurationByKey('representative_portfolio_commission_enabled', country);
+      const enabled = hasFlag?.boolean_value === true && hasFlag.status === 'active';
+      const grid = await grids.loadFor(currency, at);
+      return shouldReplaceLegacySalePay(enabled, at, !!grid);
+    });
+    grids.loadFor.mockResolvedValue({ id: 'grid-xaf' });
   });
 
   afterEach(() => {

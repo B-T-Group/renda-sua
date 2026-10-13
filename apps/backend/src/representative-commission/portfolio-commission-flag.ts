@@ -13,6 +13,15 @@ export function portfolioCommissionApplies(
   return at.getTime() >= Date.parse(PORTFOLIO_COMMISSION_CUTOVER);
 }
 
+/** Legacy 1% / first-sale pay stays until a grid can actually replace it. */
+export function shouldReplaceLegacySalePay(
+  enabled: boolean,
+  at: Date,
+  hasGrid: boolean
+): boolean {
+  return hasGrid && portfolioCommissionApplies(enabled, at);
+}
+
 type FlagRow = { boolean_value?: boolean; status?: string } | null;
 
 export async function readPortfolioEnabled(

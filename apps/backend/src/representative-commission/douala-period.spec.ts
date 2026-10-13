@@ -1,6 +1,10 @@
 import { addDays, doualaMidnight } from './douala-period';
 import { fastStartAmountDue } from './representative-commission-premiums';
-import { portfolioCommissionApplies, PORTFOLIO_COMMISSION_CUTOVER } from './portfolio-commission-flag';
+import {
+  portfolioCommissionApplies,
+  PORTFOLIO_COMMISSION_CUTOVER,
+  shouldReplaceLegacySalePay,
+} from './portfolio-commission-flag';
 
 describe('Douala commission periods', () => {
   it('starts a month at Africa/Douala midnight', () => {
@@ -29,5 +33,13 @@ describe('portfolioCommissionApplies', () => {
     const cutover = Date.parse(PORTFOLIO_COMMISSION_CUTOVER);
     expect(portfolioCommissionApplies(true, new Date(cutover - 1))).toBe(false);
     expect(portfolioCommissionApplies(true, new Date(cutover))).toBe(true);
+  });
+
+  it('keeps 1% when the flag is off or the currency has no grid', () => {
+    process.env.NODE_ENV = 'production';
+    const after = new Date(Date.parse(PORTFOLIO_COMMISSION_CUTOVER));
+    expect(shouldReplaceLegacySalePay(false, after, true)).toBe(false);
+    expect(shouldReplaceLegacySalePay(true, after, false)).toBe(false);
+    expect(shouldReplaceLegacySalePay(true, after, true)).toBe(true);
   });
 });

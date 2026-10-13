@@ -322,6 +322,19 @@ export class CommissionsService {
     return result?.businesses_by_pk?.referring_agent?.user_id ?? null;
   }
 
+  async portfolioReplacesLegacy(
+    country: string | null,
+    currency: string,
+    at: Date
+  ): Promise<boolean> {
+    try {
+      return (await this.portfolio?.replacesLegacy(country, currency, at)) === true;
+    } catch (error: any) {
+      this.logger.error(`Portfolio replace check failed: ${error.message}`);
+      return false;
+    }
+  }
+
   async accruePortfolioForCompletedOrder(orderId: string): Promise<void> {
     try {
       const order = await this.completedPortfolioOrder(orderId);
