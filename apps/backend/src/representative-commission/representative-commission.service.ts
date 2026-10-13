@@ -7,6 +7,7 @@ import { addDays, currentPeriod, doualaMidnight, doualaNoon, periodRange, previo
 import {
   portfolioCommissionApplies,
   readPortfolioEnabled,
+  shouldReplaceLegacySalePay,
 } from './portfolio-commission-flag';
 import { RepresentativeCommissionGridService, type StoredCommissionGrid } from './representative-commission-grid.service';
 import {
@@ -96,6 +97,19 @@ export class RepresentativeCommissionService {
     const grid = await this.grids.loadFor(order.currency, at);
     if (!grid || (await this.blocked(business, grid))) return;
     await this.insertAccrual(order, business);
+  }
+
+  async replacesLegacy(
+    country: string | null,
+    currency: string,
+    at: Date
+  ): Promise<boolean> {
+    const on = await readPortfolioEnabled(
+      (key, code) => this.configurations.getConfigurationByKey(key, code),
+      country
+    );
+    const grid = await this.grids.loadFor(currency, at);
+    return shouldReplaceLegacySalePay(on, at, !!grid);
   }
 
   async previewForAgent(
@@ -190,6 +204,15 @@ export class RepresentativeCommissionService {
     return portfolioCommissionApplies(on, at);
   }
 
+  private async closeAllowed(agentId: string, periodStart: string): Promise<boolean> {
+    return this.enabled(await this.agentCountry(agentId), doualaMidnight(periodStart));
+  }
+
+  private async agentCountry(agentId: string): Promise<string | null> {
+    const result = await this.hasura.executeQuery(agentCountryQuery(), { agentId });
+    return result?.agents_by_pk?.user?.country ?? null;
+  }
+
   private async blocked(
     business: ReferredBusiness,
     grid: StoredCommissionGrid
@@ -244,6 +267,7 @@ export class RepresentativeCommissionService {
     currency: string,
     period: { start: string; end: string }
   ): Promise<number> {
+    if (!(await this.closeAllowed(agentId, period.start))) return 0;
     const existing = await this.loadStatement(agentId, currency, period.start);
     if (existing?.status === 'credited') return 0;
     const grid = await this.gridForPeriod(currency, period);
@@ -1222,7 +1246,21 @@ function markCreditedMutation(): string {
 function insertHoldMutation(): string {
   return `
     mutation InsertPortfolioHold($object: representative_commission_holds_insert_input!) {
-      insert_representative_commission_holds_one(object: $object) { id }
+      insert_representative_commission_holds_one(
+        object: $object
+        on_conflict: {
+          constraint: uq_representative_commission_holds_statement
+          update_columns: []
+        }
+      ) { id }
+    }
+  `;
+}
+
+function agentCountryQuery(): string {
+  return `
+    query PortfolioAgentCountry($agentId: uuid!) {
+      agents_by_pk(id: $agentId) { user { country } }
     }
   `;
 }
