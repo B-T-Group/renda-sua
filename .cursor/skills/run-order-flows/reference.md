@@ -73,7 +73,7 @@ Preflight fields that matter: `can_proceed`, `blocking_errors`, `groups[0].total
 
 Create response: `order.id`, `order.order_number`, `order.current_status`, `order.payment_status`, `order.pay_after_merchant_confirm`, `order.total_amount`.
 
-MoMo charges must be **< 2000** (XAF). Poll `GET /orders/:id` every ~2s, up to 20s, after a charge is requested, until `payment_status` is `paid` or `authorized`.
+MoMo charges must be **< 1,000,000** (XAF). Poll `GET /orders/:id` every ~2s, up to 20s, after a charge is requested, until `payment_status` is `paid` or `authorized`.
 
 ## Flag changes (restore after)
 
@@ -111,7 +111,7 @@ Write back the boolean you read before the change.
 | Pay at the door | agent | `POST /orders/:id/initiate-pay-at-delivery-payment` `{}` |
 | Client pickup done | client | `POST /orders/:id/complete-pickup` |
 
-`claim-availability`: use `claim_order` when `hasEnoughFundsForHold` is true. Otherwise `claim_order_with_topup`, and only if `holdAmount` < 2000.
+`claim-availability`: use `claim_order` when `hasEnoughFundsForHold` is true. Otherwise `claim_order_with_topup`, and only if `holdAmount` < 1,000,000.
 
 Cooked confirm may include `"ready_in_minutes": 15`.
 

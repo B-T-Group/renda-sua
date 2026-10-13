@@ -154,7 +154,7 @@ describe('FreemopayService Mock', () => {
         expect(httpClientSpy).not.toHaveBeenCalled();
       });
 
-      it('should return success for amounts < 2000 XAF', async () => {
+      it('should return success for amounts < 1000000 XAF', async () => {
         const result = await service.initiatePayment({
           payer: '237600000000',
           amount: 1999,
@@ -169,10 +169,10 @@ describe('FreemopayService Mock', () => {
         expect(result.status).toBe('PENDING');
       });
 
-      it('should return success for amounts = 2000 XAF (fails on status check)', async () => {
+      it('should return success for amounts = 1000000 XAF (fails on status check)', async () => {
         const result = await service.initiatePayment({
           payer: '237600000000',
-          amount: 2000,
+          amount: 1_000_000,
           externalId: 'test-ref',
           description: 'Test payment',
           callback: 'http://localhost:3000/callback',
@@ -182,15 +182,15 @@ describe('FreemopayService Mock', () => {
         expect(result.reference).toMatch(/^mock-/);
         expect(result.status).toBe('PENDING');
 
-        // Status check should return FAILED for amounts >= 2000
+        // Status check should return FAILED for amounts >= 1000000
         const status = await service.checkTransactionStatus(result.reference!);
         expect(status.status).toBe('FAILED');
       });
 
-      it('should return success for amounts > 2000 XAF (fails on status check)', async () => {
+      it('should return success for amounts > 1000000 XAF (fails on status check)', async () => {
         const result = await service.initiatePayment({
           payer: '237600000000',
-          amount: 5000,
+          amount: 1_000_001,
           externalId: 'test-ref',
           description: 'Test payment',
           callback: 'http://localhost:3000/callback',
@@ -200,10 +200,10 @@ describe('FreemopayService Mock', () => {
         expect(result.reference).toMatch(/^mock-/);
         expect(result.status).toBe('PENDING');
 
-        // Status check should return FAILED for amounts >= 2000
+        // Status check should return FAILED for amounts >= 1000000
         const status = await service.checkTransactionStatus(result.reference!);
         expect(status.status).toBe('FAILED');
-        expect(status.amount).toBe(5000);
+        expect(status.amount).toBe(1_000_001);
       });
 
       it('should store mock outcomes for status checks', async () => {
@@ -217,7 +217,7 @@ describe('FreemopayService Mock', () => {
 
         const failResult = await service.initiatePayment({
           payer: '237600000000',
-          amount: 3000,
+          amount: 1_000_000,
           externalId: 'fail-ref',
           description: 'Fail payment',
           callback: 'http://localhost:3000/callback',
@@ -235,7 +235,7 @@ describe('FreemopayService Mock', () => {
           failResult.reference!
         );
         expect(failStatus.status).toBe('FAILED');
-        expect(failStatus.amount).toBe(3000);
+        expect(failStatus.amount).toBe(1_000_000);
       });
     });
 
@@ -254,7 +254,7 @@ describe('FreemopayService Mock', () => {
         expect(httpClientSpy).not.toHaveBeenCalled();
       });
 
-      it('should return success for withdrawal amounts < 2000 XAF', async () => {
+      it('should return success for withdrawal amounts < 1000000 XAF', async () => {
         const result = await service.withdraw({
           payee: '237600000000',
           amount: 1500,
@@ -269,10 +269,10 @@ describe('FreemopayService Mock', () => {
         expect(result.status).toBe('CREATED');
       });
 
-      it('should return success for withdrawal amounts >= 2000 XAF (fails on status check)', async () => {
+      it('should return success for withdrawal amounts >= 1000000 XAF (fails on status check)', async () => {
         const result = await service.withdraw({
           payee: '237600000000',
-          amount: 2500,
+          amount: 1_000_000,
           externalId: 'test-ref',
           description: 'Test withdrawal',
           callback: 'http://localhost:3000/callback',
@@ -284,10 +284,10 @@ describe('FreemopayService Mock', () => {
         // Status check should return FAILED
         const status = await service.checkTransactionStatus(result.reference!);
         expect(status.status).toBe('FAILED');
-        expect(status.amount).toBe(2500);
+        expect(status.amount).toBe(1_000_000);
       });
 
-      it('should apply the 2000 XAF threshold to withdrawals', async () => {
+      it('should apply the 1000000 XAF threshold to withdrawals', async () => {
         const belowThreshold = await service.withdraw({
           payee: '237600000000',
           amount: 1999,
@@ -298,7 +298,7 @@ describe('FreemopayService Mock', () => {
 
         const atThreshold = await service.withdraw({
           payee: '237600000000',
-          amount: 2000,
+          amount: 1_000_000,
           externalId: 'at-ref',
           description: 'At threshold',
           callback: 'http://localhost:3000/callback',
@@ -306,7 +306,7 @@ describe('FreemopayService Mock', () => {
 
         const aboveThreshold = await service.withdraw({
           payee: '237600000000',
-          amount: 2001,
+          amount: 1_000_001,
           externalId: 'above-ref',
           description: 'Above threshold',
           callback: 'http://localhost:3000/callback',
@@ -328,7 +328,7 @@ describe('FreemopayService Mock', () => {
     });
 
     describe('Status Check Mock', () => {
-      it('should return SUCCESS for mock transactions < 2000 XAF', async () => {
+      it('should return SUCCESS for mock transactions < 1000000 XAF', async () => {
         const initResult = await service.initiatePayment({
           payer: '237600000000',
           amount: 1000,
@@ -344,10 +344,10 @@ describe('FreemopayService Mock', () => {
         expect(status.amount).toBe(1000);
       });
 
-      it('should return FAILED for mock transactions >= 2000 XAF', async () => {
+      it('should return FAILED for mock transactions >= 1000000 XAF', async () => {
         const initResult = await service.initiatePayment({
           payer: '237600000000',
-          amount: 2000,
+          amount: 1_000_000,
           externalId: 'test-ref',
           description: 'Test payment',
           callback: 'http://localhost:3000/callback',
@@ -444,7 +444,7 @@ describe('FreemopayService Mock', () => {
       it('should schedule auto-callback after payment initiation (FAILED)', async () => {
         const result = await service.initiatePayment({
           payer: '237600000000',
-          amount: 2500,
+          amount: 1_000_000,
           externalId: 'test-ref',
           description: 'Test payment',
           callback: 'http://localhost:3000/callback',
@@ -499,7 +499,7 @@ describe('FreemopayService Mock', () => {
       it('should schedule auto-callback after withdrawal initiation (FAILED)', async () => {
         const result = await service.withdraw({
           payee: '237600000000',
-          amount: 3000,
+          amount: 1_000_000,
           externalId: 'test-ref',
           description: 'Test withdrawal',
           callback: 'http://localhost:3000/callback',

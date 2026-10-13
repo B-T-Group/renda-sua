@@ -1,4 +1,4 @@
-import { Inject, Injectable, forwardRef } from '@nestjs/common';
+import { Inject, Injectable, Optional, forwardRef } from '@nestjs/common';
 import { ConfigurationsService } from '../admin/configurations.service';
 import { currencyForReferralPayout } from '../business-referral-payouts/business-referral-payout.constants';
 import type { ReferredBusinessFollowUp } from '../business-referrals/referred-business-followup.util';
@@ -14,6 +14,7 @@ import {
   SALE_PERCENT,
 } from '../representative-compensation/compensation-rules';
 import {
+  applyPortfolioSummary,
   assemblePayBoard,
   buildPayBoardSummary,
   fallbackMarketAmounts,
@@ -33,6 +34,7 @@ import type {
   ScheduleAssignmentInput,
 } from './agent-pay-board.types';
 import { AgentReferralsService } from './agent-referrals.service';
+import { RepresentativeCommissionService } from '../representative-commission/representative-commission.service';
 
 const SALE_PERCENT_KEY = 'sale_only_commission_percent';
 
@@ -62,13 +64,27 @@ export class AgentPayBoardService {
     private readonly referrals: AgentReferralsService,
     @Inject(forwardRef(() => PaymentScheduleConsentService))
     private readonly schedules: PaymentScheduleConsentService,
-    private readonly configurations: ConfigurationsService
+    private readonly configurations: ConfigurationsService,
+    @Optional() private readonly portfolio?: RepresentativeCommissionService
   ) {}
 
   async getBoard(input: PayBoardQuery): Promise<PayBoard> {
     const loaded = await this.loadBoard(input);
     const items = composeItems(loaded);
-    return assemblePayBoard(items, input.status, summaryFor(loaded, items));
+    const portfolio = await this.portfolioMonth(input.agentId, loaded.currency, input.country);
+    const totals = await this.portfolioTotals(input.agentId, loaded.currency, input.country);
+    const summary = applyPortfolioSummary(summaryFor(loaded, items), totals);
+    return assemblePayBoard(items, input.status, summary, portfolio);
+  }
+
+  private async portfolioMonth(agentId: string, currency: string, country: string | null) {
+    if (!this.portfolio) return null;
+    return this.portfolio.previewForAgent(agentId, currency, country);
+  }
+
+  private async portfolioTotals(agentId: string, currency: string, country: string | null) {
+    if (!this.portfolio) return null;
+    return this.portfolio.boardTotals(agentId, currency, country);
   }
 
   private async loadBoard(input: PayBoardQuery): Promise<LoadedBoard> {

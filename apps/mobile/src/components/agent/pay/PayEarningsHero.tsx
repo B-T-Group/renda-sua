@@ -11,6 +11,7 @@ const SOURCE_FALLBACK: Record<string, string> = {
   sale_percent: 'Percent of sales',
   payment_schedule: 'Scheduled pay',
   delivery_commission: 'Deliveries',
+  portfolio_commission: 'Portfolio commission',
 };
 
 export function PayEarningsHero({ summary }: { summary: PayBoardSummary | null }) {

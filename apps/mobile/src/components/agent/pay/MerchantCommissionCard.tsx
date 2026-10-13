@@ -11,9 +11,11 @@ import type { EarningItem, MerchantReferralStructure } from '../../../types/agen
 export function MerchantCommissionCard({
   item,
   structure,
+  portfolioActive = false,
 }: {
   item: EarningItem;
   structure: MerchantReferralStructure;
+  portfolioActive?: boolean;
 }) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, shadows } = useTheme();
@@ -45,7 +47,11 @@ export function MerchantCommissionCard({
         <StatusPill compact label={status.label} backgroundColor={status.backgroundColor} textColor={status.textColor} />
       </View>
       <MerchantContacts ownerName={structure.ownerName} phone={structure.phone} email={structure.email} />
-      {sameAmount ? (
+      {portfolioActive ? (
+        <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
+          {t('agent.pay.portfolioShop', 'This shop is in your portfolio. Its sales count toward this month’s commission.')}
+        </Text>
+      ) : sameAmount ? (
         <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
           {t('agent.pay.sameSale', '{{amount}} when the first qualifying sale happens', {
             amount: formatCurrency(structure.selfSaleAmount, item.currency),
@@ -65,6 +71,28 @@ export function MerchantCommissionCard({
           </Text>
         </View>
       )}
+      {portfolioActive ? null : (
+        <LegacyCommissionLines item={item} structure={structure} onboarding={onboarding} tone={tone} />
+      )}
+    </View>
+  );
+}
+
+function LegacyCommissionLines({
+  item,
+  structure,
+  onboarding,
+  tone,
+}: {
+  item: EarningItem;
+  structure: MerchantReferralStructure;
+  onboarding: MerchantReferralStructure['onboarding'];
+  tone: CommissionDeadlineTone;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  return (
+    <>
       <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
         {t('agent.pay.salePercent', '{{percent}}% of every sale', { percent: structure.salePercent })}
         {structure.salePercentEarned > 0
@@ -85,7 +113,7 @@ export function MerchantCommissionCard({
       <Text variant="bodyMedium" style={{ color: colors.text.primary }}>
         {t(`agent.pay.nextStep.${item.nextStep}`, nextStepFallback(item.nextStep))}
       </Text>
-    </View>
+    </>
   );
 }
 

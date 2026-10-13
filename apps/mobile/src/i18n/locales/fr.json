@@ -4779,7 +4779,26 @@
         "merchant_referral": "Bonus de parrainage",
         "sale_percent": "Pourcentage des ventes",
         "payment_schedule": "Paie planifiée",
-        "delivery_commission": "Livraisons"
+        "delivery_commission": "Livraisons",
+        "portfolio_commission": "Commission de portefeuille"
+      },
+      "portfolioShop": "Cette boutique est dans votre portefeuille. Ses ventes comptent dans la commission du mois.",
+      "grid": {
+        "title": "Commission de portefeuille",
+        "base": "{{percent}} % de la commission article de Rendasua",
+        "tier": "{{from}} à {{to}} : +{{percent}} %",
+        "tierOpen": "{{from}} et plus : +{{percent}} %",
+        "month": "Ce mois : {{gmv}} de ventes · {{eligible}} éligible · {{registrations}}/{{target}} inscriptions",
+        "objective": "Objectif d’inscriptions non atteint : seule la base est versée.",
+        "baseAmount": "Base {{amount}}",
+        "growth": "Croissance +{{percent}} % · {{amount}}",
+        "activation": "Activation {{amount}}",
+        "fastStart": "Démarrage rapide gagné {{earned}}, versé {{paid}}",
+        "quarterly": "Trimestriel gagné {{earned}}, versé {{paid}}",
+        "payable": "À verser {{amount}}",
+        "hold": "Retenue {{amount}} pendant {{days}} jours",
+        "release": "Libération le {{date}}",
+        "recruitment": "Recrutement hors plafond {{amount}}"
       },
       "selfSale": "{{amount}} si vous faites la première vente",
       "otherSale": "{{amount}} si quelqu'un d'autre fait la première vente",

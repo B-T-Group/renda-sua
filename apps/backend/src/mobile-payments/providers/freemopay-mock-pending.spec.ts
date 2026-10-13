@@ -36,7 +36,7 @@ describe('FreemopayService mock pending phones', () => {
     expect(svc.generateMockCallback(res.transactionId!, 'ORD1-1').status).toBe('SUCCESS');
   });
 
-  it('other payers keep the amount rule (< 2000 succeeds) with auto-callback', async () => {
+  it('other payers keep the amount rule (< 1,000,000 succeeds) with auto-callback', async () => {
     const { svc, processor } = build(true);
     await svc.onModuleInit();
     await svc.initiatePayment({ payer: '237699111222', amount: 1500, externalId: 'ORD1-2', description: 'x', callback: '' } as any);

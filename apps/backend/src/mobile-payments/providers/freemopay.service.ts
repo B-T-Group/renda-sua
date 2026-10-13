@@ -59,7 +59,7 @@ export class FreemopayService implements OnModuleInit {
   private readonly httpClient: AxiosInstance;
   private readonly config: FreemopayConfig;
   private readonly mockEnabled: boolean;
-  private readonly mockThreshold = 2000;
+  private readonly mockThreshold = 1_000_000;
   private readonly mockCallbackDelayMs = 1500;
   private readonly mockOutcomes = new Map<string, { outcome: 'SUCCESS' | 'FAILED' | 'PENDING'; amount: number }>();
   private readonly mockPendingPhones: string[];
@@ -172,7 +172,7 @@ export class FreemopayService implements OnModuleInit {
 
   /**
    * Determine mock outcome based on amount threshold.
-   * < 2000 XAF = SUCCESS, >= 2000 XAF = FAILED.
+   * < 1,000,000 XAF = SUCCESS, >= 1,000,000 XAF = FAILED.
    */
   private getMockOutcome(amount: number): 'SUCCESS' | 'FAILED' {
     return amount < this.mockThreshold ? 'SUCCESS' : 'FAILED';

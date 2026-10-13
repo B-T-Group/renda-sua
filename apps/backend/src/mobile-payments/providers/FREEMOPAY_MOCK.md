@@ -10,10 +10,10 @@ This mock allows safe testing of FreemoPay payment and withdrawal flows in DEV w
 
 When the mock is **enabled**:
 
-- **Amounts < 2000 XAF** → simulate **SUCCESS** (auto-callback with SUCCESS status after ~1.5s)
-- **Amounts ≥ 2000 XAF** → simulate **FAILED** (auto-callback with FAILED status after ~1.5s)
+- **Amounts < 1,000,000 XAF** → simulate **SUCCESS** (auto-callback with SUCCESS status after ~1.5s)
+- **Amounts ≥ 1,000,000 XAF** → simulate **FAILED** (auto-callback with FAILED status after ~1.5s)
 
-The threshold is **inclusive** (2000 XAF fails).
+The threshold is **inclusive** (1,000,000 XAF fails).
 
 **Auto-callbacks** go through the real payment callback processor, applying the same side effects as live FreemoPay callbacks (wallet credits/debits, order state transitions, etc.).
 
@@ -66,7 +66,7 @@ Restart the backend after changing the environment variable.
 
 ### Testing Collections (Payments)
 
-**SUCCESS scenario (< 2000 XAF):**
+**SUCCESS scenario (< 1,000,000 XAF):**
 
 ```bash
 # Initiate a wallet top-up or claim order payment
@@ -95,10 +95,10 @@ POST /mobile-payments/initiate
 # - Order proceeds to fulfillment
 ```
 
-**FAILED scenario (≥ 2000 XAF):**
+**FAILED scenario (≥ 1,000,000 XAF):**
 
 ```bash
-# Use amount >= 2000
+# Use amount >= 1,000,000
 POST /mobile-payments/initiate
 {
   "amount": 2500,
@@ -118,7 +118,7 @@ POST /mobile-payments/initiate
 
 ### Testing Withdrawals (Give Change)
 
-**SUCCESS scenario (< 2000 XAF):**
+**SUCCESS scenario (< 1,000,000 XAF):**
 
 ```bash
 POST /give-change/payout
@@ -138,7 +138,7 @@ POST /give-change/payout
 # - Transaction marked success
 ```
 
-**FAILED scenario (≥ 2000 XAF):**
+**FAILED scenario (≥ 1,000,000 XAF):**
 
 ```bash
 POST /give-change/payout
@@ -181,7 +181,7 @@ If you need to test specific callback scenarios or timing, you can still trigger
 Use the existing admin callback replay endpoint:
 
 ```bash
-# For SUCCESS (amount < 2000)
+# For SUCCESS (amount < 1,000,000)
 POST /admin/mobile-payments/replay-callback
 Authorization: Bearer <admin-token>
 {
@@ -189,7 +189,7 @@ Authorization: Bearer <admin-token>
   "status": "SUCCESS"
 }
 
-# For FAILED (amount >= 2000)
+# For FAILED (amount >= 1,000,000)
 POST /admin/mobile-payments/replay-callback
 Authorization: Bearer <admin-token>
 {
@@ -233,7 +233,7 @@ Mock transactions return their predetermined status when checked:
 ```bash
 GET /mobile-payments/status/{mockReference}
 
-# For amount < 2000:
+# For amount < 1,000,000:
 {
   "status": "SUCCESS",
   "amount": 1500,
@@ -241,7 +241,7 @@ GET /mobile-payments/status/{mockReference}
   "message": "Mock transaction succeeded"
 }
 
-# For amount >= 2000:
+# For amount >= 1,000,000:
 {
   "status": "FAILED",
   "amount": 2500,
@@ -252,7 +252,7 @@ GET /mobile-payments/status/{mockReference}
 
 ## Testing Scenarios for #450
 
-### Claim Order Top-Up (< 2000 XAF)
+### Claim Order Top-Up (< 1,000,000 XAF)
 
 1. Create a claim order
 2. Initiate payment with amount 1500 XAF
@@ -263,7 +263,7 @@ GET /mobile-payments/status/{mockReference}
    - Order marked as paid
    - Order proceeds to fulfillment
 
-### Claim Order Top-Up (≥ 2000 XAF)
+### Claim Order Top-Up (≥ 1,000,000 XAF)
 
 1. Create a claim order
 2. Initiate payment with amount 2500 XAF
@@ -274,7 +274,7 @@ GET /mobile-payments/status/{mockReference}
    - Order remains unpaid or cancelled
    - Failure side effects applied
 
-### Merchant Payout (< 2000 XAF)
+### Merchant Payout (< 1,000,000 XAF)
 
 1. Initiate give-change withdrawal with amount 1800 XAF
 2. Mock places hold on wallet, returns pending
@@ -284,7 +284,7 @@ GET /mobile-payments/status/{mockReference}
    - Wallet debited
    - Transaction marked success
 
-### Merchant Payout (≥ 2000 XAF)
+### Merchant Payout (≥ 1,000,000 XAF)
 
 1. Initiate give-change withdrawal with amount 2200 XAF
 2. Mock places hold on wallet, returns pending
@@ -379,7 +379,7 @@ Check:
 4. Look for the mock warning in logs at startup:
 
 ```
-⚠️  FreemoPay DEV MOCK ENABLED: amounts < 2000 XAF will simulate SUCCESS, >= 2000 XAF will simulate FAILED. NO LIVE API CALLS.
+⚠️  FreemoPay DEV MOCK ENABLED: amounts < 1,000,000 XAF will simulate SUCCESS, >= 1,000,000 XAF will simulate FAILED. NO LIVE API CALLS.
 ```
 
 ### Auto-callbacks not working
@@ -419,11 +419,11 @@ For mocked transactions, the provider confirmation is automatically skipped. Sid
 
 - [ ] Enable mock in DEV (env var + restart)
 - [ ] Verify mock warning in logs
-- [ ] Test payment < 2000 XAF → SUCCESS (auto-callback)
-- [ ] Test payment = 2000 XAF → FAILED (auto-callback)
-- [ ] Test payment > 2000 XAF → FAILED (auto-callback)
-- [ ] Test withdrawal < 2000 XAF → SUCCESS (auto-callback)
-- [ ] Test withdrawal ≥ 2000 XAF → FAILED (auto-callback)
+- [ ] Test payment < 1,000,000 XAF → SUCCESS (auto-callback)
+- [ ] Test payment = 1,000,000 XAF → FAILED (auto-callback)
+- [ ] Test payment > 1,000,000 XAF → FAILED (auto-callback)
+- [ ] Test withdrawal < 1,000,000 XAF → SUCCESS (auto-callback)
+- [ ] Test withdrawal ≥ 1,000,000 XAF → FAILED (auto-callback)
 - [ ] Verify auto-callback logs (🔨 AUTO-CALLBACK triggered)
 - [ ] Verify no live HTTP calls in logs (no real FreemoPay API requests)
 - [ ] Verify wallet credits/debits after auto-callback

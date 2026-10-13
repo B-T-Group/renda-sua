@@ -10,6 +10,7 @@ import { AgentDeliveryEarningsService } from './agent-delivery-earnings.service'
 import { AgentHoldService } from './agent-hold.service';
 import { AgentHoldLossGuardService } from './agent-hold-loss-guard.service';
 import { AgentPayBoardService } from './agent-pay-board.service';
+import { RepresentativeCommissionModule } from '../representative-commission/representative-commission.module';
 import { AgentReferralsService } from './agent-referrals.service';
 import { AgentsController } from './agents.controller';
 
@@ -21,6 +22,7 @@ import { AgentsController } from './agents.controller';
     ReferralsModule,
     BusinessReferralPayoutsModule,
     forwardRef(() => PaymentProgramsModule),
+    RepresentativeCommissionModule,
   ],
   controllers: [AgentsController],
   providers: [

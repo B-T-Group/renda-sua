@@ -5,6 +5,7 @@ import { LaunchPromoModule } from '../launch-promo/launch-promo.module';
 import { MobilePaymentsPayoutModule } from '../mobile-payments/mobile-payments-payout.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { RepresentativeCommissionModule } from '../representative-commission/representative-commission.module';
 import { CommissionsService } from './commissions.service';
 
 @Module({
@@ -15,6 +16,7 @@ import { CommissionsService } from './commissions.service';
     MobilePaymentsPayoutModule,
     NotificationsModule,
     StripePaymentsModule,
+    RepresentativeCommissionModule,
   ],
   providers: [CommissionsService],
   exports: [CommissionsService],

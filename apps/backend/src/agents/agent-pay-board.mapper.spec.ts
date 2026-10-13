@@ -1,4 +1,5 @@
 import {
+  applyPortfolioSummary,
   buildPayBoardSummary,
   filterPayBoardItems,
   indexPayBoardExtras,
@@ -134,6 +135,28 @@ describe('agent pay board mapper', () => {
       { kind: 'payment_schedule', earnedAmount: 2000, pendingAmount: 0 },
       { kind: 'delivery_commission', earnedAmount: 800, pendingAmount: 0 },
     ]);
+  });
+
+  it('adds lifetime portfolio pay without dropping prior months', () => {
+    const base = buildPayBoardSummary({
+      currency: 'XAF',
+      items: [],
+      merchantEarned: 0,
+      merchantPending: 0,
+      salePercentEarned: 0,
+      scheduleEarned: 0,
+      deliveryEarned: 0,
+    });
+    const summary = applyPortfolioSummary(base, { earned: 9400, pending: 500 });
+    expect(summary.earnedAmount).toBe(9400);
+    expect(summary.pendingAmount).toBe(500);
+    expect(summary.sources).toContainEqual({
+      kind: 'portfolio_commission',
+      earnedAmount: 9400,
+      pendingAmount: 500,
+    });
+    expect(applyPortfolioSummary(base, null)).toBe(base);
+    expect(applyPortfolioSummary(base, { earned: 0, pending: 0 })).toBe(base);
   });
 
   it('indexes credited sales and pending onboarding without counting a closed window', () => {

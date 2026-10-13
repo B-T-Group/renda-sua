@@ -4872,7 +4872,26 @@
         "merchant_referral": "Referral bonuses",
         "sale_percent": "Percent of sales",
         "payment_schedule": "Scheduled pay",
-        "delivery_commission": "Deliveries"
+        "delivery_commission": "Deliveries",
+        "portfolio_commission": "Portfolio commission"
+      },
+      "portfolioShop": "This shop is in your portfolio. Its sales count toward this month’s commission.",
+      "grid": {
+        "title": "Portfolio commission",
+        "base": "{{percent}}% of Rendasua’s item commission",
+        "tier": "{{from}} to {{to}}: +{{percent}}%",
+        "tierOpen": "{{from}} and above: +{{percent}}%",
+        "month": "This month: {{gmv}} sales · {{eligible}} eligible · {{registrations}}/{{target}} registrations",
+        "objective": "Registration goal missed, so only the base rate is paid.",
+        "baseAmount": "Base {{amount}}",
+        "growth": "Growth +{{percent}}% · {{amount}}",
+        "activation": "Activation {{amount}}",
+        "fastStart": "Fast start earned {{earned}}, paid {{paid}}",
+        "quarterly": "Quarterly earned {{earned}}, paid {{paid}}",
+        "payable": "To pay {{amount}}",
+        "hold": "Hold {{amount}} for {{days}} days",
+        "release": "Releases {{date}}",
+        "recruitment": "Recruitment outside the cap {{amount}}"
       },
       "selfSale": "{{amount}} if you make the first sale",
       "otherSale": "{{amount}} if someone else makes the first sale",

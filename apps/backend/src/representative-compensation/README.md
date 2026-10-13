@@ -1,5 +1,13 @@
 # Representative compensation
 
+When `representative_portfolio_commission_enabled` is on, new agent sale pay
+moves to `representative-commission` (XAF grid: 10% of Rendasua’s item
+commission, minus uncollected delivery). Rules 1, 2, and 5 below stay for
+history, for Canada, and for any country where the flag is off. In production
+the grid also waits until the sale completes on or after 2026-11-01
+(Africa/Douala). The 1,000 XAF business-to-business catalog bonus is unchanged.
+Amounts are rows in `representative_commission_grids`, not configuration keys.
+
 Event-driven ledger for agent/business onboarding rewards. Credits are
 idempotent (`representative_compensation_events` unique indexes + wallet
 `reference_id`) and use the existing country/currency map (`XAF` for CM/GA,

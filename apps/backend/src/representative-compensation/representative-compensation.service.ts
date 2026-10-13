@@ -1,13 +1,18 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional, forwardRef } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { ConfigurationsService } from '../admin/configurations.service';
 import {
   BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
   currencyForReferralPayout,
 } from '../business-referral-payouts/business-referral-payout.constants';
+import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ReferralPyramidService } from '../referrals/referral-pyramid.service';
 import { referralReferenceUuid } from '../referrals/referral-pyramid.util';
+import {
+  portfolioCommissionApplies,
+  readPortfolioEnabled,
+} from '../representative-commission/portfolio-commission-flag';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
   BUSINESS_REFERRAL_10_ITEMS,
@@ -160,6 +165,12 @@ interface EvalContext {
   paidSalePercentOrderIds: string[];
 }
 
+function saleInstant(sales: CompletedSale[], orderId: string | null): Date {
+  const sale = sales.find((row) => row.id === orderId);
+  const parsed = Date.parse(sale?.completedAt ?? '');
+  return new Date(Number.isNaN(parsed) ? Date.now() : parsed);
+}
+
 @Injectable()
 export class RepresentativeCompensationService {
   private readonly logger = new Logger(RepresentativeCompensationService.name);
@@ -169,7 +180,10 @@ export class RepresentativeCompensationService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly configurationsService: ConfigurationsService,
     private readonly referralPyramidService: ReferralPyramidService,
-    private readonly accountsService: AccountsService
+    private readonly accountsService: AccountsService,
+    @Optional()
+    @Inject(forwardRef(() => CommissionsService))
+    private readonly commissions?: CommissionsService
   ) {}
 
   async evaluateForBusinessSafe(businessId: string): Promise<void> {
@@ -314,10 +328,22 @@ export class RepresentativeCompensationService {
       result.skipped += 1;
       return result;
     }
-    const actions = this.actionsForEvaluate(context, triggeringOrderId);
+    const actions = await this.dropPortfolioReplaced(
+      this.actionsForEvaluate(context, triggeringOrderId),
+      context
+    );
     await this.creditActions(result, snapshot, context, actions);
+    if (triggeringOrderId) await this.accrueReplacingPortfolio(triggeringOrderId);
     if (actions.length === 0) result.skipped += 1;
     return result;
+  }
+
+  private async accrueReplacingPortfolio(orderId: string): Promise<void> {
+    try {
+      await this.commissions?.accruePortfolioForCompletedOrder(orderId);
+    } catch (error: any) {
+      this.logger.error(`Portfolio accrual for ${orderId} failed: ${error.message}`);
+    }
   }
 
   private actionsForEvaluate(
@@ -330,6 +356,30 @@ export class RepresentativeCompensationService {
       ...evaluateCompensation(context.input),
       ...this.pendingOrderActions(context, triggeringOrderId),
     ];
+  }
+
+  private async dropPortfolioReplaced(
+    actions: CompensationAction[],
+    context: { input: Parameters<typeof evaluateCompensation>[0]; eval: EvalContext }
+  ): Promise<CompensationAction[]> {
+    const enabled = await this.portfolioEnabled(context.eval.countryCode);
+    if (!enabled) return actions;
+    return actions.filter((action) => !this.replacedByPortfolio(action, context));
+  }
+
+  private async portfolioEnabled(country: string): Promise<boolean> {
+    return readPortfolioEnabled(
+      (key, code) => this.configurationsService.getConfigurationByKey(key, code),
+      country
+    );
+  }
+
+  private replacedByPortfolio(
+    action: CompensationAction,
+    context: { input: Parameters<typeof evaluateCompensation>[0] }
+  ): boolean {
+    if (action.ruleCode !== SALE_PERCENT && !isOnboardingFirstSaleRule(action.ruleCode)) return false;
+    return portfolioCommissionApplies(true, saleInstant(context.input.completedSales, action.orderId));
   }
 
   private async creditActions(
@@ -379,10 +429,10 @@ export class RepresentativeCompensationService {
     if (!this.isEligible(snapshot)) return [];
     const context = await this.buildContext(snapshot);
     if (!context) return [];
-    const actions = [
-      ...evaluateCompensation(context.input),
-      ...this.pendingOrderActions(context),
-    ];
+    const actions = await this.dropPortfolioReplaced(
+      [...evaluateCompensation(context.input), ...this.pendingOrderActions(context)],
+      context
+    );
     return [
       ...(await this.pendingOnboardingPreviewRows(snapshot, context)),
       ...actions.map((action) =>
