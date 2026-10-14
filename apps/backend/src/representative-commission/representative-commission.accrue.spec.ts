@@ -82,4 +82,32 @@ describe('RepresentativeCommissionService.accrue', () => {
     expect(queries.some((query) => query.includes('LastPortfolioSale'))).toBe(false);
     expect(queries.some((query) => query.includes('InsertPortfolioAccrual'))).toBe(true);
   });
+
+  it('does not lapse or insert an unparseable completed_at', async () => {
+    await service.accrue(order('not-a-date'));
+    expect(hasura.executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('lapses at exactly 90 days and keeps a sale 1ms inside that window', async () => {
+    const now = new Date('2027-03-01T12:00:00.000Z');
+    const dayMs = 86_400_000;
+    jest.useFakeTimers().setSystemTime(now);
+    try {
+      await service.accrue(order(new Date(now.getTime() - 90 * dayMs).toISOString()));
+      expect(saw('ExitPortfolio')).toBe(true);
+      expect(saw('InsertPortfolioAccrual')).toBe(false);
+
+      jest.clearAllMocks();
+      await service.accrue(order(new Date(now.getTime() - 90 * dayMs + 1).toISOString()));
+      expect(saw('LastPortfolioSale')).toBe(false);
+      expect(saw('ExitPortfolio')).toBe(false);
+      expect(saw('InsertPortfolioAccrual')).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  function saw(token: string): boolean {
+    return hasura.executeQuery.mock.calls.some((call) => String(call[0]).includes(token));
+  }
 });
