@@ -5265,17 +5265,7 @@ export class OrdersService {
       });
     }
     if (live.status === 'failed' || live.status === 'cancelled') {
-      await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(
-        existing.id,
-        'pending',
-        {
-          status: 'failed',
-          error_code: PROVIDER_TERMINAL_ON_RETRY,
-          error_message: live.message || 'Provider reported the request as failed',
-        }
-      );
-      existing.status = 'failed';
-      return null;
+      return this.markPayAfterAttemptTerminal(existing, live.message);
     }
     if (live.status !== 'pending') throw this.paymentStateUncertain();
 
@@ -5290,6 +5280,52 @@ export class OrdersService {
       });
     }
     return null;
+  }
+
+  /**
+   * Poll said the attempt was dead. Only the request that wins pending → failed
+   * may send a new prompt. A SUCCESS callback can land first; ignoring a lost
+   * compare-and-set used to charge the phone again.
+   */
+  private async markPayAfterAttemptTerminal(
+    existing: MobilePaymentTransaction,
+    providerMessage?: string
+  ): Promise<PayAfterRetryResponse | null> {
+    const moved = await this.casPayAfterAttemptFailed(existing.id, providerMessage);
+    if (!moved) return this.payAfterTerminalRaceLost(existing.id);
+    existing.status = 'failed';
+    existing.error_code = PROVIDER_TERMINAL_ON_RETRY;
+    return null;
+  }
+
+  private async casPayAfterAttemptFailed(
+    transactionId: string,
+    providerMessage?: string
+  ): Promise<boolean> {
+    return this.mobilePaymentsDatabaseService.updateTransactionIfStatus(
+      transactionId,
+      'pending',
+      {
+        status: 'failed',
+        error_code: PROVIDER_TERMINAL_ON_RETRY,
+        error_message: providerMessage || 'Provider reported the request as failed',
+      }
+    );
+  }
+
+  private async payAfterTerminalRaceLost(
+    transactionId: string
+  ): Promise<PayAfterRetryResponse> {
+    const current = await this.mobilePaymentsDatabaseService.getTransactionById(
+      transactionId
+    );
+    if (current?.status === 'success') {
+      return this.payAfterRetryResponse('paid', {
+        message: 'Your earlier payment request was approved. Payment received.',
+        tx: current,
+      });
+    }
+    throw this.paymentStateUncertain();
   }
 
   private paymentStateUncertain(): HttpException {
