@@ -26,7 +26,7 @@ describe('CommissionsService portfolio accrual', () => {
   const hasura = { executeQuery: jest.fn() };
   const routing = { getUserCountryCode: jest.fn() };
   const launchPromo = { orderConsumedPromo: jest.fn() };
-  const portfolio = { accrue: jest.fn() };
+  const portfolio: { accrue: jest.Mock; replacesLegacy?: jest.Mock } = { accrue: jest.fn() };
 
   function createService() {
     return new CommissionsService(
@@ -137,7 +137,7 @@ describe('CommissionsService portfolio accrual', () => {
     const service = createService();
     const at = new Date('2026-11-02T00:00:00.000Z');
     const replacesLegacy = jest.fn().mockResolvedValue(true);
-    (portfolio as { replacesLegacy: jest.Mock }).replacesLegacy = replacesLegacy;
+    portfolio.replacesLegacy = replacesLegacy;
 
     await expect(service.portfolioReplacesLegacy('CM', 'XAF', at)).resolves.toBe(true);
     replacesLegacy.mockResolvedValue(false);
@@ -150,9 +150,7 @@ describe('CommissionsService portfolio accrual', () => {
   it('keeps legacy pay when the portfolio check throws or is unwired', async () => {
     const service = createService();
     const at = new Date('2026-11-02T00:00:00.000Z');
-    (portfolio as { replacesLegacy: jest.Mock }).replacesLegacy = jest
-      .fn()
-      .mockRejectedValue(new Error('grid down'));
+    portfolio.replacesLegacy = jest.fn().mockRejectedValue(new Error('grid down'));
 
     await expect(service.portfolioReplacesLegacy('CM', 'XAF', at)).resolves.toBe(false);
 
