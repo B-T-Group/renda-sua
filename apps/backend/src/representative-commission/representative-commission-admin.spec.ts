@@ -75,8 +75,9 @@ describe('portfolio month-close admin trigger', () => {
     it('maps YYYY-MM to Douala month bounds', () => {
       expect(parseAdminPeriod('2026-09', now)).toEqual({ start: '2026-09-01', end: '2026-10-01' });
       expect(parseAdminPeriod('2025-12', now)).toEqual({ start: '2025-12-01', end: '2026-01-01' });
+      expect(parseAdminPeriod(' 2026-10 ', now)).toEqual({ start: '2026-10-01', end: '2026-11-01' });
     });
-    it.each(['2026-13', '2026-9', 'sept', '2026-09-01', '2026-11'])('rejects %s', (value) => {
+    it.each(['2026-13', '2026-00', '2026-9', 'sept', '2026-09-01', '2026-11'])('rejects %s', (value) => {
       expect(() => parseAdminPeriod(value, now)).toThrow(BadRequestException);
     });
   });

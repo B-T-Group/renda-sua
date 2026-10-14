@@ -142,6 +142,9 @@ describe('RepresentativeCommissionService month close', () => {
       memo: 'Portfolio commission',
       referenceId: referralReferenceUuid('portfolio:stmt-1:pay'),
     });
+    const holdInsert = named(hasura, 'InsertPortfolioHold')[0][0] as string;
+    expect(holdInsert).toContain('uq_representative_commission_holds_statement');
+    expect(holdInsert).toContain('update_columns: []');
     expect(named(hasura, 'InsertPortfolioHold')[0][1].object).toEqual(
       expect.objectContaining({
         amount: 100,
@@ -220,6 +223,52 @@ describe('RepresentativeCommissionService month close', () => {
     });
     await expect(service.closePreviousMonth()).rejects.toThrow('connection reset');
     expect(accounts.registerDepositIfNotExists).not.toHaveBeenCalled();
+  });
+
+  it('does not close a CA agent when that country flag is off', async () => {
+    paymentRouting.getUserCountryCode.mockResolvedValue('ca');
+    configurations.getConfigurationByKey.mockImplementation(async (_key: string, country?: string) => {
+      if (country === 'CA') return { boolean_value: false, status: 'active' };
+      return { boolean_value: true, status: 'active' };
+    });
+    route(hasura, { ...base(), SumPortfolioAccruals: eligibleRows() });
+
+    await expect(service.closePreviousMonth()).resolves.toBe(0);
+
+    expect(configurations.getConfigurationByKey).toHaveBeenCalledWith(
+      'representative_portfolio_commission_enabled',
+      'CA'
+    );
+    expect(named(hasura, 'InsertPortfolioStatement')).toHaveLength(0);
+    expect(accounts.registerDepositIfNotExists).not.toHaveBeenCalled();
+  });
+
+  it('closes as CM when the agent has no user, without asking payment routing', async () => {
+    route(hasura, {
+      ...base(),
+      PortfolioAgentUserId: { agents_by_pk: null },
+      SumPortfolioAccruals: eligibleRows(),
+    });
+
+    await expect(service.closePreviousMonth()).resolves.toBe(1);
+
+    expect(paymentRouting.getUserCountryCode).not.toHaveBeenCalled();
+    expect(configurations.getConfigurationByKey).toHaveBeenCalledWith(
+      'representative_portfolio_commission_enabled',
+      'CM'
+    );
+  });
+
+  it('treats a blank agent country as CM', async () => {
+    paymentRouting.getUserCountryCode.mockResolvedValue('');
+    route(hasura, { ...base(), SumPortfolioAccruals: eligibleRows() });
+
+    await expect(service.closePreviousMonth()).resolves.toBe(1);
+
+    expect(configurations.getConfigurationByKey).toHaveBeenCalledWith(
+      'representative_portfolio_commission_enabled',
+      'CM'
+    );
   });
 
   it('does not replace 1% when the currency has no grid', async () => {

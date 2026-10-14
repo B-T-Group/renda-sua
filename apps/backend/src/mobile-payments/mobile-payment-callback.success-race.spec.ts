@@ -133,4 +133,20 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
       expect.anything()
     );
   });
+
+  it('poll marks PROVIDER_TERMINAL_ON_RETRY during the credit -> late success, no anomaly', async () => {
+    const t = build();
+    t.accountsService.registerDepositIfNotExists.mockImplementationOnce(async () => {
+      t.row.status = 'failed';
+      t.row.error_code = 'PROVIDER_TERMINAL_ON_RETRY';
+      return { success: true };
+    });
+
+    await t.processor.processFreemopayCallback(callback);
+
+    expect(t.handler.onPaymentSuccess).not.toHaveBeenCalled();
+    expect(t.handler.onLateSuccessAfterSupersede).toHaveBeenCalledTimes(1);
+    expect(t.row).toMatchObject({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' });
+    expect(reportMoneyAnomaly).not.toHaveBeenCalled();
+  });
 });

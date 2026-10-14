@@ -315,7 +315,31 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
     db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ created_at: iso(5) }));
     mps.checkTransactionStatus.mockResolvedValue({ status: 'failed', message: 'declined' });
     const res = await retry();
-    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith('tx-old', 'pending', expect.objectContaining({ status: 'failed' }));
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'pending',
+      expect.objectContaining({
+        status: 'failed',
+        error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+        error_message: 'declined',
+      })
+    );
+    expect(res.result).toBe('sent');
+  });
+
+  it('provider cancelled with no message still stores the recoverable terminal code', async () => {
+    db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ created_at: iso(5) }));
+    mps.checkTransactionStatus.mockResolvedValue({ status: 'cancelled' });
+    const res = await retry();
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'pending',
+      expect.objectContaining({
+        status: 'failed',
+        error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+        error_message: 'Provider reported the request as failed',
+      })
+    );
     expect(res.result).toBe('sent');
   });
 
