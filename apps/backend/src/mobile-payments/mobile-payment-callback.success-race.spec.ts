@@ -21,7 +21,7 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
     provider: 'freemopay',
     payment_method: 'mobile_money',
     status: 'pending',
-    transaction_id: 'mock-a',
+    transaction_id: 'fmp-a',
     customer_phone: '+237650000099',
     account_id: 'acct-client',
     transaction_type: 'PAYMENT',
@@ -56,11 +56,14 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
       finalizeCashReconciliationAfterPayment: jest.fn(),
       onLateSuccessAfterSupersede: jest.fn().mockResolvedValue('applied'),
     };
+    const mobilePaymentsService = {
+      assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined),
+    };
     const processor = new MobilePaymentCallbackProcessor(
       databaseService as any,
       accountsService as any,
       { getHandlers: () => [handler] } as any,
-      { assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined) } as any
+      mobilePaymentsService as any
     );
     /** What a racing retry does: CAS pending -> cancelled/SUPERSEDED_BY_RETRY. */
     const retrySupersede = () =>
@@ -69,10 +72,18 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
         error_code: 'SUPERSEDED_BY_RETRY',
         superseded_reason: 'resend_after_min_age',
       });
-    return { row, processor, databaseService, accountsService, handler, retrySupersede };
+    return {
+      row,
+      processor,
+      databaseService,
+      accountsService,
+      handler,
+      retrySupersede,
+      mobilePaymentsService,
+    };
   }
 
-  const callback = { reference: 'mock-a', externalId: 'ORD1-111-aaaa', status: 'SUCCESS' } as any;
+  const callback = { reference: 'fmp-a', externalId: 'ORD1-111-aaaa', status: 'SUCCESS' } as any;
 
   beforeEach(() => (reportMoneyAnomaly as jest.Mock).mockClear());
 
@@ -132,6 +143,38 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
       expect.stringContaining('non-pending row'),
       expect.anything()
     );
+  });
+
+  it('retry supersedes during FAILED live-check -> row stays cancelled, order not failed', async () => {
+    const t = build();
+    const failed = { ...callback, status: 'FAILED' as const, reason: 'expired' };
+    t.mobilePaymentsService.assertProviderConfirmsCallback.mockImplementation(
+      async () => {
+        await t.retrySupersede();
+      }
+    );
+
+    await t.processor.processFreemopayCallback(failed);
+
+    expect(t.row).toMatchObject({
+      status: 'cancelled',
+      error_code: 'SUPERSEDED_BY_RETRY',
+    });
+    expect(t.handler.onPaymentFailure).not.toHaveBeenCalled();
+    expect(t.databaseService.updateTransaction).not.toHaveBeenCalledWith(
+      'tx-a',
+      expect.objectContaining({ status: 'failed' })
+    );
+  });
+
+  it('FAILED callback still closes a live pending attempt', async () => {
+    const t = build();
+    const failed = { ...callback, status: 'FAILED' as const, reason: 'declined' };
+
+    await t.processor.processFreemopayCallback(failed);
+
+    expect(t.row).toMatchObject({ status: 'failed', error_message: 'declined' });
+    expect(t.handler.onPaymentFailure).toHaveBeenCalledTimes(1);
   });
 
   it('poll marks PROVIDER_TERMINAL_ON_RETRY during the credit -> late success, no anomaly', async () => {

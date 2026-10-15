@@ -252,16 +252,15 @@ export class MobilePaymentCallbackProcessor {
   }
 
   /**
-   * SUCCESS after we closed the row. Superseded cancels, and a retry poll that
-   * stored PROVIDER_TERMINAL_ON_RETRY before the debit callback arrived.
+   * SUCCESS after we closed the row. Superseded cancels, a retry poll that stored
+   * PROVIDER_TERMINAL_ON_RETRY, and a FAILED callback that raced the supersede and
+   * left the row failed while keeping a SUPERSEDED_* code.
    */
   private isRecoverableLateOrderSuccess(tx: MobilePaymentTransaction): boolean {
     if (this.isSupersededOrderTx(tx)) return true;
-    return (
-      tx.payment_entity === 'order' &&
-      tx.status === 'failed' &&
-      tx.error_code === PROVIDER_TERMINAL_ON_RETRY
-    );
+    if (tx.payment_entity !== 'order' || tx.status !== 'failed') return false;
+    const code = String(tx.error_code || '');
+    return code === PROVIDER_TERMINAL_ON_RETRY || SUPERSEDED_ERROR_CODES.has(code);
   }
 
   /**
@@ -337,10 +336,9 @@ export class MobilePaymentCallbackProcessor {
       await this.finalizePaymentSuccess(tx, callbackData.transactionId);
       return;
     }
-    await this.releaseGiveChangeHoldIfNeeded(tx);
-    await this.reverseWalletIfDebitedLegacy(tx);
-    await this.applyFailedStatus(tx, callbackData.transactionId, 'Payment failed');
-    await this.applyMypvitFailureSideEffects(tx, callbackData);
+    await this.failPendingAttempt(tx, callbackData.transactionId, 'Payment failed', () =>
+      this.applyMypvitFailureSideEffects(tx, callbackData)
+    );
   }
 
   private async processPendingFreemopay(
@@ -367,10 +365,9 @@ export class MobilePaymentCallbackProcessor {
     }
     const failureMessage =
       callbackData.reason || callbackData.message || 'Payment failed';
-    await this.releaseGiveChangeHoldIfNeeded(tx);
-    await this.reverseWalletIfDebitedLegacy(tx);
-    await this.applyFailedStatus(tx, callbackData.reference, failureMessage);
-    await this.applyFreemopayFailureSideEffects(tx, callbackData);
+    await this.failPendingAttempt(tx, callbackData.reference, failureMessage, () =>
+      this.applyFreemopayFailureSideEffects(tx, callbackData)
+    );
   }
 
   private async finalizePaymentSuccess(
@@ -520,19 +517,43 @@ export class MobilePaymentCallbackProcessor {
     return paymentEntity === 'token' || paymentEntity === 'reel_ai_token';
   }
 
+  /**
+   * Only the writer that still sees pending may fail the row. A racing retry CAS
+   * pending → cancelled (SUPERSEDED_*) or SUCCESS pending → success must win; an
+   * unconditional FAILED write used to clobber those and drop a later debit.
+   */
+  private async failPendingAttempt(
+    tx: MobilePaymentTransaction,
+    providerTransactionId: string,
+    errorMessage: string,
+    onMoved: () => Promise<void>
+  ): Promise<void> {
+    await this.releaseGiveChangeHoldIfNeeded(tx);
+    await this.reverseWalletIfDebitedLegacy(tx);
+    const moved = await this.applyFailedStatus(tx, providerTransactionId, errorMessage);
+    if (moved) await onMoved();
+  }
+
   private async applyFailedStatus(
     transaction: MobilePaymentTransaction,
     providerTransactionId: string,
     errorMessage: string
-  ): Promise<void> {
-    await this.databaseService.updateTransaction(transaction.id, {
-      status: 'failed',
-      transaction_id: providerTransactionId,
-      error_message: errorMessage,
-    });
-    this.logger.log(
-      `Updated transaction ${transaction.id} with status: failed`
+  ): Promise<boolean> {
+    const moved = await this.databaseService.updateTransactionIfStatus(
+      transaction.id,
+      'pending',
+      {
+        status: 'failed',
+        transaction_id: providerTransactionId,
+        error_message: errorMessage,
+      }
     );
+    this.logger.log(
+      moved
+        ? `Updated transaction ${transaction.id} with status: failed`
+        : `FAILED callback did not move ${transaction.id} off pending`
+    );
+    return moved;
   }
 
   private async finalizeTokenPaymentSuccess(

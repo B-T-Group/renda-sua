@@ -150,6 +150,28 @@ describe('MobilePaymentCallbackProcessor late success on superseded order tx', (
     expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
   });
 
+  it('recovers SUCCESS after a FAILED callback clobbered a superseded row', async () => {
+    const clobbered = {
+      ...supersededTx,
+      status: 'failed' as const,
+      error_code: 'SUPERSEDED_BY_RETRY',
+    };
+    const { processor, databaseService, accountsService, handler } = build(
+      clobbered,
+      'applied'
+    );
+    await processor.processFreemopayCallback(callback('SUCCESS') as any);
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceId: 'tx-old', amount: 1500 })
+    );
+    expect(handler.onLateSuccessAfterSupersede).toHaveBeenCalledWith(clobbered);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'failed',
+      expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' })
+    );
+  });
+
   it('does not recover a failed attempt the provider actually rejected', async () => {
     const rejected = {
       ...supersededTx,
