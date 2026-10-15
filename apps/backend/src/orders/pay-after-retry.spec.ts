@@ -343,17 +343,34 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
     expect(res.result).toBe('sent');
   });
 
-  it('does not send a new prompt when SUCCESS wins the race against the failed poll', async () => {
+  it('does not send or replay when SUCCESS wins the race against the failed poll', async () => {
     db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ created_at: iso(5) }));
     mps.checkTransactionStatus.mockResolvedValue({ status: 'failed', message: 'declined' });
     db.updateTransactionIfStatus.mockResolvedValue(false);
-    db.getTransactionById.mockResolvedValue(pendingTx({ status: 'success' }));
+    db.getTransactionById.mockResolvedValue(
+      pendingTx({ id: 'tx-approved', reference: 'ORD1-approved', status: 'success' })
+    );
 
     const res = await retry();
 
-    expect(res.result).toBe('paid');
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'pending',
+      expect.objectContaining({
+        status: 'failed',
+        error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+        error_message: 'declined',
+      })
+    );
+    expect(db.getTransactionById).toHaveBeenCalledWith('tx-old');
+    expect(res).toMatchObject({
+      result: 'paid',
+      message: 'Your earlier payment request was approved. Payment received.',
+      payment_transaction: { id: 'tx-approved', reference: 'ORD1-approved', status: 'success' },
+    });
     expect(db.createTransaction).not.toHaveBeenCalled();
     expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(processor.processFreemopayCallback).not.toHaveBeenCalled();
   });
 
   it('does not send a second prompt when another writer already closed the attempt', async () => {
@@ -368,7 +385,33 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
 
     expect(r).toEqual({ status: 409, code: 'PAYMENT_STATE_UNCERTAIN' });
     expect(db.createTransaction).not.toHaveBeenCalled();
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(processor.processFreemopayCallback).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['missing', null],
+    ['still pending', { status: 'pending' }],
+    ['cancelled', { status: 'cancelled', error_code: 'ORDER_SETTLED_BEFORE_SEND' }],
+  ])(
+    'does not send when the failed-poll write loses and the row is %s',
+    async (_label, overrides) => {
+      db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(
+        pendingTx({ created_at: iso(5) })
+      );
+      mps.checkTransactionStatus.mockResolvedValue({ status: 'failed', message: 'declined' });
+      db.updateTransactionIfStatus.mockResolvedValue(false);
+      db.getTransactionById.mockResolvedValue(overrides ? pendingTx(overrides) : null);
+
+      const r = await codeOf(retry());
+
+      expect(r).toEqual({ status: 409, code: 'PAYMENT_STATE_UNCERTAIN' });
+      expect(db.getTransactionById).toHaveBeenCalledWith('tx-old');
+      expect(db.createTransaction).not.toHaveBeenCalled();
+      expect(mps.initiatePayment).not.toHaveBeenCalled();
+      expect(processor.processFreemopayCallback).not.toHaveBeenCalled();
+    }
+  );
 
   it('case 9: provider rejects new request -> tx failed, 400 PROVIDER_REJECTED, payer_phone unchanged', async () => {
     mps.initiatePayment.mockResolvedValue({ success: false, message: 'Invalid payer', errorCode: 'E1' });
