@@ -562,6 +562,26 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
     });
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
   });
+
+  it('does not release hold or reverse wallet when FAILED CAS loses to SUCCESS race', async () => {
+    // Simulate a race: SUCCESS callback already moved the row to success
+    databaseService.updateTransactionIfStatus.mockResolvedValueOnce(false);
+    accountsService.hasTransactionForReference.mockResolvedValueOnce(true);
+
+    await processor.processMypvitCallback(failedCallback);
+
+    // CAS should have been attempted
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      giveChangeTx.id,
+      'pending',
+      expect.objectContaining({ status: 'failed' })
+    );
+
+    // But release and reverse should NOT happen since CAS lost
+    expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+    expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
+  });
 });
 
 describe('MobilePaymentCallbackProcessor order_deposit', () => {

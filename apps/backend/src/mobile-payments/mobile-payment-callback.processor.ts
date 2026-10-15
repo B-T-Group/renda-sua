@@ -528,10 +528,13 @@ export class MobilePaymentCallbackProcessor {
     errorMessage: string,
     onMoved: () => Promise<void>
   ): Promise<void> {
+    const moved = await this.applyFailedStatus(tx, providerTransactionId, errorMessage);
+    if (!moved) {
+      return;
+    }
     await this.releaseGiveChangeHoldIfNeeded(tx);
     await this.reverseWalletIfDebitedLegacy(tx);
-    const moved = await this.applyFailedStatus(tx, providerTransactionId, errorMessage);
-    if (moved) await onMoved();
+    await onMoved();
   }
 
   private async applyFailedStatus(
@@ -551,7 +554,7 @@ export class MobilePaymentCallbackProcessor {
     this.logger.log(
       moved
         ? `Updated transaction ${transaction.id} with status: failed`
-        : `FAILED callback did not move ${transaction.id} off pending`
+        : `FAILED callback CAS lost for ${transaction.id}; left row unchanged`
     );
     return moved;
   }
