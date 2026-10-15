@@ -1030,6 +1030,28 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     );
   });
 
+  it('releases success → pending when handler throws after the success mark (second CAS wins)', async () => {
+    // Simulate success mark CAS winning but processing → pending losing (row already success)
+    databaseService.updateTransactionIfStatus
+      .mockResolvedValueOnce(true)  // pending -> processing
+      .mockResolvedValueOnce(true)  // processing -> success
+      .mockResolvedValueOnce(false) // processing -> pending loses
+      .mockResolvedValueOnce(true); // success -> pending wins
+    orderHandler.onPaymentSuccess.mockRejectedValue(new Error('handler failed after success'));
+
+    await expect(processor.processMypvitCallback(callback)).rejects.toThrow(
+      'handler failed after success'
+    );
+
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
+      4,
+      orderTx.id,
+      'success',
+      { status: 'pending' }
+    );
+    expect(reportMoneyAnomaly).toHaveBeenCalled();
+  });
+
   it('marks success normally when the order finalize succeeds (no alert)', async () => {
     await processor.processMypvitCallback(callback);
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
@@ -1061,6 +1083,133 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
       'payment_finalize_failed',
       expect.stringContaining('(replay)'),
       expect.anything()
+    );
+  });
+
+  it('resumes finalize when SUCCESS arrives on a stuck processing row (crash recovery)', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...orderTx,
+      status: 'processing',
+    });
+    // Resume path: credit (idempotent) → success → handler
+    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+    await processor.processMypvitCallback(callback);
+
+    // Should credit wallet (idempotent)
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
+    // Should mark processing → success
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderTx.id,
+      'processing',
+      { status: 'success', transaction_id: 'provider-1' }
+    );
+    // Should run handler
+    expect(orderHandler.onPaymentSuccess).toHaveBeenCalled();
+  });
+
+  it('does not report money anomaly when CAS loses to a concurrent processing claim', async () => {
+    databaseService.updateTransactionIfStatus.mockResolvedValueOnce(false); // pending -> processing loses
+    databaseService.getTransactionById.mockResolvedValue({
+      ...orderTx,
+      status: 'processing',
+    });
+
+    await processor.processMypvitCallback(callback);
+
+    expect(reportMoneyAnomaly).not.toHaveBeenCalled();
+  });
+});
+
+describe('MobilePaymentCallbackProcessor non-order payment stuck processing recovery', () => {
+  const databaseService = {
+    getTransactionByReference: jest.fn(),
+    logCallback: jest.fn(),
+    updateTransaction: jest.fn(),
+    updateTransactionIfStatus: jest.fn(),
+    getTransactionById: jest.fn(),
+  };
+  const accountsService = {
+    registerDepositIfNotExists: jest.fn(),
+  };
+  const registry = { getHandlers: jest.fn().mockReturnValue([]) };
+  const mobilePaymentsService = {
+    assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined),
+  };
+  const accountTx: MobilePaymentTransaction = {
+    id: '88888888-8888-4888-8888-888888888888',
+    reference: 'RCHG-123-abc',
+    amount: 5000,
+    currency: 'XAF',
+    status: 'processing',
+    account_id: '99999999-9999-4999-8999-999999999999',
+    transaction_type: 'PAYMENT',
+    payment_entity: 'account',
+    entity_id: '99999999-9999-4999-8999-999999999999',
+    provider: 'freemopay',
+    payment_method: 'mobile_money',
+    created_at: '2026-10-01T00:00:00.000Z',
+    updated_at: '2026-10-01T00:00:00.000Z',
+  } as MobilePaymentTransaction;
+  const callback = {
+    reference: 'freemopay-ref-1',
+    status: 'SUCCESS' as const,
+  };
+  let processor: MobilePaymentCallbackProcessor;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    processor = new MobilePaymentCallbackProcessor(
+      databaseService as never,
+      accountsService as never,
+      registry as never,
+      mobilePaymentsService as never
+    );
+    databaseService.getTransactionByTransactionId = jest.fn().mockResolvedValue(accountTx);
+    databaseService.logCallback.mockResolvedValue(undefined);
+    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
+    accountsService.registerDepositIfNotExists.mockResolvedValue({
+      success: true,
+    });
+  });
+
+  it('resumes finalize for non-order payment stuck in processing (Freemopay)', async () => {
+    await processor.processFreemopayCallback(callback);
+
+    // Should credit wallet (idempotent)
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
+    // Should mark processing → success
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      accountTx.id,
+      'processing',
+      expect.objectContaining({ status: 'success' })
+    );
+  });
+
+  it('resumes finalize for non-order payment stuck in processing (MyPVit)', async () => {
+    databaseService.getTransactionByReference = jest.fn().mockResolvedValue(accountTx);
+    const mypvitCallback = {
+      transactionId: 'provider-1',
+      merchantReferenceId: 'RCHG-123-abc',
+      status: 'SUCCESS' as const,
+      amount: 5000,
+      customerID: '+237600000000',
+      fees: 0,
+      chargeOwner: 'MERCHANT',
+      transactionOperation: 'PAYMENT',
+      operator: 'MTN',
+      code: 200,
+    };
+
+    await processor.processMypvitCallback(mypvitCallback);
+
+    // Should credit wallet (idempotent)
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
+    // Should mark processing → success
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      accountTx.id,
+      'processing',
+      expect.objectContaining({ status: 'success' })
     );
   });
 });

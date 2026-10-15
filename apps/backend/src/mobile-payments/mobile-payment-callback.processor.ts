@@ -183,6 +183,15 @@ export class MobilePaymentCallbackProcessor {
         transactionId: callbackData.transactionId,
       };
     }
+    // Resume finalize when SUCCESS arrives on a processing row (crash recovery)
+    if (tx.status === 'processing' && callbackData.status === 'SUCCESS') {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.resumeFinalizeFromProcessing(tx, callbackData.transactionId);
+      return {
+        responseCode: callbackData.code,
+        transactionId: callbackData.transactionId,
+      };
+    }
     if (this.isRecoverableLateOrderSuccess(tx) && callbackData.status === 'SUCCESS') {
       await this.databaseService.logCallback(tx.id, callbackData);
       await this.handleLateSuccessOnSupersededOrderTx(
@@ -219,6 +228,12 @@ export class MobilePaymentCallbackProcessor {
             ? ` externalId=${callbackData.externalId}`
             : '')
       );
+      return { received: true, reference: callbackData.reference };
+    }
+    // Resume finalize when SUCCESS arrives on a processing row (crash recovery)
+    if (tx.status === 'processing' && callbackData.status === 'SUCCESS') {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.resumeFinalizeFromProcessing(tx, callbackData.reference || tx.transaction_id || '');
       return { received: true, reference: callbackData.reference };
     }
     if (this.isRecoverableLateOrderSuccess(tx) && callbackData.status === 'SUCCESS') {
@@ -456,13 +471,25 @@ export class MobilePaymentCallbackProcessor {
       }
       await this.runHandlerSuccess(transaction);
     } catch (error) {
-      await this.databaseService
+      // Try processing → pending first
+      const releasedFromProcessing = await this.databaseService
         .updateTransactionIfStatus(transaction.id, 'processing', { status: 'pending' })
-        .catch((e: any) =>
+        .catch((e: any) => {
           this.logger.error(
             `Could not release processing claim on ${transaction.id}: ${e?.message ?? e}`
-          )
-        );
+          );
+          return false;
+        });
+      // If handler threw after success mark, also try success → pending
+      if (!releasedFromProcessing) {
+        await this.databaseService
+          .updateTransactionIfStatus(transaction.id, 'success', { status: 'pending' })
+          .catch((e: any) =>
+            this.logger.error(
+              `Could not release success status on ${transaction.id}: ${e?.message ?? e}`
+            )
+          );
+      }
       throw error;
     }
     this.logger.log(`Updated transaction ${transaction.id} with status: success`);
@@ -480,6 +507,13 @@ export class MobilePaymentCallbackProcessor {
     }
     if (fresh?.status === 'success') {
       await this.retrySuccessSideEffects(fresh);
+      return;
+    }
+    // Concurrent writer holds the processing claim; this writer never credited
+    if (fresh?.status === 'processing') {
+      this.logger.log(
+        `Order payment ${transaction.id} CAS lost to concurrent processing claim; left unchanged`
+      );
       return;
     }
     // Provider confirmed SUCCESS but our row is failed / cancelled for another reason:
@@ -544,13 +578,25 @@ export class MobilePaymentCallbackProcessor {
       }
       await this.runHandlerSuccess(transaction);
     } catch (error) {
-      await this.databaseService
+      // Try processing → pending first
+      const releasedFromProcessing = await this.databaseService
         .updateTransactionIfStatus(transaction.id, 'processing', { status: 'pending' })
-        .catch((e: any) =>
+        .catch((e: any) => {
           this.logger.error(
             `Could not release processing claim on ${transaction.id}: ${e?.message ?? e}`
-          )
-        );
+          );
+          return false;
+        });
+      // If handler threw after success mark, also try success → pending
+      if (!releasedFromProcessing) {
+        await this.databaseService
+          .updateTransactionIfStatus(transaction.id, 'success', { status: 'pending' })
+          .catch((e: any) =>
+            this.logger.error(
+              `Could not release success status on ${transaction.id}: ${e?.message ?? e}`
+            )
+          );
+      }
       throw error;
     }
     this.logger.log(
@@ -569,6 +615,49 @@ export class MobilePaymentCallbackProcessor {
     this.logger.log(
       `Non-order payment ${transaction.id} CAS lost (concurrent duplicate SUCCESS); left unchanged`
     );
+  }
+
+  /**
+   * Resume finalize when SUCCESS arrives on a processing row (crash after claim).
+   * Skip the claim (already processing), then idempotently credit → mark success → handler.
+   */
+  private async resumeFinalizeFromProcessing(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    this.logger.log(
+      `Resuming finalize for processing tx ${transaction.id} (crash recovery)`
+    );
+    // Wallet credit is idempotent on the transaction id
+    const credited = await this.creditWalletIfNeeded(transaction);
+    if (!credited) {
+      throw new Error(
+        `Wallet credit failed while resuming ${transaction.id}; will retry`
+      );
+    }
+    // Mark processing → success
+    const markedSuccess = await this.databaseService.updateTransactionIfStatus(
+      transaction.id,
+      'processing',
+      {
+        status: 'success',
+        ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+      }
+    );
+    if (!markedSuccess) {
+      // Row left processing between our read and this call; re-read and route
+      const fresh = await this.databaseService.getTransactionById(transaction.id);
+      if (fresh?.status === 'success') {
+        await this.retrySuccessSideEffects(fresh);
+        return;
+      }
+      this.logger.log(
+        `Resume finalize: processing→success CAS lost for ${transaction.id}; left unchanged`
+      );
+      return;
+    }
+    // Run handler (idempotent for order/order_deposit first pass, alerts on failure)
+    await this.runHandlerSuccess(transaction);
   }
 
   private async retrySuccessSideEffects(
