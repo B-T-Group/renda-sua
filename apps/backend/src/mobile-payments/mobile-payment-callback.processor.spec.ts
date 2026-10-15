@@ -401,6 +401,7 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
     getTransactionByReference: jest.fn(),
     logCallback: jest.fn(),
     updateTransaction: jest.fn(),
+    updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
   };
   const accountsService = {
     hasTransactionForReference: jest.fn(),
@@ -541,8 +542,9 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
     expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
-    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       giveChangeTx.id,
+      'pending',
       expect.objectContaining({ status: 'failed' })
     );
   });
@@ -559,6 +561,26 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
       referenceId: giveChangeTx.id,
     });
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+  });
+
+  it('does not release hold or reverse wallet when FAILED CAS loses to SUCCESS race', async () => {
+    // Simulate a race: SUCCESS callback already moved the row to success
+    databaseService.updateTransactionIfStatus.mockResolvedValueOnce(false);
+    accountsService.hasTransactionForReference.mockResolvedValueOnce(true);
+
+    await processor.processMypvitCallback(failedCallback);
+
+    // CAS should have been attempted
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      giveChangeTx.id,
+      'pending',
+      expect.objectContaining({ status: 'failed' })
+    );
+
+    // But release and reverse should NOT happen since CAS lost
+    expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+    expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
   });
 });
 
@@ -708,6 +730,7 @@ describe('MobilePaymentCallbackProcessor Freemopay lookup', () => {
     getTransactionById: jest.fn(),
     logCallback: jest.fn(),
     updateTransaction: jest.fn(),
+    updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
   };
   const accountsService = {
     hasTransactionForReference: jest.fn(),
@@ -869,8 +892,9 @@ describe('MobilePaymentCallbackProcessor Freemopay lookup', () => {
     expect(
       mobilePaymentsService.assertProviderConfirmsCallback
     ).toHaveBeenCalledTimes(1);
-    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       depositTx.id,
+      'pending',
       expect.objectContaining({
         status: 'failed',
         error_message: 'Customer cancelled',
