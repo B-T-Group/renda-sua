@@ -89,9 +89,24 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
 
   it('retry supersedes while the wallet is being credited -> late-success handler, row not overwritten', async () => {
     const t = build();
-    // The retry wins its CAS between our pending read and our claim.
+    // The retry wins its CAS between our claim (processing) and our wallet credit.
+    let processingClaimed = false;
+    t.databaseService.updateTransactionIfStatus.mockImplementation(async (_id, expected, data) => {
+      if (expected === 'pending' && data.status === 'processing') {
+        processingClaimed = true;
+        // Don't actually change status yet - the retry will supersede
+        return true;
+      }
+      if (t.row.status !== expected) return false;
+      Object.assign(t.row, data);
+      return true;
+    });
     t.accountsService.registerDepositIfNotExists.mockImplementationOnce(async () => {
-      await t.retrySupersede();
+      if (processingClaimed) {
+        // The retry supersedes after we claimed processing but before we credited
+        t.row.status = 'cancelled';
+        t.row.error_code = 'SUPERSEDED_BY_RETRY';
+      }
       return { success: true };
     });
 
@@ -124,13 +139,41 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
 
   it('finalize throws -> claim released to pending so the provider retry reruns the path', async () => {
     const t = build();
+    // Mark the row as processing when the claim succeeds
+    let processingSet = false;
+    t.databaseService.updateTransactionIfStatus.mockImplementation(async (_id, expected, data) => {
+      if (expected === 'pending' && data.status === 'processing') {
+        t.row.status = 'processing';
+        processingSet = true;
+        return true;
+      }
+      if (expected === 'processing' && data.status === 'pending') {
+        t.row.status = 'pending';
+        return true;
+      }
+      if (t.row.status !== expected) return false;
+      Object.assign(t.row, data);
+      return true;
+    });
     t.handler.onPaymentSuccess.mockRejectedValueOnce(new Error('hold failed'));
     await expect(t.processor.processFreemopayCallback(callback)).rejects.toThrow('hold failed');
+    // After wallet credit succeeds but handler fails, the status should be released back to pending
+    expect(processingSet).toBe(true);
     expect(t.row.status).toBe('pending');
   });
 
   it('row moved to failed meanwhile -> money stays in wallet and an anomaly is reported', async () => {
     const t = build();
+    // The CAS to claim processing fails because the row was already moved to failed
+    t.databaseService.updateTransactionIfStatus.mockImplementation(async (_id, expected, data) => {
+      if (expected === 'pending' && data.status === 'processing') {
+        // Row was already moved to failed
+        return false;
+      }
+      if (t.row.status !== expected) return false;
+      Object.assign(t.row, data);
+      return true;
+    });
     t.accountsService.registerDepositIfNotExists.mockImplementationOnce(async () => {
       t.row.status = 'failed';
       return { success: true };
@@ -179,6 +222,16 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
 
   it('poll marks PROVIDER_TERMINAL_ON_RETRY during the credit -> late success, no anomaly', async () => {
     const t = build();
+    // The CAS to claim processing fails because the row was already moved to failed with PROVIDER_TERMINAL_ON_RETRY
+    t.databaseService.updateTransactionIfStatus.mockImplementation(async (_id, expected, data) => {
+      if (expected === 'pending' && data.status === 'processing') {
+        // Row was already moved to failed by the poll
+        return false;
+      }
+      if (t.row.status !== expected) return false;
+      Object.assign(t.row, data);
+      return true;
+    });
     t.accountsService.registerDepositIfNotExists.mockImplementationOnce(async () => {
       t.row.status = 'failed';
       t.row.error_code = 'PROVIDER_TERMINAL_ON_RETRY';

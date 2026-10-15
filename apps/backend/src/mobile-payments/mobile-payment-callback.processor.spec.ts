@@ -206,18 +206,19 @@ describe('MobilePaymentCallbackProcessor', () => {
   it('credits wallet before marking mobile payment success', async () => {
     databaseService.getTransactionByReference.mockResolvedValue({ ...baseTx });
     const callOrder: string[] = [];
+    databaseService.updateTransactionIfStatus.mockImplementation(async (_id, _expected, data) => {
+      if (data.status) callOrder.push(data.status);
+      return true;
+    });
     accountsService.registerDepositIfNotExists.mockImplementation(async () => {
       callOrder.push('credit');
       return { success: true, alreadyExists: false, transactionId: 'deposit-1' };
     });
-    databaseService.updateTransaction.mockImplementation(async () => {
-      callOrder.push('status');
-    });
 
     await processor.processMypvitCallback(successCallback);
 
-    expect(callOrder).toEqual(['credit', 'status']);
-    expect(databaseService.updateTransaction).toHaveBeenCalledWith(baseTx.id, {
+    expect(callOrder).toEqual(['processing', 'credit', 'success']);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(baseTx.id, 'processing', {
       status: 'success',
       transaction_id: 'provider-tx-1',
     });
@@ -236,6 +237,7 @@ describe('MobilePaymentCallbackProcessor', () => {
       amount: baseTx.amount,
       memo: `Mobile payment deposit - ${baseTx.reference}`,
       referenceId: baseTx.id,
+      idempotencyKey: `momo-deposit:${baseTx.id}`,
       skipCashAdvanceRepayment: true,
     });
   });
@@ -278,6 +280,7 @@ describe('MobilePaymentCallbackProcessor', () => {
       amount: baseTx.amount,
       memo: `Mobile payment deposit - ${baseTx.reference}`,
       referenceId: baseTx.id,
+      idempotencyKey: `momo-deposit:${baseTx.id}`,
       skipCashAdvanceRepayment: true,
     });
   });
@@ -315,6 +318,7 @@ describe('MobilePaymentCallbackProcessor', () => {
       amount: baseTx.amount,
       memo: `Mobile payment deposit - ${baseTx.reference}`,
       referenceId: baseTx.id,
+      idempotencyKey: `momo-deposit:${baseTx.id}`,
     });
   });
 
@@ -336,6 +340,7 @@ describe('MobilePaymentCallbackProcessor', () => {
       amount: baseTx.amount,
       memo: `Mobile payment deposit - ${baseTx.reference}`,
       referenceId: baseTx.id,
+      idempotencyKey: `momo-deposit:${baseTx.id}`,
     });
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
@@ -559,6 +564,7 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
       amount: giveChangeTx.amount,
       memo: `GIVE_CHANGE reversal - ${giveChangeTx.reference}`,
       referenceId: giveChangeTx.id,
+      idempotencyKey: `momo-reversal:${giveChangeTx.id}`,
     });
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
   });
@@ -589,6 +595,7 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     getTransactionByReference: jest.fn(),
     logCallback: jest.fn(),
     updateTransaction: jest.fn(),
+    updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
   };
   const accountsService = {
     hasTransactionForReference: jest.fn(),
@@ -658,18 +665,20 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     // Should NOT credit via registerTransaction with referenceId=tx.id
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     expect(accountsService.hasTransactionForReference).not.toHaveBeenCalled();
+    expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
     
     // Should still call handler which does the single credit
     expect(mockOrderDepositHandler.onPaymentSuccess).toHaveBeenCalledWith(
       orderDepositTx
     );
     
-    // Should mark transaction success
-    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+    // Should mark transaction success (using updateTransactionIfStatus for new flow)
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderDepositTx.id,
+      'processing',
       {
         status: 'success',
-        transaction_id: 'provider-deposit-1',
+        transaction_id: 'provider-tx-1',
       }
     );
   });
@@ -682,8 +691,12 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
       'Order deposit finalization failed'
     );
 
-    // Should NOT mark transaction as success when handler fails
-    expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+    // Should NOT mark transaction as success when handler fails (claim should be released)
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderDepositTx.id,
+      'processing',
+      { status: 'pending' }
+    );
   });
 
   it('does not credit processor wallet in retry for already-success order_deposit', async () => {
@@ -982,16 +995,25 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     );
 
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+    // First CAS: pending -> processing
     expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
       1,
       orderTx.id,
       'pending',
-      { status: 'success', transaction_id: 'provider-1' }
+      { status: 'processing' }
     );
+    // Second CAS: processing -> success (after wallet credit)
     expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
       2,
       orderTx.id,
-      'success',
+      'processing',
+      { status: 'success', transaction_id: 'provider-1' }
+    );
+    // Third CAS: release claim back to pending when handler fails
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
+      3,
+      orderTx.id,
+      'processing',
       { status: 'pending' }
     );
     expect(reportMoneyAnomaly).toHaveBeenCalledWith(
@@ -1007,9 +1029,14 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderTx.id,
       'pending',
+      { status: 'processing' }
+    );
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderTx.id,
+      'processing',
       { status: 'success', transaction_id: 'provider-1' }
     );
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(1);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(2);
     expect(reportMoneyAnomaly).not.toHaveBeenCalled();
   });
 

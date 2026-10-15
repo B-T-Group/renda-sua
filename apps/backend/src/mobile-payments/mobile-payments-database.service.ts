@@ -11,7 +11,7 @@ export interface MobilePaymentTransaction {
   description: string;
   provider: string;
   payment_method: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled';
   transaction_id?: string;
   customer_phone?: string;
   customer_email?: string;
@@ -68,7 +68,7 @@ export interface CreateTransactionData {
 }
 
 export interface UpdateTransactionData {
-  status?: 'pending' | 'success' | 'failed' | 'cancelled';
+  status?: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled';
   transaction_id?: string;
   /** May arrive as bilingual provider object; coerced to string before write. */
   error_message?: string | Record<string, unknown> | null;
@@ -97,7 +97,7 @@ export interface PendingClaimOrderTransaction {
   entity_id: string;
   transaction_id?: string;
   provider?: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled';
   created_at: string;
   account_id?: string;
   amount?: number;
