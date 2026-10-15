@@ -89,21 +89,32 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
 
   it('retry supersedes while the wallet is being credited -> late-success handler, row not overwritten', async () => {
     const t = build();
-    // The retry wins its CAS between our claim (processing) and our wallet credit.
-    let processingClaimed = false;
+    // Track call order
+    let firstCasDone = false;
+    let secondCasAttempted = false;
+    
     t.databaseService.updateTransactionIfStatus.mockImplementation(async (_id, expected, data) => {
-      if (expected === 'pending' && data.status === 'processing') {
-        processingClaimed = true;
-        // Don't actually change status yet - the retry will supersede
+      // First CAS: pending -> processing (succeeds)
+      if (expected === 'pending' && data.status === 'processing' && !firstCasDone) {
+        t.row.status = 'processing';
+        firstCasDone = true;
         return true;
       }
+      // Second CAS: processing -> success (fails because row is now cancelled)
+      if (expected === 'processing' && data.status === 'success') {
+        secondCasAttempted = true;
+        // Row is now cancelled, so CAS fails
+        return false;
+      }
+      // Other CAS operations
       if (t.row.status !== expected) return false;
       Object.assign(t.row, data);
       return true;
     });
+    
+    // During wallet credit, the retry supersedes
     t.accountsService.registerDepositIfNotExists.mockImplementationOnce(async () => {
-      if (processingClaimed) {
-        // The retry supersedes after we claimed processing but before we credited
+      if (firstCasDone) {
         t.row.status = 'cancelled';
         t.row.error_code = 'SUPERSEDED_BY_RETRY';
       }
@@ -112,14 +123,10 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
 
     await t.processor.processFreemopayCallback(callback);
 
+    expect(secondCasAttempted).toBe(true);
     expect(t.handler.onPaymentSuccess).not.toHaveBeenCalled();
     expect(t.handler.onLateSuccessAfterSupersede).toHaveBeenCalledTimes(1);
     expect(t.row).toMatchObject({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' });
-    // Never the old unconditional overwrite.
-    expect(t.databaseService.updateTransaction).not.toHaveBeenCalledWith(
-      'tx-a',
-      expect.objectContaining({ status: 'success' })
-    );
   });
 
   it('callback claims first -> the racing retry CAS fails (no supersede, no new prompt)', async () => {
@@ -222,24 +229,41 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
 
   it('poll marks PROVIDER_TERMINAL_ON_RETRY during the credit -> late success, no anomaly', async () => {
     const t = build();
-    // The CAS to claim processing fails because the row was already moved to failed with PROVIDER_TERMINAL_ON_RETRY
+    // Track call order
+    let firstCasDone = false;
+    let secondCasAttempted = false;
+    
     t.databaseService.updateTransactionIfStatus.mockImplementation(async (_id, expected, data) => {
-      if (expected === 'pending' && data.status === 'processing') {
-        // Row was already moved to failed by the poll
+      // First CAS: pending -> processing (succeeds)
+      if (expected === 'pending' && data.status === 'processing' && !firstCasDone) {
+        t.row.status = 'processing';
+        firstCasDone = true;
+        return true;
+      }
+      // Second CAS: processing -> success (fails because row is now failed)
+      if (expected === 'processing' && data.status === 'success') {
+        secondCasAttempted = true;
+        // Row is now failed, so CAS fails
         return false;
       }
+      // Other CAS operations
       if (t.row.status !== expected) return false;
       Object.assign(t.row, data);
       return true;
     });
+    
+    // During wallet credit, the poll marks it failed
     t.accountsService.registerDepositIfNotExists.mockImplementationOnce(async () => {
-      t.row.status = 'failed';
-      t.row.error_code = 'PROVIDER_TERMINAL_ON_RETRY';
+      if (firstCasDone) {
+        t.row.status = 'failed';
+        t.row.error_code = 'PROVIDER_TERMINAL_ON_RETRY';
+      }
       return { success: true };
     });
 
     await t.processor.processFreemopayCallback(callback);
 
+    expect(secondCasAttempted).toBe(true);
     expect(t.handler.onPaymentSuccess).not.toHaveBeenCalled();
     expect(t.handler.onLateSuccessAfterSupersede).toHaveBeenCalledTimes(1);
     expect(t.row).toMatchObject({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' });

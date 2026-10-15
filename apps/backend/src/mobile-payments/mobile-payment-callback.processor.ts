@@ -441,7 +441,7 @@ export class MobilePaymentCallbackProcessor {
           `Wallet credit failed for order payment ${transaction.id}; leaving pending for retry`
         );
       }
-      await this.databaseService.updateTransactionIfStatus(
+      const markedSuccess = await this.databaseService.updateTransactionIfStatus(
         transaction.id,
         'processing',
         {
@@ -449,6 +449,11 @@ export class MobilePaymentCallbackProcessor {
           ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
         }
       );
+      if (!markedSuccess) {
+        // Row left processing between credit and success mark: re-read and route
+        await this.routeUnclaimedOrderSuccess(transaction, providerTransactionId);
+        return;
+      }
       await this.runHandlerSuccess(transaction);
     } catch (error) {
       await this.databaseService
@@ -524,7 +529,7 @@ export class MobilePaymentCallbackProcessor {
           `Wallet credit failed for mobile payment ${transaction.id}; leaving pending for retry`
         );
       }
-      await this.databaseService.updateTransactionIfStatus(
+      const markedSuccess = await this.databaseService.updateTransactionIfStatus(
         transaction.id,
         'processing',
         {
@@ -532,6 +537,11 @@ export class MobilePaymentCallbackProcessor {
           ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
         }
       );
+      if (!markedSuccess) {
+        // Row left processing between credit and success mark: route to retry handler
+        await this.routeUnclaimedNonOrderSuccess(transaction);
+        return;
+      }
       await this.runHandlerSuccess(transaction);
     } catch (error) {
       await this.databaseService

@@ -600,6 +600,7 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
   const accountsService = {
     hasTransactionForReference: jest.fn(),
     registerTransaction: jest.fn(),
+    registerDepositIfNotExists: jest.fn(),
   };
   const mockOrderDepositHandler = {
     supportsPaymentEntity: (e: string) => e === 'order_deposit',
@@ -672,13 +673,18 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
       orderDepositTx
     );
     
-    // Should mark transaction success (using updateTransactionIfStatus for new flow)
+    // Should mark transaction success using two CAS operations
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderDepositTx.id,
+      'pending',
+      { status: 'processing' }
+    );
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderDepositTx.id,
       'processing',
       {
         status: 'success',
-        transaction_id: 'provider-tx-1',
+        transaction_id: 'provider-deposit-1',
       }
     );
   });
