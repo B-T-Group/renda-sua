@@ -1441,5 +1441,62 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE CAS and idempotency', () =>
     // Should not proceed when another writer holds the processing claim
     expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
   });
+
+  const processingGcCallback = {
+    transactionId: 'provider-gc-1',
+    merchantReferenceId: giveChangeTx.reference,
+    status: 'SUCCESS' as const,
+    amount: giveChangeTx.amount,
+    customerID: '06123456',
+    fees: 0,
+    chargeOwner: 'MERCHANT',
+    transactionOperation: 'PAYOUT',
+    operator: 'AIRTEL',
+    code: 200,
+  };
+
+  it('GIVE_CHANGE stuck in processing: SUCCESS resume releases hold, debits, marks success', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...giveChangeTx,
+      status: 'processing',
+    });
+    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+    await processor.processMypvitCallback(processingGcCallback);
+
+    expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalled();
+    expect(accountsService.registerWithdrawalIfNotExists).toHaveBeenCalledWith(
+      expect.objectContaining({ idempotencyKey: `momo-giveout:${giveChangeTx.id}` })
+    );
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      giveChangeTx.id,
+      'processing',
+      { status: 'success', transaction_id: 'provider-gc-1' }
+    );
+  });
+
+  it('GIVE_CHANGE resume with ledger debit failure records success + WITHDRAWAL_FAILED', async () => {
+    databaseService.getTransactionByReference.mockResolvedValue({
+      ...giveChangeTx,
+      status: 'processing',
+    });
+    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
+    accountsService.registerWithdrawalIfNotExists.mockResolvedValue({
+      success: false,
+      error: 'debit failed',
+    });
+
+    await processor.processMypvitCallback(processingGcCallback);
+
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(1);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      giveChangeTx.id,
+      'processing',
+      expect.objectContaining({
+        status: 'success',
+        error_code: 'WITHDRAWAL_FAILED',
+      })
+    );
+  });
 });
 

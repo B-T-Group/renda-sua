@@ -667,9 +667,21 @@ export class MobilePaymentCallbackProcessor {
       // GIVE_CHANGE: idempotent debit with momo-giveout:<tx id>
       const debited = await this.debitWalletIfNeeded(transaction);
       if (!debited) {
-        throw new Error(
-          `Wallet debit failed while resuming GIVE_CHANGE ${transaction.id}; leaving processing for recovery`
+        // Provider payout already succeeded (processing is only reached after a
+        // confirmed SUCCESS). Same outcome as finalizeGiveChangeSuccess and
+        // PendingWithdrawalResolveService: success + WITHDRAWAL_FAILED for manual
+        // reconciliation, never left in processing where finance can't see it.
+        await this.databaseService.updateTransactionIfStatus(transaction.id, 'processing', {
+          status: 'success',
+          ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+          error_message:
+            'Provider payout succeeded but wallet debit failed; manual reconciliation required',
+          error_code: 'WITHDRAWAL_FAILED',
+        });
+        this.logger.error(
+          `GIVE_CHANGE ${transaction.id} provider success with ledger debit failure (resume)`
         );
+        return;
       }
     } else {
       // PAYMENT: idempotent credit with momo-deposit:<tx id>
