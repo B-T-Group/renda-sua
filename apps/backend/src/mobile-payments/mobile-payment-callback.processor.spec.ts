@@ -1213,7 +1213,7 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
     );
   });
 
-  it('resume path attempts success→pending release if handler throws after success mark', async () => {
+  it('resume path leaves row in processing when handler throws after success mark', async () => {
     const orderHandlerMock = {
       supportsEntity: jest.fn().mockReturnValue(true),
       onPaymentSuccess: jest.fn().mockRejectedValue(new Error('Handler error')),
@@ -1230,17 +1230,12 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
     const orderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123' };
     databaseService.getTransactionByTransactionId.mockResolvedValue(orderTx);
     databaseService.updateTransactionIfStatus
-      .mockResolvedValueOnce(true)  // processing → success succeeds
-      .mockResolvedValueOnce(false); // success → pending attempt (doesn't matter if it fails)
+      .mockResolvedValueOnce(true);  // processing → success succeeds
 
     await expect(processorWithHandler.processFreemopayCallback(callback)).rejects.toThrow('Handler error');
 
-    // Should try success → pending release after handler throws
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
-      orderTx.id,
-      'success',
-      { status: 'pending' }
-    );
+    // Should NOT roll back to pending after wallet was credited; row stays processing for recovery
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(1); // only processing → success
   });
 
   it('leaves row in processing when wallet credit fails', async () => {
@@ -1275,7 +1270,7 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
 
   it('leaves row in processing when handler throws after wallet credit', async () => {
     const orderHandlerMock = {
-      supportsEntity: jest.fn().mockReturnValue(true),
+      supportsPaymentEntity: (e: string) => e === 'order',
       onPaymentSuccess: jest.fn().mockRejectedValue(new Error('Handler error')),
     };
     const registryWithHandler = {
@@ -1289,6 +1284,7 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
     );
     const orderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123' };
     databaseService.getTransactionByReference.mockResolvedValue(orderTx);
+    databaseService.logCallback = jest.fn().mockResolvedValue(undefined);
     databaseService.updateTransactionIfStatus
       .mockResolvedValueOnce(true)  // pending → processing claim
       .mockResolvedValueOnce(true); // processing → success mark
@@ -1306,9 +1302,9 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
       code: 200,
     })).rejects.toThrow('Handler error');
 
-    // Should NOT roll back after credit succeeded; row stays in processing
-    // The error should be logged but NOT trigger processing → pending
-    // (The catch block now only rolls back if credit failed)
+    // Should NOT roll back after credit succeeded; row stays in processing for recovery
+    // Only the claim and success mark CAS should have been called, no rollback
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(2);
   });
 });
 
