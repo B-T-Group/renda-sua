@@ -5064,6 +5064,11 @@ export class OrdersService {
     const phoneChanged = !!newPhone && !samePhone(newPhone, baselinePhone);
     let superseded: MobilePaymentTransaction | null = null;
     if (existing) {
+      // Processing means the wallet may already be credited. Never poll/supersede
+      // that row or send another prompt when the provider still looks pending.
+      if (existing.status === 'processing') {
+        return this.payAfterInFlightResponse(existing);
+      }
       const early = await this.resolvePendingPayAfterAttempt(
         order,
         existing,
@@ -5102,10 +5107,7 @@ export class OrdersService {
         'processing'
       );
       if (inflight.length > 0) {
-        return this.payAfterRetryResponse('sent', {
-          message: 'Payment already in progress.',
-          tx: inflight[0],
-        });
+        return this.payAfterInFlightResponse(inflight[0]);
       }
       const chargeAmount = Number(order.total_amount) || 0;
       if (chargeAmount <= 0) {
@@ -5130,6 +5132,15 @@ export class OrdersService {
       key,
       superseded,
       savePhone: options.savePhone === true,
+    });
+  }
+
+  private payAfterInFlightResponse(
+    tx: MobilePaymentTransaction
+  ): PayAfterRetryResponse {
+    return this.payAfterRetryResponse('sent', {
+      message: 'Payment already in progress.',
+      tx,
     });
   }
 

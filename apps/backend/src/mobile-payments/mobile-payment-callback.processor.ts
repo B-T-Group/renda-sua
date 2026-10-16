@@ -478,9 +478,9 @@ export class MobilePaymentCallbackProcessor {
    * Order MoMo success (#545 QA F2, money race fix). The row is claimed pending -> processing
    * with a CAS BEFORE any money moves, so only the writer that wins may credit the wallet.
    * Then the payment is flipped processing -> success and the order is finalized. A racing
-   * retry or duplicate SUCCESS that loses the claim leaves everything unchanged. If wallet
-   * credit or finalizing throws, the claim is undone (processing -> pending) so the provider
-   * retry runs the whole path again.
+   * retry or duplicate SUCCESS that loses the claim leaves everything unchanged. A failed
+   * wallet credit returns the row to pending. A failed order handler returns it to
+   * processing so the next SUCCESS resumes instead of looking already paid.
    */
   private async finalizeOrderPaymentSuccess(
     transaction: MobilePaymentTransaction,
@@ -495,45 +495,22 @@ export class MobilePaymentCallbackProcessor {
       await this.routeUnclaimedOrderSuccess(transaction, providerTransactionId);
       return;
     }
-    try {
-      const credited = await this.creditWalletIfNeeded(transaction);
-      if (!credited) {
-        await this.databaseService
-          .updateTransactionIfStatus(transaction.id, 'processing', { status: 'pending' })
-          .catch((e: any) =>
-            this.logger.error(
-              `Could not release processing claim after credit failure on ${transaction.id}: ${e?.message ?? e}`
-            )
-          );
-        throw new Error(
-          `Wallet credit failed for order payment ${transaction.id}; leaving pending for retry`
-        );
-      }
-      const markedSuccess = await this.databaseService.updateTransactionIfStatus(
-        transaction.id,
-        'processing',
-        {
-          status: 'success',
-          ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
-        }
+    const credited = await this.creditWalletIfNeeded(transaction);
+    if (!credited) {
+      await this.releaseProcessingClaimAfterCreditFailure(transaction.id);
+      throw new Error(
+        `Wallet credit failed for order payment ${transaction.id}; leaving pending for retry`
       );
-      if (!markedSuccess) {
-        // Row left processing between credit and success mark: re-read and route
-        await this.routeUnclaimedOrderSuccess(transaction, providerTransactionId);
-        return;
-      }
-      await this.runHandlerSuccess(transaction);
-    } catch (error) {
-      // Only roll back if credit failed (before wallet was credited).
-      if ((error as Error).message?.includes('Wallet credit failed')) {
-        throw error;
-      }
-      // Handler threw after row is already marked success; retrySuccessSideEffects on next callback
-      this.logger.error(
-        `Handler failed after success mark for ${transaction.id}: ${(error as any)?.message ?? error}`
-      );
-      throw error;
     }
+    const markedSuccess = await this.markProcessingSuccess(
+      transaction.id,
+      providerTransactionId
+    );
+    if (!markedSuccess) {
+      await this.routeUnclaimedOrderSuccess(transaction, providerTransactionId);
+      return;
+    }
+    await this.runHandlerOrRestoreProcessing(transaction);
     this.logger.log(`Updated transaction ${transaction.id} with status: success`);
   }
 
@@ -591,45 +568,22 @@ export class MobilePaymentCallbackProcessor {
       await this.routeUnclaimedNonOrderSuccess(transaction);
       return;
     }
-    try {
-      const credited = await this.creditWalletIfNeeded(transaction);
-      if (!credited) {
-        await this.databaseService
-          .updateTransactionIfStatus(transaction.id, 'processing', { status: 'pending' })
-          .catch((e: any) =>
-            this.logger.error(
-              `Could not release processing claim after credit failure on ${transaction.id}: ${e?.message ?? e}`
-            )
-          );
-        throw new Error(
-          `Wallet credit failed for mobile payment ${transaction.id}; leaving pending for retry`
-        );
-      }
-      const markedSuccess = await this.databaseService.updateTransactionIfStatus(
-        transaction.id,
-        'processing',
-        {
-          status: 'success',
-          ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
-        }
+    const credited = await this.creditWalletIfNeeded(transaction);
+    if (!credited) {
+      await this.releaseProcessingClaimAfterCreditFailure(transaction.id);
+      throw new Error(
+        `Wallet credit failed for mobile payment ${transaction.id}; leaving pending for retry`
       );
-      if (!markedSuccess) {
-        // Row left processing between credit and success mark: route to retry handler
-        await this.routeUnclaimedNonOrderSuccess(transaction);
-        return;
-      }
-      await this.runHandlerSuccess(transaction);
-    } catch (error) {
-      // Only roll back if credit failed (before wallet was credited).
-      if ((error as Error).message?.includes('Wallet credit failed')) {
-        throw error;
-      }
-      // Handler threw after row is already marked success; retrySuccessSideEffects on next callback
-      this.logger.error(
-        `Handler failed after success mark for ${transaction.id}: ${(error as any)?.message ?? error}`
-      );
-      throw error;
     }
+    const markedSuccess = await this.markProcessingSuccess(
+      transaction.id,
+      providerTransactionId
+    );
+    if (!markedSuccess) {
+      await this.routeUnclaimedNonOrderSuccess(transaction);
+      return;
+    }
+    await this.runHandlerOrRestoreProcessing(transaction);
     this.logger.log(
       `Updated transaction ${transaction.id} with status: success`
     );
@@ -717,18 +671,69 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
     
-    // Run handler for PAYMENT transactions (GIVE_CHANGE has no handler)
+    // GIVE_CHANGE has no entity handler. A PAYMENT handler failure must not
+    // stay success: the next callback would take the swallowed replay path.
     if (transaction.transaction_type === 'PAYMENT') {
-      try {
-        await this.runHandlerSuccess(transaction);
-      } catch (error: any) {
-        // Handler threw after wallet was credited and success mark
-        this.logger.error(
-          `Handler failed after success mark for ${transaction.id}: ${error?.message ?? error}`
-        );
-        throw error;
-      }
+      await this.runHandlerOrRestoreProcessing(transaction);
     }
+  }
+
+  private async markProcessingSuccess(
+    transactionId: string,
+    providerTransactionId: string
+  ): Promise<boolean> {
+    return this.databaseService.updateTransactionIfStatus(
+      transactionId,
+      'processing',
+      {
+        status: 'success',
+        ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+      }
+    );
+  }
+
+  private async releaseProcessingClaimAfterCreditFailure(
+    transactionId: string
+  ): Promise<void> {
+    await this.databaseService
+      .updateTransactionIfStatus(transactionId, 'processing', { status: 'pending' })
+      .catch((e: any) =>
+        this.logger.error(
+          `Could not release processing claim after credit failure on ${transactionId}: ${e?.message ?? e}`
+        )
+      );
+  }
+
+  /**
+   * The success mark is only the claim. If the entity handler throws, put the
+   * row back to processing (not pending): pending can be failed or cancelled,
+   * and success makes the next callback skip finalize. The provider retry then
+   * resumes this path and keeps returning 5xx until the order is actually paid.
+   */
+  private async runHandlerOrRestoreProcessing(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    try {
+      await this.runHandlerSuccess(transaction);
+    } catch (error: any) {
+      await this.returnSuccessClaimToProcessing(transaction.id);
+      this.logger.error(
+        `Handler failed after success mark for ${transaction.id}: ${error?.message ?? error}`
+      );
+      throw error;
+    }
+  }
+
+  private async returnSuccessClaimToProcessing(transactionId: string): Promise<void> {
+    const released = await this.databaseService.updateTransactionIfStatus(
+      transactionId,
+      'success',
+      { status: 'processing' }
+    );
+    if (released) return;
+    this.logger.error(
+      `Could not return ${transactionId} to processing after handler failure`
+    );
   }
 
   private async retrySuccessSideEffects(
@@ -1004,11 +1009,10 @@ export class MobilePaymentCallbackProcessor {
 
   /**
    * Run the entity success handler. A failure is always alerted (reportMoneyAnomaly).
-   * For `order_deposit`, and for `order` or `claim_order` on the first (pending -> success)
-   * pass, it is rethrown so the transaction is NOT marked success and stays pending: the wallet credit
-   * is idempotent on the transaction id, so the provider replay / pending reconciler
-   * re-runs the handler instead of leaving a paid-but-unpaid-order silently (UAT S-8).
-   * On replays of an already-success tx the error is only alerted (no endless 5xx).
+   * For `order_deposit`, and for `order` or `claim_order` on the first pass, it is
+   * rethrown. The caller then moves success back to processing so the next SUCCESS
+   * resumes finalize (5xx until the order is paid). A replay of a row that stayed
+   * success only alerts (no endless 5xx).
    */
   private async runHandlerSuccess(
     transaction: MobilePaymentTransaction,

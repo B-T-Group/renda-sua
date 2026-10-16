@@ -706,12 +706,15 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
       'Order deposit finalization failed'
     );
 
-    // Should mark processing → success, then leave it in processing when handler fails
-    // (wallet was already credited, so no rollback)
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderDepositTx.id,
       'processing',
       expect.objectContaining({ status: 'success' })
+    );
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderDepositTx.id,
+      'success',
+      { status: 'processing' }
     );
     // No rollback to pending after credit succeeded
     expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalledWith(
@@ -1031,8 +1034,12 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
       'processing',
       { status: 'success', transaction_id: 'provider-1' }
     );
-    // No rollback after credit; row stays in processing for recovery
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(2);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderTx.id,
+      'success',
+      { status: 'processing' }
+    );
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
     expect(reportMoneyAnomaly).toHaveBeenCalledWith(
       expect.anything(),
       'payment_finalize_failed',
@@ -1051,8 +1058,12 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
       'handler failed after success'
     );
 
-    // No rollback after wallet credit; only claim and success mark
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(2);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderTx.id,
+      'success',
+      { status: 'processing' }
+    );
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
     expect(reportMoneyAnomaly).toHaveBeenCalled();
   });
 
@@ -1300,9 +1311,12 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
       code: 200,
     })).rejects.toThrow('Handler error');
 
-    // Should NOT roll back after credit succeeded; row stays in processing for recovery
-    // Only the claim and success mark CAS should have been called, no rollback
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(2);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      pendingOrderTx.id,
+      'success',
+      { status: 'processing' }
+    );
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
   });
 });
 
