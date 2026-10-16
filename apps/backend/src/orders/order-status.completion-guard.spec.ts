@@ -126,6 +126,20 @@ describe('OrderStatusService completion guard (F1/F2)', () => {
       expect(compensation.evaluateForOrderSafe).not.toHaveBeenCalled();
     });
 
+    it('does not treat a complete row without completed_at as a finished race', async () => {
+      reads('out_for_delivery', { current_status: 'complete', completed_at: null });
+      hasura.executeMutation.mockResolvedValue(updateResult(0));
+      const onSameStatusReplay = jest.fn();
+
+      await expect(
+        service.updateOrderStatus('order-1', 'complete', { onSameStatusReplay })
+      ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+
+      expect(onSameStatusReplay).not.toHaveBeenCalled();
+      expect(queue.sendOrderStatusUpdatedMessage).not.toHaveBeenCalled();
+      expect(compensation.evaluateForOrderSafe).not.toHaveBeenCalled();
+    });
+
     it('winner does not report a replay', async () => {
       reads('out_for_delivery');
       hasura.executeMutation.mockResolvedValue(

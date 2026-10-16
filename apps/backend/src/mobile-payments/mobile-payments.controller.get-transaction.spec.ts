@@ -20,6 +20,7 @@ describe('MobilePaymentsController transaction access', () => {
   let getTransactions: jest.Mock;
   let getTransactionStats: jest.Mock;
   let updateTransaction: jest.Mock;
+  let updateTransactionIfStatus: jest.Mock;
   let checkTransactionStatus: jest.Mock;
   let cancelTransaction: jest.Mock;
   let getUser: jest.Mock;
@@ -33,6 +34,7 @@ describe('MobilePaymentsController transaction access', () => {
     getTransactions = jest.fn().mockResolvedValue([transaction]);
     getTransactionStats = jest.fn().mockResolvedValue({ count: 1 });
     updateTransaction = jest.fn().mockResolvedValue(transaction);
+    updateTransactionIfStatus = jest.fn().mockResolvedValue(true);
     checkTransactionStatus = jest.fn().mockResolvedValue({
       status: 'pending',
       message: 'awaiting',
@@ -56,6 +58,7 @@ describe('MobilePaymentsController transaction access', () => {
         getTransactions,
         getTransactionStats,
         updateTransaction,
+        updateTransactionIfStatus,
       } as never,
       {} as never,
       {} as never,
@@ -171,7 +174,7 @@ describe('MobilePaymentsController transaction access', () => {
         message: 'Transaction cancelled successfully',
       });
       expect(cancelTransaction).toHaveBeenCalledWith('tx-1', undefined);
-      expect(updateTransaction).toHaveBeenCalledWith('tx-1', {
+      expect(updateTransactionIfStatus).toHaveBeenCalledWith('tx-1', 'pending', {
         status: 'cancelled',
       });
     });
@@ -181,6 +184,40 @@ describe('MobilePaymentsController transaction access', () => {
       await expectNotFound(controller.cancelTransaction('tx-1', ctx));
       expect(cancelTransaction).not.toHaveBeenCalled();
       expect(updateTransaction).not.toHaveBeenCalled();
+    });
+
+    it('refuses a processing row before the provider or the local CAS', async () => {
+      getTransactionById.mockResolvedValue({ ...transaction, status: 'processing' });
+
+      await expect(controller.cancelTransaction('tx-1', ctx)).resolves.toEqual({
+        success: false,
+        message: 'Cannot cancel: transaction is already processing',
+      });
+      expect(cancelTransaction).not.toHaveBeenCalled();
+      expect(updateTransactionIfStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not report success when the pending CAS loses', async () => {
+      updateTransactionIfStatus.mockResolvedValue(false);
+
+      await expect(controller.cancelTransaction('tx-1', ctx)).resolves.toEqual({
+        success: false,
+        message: 'Transaction status changed before cancel could complete',
+      });
+      expect(cancelTransaction).toHaveBeenCalledWith('tx-1', undefined);
+      expect(updateTransactionIfStatus).toHaveBeenCalledWith('tx-1', 'pending', {
+        status: 'cancelled',
+      });
+    });
+
+    it('does not flip the row when the provider cancel fails', async () => {
+      cancelTransaction.mockResolvedValue(false);
+
+      await expect(controller.cancelTransaction('tx-1', ctx)).resolves.toEqual({
+        success: false,
+        message: 'Failed to cancel transaction',
+      });
+      expect(updateTransactionIfStatus).not.toHaveBeenCalled();
     });
   });
 

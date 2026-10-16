@@ -150,6 +150,55 @@ describe('MobilePaymentCallbackProcessor late success on superseded order tx', (
     expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
   });
 
+  it('recovers SUCCESS after a FAILED callback clobbered a superseded row', async () => {
+    const clobbered = {
+      ...supersededTx,
+      status: 'failed' as const,
+      error_code: 'SUPERSEDED_BY_RETRY',
+    };
+    const { processor, databaseService, accountsService, handler } = build(
+      clobbered,
+      'applied'
+    );
+    await processor.processFreemopayCallback(callback('SUCCESS') as any);
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
+      expect.objectContaining({ referenceId: 'tx-old', amount: 1500 })
+    );
+    expect(handler.onLateSuccessAfterSupersede).toHaveBeenCalledWith(clobbered);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'failed',
+      expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' })
+    );
+  });
+
+  it('does not recover a failed attempt the provider actually rejected', async () => {
+    const rejected = {
+      ...supersededTx,
+      status: 'failed' as const,
+      error_code: 'PROVIDER_REJECTED',
+    };
+    const { processor, handler, accountsService } = build(rejected);
+    const res = await processor.processFreemopayCallback(callback('SUCCESS') as any);
+    expect(res.skipped).toBe(true);
+    expect(handler.onLateSuccessAfterSupersede).not.toHaveBeenCalled();
+    expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+  });
+
+  it('does not recover a non-order row that carries the retry terminal code', async () => {
+    const token = {
+      ...supersededTx,
+      payment_entity: 'token',
+      status: 'failed' as const,
+      error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+    };
+    const { processor, handler, accountsService } = build(token);
+    const res = await processor.processFreemopayCallback(callback('SUCCESS') as any);
+    expect(res.skipped).toBe(true);
+    expect(handler.onLateSuccessAfterSupersede).not.toHaveBeenCalled();
+    expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+  });
+
   it('recovers SUCCESS after a retry poll marked the attempt failed', async () => {
     const failedPoll = {
       ...supersededTx,
@@ -175,6 +224,38 @@ describe('MobilePaymentCallbackProcessor late success on superseded order tx', (
     const res = await processor.processFreemopayCallback(callback('SUCCESS') as any);
     expect(res.skipped).toBe(true);
     expect(handler.onLateSuccessAfterSupersede).not.toHaveBeenCalled();
+  });
+
+  it('recovers a MyPVit SUCCESS after the retry poll marked the attempt failed', async () => {
+    const tx = {
+      ...supersededTx,
+      provider: 'mypvit',
+      status: 'failed' as const,
+      error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+    };
+    const { processor, handler, databaseService } = build(tx, 'applied');
+    await processor.processMypvitCallback({
+      transactionId: 'pv-1',
+      merchantReferenceId: tx.reference,
+      status: 'SUCCESS',
+      amount: 1500,
+      customerID: '650000099',
+      fees: 0,
+      chargeOwner: 'MERCHANT',
+      transactionOperation: 'PAYMENT',
+      operator: 'MTN',
+      code: 200,
+    } as any);
+    expect(handler.onLateSuccessAfterSupersede).toHaveBeenCalledWith(tx);
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      tx.id,
+      'failed',
+      expect.objectContaining({
+        status: 'success',
+        error_code: 'LATE_SUCCESS_APPLIED',
+        transaction_id: 'pv-1',
+      })
+    );
   });
 
   it('handles the MyPVit path too, including SUPERSEDED_BY_LATE_SUCCESS rows', async () => {

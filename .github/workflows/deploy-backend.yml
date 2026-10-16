@@ -285,7 +285,89 @@ jobs:
               **Deployment Time:** ${{ github.event.head_commit.timestamp }}`
             })
 
+  # Prod only: the backend must not roll out before the prod Hasura apply for the
+  # same commit has succeeded (new Nest code can depend on new migrations).
+  # - push that touches Hasura paths: wait for "Apply Hasura migrations and metadata"
+  #   on this SHA and require success (failure/cancel blocks the deploy).
+  # - push that touches no Hasura paths: no Hasura run is triggered, proceed.
+  # - workflow_dispatch: manual run, no gate.
+  wait-for-hasura-prod:
+    if: github.ref == 'refs/heads/prod'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Wait for Hasura production apply on this SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" != "push" ]; then
+            echo "Event is $EVENT_NAME (manual); not gating on Hasura."
+            exit 0
+          fi
+
+          HASURA_PATHS='^(apps/hasura/|\.github/actions/apply-hasura/|\.github/workflows/hasura-apply\.yml$)'
+          if [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ] \
+             && git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            if git diff --name-only "$BEFORE" "$SHA" | grep -Eq "$HASURA_PATHS"; then
+              EXPECT=yes
+            else
+              EXPECT=no
+            fi
+          else
+            EXPECT=unknown
+          fi
+          echo "Hasura changes in this push: $EXPECT"
+          if [ "$EXPECT" = "no" ]; then
+            echo "No Hasura files changed; no Hasura apply to wait for."
+            exit 0
+          fi
+
+          # Wait for the Hasura run for this SHA to appear.
+          if [ "$EXPECT" = "yes" ]; then appear_limit=40; else appear_limit=9; fi
+          RUN_ID=""
+          for i in $(seq 1 "$appear_limit"); do
+            RUN_ID=$(gh api "repos/$REPO/actions/workflows/hasura-apply.yml/runs?head_sha=$SHA&event=push&branch=prod&per_page=1" \
+              --jq '.workflow_runs[0].id // empty')
+            [ -n "$RUN_ID" ] && break
+            sleep 15
+          done
+          if [ -z "$RUN_ID" ]; then
+            if [ "$EXPECT" = "yes" ]; then
+              echo "::error::Hasura files changed but no Hasura apply run found for $SHA"
+              exit 1
+            fi
+            echo "No Hasura apply run for $SHA; proceeding."
+            exit 0
+          fi
+          echo "Waiting on Hasura run https://github.com/$REPO/actions/runs/$RUN_ID"
+
+          while true; do
+            read -r STATUS CONCLUSION < <(gh api "repos/$REPO/actions/runs/$RUN_ID" --jq '"\(.status) \(.conclusion // "none")"')
+            echo "Hasura run status=$STATUS conclusion=$CONCLUSION"
+            [ "$STATUS" = "completed" ] && break
+            sleep 20
+          done
+          if [ "$CONCLUSION" != "success" ]; then
+            echo "::error::Hasura production apply concluded '$CONCLUSION'; blocking backend deploy."
+            exit 1
+          fi
+          echo "Hasura production apply succeeded."
+
   build-and-deploy-prod:
+    needs: wait-for-hasura-prod
     if: github.ref == 'refs/heads/prod'
     runs-on: ubuntu-latest
     concurrency:

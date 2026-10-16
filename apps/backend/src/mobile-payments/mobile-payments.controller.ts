@@ -35,7 +35,10 @@ import type {
   MyPVitCallbackDto,
 } from './mobile-payment-callback.dto';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
-import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
+import { 
+  MobilePaymentsDatabaseService, 
+  type MobilePaymentTransaction 
+} from './mobile-payments-database.service';
 import {
   MobilePaymentsService,
   type MobileTransactionStatus,
@@ -405,7 +408,7 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Cancel a pending transaction
+   * Cancel a pending or processing transaction (CAS to prevent cancel after SUCCESS)
    */
   @Post('transactions/:transactionId/cancel')
   async cancelTransaction(
@@ -414,15 +417,33 @@ export class MobilePaymentsController {
     @Query('provider') provider?: string
   ) {
     try {
-      await this.loadViewableTransactionById(transactionId, ctx);
+      const transaction = await this.loadViewableTransactionById(transactionId, ctx);
+      
+      // Only cancel if pending (processing means wallet already credited or payout sent)
+      if (transaction.status !== 'pending') {
+        return {
+          success: false,
+          message: `Cannot cancel: transaction is already ${transaction.status}`,
+        };
+      }
+      
       const success = await this.mobilePaymentsService.cancelTransaction(
         transactionId,
         provider
       );
       if (success) {
-        await this.databaseService.updateTransaction(transactionId, {
-          status: 'cancelled',
-        });
+        // Use CAS to only cancel if still pending
+        const cancelled = await this.databaseService.updateTransactionIfStatus(
+          transactionId,
+          'pending',
+          { status: 'cancelled' }
+        );
+        if (!cancelled) {
+          return {
+            success: false,
+            message: 'Transaction status changed before cancel could complete',
+          };
+        }
       }
       return {
         success,
@@ -845,13 +866,12 @@ export class MobilePaymentsController {
   private async loadViewableTransactionById(
     transactionId: string,
     ctx: RequestContext
-  ) {
+  ): Promise<MobilePaymentTransaction> {
     const user = await this.hasuraUserService.getUser(ctx);
     const transaction = await this.databaseService.getTransactionById(
       transactionId
     );
-    await this.requireViewableTransaction(transaction, user?.id);
-    return transaction;
+    return await this.requireViewableTransaction(transaction, user?.id);
   }
 
   private async requireViewableTransaction<

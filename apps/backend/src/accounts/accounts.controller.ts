@@ -134,7 +134,7 @@ export class AccountsController {
             }
             mobile_payment_transactions(
               where: {
-                status: { _eq: "pending" }
+                status: { _in: ["pending", "processing"] }
                 transaction_type: { _eq: "GIVE_CHANGE" }
               }
               order_by: { created_at: desc }
@@ -366,7 +366,7 @@ export class AccountsController {
             }
             mobile_payment_transactions(
               where: {
-                status: { _eq: "pending" }
+                status: { _in: ["pending", "processing"] }
                 transaction_type: { _eq: "GIVE_CHANGE" }
               }
               order_by: { created_at: desc }

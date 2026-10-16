@@ -92,7 +92,7 @@ export interface ResolvePendingWithdrawalResponse {
   /** Live provider status when checked; otherwise resulting local status. */
   status?: {
     transactionId: string;
-    status: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous';
+    status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled' | 'ambiguous';
     amount: number;
     currency: string;
     reference: string;

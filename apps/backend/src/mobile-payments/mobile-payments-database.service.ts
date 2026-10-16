@@ -11,7 +11,7 @@ export interface MobilePaymentTransaction {
   description: string;
   provider: string;
   payment_method: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled';
   transaction_id?: string;
   customer_phone?: string;
   customer_email?: string;
@@ -68,7 +68,7 @@ export interface CreateTransactionData {
 }
 
 export interface UpdateTransactionData {
-  status?: 'pending' | 'success' | 'failed' | 'cancelled';
+  status?: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled';
   transaction_id?: string;
   /** May arrive as bilingual provider object; coerced to string before write. */
   error_message?: string | Record<string, unknown> | null;
@@ -97,7 +97,7 @@ export interface PendingClaimOrderTransaction {
   entity_id: string;
   transaction_id?: string;
   provider?: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled';
   created_at: string;
   account_id?: string;
   amount?: number;
@@ -505,7 +505,7 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
-   * Get the latest pending order payment transaction by order number.
+   * Get the latest in-flight order payment transaction by order number (pending or processing).
    * Uses entity_id to support multiple retry attempts with unique references.
    */
   async getPendingOrderPaymentTransactionByOrderNumber(
@@ -516,7 +516,7 @@ export class MobilePaymentsDatabaseService {
         mobile_payment_transactions(
           where: {
             payment_entity: { _eq: order }
-            status: { _eq: "pending" }
+            status: { _in: ["pending", "processing"] }
             entity_id: { _eq: $orderNumber }
           }
           order_by: { created_at: desc }
@@ -1047,7 +1047,7 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
-   * Pending GIVE_CHANGE withdrawals for wallet reconcile / cron.
+   * Pending or processing GIVE_CHANGE withdrawals for wallet reconcile / cron.
    */
   async getPendingGiveChangeWithdrawals(options?: {
     limit?: number;
@@ -1098,7 +1098,7 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
-   * Pending MyPVit / Freemopay rows for admin reconciliation.
+   * Pending or processing MyPVit / Freemopay rows for admin reconciliation.
    */
   async getPendingIntegrationTransactions(options?: {
     limit?: number;
@@ -1110,7 +1110,7 @@ export class MobilePaymentsDatabaseService {
       query GetPendingIntegrationMobilePayments {
         mobile_payment_transactions(
           where: {
-            status: { _eq: "pending" }
+            status: { _in: ["pending", "processing"] }
           }
           order_by: { created_at: desc }
           limit: ${limit}
@@ -1333,5 +1333,29 @@ export class MobilePaymentsDatabaseService {
       mobile_payment_transactions: MobilePaymentTransaction[];
     }>(query, { accountId, paymentEntity, limit, offset });
     return response.mobile_payment_transactions ?? [];
+  }
+
+  /**
+   * Check if a wallet deposit exists for this mobile payment transaction.
+   * Used to determine if a stuck processing row was actually credited.
+   */
+  async hasWalletDepositForTransaction(transactionId: string): Promise<boolean> {
+    const query = `
+      query CheckWalletDeposit($idempotencyKey: String!) {
+        account_transactions(
+          where: {
+            idempotency_key: { _eq: $idempotencyKey }
+            transaction_type: { _eq: "deposit" }
+          }
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery<{
+      account_transactions: Array<{ id: string }>;
+    }>(query, { idempotencyKey: `momo-deposit:${transactionId}` });
+    return (response.account_transactions?.length ?? 0) > 0;
   }
 }

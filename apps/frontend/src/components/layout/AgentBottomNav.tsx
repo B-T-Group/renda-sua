@@ -4,6 +4,7 @@ import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
+import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { agentAppLocked, useAgentContractContext } from '../../contexts/AgentContractContext';
 

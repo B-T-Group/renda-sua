@@ -315,9 +315,103 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
     db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ created_at: iso(5) }));
     mps.checkTransactionStatus.mockResolvedValue({ status: 'failed', message: 'declined' });
     const res = await retry();
-    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith('tx-old', 'pending', expect.objectContaining({ status: 'failed' }));
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'pending',
+      expect.objectContaining({
+        status: 'failed',
+        error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+        error_message: 'declined',
+      })
+    );
     expect(res.result).toBe('sent');
   });
+
+  it('provider cancelled with no message still stores the recoverable terminal code', async () => {
+    db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ created_at: iso(5) }));
+    mps.checkTransactionStatus.mockResolvedValue({ status: 'cancelled' });
+    const res = await retry();
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'pending',
+      expect.objectContaining({
+        status: 'failed',
+        error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+        error_message: 'Provider reported the request as failed',
+      })
+    );
+    expect(res.result).toBe('sent');
+  });
+
+  it('does not send or replay when SUCCESS wins the race against the failed poll', async () => {
+    db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ created_at: iso(5) }));
+    mps.checkTransactionStatus.mockResolvedValue({ status: 'failed', message: 'declined' });
+    db.updateTransactionIfStatus.mockResolvedValue(false);
+    db.getTransactionById.mockResolvedValue(
+      pendingTx({ id: 'tx-approved', reference: 'ORD1-approved', status: 'success' })
+    );
+
+    const res = await retry();
+
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith(
+      'tx-old',
+      'pending',
+      expect.objectContaining({
+        status: 'failed',
+        error_code: 'PROVIDER_TERMINAL_ON_RETRY',
+        error_message: 'declined',
+      })
+    );
+    expect(db.getTransactionById).toHaveBeenCalledWith('tx-old');
+    expect(res).toMatchObject({
+      result: 'paid',
+      message: 'Your earlier payment request was approved. Payment received.',
+      payment_transaction: { id: 'tx-approved', reference: 'ORD1-approved', status: 'success' },
+    });
+    expect(db.createTransaction).not.toHaveBeenCalled();
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(processor.processFreemopayCallback).not.toHaveBeenCalled();
+  });
+
+  it('does not send a second prompt when another writer already closed the attempt', async () => {
+    db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ created_at: iso(5) }));
+    mps.checkTransactionStatus.mockResolvedValue({ status: 'cancelled' });
+    db.updateTransactionIfStatus.mockResolvedValue(false);
+    db.getTransactionById.mockResolvedValue(
+      pendingTx({ status: 'failed', error_code: 'PROVIDER_TERMINAL_ON_RETRY' })
+    );
+
+    const r = await codeOf(retry());
+
+    expect(r).toEqual({ status: 409, code: 'PAYMENT_STATE_UNCERTAIN' });
+    expect(db.createTransaction).not.toHaveBeenCalled();
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(processor.processFreemopayCallback).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing', null],
+    ['still pending', { status: 'pending' }],
+    ['cancelled', { status: 'cancelled', error_code: 'ORDER_SETTLED_BEFORE_SEND' }],
+  ])(
+    'does not send when the failed-poll write loses and the row is %s',
+    async (_label, overrides) => {
+      db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(
+        pendingTx({ created_at: iso(5) })
+      );
+      mps.checkTransactionStatus.mockResolvedValue({ status: 'failed', message: 'declined' });
+      db.updateTransactionIfStatus.mockResolvedValue(false);
+      db.getTransactionById.mockResolvedValue(overrides ? pendingTx(overrides) : null);
+
+      const r = await codeOf(retry());
+
+      expect(r).toEqual({ status: 409, code: 'PAYMENT_STATE_UNCERTAIN' });
+      expect(db.getTransactionById).toHaveBeenCalledWith('tx-old');
+      expect(db.createTransaction).not.toHaveBeenCalled();
+      expect(mps.initiatePayment).not.toHaveBeenCalled();
+      expect(processor.processFreemopayCallback).not.toHaveBeenCalled();
+    }
+  );
 
   it('case 9: provider rejects new request -> tx failed, 400 PROVIDER_REJECTED, payer_phone unchanged', async () => {
     mps.initiatePayment.mockResolvedValue({ success: false, message: 'Invalid payer', errorCode: 'E1' });
@@ -335,6 +429,25 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
       status: 'cancelled', error_code: 'SUPERSEDED_BY_RETRY', superseded_reason: 'send_outcome_unknown',
     }));
     expect(hasura.executeMutation).not.toHaveBeenCalledWith(expect.stringContaining('PersistRetryPayerPhone'), expect.anything());
+  });
+
+    it('F2: getPending returns processing (SUCCESS claim in flight) -> no new prompt even if provider still pending', async () => {
+    db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(
+      pendingTx({ status: 'processing', created_at: iso(200) })
+    );
+    mps.checkTransactionStatus.mockResolvedValue({ status: 'pending' });
+
+    const res = await retry({ phoneNumber: PHONE_B });
+
+    expect(res).toMatchObject({
+      result: 'sent',
+      message: 'Payment already in progress.',
+      payment_transaction: { id: 'tx-old', status: 'processing' },
+    });
+    expect(mps.checkTransactionStatus).not.toHaveBeenCalled();
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(db.createTransaction).not.toHaveBeenCalled();
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
   });
 
   it('F2: old attempt without provider id and older than 5 min -> superseded without status check', async () => {
@@ -548,8 +661,13 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     let n = 0;
     db = {
       getPendingOrderPaymentTransactionByOrderNumber: jest.fn(async () => {
-        const p = store.rows.find((r) => r.status === 'pending');
-        return p ? { ...p } : null;
+        const open = store.rows.filter(
+          (r) => r.status === 'pending' || r.status === 'processing'
+        );
+        const newest = [...open].sort((a, b) =>
+          String(b.created_at).localeCompare(String(a.created_at))
+        )[0];
+        return newest ? { ...newest } : null;
       }),
       getOrderTransactionByIdempotencyKey: jest.fn().mockResolvedValue(null),
       getTransactionSupersededBy: jest.fn().mockResolvedValue(null),
@@ -648,6 +766,26 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     expect(db.createTransaction).not.toHaveBeenCalled();
   });
 
+  it('F2 (retry side): processing claim in flight (wallet credited) -> sent, no new prompt', async () => {
+    store.rows[0].status = 'processing';
+    const res = await retry({ phoneNumber: PB });
+    expect(res.result).toBe('sent');
+    expect(res.message).toContain('already in progress');
+    expect(mps.checkTransactionStatus).not.toHaveBeenCalled();
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(db.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('processing row older than the resend age is not replaced when the provider still looks pending', async () => {
+    store.rows[0].status = 'processing';
+    store.rows[0].created_at = new Date(Date.now() - 120_000).toISOString();
+    const res = await retry();
+    expect(res.result).toBe('sent');
+    expect(res.message).toContain('already in progress');
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(store.rows.filter((r) => r.status === 'pending')).toHaveLength(0);
+  });
+
   it('F2: after a success is applied, other pending attempts on the paid order are cancelled', async () => {
     store.rows.push({ id: 'tx-live', status: 'pending', reference: 'r2', payment_entity: 'order', entity_id: 'ORD1' });
     store.rows[0].status = 'success';
@@ -706,6 +844,17 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     db.getOrderTransactionByIdempotencyKey.mockResolvedValue({ ...store.rows[0], customer_phone: PB, idempotency_key: 'k1' });
     const res = await retry({ idempotencyKey: 'k1' });
     expect(res.idempotent_replay).toBe(true);
+  });
+
+  it('F4: idempotency replay of a processing attempt -> sent with message "in progress"', async () => {
+    db.getOrderTransactionByIdempotencyKey.mockResolvedValue({ ...store.rows[0], status: 'processing', idempotency_key: 'k1' });
+    const res = await retry({ phoneNumber: PA, idempotencyKey: 'k1' });
+    expect(res).toMatchObject({
+      result: 'sent',
+      idempotent_replay: true,
+    });
+    expect(res.message).toContain('in progress');
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
   });
 
   it('N2: an already-paid order answers result: paid (same field as the retry contract)', async () => {

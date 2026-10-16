@@ -4155,14 +4155,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
-    if (existing && existing.status === 'pending') {
+    if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
       return {
         success: true,
-        message: 'Payment request already pending',
+        message: 'Payment request already in progress',
         payment_transaction: {
           success: true,
           transaction_id: existing.transaction_id ?? null,
-          message: 'Payment request already pending',
+          message: 'Payment request already in progress',
           mode: 'mobile_money' as const,
         },
         database_transaction: {
@@ -4367,15 +4367,15 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
-    if (existing && existing.status === 'pending') {
+    if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
       await this.resetOrderPaymentFailure(orderId);
       return {
         success: true,
-        message: 'Payment request already pending',
+        message: 'Payment request already in progress',
         payment_transaction: {
           success: true,
           transaction_id: existing.transaction_id ?? null,
-          message: 'Payment request already pending',
+          message: 'Payment request already in progress',
           mode: 'mobile_money' as const,
         },
         database_transaction: {
@@ -4598,7 +4598,7 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
-    if (existing && existing.status === 'pending') return;
+    if (existing && (existing.status === 'pending' || existing.status === 'processing')) return;
 
     const momo = this.orderMomoContext(order);
     const account = await this.hasuraSystemService.getAccount(
@@ -5064,6 +5064,11 @@ export class OrdersService {
     const phoneChanged = !!newPhone && !samePhone(newPhone, baselinePhone);
     let superseded: MobilePaymentTransaction | null = null;
     if (existing) {
+      // Processing means the wallet may already be credited. Never poll/supersede
+      // that row or send another prompt when the provider still looks pending.
+      if (existing.status === 'processing') {
+        return this.payAfterInFlightResponse(existing);
+      }
       const early = await this.resolvePendingPayAfterAttempt(
         order,
         existing,
@@ -5083,9 +5088,10 @@ export class OrdersService {
         superseded = existing;
       }
     } else {
-      // QA F2: a success callback claims the row (pending -> success) before the order
-      // is finalized; in that window there is no pending attempt but the order is being
-      // paid. Never send a new prompt (or spend the just-credited wallet) then.
+      // QA F2: a success callback claims the row (pending -> processing -> success) before
+      // the order is finalized; in that window there is no pending attempt but the order is
+      // being paid. Never send a new prompt (or spend the just-credited wallet) then.
+      // Also block if row is still processing (crash recovery in flight).
       const settled = await this.mobilePaymentsDatabaseService.listOrderTransactionsByStatus(
         order.order_number,
         'success'
@@ -5095,6 +5101,13 @@ export class OrdersService {
           message: 'Payment received.',
           tx: settled[0],
         });
+      }
+      const inflight = await this.mobilePaymentsDatabaseService.listOrderTransactionsByStatus(
+        order.order_number,
+        'processing'
+      );
+      if (inflight.length > 0) {
+        return this.payAfterInFlightResponse(inflight[0]);
       }
       const chargeAmount = Number(order.total_amount) || 0;
       if (chargeAmount <= 0) {
@@ -5119,6 +5132,15 @@ export class OrdersService {
       key,
       superseded,
       savePhone: options.savePhone === true,
+    });
+  }
+
+  private payAfterInFlightResponse(
+    tx: MobilePaymentTransaction
+  ): PayAfterRetryResponse {
+    return this.payAfterRetryResponse('sent', {
+      message: 'Payment already in progress.',
+      tx,
     });
   }
 
@@ -5190,6 +5212,13 @@ export class OrdersService {
         tx.error_message || 'The payment provider rejected the request.',
         { idempotent_replay: true }
       );
+    }
+    if (tx.status === 'processing') {
+      return this.payAfterRetryResponse('sent', {
+        message: 'Payment request in progress. Approve it on your phone.',
+        tx,
+        idempotentReplay: true,
+      });
     }
     if (tx.status === 'success') {
       return this.payAfterRetryResponse('paid', {
@@ -5265,17 +5294,7 @@ export class OrdersService {
       });
     }
     if (live.status === 'failed' || live.status === 'cancelled') {
-      await this.mobilePaymentsDatabaseService.updateTransactionIfStatus(
-        existing.id,
-        'pending',
-        {
-          status: 'failed',
-          error_code: PROVIDER_TERMINAL_ON_RETRY,
-          error_message: live.message || 'Provider reported the request as failed',
-        }
-      );
-      existing.status = 'failed';
-      return null;
+      return this.markPayAfterAttemptTerminal(existing, live.message);
     }
     if (live.status !== 'pending') throw this.paymentStateUncertain();
 
@@ -5290,6 +5309,52 @@ export class OrdersService {
       });
     }
     return null;
+  }
+
+  /**
+   * Poll said the attempt was dead. Only the request that wins pending → failed
+   * may send a new prompt. A SUCCESS callback can land first; ignoring a lost
+   * compare-and-set used to charge the phone again.
+   */
+  private async markPayAfterAttemptTerminal(
+    existing: MobilePaymentTransaction,
+    providerMessage?: string
+  ): Promise<PayAfterRetryResponse | null> {
+    const moved = await this.casPayAfterAttemptFailed(existing.id, providerMessage);
+    if (!moved) return this.payAfterTerminalRaceLost(existing.id);
+    existing.status = 'failed';
+    existing.error_code = PROVIDER_TERMINAL_ON_RETRY;
+    return null;
+  }
+
+  private async casPayAfterAttemptFailed(
+    transactionId: string,
+    providerMessage?: string
+  ): Promise<boolean> {
+    return this.mobilePaymentsDatabaseService.updateTransactionIfStatus(
+      transactionId,
+      'pending',
+      {
+        status: 'failed',
+        error_code: PROVIDER_TERMINAL_ON_RETRY,
+        error_message: providerMessage || 'Provider reported the request as failed',
+      }
+    );
+  }
+
+  private async payAfterTerminalRaceLost(
+    transactionId: string
+  ): Promise<PayAfterRetryResponse> {
+    const current = await this.mobilePaymentsDatabaseService.getTransactionById(
+      transactionId
+    );
+    if (current?.status === 'success') {
+      return this.payAfterRetryResponse('paid', {
+        message: 'Your earlier payment request was approved. Payment received.',
+        tx: current,
+      });
+    }
+    throw this.paymentStateUncertain();
   }
 
   private paymentStateUncertain(): HttpException {
@@ -5943,11 +6008,11 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
-    if (existing && existing.status === 'pending') {
+    if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
       await this.resetOrderPaymentFailure(orderId);
       return {
         success: true,
-        message: 'Payment request already pending',
+        message: 'Payment request already in progress',
         database_transaction: {
           id: existing.id,
           reference: existing.reference,

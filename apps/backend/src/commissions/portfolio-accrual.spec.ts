@@ -26,7 +26,7 @@ describe('CommissionsService portfolio accrual', () => {
   const hasura = { executeQuery: jest.fn() };
   const routing = { getUserCountryCode: jest.fn() };
   const launchPromo = { orderConsumedPromo: jest.fn() };
-  const portfolio = { accrue: jest.fn() };
+  const portfolio: { accrue: jest.Mock; replacesLegacy?: jest.Mock } = { accrue: jest.fn() };
 
   function createService() {
     return new CommissionsService(
@@ -131,6 +131,39 @@ describe('CommissionsService portfolio accrual', () => {
       })
     );
     expect(configsSpy).toHaveBeenCalledWith('loc-nested');
+  });
+
+  it('drops legacy pay only when the portfolio check returns true', async () => {
+    const service = createService();
+    const at = new Date('2026-11-02T00:00:00.000Z');
+    const replacesLegacy = jest.fn().mockResolvedValue(true);
+    portfolio.replacesLegacy = replacesLegacy;
+
+    await expect(service.portfolioReplacesLegacy('CM', 'XAF', at)).resolves.toBe(true);
+    replacesLegacy.mockResolvedValue(false);
+    await expect(service.portfolioReplacesLegacy('CA', 'CAD', at)).resolves.toBe(false);
+    replacesLegacy.mockResolvedValue(undefined);
+    await expect(service.portfolioReplacesLegacy('CM', 'XAF', at)).resolves.toBe(false);
+    expect(replacesLegacy).toHaveBeenLastCalledWith('CM', 'XAF', at);
+  });
+
+  it('keeps legacy pay when the portfolio check throws or is unwired', async () => {
+    const service = createService();
+    const at = new Date('2026-11-02T00:00:00.000Z');
+    portfolio.replacesLegacy = jest.fn().mockRejectedValue(new Error('grid down'));
+
+    await expect(service.portfolioReplacesLegacy('CM', 'XAF', at)).resolves.toBe(false);
+
+    const unwired = new CommissionsService(
+      {} as never,
+      hasura as never,
+      {} as never,
+      {} as never,
+      routing as never,
+      {} as never,
+      launchPromo as never
+    );
+    await expect(unwired.portfolioReplacesLegacy('CM', 'XAF', at)).resolves.toBe(false);
   });
 
   it('swallows a portfolio failure and skips an order with no shop', async () => {
