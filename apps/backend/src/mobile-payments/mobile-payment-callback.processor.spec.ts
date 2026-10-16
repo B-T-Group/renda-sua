@@ -1225,20 +1225,29 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
     const registryWithHandler = {
       getHandlers: jest.fn().mockReturnValue([orderHandlerMock]),
     };
+    const testDatabaseService = {
+      ...databaseService,
+      getTransactionByTransactionId: jest.fn().mockResolvedValue(accountTx),
+      getTransactionByReference: jest.fn().mockResolvedValue(accountTx),
+      getTransactionById: jest.fn().mockResolvedValue(accountTx),
+      logCallback: jest.fn().mockResolvedValue(undefined),
+      updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
+    };
     const processorWithHandler = new MobilePaymentCallbackProcessor(
-      databaseService as never,
+      testDatabaseService as never,
       accountsService as never,
       registryWithHandler as never,
       mobilePaymentsService as never
     );
-    databaseService.getTransactionByTransactionId.mockResolvedValue(accountTx);
-    databaseService.updateTransactionIfStatus
-      .mockResolvedValueOnce(true);  // processing → success succeeds
 
     await expect(processorWithHandler.processFreemopayCallback(callback)).rejects.toThrow('Handler error');
 
     // Should NOT roll back to pending after wallet was credited; row stays in processing for recovery
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(1); // only processing → success
+    expect(testDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      accountTx.id,
+      'processing',
+      expect.objectContaining({ status: 'success' })
+    );
   });
 
   it('leaves row in processing when wallet credit fails', async () => {
