@@ -642,8 +642,13 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     let n = 0;
     db = {
       getPendingOrderPaymentTransactionByOrderNumber: jest.fn(async () => {
-        const p = store.rows.find((r) => r.status === 'pending');
-        return p ? { ...p } : null;
+        const open = store.rows.filter(
+          (r) => r.status === 'pending' || r.status === 'processing'
+        );
+        const newest = [...open].sort((a, b) =>
+          String(b.created_at).localeCompare(String(a.created_at))
+        )[0];
+        return newest ? { ...newest } : null;
       }),
       getOrderTransactionByIdempotencyKey: jest.fn().mockResolvedValue(null),
       getTransactionSupersededBy: jest.fn().mockResolvedValue(null),
@@ -749,6 +754,16 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     expect(res.message).toContain('already in progress');
     expect(mps.initiatePayment).not.toHaveBeenCalled();
     expect(db.createTransaction).not.toHaveBeenCalled();
+  });
+
+  it('processing row older than the resend age is not replaced when the provider still looks pending', async () => {
+    store.rows[0].status = 'processing';
+    store.rows[0].created_at = new Date(Date.now() - 120_000).toISOString();
+    const res = await retry();
+    expect(res.result).toBe('sent');
+    expect(res.message).toContain('already in progress');
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(store.rows.filter((r) => r.status === 'pending')).toHaveLength(0);
   });
 
   it('F2: after a success is applied, other pending attempts on the paid order are cancelled', async () => {

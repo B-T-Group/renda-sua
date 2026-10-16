@@ -164,8 +164,24 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
     });
     t.handler.onPaymentSuccess.mockRejectedValueOnce(new Error('hold failed'));
     await expect(t.processor.processFreemopayCallback(callback)).rejects.toThrow('hold failed');
-    // After wallet credit succeeds but handler fails, row is marked success but stays there for recovery
     expect(processingSet).toBe(true);
+    expect(t.row.status).toBe('processing');
+  });
+
+  it('handler failure stays processing so the next SUCCESS finalizes the order', async () => {
+    const t = build();
+    t.databaseService.getTransactionByTransactionId.mockImplementation(async () => ({ ...t.row }));
+    t.databaseService.getTransactionByReference.mockImplementation(async () => ({ ...t.row }));
+    t.handler.onPaymentSuccess
+      .mockRejectedValueOnce(new Error('hold failed'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(t.processor.processFreemopayCallback(callback)).rejects.toThrow('hold failed');
+    expect(t.row.status).toBe('processing');
+
+    await t.processor.processFreemopayCallback(callback);
+
+    expect(t.handler.onPaymentSuccess).toHaveBeenCalledTimes(2);
     expect(t.row.status).toBe('success');
   });
 
