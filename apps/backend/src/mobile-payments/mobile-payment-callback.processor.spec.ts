@@ -484,8 +484,19 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
     accountsService.hasTransactionForReference.mockResolvedValue(false);
   });
 
-  it('debits wallet on SUCCESS callback before marking GIVE_CHANGE success', async () => {
+  it('debits wallet on SUCCESS callback after CAS claim and before marking success', async () => {
     const callOrder: string[] = [];
+    databaseService.updateTransactionIfStatus.mockImplementation(async (id, expected, data) => {
+      if (expected === 'pending' && data.status === 'processing') {
+        callOrder.push('claim');
+        return true;
+      }
+      if (expected === 'processing' && data.status === 'success') {
+        callOrder.push('success');
+        return true;
+      }
+      return false;
+    });
     accountsService.registerReleaseIfNotExists.mockImplementation(async () => {
       callOrder.push('release');
       return { success: true, transactionId: 'release-1' };
@@ -494,30 +505,26 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
       callOrder.push('debit');
       return { success: true, transactionId: 'withdrawal-1' };
     });
-    databaseService.updateTransaction.mockImplementation(async () => {
-      callOrder.push('status');
-    });
 
     await processor.processMypvitCallback(successCallback);
 
-    expect(callOrder).toEqual(['release', 'debit', 'status']);
-    expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledWith({
-      accountId: giveChangeTx.account_id,
-      amount: giveChangeTx.amount,
-      referenceId: giveChangeTx.id,
-      memo: `GIVE_CHANGE release - ${giveChangeTx.reference}`,
-    });
-    expect(accountsService.registerWithdrawalIfNotExists).toHaveBeenCalledWith({
-      accountId: giveChangeTx.account_id,
-      amount: giveChangeTx.amount,
-      referenceId: giveChangeTx.id,
-      memo: `Mobile payment give change - ${giveChangeTx.reference}`,
-    });
+    expect(callOrder).toEqual(['claim', 'release', 'debit', 'success']);
+    expect(accountsService.registerWithdrawalIfNotExists).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: giveChangeTx.account_id,
+        amount: giveChangeTx.amount,
+        referenceId: giveChangeTx.id,
+        idempotencyKey: `momo-giveout:${giveChangeTx.id}`,
+      })
+    );
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
   });
 
-  it('marks provider success when ledger debit fails after payout', async () => {
+  it('marks failed with CAS when ledger debit fails after payout', async () => {
+    databaseService.updateTransactionIfStatus
+      .mockResolvedValueOnce(true) // pending → processing claim
+      .mockResolvedValueOnce(true); // processing → failed when debit fails
     accountsService.registerReleaseIfNotExists.mockResolvedValue({
       success: true,
       transactionId: 'release-1',
@@ -529,10 +536,11 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
 
     await processor.processMypvitCallback(successCallback);
 
-    expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       giveChangeTx.id,
+      'processing',
       expect.objectContaining({
-        status: 'success',
+        status: 'failed',
         error_code: 'WITHDRAWAL_FAILED',
       })
     );
@@ -689,7 +697,7 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     );
   });
 
-  it('fails closed when order_deposit handler throws during finalize', async () => {
+  it('leaves row in processing when order_deposit handler throws (wallet already credited)', async () => {
     const finalizeError = new Error('Order deposit finalization failed');
     mockOrderDepositHandler.onPaymentSuccess.mockRejectedValue(finalizeError);
 
@@ -697,11 +705,18 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
       'Order deposit finalization failed'
     );
 
-    // Should NOT mark transaction as success when handler fails (claim should be released)
+    // Should mark processing → success, then leave it in processing when handler fails
+    // (wallet was already credited, so no rollback)
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderDepositTx.id,
       'processing',
-      { status: 'pending' }
+      expect.objectContaining({ status: 'success' })
+    );
+    // No rollback to pending after credit succeeded
+    expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalledWith(
+      orderDepositTx.id,
+      expect.anything(),
+      expect.objectContaining({ status: 'pending' })
     );
   });
 
@@ -993,7 +1008,7 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     orderHandler.onPaymentSuccess.mockResolvedValue(undefined);
   });
 
-  it('does not leave the tx success when the order finalize fails; alerts and releases the claim to pending for replay', async () => {
+  it('leaves row in processing when order finalize fails (wallet already credited); alerts for recovery', async () => {
     orderHandler.onPaymentSuccess.mockRejectedValue(new Error('hold failed'));
 
     await expect(processor.processMypvitCallback(callback)).rejects.toThrow(
@@ -1015,13 +1030,8 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
       'processing',
       { status: 'success', transaction_id: 'provider-1' }
     );
-    // Third CAS: release claim back to pending when handler fails
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
-      3,
-      orderTx.id,
-      'processing',
-      { status: 'pending' }
-    );
+    // No rollback after credit; row stays in processing for recovery
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(2);
     expect(reportMoneyAnomaly).toHaveBeenCalledWith(
       expect.anything(),
       'payment_finalize_failed',
@@ -1030,25 +1040,18 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     );
   });
 
-  it('releases success → pending when handler throws after the success mark (second CAS wins)', async () => {
-    // Simulate success mark CAS winning but processing → pending losing (row already success)
+  it('leaves row in processing when handler throws after success mark (no rollback)', async () => {
     databaseService.updateTransactionIfStatus
       .mockResolvedValueOnce(true)  // pending -> processing
-      .mockResolvedValueOnce(true)  // processing -> success
-      .mockResolvedValueOnce(false) // processing -> pending loses
-      .mockResolvedValueOnce(true); // success -> pending wins
+      .mockResolvedValueOnce(true); // processing -> success
     orderHandler.onPaymentSuccess.mockRejectedValue(new Error('handler failed after success'));
 
     await expect(processor.processMypvitCallback(callback)).rejects.toThrow(
       'handler failed after success'
     );
 
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
-      4,
-      orderTx.id,
-      'success',
-      { status: 'pending' }
-    );
+    // No rollback after wallet credit; only claim and success mark
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(2);
     expect(reportMoneyAnomaly).toHaveBeenCalled();
   });
 
@@ -1276,11 +1279,15 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
     const registryWithHandler = {
       getHandlers: jest.fn().mockReturnValue([orderHandlerMock]),
     };
+    const testMobilePaymentsService = {
+      ...mobilePaymentsService,
+      assertProviderConfirmsCallback: jest.fn().mockResolvedValue(undefined),
+    };
     const processorWithHandler = new MobilePaymentCallbackProcessor(
       databaseService as never,
       accountsService as never,
       registryWithHandler as never,
-      mobilePaymentsService as never
+      testMobilePaymentsService as never
     );
     const orderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123' };
     databaseService.getTransactionByReference.mockResolvedValue(orderTx);
