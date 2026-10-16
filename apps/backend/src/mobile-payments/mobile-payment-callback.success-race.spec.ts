@@ -163,7 +163,7 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
       return true;
     });
     t.handler.onPaymentSuccess.mockRejectedValueOnce(new Error('hold failed'));
-    await expect(t.processor.processFreemopayCallback(callback)).rejects.toThrow('hold failed');
+    await expect(t.processor.processFreemopayCallback(callback)).rejects.toThrow('Payment handler failed for order ORD1; will retry');
     expect(processingSet).toBe(true);
     expect(t.row.status).toBe('processing');
   });
@@ -176,7 +176,7 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
       .mockRejectedValueOnce(new Error('hold failed'))
       .mockResolvedValueOnce(undefined);
 
-    await expect(t.processor.processFreemopayCallback(callback)).rejects.toThrow('hold failed');
+    await expect(t.processor.processFreemopayCallback(callback)).rejects.toThrow('Payment handler failed for order ORD1; will retry');
     expect(t.row.status).toBe('processing');
 
     await t.processor.processFreemopayCallback(callback);
