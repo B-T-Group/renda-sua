@@ -185,6 +185,40 @@ describe('MobilePaymentsController transaction access', () => {
       expect(cancelTransaction).not.toHaveBeenCalled();
       expect(updateTransaction).not.toHaveBeenCalled();
     });
+
+    it('refuses a processing row before the provider or the local CAS', async () => {
+      getTransactionById.mockResolvedValue({ ...transaction, status: 'processing' });
+
+      await expect(controller.cancelTransaction('tx-1', ctx)).resolves.toEqual({
+        success: false,
+        message: 'Cannot cancel: transaction is already processing',
+      });
+      expect(cancelTransaction).not.toHaveBeenCalled();
+      expect(updateTransactionIfStatus).not.toHaveBeenCalled();
+    });
+
+    it('does not report success when the pending CAS loses', async () => {
+      updateTransactionIfStatus.mockResolvedValue(false);
+
+      await expect(controller.cancelTransaction('tx-1', ctx)).resolves.toEqual({
+        success: false,
+        message: 'Transaction status changed before cancel could complete',
+      });
+      expect(cancelTransaction).toHaveBeenCalledWith('tx-1', undefined);
+      expect(updateTransactionIfStatus).toHaveBeenCalledWith('tx-1', 'pending', {
+        status: 'cancelled',
+      });
+    });
+
+    it('does not flip the row when the provider cancel fails', async () => {
+      cancelTransaction.mockResolvedValue(false);
+
+      await expect(controller.cancelTransaction('tx-1', ctx)).resolves.toEqual({
+        success: false,
+        message: 'Failed to cancel transaction',
+      });
+      expect(updateTransactionIfStatus).not.toHaveBeenCalled();
+    });
   });
 
   describe('GET transactions', () => {

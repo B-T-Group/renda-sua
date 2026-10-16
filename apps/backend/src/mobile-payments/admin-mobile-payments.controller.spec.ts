@@ -192,6 +192,54 @@ describe('AdminMobilePaymentsController', () => {
       expect(mobilePaymentsService.checkTransactionStatus).not.toHaveBeenCalled();
     });
 
+    it('resolves a processing row and replays when the provider succeeded', async () => {
+      databaseService.getTransactionById.mockResolvedValue(
+        baseTx({ status: 'processing' })
+      );
+      mobilePaymentsService.checkTransactionStatus.mockResolvedValue(
+        liveStatus()
+      );
+
+      const result = await controller.resolve('tx-1', { ip: '1.1.1.1' } as never);
+
+      expect(result).toMatchObject({ success: true, replayed: true });
+      expect(mobilePaymentsService.checkTransactionStatus).toHaveBeenCalledWith(
+        'PAYTEST001',
+        'mypvit',
+        '+24166123456'
+      );
+      expect(callbackProcessor.processMypvitCallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('leaves a processing row alone when the provider is still pending', async () => {
+      databaseService.getTransactionById.mockResolvedValue(
+        baseTx({ status: 'processing' })
+      );
+      mobilePaymentsService.checkTransactionStatus.mockResolvedValue(
+        liveStatus({ status: 'pending' })
+      );
+
+      const result = await controller.resolve('tx-1', {} as never);
+
+      expect(result).toMatchObject({
+        success: true,
+        replayed: false,
+        message: 'Provider still pending',
+      });
+      expect(callbackProcessor.processMypvitCallback).not.toHaveBeenCalled();
+    });
+
+    it('rejects a failed row before calling the provider', async () => {
+      databaseService.getTransactionById.mockResolvedValue(
+        baseTx({ status: 'failed' })
+      );
+
+      await expect(controller.resolve('tx-1', {} as never)).rejects.toBeInstanceOf(
+        ConflictException
+      );
+      expect(mobilePaymentsService.checkTransactionStatus).not.toHaveBeenCalled();
+    });
+
     it('rejects a row with no provider transaction id', async () => {
       databaseService.getTransactionById.mockResolvedValue(
         baseTx({ transaction_id: '   ' })
