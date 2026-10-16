@@ -607,13 +607,25 @@ export class MobilePaymentCallbackProcessor {
    * Skip the claim (already processing), then idempotently credit/debit → mark success → handler.
    * Note: resume skips assertProviderConfirmsCallback because a row only reaches processing
    * after a confirmed SUCCESS in the first finalize attempt.
+   *
+   * Staleness guard: only resume rows whose updated_at is older than ~60 seconds. A younger
+   * processing row means another callback is mid-finalize; return without moving money so
+   * only the first writer releases/withdraws/credits.
    */
   private async resumeFinalizeFromProcessing(
     transaction: MobilePaymentTransaction,
     providerTransactionId: string
   ): Promise<void> {
+    const ageMs = Date.now() - new Date(transaction.updated_at).getTime();
+    const staleThresholdMs = 60_000;
+    if (ageMs < staleThresholdMs) {
+      this.logger.log(
+        `Resume skipped for fresh processing tx ${transaction.id} (age ${Math.round(ageMs / 1000)}s < ${staleThresholdMs / 1000}s; another finalize is in flight)`
+      );
+      return;
+    }
     this.logger.log(
-      `Resuming finalize for processing tx ${transaction.id} (crash recovery)`
+      `Resuming finalize for processing tx ${transaction.id} (crash recovery, age ${Math.round(ageMs / 1000)}s)`
     );
     
     // Branch on transaction type: GIVE_CHANGE needs debit, PAYMENT needs credit
@@ -709,6 +721,10 @@ export class MobilePaymentCallbackProcessor {
    * row back to processing (not pending): pending can be failed or cancelled,
    * and success makes the next callback skip finalize. The provider retry then
    * resumes this path and keeps returning 5xx until the order is actually paid.
+   *
+   * Always re-throw handler failures as a generic error (5xx) so the provider keeps
+   * retrying, even if the handler's original error was a 4xx. The money is claimed
+   * and in the wallet; the order must be finalized on a later attempt.
    */
   private async runHandlerOrRestoreProcessing(
     transaction: MobilePaymentTransaction
@@ -720,7 +736,11 @@ export class MobilePaymentCallbackProcessor {
       this.logger.error(
         `Handler failed after success mark for ${transaction.id}: ${error?.message ?? error}`
       );
-      throw error;
+      // Always re-throw as a generic retryable error so providers keep retrying
+      // (do not leak handler 4xx that would make the provider drop the callback)
+      throw new Error(
+        `Payment handler failed for ${transaction.payment_entity} ${transaction.entity_id}; will retry`
+      );
     }
   }
 
@@ -876,6 +896,7 @@ export class MobilePaymentCallbackProcessor {
       amount: transaction.amount,
       referenceId: transaction.id,
       memo: `GIVE_CHANGE release - ${transaction.reference}`,
+      idempotencyKey: `momo-giveout-release:${transaction.id}`,
     });
     if (!released.success) {
       this.logger.error(
@@ -922,6 +943,7 @@ export class MobilePaymentCallbackProcessor {
       amount: transaction.amount,
       referenceId: transaction.id,
       memo: `GIVE_CHANGE release - ${transaction.reference}`,
+      idempotencyKey: `momo-giveout-release:${transaction.id}`,
     });
     if (!released.success) {
       this.logger.error(

@@ -258,7 +258,7 @@ describe('MobilePaymentCallbackProcessor', () => {
 
     try {
       await expect(processor.processMypvitCallback(successCallback)).rejects.toThrow(
-        'claim assign failed'
+        'Payment handler failed for claim_order ORD-9; will retry'
       );
       expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
       expect(databaseService.updateTransaction).not.toHaveBeenCalled();
@@ -703,7 +703,7 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     mockOrderDepositHandler.onPaymentSuccess.mockRejectedValue(finalizeError);
 
     await expect(processor.processMypvitCallback(successCallback)).rejects.toThrow(
-      'Order deposit finalization failed'
+      'Payment handler failed for order_deposit ORD123456; will retry'
     );
 
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
@@ -1016,7 +1016,7 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     orderHandler.onPaymentSuccess.mockRejectedValue(new Error('hold failed'));
 
     await expect(processor.processMypvitCallback(callback)).rejects.toThrow(
-      'hold failed'
+      'Payment handler failed for order ORD-1; will retry'
     );
 
     expect(databaseService.updateTransaction).not.toHaveBeenCalled();
@@ -1055,7 +1055,7 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     orderHandler.onPaymentSuccess.mockRejectedValue(new Error('handler failed after success'));
 
     await expect(processor.processMypvitCallback(callback)).rejects.toThrow(
-      'handler failed after success'
+      'Payment handler failed for order ORD-1; will retry'
     );
 
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
@@ -1309,7 +1309,7 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
       transactionOperation: 'PAYMENT',
       operator: 'MTN',
       code: 200,
-    })).rejects.toThrow('Handler error');
+    })).rejects.toThrow('Payment handler failed for order ORD-123; will retry');
 
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       pendingOrderTx.id,

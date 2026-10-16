@@ -7,7 +7,7 @@ export interface RechargeTransaction {
   currency: string;
   description: string;
   provider: string;
-  status: 'pending' | 'success' | 'failed' | 'cancelled';
+  status: 'pending' | 'processing' | 'success' | 'failed' | 'cancelled';
   customer_phone?: string;
   transaction_id?: string;
   error_message?: string;
