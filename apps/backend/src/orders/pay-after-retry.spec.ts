@@ -431,6 +431,25 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
     expect(hasura.executeMutation).not.toHaveBeenCalledWith(expect.stringContaining('PersistRetryPayerPhone'), expect.anything());
   });
 
+    it('F2: getPending returns processing (SUCCESS claim in flight) -> no new prompt even if provider still pending', async () => {
+    db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(
+      pendingTx({ status: 'processing', created_at: iso(200) })
+    );
+    mps.checkTransactionStatus.mockResolvedValue({ status: 'pending' });
+
+    const res = await retry({ phoneNumber: PHONE_B });
+
+    expect(res).toMatchObject({
+      result: 'sent',
+      message: 'Payment already in progress.',
+      payment_transaction: { id: 'tx-old', status: 'processing' },
+    });
+    expect(mps.checkTransactionStatus).not.toHaveBeenCalled();
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(db.createTransaction).not.toHaveBeenCalled();
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+  });
+
   it('F2: old attempt without provider id and older than 5 min -> superseded without status check', async () => {
     db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(pendingTx({ transaction_id: null, created_at: iso(400) }));
     const res = await retry();
@@ -752,6 +771,7 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     const res = await retry({ phoneNumber: PB });
     expect(res.result).toBe('sent');
     expect(res.message).toContain('already in progress');
+    expect(mps.checkTransactionStatus).not.toHaveBeenCalled();
     expect(mps.initiatePayment).not.toHaveBeenCalled();
     expect(db.createTransaction).not.toHaveBeenCalled();
   });

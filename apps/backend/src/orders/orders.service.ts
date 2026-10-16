@@ -5064,6 +5064,11 @@ export class OrdersService {
     const phoneChanged = !!newPhone && !samePhone(newPhone, baselinePhone);
     let superseded: MobilePaymentTransaction | null = null;
     if (existing) {
+      // Processing means the wallet may already be credited. Never poll/supersede
+      // that row or send another prompt when the provider still looks pending.
+      if (existing.status === 'processing') {
+        return this.payAfterInFlightResponse(existing);
+      }
       const early = await this.resolvePendingPayAfterAttempt(
         order,
         existing,
@@ -5071,11 +5076,6 @@ export class OrdersService {
         phoneChanged
       );
       if (early) return early;
-      // Processing means the wallet may already be credited. Never supersede it
-      // or send another prompt when the provider poll still looks pending.
-      if (existing.status === 'processing') {
-        return this.payAfterInFlightResponse(existing);
-      }
       await this.assertPayAfterRetryRateLimit(order, phone);
       if (existing.status === 'pending') {
         const raced = await this.supersedePendingOrderPaymentTx(
