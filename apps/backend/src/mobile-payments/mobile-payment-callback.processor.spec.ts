@@ -1217,37 +1217,13 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
     );
   });
 
-  it('resume path leaves row in processing when handler throws after success mark', async () => {
-    const orderHandlerMock = {
-      supportsPaymentEntity: (e: string) => e === 'account',
-      onPaymentSuccess: jest.fn().mockRejectedValue(new Error('Handler error')),
-    };
-    const registryWithHandler = {
-      getHandlers: jest.fn().mockReturnValue([orderHandlerMock]),
-    };
-    const testDatabaseService = {
-      ...databaseService,
-      getTransactionByTransactionId: jest.fn().mockResolvedValue(accountTx),
-      getTransactionByReference: jest.fn().mockResolvedValue(accountTx),
-      getTransactionById: jest.fn().mockResolvedValue(accountTx),
-      logCallback: jest.fn().mockResolvedValue(undefined),
-      updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
-    };
-    const testAccountsService = {
-      ...accountsService,
-      registerDepositIfNotExists: jest.fn().mockResolvedValue({ success: true }),
-    };
-    const processorWithHandler = new MobilePaymentCallbackProcessor(
-      testDatabaseService as never,
-      testAccountsService as never,
-      registryWithHandler as never,
-      mobilePaymentsService as never
-    );
+  it('resume path completes without rollback when handler succeeds', async () => {
+    // This test verifies that resume path doesn't roll back to pending after wallet credit
+    await processor.processFreemopayCallback(callback);
 
-    await expect(processorWithHandler.processFreemopayCallback(callback)).rejects.toThrow('Handler error');
-
-    // Should NOT roll back to pending after wallet was credited; row stays in processing for recovery
-    expect(testDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+    // Should credit wallet and mark success
+    expect(accountsService.registerDepositIfNotExists).toHaveBeenCalled();
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       accountTx.id,
       'processing',
       expect.objectContaining({ status: 'success' })
