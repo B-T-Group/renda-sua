@@ -419,8 +419,8 @@ export class MobilePaymentsController {
     try {
       const transaction = await this.loadViewableTransactionById(transactionId, ctx);
       
-      // Only cancel if pending or processing (use CAS to avoid race with SUCCESS)
-      if (transaction.status !== 'pending' && transaction.status !== 'processing') {
+      // Only cancel if pending (processing means wallet already credited or payout sent)
+      if (transaction.status !== 'pending') {
         return {
           success: false,
           message: `Cannot cancel: transaction is already ${transaction.status}`,
@@ -432,10 +432,10 @@ export class MobilePaymentsController {
         provider
       );
       if (success) {
-        // Use CAS to only cancel if still in the original status
+        // Use CAS to only cancel if still pending
         const cancelled = await this.databaseService.updateTransactionIfStatus(
           transactionId,
-          transaction.status,
+          'pending',
           { status: 'cancelled' }
         );
         if (!cancelled) {

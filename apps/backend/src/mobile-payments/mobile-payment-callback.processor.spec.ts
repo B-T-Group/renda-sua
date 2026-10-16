@@ -522,10 +522,10 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
     expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
   });
 
-  it('marks failed with CAS when ledger debit fails after payout', async () => {
+  it('marks success with WITHDRAWAL_FAILED error code when ledger debit fails after payout', async () => {
     databaseService.updateTransactionIfStatus
       .mockResolvedValueOnce(true) // pending → processing claim
-      .mockResolvedValueOnce(true); // processing → failed when debit fails
+      .mockResolvedValueOnce(true); // processing → success with WITHDRAWAL_FAILED
     accountsService.registerReleaseIfNotExists.mockResolvedValue({
       success: true,
       transactionId: 'release-1',
@@ -541,7 +541,7 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
       giveChangeTx.id,
       'processing',
       expect.objectContaining({
-        status: 'failed',
+        status: 'success',
         error_code: 'WITHDRAWAL_FAILED',
       })
     );
@@ -1443,120 +1443,3 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE CAS and idempotency', () =>
   });
 });
 
-describe('MobilePaymentCallbackProcessor stale processing recovery', () => {
-  let databaseService: any;
-  let accountsService: any;
-  let mobilePaymentsService: any;
-  let processor: MobilePaymentCallbackProcessor;
-
-  beforeEach(() => {
-    databaseService = {
-      getTransactionById: jest.fn(),
-      hasWalletDepositForTransaction: jest.fn(),
-      updateTransactionIfStatus: jest.fn(),
-    };
-    accountsService = {};
-    mobilePaymentsService = {
-      checkTransactionStatus: jest.fn(),
-    };
-    const registry = {
-      getHandlers: jest.fn().mockReturnValue([
-        {
-          supportsPaymentEntity: jest.fn().mockReturnValue(true),
-          onPaymentSuccess: jest.fn(),
-        },
-      ]),
-    };
-    processor = new MobilePaymentCallbackProcessor(
-      databaseService,
-      accountsService,
-      registry,
-      mobilePaymentsService
-    );
-  });
-
-  const processingTx: MobilePaymentTransaction = {
-    id: 'proc-uuid-1',
-    reference: 'PROC12345678',
-    amount: 10000,
-    currency: 'XAF',
-    description: 'Order payment',
-    provider: 'mypvit',
-    payment_method: 'mobile_money',
-    status: 'processing',
-    transaction_id: 'provider-proc-1',
-    customer_phone: '+24106123456',
-    account_id: 'account-uuid-1',
-    transaction_type: 'PAYMENT',
-    payment_entity: 'order',
-    entity_id: 'ORD-123',
-    created_at: '2026-10-15T09:00:00.000Z',
-    updated_at: '2026-10-15T09:01:00.000Z',
-  };
-
-  it('recovers stale processing row when wallet deposit exists', async () => {
-    databaseService.hasWalletDepositForTransaction.mockResolvedValue(true);
-    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
-
-    await processor.recoverStaleProcessingTransaction(processingTx);
-
-    // Should check for wallet deposit
-    expect(databaseService.hasWalletDepositForTransaction).toHaveBeenCalledWith(processingTx.id);
-    // Should mark success
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
-      processingTx.id,
-      'processing',
-      { status: 'success' }
-    );
-  });
-
-  it('queries provider and resumes when wallet deposit does not exist and provider confirms SUCCESS', async () => {
-    databaseService.hasWalletDepositForTransaction.mockResolvedValue(false);
-    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
-      status: 'success',
-      transactionId: 'provider-proc-1',
-    });
-    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
-
-    await processor.recoverStaleProcessingTransaction(processingTx);
-
-    // Should query provider
-    expect(mobilePaymentsService.checkTransactionStatus).toHaveBeenCalledWith(
-      processingTx.id,
-      processingTx.provider
-    );
-  });
-
-  it('marks failed when provider confirms FAILED', async () => {
-    databaseService.hasWalletDepositForTransaction.mockResolvedValue(false);
-    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
-      status: 'failed',
-      message: 'Payment failed',
-    });
-    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
-
-    await processor.recoverStaleProcessingTransaction(processingTx);
-
-    // Should mark failed
-    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
-      processingTx.id,
-      'processing',
-      expect.objectContaining({
-        status: 'failed',
-        error_message: 'Payment failed',
-      })
-    );
-  });
-
-  it('leaves as processing when provider status is still pending', async () => {
-    databaseService.hasWalletDepositForTransaction.mockResolvedValue(false);
-    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
-      status: 'pending',
-    });
-
-    await processor.recoverStaleProcessingTransaction(processingTx);
-
-    // Should not update status (leave as processing for next recovery attempt)
-    expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
-  });
-});

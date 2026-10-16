@@ -1059,7 +1059,7 @@ export class MobilePaymentsDatabaseService {
       query GetPendingGiveChangeWithdrawals {
         mobile_payment_transactions(
           where: {
-            status: { _in: ["pending", "processing"] }
+            status: { _eq: "pending" }
             transaction_type: { _eq: "GIVE_CHANGE" }
           }
           order_by: { created_at: asc }

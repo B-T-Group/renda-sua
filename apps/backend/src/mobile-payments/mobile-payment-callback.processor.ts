@@ -436,7 +436,7 @@ export class MobilePaymentCallbackProcessor {
     const debited = await this.debitWalletIfNeeded(transaction);
     if (!debited) {
       await this.databaseService.updateTransactionIfStatus(transaction.id, 'processing', {
-        status: 'failed',
+        status: 'success',
         transaction_id: providerTransactionId,
         error_message:
           'Provider payout succeeded but wallet debit failed; manual reconciliation required',
@@ -525,13 +525,12 @@ export class MobilePaymentCallbackProcessor {
       await this.runHandlerSuccess(transaction);
     } catch (error) {
       // Only roll back if credit failed (before wallet was credited).
-      // After credit, leave the row in processing for recovery.
       if ((error as Error).message?.includes('Wallet credit failed')) {
         throw error;
       }
-      // Handler threw after wallet was credited; leave row in processing for recovery
+      // Handler threw after row is already marked success; retrySuccessSideEffects on next callback
       this.logger.error(
-        `Handler failed after wallet credit for ${transaction.id}; leaving processing for recovery: ${(error as any)?.message ?? error}`
+        `Handler failed after success mark for ${transaction.id}: ${(error as any)?.message ?? error}`
       );
       throw error;
     }
@@ -622,13 +621,12 @@ export class MobilePaymentCallbackProcessor {
       await this.runHandlerSuccess(transaction);
     } catch (error) {
       // Only roll back if credit failed (before wallet was credited).
-      // After credit, leave the row in processing for recovery.
       if ((error as Error).message?.includes('Wallet credit failed')) {
         throw error;
       }
-      // Handler threw after wallet was credited; leave row in processing for recovery
+      // Handler threw after row is already marked success; retrySuccessSideEffects on next callback
       this.logger.error(
-        `Handler failed after wallet credit for ${transaction.id}; leaving processing for recovery: ${(error as any)?.message ?? error}`
+        `Handler failed after success mark for ${transaction.id}: ${(error as any)?.message ?? error}`
       );
       throw error;
     }
@@ -651,14 +649,8 @@ export class MobilePaymentCallbackProcessor {
   }
 
   /**
-   * Resume finalize when SUCCESS arrives on a processing row (crash after claim).
-   * Skip the claim (already processing), then idempotently credit → mark success → handler.
-   * Note: resume skips assertProviderConfirmsCallback because a row only reaches processing
-   * after a confirmed SUCCESS in the first finalize attempt.
-   */
-  /**
    * Resume finalize when SUCCESS arrives on a processing row (crash recovery).
-   * Skip the claim (already processing), then idempotently credit → mark success → handler.
+   * Skip the claim (already processing), then idempotently credit/debit → mark success → handler.
    * Note: resume skips assertProviderConfirmsCallback because a row only reaches processing
    * after a confirmed SUCCESS in the first finalize attempt.
    */
@@ -669,15 +661,28 @@ export class MobilePaymentCallbackProcessor {
     this.logger.log(
       `Resuming finalize for processing tx ${transaction.id} (crash recovery)`
     );
-    // Wallet credit is idempotent on the transaction id
-    const credited = await this.creditWalletIfNeeded(transaction);
-    if (!credited) {
-      // Credit failed; leave the row in processing (not pending) because
-      // the wallet might have been credited before the crash.
-      throw new Error(
-        `Wallet credit failed while resuming ${transaction.id}; leaving processing for recovery`
-      );
+    
+    // Branch on transaction type: GIVE_CHANGE needs debit, PAYMENT needs credit
+    if (transaction.transaction_type === 'GIVE_CHANGE') {
+      // GIVE_CHANGE: idempotent debit with momo-giveout:<tx id>
+      const debited = await this.debitWalletIfNeeded(transaction);
+      if (!debited) {
+        throw new Error(
+          `Wallet debit failed while resuming GIVE_CHANGE ${transaction.id}; leaving processing for recovery`
+        );
+      }
+    } else {
+      // PAYMENT: idempotent credit with momo-deposit:<tx id>
+      const credited = await this.creditWalletIfNeeded(transaction);
+      if (!credited) {
+        // Credit failed; leave the row in processing (not pending) because
+        // the wallet might have been credited before the crash.
+        throw new Error(
+          `Wallet credit failed while resuming ${transaction.id}; leaving processing for recovery`
+        );
+      }
     }
+    
     // Mark processing → success
     const markedSuccess = await this.databaseService.updateTransactionIfStatus(
       transaction.id,
@@ -699,92 +704,18 @@ export class MobilePaymentCallbackProcessor {
       );
       return;
     }
-    // Run handler (idempotent for order/order_deposit first pass, alerts on failure)
-    try {
-      await this.runHandlerSuccess(transaction);
-    } catch (error: any) {
-      // Handler threw after wallet was credited and success mark; leave row in processing for recovery
-      this.logger.error(
-        `Handler failed after success mark for ${transaction.id}; leaving processing for recovery: ${error?.message ?? error}`
-      );
-      throw error;
-    }
-  }
-
-  /**
-   * Recover a stale processing row. Check if wallet was credited; if so, finalize.
-   * Otherwise query provider status and finalize or fail accordingly.
-   */
-  async recoverStaleProcessingTransaction(
-    transaction: MobilePaymentTransaction
-  ): Promise<void> {
-    this.logger.log(`Recovering stale processing tx ${transaction.id}`);
     
-    // Check if wallet deposit exists (idempotent key: momo-deposit:<tx id>)
-    const walletCredited = await this.databaseService.hasWalletDepositForTransaction(
-      transaction.id
-    );
-    
-    if (walletCredited) {
-      this.logger.log(
-        `Wallet deposit found for ${transaction.id}; marking success and running handler`
-      );
-      // Wallet was credited; mark success and run handler
-      const markedSuccess = await this.databaseService.updateTransactionIfStatus(
-        transaction.id,
-        'processing',
-        { status: 'success' }
-      );
-      if (markedSuccess) {
-        try {
-          await this.runHandlerSuccess(transaction);
-        } catch (error: any) {
-          this.logger.error(
-            `Handler failed after recovery for ${transaction.id}: ${error?.message ?? error}`
-          );
-        }
+    // Run handler for PAYMENT transactions (GIVE_CHANGE has no handler)
+    if (transaction.transaction_type === 'PAYMENT') {
+      try {
+        await this.runHandlerSuccess(transaction);
+      } catch (error: any) {
+        // Handler threw after wallet was credited and success mark
+        this.logger.error(
+          `Handler failed after success mark for ${transaction.id}: ${error?.message ?? error}`
+        );
+        throw error;
       }
-      return;
-    }
-    
-    // Wallet not credited; query provider status
-    try {
-      const providerStatus = await this.mobilePaymentsService.checkTransactionStatus(
-        transaction.id,
-        transaction.provider
-      );
-      
-      if (providerStatus.status === 'success') {
-        this.logger.log(
-          `Provider confirms SUCCESS for ${transaction.id}; resuming finalize`
-        );
-        await this.resumeFinalizeFromProcessing(
-          transaction,
-          providerStatus.transactionId || transaction.transaction_id || ''
-        );
-      } else if (providerStatus.status === 'failed' || providerStatus.status === 'cancelled') {
-        this.logger.log(
-          `Provider confirms ${providerStatus.status} for ${transaction.id}; marking failed`
-        );
-        await this.databaseService.updateTransactionIfStatus(
-          transaction.id,
-          'processing',
-          {
-            status: 'failed',
-            error_message: providerStatus.message || 'Payment failed',
-          }
-        );
-      } else {
-        // Still pending or ambiguous; leave as processing for next recovery attempt
-        this.logger.log(
-          `Provider status ${providerStatus.status} for ${transaction.id}; leaving processing for next recovery`
-        );
-      }
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to query provider status for recovery of ${transaction.id}: ${error?.message ?? error}`
-      );
-      // Leave as processing for next recovery attempt
     }
   }
 
