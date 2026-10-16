@@ -14,8 +14,13 @@ sys.path.insert(0, str(LAMBDA_DIR))
 
 sys.modules.setdefault("boto3", MagicMock())
 
+# Load the wait-handler as a private module so it does not shadow the other
+# lambdas' ``handler`` modules when pytest collects the whole tests/ dir.
 sys.modules.pop("handler", None)
 import handler  # noqa: E402
+
+sys.modules.pop("handler", None)
+sys.path.remove(str(LAMBDA_DIR))
 
 ROW_ID = "11111111-2222-3333-4444-555555555555"
 ENDPOINT = "https://hasura.example/v1/graphql"
