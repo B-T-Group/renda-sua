@@ -8,7 +8,7 @@ export function getPaymentStatusChipColor(
 ): PaymentStatusChipColor {
   if (status === 'paid') return 'success';
   if (status === 'failed') return 'error';
-  if (status === 'authorized' || status === 'capture_pending') return 'info';
+  if (status === 'authorized' || status === 'capture_pending' || status === 'processing') return 'info';
   return 'warning';
 }
 

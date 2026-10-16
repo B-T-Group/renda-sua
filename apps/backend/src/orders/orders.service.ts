@@ -4155,14 +4155,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
-    if (existing && existing.status === 'pending') {
+    if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
       return {
         success: true,
-        message: 'Payment request already pending',
+        message: 'Payment request already in progress',
         payment_transaction: {
           success: true,
           transaction_id: existing.transaction_id ?? null,
-          message: 'Payment request already pending',
+          message: 'Payment request already in progress',
           mode: 'mobile_money' as const,
         },
         database_transaction: {
@@ -4367,15 +4367,15 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
-    if (existing && existing.status === 'pending') {
+    if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
       await this.resetOrderPaymentFailure(orderId);
       return {
         success: true,
-        message: 'Payment request already pending',
+        message: 'Payment request already in progress',
         payment_transaction: {
           success: true,
           transaction_id: existing.transaction_id ?? null,
-          message: 'Payment request already pending',
+          message: 'Payment request already in progress',
           mode: 'mobile_money' as const,
         },
         database_transaction: {
@@ -4598,7 +4598,7 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
-    if (existing && existing.status === 'pending') return;
+    if (existing && (existing.status === 'pending' || existing.status === 'processing')) return;
 
     const momo = this.orderMomoContext(order);
     const account = await this.hasuraSystemService.getAccount(
@@ -5083,9 +5083,10 @@ export class OrdersService {
         superseded = existing;
       }
     } else {
-      // QA F2: a success callback claims the row (pending -> success) before the order
-      // is finalized; in that window there is no pending attempt but the order is being
-      // paid. Never send a new prompt (or spend the just-credited wallet) then.
+      // QA F2: a success callback claims the row (pending -> processing -> success) before
+      // the order is finalized; in that window there is no pending attempt but the order is
+      // being paid. Never send a new prompt (or spend the just-credited wallet) then.
+      // Also block if row is still processing (crash recovery in flight).
       const settled = await this.mobilePaymentsDatabaseService.listOrderTransactionsByStatus(
         order.order_number,
         'success'
@@ -5094,6 +5095,16 @@ export class OrdersService {
         return this.payAfterRetryResponse('paid', {
           message: 'Payment received.',
           tx: settled[0],
+        });
+      }
+      const inflight = await this.mobilePaymentsDatabaseService.listOrderTransactionsByStatus(
+        order.order_number,
+        'processing'
+      );
+      if (inflight.length > 0) {
+        return this.payAfterRetryResponse('sent', {
+          message: 'Payment already in progress.',
+          tx: inflight[0],
         });
       }
       const chargeAmount = Number(order.total_amount) || 0;
@@ -5190,6 +5201,13 @@ export class OrdersService {
         tx.error_message || 'The payment provider rejected the request.',
         { idempotent_replay: true }
       );
+    }
+    if (tx.status === 'processing') {
+      return this.payAfterRetryResponse('sent', {
+        message: 'Payment request in progress. Approve it on your phone.',
+        tx,
+        idempotentReplay: true,
+      });
     }
     if (tx.status === 'success') {
       return this.payAfterRetryResponse('paid', {
@@ -5979,11 +5997,11 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.getPendingOrderPaymentTransactionByOrderNumber(
         order.order_number
       );
-    if (existing && existing.status === 'pending') {
+    if (existing && (existing.status === 'pending' || existing.status === 'processing')) {
       await this.resetOrderPaymentFailure(orderId);
       return {
         success: true,
-        message: 'Payment request already pending',
+        message: 'Payment request already in progress',
         database_transaction: {
           id: existing.id,
           reference: existing.reference,

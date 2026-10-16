@@ -101,10 +101,12 @@ def _cancel_momo_tx_if_pending(
     hasura_endpoint: str,
     hasura_admin_secret: str,
 ) -> bool:
-    """Mark mobile_payment_transactions row cancelled when still pending.
+    """Mark mobile_payment_transactions row cancelled when pending only.
     
-    Returns True if the transaction was actually flipped from pending to cancelled,
-    False otherwise (already not pending, or not found).
+    Uses compare-and-set on pending status. Processing means wallet already credited
+    or payout sent, so cannot be cancelled.
+    Returns True if the transaction was actually flipped to cancelled,
+    False otherwise (already terminal, or not found).
     """
     tx = get_transaction_by_id(
         transaction_id, hasura_endpoint, hasura_admin_secret
@@ -115,16 +117,48 @@ def _cancel_momo_tx_if_pending(
     status = tx.get("status")
     if status != "pending":
         log_info(
-            "MoMo tx not pending; skip provider cancel",
+            "MoMo tx not pending; skip cancel",
             transaction_id=transaction_id,
             status=status,
         )
         return False
-    log_info("Cancelling pending MoMo transaction", transaction_id=transaction_id)
-    update_transaction_status(
-        transaction_id, "cancelled", hasura_endpoint, hasura_admin_secret
+    log_info(f"Cancelling pending MoMo transaction", transaction_id=transaction_id)
+    # Use CAS to prevent canceling after a concurrent SUCCESS
+    # Note: This Python service uses system admin; CAS is via explicit WHERE filter
+    mutation = """
+    mutation CancelMoMoTx($id: uuid!) {
+      update_mobile_payment_transactions(
+        where: { id: { _eq: $id }, status: { _eq: "pending" } }
+        _set: { status: "cancelled" }
+      ) { affected_rows }
+    }
+    """
+    payload = json.dumps({
+        "query": mutation,
+        "variables": {"id": transaction_id}
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        hasura_endpoint,
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-hasura-admin-secret": hasura_admin_secret,
+        },
     )
-    return True
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        if "errors" in result and result["errors"]:
+            log_error("GraphQL errors cancelling MoMo transaction", transaction_id=transaction_id, errors=result["errors"])
+            return False
+        affected = result.get("data", {}).get("update_mobile_payment_transactions", {}).get("affected_rows", 0)
+        if affected == 0:
+            log_info("CAS cancel failed; transaction status changed", transaction_id=transaction_id)
+        return affected > 0
+    except Exception as e:
+        log_error("Failed to cancel MoMo transaction", error=e, transaction_id=transaction_id)
+        return False
 
 
 def _handle_unpaid_order_timeout(

@@ -742,6 +742,15 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     expect(db.createTransaction).not.toHaveBeenCalled();
   });
 
+  it('F2 (retry side): processing claim in flight (wallet credited) -> sent, no new prompt', async () => {
+    store.rows[0].status = 'processing';
+    const res = await retry({ phoneNumber: PB });
+    expect(res.result).toBe('sent');
+    expect(res.message).toContain('already in progress');
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+    expect(db.createTransaction).not.toHaveBeenCalled();
+  });
+
   it('F2: after a success is applied, other pending attempts on the paid order are cancelled', async () => {
     store.rows.push({ id: 'tx-live', status: 'pending', reference: 'r2', payment_entity: 'order', entity_id: 'ORD1' });
     store.rows[0].status = 'success';
@@ -800,6 +809,17 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     db.getOrderTransactionByIdempotencyKey.mockResolvedValue({ ...store.rows[0], customer_phone: PB, idempotency_key: 'k1' });
     const res = await retry({ idempotencyKey: 'k1' });
     expect(res.idempotent_replay).toBe(true);
+  });
+
+  it('F4: idempotency replay of a processing attempt -> sent with message "in progress"', async () => {
+    db.getOrderTransactionByIdempotencyKey.mockResolvedValue({ ...store.rows[0], status: 'processing', idempotency_key: 'k1' });
+    const res = await retry({ phoneNumber: PA, idempotencyKey: 'k1' });
+    expect(res).toMatchObject({
+      result: 'sent',
+      idempotent_replay: true,
+    });
+    expect(res.message).toContain('in progress');
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
   });
 
   it('N2: an already-paid order answers result: paid (same field as the retry contract)', async () => {
