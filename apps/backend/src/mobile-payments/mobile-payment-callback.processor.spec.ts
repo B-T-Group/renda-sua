@@ -468,6 +468,7 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE', () => {
     databaseService.getTransactionByReference.mockResolvedValue(giveChangeTx);
     databaseService.logCallback.mockResolvedValue(undefined);
     databaseService.updateTransaction.mockResolvedValue(undefined);
+    databaseService.updateTransactionIfStatus.mockResolvedValue(true);
     accountsService.registerWithdrawalIfNotExists.mockResolvedValue({
       success: true,
       transactionId: 'withdrawal-1',
@@ -1218,7 +1219,7 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
 
   it('resume path leaves row in processing when handler throws after success mark', async () => {
     const orderHandlerMock = {
-      supportsEntity: jest.fn().mockReturnValue(true),
+      supportsPaymentEntity: (e: string) => e === 'account',
       onPaymentSuccess: jest.fn().mockRejectedValue(new Error('Handler error')),
     };
     const registryWithHandler = {
@@ -1230,14 +1231,13 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
       registryWithHandler as never,
       mobilePaymentsService as never
     );
-    const orderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123' };
-    databaseService.getTransactionByTransactionId.mockResolvedValue(orderTx);
+    databaseService.getTransactionByTransactionId.mockResolvedValue(accountTx);
     databaseService.updateTransactionIfStatus
       .mockResolvedValueOnce(true);  // processing → success succeeds
 
     await expect(processorWithHandler.processFreemopayCallback(callback)).rejects.toThrow('Handler error');
 
-    // Should NOT roll back to pending after wallet was credited; row stays processing for recovery
+    // Should NOT roll back to pending after wallet was credited; row stays in processing for recovery
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(1); // only processing → success
   });
 
@@ -1246,15 +1246,17 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
       success: false,
       error: 'Credit failed',
     });
-    const orderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123' };
-    databaseService.getTransactionByReference.mockResolvedValue(orderTx);
-    databaseService.updateTransactionIfStatus.mockResolvedValueOnce(true); // pending → processing claim
+    const pendingOrderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123', status: 'pending' as const };
+    databaseService.getTransactionByReference.mockResolvedValue(pendingOrderTx);
+    databaseService.updateTransactionIfStatus
+      .mockResolvedValueOnce(true) // pending → processing claim
+      .mockResolvedValueOnce(true); // processing → pending release attempt
 
     await expect(processor.processMypvitCallback({
       transactionId: 'provider-tx-1',
-      merchantReferenceId: accountTx.reference,
+      merchantReferenceId: pendingOrderTx.reference,
       status: 'SUCCESS',
-      amount: accountTx.amount,
+      amount: pendingOrderTx.amount,
       customerID: '06123456',
       fees: 0,
       chargeOwner: 'MERCHANT',
@@ -1265,7 +1267,7 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
 
     // Should release processing → pending when credit fails
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
-      orderTx.id,
+      pendingOrderTx.id,
       'processing',
       { status: 'pending' }
     );
@@ -1289,8 +1291,8 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
       registryWithHandler as never,
       testMobilePaymentsService as never
     );
-    const orderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123' };
-    databaseService.getTransactionByReference.mockResolvedValue(orderTx);
+    const pendingOrderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123', status: 'pending' as const };
+    databaseService.getTransactionByReference.mockResolvedValue(pendingOrderTx);
     databaseService.logCallback = jest.fn().mockResolvedValue(undefined);
     databaseService.updateTransactionIfStatus
       .mockResolvedValueOnce(true)  // pending → processing claim
@@ -1298,9 +1300,9 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
 
     await expect(processorWithHandler.processMypvitCallback({
       transactionId: 'provider-tx-1',
-      merchantReferenceId: orderTx.reference,
+      merchantReferenceId: pendingOrderTx.reference,
       status: 'SUCCESS',
-      amount: orderTx.amount,
+      amount: pendingOrderTx.amount,
       customerID: '06123456',
       fees: 0,
       chargeOwner: 'MERCHANT',

@@ -144,9 +144,9 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
     expect(t.handler.onLateSuccessAfterSupersede).not.toHaveBeenCalled();
   });
 
-  it('finalize throws -> claim released to pending so the provider retry reruns the path', async () => {
+  it('finalize throws -> row stays in processing for recovery (no rollback after credit)', async () => {
     const t = build();
-    // Mark the row as processing when the claim succeeds
+    // Mark the row as processing when the claim succeeds, and as success when marked
     let processingSet = false;
     t.databaseService.updateTransactionIfStatus.mockImplementation(async (_id, expected, data) => {
       if (expected === 'pending' && data.status === 'processing') {
@@ -154,8 +154,8 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
         processingSet = true;
         return true;
       }
-      if (expected === 'processing' && data.status === 'pending') {
-        t.row.status = 'pending';
+      if (expected === 'processing' && data.status === 'success') {
+        t.row.status = 'success';
         return true;
       }
       if (t.row.status !== expected) return false;
@@ -164,9 +164,9 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
     });
     t.handler.onPaymentSuccess.mockRejectedValueOnce(new Error('hold failed'));
     await expect(t.processor.processFreemopayCallback(callback)).rejects.toThrow('hold failed');
-    // After wallet credit succeeds but handler fails, the status should be released back to pending
+    // After wallet credit succeeds but handler fails, row is marked success but stays there for recovery
     expect(processingSet).toBe(true);
-    expect(t.row.status).toBe('pending');
+    expect(t.row.status).toBe('success');
   });
 
   it('row moved to failed meanwhile -> money stays in wallet and an anomaly is reported', async () => {
