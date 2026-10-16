@@ -1233,9 +1233,13 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
       logCallback: jest.fn().mockResolvedValue(undefined),
       updateTransactionIfStatus: jest.fn().mockResolvedValue(true),
     };
+    const testAccountsService = {
+      ...accountsService,
+      registerDepositIfNotExists: jest.fn().mockResolvedValue({ success: true }),
+    };
     const processorWithHandler = new MobilePaymentCallbackProcessor(
       testDatabaseService as never,
-      accountsService as never,
+      testAccountsService as never,
       registryWithHandler as never,
       mobilePaymentsService as never
     );
