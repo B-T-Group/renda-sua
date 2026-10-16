@@ -35,7 +35,10 @@ import type {
   MyPVitCallbackDto,
 } from './mobile-payment-callback.dto';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
-import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
+import { 
+  MobilePaymentsDatabaseService, 
+  type MobilePaymentTransaction 
+} from './mobile-payments-database.service';
 import {
   MobilePaymentsService,
   type MobileTransactionStatus,
@@ -863,13 +866,12 @@ export class MobilePaymentsController {
   private async loadViewableTransactionById(
     transactionId: string,
     ctx: RequestContext
-  ) {
+  ): Promise<MobilePaymentTransaction> {
     const user = await this.hasuraUserService.getUser(ctx);
     const transaction = await this.databaseService.getTransactionById(
       transactionId
     );
-    await this.requireViewableTransaction(transaction, user?.id);
-    return transaction;
+    return await this.requireViewableTransaction(transaction, user?.id);
   }
 
   private async requireViewableTransaction<

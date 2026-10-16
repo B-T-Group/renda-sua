@@ -14,7 +14,7 @@ type OrderStatus =
 
 type StockStatus = 'in_stock' | 'low_stock' | 'out_of_stock';
 
-type PaymentStatus = 'paid' | 'pending' | 'failed' | 'refunded';
+type PaymentStatus = 'paid' | 'pending' | 'processing' | 'failed' | 'refunded';
 
 export type StatusBadgeVariant = OrderStatus | StockStatus | PaymentStatus;
 
@@ -32,6 +32,12 @@ function buildStatusMap(colors: ThemeColors): Record<StatusBadgeVariant, StatusC
       backgroundColor: colors.warningTint,
       textColor: colors.warning.dark,
       icon: 'clock-outline',
+    },
+    processing: {
+      label: 'Processing',
+      backgroundColor: colors.infoTint,
+      textColor: colors.info.dark,
+      icon: 'progress-clock',
     },
     confirmed: {
       label: 'Confirmed',
