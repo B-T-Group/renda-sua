@@ -438,6 +438,25 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
     expect(res.result).toBe('resent');
   });
 
+  it('F2: getPending returns processing (SUCCESS claim in flight) -> no new prompt even if provider still pending', async () => {
+    db.getPendingOrderPaymentTransactionByOrderNumber.mockResolvedValue(
+      pendingTx({ status: 'processing', created_at: iso(200) })
+    );
+    mps.checkTransactionStatus.mockResolvedValue({ status: 'pending' });
+
+    const res = await retry({ phoneNumber: PHONE_B });
+
+    expect(res).toMatchObject({
+      result: 'sent',
+      message: 'Payment already in progress.',
+      payment_transaction: { id: 'tx-old', status: 'processing' },
+    });
+    expect(mps.checkTransactionStatus).not.toHaveBeenCalled();
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(db.createTransaction).not.toHaveBeenCalled();
+    expect(mps.initiatePayment).not.toHaveBeenCalled();
+  });
+
   it('F4: idempotent replay of an attempt cancelled before send on a paid order -> paid', async () => {
     db.getOrderTransactionByIdempotencyKey.mockResolvedValue(pendingTx({ id: 'tx-k', status: 'cancelled', error_code: 'ORDER_SETTLED_BEFORE_SEND' }));
     order = { ...baseOrder(), payment_status: 'paid' };
@@ -642,7 +661,9 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
     let n = 0;
     db = {
       getPendingOrderPaymentTransactionByOrderNumber: jest.fn(async () => {
-        const p = store.rows.find((r) => r.status === 'pending');
+        const p = store.rows.find(
+          (r) => r.status === 'pending' || r.status === 'processing'
+        );
         return p ? { ...p } : null;
       }),
       getOrderTransactionByIdempotencyKey: jest.fn().mockResolvedValue(null),

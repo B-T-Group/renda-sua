@@ -5064,6 +5064,12 @@ export class OrdersService {
     const phoneChanged = !!newPhone && !samePhone(newPhone, baselinePhone);
     let superseded: MobilePaymentTransaction | null = null;
     if (existing) {
+      // #567 getPending includes processing. Never poll-and-supersede that row:
+      // the unique pending index does not cover processing, so falling through
+      // would send a second MoMo collect while SUCCESS finalize is in flight.
+      if (existing.status === 'processing') {
+        return this.payAfterProcessingInFlight(existing);
+      }
       const early = await this.resolvePendingPayAfterAttempt(
         order,
         existing,
@@ -5102,10 +5108,7 @@ export class OrdersService {
         'processing'
       );
       if (inflight.length > 0) {
-        return this.payAfterRetryResponse('sent', {
-          message: 'Payment already in progress.',
-          tx: inflight[0],
-        });
+        return this.payAfterProcessingInFlight(inflight[0]);
       }
       const chargeAmount = Number(order.total_amount) || 0;
       if (chargeAmount <= 0) {
@@ -5130,6 +5133,15 @@ export class OrdersService {
       key,
       superseded,
       savePhone: options.savePhone === true,
+    });
+  }
+
+  private payAfterProcessingInFlight(
+    tx: MobilePaymentTransaction
+  ): PayAfterRetryResponse {
+    return this.payAfterRetryResponse('sent', {
+      message: 'Payment already in progress.',
+      tx,
     });
   }
 
