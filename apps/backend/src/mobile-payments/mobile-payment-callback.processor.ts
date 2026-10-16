@@ -390,27 +390,7 @@ export class MobilePaymentCallbackProcessor {
     providerTransactionId: string
   ): Promise<void> {
     if (transaction.transaction_type === 'GIVE_CHANGE') {
-      const debited = await this.debitWalletIfNeeded(transaction);
-      if (!debited) {
-        await this.databaseService.updateTransaction(transaction.id, {
-          status: 'success',
-          transaction_id: providerTransactionId,
-          error_message:
-            'Provider payout succeeded but wallet debit failed; manual reconciliation required',
-          error_code: 'WITHDRAWAL_FAILED',
-        });
-        this.logger.error(
-          `GIVE_CHANGE ${transaction.id} provider success with ledger debit failure`
-        );
-        return;
-      }
-      await this.databaseService.updateTransaction(transaction.id, {
-        status: 'success',
-        transaction_id: providerTransactionId,
-      });
-      this.logger.log(
-        `GIVE_CHANGE ${transaction.id} finalized with wallet debit`
-      );
+      await this.finalizeGiveChangeSuccess(transaction, providerTransactionId);
       return;
     }
 
@@ -419,6 +399,79 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
     await this.finalizeNonOrderPaymentSuccess(transaction, providerTransactionId);
+  }
+
+  /**
+   * GIVE_CHANGE success: claim pending→processing with CAS, debit with idempotency,
+   * then mark success. Never overwrite FAILED (provider may callback late after we timed it out).
+   */
+  private async finalizeGiveChangeSuccess(
+    transaction: MobilePaymentTransaction,
+    providerTransactionId: string
+  ): Promise<void> {
+    const claimed = await this.databaseService.updateTransactionIfStatus(
+      transaction.id,
+      'pending',
+      { status: 'processing' }
+    );
+    if (!claimed) {
+      const fresh = await this.databaseService.getTransactionById(transaction.id);
+      if (fresh?.status === 'processing') {
+        this.logger.log(
+          `GIVE_CHANGE ${transaction.id} CAS lost to concurrent SUCCESS; left unchanged`
+        );
+        return;
+      }
+      if (fresh?.status === 'failed') {
+        this.logger.warn(
+          `GIVE_CHANGE ${transaction.id} SUCCESS callback after FAILED status; not overwriting`
+        );
+        return;
+      }
+      this.logger.log(
+        `GIVE_CHANGE ${transaction.id} not pending (status=${fresh?.status ?? 'missing'}); skipped`
+      );
+      return;
+    }
+    const debited = await this.debitWalletIfNeeded(transaction);
+    if (!debited) {
+      await this.databaseService.updateTransactionIfStatus(transaction.id, 'processing', {
+        status: 'failed',
+        transaction_id: providerTransactionId,
+        error_message:
+          'Provider payout succeeded but wallet debit failed; manual reconciliation required',
+        error_code: 'WITHDRAWAL_FAILED',
+      });
+      this.logger.error(
+        `GIVE_CHANGE ${transaction.id} provider success with ledger debit failure`
+      );
+      return;
+    }
+    const markedSuccess = await this.databaseService.updateTransactionIfStatus(
+      transaction.id,
+      'processing',
+      {
+        status: 'success',
+        transaction_id: providerTransactionId,
+      }
+    );
+    if (!markedSuccess) {
+      // Row left processing; re-read
+      const fresh = await this.databaseService.getTransactionById(transaction.id);
+      if (fresh?.status === 'success') {
+        this.logger.log(
+          `GIVE_CHANGE ${transaction.id} already marked success by concurrent writer`
+        );
+        return;
+      }
+      this.logger.warn(
+        `GIVE_CHANGE ${transaction.id} processing→success CAS lost; status=${fresh?.status ?? 'missing'}`
+      );
+      return;
+    }
+    this.logger.log(
+      `GIVE_CHANGE ${transaction.id} finalized with wallet debit`
+    );
   }
 
   /**
@@ -471,25 +524,15 @@ export class MobilePaymentCallbackProcessor {
       }
       await this.runHandlerSuccess(transaction);
     } catch (error) {
-      // Try processing → pending first
-      const releasedFromProcessing = await this.databaseService
-        .updateTransactionIfStatus(transaction.id, 'processing', { status: 'pending' })
-        .catch((e: any) => {
-          this.logger.error(
-            `Could not release processing claim on ${transaction.id}: ${e?.message ?? e}`
-          );
-          return false;
-        });
-      // If handler threw after success mark, also try success → pending
-      if (!releasedFromProcessing) {
-        await this.databaseService
-          .updateTransactionIfStatus(transaction.id, 'success', { status: 'pending' })
-          .catch((e: any) =>
-            this.logger.error(
-              `Could not release success status on ${transaction.id}: ${e?.message ?? e}`
-            )
-          );
+      // Only roll back if credit failed (before wallet was credited).
+      // After credit, leave the row in processing for recovery.
+      if ((error as Error).message?.includes('Wallet credit failed')) {
+        throw error;
       }
+      // Handler threw after wallet was credited; leave row in processing for recovery
+      this.logger.error(
+        `Handler failed after wallet credit for ${transaction.id}; leaving processing for recovery: ${(error as any)?.message ?? error}`
+      );
       throw error;
     }
     this.logger.log(`Updated transaction ${transaction.id} with status: success`);
@@ -578,25 +621,15 @@ export class MobilePaymentCallbackProcessor {
       }
       await this.runHandlerSuccess(transaction);
     } catch (error) {
-      // Try processing → pending first
-      const releasedFromProcessing = await this.databaseService
-        .updateTransactionIfStatus(transaction.id, 'processing', { status: 'pending' })
-        .catch((e: any) => {
-          this.logger.error(
-            `Could not release processing claim on ${transaction.id}: ${e?.message ?? e}`
-          );
-          return false;
-        });
-      // If handler threw after success mark, also try success → pending
-      if (!releasedFromProcessing) {
-        await this.databaseService
-          .updateTransactionIfStatus(transaction.id, 'success', { status: 'pending' })
-          .catch((e: any) =>
-            this.logger.error(
-              `Could not release success status on ${transaction.id}: ${e?.message ?? e}`
-            )
-          );
+      // Only roll back if credit failed (before wallet was credited).
+      // After credit, leave the row in processing for recovery.
+      if ((error as Error).message?.includes('Wallet credit failed')) {
+        throw error;
       }
+      // Handler threw after wallet was credited; leave row in processing for recovery
+      this.logger.error(
+        `Handler failed after wallet credit for ${transaction.id}; leaving processing for recovery: ${(error as any)?.message ?? error}`
+      );
       throw error;
     }
     this.logger.log(
@@ -623,6 +656,12 @@ export class MobilePaymentCallbackProcessor {
    * Note: resume skips assertProviderConfirmsCallback because a row only reaches processing
    * after a confirmed SUCCESS in the first finalize attempt.
    */
+  /**
+   * Resume finalize when SUCCESS arrives on a processing row (crash recovery).
+   * Skip the claim (already processing), then idempotently credit → mark success → handler.
+   * Note: resume skips assertProviderConfirmsCallback because a row only reaches processing
+   * after a confirmed SUCCESS in the first finalize attempt.
+   */
   private async resumeFinalizeFromProcessing(
     transaction: MobilePaymentTransaction,
     providerTransactionId: string
@@ -633,8 +672,10 @@ export class MobilePaymentCallbackProcessor {
     // Wallet credit is idempotent on the transaction id
     const credited = await this.creditWalletIfNeeded(transaction);
     if (!credited) {
+      // Credit failed; leave the row in processing (not pending) because
+      // the wallet might have been credited before the crash.
       throw new Error(
-        `Wallet credit failed while resuming ${transaction.id}; will retry`
+        `Wallet credit failed while resuming ${transaction.id}; leaving processing for recovery`
       );
     }
     // Mark processing → success
@@ -662,19 +703,88 @@ export class MobilePaymentCallbackProcessor {
     try {
       await this.runHandlerSuccess(transaction);
     } catch (error: any) {
-      // Handler threw after success mark: try success → pending release (same S-8 contract as main finalize)
-      try {
+      // Handler threw after wallet was credited and success mark; leave row in processing for recovery
+      this.logger.error(
+        `Handler failed after success mark for ${transaction.id}; leaving processing for recovery: ${error?.message ?? error}`
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Recover a stale processing row. Check if wallet was credited; if so, finalize.
+   * Otherwise query provider status and finalize or fail accordingly.
+   */
+  async recoverStaleProcessingTransaction(
+    transaction: MobilePaymentTransaction
+  ): Promise<void> {
+    this.logger.log(`Recovering stale processing tx ${transaction.id}`);
+    
+    // Check if wallet deposit exists (idempotent key: momo-deposit:<tx id>)
+    const walletCredited = await this.databaseService.hasWalletDepositForTransaction(
+      transaction.id
+    );
+    
+    if (walletCredited) {
+      this.logger.log(
+        `Wallet deposit found for ${transaction.id}; marking success and running handler`
+      );
+      // Wallet was credited; mark success and run handler
+      const markedSuccess = await this.databaseService.updateTransactionIfStatus(
+        transaction.id,
+        'processing',
+        { status: 'success' }
+      );
+      if (markedSuccess) {
+        try {
+          await this.runHandlerSuccess(transaction);
+        } catch (error: any) {
+          this.logger.error(
+            `Handler failed after recovery for ${transaction.id}: ${error?.message ?? error}`
+          );
+        }
+      }
+      return;
+    }
+    
+    // Wallet not credited; query provider status
+    try {
+      const providerStatus = await this.mobilePaymentsService.checkTransactionStatus(
+        transaction.id,
+        transaction.provider
+      );
+      
+      if (providerStatus.status === 'success') {
+        this.logger.log(
+          `Provider confirms SUCCESS for ${transaction.id}; resuming finalize`
+        );
+        await this.resumeFinalizeFromProcessing(
+          transaction,
+          providerStatus.transactionId || transaction.transaction_id || ''
+        );
+      } else if (providerStatus.status === 'failed' || providerStatus.status === 'cancelled') {
+        this.logger.log(
+          `Provider confirms ${providerStatus.status} for ${transaction.id}; marking failed`
+        );
         await this.databaseService.updateTransactionIfStatus(
           transaction.id,
-          'success',
-          { status: 'pending' }
+          'processing',
+          {
+            status: 'failed',
+            error_message: providerStatus.message || 'Payment failed',
+          }
         );
-      } catch (e: any) {
-        this.logger.error(
-          `Could not release success→pending on ${transaction.id} after handler failure: ${e?.message ?? e}`
+      } else {
+        // Still pending or ambiguous; leave as processing for next recovery attempt
+        this.logger.log(
+          `Provider status ${providerStatus.status} for ${transaction.id}; leaving processing for next recovery`
         );
       }
-      throw error;
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to query provider status for recovery of ${transaction.id}: ${error?.message ?? error}`
+      );
+      // Leave as processing for next recovery attempt
     }
   }
 
@@ -832,6 +942,7 @@ export class MobilePaymentCallbackProcessor {
         amount: transaction.amount,
         referenceId: transaction.id,
         memo: `Mobile payment give change - ${transaction.reference}`,
+        idempotencyKey: `momo-giveout:${transaction.id}`,
       });
 
     if (!withdrawalResult.success) {

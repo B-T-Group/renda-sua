@@ -1334,4 +1334,28 @@ export class MobilePaymentsDatabaseService {
     }>(query, { accountId, paymentEntity, limit, offset });
     return response.mobile_payment_transactions ?? [];
   }
+
+  /**
+   * Check if a wallet deposit exists for this mobile payment transaction.
+   * Used to determine if a stuck processing row was actually credited.
+   */
+  async hasWalletDepositForTransaction(transactionId: string): Promise<boolean> {
+    const query = `
+      query CheckWalletDeposit($idempotencyKey: String!) {
+        account_transactions(
+          where: {
+            idempotency_key: { _eq: $idempotencyKey }
+            transaction_type: { _eq: "deposit" }
+          }
+          limit: 1
+        ) {
+          id
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery<{
+      account_transactions: Array<{ id: string }>;
+    }>(query, { idempotencyKey: `momo-deposit:${transactionId}` });
+    return (response.account_transactions?.length ?? 0) > 0;
+  }
 }

@@ -405,7 +405,7 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Cancel a pending transaction
+   * Cancel a pending or processing transaction (CAS to prevent cancel after SUCCESS)
    */
   @Post('transactions/:transactionId/cancel')
   async cancelTransaction(
@@ -414,15 +414,33 @@ export class MobilePaymentsController {
     @Query('provider') provider?: string
   ) {
     try {
-      await this.loadViewableTransactionById(transactionId, ctx);
+      const transaction = await this.loadViewableTransactionById(transactionId, ctx);
+      
+      // Only cancel if pending or processing (use CAS to avoid race with SUCCESS)
+      if (transaction.status !== 'pending' && transaction.status !== 'processing') {
+        return {
+          success: false,
+          message: `Cannot cancel: transaction is already ${transaction.status}`,
+        };
+      }
+      
       const success = await this.mobilePaymentsService.cancelTransaction(
         transactionId,
         provider
       );
       if (success) {
-        await this.databaseService.updateTransaction(transactionId, {
-          status: 'cancelled',
-        });
+        // Use CAS to only cancel if still in the original status
+        const cancelled = await this.databaseService.updateTransactionIfStatus(
+          transactionId,
+          transaction.status,
+          { status: 'cancelled' }
+        );
+        if (!cancelled) {
+          return {
+            success: false,
+            message: 'Transaction status changed before cancel could complete',
+          };
+        }
       }
       return {
         success,

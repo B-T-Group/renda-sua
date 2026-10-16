@@ -96,15 +96,16 @@ def _call_backend_cancel_unpaid(
     )
 
 
-def _cancel_momo_tx_if_pending(
+def _cancel_momo_tx_if_pending_or_processing(
     transaction_id: str,
     hasura_endpoint: str,
     hasura_admin_secret: str,
 ) -> bool:
-    """Mark mobile_payment_transactions row cancelled when still pending.
+    """Mark mobile_payment_transactions row cancelled when pending or processing.
     
-    Returns True if the transaction was actually flipped from pending to cancelled,
-    False otherwise (already not pending, or not found).
+    Uses compare-and-set to prevent canceling after SUCCESS claim or debit.
+    Returns True if the transaction was actually flipped to cancelled,
+    False otherwise (already terminal, or not found).
     """
     tx = get_transaction_by_id(
         transaction_id, hasura_endpoint, hasura_admin_secret
@@ -113,18 +114,45 @@ def _cancel_momo_tx_if_pending(
         log_error("Transaction not found for MoMo cancel", transaction_id=transaction_id)
         return False
     status = tx.get("status")
-    if status != "pending":
+    if status not in ("pending", "processing"):
         log_info(
-            "MoMo tx not pending; skip provider cancel",
+            "MoMo tx already terminal; skip cancel",
             transaction_id=transaction_id,
             status=status,
         )
         return False
-    log_info("Cancelling pending MoMo transaction", transaction_id=transaction_id)
-    update_transaction_status(
-        transaction_id, "cancelled", hasura_endpoint, hasura_admin_secret
+    log_info(f"Cancelling {status} MoMo transaction", transaction_id=transaction_id)
+    # Use CAS to prevent canceling after a concurrent SUCCESS
+    # Note: This Python service uses system admin; CAS is via explicit WHERE filter
+    mutation = """
+    mutation CancelMoMoTx($id: uuid!, $expectedStatus: String!) {
+      update_mobile_payment_transactions(
+        where: { id: { _eq: $id }, status: { _eq: $expectedStatus } }
+        _set: { status: "cancelled", updated_at: "now()" }
+      ) { affected_rows }
+    }
+    """
+    payload = json.dumps({
+        "query": mutation,
+        "variables": {"id": transaction_id, "expectedStatus": status}
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        hasura_endpoint,
+        data=payload,
+        method="POST",
+        headers={
+            "Content-Type": "application/json",
+            "x-hasura-admin-secret": hasura_admin_secret,
+        },
     )
-    return True
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+        affected = result.get("data", {}).get("update_mobile_payment_transactions", {}).get("affected_rows", 0)
+        return affected > 0
+    except Exception as e:
+        log_error("Failed to cancel MoMo transaction", error=e, transaction_id=transaction_id)
+        return False
 
 
 def _handle_unpaid_order_timeout(
@@ -153,7 +181,7 @@ def _handle_unpaid_order_timeout(
         }
     if result.get("cancelled"):
         if transaction_id:
-            _cancel_momo_tx_if_pending(
+            _cancel_momo_tx_if_pending_or_processing(
                 transaction_id, hasura_endpoint, hasura_admin_secret
             )
         return {
@@ -184,7 +212,7 @@ def _handle_order_claim_initiated(
         order_id=order_id,
         transaction_id=transaction_id,
     )
-    was_cancelled = _cancel_momo_tx_if_pending(
+    was_cancelled = _cancel_momo_tx_if_pending_or_processing(
         transaction_id, hasura_endpoint, hasura_admin_secret
     )
     

@@ -137,7 +137,7 @@ export class AdminMobilePaymentsController {
   ): Promise<MobilePaymentTransaction> {
     const tx = await this.requireTransaction(id);
     this.requireProviderTxId(tx);
-    if (tx.status !== 'pending') {
+    if (tx.status !== 'pending' && tx.status !== 'processing') {
       throw new ConflictException(
         `Transaction is already ${tx.status}; resolve skipped`
       );
