@@ -505,7 +505,7 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
-   * Get the latest pending order payment transaction by order number.
+   * Get the latest in-flight order payment transaction by order number (pending or processing).
    * Uses entity_id to support multiple retry attempts with unique references.
    */
   async getPendingOrderPaymentTransactionByOrderNumber(
@@ -516,7 +516,7 @@ export class MobilePaymentsDatabaseService {
         mobile_payment_transactions(
           where: {
             payment_entity: { _eq: order }
-            status: { _eq: "pending" }
+            status: { _in: ["pending", "processing"] }
             entity_id: { _eq: $orderNumber }
           }
           order_by: { created_at: desc }
@@ -1047,7 +1047,7 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
-   * Pending GIVE_CHANGE withdrawals for wallet reconcile / cron.
+   * Pending or processing GIVE_CHANGE withdrawals for wallet reconcile / cron.
    */
   async getPendingGiveChangeWithdrawals(options?: {
     limit?: number;
@@ -1059,7 +1059,7 @@ export class MobilePaymentsDatabaseService {
       query GetPendingGiveChangeWithdrawals {
         mobile_payment_transactions(
           where: {
-            status: { _eq: "pending" }
+            status: { _in: ["pending", "processing"] }
             transaction_type: { _eq: "GIVE_CHANGE" }
           }
           order_by: { created_at: asc }
@@ -1098,7 +1098,7 @@ export class MobilePaymentsDatabaseService {
   }
 
   /**
-   * Pending MyPVit / Freemopay rows for admin reconciliation.
+   * Pending or processing MyPVit / Freemopay rows for admin reconciliation.
    */
   async getPendingIntegrationTransactions(options?: {
     limit?: number;
@@ -1110,7 +1110,7 @@ export class MobilePaymentsDatabaseService {
       query GetPendingIntegrationMobilePayments {
         mobile_payment_transactions(
           where: {
-            status: { _eq: "pending" }
+            status: { _in: ["pending", "processing"] }
           }
           order_by: { created_at: desc }
           limit: ${limit}

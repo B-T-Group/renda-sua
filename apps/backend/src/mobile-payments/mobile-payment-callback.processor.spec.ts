@@ -1212,4 +1212,34 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
       expect.objectContaining({ status: 'success' })
     );
   });
+
+  it('resume path attempts success→pending release if handler throws after success mark', async () => {
+    const orderHandlerMock = {
+      supportsEntity: jest.fn().mockReturnValue(true),
+      onPaymentSuccess: jest.fn().mockRejectedValue(new Error('Handler error')),
+    };
+    const registryWithHandler = {
+      getHandlers: jest.fn().mockReturnValue([orderHandlerMock]),
+    };
+    const processorWithHandler = new MobilePaymentCallbackProcessor(
+      databaseService as never,
+      accountsService as never,
+      registryWithHandler as never,
+      mobilePaymentsService as never
+    );
+    const orderTx = { ...accountTx, payment_entity: 'order', entity_id: 'ORD-123' };
+    databaseService.getTransactionByTransactionId.mockResolvedValue(orderTx);
+    databaseService.updateTransactionIfStatus
+      .mockResolvedValueOnce(true)  // processing → success succeeds
+      .mockResolvedValueOnce(false); // success → pending attempt (doesn't matter if it fails)
+
+    await expect(processorWithHandler.processFreemopayCallback(callback)).rejects.toThrow('Handler error');
+
+    // Should try success → pending release after handler throws
+    expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      orderTx.id,
+      'success',
+      { status: 'pending' }
+    );
+  });
 });

@@ -620,6 +620,8 @@ export class MobilePaymentCallbackProcessor {
   /**
    * Resume finalize when SUCCESS arrives on a processing row (crash after claim).
    * Skip the claim (already processing), then idempotently credit → mark success → handler.
+   * Note: resume skips assertProviderConfirmsCallback because a row only reaches processing
+   * after a confirmed SUCCESS in the first finalize attempt.
    */
   private async resumeFinalizeFromProcessing(
     transaction: MobilePaymentTransaction,
@@ -657,7 +659,23 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
     // Run handler (idempotent for order/order_deposit first pass, alerts on failure)
-    await this.runHandlerSuccess(transaction);
+    try {
+      await this.runHandlerSuccess(transaction);
+    } catch (error: any) {
+      // Handler threw after success mark: try success → pending release (same S-8 contract as main finalize)
+      try {
+        await this.databaseService.updateTransactionIfStatus(
+          transaction.id,
+          'success',
+          { status: 'pending' }
+        );
+      } catch (e: any) {
+        this.logger.error(
+          `Could not release success→pending on ${transaction.id} after handler failure: ${e?.message ?? e}`
+        );
+      }
+      throw error;
+    }
   }
 
   private async retrySuccessSideEffects(
