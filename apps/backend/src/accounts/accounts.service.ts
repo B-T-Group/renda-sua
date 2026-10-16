@@ -342,7 +342,7 @@ export class AccountsService {
   async registerWithdrawalIfNotExists(
     request: Pick<
       TransactionRequest,
-      'accountId' | 'amount' | 'memo' | 'referenceId'
+      'accountId' | 'amount' | 'memo' | 'referenceId' | 'idempotencyKey'
     >
   ): Promise<WithdrawalRegistrationResult> {
     return this.registerLedgerEntryIfNotExists(request, 'withdrawal');
