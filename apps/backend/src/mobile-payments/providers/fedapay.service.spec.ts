@@ -140,7 +140,7 @@ describe('FedaPayService', () => {
   });
 
   describe('Payment Initiation', () => {
-    it('should validate phone number', async () => {
+    it('should validate phone number in mock mode', async () => {
       const result = await service.initiatePayment({
         amount: 1000,
         currency: 'XOF',
@@ -155,7 +155,7 @@ describe('FedaPayService', () => {
       expect(result.message).toContain('Invalid Togo phone number');
     });
 
-    it('should validate XOF currency', async () => {
+    it('should validate XOF currency in mock mode', async () => {
       const result = await service.initiatePayment({
         amount: 1000,
         currency: 'USD',
