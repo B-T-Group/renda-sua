@@ -157,7 +157,7 @@ export class AdminMobilePaymentsController {
     tx: MobilePaymentTransaction
   ): MobilePaymentIntegrationProvider {
     try {
-      return await this.mobilePaymentsService.resolveAdminIntegrationProvider(
+      return this.mobilePaymentsService.resolveAdminIntegrationProvider(
         tx.customer_phone,
         tx.provider
       );
