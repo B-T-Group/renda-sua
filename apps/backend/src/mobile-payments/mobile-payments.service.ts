@@ -671,7 +671,37 @@ export class MobilePaymentsService {
       // Determine the best provider based on request
       const provider = await this.selectProvider(paymentRequest);
       
-      // Validation already done by validatePaymentRequest above
+      // B5: Validate against the RESOLVED provider (critical for requests without explicit provider)
+      if (provider === 'fedapay') {
+        const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone || '', phoneRegion);
+        
+        // Restore isValid check for FedaPay
+        if (paymentRequest.customerPhone && !phoneValidation.isValid) {
+          return {
+            success: false,
+            message: 'Invalid phone number format',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        
+        // Currency validation
+        if (paymentRequest.currency && paymentRequest.currency !== 'XOF') {
+          return {
+            success: false,
+            message: 'FedaPay (Togo) only supports XOF currency',
+            errorCode: 'UNSUPPORTED_CURRENCY',
+          };
+        }
+        
+        // Integer amount validation
+        if (paymentRequest.amount && !Number.isInteger(paymentRequest.amount)) {
+          return {
+            success: false,
+            message: 'FedaPay amounts must be integers (XOF has no decimals)',
+            errorCode: 'INVALID_AMOUNT',
+          };
+        }
+      }
 
       // Convert to provider-specific request
       const providerRequest = this.convertToProviderRequest(
