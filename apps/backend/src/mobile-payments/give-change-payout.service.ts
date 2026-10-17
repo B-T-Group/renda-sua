@@ -181,11 +181,13 @@ export class GiveChangePayoutService {
       ...(params.paymentEntity ? { payment_entity: params.paymentEntity } : {}),
     });
 
+    // F-L5: Idempotency key prevents duplicate holds on retry/race
     const holdResult = await this.accountsService.registerHoldIfNotExists({
       accountId: params.accountId,
       amount: params.amount,
       referenceId: transaction.id,
       memo: `GIVE_CHANGE hold - ${reference}`,
+      idempotencyKey: `give-change-hold:${reference}`,
     });
     if (!holdResult.success) {
       await this.markFailed(
