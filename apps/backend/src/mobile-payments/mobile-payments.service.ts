@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
@@ -278,9 +278,17 @@ export class MobilePaymentsService {
     live: MobileTransactionStatus
   ): void {
     if (claimed === 'SUCCESS') {
-      if (live.status !== 'success') {
+      // (b) Transient/pending status stays 5xx so FedaPay retries
+      if (live.status === 'pending' || live.status === 'ambiguous') {
         throw new Error(
-          `Rejecting SUCCESS callback for ${tx.id}: provider status is ${live.status}`
+          `Rejecting SUCCESS callback for ${tx.id}: provider still ${live.status} (transient, will retry)`
+        );
+      }
+      // (b) Definite mismatch (failed/cancelled when SUCCESS claimed) returns 409
+      if (live.status !== 'success') {
+        throw new HttpException(
+          `Rejecting SUCCESS callback for ${tx.id}: provider status is ${live.status}`,
+          HttpStatus.CONFLICT
         );
       }
       if (tx.provider === 'fedapay') {
@@ -328,14 +336,17 @@ export class MobilePaymentsService {
       }
       return;
     }
+    // (b) Definite mismatch (success when FAILED claimed) returns 409
     if (live.status === 'success') {
-      throw new Error(
-        `Rejecting FAILED callback for ${tx.id}: provider reports success`
+      throw new HttpException(
+        `Rejecting FAILED callback for ${tx.id}: provider reports success`,
+        HttpStatus.CONFLICT
       );
     }
+    // (b) Transient/pending status stays 5xx so FedaPay retries
     if (live.status === 'pending' || live.status === 'ambiguous') {
       throw new Error(
-        `Rejecting FAILED callback for ${tx.id}: provider still ${live.status}`
+        `Rejecting FAILED callback for ${tx.id}: provider still ${live.status} (transient, will retry)`
       );
     }
     // N6: For FedaPay, also verify reference on DECLINED/failed outcomes
@@ -343,13 +354,15 @@ export class MobilePaymentsService {
     // Fail closed if stored reference is empty/null
     if (tx.provider === 'fedapay') {
       if (!tx.reference?.trim()) {
-        throw new Error(
-          `Rejecting FedaPay FAILED callback for ${tx.id}: missing stored reference (fail closed)`
+        throw new HttpException(
+          `Rejecting FedaPay FAILED callback for ${tx.id}: missing stored reference (fail closed)`,
+          HttpStatus.UNPROCESSABLE_ENTITY
         );
       }
       if (live.reference !== tx.reference) {
-        throw new Error(
-          `Rejecting FedaPay FAILED callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference || '<missing>'})`
+        throw new HttpException(
+          `Rejecting FedaPay FAILED callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference || '<missing>'})`,
+          HttpStatus.UNPROCESSABLE_ENTITY
         );
       }
     }
