@@ -475,6 +475,13 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
           balance: 5000,
         }),
       };
+      const mockTestMobilePaymentsService = {
+        resolveProviderFromRequest: jest.fn().mockResolvedValue('fedapay'),
+        assertMobileMoneyCurrency: jest.fn(),
+        checkTransactionStatus: jest.fn(),
+        assertProviderConfirmsCallback: jest.fn(),
+        isWithdrawalDestinationCmOrGa: jest.fn(),
+      };
       const mockGiveChangePayoutService = {};
       const mockHasuraUserService = {};
       const mockWithdrawalPinService = {};
@@ -485,7 +492,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       const testModule = await Test.createTestingModule({
         controllers: [MobilePaymentsController],
         providers: [
-          { provide: MobilePaymentsService, useValue: mockMobilePaymentsService },
+          { provide: MobilePaymentsService, useValue: mockTestMobilePaymentsService },
           { provide: MobilePaymentsDatabaseService, useValue: mockMobilePaymentsDatabaseService },
           { provide: AccountsService, useValue: mockAccountsService },
           { provide: GiveChangePayoutService, useValue: mockGiveChangePayoutService },
@@ -499,7 +506,6 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       }).compile();
 
       const testController = testModule.get<MobilePaymentsController>(MobilePaymentsController);
-      mockMobilePaymentsService.resolveProviderFromRequest = jest.fn().mockResolvedValue('fedapay');
 
       const request = {
         amount: 1000,
@@ -526,6 +532,13 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
           balance: 5000,
         }),
       };
+      const mockTestMobilePaymentsService = {
+        resolveProviderFromRequest: jest.fn().mockResolvedValue('fedapay'),
+        assertMobileMoneyCurrency: jest.fn(),
+        checkTransactionStatus: jest.fn(),
+        assertProviderConfirmsCallback: jest.fn(),
+        isWithdrawalDestinationCmOrGa: jest.fn(),
+      };
       const mockGiveChangePayoutService = {
         executeOwnedGiveChangePayout: jest.fn(),
       };
@@ -542,7 +555,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       const testModule = await Test.createTestingModule({
         controllers: [MobilePaymentsController],
         providers: [
-          { provide: MobilePaymentsService, useValue: mockMobilePaymentsService },
+          { provide: MobilePaymentsService, useValue: mockTestMobilePaymentsService },
           { provide: MobilePaymentsDatabaseService, useValue: mockMobilePaymentsDatabaseService },
           { provide: AccountsService, useValue: mockAccountsService },
           { provide: GiveChangePayoutService, useValue: mockGiveChangePayoutService },
@@ -556,7 +569,6 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       }).compile();
 
       const testController = testModule.get<MobilePaymentsController>(MobilePaymentsController);
-      mockMobilePaymentsService.resolveProviderFromRequest = jest.fn().mockResolvedValue('fedapay');
 
       const request = {
         amount: 1000,
