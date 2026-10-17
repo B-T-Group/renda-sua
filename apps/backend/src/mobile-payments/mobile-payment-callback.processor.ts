@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import type { Request } from 'express';
 import { AccountsService } from '../accounts/accounts.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
@@ -55,7 +56,8 @@ export class MobilePaymentCallbackProcessor {
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
     private readonly paymentCallbackRegistry: PaymentCallbackRegistryService,
-    private readonly mobilePaymentsService: MobilePaymentsService
+    private readonly mobilePaymentsService: MobilePaymentsService,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   /**
@@ -63,6 +65,20 @@ export class MobilePaymentCallbackProcessor {
    */
   private isMockedTransaction(tx: MobilePaymentTransaction): boolean {
     return tx.transaction_id?.startsWith('mock-') ?? false;
+  }
+
+  /**
+   * G1: Check if FedaPay mock mode is currently enabled.
+   * Fail closed: if we can't resolve the service, assume mock is off.
+   */
+  private isFedaPayMockEnabled(): boolean {
+    try {
+      const FedaPayService = require('./providers/fedapay.service').FedaPayService;
+      const fedapay = this.moduleRef.get(FedaPayService, { strict: false });
+      return fedapay?.['mockEnabled'] === true;
+    } catch {
+      return false;
+    }
   }
 
   private resolveHandlers(): PaymentCallbackHandler[] {
@@ -145,12 +161,14 @@ export class MobilePaymentCallbackProcessor {
   ): Promise<{ received: boolean; transactionId: number }> {
     // FedaPay docs (docs.fedapay.com/en/integration-api/collects-management, "Collect Lifecycle"):
     // 'expired' = "the collect was not completed within the allowed time frame" (unpaid collections expire after 24h).
-    // No transaction.expired event; expiry arrives as transaction.updated with status 'expired'.
-    const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled', 'transaction.updated'];
+    // Handle both transaction.expired event and transaction.updated with status 'expired'.
+    const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled', 'transaction.updated', 'transaction.expired'];
     const TERMINAL_STATUSES = ['approved', 'declined', 'canceled', 'expired'];
     
     const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name) &&
-      (callbackData.name !== 'transaction.updated' || callbackData.entity.status === 'expired');
+      (callbackData.name === 'transaction.expired' || 
+       callbackData.name !== 'transaction.updated' || 
+       callbackData.entity.status === 'expired');
     const isTerminalStatus = TERMINAL_STATUSES.includes(callbackData.entity.status);
     
     if (!isTerminalEvent || !isTerminalStatus) {
@@ -276,10 +294,15 @@ export class MobilePaymentCallbackProcessor {
     // Exclude GIVE_CHANGE rows: they hold payout ids, not transaction ids.
     // FedaPay payout and transaction ids are separate sequences and can collide.
     // DEV mock payouts (transaction_id "mock-…") are resolved by FedaPayService's
-    // auto-callback through this same path, so keep matching those.
+    // auto-callback through this same path, so keep matching those, but only when
+    // mock mode is actually on (G1).
     const isFedaPayCollection = (tx: MobilePaymentTransaction | null | undefined) => {
       if (tx?.provider !== 'fedapay') return null;
-      if (tx.transaction_type === 'GIVE_CHANGE' && !this.isMockedTransaction(tx)) return null;
+      if (tx.transaction_type === 'GIVE_CHANGE') {
+        const isMocked = this.isMockedTransaction(tx);
+        if (!isMocked) return null;
+        if (!this.isFedaPayMockEnabled()) return null;
+      }
       return tx;
     };
     const byProviderId = isFedaPayCollection(
@@ -420,6 +443,13 @@ export class MobilePaymentCallbackProcessor {
       );
       return { received: true, transactionId: callbackData.entity.id };
     }
+    // F3: Handle approve-after-decline/cancel for top-ups (PAYMENT type).
+    // Re-check live with FedaPay, then credit exactly once if confirmed.
+    if (tx.status === 'failed' && isApproved && tx.transaction_type === 'PAYMENT') {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.handleLateSuccessOnFailedTopUp(tx, callbackData);
+      return { received: true, transactionId: callbackData.entity.id };
+    }
     if (tx.status === 'success' && isApproved) {
       await this.retrySuccessSideEffects(tx);
     }
@@ -504,6 +534,43 @@ export class MobilePaymentCallbackProcessor {
     );
   }
 
+  /**
+   * F3: Handle approve-after-decline/cancel for top-ups (PAYMENT type).
+   * Re-check live with FedaPay to confirm status, amount, currency and reference,
+   * then credit exactly once (idempotent with momo-deposit key).
+   */
+  private async handleLateSuccessOnFailedTopUp(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    if (!this.isMockedTransaction(tx)) {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(
+        tx,
+        'SUCCESS'
+      );
+    }
+    const credited = await this.creditWalletIfNeeded(tx);
+    if (!credited) {
+      throw new Error(
+        `Wallet credit failed for late success on failed top-up ${tx.id}; will retry`
+      );
+    }
+    const moved = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'failed',
+      {
+        status: 'success',
+        transaction_id: String(callbackData.entity.id),
+        error_code: LATE_SUCCESS_APPLIED,
+      }
+    );
+    this.logger.warn(
+      `Late success on failed top-up ${tx.id} (${tx.reference}): credited${
+        moved ? '' : ' (row already moved by concurrent callback)'
+      }`
+    );
+  }
+
   private async processPendingMypvit(
     tx: MobilePaymentTransaction,
     callbackData: MyPVitCallbackDto
@@ -564,7 +631,11 @@ export class MobilePaymentCallbackProcessor {
     tx: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
-    const providerTxId = String(callbackData.entity.id);
+    // F-L3: Preserve mock- transaction_id; don't overwrite with synthetic numeric id
+    const isMock = this.isMockedTransaction(tx);
+    const providerTxId = isMock && callbackData.entity.reference?.startsWith('mock-')
+      ? callbackData.entity.reference
+      : String(callbackData.entity.id);
     const isApproved = callbackData.entity.status === 'approved';
     
     if (

@@ -77,7 +77,7 @@ export class FedaPayService implements OnModuleInit {
   private readonly config: FedaPayConfig;
   private readonly mockEnabled: boolean;
   private readonly mockThreshold = 1_000_000;
-  private readonly mockCallbackDelayMs = 1500;
+  private readonly mockCallbackDelayMs = 2500;
   private readonly mockOutcomes = new Map<
     string,
     { outcome: 'approved' | 'declined' | 'pending'; amount: number }
@@ -157,6 +157,16 @@ export class FedaPayService implements OnModuleInit {
 
   private isMockedTransaction(reference: string): boolean {
     return reference?.startsWith('mock-') ?? false;
+  }
+
+  /**
+   * M3: Redact phone numbers in logs, keeping only the last 3 digits.
+   */
+  private redactPhone(phone?: string): string {
+    if (!phone) return '';
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length <= 3) return '***';
+    return '***' + cleaned.slice(-3);
   }
 
   private generateMockReference(): string {
@@ -259,7 +269,7 @@ export class FedaPayService implements OnModuleInit {
     if (this.isMockPendingPayer(paymentRequest.payer)) {
       this.mockOutcomes.set(mockRef, { outcome: 'pending', amount: paymentRequest.amount });
       this.logger.log(
-        `🔨 MOCK FedaPay payment: payer=${paymentRequest.payer} is on FEDAPAY_MOCK_PENDING_PHONES, reference=${externalId}, mock_ref=${mockRef}: stays pending (no auto-callback)`
+        `🔨 MOCK FedaPay payment: payer=${this.redactPhone(paymentRequest.payer)} is on FEDAPAY_MOCK_PENDING_PHONES, reference=${externalId}, mock_ref=${mockRef}: stays pending (no auto-callback)`
       );
       return {
         success: true,
@@ -274,7 +284,7 @@ export class FedaPayService implements OnModuleInit {
     this.mockOutcomes.set(mockRef, { outcome, amount: paymentRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FedaPay payment: amount=${paymentRequest.amount} XOF, payer=${paymentRequest.payer}, channel=${paymentRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
+      `🔨 MOCK FedaPay payment: amount=${paymentRequest.amount} XOF, payer=${this.redactPhone(paymentRequest.payer)}, channel=${paymentRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
     );
 
     this.scheduleAutoCallback(mockRef, externalId, outcome);
@@ -299,7 +309,7 @@ export class FedaPayService implements OnModuleInit {
     this.mockOutcomes.set(mockRef, { outcome, amount: withdrawalRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FedaPay payout: amount=${withdrawalRequest.amount} XOF, payee=${withdrawalRequest.payee}, channel=${withdrawalRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
+      `🔨 MOCK FedaPay payout: amount=${withdrawalRequest.amount} XOF, payee=${this.redactPhone(withdrawalRequest.payee)}, channel=${withdrawalRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
     );
 
     this.scheduleAutoCallback(mockRef, externalId, outcome);

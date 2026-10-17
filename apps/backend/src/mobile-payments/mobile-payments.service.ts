@@ -307,12 +307,18 @@ export class MobilePaymentsService {
         }
         // Check reference matches stored reference exactly (B4)
         // live.reference contains merchantRef || fedapay_id (from mapping at :719)
+        // N6: Fail closed if stored reference is empty/null
+        if (!tx.reference?.trim()) {
+          throw new Error(
+            `Rejecting FedaPay callback for ${tx.id}: missing stored reference (fail closed)`
+          );
+        }
         if (!live.reference) {
           throw new Error(
             `Rejecting FedaPay callback for ${tx.id}: missing live reference (fail closed)`
           );
         }
-        if (tx.reference && live.reference !== tx.reference) {
+        if (live.reference !== tx.reference) {
           throw new Error(
             `Rejecting FedaPay callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference})`
           );
@@ -332,14 +338,18 @@ export class MobilePaymentsService {
     }
     // N6: For FedaPay, also verify reference on DECLINED/failed outcomes
     // (with N2 substitution, a declined result could otherwise be confirmed on status alone)
-    if (
-      tx.provider === 'fedapay' &&
-      tx.reference &&
-      live.reference !== tx.reference
-    ) {
-      throw new Error(
-        `Rejecting FedaPay FAILED callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference || '<missing>'})`
-      );
+    // Fail closed if stored reference is empty/null
+    if (tx.provider === 'fedapay') {
+      if (!tx.reference?.trim()) {
+        throw new Error(
+          `Rejecting FedaPay FAILED callback for ${tx.id}: missing stored reference (fail closed)`
+        );
+      }
+      if (live.reference !== tx.reference) {
+        throw new Error(
+          `Rejecting FedaPay FAILED callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference || '<missing>'})`
+        );
+      }
     }
   }
 
@@ -425,16 +435,24 @@ export class MobilePaymentsService {
         }>;
       }>(query, { country: upperCountry });
       
-      const activeProviders = new Set(
-        result.supported_payment_systems.map((p: { name: string }) => p.name.toLowerCase())
+      this.logger.log(
+        `Found ${result.supported_payment_systems.length} active providers for ${upperCountry}: ${JSON.stringify(result.supported_payment_systems)}`
+      );
+      
+      const activeProviderNames = new Set(
+        result.supported_payment_systems.map((p) => p.name.toLowerCase())
       );
       
       // Filter providers to only those active for this country
-      return allProviders.filter((p: PaymentProvider) => 
-        activeProviders.has(p.name.toLowerCase()) || activeProviders.has(this.mapProviderName(p.name))
-      );
+      return allProviders.filter((p: PaymentProvider) => {
+        const dbName = this.mapProviderName(p.name);
+        return activeProviderNames.has(dbName);
+      });
     } catch (error: any) {
-      this.logger.error(`Failed to get active providers for ${upperCountry}: ${error.message}`);
+      this.logger.error(
+        `Failed to get active providers for ${upperCountry}: ${error.message}`,
+        error.stack
+      );
       // Return empty array on error to be safe
       return [];
     }
@@ -500,6 +518,21 @@ export class MobilePaymentsService {
           };
         }
 
+        // F-M3: Enforce that payer phone country matches the market/item country
+        if (paymentRequest.itemCountry) {
+          const itemCountryUpper = paymentRequest.itemCountry.trim().toUpperCase();
+          if (phoneValidation.regionCode !== itemCountryUpper) {
+            this.logger.warn(
+              `Phone country mismatch: phone=${phoneValidation.regionCode}, item country=${itemCountryUpper}`
+            );
+            return {
+              success: false,
+              message: `Payment phone number must match the item's country (${itemCountryUpper})`,
+              errorCode: 'PHONE_COUNTRY_MISMATCH',
+            };
+          }
+        }
+
         this.logger.log(
           `Phone number validated: ${paymentRequest.customerPhone} -> Country: ${phoneValidation.regionCode}, National: ${phoneValidation.nationalNumber}, callback URL: ${paymentRequest.callbackUrl || 'none'}`
         );
@@ -531,6 +564,37 @@ export class MobilePaymentsService {
             message: 'FedaPay amounts must be integers (XOF has no decimals)',
             errorCode: 'INVALID_AMOUNT',
           };
+        }
+        // F-L2: Validate Togo phone number format before creating row
+        if (paymentRequest.customerPhone) {
+          const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone);
+          if (phoneValidation.regionCode !== 'TG') {
+            return {
+              success: false,
+              message: 'FedaPay requires a Togo (+228) phone number',
+              errorCode: 'INVALID_PHONE_NUMBER',
+            };
+          }
+          // Check Togo-specific prefixes (Moov/Mixx)
+          const cleaned = paymentRequest.customerPhone.replace(/\D/g, '');
+          const hasTogoPrefix = cleaned.startsWith('228');
+          const national = hasTogoPrefix ? cleaned.slice(3) : cleaned;
+          if (national.length !== 8) {
+            return {
+              success: false,
+              message: 'Invalid Togo phone number. Must be 8 digits after +228.',
+              errorCode: 'INVALID_PHONE_NUMBER',
+            };
+          }
+          const prefix = national.slice(0, 2);
+          const validPrefixes = ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'];
+          if (!validPrefixes.includes(prefix)) {
+            return {
+              success: false,
+              message: 'Invalid Togo phone number. Must use valid Moov or Mixx prefix.',
+              errorCode: 'INVALID_PHONE_NUMBER',
+            };
+          }
         }
       }
 

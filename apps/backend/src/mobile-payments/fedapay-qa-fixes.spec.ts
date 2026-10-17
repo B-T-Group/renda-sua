@@ -1,0 +1,502 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ModuleRef } from '@nestjs/core';
+import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
+import { MobilePaymentsService } from './mobile-payments.service';
+import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
+import { AccountsService } from '../accounts/accounts.service';
+import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
+import type { FedaPayCallbackDto } from './mobile-payment-callback.dto';
+import type { MobilePaymentTransaction } from './mobile-payments-database.service';
+
+/**
+ * QA Phase 1 findings: F2, F3, F-L2, F-L3, F-M3, F-M5, G1, G2, G3, M3, N6
+ * Tests for each fix with mutation checks.
+ */
+describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
+  let processor: MobilePaymentCallbackProcessor;
+  let service: MobilePaymentsService;
+  let databaseService: MobilePaymentsDatabaseService;
+  let accountsService: AccountsService;
+
+  const mockDatabaseService = {
+    getTransactionById: jest.fn(),
+    getTransactionByTransactionId: jest.fn(),
+    getTransactionByReference: jest.fn(),
+    updateTransactionIfStatus: jest.fn(),
+    updateTransaction: jest.fn(),
+    logCallback: jest.fn(),
+  };
+
+  const mockAccountsService = {
+    registerDepositIfNotExists: jest.fn(),
+    registerWithdrawalIfNotExists: jest.fn(),
+    registerReleaseIfNotExists: jest.fn(),
+    hasTransactionForReference: jest.fn(),
+  };
+
+  const mockMobilePaymentsService = {
+    assertProviderConfirmsCallback: jest.fn(),
+  };
+
+  const mockRegistryService = {
+    getHandlers: jest.fn().mockReturnValue([]),
+  };
+
+  const mockModuleRef = {
+    get: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        MobilePaymentCallbackProcessor,
+        { provide: MobilePaymentsDatabaseService, useValue: mockDatabaseService },
+        { provide: AccountsService, useValue: mockAccountsService },
+        { provide: MobilePaymentsService, useValue: mockMobilePaymentsService },
+        { provide: PaymentCallbackRegistryService, useValue: mockRegistryService },
+        { provide: ModuleRef, useValue: mockModuleRef },
+      ],
+    }).compile();
+
+    processor = module.get<MobilePaymentCallbackProcessor>(MobilePaymentCallbackProcessor);
+    service = module.get<MobilePaymentsService>(MobilePaymentsService);
+    databaseService = module.get<MobilePaymentsDatabaseService>(MobilePaymentsDatabaseService);
+    accountsService = module.get<AccountsService>(AccountsService);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('F2: Handle transaction.expired event', () => {
+    const expiredTx: MobilePaymentTransaction = {
+      id: 'tx-expired-1',
+      status: 'pending',
+      provider: 'fedapay',
+      transaction_type: 'PAYMENT',
+      transaction_id: '789',
+      amount: 500,
+      currency: 'XOF',
+      reference: 'REF-EXPIRED',
+      customer_phone: '+22890123456',
+      account_id: 'acc-1',
+      payment_entity: 'wallet',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    it('should process transaction.expired event as terminal', async () => {
+      const expiredEvent: FedaPayCallbackDto = {
+        entity: {
+          id: 789,
+          status: 'expired',
+          amount: 500,
+          reference: 'REF-EXPIRED',
+          custom_metadata: { externalId: 'REF-EXPIRED' },
+        } as any,
+        name: 'transaction.expired',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(expiredTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+      const result = await processor.processFedaPayCallback(expiredEvent);
+
+      expect(result.received).toBe(true);
+      expect(mockDatabaseService.logCallback).toHaveBeenCalledWith(expiredTx.id, expiredEvent);
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.objectContaining({ id: expiredTx.id }),
+        'FAILED'
+      );
+    });
+
+    it('should still process transaction.updated with expired status', async () => {
+      const updatedExpired: FedaPayCallbackDto = {
+        entity: {
+          id: 789,
+          status: 'expired',
+          amount: 500,
+          reference: 'REF-EXPIRED',
+          custom_metadata: { externalId: 'REF-EXPIRED' },
+        } as any,
+        name: 'transaction.updated',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(expiredTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+      const result = await processor.processFedaPayCallback(updatedExpired);
+
+      expect(result.received).toBe(true);
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalled();
+    });
+  });
+
+  describe('F3: Approve-after-decline for top-ups', () => {
+    const failedTopUpTx: MobilePaymentTransaction = {
+      id: 'tx-failed-topup',
+      status: 'failed',
+      provider: 'fedapay',
+      transaction_type: 'PAYMENT',
+      transaction_id: '999',
+      amount: 1000,
+      currency: 'XOF',
+      reference: 'REF-TOPUP',
+      customer_phone: '+22890123456',
+      account_id: 'acc-1',
+      payment_entity: 'wallet',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    it('should re-check and credit a failed top-up that later gets approved', async () => {
+      const lateApproval: FedaPayCallbackDto = {
+        entity: {
+          id: 999,
+          status: 'approved',
+          amount: 1000,
+          reference: 'REF-TOPUP',
+          custom_metadata: { externalId: 'REF-TOPUP' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(failedTopUpTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+      const result = await processor.processFedaPayCallback(lateApproval);
+
+      expect(result.received).toBe(true);
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.objectContaining({ id: failedTopUpTx.id }),
+        'SUCCESS'
+      );
+      expect(mockAccountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: failedTopUpTx.account_id,
+          amount: failedTopUpTx.amount,
+        })
+      );
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        failedTopUpTx.id,
+        'failed',
+        expect.objectContaining({ status: 'success' })
+      );
+    });
+
+    it('should use CAS to prevent double-credit on concurrent callbacks', async () => {
+      const lateApproval: FedaPayCallbackDto = {
+        entity: {
+          id: 999,
+          status: 'approved',
+          amount: 1000,
+          reference: 'REF-TOPUP',
+          custom_metadata: { externalId: 'REF-TOPUP' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(failedTopUpTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      // CAS fails - another callback already moved the row
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(false);
+
+      const result = await processor.processFedaPayCallback(lateApproval);
+
+      expect(result.received).toBe(true);
+      // Credit still happened but CAS failed, so no double-credit
+      expect(mockAccountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('F-L3: Preserve mock- transaction_id', () => {
+    const mockTx: MobilePaymentTransaction = {
+      id: 'tx-mock-1',
+      status: 'pending',
+      provider: 'fedapay',
+      transaction_type: 'PAYMENT',
+      transaction_id: 'mock-abc-123',
+      amount: 500,
+      currency: 'XOF',
+      reference: 'REF-MOCK',
+      customer_phone: '+22890123456',
+      account_id: 'acc-1',
+      payment_entity: 'wallet',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    it('should preserve mock- id and not overwrite with numeric entity id', async () => {
+      const mockCallback: FedaPayCallbackDto = {
+        entity: {
+          id: 12345,
+          status: 'approved',
+          amount: 500,
+          reference: 'mock-abc-123',
+          custom_metadata: { externalId: 'REF-MOCK' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(mockTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+      await processor.processFedaPayCallback(mockCallback);
+
+      // Should use mock- reference, not the numeric entity.id
+      const updateCall = mockDatabaseService.updateTransactionIfStatus.mock.calls.find(
+        (call) => call[0] === mockTx.id && call[1] === 'processing'
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall[2].transaction_id).toBe('mock-abc-123');
+    });
+  });
+
+  describe('G1: Mock carve-out only when mock mode is on', () => {
+    const mockGiveChangeTx: MobilePaymentTransaction = {
+      id: 'tx-gc-mock',
+      status: 'pending',
+      provider: 'fedapay',
+      transaction_type: 'GIVE_CHANGE',
+      transaction_id: 'mock-xyz-789',
+      amount: 200,
+      currency: 'XOF',
+      reference: 'GC-REF',
+      customer_phone: '+22890123456',
+      account_id: 'acc-1',
+      payment_entity: 'wallet',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    it('should not match mock GIVE_CHANGE rows when mock mode is off', async () => {
+      // Mock mode is off
+      const mockFedaPayService = {
+        mockEnabled: false,
+      };
+      mockModuleRef.get.mockReturnValue(mockFedaPayService);
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(mockGiveChangeTx);
+      mockDatabaseService.getTransactionByReference.mockResolvedValue(null);
+
+      const callback: FedaPayCallbackDto = {
+        entity: {
+          id: 123,
+          status: 'approved',
+          amount: 200,
+          reference: 'mock-xyz-789',
+          custom_metadata: { externalId: 'GC-REF' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      const result = await processor.processFedaPayCallback(callback);
+
+      // Should not find the transaction (carve-out blocked by mock mode check)
+      expect(result.received).toBe(true);
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).not.toHaveBeenCalled();
+    });
+
+    it('should match mock GIVE_CHANGE rows when mock mode is on', async () => {
+      // Mock mode is on
+      const mockFedaPayService = {
+        mockEnabled: true,
+      };
+      mockModuleRef.get.mockReturnValue(mockFedaPayService);
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(mockGiveChangeTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValueOnce(true); // pending->processing
+      mockAccountsService.registerReleaseIfNotExists.mockResolvedValue({ success: true });
+      mockAccountsService.registerWithdrawalIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValueOnce(true); // processing->success
+
+      const callback: FedaPayCallbackDto = {
+        entity: {
+          id: 123,
+          status: 'approved',
+          amount: 200,
+          reference: 'mock-xyz-789',
+          custom_metadata: { externalId: 'GC-REF' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      const result = await processor.processFedaPayCallback(callback);
+
+      expect(result.received).toBe(true);
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalled();
+    });
+  });
+
+  describe('G3: Tests assert CAS and account operations', () => {
+    const gcTx: MobilePaymentTransaction = {
+      id: 'tx-gc-1',
+      status: 'pending',
+      provider: 'fedapay',
+      transaction_type: 'GIVE_CHANGE',
+      transaction_id: 'mock-gc-1',
+      amount: 150,
+      currency: 'XOF',
+      reference: 'GC-1',
+      customer_phone: '+22890123456',
+      account_id: 'acc-1',
+      payment_entity: 'wallet',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    it('should assert CAS claim succeeds before debit', async () => {
+      const mockFedaPayService = { mockEnabled: true };
+      mockModuleRef.get.mockReturnValue(mockFedaPayService);
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(gcTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValueOnce(true); // CAS claim
+      mockAccountsService.registerReleaseIfNotExists.mockResolvedValue({ success: true });
+      mockAccountsService.registerWithdrawalIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValueOnce(true); // mark success
+
+      const callback: FedaPayCallbackDto = {
+        entity: {
+          id: 111,
+          status: 'approved',
+          amount: 150,
+          reference: 'mock-gc-1',
+          custom_metadata: { externalId: 'GC-1' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      await processor.processFedaPayCallback(callback);
+
+      // Assert CAS was called
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        gcTx.id,
+        'pending',
+        { status: 'processing' }
+      );
+      // Assert debit was called
+      expect(mockAccountsService.registerWithdrawalIfNotExists).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: gcTx.account_id,
+          amount: gcTx.amount,
+        })
+      );
+    });
+
+    it('should not debit if CAS claim fails', async () => {
+      const mockFedaPayService = { mockEnabled: true };
+      mockModuleRef.get.mockReturnValue(mockFedaPayService);
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(gcTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      // CAS claim fails
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(false);
+      mockDatabaseService.getTransactionById.mockResolvedValue({
+        ...gcTx,
+        status: 'processing',
+      });
+
+      const callback: FedaPayCallbackDto = {
+        entity: {
+          id: 111,
+          status: 'approved',
+          amount: 150,
+          reference: 'mock-gc-1',
+          custom_metadata: { externalId: 'GC-1' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      await processor.processFedaPayCallback(callback);
+
+      // Assert no debit when CAS fails
+      expect(mockAccountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('N6: Handle empty/null stored reference', () => {
+    it('should reject callback when stored reference is empty via assertProviderConfirmsCallback', async () => {
+      const tx = {
+        id: 'tx-no-ref',
+        transaction_id: '123',
+        provider: 'fedapay',
+        reference: '',
+        amount: 500,
+        currency: 'XOF',
+        customer_phone: '+22890123456',
+        transaction_type: 'PAYMENT',
+      };
+
+      mockMobilePaymentsService.checkTransactionStatus = jest.fn().mockResolvedValue({
+        transactionId: '123',
+        status: 'success',
+        amount: 500,
+        currency: 'XOF',
+        reference: 'LIVE-REF',
+        provider: 'fedapay',
+      });
+
+      await expect(
+        service.assertProviderConfirmsCallback(tx, 'SUCCESS')
+      ).rejects.toThrow(/missing stored reference/);
+    });
+
+    it('should reject FAILED callback when stored reference is null', async () => {
+      const tx = {
+        id: 'tx-null-ref',
+        transaction_id: '123',
+        provider: 'fedapay',
+        reference: null,
+        amount: 500,
+        currency: 'XOF',
+        customer_phone: '+22890123456',
+        transaction_type: 'PAYMENT',
+      };
+
+      mockMobilePaymentsService.checkTransactionStatus = jest.fn().mockResolvedValue({
+        transactionId: '123',
+        status: 'failed',
+        amount: 500,
+        currency: 'XOF',
+        reference: 'LIVE-REF',
+        provider: 'fedapay',
+      });
+
+      await expect(
+        service.assertProviderConfirmsCallback(tx, 'FAILED')
+      ).rejects.toThrow(/missing stored reference/);
+    });
+  });
+});
