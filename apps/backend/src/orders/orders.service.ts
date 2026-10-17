@@ -3106,7 +3106,7 @@ export class OrdersService {
     const provider = momo.provider;
 
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: phoneNumber,
         provider,
@@ -4225,7 +4225,7 @@ export class OrdersService {
     }
 
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: phoneNumber,
         provider,
@@ -4464,7 +4464,7 @@ export class OrdersService {
     }
 
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: phoneNumber,
         provider,
@@ -4689,7 +4689,7 @@ export class OrdersService {
     const chargeAmount = Number(order.total_amount) || 0;
 
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: phoneNumber,
         provider: momo.provider,
@@ -5680,7 +5680,7 @@ export class OrdersService {
     const chargeAmount = Number(order.total_amount) || 0;
 
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: params.phone,
         provider: momo.provider,
@@ -6168,7 +6168,7 @@ export class OrdersService {
     );
     
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: phoneNumber,
         provider,
@@ -6432,7 +6432,7 @@ export class OrdersService {
     const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
 
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: phoneNumber,
         provider,
@@ -6981,7 +6981,7 @@ export class OrdersService {
     );
 
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: phone,
         provider,
@@ -15597,7 +15597,7 @@ export class OrdersService {
     userId?: string;
   }): Promise<{ transaction: any; paymentTransaction: any }> {
     // F-M6: Validate payment BEFORE creating transaction row
-    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest?.(
       {
         customerPhone: params.phoneNumber,
         provider: params.provider,
