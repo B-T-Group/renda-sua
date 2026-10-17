@@ -1342,8 +1342,15 @@ export class MobilePaymentsController {
     provider: string,
     itemCountry?: string
   ): Promise<void> {
-    // Resolve region for phone parsing (itemCountry or default GA)
-    const region = itemCountry ? isoCountryCode(itemCountry) || 'GA' : 'GA';
+    // Derive region from resolved provider for accurate phone parsing
+    const providerRegionMap: Record<string, string> = {
+      fedapay: 'TG',
+      freemopay: 'CM',
+      mypvit: 'GA',
+      airtel: 'GA',
+      moov: 'GA',
+    };
+    const region = providerRegionMap[provider] || 'GA';
     const phoneValidation = validatePhoneNumber(customerPhone, region);
     
     if (!phoneValidation.isValid) {
