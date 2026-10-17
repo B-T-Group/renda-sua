@@ -331,7 +331,7 @@ export class MobilePaymentsService {
     `;
     
     try {
-      const result = await this.hasuraSystemService.query<{
+      const result = await this.hasuraSystemService.executeQuery<{
         supported_payment_systems: Array<{
           provider: string;
           country: string;
