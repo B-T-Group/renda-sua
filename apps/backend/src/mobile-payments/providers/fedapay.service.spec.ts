@@ -627,16 +627,18 @@ describe('FedaPayService', () => {
             provide: ConfigService,
             useValue: {
               get: jest.fn((key: string) => {
-                const config = {
-                  'fedapay.env': 'sandbox',
-                  'fedapay.secretKey': 'sk_sandbox_TEST',
-                  'fedapay.publicKey': 'test-public',
-                  'fedapay.webhookSecret': 'test-webhook-secret',
-                  'fedapay.callbackUrl': 'https://test.com/callback',
-                  'fedapay.payoutCallbackUrl': 'https://test.com/payout-callback',
-                  'fedapay.mock': true,
-                };
-                return config[key];
+                if (key === 'fedapay') {
+                  return {
+                    environment: 'sandbox',
+                    secretKey: 'sk_sandbox_TEST',
+                    publicKey: 'test-public',
+                    webhookSecret: 'test-webhook-secret',
+                    callbackUrl: 'https://test.com/callback',
+                    payoutCallbackUrl: 'https://test.com/payout-callback',
+                    mockEnabled: true,
+                  };
+                }
+                return undefined;
               }),
             },
           },

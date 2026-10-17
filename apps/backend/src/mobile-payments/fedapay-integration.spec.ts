@@ -47,6 +47,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
   const mockMtnMomoService = {};
   const mockOrangeMomoService = {};
   const mockFreemopayService = {};
+  const mockFedaPayService = {};
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -71,7 +72,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   describe('B2: Signature Verification', () => {
@@ -177,6 +178,14 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       },
     });
 
+    beforeEach(() => {
+      // Re-establish webhook secret mock after reset
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'fedapay.webhookSecret') return secret;
+        return null;
+      });
+    });
+
     it('should accept valid webhook with real HMAC signature', () => {
       const timestamp = Math.floor(Date.now() / 1000);
       const header = Webhook.generateTestHeaderString({ payload, secret, timestamp });
@@ -227,22 +236,24 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       const parsedEvent = JSON.parse(payload);
       const rawBody = Buffer.from(payload);
 
-      // First call: event recorded and processed
-      mockHasuraSystemService.query.mockResolvedValueOnce({ webhook_events: [] });
-      mockHasuraSystemService.mutate.mockResolvedValueOnce({ insert_webhook_events_one: { id: 1 } });
-      mockCallbackProcessor.processFedaPayCallback.mockResolvedValueOnce({ received: true });
+      // First call: event processed and recorded in-memory
+      mockCallbackProcessor.processFedaPayCallback.mockResolvedValue({ received: true });
 
       const req1 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
       const result1 = await controller.fedapayCallback(req1);
       expect(result1).toEqual({ received: true });
+      expect(mockCallbackProcessor.processFedaPayCallback).toHaveBeenCalledTimes(1);
 
-      // Second call: same event replayed (webhook_events found, so processor not called again)
-      mockHasuraSystemService.query.mockResolvedValueOnce({ webhook_events: [{ id: 1, event_id: parsedEvent.id }] });
-      mockCallbackProcessor.processFedaPayCallback.mockResolvedValueOnce({ received: true });
-
+      // Second call: same event replayed, controller throws HTTP 200 (duplicate)
       const req2 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
-      const result2 = await controller.fedapayCallback(req2);
-      expect(result2).toEqual({ received: true });
+      try {
+        await controller.fedapayCallback(req2);
+        throw new Error('Expected HTTP 200 exception for duplicate');
+      } catch (error: any) {
+        expect(error.status).toBe(200);
+        expect(error.response.message).toBe('Duplicate event');
+      }
+      // Processor not called again
       expect(mockCallbackProcessor.processFedaPayCallback).toHaveBeenCalledTimes(1);
     });
 
@@ -252,17 +263,13 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       const parsedEvent = JSON.parse(payload);
       const rawBody = Buffer.from(payload);
 
-      // First call: event recorded but processing throws
-      mockHasuraSystemService.query.mockResolvedValueOnce({ webhook_events: [] });
-      mockHasuraSystemService.mutate.mockResolvedValueOnce({ insert_webhook_events_one: { id: 1 } });
+      // First call: processing throws, event NOT recorded in-memory
       mockCallbackProcessor.processFedaPayCallback.mockRejectedValueOnce(new Error('DB timeout'));
 
       const req1 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
-      await expect(controller.fedapayCallback(req1)).rejects.toThrow(/Failed to process FedaPay callback|DB timeout/);
+      await expect(controller.fedapayCallback(req1)).rejects.toThrow(/Failed to process FedaPay callback/);
 
-      // Second call: same event, but no recorded webhook_events (because insert failed in error path)
-      mockHasuraSystemService.query.mockResolvedValueOnce({ webhook_events: [] });
-      mockHasuraSystemService.mutate.mockResolvedValueOnce({ insert_webhook_events_one: { id: 2 } });
+      // Second call: same event retried, processing succeeds this time
       mockCallbackProcessor.processFedaPayCallback.mockResolvedValueOnce({ received: true });
 
       const req2 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
@@ -461,12 +468,61 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       }).toThrow(/only supports mobile_money/i);
     });
 
-    // Note: Account currency XOF checks for FedaPay are tested in
-    // mobile-payments.controller.ts:initiatePayment integration tests (B5)
-    // Lines 280-299 for payments and 1113-1130 for withdrawals
+    it('should reject initiatePayment with non-XOF currency for fedapay (service:505-510)', async () => {
+      const realService = new MobilePaymentsService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockFedaPayService,
+        mockHasuraSystemService as any,
+      );
 
-    // Note: XOF currency and integer amount validation for FedaPay is tested
-    // in mobile-payments.service.spec.ts:initiatePayment tests (B5)
+      const mockSelectProvider = jest.spyOn(realService as any, 'selectProvider')
+        .mockResolvedValue('fedapay');
+
+      const result = await realService.initiatePayment({
+        amount: 1000,
+        currency: 'XAF',
+        accountId: 'acc-test',
+        description: 'Test',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toMatch(/only supports XOF currency/i);
+
+      mockSelectProvider.mockRestore();
+    });
+
+    it('should reject initiatePayment with decimal amount for fedapay (service:512-519)', async () => {
+      const realService = new MobilePaymentsService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockFedaPayService,
+        mockHasuraSystemService as any,
+      );
+
+      const mockSelectProvider = jest.spyOn(realService as any, 'selectProvider')
+        .mockResolvedValue('fedapay');
+
+      const result = await realService.initiatePayment({
+        amount: 100.5,
+        currency: 'XOF',
+        accountId: 'acc-test',
+        description: 'Test',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toMatch(/amounts must be integers/i);
+
+      mockSelectProvider.mockRestore();
+    });
   });
 
 });
