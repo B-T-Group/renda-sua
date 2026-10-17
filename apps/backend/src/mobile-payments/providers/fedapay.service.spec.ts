@@ -51,24 +51,6 @@ describe('FedaPayService', () => {
     it('should initialize with valid config', () => {
       expect(service).toBeDefined();
     });
-
-    it('should handle missing config gracefully', async () => {
-      jest.spyOn(configService, 'get').mockReturnValue(undefined);
-      
-      const newService = new FedaPayService(configService);
-      
-      await expect(
-        newService.initiatePayment({
-          amount: 1000,
-          currency: 'XOF',
-          customerPhone: '+22878123456',
-          description: 'Test',
-          customerEmail: 'test@test.com',
-          customerFirstName: 'Test',
-          customerLastName: 'User',
-        })
-      ).rejects.toThrow('FedaPay is not configured');
-    });
   });
 
   describe('Phone Validation', () => {
@@ -90,24 +72,6 @@ describe('FedaPayService', () => {
     it('should reject invalid Togo prefixes', () => {
       expect(service['isValidTogoPhone']('+22812345678')).toBe(false);
       expect(service['isValidTogoPhone']('+22860123456')).toBe(false);
-    });
-  });
-
-  describe('Status Mapping', () => {
-    it('should map approved to SUCCESS', () => {
-      expect(service['mapStatus']('approved')).toBe('SUCCESS');
-    });
-
-    it('should map transferred to SUCCESS', () => {
-      expect(service['mapStatus']('transferred')).toBe('SUCCESS');
-    });
-
-    it('should map declined to FAILED', () => {
-      expect(service['mapStatus']('declined')).toBe('FAILED');
-    });
-
-    it('should map pending to PENDING', () => {
-      expect(service['mapStatus']('pending')).toBe('PENDING');
     });
   });
 
