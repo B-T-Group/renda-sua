@@ -207,6 +207,51 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       );
     });
 
+    it('should call reportMoneyAnomaly for late approval on non-wallet entity', async () => {
+      const failedOrderTx: MobilePaymentTransaction = {
+        id: 'tx-failed-order',
+        status: 'failed',
+        provider: 'fedapay',
+        transaction_type: 'PAYMENT',
+        transaction_id: '888',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF-ORDER',
+        customer_phone: '+22890123456',
+        account_id: 'acc-1',
+        payment_entity: 'order', // Non-wallet entity
+        entity_id: 'ORD-123',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const lateApprovalOrder: FedaPayCallbackDto = {
+        entity: {
+          id: 888,
+          status: 'approved',
+          amount: 1000,
+          reference: 'REF-ORDER',
+          custom_metadata: { externalId: 'REF-ORDER' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(failedOrderTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      const reportAnomalySpy = jest.spyOn(processor as any, 'reportMoneyAnomaly').mockResolvedValue(undefined);
+
+      const result = await processor.processFedaPayCallback(lateApprovalOrder);
+
+      expect(result.received).toBe(true);
+      expect(reportAnomalySpy).toHaveBeenCalledWith(
+        expect.objectContaining({ id: failedOrderTx.id }),
+        'late_success_non_wallet',
+        'Approved after decline: money captured, not applied'
+      );
+      // Should NOT call registerDepositIfNotExists for non-wallet entities
+      expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    });
+
     it('should use CAS to prevent double-credit on concurrent callbacks', async () => {
       const lateApproval: FedaPayCallbackDto = {
         entity: {
