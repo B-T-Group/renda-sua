@@ -261,6 +261,7 @@ describe('OrdersService', () => {
           getProviderForCountry: jest.fn().mockReturnValue('mypvit'),
           initiatePayment: jest.fn(),
           validatePaymentRequest: jest.fn().mockResolvedValue(null),
+          scheduleMockCallback: jest.fn(),
         } },
         { provide: MobilePaymentsDatabaseService, useValue: {
           hasPendingClaimOrderForOrderNumber: jest.fn().mockResolvedValue(false),
