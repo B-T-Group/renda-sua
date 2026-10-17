@@ -8,6 +8,7 @@ import {
   MobilePaymentResponse,
   MobilePaymentsService,
 } from './mobile-payments.service';
+import { FedaPayService } from './providers/fedapay.service';
 
 export type GiveChangeProvider =
   | 'mypvit'
@@ -54,7 +55,8 @@ export class GiveChangePayoutService {
   constructor(
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly mobilePaymentsService: MobilePaymentsService,
-    private readonly accountsService: AccountsService
+    private readonly accountsService: AccountsService,
+    private readonly fedaPayService: FedaPayService,
   ) {}
 
   buildDefaultCallbackUrl(): string {
@@ -380,10 +382,7 @@ export class GiveChangePayoutService {
 
     // G2: Schedule mock payout callback AFTER persisting the mock id
     if (providerTxId?.startsWith('mock-')) {
-      const fedapayService = this.mobilePaymentsService['fedapayService'] as any;
-      if (fedapayService?.scheduleMockPayoutCallback) {
-        fedapayService.scheduleMockPayoutCallback(providerTxId, reference);
-      }
+      this.fedaPayService.scheduleMockCallback(providerTxId, reference);
     }
 
     this.logger.log(

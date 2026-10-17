@@ -275,10 +275,11 @@ export class FedaPayService implements OnModuleInit {
     this.mockOutcomes.set(mockRef, { outcome, amount: paymentRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FedaPay payment: amount=${paymentRequest.amount} XOF, payer=${maskPhoneNumber(paymentRequest.payer)}, channel=${paymentRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
+      `🔨 MOCK FedaPay payment: amount=${paymentRequest.amount} XOF, payer=${maskPhoneNumber(paymentRequest.payer)}, channel=${paymentRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (callback will be scheduled after DB persist)`
     );
 
-    this.scheduleAutoCallback(mockRef, externalId, outcome);
+    // G2: DO NOT schedule here - caller must schedule AFTER persisting mock id
+    // this.scheduleAutoCallback(mockRef, externalId, outcome);
 
     return {
       success: true,
@@ -315,10 +316,10 @@ export class FedaPayService implements OnModuleInit {
   }
 
   /**
-   * G2: Schedule auto-callback for mock payout AFTER the mock id has been persisted.
-   * Must be called by GiveChangePayoutService after updateTransaction completes.
+   * G2: Schedule auto-callback for mock payment/payout AFTER the mock id has been persisted.
+   * Must be called by controller/service after updateTransaction completes.
    */
-  scheduleMockPayoutCallback(mockRef: string, externalId: string): void {
+  scheduleMockCallback(mockRef: string, externalId: string): void {
     if (!this.mockEnabled || !mockRef.startsWith('mock-')) {
       return;
     }
