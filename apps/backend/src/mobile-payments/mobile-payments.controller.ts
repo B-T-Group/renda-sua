@@ -22,6 +22,7 @@ import {
 } from 'class-validator';
 import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -86,7 +87,7 @@ export class InitiatePaymentDto {
 
   @IsOptional()
   @IsString()
-  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay';
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay' | 'fedapay';
 
   @IsOptional()
   @IsString()
@@ -132,7 +133,8 @@ export class MobilePaymentsController {
     private readonly callbackProcessor: MobilePaymentCallbackProcessor,
     private readonly withdrawalPinService: WithdrawalPinService,
     private readonly pendingWithdrawalResolveService: PendingWithdrawalResolveService,
-    private readonly transactionAccessService: MobileTransactionAccessService
+    private readonly transactionAccessService: MobileTransactionAccessService,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -173,12 +175,14 @@ export class MobilePaymentsController {
 
   /**
    * Get available payment providers
+   * @param country Optional ISO 3166-1 alpha-2 country code to filter providers
    */
   @Get('providers')
-  async getProviders() {
+  async getProviders(@Query('country') country?: string) {
     try {
-      const providers =
-        await this.mobilePaymentsService.getAvailableProviders();
+      const providers = country
+        ? await this.mobilePaymentsService.getProvidersForCountry(country)
+        : await this.mobilePaymentsService.getAvailableProviders();
       return {
         success: true,
         data: providers,
@@ -286,7 +290,7 @@ export class MobilePaymentsController {
         );
       }
 
-      this.assertMobileMoneyCurrency(paymentRequest, resolvedProvider);
+      this.assertMobileMoneyCurrency(paymentRequest, await resolvedProvider);
 
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
@@ -306,7 +310,7 @@ export class MobilePaymentsController {
         amount: paymentRequest.amount,
         currency: paymentRequest.currency,
         description: paymentRequest.description,
-        provider: resolvedProvider,
+        provider: await resolvedProvider,
         payment_method: paymentRequest.paymentMethod || 'mobile_money',
         customer_phone: paymentRequest.customerPhone,
         customer_email: paymentRequest.customerEmail,
@@ -690,6 +694,173 @@ export class MobilePaymentsController {
     }
   }
 
+  @Public()
+  @Post('callback/fedapay')
+  async fedapayCallback(
+    @Req() req: Request
+  ) {
+    try {
+      const signature = req.headers['x-fedapay-signature'] as string;
+      const rawBody = (req as unknown as { body: Buffer }).body;
+      
+      if (!signature) {
+        this.logger.warn('FedaPay webhook rejected: missing signature header');
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Missing webhook signature',
+          },
+          HttpStatus.UNAUTHORIZED
+        );
+      }
+
+      if (!rawBody || !Buffer.isBuffer(rawBody)) {
+        this.logger.warn('FedaPay webhook rejected: raw body unavailable');
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Invalid request body',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const { event: callbackData, timestamp } =
+        this.verifyAndParseFedaPayWebhook(rawBody, signature);
+
+      if (!callbackData.entity || !callbackData.name) {
+        this.logger.warn('FedaPay webhook rejected: missing entity or name');
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Missing required callback data',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      this.logger.log(`FedaPay webhook: event=${callbackData.name} entity_id=${callbackData.entity.id}`);
+
+      const result = await this.callbackProcessor.processFedaPayCallback(
+        callbackData,
+        req
+      );
+      // Only remember the event once it was processed, so a FedaPay retry
+      // after a 5xx is processed again instead of being acked as a duplicate.
+      if (callbackData.entity.id) {
+        this.recordFedaPayEvent(String(callbackData.entity.id), String(timestamp));
+      }
+      return result;
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error(`FedaPay callback processing error: ${error.message}`);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to process FedaPay callback',
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  private verifyAndParseFedaPayWebhook(
+    rawBody: Buffer,
+    signatureHeader: string
+  ): { event: any; timestamp: number } {
+    const webhookSecret = this.configService.get<string>('fedapay.webhookSecret');
+    
+    if (!webhookSecret) {
+      this.logger.error('FedaPay webhook secret not configured');
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Webhook verification not configured',
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
+    let event: any;
+    let timestamp: number;
+    try {
+      const { Webhook } = require('fedapay');
+      event = Webhook.constructEvent(
+        rawBody.toString('utf8'),
+        signatureHeader,
+        webhookSecret
+      );
+      
+      const parts = signatureHeader.split(',');
+      let timestampStr: string | null = null;
+      for (const part of parts) {
+        const [key, value] = part.trim().split('=');
+        if (key === 't') timestampStr = value;
+      }
+      timestamp = timestampStr ? parseInt(timestampStr, 10) : Math.floor(Date.now() / 1000);
+    } catch (error: any) {
+      this.logger.warn(`FedaPay webhook rejected: ${error.message}`);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Invalid webhook signature',
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+    
+    const currentTime = Math.floor(Date.now() / 1000);
+    const timeDiff = Math.abs(currentTime - timestamp);
+    
+    if (timeDiff > 300) {
+      this.logger.warn(`FedaPay webhook rejected: stale timestamp (diff=${timeDiff}s)`);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Webhook timestamp too old or in future',
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+    
+    const eventId = event.entity?.id ? String(event.entity.id) : null;
+    const timestampStr = String(timestamp);
+    if (eventId && this.hasSeenFedaPayEvent(eventId, timestampStr)) {
+      this.logger.log(`FedaPay webhook: duplicate event_id=${eventId}, returning 200`);
+      throw new HttpException(
+        {
+          success: true,
+          message: 'Duplicate event',
+        },
+        HttpStatus.OK
+      );
+    }
+    
+    return { event, timestamp };
+  }
+
+  private fedapayEventCache = new Map<string, number>();
+  
+  private hasSeenFedaPayEvent(eventId: string, timestamp: string): boolean {
+    const key = `${eventId}:${timestamp}`;
+    return this.fedapayEventCache.has(key);
+  }
+  
+  private recordFedaPayEvent(eventId: string, timestamp: string): void {
+    const key = `${eventId}:${timestamp}`;
+    const timestampNum = parseInt(timestamp, 10);
+    this.fedapayEventCache.set(key, timestampNum);
+    
+    const cutoff = Math.floor(Date.now() / 1000) - 600;
+    for (const [cachedKey, cachedTime] of this.fedapayEventCache.entries()) {
+      if (cachedTime < cutoff) {
+        this.fedapayEventCache.delete(cachedKey);
+      }
+    }
+  }
+
   /**
    * Check merchant balance
    */
@@ -915,11 +1086,11 @@ export class MobilePaymentsController {
     await this.assertGiveChangePrechecks(request, accountId);
     const resolvedProvider =
       this.mobilePaymentsService.resolveProviderFromRequest(request);
-    this.assertMobileMoneyCurrency(request, resolvedProvider);
+    this.assertMobileMoneyCurrency(request, await resolvedProvider);
     return this.executeOwnedGiveChangePayout(
       request,
       accountId,
-      resolvedProvider,
+      await resolvedProvider,
       initiatorUserId
     );
   }
@@ -974,12 +1145,12 @@ export class MobilePaymentsController {
     request: InitiatePaymentDto,
     accountId: string
   ): Promise<void> {
-    this.assertGiveChangeAmountAndPhone(request);
+    await this.assertGiveChangeAmountAndPhone(request);
     await this.assertGiveChangeFunds(request, accountId);
     await this.assertGiveChangePin(request, accountId);
   }
 
-  private assertGiveChangeAmountAndPhone(request: InitiatePaymentDto): void {
+  private async assertGiveChangeAmountAndPhone(request: InitiatePaymentDto): Promise<void> {
     if (request.amount < 150) {
       throw new HttpException(
         {
@@ -991,16 +1162,15 @@ export class MobilePaymentsController {
         HttpStatus.BAD_REQUEST
       );
     }
-    if (
-      !this.mobilePaymentsService.isWithdrawalDestinationCmOrGa(
-        request.customerPhone
-      )
-    ) {
+    const isValidDestination = await this.mobilePaymentsService.isWithdrawalDestinationCmOrGa(
+      request.customerPhone
+    );
+    if (!isValidDestination) {
       throw new HttpException(
         {
           success: false,
           message:
-            'Withdrawals are only supported to Cameroon (+237) or Gabon (+241) mobile numbers',
+            'Withdrawals are only supported to Cameroon (+237), Gabon (+241), or Togo (+228) mobile numbers (when active)',
           error: 'WITHDRAW_PHONE_REGION_NOT_ALLOWED',
         },
         HttpStatus.BAD_REQUEST
@@ -1101,8 +1271,45 @@ export class MobilePaymentsController {
   ): void {
     const isMobileMoney =
       !request.paymentMethod || request.paymentMethod === 'mobile_money';
+    
+    if (!isMobileMoney) {
+      return;
+    }
+
+    if (resolvedProvider === 'fedapay') {
+      if (request.currency !== 'XOF') {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'FedaPay payments are only supported for XOF currency',
+            error: 'UNSUPPORTED_CURRENCY',
+            data: {
+              provider: resolvedProvider,
+              currency: request.currency,
+              supportedCurrency: 'XOF',
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (!Number.isInteger(request.amount)) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'FedaPay amounts must be integers (XOF has no decimals)',
+            error: 'INVALID_AMOUNT',
+            data: {
+              provider: resolvedProvider,
+              amount: request.amount,
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      return;
+    }
+
     if (
-      !isMobileMoney ||
       request.currency === 'XAF' ||
       (resolvedProvider !== 'mypvit' &&
         resolvedProvider !== 'freemopay' &&
@@ -1111,6 +1318,7 @@ export class MobilePaymentsController {
     ) {
       return;
     }
+    
     throw new HttpException(
       {
         success: false,

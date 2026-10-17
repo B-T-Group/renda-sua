@@ -11,6 +11,19 @@ export interface MyPVitCallbackDto {
   code: number;
 }
 
+export interface FedaPayCallbackDto {
+  entity: {
+    id: number;
+    status: string;
+    amount: number;
+    reference: string;
+    custom_metadata?: {
+      externalId?: string;
+    };
+  };
+  name: string;
+}
+
 export interface FreemopayCallbackDto {
   reference: string;
   externalId?: string;
