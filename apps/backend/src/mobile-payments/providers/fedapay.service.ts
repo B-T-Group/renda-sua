@@ -168,18 +168,12 @@ export class FedaPayService implements OnModuleInit {
     if (!this.isValidTogoPhone(request.payer)) {
       return { valid: false, error: 'Invalid Togo phone number. Must be +228 followed by valid Moov or Mixx prefix.' };
     }
-    if (request.currency && request.currency !== 'XOF') {
-      return { valid: false, error: 'FedaPay only supports XOF currency for Togo.' };
-    }
     return { valid: true };
   }
 
   private validateWithdrawalRequest(request: FedaPayWithdrawalRequest): { valid: boolean; error?: string } {
     if (!this.isValidTogoPhone(request.payee)) {
       return { valid: false, error: 'Invalid Togo phone number. Must be +228 followed by valid Moov or Mixx prefix.' };
-    }
-    if (request.currency && request.currency !== 'XOF') {
-      return { valid: false, error: 'FedaPay only supports XOF currency for Togo.' };
     }
     return { valid: true };
   }
