@@ -260,6 +260,68 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
   });
 
+  describe('GIVE_CHANGE rows excluded from collection webhook lookup', () => {
+    const gcRow = { ...mockTransaction, id: 'gc-1', transaction_type: 'GIVE_CHANGE', transaction_id: '456', reference: 'REFGC' };
+    const collectionApproved: FedaPayCallbackDto = {
+      entity: { id: 456, status: 'approved', amount: 1000, reference: 'trx_x', custom_metadata: { externalId: 'REF123' } } as any,
+      name: 'transaction.approved',
+    };
+
+    beforeEach(() => {
+      // clearAllMocks does not drop queued mockResolvedValueOnce values from earlier tests
+      mockDatabaseService.getTransactionByTransactionId.mockReset();
+      mockDatabaseService.getTransactionByReference.mockReset();
+      mockDatabaseService.getTransactionById.mockReset();
+      mockDatabaseService.updateTransactionIfStatus.mockReset();
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockReset();
+      mockAccountsService.registerDepositIfNotExists.mockReset();
+    });
+
+    it('does not match a real GIVE_CHANGE row holding a colliding payout id', async () => {
+      mockDatabaseService.getTransactionByTransactionId.mockImplementation(async (k: string) => (k === '456' ? gcRow : null));
+      mockDatabaseService.getTransactionByReference.mockResolvedValue(null);
+
+      const res = await processor.processFedaPayCallback(successCallback);
+
+      expect(res.received).toBe(true);
+      expect(mockDatabaseService.logCallback).not.toHaveBeenCalled();
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).not.toHaveBeenCalled();
+    });
+
+    it('falls through to the collection row (by externalId) when a GIVE_CHANGE row shares the id', async () => {
+      mockDatabaseService.getTransactionByTransactionId.mockImplementation(async (k: string) => (k === '456' ? gcRow : null));
+      mockDatabaseService.getTransactionByReference.mockImplementation(async (k: string) => (k === 'REF123' ? mockTransaction : null));
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ success: true });
+
+      await processor.processFedaPayCallback(collectionApproved);
+
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'tx-123' }),
+        'SUCCESS'
+      );
+      expect(mockDatabaseService.logCallback).not.toHaveBeenCalledWith('gc-1', expect.anything());
+    });
+
+    it('still resolves a DEV mock payout auto-callback on its GIVE_CHANGE row', async () => {
+      const mockGc = { ...gcRow, transaction_id: 'mock-abc123-xyz' };
+      mockDatabaseService.getTransactionByTransactionId.mockImplementation(async (k: string) => (k === 'mock-abc123-xyz' ? mockGc : null));
+      mockDatabaseService.getTransactionByReference.mockImplementation(async (k: string) => (k === 'REFGC' ? mockGc : null));
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(false);
+
+      // exact shape FedaPayService.scheduleAutoCallback emits for a mock payout
+      await processor
+        .processFedaPayCallback({
+          entity: { id: parseInt('abc123', 36), status: 'approved', amount: 0, reference: 'mock-abc123-xyz', custom_metadata: { externalId: 'REFGC' } } as any,
+          name: 'transaction.approved',
+        })
+        .catch(() => undefined); // finalize collaborators are not under test here
+
+      expect(mockDatabaseService.logCallback).toHaveBeenCalledWith('gc-1', expect.anything());
+    });
+  });
+
   describe('N5: expired status handling', () => {
     it('handles transaction.updated with expired status as terminal failed', async () => {
       const expiredCallback: FedaPayCallbackDto = {
@@ -289,6 +351,20 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
       mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
 
       const result = await processor.processFedaPayCallback(pendingUpdateCallback);
+
+      expect(result.received).toBe(true);
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).not.toHaveBeenCalled();
+      expect(mockDatabaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
+    });
+
+    it('ignores transaction.updated with approved status (terminal events use dedicated transaction.approved)', async () => {
+      const approvedUpdateCallback: FedaPayCallbackDto = {
+        entity: { id: 456, status: 'approved', amount: 1000, reference: 'fedapay-tx-456' },
+        name: 'transaction.updated',
+      };
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
+
+      const result = await processor.processFedaPayCallback(approvedUpdateCallback);
 
       expect(result.received).toBe(true);
       expect(mockMobilePaymentsService.assertProviderConfirmsCallback).not.toHaveBeenCalled();

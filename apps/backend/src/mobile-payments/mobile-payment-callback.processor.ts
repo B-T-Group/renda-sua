@@ -275,8 +275,13 @@ export class MobilePaymentCallbackProcessor {
     // transaction_id/reference, so only ever match FedaPay rows here.
     // Exclude GIVE_CHANGE rows: they hold payout ids, not transaction ids.
     // FedaPay payout and transaction ids are separate sequences and can collide.
-    const isFedaPayCollection = (tx: MobilePaymentTransaction | null | undefined) =>
-      tx?.provider === 'fedapay' && tx?.transaction_type !== 'GIVE_CHANGE' ? tx : null;
+    // DEV mock payouts (transaction_id "mock-…") are resolved by FedaPayService's
+    // auto-callback through this same path, so keep matching those.
+    const isFedaPayCollection = (tx: MobilePaymentTransaction | null | undefined) => {
+      if (tx?.provider !== 'fedapay') return null;
+      if (tx.transaction_type === 'GIVE_CHANGE' && !this.isMockedTransaction(tx)) return null;
+      return tx;
+    };
     const byProviderId = isFedaPayCollection(
       await this.databaseService.getTransactionByTransactionId(key)
     );

@@ -441,6 +441,25 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       ).resolves.not.toThrow();
     });
 
+    describe('N5: expired is confirmed by the live re-check (service statusMap)', () => {
+      const expTx = { id: 'tx-exp', transaction_id: 'fedapay_tx_exp', amount: 1000, currency: 'XOF', reference: 'REF-EXP', provider: 'fedapay', status: 'pending' };
+
+      it('accepts an expired webhook when FedaPay reports expired with the matching reference', async () => {
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({ status: 'expired', amount: 1000, currency: 'XOF', merchantRef: 'REF-EXP' });
+        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).resolves.toBeUndefined();
+      });
+
+      it('rejects an expired webhook while FedaPay still reports pending', async () => {
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({ status: 'pending', amount: 1000, currency: 'XOF', merchantRef: 'REF-EXP' });
+        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toThrow(/provider still pending/);
+      });
+
+      it('rejects an expired webhook whose live reference mismatches', async () => {
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({ status: 'expired', amount: 1000, currency: 'XOF', merchantRef: 'OTHER' });
+        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toThrow(/reference mismatch/);
+      });
+    });
+
     describe('N6: reference check on FAILED (declined) callbacks', () => {
       const declinedTx = {
         id: 'tx-n6',
