@@ -2408,7 +2408,7 @@ export class RentalsService {
       entity_id: params.bookingNumber,
     });
 
-    const paymentRequest = {
+    const paymentRequest: MobilePaymentRequest = {
       amount: params.amount,
       currency: params.currency,
       description: descriptionShort,

@@ -13167,11 +13167,11 @@ export class OrdersService {
     return { ...payer, payer_phone: phone };
   }
 
-  private orderMomoContext(order: Orders): {
+  private async orderMomoContext(order: Orders): Promise<{
     provider: MobilePaymentIntegrationProvider;
     itemCountry: string | null;
     payerUserId?: string;
-  } {
+  }> {
     const location = order.business_location as {
       address?: { country?: string | null } | null;
       business?: { user?: { country?: string | null } | null } | null;
