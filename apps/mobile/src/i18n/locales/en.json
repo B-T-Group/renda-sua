@@ -5313,8 +5313,10 @@
       "forceFirstOrderHint": "Shows the first-order journey card on any business or client order on this device only.",
       "resetFirstOrder": "Reset first-order guidance",
       "resetFirstOrderDone": "First-order pin cleared. The next eligible order will teach again.",
-      "bannerDev": "DEVELOPMENT",
-      "bannerLocal": "LOCAL API"
+      "bannerDev": "D",
+      "bannerDevA11y": "Development",
+      "bannerLocal": "LOCAL API",
+      "bannerLocalA11y": "Local API"
     }
   },
   "menu": {

@@ -5220,8 +5220,10 @@
       "forceFirstOrderHint": "Affiche la carte parcours sur toute commande commerce ou client, sur cet appareil seulement.",
       "resetFirstOrder": "Réinitialiser le guide première commande",
       "resetFirstOrderDone": "Épinglage effacé. La prochaine commande éligible réaffichera le guide.",
-      "bannerDev": "DÉVELOPPEMENT",
-      "bannerLocal": "API LOCALE"
+      "bannerDev": "D",
+      "bannerDevA11y": "Développement",
+      "bannerLocal": "API LOCALE",
+      "bannerLocalA11y": "API locale"
     }
   },
   "menu": {
