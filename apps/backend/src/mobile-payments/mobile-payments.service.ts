@@ -284,8 +284,13 @@ export class MobilePaymentsService {
             `Rejecting FedaPay callback for ${tx.id}: stored currency ${tx.currency} is not XOF`
           );
         }
-        // Check live currency is XOF
-        if (live.currency && live.currency !== 'XOF') {
+        // Check live currency is XOF (fail closed if missing)
+        if (!live.currency) {
+          throw new Error(
+            `Rejecting FedaPay callback for ${tx.id}: missing live currency (fail closed)`
+          );
+        }
+        if (live.currency !== 'XOF') {
           throw new Error(
             `Rejecting FedaPay callback for ${tx.id}: live currency ${live.currency} is not XOF`
           );
@@ -296,11 +301,16 @@ export class MobilePaymentsService {
             `Rejecting FedaPay callback for ${tx.id}: amount mismatch (expected ${tx.amount}, got ${live.amount})`
           );
         }
-        // Check merchantRef matches stored reference exactly (B4)
-        const merchantRef = (live as any).merchantRef || '';
-        if (merchantRef && tx.reference && merchantRef !== tx.reference) {
+        // Check reference matches stored reference exactly (B4)
+        // live.reference contains merchantRef || fedapay_id (from mapping at :719)
+        if (!live.reference) {
           throw new Error(
-            `Rejecting FedaPay callback for ${tx.id}: merchantRef mismatch (expected ${tx.reference}, got ${merchantRef})`
+            `Rejecting FedaPay callback for ${tx.id}: missing live reference (fail closed)`
+          );
+        }
+        if (tx.reference && live.reference !== tx.reference) {
+          throw new Error(
+            `Rejecting FedaPay callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference})`
           );
         }
       }
@@ -715,7 +725,7 @@ export class MobilePaymentsService {
             transactionId: fedapayStatus.transactionId,
             status: statusMap[fedapayStatus.status] || 'pending',
             amount: fedapayStatus.amount || 0,
-            currency: 'XOF',
+            currency: fedapayStatus.currency || '', // Pass through real currency, fail closed on missing
             reference: fedapayStatus.merchantRef || fedapayStatus.reference || '',
             message: fedapayStatus.reason || fedapayStatus.message,
             provider: 'fedapay',
@@ -1102,14 +1112,6 @@ export class MobilePaymentsService {
       );
     }
     if (request.customerPhone?.trim()) {
-      // B7: Check for +228 (Togo) numbers before falling back to getProvider
-      const cleaned = request.customerPhone.replace(/\D/g, '');
-      if (cleaned.startsWith('228') && cleaned.length >= 11) {
-        const isActive = await this.isFedaPayActiveForTogo();
-        if (isActive) {
-          return 'fedapay';
-        }
-      }
       return this.getProvider(request.customerPhone);
     }
     return 'mypvit';

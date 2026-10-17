@@ -416,7 +416,7 @@ export class FedaPayService implements OnModuleInit {
 
       // Check for existing payout with same externalId (B6 idempotency)
       try {
-        const existingPayouts = await (Payout as any).list({
+        const existingPayouts = await Payout.all({
           'custom_metadata.externalId': externalId,
         });
         if (existingPayouts?.data?.length > 0) {
@@ -431,7 +431,9 @@ export class FedaPayService implements OnModuleInit {
           };
         }
       } catch (lookupError: any) {
-        this.logger.warn(`Failed to check existing payout: ${lookupError.message}`);
+        // Fail closed: don't create if lookup fails, let it retry
+        this.logger.error(`Payout lookup failed for ${externalId}: ${lookupError.message}`);
+        throw new Error(`Failed to check existing payout: ${lookupError.message}`);
       }
 
       const payout = await Payout.create({
@@ -501,7 +503,7 @@ export class FedaPayService implements OnModuleInit {
 
       const payoutData: any = payout;
       const customMeta = payoutData.custom_metadata || {};
-      const currency = payoutData.currency?.iso || 'XOF';
+      const currency = payoutData.currency?.iso || ''; // Fail closed on missing currency
 
       const statusMap: Record<string, string> = {
         sent: 'approved',
@@ -550,7 +552,7 @@ export class FedaPayService implements OnModuleInit {
 
       const txData: any = transaction;
       const customMeta = txData.custom_metadata || {};
-      const currency = txData.currency?.iso || 'XOF';
+      const currency = txData.currency?.iso || ''; // Fail closed on missing currency
 
       return {
         transactionId: String(transaction.id),
