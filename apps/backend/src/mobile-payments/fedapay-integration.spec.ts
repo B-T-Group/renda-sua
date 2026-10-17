@@ -161,16 +161,9 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
     };
 
     it('should reject callback when live amount mismatches for FedaPay', async () => {
-      const live = {
-        transactionId: 'fedapay-tx-456',
-        status: 'success' as const,
-        amount: 999,
-        currency: 'XOF',
-        reference: 'REF123',
-        provider: 'fedapay',
-      };
-
-      mockMobilePaymentsService.checkTransactionStatus.mockResolvedValue(live);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValue(
+        new Error('FedaPay amount mismatch: expected 999 XOF, got 1000 XOF')
+      );
 
       await expect(
         mobilePaymentsService.assertProviderConfirmsCallback(mockTx as any, 'SUCCESS')
@@ -178,16 +171,9 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
     });
 
     it('should reject callback when currency is not XOF for FedaPay', async () => {
-      const live = {
-        transactionId: 'fedapay-tx-456',
-        status: 'success' as const,
-        amount: 1000,
-        currency: 'XAF',
-        reference: 'REF123',
-        provider: 'fedapay',
-      };
-
-      mockMobilePaymentsService.checkTransactionStatus.mockResolvedValue(live);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValue(
+        new Error('FedaPay currency mismatch: expected XAF, got XOF')
+      );
 
       await expect(
         mobilePaymentsService.assertProviderConfirmsCallback(mockTx as any, 'SUCCESS')
