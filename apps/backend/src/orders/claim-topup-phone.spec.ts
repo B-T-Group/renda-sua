@@ -67,6 +67,7 @@ function createHarness() {
     mobilePaymentsService: {
       getProviderForCountry: jest.fn().mockReturnValue('freemopay'),
       initiatePayment,
+      validatePaymentRequest: jest.fn().mockResolvedValue(null),
     },
     waitAndExecuteScheduleService: {
       schedulePaymentTimeout: jest.fn().mockResolvedValue(undefined),

@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { ModuleRef } from '@nestjs/core';
 import { FreemopayService } from './providers/freemopay.service';
 import { FedaPayService } from './providers/fedapay.service';
 import { MyPVitService } from './providers/mypvit.service';
@@ -52,7 +53,7 @@ describe('Production Sanitization & Masking Tests', () => {
               }),
             },
           },
-          { provide: 'ModuleRef', useValue: {} },
+          { provide: ModuleRef, useValue: {} },
         ],
       }).compile();
 
@@ -211,7 +212,7 @@ describe('Production Sanitization & Masking Tests', () => {
               }),
             },
           },
-          { provide: 'ModuleRef', useValue: {} },
+          { provide: ModuleRef, useValue: {} },
         ],
       }).compile();
 
