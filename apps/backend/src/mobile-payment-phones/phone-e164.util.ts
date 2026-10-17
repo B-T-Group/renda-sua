@@ -1,12 +1,14 @@
-const ALLOWED_COUNTRY_CODES = new Set(['237', '241']);
+export const ALLOWED_COUNTRY_CODES = new Set(['228', '237', '241']);
 
 /** ISO alpha-2 → calling code for supported mobile-money countries. */
-const ISO_TO_CALLING: Record<string, string> = {
+export const ISO_TO_CALLING: Record<string, string> = {
+  TG: '228',
   CM: '237',
   GA: '241',
 };
 
-const CALLING_TO_ISO: Record<string, string> = {
+export const CALLING_TO_ISO: Record<string, string> = {
+  '228': 'TG',
   '237': 'CM',
   '241': 'GA',
 };
