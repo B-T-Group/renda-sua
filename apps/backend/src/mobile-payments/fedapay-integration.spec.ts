@@ -530,6 +530,12 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         getAccountBalance: jest.fn().mockResolvedValue({
           currency: 'XAF',
           balance: 5000,
+          availableBalance: 5000,
+        }),
+        getBusinessWithdrawalPinStateByAccountId: jest.fn().mockResolvedValue({
+          enabled: true,
+          hash: 'test-hash',
+          businessId: 'bus-123',
         }),
       };
       const mockTestMobilePaymentsService = {
@@ -537,14 +543,14 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         assertMobileMoneyCurrency: jest.fn(),
         checkTransactionStatus: jest.fn(),
         assertProviderConfirmsCallback: jest.fn(),
-        isWithdrawalDestinationCmOrGa: jest.fn(),
+        isWithdrawalDestinationCmOrGa: jest.fn().mockResolvedValue(true),
       };
       const mockGiveChangePayoutService = {
-        executeOwnedGiveChangePayout: jest.fn(),
+        executeGiveChangePayout: jest.fn(),
       };
       const mockHasuraUserService = {};
       const mockWithdrawalPinService = {
-        isValidPin: jest.fn().mockResolvedValue(true),
+        verifyPin: jest.fn().mockReturnValue(true),
       };
       const mockPendingWithdrawalResolveService = {};
       const mockMobileTransactionAccessService = {};
@@ -573,14 +579,16 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       const request = {
         amount: 1000,
         currency: 'XOF',
+        accountId: 'acc-xaf',
         customerPhone: '+22878123456',
         description: 'Test withdrawal',
-        pin: '1234',
+        transactionType: 'GIVE_CHANGE' as const,
+        withdrawalPin: '1234',
       };
-      const ctx = { userId: 'user-123' } as any;
+      const ctx = { userId: 'user-123', user: { id: 'user-123' } } as any;
 
       try {
-        await testController.giveChangePayout('acc-xaf', request as any, ctx);
+        await testController.initiatePayment(request as any, ctx);
         throw new Error('Expected ACCOUNT_CURRENCY_MISMATCH error');
       } catch (error: any) {
         expect(error.status).toBe(400);
