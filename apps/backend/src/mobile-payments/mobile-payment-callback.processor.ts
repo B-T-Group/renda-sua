@@ -550,7 +550,17 @@ export class MobilePaymentCallbackProcessor {
       this.logger.error(
         `Late success on failed ${tx.payment_entity} tx ${tx.id} (${tx.reference}): money captured but entity is not a wallet. MONEY ANOMALY - requires manual review.`
       );
-      await this.reportMoneyAnomaly(tx, 'late_success_non_wallet', 'Approved after decline: money captured, not applied');
+      await reportMoneyAnomaly(
+        this.logger,
+        'late_success_non_wallet',
+        `Late success on ${tx.payment_entity} tx ${tx.id}: approved after decline, money captured but not applied`,
+        {
+          transactionId: tx.id,
+          reference: tx.reference,
+          entity: tx.payment_entity,
+          entityId: tx.entity_id,
+        }
+      );
       return;
     }
 
