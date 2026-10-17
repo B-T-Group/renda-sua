@@ -542,10 +542,10 @@ export class MobilePaymentCallbackProcessor {
     tx: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
-    // F3: Limit to wallet top-ups only
-    if (tx.payment_entity !== 'wallet') {
+    // F3: Limit to wallet top-ups only (payment_entity='account')
+    if (tx.payment_entity !== 'account') {
       this.logger.warn(
-        `Late success on failed ${tx.payment_entity} tx ${tx.id}: not wallet, skipping`
+        `Late success on failed ${tx.payment_entity} tx ${tx.id}: not account wallet, skipping`
       );
       return;
     }
