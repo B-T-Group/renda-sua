@@ -6347,6 +6347,7 @@ describe('OrdersService', () => {
           transactionId: 'momo-tx-1',
           message: 'Payment initiated',
         }),
+        validatePaymentRequest: jest.fn().mockResolvedValue(null),
       };
       (service as any).mobilePaymentsDatabaseService = {
         getPendingOrderPaymentTransactionByOrderNumber: jest
