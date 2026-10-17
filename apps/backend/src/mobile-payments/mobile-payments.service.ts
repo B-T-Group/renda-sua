@@ -121,8 +121,45 @@ export class MobilePaymentsService {
   }
 
   /** Catalog MoMo integration from the item/listing country, not the payer phone. */
-  getProviderForCountry(country?: string | null): MobilePaymentIntegrationProvider {
-    return mapCountryToMobileMoneyProvider(country);
+  async getProviderForCountry(country?: string | null): Promise<MobilePaymentIntegrationProvider> {
+    const provider = mapCountryToMobileMoneyProvider(country);
+    
+    // Check if provider is active in supported_payment_systems
+    if (provider === 'fedapay') {
+      const iso = country?.trim().toUpperCase();
+      if (iso === 'TG') {
+        const isActive = await this.isFedaPayActiveForTogo();
+        if (!isActive) {
+          this.logger.log('FedaPay for TG is not active, falling back to MyPVit');
+          return 'mypvit';
+        }
+      }
+    }
+    
+    return provider;
+  }
+
+  private async isFedaPayActiveForTogo(): Promise<boolean> {
+    try {
+      const query = `
+        query CheckFedaPayActive {
+          supported_payment_systems(
+            where: { name: { _eq: "fedapay" }, country: { _eq: "TG" } }
+          ) {
+            active
+          }
+        }
+      `;
+      
+      const result = await this.hasuraSystemService.executeQuery<{
+        supported_payment_systems: Array<{ active: boolean }>;
+      }>(query, {});
+      
+      return result.supported_payment_systems[0]?.active ?? false;
+    } catch (error: any) {
+      this.logger.error('Failed to check FedaPay active status:', error);
+      return false;
+    }
   }
 
   /** National MSISDN digits for synthetic MyPVit callbacks (admin replay). */
@@ -133,11 +170,11 @@ export class MobilePaymentsService {
     return removeCountryCode(customerPhone);
   }
 
-  resolveAdminIntegrationProvider(
+  async resolveAdminIntegrationProvider(
     customerPhone: string | undefined | null,
     storedProvider: string
-  ): MobilePaymentIntegrationProvider {
-    return this.resolveProviderFromRequest({
+  ): Promise<MobilePaymentIntegrationProvider> {
+    return await this.resolveProviderFromRequest({
       customerPhone: customerPhone ?? undefined,
       provider: this.knownProvider(storedProvider),
     });
@@ -179,7 +216,7 @@ export class MobilePaymentsService {
         `Cannot verify callback for ${tx.id}: missing provider transaction_id`
       );
     }
-    const provider = this.resolveAdminIntegrationProvider(
+    const provider = await this.resolveAdminIntegrationProvider(
       tx.customer_phone,
       tx.provider
     );
@@ -315,7 +352,7 @@ export class MobilePaymentsService {
       );
 
       // Determine the best provider based on request
-      const provider = this.selectProvider(paymentRequest);
+      const provider = await this.selectProvider(paymentRequest);
 
       // Convert to provider-specific request
       const providerRequest = this.convertToProviderRequest(
@@ -829,15 +866,15 @@ export class MobilePaymentsService {
    * Same choice at charge time and on the callback.
    * Direct MTN/Orange first, then any +237 number on FreemoPay, then item country.
    */
-  resolveProviderFromRequest(
+  async resolveProviderFromRequest(
     request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider' | 'itemCountry'>
-  ): MobilePaymentIntegrationProvider {
+  ): Promise<MobilePaymentIntegrationProvider> {
     if (request.provider === 'mtn' || request.provider === 'orange') {
       return request.provider;
     }
     if (isCameroonCountryCode(request.customerPhone)) return 'freemopay';
     if (request.itemCountry?.trim()) {
-      return this.getProviderForCountry(request.itemCountry);
+      return await this.getProviderForCountry(request.itemCountry);
     }
     return this.providerFromHintOrPhone(request);
   }
@@ -859,8 +896,8 @@ export class MobilePaymentsService {
     return 'mypvit';
   }
 
-  private selectProvider(request: MobilePaymentRequest): string {
-    return this.resolveProviderFromRequest(request);
+  private async selectProvider(request: MobilePaymentRequest): Promise<string> {
+    return await this.resolveProviderFromRequest(request);
   }
 
   /**
