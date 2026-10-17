@@ -13510,6 +13510,7 @@ export class OrdersService {
             description
             pay_on_delivery_enabled
             export_available
+            moderation_status
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price
@@ -13704,6 +13705,18 @@ export class OrdersService {
       if (!businessInventory.is_active) {
         throw new Error(
           `Item ${businessInventory.item.name} is not currently available`
+        );
+      }
+
+      // F-M7: unmoderated (draft/pending/rejected) items cannot be ordered
+      if (businessInventory.item?.moderation_status !== 'approved') {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'ITEM_UNAVAILABLE',
+            message: `Item ${businessInventory.item?.name ?? ''} is not currently available`,
+          },
+          HttpStatus.BAD_REQUEST
         );
       }
 

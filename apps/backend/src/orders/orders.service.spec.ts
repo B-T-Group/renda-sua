@@ -143,6 +143,7 @@ describe('OrdersService', () => {
     id: 'item-123',
     name: 'Shipping item',
     description: 'Ships to the customer',
+    moderation_status: "approved",
     pay_on_delivery_enabled: false,
     pay_at_pickup_enabled: false,
     shipping_enabled: true,
@@ -571,6 +572,47 @@ describe('OrdersService', () => {
   });
 
   describe('createOrder', () => {
+    it.each(['draft', 'pending', 'rejected'])(
+      'F-M7: rejects createOrder for an item with moderation_status %s before inserting the order',
+      async (moderationStatus) => {
+        hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+        hasuraUserService.sessionPersonaContext.mockReturnValue({
+          jwtDefaultRole: 'client',
+          jwtAllowedRoles: ['client'],
+        });
+        hasuraSystemService.getAccount.mockResolvedValue({
+          id: 'account-123',
+          available_balance: 100,
+        } as any);
+        (service as any).paymentRoutingService.resolveRailForUser.mockResolvedValue(
+          'mobile_money'
+        );
+        const draftInventory = shippingInventoryFixture();
+        (draftInventory as any).item = {
+          ...(draftInventory as any).item,
+          moderation_status: moderationStatus,
+        };
+        hasuraSystemService.executeQuery
+          .mockResolvedValueOnce({ business_inventory: [draftInventory] })
+          .mockResolvedValueOnce({ supported_payment_systems: [] })
+          .mockResolvedValueOnce({ item_deals: [] });
+
+        await expect(
+          service.createOrder({
+            delivery_address_id: 'address-123',
+            fulfillment_method: 'shipping',
+            payment_timing: 'pay_now',
+            phone_number: '+14165550123',
+            items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
+          })
+        ).rejects.toThrow(/not currently available/);
+        expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
+          expect.stringContaining('mutation CreateOrderWithItems'),
+          expect.anything()
+        );
+      }
+    );
+
     it('passes first-order delivery promo defaults for shipping orders', async () => {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.sessionPersonaContext.mockReturnValue({
@@ -796,6 +838,7 @@ describe('OrdersService', () => {
           id: 'item-pad-123',
           name: 'PAD item',
           description: 'Pay at delivery item',
+          moderation_status: "approved",
           pay_on_delivery_enabled: true,
           pay_at_pickup_enabled: true,
           shipping_enabled: false,
@@ -1031,6 +1074,7 @@ describe('OrdersService', () => {
           name: 'Fried Rice',
           description: 'Cooked dish',
           is_cooked_food: true,
+          moderation_status: "approved",
           pay_on_delivery_enabled: true,
           pay_at_pickup_enabled: true,
           shipping_enabled: false,
@@ -1192,6 +1236,7 @@ describe('OrdersService', () => {
           name: 'Fried Rice',
           description: 'Cooked dish',
           is_cooked_food: false,
+          moderation_status: "approved",
           pay_on_delivery_enabled: true,
           pay_at_pickup_enabled: true,
           shipping_enabled: false,
@@ -1349,6 +1394,7 @@ describe('OrdersService', () => {
           name: 'Fried Rice',
           description: 'Cooked dish',
           is_cooked_food: false,
+          moderation_status: "approved",
           pay_on_delivery_enabled: true,
           pay_at_pickup_enabled: true,
           shipping_enabled: false,
@@ -1491,6 +1537,7 @@ describe('OrdersService', () => {
           name: 'Fried Rice',
           description: 'Cooked dish',
           is_cooked_food: false,
+          moderation_status: "approved",
           pay_on_delivery_enabled: true,
           pay_at_pickup_enabled: true,
           shipping_enabled: false,
@@ -1633,6 +1680,7 @@ describe('OrdersService', () => {
           name: 'Fried Rice',
           description: 'Cooked dish',
           is_cooked_food: false,
+          moderation_status: "approved",
           pay_on_delivery_enabled: true,
           pay_at_pickup_enabled: true,
           shipping_enabled: false,
@@ -1750,6 +1798,7 @@ describe('OrdersService', () => {
           id: 'item-f',
           name: 'Flagged Item',
           is_cooked_food: false,
+          moderation_status: "approved",
           pay_on_delivery_enabled: true,
           pay_at_pickup_enabled: true,
           currency: 'XAF',
@@ -1922,6 +1971,7 @@ describe('OrdersService', () => {
               item: {
                 name: 'Pay at delivery item',
                 description: 'Pay at delivery item',
+                moderation_status: "approved",
                 pay_on_delivery_enabled: true,
                 pay_at_pickup_enabled: true,
                 shipping_enabled: false,
