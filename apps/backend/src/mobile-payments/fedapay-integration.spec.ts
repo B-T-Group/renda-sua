@@ -468,7 +468,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       }).toThrow(/only supports mobile_money/i);
     });
 
-    it.skip('should reject FedaPay top-up from non-XOF account', async () => {
+    it('should reject FedaPay top-up from non-XOF account (controller:280-299)', async () => {
       const mockAccountsService = {
         getAccountBalance: jest.fn().mockResolvedValue({
           currency: 'XAF',
@@ -477,7 +477,6 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       };
       const mockTestMobilePaymentsService = {
         resolveProviderFromRequest: jest.fn().mockResolvedValue('fedapay'),
-        assertMobileMoneyCurrency: jest.fn(),
         checkTransactionStatus: jest.fn(),
         assertProviderConfirmsCallback: jest.fn(),
         isWithdrawalDestinationCmOrGa: jest.fn(),
@@ -521,17 +520,28 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       };
       const ctx = { userId: 'user-123', user: { id: 'user-123' } } as any;
 
-      try {
-        await testController.initiatePayment(request as any, ctx);
-        throw new Error('Expected ACCOUNT_CURRENCY_MISMATCH error');
-      } catch (error: any) {
-        expect(error.status).toBe(400);
-        expect(error.response?.error).toBe('ACCOUNT_CURRENCY_MISMATCH');
-        expect(error.response?.message).toMatch(/FedaPay.*requires account currency to be XOF/i);
-      }
+      // Controller signature is initiatePayment(ctx, paymentRequest).
+      const error: any = await testController
+        .initiatePayment(ctx, request as any)
+        .then(
+          () => {
+            throw new Error('Expected ACCOUNT_CURRENCY_MISMATCH error');
+          },
+          (e) => e
+        );
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(error.getResponse()).toMatchObject({
+        error: 'ACCOUNT_CURRENCY_MISMATCH',
+        data: { accountCurrency: 'XAF', requiredCurrency: 'XOF' },
+      });
+      expect(error.getResponse().message).toMatch(/FedaPay.*requires account currency to be XOF/i);
+      expect(
+        mockTestMobilePaymentsService.resolveProviderFromRequest
+      ).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-xaf' }));
     });
 
-    it.skip('should reject FedaPay withdrawal from non-XOF account', async () => {
+    it('should reject FedaPay withdrawal from non-XOF account (controller:1113-1130)', async () => {
       const mockAccountsService = {
         getAccountBalance: jest.fn().mockResolvedValue({
           currency: 'XAF',
@@ -546,7 +556,6 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       };
       const mockTestMobilePaymentsService = {
         resolveProviderFromRequest: jest.fn().mockResolvedValue('fedapay'),
-        assertMobileMoneyCurrency: jest.fn(),
         checkTransactionStatus: jest.fn(),
         assertProviderConfirmsCallback: jest.fn(),
         isWithdrawalDestinationCmOrGa: jest.fn().mockResolvedValue(true),
@@ -598,14 +607,25 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       };
       const ctx = { userId: 'user-123', user: { id: 'user-123' } } as any;
 
-      try {
-        await testController.initiatePayment(request as any, ctx);
-        throw new Error('Expected ACCOUNT_CURRENCY_MISMATCH error');
-      } catch (error: any) {
-        expect(error.status).toBe(400);
-        expect(error.response?.error).toBe('ACCOUNT_CURRENCY_MISMATCH');
-        expect(error.response?.message).toMatch(/FedaPay.*withdrawals require account currency to be XOF/i);
-      }
+      // Controller signature is initiatePayment(ctx, paymentRequest).
+      const error: any = await testController
+        .initiatePayment(ctx, request as any)
+        .then(
+          () => {
+            throw new Error('Expected ACCOUNT_CURRENCY_MISMATCH error');
+          },
+          (e) => e
+        );
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(error.getResponse()).toMatchObject({
+        error: 'ACCOUNT_CURRENCY_MISMATCH',
+        data: { accountCurrency: 'XAF', requiredCurrency: 'XOF' },
+      });
+      expect(error.getResponse().message).toMatch(/FedaPay.*withdrawals require account currency to be XOF/i);
+      expect(
+        mockTestMobilePaymentsService.resolveProviderFromRequest
+      ).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-xaf' }));
     });
 
     it('should reject initiatePayment with non-XOF currency for fedapay (service:505-510)', async () => {
