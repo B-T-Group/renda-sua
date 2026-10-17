@@ -483,7 +483,9 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         isWithdrawalDestinationCmOrGa: jest.fn(),
       };
       const mockGiveChangePayoutService = {};
-      const mockHasuraUserService = {};
+      const mockHasuraUserService = {
+        getUser: jest.fn().mockResolvedValue({ id: 'user-123' }),
+      };
       const mockWithdrawalPinService = {};
       const mockPendingWithdrawalResolveService = {};
       const mockMobileTransactionAccessService = {
@@ -550,7 +552,9 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       const mockGiveChangePayoutService = {
         executeGiveChangePayout: jest.fn(),
       };
-      const mockHasuraUserService = {};
+      const mockHasuraUserService = {
+        getUser: jest.fn().mockResolvedValue({ id: 'user-123' }),
+      };
       const mockWithdrawalPinService = {
         verifyPin: jest.fn().mockReturnValue(true),
       };
