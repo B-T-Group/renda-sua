@@ -4262,7 +4262,7 @@ export class OrdersService {
       if (paymentTransaction.transactionId.startsWith('mock-')) {
         await this.mobilePaymentsService.scheduleMockCallback(
           paymentTransaction.transactionId,
-          reference
+          paymentAttemptReference
         );
       }
     }
