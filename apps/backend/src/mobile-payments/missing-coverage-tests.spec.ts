@@ -16,7 +16,7 @@ import { OrangeMomoService } from '../orange-momo/orange-momo.service';
 import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
 import { GiveChangePayoutService } from './give-change-payout.service';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
-import { WithdrawalPinService } from './withdrawal-pin.service';
+import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { MobileTransactionAccessService } from './mobile-transaction-access.service';
 

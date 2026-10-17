@@ -9,7 +9,7 @@ import { OrdersService } from '../orders/orders.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
-import { WithdrawalPinService } from './withdrawal-pin.service';
+import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { MobileTransactionAccessService } from './mobile-transaction-access.service';
 

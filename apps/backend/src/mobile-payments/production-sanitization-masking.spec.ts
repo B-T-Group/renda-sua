@@ -38,9 +38,16 @@ describe('Production Sanitization & Masking Tests', () => {
             provide: ConfigService,
             useValue: {
               get: jest.fn((key: string) => {
-                if (key === 'freemopay.apiUrl') return 'https://api.test.com';
-                if (key === 'freemopay.apiKey') return 'test-key';
-                if (key === 'freemopay.secretKey') return 'sk_live_secret123';
+                if (key === 'freemopay') {
+                  return {
+                    baseUrl: 'https://api.test.com',
+                    appKey: 'test-key',
+                    secretKey: 'sk_live_secret123',
+                    callbackUrl: 'http://test.com/callback',
+                    amountMockEnabled: false,
+                    mockPendingPhones: [],
+                  };
+                }
                 return null;
               }),
             },
@@ -190,9 +197,16 @@ describe('Production Sanitization & Masking Tests', () => {
             provide: ConfigService,
             useValue: {
               get: jest.fn((key: string) => {
-                if (key === 'freemopay.apiUrl') return 'https://api.test.com';
-                if (key === 'freemopay.apiKey') return 'test-key';
-                if (key === 'freemopay.secretKey') return 'secret';
+                if (key === 'freemopay') {
+                  return {
+                    baseUrl: 'https://api.test.com',
+                    appKey: 'test-key',
+                    secretKey: 'secret',
+                    callbackUrl: 'http://test.com/callback',
+                    amountMockEnabled: false,
+                    mockPendingPhones: [],
+                  };
+                }
                 return null;
               }),
             },
