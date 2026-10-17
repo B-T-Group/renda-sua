@@ -6,12 +6,6 @@ import { GiveChangePayoutService } from './give-change-payout.service';
 import { FedaPayService } from './providers/fedapay.service';
 import { OrdersService } from '../orders/orders.service';
 import { AccountsService } from '../accounts/accounts.service';
-import { HasuraUserService } from '../hasura/hasura-user.service';
-import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
-import { WithdrawalPinService } from '../withdrawal-pin/withdrawal-pin.service';
-import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
-import { MobileTransactionAccessService } from './mobile-transaction-access.service';
-import { ConfigService } from '@nestjs/config';
 
 jest.useFakeTimers();
 
@@ -49,12 +43,12 @@ describe('G2: Real Mock Callback Order Tests', () => {
           { provide: MobilePaymentsDatabaseService, useValue: databaseService },
           { provide: AccountsService, useValue: {} },
           { provide: GiveChangePayoutService, useValue: {} },
-          { provide: HasuraUserService, useValue: {} },
-          { provide: MobilePaymentCallbackProcessor, useValue: {} },
-          { provide: WithdrawalPinService, useValue: {} },
-          { provide: PendingWithdrawalResolveService, useValue: {} },
-          { provide: MobileTransactionAccessService, useValue: {} },
-          { provide: ConfigService, useValue: {} },
+          { provide: 'HasuraUserService', useValue: {} },
+          { provide: 'MobilePaymentCallbackProcessor', useValue: {} },
+          { provide: 'WithdrawalPinService', useValue: {} },
+          { provide: 'PendingWithdrawalResolveService', useValue: {} },
+          { provide: 'MobileTransactionAccessService', useValue: {} },
+          { provide: 'ConfigService', useValue: {} },
         ],
       }).compile();
 
