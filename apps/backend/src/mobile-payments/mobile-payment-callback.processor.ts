@@ -143,10 +143,14 @@ export class MobilePaymentCallbackProcessor {
     callbackData: FedaPayCallbackDto,
     _req?: Request
   ): Promise<{ received: boolean; transactionId: number }> {
-    const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled'];
-    const TERMINAL_STATUSES = ['approved', 'declined', 'canceled'];
+    // FedaPay docs (docs.fedapay.com/en/integration-api/collects-management, "Collect Lifecycle"):
+    // 'expired' = "the collect was not completed within the allowed time frame" (unpaid collections expire after 24h).
+    // No transaction.expired event; expiry arrives as transaction.updated with status 'expired'.
+    const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled', 'transaction.updated'];
+    const TERMINAL_STATUSES = ['approved', 'declined', 'canceled', 'expired'];
     
-    const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name);
+    const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name) &&
+      (callbackData.name !== 'transaction.updated' || callbackData.entity.status === 'expired');
     const isTerminalStatus = TERMINAL_STATUSES.includes(callbackData.entity.status);
     
     if (!isTerminalEvent || !isTerminalStatus) {
@@ -168,7 +172,7 @@ export class MobilePaymentCallbackProcessor {
       ? 'SUCCESS' 
       : callbackData.entity.status === 'declined' 
       ? 'FAILED' 
-      : callbackData.entity.status === 'canceled'
+      : ['canceled', 'expired'].includes(callbackData.entity.status)
       ? 'FAILED'
       : null;
 
@@ -269,18 +273,20 @@ export class MobilePaymentCallbackProcessor {
   ): Promise<MobilePaymentTransaction | null> {
     // FedaPay ids are plain numbers and can collide with another provider's
     // transaction_id/reference, so only ever match FedaPay rows here.
-    const isFedaPay = (tx: MobilePaymentTransaction | null | undefined) =>
-      tx?.provider === 'fedapay' ? tx : null;
-    const byProviderId = isFedaPay(
+    // Exclude GIVE_CHANGE rows: they hold payout ids, not transaction ids.
+    // FedaPay payout and transaction ids are separate sequences and can collide.
+    const isFedaPayCollection = (tx: MobilePaymentTransaction | null | undefined) =>
+      tx?.provider === 'fedapay' && tx?.transaction_type !== 'GIVE_CHANGE' ? tx : null;
+    const byProviderId = isFedaPayCollection(
       await this.databaseService.getTransactionByTransactionId(key)
     );
     if (byProviderId) return byProviderId;
-    const byReference = isFedaPay(
+    const byReference = isFedaPayCollection(
       await this.databaseService.getTransactionByReference(key)
     );
     if (byReference) return byReference;
     if (!looksLikeUuid(key)) return null;
-    return isFedaPay(await this.databaseService.getTransactionById(key));
+    return isFedaPayCollection(await this.databaseService.getTransactionById(key));
   }
 
   private async lookupFedaPayTransaction(

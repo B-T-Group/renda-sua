@@ -73,6 +73,10 @@ export interface MobilePaymentResponse {
   message?: string;
   errorCode?: string;
   provider?: string;
+  /** Returned when success:true but outcome is ambiguous (e.g., FedaPay send failure after create) */
+  status?: 'pending';
+  /** Reason for ambiguous/pending status */
+  reason?: 'provider_ambiguous';
 }
 
 export interface MobileTransactionStatus {
@@ -324,6 +328,17 @@ export class MobilePaymentsService {
     if (live.status === 'pending' || live.status === 'ambiguous') {
       throw new Error(
         `Rejecting FAILED callback for ${tx.id}: provider still ${live.status}`
+      );
+    }
+    // N6: For FedaPay, also verify reference on DECLINED/failed outcomes
+    // (with N2 substitution, a declined result could otherwise be confirmed on status alone)
+    if (
+      tx.provider === 'fedapay' &&
+      tx.reference &&
+      live.reference !== tx.reference
+    ) {
+      throw new Error(
+        `Rejecting FedaPay FAILED callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference || '<missing>'})`
       );
     }
   }
@@ -591,6 +606,14 @@ export class MobilePaymentsService {
                 providerRequest as FedaPayPaymentRequest,
                 reference
               );
+          
+          // N5: Surface ambiguous payout/push outcome
+          if (fedapayResponse.ambiguous && fedapayResponse.transactionId) {
+            this.logger.warn(
+              `FedaPay ambiguous outcome: tx_id=${fedapayResponse.transactionId} status=${fedapayResponse.status || 'pending'}`
+            );
+          }
+          
           response = {
             success: fedapayResponse.success,
             transactionId: fedapayResponse.transactionId,
@@ -599,6 +622,10 @@ export class MobilePaymentsService {
             message: fedapayResponse.message,
             errorCode: fedapayResponse.errorCode,
             provider: 'fedapay',
+            ...(fedapayResponse.ambiguous ? { 
+              status: 'pending',
+              reason: 'provider_ambiguous' 
+            } : {}),
           };
           break;
         }
@@ -720,6 +747,7 @@ export class MobilePaymentsService {
             canceled: 'cancelled',
             pending: 'pending',
             transferred: 'success',
+            expired: 'failed', // FedaPay docs: unpaid collections expire after 24h
           };
           status = {
             transactionId: fedapayStatus.transactionId,

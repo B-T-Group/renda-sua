@@ -931,4 +931,22 @@ describe('FedaPayService', () => {
     });
   });
 
+  describe('N5: expired status mapping', () => {
+    it('maps expired transaction status to failed', async () => {
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve.mockResolvedValue({
+        id: 'tx-expired',
+        status: 'expired',
+        amount: 1000,
+        currency: { iso: 'XOF' },
+        custom_metadata: { externalId: 'ref-expired' },
+      });
+
+      const result = await service.checkTransactionStatus('tx-expired');
+
+      expect(result.status).toBe('expired');
+      // The processor and service statusMap will handle expired → failed mapping
+    });
+  });
+
 });

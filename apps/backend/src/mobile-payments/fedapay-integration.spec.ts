@@ -440,6 +440,158 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
       ).resolves.not.toThrow();
     });
+
+    describe('N6: reference check on FAILED (declined) callbacks', () => {
+      const declinedTx = {
+        id: 'tx-n6',
+        transaction_id: 'fedapay_tx_n6',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF-N6',
+        provider: 'fedapay',
+        status: 'pending',
+      };
+
+      it('rejects a declined callback whose live reference mismatches (row stays pending)', async () => {
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+          status: 'declined',
+          amount: 1000,
+          currency: 'XOF',
+          reference: 'OTHER-REF',
+        });
+        await expect(
+          realService.assertProviderConfirmsCallback(declinedTx as any, 'FAILED')
+        ).rejects.toThrow(/FAILED callback.*reference mismatch.*expected REF-N6.*got OTHER-REF/i);
+      });
+
+      it('rejects a declined callback with no live reference (fail closed)', async () => {
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+          status: 'declined',
+          amount: 1000,
+          currency: 'XOF',
+          reference: '',
+        });
+        await expect(
+          realService.assertProviderConfirmsCallback(declinedTx as any, 'FAILED')
+        ).rejects.toThrow(/reference mismatch.*<missing>/i);
+      });
+
+      it('accepts a legitimate declined callback whose reference matches', async () => {
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+          status: 'declined',
+          amount: 1000,
+          currency: 'XOF',
+          merchantRef: 'REF-N6',
+          reference: 'fedapay_tx_n6',
+        });
+        await expect(
+          realService.assertProviderConfirmsCallback(declinedTx as any, 'FAILED')
+        ).resolves.toBeUndefined();
+      });
+    });
+
+    describe('ambiguous FedaPay outcome is surfaced on MobilePaymentResponse', () => {
+      const request = {
+        amount: 1000,
+        currency: 'XOF',
+        customerPhone: '+22890000001',
+        description: 'Test',
+        paymentMethod: 'mobile_money',
+      } as any;
+
+      it('returns status pending + reason provider_ambiguous when FedaPay reports ambiguous', async () => {
+        mockFedaPayService.initiatePayment = jest.fn().mockResolvedValue({
+          success: true,
+          ambiguous: true,
+          transactionId: '777',
+          status: 'pending',
+          message: 'Payment created; awaiting confirmation',
+        });
+        jest.spyOn(realService as any, 'selectProvider').mockResolvedValue('fedapay');
+        // Unit under test is the response mapping; stub the request conversion.
+        jest.spyOn(realService as any, 'convertToProviderRequest').mockReturnValue({ amount: 1000, payer: '+22890000001', channel: 'togocel' });
+
+        const result = await realService.initiatePayment(request, 'REF-AMB');
+
+        expect(mockFedaPayService.initiatePayment).toHaveBeenCalled();
+        expect(result).toMatchObject({
+          success: true,
+          transactionId: '777',
+          provider: 'fedapay',
+          status: 'pending',
+          reason: 'provider_ambiguous',
+        });
+      });
+
+      it('does not add status/reason for a normal (non-ambiguous) FedaPay success', async () => {
+        mockFedaPayService.initiatePayment = jest.fn().mockResolvedValue({
+          success: true,
+          transactionId: '778',
+          status: 'pending',
+        });
+        jest.spyOn(realService as any, 'selectProvider').mockResolvedValue('fedapay');
+        // Unit under test is the response mapping; stub the request conversion.
+        jest.spyOn(realService as any, 'convertToProviderRequest').mockReturnValue({ amount: 1000, payer: '+22890000001', channel: 'togocel' });
+
+        const result = await realService.initiatePayment(request, 'REF-OK');
+
+        expect(result.success).toBe(true);
+        expect(result).not.toHaveProperty('reason');
+      });
+    });
+
+    it('controller passes ambiguous status/reason through to API response', async () => {
+      const ctx: any = { headers: {} };
+      const svc = { 
+        resolveProviderFromRequest: jest.fn().mockResolvedValue('fedapay'),
+        initiatePayment: jest.fn().mockResolvedValue({
+          success: true,
+          transactionId: '999',
+          status: 'pending',
+          reason: 'provider_ambiguous',
+          provider: 'fedapay',
+          message: 'Payment created; awaiting confirmation',
+        }),
+      };
+      const db = { 
+        createTransaction: jest.fn().mockResolvedValue({ id: 'tx-amb', reference: 'REF-AMB' }),
+        updateTransaction: jest.fn().mockResolvedValue(undefined),
+      };
+      const hasuraUser = { getUser: jest.fn().mockResolvedValue({ id: 'user-1' }) };
+      const access = { canView: jest.fn().mockResolvedValue(true) };
+      const accounts = { getAccountBalance: jest.fn().mockResolvedValue({ availableBalance: 10000, currency: 'XOF' }) };
+
+      const module: TestingModule = await Test.createTestingModule({
+        controllers: [MobilePaymentsController],
+        providers: [
+          { provide: MobilePaymentsService, useValue: svc },
+          { provide: MobilePaymentsDatabaseService, useValue: db },
+          { provide: AccountsService, useValue: accounts },
+          { provide: GiveChangePayoutService, useValue: {} },
+          { provide: HasuraUserService, useValue: hasuraUser },
+          { provide: MobilePaymentCallbackProcessor, useValue: {} },
+          { provide: WithdrawalPinService, useValue: {} },
+          { provide: PendingWithdrawalResolveService, useValue: {} },
+          { provide: MobileTransactionAccessService, useValue: access },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+      const ctrl = module.get(MobilePaymentsController);
+
+      const response = await ctrl.initiatePayment(ctx, {
+        amount: 1000,
+        currency: 'XOF',
+        customerPhone: '+22890000001',
+        accountId: 'acc-xof',
+        transactionType: 'PAYMENT',
+      } as any);
+
+      expect(response.success).toBe(true);
+      expect(response.data).toMatchObject({
+        status: 'pending',
+        reason: 'provider_ambiguous',
+      });
+    });
   });
 
   describe('B8e: Card/Bank Rejection and Currency Guards', () => {
@@ -573,7 +725,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       accounts.getBusinessWithdrawalPinStateByAccountId.mockResolvedValue(null);
     });
 
-    const expectCurrencyMismatch = async (promise: Promise<unknown>) => {
+    const expectCurrencyMismatch = async (promise: Promise<unknown>, accountId: string) => {
       let caught: any;
       try {
         await promise;
@@ -582,11 +734,18 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       }
       expect(caught).toBeInstanceOf(HttpException);
       expect(caught.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-      expect(caught.getResponse()).toEqual(
+      const response = caught.getResponse();
+      expect(response).toEqual(
         expect.objectContaining({
           error: 'ACCOUNT_CURRENCY_MISMATCH',
           data: { accountCurrency: 'XAF', requiredCurrency: 'XOF' },
         })
+      );
+      // N4: assert error message includes FedaPay and XOF
+      expect(response.message).toMatch(/FedaPay.*XOF/i);
+      // N4: assert resolveProviderFromRequest received the real request (accountId)
+      expect(svc.resolveProviderFromRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId })
       );
     };
 
@@ -598,7 +757,8 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
           customerPhone: '+22896000001',
           accountId: 'acc-xaf',
           transactionType: 'PAYMENT',
-        } as any)
+        } as any),
+        'acc-xaf'
       );
       expect(db.createTransaction).not.toHaveBeenCalled();
       expect(svc.initiatePayment).not.toHaveBeenCalled();
@@ -612,7 +772,8 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
           customerPhone: '+22896000001',
           accountId: 'acc-xaf',
           transactionType: 'GIVE_CHANGE',
-        } as any)
+        } as any),
+        'acc-xaf'
       );
       expect(db.createTransaction).not.toHaveBeenCalled();
       expect(svc.initiatePayment).not.toHaveBeenCalled();
@@ -624,20 +785,23 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         availableBalance: 50000,
         currency: 'XOF',
       });
-      let caught: any;
-      try {
-        await currencyController.initiatePayment(ctx, {
-          amount: 1000,
-          currency: 'XOF',
-          customerPhone: '+22896000001',
-          accountId: 'acc-xof',
-          transactionType: 'PAYMENT',
-        } as any);
-      } catch (e) {
-        caught = e;
-      }
-      const body = caught?.getResponse?.();
-      expect(body?.error).not.toBe('ACCOUNT_CURRENCY_MISMATCH');
+      // N4: Make XOF control prove the request passed the currency check
+      // by asserting downstream service calls happened
+      db.createTransaction.mockResolvedValue({ id: 'tx-1', reference: 'ref-1' });
+      svc.initiatePayment.mockResolvedValue({ success: true });
+      
+      await currencyController.initiatePayment(ctx, {
+        amount: 1000,
+        currency: 'XOF',
+        customerPhone: '+22896000001',
+        accountId: 'acc-xof',
+        transactionType: 'PAYMENT',
+      } as any);
+      
+      // Assert the currency check was passed (account was fetched)
+      expect(accounts.getAccountBalance).toHaveBeenCalledWith('acc-xof');
+      // Assert resolveProviderFromRequest was called (routing happened)
+      expect(svc.resolveProviderFromRequest).toHaveBeenCalled();
     });
   });
 });
