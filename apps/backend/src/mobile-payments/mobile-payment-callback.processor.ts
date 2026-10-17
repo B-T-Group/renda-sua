@@ -5,6 +5,7 @@ import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import type {
   FreemopayCallbackDto,
   MyPVitCallbackDto,
+  FedaPayCallbackDto,
 } from './mobile-payment-callback.dto';
 import {
   MobilePaymentTransaction,
@@ -138,6 +139,41 @@ export class MobilePaymentCallbackProcessor {
     return { received: true, reference: callbackData.reference };
   }
 
+  async processFedaPayCallback(
+    callbackData: FedaPayCallbackDto,
+    _req?: Request
+  ): Promise<{ received: boolean; transactionId: number }> {
+    const tx = await this.lookupFedaPayTransaction(callbackData);
+
+    if (tx?.status !== 'pending') {
+      return this.handleNonPendingFedaPay(tx, callbackData);
+    }
+
+    await this.databaseService.logCallback(tx.id, callbackData);
+    
+    // Map FedaPay status to our internal status
+    const normalizedStatus = callbackData.entity.status === 'approved' 
+      ? 'SUCCESS' 
+      : callbackData.entity.status === 'declined' 
+      ? 'FAILED' 
+      : null;
+
+    if (normalizedStatus && !this.isMockedTransaction(tx)) {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(
+        tx,
+        normalizedStatus
+      );
+    } else if (this.isMockedTransaction(tx)) {
+      this.logger.log(
+        `Skipping live provider confirmation for mocked transaction: ${tx.id}`
+      );
+    }
+    
+    await this.processPendingFedaPay(tx, callbackData);
+
+    return { received: true, transactionId: callbackData.entity.id };
+  }
+
   private freemopayLookupKeys(callbackData: FreemopayCallbackDto): string[] {
     return [
       ...new Set(
@@ -165,6 +201,40 @@ export class MobilePaymentCallbackProcessor {
   ): Promise<MobilePaymentTransaction | null> {
     for (const key of this.freemopayLookupKeys(callbackData)) {
       const found = await this.lookupFreemopayKey(key);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  private fedapayLookupKeys(callbackData: FedaPayCallbackDto): string[] {
+    const entityId = String(callbackData.entity.id);
+    const externalId = callbackData.entity.custom_metadata?.externalId;
+    return [
+      ...new Set(
+        [entityId, externalId, callbackData.entity.reference]
+          .map((key) => key?.trim())
+          .filter((key): key is string => !!key)
+      ),
+    ];
+  }
+
+  private async lookupFedaPayKey(
+    key: string
+  ): Promise<MobilePaymentTransaction | null> {
+    const byProviderId =
+      await this.databaseService.getTransactionByTransactionId(key);
+    if (byProviderId) return byProviderId;
+    const byReference = await this.databaseService.getTransactionByReference(key);
+    if (byReference) return byReference;
+    if (!looksLikeUuid(key)) return null;
+    return this.databaseService.getTransactionById(key);
+  }
+
+  private async lookupFedaPayTransaction(
+    callbackData: FedaPayCallbackDto
+  ): Promise<MobilePaymentTransaction | null> {
+    for (const key of this.fedapayLookupKeys(callbackData)) {
+      const found = await this.lookupFedaPayKey(key);
       if (found) return found;
     }
     return null;
@@ -258,6 +328,43 @@ export class MobilePaymentCallbackProcessor {
       received: true,
       reference: callbackData.reference,
       skipped: true,
+    };
+  }
+
+  private async handleNonPendingFedaPay(
+    tx: MobilePaymentTransaction | null | undefined,
+    callbackData: FedaPayCallbackDto
+  ): Promise<{ received: boolean; transactionId: number }> {
+    if (!tx) {
+      this.logger.warn(
+        `Transaction not found for FedaPay entity: ${callbackData.entity.id}`
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+    const isApproved = callbackData.entity.status === 'approved';
+    // Resume finalize when approved arrives on a processing row (crash recovery)
+    if (tx.status === 'processing' && isApproved) {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.resumeFinalizeFromProcessing(tx, String(callbackData.entity.id));
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+    if (this.isRecoverableLateOrderSuccess(tx) && isApproved) {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.handleLateSuccessOnSupersededOrderTx(
+        tx,
+        String(callbackData.entity.id)
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+    if (tx.status === 'success' && isApproved) {
+      await this.retrySuccessSideEffects(tx);
+    }
+    this.logger.log(
+      `FedaPay callback skipped (already ${tx.status}): ${tx.id}`
+    );
+    return {
+      received: true,
+      transactionId: callbackData.entity.id,
     };
   }
 
@@ -386,6 +493,37 @@ export class MobilePaymentCallbackProcessor {
       callbackData.reason || callbackData.message || 'Payment failed';
     await this.failPendingAttempt(tx, callbackData.reference, failureMessage, () =>
       this.applyFreemopayFailureSideEffects(tx, callbackData)
+    );
+  }
+
+  private async processPendingFedaPay(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    const providerTxId = String(callbackData.entity.id);
+    const isApproved = callbackData.entity.status === 'approved';
+    
+    if (
+      isApproved &&
+      tx.payment_entity === 'order_cash_reconciliation'
+    ) {
+      await this.settleCashReconciliation(tx, providerTxId);
+      return;
+    }
+    if (
+      isApproved &&
+      (tx.payment_entity === 'token' || tx.payment_entity === 'reel_ai_token')
+    ) {
+      await this.finalizeTokenPaymentSuccess(tx, providerTxId);
+      return;
+    }
+    if (isApproved) {
+      await this.finalizePaymentSuccess(tx, providerTxId);
+      return;
+    }
+    const failureMessage = String(callbackData.entity.status || 'Payment declined');
+    await this.failPendingAttempt(tx, providerTxId, failureMessage, () =>
+      this.applyFedaPayFailureSideEffects(tx, callbackData)
     );
   }
 
@@ -1125,6 +1263,24 @@ export class MobilePaymentCallbackProcessor {
     if (handler) {
       const failureMessage =
         callbackData.reason || callbackData.message || 'Payment failed';
+      await handler.onPaymentFailure(transaction, failureMessage);
+    }
+  }
+
+  private async applyFedaPayFailureSideEffects(
+    transaction: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    if (callbackData.entity.status !== 'declined' && callbackData.entity.status !== 'canceled') {
+      return;
+    }
+    const handlers = this.resolveHandlers();
+    const handler = findPaymentCallbackHandler(
+      handlers,
+      transaction.payment_entity
+    );
+    if (handler) {
+      const failureMessage = String(callbackData.entity.status || 'Payment declined');
       await handler.onPaymentFailure(transaction, failureMessage);
     }
   }

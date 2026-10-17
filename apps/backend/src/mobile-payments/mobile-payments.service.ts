@@ -21,6 +21,12 @@ import {
   FreemopayWithdrawalRequest,
 } from './providers/freemopay.service';
 import {
+  FedaPayPaymentRequest,
+  FedaPayPaymentResponse,
+  FedaPayService,
+  FedaPayWithdrawalRequest,
+} from './providers/fedapay.service';
+import {
   buildShortReferenceForMyPVit,
   MyPVitPaymentRequest,
   MyPVitService,
@@ -54,7 +60,7 @@ export interface MobilePaymentRequest {
   ownerCharge?: 'MERCHANT' | 'CUSTOMER';
   callbackUrl?: string;
   returnUrl?: string;
-  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay';
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay' | 'fedapay';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
   transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments
@@ -92,7 +98,8 @@ export type MobilePaymentIntegrationProvider =
   | 'freemopay'
   | 'mypvit'
   | 'mtn'
-  | 'orange';
+  | 'orange'
+  | 'fedapay';
 
 @Injectable()
 export class MobilePaymentsService {
@@ -106,11 +113,13 @@ export class MobilePaymentsService {
     private readonly orangeMomoService: OrangeMomoService,
     private readonly orangeMomoDatabaseService: OrangeMomoDatabaseService,
     private readonly freemopayService: FreemopayService,
+    private readonly fedapayService: FedaPayService,
     private readonly hasuraSystemService: HasuraSystemService
   ) {
     // Register payment providers
     this.providers.set('mypvit', myPVitService);
     this.providers.set('freemopay', freemopayService);
+    this.providers.set('fedapay', fedapayService);
   }
 
   getProvider(phoneNumber: string): MobilePaymentIntegrationProvider {
@@ -121,8 +130,45 @@ export class MobilePaymentsService {
   }
 
   /** Catalog MoMo integration from the item/listing country, not the payer phone. */
-  getProviderForCountry(country?: string | null): MobilePaymentIntegrationProvider {
-    return mapCountryToMobileMoneyProvider(country);
+  async getProviderForCountry(country?: string | null): Promise<MobilePaymentIntegrationProvider> {
+    const provider = mapCountryToMobileMoneyProvider(country);
+    
+    // Check if provider is active in supported_payment_systems
+    if (provider === 'fedapay') {
+      const iso = country?.trim().toUpperCase();
+      if (iso === 'TG') {
+        const isActive = await this.isFedaPayActiveForTogo();
+        if (!isActive) {
+          this.logger.log('FedaPay for TG is not active, falling back to MyPVit');
+          return 'mypvit';
+        }
+      }
+    }
+    
+    return provider;
+  }
+
+  private async isFedaPayActiveForTogo(): Promise<boolean> {
+    try {
+      const query = `
+        query CheckFedaPayActive {
+          supported_payment_systems(
+            where: { name: { _eq: "fedapay" }, country: { _eq: "TG" } }
+          ) {
+            active
+          }
+        }
+      `;
+      
+      const result = await this.hasuraSystemService.executeQuery<{
+        supported_payment_systems: Array<{ active: boolean }>;
+      }>(query, {});
+      
+      return result.supported_payment_systems[0]?.active ?? false;
+    } catch (error: any) {
+      this.logger.error('Failed to check FedaPay active status:', error);
+      return false;
+    }
   }
 
   /** National MSISDN digits for synthetic MyPVit callbacks (admin replay). */
@@ -133,11 +179,11 @@ export class MobilePaymentsService {
     return removeCountryCode(customerPhone);
   }
 
-  resolveAdminIntegrationProvider(
+  async resolveAdminIntegrationProvider(
     customerPhone: string | undefined | null,
     storedProvider: string
-  ): MobilePaymentIntegrationProvider {
-    return this.resolveProviderFromRequest({
+  ): Promise<MobilePaymentIntegrationProvider> {
+    return await this.resolveProviderFromRequest({
       customerPhone: customerPhone ?? undefined,
       provider: this.knownProvider(storedProvider),
     });
@@ -153,7 +199,8 @@ export class MobilePaymentsService {
       p === 'moov' ||
       p === 'mtn' ||
       p === 'orange' ||
-      p === 'freemopay'
+      p === 'freemopay' ||
+      p === 'fedapay'
     ) {
       return p;
     }
@@ -179,7 +226,7 @@ export class MobilePaymentsService {
         `Cannot verify callback for ${tx.id}: missing provider transaction_id`
       );
     }
-    const provider = this.resolveAdminIntegrationProvider(
+    const provider = await this.resolveAdminIntegrationProvider(
       tx.customer_phone,
       tx.provider
     );
@@ -216,7 +263,7 @@ export class MobilePaymentsService {
     }
   }
 
-  /** Account withdrawals (GIVE_CHANGE): only valid CM or GA MSISDN. */
+  /** Account withdrawals (GIVE_CHANGE): valid CM, GA, or TG MSISDN. */
   isWithdrawalDestinationCmOrGa(customerPhone?: string): boolean {
     if (!customerPhone?.trim()) {
       return false;
@@ -225,7 +272,7 @@ export class MobilePaymentsService {
     if (!v.isValid) {
       return false;
     }
-    return v.regionCode === 'CM' || v.regionCode === 'GA';
+    return v.regionCode === 'CM' || v.regionCode === 'GA' || v.regionCode === 'TG';
   }
 
   /**
@@ -252,6 +299,15 @@ export class MobilePaymentsService {
       isAvailable: freemopayAvailable,
     });
 
+    // FedaPay provider (Togo)
+    const fedapayAvailable = await this.fedapayService.testConnection();
+    providers.push({
+      name: 'FedaPay',
+      supportedMethods: ['mobile_money'],
+      supportedCurrencies: ['XOF'],
+      isAvailable: fedapayAvailable,
+    });
+
     return providers;
   }
 
@@ -264,6 +320,8 @@ export class MobilePaymentsService {
         return await this.myPVitService.getSupportedPaymentMethods();
       case 'freemopay':
         return await this.freemopayService.getSupportedPaymentMethods();
+      case 'fedapay':
+        return await this.fedapayService.getSupportedPaymentMethods();
       default:
         return [];
     }
@@ -315,7 +373,7 @@ export class MobilePaymentsService {
       );
 
       // Determine the best provider based on request
-      const provider = this.selectProvider(paymentRequest);
+      const provider = await this.selectProvider(paymentRequest);
 
       // Convert to provider-specific request
       const providerRequest = this.convertToProviderRequest(
@@ -375,6 +433,28 @@ export class MobilePaymentsService {
             message: freemopayResponse.message,
             errorCode: freemopayResponse.errorCode,
             provider: 'freemopay',
+          };
+          break;
+        }
+        case 'fedapay': {
+          const isGiveChange = paymentRequest.transactionType === 'GIVE_CHANGE';
+          const fedapayResponse = isGiveChange
+            ? await this.fedapayService.withdraw(
+                providerRequest as FedaPayWithdrawalRequest,
+                reference
+              )
+            : await this.fedapayService.initiatePayment(
+                providerRequest as FedaPayPaymentRequest,
+                reference
+              );
+          response = {
+            success: fedapayResponse.success,
+            transactionId: fedapayResponse.transactionId,
+            paymentUrl: (fedapayResponse as FedaPayPaymentResponse)
+              .paymentUrl,
+            message: fedapayResponse.message,
+            errorCode: fedapayResponse.errorCode,
+            provider: 'fedapay',
           };
           break;
         }
@@ -481,6 +561,27 @@ export class MobilePaymentsService {
             reference: freemopayStatus.reference || freemopayStatus.merchantRef || '',
             message: freemopayStatus.reason || freemopayStatus.message,
             provider: 'freemopay',
+          };
+          break;
+        }
+        case 'fedapay': {
+          const fedapayStatus =
+            await this.fedapayService.checkTransactionStatus(transactionId);
+          const statusMap: Record<string, MobileTransactionStatus['status']> = {
+            approved: 'success',
+            declined: 'failed',
+            canceled: 'cancelled',
+            pending: 'pending',
+            transferred: 'success',
+          };
+          status = {
+            transactionId: fedapayStatus.transactionId,
+            status: statusMap[fedapayStatus.status] || 'pending',
+            amount: fedapayStatus.amount || 0,
+            currency: 'XOF',
+            reference: fedapayStatus.reference || '',
+            message: fedapayStatus.reason || fedapayStatus.message,
+            provider: 'fedapay',
           };
           break;
         }
@@ -829,15 +930,15 @@ export class MobilePaymentsService {
    * Same choice at charge time and on the callback.
    * Direct MTN/Orange first, then any +237 number on FreemoPay, then item country.
    */
-  resolveProviderFromRequest(
+  async resolveProviderFromRequest(
     request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider' | 'itemCountry'>
-  ): MobilePaymentIntegrationProvider {
+  ): Promise<MobilePaymentIntegrationProvider> {
     if (request.provider === 'mtn' || request.provider === 'orange') {
       return request.provider;
     }
     if (isCameroonCountryCode(request.customerPhone)) return 'freemopay';
     if (request.itemCountry?.trim()) {
-      return this.getProviderForCountry(request.itemCountry);
+      return await this.getProviderForCountry(request.itemCountry);
     }
     return this.providerFromHintOrPhone(request);
   }
@@ -859,8 +960,8 @@ export class MobilePaymentsService {
     return 'mypvit';
   }
 
-  private selectProvider(request: MobilePaymentRequest): string {
-    return this.resolveProviderFromRequest(request);
+  private async selectProvider(request: MobilePaymentRequest): Promise<string> {
+    return await this.resolveProviderFromRequest(request);
   }
 
   /**
@@ -876,7 +977,9 @@ export class MobilePaymentsService {
     | OrangeCollectionRequest
     | MyPVitPaymentRequest
     | FreemopayPaymentRequest
-    | FreemopayWithdrawalRequest {
+    | FreemopayWithdrawalRequest
+    | FedaPayPaymentRequest
+    | FedaPayWithdrawalRequest {
     const phoneNumber = removeCountryCode(
       request.customerPhone || '',
       phoneRegion
@@ -918,6 +1021,33 @@ export class MobilePaymentsService {
               description: request.description || 'Payment',
               callback: this.freemopayService.getCallbackUrl(),
             } as FreemopayPaymentRequest);
+      }
+      case 'fedapay': {
+        const phone = phoneNumber || '';
+        const formatted = phone.startsWith('228') ? phone : phone ? `228${phone}` : '';
+        const isGiveChange = request.transactionType === 'GIVE_CHANGE';
+        const channel: 'moov_tg' | 'togocel' = phone.startsWith('78') || phone.startsWith('79') || 
+                                                 phone.startsWith('96') || phone.startsWith('97') || 
+                                                 phone.startsWith('98') || phone.startsWith('99')
+          ? 'moov_tg'
+          : 'togocel';
+        return isGiveChange
+          ? ({
+              payee: formatted,
+              amount,
+              externalId: reference || '',
+              description: request.description || 'Payout',
+              callback: this.fedapayService.getCallbackUrl(),
+              channel,
+            } as FedaPayWithdrawalRequest)
+          : ({
+              payer: formatted,
+              amount,
+              externalId: reference || '',
+              description: request.description || 'Payment',
+              callback: this.fedapayService.getCallbackUrl(),
+              channel,
+            } as FedaPayPaymentRequest);
       }
       case 'mtn': {
         return {
