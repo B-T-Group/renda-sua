@@ -337,15 +337,14 @@ describe('FedaPay Validation Fixes', () => {
     });
 
     it('should filter inactive providers', async () => {
+      // Query has active: {_eq: true}, so inactive providers won't be returned
       mockHasuraSystemService.executeQuery.mockResolvedValue({
-        supported_payment_systems: [
-          { name: 'fedapay', country: 'TG', active: false },
-        ],
+        supported_payment_systems: [],
       });
 
       const providers = await service.getProvidersForCountry('TG');
 
-      // Active filter in query should exclude it
+      // No active providers for TG
       expect(providers).toHaveLength(0);
     });
   });

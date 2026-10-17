@@ -232,8 +232,8 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       const result = await processor.processFedaPayCallback(lateApproval);
 
       expect(result.received).toBe(true);
-      // Credit still happened but CAS failed, so no double-credit
-      expect(mockAccountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
+      // F3: CAS before credit means if CAS fails, no credit happens (preventing double-credit)
+      expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
     });
   });
 
