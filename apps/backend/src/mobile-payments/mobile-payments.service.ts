@@ -14,6 +14,7 @@ import {
   resolveWalletPhoneRegion,
   validatePhoneNumber,
 } from './phone-validation.util';
+import { sanitizeProviderError, maskPhoneNumber } from './sanitize-provider-error.util';
 import {
   FreemopayPaymentRequest,
   FreemopayPaymentResponse,
@@ -173,7 +174,8 @@ export class MobilePaymentsService {
       
       return result.supported_payment_systems[0]?.active ?? false;
     } catch (error: any) {
-      this.logger.error(`Failed to check FedaPay active status: ${error.message || 'Unknown error'}`);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check FedaPay active status: ${sanitized.message}`);
       return false;
     }
   }
@@ -534,14 +536,14 @@ export class MobilePaymentsService {
         }
 
         this.logger.log(
-          `Phone number validated: ${paymentRequest.customerPhone} -> Country: ${phoneValidation.regionCode}, National: ${phoneValidation.nationalNumber}, callback URL: ${paymentRequest.callbackUrl || 'none'}`
+          `Phone number validated: ${maskPhoneNumber(paymentRequest.customerPhone)} -> Country: ${phoneValidation.regionCode}, National: ${maskPhoneNumber(phoneValidation.nationalNumber)}, callback URL: ${paymentRequest.callbackUrl || 'none'}`
         );
       }
 
       this.logger.log(
         `Initiating mobile payment for account: ${
           paymentRequest.customerPhone
-            ? removeCountryCode(paymentRequest.customerPhone, phoneRegion)
+            ? maskPhoneNumber(paymentRequest.customerPhone)
             : paymentRequest.accountId || 'unknown'
         }`
       );
@@ -735,8 +737,9 @@ export class MobilePaymentsService {
       await this.logPaymentInitiation(paymentRequest, response);
 
       return response;
-    } catch (error) {
-      this.logger.error('Failed to initiate mobile payment:', error);
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate mobile payment: ${sanitized.message}`);
       return {
         success: false,
         message: 'Failed to initiate payment',
@@ -868,9 +871,10 @@ export class MobilePaymentsService {
       await this.logStatusCheck(transactionId, status);
 
       return status;
-    } catch (error) {
-      this.logger.error('Failed to check transaction status:', error);
-      throw error;
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check transaction status: ${sanitized.message}`);
+      throw new Error(sanitized.message);
     }
   }
 
@@ -958,8 +962,9 @@ export class MobilePaymentsService {
       await this.logTransactionCancellation(transactionId, success);
 
       return success;
-    } catch (error) {
-      this.logger.error('Failed to cancel transaction:', error);
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to cancel transaction: ${sanitized.message}`);
       return false;
     }
   }
@@ -993,8 +998,9 @@ export class MobilePaymentsService {
           );
           return false;
       }
-    } catch (error) {
-      this.logger.error('Failed to verify callback:', error);
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to verify callback: ${sanitized.message}`);
       return false;
     }
   }
@@ -1024,8 +1030,9 @@ export class MobilePaymentsService {
           );
           return [];
       }
-    } catch (error) {
-      this.logger.error('Failed to get transaction history:', error);
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get transaction history: ${sanitized.message}`);
       return [];
     }
   }
@@ -1049,9 +1056,10 @@ export class MobilePaymentsService {
             `Unsupported provider for balance check: ${provider}`
           );
       }
-    } catch (error) {
-      this.logger.error('Failed to check balance:', error);
-      throw error;
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check balance: ${sanitized.message}`);
+      throw new Error(sanitized.message);
     }
   }
 
@@ -1074,9 +1082,10 @@ export class MobilePaymentsService {
         default:
           throw new Error(`Unsupported provider for KYC: ${provider}`);
       }
-    } catch (error) {
-      this.logger.error('Failed to perform KYC:', error);
-      throw error;
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to perform KYC: ${sanitized.message}`);
+      throw new Error(sanitized.message);
     }
   }
 
@@ -1121,9 +1130,10 @@ export class MobilePaymentsService {
         success: true,
         message: 'Secret updated successfully',
       };
-    } catch (error) {
-      this.logger.error(`Failed to update secret ${secretName}:`, error);
-      throw error;
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to update secret ${secretName}: ${sanitized.message}`);
+      throw new Error(sanitized.message);
     }
   }
 

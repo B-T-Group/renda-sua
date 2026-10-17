@@ -371,7 +371,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       updated_at: new Date().toISOString(),
     };
 
-    it('should assert CAS claim succeeds before debit', async () => {
+    it('should assert CAS claim succeeds and debit is called', async () => {
       const mockFedaPayService = { mockEnabled: true };
       mockModuleRef.get.mockReturnValue(mockFedaPayService);
 
@@ -399,18 +399,36 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       await processor.processFedaPayCallback(callback);
 
-      // Assert CAS was called
+      // G3: Assert CAS claim was called and succeeded
       expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
         gcTx.id,
         'pending',
         { status: 'processing' }
       );
-      // Assert debit was called
+      
+      // G3: Assert account release was called
+      expect(mockAccountsService.registerReleaseIfNotExists).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: gcTx.account_id,
+          amount: gcTx.amount,
+          referenceId: gcTx.id,
+        })
+      );
+      
+      // G3: Assert account debit was called
       expect(mockAccountsService.registerWithdrawalIfNotExists).toHaveBeenCalledWith(
         expect.objectContaining({
           accountId: gcTx.account_id,
           amount: gcTx.amount,
+          referenceId: gcTx.id,
         })
+      );
+
+      // G3: Assert final status update was called
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        gcTx.id,
+        'processing',
+        expect.objectContaining({ status: 'success' })
       );
     });
 
@@ -441,8 +459,72 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       await processor.processFedaPayCallback(callback);
 
-      // Assert no debit when CAS fails
+      // G3: Assert CAS was attempted
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        gcTx.id,
+        'pending',
+        { status: 'processing' }
+      );
+      
+      // G3: Assert no debit when CAS fails
+      expect(mockAccountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
       expect(mockAccountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('should assert deposit for top-up success', async () => {
+      const depositTx: MobilePaymentTransaction = {
+        id: 'tx-deposit-1',
+        status: 'pending',
+        provider: 'fedapay',
+        transaction_type: 'PAYMENT',
+        transaction_id: '789',
+        amount: 500,
+        currency: 'XOF',
+        reference: 'REF-1',
+        customer_phone: '+22890123456',
+        account_id: 'acc-1',
+        payment_entity: 'wallet',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(depositTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValueOnce(true); // CAS
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValueOnce(true); // mark success
+
+      const callback: FedaPayCallbackDto = {
+        entity: {
+          id: 789,
+          status: 'approved',
+          amount: 500,
+          reference: 'REF-1',
+          custom_metadata: { externalId: 'REF-1' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      await processor.processFedaPayCallback(callback);
+
+      // G3: Assert CAS was called
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        depositTx.id,
+        'pending',
+        { status: 'processing' }
+      );
+
+      // G3: Assert deposit was called
+      expect(mockAccountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: depositTx.account_id,
+          amount: depositTx.amount,
+        })
+      );
     });
   });
 

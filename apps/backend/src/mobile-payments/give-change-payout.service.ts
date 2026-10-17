@@ -371,11 +371,20 @@ export class GiveChangePayoutService {
       return { success: false, data };
     }
 
-    // Pending is only valid once we have a provider transaction_id.
+    // G2: Pending is only valid once we have a provider transaction_id.
+    // For mock payouts, this MUST complete before scheduling the auto-callback.
     await this.databaseService.updateTransaction(mobileTxId, {
       transaction_id: providerTxId,
       status: 'pending',
     });
+
+    // G2: Schedule mock payout callback AFTER persisting the mock id
+    if (providerTxId?.startsWith('mock-')) {
+      const fedapayService = this.mobilePaymentsService['fedapayService'] as any;
+      if (fedapayService?.scheduleMockPayoutCallback) {
+        fedapayService.scheduleMockPayoutCallback(providerTxId, reference);
+      }
+    }
 
     this.logger.log(
       `GIVE_CHANGE ${mobileTxId} initiated (${reference}); funds held until provider confirms`
