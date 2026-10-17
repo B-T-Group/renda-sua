@@ -162,6 +162,7 @@ async function bootstrap() {
   app.use('/api/business-contracts/webhook', raw({ type: '*/*' }));
   app.use('/api/commerce-integrations/webhooks/shopify', raw({ type: '*/*' }));
   app.use('/api/whatsapp/webhook', raw({ type: '*/*' }));
+  app.use('/api/mobile-payments/callback/fedapay', raw({ type: '*/*' }));
   app.use(json({ limit: JSON_BODY_LIMIT }));
   app.use(urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
   app.use(cookieParser());

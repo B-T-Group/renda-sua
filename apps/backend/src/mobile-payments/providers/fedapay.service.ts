@@ -93,6 +93,23 @@ export class FedaPayService implements OnModuleInit {
       mockPendingPhones: fedapayConfig?.mockPendingPhones ?? [],
     };
 
+    const deploymentEnv = process.env.DEPLOYMENT_ENV?.toLowerCase();
+    const nodeEnv = process.env.NODE_ENV?.toLowerCase();
+    const isProductionRuntime = deploymentEnv === 'production' || nodeEnv === 'production';
+    
+    if (this.config.mockEnabled) {
+      if (!deploymentEnv || !['development', 'test'].includes(deploymentEnv)) {
+        throw new Error(
+          `FedaPay mock can only be enabled when DEPLOYMENT_ENV is 'development' or 'test', got: ${deploymentEnv || '(unset)'}`
+        );
+      }
+      if (this.config.secretKey?.startsWith('sk_live_')) {
+        throw new Error(
+          'FedaPay mock cannot be enabled with a live secret key (sk_live_*)'
+        );
+      }
+    }
+    
     this.mockEnabled = this.config.mockEnabled;
     this.mockPendingPhones = this.mockEnabled ? this.config.mockPendingPhones : [];
 
@@ -311,7 +328,7 @@ export class FedaPayService implements OnModuleInit {
     try {
       const externalId = reference || paymentRequest.externalId;
       this.logger.log(
-        `Initiating FedaPay payment for payer: ${paymentRequest.payer}, channel: ${paymentRequest.channel}, externalId: ${externalId}`
+        `Initiating FedaPay payment: channel=${paymentRequest.channel}, externalId=${externalId}`
       );
 
       const transaction = await Transaction.create({
@@ -335,6 +352,13 @@ export class FedaPayService implements OnModuleInit {
         const txData: any = transaction;
         await txData.generateToken();
         
+        await txData.sendNowWithToken(paymentRequest.channel, txData.token, {
+          phone_number: {
+            number: paymentRequest.payer,
+            country: 'TG',
+          },
+        });
+        
         return {
           success: true,
           transactionId: String(transaction.id),
@@ -352,7 +376,7 @@ export class FedaPayService implements OnModuleInit {
         status: 'failed',
       };
     } catch (error: any) {
-      this.logger.error('Failed to initiate FedaPay payment:', error);
+      this.logger.error(`Failed to initiate FedaPay payment: ${error.message}`);
       return {
         success: false,
         message: normalizeProviderMessage(
@@ -387,7 +411,7 @@ export class FedaPayService implements OnModuleInit {
     try {
       const externalId = reference || withdrawalRequest.externalId;
       this.logger.log(
-        `Initiating FedaPay payout for payee: ${withdrawalRequest.payee}, channel: ${withdrawalRequest.channel}, externalId: ${externalId}`
+        `Initiating FedaPay payout: channel=${withdrawalRequest.channel}, externalId=${externalId}`
       );
 
       const payout = await Payout.create({
@@ -401,6 +425,9 @@ export class FedaPayService implements OnModuleInit {
             country: 'TG',
           },
         },
+        custom_metadata: {
+          externalId,
+        },
       });
 
       if (payout && payout.id) {
@@ -410,7 +437,7 @@ export class FedaPayService implements OnModuleInit {
         return {
           success: true,
           transactionId: String(payout.id),
-          reference: String(payout.id),
+          reference: externalId,
           status: payoutData.status || 'pending',
           message: normalizeProviderMessage(null, 'Payout initiated'),
         };
@@ -423,7 +450,7 @@ export class FedaPayService implements OnModuleInit {
         status: 'failed',
       };
     } catch (error: any) {
-      this.logger.error('Failed to initiate FedaPay payout:', error);
+      this.logger.error(`Failed to initiate FedaPay payout: ${error.message}`);
       return {
         success: false,
         message: normalizeProviderMessage(
@@ -433,6 +460,53 @@ export class FedaPayService implements OnModuleInit {
         errorCode: error.code || 'WITHDRAWAL_FAILED',
         status: 'failed',
       };
+    }
+  }
+
+  async checkPayoutStatus(
+    payoutId: string
+  ): Promise<FedaPayTransactionStatus> {
+    if (this.isMockedTransaction(payoutId)) {
+      return this.getMockTransactionStatus(payoutId);
+    }
+
+    try {
+      this.logger.log(`Checking FedaPay payout status: ${payoutId}`);
+
+      const payout = await Payout.retrieve(parseInt(payoutId, 10));
+
+      if (!payout) {
+        throw new Error(`Payout ${payoutId} not found`);
+      }
+
+      const payoutData: any = payout;
+      const customMeta = payoutData.custom_metadata || {};
+
+      const statusMap: Record<string, string> = {
+        sent: 'approved',
+        failed: 'declined',
+        pending: 'pending',
+      };
+
+      const mappedStatus = statusMap[payoutData.status] || payoutData.status;
+
+      return {
+        transactionId: String(payout.id),
+        status: mappedStatus,
+        amount: payoutData.amount,
+        reference: String(payout.id),
+        merchantRef: customMeta.externalId || '',
+        reason: payoutData.reason || '',
+        message: normalizeProviderMessage(
+          payoutData.reason || payoutData.message,
+          'Payout status check completed'
+        ),
+      };
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to check FedaPay payout status: ${error.message}`
+      );
+      throw error;
     }
   }
 
@@ -555,7 +629,7 @@ export class FedaPayService implements OnModuleInit {
       
       return signature === expectedSignature;
     } catch (error: any) {
-      this.logger.error('Webhook signature verification failed:', error);
+      this.logger.error(`Webhook signature verification failed: ${error.message}`);
       return false;
     }
   }

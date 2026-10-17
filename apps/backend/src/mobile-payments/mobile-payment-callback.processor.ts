@@ -143,6 +143,19 @@ export class MobilePaymentCallbackProcessor {
     callbackData: FedaPayCallbackDto,
     _req?: Request
   ): Promise<{ received: boolean; transactionId: number }> {
+    const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled'];
+    const TERMINAL_STATUSES = ['approved', 'declined', 'canceled'];
+    
+    const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name);
+    const isTerminalStatus = TERMINAL_STATUSES.includes(callbackData.entity.status);
+    
+    if (!isTerminalEvent || !isTerminalStatus) {
+      this.logger.log(
+        `FedaPay non-terminal event: name=${callbackData.name} status=${callbackData.entity.status} entity_id=${callbackData.entity.id}, acknowledging without state change`
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+
     const tx = await this.lookupFedaPayTransaction(callbackData);
 
     if (tx?.status !== 'pending') {
@@ -151,19 +164,27 @@ export class MobilePaymentCallbackProcessor {
 
     await this.databaseService.logCallback(tx.id, callbackData);
     
-    // Map FedaPay status to our internal status
     const normalizedStatus = callbackData.entity.status === 'approved' 
       ? 'SUCCESS' 
       : callbackData.entity.status === 'declined' 
       ? 'FAILED' 
+      : callbackData.entity.status === 'canceled'
+      ? 'FAILED'
       : null;
 
-    if (normalizedStatus && !this.isMockedTransaction(tx)) {
+    if (!normalizedStatus) {
+      this.logger.warn(
+        `FedaPay unexpected terminal status: ${callbackData.entity.status} for tx ${tx.id}`
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+
+    if (!this.isMockedTransaction(tx)) {
       await this.mobilePaymentsService.assertProviderConfirmsCallback(
         tx,
         normalizedStatus
       );
-    } else if (this.isMockedTransaction(tx)) {
+    } else {
       this.logger.log(
         `Skipping live provider confirmation for mocked transaction: ${tx.id}`
       );
