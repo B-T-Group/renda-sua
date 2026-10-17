@@ -8800,5 +8800,12 @@
       "failed": "Could not be sent",
       "unknown": "Unknown"
     }
+  },
+  "payment": {
+    "togoOperator": {
+      "label": "Mobile Money Operator",
+      "moov": "Moov Money",
+      "mixx": "Mixx by Yas"
+    }
   }
 }

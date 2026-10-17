@@ -8817,5 +8817,12 @@
       "failed": "Échec de l'envoi",
       "unknown": "Inconnu"
     }
+  },
+  "payment": {
+    "togoOperator": {
+      "label": "Opérateur Mobile Money",
+      "moov": "Moov Money",
+      "mixx": "Mixx by Yas"
+    }
   }
 }
