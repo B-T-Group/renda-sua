@@ -6,7 +6,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
-import { sanitizeProviderError } from '../sanitize-provider-error.util';
+import { sanitizeProviderError, maskPhoneNumber } from '../sanitize-provider-error.util';
 import {
   MYP_VIT_STATUS_OPERATIONS,
   buildMypvitStatusPath,
@@ -610,7 +610,7 @@ export class MyPVitService {
     customerEmail?: string;
   }): Promise<{ success: boolean; kycStatus: string; message?: string }> {
     try {
-      this.logger.log(`Performing KYC for customer: ${kycData.customerPhone}`);
+      this.logger.log(`Performing KYC for customer: ${maskPhoneNumber(kycData.customerPhone)}`);
 
       const response = await this.httpClient.post(
         '/W2OZPE4QDSWH3Z5R/kyc',
