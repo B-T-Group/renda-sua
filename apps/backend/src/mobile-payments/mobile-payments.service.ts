@@ -503,17 +503,21 @@ export class MobilePaymentsService {
     try {
       // F-L2: If FedaPay is explicitly requested, validate TG-specific requirements FIRST
       if (paymentRequest.provider === 'fedapay' && paymentRequest.customerPhone) {
+        // Parse and check structure first
+        const cleaned = paymentRequest.customerPhone.replace(/\D/g, '');
+        const hasTogoPrefix = cleaned.startsWith('228');
+        
+        // Check if it's a TG number (starts with +228 or looks like one)
         const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone);
-        if (!phoneValidation.isValid || phoneValidation.regionCode !== 'TG') {
+        if (phoneValidation.regionCode !== 'TG') {
           return {
             success: false,
             message: 'FedaPay requires a Togo (+228) phone number',
             errorCode: 'INVALID_PHONE_NUMBER',
           };
         }
-        // Check Togo-specific prefixes
-        const cleaned = paymentRequest.customerPhone.replace(/\D/g, '');
-        const hasTogoPrefix = cleaned.startsWith('228');
+        
+        // Now check Togo-specific format requirements
         const national = hasTogoPrefix ? cleaned.slice(3) : cleaned;
         if (national.length !== 8) {
           return {
@@ -522,6 +526,7 @@ export class MobilePaymentsService {
             errorCode: 'INVALID_PHONE_NUMBER',
           };
         }
+        
         const prefix = national.slice(0, 2);
         const validPrefixes = ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'];
         if (!validPrefixes.includes(prefix)) {
