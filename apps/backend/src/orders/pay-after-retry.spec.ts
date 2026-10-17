@@ -147,6 +147,7 @@ describe('OrdersService pay-after-confirm retry (#545)', () => {
       initiatePayment: jest.fn().mockResolvedValue({ success: true, transactionId: 'mock-new' }),
       cancelTransaction: jest.fn().mockResolvedValue(true),
       nationalCustomerIdForMypvit: jest.fn().mockReturnValue('650000099'),
+      validatePaymentRequest: jest.fn().mockResolvedValue(null),
     };
     hasura = {
       getAccount: jest.fn().mockResolvedValue({ id: 'acct-1', available_balance: 0 }),
@@ -704,6 +705,7 @@ describe('OrdersService pay-after retry QA fixes (#545 F1-F5)', () => {
       checkTransactionStatus: jest.fn().mockResolvedValue({ status: 'pending' }),
       initiatePayment: jest.fn().mockResolvedValue({ success: true, transactionId: 'mock-x' }),
       cancelTransaction: jest.fn().mockResolvedValue(true),
+      validatePaymentRequest: jest.fn().mockResolvedValue(null),
     };
     svc = Object.create(OrdersService.prototype);
     Object.assign(svc, {
