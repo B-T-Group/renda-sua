@@ -42,7 +42,7 @@ describe('MobilePaymentCallbackProcessor order success vs retry race (#545 F2)',
       updateTransaction: jest.fn(async (_id: string, data: any) => Object.assign(row, data)),
       updateTransactionIfStatus: jest.fn(async (_id: string, expected: string, data: any) => {
         if (row.status !== expected) return false;
-        Object.assign(row, data);
+        Object.assign(row, data, { updated_at: new Date().toISOString() });
         return true;
       }),
     };

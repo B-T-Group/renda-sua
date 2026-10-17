@@ -1,5 +1,8 @@
 import { BadRequestException, HttpException } from '@nestjs/common';
-import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
+import {
+  FINALIZE_HANDLER_FAILED,
+  MobilePaymentCallbackProcessor,
+} from './mobile-payment-callback.processor';
 import type { MobilePaymentTransaction } from './mobile-payments-database.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 
@@ -8,9 +11,10 @@ jest.mock('../common/utils/money-alert.util', () => ({
 }));
 
 /**
- * #570/#571 leftovers. Resume only after the processing row is 60s old, a failed
- * resume credit stays processing, a handler 4xx is still a retryable error, and
- * a FAILED give-change releases the hold with the success-path idempotency key.
+ * #570/#571 leftovers. Resume only after the processing row is 60s old unless
+ * error_code is FINALIZE_HANDLER_FAILED (handler already failed; retry immediately).
+ * A failed resume credit stays processing, a handler 4xx is still a retryable
+ * error, and a FAILED give-change releases the hold with the success-path key.
  */
 const NOW = Date.parse('2026-10-17T10:00:00.000Z');
 const RETRY_MESSAGE = 'Payment handler failed for order ORD1; will retry';
@@ -59,7 +63,7 @@ function buildOrder(tx: MobilePaymentTransaction, loseRestore = false) {
         return false;
       }
       if (row.status !== expected) return false;
-      Object.assign(row, data);
+      Object.assign(row, data, { updated_at: new Date(NOW).toISOString() });
       return true;
     }),
   };
@@ -130,6 +134,40 @@ describe('MobilePaymentCallbackProcessor resume guard (#570 #571)', () => {
     expect(t.row.status).toBe('processing');
   });
 
+  it('a fresh processing row with FINALIZE_HANDLER_FAILED resumes immediately', async () => {
+    const t = buildOrder({
+      ...orderTx('processing', 5_000),
+      error_code: FINALIZE_HANDLER_FAILED,
+    });
+
+    await t.processor.processFreemopayCallback(successCallback);
+
+    expect(t.accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
+    expect(t.handler.onPaymentSuccess).toHaveBeenCalledTimes(1);
+    expect(t.row.status).toBe('success');
+    expect(t.row.error_code).toBeNull();
+  });
+
+  it('handler failure then immediate SUCCESS retry finalizes even though updated_at is fresh', async () => {
+    const t = buildOrder(orderTx('pending', 70_000));
+    t.handler.onPaymentSuccess
+      .mockRejectedValueOnce(new Error('hold failed'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(t.processor.processFreemopayCallback(successCallback)).rejects.toThrow(
+      RETRY_MESSAGE
+    );
+    expect(t.row.status).toBe('processing');
+    expect(t.row.error_code).toBe(FINALIZE_HANDLER_FAILED);
+    expect(t.row.updated_at).toBe(new Date(NOW).toISOString());
+
+    await t.processor.processFreemopayCallback(successCallback);
+
+    expect(t.handler.onPaymentSuccess).toHaveBeenCalledTimes(2);
+    expect(t.row.status).toBe('success');
+    expect(t.row.error_code).toBeNull();
+  });
+
   it('a processing order aged exactly 60s resumes credit and the order handler', async () => {
     const t = buildOrder(orderTx('processing', 60_000));
 
@@ -187,7 +225,7 @@ describe('MobilePaymentCallbackProcessor resume guard (#570 #571)', () => {
     expect(t.databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       'tx-order',
       'success',
-      { status: 'processing' }
+      { status: 'processing', error_code: FINALIZE_HANDLER_FAILED }
     );
     expect(t.accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
     expect(t.row.status).toBe('processing');

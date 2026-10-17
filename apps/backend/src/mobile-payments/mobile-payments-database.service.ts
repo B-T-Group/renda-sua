@@ -72,7 +72,7 @@ export interface UpdateTransactionData {
   transaction_id?: string;
   /** May arrive as bilingual provider object; coerced to string before write. */
   error_message?: string | Record<string, unknown> | null;
-  error_code?: string;
+  error_code?: string | null;
   superseded_by_id?: string | null;
   superseded_reason?: string | null;
   superseded_at?: string | null;
