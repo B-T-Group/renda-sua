@@ -5,6 +5,13 @@ import { MobilePaymentsService } from './mobile-payments.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { GiveChangePayoutService } from './give-change-payout.service';
 import { FedaPayService } from './providers/fedapay.service';
+import { MyPVitService } from './providers/mypvit.service';
+import { FreemopayService } from './providers/freemopay.service';
+import { MtnMomoService } from '../mtn-momo/mtn-momo.service';
+import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
+import { OrangeMomoService } from '../orange-momo/orange-momo.service';
+import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { OrdersService } from '../orders/orders.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -45,9 +52,15 @@ describe('G2: Real Mock Callback Order Tests', () => {
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           MobilePaymentsService,
+          { provide: MyPVitService, useValue: {} },
+          { provide: MtnMomoService, useValue: {} },
+          { provide: MtnMomoDatabaseService, useValue: {} },
+          { provide: OrangeMomoService, useValue: {} },
+          { provide: OrangeMomoDatabaseService, useValue: {} },
+          { provide: FreemopayService, useValue: {} },
           { provide: FedaPayService, useValue: fedaPayService },
           { provide: MobilePaymentsDatabaseService, useValue: databaseService },
-          { provide: 'HasuraSystemService', useValue: {} },
+          { provide: HasuraSystemService, useValue: {} },
         ],
       }).compile();
 
