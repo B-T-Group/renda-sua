@@ -280,7 +280,7 @@ export class PendingWithdrawalResolveService {
   ): Promise<PendingWithdrawalResolveResult> {
     let provider: MobilePaymentIntegrationProvider;
     try {
-      provider = this.mobilePaymentsService.resolveAdminIntegrationProvider(
+      provider = await this.mobilePaymentsService.resolveAdminIntegrationProvider(
         tx.customer_phone,
         tx.provider
       );

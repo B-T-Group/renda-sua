@@ -286,7 +286,7 @@ export class MobilePaymentsController {
         );
       }
 
-      this.assertMobileMoneyCurrency(paymentRequest, resolvedProvider);
+      this.assertMobileMoneyCurrency(paymentRequest, await resolvedProvider);
 
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
@@ -306,7 +306,7 @@ export class MobilePaymentsController {
         amount: paymentRequest.amount,
         currency: paymentRequest.currency,
         description: paymentRequest.description,
-        provider: resolvedProvider,
+        provider: await await resolvedProvider,
         payment_method: paymentRequest.paymentMethod || 'mobile_money',
         customer_phone: paymentRequest.customerPhone,
         customer_email: paymentRequest.customerEmail,
@@ -967,11 +967,11 @@ export class MobilePaymentsController {
     await this.assertGiveChangePrechecks(request, accountId);
     const resolvedProvider =
       this.mobilePaymentsService.resolveProviderFromRequest(request);
-    this.assertMobileMoneyCurrency(request, resolvedProvider);
+    this.assertMobileMoneyCurrency(request, await resolvedProvider);
     return this.executeOwnedGiveChangePayout(
       request,
       accountId,
-      resolvedProvider,
+      await resolvedProvider,
       initiatorUserId
     );
   }
@@ -1169,7 +1169,7 @@ export class MobilePaymentsController {
         message: 'Mobile money payments are only supported for XAF currency',
         error: 'UNSUPPORTED_CURRENCY',
         data: {
-          provider: resolvedProvider,
+          provider: await await resolvedProvider,
           currency: request.currency,
           supportedCurrency: 'XAF',
         },

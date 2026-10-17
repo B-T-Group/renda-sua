@@ -6,8 +6,6 @@ import {
   FedaPay,
   Transaction,
   Payout,
-  Webhook,
-  Customer,
 } from 'fedapay';
 import type { FedaPayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
@@ -511,7 +509,7 @@ export class FedaPayService implements OnModuleInit {
 
   verifyWebhookSignature(
     payload: string | Buffer,
-    signature: string,
+    signatureHeader: string,
     webhookSecret?: string
   ): boolean {
     try {
@@ -521,8 +519,41 @@ export class FedaPayService implements OnModuleInit {
         return false;
       }
 
-      const event = Webhook.constructEvent(payload, signature, secret);
-      return !!event;
+      const payloadString = typeof payload === 'string' ? payload : payload.toString();
+      
+      // Parse header: t=timestamp,v1=signature
+      const parts = signatureHeader.split(',');
+      let timestamp: string | null = null;
+      let signature: string | null = null;
+      
+      for (const part of parts) {
+        const [key, value] = part.split('=');
+        if (key === 't') timestamp = value;
+        if (key === 'v1') signature = value;
+      }
+      
+      if (!timestamp || !signature) {
+        this.logger.warn('Invalid webhook signature header format');
+        return false;
+      }
+      
+      // Check timestamp staleness (5 minute tolerance)
+      const currentTime = Math.floor(Date.now() / 1000);
+      const timestampNum = parseInt(timestamp, 10);
+      if (currentTime - timestampNum > 300) {
+        this.logger.warn('Webhook timestamp too old');
+        return false;
+      }
+      
+      // Verify signature
+      const crypto = require('crypto');
+      const signedPayload = `${timestamp}.${payloadString}`;
+      const expectedSignature = crypto
+        .createHmac('sha256', secret)
+        .update(signedPayload)
+        .digest('hex');
+      
+      return signature === expectedSignature;
     } catch (error: any) {
       this.logger.error('Webhook signature verification failed:', error);
       return false;

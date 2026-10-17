@@ -707,7 +707,7 @@ export class CheckoutPreflightService {
 
       let mobileMoneyProvider: string | null = null;
       if (rail === 'mobile_money') {
-        mobileMoneyProvider = this.mobilePaymentsService.getProviderForCountry(
+        mobileMoneyProvider = await this.mobilePaymentsService.getProviderForCountry(
           group.sellerCountry
         );
       }
