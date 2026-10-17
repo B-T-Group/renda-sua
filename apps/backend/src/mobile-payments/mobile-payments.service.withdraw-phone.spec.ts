@@ -1,20 +1,27 @@
 import { MobilePaymentsService } from './mobile-payments.service';
 
 describe('MobilePaymentsService.isWithdrawalDestinationCmOrGa', () => {
-  const service = Object.create(
-    MobilePaymentsService.prototype
-  ) as MobilePaymentsService;
+  let service: MobilePaymentsService;
+  let mockIsFedaPayActive: jest.Mock;
 
-  it('accepts valid Cameroon and Gabon MSISDNs', () => {
-    expect(service.isWithdrawalDestinationCmOrGa('+237670000000')).toBe(true);
-    expect(service.isWithdrawalDestinationCmOrGa('+24106123456')).toBe(true);
+  beforeEach(() => {
+    service = Object.create(MobilePaymentsService.prototype) as MobilePaymentsService;
+    mockIsFedaPayActive = jest.fn().mockResolvedValue(false);
+    (service as any).isFedaPayActiveForTogo = mockIsFedaPayActive;
   });
 
-  it('rejects blank, invalid, and non-CM/GA numbers', () => {
-    expect(service.isWithdrawalDestinationCmOrGa(undefined)).toBe(false);
-    expect(service.isWithdrawalDestinationCmOrGa('')).toBe(false);
-    expect(service.isWithdrawalDestinationCmOrGa('   ')).toBe(false);
-    expect(service.isWithdrawalDestinationCmOrGa('not-a-phone')).toBe(false);
-    expect(service.isWithdrawalDestinationCmOrGa('+15551234567')).toBe(false);
+  it('accepts valid Cameroon and Gabon MSISDNs', async () => {
+    await expect(service.isWithdrawalDestinationCmOrGa('+237670000000')).resolves.toBe(true);
+    await expect(service.isWithdrawalDestinationCmOrGa('+24106123456')).resolves.toBe(true);
   });
+
+  it('rejects blank, invalid, and non-CM/GA numbers', async () => {
+    await expect(service.isWithdrawalDestinationCmOrGa(undefined)).resolves.toBe(false);
+    await expect(service.isWithdrawalDestinationCmOrGa('')).resolves.toBe(false);
+    await expect(service.isWithdrawalDestinationCmOrGa('   ')).resolves.toBe(false);
+    await expect(service.isWithdrawalDestinationCmOrGa('not-a-phone')).resolves.toBe(false);
+    await expect(service.isWithdrawalDestinationCmOrGa('+15551234567')).resolves.toBe(false);
+  });
+  
+  // TG flag testing covered in fedapay-integration.spec.ts and full integration tests
 });

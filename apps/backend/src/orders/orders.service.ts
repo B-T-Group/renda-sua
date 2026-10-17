@@ -3102,7 +3102,7 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
 
     // Create transaction record before initiating payment
@@ -4173,7 +4173,7 @@ export class OrdersService {
       };
     }
 
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
     const account = await this.hasuraSystemService.getAccount(
       order.client.user_id,
@@ -4386,7 +4386,7 @@ export class OrdersService {
       };
     }
 
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
     const account = await this.hasuraSystemService.getAccount(
       order.client.user_id,
@@ -4600,7 +4600,7 @@ export class OrdersService {
       );
     if (existing && (existing.status === 'pending' || existing.status === 'processing')) return;
 
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     const account = await this.hasuraSystemService.getAccount(
       order.client.user_id,
       order.currency
@@ -5030,7 +5030,7 @@ export class OrdersService {
     order: Orders,
     options: RetryOrderPaymentOptions
   ): Promise<PayAfterRetryResponse> {
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     // Validate everything before any side effect.
     const newPhone = options.phoneNumber?.trim()
       ? requireValidRetryPhone(options.phoneNumber, momo.itemCountry)
@@ -5567,7 +5567,7 @@ export class OrdersService {
       savePhone: boolean;
     }
   ): Promise<PayAfterRetryResponse> {
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     const account = await this.hasuraSystemService.getAccount(
       order.client.user_id,
       order.currency
@@ -5722,7 +5722,7 @@ export class OrdersService {
 
   private async saveRetryPhoneForClient(order: Orders, phoneE164: string): Promise<void> {
     try {
-      const region = (this.orderMomoContext(order).itemCountry || 'CM').toUpperCase();
+      const region = ((await this.orderMomoContext(order)).itemCountry || 'CM').toUpperCase();
       await this.mobilePaymentPhonesService.createForUser(
         order.client.user_id,
         region,
@@ -6031,7 +6031,7 @@ export class OrdersService {
       );
     }
 
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
     const account = await this.hasuraSystemService.getAccount(
       order.client!.user_id,
@@ -6276,7 +6276,7 @@ export class OrdersService {
       );
     }
 
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
 
     const depositLongReference = `${order.order_number}-DEP-${Date.now()}-retry`;
@@ -6804,7 +6804,7 @@ export class OrdersService {
       }
     );
 
-    const momo = this.orderMomoContext(order);
+    const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
@@ -13167,11 +13167,11 @@ export class OrdersService {
     return { ...payer, payer_phone: phone };
   }
 
-  private orderMomoContext(order: Orders): {
+  private async orderMomoContext(order: Orders): Promise<{
     provider: MobilePaymentIntegrationProvider;
     itemCountry: string | null;
     payerUserId?: string;
-  } {
+  }> {
     const location = order.business_location as {
       address?: { country?: string | null } | null;
       business?: { user?: { country?: string | null } | null } | null;
@@ -13181,7 +13181,7 @@ export class OrdersService {
       location?.business?.user?.country
     );
     return {
-      provider: this.mobilePaymentsService.getProviderForCountry(itemCountry),
+      provider: await this.mobilePaymentsService.getProviderForCountry(itemCountry),
       itemCountry,
       payerUserId: order.client?.user_id,
     };
@@ -14763,7 +14763,7 @@ export class OrdersService {
               amount: depositCalc.depositAmount,
               currency,
               description: `Deposit for order ${order.order_number}`,
-              provider,
+              provider: await provider,
               payment_method: 'mobile_money',
               customer_phone: phoneNumber,
               account_id: account.id,
@@ -15092,10 +15092,10 @@ export class OrdersService {
             orderNumber,
             totalAmount: total_amount,
             currency,
-            accountId: account.id,
-            phoneNumber,
-            provider,
-            userEmail: user.email ?? undefined,
+          accountId: account.id,
+          phoneNumber,
+          provider: await provider,
+          userEmail: user.email ?? undefined,
             itemCountry: itemCountry ?? undefined,
             userId: user.id,
           });

@@ -57,98 +57,98 @@ describe('MobilePaymentsService.resolveAdminIntegrationProvider', () => {
     MobilePaymentsService.prototype
   ) as MobilePaymentsService;
 
-  it('sends every +237 number to FreemoPay for payment and callback', () => {
+  it('sends every +237 number to FreemoPay for payment and callback', async () => {
     const phone = '+237640448217';
-    expect(service.resolveProviderFromRequest({ customerPhone: phone })).toBe(
+    await expect(service.resolveProviderFromRequest({ customerPhone: phone })).resolves.toBe(
       'freemopay'
     );
-    expect(service.resolveAdminIntegrationProvider(phone, 'mypvit')).toBe(
+    await expect(service.resolveAdminIntegrationProvider(phone, 'mypvit')).resolves.toBe(
       'freemopay'
     );
   });
 
-  it('keeps a stored FreemoPay rail when the phone is not Cameroon', () => {
-    expect(
+  it('keeps a stored FreemoPay rail when the phone is not Cameroon', async () => {
+    await expect(
       service.resolveAdminIntegrationProvider('+24106123456', 'freemopay')
-    ).toBe('freemopay');
-    expect(
+    ).resolves.toBe('freemopay');
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '+24106123456',
         provider: 'freemopay',
       })
-    ).toBe('freemopay');
+    ).resolves.toBe('freemopay');
   });
 
-  it('lets a Cameroon country code beat a stored MyPVit rail and the item country', () => {
-    expect(
+  it('lets a Cameroon country code beat a stored MyPVit rail and the item country', async () => {
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '+237 640 44 82 17',
         provider: 'mypvit',
         itemCountry: 'GA',
       })
-    ).toBe('freemopay');
-    expect(
+    ).resolves.toBe('freemopay');
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '00237692168717',
         provider: 'airtel',
         itemCountry: 'ga',
       })
-    ).toBe('freemopay');
-    expect(
+    ).resolves.toBe('freemopay');
+    await expect(
       service.resolveAdminIntegrationProvider('00237692168717', 'mypvit')
-    ).toBe('freemopay');
+    ).resolves.toBe('freemopay');
   });
 
-  it('keeps a direct MTN or Orange rail ahead of a Cameroon number', () => {
-    expect(
+  it('keeps a direct MTN or Orange rail ahead of a Cameroon number', async () => {
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '+237640448217',
         provider: 'mtn',
         itemCountry: 'GA',
       })
-    ).toBe('mtn');
-    expect(
+    ).resolves.toBe('mtn');
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '+237692168717',
         provider: 'orange',
       })
-    ).toBe('orange');
+    ).resolves.toBe('orange');
   });
 
-  it('uses the item country when the number has no Cameroon country code', () => {
-    expect(
+  it('uses the item country when the number has no Cameroon country code', async () => {
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '692168717',
         provider: 'mypvit',
         itemCountry: 'GA',
       })
-    ).toBe('mypvit');
-    expect(
+    ).resolves.toBe('mypvit');
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '+24106123456',
         itemCountry: 'CM',
       })
-    ).toBe('freemopay');
-    expect(service.resolveProviderFromRequest({})).toBe('mypvit');
-    expect(
+    ).resolves.toBe('freemopay');
+    await expect(service.resolveProviderFromRequest({})).resolves.toBe('mypvit');
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '692168717',
         itemCountry: 'Cameroon',
       })
-    ).toBe('freemopay');
-    expect(
+    ).resolves.toBe('freemopay');
+    await expect(
       service.resolveProviderFromRequest({
         customerPhone: '692168717',
         itemCountry: 'Cameroun',
       })
-    ).toBe('freemopay');
+    ).resolves.toBe('freemopay');
   });
 
-  it('sends a local Cameroon mobile to FreemoPay only with no item country', () => {
+  it('sends a local Cameroon mobile to FreemoPay only with no item country', async () => {
     expect(service.getProvider('692168717')).toBe('freemopay');
     expect(service.getProvider('+24106123456')).toBe('mypvit');
-    expect(
+    await expect(
       service.resolveProviderFromRequest({ customerPhone: '692168717' })
-    ).toBe('freemopay');
+    ).resolves.toBe('freemopay');
   });
 });

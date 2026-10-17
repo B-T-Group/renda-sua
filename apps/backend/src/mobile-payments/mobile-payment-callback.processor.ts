@@ -5,6 +5,7 @@ import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import type {
   FreemopayCallbackDto,
   MyPVitCallbackDto,
+  FedaPayCallbackDto,
 } from './mobile-payment-callback.dto';
 import {
   MobilePaymentTransaction,
@@ -138,6 +139,87 @@ export class MobilePaymentCallbackProcessor {
     return { received: true, reference: callbackData.reference };
   }
 
+  async processFedaPayCallback(
+    callbackData: FedaPayCallbackDto,
+    _req?: Request
+  ): Promise<{ received: boolean; transactionId: number }> {
+    const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled'];
+    const TERMINAL_STATUSES = ['approved', 'declined', 'canceled'];
+    
+    const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name);
+    const isTerminalStatus = TERMINAL_STATUSES.includes(callbackData.entity.status);
+    
+    if (!isTerminalEvent || !isTerminalStatus) {
+      this.logger.log(
+        `FedaPay non-terminal event: name=${callbackData.name} status=${callbackData.entity.status} entity_id=${callbackData.entity.id}, acknowledging without state change`
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+
+    const tx = await this.lookupFedaPayTransaction(callbackData);
+
+    if (tx?.status !== 'pending') {
+      return this.handleNonPendingFedaPay(tx, callbackData);
+    }
+
+    await this.databaseService.logCallback(tx.id, callbackData);
+    
+    const normalizedStatus = callbackData.entity.status === 'approved' 
+      ? 'SUCCESS' 
+      : callbackData.entity.status === 'declined' 
+      ? 'FAILED' 
+      : callbackData.entity.status === 'canceled'
+      ? 'FAILED'
+      : null;
+
+    if (!normalizedStatus) {
+      this.logger.warn(
+        `FedaPay unexpected terminal status: ${callbackData.entity.status} for tx ${tx.id}`
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+
+    if (!this.isMockedTransaction(tx)) {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(
+        this.withFedaPayRecheckId(tx, callbackData),
+        normalizedStatus
+      );
+    } else {
+      this.logger.log(
+        `Skipping live provider confirmation for mocked transaction: ${tx.id}`
+      );
+    }
+    
+    await this.processPendingFedaPay(tx, callbackData);
+
+    return { received: true, transactionId: callbackData.entity.id };
+  }
+
+  /**
+   * N2: a FedaPay row can be pending without a transaction_id (the provider id
+   * was never stored, e.g. the push failed or the process died right after
+   * Transaction.create). The webhook was matched by custom_metadata.externalId,
+   * so re-check the live status of the webhook's entity id instead of failing
+   * with "missing provider transaction_id". This is safe only because the live
+   * re-check requires custom_metadata.externalId === tx.reference (fail closed),
+   * so it is used only when the row has a reference. The finalizers then store
+   * the entity id as transaction_id.
+   */
+  private withFedaPayRecheckId(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): MobilePaymentTransaction {
+    if (tx.transaction_id?.trim()) return tx;
+    const entityId = callbackData.entity?.id;
+    if (!tx.reference?.trim() || entityId === undefined || entityId === null) {
+      return tx;
+    }
+    this.logger.warn(
+      `FedaPay row ${tx.id} has no transaction_id; re-checking webhook entity ${entityId} (reference must match)`
+    );
+    return { ...tx, transaction_id: String(entityId) };
+  }
+
   private freemopayLookupKeys(callbackData: FreemopayCallbackDto): string[] {
     return [
       ...new Set(
@@ -165,6 +247,47 @@ export class MobilePaymentCallbackProcessor {
   ): Promise<MobilePaymentTransaction | null> {
     for (const key of this.freemopayLookupKeys(callbackData)) {
       const found = await this.lookupFreemopayKey(key);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  private fedapayLookupKeys(callbackData: FedaPayCallbackDto): string[] {
+    const entityId = String(callbackData.entity.id);
+    const externalId = callbackData.entity.custom_metadata?.externalId;
+    return [
+      ...new Set(
+        [entityId, externalId, callbackData.entity.reference]
+          .map((key) => key?.trim())
+          .filter((key): key is string => !!key)
+      ),
+    ];
+  }
+
+  private async lookupFedaPayKey(
+    key: string
+  ): Promise<MobilePaymentTransaction | null> {
+    // FedaPay ids are plain numbers and can collide with another provider's
+    // transaction_id/reference, so only ever match FedaPay rows here.
+    const isFedaPay = (tx: MobilePaymentTransaction | null | undefined) =>
+      tx?.provider === 'fedapay' ? tx : null;
+    const byProviderId = isFedaPay(
+      await this.databaseService.getTransactionByTransactionId(key)
+    );
+    if (byProviderId) return byProviderId;
+    const byReference = isFedaPay(
+      await this.databaseService.getTransactionByReference(key)
+    );
+    if (byReference) return byReference;
+    if (!looksLikeUuid(key)) return null;
+    return isFedaPay(await this.databaseService.getTransactionById(key));
+  }
+
+  private async lookupFedaPayTransaction(
+    callbackData: FedaPayCallbackDto
+  ): Promise<MobilePaymentTransaction | null> {
+    for (const key of this.fedapayLookupKeys(callbackData)) {
+      const found = await this.lookupFedaPayKey(key);
       if (found) return found;
     }
     return null;
@@ -258,6 +381,43 @@ export class MobilePaymentCallbackProcessor {
       received: true,
       reference: callbackData.reference,
       skipped: true,
+    };
+  }
+
+  private async handleNonPendingFedaPay(
+    tx: MobilePaymentTransaction | null | undefined,
+    callbackData: FedaPayCallbackDto
+  ): Promise<{ received: boolean; transactionId: number }> {
+    if (!tx) {
+      this.logger.warn(
+        `Transaction not found for FedaPay entity: ${callbackData.entity.id}`
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+    const isApproved = callbackData.entity.status === 'approved';
+    // Resume finalize when approved arrives on a processing row (crash recovery)
+    if (tx.status === 'processing' && isApproved) {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.resumeFinalizeFromProcessing(tx, String(callbackData.entity.id));
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+    if (this.isRecoverableLateOrderSuccess(tx) && isApproved) {
+      await this.databaseService.logCallback(tx.id, callbackData);
+      await this.handleLateSuccessOnSupersededOrderTx(
+        tx,
+        String(callbackData.entity.id)
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+    if (tx.status === 'success' && isApproved) {
+      await this.retrySuccessSideEffects(tx);
+    }
+    this.logger.log(
+      `FedaPay callback skipped (already ${tx.status}): ${tx.id}`
+    );
+    return {
+      received: true,
+      transactionId: callbackData.entity.id,
     };
   }
 
@@ -386,6 +546,37 @@ export class MobilePaymentCallbackProcessor {
       callbackData.reason || callbackData.message || 'Payment failed';
     await this.failPendingAttempt(tx, callbackData.reference, failureMessage, () =>
       this.applyFreemopayFailureSideEffects(tx, callbackData)
+    );
+  }
+
+  private async processPendingFedaPay(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    const providerTxId = String(callbackData.entity.id);
+    const isApproved = callbackData.entity.status === 'approved';
+    
+    if (
+      isApproved &&
+      tx.payment_entity === 'order_cash_reconciliation'
+    ) {
+      await this.settleCashReconciliation(tx, providerTxId);
+      return;
+    }
+    if (
+      isApproved &&
+      (tx.payment_entity === 'token' || tx.payment_entity === 'reel_ai_token')
+    ) {
+      await this.finalizeTokenPaymentSuccess(tx, providerTxId);
+      return;
+    }
+    if (isApproved) {
+      await this.finalizePaymentSuccess(tx, providerTxId);
+      return;
+    }
+    const failureMessage = String(callbackData.entity.status || 'Payment declined');
+    await this.failPendingAttempt(tx, providerTxId, failureMessage, () =>
+      this.applyFedaPayFailureSideEffects(tx, callbackData)
     );
   }
 
@@ -1125,6 +1316,24 @@ export class MobilePaymentCallbackProcessor {
     if (handler) {
       const failureMessage =
         callbackData.reason || callbackData.message || 'Payment failed';
+      await handler.onPaymentFailure(transaction, failureMessage);
+    }
+  }
+
+  private async applyFedaPayFailureSideEffects(
+    transaction: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    if (callbackData.entity.status !== 'declined' && callbackData.entity.status !== 'canceled') {
+      return;
+    }
+    const handlers = this.resolveHandlers();
+    const handler = findPaymentCallbackHandler(
+      handlers,
+      transaction.payment_entity
+    );
+    if (handler) {
+      const failureMessage = String(callbackData.entity.status || 'Payment declined');
       await handler.onPaymentFailure(transaction, failureMessage);
     }
   }

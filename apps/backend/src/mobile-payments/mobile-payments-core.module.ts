@@ -4,6 +4,7 @@ import { MtnMomoModule } from '../mtn-momo/mtn-momo.module';
 import { OrangeMomoModule } from '../orange-momo/orange-momo.module';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
+import { FedaPayService } from './providers/fedapay.service';
 import { FreemopayService } from './providers/freemopay.service';
 import { MyPVitService } from './providers/mypvit.service';
 
@@ -15,12 +16,14 @@ import { MyPVitService } from './providers/mypvit.service';
     MobilePaymentsDatabaseService,
     MyPVitService,
     FreemopayService,
+    FedaPayService,
   ],
   exports: [
     MobilePaymentsService,
     MobilePaymentsDatabaseService,
     MyPVitService,
     FreemopayService,
+    FedaPayService,
   ],
 })
 export class MobilePaymentsCoreModule {}
