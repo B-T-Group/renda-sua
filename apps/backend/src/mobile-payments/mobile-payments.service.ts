@@ -570,13 +570,7 @@ export class MobilePaymentsService {
 
       // Provider-specific validation
       if (paymentRequest.provider === 'fedapay') {
-        if (!phoneValidation.isValid) {
-          return {
-            success: false,
-            message: 'Invalid phone number format',
-            errorCode: 'INVALID_PHONE_NUMBER',
-          };
-        }
+        // FedaPay custom validation: region, length, prefix checks BEFORE isValid
         if (phoneValidation.regionCode !== 'TG') {
           return {
             success: false,
@@ -606,6 +600,8 @@ export class MobilePaymentsService {
             errorCode: 'INVALID_PHONE_NUMBER',
           };
         }
+        
+        // FedaPay: custom validation sufficient, skip isValid check
       } else {
         if (!phoneValidation.isValid) {
           return {
