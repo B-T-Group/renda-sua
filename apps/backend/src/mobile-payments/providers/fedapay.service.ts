@@ -56,6 +56,7 @@ export interface FedaPayTransactionStatus {
   transactionId: string;
   status: 'pending' | 'approved' | 'declined' | 'canceled' | 'transferred' | string;
   amount?: number;
+  currency?: string;
   reference?: string;
   merchantRef?: string;
   reason?: string;
@@ -348,9 +349,10 @@ export class FedaPayService implements OnModuleInit {
 
       if (transaction && transaction.id) {
         const txData: any = transaction;
-        await txData.generateToken();
+        const tokenResponse = await txData.generateToken();
+        const token = tokenResponse?.token || tokenResponse;
         
-        await txData.sendNowWithToken(paymentRequest.channel, txData.token, {
+        await txData.sendNowWithToken(paymentRequest.channel, token, {
           phone_number: {
             number: paymentRequest.payer,
             country: 'TG',
@@ -361,7 +363,7 @@ export class FedaPayService implements OnModuleInit {
           success: true,
           transactionId: String(transaction.id),
           reference: String(transaction.id),
-          token: txData.token,
+          token,
           status: txData.status || 'pending',
           message: normalizeProviderMessage(null, 'Payment initiated'),
         };
@@ -411,6 +413,31 @@ export class FedaPayService implements OnModuleInit {
       this.logger.log(
         `Initiating FedaPay payout: channel=${withdrawalRequest.channel}, externalId=${externalId}`
       );
+
+      // Check for existing payout with same externalId (B6 idempotency)
+      // Note: FedaPay API may not filter by custom_metadata server-side,
+      // so we fetch all and filter client-side
+      try {
+        const existingPayouts = await Payout.all({
+          'custom_metadata.externalId': externalId,
+        });
+        const payouts = (existingPayouts as any)?.payouts || [];
+        const matching = payouts.find((p: any) => p.custom_metadata?.externalId === externalId);
+        if (matching) {
+          this.logger.log(`Found existing FedaPay payout for ${externalId}: ${matching.id}`);
+          return {
+            success: true,
+            transactionId: String(matching.id),
+            reference: externalId,
+            status: matching.status || 'pending',
+            message: normalizeProviderMessage(null, 'Payout already exists'),
+          };
+        }
+      } catch (lookupError: any) {
+        // Fail closed: don't create if lookup fails, let it retry
+        this.logger.error(`Payout lookup failed for ${externalId}: ${lookupError.message}`);
+        throw new Error(`Failed to check existing payout: ${lookupError.message}`);
+      }
 
       const payout = await Payout.create({
         amount: withdrawalRequest.amount,
@@ -471,7 +498,7 @@ export class FedaPayService implements OnModuleInit {
     try {
       this.logger.log(`Checking FedaPay payout status: ${payoutId}`);
 
-      const payout = await Payout.retrieve(parseInt(payoutId, 10));
+      const payout = await Payout.retrieve(parseInt(payoutId, 10), { include: 'currency' });
 
       if (!payout) {
         throw new Error(`Payout ${payoutId} not found`);
@@ -479,6 +506,7 @@ export class FedaPayService implements OnModuleInit {
 
       const payoutData: any = payout;
       const customMeta = payoutData.custom_metadata || {};
+      const currency = payoutData.currency?.iso || ''; // Fail closed on missing currency
 
       const statusMap: Record<string, string> = {
         sent: 'approved',
@@ -492,6 +520,7 @@ export class FedaPayService implements OnModuleInit {
         transactionId: String(payout.id),
         status: mappedStatus,
         amount: payoutData.amount,
+        currency,
         reference: String(payout.id),
         merchantRef: customMeta.externalId || '',
         reason: payoutData.reason || '',
@@ -518,7 +547,7 @@ export class FedaPayService implements OnModuleInit {
     try {
       this.logger.log(`Checking FedaPay transaction status: ${reference}`);
 
-      const transaction = await Transaction.retrieve(parseInt(reference, 10));
+      const transaction = await Transaction.retrieve(parseInt(reference, 10), { include: 'currency' });
 
       if (!transaction) {
         throw new Error(`Transaction ${reference} not found`);
@@ -526,11 +555,13 @@ export class FedaPayService implements OnModuleInit {
 
       const txData: any = transaction;
       const customMeta = txData.custom_metadata || {};
+      const currency = txData.currency?.iso || ''; // Fail closed on missing currency
 
       return {
         transactionId: String(transaction.id),
         status: txData.status || 'pending',
         amount: txData.amount,
+        currency,
         reference: String(transaction.id),
         merchantRef: customMeta.externalId || '',
         reason: txData.reason || '',
@@ -541,8 +572,7 @@ export class FedaPayService implements OnModuleInit {
       };
     } catch (error: any) {
       this.logger.error(
-        'Failed to check FedaPay transaction status:',
-        error
+        `Failed to check FedaPay transaction status: ${error.message || 'Unknown error'}`
       );
       throw error;
     }
@@ -579,72 +609,6 @@ export class FedaPayService implements OnModuleInit {
     };
   }
 
-  verifyWebhookSignature(
-    payload: string | Buffer,
-    signatureHeader: string,
-    webhookSecret?: string
-  ): boolean {
-    try {
-      const secret = webhookSecret || this.config.webhookSecret;
-      if (!secret) {
-        this.logger.warn('Webhook secret not configured, skipping signature verification');
-        return false;
-      }
-
-      const payloadString = typeof payload === 'string' ? payload : payload.toString();
-      
-      // Parse header: t=timestamp,v1=signature
-      const parts = signatureHeader.split(',');
-      let timestamp: string | null = null;
-      let signature: string | null = null;
-      
-      for (const part of parts) {
-        const [key, value] = part.split('=');
-        if (key === 't') timestamp = value;
-        if (key === 'v1') signature = value;
-      }
-      
-      if (!timestamp || !signature) {
-        this.logger.warn('Invalid webhook signature header format');
-        return false;
-      }
-      
-      // Check timestamp staleness (5 minute tolerance)
-      const currentTime = Math.floor(Date.now() / 1000);
-      const timestampNum = parseInt(timestamp, 10);
-      if (currentTime - timestampNum > 300) {
-        this.logger.warn('Webhook timestamp too old');
-        return false;
-      }
-      
-      // Verify signature
-      const crypto = require('crypto');
-      const signedPayload = `${timestamp}.${payloadString}`;
-      const expectedSignature = crypto
-        .createHmac('sha256', secret)
-        .update(signedPayload)
-        .digest('hex');
-      
-      return signature === expectedSignature;
-    } catch (error: any) {
-      this.logger.error(`Webhook signature verification failed: ${error.message}`);
-      return false;
-    }
-  }
-
-  verifyCallback(
-    payload: unknown,
-    signature?: string,
-    _timestamp?: string
-  ): boolean {
-    if (!payload || typeof payload !== 'object') return false;
-    if (!signature) return false;
-    
-    return this.verifyWebhookSignature(
-      JSON.stringify(payload),
-      signature
-    );
-  }
 
   async getSupportedPaymentMethods(): Promise<string[]> {
     return ['mobile_money'];

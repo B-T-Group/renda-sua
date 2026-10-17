@@ -300,10 +300,12 @@ export class PendingWithdrawalResolveService {
 
     let live: MobileTransactionStatus;
     try {
+      const isGiveChange = tx.transaction_type === 'GIVE_CHANGE';
       live = await this.mobilePaymentsService.checkTransactionStatus(
         providerTxId,
         provider,
-        tx.customer_phone ?? undefined
+        tx.customer_phone ?? undefined,
+        isGiveChange
       );
     } catch (error: any) {
       throw new HttpException(

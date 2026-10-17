@@ -86,7 +86,8 @@ describe('AdminMobilePaymentsController', () => {
       expect(mobilePaymentsService.checkTransactionStatus).toHaveBeenCalledWith(
         'PAYTEST001',
         'mypvit',
-        '+24166123456'
+        '+24166123456',
+        false
       );
       expect(result.data.providerStatus.status).toBe('pending');
     });
@@ -121,7 +122,8 @@ describe('AdminMobilePaymentsController', () => {
       expect(mobilePaymentsService.checkTransactionStatus).toHaveBeenCalledWith(
         'PAYTEST001',
         'mypvit',
-        '+24166123456'
+        '+24166123456',
+        false
       );
     });
 
@@ -206,7 +208,8 @@ describe('AdminMobilePaymentsController', () => {
       expect(mobilePaymentsService.checkTransactionStatus).toHaveBeenCalledWith(
         'PAYTEST001',
         'mypvit',
-        '+24166123456'
+        '+24166123456',
+        false
       );
       expect(callbackProcessor.processMypvitCallback).toHaveBeenCalledTimes(1);
     });
