@@ -1,14 +1,16 @@
-const ALLOWED_COUNTRY_CODES = new Set(['237', '241']);
+const ALLOWED_COUNTRY_CODES = new Set(['237', '241', '228']);
 
 /** ISO alpha-2 → calling code for supported mobile-money countries. */
 const ISO_TO_CALLING: Record<string, string> = {
   CM: '237',
   GA: '241',
+  TG: '228',
 };
 
 const CALLING_TO_ISO: Record<string, string> = {
   '237': 'CM',
   '241': 'GA',
+  '228': 'TG',
 };
 
 /** Accepts dialing code (237) or ISO alpha-2 (CM); returns dialing code or null. */

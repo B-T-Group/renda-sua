@@ -86,7 +86,7 @@ export class InitiatePaymentDto {
 
   @IsOptional()
   @IsString()
-  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay';
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'orange' | 'freemopay' | 'fedapay';
 
   @IsOptional()
   @IsString()
@@ -683,6 +683,58 @@ export class MobilePaymentsController {
         {
           success: false,
           message: 'Failed to process callback',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Public()
+  @Post('callback/fedapay')
+  async fedapayCallback(
+    @Body() callbackData: any,
+    @Req() req: Request
+  ) {
+    this.logger.log('fedapayCallback', callbackData);
+    try {
+      const signature = req.headers['x-fedapay-signature'] as string;
+      
+      if (!signature) {
+        this.logger.error('Missing X-FEDAPAY-SIGNATURE header');
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Missing webhook signature',
+          },
+          HttpStatus.UNAUTHORIZED
+        );
+      }
+
+      if (!callbackData.entity || !callbackData.name) {
+        this.logger.error('Missing required callback data (entity, name)');
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Missing required callback data',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      return await this.callbackProcessor.processFedaPayCallback(
+        callbackData,
+        req
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      this.logger.error('FedaPay callback processing error:', error);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Failed to process FedaPay callback',
           error: error.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR
