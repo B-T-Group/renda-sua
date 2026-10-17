@@ -3105,6 +3105,24 @@ export class OrdersService {
     const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: holdAmount,
+      },
+      user.id
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     // Create transaction record before initiating payment
     let paymentTransaction = null;
     let transaction = null;
@@ -4206,6 +4224,24 @@ export class OrdersService {
       };
     }
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4427,6 +4463,24 @@ export class OrdersService {
       };
     }
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4633,6 +4687,24 @@ export class OrdersService {
       order.order_number
     );
     const chargeAmount = Number(order.total_amount) || 0;
+
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider: momo.provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
@@ -5607,6 +5679,24 @@ export class OrdersService {
     const reference = this.buildOrderPaymentAttemptReference(order.order_number);
     const chargeAmount = Number(order.total_amount) || 0;
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: params.phone,
+        provider: momo.provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     let tx: MobilePaymentTransaction;
     try {
       tx = await this.mobilePaymentsDatabaseService.createTransaction({
@@ -6076,6 +6166,25 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: Number(order.total_amount),
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: Number(order.total_amount),
@@ -6321,6 +6430,24 @@ export class OrdersService {
 
     const depositLongReference = `${order.order_number}-DEP-${Date.now()}-retry`;
     const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
+
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: depositAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     // Step 1: Create pending mobile_payment_transactions row FIRST (real FK target)
     const depositTransaction =
@@ -6852,6 +6979,25 @@ export class OrdersService {
     const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
       order as any
     );
+
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phone,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -15450,6 +15596,24 @@ export class OrdersService {
     itemCountry?: string;
     userId?: string;
   }): Promise<{ transaction: any; paymentTransaction: any }> {
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: params.phoneNumber,
+        provider: params.provider,
+        itemCountry: params.itemCountry,
+        currency: params.currency,
+        amount: params.totalAmount,
+      },
+      params.userId
+    );
+    if (validationError) {
+      throw new HttpException(
+        validationError.message,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const transaction =
       await this.mobilePaymentsDatabaseService.createTransaction({
         reference: params.orderNumber,
