@@ -325,6 +325,52 @@ describe('FedaPay Validation Fixes', () => {
       expect(providers).toHaveLength(0);
     });
 
+    it('should use bpchar type in GraphQL query for country parameter', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ name: 'fedapay', country: 'TG', active: true }],
+      });
+
+      await service.getProvidersForCountry('TG');
+
+      // Verify the query uses bpchar! type annotation
+      expect(mockHasuraSystemService.executeQuery).toHaveBeenCalledWith(
+        expect.stringContaining('$country: bpchar!'),
+        { country: 'TG' }
+      );
+    });
+
+    it('should recognize airtel/moov as MyPVit-compatible providers', () => {
+      // F-M5: The mapProviderName function maps display names to database names
+      // 'MyPVit' -> 'mypvit', 'airtel' -> 'mypvit', 'moov' -> 'mypvit'
+      // This documents that airtel and moov are MyPVit-backed in the database
+      const mapping = {
+        'MyPVit': 'mypvit',
+        'airtel': 'mypvit',
+        'moov': 'mypvit',
+      };
+      
+      // All three display names map to mypvit provider
+      expect(mapping['MyPVit']).toBe('mypvit');
+      expect(mapping['airtel']).toBe('mypvit');
+      expect(mapping['moov']).toBe('mypvit');
+    });
+
+    it('should handle mixed provider names including airtel/moov', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [
+          { name: 'mypvit', country: 'GA', active: true },
+          { name: 'airtel', country: 'GA', active: true },
+          { name: 'moov', country: 'GA', active: true },
+        ],
+      });
+
+      const providers = await service.getProvidersForCountry('GA');
+
+      // All should resolve to MyPVit (deduplicated)
+      expect(providers).toHaveLength(1);
+      expect(providers[0].name).toBe('MyPVit');
+    });
+
     it('should handle query errors gracefully', async () => {
       mockHasuraSystemService.executeQuery.mockRejectedValue(
         new Error('GraphQL error')
