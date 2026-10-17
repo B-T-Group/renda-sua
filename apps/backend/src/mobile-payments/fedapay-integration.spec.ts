@@ -486,7 +486,9 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       const mockHasuraUserService = {};
       const mockWithdrawalPinService = {};
       const mockPendingWithdrawalResolveService = {};
-      const mockMobileTransactionAccessService = {};
+      const mockMobileTransactionAccessService = {
+        canView: jest.fn().mockResolvedValue(true),
+      };
       const mockMobilePaymentsDatabaseService = {};
 
       const testModule = await Test.createTestingModule({
@@ -553,7 +555,9 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         verifyPin: jest.fn().mockReturnValue(true),
       };
       const mockPendingWithdrawalResolveService = {};
-      const mockMobileTransactionAccessService = {};
+      const mockMobileTransactionAccessService = {
+        canView: jest.fn().mockResolvedValue(true),
+      };
       const mockMobilePaymentsDatabaseService = {
         getUserTransactionInDateRange: jest.fn().mockResolvedValue([]),
       };
