@@ -516,6 +516,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         currency: 'XOF',
         accountId: 'acc-xaf',
         customerPhone: '+22878123456',
+        provider: 'fedapay' as const,
         description: 'Test payment',
       };
       const ctx = { userId: 'user-123', user: { id: 'user-123' } } as any;
@@ -590,6 +591,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         currency: 'XOF',
         accountId: 'acc-xaf',
         customerPhone: '+22878123456',
+        provider: 'fedapay' as const,
         description: 'Test withdrawal',
         transactionType: 'GIVE_CHANGE' as const,
         withdrawalPin: '1234',
