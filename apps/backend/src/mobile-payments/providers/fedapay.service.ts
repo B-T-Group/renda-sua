@@ -7,7 +7,6 @@ import {
   Transaction,
   Payout,
   Webhook,
-  Customer,
 } from 'fedapay';
 import type { FedaPayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
