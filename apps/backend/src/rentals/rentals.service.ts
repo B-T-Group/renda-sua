@@ -2417,7 +2417,6 @@ export class RentalsService {
       itemCountry: params.itemCountry ?? undefined,
       ownerCharge: 'CUSTOMER' as const,
       transactionType: 'PAYMENT' as const,
-      payment_entity: params.paymentEntity,
     };
 
     const paymentResponse = await this.mobilePaymentsService.initiatePayment(

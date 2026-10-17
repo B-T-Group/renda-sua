@@ -88,7 +88,7 @@ export class AdminMobilePaymentsController {
     const tx = await this.requireTransaction(id);
     const providerTxId = this.requireProviderTxId(tx);
     const provider = this.resolveProvider(tx);
-    const live = await this.checkLiveStatus(tx, await providerTxId, provider);
+    const live = await this.checkLiveStatus(tx, providerTxId, await provider);
     return {
       success: true,
       data: {
