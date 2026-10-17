@@ -1349,16 +1349,9 @@ export class MobilePaymentsController {
 
     const phoneCountry = phoneValidation.regionCode;
 
-    // F-L2: FedaPay requires Togo phone
-    if (provider === 'fedapay' && phoneCountry !== 'TG') {
-      throw new BadRequestException({
-        success: false,
-        message: 'FedaPay requires a Togo (+228) phone number',
-        error: 'INVALID_PHONE_NUMBER',
-      });
-    }
-
     // F-M3 & F-M6: Phone country must match item/market country (bidirectional)
+    // This check MUST run before provider-specific checks so that country mismatches
+    // are reported as PHONE_COUNTRY_MISMATCH rather than generic INVALID_PHONE_NUMBER
     if (itemCountry) {
       // Normalize item country to ISO (handles "Togo", "TOGO", "TG", etc.)
       const normalizedItemCountry = isoCountryCode(itemCountry);
@@ -1375,8 +1368,16 @@ export class MobilePaymentsController {
       }
     }
 
+    // F-L2: FedaPay requires Togo phone
+    if (provider === 'fedapay' && phoneCountry !== 'TG') {
+      throw new BadRequestException({
+        success: false,
+        message: 'FedaPay requires a Togo (+228) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
     // F-M6: Provider-specific country validation
-    // FedaPay -> TG only (already checked above)
     // Freemopay -> CM only
     if (provider === 'freemopay' && phoneCountry !== 'CM') {
       throw new BadRequestException({

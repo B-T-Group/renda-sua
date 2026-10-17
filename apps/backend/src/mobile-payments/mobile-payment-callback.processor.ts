@@ -999,17 +999,17 @@ export class MobilePaymentCallbackProcessor {
     transactionId: string,
     providerTransactionId: string
   ): Promise<boolean> {
-    // F-L3: Don't overwrite if providerTransactionId itself is a mock- id (meaning it was already stored)
-    // or if providerTransactionId is empty
-    const shouldUpdateTxId = providerTransactionId && !providerTransactionId.startsWith('mock-');
+    // F-L3: Always include transaction_id when provided (including mock- ids).
+    // Mock ids are explicitly passed through to ensure they're preserved and not overwritten.
+    const updateFields: any = { status: 'success' };
+    if (providerTransactionId) {
+      updateFields.transaction_id = providerTransactionId;
+    }
     
     return this.databaseService.updateTransactionIfStatus(
       transactionId,
       'processing',
-      {
-        status: 'success',
-        ...(shouldUpdateTxId ? { transaction_id: providerTransactionId } : {}),
-      }
+      updateFields
     );
   }
 
