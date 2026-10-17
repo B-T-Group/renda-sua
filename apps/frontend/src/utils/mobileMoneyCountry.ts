@@ -1,8 +1,8 @@
-const MOBILE_MONEY_COUNTRY_CODES = ['CM', 'GA'] as const;
+const MOBILE_MONEY_COUNTRY_CODES = ['CM', 'GA', 'TG'] as const;
 
 export type MobileMoneyCountryCode = (typeof MOBILE_MONEY_COUNTRY_CODES)[number];
 
-/** Cameroon and Gabon are the markets that collect payment by Mobile Money. */
+/** Cameroon, Gabon, and Togo are the markets that collect payment by Mobile Money. */
 export function isMobileMoneyCountry(country?: string | null): boolean {
   const code = (country || '').trim().toUpperCase();
   return (MOBILE_MONEY_COUNTRY_CODES as readonly string[]).includes(code);
@@ -13,5 +13,7 @@ export function pickMobileMoneyDefaultCountry(
   preferred?: string | null
 ): MobileMoneyCountryCode {
   const code = preferred?.trim().toUpperCase();
-  return code === 'GA' ? 'GA' : 'CM';
+  if (code === 'GA') return 'GA';
+  if (code === 'TG') return 'TG';
+  return 'CM';
 }
