@@ -5,6 +5,14 @@ import { MobilePaymentsService } from './mobile-payments.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { FedaPayService } from './providers/fedapay.service';
+import { MyPVitService } from './providers/mypvit.service';
+import { FreemopayService } from './providers/freemopay.service';
+import { MtnMomoService } from '../mtn-momo/mtn-momo.service';
+import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
+import { OrangeMomoService } from '../orange-momo/orange-momo.service';
+import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
 import type { FedaPayCallbackDto } from './mobile-payment-callback.dto';
 import type { MobilePaymentTransaction } from './mobile-payments-database.service';
 
@@ -528,8 +536,41 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
     });
   });
 
-  describe('N6: Handle empty/null stored reference', () => {
-    it('should reject callback when stored reference is empty via assertProviderConfirmsCallback', async () => {
+  describe('N6: Handle empty/null stored reference (real code)', () => {
+    let realService: MobilePaymentsService;
+    let mockFedaPayService: any;
+    let mockHasuraSystemService: any;
+
+    beforeEach(async () => {
+      mockFedaPayService = {
+        checkTransactionStatus: jest.fn(),
+        testConnection: jest.fn().mockResolvedValue(true),
+        getSupportedPaymentMethods: jest.fn().mockResolvedValue(['mobile_money']),
+      };
+      mockHasuraSystemService = {
+        executeQuery: jest.fn(),
+        executeMutation: jest.fn(),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MobilePaymentsService,
+          { provide: HasuraSystemService, useValue: mockHasuraSystemService },
+          { provide: FedaPayService, useValue: mockFedaPayService },
+          { provide: MyPVitService, useValue: { testConnection: jest.fn().mockResolvedValue(true) } },
+          { provide: FreemopayService, useValue: { testConnection: jest.fn().mockResolvedValue(true) } },
+          { provide: MtnMomoService, useValue: { testConnection: jest.fn().mockResolvedValue(true) } },
+          { provide: MtnMomoDatabaseService, useValue: {} },
+          { provide: OrangeMomoService, useValue: { testConnection: jest.fn().mockResolvedValue(true) } },
+          { provide: OrangeMomoDatabaseService, useValue: {} },
+          { provide: MobilePaymentsDatabaseService, useValue: { getUserCountry: jest.fn(), getUserAddress: jest.fn() } },
+        ],
+      }).compile();
+
+      realService = module.get<MobilePaymentsService>(MobilePaymentsService);
+    });
+
+    it('should reject SUCCESS callback when stored reference is empty', async () => {
       const tx = {
         id: 'tx-no-ref',
         transaction_id: '123',
@@ -539,9 +580,9 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
         currency: 'XOF',
         customer_phone: '+22890123456',
         transaction_type: 'PAYMENT',
-      };
+      } as any;
 
-      mockMobilePaymentsService.checkTransactionStatus = jest.fn().mockResolvedValue({
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
         transactionId: '123',
         status: 'success',
         amount: 500,
@@ -551,7 +592,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       });
 
       await expect(
-        service.assertProviderConfirmsCallback(tx, 'SUCCESS')
+        realService.assertProviderConfirmsCallback(tx, 'SUCCESS')
       ).rejects.toThrow(/missing stored reference/);
     });
 
@@ -565,11 +606,11 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
         currency: 'XOF',
         customer_phone: '+22890123456',
         transaction_type: 'PAYMENT',
-      };
+      } as any;
 
-      mockMobilePaymentsService.checkTransactionStatus = jest.fn().mockResolvedValue({
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
         transactionId: '123',
-        status: 'failed',
+        status: 'declined',
         amount: 500,
         currency: 'XOF',
         reference: 'LIVE-REF',
@@ -577,7 +618,33 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       });
 
       await expect(
-        service.assertProviderConfirmsCallback(tx, 'FAILED')
+        realService.assertProviderConfirmsCallback(tx, 'FAILED')
+      ).rejects.toThrow(/missing stored reference/);
+    });
+
+    it('should reject SUCCESS callback when stored reference is whitespace', async () => {
+      const tx = {
+        id: 'tx-ws-ref',
+        transaction_id: '123',
+        provider: 'fedapay',
+        reference: '   ',
+        amount: 500,
+        currency: 'XOF',
+        customer_phone: '+22890123456',
+        transaction_type: 'PAYMENT',
+      } as any;
+
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        transactionId: '123',
+        status: 'success',
+        amount: 500,
+        currency: 'XOF',
+        reference: 'LIVE-REF',
+        provider: 'fedapay',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx, 'SUCCESS')
       ).rejects.toThrow(/missing stored reference/);
     });
   });

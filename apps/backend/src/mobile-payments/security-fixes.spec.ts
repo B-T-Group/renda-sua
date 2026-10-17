@@ -2,8 +2,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
 import { sanitizeProviderError, maskPhoneNumber } from './sanitize-provider-error.util';
 import { MobilePaymentsService } from './mobile-payments.service';
+import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { FedaPayService } from './providers/fedapay.service';
+import { MyPVitService } from './providers/mypvit.service';
+import { FreemopayService } from './providers/freemopay.service';
+import { MtnMomoService } from '../mtn-momo/mtn-momo.service';
+import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
+import { OrangeMomoService } from '../orange-momo/orange-momo.service';
+import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
 
 /**
  * Security tests: ensure no Authorization headers or API keys are logged
@@ -128,11 +135,27 @@ describe('Security: Error Sanitization & Phone Masking', () => {
     });
   });
 
-  describe('FedaPayService: no secrets in logs', () => {
+  describe('FedaPayService: no secrets in logs (real service)', () => {
     let service: FedaPayService;
     let loggerSpy: jest.SpyInstance;
 
     beforeEach(async () => {
+      // Mock the FedaPay SDK
+      jest.mock('fedapay', () => ({
+        Transaction: {
+          retrieve: jest.fn(),
+          create: jest.fn(),
+        },
+        Payout: {
+          retrieve: jest.fn(),
+          create: jest.fn(),
+        },
+        FedaPay: {
+          setApiKey: jest.fn(),
+          setEnvironment: jest.fn(),
+        },
+      }));
+
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           {
@@ -164,29 +187,35 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       }).compile();
 
       service = module.get<FedaPayService>(FedaPayService);
-      loggerSpy = jest.spyOn(Logger.prototype, 'error');
+      loggerSpy = jest.spyOn(service['logger'], 'error').mockImplementation(() => undefined as any);
     });
 
     afterEach(() => {
       loggerSpy.mockRestore();
+      jest.clearAllMocks();
     });
 
-    it('should not log Authorization header in provider-status error', async () => {
-      const axiosError = {
-        message: 'Request failed',
+    it('should not log Authorization header when checkTransactionStatus fails', async () => {
+      const axiosLikeError = {
+        message: 'Request failed with status 401',
         config: {
           headers: {
             Authorization: 'Bearer sk_sandbox_DANGEROUS_KEY',
           },
+          url: 'https://api.fedapay.com/v1/transactions/123',
         },
-        response: { status: 401 },
+        response: { status: 401, data: { error: 'Unauthorized' } },
+        status: 401,
       };
 
+      // Mock Transaction.retrieve to throw
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve = jest.fn().mockRejectedValue(axiosLikeError);
+
       try {
-        throw axiosError;
+        await service.checkTransactionStatus('123', 'REF-123');
       } catch (err) {
-        const sanitized = sanitizeProviderError(err);
-        loggerSpy(`Failed to check FedaPay transaction status: ${sanitized.message}`);
+        // Expected to throw after logging
       }
 
       const allCalls = loggerSpy.mock.calls.flat();
@@ -198,20 +227,27 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       expect(loggedText).not.toContain('DANGEROUS_KEY');
     });
 
-    it('should not log Bearer token in initiate-payment error', async () => {
-      const error = {
-        message: 'Auth failed: Bearer sk_live_SECRET123',
+    it('should not log sk_live_ keys in error message', async () => {
+      const errorWithKey = {
+        message: 'Authentication failed: sk_live_SECRET_KEY_12345',
+        status: 401,
       };
 
-      const sanitized = sanitizeProviderError(error);
-      loggerSpy(`Failed to initiate FedaPay payment: ${sanitized.message}`);
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve = jest.fn().mockRejectedValue(errorWithKey);
+
+      try {
+        await service.checkTransactionStatus('123', 'REF-123');
+      } catch (err) {
+        // Expected to throw
+      }
 
       const allCalls = loggerSpy.mock.calls.flat();
       const loggedText = allCalls.map((arg) => JSON.stringify(arg)).join(' ');
 
-      expect(loggedText).not.toContain('Bearer sk_live_SECRET123');
-      expect(loggedText).not.toContain('SECRET123');
-      expect(loggedText).toContain('Bearer REDACTED');
+      expect(loggedText).not.toContain('sk_live_SECRET_KEY_12345');
+      expect(loggedText).not.toContain('SECRET_KEY_12345');
+      expect(loggedText).toContain('sk_live_REDACTED');
     });
   });
 
@@ -233,23 +269,32 @@ describe('Security: Error Sanitization & Phone Masking', () => {
         }),
       };
 
+      const mockMyPVitService = { testConnection: jest.fn().mockResolvedValue(true) };
+      const mockFreemopayService = { testConnection: jest.fn().mockResolvedValue(true) };
+      const mockMtnMomoService = { testConnection: jest.fn().mockResolvedValue(true) };
+      const mockOrangeMomoService = { testConnection: jest.fn().mockResolvedValue(true) };
+      const mockDatabaseService = { 
+        getUserCountry: jest.fn(), 
+        getUserAddress: jest.fn() 
+      };
+
       const module: TestingModule = await Test.createTestingModule({
         providers: [
           MobilePaymentsService,
           { provide: HasuraSystemService, useValue: mockHasuraSystemService },
           { provide: FedaPayService, useValue: mockFedaPayService },
-          { provide: 'MyPVitService', useValue: { testConnection: jest.fn().mockResolvedValue(true) } },
-          { provide: 'FreemopayService', useValue: { testConnection: jest.fn().mockResolvedValue(true) } },
-          { provide: 'MtnMomoService', useValue: {} },
-          { provide: 'MtnMomoDatabaseService', useValue: {} },
-          { provide: 'OrangeMomoService', useValue: {} },
-          { provide: 'OrangeMomoDatabaseService', useValue: {} },
-          { provide: 'MobilePaymentsDatabaseService', useValue: { getUserCountry: jest.fn(), getUserAddress: jest.fn() } },
+          { provide: MyPVitService, useValue: mockMyPVitService },
+          { provide: FreemopayService, useValue: mockFreemopayService },
+          { provide: MtnMomoService, useValue: mockMtnMomoService },
+          { provide: MtnMomoDatabaseService, useValue: {} },
+          { provide: OrangeMomoService, useValue: mockOrangeMomoService },
+          { provide: OrangeMomoDatabaseService, useValue: {} },
+          { provide: MobilePaymentsDatabaseService, useValue: mockDatabaseService },
         ],
       }).compile();
 
       service = module.get<MobilePaymentsService>(MobilePaymentsService);
-      loggerSpy = jest.spyOn(Logger.prototype, 'log');
+      loggerSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined as any);
     });
 
     afterEach(() => {

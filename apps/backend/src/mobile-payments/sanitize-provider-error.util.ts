@@ -24,7 +24,7 @@ function redactSecrets(text: string): string {
   
   // Redact Bearer tokens
   redacted = redacted.replace(
-    /Bearer\s+[A-Za-z0-9_\-\.]+/gi,
+    /Bearer\s+[A-Za-z0-9._-]+/gi,
     'Bearer REDACTED'
   );
   

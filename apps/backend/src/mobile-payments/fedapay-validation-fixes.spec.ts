@@ -4,6 +4,11 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { FreemopayService } from './providers/freemopay.service';
 import { FedaPayService } from './providers/fedapay.service';
+import { MyPVitService } from './providers/mypvit.service';
+import { MtnMomoService } from '../mtn-momo/mtn-momo.service';
+import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
+import { OrangeMomoService } from '../orange-momo/orange-momo.service';
+import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
 
 /**
  * Tests for F-L2 (TG phone validation), F-M3 (country matching), F-M5 (providers by country)
@@ -35,6 +40,12 @@ describe('FedaPay Validation Fixes', () => {
     testConnection: jest.fn().mockResolvedValue(true),
     getSupportedPaymentMethods: jest.fn().mockResolvedValue(['mobile_money']),
   };
+  const mockMtnMomoService = {
+    testConnection: jest.fn().mockResolvedValue(true),
+  };
+  const mockOrangeMomoService = {
+    testConnection: jest.fn().mockResolvedValue(true),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -44,11 +55,11 @@ describe('FedaPay Validation Fixes', () => {
         { provide: MobilePaymentsDatabaseService, useValue: mockDatabaseService },
         { provide: FedaPayService, useValue: mockFedaPayService },
         { provide: FreemopayService, useValue: mockFreemopayService },
-        { provide: 'MyPVitService', useValue: mockMyPVitService },
-        { provide: 'MtnMomoService', useValue: {} },
-        { provide: 'MtnMomoDatabaseService', useValue: {} },
-        { provide: 'OrangeMomoService', useValue: {} },
-        { provide: 'OrangeMomoDatabaseService', useValue: {} },
+        { provide: MyPVitService, useValue: mockMyPVitService },
+        { provide: MtnMomoService, useValue: mockMtnMomoService },
+        { provide: MtnMomoDatabaseService, useValue: {} },
+        { provide: OrangeMomoService, useValue: mockOrangeMomoService },
+        { provide: OrangeMomoDatabaseService, useValue: {} },
       ],
     }).compile();
 
