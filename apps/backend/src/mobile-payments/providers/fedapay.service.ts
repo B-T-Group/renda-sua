@@ -71,6 +71,32 @@ export interface FedaPayTransactionStatus {
   message?: string;
 }
 
+/**
+ * GET /transactions/:id returns `currency_id`, not `currency.iso`.
+ * Official FedaPay examples use id 1 for XOF (the only collect currency).
+ */
+const FEDAPAY_CURRENCY_ID_TO_ISO: Record<string, string> = { '1': 'XOF' };
+
+function readFedaPayCurrencyIso(data: {
+  currency?: { iso?: string | null } | null;
+  currency_id?: number | string | null;
+} | null | undefined): string {
+  const iso = data?.currency?.iso?.trim();
+  if (iso) return iso.toUpperCase();
+  const id = data?.currency_id;
+  if (id === undefined || id === null || id === '') return '';
+  return FEDAPAY_CURRENCY_ID_TO_ISO[String(id)] ?? '';
+}
+
+function readFedaPayMerchantRef(data: {
+  custom_metadata?: { externalId?: string | null } | null;
+  merchant_reference?: string | null;
+} | null | undefined): string {
+  return data?.custom_metadata?.externalId?.trim()
+    || data?.merchant_reference?.trim()
+    || '';
+}
+
 @Injectable()
 export class FedaPayService implements OnModuleInit {
   private readonly logger = new Logger(FedaPayService.name);
@@ -647,8 +673,7 @@ export class FedaPayService implements OnModuleInit {
       }
 
       const payoutData: any = payout;
-      const customMeta = payoutData.custom_metadata || {};
-      const currency = payoutData.currency?.iso || ''; // Fail closed on missing currency
+      const currency = readFedaPayCurrencyIso(payoutData);
 
       const statusMap: Record<string, string> = {
         sent: 'approved',
@@ -664,7 +689,7 @@ export class FedaPayService implements OnModuleInit {
         amount: payoutData.amount,
         currency,
         reference: String(payout.id),
-        merchantRef: customMeta.externalId || '',
+        merchantRef: readFedaPayMerchantRef(payoutData),
         reason: payoutData.reason || '',
         message: normalizeProviderMessage(
           payoutData.reason || payoutData.message,
@@ -696,8 +721,7 @@ export class FedaPayService implements OnModuleInit {
       }
 
       const txData: any = transaction;
-      const customMeta = txData.custom_metadata || {};
-      const currency = txData.currency?.iso || ''; // Fail closed on missing currency
+      const currency = readFedaPayCurrencyIso(txData);
 
       return {
         transactionId: String(transaction.id),
@@ -705,7 +729,7 @@ export class FedaPayService implements OnModuleInit {
         amount: txData.amount,
         currency,
         reference: String(transaction.id),
-        merchantRef: customMeta.externalId || '',
+        merchantRef: readFedaPayMerchantRef(txData),
         reason: txData.reason || '',
         message: normalizeProviderMessage(
           txData.reason || txData.message,
