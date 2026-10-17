@@ -96,7 +96,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     };
 
     it('should process first success callback', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
@@ -119,7 +119,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
     it('should reject duplicate success callback (already success)', async () => {
       const completedTransaction = { ...mockTransaction, status: 'success' };
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         completedTransaction
       );
 
@@ -133,7 +133,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
     it('should reject duplicate success callback (already failed)', async () => {
       const failedTransaction = { ...mockTransaction, status: 'failed' };
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         failedTransaction
       );
 
@@ -145,7 +145,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
 
     it('should handle duplicate pending callback', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(false); // CAS failed
@@ -158,7 +158,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
 
     it('should not double-credit on concurrent callbacks', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
       // First CAS succeeds, second fails
@@ -208,7 +208,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     };
 
     it('should return 5xx when credit fails', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
@@ -231,7 +231,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
 
     it('should return 5xx when handler throws exception', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
@@ -248,7 +248,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
 
     it('should allow retry after handler failure', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
@@ -298,7 +298,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
         },
       };
 
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
@@ -332,7 +332,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
         },
       };
 
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
@@ -360,7 +360,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
         },
       };
 
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTx
       );
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
@@ -402,7 +402,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
         },
       };
 
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
         mockTransaction
       );
 
