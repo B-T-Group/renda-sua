@@ -27,6 +27,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { BadRequestException } from '@nestjs/common';
 import { isoCountryCode } from '../orders/delivery-pricing.util';
 import { validatePhoneNumber } from './phone-validation.util';
+import { sanitizeProviderError } from './sanitize-provider-error.util';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { WithdrawalPinService } from '../admin/withdrawal-pin.service';

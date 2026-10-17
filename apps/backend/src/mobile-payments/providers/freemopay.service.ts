@@ -5,6 +5,7 @@ import { randomUUID } from 'crypto';
 import axios, { AxiosInstance } from 'axios';
 import { FreemopayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
+import { sanitizeProviderError } from '../sanitize-provider-error.util';
 import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
 import type { FreemopayCallbackDto } from '../mobile-payment-callback.dto';
 

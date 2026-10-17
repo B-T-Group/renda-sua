@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { sanitizeProviderError } from './sanitize-provider-error.util';
 import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
 import { normalizeProviderMessage } from './normalize-provider-message';
 
@@ -156,7 +157,8 @@ export class MobilePaymentsDatabaseService {
       );
       return response.insert_mobile_payment_transactions_one;
     } catch (error) {
-      this.logger.error('Failed to create mobile payment transaction:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to create mobile payment transaction: ${sanitized.message}`);
       throw error;
     }
   }
@@ -220,7 +222,8 @@ export class MobilePaymentsDatabaseService {
       );
       return response.update_mobile_payment_transactions_by_pk;
     } catch (error) {
-      this.logger.error('Failed to update mobile payment transaction:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to update mobile payment transaction: ${sanitized.message}`);
       throw error;
     }
   }
@@ -262,7 +265,8 @@ export class MobilePaymentsDatabaseService {
       const response = await this.hasuraService.executeQuery(query, variables);
       return response.mobile_payment_transactions_by_pk;
     } catch (error) {
-      this.logger.error('Failed to get mobile payment transaction:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get mobile payment transaction: ${sanitized.message}`);
       throw error;
     }
   }
@@ -1041,7 +1045,8 @@ export class MobilePaymentsDatabaseService {
       const response = await this.hasuraService.executeQuery(query);
       return response.mobile_payment_transactions;
     } catch (error) {
-      this.logger.error('Failed to get mobile payment transactions:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get mobile payment transactions: ${sanitized.message}`);
       throw error;
     }
   }
@@ -1092,7 +1097,8 @@ export class MobilePaymentsDatabaseService {
       const response = await this.hasuraService.executeQuery(query);
       return response.mobile_payment_transactions;
     } catch (error) {
-      this.logger.error('Failed to get pending GIVE_CHANGE withdrawals:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get pending GIVE_CHANGE withdrawals: ${sanitized.message}`);
       throw error;
     }
   }
@@ -1142,7 +1148,8 @@ export class MobilePaymentsDatabaseService {
       const response = await this.hasuraService.executeQuery(query);
       return response.mobile_payment_transactions;
     } catch (error) {
-      this.logger.error('Failed to get pending integration transactions:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get pending integration transactions: ${sanitized.message}`);
       throw error;
     }
   }
@@ -1232,7 +1239,8 @@ export class MobilePaymentsDatabaseService {
 
       return stats;
     } catch (error) {
-      this.logger.error('Failed to get transaction statistics:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get transaction statistics: ${sanitized.message}`);
       throw error;
     }
   }
@@ -1286,7 +1294,8 @@ export class MobilePaymentsDatabaseService {
         `Payment callback logged for transaction: ${transaction.id}`
       );
     } catch (error) {
-      this.logger.error('Failed to log payment callback:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to log payment callback: ${sanitized.message}`);
       // Don't throw error as this is just logging
     }
   }

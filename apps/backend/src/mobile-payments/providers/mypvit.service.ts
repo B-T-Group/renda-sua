@@ -6,6 +6,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
+import { sanitizeProviderError } from '../sanitize-provider-error.util';
 import {
   MYP_VIT_STATUS_OPERATIONS,
   buildMypvitStatusPath,
@@ -214,7 +215,8 @@ export class MyPVitService {
       this.logger.debug('MyPVit resource not found (expected miss):', payload);
       return;
     }
-    this.logger.error('MyPVit API Error:', payload);
+    const sanitized = sanitizeProviderError(payload);
+    this.logger.error(`MyPVit API Error: ${sanitized.message}`);
   }
 
   /**
@@ -347,7 +349,8 @@ export class MyPVitService {
       return response.data;
     } catch (error: any) {
       if (!isNotFoundHttpError(error)) {
-        this.logger.error('Failed to check transaction status:', error);
+        const sanitized = sanitizeProviderError(error);
+        this.logger.error(`Failed to check transaction status: ${sanitized.message}`);
         throw error;
       }
       return this.fetchStatusAfterPathMiss(
@@ -451,7 +454,8 @@ export class MyPVitService {
       // MyPVit supports these payment methods based on their documentation
       return ['mobile_money', 'card', 'bank_transfer'];
     } catch (error) {
-      this.logger.error('Failed to get supported payment methods:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get supported payment methods: ${sanitized.message}`);
       return [];
     }
   }
@@ -483,7 +487,8 @@ export class MyPVitService {
 
       return response.data.success || false;
     } catch (error) {
-      this.logger.error('Failed to cancel transaction:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to cancel transaction: ${sanitized.message}`);
       return false;
     }
   }
@@ -517,7 +522,8 @@ export class MyPVitService {
         return [];
       }
     } catch (error) {
-      this.logger.error('Failed to get transaction history:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get transaction history: ${sanitized.message}`);
       return [];
     }
   }
@@ -551,7 +557,8 @@ export class MyPVitService {
         throw new Error(response.data.message || 'Failed to check balance');
       }
     } catch (error) {
-      this.logger.error('Failed to check balance:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check balance: ${sanitized.message}`);
       throw error;
     }
   }
@@ -584,7 +591,8 @@ export class MyPVitService {
         };
       }
     } catch (error) {
-      this.logger.error('Failed to renew secret key:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to renew secret key: ${sanitized.message}`);
       return {
         success: false,
         message: 'Failed to renew secret key',
@@ -623,7 +631,8 @@ export class MyPVitService {
         };
       }
     } catch (error) {
-      this.logger.error('Failed to perform KYC:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to perform KYC: ${sanitized.message}`);
       return {
         success: false,
         kycStatus: 'failed',
@@ -641,7 +650,8 @@ export class MyPVitService {
       await this.checkBalance();
       return true;
     } catch (error) {
-      this.logger.error('MyPVit connection test failed:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`MyPVit connection test failed: ${sanitized.message}`);
       return false;
     }
   }
