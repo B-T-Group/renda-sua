@@ -5801,6 +5801,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: sent.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (sent.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          sent.transactionId,
+          reference
+        );
+      }
     }
     // D3: persist the new number only after the provider accepted the request.
     if (params.phoneChanged) {
@@ -6669,6 +6677,14 @@ export class OrdersService {
           transaction_id: depositResult.transactionId,
         }
       );
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (depositResult.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          depositResult.transactionId,
+          depositShortReference
+        );
+      }
     }
 
     try {
@@ -7047,6 +7063,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     return {
@@ -14971,6 +14995,14 @@ export class OrdersService {
               entity_id: order.order_number,
               transaction_id: depositResult.transactionId,
             });
+          
+          // G2: Schedule mock callback AFTER persisting the transaction_id
+          if (depositResult.transactionId?.startsWith('mock-')) {
+            await this.mobilePaymentsService.scheduleMockCallback(
+              depositResult.transactionId,
+              depositShortReference
+            );
+          }
 
           // Update order with deposit info (keep status pending_payment until callback)
           const updateDepositMutation = `
@@ -15675,6 +15707,14 @@ export class OrdersService {
         transaction.id,
         { transaction_id: paymentTransaction.transactionId }
       );
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          params.orderNumber
+        );
+      }
     }
 
     this.logger.log(
