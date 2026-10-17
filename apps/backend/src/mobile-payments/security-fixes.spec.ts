@@ -228,13 +228,6 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       expect(loggedText).not.toContain('DANGEROUS_KEY');
     });
 
-    it('should not log sk_live_ keys in error message', async () => {
-      // This test verifies that when an error contains an API key, it's redacted in logs
-      // Skip for now - the actual error structure from FedaPay SDK is complex
-      // and the key point (sanitizeProviderError redacts sk_live_ patterns) is tested
-      // in the unit test for sanitizeProviderError itself
-    });
-
     it('(a) webhook re-check must not leak Authorization headers from FedaPay SDK errors', async () => {
       // Requirement (a): Test that drives FedaPay SDK timeout/5xx through webhook re-check
       const errorWithAuthHeader: any = {
@@ -298,7 +291,7 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       const service = module.get<MyPVitService>(MyPVitService);
 
       // Force an error by calling testConnection (will fail with mock config)
-      await service.testConnection().catch(() => {});
+      await service.testConnection().catch(() => undefined);
 
       const allCalls = loggerSpy.mock.calls.flat();
       const loggedText = allCalls.map((arg) => JSON.stringify(arg)).join(' ');
@@ -331,7 +324,7 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       const service = module.get<MobilePaymentsDatabaseService>(MobilePaymentsDatabaseService);
 
       // Force an error
-      await service.getTransactionById('invalid').catch(() => {});
+      await service.getTransactionById('invalid').catch(() => undefined);
 
       const allCalls = loggerSpy.mock.calls.flat();
       const loggedText = allCalls.map((arg) => JSON.stringify(arg)).join(' ');

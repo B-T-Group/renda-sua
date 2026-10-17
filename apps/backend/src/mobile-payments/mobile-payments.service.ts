@@ -530,7 +530,7 @@ export class MobilePaymentsService {
         // F-M3: Enforce that payer phone country matches the market/item country FIRST
         // This check MUST run before provider-specific checks so that country mismatches
         // are reported as PHONE_COUNTRY_MISMATCH rather than generic INVALID_PHONE_NUMBER
-        let phoneValidation = validatePhoneNumber(
+        const phoneValidation = validatePhoneNumber(
           paymentRequest.customerPhone,
           phoneRegion
         );
