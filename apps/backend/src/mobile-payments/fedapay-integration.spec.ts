@@ -469,9 +469,6 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       }).toThrow(/only supports mobile_money/i);
     });
 
-    // Note: Controller-level account currency checks (controller:280-299, :1113-1130)
-    // are integration-tested via service-level guards above and E2E tests.
-
     it('should reject initiatePayment with non-XOF currency for fedapay (service:505-510)', async () => {
       const realService = new MobilePaymentsService(
         {} as any,
@@ -529,4 +526,118 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
     });
   });
 
+  describe('B5: account currency (controller, ACCOUNT_CURRENCY_MISMATCH)', () => {
+    let currencyController: MobilePaymentsController;
+    const ctx: any = { headers: {} };
+
+    const svc = {
+      resolveProviderFromRequest: jest.fn(),
+      isWithdrawalDestinationCmOrGa: jest.fn(),
+      initiatePayment: jest.fn(),
+    };
+    const accounts = {
+      getAccountBalance: jest.fn(),
+      getBusinessWithdrawalPinStateByAccountId: jest.fn(),
+    };
+    const db = { createTransaction: jest.fn(), updateTransaction: jest.fn() };
+    const giveChange = { executeGiveChangePayout: jest.fn() };
+    const hasuraUser = { getUser: jest.fn() };
+    const access = { canView: jest.fn() };
+
+    beforeEach(async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        controllers: [MobilePaymentsController],
+        providers: [
+          { provide: MobilePaymentsService, useValue: svc },
+          { provide: MobilePaymentsDatabaseService, useValue: db },
+          { provide: AccountsService, useValue: accounts },
+          { provide: GiveChangePayoutService, useValue: giveChange },
+          { provide: HasuraUserService, useValue: hasuraUser },
+          { provide: MobilePaymentCallbackProcessor, useValue: {} },
+          { provide: WithdrawalPinService, useValue: {} },
+          { provide: PendingWithdrawalResolveService, useValue: {} },
+          { provide: MobileTransactionAccessService, useValue: access },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+      currencyController = module.get(MobilePaymentsController);
+
+      hasuraUser.getUser.mockResolvedValue({ id: 'user-1' });
+      access.canView.mockResolvedValue(true);
+      svc.resolveProviderFromRequest.mockResolvedValue('fedapay');
+      svc.isWithdrawalDestinationCmOrGa.mockResolvedValue(true);
+      accounts.getAccountBalance.mockResolvedValue({
+        availableBalance: 50000,
+        currency: 'XAF',
+      });
+      accounts.getBusinessWithdrawalPinStateByAccountId.mockResolvedValue(null);
+    });
+
+    const expectCurrencyMismatch = async (promise: Promise<unknown>) => {
+      let caught: any;
+      try {
+        await promise;
+      } catch (e) {
+        caught = e;
+      }
+      expect(caught).toBeInstanceOf(HttpException);
+      expect(caught.getStatus()).toBe(HttpStatus.BAD_REQUEST);
+      expect(caught.getResponse()).toEqual(
+        expect.objectContaining({
+          error: 'ACCOUNT_CURRENCY_MISMATCH',
+          data: { accountCurrency: 'XAF', requiredCurrency: 'XOF' },
+        })
+      );
+    };
+
+    it('rejects a fedapay top-up into a non-XOF account with 400 ACCOUNT_CURRENCY_MISMATCH', async () => {
+      await expectCurrencyMismatch(
+        currencyController.initiatePayment(ctx, {
+          amount: 1000,
+          currency: 'XOF',
+          customerPhone: '+22896000001',
+          accountId: 'acc-xaf',
+          transactionType: 'PAYMENT',
+        } as any)
+      );
+      expect(db.createTransaction).not.toHaveBeenCalled();
+      expect(svc.initiatePayment).not.toHaveBeenCalled();
+    });
+
+    it('rejects a +228 (fedapay) withdrawal from a non-XOF account with 400 ACCOUNT_CURRENCY_MISMATCH', async () => {
+      await expectCurrencyMismatch(
+        currencyController.initiatePayment(ctx, {
+          amount: 1000,
+          currency: 'XOF',
+          customerPhone: '+22896000001',
+          accountId: 'acc-xaf',
+          transactionType: 'GIVE_CHANGE',
+        } as any)
+      );
+      expect(db.createTransaction).not.toHaveBeenCalled();
+      expect(svc.initiatePayment).not.toHaveBeenCalled();
+      expect(giveChange.executeGiveChangePayout).not.toHaveBeenCalled();
+    });
+
+    it('lets an XOF account past the currency check (control)', async () => {
+      accounts.getAccountBalance.mockResolvedValue({
+        availableBalance: 50000,
+        currency: 'XOF',
+      });
+      let caught: any;
+      try {
+        await currencyController.initiatePayment(ctx, {
+          amount: 1000,
+          currency: 'XOF',
+          customerPhone: '+22896000001',
+          accountId: 'acc-xof',
+          transactionType: 'PAYMENT',
+        } as any);
+      } catch (e) {
+        caught = e;
+      }
+      const body = caught?.getResponse?.();
+      expect(body?.error).not.toBe('ACCOUNT_CURRENCY_MISMATCH');
+    });
+  });
 });

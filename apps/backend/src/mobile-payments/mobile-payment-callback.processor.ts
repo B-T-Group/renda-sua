@@ -181,7 +181,7 @@ export class MobilePaymentCallbackProcessor {
 
     if (!this.isMockedTransaction(tx)) {
       await this.mobilePaymentsService.assertProviderConfirmsCallback(
-        tx,
+        this.withFedaPayRecheckId(tx, callbackData),
         normalizedStatus
       );
     } else {
@@ -193,6 +193,31 @@ export class MobilePaymentCallbackProcessor {
     await this.processPendingFedaPay(tx, callbackData);
 
     return { received: true, transactionId: callbackData.entity.id };
+  }
+
+  /**
+   * N2: a FedaPay row can be pending without a transaction_id (the provider id
+   * was never stored, e.g. the push failed or the process died right after
+   * Transaction.create). The webhook was matched by custom_metadata.externalId,
+   * so re-check the live status of the webhook's entity id instead of failing
+   * with "missing provider transaction_id". This is safe only because the live
+   * re-check requires custom_metadata.externalId === tx.reference (fail closed),
+   * so it is used only when the row has a reference. The finalizers then store
+   * the entity id as transaction_id.
+   */
+  private withFedaPayRecheckId(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): MobilePaymentTransaction {
+    if (tx.transaction_id?.trim()) return tx;
+    const entityId = callbackData.entity?.id;
+    if (!tx.reference?.trim() || entityId === undefined || entityId === null) {
+      return tx;
+    }
+    this.logger.warn(
+      `FedaPay row ${tx.id} has no transaction_id; re-checking webhook entity ${entityId} (reference must match)`
+    );
+    return { ...tx, transaction_id: String(entityId) };
   }
 
   private freemopayLookupKeys(callbackData: FreemopayCallbackDto): string[] {

@@ -160,6 +160,80 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
   });
 
+  describe('N2: row without provider transaction_id', () => {
+    const rowWithoutProviderId = { ...mockTransaction, transaction_id: null };
+    const approvedByExternalId: FedaPayCallbackDto = {
+      entity: {
+        id: 456,
+        status: 'approved',
+        amount: 1000,
+        reference: 'trx_abc',
+        custom_metadata: { externalId: 'REF123' },
+      } as any,
+      name: 'transaction.approved',
+    };
+
+    beforeEach(() => {
+      mockDatabaseService.getTransactionByTransactionId.mockReset();
+      mockDatabaseService.getTransactionByReference.mockReset();
+      mockDatabaseService.updateTransactionIfStatus.mockReset();
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockReset();
+      mockAccountsService.registerDepositIfNotExists.mockReset();
+    });
+
+    it('re-checks the webhook entity id (instead of throwing) and credits once', async () => {
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(null);
+      mockDatabaseService.getTransactionByReference.mockImplementation(
+        async (key: string) => (key === 'REF123' ? rowWithoutProviderId : null)
+      );
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ success: true });
+
+      await processor.processFedaPayCallback(approvedByExternalId);
+
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'tx-123', transaction_id: '456', reference: 'REF123' }),
+        'SUCCESS'
+      );
+      expect(mockAccountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not substitute the entity id when the row has no reference (stays fail closed)', async () => {
+      const noRef = { ...rowWithoutProviderId, reference: '' };
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(null);
+      mockDatabaseService.getTransactionByReference.mockImplementation(
+        async (key: string) => (key === 'REF123' ? noRef : null)
+      );
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValue(
+        new Error('missing provider transaction_id')
+      );
+
+      await expect(processor.processFedaPayCallback(approvedByExternalId)).rejects.toThrow(
+        /missing provider transaction_id/
+      );
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        noRef,
+        'SUCCESS'
+      );
+      expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('keeps the stored transaction_id when present', async () => {
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ success: true });
+
+      await processor.processFedaPayCallback(successCallback);
+
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        mockTransaction,
+        'SUCCESS'
+      );
+    });
+  });
+
   describe('Non-Terminal Event Handling (B3)', () => {
     it('should return 200 for non-terminal events without state change', async () => {
       mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
