@@ -304,15 +304,18 @@ export class MobilePaymentsService {
             `Rejecting FedaPay callback for ${tx.id}: missing live currency (fail closed)`
           );
         }
+        // (b) Definite currency mismatch returns 422 Unprocessable Entity
         if (live.currency !== 'XOF') {
-          throw new Error(
-            `Rejecting FedaPay callback for ${tx.id}: live currency ${live.currency} is not XOF`
+          throw new HttpException(
+            `Rejecting FedaPay callback for ${tx.id}: live currency ${live.currency} is not XOF`,
+            HttpStatus.UNPROCESSABLE_ENTITY
           );
         }
-        // Check amount matches
+        // (b) Definite amount mismatch returns 409 Conflict
         if (tx.amount !== undefined && live.amount !== undefined && live.amount !== tx.amount) {
-          throw new Error(
-            `Rejecting FedaPay callback for ${tx.id}: amount mismatch (expected ${tx.amount}, got ${live.amount})`
+          throw new HttpException(
+            `Rejecting FedaPay callback for ${tx.id}: amount mismatch (expected ${tx.amount}, got ${live.amount})`,
+            HttpStatus.CONFLICT
           );
         }
         // Check reference matches stored reference exactly (B4)
@@ -328,9 +331,11 @@ export class MobilePaymentsService {
             `Rejecting FedaPay callback for ${tx.id}: missing live reference (fail closed)`
           );
         }
+        // (b) Definite reference mismatch returns 409 Conflict
         if (live.reference !== tx.reference) {
-          throw new Error(
-            `Rejecting FedaPay callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference})`
+          throw new HttpException(
+            `Rejecting FedaPay callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference})`,
+            HttpStatus.CONFLICT
           );
         }
       }
