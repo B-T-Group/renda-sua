@@ -153,11 +153,11 @@ export class AdminMobilePaymentsController {
     return providerTxId;
   }
 
-  private resolveProvider(
+  private async resolveProvider(
     tx: MobilePaymentTransaction
-  ): MobilePaymentIntegrationProvider {
+  ): Promise<MobilePaymentIntegrationProvider> {
     try {
-      return this.mobilePaymentsService.resolveAdminIntegrationProvider(
+      return await this.mobilePaymentsService.resolveAdminIntegrationProvider(
         tx.customer_phone,
         tx.provider
       );
