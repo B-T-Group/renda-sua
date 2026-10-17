@@ -372,4 +372,73 @@ describe('MobilePaymentsService - Routing', () => {
       expect(mockHasuraSystemService.executeQuery).toHaveBeenCalledTimes(3);
     });
   });
+
+  describe('B8: B7 Country Name Normalization', () => {
+    it('should normalize "Togo" to TG and check flag', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: true }],
+      });
+
+      const provider = await service.getProviderForCountry('Togo');
+
+      expect(provider).toBe('fedapay');
+      expect(mockHasuraSystemService.executeQuery).toHaveBeenCalled();
+    });
+
+    it('should normalize "TOGO" to TG', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: true }],
+      });
+
+      const provider = await service.getProviderForCountry('TOGO');
+
+      expect(provider).toBe('fedapay');
+    });
+  });
+
+  describe('B8: B7 +228 Withdrawal Routing', () => {
+    it('should route +228 to fedapay when TG flag active', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: true }],
+      });
+
+      const provider = await (service as any).providerFromHintOrPhone({
+        customerPhone: '+22878123456',
+      });
+
+      expect(provider).toBe('fedapay');
+    });
+
+    it('should route +228 to mypvit when TG flag inactive', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: false }],
+      });
+
+      const provider = await (service as any).providerFromHintOrPhone({
+        customerPhone: '+22878123456',
+      });
+
+      expect(provider).toBe('mypvit');
+    });
+  });
+
+  describe('B8: CM/GA Routing Unchanged', () => {
+    it('should keep Cameroon routing to freemopay', async () => {
+      const provider = await service['resolveProviderFromRequest']({
+        customerPhone: '+237690123456',
+      });
+
+      expect(provider).toBe('freemopay');
+    });
+
+    it('should keep local Cameroon mobile to freemopay', () => {
+      const provider = service.getProvider('692168717');
+      expect(provider).toBe('freemopay');
+    });
+
+    it('should keep Gabon routing to mypvit', () => {
+      const provider = service.getProvider('+24106123456');
+      expect(provider).toBe('mypvit');
+    });
+  });
 });
