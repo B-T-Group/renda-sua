@@ -573,7 +573,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       accounts.getBusinessWithdrawalPinStateByAccountId.mockResolvedValue(null);
     });
 
-    const expectCurrencyMismatch = async (promise: Promise<unknown>) => {
+    const expectCurrencyMismatch = async (promise: Promise<unknown>, accountId: string) => {
       let caught: any;
       try {
         await promise;
@@ -582,11 +582,18 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       }
       expect(caught).toBeInstanceOf(HttpException);
       expect(caught.getStatus()).toBe(HttpStatus.BAD_REQUEST);
-      expect(caught.getResponse()).toEqual(
+      const response = caught.getResponse();
+      expect(response).toEqual(
         expect.objectContaining({
           error: 'ACCOUNT_CURRENCY_MISMATCH',
           data: { accountCurrency: 'XAF', requiredCurrency: 'XOF' },
         })
+      );
+      // N4: assert error message includes FedaPay and XOF
+      expect(response.message).toMatch(/FedaPay.*XOF/i);
+      // N4: assert resolveProviderFromRequest received the real request (accountId)
+      expect(svc.resolveProviderFromRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ accountId })
       );
     };
 
@@ -598,7 +605,8 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
           customerPhone: '+22896000001',
           accountId: 'acc-xaf',
           transactionType: 'PAYMENT',
-        } as any)
+        } as any),
+        'acc-xaf'
       );
       expect(db.createTransaction).not.toHaveBeenCalled();
       expect(svc.initiatePayment).not.toHaveBeenCalled();
@@ -612,7 +620,8 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
           customerPhone: '+22896000001',
           accountId: 'acc-xaf',
           transactionType: 'GIVE_CHANGE',
-        } as any)
+        } as any),
+        'acc-xaf'
       );
       expect(db.createTransaction).not.toHaveBeenCalled();
       expect(svc.initiatePayment).not.toHaveBeenCalled();
@@ -624,20 +633,23 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         availableBalance: 50000,
         currency: 'XOF',
       });
-      let caught: any;
-      try {
-        await currencyController.initiatePayment(ctx, {
-          amount: 1000,
-          currency: 'XOF',
-          customerPhone: '+22896000001',
-          accountId: 'acc-xof',
-          transactionType: 'PAYMENT',
-        } as any);
-      } catch (e) {
-        caught = e;
-      }
-      const body = caught?.getResponse?.();
-      expect(body?.error).not.toBe('ACCOUNT_CURRENCY_MISMATCH');
+      // N4: Make XOF control prove the request passed the currency check
+      // by asserting downstream service calls happened
+      db.createTransaction.mockResolvedValue({ id: 'tx-1', reference: 'ref-1' });
+      svc.initiatePayment.mockResolvedValue({ success: true });
+      
+      await currencyController.initiatePayment(ctx, {
+        amount: 1000,
+        currency: 'XOF',
+        customerPhone: '+22896000001',
+        accountId: 'acc-xof',
+        transactionType: 'PAYMENT',
+      } as any);
+      
+      // Assert the currency check was passed (account was fetched)
+      expect(accounts.getAccountBalance).toHaveBeenCalledWith('acc-xof');
+      // Assert resolveProviderFromRequest was called (routing happened)
+      expect(svc.resolveProviderFromRequest).toHaveBeenCalled();
     });
   });
 });
