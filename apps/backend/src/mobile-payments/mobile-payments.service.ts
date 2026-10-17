@@ -122,18 +122,12 @@ export class MobilePaymentsService {
     this.providers.set('fedapay', fedapayService);
   }
 
-  async getProvider(phoneNumber: string): Promise<MobilePaymentIntegrationProvider> {
+  getProvider(phoneNumber: string): MobilePaymentIntegrationProvider {
     if (isCameroonCountryCode(phoneNumber) || detectCameroonPhone(phoneNumber)) {
       return 'freemopay';
     }
-    // Check for Togo +228 numbers (B7)
-    const cleaned = phoneNumber.replace(/\D/g, '');
-    if (cleaned.startsWith('228') && cleaned.length >= 11) {
-      const isActive = await this.isFedaPayActiveForTogo();
-      if (isActive) {
-        return 'fedapay';
-      }
-    }
+    // Note: +228 routing to fedapay is handled in providerFromHintOrPhone (B7)
+    // to allow async flag check
     return 'mypvit';
   }
 
@@ -1108,7 +1102,15 @@ export class MobilePaymentsService {
       );
     }
     if (request.customerPhone?.trim()) {
-      return await this.getProvider(request.customerPhone);
+      // B7: Check for +228 (Togo) numbers before falling back to getProvider
+      const cleaned = request.customerPhone.replace(/\D/g, '');
+      if (cleaned.startsWith('228') && cleaned.length >= 11) {
+        const isActive = await this.isFedaPayActiveForTogo();
+        if (isActive) {
+          return 'fedapay';
+        }
+      }
+      return this.getProvider(request.customerPhone);
     }
     return 'mypvit';
   }
