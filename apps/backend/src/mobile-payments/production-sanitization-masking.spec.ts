@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { FreemopayService } from './providers/freemopay.service';
 import { FedaPayService } from './providers/fedapay.service';
 import { MyPVitService } from './providers/mypvit.service';
@@ -34,7 +35,7 @@ describe('Production Sanitization & Masking Tests', () => {
         providers: [
           FreemopayService,
           {
-            provide: 'ConfigService',
+            provide: ConfigService,
             useValue: {
               get: jest.fn((key: string) => {
                 if (key === 'freemopay.apiUrl') return 'https://api.test.com';
@@ -186,7 +187,7 @@ describe('Production Sanitization & Masking Tests', () => {
         providers: [
           FreemopayService,
           {
-            provide: 'ConfigService',
+            provide: ConfigService,
             useValue: {
               get: jest.fn((key: string) => {
                 if (key === 'freemopay.apiUrl') return 'https://api.test.com';
