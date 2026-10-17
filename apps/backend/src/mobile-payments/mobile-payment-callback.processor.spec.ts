@@ -714,7 +714,7 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderDepositTx.id,
       'success',
-      { status: 'processing' }
+      expect.objectContaining({ status: 'processing', updated_at: expect.any(String) })
     );
     // No rollback to pending after credit succeeded
     expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalledWith(
@@ -1037,7 +1037,7 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderTx.id,
       'success',
-      { status: 'processing' }
+      expect.objectContaining({ status: 'processing', updated_at: expect.any(String) })
     );
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
     expect(reportMoneyAnomaly).toHaveBeenCalledWith(
@@ -1061,7 +1061,13 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderTx.id,
       'success',
-      { status: 'processing' }
+      expect.objectContaining({ status: 'processing', updated_at: expect.any(String) })
+    );
+    const restore = databaseService.updateTransactionIfStatus.mock.calls.find(
+      (call) => call[1] === 'success'
+    );
+    expect(Date.now() - Date.parse(restore?.[2].updated_at)).toBeGreaterThanOrEqual(
+      60_000
     );
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
     expect(reportMoneyAnomaly).toHaveBeenCalled();
@@ -1130,9 +1136,12 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
       status: 'processing',
     });
 
-    await processor.processMypvitCallback(callback);
+    await expect(processor.processMypvitCallback(callback)).rejects.toThrow(
+      'Payment finalize still in progress'
+    );
 
     expect(reportMoneyAnomaly).not.toHaveBeenCalled();
+    expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
   });
 });
 
@@ -1314,7 +1323,7 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       pendingOrderTx.id,
       'success',
-      { status: 'processing' }
+      expect.objectContaining({ status: 'processing', updated_at: expect.any(String) })
     );
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
   });
@@ -1439,18 +1448,20 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE CAS and idempotency', () =>
     databaseService.updateTransactionIfStatus.mockResolvedValueOnce(false); // CAS fails
     databaseService.getTransactionById.mockResolvedValue(processingGcTx);
 
-    await processor.processMypvitCallback({
-      transactionId: 'provider-gc-1',
-      merchantReferenceId: giveChangeTx.reference,
-      status: 'SUCCESS',
-      amount: giveChangeTx.amount,
-      customerID: '06123456',
-      fees: 0,
-      chargeOwner: 'MERCHANT',
-      transactionOperation: 'PAYOUT',
-      operator: 'AIRTEL',
-      code: 200,
-    });
+    await expect(
+      processor.processMypvitCallback({
+        transactionId: 'provider-gc-1',
+        merchantReferenceId: giveChangeTx.reference,
+        status: 'SUCCESS',
+        amount: giveChangeTx.amount,
+        customerID: '06123456',
+        fees: 0,
+        chargeOwner: 'MERCHANT',
+        transactionOperation: 'PAYOUT',
+        operator: 'AIRTEL',
+        code: 200,
+      })
+    ).rejects.toThrow('Payment finalize still in progress');
 
     // Should not proceed when another writer holds the processing claim
     expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();

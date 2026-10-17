@@ -3,6 +3,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
 import { normalizeProviderMessage } from './normalize-provider-message';
 
+function transactionUpdatedAt(data: UpdateTransactionData): string {
+  return data.updated_at ?? new Date().toISOString();
+}
+
 export interface MobilePaymentTransaction {
   id: string;
   reference: string;
@@ -76,6 +80,11 @@ export interface UpdateTransactionData {
   superseded_by_id?: string | null;
   superseded_reason?: string | null;
   superseded_at?: string | null;
+  /**
+   * Stored as given. Handler-failure restore backdates this so a provider
+   * retry is old enough to resume finalize instead of looking in-flight.
+   */
+  updated_at?: string;
 }
 
 /** Columns that exist before the #545 migration (safe on hot paths during deploy). */
@@ -210,7 +219,7 @@ export class MobilePaymentsDatabaseService {
                 ),
               }
             : {}),
-          updated_at: new Date().toISOString(),
+          updated_at: transactionUpdatedAt(data),
         },
       };
 
@@ -581,7 +590,7 @@ export class MobilePaymentsDatabaseService {
                 ),
               }
             : {}),
-          updated_at: new Date().toISOString(),
+          updated_at: transactionUpdatedAt(data),
         },
       }
     );

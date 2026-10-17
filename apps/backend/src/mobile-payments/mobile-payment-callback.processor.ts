@@ -26,6 +26,9 @@ import {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Younger than this, a processing row is another finalize still in flight. */
+const PROCESSING_RESUME_MIN_AGE_MS = 60_000;
+
 function looksLikeUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
@@ -417,10 +420,7 @@ export class MobilePaymentCallbackProcessor {
     if (!claimed) {
       const fresh = await this.databaseService.getTransactionById(transaction.id);
       if (fresh?.status === 'processing') {
-        this.logger.log(
-          `GIVE_CHANGE ${transaction.id} CAS lost to concurrent SUCCESS; left unchanged`
-        );
-        return;
+        this.processingStillInFlight(transaction.id);
       }
       if (fresh?.status === 'failed') {
         this.logger.warn(
@@ -528,12 +528,10 @@ export class MobilePaymentCallbackProcessor {
       await this.retrySuccessSideEffects(fresh);
       return;
     }
-    // Concurrent writer holds the processing claim; this writer never credited
+    // Concurrent writer holds the processing claim; this writer never credited.
+    // Do not acknowledge: the winner may still fail the order handler.
     if (fresh?.status === 'processing') {
-      this.logger.log(
-        `Order payment ${transaction.id} CAS lost to concurrent processing claim; left unchanged`
-      );
-      return;
+      this.processingStillInFlight(transaction.id);
     }
     // Provider confirmed SUCCESS but our row is failed / cancelled for another reason:
     // the wallet is already credited (idempotent), so the money is safe; flag it.
@@ -597,6 +595,9 @@ export class MobilePaymentCallbackProcessor {
       await this.retrySuccessSideEffects(fresh);
       return;
     }
+    if (fresh?.status === 'processing') {
+      this.processingStillInFlight(transaction.id);
+    }
     this.logger.log(
       `Non-order payment ${transaction.id} CAS lost (concurrent duplicate SUCCESS); left unchanged`
     );
@@ -608,21 +609,20 @@ export class MobilePaymentCallbackProcessor {
    * Note: resume skips assertProviderConfirmsCallback because a row only reaches processing
    * after a confirmed SUCCESS in the first finalize attempt.
    *
-   * Staleness guard: only resume rows whose updated_at is older than ~60 seconds. A younger
-   * processing row means another callback is mid-finalize; return without moving money so
-   * only the first writer releases/withdraws/credits.
+   * Staleness guard: only resume rows whose updated_at is older than 60 seconds. A younger
+   * processing row means another callback is mid-finalize. Do not acknowledge that callback:
+   * HTTP 200 would stop the provider retry while the order is still unpaid.
    */
   private async resumeFinalizeFromProcessing(
     transaction: MobilePaymentTransaction,
     providerTransactionId: string
   ): Promise<void> {
     const ageMs = Date.now() - new Date(transaction.updated_at).getTime();
-    const staleThresholdMs = 60_000;
-    if (ageMs < staleThresholdMs) {
+    if (ageMs < PROCESSING_RESUME_MIN_AGE_MS) {
       this.logger.log(
-        `Resume skipped for fresh processing tx ${transaction.id} (age ${Math.round(ageMs / 1000)}s < ${staleThresholdMs / 1000}s; another finalize is in flight)`
+        `Resume skipped for fresh processing tx ${transaction.id} (age ${Math.round(ageMs / 1000)}s < ${PROCESSING_RESUME_MIN_AGE_MS / 1000}s; another finalize is in flight)`
       );
-      return;
+      this.processingStillInFlight(transaction.id);
     }
     this.logger.log(
       `Resuming finalize for processing tx ${transaction.id} (crash recovery, age ${Math.round(ageMs / 1000)}s)`
@@ -744,11 +744,25 @@ export class MobilePaymentCallbackProcessor {
     }
   }
 
+  /** Plain Error so the callback controller returns HTTP 500 and the provider retries. */
+  private processingStillInFlight(transactionId: string): never {
+    throw new Error(
+      `Payment finalize still in progress for ${transactionId}; will retry`
+    );
+  }
+
   private async returnSuccessClaimToProcessing(transactionId: string): Promise<void> {
     const released = await this.databaseService.updateTransactionIfStatus(
       transactionId,
       'success',
-      { status: 'processing' }
+      {
+        status: 'processing',
+        // The provider retries this 5xx within seconds. A fresh updated_at would
+        // look in-flight and, if acknowledged, stop that retry with the order unpaid.
+        updated_at: new Date(
+          Date.now() - PROCESSING_RESUME_MIN_AGE_MS
+        ).toISOString(),
+      }
     );
     if (released) return;
     this.logger.error(

@@ -9,8 +9,8 @@ import type { MobilePaymentTransaction } from './mobile-payments-database.servic
  * - Release: momo-giveout-release:<tx id>
  * - Withdrawal: momo-giveout:<tx id>
  *
- * The resume path guards against fresh processing rows (updated_at < 60s ago),
- * so only stale processing rows are resumed.
+ * A fresh processing row is not resumed and is not acknowledged (HTTP 500),
+ * so a provider retry is not treated as delivered while money is still in flight.
  */
 describe('MobilePaymentCallbackProcessor GIVE_CHANGE parallel SUCCESS race', () => {
   const pendingGiveChange: MobilePaymentTransaction = {
@@ -104,7 +104,7 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE parallel SUCCESS race', () 
 
     // Simulate 3 parallel callbacks arriving at the same time
     // Only the first one should claim pending -> processing
-    // The other two should see processing and skip (staleness check)
+    // The other two lose the claim, see processing, and reject without moving money
     let claimWinner = false;
 
     t.databaseService.updateTransactionIfStatus.mockImplementation(async (_id, expected, data) => {
@@ -135,8 +135,15 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE parallel SUCCESS race', () 
       t.processor.processFreemopayCallback(callback, {} as any),
     ]);
 
-    // All should succeed (or skip)
-    expect(results.every(r => r.status === 'fulfilled')).toBe(true);
+    const fulfilled = results.filter((r) => r.status === 'fulfilled');
+    const rejected = results.filter((r) => r.status === 'rejected');
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(2);
+    for (const result of rejected) {
+      expect((result as PromiseRejectedResult).reason.message).toBe(
+        'Payment finalize still in progress for tx-givechange; will retry'
+      );
+    }
 
     // Verify exactly 1 release call
     const { releaseCallCount, withdrawalCallCount } = t.getCounts();
@@ -171,8 +178,12 @@ describe('MobilePaymentCallbackProcessor GIVE_CHANGE parallel SUCCESS race', () 
       t.processor.processFreemopayCallback(callback, {} as any),
     ]);
 
-    // All should succeed (staleness check returns early)
-    expect(results.every(r => r.status === 'fulfilled')).toBe(true);
+    expect(results.every((r) => r.status === 'rejected')).toBe(true);
+    for (const result of results) {
+      expect((result as PromiseRejectedResult).reason.message).toBe(
+        'Payment finalize still in progress for tx-givechange; will retry'
+      );
+    }
 
     // No wallet operations because the row is too fresh
     const { releaseCallCount, withdrawalCallCount } = t.getCounts();

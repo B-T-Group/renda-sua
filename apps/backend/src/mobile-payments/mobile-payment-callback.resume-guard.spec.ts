@@ -8,9 +8,10 @@ jest.mock('../common/utils/money-alert.util', () => ({
 }));
 
 /**
- * #570/#571 leftovers. Resume only after the processing row is 60s old, a failed
- * resume credit stays processing, a handler 4xx is still a retryable error, and
- * a FAILED give-change releases the hold with the success-path idempotency key.
+ * #570/#571 leftovers. A processing row younger than 60s is not resumed and is
+ * not acknowledged. A failed resume credit stays processing, a handler 4xx is
+ * still a retryable error with updated_at old enough to resume, and a FAILED
+ * give-change releases the hold with the success-path idempotency key.
  */
 const NOW = Date.parse('2026-10-17T10:00:00.000Z');
 const RETRY_MESSAGE = 'Payment handler failed for order ORD1; will retry';
@@ -103,14 +104,17 @@ describe('MobilePaymentCallbackProcessor resume guard (#570 #571)', () => {
     jest.restoreAllMocks();
   });
 
-  it('a processing order younger than 60s does not credit or finalize', async () => {
+  it('a processing order younger than 60s does not credit, finalize, or acknowledge', async () => {
     // 59_999ms rounds to "60s" in the log; the guard compares milliseconds.
     const t = buildOrder(orderTx('processing', 59_999));
 
-    const result = await t.processor.processFreemopayCallback(successCallback);
+    const error = await catchError(() => t.processor.processFreemopayCallback(successCallback));
 
-    expect(result).toMatchObject({ received: true, reference: 'fmp-order' });
-    expect(result.skipped).toBeUndefined();
+    expect(error).toBeInstanceOf(Error);
+    expect(error).not.toBeInstanceOf(HttpException);
+    expect((error as Error).message).toBe(
+      'Payment finalize still in progress for tx-order; will retry'
+    );
     expect(t.databaseService.logCallback).toHaveBeenCalledWith('tx-order', successCallback);
     expect(t.accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
     expect(t.handler.onPaymentSuccess).not.toHaveBeenCalled();
@@ -119,11 +123,14 @@ describe('MobilePaymentCallbackProcessor resume guard (#570 #571)', () => {
     expect(t.row.status).toBe('processing');
   });
 
-  it('a processing order updated in the future does not credit or finalize', async () => {
+  it('a processing order updated in the future does not credit, finalize, or acknowledge', async () => {
     const t = buildOrder(orderTx('processing', -5_000));
 
-    await t.processor.processFreemopayCallback(successCallback);
+    const error = await catchError(() => t.processor.processFreemopayCallback(successCallback));
 
+    expect((error as Error).message).toBe(
+      'Payment finalize still in progress for tx-order; will retry'
+    );
     expect(t.accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
     expect(t.handler.onPaymentSuccess).not.toHaveBeenCalled();
     expect(t.databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
@@ -187,8 +194,9 @@ describe('MobilePaymentCallbackProcessor resume guard (#570 #571)', () => {
     expect(t.databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       'tx-order',
       'success',
-      { status: 'processing' }
+      expect.objectContaining({ status: 'processing' })
     );
+    expect(NOW - Date.parse(t.row.updated_at)).toBeGreaterThanOrEqual(60_000);
     expect(t.accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
     expect(t.row.status).toBe('processing');
   });
