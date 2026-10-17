@@ -175,7 +175,7 @@ export class FedaPayService implements OnModuleInit {
 
         // TODO: Enable when callback processor is merged from PR3
         // await this.callbackProcessor!.processFedaPayCallback(callbackData);
-        this.logger.warn('processFedaPayCallback not yet available (pending PR3 merge)');
+        this.logger.warn('processFedaPayCallback not yet available (pending PR3 merge), callbackData:', callbackData);
       } catch (error: any) {
         this.logger.error(
           `Failed to process auto-callback for ${mockReference}: ${

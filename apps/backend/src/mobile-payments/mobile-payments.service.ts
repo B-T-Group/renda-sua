@@ -91,6 +91,7 @@ export interface PaymentProvider {
 export type MobilePaymentIntegrationProvider =
   | 'freemopay'
   | 'mypvit'
+  | 'fedapay'
   | 'mtn'
   | 'orange';
 
