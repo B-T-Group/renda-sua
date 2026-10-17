@@ -20,18 +20,3 @@ export interface FreemopayCallbackDto {
   reason?: string;
   message?: string;
 }
-
-export interface FedaPayCallbackDto {
-  entity: {
-    id: number;
-    status: 'pending' | 'approved' | 'declined' | 'canceled' | 'transferred' | string;
-    amount: number;
-    reference?: string;
-    custom_metadata?: {
-      externalId?: string;
-      [key: string]: any;
-    };
-    [key: string]: any;
-  };
-  name: string;
-}

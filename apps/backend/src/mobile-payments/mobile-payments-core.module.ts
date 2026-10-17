@@ -6,7 +6,6 @@ import { MobilePaymentsDatabaseService } from './mobile-payments-database.servic
 import { MobilePaymentsService } from './mobile-payments.service';
 import { FreemopayService } from './providers/freemopay.service';
 import { MyPVitService } from './providers/mypvit.service';
-import { FedaPayService } from './providers/fedapay.service';
 
 @Global()
 @Module({
@@ -16,14 +15,12 @@ import { FedaPayService } from './providers/fedapay.service';
     MobilePaymentsDatabaseService,
     MyPVitService,
     FreemopayService,
-    FedaPayService,
   ],
   exports: [
     MobilePaymentsService,
     MobilePaymentsDatabaseService,
     MyPVitService,
     FreemopayService,
-    FedaPayService,
   ],
 })
 export class MobilePaymentsCoreModule {}
