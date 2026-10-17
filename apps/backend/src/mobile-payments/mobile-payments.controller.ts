@@ -667,7 +667,8 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error('MyPVIT callback processing error:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`MyPVIT callback processing error: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,
@@ -715,7 +716,8 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error('Freemopay callback processing error:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Freemopay callback processing error: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,

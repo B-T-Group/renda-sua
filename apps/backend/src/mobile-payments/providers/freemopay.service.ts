@@ -357,7 +357,8 @@ export class FreemopayService implements OnModuleInit {
         status: data?.status,
       };
     } catch (error: any) {
-      this.logger.error('Failed to initiate Freemopay payment:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate Freemopay payment: ${sanitized.message}`);
       return {
         success: false,
         message: normalizeProviderMessage(
@@ -432,7 +433,8 @@ export class FreemopayService implements OnModuleInit {
         status: data?.status,
       };
     } catch (error: any) {
-      this.logger.error('Failed to initiate Freemopay withdrawal:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate Freemopay withdrawal: ${sanitized.message}`);
       return {
         success: false,
         message: normalizeProviderMessage(
