@@ -773,30 +773,36 @@ export class MobilePaymentsController {
       );
     }
 
-    const parts = signatureHeader.split(',');
-    let timestamp: string | null = null;
-    const v1Signatures: string[] = [];
-    
-    for (const part of parts) {
-      const [key, value] = part.trim().split('=');
-      if (key === 't') timestamp = value;
-      if (key === 'v1') v1Signatures.push(value);
-    }
-    
-    if (!timestamp || v1Signatures.length === 0) {
-      this.logger.warn('FedaPay webhook rejected: malformed signature header');
+    let event: any;
+    let timestamp: number;
+    try {
+      const { Webhook } = require('fedapay');
+      event = Webhook.constructEvent(
+        rawBody.toString('utf8'),
+        signatureHeader,
+        webhookSecret
+      );
+      
+      const parts = signatureHeader.split(',');
+      let timestampStr: string | null = null;
+      for (const part of parts) {
+        const [key, value] = part.trim().split('=');
+        if (key === 't') timestampStr = value;
+      }
+      timestamp = timestampStr ? parseInt(timestampStr, 10) : Math.floor(Date.now() / 1000);
+    } catch (error: any) {
+      this.logger.warn(`FedaPay webhook rejected: ${error.message}`);
       throw new HttpException(
         {
           success: false,
-          message: 'Malformed signature header',
+          message: 'Invalid webhook signature',
         },
         HttpStatus.UNAUTHORIZED
       );
     }
     
     const currentTime = Math.floor(Date.now() / 1000);
-    const timestampNum = parseInt(timestamp, 10);
-    const timeDiff = Math.abs(currentTime - timestampNum);
+    const timeDiff = Math.abs(currentTime - timestamp);
     
     if (timeDiff > 300) {
       this.logger.warn(`FedaPay webhook rejected: stale timestamp (diff=${timeDiff}s)`);
@@ -809,44 +815,9 @@ export class MobilePaymentsController {
       );
     }
     
-    const crypto = require('crypto');
-    const signedPayload = `${timestamp}.${rawBody.toString('utf8')}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', webhookSecret)
-      .update(signedPayload, 'utf8')
-      .digest('hex');
-    
-    let signatureValid = false;
-    for (const v1Sig of v1Signatures) {
-      if (v1Sig.length === expectedSignature.length) {
-        try {
-          const v1Buffer = Buffer.from(v1Sig, 'utf8');
-          const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
-          if (crypto.timingSafeEqual(v1Buffer, expectedBuffer)) {
-            signatureValid = true;
-            break;
-          }
-        } catch {
-          continue;
-        }
-      }
-    }
-    
-    if (!signatureValid) {
-      this.logger.warn('FedaPay webhook rejected: signature mismatch');
-      throw new HttpException(
-        {
-          success: false,
-          message: 'Invalid webhook signature',
-        },
-        HttpStatus.UNAUTHORIZED
-      );
-    }
-    
-    const parsedBody = JSON.parse(rawBody.toString('utf8'));
-    
-    const eventId = parsedBody.entity?.id ? String(parsedBody.entity.id) : null;
-    if (eventId && this.hasSeenFedaPayEvent(eventId, timestamp)) {
+    const eventId = event.entity?.id ? String(event.entity.id) : null;
+    const timestampStr = String(timestamp);
+    if (eventId && this.hasSeenFedaPayEvent(eventId, timestampStr)) {
       this.logger.log(`FedaPay webhook: duplicate event_id=${eventId}, returning 200`);
       throw new HttpException(
         {
@@ -858,10 +829,10 @@ export class MobilePaymentsController {
     }
     
     if (eventId) {
-      this.recordFedaPayEvent(eventId, timestamp);
+      this.recordFedaPayEvent(eventId, timestampStr);
     }
     
-    return parsedBody;
+    return event;
   }
 
   private fedapayEventCache = new Map<string, number>();
