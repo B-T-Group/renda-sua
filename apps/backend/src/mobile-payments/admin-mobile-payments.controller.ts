@@ -115,7 +115,7 @@ export class AdminMobilePaymentsController {
     const tx = await this.requirePendingResolvable(id);
     const providerTxId = this.requireProviderTxId(tx);
     const provider = this.resolveProvider(tx);
-    const live = await this.checkLiveStatus(tx, await providerTxId, provider);
+    const live = await this.checkLiveStatus(tx, await providerTxId, await provider);
     if (live.status === 'pending' || live.status === 'ambiguous') {
       return this.stillPendingResponse(live, await provider);
     }
