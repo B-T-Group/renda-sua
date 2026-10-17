@@ -15,6 +15,17 @@ import axios from 'axios';
 jest.mock('axios');
 const mockedAxios = axios as jest.Mocked<typeof axios>;
 
+// Mock axios.create to return a proper instance
+const mockAxiosInstance = {
+  post: jest.fn(),
+  get: jest.fn(),
+  interceptors: {
+    request: { use: jest.fn(), eject: jest.fn() },
+    response: { use: jest.fn(), eject: jest.fn() },
+  },
+};
+(axios.create as jest.Mock) = jest.fn(() => mockAxiosInstance);
+
 describe('Production Sanitization & Masking Tests', () => {
   let logSpy: jest.SpyInstance;
 
@@ -69,7 +80,7 @@ describe('Production Sanitization & Masking Tests', () => {
         },
       };
 
-      mockedAxios.post.mockRejectedValue(axiosError);
+      mockAxiosInstance.post.mockRejectedValue(axiosError);
 
       await expect(
         service.initiatePayment({
@@ -103,7 +114,7 @@ describe('Production Sanitization & Masking Tests', () => {
         },
       };
 
-      mockedAxios.post.mockRejectedValue(axiosError);
+      mockAxiosInstance.post.mockRejectedValue(axiosError);
 
       await expect(
         service.withdraw({
@@ -220,7 +231,7 @@ describe('Production Sanitization & Masking Tests', () => {
     });
 
     it('should mask phone numbers in FreemoPay logs', async () => {
-      mockedAxios.post.mockResolvedValue({
+      mockAxiosInstance.post.mockResolvedValue({
         data: { status: 'SUCCESS', transaction_id: 'tx-123' },
       });
 
@@ -304,7 +315,7 @@ describe('Production Sanitization & Masking Tests', () => {
     });
 
     it('should mask phone numbers in MyPVit KYC logs (mypvit:605)', async () => {
-      mockedAxios.post.mockResolvedValue({
+      mockAxiosInstance.post.mockResolvedValue({
         data: { status: 'SUCCESS', kyc_verified: true },
       });
 
