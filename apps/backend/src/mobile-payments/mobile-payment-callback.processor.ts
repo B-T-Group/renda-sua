@@ -535,39 +535,58 @@ export class MobilePaymentCallbackProcessor {
   }
 
   /**
-   * F3: Handle approve-after-decline/cancel for top-ups (PAYMENT type).
-   * Re-check live with FedaPay to confirm status, amount, currency and reference,
-   * then credit exactly once (idempotent with momo-deposit key).
+   * F3: Handle approve-after-decline for wallet top-up rows ONLY.
+   * Re-check live, CAS claim BEFORE credit, keep transaction_id.
    */
   private async handleLateSuccessOnFailedTopUp(
     tx: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
+    // F3: Limit to wallet top-ups only
+    if (tx.payment_entity !== 'wallet') {
+      this.logger.warn(
+        `Late success on failed ${tx.payment_entity} tx ${tx.id}: not wallet, skipping`
+      );
+      return;
+    }
+
     if (!this.isMockedTransaction(tx)) {
       await this.mobilePaymentsService.assertProviderConfirmsCallback(
         tx,
         'SUCCESS'
       );
     }
+
+    // F3: CAS claim failed→processing BEFORE crediting
+    const claimed = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'failed',
+      { status: 'processing' }
+    );
+
+    if (!claimed) {
+      this.logger.warn(
+        `Late success on failed top-up ${tx.id}: concurrent claim won`
+      );
+      return;
+    }
+
     const credited = await this.creditWalletIfNeeded(tx);
     if (!credited) {
+      await this.databaseService.updateTransaction(tx.id, { status: 'failed' });
       throw new Error(
         `Wallet credit failed for late success on failed top-up ${tx.id}; will retry`
       );
     }
-    const moved = await this.databaseService.updateTransactionIfStatus(
-      tx.id,
-      'failed',
-      {
-        status: 'success',
-        transaction_id: String(callbackData.entity.id),
-        error_code: LATE_SUCCESS_APPLIED,
-      }
-    );
+
+    // F3: Mark success, KEEP the stored transaction_id (don't overwrite)
+    await this.databaseService.updateTransaction(tx.id, {
+      status: 'success',
+      error_code: LATE_SUCCESS_APPLIED,
+    });
+
     this.logger.warn(
-      `Late success on failed top-up ${tx.id} (${tx.reference}): credited${
-        moved ? '' : ' (row already moved by concurrent callback)'
-      }`
+      `Late success on failed top-up ${tx.id} (${tx.reference}): claimed, credited, success`
     );
   }
 
