@@ -654,18 +654,22 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       const mockSelectProvider = jest.spyOn(realService as any, 'selectProvider')
         .mockResolvedValue('fedapay');
+      const mockResolveRegion = jest.spyOn(realService as any, 'resolvePhoneDefaultRegion')
+        .mockResolvedValue('TG');
 
       const result = await realService.initiatePayment({
         amount: 1000,
         currency: 'XAF',
         accountId: 'acc-test',
         description: 'Test',
+        provider: 'fedapay',
       });
 
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/only supports XOF currency/i);
 
       mockSelectProvider.mockRestore();
+      mockResolveRegion.mockRestore();
     });
 
     it('should reject initiatePayment with decimal amount for fedapay (service:512-519)', async () => {
@@ -682,18 +686,22 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       const mockSelectProvider = jest.spyOn(realService as any, 'selectProvider')
         .mockResolvedValue('fedapay');
+      const mockResolveRegion = jest.spyOn(realService as any, 'resolvePhoneDefaultRegion')
+        .mockResolvedValue('TG');
 
       const result = await realService.initiatePayment({
         amount: 100.5,
         currency: 'XOF',
         accountId: 'acc-test',
         description: 'Test',
+        provider: 'fedapay',
       });
 
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/amounts must be integers/i);
 
       mockSelectProvider.mockRestore();
+      mockResolveRegion.mockRestore();
     });
   });
 
