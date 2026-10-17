@@ -26,6 +26,10 @@ import {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/** Set when success→processing after a failed order/claim/deposit handler. */
+export const FINALIZE_HANDLER_FAILED = 'FINALIZE_HANDLER_FAILED';
+const PROCESSING_RESUME_STALE_MS = 60_000;
+
 function looksLikeUuid(value: string): boolean {
   return UUID_RE.test(value);
 }
@@ -610,20 +614,22 @@ export class MobilePaymentCallbackProcessor {
    *
    * Staleness guard: only resume rows whose updated_at is older than ~60 seconds. A younger
    * processing row means another callback is mid-finalize; return without moving money so
-   * only the first writer releases/withdraws/credits.
+   * only the first writer releases/withdraws/credits. Exception: FINALIZE_HANDLER_FAILED
+   * means the first writer already finished and failed; the provider retry must resume
+   * immediately (updated_at was just stamped, so the 60s skip would ACK 200 and drop retries).
    */
   private async resumeFinalizeFromProcessing(
     transaction: MobilePaymentTransaction,
     providerTransactionId: string
   ): Promise<void> {
-    const ageMs = Date.now() - new Date(transaction.updated_at).getTime();
-    const staleThresholdMs = 60_000;
-    if (ageMs < staleThresholdMs) {
+    if (this.shouldSkipFreshProcessingResume(transaction)) {
+      const ageMs = Date.now() - new Date(transaction.updated_at).getTime();
       this.logger.log(
-        `Resume skipped for fresh processing tx ${transaction.id} (age ${Math.round(ageMs / 1000)}s < ${staleThresholdMs / 1000}s; another finalize is in flight)`
+        `Resume skipped for fresh processing tx ${transaction.id} (age ${Math.round(ageMs / 1000)}s < ${PROCESSING_RESUME_STALE_MS / 1000}s; another finalize is in flight)`
       );
       return;
     }
+    const ageMs = Date.now() - new Date(transaction.updated_at).getTime();
     this.logger.log(
       `Resuming finalize for processing tx ${transaction.id} (crash recovery, age ${Math.round(ageMs / 1000)}s)`
     );
@@ -744,11 +750,21 @@ export class MobilePaymentCallbackProcessor {
     }
   }
 
+  private shouldSkipFreshProcessingResume(
+    transaction: MobilePaymentTransaction
+  ): boolean {
+    if (String(transaction.error_code || '') === FINALIZE_HANDLER_FAILED) {
+      return false;
+    }
+    const ageMs = Date.now() - new Date(transaction.updated_at).getTime();
+    return ageMs < PROCESSING_RESUME_STALE_MS;
+  }
+
   private async returnSuccessClaimToProcessing(transactionId: string): Promise<void> {
     const released = await this.databaseService.updateTransactionIfStatus(
       transactionId,
       'success',
-      { status: 'processing' }
+      { status: 'processing', error_code: FINALIZE_HANDLER_FAILED }
     );
     if (released) return;
     this.logger.error(

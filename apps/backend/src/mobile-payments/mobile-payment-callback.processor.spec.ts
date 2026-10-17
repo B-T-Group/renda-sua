@@ -714,7 +714,7 @@ describe('MobilePaymentCallbackProcessor order_deposit', () => {
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderDepositTx.id,
       'success',
-      { status: 'processing' }
+      { status: 'processing', error_code: 'FINALIZE_HANDLER_FAILED' }
     );
     // No rollback to pending after credit succeeded
     expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalledWith(
@@ -1037,7 +1037,7 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderTx.id,
       'success',
-      { status: 'processing' }
+      { status: 'processing', error_code: 'FINALIZE_HANDLER_FAILED' }
     );
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
     expect(reportMoneyAnomaly).toHaveBeenCalledWith(
@@ -1061,7 +1061,7 @@ describe('MobilePaymentCallbackProcessor order payment handler failure (UAT S-8)
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       orderTx.id,
       'success',
-      { status: 'processing' }
+      { status: 'processing', error_code: 'FINALIZE_HANDLER_FAILED' }
     );
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
     expect(reportMoneyAnomaly).toHaveBeenCalled();
@@ -1314,7 +1314,7 @@ describe('MobilePaymentCallbackProcessor non-order payment stuck processing reco
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
       pendingOrderTx.id,
       'success',
-      { status: 'processing' }
+      { status: 'processing', error_code: 'FINALIZE_HANDLER_FAILED' }
     );
     expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledTimes(3);
   });
