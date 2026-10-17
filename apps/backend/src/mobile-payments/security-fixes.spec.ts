@@ -234,6 +234,46 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       // and the key point (sanitizeProviderError redacts sk_live_ patterns) is tested
       // in the unit test for sanitizeProviderError itself
     });
+
+    it('(a) webhook re-check must not leak Authorization headers from FedaPay SDK errors', async () => {
+      // Requirement (a): Test that drives FedaPay SDK timeout/5xx through webhook re-check
+      const errorWithAuthHeader: any = {
+        message: 'Request failed with status code 401',
+        status: 401,
+        config: {
+          headers: {
+            Authorization: 'Bearer sk_sandbox_FAKE_SECRET_KEY_12345',
+            'Content-Type': 'application/json',
+          },
+          url: 'https://api.fedapay.com/v1/transactions/123',
+        },
+        response: {
+          status: 401,
+          statusText: 'Unauthorized',
+        },
+      };
+
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve = jest.fn().mockRejectedValue(errorWithAuthHeader);
+
+      try {
+        await service.checkTransactionStatus('123');
+      } catch (err) {
+        // Expected to throw
+      }
+
+      const allCalls = loggerSpy.mock.calls.flat();
+      const loggedText = allCalls.map((arg) => JSON.stringify(arg)).join(' ');
+
+      // Must not leak Authorization header, Bearer token, or sk_ keys
+      expect(loggedText).not.toContain('Authorization');
+      expect(loggedText).not.toContain('Bearer sk_sandbox');
+      expect(loggedText).not.toContain('sk_sandbox_FAKE');
+      expect(loggedText).not.toContain('FAKE_SECRET_KEY');
+      
+      // Should log only safe error info
+      expect(loggedText).toContain('Failed to check FedaPay transaction status');
+    });
   });
 
   describe('Error sanitization coverage', () => {
