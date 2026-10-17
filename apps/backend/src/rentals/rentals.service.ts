@@ -10,7 +10,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
-import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { MobilePaymentsService, MobilePaymentRequest } from '../mobile-payments/mobile-payments.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
