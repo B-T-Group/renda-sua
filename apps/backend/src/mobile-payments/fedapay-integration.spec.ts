@@ -33,7 +33,6 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
     checkTransactionStatus: jest.fn(),
     assertProviderConfirmsCallback: jest.fn(),
     isWithdrawalDestinationCmOrGa: jest.fn(),
-    resolveProviderFromRequest: jest.fn(),
   };
 
   const mockCallbackProcessor = {
@@ -469,8 +468,114 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       }).toThrow(/only supports mobile_money/i);
     });
 
-    // Note: Controller-level account currency checks (controller:280-299, :1113-1130)
-    // are integration-tested via service-level guards above and E2E tests.
+    it('should reject FedaPay top-up from non-XOF account', async () => {
+      const mockAccountsService = {
+        getAccountBalance: jest.fn().mockResolvedValue({
+          currency: 'XAF',
+          balance: 5000,
+        }),
+      };
+      const mockGiveChangePayoutService = {};
+      const mockHasuraUserService = {};
+      const mockWithdrawalPinService = {};
+      const mockPendingWithdrawalResolveService = {};
+      const mockMobileTransactionAccessService = {};
+      const mockMobilePaymentsDatabaseService = {};
+
+      const testModule = await Test.createTestingModule({
+        controllers: [MobilePaymentsController],
+        providers: [
+          { provide: MobilePaymentsService, useValue: mockMobilePaymentsService },
+          { provide: MobilePaymentsDatabaseService, useValue: mockMobilePaymentsDatabaseService },
+          { provide: AccountsService, useValue: mockAccountsService },
+          { provide: GiveChangePayoutService, useValue: mockGiveChangePayoutService },
+          { provide: HasuraUserService, useValue: mockHasuraUserService },
+          { provide: MobilePaymentCallbackProcessor, useValue: mockCallbackProcessor },
+          { provide: WithdrawalPinService, useValue: mockWithdrawalPinService },
+          { provide: PendingWithdrawalResolveService, useValue: mockPendingWithdrawalResolveService },
+          { provide: MobileTransactionAccessService, useValue: mockMobileTransactionAccessService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const testController = testModule.get<MobilePaymentsController>(MobilePaymentsController);
+      mockMobilePaymentsService.resolveProviderFromRequest = jest.fn().mockResolvedValue('fedapay');
+
+      const request = {
+        amount: 1000,
+        currency: 'XOF',
+        accountId: 'acc-xaf',
+        customerPhone: '+22878123456',
+        description: 'Test payment',
+      };
+
+      try {
+        await testController.initiatePayment(request as any, {} as any);
+        throw new Error('Expected ACCOUNT_CURRENCY_MISMATCH error');
+      } catch (error: any) {
+        expect(error.status).toBe(400);
+        expect(error.response?.error).toBe('ACCOUNT_CURRENCY_MISMATCH');
+        expect(error.response?.message).toMatch(/FedaPay.*requires account currency to be XOF/i);
+      }
+    });
+
+    it('should reject FedaPay withdrawal from non-XOF account', async () => {
+      const mockAccountsService = {
+        getAccountBalance: jest.fn().mockResolvedValue({
+          currency: 'XAF',
+          balance: 5000,
+        }),
+      };
+      const mockGiveChangePayoutService = {
+        executeOwnedGiveChangePayout: jest.fn(),
+      };
+      const mockHasuraUserService = {};
+      const mockWithdrawalPinService = {
+        isValidPin: jest.fn().mockResolvedValue(true),
+      };
+      const mockPendingWithdrawalResolveService = {};
+      const mockMobileTransactionAccessService = {};
+      const mockMobilePaymentsDatabaseService = {
+        getUserTransactionInDateRange: jest.fn().mockResolvedValue([]),
+      };
+
+      const testModule = await Test.createTestingModule({
+        controllers: [MobilePaymentsController],
+        providers: [
+          { provide: MobilePaymentsService, useValue: mockMobilePaymentsService },
+          { provide: MobilePaymentsDatabaseService, useValue: mockMobilePaymentsDatabaseService },
+          { provide: AccountsService, useValue: mockAccountsService },
+          { provide: GiveChangePayoutService, useValue: mockGiveChangePayoutService },
+          { provide: HasuraUserService, useValue: mockHasuraUserService },
+          { provide: MobilePaymentCallbackProcessor, useValue: mockCallbackProcessor },
+          { provide: WithdrawalPinService, useValue: mockWithdrawalPinService },
+          { provide: PendingWithdrawalResolveService, useValue: mockPendingWithdrawalResolveService },
+          { provide: MobileTransactionAccessService, useValue: mockMobileTransactionAccessService },
+          { provide: ConfigService, useValue: mockConfigService },
+        ],
+      }).compile();
+
+      const testController = testModule.get<MobilePaymentsController>(MobilePaymentsController);
+      mockMobilePaymentsService.resolveProviderFromRequest = jest.fn().mockResolvedValue('fedapay');
+
+      const request = {
+        amount: 1000,
+        currency: 'XOF',
+        customerPhone: '+22878123456',
+        description: 'Test withdrawal',
+        pin: '1234',
+      };
+      const ctx = { userId: 'user-123' } as any;
+
+      try {
+        await testController.giveChangePayout('acc-xaf', request as any, ctx);
+        throw new Error('Expected ACCOUNT_CURRENCY_MISMATCH error');
+      } catch (error: any) {
+        expect(error.status).toBe(400);
+        expect(error.response?.error).toBe('ACCOUNT_CURRENCY_MISMATCH');
+        expect(error.response?.message).toMatch(/FedaPay.*withdrawals require account currency to be XOF/i);
+      }
+    });
 
     it('should reject initiatePayment with non-XOF currency for fedapay (service:505-510)', async () => {
       const realService = new MobilePaymentsService(
