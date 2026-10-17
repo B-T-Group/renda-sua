@@ -47,8 +47,18 @@ describe('G2: Real Mock Callback Order Tests', () => {
         providers: [
           { provide: MobilePaymentsService, useValue: mobilePaymentsService },
           { provide: MobilePaymentsDatabaseService, useValue: databaseService },
-          { provide: AccountsService, useValue: {} },
-          { provide: GiveChangePayoutService, useValue: {} },
+          { provide: AccountsService, useValue: {
+            getAccountBalance: jest.fn().mockResolvedValue({
+              availableBalance: '10000',
+              currency: 'XOF',
+            }),
+          } },
+          { provide: GiveChangePayoutService, useValue: {
+            getAccountBalance: jest.fn().mockResolvedValue({
+              availableBalance: '10000',
+              currency: 'XOF',
+            }),
+          } },
           { provide: HasuraUserService, useValue: {} },
           { provide: MobilePaymentCallbackProcessor, useValue: {} },
           { provide: WithdrawalPinService, useValue: {} },
@@ -112,6 +122,10 @@ describe('G2: Real Mock Callback Order Tests', () => {
         registerHoldIfNotExists: jest.fn().mockResolvedValue({
           success: true,
           hold: { id: 'hold-1' },
+        }),
+        getAccountBalance: jest.fn().mockResolvedValue({
+          availableBalance: '10000',
+          currency: 'XOF',
         }),
       };
 
