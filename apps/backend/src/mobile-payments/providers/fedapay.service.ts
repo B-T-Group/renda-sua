@@ -56,6 +56,7 @@ export interface FedaPayTransactionStatus {
   transactionId: string;
   status: 'pending' | 'approved' | 'declined' | 'canceled' | 'transferred' | string;
   amount?: number;
+  currency?: string;
   reference?: string;
   merchantRef?: string;
   reason?: string;
@@ -348,9 +349,10 @@ export class FedaPayService implements OnModuleInit {
 
       if (transaction && transaction.id) {
         const txData: any = transaction;
-        await txData.generateToken();
+        const tokenResponse = await txData.generateToken();
+        const token = tokenResponse?.token || tokenResponse;
         
-        await txData.sendNowWithToken(paymentRequest.channel, txData.token, {
+        await txData.sendNowWithToken(paymentRequest.channel, token, {
           phone_number: {
             number: paymentRequest.payer,
             country: 'TG',
@@ -361,7 +363,7 @@ export class FedaPayService implements OnModuleInit {
           success: true,
           transactionId: String(transaction.id),
           reference: String(transaction.id),
-          token: txData.token,
+          token,
           status: txData.status || 'pending',
           message: normalizeProviderMessage(null, 'Payment initiated'),
         };
@@ -411,6 +413,26 @@ export class FedaPayService implements OnModuleInit {
       this.logger.log(
         `Initiating FedaPay payout: channel=${withdrawalRequest.channel}, externalId=${externalId}`
       );
+
+      // Check for existing payout with same externalId (B6 idempotency)
+      try {
+        const existingPayouts = await (Payout as any).list({
+          'custom_metadata.externalId': externalId,
+        });
+        if (existingPayouts?.data?.length > 0) {
+          const existing = existingPayouts.data[0];
+          this.logger.log(`Found existing FedaPay payout for ${externalId}: ${existing.id}`);
+          return {
+            success: true,
+            transactionId: String(existing.id),
+            reference: externalId,
+            status: existing.status || 'pending',
+            message: normalizeProviderMessage(null, 'Payout already exists'),
+          };
+        }
+      } catch (lookupError: any) {
+        this.logger.warn(`Failed to check existing payout: ${lookupError.message}`);
+      }
 
       const payout = await Payout.create({
         amount: withdrawalRequest.amount,
@@ -479,6 +501,7 @@ export class FedaPayService implements OnModuleInit {
 
       const payoutData: any = payout;
       const customMeta = payoutData.custom_metadata || {};
+      const currency = payoutData.currency?.iso || 'XOF';
 
       const statusMap: Record<string, string> = {
         sent: 'approved',
@@ -492,6 +515,7 @@ export class FedaPayService implements OnModuleInit {
         transactionId: String(payout.id),
         status: mappedStatus,
         amount: payoutData.amount,
+        currency,
         reference: String(payout.id),
         merchantRef: customMeta.externalId || '',
         reason: payoutData.reason || '',
@@ -526,11 +550,13 @@ export class FedaPayService implements OnModuleInit {
 
       const txData: any = transaction;
       const customMeta = txData.custom_metadata || {};
+      const currency = txData.currency?.iso || 'XOF';
 
       return {
         transactionId: String(transaction.id),
         status: txData.status || 'pending',
         amount: txData.amount,
+        currency,
         reference: String(transaction.id),
         merchantRef: customMeta.externalId || '',
         reason: txData.reason || '',
@@ -541,8 +567,7 @@ export class FedaPayService implements OnModuleInit {
       };
     } catch (error: any) {
       this.logger.error(
-        'Failed to check FedaPay transaction status:',
-        error
+        `Failed to check FedaPay transaction status: ${error.message || 'Unknown error'}`
       );
       throw error;
     }

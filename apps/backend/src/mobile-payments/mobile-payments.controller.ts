@@ -275,8 +275,28 @@ export class MobilePaymentsController {
         }
       }
 
-      const resolvedProvider =
-        this.mobilePaymentsService.resolveProviderFromRequest(paymentRequest);
+      const resolvedProvider = await this.mobilePaymentsService.resolveProviderFromRequest(paymentRequest);
+
+      // Check account currency for FedaPay (B5)
+      if (paymentRequest.accountId && resolvedProvider === 'fedapay') {
+        const accountBalance = await this.accountsService.getAccountBalance(
+          paymentRequest.accountId
+        );
+        if (accountBalance && accountBalance.currency !== 'XOF') {
+          throw new HttpException(
+            {
+              success: false,
+              message: 'FedaPay (Togo) requires account currency to be XOF',
+              error: 'ACCOUNT_CURRENCY_MISMATCH',
+              data: {
+                accountCurrency: accountBalance.currency,
+                requiredCurrency: 'XOF',
+              },
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
+      }
 
       if (paymentRequest.accountId && paymentRequest.amount < 150) {
         throw new HttpException(
@@ -290,7 +310,7 @@ export class MobilePaymentsController {
         );
       }
 
-      this.assertMobileMoneyCurrency(paymentRequest, await resolvedProvider);
+      this.assertMobileMoneyCurrency(paymentRequest, resolvedProvider);
 
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
@@ -725,8 +745,7 @@ export class MobilePaymentsController {
         );
       }
 
-      const { event: callbackData, timestamp } =
-        this.verifyAndParseFedaPayWebhook(rawBody, signature);
+      const callbackData = this.verifyAndParseFedaPayWebhook(rawBody, signature);
 
       if (!callbackData.entity || !callbackData.name) {
         this.logger.warn('FedaPay webhook rejected: missing entity or name');
@@ -745,11 +764,14 @@ export class MobilePaymentsController {
         callbackData,
         req
       );
-      // Only remember the event once it was processed, so a FedaPay retry
-      // after a 5xx is processed again instead of being acked as a duplicate.
-      if (callbackData.entity.id) {
-        this.recordFedaPayEvent(String(callbackData.entity.id), String(timestamp));
+      
+      // B2: Record replay cache only after successful processing
+      const eventId = callbackData.entity?.id ? String(callbackData.entity.id) : null;
+      const timestamp = (callbackData as any).webhookTimestamp || Math.floor(Date.now() / 1000);
+      if (eventId) {
+        this.recordFedaPayEvent(eventId, String(timestamp));
       }
+      
       return result;
     } catch (error: any) {
       if (error instanceof HttpException) {
@@ -766,10 +788,7 @@ export class MobilePaymentsController {
     }
   }
 
-  private verifyAndParseFedaPayWebhook(
-    rawBody: Buffer,
-    signatureHeader: string
-  ): { event: any; timestamp: number } {
+  private verifyAndParseFedaPayWebhook(rawBody: Buffer, signatureHeader: string): any {
     const webhookSecret = this.configService.get<string>('fedapay.webhookSecret');
     
     if (!webhookSecret) {
@@ -838,7 +857,12 @@ export class MobilePaymentsController {
       );
     }
     
-    return { event, timestamp };
+    // B2: Do NOT record yet - must wait for processing to succeed
+    // Recording happens after processFedaPayCallback succeeds
+    // Attach timestamp to event for later use
+    (event as any).webhookTimestamp = timestamp;
+    
+    return event;
   }
 
   private fedapayEventCache = new Map<string, number>();
@@ -1084,13 +1108,32 @@ export class MobilePaymentsController {
       accountId
     );
     await this.assertGiveChangePrechecks(request, accountId);
-    const resolvedProvider =
-      this.mobilePaymentsService.resolveProviderFromRequest(request);
-    this.assertMobileMoneyCurrency(request, await resolvedProvider);
+    const resolvedProvider = await this.mobilePaymentsService.resolveProviderFromRequest(request);
+    
+    // Check account currency for FedaPay withdrawals (B5)
+    if (resolvedProvider === 'fedapay') {
+      const accountBalance = await this.accountsService.getAccountBalance(accountId);
+      if (accountBalance && accountBalance.currency !== 'XOF') {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'FedaPay (Togo) withdrawals require account currency to be XOF',
+            error: 'ACCOUNT_CURRENCY_MISMATCH',
+            data: {
+              accountCurrency: accountBalance.currency,
+              requiredCurrency: 'XOF',
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+    
+    this.assertMobileMoneyCurrency(request, resolvedProvider);
     return this.executeOwnedGiveChangePayout(
       request,
       accountId,
-      await resolvedProvider,
+      resolvedProvider,
       initiatorUserId
     );
   }
@@ -1269,14 +1312,25 @@ export class MobilePaymentsController {
     request: InitiatePaymentDto,
     resolvedProvider: string
   ): void {
-    const isMobileMoney =
-      !request.paymentMethod || request.paymentMethod === 'mobile_money';
-    
-    if (!isMobileMoney) {
-      return;
-    }
-
+    // FedaPay checks apply regardless of paymentMethod (B5)
     if (resolvedProvider === 'fedapay') {
+      // Reject non-mobile_money for fedapay
+      const isMobileMoney = !request.paymentMethod || request.paymentMethod === 'mobile_money';
+      if (!isMobileMoney) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'FedaPay only supports mobile_money payment method',
+            error: 'UNSUPPORTED_PAYMENT_METHOD',
+            data: {
+              provider: resolvedProvider,
+              paymentMethod: request.paymentMethod,
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      
       if (request.currency !== 'XOF') {
         throw new HttpException(
           {
@@ -1306,6 +1360,14 @@ export class MobilePaymentsController {
           HttpStatus.BAD_REQUEST
         );
       }
+      return;
+    }
+    
+    // Other providers only for mobile_money
+    const isMobileMoney =
+      !request.paymentMethod || request.paymentMethod === 'mobile_money';
+    
+    if (!isMobileMoney) {
       return;
     }
 

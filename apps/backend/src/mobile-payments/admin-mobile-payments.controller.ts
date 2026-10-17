@@ -182,10 +182,12 @@ export class AdminMobilePaymentsController {
     provider: MobilePaymentIntegrationProvider
   ): Promise<MobileTransactionStatus> {
     try {
+      const isGiveChange = tx.transaction_type === 'GIVE_CHANGE';
       return await this.mobilePaymentsService.checkTransactionStatus(
         providerTxId,
         provider,
-        tx.customer_phone
+        tx.customer_phone,
+        isGiveChange
       );
     } catch (error: any) {
       this.logger.warn(

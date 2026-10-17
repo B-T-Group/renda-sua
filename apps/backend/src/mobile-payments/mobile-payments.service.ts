@@ -122,9 +122,17 @@ export class MobilePaymentsService {
     this.providers.set('fedapay', fedapayService);
   }
 
-  getProvider(phoneNumber: string): MobilePaymentIntegrationProvider {
+  async getProvider(phoneNumber: string): Promise<MobilePaymentIntegrationProvider> {
     if (isCameroonCountryCode(phoneNumber) || detectCameroonPhone(phoneNumber)) {
       return 'freemopay';
+    }
+    // Check for Togo +228 numbers (B7)
+    const cleaned = phoneNumber.replace(/\D/g, '');
+    if (cleaned.startsWith('228') && cleaned.length >= 11) {
+      const isActive = await this.isFedaPayActiveForTogo();
+      if (isActive) {
+        return 'fedapay';
+      }
     }
     return 'mypvit';
   }
@@ -135,7 +143,8 @@ export class MobilePaymentsService {
     
     // Check if provider is active in supported_payment_systems
     if (provider === 'fedapay') {
-      const iso = country?.trim().toUpperCase();
+      // Use normalized ISO code (B7)
+      const iso = isoCountryCode(country);
       if (iso === 'TG') {
         const isActive = await this.isFedaPayActiveForTogo();
         if (!isActive) {
@@ -166,7 +175,7 @@ export class MobilePaymentsService {
       
       return result.supported_payment_systems[0]?.active ?? false;
     } catch (error: any) {
-      this.logger.error('Failed to check FedaPay active status:', error);
+      this.logger.error(`Failed to check FedaPay active status: ${error.message || 'Unknown error'}`);
       return false;
     }
   }
@@ -183,9 +192,14 @@ export class MobilePaymentsService {
     customerPhone: string | undefined | null,
     storedProvider: string
   ): Promise<MobilePaymentIntegrationProvider> {
+    // For stored transactions, honor fedapay unconditionally (B4)
+    const known = this.knownProvider(storedProvider);
+    if (known === 'fedapay') {
+      return 'fedapay';
+    }
     return await this.resolveProviderFromRequest({
       customerPhone: customerPhone ?? undefined,
-      provider: this.knownProvider(storedProvider),
+      provider: known,
     });
   }
 
@@ -218,6 +232,7 @@ export class MobilePaymentsService {
       customer_phone?: string | null;
       provider: string;
       amount?: number;
+      currency?: string | null;
       reference?: string | null;
       transaction_type?: string | null;
     },
@@ -229,10 +244,18 @@ export class MobilePaymentsService {
         `Cannot verify callback for ${tx.id}: missing provider transaction_id`
       );
     }
-    const provider = await this.resolveAdminIntegrationProvider(
-      tx.customer_phone,
-      tx.provider
-    );
+    // For status checks, honor the stored provider unconditionally (B4)
+    // Don't gate fedapay on the active flag for existing transactions
+    const storedProvider = tx.provider?.toLowerCase();
+    let provider: MobilePaymentIntegrationProvider;
+    if (storedProvider === 'fedapay') {
+      provider = 'fedapay';
+    } else {
+      provider = await this.resolveAdminIntegrationProvider(
+        tx.customer_phone,
+        tx.provider
+      );
+    }
     const isGiveChange = tx.transaction_type === 'GIVE_CHANGE';
     const live = await this.checkTransactionStatus(
       providerTxId,
@@ -248,6 +271,7 @@ export class MobilePaymentsService {
       id: string;
       provider: string;
       amount?: number;
+      currency?: string | null;
       reference?: string | null;
     },
     claimed: 'SUCCESS' | 'FAILED',
@@ -260,23 +284,30 @@ export class MobilePaymentsService {
         );
       }
       if (tx.provider === 'fedapay') {
-        if (live.currency && live.currency !== 'XOF') {
+        // Check stored tx currency is XOF
+        if (tx.currency && tx.currency !== 'XOF') {
           throw new Error(
-            `Rejecting FedaPay callback for ${tx.id}: currency mismatch (expected XOF, got ${live.currency})`
+            `Rejecting FedaPay callback for ${tx.id}: stored currency ${tx.currency} is not XOF`
           );
         }
+        // Check live currency is XOF
+        if (live.currency && live.currency !== 'XOF') {
+          throw new Error(
+            `Rejecting FedaPay callback for ${tx.id}: live currency ${live.currency} is not XOF`
+          );
+        }
+        // Check amount matches
         if (tx.amount !== undefined && live.amount !== undefined && live.amount !== tx.amount) {
           throw new Error(
             `Rejecting FedaPay callback for ${tx.id}: amount mismatch (expected ${tx.amount}, got ${live.amount})`
           );
         }
-        if (tx.reference && live.reference && live.reference !== tx.reference) {
-          const liveExternalId = live.reference;
-          if (liveExternalId !== tx.reference) {
-            throw new Error(
-              `Rejecting FedaPay callback for ${tx.id}: reference mismatch (expected ${tx.reference})`
-            );
-          }
+        // Check merchantRef matches stored reference exactly (B4)
+        const merchantRef = (live as any).merchantRef || '';
+        if (merchantRef && tx.reference && merchantRef !== tx.reference) {
+          throw new Error(
+            `Rejecting FedaPay callback for ${tx.id}: merchantRef mismatch (expected ${tx.reference}, got ${merchantRef})`
+          );
         }
       }
       return;
@@ -465,6 +496,24 @@ export class MobilePaymentsService {
 
       // Determine the best provider based on request
       const provider = await this.selectProvider(paymentRequest);
+
+      // Validate FedaPay currency requirements (B5)
+      if (provider === 'fedapay') {
+        if (paymentRequest.currency !== 'XOF') {
+          return {
+            success: false,
+            message: 'FedaPay (Togo) only supports XOF currency',
+            errorCode: 'UNSUPPORTED_CURRENCY',
+          };
+        }
+        if (!Number.isInteger(paymentRequest.amount)) {
+          return {
+            success: false,
+            message: 'FedaPay amounts must be integers (XOF has no decimals)',
+            errorCode: 'INVALID_AMOUNT',
+          };
+        }
+      }
 
       // Convert to provider-specific request
       const providerRequest = this.convertToProviderRequest(
@@ -1059,7 +1108,7 @@ export class MobilePaymentsService {
       );
     }
     if (request.customerPhone?.trim()) {
-      return this.getProvider(request.customerPhone);
+      return await this.getProvider(request.customerPhone);
     }
     return 'mypvit';
   }
