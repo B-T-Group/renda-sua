@@ -379,8 +379,13 @@ export class MobilePaymentsController {
           transaction_id: paymentResponse.transactionId,
         });
         
-        // G2: Mock callback scheduling handled by GiveChangePayoutService for payouts;
-        // for payments, FedaPayService now handles it internally after this persist
+        // G2: Schedule mock callback AFTER persisting the transaction_id
+        if (paymentResponse.transactionId.startsWith('mock-')) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentResponse.transactionId,
+            reference
+          );
+        }
       } else {
         await this.databaseService.updateTransaction(transaction.id, {
           status: 'failed',

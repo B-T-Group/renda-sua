@@ -3189,6 +3189,14 @@ export class OrdersService {
             transaction_id: paymentTransaction.transactionId,
           }
         );
+        
+        // G2: Schedule mock callback AFTER persisting the transaction_id
+        if (paymentTransaction.transactionId.startsWith('mock-')) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentTransaction.transactionId,
+            reference
+          );
+        }
       }
 
       this.logger.log(
@@ -4249,6 +4257,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          reference
+        );
+      }
     }
 
     return {
@@ -4462,6 +4478,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     // Clear a prior failed payment_status so clients polling after a new push
@@ -4657,6 +4681,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
     await this.resetOrderPaymentFailure(orderId);
   }
@@ -6095,6 +6127,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     await this.resetOrderPaymentFailure(orderId);

@@ -1537,6 +1537,16 @@ export class MobilePaymentsService {
   }
 
   /**
+   * Schedule mock callback for FedaPay mock transactions.
+   * Must be called AFTER persisting the transaction_id to avoid G2 race.
+   */
+  async scheduleMockCallback(transactionId: string, reference: string): Promise<void> {
+    if (transactionId.startsWith('mock-')) {
+      this.fedapayService.scheduleMockCallback(transactionId, reference);
+    }
+  }
+
+  /**
    * Log status check
    */
   private async logStatusCheck(
