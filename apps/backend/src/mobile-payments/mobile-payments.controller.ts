@@ -173,12 +173,14 @@ export class MobilePaymentsController {
 
   /**
    * Get available payment providers
+   * @param country Optional ISO 3166-1 alpha-2 country code to filter providers
    */
   @Get('providers')
-  async getProviders() {
+  async getProviders(@Query('country') country?: string) {
     try {
-      const providers =
-        await this.mobilePaymentsService.getAvailableProviders();
+      const providers = country
+        ? await this.mobilePaymentsService.getProvidersForCountry(country)
+        : await this.mobilePaymentsService.getAvailableProviders();
       return {
         success: true,
         data: providers,

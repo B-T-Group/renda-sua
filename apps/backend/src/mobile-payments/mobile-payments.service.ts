@@ -312,6 +312,61 @@ export class MobilePaymentsService {
   }
 
   /**
+   * Get available payment providers for a specific country
+   * Filters providers based on supported_payment_systems table
+   */
+  async getProvidersForCountry(countryCode: string): Promise<PaymentProvider[]> {
+    const upperCountry = countryCode.toUpperCase();
+    const allProviders = await this.getAvailableProviders();
+    
+    // Query supported_payment_systems for active providers in this country
+    const query = `
+      query GetSupportedPaymentSystems($country: String!) {
+        supported_payment_systems(where: {country: {_eq: $country}, active: {_eq: true}}) {
+          provider
+          country
+          active
+        }
+      }
+    `;
+    
+    try {
+      const result = await this.hasuraSystemService.request<{
+        supported_payment_systems: Array<{
+          provider: string;
+          country: string;
+          active: boolean;
+        }>;
+      }>(query, { country: upperCountry });
+      
+      const activeProviders = new Set(
+        result.supported_payment_systems.map(p => p.provider.toLowerCase())
+      );
+      
+      // Filter providers to only those active for this country
+      return allProviders.filter(p => 
+        activeProviders.has(p.name.toLowerCase()) || activeProviders.has(this.mapProviderName(p.name))
+      );
+    } catch (error: any) {
+      this.logger.error(`Failed to get active providers for ${upperCountry}: ${error.message}`);
+      // Return empty array on error to be safe
+      return [];
+    }
+  }
+
+  /**
+   * Map provider display name to database provider value
+   */
+  private mapProviderName(displayName: string): string {
+    const mapping: Record<string, string> = {
+      'MyPVit': 'mypvit',
+      'Freemopay': 'freemopay',
+      'FedaPay': 'fedapay',
+    };
+    return mapping[displayName] || displayName.toLowerCase();
+  }
+
+  /**
    * Get supported payment methods for a provider
    */
   async getSupportedPaymentMethods(provider: string): Promise<string[]> {
