@@ -741,7 +741,9 @@ export class FedaPayService implements OnModuleInit {
     } catch (error: any) {
       const sanitized = sanitizeProviderError(error);
       this.logger.error(
-        `Failed to check FedaPay transaction status: ${sanitized.message}`
+        `Failed to check FedaPay transaction status: ${sanitized.message}`,
+        sanitized.status ? `Status: ${sanitized.status}` : undefined,
+        sanitized.code ? `Code: ${sanitized.code}` : undefined
       );
       throw new Error(sanitized.message);
     }

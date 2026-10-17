@@ -16,9 +16,9 @@ interface SanitizedError {
 function redactSecrets(text: string): string {
   if (!text) return text;
   
-  // Redact FedaPay/Stripe-style keys
+  // Redact FedaPay/Stripe-style keys (keep the type visible but redact the value)
   let redacted = text.replace(
-    /sk_(live|sandbox|test)_[A-Za-z0-9]+/gi,
+    /sk_(live|sandbox|test)_[A-Za-z0-9_]+/gi,
     'sk_$1_REDACTED'
   );
   
