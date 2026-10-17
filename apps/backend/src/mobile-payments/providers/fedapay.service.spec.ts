@@ -79,17 +79,16 @@ describe('FedaPayService', () => {
     it('should succeed for amounts < 1,000,000 XOF', async () => {
       const result = await service.initiatePayment({
         amount: 500000,
-        currency: 'XOF',
-        customerPhone: '+22878123456',
+        payer: '+22878123456',
         description: 'Test',
-        customerEmail: 'test@test.com',
-        customerFirstName: 'Test',
-        customerLastName: 'User',
+        externalId: 'test-123',
+        callback: 'https://test.com/callback',
+        channel: 'moov_tg',
       });
 
       expect(result.success).toBe(true);
       expect(result.transactionId).toBeDefined();
-      expect(result.status).toBe('PENDING');
+      expect(result.status).toBe('pending');
     });
 
     it('should force mock off in production', () => {
@@ -107,31 +106,29 @@ describe('FedaPayService', () => {
     it('should validate phone number in mock mode', async () => {
       const result = await service.initiatePayment({
         amount: 1000,
-        currency: 'XOF',
-        customerPhone: '+22812345678',
+        payer: '+22812345678',
         description: 'Test',
-        customerEmail: 'test@test.com',
-        customerFirstName: 'Test',
-        customerLastName: 'User',
+        externalId: 'test-456',
+        callback: 'https://test.com/callback',
+        channel: 'moov_tg',
       });
 
       expect(result.success).toBe(false);
       expect(result.message).toContain('Invalid Togo phone number');
     });
 
-    it('should validate XOF currency in mock mode', async () => {
+    it('should validate phone with valid Togo prefix', async () => {
       const result = await service.initiatePayment({
         amount: 1000,
-        currency: 'USD',
-        customerPhone: '+22878123456',
+        payer: '+22878123456',
         description: 'Test',
-        customerEmail: 'test@test.com',
-        customerFirstName: 'Test',
-        customerLastName: 'User',
+        externalId: 'test-789',
+        callback: 'https://test.com/callback',
+        channel: 'moov_tg',
       });
 
-      expect(result.success).toBe(false);
-      expect(result.message).toContain('FedaPay only supports XOF');
+      // Should succeed in mock mode
+      expect(result.success).toBe(true);
     });
   });
 
