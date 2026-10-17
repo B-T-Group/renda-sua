@@ -5,6 +5,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { FreemopayService } from './providers/freemopay.service';
 import { MyPVitService } from './providers/mypvit.service';
 import { FedaPayService } from './providers/fedapay.service';
+import { MtnMomoService } from '../mtn-momo/mtn-momo.service';
+import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
+import { OrangeMomoService } from '../orange-momo/orange-momo.service';
+import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 
 describe('MobilePaymentsService - Routing', () => {
@@ -62,6 +66,26 @@ describe('MobilePaymentsService - Routing', () => {
     checkTransactionStatus: jest.fn(),
   };
 
+  const mockMtnMomoService = {
+    initiatePayment: jest.fn(),
+    checkTransactionStatus: jest.fn(),
+  };
+
+  const mockMtnMomoDatabaseService = {
+    executeQuery: jest.fn(),
+    executeMutation: jest.fn(),
+  };
+
+  const mockOrangeMomoService = {
+    initiatePayment: jest.fn(),
+    checkTransactionStatus: jest.fn(),
+  };
+
+  const mockOrangeMomoDatabaseService = {
+    executeQuery: jest.fn(),
+    executeMutation: jest.fn(),
+  };
+
   const mockCallbackProcessor = {
     processFreemopayCallback: jest.fn(),
     processMyPVitCallback: jest.fn(),
@@ -91,6 +115,22 @@ describe('MobilePaymentsService - Routing', () => {
         {
           provide: FedaPayService,
           useValue: mockFedaPayService,
+        },
+        {
+          provide: MtnMomoService,
+          useValue: mockMtnMomoService,
+        },
+        {
+          provide: MtnMomoDatabaseService,
+          useValue: mockMtnMomoDatabaseService,
+        },
+        {
+          provide: OrangeMomoService,
+          useValue: mockOrangeMomoService,
+        },
+        {
+          provide: OrangeMomoDatabaseService,
+          useValue: mockOrangeMomoDatabaseService,
         },
         {
           provide: MobilePaymentCallbackProcessor,
