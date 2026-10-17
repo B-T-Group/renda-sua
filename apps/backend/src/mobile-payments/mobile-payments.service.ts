@@ -419,7 +419,7 @@ export class MobilePaymentsService {
     
     // Query supported_payment_systems for active providers in this country
     const query = `
-      query GetSupportedPaymentSystems($country: String!) {
+      query GetSupportedPaymentSystems($country: bpchar!) {
         supported_payment_systems(where: {country: {_eq: $country}, active: {_eq: true}}) {
           name
           country
@@ -462,12 +462,16 @@ export class MobilePaymentsService {
 
   /**
    * Map provider display name to database provider value
+   * F-M5: Map GA's airtel/moov rows to MyPVit
    */
   private mapProviderName(displayName: string): string {
     const mapping: Record<string, string> = {
       'MyPVit': 'mypvit',
       'Freemopay': 'freemopay',
       'FedaPay': 'fedapay',
+      // GA uses airtel/moov in DB but should map to MyPVit provider
+      'airtel': 'mypvit',
+      'moov': 'mypvit',
     };
     return mapping[displayName] || displayName.toLowerCase();
   }

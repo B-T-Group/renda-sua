@@ -24,6 +24,9 @@ import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
+import { BadRequestException } from '@nestjs/common';
+import { isoCountryCode } from '../orders/delivery-pricing.util';
+import { validatePhoneNumber } from './phone-validation.util';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
@@ -311,6 +314,15 @@ export class MobilePaymentsController {
       }
 
       this.assertMobileMoneyCurrency(paymentRequest, resolvedProvider);
+
+      // F-L2, F-M3, F-M6: Validate phone before ANY row creation
+      if (paymentRequest.customerPhone) {
+        await this.validatePhoneForPayment(
+          paymentRequest.customerPhone,
+          resolvedProvider,
+          paymentRequest.itemCountry
+        );
+      }
 
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
@@ -1306,6 +1318,73 @@ export class MobilePaymentsController {
         },
         HttpStatus.FORBIDDEN
       );
+    }
+  }
+
+  /**
+   * F-L2, F-M3, F-M6: Validate phone number against provider and market BEFORE creating any row.
+   * Returns 400 BadRequestException on validation failure.
+   */
+  private async validatePhoneForPayment(
+    customerPhone: string,
+    provider: string,
+    itemCountry?: string
+  ): Promise<void> {
+    const phoneValidation = validatePhoneNumber(customerPhone);
+    
+    if (!phoneValidation.isValid) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Invalid phone number format',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
+    const phoneCountry = phoneValidation.regionCode;
+
+    // F-L2: FedaPay requires Togo phone
+    if (provider === 'fedapay' && phoneCountry !== 'TG') {
+      throw new BadRequestException({
+        success: false,
+        message: 'FedaPay requires a Togo (+228) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
+    // F-M3 & F-M6: Phone country must match item/market country (bidirectional)
+    if (itemCountry) {
+      // Normalize item country to ISO (handles "Togo", "TOGO", "TG", etc.)
+      const normalizedItemCountry = isoCountryCode(itemCountry);
+      if (normalizedItemCountry && phoneCountry !== normalizedItemCountry) {
+        throw new BadRequestException({
+          success: false,
+          message: `Payment phone number must match the item's country (${normalizedItemCountry})`,
+          error: 'PHONE_COUNTRY_MISMATCH',
+          data: {
+            phoneCountry,
+            itemCountry: normalizedItemCountry,
+          },
+        });
+      }
+    }
+
+    // F-M6: Provider-specific country validation
+    // FedaPay -> TG only (already checked above)
+    // Freemopay -> CM only
+    if (provider === 'freemopay' && phoneCountry !== 'CM') {
+      throw new BadRequestException({
+        success: false,
+        message: 'Freemopay requires a Cameroon (+237) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+    // MyPVit/Airtel/Moov -> GA only
+    if (['mypvit', 'airtel', 'moov'].includes(provider) && phoneCountry !== 'GA') {
+      throw new BadRequestException({
+        success: false,
+        message: `${provider} requires a Gabon (+241) phone number`,
+        error: 'INVALID_PHONE_NUMBER',
+      });
     }
   }
 
