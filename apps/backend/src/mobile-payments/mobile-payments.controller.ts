@@ -318,10 +318,11 @@ export class MobilePaymentsController {
 
       // F-L2, F-M3, F-M6: Validate phone before ANY row creation
       if (paymentRequest.customerPhone) {
+        const itemCountry = (paymentRequest as any).itemCountry;
         await this.validatePhoneForPayment(
           paymentRequest.customerPhone,
           resolvedProvider,
-          paymentRequest.itemCountry
+          itemCountry
         );
       }
 

@@ -334,7 +334,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
       const mockGc = { ...gcRow, transaction_id: 'mock-abc123-xyz' };
       mockDatabaseService.getTransactionByTransactionId.mockImplementation(async (k: string) => (k === 'mock-abc123-xyz' ? mockGc : null));
-      mockDatabaseService.getTransactionByReference.mockImplementation(async (k: string) => (k === 'REFGC' ? null));
+      mockDatabaseService.getTransactionByReference.mockImplementation(async (k: string) => (k === 'REFGC' ? null : mockGc));
 
       await processor
         .processFedaPayCallback({
