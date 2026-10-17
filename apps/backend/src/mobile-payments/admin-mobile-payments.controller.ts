@@ -117,9 +117,9 @@ export class AdminMobilePaymentsController {
     const provider = this.resolveProvider(tx);
     const live = await this.checkLiveStatus(tx, providerTxId, provider);
     if (live.status === 'pending' || live.status === 'ambiguous') {
-      return this.stillPendingResponse(live, provider);
+      return this.stillPendingResponse(live, await provider);
     }
-    return this.replayTerminal(tx, live, provider, req);
+    return this.replayTerminal(tx, live, await provider, req);
   }
 
   private async requireTransaction(

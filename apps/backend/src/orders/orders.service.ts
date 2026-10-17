@@ -13181,7 +13181,7 @@ export class OrdersService {
       location?.business?.user?.country
     );
     return {
-      provider: this.mobilePaymentsService.getProviderForCountry(itemCountry),
+      provider: await this.mobilePaymentsService.getProviderForCountry(itemCountry),
       itemCountry,
       payerUserId: order.client?.user_id,
     };
@@ -14763,7 +14763,7 @@ export class OrdersService {
               amount: depositCalc.depositAmount,
               currency,
               description: `Deposit for order ${order.order_number}`,
-              provider,
+              provider: await provider,
               payment_method: 'mobile_money',
               customer_phone: phoneNumber,
               account_id: account.id,
@@ -15094,7 +15094,7 @@ export class OrdersService {
             currency,
             accountId: account.id,
             phoneNumber,
-            provider,
+            await provider,
             userEmail: user.email ?? undefined,
             itemCountry: itemCountry ?? undefined,
             userId: user.id,
