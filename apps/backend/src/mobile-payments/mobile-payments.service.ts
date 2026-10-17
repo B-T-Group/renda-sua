@@ -747,6 +747,7 @@ export class MobilePaymentsService {
             canceled: 'cancelled',
             pending: 'pending',
             transferred: 'success',
+            expired: 'failed', // FedaPay docs: unpaid collections expire after 24h
           };
           status = {
             transactionId: fedapayStatus.transactionId,

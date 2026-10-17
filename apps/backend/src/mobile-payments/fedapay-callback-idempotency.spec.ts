@@ -259,4 +259,41 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
       expect(mockDatabaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
     });
   });
+
+  describe('N5: expired status handling', () => {
+    it('handles transaction.updated with expired status as terminal failed', async () => {
+      const expiredCallback: FedaPayCallbackDto = {
+        entity: { id: 456, status: 'expired', amount: 1000, reference: 'fedapay-tx-456', custom_metadata: { externalId: 'REF456' } } as any,
+        name: 'transaction.updated',
+      };
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+
+      await processor.processFedaPayCallback(expiredCallback);
+
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.anything(),
+        'FAILED'
+      );
+      // The failPendingAttempt method is called, which updates the transaction
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalled();
+    });
+
+    it('ignores transaction.updated with non-terminal status (stays no-op)', async () => {
+      const pendingUpdateCallback: FedaPayCallbackDto = {
+        entity: { id: 456, status: 'pending', amount: 1000, reference: 'fedapay-tx-456' },
+        name: 'transaction.updated',
+      };
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
+
+      const result = await processor.processFedaPayCallback(pendingUpdateCallback);
+
+      expect(result.received).toBe(true);
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).not.toHaveBeenCalled();
+      expect(mockDatabaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
+    });
+  });
+
 });

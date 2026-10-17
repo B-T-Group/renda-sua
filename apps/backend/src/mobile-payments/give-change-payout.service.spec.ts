@@ -77,6 +77,56 @@ describe('GiveChangePayoutService', () => {
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
   });
 
+  describe('N3: keep provider id on failed withdrawal rows', () => {
+    const params = {
+      amount: 5000,
+      currency: 'XOF',
+      description: 'Auto payout',
+      customerPhone: '+22890000001',
+      accountId: 'acct-1',
+      provider: 'fedapay',
+    } as any;
+
+    it('writes the FedaPay payout id with status failed and still releases the hold', async () => {
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: false,
+        transactionId: 'fedapay-payout-9',
+        errorCode: 'PAYOUT_FAILED',
+        message: 'Payout failed',
+        provider: 'fedapay',
+      });
+
+      const result = await service.executeGiveChangePayout(params, {
+        throwOnWithdrawalFailure: false,
+      });
+
+      expect(result.success).toBe(false);
+      expect(databaseService.updateTransaction).toHaveBeenCalledWith('mobile-tx-1', {
+        status: 'failed',
+        error_message: 'Payout failed',
+        error_code: 'PAYOUT_FAILED',
+        transaction_id: 'fedapay-payout-9',
+      });
+      expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not write transaction_id when the provider returned none', async () => {
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: false,
+        errorCode: 'PROVIDER_INIT_FAILED',
+        message: 'create failed',
+      });
+
+      await service.executeGiveChangePayout(params, { throwOnWithdrawalFailure: false });
+
+      const failedUpdate = databaseService.updateTransaction.mock.calls.find(
+        ([, patch]) => patch?.status === 'failed'
+      );
+      expect(failedUpdate).toBeDefined();
+      expect(failedUpdate![1]).not.toHaveProperty('transaction_id');
+    });
+  });
+
   it('releases hold when provider initiation fails', async () => {
     mobilePaymentsService.initiatePayment.mockResolvedValue({
       success: false,

@@ -380,6 +380,7 @@ export class MobilePaymentsController {
           paymentUrl: paymentResponse.paymentUrl,
           message: paymentResponse.message,
           provider: paymentResponse.provider,
+          ...(paymentResponse.reason ? { status: paymentResponse.status, reason: paymentResponse.reason } : {}),
         },
       };
     } catch (error: any) {
@@ -1424,6 +1425,7 @@ export class MobilePaymentsController {
         paymentUrl: result.data?.paymentUrl,
         message: result.data?.message,
         provider: result.data?.provider,
+        ...(result.data?.reason ? { status: result.data.status, reason: result.data.reason } : {}),
       },
     };
   }

@@ -40,6 +40,8 @@ export interface GiveChangePayoutResult {
     paymentUrl?: string;
     message?: string;
     provider?: string;
+    status?: 'pending';
+    reason?: 'provider_ambiguous';
   };
 }
 
@@ -354,6 +356,7 @@ export class GiveChangePayoutService {
       paymentUrl: paymentResponse.paymentUrl,
       message: paymentResponse.message,
       provider: paymentResponse.provider,
+      ...(paymentResponse.reason ? { status: paymentResponse.status, reason: paymentResponse.reason } : {}),
     };
 
     if (!paymentResponse.success || !providerTxId) {
