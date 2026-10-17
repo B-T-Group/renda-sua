@@ -272,7 +272,7 @@ export class MobilePaymentsController {
       }
 
       const resolvedProvider =
-        this.mobilePaymentsService.resolveProviderFromRequest(paymentRequest);
+        await this.mobilePaymentsService.resolveProviderFromRequest(paymentRequest);
 
       if (paymentRequest.accountId && paymentRequest.amount < 150) {
         throw new HttpException(
@@ -914,7 +914,7 @@ export class MobilePaymentsController {
     );
     await this.assertGiveChangePrechecks(request, accountId);
     const resolvedProvider =
-      this.mobilePaymentsService.resolveProviderFromRequest(request);
+      await this.mobilePaymentsService.resolveProviderFromRequest(request);
     this.assertMobileMoneyCurrency(request, resolvedProvider);
     return this.executeOwnedGiveChangePayout(
       request,

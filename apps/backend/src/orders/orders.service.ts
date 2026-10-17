@@ -13181,7 +13181,7 @@ export class OrdersService {
       location?.business?.user?.country
     );
     return {
-      provider: this.mobilePaymentsService.getProviderForCountry(itemCountry),
+      provider: await this.mobilePaymentsService.getProviderForCountry(itemCountry),
       itemCountry,
       payerUserId: order.client?.user_id,
     };
@@ -14136,7 +14136,7 @@ export class OrdersService {
       );
     }
 
-    const provider = this.mobilePaymentsService.getProviderForCountry(itemCountry);
+    const provider = await this.mobilePaymentsService.getProviderForCountry(itemCountry);
 
     if (paymentTiming === 'pay_now' && !isZeroOrNegativeOrder && availableBalance < 0) {
       throw new HttpException(

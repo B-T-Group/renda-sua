@@ -87,7 +87,7 @@ export class AdminMobilePaymentsController {
   async getProviderStatus(@Param('id') id: string) {
     const tx = await this.requireTransaction(id);
     const providerTxId = this.requireProviderTxId(tx);
-    const provider = this.resolveProvider(tx);
+    const provider = await this.resolveProvider(tx);
     const live = await this.checkLiveStatus(tx, providerTxId, provider);
     return {
       success: true,
@@ -114,7 +114,7 @@ export class AdminMobilePaymentsController {
   async resolve(@Param('id') id: string, @Req() req: Request) {
     const tx = await this.requirePendingResolvable(id);
     const providerTxId = this.requireProviderTxId(tx);
-    const provider = this.resolveProvider(tx);
+    const provider = await this.resolveProvider(tx);
     const live = await this.checkLiveStatus(tx, providerTxId, provider);
     if (live.status === 'pending' || live.status === 'ambiguous') {
       return this.stillPendingResponse(live, provider);
@@ -153,11 +153,11 @@ export class AdminMobilePaymentsController {
     return providerTxId;
   }
 
-  private resolveProvider(
+  private async resolveProvider(
     tx: MobilePaymentTransaction
-  ): MobilePaymentIntegrationProvider {
+  ): Promise<MobilePaymentIntegrationProvider> {
     try {
-      return this.mobilePaymentsService.resolveAdminIntegrationProvider(
+      return await this.mobilePaymentsService.resolveAdminIntegrationProvider(
         tx.customer_phone,
         tx.provider
       );

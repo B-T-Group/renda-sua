@@ -2377,7 +2377,7 @@ export class RentalsService {
     }
 
     const provider = params.itemCountry
-      ? this.mobilePaymentsService.getProviderForCountry(params.itemCountry)
+      ? await this.mobilePaymentsService.getProviderForCountry(params.itemCountry)
       : this.mobilePaymentsService.getProvider(params.phoneNumber);
 
     const isMyPVitLike = provider === 'mypvit';
