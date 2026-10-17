@@ -229,9 +229,14 @@ describe('Security: Error Sanitization & Phone Masking', () => {
     });
 
     it('should not log sk_live_ keys in error message', async () => {
-      const errorWithKey = {
-        message: 'Authentication failed: sk_live_SECRET_KEY_12345',
+      // Mock error with sk_live key in the message property
+      const errorWithKey: any = {
+        message: 'Authentication failed with sk_live_SECRET_KEY_12345 check your credentials',
         status: 401,
+        response: {
+          status: 401,
+          data: { error: 'Authentication failed with sk_live_SECRET_KEY_12345 check your credentials' }
+        }
       };
 
       const { Transaction } = require('fedapay');
@@ -246,8 +251,10 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       const allCalls = loggerSpy.mock.calls.flat();
       const loggedText = allCalls.map((arg) => JSON.stringify(arg)).join(' ');
 
+      // Must not leak the actual key
       expect(loggedText).not.toContain('sk_live_SECRET_KEY_12345');
       expect(loggedText).not.toContain('SECRET_KEY_12345');
+      // Should redact to sk_live_REDACTED
       expect(loggedText).toContain('sk_live_REDACTED');
     });
   });
