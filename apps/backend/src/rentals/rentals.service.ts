@@ -2398,7 +2398,7 @@ export class RentalsService {
       amount: params.amount,
       currency: params.currency,
       description: descriptionShort,
-      await provider,
+      provider: await provider,
       payment_method: 'mobile_money',
       customer_phone: params.phoneNumber,
       ...(params.email ? { customer_email: params.email } : {}),
