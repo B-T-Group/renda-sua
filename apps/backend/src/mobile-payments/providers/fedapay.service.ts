@@ -145,6 +145,40 @@ export class FedaPayService implements OnModuleInit {
     return amount < this.mockThreshold ? 'approved' : 'declined';
   }
 
+  private isValidTogoPhone(phone: string | undefined | null): boolean {
+    if (!phone) return false;
+    const cleaned = phone.replace(/\D/g, '');
+    // Must start with 228 or be exactly 8 digits (national format)
+    if (cleaned.startsWith('228')) {
+      const national = cleaned.slice(3);
+      if (national.length !== 8) return false;
+      const prefix = national.slice(0, 2);
+      // Moov: 78, 79, 96, 97, 98, 99
+      // Mixx: 70, 71, 72, 73, 90, 91, 92, 93
+      return ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'].includes(prefix);
+    }
+    // National format
+    if (cleaned.length === 8) {
+      const prefix = cleaned.slice(0, 2);
+      return ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'].includes(prefix);
+    }
+    return false;
+  }
+
+  private validatePaymentRequest(request: FedaPayPaymentRequest): { valid: boolean; error?: string } {
+    if (!this.isValidTogoPhone(request.payer)) {
+      return { valid: false, error: 'Invalid Togo phone number. Must be +228 followed by valid Moov or Mixx prefix.' };
+    }
+    return { valid: true };
+  }
+
+  private validateWithdrawalRequest(request: FedaPayWithdrawalRequest): { valid: boolean; error?: string } {
+    if (!this.isValidTogoPhone(request.payee)) {
+      return { valid: false, error: 'Invalid Togo phone number. Must be +228 followed by valid Moov or Mixx prefix.' };
+    }
+    return { valid: true };
+  }
+
   private scheduleAutoCallback(
     mockReference: string,
     externalId: string,
@@ -261,6 +295,17 @@ export class FedaPayService implements OnModuleInit {
     paymentRequest: FedaPayPaymentRequest,
     reference?: string
   ): Promise<FedaPayPaymentResponse> {
+    // Validate request
+    const validation = this.validatePaymentRequest(paymentRequest);
+    if (!validation.valid) {
+      return {
+        success: false,
+        message: validation.error!,
+        errorCode: 'VALIDATION_ERROR',
+        status: 'failed',
+      };
+    }
+
     if (this.mockEnabled) {
       return this.mockInitiatePayment(paymentRequest, reference);
     }
@@ -326,6 +371,17 @@ export class FedaPayService implements OnModuleInit {
     withdrawalRequest: FedaPayWithdrawalRequest,
     reference?: string
   ): Promise<FedaPayWithdrawalResponse> {
+    // Validate request
+    const validation = this.validateWithdrawalRequest(withdrawalRequest);
+    if (!validation.valid) {
+      return {
+        success: false,
+        message: validation.error!,
+        errorCode: 'VALIDATION_ERROR',
+        status: 'failed',
+      };
+    }
+
     if (this.mockEnabled) {
       return this.mockWithdraw(withdrawalRequest, reference);
     }
