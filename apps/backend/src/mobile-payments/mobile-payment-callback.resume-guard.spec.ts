@@ -145,6 +145,7 @@ describe('MobilePaymentCallbackProcessor resume guard (#570 #571)', () => {
     expect(t.accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
     expect(t.handler.onPaymentSuccess).toHaveBeenCalledTimes(1);
     expect(t.row.status).toBe('success');
+    expect(t.row.error_code).toBeNull();
   });
 
   it('handler failure then immediate SUCCESS retry finalizes even though updated_at is fresh', async () => {
@@ -164,6 +165,7 @@ describe('MobilePaymentCallbackProcessor resume guard (#570 #571)', () => {
 
     expect(t.handler.onPaymentSuccess).toHaveBeenCalledTimes(2);
     expect(t.row.status).toBe('success');
+    expect(t.row.error_code).toBeNull();
   });
 
   it('a processing order aged exactly 60s resumes credit and the order handler', async () => {

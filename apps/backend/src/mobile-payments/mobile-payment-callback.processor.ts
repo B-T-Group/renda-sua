@@ -667,13 +667,17 @@ export class MobilePaymentCallbackProcessor {
       }
     }
     
-    // Mark processing → success
+    // Mark processing → success. Clear the handler-failure marker so a paid row
+    // does not keep FINALIZE_HANDLER_FAILED; a new handler failure sets it again.
     const markedSuccess = await this.databaseService.updateTransactionIfStatus(
       transaction.id,
       'processing',
       {
         status: 'success',
         ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+        ...(String(transaction.error_code || '') === FINALIZE_HANDLER_FAILED
+          ? { error_code: null }
+          : {}),
       }
     );
     if (!markedSuccess) {
