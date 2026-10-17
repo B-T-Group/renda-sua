@@ -501,12 +501,6 @@ export class MobilePaymentsService {
     userId?: string
   ): Promise<MobilePaymentResponse> {
     try {
-      const phoneRegion = await this.resolvePhoneDefaultRegion(
-        userId,
-        paymentRequest.customerPhone,
-        paymentRequest.itemCountry
-      );
-
       // F-L2: If FedaPay is explicitly requested, validate TG-specific requirements FIRST
       if (paymentRequest.provider === 'fedapay' && paymentRequest.customerPhone) {
         const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone);
@@ -538,6 +532,12 @@ export class MobilePaymentsService {
           };
         }
       }
+
+      const phoneRegion = await this.resolvePhoneDefaultRegion(
+        userId,
+        paymentRequest.customerPhone,
+        paymentRequest.itemCountry
+      );
 
       // Validate phone number if provided
       if (paymentRequest.customerPhone) {
