@@ -22,6 +22,7 @@ import {
 } from 'class-validator';
 import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -132,7 +133,8 @@ export class MobilePaymentsController {
     private readonly callbackProcessor: MobilePaymentCallbackProcessor,
     private readonly withdrawalPinService: WithdrawalPinService,
     private readonly pendingWithdrawalResolveService: PendingWithdrawalResolveService,
-    private readonly transactionAccessService: MobileTransactionAccessService
+    private readonly transactionAccessService: MobileTransactionAccessService,
+    private readonly configService: ConfigService
   ) {}
 
   /**

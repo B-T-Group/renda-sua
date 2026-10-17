@@ -94,8 +94,6 @@ export class FedaPayService implements OnModuleInit {
     };
 
     const deploymentEnv = process.env.DEPLOYMENT_ENV?.toLowerCase();
-    const nodeEnv = process.env.NODE_ENV?.toLowerCase();
-    const isProductionRuntime = deploymentEnv === 'production' || nodeEnv === 'production';
     
     if (this.config.mockEnabled) {
       if (!deploymentEnv || !['development', 'test'].includes(deploymentEnv)) {
