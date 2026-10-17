@@ -331,7 +331,7 @@ export class MobilePaymentsService {
     `;
     
     try {
-      const result = await this.hasuraSystemService.request<{
+      const result = await this.hasuraSystemService.query<{
         supported_payment_systems: Array<{
           provider: string;
           country: string;
@@ -340,11 +340,11 @@ export class MobilePaymentsService {
       }>(query, { country: upperCountry });
       
       const activeProviders = new Set(
-        result.supported_payment_systems.map(p => p.provider.toLowerCase())
+        result.supported_payment_systems.map((p: { provider: string }) => p.provider.toLowerCase())
       );
       
       // Filter providers to only those active for this country
-      return allProviders.filter(p => 
+      return allProviders.filter((p: PaymentProvider) => 
         activeProviders.has(p.name.toLowerCase()) || activeProviders.has(this.mapProviderName(p.name))
       );
     } catch (error: any) {
