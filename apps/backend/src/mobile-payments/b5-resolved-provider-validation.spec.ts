@@ -54,6 +54,7 @@ describe('B5: Resolved Provider Validation', () => {
         transactionId: 'tx-123',
       }),
       checkTransactionStatus: jest.fn(),
+      getCallbackUrl: jest.fn().mockReturnValue('http://test.com/callback'),
     };
 
     const mockHasuraSystemService = {

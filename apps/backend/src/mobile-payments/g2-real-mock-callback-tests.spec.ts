@@ -41,6 +41,14 @@ describe('G2: Real Mock Callback Order Tests', () => {
         providers: [
           { provide: MobilePaymentsService, useValue: mobilePaymentsService },
           { provide: MobilePaymentsDatabaseService, useValue: databaseService },
+          { provide: AccountsService, useValue: {} },
+          { provide: 'GiveChangePayoutService', useValue: {} },
+          { provide: 'HasuraUserService', useValue: {} },
+          { provide: 'MobilePaymentCallbackProcessor', useValue: {} },
+          { provide: 'WithdrawalPinService', useValue: {} },
+          { provide: 'PendingWithdrawalResolveService', useValue: {} },
+          { provide: 'MobileTransactionAccessService', useValue: {} },
+          { provide: 'ConfigService', useValue: {} },
         ],
       }).compile();
 
