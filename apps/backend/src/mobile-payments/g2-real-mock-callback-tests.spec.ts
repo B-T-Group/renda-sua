@@ -16,10 +16,10 @@ import { MobileTransactionAccessService } from './mobile-transaction-access.serv
 jest.useFakeTimers();
 
 describe('G2: Real Mock Callback Order Tests', () => {
-  describe('MobilePaymentsController', () => {
-    let controller: MobilePaymentsController;
-    let mobilePaymentsService: any;
+  describe('MobilePaymentsService', () => {
+    let service: MobilePaymentsService;
     let databaseService: any;
+    let fedaPayService: any;
 
     beforeEach(async () => {
       databaseService = {
@@ -32,51 +32,29 @@ describe('G2: Real Mock Callback Order Tests', () => {
         getTransactionByReference: jest.fn(),
       };
 
-      mobilePaymentsService = {
+      fedaPayService = {
         initiatePayment: jest.fn().mockResolvedValue({
           success: true,
           transactionId: 'mock-abc-123',
-          message: 'Payment initiated',
         }),
+        getCallbackUrl: jest.fn().mockReturnValue('http://test/callback'),
         scheduleMockCallback: jest.fn().mockResolvedValue(undefined),
-        getProvider: jest.fn().mockReturnValue('fedapay'),
+        mockEnabled: true,
       };
 
       const module: TestingModule = await Test.createTestingModule({
-        controllers: [MobilePaymentsController],
         providers: [
-          { provide: MobilePaymentsService, useValue: mobilePaymentsService },
+          MobilePaymentsService,
+          { provide: FedaPayService, useValue: fedaPayService },
           { provide: MobilePaymentsDatabaseService, useValue: databaseService },
-          { provide: AccountsService, useValue: {
-            getAccountBalance: jest.fn().mockResolvedValue({
-              availableBalance: '10000',
-              currency: 'XOF',
-            }),
-          } },
-          { provide: GiveChangePayoutService, useValue: {
-            getAccountBalance: jest.fn().mockResolvedValue({
-              availableBalance: '10000',
-              currency: 'XOF',
-            }),
-          } },
-          { provide: HasuraUserService, useValue: {} },
-          { provide: MobilePaymentCallbackProcessor, useValue: {} },
-          { provide: WithdrawalPinService, useValue: {} },
-          { provide: PendingWithdrawalResolveService, useValue: {} },
-          { provide: MobileTransactionAccessService, useValue: {} },
-          { provide: ConfigService, useValue: {} },
+          { provide: 'HasuraSystemService', useValue: {} },
         ],
       }).compile();
 
-      controller = module.get<MobilePaymentsController>(MobilePaymentsController);
+      service = module.get<MobilePaymentsService>(MobilePaymentsService);
     });
 
-    it('(a) scheduleMockCallback called AFTER updateTransaction in controller top-up', async () => {
-      const ctx = {
-        userId: 'user-1',
-        userRole: 'user',
-      } as any;
-
+    it('(a) scheduleMockCallback called AFTER updateTransaction in service payment', async () => {
       const request = {
         amount: 1000,
         currency: 'XOF',
@@ -84,20 +62,22 @@ describe('G2: Real Mock Callback Order Tests', () => {
         provider: 'fedapay',
         paymentMethod: 'mobile_money' as const,
         transactionType: 'PAYMENT' as const,
+        description: 'Test',
+        accountId: 'acct-1',
       };
 
-      await controller.initiatePayment(ctx, request);
+      await service.initiatePayment(request);
 
       // Verify both were called
       expect(databaseService.updateTransaction).toHaveBeenCalled();
-      expect(mobilePaymentsService.scheduleMockCallback).toHaveBeenCalledWith(
+      expect(fedaPayService.scheduleMockCallback).toHaveBeenCalledWith(
         'mock-abc-123',
         expect.any(String)
       );
 
       // Verify order: updateTransaction was called before scheduleMockCallback
       const updateOrder = databaseService.updateTransaction.mock.invocationCallOrder[0];
-      const scheduleOrder = mobilePaymentsService.scheduleMockCallback.mock.invocationCallOrder[0];
+      const scheduleOrder = fedaPayService.scheduleMockCallback.mock.invocationCallOrder[0];
       expect(updateOrder).toBeLessThan(scheduleOrder);
     });
   });
