@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { sanitizeProviderError, maskPhoneNumber } from './sanitize-provider-error.util';
 import { MobilePaymentsService } from './mobile-payments.service';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
@@ -248,6 +249,74 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       expect(loggedText).not.toContain('sk_live_SECRET_KEY_12345');
       expect(loggedText).not.toContain('SECRET_KEY_12345');
       expect(loggedText).toContain('sk_live_REDACTED');
+    });
+  });
+
+  describe('Error sanitization coverage', () => {
+    it('should sanitize errors in MyPVitService', async () => {
+      const loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined as any);
+      
+      const mockConfig = {
+        get: jest.fn(() => ({
+          apiUrl: 'https://test.mypvit.com',
+          merchantCode: 'TEST',
+          secretKey: 'sk_test_SECRET',
+        })),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MyPVitService,
+          { provide: ConfigService, useValue: mockConfig },
+        ],
+      }).compile();
+
+      const service = module.get<MyPVitService>(MyPVitService);
+
+      // Force an error by calling testConnection (will fail with mock config)
+      await service.testConnection().catch(() => {});
+
+      const allCalls = loggerSpy.mock.calls.flat();
+      const loggedText = allCalls.map((arg) => JSON.stringify(arg)).join(' ');
+
+      // Should not contain raw error objects or sensitive config
+      expect(loggedText).not.toContain('"config"');
+      expect(loggedText).not.toContain('"headers"');
+      expect(loggedText).not.toContain('"request"');
+      
+      loggerSpy.mockRestore();
+    });
+
+    it('should sanitize errors in MobilePaymentsDatabaseService', async () => {
+      const loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined as any);
+      
+      const mockHasura = {
+        executeQuery: jest.fn().mockRejectedValue({
+          message: 'Query error with sensitive data',
+          config: { headers: { 'x-hasura-admin-secret': 'SECRET' } },
+        }),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MobilePaymentsDatabaseService,
+          { provide: HasuraSystemService, useValue: mockHasura },
+        ],
+      }).compile();
+
+      const service = module.get<MobilePaymentsDatabaseService>(MobilePaymentsDatabaseService);
+
+      // Force an error
+      await service.getTransactionById('invalid').catch(() => {});
+
+      const allCalls = loggerSpy.mock.calls.flat();
+      const loggedText = allCalls.map((arg) => JSON.stringify(arg)).join(' ');
+
+      // Should not contain raw error config
+      expect(loggedText).not.toContain('"config"');
+      expect(loggedText).not.toContain('x-hasura-admin-secret');
+      
+      loggerSpy.mockRestore();
     });
   });
 

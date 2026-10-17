@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 import axios, { AxiosInstance } from 'axios';
 import { FreemopayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
-import { sanitizeProviderError } from '../sanitize-provider-error.util';
+import { sanitizeProviderError, maskPhoneNumber } from '../sanitize-provider-error.util';
 import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
 import type { FreemopayCallbackDto } from '../mobile-payment-callback.dto';
 
@@ -248,7 +248,7 @@ export class FreemopayService implements OnModuleInit {
     if (this.isMockPendingPayer(paymentRequest.payer)) {
       this.mockOutcomes.set(mockRef, { outcome: 'PENDING', amount: paymentRequest.amount });
       this.logger.log(
-        `🔨 MOCK FreemoPay payment: payer=${paymentRequest.payer} is on FREEMOPAY_MOCK_PENDING_PHONES, reference=${externalId}, mock_ref=${mockRef}: stays PENDING (no auto-callback)`
+        `🔨 MOCK FreemoPay payment: payer=${maskPhoneNumber(paymentRequest.payer)} is on FREEMOPAY_MOCK_PENDING_PHONES, reference=${externalId}, mock_ref=${mockRef}: stays PENDING (no auto-callback)`
       );
       return {
         success: true,
@@ -264,7 +264,7 @@ export class FreemopayService implements OnModuleInit {
     this.mockOutcomes.set(mockRef, { outcome, amount: paymentRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FreemoPay payment: amount=${paymentRequest.amount} XAF, payer=${paymentRequest.payer}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
+      `🔨 MOCK FreemoPay payment: amount=${paymentRequest.amount} XAF, payer=${maskPhoneNumber(paymentRequest.payer)}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
     );
 
     // Schedule auto-callback
@@ -294,7 +294,7 @@ export class FreemopayService implements OnModuleInit {
     this.mockOutcomes.set(mockRef, { outcome, amount: withdrawalRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FreemoPay withdrawal: amount=${withdrawalRequest.amount} XAF, payee=${withdrawalRequest.payee}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
+      `🔨 MOCK FreemoPay withdrawal: amount=${withdrawalRequest.amount} XAF, payee=${maskPhoneNumber(withdrawalRequest.payee)}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
     );
 
     // Schedule auto-callback
@@ -323,7 +323,7 @@ export class FreemopayService implements OnModuleInit {
     try {
       const externalId = reference || paymentRequest.externalId;
       this.logger.log(
-        `Initiating Freemopay payment for payer: ${paymentRequest.payer}, externalId: ${externalId}, callback: ${paymentRequest.callback}`
+        `Initiating Freemopay payment for payer: ${maskPhoneNumber(paymentRequest.payer)}, externalId: ${externalId}, callback: ${paymentRequest.callback}`
       );
 
       const payload = {
@@ -390,7 +390,7 @@ export class FreemopayService implements OnModuleInit {
     try {
       const externalId = reference || withdrawalRequest.externalId;
       this.logger.log(
-        `Initiating Freemopay withdrawal for receiver: ${withdrawalRequest.payee}, externalId: ${externalId}, callback: ${withdrawalRequest.callback}`
+        `Initiating Freemopay withdrawal for receiver: ${maskPhoneNumber(withdrawalRequest.payee)}, externalId: ${externalId}, callback: ${withdrawalRequest.callback}`
       );
 
       const payload = {

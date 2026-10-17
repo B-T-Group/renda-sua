@@ -3,6 +3,7 @@ import { AccountsService } from '../../accounts/accounts.service';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { MobilePaymentsDatabaseService } from '../../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../../mobile-payments/mobile-payments.service';
+import { maskPhoneNumber } from '../../mobile-payments/sanitize-provider-error.util';
 import type { InitiateAccountRechargeDto } from './account-recharge.dto';
 
 const XAF = 'XAF';
@@ -75,7 +76,7 @@ export class AccountRechargeService {
     await this.recordProviderResponse(tx.id, paymentResponse);
 
     this.logger.log(
-      `HQ recharge initiated: ref=${reference} phone=${fullPhone} amount=${dto.amount} provider=${provider} success=${paymentResponse.success}`
+      `HQ recharge initiated: ref=${reference} phone=${maskPhoneNumber(fullPhone)} amount=${dto.amount} provider=${provider} success=${paymentResponse.success}`
     );
 
     return {
