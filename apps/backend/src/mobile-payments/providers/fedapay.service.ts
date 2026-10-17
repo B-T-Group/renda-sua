@@ -41,6 +41,12 @@ export interface FedaPayPaymentResponse {
   message?: string;
   errorCode?: string;
   status?: string;
+  /**
+   * True when the FedaPay object was created but the follow-up push/send
+   * failed or timed out. The outcome is unknown: callers must keep the row
+   * pending with this transactionId and let the webhook / polling decide.
+   */
+  ambiguous?: boolean;
 }
 
 export interface FedaPayWithdrawalResponse {
@@ -50,6 +56,8 @@ export interface FedaPayWithdrawalResponse {
   message?: string;
   errorCode?: string;
   status?: string;
+  /** See FedaPayPaymentResponse.ambiguous. */
+  ambiguous?: boolean;
 }
 
 export interface FedaPayTransactionStatus {
@@ -349,16 +357,39 @@ export class FedaPayService implements OnModuleInit {
 
       if (transaction && transaction.id) {
         const txData: any = transaction;
-        const tokenResponse = await txData.generateToken();
-        const token = tokenResponse?.token || tokenResponse;
-        
-        await txData.sendNowWithToken(paymentRequest.channel, token, {
-          phone_number: {
-            number: paymentRequest.payer,
-            country: 'TG',
-          },
-        });
-        
+        let token: any;
+        try {
+          const tokenResponse = await txData.generateToken();
+          token = tokenResponse?.token || tokenResponse;
+
+          await txData.sendNowWithToken(paymentRequest.channel, token, {
+            phone_number: {
+              number: paymentRequest.payer,
+              country: 'TG',
+            },
+          });
+        } catch (pushError: any) {
+          // N2: the FedaPay transaction exists, so the push may still reach the
+          // customer. Never report failure here: hand back the FedaPay id so the
+          // caller stores it on the row (pending). The approved/declined webhook,
+          // FedaPay's own expiry (-> canceled) or polling then resolves it.
+          this.logger.warn(
+            `FedaPay push failed after transaction ${transaction.id} was created ` +
+              `(externalId=${externalId}); keeping it pending: ${pushError?.message}`
+          );
+          return {
+            success: true,
+            ambiguous: true,
+            transactionId: String(transaction.id),
+            reference: String(transaction.id),
+            status: 'pending',
+            message: normalizeProviderMessage(
+              null,
+              'Payment created; awaiting confirmation'
+            ),
+          };
+        }
+
         return {
           success: true,
           transactionId: String(transaction.id),
@@ -424,14 +455,10 @@ export class FedaPayService implements OnModuleInit {
         const payouts = (existingPayouts as any)?.payouts || [];
         const matching = payouts.find((p: any) => p.custom_metadata?.externalId === externalId);
         if (matching) {
-          this.logger.log(`Found existing FedaPay payout for ${externalId}: ${matching.id}`);
-          return {
-            success: true,
-            transactionId: String(matching.id),
-            reference: externalId,
-            status: matching.status || 'pending',
-            message: normalizeProviderMessage(null, 'Payout already exists'),
-          };
+          this.logger.log(
+            `Found existing FedaPay payout for ${externalId}: ${matching.id} (status=${matching.status})`
+          );
+          return this.resumeExistingPayout(matching, externalId);
         }
       } catch (lookupError: any) {
         // Fail closed: don't create if lookup fails, let it retry
@@ -456,16 +483,9 @@ export class FedaPayService implements OnModuleInit {
       });
 
       if (payout && payout.id) {
-        const payoutData: any = payout;
-        await payoutData.sendNow();
-        
-        return {
-          success: true,
-          transactionId: String(payout.id),
-          reference: externalId,
-          status: payoutData.status || 'pending',
-          message: normalizeProviderMessage(null, 'Payout initiated'),
-        };
+        // N1: from here on a FedaPay payout exists. Nothing below may report a
+        // plain failure (that would release the hold while money may go out).
+        return this.sendCreatedPayout(payout, externalId);
       }
 
       return {
@@ -486,6 +506,128 @@ export class FedaPayService implements OnModuleInit {
         status: 'failed',
       };
     }
+  }
+
+  /**
+   * Send a payout that already exists at FedaPay. Any error is treated as
+   * ambiguous (pending) unless a Payout.retrieve confirms it failed.
+   */
+  private async sendCreatedPayout(
+    payout: any,
+    externalId: string | undefined
+  ): Promise<FedaPayWithdrawalResponse> {
+    const payoutId = String(payout.id);
+    try {
+      await payout.sendNow();
+      return {
+        success: true,
+        transactionId: payoutId,
+        reference: externalId,
+        status: payout.status || 'pending',
+        message: normalizeProviderMessage(null, 'Payout initiated'),
+      };
+    } catch (sendError: any) {
+      this.logger.warn(
+        `FedaPay payout ${payoutId} created but sendNow failed (externalId=${externalId}): ${sendError?.message}; reconciling via Payout.retrieve`
+      );
+      return this.reconcileAmbiguousPayout(payoutId, externalId);
+    }
+  }
+
+  /**
+   * After an ambiguous send, ask FedaPay what actually happened. Only a
+   * confirmed `failed` is reported as failure; anything else (including a
+   * retrieve error) stays pending with the payout id so polling decides.
+   */
+  private async reconcileAmbiguousPayout(
+    payoutId: string,
+    externalId: string | undefined
+  ): Promise<FedaPayWithdrawalResponse> {
+    let liveStatus: string | undefined;
+    try {
+      const live: any = await Payout.retrieve(parseInt(payoutId, 10));
+      liveStatus = live?.status;
+    } catch (retrieveError: any) {
+      this.logger.warn(
+        `FedaPay payout ${payoutId} retrieve after failed send also failed: ${retrieveError?.message}`
+      );
+    }
+    if (liveStatus === 'failed') {
+      return {
+        success: false,
+        transactionId: payoutId,
+        reference: externalId,
+        status: 'failed',
+        errorCode: 'PAYOUT_FAILED',
+        message: normalizeProviderMessage(null, 'Payout failed'),
+      };
+    }
+    return {
+      success: true,
+      ambiguous: true,
+      transactionId: payoutId,
+      reference: externalId,
+      status: liveStatus || 'pending',
+      message: normalizeProviderMessage(
+        null,
+        'Payout created; awaiting confirmation'
+      ),
+    };
+  }
+
+  /**
+   * Dedupe hit: an existing payout for this externalId. Pass through terminal
+   * states; (re)send one that was created but never sent.
+   */
+  private async resumeExistingPayout(
+    matching: any,
+    externalId: string | undefined
+  ): Promise<FedaPayWithdrawalResponse> {
+    const payoutId = String(matching.id);
+    const status = String(matching.status || 'pending');
+    if (status === 'failed') {
+      return {
+        success: false,
+        transactionId: payoutId,
+        reference: externalId,
+        status: 'failed',
+        errorCode: 'PAYOUT_FAILED',
+        message: normalizeProviderMessage(null, 'Existing payout failed'),
+      };
+    }
+    if (status === 'pending') {
+      // Created but never sent (e.g. an earlier sendNow failed): resend it.
+      let existing: any;
+      try {
+        existing = await Payout.retrieve(parseInt(payoutId, 10));
+      } catch (retrieveError: any) {
+        this.logger.warn(
+          `FedaPay payout ${payoutId} retrieve for resend failed: ${retrieveError?.message}`
+        );
+      }
+      if (existing && typeof existing.sendNow === 'function') {
+        return this.sendCreatedPayout(existing, externalId);
+      }
+      return {
+        success: true,
+        ambiguous: true,
+        transactionId: payoutId,
+        reference: externalId,
+        status: 'pending',
+        message: normalizeProviderMessage(
+          null,
+          'Payout exists; awaiting confirmation'
+        ),
+      };
+    }
+    // sent / started / processing / scheduled: already on its way.
+    return {
+      success: true,
+      transactionId: payoutId,
+      reference: externalId,
+      status,
+      message: normalizeProviderMessage(null, 'Payout already exists'),
+    };
   }
 
   async checkPayoutStatus(
