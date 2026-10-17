@@ -5722,7 +5722,8 @@ export class OrdersService {
 
   private async saveRetryPhoneForClient(order: Orders, phoneE164: string): Promise<void> {
     try {
-      const region = (this.orderMomoContext(order).itemCountry || 'CM').toUpperCase();
+      const momoCtx = await this.orderMomoContext(order);
+      const region = (momoCtx.itemCountry || 'CM').toUpperCase();
       await this.mobilePaymentPhonesService.createForUser(
         order.client.user_id,
         region,
