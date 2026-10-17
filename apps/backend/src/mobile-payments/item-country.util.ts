@@ -13,11 +13,13 @@ export function resolveItemCountry(
 
 /**
  * MoMo integration for a market. Matches seeded `supported_payment_systems`:
- * CM → freemopay, otherwise MyPVit (GA airtel/moov).
+ * CM → freemopay, TG → fedapay (when active), otherwise MyPVit (GA airtel/moov).
  */
 export function mapCountryToMobileMoneyProvider(
   country?: string | null
-): 'freemopay' | 'mypvit' {
-  if (isoCountryCode(country) === 'CM') return 'freemopay';
+): 'freemopay' | 'mypvit' | 'fedapay' {
+  const iso = isoCountryCode(country);
+  if (iso === 'CM') return 'freemopay';
+  if (iso === 'TG') return 'fedapay';
   return 'mypvit';
 }

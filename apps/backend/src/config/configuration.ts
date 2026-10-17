@@ -308,6 +308,29 @@ export interface FreemopayConfig {
   mockPendingPhones: string[];
 }
 
+export interface FedaPayConfig {
+  /** 'sandbox' or 'live'. Forced to 'sandbox' if production check detects non-prod. */
+  environment: 'sandbox' | 'live';
+  /** FedaPay API secret key (sk_sandbox_... or sk_live_...). */
+  secretKey: string;
+  /** FedaPay API public key (pk_sandbox_... or pk_live_...). Used client-side only. */
+  publicKey: string;
+  /** Webhook signing secret for X-FEDAPAY-SIGNATURE verification (wh_sandbox_... or wh_...). */
+  webhookSecret: string;
+  /** Backend callback URL for collections (transactions). */
+  callbackUrl: string;
+  /** Backend callback URL for payouts (dépôts). */
+  payoutCallbackUrl: string;
+  /** DEV ONLY: mock collections/payouts by amount threshold. Never enabled in production. */
+  mockEnabled: boolean;
+  /**
+   * DEV ONLY: with mock enabled, transactions to these payer numbers stay PENDING
+   * forever (no auto-callback) to simulate stuck MoMo prompts.
+   * Ignored unless mockEnabled, which is hard-off in production.
+   */
+  mockPendingPhones: string[];
+}
+
 export interface StripeConfig {
   /** Secret API key (sk_...). */
   secretKey: string;
@@ -623,6 +646,7 @@ export interface Configuration {
   airtelMoney: AirtelMoneyConfig;
   mypvit: MyPVitConfig;
   freemopay: FreemopayConfig;
+  fedapay: FedaPayConfig;
   stripe: StripeConfig;
   order: OrderConfig;
   agentTracking: AgentTrackingConfig;
@@ -772,6 +796,25 @@ export default (): Configuration => {
       mockPendingPhones: (
         process.env.FREEMOPAY_MOCK_PENDING_PHONES ?? '237650000099,237690000099'
       )
+        .split(',')
+        .map((p) => p.replace(/\D/g, ''))
+        .filter((p) => p.length >= 8),
+    },
+    fedapay: {
+      environment:
+        (process.env.FEDAPAY_ENV as 'sandbox' | 'live') === 'live' &&
+        isProductionRuntime(process.env)
+          ? 'live'
+          : 'sandbox',
+      secretKey: process.env.FEDAPAY_SECRET_KEY || '',
+      publicKey: process.env.FEDAPAY_PUBLIC_KEY || '',
+      webhookSecret: process.env.FEDAPAY_WEBHOOK_SECRET || '',
+      callbackUrl: process.env.FEDAPAY_CALLBACK_URL || '',
+      payoutCallbackUrl: process.env.FEDAPAY_PAYOUT_CALLBACK_URL || '',
+      // Hard production safety: mock can ONLY be enabled in non-production runtimes
+      mockEnabled:
+        process.env.FEDAPAY_MOCK === 'true' && !isProductionRuntime(process.env),
+      mockPendingPhones: (process.env.FEDAPAY_MOCK_PENDING_PHONES ?? '')
         .split(',')
         .map((p) => p.replace(/\D/g, ''))
         .filter((p) => p.length >= 8),
