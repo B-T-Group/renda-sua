@@ -12,6 +12,13 @@ import { MtnMomoService } from '../mtn-momo/mtn-momo.service';
 import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
 import { OrangeMomoService } from '../orange-momo/orange-momo.service';
 import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
+import { GiveChangePayoutService } from './give-change-payout.service';
+import { HasuraUserService } from '../hasura/hasura-user.service';
+import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
+import { WithdrawalPinService } from '../withdrawal-pin/withdrawal-pin.service';
+import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
+import { MobileTransactionAccessService } from './mobile-transaction-access.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('Missing Coverage Tests', () => {
   describe('F-M5: Airtel/Moov → MyPVit Mapping', () => {
@@ -65,13 +72,13 @@ describe('Missing Coverage Tests', () => {
           { provide: MobilePaymentsService, useValue: mobilePaymentsService },
           { provide: MobilePaymentsDatabaseService, useValue: mockDatabaseService },
           { provide: AccountsService, useValue: {} },
-          { provide: 'GiveChangePayoutService', useValue: {} },
-          { provide: 'HasuraUserService', useValue: {} },
-          { provide: 'MobilePaymentCallbackProcessor', useValue: {} },
-          { provide: 'WithdrawalPinService', useValue: {} },
-          { provide: 'PendingWithdrawalResolveService', useValue: {} },
-          { provide: 'MobileTransactionAccessService', useValue: {} },
-          { provide: 'ConfigService', useValue: {} },
+          { provide: GiveChangePayoutService, useValue: {} },
+          { provide: HasuraUserService, useValue: {} },
+          { provide: MobilePaymentCallbackProcessor, useValue: {} },
+          { provide: WithdrawalPinService, useValue: {} },
+          { provide: PendingWithdrawalResolveService, useValue: {} },
+          { provide: MobileTransactionAccessService, useValue: {} },
+          { provide: ConfigService, useValue: {} },
         ],
       }).compile();
 
