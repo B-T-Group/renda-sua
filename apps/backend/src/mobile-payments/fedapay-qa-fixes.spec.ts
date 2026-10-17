@@ -88,7 +88,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       reference: 'REF-EXPIRED',
       customer_phone: '+22890123456',
       account_id: 'acc-1',
-      payment_entity: 'wallet',
+      payment_entity: 'account',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -156,7 +156,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       reference: 'REF-TOPUP',
       customer_phone: '+22890123456',
       account_id: 'acc-1',
-      payment_entity: 'wallet',
+      payment_entity: 'account',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -195,9 +195,14 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
           amount: failedTopUpTx.amount,
         })
       );
+      // F3: First CAS claim failed->processing, then mark success
       expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
         failedTopUpTx.id,
         'failed',
+        expect.objectContaining({ status: 'processing' })
+      );
+      expect(mockDatabaseService.updateTransaction).toHaveBeenCalledWith(
+        failedTopUpTx.id,
         expect.objectContaining({ status: 'success' })
       );
     });
@@ -244,7 +249,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       reference: 'REF-MOCK',
       customer_phone: '+22890123456',
       account_id: 'acc-1',
-      payment_entity: 'wallet',
+      payment_entity: 'account',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -293,7 +298,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       reference: 'GC-REF',
       customer_phone: '+22890123456',
       account_id: 'acc-1',
-      payment_entity: 'wallet',
+      payment_entity: 'account',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -374,7 +379,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       reference: 'GC-1',
       customer_phone: '+22890123456',
       account_id: 'acc-1',
-      payment_entity: 'wallet',
+      payment_entity: 'account',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
@@ -491,7 +496,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
         reference: 'REF-1',
         customer_phone: '+22890123456',
         account_id: 'acc-1',
-        payment_entity: 'wallet',
+        payment_entity: 'account',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -584,11 +589,13 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       mockFedaPayService.checkTransactionStatus.mockResolvedValue({
         transactionId: '123',
-        status: 'success',
+        status: 'approved',
         amount: 500,
         currency: 'XOF',
-        reference: 'LIVE-REF',
-        provider: 'fedapay',
+        reference: '123',
+        merchantRef: 'LIVE-REF',
+        reason: '',
+        message: 'Success',
       });
 
       await expect(
@@ -613,8 +620,10 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
         status: 'declined',
         amount: 500,
         currency: 'XOF',
-        reference: 'LIVE-REF',
-        provider: 'fedapay',
+        reference: '123',
+        merchantRef: 'LIVE-REF',
+        reason: 'declined',
+        message: 'Declined',
       });
 
       await expect(
@@ -636,11 +645,13 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       mockFedaPayService.checkTransactionStatus.mockResolvedValue({
         transactionId: '123',
-        status: 'success',
+        status: 'approved',
         amount: 500,
         currency: 'XOF',
-        reference: 'LIVE-REF',
-        provider: 'fedapay',
+        reference: '123',
+        merchantRef: 'LIVE-REF',
+        reason: '',
+        message: 'Success',
       });
 
       await expect(

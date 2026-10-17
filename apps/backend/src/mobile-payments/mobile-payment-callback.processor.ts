@@ -992,16 +992,24 @@ export class MobilePaymentCallbackProcessor {
     }
   }
 
+  /**
+   * F-L3: Mark processing→success. Never overwrite a stored mock-* transaction_id.
+   */
   private async markProcessingSuccess(
     transactionId: string,
     providerTransactionId: string
   ): Promise<boolean> {
+    // F-L3: If the row already has a mock- id, don't replace it
+    const tx = await this.databaseService.getTransactionById(transactionId);
+    const shouldUpdateTxId = providerTransactionId && 
+                              (!tx?.transaction_id || !tx.transaction_id.startsWith('mock-'));
+    
     return this.databaseService.updateTransactionIfStatus(
       transactionId,
       'processing',
       {
         status: 'success',
-        ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
+        ...(shouldUpdateTxId ? { transaction_id: providerTransactionId } : {}),
       }
     );
   }
