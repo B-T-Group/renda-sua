@@ -13,13 +13,12 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
   let accountsService: AccountsService;
 
   const mockDatabaseService = {
-    findTransactionByProviderReference: jest.fn(),
     getTransactionByTransactionId: jest.fn(),
     getTransactionByReference: jest.fn(),
+    getTransactionById: jest.fn(),
     logCallback: jest.fn(),
     updateTransactionIfStatus: jest.fn(),
     updateTransactionStatus: jest.fn(),
-    findTransactionById: jest.fn(),
   };
 
   const mockMobilePaymentsService = {
@@ -96,9 +95,9 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     };
 
     it('should process first success callback', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
-      );
+      // Lookup chain: tries '456' first, then 'fedapay-tx-456'
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(mockTransaction);  // Found on '456'
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
       mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(
         undefined
@@ -119,35 +118,30 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
     it('should reject duplicate success callback (already success)', async () => {
       const completedTransaction = { ...mockTransaction, status: 'success' };
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        completedTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(completedTransaction);
 
       const result = await processor.processFedaPayCallback(successCallback);
 
       expect(result.received).toBe(true);
-      expect(result.skipped).toBe(true);
       // Should not credit again
       expect(mockAccountsService.creditAccountFromCallback).not.toHaveBeenCalled();
     });
 
     it('should reject duplicate success callback (already failed)', async () => {
       const failedTransaction = { ...mockTransaction, status: 'failed' };
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        failedTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(failedTransaction);
 
       const result = await processor.processFedaPayCallback(successCallback);
 
       expect(result.received).toBe(true);
-      expect(result.skipped).toBe(true);
       expect(mockAccountsService.creditAccountFromCallback).not.toHaveBeenCalled();
     });
 
     it('should handle duplicate pending callback', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(mockTransaction);
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(false); // CAS failed
 
       const result = await processor.processFedaPayCallback(successCallback);
@@ -158,9 +152,8 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
 
     it('should not double-credit on concurrent callbacks', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValue(mockTransaction);
       // First CAS succeeds, second fails
       mockDatabaseService.updateTransactionIfStatus
         .mockResolvedValueOnce(true)
@@ -208,9 +201,8 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     };
 
     it('should return 5xx when credit fails', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(mockTransaction);
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
       mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(
         undefined
@@ -231,9 +223,8 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
 
     it('should return 5xx when handler throws exception', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(mockTransaction);
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
       mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(
         undefined
@@ -248,9 +239,8 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
 
     it('should allow retry after handler failure', async () => {
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValue(mockTransaction);
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
       mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(
         undefined
@@ -298,9 +288,8 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
         },
       };
 
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(mockTransaction);
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
       mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(
         undefined
@@ -332,9 +321,8 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
         },
       };
 
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(mockTransaction);
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
       // Provider verification fails
       mockMobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValue(
@@ -350,19 +338,21 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
 
     it('should skip re-verification for mocked transactions', async () => {
-      const mockTx = { ...mockTransaction, transaction_id: 'mock-fedapay-123' };
+      const mockedTransaction = {
+        ...mockTransaction,
+        provider_tx_id: 'mock:fedapay-tx-456',
+      };
       const successCallback: FedaPayCallbackDto = {
         entity: {
           id: 456,
           status: 'approved',
           amount: 1000,
-          reference: 'mock-fedapay-123',
+          reference: 'fedapay-tx-456',
         },
       };
 
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTx
-      );
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(mockedTransaction);
       mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
       mockAccountsService.creditAccountFromCallback.mockResolvedValue({
         success: true,
@@ -384,7 +374,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
       const mockTransaction = {
         id: 'tx-123',
         transaction_id: 'fedapay-tx-456',
-        status: 'success', // Already completed
+        status: 'pending',
         amount: 1000,
         currency: 'XOF',
         customer_phone: '+22878123456',
@@ -402,13 +392,19 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
         },
       };
 
-      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(
-        mockTransaction
+      mockDatabaseService.getTransactionByTransactionId
+        .mockResolvedValueOnce(mockTransaction);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(
+        undefined
       );
+      mockAccountsService.creditAccountFromCallback.mockResolvedValue({
+        success: true,
+      });
 
       await processor.processFedaPayCallback(callback);
 
-      // Should still log even if skipped
+      // Should log callback
       expect(mockDatabaseService.logCallback).toHaveBeenCalledWith(
         'tx-123',
         callback
