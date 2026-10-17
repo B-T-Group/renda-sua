@@ -8,10 +8,10 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { FedaPayService } from './providers/fedapay.service';
 import { FreemopayService } from './providers/freemopay.service';
 import { MyPVitService } from './providers/mypvit.service';
-import { MtnMomoService } from './providers/mtn-momo.service';
-import { MtnMomoDatabaseService } from './providers/mtn-momo-database.service';
-import { OrangeMomoService } from './providers/orange-momo.service';
-import { OrangeMomoDatabaseService } from './providers/orange-momo-database.service';
+import { MtnMomoService } from '../mtn-momo/mtn-momo.service';
+import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
+import { OrangeMomoService } from '../orange-momo/orange-momo.service';
+import { OrangeMomoDatabaseService } from '../orange-momo/orange-momo-database.service';
 
 describe('Missing Coverage Tests', () => {
   describe('F-M5: Airtel/Moov → MyPVit Mapping', () => {
