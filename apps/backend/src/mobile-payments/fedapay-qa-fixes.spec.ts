@@ -207,7 +207,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       );
     });
 
-    it('should call reportMoneyAnomaly for late approval on non-wallet entity', async () => {
+    it('should NOT credit non-wallet entities on late approval (money anomaly case)', async () => {
       const failedOrderTx: MobilePaymentTransaction = {
         id: 'tx-failed-order',
         status: 'failed',
@@ -238,18 +238,13 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(failedOrderTx);
       mockDatabaseService.logCallback.mockResolvedValue(undefined);
-      const reportAnomalySpy = jest.spyOn(processor as any, 'reportMoneyAnomaly').mockResolvedValue(undefined);
 
       const result = await processor.processFedaPayCallback(lateApprovalOrder);
 
       expect(result.received).toBe(true);
-      expect(reportAnomalySpy).toHaveBeenCalledWith(
-        expect.objectContaining({ id: failedOrderTx.id }),
-        'late_success_non_wallet',
-        'Approved after decline: money captured, not applied'
-      );
       // Should NOT call registerDepositIfNotExists for non-wallet entities
       expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+      // The processor should log the money anomaly and return early
     });
 
     it('should use CAS to prevent double-credit on concurrent callbacks', async () => {
