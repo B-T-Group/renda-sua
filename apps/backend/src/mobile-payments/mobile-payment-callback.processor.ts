@@ -542,11 +542,16 @@ export class MobilePaymentCallbackProcessor {
     tx: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
-    // F3: Limit to wallet top-ups only (payment_entity='account')
-    if (tx.payment_entity !== 'account') {
-      this.logger.warn(
-        `Late success on failed ${tx.payment_entity} tx ${tx.id}: not account wallet, skipping`
+    // F3: Wallet top-ups have payment_entity null or 'account'
+    const isWalletTopUp = tx.payment_entity == null || tx.payment_entity === 'account';
+    
+    if (!isWalletTopUp) {
+      // Money captured but not applied - this is an anomaly that requires investigation
+      this.logger.error(
+        `Late success on failed ${tx.payment_entity} tx ${tx.id} (${tx.reference}): money captured but entity is not a wallet. MONEY ANOMALY - requires manual review.`
       );
+      // TODO: Call reportMoneyAnomaly when the service is available
+      // await this.reportMoneyAnomaly(tx, 'late_success_non_wallet', 'Approved after decline: money captured, not applied');
       return;
     }
 

@@ -235,6 +235,98 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       // F3: CAS before credit means if CAS fails, no credit happens (preventing double-credit)
       expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
     });
+
+    it('should credit wallet when payment_entity is null (real user top-ups)', async () => {
+      const topUpWithNullEntity: MobilePaymentTransaction = {
+        ...failedTopUpTx,
+        payment_entity: null as any,
+      };
+
+      const lateApproval: FedaPayCallbackDto = {
+        entity: {
+          id: 999,
+          status: 'approved',
+          amount: 1000,
+          reference: 'REF-TOPUP',
+          custom_metadata: { externalId: 'REF-TOPUP' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(topUpWithNullEntity);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+      const result = await processor.processFedaPayCallback(lateApproval);
+
+      expect(result.received).toBe(true);
+      expect(mockAccountsService.registerDepositIfNotExists).toHaveBeenCalled();
+    });
+
+    it('should log money anomaly for non-wallet late approvals', async () => {
+      const orderTx: MobilePaymentTransaction = {
+        ...failedTopUpTx,
+        payment_entity: 'order',
+      };
+
+      const lateApproval: FedaPayCallbackDto = {
+        entity: {
+          id: 999,
+          status: 'approved',
+          amount: 1000,
+          reference: 'REF-TOPUP',
+          custom_metadata: { externalId: 'REF-TOPUP' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(orderTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+
+      const result = await processor.processFedaPayCallback(lateApproval);
+
+      expect(result.received).toBe(true);
+      // No credit should happen for non-wallet entities
+      expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+      // Transaction should remain unchanged
+      expect(mockDatabaseService.updateTransaction).not.toHaveBeenCalled();
+    });
+
+    it('should preserve transaction_id when marking late success', async () => {
+      const lateApproval: FedaPayCallbackDto = {
+        entity: {
+          id: 999,
+          status: 'approved',
+          amount: 1000,
+          reference: 'REF-TOPUP',
+          custom_metadata: { externalId: 'REF-TOPUP' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(failedTopUpTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+      await processor.processFedaPayCallback(lateApproval);
+
+      // The final updateTransaction call should NOT include transaction_id
+      const finalUpdateCall = mockDatabaseService.updateTransaction.mock.calls.find(
+        (call) => call[1].status === 'success'
+      );
+      expect(finalUpdateCall).toBeDefined();
+      expect(finalUpdateCall[1]).not.toHaveProperty('transaction_id');
+    });
   });
 
   describe('F-L3: Preserve mock- transaction_id', () => {
