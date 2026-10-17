@@ -18,6 +18,7 @@ jest.mock('fedapay', () => ({
   Payout: {
     create: jest.fn(),
     retrieve: jest.fn(),
+    all: jest.fn(),
   },
   Webhook: {
     constructEvent: jest.fn(),
@@ -270,70 +271,6 @@ describe('FedaPayService', () => {
     });
   });
 
-  describe('Webhook Signature Verification', () => {
-    const validPayload = JSON.stringify({ transaction: { id: '123' } });
-    const timestamp = Math.floor(Date.now() / 1000);
-    const secret = 'test-webhook-secret';
-
-    it('should verify valid signature', () => {
-      const crypto = require('crypto');
-      const signature = crypto
-        .createHmac('sha256', secret)
-        .update(`${timestamp}.${validPayload}`)
-        .digest('hex');
-      
-      const header = `t=${timestamp},v1=${signature}`;
-
-      expect(
-        service['verifyWebhookSignature'](validPayload, header, secret)
-      ).toBe(true);
-    });
-
-    it('should reject invalid signature', () => {
-      const header = `t=${timestamp},v1=invalid_signature`;
-
-      expect(
-        service['verifyWebhookSignature'](validPayload, header, secret)
-      ).toBe(false);
-    });
-
-    it('should reject stale timestamp', () => {
-      const staleTimestamp = Math.floor(Date.now() / 1000) - 400; // 400s old
-      const crypto = require('crypto');
-      const signature = crypto
-        .createHmac('sha256', secret)
-        .update(`${staleTimestamp}.${validPayload}`)
-        .digest('hex');
-      
-      const header = `t=${staleTimestamp},v1=${signature}`;
-
-      expect(
-        service['verifyWebhookSignature'](validPayload, header, secret)
-      ).toBe(false);
-    });
-
-    it('should accept timestamp within tolerance (5 minutes)', () => {
-      const recentTimestamp = Math.floor(Date.now() / 1000) - 200; // 200s old
-      const crypto = require('crypto');
-      const signature = crypto
-        .createHmac('sha256', secret)
-        .update(`${recentTimestamp}.${validPayload}`)
-        .digest('hex');
-      
-      const header = `t=${recentTimestamp},v1=${signature}`;
-
-      expect(
-        service['verifyWebhookSignature'](validPayload, header, secret)
-      ).toBe(true);
-    });
-
-    it('should reject malformed header', () => {
-      expect(
-        service['verifyWebhookSignature'](validPayload, 'malformed', secret)
-      ).toBe(false);
-    });
-  });
-
   describe('Payment Initiation', () => {
     it('should validate phone number', async () => {
       const result = await service.initiatePayment({
@@ -439,51 +376,341 @@ describe('FedaPayService', () => {
     });
   });
 
-  describe('Callback Verification', () => {
-    it('should verify callback payload with valid signature', () => {
-      const payload = {
-        entity: 'transaction',
-        name: 'transaction.approved',
-        object: {
-          id: '123',
-          status: 'approved',
-        },
+  describe('B8: M1 Token Flow', () => {
+    it('should use token returned by generateToken()', async () => {
+      const mockToken = 'generated-token-xyz';
+      const mockTx = {
+        id: 'tx_token_test',
+        status: 'pending',
+        generateToken: jest.fn().mockResolvedValue({ token: mockToken }),
+        sendNowWithToken: jest.fn().mockResolvedValue(undefined),
       };
-      
-      const timestamp = Math.floor(Date.now() / 1000);
-      const secret = 'test-webhook-secret';
-      const crypto = require('crypto');
-      const signature = crypto
-        .createHmac('sha256', secret)
-        .update(`${timestamp}.${JSON.stringify(payload)}`)
-        .digest('hex');
-      const header = `t=${timestamp},v1=${signature}`;
-      
-      const result = service.verifyCallback(payload, header);
-      
-      expect(result).toBe(true);
-    });
 
-    it('should reject callback with invalid signature', () => {
-      const payload = {
-        entity: 'transaction',
-        name: 'transaction.approved',
-      };
-      
-      const result = service.verifyCallback(payload, 'invalid-signature');
-      
-      expect(result).toBe(false);
-    });
+      const { Transaction } = require('fedapay');
+      Transaction.create.mockResolvedValue(mockTx);
 
-    it('should reject callback without signature', () => {
-      const payload = {
-        entity: 'transaction',
-        name: 'transaction.approved',
-      };
-      
-      const result = service.verifyCallback(payload);
-      
-      expect(result).toBe(false);
+      await service.initiatePayment({
+        payer: '+22878123456',
+        amount: 1000,
+        externalId: 'ref-token-test',
+        description: 'Token test',
+        callback: 'https://test.com/callback',
+        channel: 'moov_tg',
+      });
+
+      expect(mockTx.generateToken).toHaveBeenCalled();
+      expect(mockTx.sendNowWithToken).toHaveBeenCalledWith(
+        'moov_tg',
+        mockToken,
+        expect.objectContaining({
+          phone_number: expect.objectContaining({
+            country: 'TG'
+          })
+        })
+      );
     });
   });
+
+  describe('B8: B6 Payout Idempotency', () => {
+    it('should check for existing payout before creating new one using Payout.all', async () => {
+      const { Payout } = require('fedapay');
+      // Real SDK shape: Payout.all returns { payouts: [...], meta: {...} }
+      // See node_modules/fedapay/test/PayoutTest.ts:68-126
+      Payout.all.mockResolvedValue({
+        payouts: [
+          {
+            id: 'existing-payout-id',
+            status: 'pending',
+            amount: 5000,
+            custom_metadata: { externalId: 'duplicate-ref-test' },
+          }
+        ]
+      });
+
+      const result = await service.withdraw({
+        payee: '+22878123456',
+        amount: 5000,
+        externalId: 'duplicate-ref-test',
+        description: 'Duplicate payout test',
+        callback: 'https://test.com/callback',
+        channel: 'togocel',
+      });
+
+      expect(Payout.all).toHaveBeenCalledWith({
+        'custom_metadata.externalId': 'duplicate-ref-test'
+      });
+      expect(Payout.create).not.toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.transactionId).toBe('existing-payout-id');
+    });
+
+    it('should create new payout when none exists', async () => {
+      const { Payout } = require('fedapay');
+      // Real SDK shape: empty list
+      Payout.all.mockResolvedValue({ payouts: [] });
+      
+      const mockPayout = {
+        id: 'new-payout-123',
+        status: 'pending',
+        sendNow: jest.fn().mockResolvedValue(undefined),
+      };
+      Payout.create.mockResolvedValue(mockPayout);
+
+      const result = await service.withdraw({
+        payee: '+22878123456',
+        amount: 5000,
+        externalId: 'new-ref',
+        description: 'New payout',
+        callback: 'https://test.com/callback',
+        channel: 'togocel',
+      });
+
+      expect(Payout.all).toHaveBeenCalled();
+      expect(Payout.create).toHaveBeenCalled();
+      expect(result.success).toBe(true);
+      expect(result.transactionId).toBe('new-payout-123');
+    });
+
+    it('should fail closed when payout lookup errors', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockRejectedValue(new Error('Network error'));
+
+      const result = await service.withdraw({
+        payee: '+22878123456',
+        amount: 5000,
+        externalId: 'error-ref',
+        description: 'Error test',
+        callback: 'https://test.com/callback',
+        channel: 'togocel',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Failed to check existing payout');
+      expect(Payout.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('B8: B6 Payout Status Mapping', () => {
+    it('should map payout sent to approved', async () => {
+      const { Payout } = require('fedapay');
+      Payout.retrieve.mockResolvedValue({
+        id: 'payout-sent',
+        status: 'sent',
+        amount: 5000,
+        currency: { iso: 'XOF' },
+        custom_metadata: { externalId: 'sent-ref' },
+      });
+
+      const result = await service.checkPayoutStatus('payout-sent');
+
+      expect(result.status).toBe('approved');
+      expect(result.amount).toBe(5000);
+      expect(result.currency).toBe('XOF');
+    });
+
+    it('should map payout failed to declined', async () => {
+      const { Payout } = require('fedapay');
+      Payout.retrieve.mockResolvedValue({
+        id: 'payout-failed',
+        status: 'failed',
+        amount: 5000,
+        currency: { iso: 'XOF' },
+        custom_metadata: { externalId: 'failed-ref' },
+        reason: 'Insufficient funds',
+      });
+
+      const result = await service.checkPayoutStatus('payout-failed');
+
+      expect(result.status).toBe('declined');
+      expect(result.reason).toContain('Insufficient funds');
+    });
+
+    it('should keep payout pending as pending', async () => {
+      const { Payout } = require('fedapay');
+      Payout.retrieve.mockResolvedValue({
+        id: 'payout-pending',
+        status: 'pending',
+        amount: 5000,
+        currency: { iso: 'XOF' },
+        custom_metadata: { externalId: 'pending-ref' },
+      });
+
+      const result = await service.checkPayoutStatus('payout-pending');
+
+      expect(result.status).toBe('pending');
+    });
+  });
+
+  describe('B8d: M4 Production Config Refusal (Real Constructor Tests)', () => {
+    it('should throw when sk_live_ key is used with mock enabled', async () => {
+      const originalEnv = process.env.DEPLOYMENT_ENV;
+      process.env.DEPLOYMENT_ENV = 'development';
+
+      try {
+        await Test.createTestingModule({
+          providers: [
+            FedaPayService,
+            {
+              provide: ConfigService,
+              useValue: {
+                get: jest.fn((key: string) => {
+                  if (key === 'fedapay') {
+                    return {
+                      environment: 'sandbox',
+                      secretKey: 'sk_live_DANGEROUS',
+                      publicKey: 'test-public',
+                      webhookSecret: 'test-webhook-secret',
+                      callbackUrl: 'https://test.com/callback',
+                      payoutCallbackUrl: 'https://test.com/payout-callback',
+                      mockEnabled: true,
+                    };
+                  }
+                  return undefined;
+                }),
+              },
+            },
+          ],
+        }).compile();
+        throw new Error('Expected constructor to throw');
+      } catch (error: any) {
+        expect(error.message).toMatch(/mock cannot be enabled with a live secret key/i);
+      }
+
+      process.env.DEPLOYMENT_ENV = originalEnv;
+    });
+
+    it('should throw when DEPLOYMENT_ENV is production with mock enabled', async () => {
+      const originalEnv = process.env.DEPLOYMENT_ENV;
+      process.env.DEPLOYMENT_ENV = 'production';
+
+      try {
+        await Test.createTestingModule({
+          providers: [
+            FedaPayService,
+            {
+              provide: ConfigService,
+              useValue: {
+                get: jest.fn((key: string) => {
+                  if (key === 'fedapay') {
+                    return {
+                      environment: 'sandbox',
+                      secretKey: 'sk_sandbox_TEST',
+                      publicKey: 'test-public',
+                      webhookSecret: 'test-webhook-secret',
+                      callbackUrl: 'https://test.com/callback',
+                      payoutCallbackUrl: 'https://test.com/payout-callback',
+                      mockEnabled: true,
+                    };
+                  }
+                  return undefined;
+                }),
+              },
+            },
+          ],
+        }).compile();
+        throw new Error('Expected constructor to throw');
+      } catch (error: any) {
+        expect(error.message).toMatch(/Mock can only be enabled.*development.*test/i);
+      }
+
+      process.env.DEPLOYMENT_ENV = originalEnv;
+    });
+
+    it('should allow sk_sandbox_ with mock enabled in development', async () => {
+      const originalEnv = process.env.DEPLOYMENT_ENV;
+      process.env.DEPLOYMENT_ENV = 'development';
+
+      const testModule = await Test.createTestingModule({
+        providers: [
+          FedaPayService,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn((key: string) => {
+                if (key === 'fedapay') {
+                  return {
+                    environment: 'sandbox',
+                    secretKey: 'sk_sandbox_TEST',
+                    publicKey: 'test-public',
+                    webhookSecret: 'test-webhook-secret',
+                    callbackUrl: 'https://test.com/callback',
+                    payoutCallbackUrl: 'https://test.com/payout-callback',
+                    mockEnabled: true,
+                  };
+                }
+                return undefined;
+              }),
+            },
+          },
+        ],
+      }).compile();
+
+      expect(() => {
+        testModule.get(FedaPayService);
+      }).not.toThrow();
+
+      process.env.DEPLOYMENT_ENV = originalEnv;
+    });
+  });
+
+  describe('B8: B4 Currency Reading', () => {
+    it('should read real currency from transaction', async () => {
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve.mockResolvedValue({
+        id: 'tx-currency-test',
+        status: 'approved',
+        amount: 1000,
+        currency: { iso: 'XOF' },
+        custom_metadata: { externalId: 'ref-curr' },
+      });
+
+      const result = await service.checkTransactionStatus('tx-currency-test');
+
+      expect(result.currency).toBe('XOF');
+    });
+
+    it('should return empty string when currency missing (fail closed)', async () => {
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve.mockResolvedValue({
+        id: 'tx-no-currency',
+        status: 'approved',
+        amount: 1000,
+        custom_metadata: { externalId: 'ref-no-curr' },
+      });
+
+      const result = await service.checkTransactionStatus('tx-no-currency');
+
+      expect(result.currency).toBe('');
+    });
+
+    it('should read real currency from payout', async () => {
+      const { Payout } = require('fedapay');
+      Payout.retrieve.mockResolvedValue({
+        id: 'payout-currency-test',
+        status: 'sent',
+        amount: 5000,
+        currency: { iso: 'XOF' },
+        custom_metadata: { externalId: 'payout-curr' },
+      });
+
+      const result = await service.checkPayoutStatus('payout-currency-test');
+
+      expect(result.currency).toBe('XOF');
+    });
+
+    it('should return empty string when payout currency missing (fail closed)', async () => {
+      const { Payout } = require('fedapay');
+      Payout.retrieve.mockResolvedValue({
+        id: 'payout-no-currency',
+        status: 'sent',
+        amount: 5000,
+        custom_metadata: { externalId: 'payout-no-curr' },
+      });
+
+      const result = await service.checkPayoutStatus('payout-no-currency');
+
+      expect(result.currency).toBe('');
+    });
+  });
+
 });

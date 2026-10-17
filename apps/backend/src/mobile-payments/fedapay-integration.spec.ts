@@ -7,10 +7,14 @@ import { MobilePaymentsDatabaseService } from './mobile-payments-database.servic
 import { AccountsService } from '../accounts/accounts.service';
 import { GiveChangePayoutService } from './give-change-payout.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { MobileTransactionAccessService } from './mobile-transaction-access.service';
+import { MtnMomoService } from './providers/mtn-momo.service';
+import { OrangeMomoService } from './providers/orange-momo.service';
+import { FreemopayService } from './providers/freemopay.service';
 
 describe('FedaPay Integration Tests (B2, B4, B5)', () => {
   let controller: MobilePaymentsController;
@@ -29,11 +33,22 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
     checkTransactionStatus: jest.fn(),
     assertProviderConfirmsCallback: jest.fn(),
     isWithdrawalDestinationCmOrGa: jest.fn(),
+    resolveProviderFromRequest: jest.fn(),
   };
 
   const mockCallbackProcessor = {
     processFedaPayCallback: jest.fn(),
   };
+
+  const mockHasuraSystemService = {
+    query: jest.fn(),
+    mutate: jest.fn(),
+  };
+
+  const mockMtnMomoService = {};
+  const mockOrangeMomoService = {};
+  const mockFreemopayService = {};
+  const mockFedaPayService = {};
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -58,7 +73,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
   });
 
   describe('B2: Signature Verification', () => {
@@ -150,64 +165,368 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
     });
   });
 
-  describe('B4: Provider Routing with Amount/Currency/Reference Check', () => {
-    const mockTx = {
-      id: 'tx-123',
-      transaction_id: 'fedapay-tx-456',
-      customer_phone: '+22878123456',
-      provider: 'fedapay',
-      amount: 1000,
-      reference: 'REF123',
-    };
-
-    it('should reject callback when live amount mismatches for FedaPay', async () => {
-      mockMobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValue(
-        new Error('FedaPay amount mismatch: expected 999 XOF, got 1000 XOF')
-      );
-
-      await expect(
-        mobilePaymentsService.assertProviderConfirmsCallback(mockTx as any, 'SUCCESS')
-      ).rejects.toThrow(/amount mismatch/i);
+  describe('B8a: Controller Webhook Signature Verification (Real SDK)', () => {
+    const { Webhook } = require('fedapay');
+    const secret = 'test_webhook_secret'; // Must match mockConfigService
+    const payload = JSON.stringify({
+      id: 'evt_test_123',
+      name: 'transaction.approved',
+      entity: {
+        id: 'tx_123',
+        status: 'approved',
+        amount: 1000,
+        custom_metadata: { externalId: 'REF123' },
+      },
     });
 
-    it('should reject callback when currency is not XOF for FedaPay', async () => {
-      mockMobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValue(
-        new Error('FedaPay currency mismatch: expected XAF, got XOF')
-      );
+    beforeEach(() => {
+      // Re-establish webhook secret mock after reset
+      mockConfigService.get.mockImplementation((key: string) => {
+        if (key === 'fedapay.webhookSecret') return secret;
+        return null;
+      });
+    });
 
-      await expect(
-        mobilePaymentsService.assertProviderConfirmsCallback(mockTx as any, 'SUCCESS')
-      ).rejects.toThrow(/currency mismatch/i);
+    it('should accept valid webhook with real HMAC signature', () => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const header = Webhook.generateTestHeaderString({ payload, secret, timestamp });
+
+      const result = controller['verifyAndParseFedaPayWebhook'](payload, header);
+
+      expect(result).toBeDefined();
+      expect(result.id).toBe('evt_test_123');
+    });
+
+    it('should reject tampered webhook body', () => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const header = Webhook.generateTestHeaderString({ payload, secret, timestamp });
+      const tamperedPayload = payload.replace('"approved"', '"declined"');
+
+      expect(() => {
+        controller['verifyAndParseFedaPayWebhook'](tamperedPayload, header);
+      }).toThrow(HttpException);
+    });
+
+    it('should reject stale webhook (>300s past)', () => {
+      const staleTimestamp = Math.floor(Date.now() / 1000) - 400; // 400s ago
+      const header = Webhook.generateTestHeaderString({ payload, secret, timestamp: staleTimestamp });
+
+      expect(() => {
+        controller['verifyAndParseFedaPayWebhook'](payload, header);
+      }).toThrow(HttpException);
+    });
+
+    it('should reject future webhook (>300s future)', () => {
+      const futureTimestamp = Math.floor(Date.now() / 1000) + 400; // 400s future
+      const header = Webhook.generateTestHeaderString({ payload, secret, timestamp: futureTimestamp });
+
+      expect(() => {
+        controller['verifyAndParseFedaPayWebhook'](payload, header);
+      }).toThrow(HttpException);
+    });
+
+    it('should reject webhook with missing header', () => {
+      expect(() => {
+        controller['verifyAndParseFedaPayWebhook'](payload, '');
+      }).toThrow();
+    });
+
+    it('should handle replayed event (200 with no reprocessing)', async () => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const header = Webhook.generateTestHeaderString({ payload, secret, timestamp });
+      const parsedEvent = JSON.parse(payload);
+      const rawBody = Buffer.from(payload);
+
+      // First call: event processed and recorded in-memory
+      mockCallbackProcessor.processFedaPayCallback.mockResolvedValue({ received: true });
+
+      const req1 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
+      const result1 = await controller.fedapayCallback(req1);
+      expect(result1).toEqual({ received: true });
+      expect(mockCallbackProcessor.processFedaPayCallback).toHaveBeenCalledTimes(1);
+
+      // Second call: same event replayed, controller throws HTTP 200 (duplicate)
+      const req2 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
+      try {
+        await controller.fedapayCallback(req2);
+        throw new Error('Expected HTTP 200 exception for duplicate');
+      } catch (error: any) {
+        expect(error.status).toBe(200);
+        expect(error.response.message).toBe('Duplicate event');
+      }
+      // Processor not called again
+      expect(mockCallbackProcessor.processFedaPayCallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reprocess replayed event after handler failure', async () => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const header = Webhook.generateTestHeaderString({ payload, secret, timestamp });
+      const parsedEvent = JSON.parse(payload);
+      const rawBody = Buffer.from(payload);
+
+      // First call: processing throws, event NOT recorded in-memory
+      mockCallbackProcessor.processFedaPayCallback.mockRejectedValueOnce(new Error('DB timeout'));
+
+      const req1 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
+      await expect(controller.fedapayCallback(req1)).rejects.toThrow(/Failed to process FedaPay callback/);
+
+      // Second call: same event retried, processing succeeds this time
+      mockCallbackProcessor.processFedaPayCallback.mockResolvedValueOnce({ received: true });
+
+      const req2 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
+      const result2 = await controller.fedapayCallback(req2);
+      expect(result2).toEqual({ received: true });
+      expect(mockCallbackProcessor.processFedaPayCallback).toHaveBeenCalledTimes(2);
     });
   });
 
-  describe('B7: Withdrawal Destination with FedaPay Flag', () => {
-    it('should reject TG withdrawal when FedaPay not active', async () => {
-      mockMobilePaymentsService.isWithdrawalDestinationCmOrGa.mockResolvedValue(false);
+  describe('B8b: Real assertProviderConfirmsCallback Tests', () => {
+    let realService: MobilePaymentsService;
+    let mockFedaPayService: any;
+    const mockMyPVitService = {};
+    const mockMtnMomoDatabaseService = {};
+    const mockOrangeMomoDatabaseService = {};
 
-      const request = {
-        amount: 1000,
-        currency: 'XOF',
-        customerPhone: '+22878123456',
+    beforeEach(() => {
+      mockFedaPayService = {
+        checkTransactionStatus: jest.fn(),
       };
-
-      await expect(
-        (controller as any).assertGiveChangeAmountAndPhone(request)
-      ).rejects.toThrow(HttpException);
+      realService = new MobilePaymentsService(
+        mockMyPVitService as any,
+        mockMtnMomoService as any,
+        mockMtnMomoDatabaseService as any,
+        mockOrangeMomoService as any,
+        mockOrangeMomoDatabaseService as any,
+        mockFreemopayService as any,
+        mockFedaPayService,
+        mockHasuraSystemService as any,
+      );
     });
 
-    it('should allow TG withdrawal when FedaPay active', async () => {
-      mockMobilePaymentsService.isWithdrawalDestinationCmOrGa.mockResolvedValue(true);
-
-      const request = {
+    it('should reject when live amount mismatches stored amount', async () => {
+      const tx = {
+        id: 'tx-1',
+        transaction_id: 'fedapay_tx_1',
         amount: 1000,
         currency: 'XOF',
-        customerPhone: '+22878123456',
+        reference: 'REF123',
+        provider: 'fedapay',
+        status: 'PENDING',
       };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 999, // Mismatch
+        currency: 'XOF',
+        reference: 'REF123',
+      });
+      process.env.ENABLE_FEDAPAY_TOGO_INTEGRATION = 'false';
 
       await expect(
-        (controller as any).assertGiveChangeAmountAndPhone(request)
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.toThrow(/amount mismatch.*expected 1000.*got 999/i);
+    });
+
+    it('should reject when live currency is not XOF', async () => {
+      const tx = {
+        id: 'tx-2',
+        transaction_id: 'fedapay_tx_2',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF456',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XAF', // Wrong currency
+        reference: 'REF456',
+      });
+      process.env.ENABLE_FEDAPAY_TOGO_INTEGRATION = 'false';
+
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.toThrow(/live currency XAF is not XOF/i);
+    });
+
+    it('should reject when live reference mismatches stored reference', async () => {
+      const tx = {
+        id: 'tx-3',
+        transaction_id: 'fedapay_tx_3',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF789',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'WRONG_REF', // Reference mismatch
+      });
+      process.env.ENABLE_FEDAPAY_TOGO_INTEGRATION = 'false';
+
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.toThrow(/reference mismatch.*expected REF789.*got WRONG_REF/i);
+    });
+
+    it('should reject when live currency is missing (fail closed)', async () => {
+      const tx = {
+        id: 'tx-4',
+        transaction_id: 'fedapay_tx_4',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF111',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: '', // Missing currency
+        reference: 'REF111',
+      });
+      process.env.ENABLE_FEDAPAY_TOGO_INTEGRATION = 'false';
+
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.toThrow(/missing live currency.*fail closed/i);
+    });
+
+    it('should reject when live reference is missing (fail closed)', async () => {
+      const tx = {
+        id: 'tx-5',
+        transaction_id: 'fedapay_tx_5',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF222',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        reference: '', // Missing reference
+      });
+      process.env.ENABLE_FEDAPAY_TOGO_INTEGRATION = 'false';
+
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.toThrow(/missing live reference.*fail closed/i);
+    });
+
+    it('should accept when all fields match', async () => {
+      const tx = {
+        id: 'tx-6',
+        transaction_id: 'fedapay_tx_6',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF333',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF333',
+      });
+      process.env.ENABLE_FEDAPAY_TOGO_INTEGRATION = 'false';
+
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
       ).resolves.not.toThrow();
     });
   });
+
+  describe('B8e: Card/Bank Rejection and Currency Guards', () => {
+    it('should reject card payment method for FedaPay', () => {
+      const request = {
+        amount: 1000,
+        currency: 'XOF',
+        customerPhone: '+22878123456',
+        paymentMethod: 'card',
+      };
+
+      expect(() => {
+        (controller as any).assertMobileMoneyCurrency(request, 'fedapay');
+      }).toThrow(/only supports mobile_money/i);
+    });
+
+    it('should reject bank transfer payment method for FedaPay', () => {
+      const request = {
+        amount: 1000,
+        currency: 'XOF',
+        customerPhone: '+22878123456',
+        paymentMethod: 'bank_transfer',
+      };
+
+      expect(() => {
+        (controller as any).assertMobileMoneyCurrency(request, 'fedapay');
+      }).toThrow(/only supports mobile_money/i);
+    });
+
+    // Note: Controller-level account currency checks (controller:280-299, :1113-1130)
+    // are integration-tested via service-level guards above and E2E tests.
+
+    it('should reject initiatePayment with non-XOF currency for fedapay (service:505-510)', async () => {
+      const realService = new MobilePaymentsService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockFedaPayService,
+        mockHasuraSystemService as any,
+      );
+
+      const mockSelectProvider = jest.spyOn(realService as any, 'selectProvider')
+        .mockResolvedValue('fedapay');
+
+      const result = await realService.initiatePayment({
+        amount: 1000,
+        currency: 'XAF',
+        accountId: 'acc-test',
+        description: 'Test',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toMatch(/only supports XOF currency/i);
+
+      mockSelectProvider.mockRestore();
+    });
+
+    it('should reject initiatePayment with decimal amount for fedapay (service:512-519)', async () => {
+      const realService = new MobilePaymentsService(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockFedaPayService,
+        mockHasuraSystemService as any,
+      );
+
+      const mockSelectProvider = jest.spyOn(realService as any, 'selectProvider')
+        .mockResolvedValue('fedapay');
+
+      const result = await realService.initiatePayment({
+        amount: 100.5,
+        currency: 'XOF',
+        accountId: 'acc-test',
+        description: 'Test',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toMatch(/amounts must be integers/i);
+
+      mockSelectProvider.mockRestore();
+    });
+  });
+
 });
