@@ -518,9 +518,10 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         customerPhone: '+22878123456',
         description: 'Test payment',
       };
+      const ctx = { userId: 'user-123', user: { id: 'user-123' } } as any;
 
       try {
-        await testController.initiatePayment(request as any, {} as any);
+        await testController.initiatePayment(request as any, ctx);
         throw new Error('Expected ACCOUNT_CURRENCY_MISMATCH error');
       } catch (error: any) {
         expect(error.status).toBe(400);
