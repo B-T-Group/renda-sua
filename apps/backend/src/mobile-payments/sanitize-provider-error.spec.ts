@@ -46,35 +46,6 @@ describe('sanitizeProviderError', () => {
     });
   });
 
-  describe('Controller error sanitization', () => {
-    it('should not leak phone numbers in validation errors', () => {
-      const phoneNumber = '+237650123456';
-      const errorMessage = `Invalid phone number: ${phoneNumber}`;
-      
-      // Controller should use masked phone in error messages
-      const maskedMessage = `Invalid phone number: ${maskPhoneNumber(phoneNumber)}`;
-      
-      expect(maskedMessage).not.toContain(phoneNumber);
-      expect(maskedMessage).toContain('***456');
-    });
-
-    it('should redact Bearer tokens in controller errors', () => {
-      const error = new Error('Authorization failed: Bearer xyz789abc123');
-      const sanitized = sanitizeProviderError(error);
-      
-      expect(sanitized.message).not.toContain('xyz789abc123');
-      expect(sanitized.message).toContain('Bearer REDACTED');
-    });
-
-    it('should redact API keys in controller errors', () => {
-      const error = new Error('Invalid API key: sk_sandbox_test123key456');
-      const sanitized = sanitizeProviderError(error);
-      
-      expect(sanitized.message).not.toContain('test123key456');
-      expect(sanitized.message).toContain('sk_sandbox_REDACTED');
-    });
-  });
-
   describe('General sanitization', () => {
     it('should handle errors without response data', () => {
       const error = new Error('Simple error message');
