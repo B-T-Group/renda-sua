@@ -655,10 +655,9 @@ export class MobilePaymentCallbackProcessor {
     tx: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
-    // F-L3: Preserve mock- transaction_id; don't overwrite with synthetic numeric id
-    const isMock = this.isMockedTransaction(tx);
-    const providerTxId = isMock && callbackData.entity.reference?.startsWith('mock-')
-      ? callbackData.entity.reference
+    // F-L3: Preserve stored mock- transaction_id; don't overwrite with numeric id
+    const providerTxId = tx.transaction_id?.startsWith('mock-')
+      ? tx.transaction_id
       : String(callbackData.entity.id);
     const isApproved = callbackData.entity.status === 'approved';
     

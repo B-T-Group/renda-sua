@@ -376,6 +376,53 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       expect(updateCall).toBeDefined();
       expect(updateCall[2].transaction_id).toBe('mock-abc-123');
     });
+
+    it('should preserve stored mock- id even when callback reference is not mock-', async () => {
+      const storedMockTx: MobilePaymentTransaction = {
+        id: 'tx-mock-2',
+        status: 'pending',
+        provider: 'fedapay',
+        transaction_type: 'PAYMENT',
+        transaction_id: 'mock-xyz-789',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF-REAL',
+        customer_phone: '+22890123456',
+        account_id: 'acc-2',
+        payment_entity: 'account',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      const callbackWithNonMockReference: FedaPayCallbackDto = {
+        entity: {
+          id: 99999,
+          status: 'approved',
+          amount: 1000,
+          reference: 'REF-REAL',
+          custom_metadata: { externalId: 'REF-REAL' },
+        } as any,
+        name: 'transaction.approved',
+      };
+
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(storedMockTx);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+      mockAccountsService.registerDepositIfNotExists.mockResolvedValue({ 
+        success: true, 
+        alreadyExists: false 
+      });
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+      await processor.processFedaPayCallback(callbackWithNonMockReference);
+
+      // Should preserve stored mock-xyz-789, NOT use numeric 99999
+      const updateCall = mockDatabaseService.updateTransactionIfStatus.mock.calls.find(
+        (call) => call[0] === storedMockTx.id && call[1] === 'processing'
+      );
+      expect(updateCall).toBeDefined();
+      expect(updateCall[2].transaction_id).toBe('mock-xyz-789');
+    });
   });
 
   describe('G1: Mock carve-out only when mock mode is on', () => {
