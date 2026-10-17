@@ -493,4 +493,131 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       expect(safe).not.toContain('sk_live_MUSTNOTLOG');
     });
   });
+
+  describe('Webhook re-check credential leak protection', () => {
+    let service: MobilePaymentsService;
+    let fedaPayService: FedaPayService;
+    let loggerErrorSpy: jest.SpyInstance;
+
+    beforeEach(async () => {
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          MobilePaymentsService,
+          {
+            provide: FedaPayService,
+            useValue: {
+              checkTransactionStatus: jest.fn(),
+            },
+          },
+          {
+            provide: HasuraSystemService,
+            useValue: {
+              executeQuery: jest.fn(),
+            },
+          },
+          {
+            provide: MobilePaymentsDatabaseService,
+            useValue: {},
+          },
+          {
+            provide: MyPVitService,
+            useValue: {},
+          },
+          {
+            provide: FreemopayService,
+            useValue: {},
+          },
+          {
+            provide: MtnMomoService,
+            useValue: {},
+          },
+          {
+            provide: MtnMomoDatabaseService,
+            useValue: {},
+          },
+          {
+            provide: OrangeMomoService,
+            useValue: {},
+          },
+          {
+            provide: OrangeMomoDatabaseService,
+            useValue: {},
+          },
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn(),
+            },
+          },
+        ],
+      }).compile();
+
+      service = module.get<MobilePaymentsService>(MobilePaymentsService);
+      fedaPayService = module.get<FedaPayService>(FedaPayService);
+
+      // Spy on logger.error to catch all logged arguments
+      loggerErrorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined as any);
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it('should never log Authorization, Bearer, or sk_ from FedaPay SDK errors in webhook re-check', async () => {
+      // Simulate FedaPay SDK timeout/5xx with Authorization header
+      const axiosErrorWithAuth = {
+        message: 'Request timeout',
+        isAxiosError: true,
+        code: 'ECONNABORTED',
+        config: {
+          headers: {
+            Authorization: 'Bearer sk_sandbox_FAKE_SECRET_KEY_12345',
+            'Content-Type': 'application/json',
+          },
+          url: 'https://api.fedapay.com/v1/transactions/12345',
+          method: 'GET',
+        },
+        request: {
+          path: '/v1/transactions/12345',
+        },
+        response: {
+          status: 500,
+          statusText: 'Internal Server Error',
+          config: {
+            headers: {
+              Authorization: 'Bearer sk_sandbox_FAKE_SECRET_KEY_12345',
+            },
+          },
+        },
+        status: 500,
+      };
+
+      // Mock FedaPayService to throw this error
+      (fedaPayService.checkTransactionStatus as jest.Mock).mockRejectedValue(axiosErrorWithAuth);
+
+      const tx = {
+        id: 'tx-webhook-recheck',
+        transaction_id: '12345',
+        customer_phone: '+22890123456',
+        provider: 'fedapay' as const,
+      };
+
+      // Call assertProviderConfirmsCallback which triggers the re-check path
+      await expect(
+        service.assertProviderConfirmsCallback(tx, 'SUCCESS')
+      ).rejects.toThrow();
+
+      // Check that NO logged argument contains secrets
+      const allLoggedArgs = loggerErrorSpy.mock.calls.flat();
+      const allLoggedText = allLoggedArgs.map(arg => 
+        typeof arg === 'string' ? arg : JSON.stringify(arg)
+      ).join(' ');
+
+      // These MUST NOT appear in any logged argument
+      expect(allLoggedText).not.toContain('Authorization');
+      expect(allLoggedText).not.toContain('Bearer');
+      expect(allLoggedText).not.toContain('sk_');
+      expect(allLoggedText).not.toContain('FAKE_SECRET_KEY');
+    });
+  });
 });
