@@ -34,13 +34,17 @@ describe('Production Sanitization & Masking Tests', () => {
         providers: [
           FreemopayService,
           {
-            provide: 'FREEMOPAY_CONFIG',
+            provide: 'ConfigService',
             useValue: {
-              apiUrl: 'https://api.test.com',
-              apiKey: 'test-key',
-              secretKey: 'sk_live_secret123',
+              get: jest.fn((key: string) => {
+                if (key === 'freemopay.apiUrl') return 'https://api.test.com';
+                if (key === 'freemopay.apiKey') return 'test-key';
+                if (key === 'freemopay.secretKey') return 'sk_live_secret123';
+                return null;
+              }),
             },
           },
+          { provide: 'ModuleRef', useValue: {} },
         ],
       }).compile();
 
@@ -182,13 +186,17 @@ describe('Production Sanitization & Masking Tests', () => {
         providers: [
           FreemopayService,
           {
-            provide: 'FREEMOPAY_CONFIG',
+            provide: 'ConfigService',
             useValue: {
-              apiUrl: 'https://api.test.com',
-              apiKey: 'test-key',
-              secretKey: 'secret',
+              get: jest.fn((key: string) => {
+                if (key === 'freemopay.apiUrl') return 'https://api.test.com';
+                if (key === 'freemopay.apiKey') return 'test-key';
+                if (key === 'freemopay.secretKey') return 'secret';
+                return null;
+              }),
             },
           },
+          { provide: 'ModuleRef', useValue: {} },
         ],
       }).compile();
 
