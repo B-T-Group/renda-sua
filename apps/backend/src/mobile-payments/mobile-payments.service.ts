@@ -513,89 +513,136 @@ export class MobilePaymentsService {
   /**
    * Initiate a mobile payment
    */
+  /**
+   * F-M6: Validate payment request before creating ANY database row.
+   * Returns null if valid, or an error response if invalid.
+   */
+  async validatePaymentRequest(
+    paymentRequest: { 
+      customerPhone?: string; 
+      itemCountry?: string; 
+      provider?: string;
+      currency?: string;
+      amount?: number;
+    },
+    userId?: string
+  ): Promise<{ success: false; message: string; errorCode: string } | null> {
+    const phoneRegion = await this.resolvePhoneDefaultRegion(
+      userId,
+      paymentRequest.customerPhone,
+      paymentRequest.itemCountry
+    );
+
+    // Validate phone number if provided
+    if (paymentRequest.customerPhone) {
+      // F-M3: Enforce that payer phone country matches the market/item country FIRST
+      const phoneValidation = validatePhoneNumber(
+        paymentRequest.customerPhone,
+        phoneRegion
+      );
+      
+      if (paymentRequest.itemCountry) {
+        const normalizedItemCountry = isoCountryCode(paymentRequest.itemCountry);
+        if (normalizedItemCountry && phoneValidation.regionCode !== normalizedItemCountry) {
+          return {
+            success: false,
+            message: `Payment phone number must match the item's country (${normalizedItemCountry})`,
+            errorCode: 'PHONE_COUNTRY_MISMATCH',
+          };
+        }
+      }
+
+      // Provider-specific validation
+      if (paymentRequest.provider === 'fedapay') {
+        if (!phoneValidation.isValid) {
+          return {
+            success: false,
+            message: 'Invalid phone number format',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        if (phoneValidation.regionCode !== 'TG') {
+          return {
+            success: false,
+            message: 'FedaPay requires a Togo (+228) phone number',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        
+        const cleaned = paymentRequest.customerPhone.replace(/\D/g, '');
+        const hasTogoPrefix = cleaned.startsWith('228');
+        const national = hasTogoPrefix ? cleaned.slice(3) : cleaned;
+        
+        if (national.length !== 8) {
+          return {
+            success: false,
+            message: 'Invalid Togo phone number. Must be 8 digits after +228.',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        
+        const prefix = national.slice(0, 2);
+        const validPrefixes = ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'];
+        if (!validPrefixes.includes(prefix)) {
+          return {
+            success: false,
+            message: 'Invalid Togo phone number. Must use valid Moov or Mixx prefix.',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+      } else {
+        if (!phoneValidation.isValid) {
+          return {
+            success: false,
+            message: 'Invalid phone number format',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+      }
+    }
+
+    // FedaPay currency validation
+    if (paymentRequest.provider === 'fedapay') {
+      if (paymentRequest.currency && paymentRequest.currency !== 'XOF') {
+        return {
+          success: false,
+          message: 'FedaPay (Togo) only supports XOF currency',
+          errorCode: 'UNSUPPORTED_CURRENCY',
+        };
+      }
+      if (paymentRequest.amount && !Number.isInteger(paymentRequest.amount)) {
+        return {
+          success: false,
+          message: 'FedaPay amounts must be integers (XOF has no decimals)',
+          errorCode: 'INVALID_AMOUNT',
+        };
+      }
+    }
+
+    return null;
+  }
+
   async initiatePayment(
     paymentRequest: MobilePaymentRequest,
     reference?: string,
     userId?: string
   ): Promise<MobilePaymentResponse> {
     try {
+      // F-M6: Validate before any processing
+      const validationError = await this.validatePaymentRequest(paymentRequest, userId);
+      if (validationError) {
+        return validationError;
+      }
+
       const phoneRegion = await this.resolvePhoneDefaultRegion(
         userId,
         paymentRequest.customerPhone,
         paymentRequest.itemCountry
       );
 
-      // Validate phone number if provided
+      // Phone logging (validation already done by validatePaymentRequest)
       if (paymentRequest.customerPhone) {
-        // F-M3: Enforce that payer phone country matches the market/item country FIRST
-        // This check MUST run before provider-specific checks so that country mismatches
-        // are reported as PHONE_COUNTRY_MISMATCH rather than generic INVALID_PHONE_NUMBER
-        const phoneValidation = validatePhoneNumber(
-          paymentRequest.customerPhone,
-          phoneRegion
-        );
-        
-        if (paymentRequest.itemCountry) {
-          const itemCountryUpper = paymentRequest.itemCountry.trim().toUpperCase();
-          if (phoneValidation.regionCode !== itemCountryUpper) {
-            this.logger.warn(
-              `Phone country mismatch: phone=${phoneValidation.regionCode}, item country=${itemCountryUpper}`
-            );
-            return {
-              success: false,
-              message: `Payment phone number must match the item's country (${itemCountryUpper})`,
-              errorCode: 'PHONE_COUNTRY_MISMATCH',
-            };
-          }
-        }
-
-        // F-L2: If FedaPay is explicitly requested, validate TG-specific requirements
-        // before generic phone validation to provide more specific error messages
-        if (paymentRequest.provider === 'fedapay') {
-          if (phoneValidation.regionCode !== 'TG') {
-            return {
-              success: false,
-              message: 'FedaPay requires a Togo (+228) phone number',
-              errorCode: 'INVALID_PHONE_NUMBER',
-            };
-          }
-          
-          // Now check Togo-specific format requirements
-          const cleaned = paymentRequest.customerPhone.replace(/\D/g, '');
-          const hasTogoPrefix = cleaned.startsWith('228');
-          const national = hasTogoPrefix ? cleaned.slice(3) : cleaned;
-          
-          if (national.length !== 8) {
-            return {
-              success: false,
-              message: 'Invalid Togo phone number. Must be 8 digits after +228.',
-              errorCode: 'INVALID_PHONE_NUMBER',
-            };
-          }
-          
-          const prefix = national.slice(0, 2);
-          const validPrefixes = ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'];
-          if (!validPrefixes.includes(prefix)) {
-            return {
-              success: false,
-              message: 'Invalid Togo phone number. Must use valid Moov or Mixx prefix.',
-              errorCode: 'INVALID_PHONE_NUMBER',
-            };
-          }
-        } else {
-          // For non-FedaPay providers, do general phone validation
-          if (!phoneValidation.isValid) {
-            this.logger.warn(
-              `Invalid phone number provided: ${paymentRequest.customerPhone} (region=${phoneRegion})`
-            );
-            return {
-              success: false,
-              message: 'Invalid phone number format',
-              errorCode: 'INVALID_PHONE_NUMBER',
-            };
-          }
-        }
-
+        const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone, phoneRegion);
         this.logger.log(
           `Phone number validated: ${maskPhoneNumber(paymentRequest.customerPhone)} -> Country: ${phoneValidation.regionCode}, National: ${maskPhoneNumber(phoneValidation.nationalNumber)}, callback URL: ${paymentRequest.callbackUrl || 'none'}`
         );
@@ -611,55 +658,8 @@ export class MobilePaymentsService {
 
       // Determine the best provider based on request
       const provider = await this.selectProvider(paymentRequest);
-
-      // Validate FedaPay currency requirements (B5)
-      if (provider === 'fedapay') {
-        if (paymentRequest.currency !== 'XOF') {
-          return {
-            success: false,
-            message: 'FedaPay (Togo) only supports XOF currency',
-            errorCode: 'UNSUPPORTED_CURRENCY',
-          };
-        }
-        if (!Number.isInteger(paymentRequest.amount)) {
-          return {
-            success: false,
-            message: 'FedaPay amounts must be integers (XOF has no decimals)',
-            errorCode: 'INVALID_AMOUNT',
-          };
-        }
-        // F-L2: Validate Togo phone number format before creating row
-        if (paymentRequest.customerPhone) {
-          const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone);
-          if (phoneValidation.regionCode !== 'TG') {
-            return {
-              success: false,
-              message: 'FedaPay requires a Togo (+228) phone number',
-              errorCode: 'INVALID_PHONE_NUMBER',
-            };
-          }
-          // Check Togo-specific prefixes (Moov/Mixx)
-          const cleaned = paymentRequest.customerPhone.replace(/\D/g, '');
-          const hasTogoPrefix = cleaned.startsWith('228');
-          const national = hasTogoPrefix ? cleaned.slice(3) : cleaned;
-          if (national.length !== 8) {
-            return {
-              success: false,
-              message: 'Invalid Togo phone number. Must be 8 digits after +228.',
-              errorCode: 'INVALID_PHONE_NUMBER',
-            };
-          }
-          const prefix = national.slice(0, 2);
-          const validPrefixes = ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'];
-          if (!validPrefixes.includes(prefix)) {
-            return {
-              success: false,
-              message: 'Invalid Togo phone number. Must use valid Moov or Mixx prefix.',
-              errorCode: 'INVALID_PHONE_NUMBER',
-            };
-          }
-        }
-      }
+      
+      // Validation already done by validatePaymentRequest above
 
       // Convert to provider-specific request
       const providerRequest = this.convertToProviderRequest(
