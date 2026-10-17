@@ -1342,7 +1342,9 @@ export class MobilePaymentsController {
     provider: string,
     itemCountry?: string
   ): Promise<void> {
-    const phoneValidation = validatePhoneNumber(customerPhone);
+    // Resolve region for phone parsing (itemCountry or default GA)
+    const region = itemCountry ? isoCountryCode(itemCountry) || 'GA' : 'GA';
+    const phoneValidation = validatePhoneNumber(customerPhone, region);
     
     if (!phoneValidation.isValid) {
       throw new BadRequestException({
