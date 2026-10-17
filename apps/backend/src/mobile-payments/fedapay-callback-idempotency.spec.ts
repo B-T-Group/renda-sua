@@ -14,6 +14,8 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
   const mockDatabaseService = {
     findTransactionByProviderReference: jest.fn(),
+    getTransactionByTransactionId: jest.fn(),
+    getTransactionByReference: jest.fn(),
     logCallback: jest.fn(),
     updateTransactionIfStatus: jest.fn(),
     updateTransactionStatus: jest.fn(),
