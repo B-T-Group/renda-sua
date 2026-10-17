@@ -299,6 +299,20 @@ describe('MobilePaymentsService - Routing', () => {
       expect(provider).toBe('fedapay');
     });
 
+    it('B8: should route stored fedapay unconditionally even when TG flag is OFF', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: false }], // Flag OFF
+      });
+
+      // Stored provider='fedapay' should still route to fedapay (B4)
+      const provider = await service.resolveAdminIntegrationProvider(
+        '+22878123456',
+        'fedapay' // stored provider
+      );
+      
+      expect(provider).toBe('fedapay'); // Must route to fedapay regardless of flag
+    });
+
     it('should fallback to MyPVit when fedapay inactive', async () => {
       mockHasuraSystemService.executeQuery.mockResolvedValue({
         supported_payment_systems: [{ active: false }],

@@ -18,7 +18,7 @@ jest.mock('fedapay', () => ({
   Payout: {
     create: jest.fn(),
     retrieve: jest.fn(),
-    list: jest.fn(),
+    all: jest.fn(),
   },
   Webhook: {
     constructEvent: jest.fn(),
@@ -412,9 +412,9 @@ describe('FedaPayService', () => {
   });
 
   describe('B8: B6 Payout Idempotency', () => {
-    it('should check for existing payout before creating new one', async () => {
+    it('should check for existing payout before creating new one using Payout.all', async () => {
       const { Payout } = require('fedapay');
-      Payout.list.mockResolvedValue({
+      Payout.all.mockResolvedValue({
         data: [
           {
             id: 'existing-payout-id',
@@ -433,7 +433,7 @@ describe('FedaPayService', () => {
         channel: 'togocel',
       });
 
-      expect(Payout.list).toHaveBeenCalledWith({
+      expect(Payout.all).toHaveBeenCalledWith({
         'custom_metadata.externalId': 'duplicate-ref-test'
       });
       expect(Payout.create).not.toHaveBeenCalled();
@@ -443,7 +443,7 @@ describe('FedaPayService', () => {
 
     it('should create new payout when none exists', async () => {
       const { Payout } = require('fedapay');
-      Payout.list.mockResolvedValue({ data: [] });
+      Payout.all.mockResolvedValue({ data: [] });
       
       const mockPayout = {
         id: 'new-payout-123',
@@ -461,10 +461,28 @@ describe('FedaPayService', () => {
         channel: 'togocel',
       });
 
-      expect(Payout.list).toHaveBeenCalled();
+      expect(Payout.all).toHaveBeenCalled();
       expect(Payout.create).toHaveBeenCalled();
       expect(result.success).toBe(true);
       expect(result.transactionId).toBe('new-payout-123');
+    });
+
+    it('should fail closed when payout lookup errors', async () => {
+      const { Payout } = require('fedapay');
+      Payout.all.mockRejectedValue(new Error('Network error'));
+
+      const result = await service.withdraw({
+        payee: '+22878123456',
+        amount: 5000,
+        externalId: 'error-ref',
+        description: 'Error test',
+        callback: 'https://test.com/callback',
+        channel: 'togocel',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.message).toContain('Failed to check existing payout');
+      expect(Payout.create).not.toHaveBeenCalled();
     });
   });
 
@@ -550,6 +568,20 @@ describe('FedaPayService', () => {
       expect(result.currency).toBe('XOF');
     });
 
+    it('should return empty string when currency missing (fail closed)', async () => {
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve.mockResolvedValue({
+        id: 'tx-no-currency',
+        status: 'approved',
+        amount: 1000,
+        custom_metadata: { externalId: 'ref-no-curr' },
+      });
+
+      const result = await service.checkTransactionStatus('tx-no-currency');
+
+      expect(result.currency).toBe('');
+    });
+
     it('should read real currency from payout', async () => {
       const { Payout } = require('fedapay');
       Payout.retrieve.mockResolvedValue({
@@ -563,6 +595,20 @@ describe('FedaPayService', () => {
       const result = await service.checkPayoutStatus('payout-currency-test');
 
       expect(result.currency).toBe('XOF');
+    });
+
+    it('should return empty string when payout currency missing (fail closed)', async () => {
+      const { Payout } = require('fedapay');
+      Payout.retrieve.mockResolvedValue({
+        id: 'payout-no-currency',
+        status: 'sent',
+        amount: 5000,
+        custom_metadata: { externalId: 'payout-no-curr' },
+      });
+
+      const result = await service.checkPayoutStatus('payout-no-currency');
+
+      expect(result.currency).toBe('');
     });
   });
 
