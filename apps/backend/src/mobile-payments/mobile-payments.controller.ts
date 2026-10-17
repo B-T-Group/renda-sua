@@ -50,6 +50,7 @@ import {
 } from './mobile-payments.service';
 import { MobileTransactionAccessService } from './mobile-transaction-access.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
+import { FedaPayService } from './providers/fedapay.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 
@@ -377,6 +378,11 @@ export class MobilePaymentsController {
         await this.databaseService.updateTransaction(transaction.id, {
           transaction_id: paymentResponse.transactionId,
         });
+        
+        // G2: Schedule mock callback AFTER persisting mock id
+        if (paymentResponse.transactionId.startsWith('mock-')) {
+          this.fedaPayService.scheduleMockCallback(paymentResponse.transactionId, reference);
+        }
       } else {
         await this.databaseService.updateTransaction(transaction.id, {
           status: 'failed',
