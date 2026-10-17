@@ -72,6 +72,11 @@ describe('G2: Real Mock Callback Order Tests', () => {
     });
 
     it('(a) scheduleMockCallback called AFTER updateTransaction in controller top-up', async () => {
+      const ctx = {
+        userId: 'user-1',
+        userRole: 'user',
+      } as any;
+
       const request = {
         amount: 1000,
         currency: 'XOF',
@@ -81,7 +86,7 @@ describe('G2: Real Mock Callback Order Tests', () => {
         transactionType: 'PAYMENT' as const,
       };
 
-      await controller.initiatePayment(request);
+      await controller.initiatePayment(ctx, request);
 
       // Verify both were called
       expect(databaseService.updateTransaction).toHaveBeenCalled();
@@ -105,6 +110,11 @@ describe('G2: Real Mock Callback Order Tests', () => {
 
     beforeEach(async () => {
       databaseService = {
+        createTransaction: jest.fn().mockResolvedValue({
+          id: 'tx-gc-1',
+          reference: 'GC-REF-123',
+          status: 'pending',
+        }),
         updateTransaction: jest.fn().mockResolvedValue(undefined),
         getTransactionById: jest.fn(),
       };
