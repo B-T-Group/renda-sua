@@ -64,6 +64,17 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
   const successCallback: FedaPayCallbackDto = {
     entity: { id: 456, status: 'approved', amount: 1000, reference: 'fedapay-tx-456' },
+    name: 'transaction.approved',
+  };
+  
+  const declinedCallback: FedaPayCallbackDto = {
+    entity: { id: 456, status: 'declined', amount: 1000, reference: 'fedapay-tx-456' },
+    name: 'transaction.declined',
+  };
+  
+  const nonTerminalCallback: FedaPayCallbackDto = {
+    entity: { id: 456, status: 'pending', amount: 1000, reference: 'fedapay-tx-456' },
+    name: 'transaction.pending',
   };
 
   describe('Duplicate Webhook Prevention & No Double-Credit', () => {
@@ -128,6 +139,32 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
       await expect(processor.processFedaPayCallback(successCallback)).rejects.toThrow();
       expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Non-Terminal Event Handling (B3)', () => {
+    it('should return 200 for non-terminal events without state change', async () => {
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
+
+      const result = await processor.processFedaPayCallback(nonTerminalCallback);
+
+      expect(result.received).toBe(true);
+      expect(mockDatabaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
+      expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).not.toHaveBeenCalled();
+    });
+
+    it('should not fail pending transaction on unknown event name', async () => {
+      const unknownCallback: FedaPayCallbackDto = {
+        entity: { id: 456, status: 'processing', amount: 1000, reference: 'fedapay-tx-456' },
+        name: 'transaction.processing',
+      };
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
+
+      const result = await processor.processFedaPayCallback(unknownCallback);
+
+      expect(result.received).toBe(true);
+      expect(mockDatabaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
     });
   });
 });
