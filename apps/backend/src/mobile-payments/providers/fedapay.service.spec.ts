@@ -414,12 +414,15 @@ describe('FedaPayService', () => {
   describe('B8: B6 Payout Idempotency', () => {
     it('should check for existing payout before creating new one using Payout.all', async () => {
       const { Payout } = require('fedapay');
+      // Real SDK shape: Payout.all returns { payouts: [...], meta: {...} }
+      // See node_modules/fedapay/test/PayoutTest.ts:68-126
       Payout.all.mockResolvedValue({
-        data: [
+        payouts: [
           {
             id: 'existing-payout-id',
             status: 'pending',
             amount: 5000,
+            custom_metadata: { externalId: 'duplicate-ref-test' },
           }
         ]
       });
@@ -443,7 +446,8 @@ describe('FedaPayService', () => {
 
     it('should create new payout when none exists', async () => {
       const { Payout } = require('fedapay');
-      Payout.all.mockResolvedValue({ data: [] });
+      // Real SDK shape: empty list
+      Payout.all.mockResolvedValue({ payouts: [] });
       
       const mockPayout = {
         id: 'new-payout-123',
@@ -537,18 +541,113 @@ describe('FedaPayService', () => {
     });
   });
 
-  describe('B8: M4 Production Config Refusal', () => {
-    it('should document sk_live_ refusal in mock mode', () => {
-      // The service constructor checks for sk_live_ prefix and throws
-      // This is verified by the fact that the service initializes successfully
-      // with sk_sandbox_ or sk_test_ keys only
-      expect(service).toBeDefined();
+  describe('B8d: M4 Production Config Refusal (Real Constructor Tests)', () => {
+    it('should throw when sk_live_ key is used with mock enabled', async () => {
+      const originalEnv = process.env.DEPLOYMENT_ENV;
+      process.env.DEPLOYMENT_ENV = 'development';
+
+      try {
+        await Test.createTestingModule({
+          providers: [
+            FedaPayService,
+            {
+              provide: ConfigService,
+              useValue: {
+                get: jest.fn((key: string) => {
+                  if (key === 'fedapay') {
+                    return {
+                      environment: 'sandbox',
+                      secretKey: 'sk_live_DANGEROUS',
+                      publicKey: 'test-public',
+                      webhookSecret: 'test-webhook-secret',
+                      callbackUrl: 'https://test.com/callback',
+                      payoutCallbackUrl: 'https://test.com/payout-callback',
+                      mockEnabled: true,
+                    };
+                  }
+                  return undefined;
+                }),
+              },
+            },
+          ],
+        }).compile();
+        throw new Error('Expected constructor to throw');
+      } catch (error: any) {
+        expect(error.message).toMatch(/mock cannot be enabled with a live secret key/i);
+      }
+
+      process.env.DEPLOYMENT_ENV = originalEnv;
     });
 
-    it('should document production DEPLOYMENT_ENV refusal', () => {
-      // The service constructor checks DEPLOYMENT_ENV and refuses mock in production
-      // This is verified in the M4 implementation
-      expect(service).toBeDefined();
+    it('should throw when DEPLOYMENT_ENV is production with mock enabled', async () => {
+      const originalEnv = process.env.DEPLOYMENT_ENV;
+      process.env.DEPLOYMENT_ENV = 'production';
+
+      try {
+        await Test.createTestingModule({
+          providers: [
+            FedaPayService,
+            {
+              provide: ConfigService,
+              useValue: {
+                get: jest.fn((key: string) => {
+                  if (key === 'fedapay') {
+                    return {
+                      environment: 'sandbox',
+                      secretKey: 'sk_sandbox_TEST',
+                      publicKey: 'test-public',
+                      webhookSecret: 'test-webhook-secret',
+                      callbackUrl: 'https://test.com/callback',
+                      payoutCallbackUrl: 'https://test.com/payout-callback',
+                      mockEnabled: true,
+                    };
+                  }
+                  return undefined;
+                }),
+              },
+            },
+          ],
+        }).compile();
+        throw new Error('Expected constructor to throw');
+      } catch (error: any) {
+        expect(error.message).toMatch(/Mock can only be enabled.*development.*test/i);
+      }
+
+      process.env.DEPLOYMENT_ENV = originalEnv;
+    });
+
+    it('should allow sk_sandbox_ with mock enabled in development', async () => {
+      const originalEnv = process.env.DEPLOYMENT_ENV;
+      process.env.DEPLOYMENT_ENV = 'development';
+
+      const testModule = await Test.createTestingModule({
+        providers: [
+          FedaPayService,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn((key: string) => {
+                const config = {
+                  'fedapay.env': 'sandbox',
+                  'fedapay.secretKey': 'sk_sandbox_TEST',
+                  'fedapay.publicKey': 'test-public',
+                  'fedapay.webhookSecret': 'test-webhook-secret',
+                  'fedapay.callbackUrl': 'https://test.com/callback',
+                  'fedapay.payoutCallbackUrl': 'https://test.com/payout-callback',
+                  'fedapay.mock': true,
+                };
+                return config[key];
+              }),
+            },
+          },
+        ],
+      }).compile();
+
+      expect(() => {
+        testModule.get(FedaPayService);
+      }).not.toThrow();
+
+      process.env.DEPLOYMENT_ENV = originalEnv;
     });
   });
 

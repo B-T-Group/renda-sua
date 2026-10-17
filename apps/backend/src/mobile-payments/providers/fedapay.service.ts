@@ -415,18 +415,21 @@ export class FedaPayService implements OnModuleInit {
       );
 
       // Check for existing payout with same externalId (B6 idempotency)
+      // Note: FedaPay API may not filter by custom_metadata server-side,
+      // so we fetch all and filter client-side
       try {
         const existingPayouts = await Payout.all({
           'custom_metadata.externalId': externalId,
         });
-        if (existingPayouts?.data?.length > 0) {
-          const existing = existingPayouts.data[0];
-          this.logger.log(`Found existing FedaPay payout for ${externalId}: ${existing.id}`);
+        const payouts = (existingPayouts as any)?.payouts || [];
+        const matching = payouts.find((p: any) => p.custom_metadata?.externalId === externalId);
+        if (matching) {
+          this.logger.log(`Found existing FedaPay payout for ${externalId}: ${matching.id}`);
           return {
             success: true,
-            transactionId: String(existing.id),
+            transactionId: String(matching.id),
             reference: externalId,
-            status: existing.status || 'pending',
+            status: matching.status || 'pending',
             message: normalizeProviderMessage(null, 'Payout already exists'),
           };
         }
@@ -495,7 +498,7 @@ export class FedaPayService implements OnModuleInit {
     try {
       this.logger.log(`Checking FedaPay payout status: ${payoutId}`);
 
-      const payout = await Payout.retrieve(parseInt(payoutId, 10));
+      const payout = await Payout.retrieve(parseInt(payoutId, 10), { include: 'currency' });
 
       if (!payout) {
         throw new Error(`Payout ${payoutId} not found`);
@@ -544,7 +547,7 @@ export class FedaPayService implements OnModuleInit {
     try {
       this.logger.log(`Checking FedaPay transaction status: ${reference}`);
 
-      const transaction = await Transaction.retrieve(parseInt(reference, 10));
+      const transaction = await Transaction.retrieve(parseInt(reference, 10), { include: 'currency' });
 
       if (!transaction) {
         throw new Error(`Transaction ${reference} not found`);
