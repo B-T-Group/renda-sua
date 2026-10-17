@@ -6,7 +6,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
-import { sanitizeProviderError, maskPhoneNumber } from '../sanitize-provider-error.util';
+import { sanitizeProviderError } from '../sanitize-provider-error.util';
 import {
   MYP_VIT_STATUS_OPERATIONS,
   buildMypvitStatusPath,
