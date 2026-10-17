@@ -242,13 +242,20 @@ export class MobilePaymentCallbackProcessor {
   private async lookupFedaPayKey(
     key: string
   ): Promise<MobilePaymentTransaction | null> {
-    const byProviderId =
-      await this.databaseService.getTransactionByTransactionId(key);
+    // FedaPay ids are plain numbers and can collide with another provider's
+    // transaction_id/reference, so only ever match FedaPay rows here.
+    const isFedaPay = (tx: MobilePaymentTransaction | null | undefined) =>
+      tx?.provider === 'fedapay' ? tx : null;
+    const byProviderId = isFedaPay(
+      await this.databaseService.getTransactionByTransactionId(key)
+    );
     if (byProviderId) return byProviderId;
-    const byReference = await this.databaseService.getTransactionByReference(key);
+    const byReference = isFedaPay(
+      await this.databaseService.getTransactionByReference(key)
+    );
     if (byReference) return byReference;
     if (!looksLikeUuid(key)) return null;
-    return this.databaseService.getTransactionById(key);
+    return isFedaPay(await this.databaseService.getTransactionById(key));
   }
 
   private async lookupFedaPayTransaction(

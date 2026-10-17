@@ -725,7 +725,8 @@ export class MobilePaymentsController {
         );
       }
 
-      const callbackData = this.verifyAndParseFedaPayWebhook(rawBody, signature);
+      const { event: callbackData, timestamp } =
+        this.verifyAndParseFedaPayWebhook(rawBody, signature);
 
       if (!callbackData.entity || !callbackData.name) {
         this.logger.warn('FedaPay webhook rejected: missing entity or name');
@@ -740,10 +741,16 @@ export class MobilePaymentsController {
 
       this.logger.log(`FedaPay webhook: event=${callbackData.name} entity_id=${callbackData.entity.id}`);
 
-      return await this.callbackProcessor.processFedaPayCallback(
+      const result = await this.callbackProcessor.processFedaPayCallback(
         callbackData,
         req
       );
+      // Only remember the event once it was processed, so a FedaPay retry
+      // after a 5xx is processed again instead of being acked as a duplicate.
+      if (callbackData.entity.id) {
+        this.recordFedaPayEvent(String(callbackData.entity.id), String(timestamp));
+      }
+      return result;
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
@@ -759,7 +766,10 @@ export class MobilePaymentsController {
     }
   }
 
-  private verifyAndParseFedaPayWebhook(rawBody: Buffer, signatureHeader: string): any {
+  private verifyAndParseFedaPayWebhook(
+    rawBody: Buffer,
+    signatureHeader: string
+  ): { event: any; timestamp: number } {
     const webhookSecret = this.configService.get<string>('fedapay.webhookSecret');
     
     if (!webhookSecret) {
@@ -828,11 +838,7 @@ export class MobilePaymentsController {
       );
     }
     
-    if (eventId) {
-      this.recordFedaPayEvent(eventId, timestampStr);
-    }
-    
-    return event;
+    return { event, timestamp };
   }
 
   private fedapayEventCache = new Map<string, number>();

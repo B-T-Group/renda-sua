@@ -464,7 +464,7 @@ export class FedaPayService implements OnModuleInit {
   async checkPayoutStatus(
     payoutId: string
   ): Promise<FedaPayTransactionStatus> {
-    if (this.isMockedTransaction(payoutId)) {
+    if (this.mockEnabled && this.isMockedTransaction(payoutId)) {
       return this.getMockTransactionStatus(payoutId);
     }
 
@@ -511,7 +511,7 @@ export class FedaPayService implements OnModuleInit {
   async checkTransactionStatus(
     reference: string
   ): Promise<FedaPayTransactionStatus> {
-    if (this.isMockedTransaction(reference)) {
+    if (this.mockEnabled && this.isMockedTransaction(reference)) {
       return this.getMockTransactionStatus(reference);
     }
 

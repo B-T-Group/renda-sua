@@ -95,6 +95,24 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     });
   });
 
+  describe('Provider isolation', () => {
+    it('ignores a FedaPay callback whose id matches a non-FedaPay transaction', async () => {
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValue({
+        ...mockTransaction,
+        provider: 'mypvit',
+      });
+      mockDatabaseService.getTransactionByReference.mockResolvedValue(null);
+
+      const result = await processor.processFedaPayCallback(successCallback);
+
+      expect(result.received).toBe(true);
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).not.toHaveBeenCalled();
+      expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+      mockDatabaseService.getTransactionByTransactionId.mockReset();
+      mockDatabaseService.getTransactionByReference.mockReset();
+    });
+  });
+
   describe('Handler Failure Returns 5xx', () => {
     it('should throw when credit fails (5xx for webhook retry)', async () => {
       mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);

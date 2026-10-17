@@ -313,6 +313,51 @@ describe('MobilePaymentsService - Routing', () => {
     });
   });
 
+  describe('Phone-based routing without itemCountry (payouts)', () => {
+    it('routes a +228 payee to FedaPay when TG is active', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: true }],
+      });
+      const provider = await service.resolveProviderFromRequest({
+        customerPhone: '+22890123456',
+      });
+      expect(provider).toBe('fedapay');
+    });
+
+    it('does not route a +228 payee to FedaPay when TG is inactive', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: false }],
+      });
+      const provider = await service.resolveProviderFromRequest({
+        customerPhone: '+22890123456',
+        provider: 'fedapay',
+      });
+      expect(provider).toBe('mypvit');
+    });
+
+    it('ignores a fedapay hint for a non-Togo phone even when TG is active', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: true }],
+      });
+      const provider = await service.resolveProviderFromRequest({
+        customerPhone: '+24166123456',
+        provider: 'fedapay',
+      });
+      expect(provider).toBe('mypvit');
+    });
+
+    it('keeps an explicit stored mypvit provider for a +228 phone', async () => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ active: true }],
+      });
+      const provider = await service.resolveAdminIntegrationProvider(
+        '+22890123456',
+        'mypvit'
+      );
+      expect(provider).toBe('mypvit');
+    });
+  });
+
   describe('Cache Behavior', () => {
     it('should query database on each routing decision (no caching)', async () => {
       mockHasuraSystemService.executeQuery.mockResolvedValue({

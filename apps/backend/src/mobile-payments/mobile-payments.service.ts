@@ -1041,17 +1041,22 @@ export class MobilePaymentsService {
     request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider'>
   ): Promise<MobilePaymentIntegrationProvider> {
     if (request.provider === 'freemopay') return 'freemopay';
-    if (request.provider === 'fedapay') {
-      const isActive = await this.isFedaPayActiveForTogo();
-      if (isActive) return 'fedapay';
-      this.logger.warn('FedaPay hint ignored: TG not active, falling back');
-    }
     if (
       request.provider === 'mypvit' ||
       request.provider === 'airtel' ||
       request.provider === 'moov'
     ) {
       return 'mypvit';
+    }
+    const isTogoPhone =
+      !!request.customerPhone?.trim() &&
+      validatePhoneNumber(request.customerPhone).regionCode === 'TG';
+    // FedaPay only serves Togo (+228) numbers, and only once TG is active.
+    if (isTogoPhone && (await this.isFedaPayActiveForTogo())) return 'fedapay';
+    if (request.provider === 'fedapay') {
+      this.logger.warn(
+        'FedaPay hint ignored: payer is not +228 or TG is not active, falling back'
+      );
     }
     if (request.customerPhone?.trim()) {
       return this.getProvider(request.customerPhone);
