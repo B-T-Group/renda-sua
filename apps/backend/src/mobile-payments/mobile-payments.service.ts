@@ -552,6 +552,38 @@ export class MobilePaymentsService {
         }`
       );
 
+      // F-L2: If FedaPay is explicitly requested, validate TG phone BEFORE falling back
+      if (paymentRequest.provider === 'fedapay' && paymentRequest.customerPhone) {
+        const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone);
+        if (phoneValidation.regionCode !== 'TG') {
+          return {
+            success: false,
+            message: 'FedaPay requires a Togo (+228) phone number',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        // Check Togo-specific prefixes
+        const cleaned = paymentRequest.customerPhone.replace(/\D/g, '');
+        const hasTogoPrefix = cleaned.startsWith('228');
+        const national = hasTogoPrefix ? cleaned.slice(3) : cleaned;
+        if (national.length !== 8) {
+          return {
+            success: false,
+            message: 'Invalid Togo phone number. Must be 8 digits after +228.',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        const prefix = national.slice(0, 2);
+        const validPrefixes = ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'];
+        if (!validPrefixes.includes(prefix)) {
+          return {
+            success: false,
+            message: 'Invalid Togo phone number. Must use valid Moov or Mixx prefix.',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+      }
+
       // Determine the best provider based on request
       const provider = await this.selectProvider(paymentRequest);
 
