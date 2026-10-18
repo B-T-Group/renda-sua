@@ -35,6 +35,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         success: true,
         balance: { available_balance: '10000' },
       }),
+      registerDepositIfNotExists: jest.fn().mockResolvedValue({
+        success: true,
+        alreadyProcessed: false,
+      }),
     } as any;
 
     mobilePaymentsService = {
@@ -515,6 +519,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       };
 
       databaseService.getTransactionByTransactionId.mockResolvedValue(pendingTx);
+      databaseService.updateTransactionIfStatus.mockResolvedValue(true);
 
       const expiredCallback: FedaPayCallbackDto = {
         name: 'transaction.expired',
@@ -533,8 +538,9 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       expect(databaseService.logCallback).toHaveBeenCalledWith('tx-expired', expiredCallback);
 
       // Verify transaction was updated to failed (expired → FAILED normalization)
-      expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
         'tx-expired',
+        'pending',
         expect.objectContaining({
           status: 'failed',
         })
@@ -544,8 +550,12 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
     it('should fail when transaction.expired handling is removed', () => {
       // This test documents that transaction.expired MUST be handled as a terminal event
       // If someone removes it from TERMINAL_EVENTS, this test will fail
-      const processor = require('./mobile-payment-callback.processor');
-      const source = processor.toString();
+      const fs = require('fs');
+      const path = require('path');
+      const source = fs.readFileSync(
+        path.join(__dirname, 'mobile-payment-callback.processor.ts'),
+        'utf-8'
+      );
       
       // transaction.expired must be in the terminal events list
       expect(source).toContain('transaction.expired');

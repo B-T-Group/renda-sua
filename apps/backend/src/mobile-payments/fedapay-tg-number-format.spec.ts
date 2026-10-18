@@ -50,6 +50,7 @@ describe('FedaPay TG Number Format', () => {
       paymentMethod: 'mobile_money' as const,
       transactionType: 'PAYMENT' as const,
       provider: 'fedapay',
+      accountId: 'acc-test',
     };
 
     await service.initiatePayment(request, 'REF-TEST-MOOV');
@@ -78,6 +79,7 @@ describe('FedaPay TG Number Format', () => {
       paymentMethod: 'mobile_money' as const,
       transactionType: 'PAYMENT' as const,
       provider: 'fedapay',
+      accountId: 'acc-test',
     };
 
     await service.initiatePayment(request, 'REF-TEST-TOGOCEL');
@@ -105,6 +107,7 @@ describe('FedaPay TG Number Format', () => {
         paymentMethod: 'mobile_money' as const,
         transactionType: 'PAYMENT' as const,
         provider: 'fedapay',
+        accountId: 'acc-test',
       };
 
       await service.initiatePayment(request, `REF-MOOV-${prefix}`);
@@ -128,6 +131,7 @@ describe('FedaPay TG Number Format', () => {
       paymentMethod: 'mobile_money' as const,
       transactionType: 'PAYMENT' as const,
       provider: 'fedapay',
+      accountId: 'acc-test',
     };
 
     await service.initiatePayment(request, 'REF-NATIONAL');
@@ -150,6 +154,7 @@ describe('FedaPay TG Number Format', () => {
       paymentMethod: 'mobile_money' as const,
       transactionType: 'GIVE_CHANGE' as const,
       provider: 'fedapay',
+      accountId: 'acc-test',
     };
 
     await service.initiatePayment(request, 'REF-PAYOUT');

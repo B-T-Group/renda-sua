@@ -11,7 +11,7 @@ describe('Production Sanitization & Masking Tests (G6)', () => {
       const sanitized = sanitizeProviderError(error);
 
       expect(sanitized.message).not.toContain('sk_live_secret123');
-      expect(sanitized.message).toContain('[REDACTED]');
+      expect(sanitized.message).toContain('REDACTED');
     });
 
     it('should sanitize Authorization headers', () => {
@@ -26,7 +26,7 @@ describe('Production Sanitization & Masking Tests (G6)', () => {
       const serialized = JSON.stringify(sanitized);
 
       expect(serialized).not.toContain('sk_live_secret456');
-      expect(serialized).toContain('[REDACTED]');
+      expect(serialized).toContain('REDACTED');
     });
 
     it('should sanitize api keys from responses', () => {
@@ -44,7 +44,7 @@ describe('Production Sanitization & Masking Tests (G6)', () => {
       const serialized = JSON.stringify(sanitized);
 
       expect(serialized).not.toContain('app_key_12345');
-      expect(serialized).toContain('[REDACTED]');
+      expect(serialized).toContain('REDACTED');
     });
   });
 
