@@ -1,6 +1,7 @@
 const EXPRESS_KEYWORDS = new Set(['loopback', 'true', 'false']);
 
-function isProductionEnv(env: Record<string, string | undefined>): boolean {
+/** NODE_ENV or DEPLOYMENT_ENV is `production` (case-insensitive, trimmed). */
+export function isProductionEnv(env: Record<string, string | undefined>): boolean {
   return (
     env.NODE_ENV?.trim().toLowerCase() === 'production' ||
     env.DEPLOYMENT_ENV?.trim().toLowerCase() === 'production'

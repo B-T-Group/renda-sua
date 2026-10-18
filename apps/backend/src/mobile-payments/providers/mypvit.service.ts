@@ -21,17 +21,22 @@ import {
   toSanitizedError,
 } from '../sanitize-provider-error.util';
 import { mypvitSecretName } from '../secret-refresh-auth';
+import { isProductionEnv } from '../../common/utils/resolve-trust-proxy';
 
 /**
  * QA #593 S3: the Airtel/Moov operation account codes have no hard-coded fallback (missing
  * codes used to fall back to ACC_68A722C33473B). Missing or blank codes throw here, so Nest
  * fails at boot instead of paying through an account nobody configured.
- * Identical codes are allowed (payments work; DEV's sandbox uses one account for both) but
- * reported via `identical`: the secret-refresh webhook can't tell which key such a delivery
- * rotates, so it refuses those with 503.
+ *
+ * QA #593 R1: identical codes mean one MyPVit account with one secret (DEV's repo config uses
+ * ACC_68A722C33473B for both). Outside production that is allowed and reported via
+ * `identical`; the secret-refresh webhook then stores the delivered key under both
+ * AIRTEL_MYPVIT_SECRET_KEY and MOOV_MYPVIT_SECRET_KEY. In production (isProductionEnv) the
+ * operators have distinct accounts, so identical codes are a misconfiguration and fail boot.
  */
 export function requireOperationAccountCodes(
-  config: Partial<Pick<MyPVitConfig, 'airtelMerchantOperationAccountCode' | 'moovMerchantOperationAccountCode'>> | undefined
+  config: Partial<Pick<MyPVitConfig, 'airtelMerchantOperationAccountCode' | 'moovMerchantOperationAccountCode'>> | undefined,
+  env: Record<string, string | undefined> = process.env
 ): { airtel: string; moov: string; identical: boolean } {
   const airtel = config?.airtelMerchantOperationAccountCode?.trim() ?? '';
   const moov = config?.moovMerchantOperationAccountCode?.trim() ?? '';
@@ -41,7 +46,14 @@ export function requireOperationAccountCodes(
         'MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE must both be set'
     );
   }
-  return { airtel, moov, identical: airtel === moov };
+  const identical = airtel === moov;
+  if (identical && isProductionEnv(env)) {
+    throw new Error(
+      'MyPVit misconfigured: MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE and ' +
+        'MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE must differ in production'
+    );
+  }
+  return { airtel, moov, identical };
 }
 
 export interface MyPVitPaymentRequest {
@@ -168,7 +180,7 @@ export class MyPVitService {
     const accountCodes = requireOperationAccountCodes(mypvitConfig);
     if (accountCodes.identical) {
       this.logger.warn(
-        'MyPVit Airtel and Moov operation account codes are identical; secret-refresh deliveries will be refused (503) until they differ'
+        'MyPVit Airtel and Moov operation account codes are identical (single account, non-production); secret refresh stores the key under both names'
       );
     }
 

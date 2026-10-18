@@ -978,9 +978,9 @@ export class MobilePaymentsController {
     const airtelAccountCode =
       process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE?.trim();
     const moovAccountCode = process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE?.trim();
-    if (!airtelAccountCode || !moovAccountCode || airtelAccountCode === moovAccountCode) {
+    if (!airtelAccountCode || !moovAccountCode) {
       this.logger.error(
-        'MyPVit secret refresh rejected: Airtel/Moov operation account codes are not configured (or identical)'
+        'MyPVit secret refresh rejected: Airtel/Moov operation account codes are not configured'
       );
       throw new HttpException(
         { success: false, message: 'Secret refresh is not available' },
@@ -988,11 +988,15 @@ export class MobilePaymentsController {
       );
     }
 
-    let secretKeyName: 'AIRTEL_MYPVIT_SECRET_KEY' | 'MOOV_MYPVIT_SECRET_KEY';
-    if (accountCode === airtelAccountCode) {
-      secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY';
+    // QA #593 R1: identical codes = one account, one secret: store it under both names
+    // (one atomic Secrets Manager write). Production refuses to boot with identical codes.
+    let secretKeyNames: Array<'AIRTEL_MYPVIT_SECRET_KEY' | 'MOOV_MYPVIT_SECRET_KEY'>;
+    if (accountCode === airtelAccountCode && accountCode === moovAccountCode) {
+      secretKeyNames = ['AIRTEL_MYPVIT_SECRET_KEY', 'MOOV_MYPVIT_SECRET_KEY'];
+    } else if (accountCode === airtelAccountCode) {
+      secretKeyNames = ['AIRTEL_MYPVIT_SECRET_KEY'];
     } else if (accountCode === moovAccountCode) {
-      secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
+      secretKeyNames = ['MOOV_MYPVIT_SECRET_KEY'];
     } else {
       this.logger.warn('MyPVit secret refresh rejected: unknown operation account code');
       throw new HttpException(
@@ -1001,23 +1005,28 @@ export class MobilePaymentsController {
       );
     }
 
+    const [primaryKey, ...alsoKeys] = secretKeyNames;
+    const keysLabel = secretKeyNames.join(' and ');
     try {
       await this.mobilePaymentsService.updateSecretInSecretsManager(
         mypvitSecretName(),
-        secretKeyName,
-        secret
+        primaryKey,
+        secret,
+        alsoKeys.length > 0
+          ? Object.fromEntries(alsoKeys.map((k) => [k, secret]))
+          : undefined
       );
     } catch (error: unknown) {
       // Name only: the message can quote the secret store (JSON.parse) or the request.
       const name = (error as { name?: string } | null)?.name || 'Error';
-      this.logger.error(`MyPVit secret refresh failed to store ${secretKeyName}: ${name}`);
+      this.logger.error(`MyPVit secret refresh failed to store ${keysLabel}: ${name}`);
       throw new HttpException(
         { success: false, message: 'Failed to handle secret refresh webhook' },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
 
-    this.logger.log(`MyPVit secret refresh stored ${secretKeyName}`);
+    this.logger.log(`MyPVit secret refresh stored ${keysLabel}`);
     return { success: true, data: { updated_at: new Date().toISOString() } };
   }
 
