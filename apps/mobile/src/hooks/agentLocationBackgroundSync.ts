@@ -7,8 +7,9 @@ import {
   AGENT_LOCATION_TASK_NAME,
 } from '../constants/agentLocationBackground';
 
-const DEFAULT_UPDATE_INTERVAL_MS = 20 * 60 * 1000;
+const DEFAULT_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 const ACTIVE_UPDATE_INTERVAL_MS = 60 * 1000;
+const ACTIVE_FOREGROUND_INTERVAL_MS = 2 * 1000;
 const MIN_DISTANCE_CHANGE_M = 100;
 const ACTIVE_MIN_DISTANCE_M = 50;
 
@@ -24,19 +25,30 @@ export function buildLocationTaskOptions(
     ? ACTIVE_UPDATE_INTERVAL_MS
     : DEFAULT_UPDATE_INTERVAL_MS;
   const distanceM = active ? ACTIVE_MIN_DISTANCE_M : MIN_DISTANCE_CHANGE_M;
+
   const base: Location.LocationTaskOptions = {
-    accuracy: active ? Location.Accuracy.High : Location.Accuracy.Balanced,
-    distanceInterval: distanceM,
-    deferredUpdatesDistance: distanceM,
-    deferredUpdatesInterval: intervalMs,
     showsBackgroundLocationIndicator: true,
   };
+
   if (Platform.OS === 'android') {
+    base.accuracy = active ? Location.Accuracy.High : Location.Accuracy.Balanced;
+    base.timeInterval = active ? ACTIVE_FOREGROUND_INTERVAL_MS : intervalMs;
+    base.distanceInterval = 0;
+    if (active) {
+      base.deferredUpdatesInterval = ACTIVE_UPDATE_INTERVAL_MS;
+      base.deferredUpdatesDistance = 0;
+    }
     base.foregroundService = {
       notificationTitle,
       notificationBody,
     };
+  } else {
+    base.accuracy = active ? Location.Accuracy.High : Location.Accuracy.Low;
+    base.distanceInterval = distanceM;
+    base.deferredUpdatesDistance = active ? distanceM : 0;
+    base.deferredUpdatesInterval = intervalMs;
   }
+
   return base;
 }
 
@@ -92,8 +104,7 @@ export async function startBackgroundLocationUpdates(
     { activeDelivery }
   );
 
-  // Prefer starting the new config first; only stop the old task after success
-  // when Expo requires a restart (already running with different options).
+  // Stop the old task before starting with new options (Expo requires a restart when options change).
   if (has) {
     try {
       await Location.stopLocationUpdatesAsync(AGENT_LOCATION_TASK_NAME);
