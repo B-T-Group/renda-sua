@@ -6,6 +6,12 @@
 -- scanned while this migration holds ACCESS EXCLUSIVE locks. No backfill: a location with
 -- no business_location_pickup_slots row means "slot enabled, no pickup time" (AC-B1 default on).
 -- Writes to the new tables go through the backend (system role); Hasura roles get read-only access.
+-- Locks: ALTER TABLE takes ACCESS EXCLUSIVE on orders / order_offers for the rest of this
+-- transaction, so this file does no scans of those tables (the two partial indexes are built in
+-- 20261018180001 under SHARE). lock_timeout makes the migration fail fast instead of queueing every
+-- orders query behind a long-running reader; re-run it if it times out.
+
+SET LOCAL lock_timeout = '5s';
 
 -- 1. Config keys (global rows). Never a blind insert.
 INSERT INTO public.application_configurations (
@@ -185,11 +191,22 @@ CREATE INDEX IF NOT EXISTS dedicated_agent_assignments_coverage_idx
 CREATE INDEX IF NOT EXISTS dedicated_agent_assignments_agent_idx
   ON public.dedicated_agent_assignments (agent_id) WHERE status IN ('active', 'paused');
 
--- Max live assignments per agent (D8). Locks the agent row so concurrent inserts serialise.
+-- Max live assignments per agent (D8).
+-- Cap: same rule as the backend (resolveDedicatedAgentsConfig): the active row for the location's
+-- country wins over the global row; a missing, non-integer or out-of-range (1..20) value means 3.
+-- Concurrency: the agent row is locked FOR NO KEY UPDATE, which serialises concurrent assignment
+-- writes for that agent without blocking FK readers (order_offers / orders.assigned_agent_id
+-- writes take FOR KEY SHARE). The count then sees committed rows only under READ COMMITTED, which
+-- is what Hasura runs (isolation_level: read-committed); under REPEATABLE READ / SERIALIZABLE the
+-- snapshot predates the lock wait and the cap could be exceeded, so those levels are refused.
+-- Writers touching several agents in one transaction must write them in agent_id order (see
+-- orderAssignmentsForLocking in the backend) and may retry on 40P01.
 CREATE OR REPLACE FUNCTION public.dedicated_agent_assignments_enforce_cap()
 RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE
   cap integer;
+  raw numeric;
+  location_country text;
   live integer;
 BEGIN
   IF NEW.status NOT IN ('active', 'paused') THEN
@@ -198,14 +215,25 @@ BEGIN
   IF TG_OP = 'UPDATE' AND OLD.status IN ('active', 'paused') AND OLD.agent_id = NEW.agent_id THEN
     RETURN NEW;
   END IF;
-  PERFORM 1 FROM public.agents WHERE id = NEW.agent_id FOR UPDATE;
-  SELECT COALESCE(
-           (SELECT number_value::integer FROM public.application_configurations
-             WHERE config_key = 'dedicated_max_assignments_per_agent'
-               AND country_code IS NULL AND status = 'active'
-             LIMIT 1),
-           3)
-    INTO cap;
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'dedicated_agent_assignment_requires_read_committed: assignment writes must run under READ COMMITTED (got %)',
+      current_setting('transaction_isolation')
+      USING ERRCODE = 'invalid_transaction_state';
+  END IF;
+  PERFORM 1 FROM public.agents WHERE id = NEW.agent_id FOR NO KEY UPDATE;
+  SELECT NULLIF(upper(btrim(a.country)), '') INTO location_country
+    FROM public.business_locations bl
+    JOIN public.addresses a ON a.id = bl.address_id
+   WHERE bl.id = NEW.business_location_id;
+  SELECT c.number_value INTO raw
+    FROM public.application_configurations c
+   WHERE c.config_key = 'dedicated_max_assignments_per_agent'
+     AND c.status = 'active'
+     AND (NULLIF(btrim(c.country_code), '') IS NULL
+          OR upper(btrim(c.country_code)) = location_country)
+   ORDER BY (NULLIF(btrim(c.country_code), '') IS NULL)
+   LIMIT 1;
+  cap := CASE WHEN raw IS NOT NULL AND raw = trunc(raw) AND raw BETWEEN 1 AND 20 THEN raw::integer ELSE 3 END;
   SELECT count(*) INTO live
     FROM public.dedicated_agent_assignments
    WHERE agent_id = NEW.agent_id
@@ -261,8 +289,6 @@ ALTER TABLE public.orders
   ADD CONSTRAINT orders_dedicated_assignment_id_fkey
     FOREIGN KEY (dedicated_assignment_id) REFERENCES public.dedicated_agent_assignments(id)
     ON UPDATE CASCADE ON DELETE SET NULL NOT VALID;
-CREATE INDEX IF NOT EXISTS orders_dedicated_assignment_idx
-  ON public.orders (dedicated_assignment_id) WHERE dedicated_assignment_id IS NOT NULL;
 
 -- 8. order_offers: kind + decline reason (AC-A6, A7). Constant default: metadata-only on PG >= 11.
 ALTER TABLE public.order_offers
@@ -276,5 +302,3 @@ ALTER TABLE public.order_offers
     CHECK (offer_kind IN ('standard', 'dedicated')) NOT VALID,
   ADD CONSTRAINT order_offers_decline_reason_check
     CHECK (decline_reason IS NULL OR decline_reason IN ('too_far', 'busy', 'not_enough_balance', 'other')) NOT VALID;
-CREATE INDEX IF NOT EXISTS order_offers_dedicated_outstanding_idx
-  ON public.order_offers (agent_id, expires_at) WHERE offer_kind = 'dedicated' AND status = 'offered';

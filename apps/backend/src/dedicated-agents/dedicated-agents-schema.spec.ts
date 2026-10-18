@@ -26,6 +26,9 @@ const read = (...p: string[]) => readFileSync(join(...p), 'utf8');
 const up = read(MIGRATIONS, '20261018180000_dedicated_agents_schema/up.sql');
 const down = read(MIGRATIONS, '20261018180000_dedicated_agents_schema/down.sql');
 const validate = read(MIGRATIONS, '20261018180001_dedicated_agents_validate_constraints/up.sql');
+const validateDown = read(MIGRATIONS, '20261018180001_dedicated_agents_validate_constraints/down.sql');
+/** SQL without `--` comments, so assertions only see statements. */
+const code = (sql: string) => sql.replace(/--[^\n]*/g, '');
 const sqlList = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ');
 
 const NEW_TABLES = [
@@ -122,14 +125,58 @@ describe('dedicated agents migration (20261018180000)', () => {
 
   it('keeps one live assignment per location-slot-agent and caps live assignments per agent under a row lock', () => {
     expect(up).toMatch(/dedicated_agent_assignments_live_unique_idx[\s\S]*?WHERE status IN \('active', 'paused'\)/);
-    expect(up).toMatch(/FROM public\.agents WHERE id = NEW\.agent_id FOR UPDATE/);
+    expect(up).toMatch(/FROM public\.agents WHERE id = NEW\.agent_id FOR NO KEY UPDATE;/);
     expect(up).toContain("config_key = 'dedicated_max_assignments_per_agent'");
     expect(up).toMatch(
       /^CREATE TRIGGER dedicated_agent_assignments_enforce_cap\s+BEFORE INSERT OR UPDATE OF status, agent_id ON public\.dedicated_agent_assignments\s+FOR EACH ROW EXECUTE FUNCTION public\.dedicated_agent_assignments_enforce_cap\(\);/m
     );
   });
 
-  it('touches orders / order_offers without a table rewrite or long ACCESS EXCLUSIVE scan', () => {
+  it('QA L2: locks the agent row FOR NO KEY UPDATE (does not block FK readers), never FOR UPDATE', () => {
+    expect(code(up)).not.toMatch(/\bFOR UPDATE\b/);
+    expect(code(up).match(/FOR NO KEY UPDATE/g)).toHaveLength(1);
+  });
+
+  it('QA L3: refuses assignment writes outside READ COMMITTED, after the early returns and before the lock', () => {
+    const fn = code(up).slice(code(up).indexOf('FUNCTION public.dedicated_agent_assignments_enforce_cap'));
+    const guard = fn.indexOf("IF current_setting('transaction_isolation') <> 'read committed' THEN");
+    expect(guard).toBeGreaterThan(fn.indexOf("AND OLD.agent_id = NEW.agent_id THEN"));
+    expect(guard).toBeLessThan(fn.indexOf('FOR NO KEY UPDATE'));
+    expect(fn.slice(guard, fn.indexOf('END IF;', guard))).toContain(
+      "RAISE EXCEPTION 'dedicated_agent_assignment_requires_read_committed"
+    );
+  });
+
+  it('QA L5: the cap trigger resolves the cap like resolveDedicatedAgentsConfig (country row > global, range, fallback)', () => {
+    const spec = DEDICATED_NUMBER_CONFIG.dedicated_max_assignments_per_agent;
+    const fn = code(up).slice(code(up).indexOf('FUNCTION public.dedicated_agent_assignments_enforce_cap'));
+    expect(fn).toContain(
+      `cap := CASE WHEN raw IS NOT NULL AND raw = trunc(raw) AND raw BETWEEN ${spec.min} AND ${spec.max} THEN raw::integer ELSE ${spec.fallback} END;`
+    );
+    expect(fn.replace(/\s+/g, ' ')).toContain(
+      "AND c.status = 'active' AND (NULLIF(btrim(c.country_code), '') IS NULL OR upper(btrim(c.country_code)) = location_country) ORDER BY (NULLIF(btrim(c.country_code), '') IS NULL) LIMIT 1;"
+    );
+    expect(fn.replace(/\s+/g, ' ')).toContain(
+      'FROM public.business_locations bl JOIN public.addresses a ON a.id = bl.address_id WHERE bl.id = NEW.business_location_id;'
+    );
+    expect(fn).not.toMatch(/number_value::integer/);
+  });
+
+  it('QA L1: both migrations set a LOCAL 5 s lock_timeout before any other statement', () => {
+    for (const sql of [up, validate]) {
+      expect(code(sql).trim().split(';')[0].trim()).toBe("SET LOCAL lock_timeout = '5s'");
+    }
+  });
+
+  it('QA L1: no index build on orders / order_offers while 180000 holds ACCESS EXCLUSIVE; 180001 builds them', () => {
+    expect(code(up)).not.toMatch(/CREATE (UNIQUE )?INDEX[^;]*\bON public\.(orders|order_offers)\b/);
+    expect(validate).toMatch(/CREATE INDEX IF NOT EXISTS orders_dedicated_assignment_idx\s+ON public\.orders \(dedicated_assignment_id\) WHERE dedicated_assignment_id IS NOT NULL;/);
+    expect(validate).toMatch(/CREATE INDEX IF NOT EXISTS order_offers_dedicated_outstanding_idx\s+ON public\.order_offers \(agent_id, expires_at\) WHERE offer_kind = 'dedicated' AND status = 'offered';/);
+    expect(validateDown).toContain('DROP INDEX IF EXISTS public.orders_dedicated_assignment_idx;');
+    expect(validateDown).toContain('DROP INDEX IF EXISTS public.order_offers_dedicated_outstanding_idx;');
+  });
+
+  it('touches orders / order_offers without a table rewrite or a scan in 180000 (constraints NOT VALID, validated in 180001)', () => {
     const hot = up.slice(up.indexOf('-- 7. orders'));
     expect(hot).not.toMatch(/VALIDATE CONSTRAINT/);
     expect(hot.match(/NOT VALID/g)).toHaveLength(5);
@@ -191,14 +238,14 @@ describe('dedicated agents Hasura metadata', () => {
     }
   });
 
-  it('only agent and business roles can read, and every filter is scoped to X-Hasura-User-Id or open postings', () => {
+  it('only agent and business roles can read, and every filter is scoped to X-Hasura-User-Id', () => {
     for (const t of NEW_TABLES) {
       const perms = meta(t).select_permissions ?? [];
       expect(perms.map((p) => p.role).sort()).toEqual(['agent', 'business']);
       for (const p of perms) {
         const filter = JSON.stringify(p.permission.filter);
         expect(filter).not.toBe('{}');
-        expect(filter.includes('X-Hasura-User-Id') || filter.includes('"open"')).toBe(true);
+        expect(filter).toContain('X-Hasura-User-Id');
       }
     }
   });
@@ -219,11 +266,23 @@ describe('dedicated agents Hasura metadata', () => {
     }
   });
 
-  it('agents see open postings, or postings they applied to', () => {
-    const agent = meta('dedicated_agent_postings').select_permissions?.find((p) => p.role === 'agent');
-    expect(agent?.permission.filter).toEqual({
-      _or: [{ status: { _eq: 'open' } }, { applications: { agent: { user: { id: { _eq: 'X-Hasura-User-Id' } } } } }],
-    });
+  it('QA M1: agents see only postings they applied to (Opportunities come from the backend with city/eligibility matching)', () => {
+    const mine = { applications: { agent: { user: { id: { _eq: 'X-Hasura-User-Id' } } } } };
+    const postings = meta('dedicated_agent_postings').select_permissions?.find((p) => p.role === 'agent');
+    const slots = meta('dedicated_agent_posting_slots').select_permissions?.find((p) => p.role === 'agent');
+    expect(postings?.permission.filter).toEqual(mine);
+    expect(slots?.permission.filter).toEqual({ posting: mine });
+  });
+
+  it('QA M1: no agent filter opens rows by status (no "open postings" branch, no _or)', () => {
+    for (const t of ['dedicated_agent_postings', 'dedicated_agent_posting_slots']) {
+      const agent = meta(t).select_permissions?.find((p) => p.role === 'agent');
+      expect(JSON.stringify(agent?.permission.filter)).not.toMatch(/"status"|"is_open"|"_or"/);
+    }
+    for (const t of NEW_TABLES) {
+      const agent = meta(t).select_permissions?.find((p) => p.role === 'agent');
+      expect(JSON.stringify(agent?.permission.filter)).not.toMatch(/"open"|"_or"/);
+    }
   });
 
   it('never exposes actor user ids or relation-dismissal fields to Hasura roles', () => {

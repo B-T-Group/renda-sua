@@ -21,14 +21,11 @@ select_permissions:
         - is_open
       filter:
         posting:
-          _or:
-            - status:
-                _eq: open
-            - applications:
-                agent:
-                  user:
-                    id:
-                      _eq: X-Hasura-User-Id
+          applications:
+            agent:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
   - role: business
     permission:
       columns:
