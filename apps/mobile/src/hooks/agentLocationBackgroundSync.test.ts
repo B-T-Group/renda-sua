@@ -63,14 +63,16 @@ describe('buildLocationTaskOptions', () => {
       expect(options.deferredUpdatesInterval).toBeUndefined();
     });
 
-    it('active-delivery mode: timeInterval 60s, distanceInterval 0, Accuracy.High, foreground service', () => {
+    it('active-delivery mode: timeInterval 2s, distanceInterval 0, deferred 60s/0, Accuracy.High, foreground service', () => {
       const options = buildLocationTaskOptions(notificationTitle, notificationBody, {
         activeDelivery: true,
       });
 
       expect(options.accuracy).toBe(Location.Accuracy.High);
-      expect(options.timeInterval).toBeLessThanOrEqual(60 * 1000);
+      expect(options.timeInterval).toBe(2 * 1000);
       expect(options.distanceInterval).toBe(0);
+      expect(options.deferredUpdatesInterval).toBe(60 * 1000);
+      expect(options.deferredUpdatesDistance).toBe(0);
       expect(options.showsBackgroundLocationIndicator).toBe(true);
       expect(options.foregroundService).toEqual({
         notificationTitle,

@@ -9,6 +9,7 @@ import {
 
 const DEFAULT_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 const ACTIVE_UPDATE_INTERVAL_MS = 60 * 1000;
+const ACTIVE_FOREGROUND_INTERVAL_MS = 2 * 1000;
 const MIN_DISTANCE_CHANGE_M = 100;
 const ACTIVE_MIN_DISTANCE_M = 50;
 
@@ -31,8 +32,12 @@ export function buildLocationTaskOptions(
 
   if (Platform.OS === 'android') {
     base.accuracy = active ? Location.Accuracy.High : Location.Accuracy.Balanced;
-    base.timeInterval = intervalMs;
+    base.timeInterval = active ? ACTIVE_FOREGROUND_INTERVAL_MS : intervalMs;
     base.distanceInterval = 0;
+    if (active) {
+      base.deferredUpdatesInterval = ACTIVE_UPDATE_INTERVAL_MS;
+      base.deferredUpdatesDistance = 0;
+    }
     base.foregroundService = {
       notificationTitle,
       notificationBody,
