@@ -1386,16 +1386,17 @@ export class MobilePaymentsService {
       }
       case 'fedapay': {
         const phone = phoneNumber || '';
-        const formatted = phone.startsWith('228') ? phone : phone ? `228${phone}` : '';
+        // FedaPay expects bare 8-digit national number with country 'TG' (not 228+national)
+        const nationalNumber = phone.startsWith('228') ? phone.slice(3) : phone;
         const isGiveChange = request.transactionType === 'GIVE_CHANGE';
-        const channel: 'moov_tg' | 'togocel' = phone.startsWith('78') || phone.startsWith('79') || 
-                                                 phone.startsWith('96') || phone.startsWith('97') || 
-                                                 phone.startsWith('98') || phone.startsWith('99')
+        const channel: 'moov_tg' | 'togocel' = nationalNumber.startsWith('78') || nationalNumber.startsWith('79') || 
+                                                 nationalNumber.startsWith('96') || nationalNumber.startsWith('97') || 
+                                                 nationalNumber.startsWith('98') || nationalNumber.startsWith('99')
           ? 'moov_tg'
           : 'togocel';
         return isGiveChange
           ? ({
-              payee: formatted,
+              payee: nationalNumber,
               amount,
               externalId: reference || '',
               description: request.description || 'Payout',
@@ -1403,7 +1404,7 @@ export class MobilePaymentsService {
               channel,
             } as FedaPayWithdrawalRequest)
           : ({
-              payer: formatted,
+              payer: nationalNumber,
               amount,
               externalId: reference || '',
               description: request.description || 'Payment',
