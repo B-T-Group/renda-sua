@@ -278,6 +278,45 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       expect(result2).toEqual({ received: true });
       expect(mockCallbackProcessor.processFedaPayCallback).toHaveBeenCalledTimes(2);
     });
+
+    it('does not drop transaction.approved when transaction.updated shares entity id and timestamp', async () => {
+      const timestamp = Math.floor(Date.now() / 1000);
+      const updatedPayload = JSON.stringify({
+        name: 'transaction.updated',
+        entity: { id: 'tx_123', status: 'approved', amount: 1000 },
+      });
+      const approvedPayload = JSON.stringify({
+        name: 'transaction.approved',
+        entity: { id: 'tx_123', status: 'approved', amount: 1000 },
+      });
+      const updatedHeader = Webhook.generateTestHeaderString({
+        payload: updatedPayload,
+        secret,
+        timestamp,
+      });
+      const approvedHeader = Webhook.generateTestHeaderString({
+        payload: approvedPayload,
+        secret,
+        timestamp,
+      });
+      mockCallbackProcessor.processFedaPayCallback.mockResolvedValue({ received: true });
+
+      await controller.fedapayCallback({
+        headers: { 'x-fedapay-signature': updatedHeader },
+        body: Buffer.from(updatedPayload),
+      } as any);
+      const approved = await controller.fedapayCallback({
+        headers: { 'x-fedapay-signature': approvedHeader },
+        body: Buffer.from(approvedPayload),
+      } as any);
+
+      expect(approved).toEqual({ received: true });
+      expect(mockCallbackProcessor.processFedaPayCallback).toHaveBeenCalledTimes(2);
+      expect(mockCallbackProcessor.processFedaPayCallback).toHaveBeenLastCalledWith(
+        expect.objectContaining({ name: 'transaction.approved' }),
+        expect.anything()
+      );
+    });
   });
 
   describe('B8b: Real assertProviderConfirmsCallback Tests', () => {
@@ -416,6 +455,50 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
       ).rejects.toThrow(/missing live reference.*fail closed/i);
+    });
+
+    it('accepts a Hasura numeric string amount against a FedaPay number', async () => {
+      const tx = {
+        id: 'tx-decimal',
+        transaction_id: 'fedapay_tx_dec',
+        amount: '1000.00',
+        currency: 'XOF',
+        reference: 'REF333',
+        provider: 'fedapay',
+        status: 'pending',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF333',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
+      ).resolves.toBeUndefined();
+    });
+
+    it('still rejects a real amount mismatch when the stored amount is a numeric string', async () => {
+      const tx = {
+        id: 'tx-decimal-bad',
+        transaction_id: 'fedapay_tx_dec_bad',
+        amount: '1000.00',
+        currency: 'XOF',
+        reference: 'REF333',
+        provider: 'fedapay',
+        status: 'pending',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 999,
+        currency: 'XOF',
+        reference: 'REF333',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
+      ).rejects.toThrow(/amount mismatch/i);
     });
 
     it('should accept when all fields match', async () => {

@@ -299,8 +299,15 @@ export class MobilePaymentsService {
             `Rejecting FedaPay callback for ${tx.id}: live currency ${live.currency} is not XOF`
           );
         }
-        // Check amount matches
-        if (tx.amount !== undefined && live.amount !== undefined && live.amount !== tx.amount) {
+        // Hasura returns numeric as a string ("1000.00"); FedaPay returns a number.
+        // Strict inequality would reject every paid callback and leave the order unpaid.
+        if (
+          tx.amount !== undefined &&
+          tx.amount !== null &&
+          live.amount !== undefined &&
+          live.amount !== null &&
+          !this.fedapayAmountsEqual(tx.amount, live.amount)
+        ) {
           throw new Error(
             `Rejecting FedaPay callback for ${tx.id}: amount mismatch (expected ${tx.amount}, got ${live.amount})`
           );
@@ -341,6 +348,13 @@ export class MobilePaymentsService {
         `Rejecting FedaPay FAILED callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference || '<missing>'})`
       );
     }
+  }
+
+  /** Numeric equality. Hasura numeric arrives as "1000.00"; FedaPay sends 1000. */
+  private fedapayAmountsEqual(expected: unknown, actual: unknown): boolean {
+    const left = Number(expected);
+    const right = Number(actual);
+    return Number.isFinite(left) && Number.isFinite(right) && left === right;
   }
 
   /** Account withdrawals (GIVE_CHANGE): valid CM, GA, or TG MSISDN. */
