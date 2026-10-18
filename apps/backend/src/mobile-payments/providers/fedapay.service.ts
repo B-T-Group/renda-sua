@@ -9,6 +9,7 @@ import {
 } from 'fedapay';
 import type { FedaPayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
+import { sanitizeProviderError, toSanitizedError } from '../sanitize-provider-error.util';
 import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
 import type { FedaPayCallbackDto } from '../mobile-payment-callback.dto';
 
@@ -234,7 +235,7 @@ export class FedaPayService implements OnModuleInit {
       } catch (error: any) {
         this.logger.error(
           `Failed to process auto-callback for ${mockReference}: ${
-            error?.message || error
+            sanitizeProviderError(error).message
           }`
         );
       }
@@ -375,7 +376,7 @@ export class FedaPayService implements OnModuleInit {
           // FedaPay's own expiry (-> canceled) or polling then resolves it.
           this.logger.warn(
             `FedaPay push failed after transaction ${transaction.id} was created ` +
-              `(externalId=${externalId}); keeping it pending: ${pushError?.message}`
+              `(externalId=${externalId}); keeping it pending: ${sanitizeProviderError(pushError).message}`
           );
           return {
             success: true,
@@ -407,11 +408,13 @@ export class FedaPayService implements OnModuleInit {
         status: 'failed',
       };
     } catch (error: any) {
-      this.logger.error(`Failed to initiate FedaPay payment: ${error.message}`);
+      // The SDK error can carry the Bearer sk_ key: log and return only the redacted message.
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate FedaPay payment: ${sanitized.message}`);
       return {
         success: false,
         message: normalizeProviderMessage(
-          error.message,
+          sanitized.message,
           'Failed to initiate payment'
         ),
         errorCode: error.code || 'INITIATION_FAILED',
@@ -462,8 +465,9 @@ export class FedaPayService implements OnModuleInit {
         }
       } catch (lookupError: any) {
         // Fail closed: don't create if lookup fails, let it retry
-        this.logger.error(`Payout lookup failed for ${externalId}: ${lookupError.message}`);
-        throw new Error(`Failed to check existing payout: ${lookupError.message}`);
+        const sanitized = sanitizeProviderError(lookupError);
+        this.logger.error(`Payout lookup failed for ${externalId}: ${sanitized.message}`);
+        throw new Error(`Failed to check existing payout: ${sanitized.message}`);
       }
 
       const payout = await Payout.create({
@@ -495,11 +499,13 @@ export class FedaPayService implements OnModuleInit {
         status: 'failed',
       };
     } catch (error: any) {
-      this.logger.error(`Failed to initiate FedaPay payout: ${error.message}`);
+      // The SDK error can carry the Bearer sk_ key: log and return only the redacted message.
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate FedaPay payout: ${sanitized.message}`);
       return {
         success: false,
         message: normalizeProviderMessage(
-          error.message,
+          sanitized.message,
           'Failed to initiate payout'
         ),
         errorCode: error.code || 'WITHDRAWAL_FAILED',
@@ -528,7 +534,7 @@ export class FedaPayService implements OnModuleInit {
       };
     } catch (sendError: any) {
       this.logger.warn(
-        `FedaPay payout ${payoutId} created but sendNow failed (externalId=${externalId}): ${sendError?.message}; reconciling via Payout.retrieve`
+        `FedaPay payout ${payoutId} created but sendNow failed (externalId=${externalId}): ${sanitizeProviderError(sendError).message}; reconciling via Payout.retrieve`
       );
       return this.reconcileAmbiguousPayout(payoutId, externalId);
     }
@@ -549,7 +555,7 @@ export class FedaPayService implements OnModuleInit {
       liveStatus = live?.status;
     } catch (retrieveError: any) {
       this.logger.warn(
-        `FedaPay payout ${payoutId} retrieve after failed send also failed: ${retrieveError?.message}`
+        `FedaPay payout ${payoutId} retrieve after failed send also failed: ${sanitizeProviderError(retrieveError).message}`
       );
     }
     if (liveStatus === 'failed') {
@@ -602,7 +608,7 @@ export class FedaPayService implements OnModuleInit {
         existing = await Payout.retrieve(parseInt(payoutId, 10));
       } catch (retrieveError: any) {
         this.logger.warn(
-          `FedaPay payout ${payoutId} retrieve for resend failed: ${retrieveError?.message}`
+          `FedaPay payout ${payoutId} retrieve for resend failed: ${sanitizeProviderError(retrieveError).message}`
         );
       }
       if (existing && typeof existing.sendNow === 'function') {
@@ -672,10 +678,11 @@ export class FedaPayService implements OnModuleInit {
         ),
       };
     } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
       this.logger.error(
-        `Failed to check FedaPay payout status: ${error.message}`
+        `Failed to check FedaPay payout status: ${sanitized.message}`
       );
-      throw error;
+      throw toSanitizedError(error);
     }
   }
 
@@ -713,10 +720,11 @@ export class FedaPayService implements OnModuleInit {
         ),
       };
     } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
       this.logger.error(
-        `Failed to check FedaPay transaction status: ${error.message || 'Unknown error'}`
+        `Failed to check FedaPay transaction status: ${sanitized.message}`
       );
-      throw error;
+      throw toSanitizedError(error);
     }
   }
 
