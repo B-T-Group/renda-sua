@@ -35,6 +35,8 @@ export function shouldSendLocation(
   if (!prev) return true;
 
   const elapsedMs = nowMs - prev.timestampMs;
+  if (elapsedMs < 0) return true;
+
   const effectiveHeartbeatMs = heartbeatMs - slackMs;
   if (elapsedMs >= effectiveHeartbeatMs) return true;
 

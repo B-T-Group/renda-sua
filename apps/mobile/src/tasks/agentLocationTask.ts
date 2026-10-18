@@ -2,8 +2,10 @@
  * Background location task — must be registered at app entry (see index.js).
  * Sends fixes to Hasura when the OS delivers batched location updates.
  * 
- * iOS note: iOS may still throttle background location updates despite
- * pausesUpdatesAutomatically: false. This is best-effort on iOS.
+ * iOS idle note: iOS uses a 100m distanceInterval filter, so a stationary agent
+ * receives no background fixes and the heartbeat cannot fire. Foreground interval
+ * provides the stationary heartbeat when the app is visible. iOS may also throttle
+ * delivery even when moving, depending on battery state and system policies.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';

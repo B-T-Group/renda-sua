@@ -167,4 +167,20 @@ describe('shouldSendLocation', () => {
     );
     expect(result).toBe(true);
   });
+
+  it('should return true when elapsed time is negative (clock moved backwards)', () => {
+    const nowMs = 1000000;
+    const prev = { lat: 0, lng: 0, timestampMs: nowMs + 60000 };
+    const result = shouldSendLocation(
+      prev,
+      0,
+      0,
+      nowMs,
+      minDistanceM,
+      heartbeatMs,
+      slackMs,
+      mockHaversineDistance
+    );
+    expect(result).toBe(true);
+  });
 });

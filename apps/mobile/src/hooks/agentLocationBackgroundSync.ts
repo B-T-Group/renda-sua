@@ -26,18 +26,19 @@ export function buildLocationTaskOptions(
   const distanceM = active ? ACTIVE_MIN_DISTANCE_M : MIN_DISTANCE_CHANGE_M;
 
   const base: Location.LocationTaskOptions = {
-    accuracy: active ? Location.Accuracy.High : Location.Accuracy.Low,
     showsBackgroundLocationIndicator: true,
   };
 
   if (Platform.OS === 'android') {
-    base.timeInterval = intervalMs;
+    base.accuracy = active ? Location.Accuracy.High : Location.Accuracy.Balanced;
+    base.timeInterval = active ? DEFAULT_UPDATE_INTERVAL_MS : intervalMs;
     base.distanceInterval = active ? distanceM : 0;
     base.foregroundService = {
       notificationTitle,
       notificationBody,
     };
   } else {
+    base.accuracy = active ? Location.Accuracy.High : Location.Accuracy.Low;
     base.distanceInterval = distanceM;
     base.deferredUpdatesDistance = active ? distanceM : 0;
     base.deferredUpdatesInterval = intervalMs;
