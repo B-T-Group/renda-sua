@@ -31,8 +31,8 @@ export function buildLocationTaskOptions(
 
   if (Platform.OS === 'android') {
     base.accuracy = active ? Location.Accuracy.High : Location.Accuracy.Balanced;
-    base.timeInterval = active ? DEFAULT_UPDATE_INTERVAL_MS : intervalMs;
-    base.distanceInterval = active ? distanceM : 0;
+    base.timeInterval = intervalMs;
+    base.distanceInterval = 0;
     base.foregroundService = {
       notificationTitle,
       notificationBody,
