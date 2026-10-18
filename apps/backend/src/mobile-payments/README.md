@@ -87,7 +87,7 @@ Overwrites the live MyPVit operation-account secret, so it fails closed:
   - Exact IPv4 match only: no CIDR ranges and no IPv6 (an IPv4-mapped `::ffff:a.b.c.d` is normalised to `a.b.c.d`).
   - `req.ip` is only trustworthy with `trust proxy = 1` (one hop: the Lightsail load balancer). The backend refuses to start in production if `TRUST_PROXY` resolves to anything else; leave it unset or set it to `1`.
 - **One answer for every auth failure:** the IP check and the token compare always both run, and an unconfigured token, a non-allow-listed IP and a wrong token all return the same `401 {"success":false,"message":"Unauthorized"}`. The reason (and the caller IP) goes to the log only.
-- **Account codes:** `MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE` and `MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE` must be set and must differ. There is no fallback in code: `MyPVitService` throws at construction, so **the backend fails at boot** when they are missing or identical.
+- **Account codes:** `MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE` and `MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE` must be set. There is no fallback in code: `MyPVitService` throws at construction, so **the backend fails at boot** when either is missing or blank. Identical codes still boot (payments work; DEV's sandbox config uses one account for both), but `MyPVitService` warns, and this webhook refuses deliveries with 503 because it can't tell which key to rotate.
 - **Secret name:** `MYPVIT_SECRET_NAME` wins if set. Otherwise the same rule as `main.ts`: `DEPLOYMENT_ENV` (then `NODE_ENV`) equal to `production` gives `production-rendasua-backend-secrets`; anything else gives `development-rendasua-backend-secrets`. The webhook writer and `MyPVitService`'s reader use the same function.
 - **Old URL:** the unauthenticated `POST /mobile-payments/secret-refresh` always returns 401.
 
@@ -102,7 +102,7 @@ Overwrites the live MyPVit operation-account secret, so it fails closed:
 - `200 { "success": true, "data": { "updated_at": "…" } }`. It echoes nothing about the secret store.
 - 401: any auth failure (token missing/wrong/unconfigured, or IP not allowed), identical body.
 - 400: invalid payload (missing/blank/oversized secret, missing account code) or unknown account code.
-- 503: account codes missing at request time (defence in depth; normally the app would not have booted).
+- 503: account codes identical (or missing at request time, defence in depth).
 - 500: store failure, with a generic body; only the error class name is logged.
 
 **Deploy runbook (do these in order):**

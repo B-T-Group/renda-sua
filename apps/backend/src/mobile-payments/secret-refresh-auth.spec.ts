@@ -365,7 +365,6 @@ describe('QA #593 S3: no account-code fallback anywhere; the app fails at boot',
     ['airtel missing', { moovMerchantOperationAccountCode: MOOV }],
     ['moov missing', { airtelMerchantOperationAccountCode: AIRTEL }],
     ['blank', { airtelMerchantOperationAccountCode: ' ', moovMerchantOperationAccountCode: MOOV }],
-    ['identical', { airtelMerchantOperationAccountCode: AIRTEL, moovMerchantOperationAccountCode: AIRTEL }],
   ])('MyPVitService refuses to construct (boot fails) when codes are %s', (_l, mypvit) => {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { MyPVitService, requireOperationAccountCodes } = require('./providers/mypvit.service');
@@ -373,11 +372,31 @@ describe('QA #593 S3: no account-code fallback anywhere; the app fails at boot',
     expect(() => new MyPVitService({ get: () => mypvit } as never)).toThrow(/MyPVit misconfigured/);
   });
 
-  it('valid distinct codes construct fine', () => {
+  /** The module registry was reset, so spy on the Logger the freshly required service uses. */
+  function freshWarnSpy(): jest.SpyInstance {
+    jest.resetModules();
     // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { requireOperationAccountCodes } = require('./providers/mypvit.service');
-    expect(
-      requireOperationAccountCodes({ airtelMerchantOperationAccountCode: AIRTEL, moovMerchantOperationAccountCode: MOOV })
-    ).toEqual({ airtel: AIRTEL, moov: MOOV });
+    const { Logger: FreshLogger } = require('@nestjs/common');
+    return jest.spyOn(FreshLogger.prototype, 'warn').mockImplementation(() => undefined);
+  }
+
+  it('valid distinct codes construct fine, with no warning', () => {
+    const warn = freshWarnSpy();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { MyPVitService, requireOperationAccountCodes } = require('./providers/mypvit.service');
+    const cfg = { airtelMerchantOperationAccountCode: AIRTEL, moovMerchantOperationAccountCode: MOOV };
+    expect(requireOperationAccountCodes(cfg)).toEqual({ airtel: AIRTEL, moov: MOOV, identical: false });
+    new MyPVitService({ get: () => cfg } as never);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('identical');
+  });
+
+  it('identical codes (DEV sandbox) still boot, but warn that secret refresh will be refused', () => {
+    const warn = freshWarnSpy();
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { MyPVitService, requireOperationAccountCodes } = require('./providers/mypvit.service');
+    const cfg = { airtelMerchantOperationAccountCode: AIRTEL, moovMerchantOperationAccountCode: ` ${AIRTEL}` };
+    expect(requireOperationAccountCodes(cfg)).toEqual({ airtel: AIRTEL, moov: AIRTEL, identical: true });
+    expect(() => new MyPVitService({ get: () => cfg } as never)).not.toThrow();
+    expect(JSON.stringify(warn.mock.calls)).toContain('operation account codes are identical');
   });
 });
