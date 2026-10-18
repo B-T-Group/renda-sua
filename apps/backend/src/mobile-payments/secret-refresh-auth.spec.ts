@@ -137,6 +137,15 @@ describe('H1: /secret-refresh authentication', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('unconfigured: even the internal dummy comparison value is refused (the configured flag gates)', async () => {
+    delete process.env.MYPVIT_SECRET_REFRESH_TOKEN;
+    const ctrl = controller();
+    expect(await status(ctrl.handleSecretRefreshCallback('x'.repeat(32), body(), req()))).toBe(401);
+    process.env.MYPVIT_SECRET_REFRESH_TOKEN = 'short-token';
+    expect(await status(ctrl.handleSecretRefreshCallback('x'.repeat(32), body(), req()))).toBe(401);
+    expect(update).not.toHaveBeenCalled();
+  });
+
   it('QA S4: the token compare runs even when the IP is already rejected (no short-circuit)', async () => {
     const ctrl = controller();
     await status(ctrl.handleSecretRefreshCallback(TOKEN, body(), req('203.0.113.9')));
@@ -194,6 +203,16 @@ describe('H1: /secret-refresh authentication', () => {
     await ctrl.handleSecretRefreshCallback(TOKEN, body({ secret_key: `  ${NEW_SECRET} ` }), req());
     expect(update).toHaveBeenLastCalledWith(mypvitSecretName(), 'AIRTEL_MYPVIT_SECRET_KEY', NEW_SECRET);
     expect(update).toHaveBeenCalledTimes(3);
+  });
+
+  it('a blank documented field falls through to the legacy one (secret and account code)', async () => {
+    const ctrl = controller();
+    await ctrl.handleSecretRefreshCallback(
+      TOKEN,
+      { secret: '', secret_key: NEW_SECRET, operation_account_code: '  ', merchant_operation_account_code: MOOV },
+      req()
+    );
+    expect(update).toHaveBeenCalledWith(mypvitSecretName(), 'MOOV_MYPVIT_SECRET_KEY', NEW_SECRET);
   });
 
   it('compares the token with crypto.timingSafeEqual', async () => {
