@@ -9,6 +9,7 @@ import {
   MobilePaymentsService,
 } from './mobile-payments.service';
 import { FedaPayService } from './providers/fedapay.service';
+import { sanitizeProviderError } from './sanitize-provider-error.util';
 
 export type GiveChangeProvider =
   | 'mypvit'
@@ -43,8 +44,13 @@ export interface GiveChangePayoutResult {
     provider?: string;
     status?: 'pending';
     reason?: 'provider_ambiguous';
+    error?: 'PAYOUT_PROVIDER_ERROR';
   };
 }
+
+/** S3: what a client sees when the provider refuses a payout. Never provider text. */
+export const PAYOUT_PROVIDER_ERROR_MESSAGE =
+  'Failed to initiate withdrawal. Please try again or contact support.';
 
 type HttpErr = { status: HttpStatus; body: Record<string, unknown> };
 
@@ -219,17 +225,17 @@ export class GiveChangePayoutService {
         options.initiatorUserId ?? params.mtnUserId
       );
     } catch (error: any) {
-      // Log detailed error server-side (sanitized for secrets)
+      // Log the failure server-side, sanitized for secrets (no raw message or stack)
+      const sanitized = sanitizeProviderError(error);
       this.logger.error(
-        `Withdrawal initiation failed for reference ${reference}: ${error?.message}`,
-        error?.stack
+        `Withdrawal initiation failed for reference ${reference}: ${sanitized.message}`
       );
       
       await this.failInitiation(
         transaction.id,
         reference,
         params,
-        error?.message || 'Withdrawal initiation failed',
+        sanitized.message || 'Withdrawal initiation failed',
         'INITIATION_EXCEPTION'
       );
       
@@ -240,7 +246,7 @@ export class GiveChangePayoutService {
           : new HttpException(
               {
                 success: false,
-                message: 'Failed to initiate withdrawal. Please try again or contact support.',
+                message: PAYOUT_PROVIDER_ERROR_MESSAGE,
                 error: 'PAYOUT_PROVIDER_ERROR',
               },
               HttpStatus.BAD_GATEWAY
@@ -380,7 +386,18 @@ export class GiveChangePayoutService {
         paymentResponse.errorCode || 'PROVIDER_INIT_FAILED',
         providerTxId // Keep FedaPay id on failed withdrawal rows for audit trail
       );
-      return { success: false, data };
+      // S3: the provider's message stays server-side (error_message on the row);
+      // the caller only gets a generic message and a stable error code.
+      return {
+        success: false,
+        data: {
+          transactionId: mobileTxId,
+          providerTransactionId: providerTxId,
+          provider: paymentResponse.provider,
+          message: PAYOUT_PROVIDER_ERROR_MESSAGE,
+          error: 'PAYOUT_PROVIDER_ERROR',
+        },
+      };
     }
 
     // G2: Pending is only valid once we have a provider transaction_id.

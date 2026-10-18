@@ -5,6 +5,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 import { ModuleRef } from '@nestjs/core';
+import { ConflictException, UnprocessableEntityException } from '@nestjs/common';
 import type { FedaPayCallbackDto } from './mobile-payment-callback.dto';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 
@@ -215,7 +216,16 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         } as any,
       };
 
-      await processor.processFedaPayCallback(approvedCallback);
+      // The callback body is NOT trusted; the LIVE provider re-check decides.
+      mobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValueOnce(
+        new ConflictException('live mismatch')
+      );
+
+      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toBeInstanceOf(ConflictException);
+      expect(mobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.objectContaining({ transaction_id: expect.any(String) }),
+        'SUCCESS'
+      );
 
       // Should NOT credit wallet due to amount mismatch
       expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
@@ -224,7 +234,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       // Verify money anomaly was reported
       expect(reportMoneyAnomaly).toHaveBeenCalled();
       const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
-      expect(anomalyType).toBe('late_success_amount_mismatch');
+      expect(anomalyType).toBe('late_success_top_up_live_mismatch');
       expect(message).toContain('tx-amount-mismatch');
     });
 
@@ -258,7 +268,16 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         } as any,
       };
 
-      await processor.processFedaPayCallback(approvedCallback);
+      // The callback body is NOT trusted; the LIVE provider re-check decides.
+      mobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValueOnce(
+        new UnprocessableEntityException('live mismatch')
+      );
+
+      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toBeInstanceOf(UnprocessableEntityException);
+      expect(mobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.objectContaining({ transaction_id: expect.any(String) }),
+        'SUCCESS'
+      );
 
       // Should NOT credit wallet due to invalid currency
       expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
@@ -267,7 +286,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       // Verify money anomaly was reported
       expect(reportMoneyAnomaly).toHaveBeenCalled();
       const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
-      expect(anomalyType).toBe('late_success_currency_invalid');
+      expect(anomalyType).toBe('late_success_top_up_live_mismatch');
       expect(message).toContain('tx-currency-invalid');
     });
 
@@ -301,7 +320,16 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         } as any,
       };
 
-      await processor.processFedaPayCallback(approvedCallback);
+      // The callback body is NOT trusted; the LIVE provider re-check decides.
+      mobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValueOnce(
+        new ConflictException('live mismatch')
+      );
+
+      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toBeInstanceOf(ConflictException);
+      expect(mobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.objectContaining({ transaction_id: expect.any(String) }),
+        'SUCCESS'
+      );
 
       // Should NOT credit wallet due to reference mismatch
       expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
@@ -310,19 +338,28 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       // Verify money anomaly was reported
       expect(reportMoneyAnomaly).toHaveBeenCalled();
       const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
-      expect(anomalyType).toBe('late_success_reference_mismatch');
+      expect(anomalyType).toBe('late_success_top_up_live_mismatch');
       expect(message).toContain('tx-ref-mismatch');
     });
   });
 
   describe('Order Payment Late Success', () => {
-    it('should handle failed order payment when declined then approved', async () => {
+    it('should credit the wallet, then apply the order, when declined then approved', async () => {
+      const calls: string[] = [];
       const mockOrderHandler = {
         supportsPaymentEntity: jest.fn().mockReturnValue(true),
-        onPaymentSuccess: jest.fn().mockResolvedValue(undefined),
+        onPaymentSuccess: jest.fn(async () => {
+          calls.push('handler');
+        }),
       };
-
       registryService.getHandlers.mockReturnValue([mockOrderHandler as any]);
+      accountsService.registerDepositIfNotExists.mockImplementation(async () => {
+        calls.push('deposit');
+        return { success: true, alreadyProcessed: false } as any;
+      });
+      mobilePaymentsService.assertProviderConfirmsCallback.mockImplementation(async () => {
+        calls.push('live');
+      });
 
       const failedOrderPayment: MobilePaymentTransaction = {
         id: 'tx-order-failed',
@@ -356,41 +393,38 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
 
       await processor.processFedaPayCallback(approvedCallback);
 
-      // Verify callback was logged
       expect(databaseService.logCallback).toHaveBeenCalledWith('tx-order-failed', approvedCallback);
-
-      // Verify CAS claim (failed → processing)
-      expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+      expect(calls).toEqual(['live', 'deposit', 'handler']);
+      expect(databaseService.updateTransactionIfStatus).toHaveBeenNthCalledWith(
+        1,
         'tx-order-failed',
         'failed',
         { status: 'processing' }
       );
-
-      // Verify order payment handler was called
-      expect(mockOrderHandler.onPaymentSuccess).toHaveBeenCalledWith(failedOrderPayment);
-
-      // Verify transaction marked as success
-      expect(databaseService.updateTransaction).toHaveBeenCalledWith(
-        'tx-order-failed',
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith(
         expect.objectContaining({
-          status: 'success',
-          error_code: 'LATE_SUCCESS_APPLIED',
+          accountId: 'acc-789',
+          amount: 8000,
+          idempotencyKey: 'momo-deposit:tx-order-failed',
         })
       );
-
-      // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalled();
-      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
-      expect(anomalyType).toBe('late_success_order_applied');
-      expect(message).toContain('tx-order-failed');
+      expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        'tx-order-failed',
+        'processing',
+        expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' })
+      );
+      expect(mockOrderHandler.onPaymentSuccess).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'tx-order-failed', status: 'success' })
+      );
+      const anomalyTypes = (reportMoneyAnomaly as jest.Mock).mock.calls.map((c) => c[1]);
+      expect(anomalyTypes).toContain('late_success_order_credited');
     });
 
-    it('should raise anomaly if order payment cannot be applied safely', async () => {
+    it('should restore processing and rethrow if the order cannot be applied (deposit kept for retry)', async () => {
       const mockOrderHandler = {
         supportsPaymentEntity: jest.fn().mockReturnValue(true),
         onPaymentSuccess: jest.fn().mockRejectedValue(new Error('Order already paid')),
       };
-
       registryService.getHandlers.mockReturnValue([mockOrderHandler as any]);
 
       const failedOrderPayment: MobilePaymentTransaction = {
@@ -423,24 +457,16 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         } as any,
       };
 
-      // Should not throw - anomaly is raised instead
-      await processor.processFedaPayCallback(approvedCallback);
+      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toThrow('Payment handler failed for order order-456; will retry');
 
-      // Verify handler was attempted
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
       expect(mockOrderHandler.onPaymentSuccess).toHaveBeenCalled();
-
-      // Transaction should remain in processing (not marked success)
-      const updateCalls = databaseService.updateTransaction.mock.calls;
-      const hasSuccessUpdate = updateCalls.some(
-        (call) => call[1]?.status === 'success'
+      // success -> processing so a FedaPay retry resumes the order apply
+      expect(databaseService.updateTransactionIfStatus).toHaveBeenLastCalledWith(
+        'tx-order-unsafe',
+        'success',
+        expect.objectContaining({ status: 'processing' })
       );
-      expect(hasSuccessUpdate).toBe(false);
-
-      // Verify money anomaly was reported for the failed application
-      expect(reportMoneyAnomaly).toHaveBeenCalled();
-      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
-      expect(anomalyType).toBe('late_success_order_apply_failed');
-      expect(message).toContain('tx-order-unsafe');
     });
 
     it('should report late_success_non_wallet anomaly when payment_entity is not wallet', async () => {
@@ -536,20 +562,6 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
           status: 'failed',
         })
       );
-    });
-
-    it('should fail when transaction.expired handling is removed', () => {
-      // This test documents that transaction.expired MUST be handled as a terminal event
-      // If someone removes it from TERMINAL_EVENTS, this test will fail
-      const fs = require('fs');
-      const path = require('path');
-      const source = fs.readFileSync(
-        path.join(__dirname, 'mobile-payment-callback.processor.ts'),
-        'utf-8'
-      );
-      
-      // transaction.expired must be in the terminal events list
-      expect(source).toContain('transaction.expired');
     });
   });
 });

@@ -683,7 +683,7 @@ export class MobilePaymentsController {
         {
           success: false,
           message: 'Failed to process callback',
-          error: error.message,
+          error: sanitized.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -732,7 +732,7 @@ export class MobilePaymentsController {
         {
           success: false,
           message: 'Failed to process callback',
-          error: error.message,
+          error: sanitized.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -802,7 +802,8 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error(`FedaPay callback processing error: ${error.message}`);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`FedaPay callback processing error: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,
@@ -1527,6 +1528,7 @@ export class MobilePaymentsController {
         message: result.data?.message,
         provider: result.data?.provider,
         ...(result.data?.reason ? { status: result.data.status, reason: result.data.reason } : {}),
+        ...(result.data?.error ? { error: result.data.error } : {}),
       },
     };
   }

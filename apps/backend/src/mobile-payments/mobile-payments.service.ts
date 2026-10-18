@@ -106,6 +106,17 @@ export type MobilePaymentIntegrationProvider =
   | 'orange'
   | 'fedapay';
 
+/** F-M5: supported_payment_systems names -> provider. GA's airtel/moov rows are MyPVit. */
+const SUPPORTED_SYSTEM_PROVIDER_ALIASES: Record<string, string> = {
+  airtel: 'mypvit',
+  moov: 'mypvit',
+};
+
+function normalizeSupportedSystemName(name: string): string {
+  const lower = (name || '').trim().toLowerCase();
+  return SUPPORTED_SYSTEM_PROVIDER_ALIASES[lower] ?? lower;
+}
+
 @Injectable()
 export class MobilePaymentsService {
   private readonly logger = new Logger(MobilePaymentsService.name);
@@ -475,8 +486,13 @@ export class MobilePaymentsService {
         `Found ${result.supported_payment_systems.length} active providers for ${upperCountry}: ${JSON.stringify(result.supported_payment_systems)}`
       );
       
+      // F-M5: GA rows are stored as airtel/moov but are served by MyPVit, so
+      // normalize the DB names before matching (mapProviderName only maps
+      // display names, which never say airtel/moov).
       const activeProviderNames = new Set(
-        result.supported_payment_systems.map((p) => p.name.toLowerCase())
+        result.supported_payment_systems.map((p) =>
+          normalizeSupportedSystemName(p.name)
+        )
       );
       
       // Filter providers to only those active for this country
@@ -503,9 +519,6 @@ export class MobilePaymentsService {
       'MyPVit': 'mypvit',
       'Freemopay': 'freemopay',
       'FedaPay': 'fedapay',
-      // GA uses airtel/moov in DB but should map to MyPVit provider
-      'airtel': 'mypvit',
-      'moov': 'mypvit',
     };
     return mapping[displayName] || displayName.toLowerCase();
   }

@@ -120,7 +120,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       );
     });
 
-    it('should process transaction.expired event', async () => {
+    it('should still process transaction.updated with expired status', async () => {
       const updatedExpired: FedaPayCallbackDto = {
         entity: {
           id: 789,
@@ -129,7 +129,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
           reference: 'REF-EXPIRED',
           custom_metadata: { externalId: 'REF-EXPIRED' },
         } as any,
-        name: 'transaction.expired',
+        name: 'transaction.updated',
       };
 
       mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(expiredTx);
@@ -140,7 +140,10 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       const result = await processor.processFedaPayCallback(updatedExpired);
 
       expect(result.received).toBe(true);
-      // Note: expired status does not call assertProviderConfirmsCallback - only SUCCESS does
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.objectContaining({ id: expiredTx.id }),
+        'FAILED'
+      );
       expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
         expiredTx.id,
         'pending',
@@ -224,8 +227,8 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
         reference: 'REF-ORDER',
         customer_phone: '+22890123456',
         account_id: 'acc-1',
-        payment_entity: 'order', // Non-wallet entity
-        entity_id: 'ORD-123',
+        payment_entity: 'rental_booking', // Non-wallet, non-order entity
+        entity_id: 'BK-123',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
@@ -316,7 +319,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
     it('should log money anomaly for non-wallet late approvals', async () => {
       const orderTx: MobilePaymentTransaction = {
         ...failedTopUpTx,
-        payment_entity: 'order',
+        payment_entity: 'rental_booking',
       };
 
       const lateApproval: FedaPayCallbackDto = {
@@ -338,11 +341,9 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       expect(result.received).toBe(true);
       // No credit should happen for non-wallet entities
       expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
-      // Transaction is updated to failed because no handler can handle the order entity
-      expect(mockDatabaseService.updateTransaction).toHaveBeenCalledWith(
-        orderTx.id,
-        expect.objectContaining({ status: 'failed' })
-      );
+      // Transaction should remain unchanged (anomaly only, manual review)
+      expect(mockDatabaseService.updateTransaction).not.toHaveBeenCalled();
+      expect(mockDatabaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
     });
 
     it('should preserve transaction_id when marking late success', async () => {

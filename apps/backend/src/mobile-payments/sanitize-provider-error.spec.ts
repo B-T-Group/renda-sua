@@ -69,13 +69,15 @@ describe('sanitizeProviderError', () => {
       expect(sanitized2.message).toBe('Unknown error');
     });
 
-    it('should mask phone numbers in any error message', () => {
-      const error = new Error('Payment failed for +237650123456 at 10:30 AM');
+    it('drops config/headers/request from axios-style errors (only message/status/code survive)', () => {
+      const error: any = new Error('Request failed with status code 401');
+      error.config = { headers: { Authorization: 'Bearer abc.def.ghi' }, data: '{"api_key":"sk_live_XYZ"}' };
+      error.request = { _header: 'Authorization: Bearer abc.def.ghi' };
+      error.response = { status: 401, config: error.config, data: { secret: 'sk_live_XYZ' } };
       const sanitized = sanitizeProviderError(error);
-      
-      // The current implementation may not mask phones in generic errors,
-      // but this documents the expected behavior
-      expect(sanitized.message).toBeTruthy();
+
+      expect(sanitized).toEqual({ message: 'Request failed with status code 401', status: 401 });
+      expect(JSON.stringify(sanitized)).not.toMatch(/abc\.def\.ghi|sk_live_XYZ/);
     });
   });
 });

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, Injectable, Logger } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import type { Request } from 'express';
 import { AccountsService } from '../accounts/accounts.service';
@@ -161,11 +161,16 @@ export class MobilePaymentCallbackProcessor {
   ): Promise<{ received: boolean; transactionId: number }> {
     // FedaPay docs (docs.fedapay.com/en/integration-api/collects-management, "Collect Lifecycle"):
     // 'expired' = "the collect was not completed within the allowed time frame" (unpaid collections expire after 24h).
-    // FedaPay has NO transaction.updated event. Expiry arrives only as transaction.expired.
+    // Expiry can arrive as transaction.expired (what FedaPay webhooks send in practice)
+    // or as transaction.updated with status 'expired' (transaction.updated is the
+    // documented status-change event). Support both. transaction.updated only counts
+    // when the status is 'expired'; approved/declined/canceled have their own events.
     const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled', 'transaction.expired'];
     const TERMINAL_STATUSES = ['approved', 'declined', 'canceled', 'expired'];
-    
-    const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name);
+
+    const isExpiredUpdate =
+      callbackData.name === 'transaction.updated' && callbackData.entity.status === 'expired';
+    const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name) || isExpiredUpdate;
     const isTerminalStatus = TERMINAL_STATUSES.includes(callbackData.entity.status);
     
     if (!isTerminalEvent || !isTerminalStatus) {
@@ -438,6 +443,16 @@ export class MobilePaymentCallbackProcessor {
       return { received: true, transactionId: callbackData.entity.id };
     }
     
+    // #545: superseded / retry-terminal order attempts take the proven recovery path FIRST
+    // (credit, then onLateSuccessAfterSupersede decides applied vs duplicate).
+    if (this.isRecoverableLateOrderSuccess(tx) && isApproved) {
+      await this.handleLateSuccessOnSupersededOrderTx(
+        tx,
+        String(callbackData.entity.id)
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+
     // F3: Handle late success on FAILED transactions (declined then approved)
     if (tx.status === 'failed' && isApproved) {
       // Handle order payments
@@ -451,16 +466,7 @@ export class MobilePaymentCallbackProcessor {
         return { received: true, transactionId: callbackData.entity.id };
       }
     }
-    
-    // Handle recoverable late order success (superseded transactions)
-    if (this.isRecoverableLateOrderSuccess(tx) && isApproved) {
-      await this.handleLateSuccessOnSupersededOrderTx(
-        tx,
-        String(callbackData.entity.id)
-      );
-      return { received: true, transactionId: callbackData.entity.id };
-    }
-    
+
     if (tx.status === 'success' && isApproved) {
       await this.retrySuccessSideEffects(tx);
     }
@@ -580,73 +586,8 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
 
-    // F3: Full success re-check (approved status, amount, XOF currency, reference match)
-    if (!this.isMockedTransaction(tx)) {
-      const recheckTx = this.withFedaPayRecheckId(tx, callbackData);
-      await this.mobilePaymentsService.assertProviderConfirmsCallback(
-        recheckTx,
-        'SUCCESS'
-      );
-      
-      // Validate amount matches
-      if (callbackData.entity.amount && tx.amount) {
-        const callbackAmount = Number(callbackData.entity.amount);
-        if (callbackAmount !== tx.amount) {
-          this.logger.error(
-            `F3 Late success amount mismatch: tx ${tx.id} expected ${tx.amount} but callback has ${callbackAmount}`
-          );
-          await reportMoneyAnomaly(
-            this.logger,
-            'late_success_amount_mismatch',
-            `Late success amount mismatch for tx ${tx.id}: expected ${tx.amount}, got ${callbackAmount}`,
-            {
-              transactionId: tx.id,
-              reference: tx.reference,
-              expectedAmount: tx.amount,
-              callbackAmount: callbackAmount,
-            }
-          );
-          return;
-        }
-      }
-      
-      // Validate currency is XOF
-      if (callbackData.entity.currency && callbackData.entity.currency !== 'XOF') {
-        this.logger.error(
-          `F3 Late success currency invalid: tx ${tx.id} has ${callbackData.entity.currency}, expected XOF`
-        );
-        await reportMoneyAnomaly(
-          this.logger,
-          'late_success_currency_invalid',
-          `Late success currency invalid for tx ${tx.id}: got ${callbackData.entity.currency}, expected XOF`,
-          {
-            transactionId: tx.id,
-            reference: tx.reference,
-            currency: callbackData.entity.currency,
-          }
-        );
-        return;
-      }
-      
-      // Validate reference matches (if available in callback)
-      const customMetadata = callbackData.entity.custom_metadata;
-      if (customMetadata?.externalId && tx.reference && customMetadata.externalId !== tx.reference) {
-        this.logger.error(
-          `F3 Late success reference mismatch: tx ${tx.id} expected ${tx.reference} but callback has ${customMetadata.externalId}`
-        );
-        await reportMoneyAnomaly(
-          this.logger,
-          'late_success_reference_mismatch',
-          `Late success reference mismatch for tx ${tx.id}: expected ${tx.reference}, got ${customMetadata.externalId}`,
-          {
-            transactionId: tx.id,
-            expectedReference: tx.reference,
-            callbackReference: customMetadata.externalId,
-          }
-        );
-        return;
-      }
-    }
+    // F3: Live re-check (status, amount, XOF, reference) against the provider record
+    await this.confirmLateSuccessLive(tx, callbackData, 'top_up');
 
     // F3: CAS claim failed→processing BEFORE crediting
     const claimed = await this.databaseService.updateTransactionIfStatus(
@@ -700,95 +641,64 @@ export class MobilePaymentCallbackProcessor {
   }
 
   /**
-   * F3: Handle late success for FAILED order payments (declined then approved).
-   * Re-check with provider, then try to apply payment to order if safe, otherwise raise anomaly.
+   * F3: Late success is confirmed against the LIVE provider record only, never the
+   * webhook body. assertProviderConfirmsCallback re-fetches the FedaPay transaction
+   * and requires live status approved, live currency XOF, live amount === stored
+   * amount and live reference === stored reference. A definite mismatch (4xx
+   * HttpException) is reported as a money anomaly and rethrown, so nothing is
+   * credited; transient errors are rethrown for the provider retry.
+   */
+  private async confirmLateSuccessLive(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto,
+    kind: 'top_up' | 'order'
+  ): Promise<void> {
+    if (this.isMockedTransaction(tx)) return;
+    try {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(
+        this.withFedaPayRecheckId(tx, callbackData),
+        'SUCCESS'
+      );
+    } catch (error: any) {
+      if (error instanceof HttpException) {
+        await reportMoneyAnomaly(
+          this.logger,
+          `late_success_${kind}_live_mismatch`,
+          `Late success on ${kind} tx ${tx.id} rejected by live re-check: ${error.message}`,
+          {
+            transactionId: tx.id,
+            reference: tx.reference,
+            amount: tx.amount,
+            httpStatus: error.getStatus(),
+          }
+        );
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * F3: approve-after-decline on a plain FAILED order attempt. Superseded attempts
+   * (isRecoverableLateOrderSuccess) never get here; they take
+   * handleLateSuccessOnSupersededOrderTx first. Same money order as the normal order
+   * path (finalizeOrderPaymentSuccess): live re-check, CAS failed -> processing,
+   * credit the wallet (momo-deposit:<tx id>), mark success, then let the order
+   * handler apply it. If the order can no longer take the payment (cancelled or
+   * already paid), the handler leaves the money in the wallet. A handler failure
+   * puts the row back to processing and rethrows, so the provider retry resumes
+   * finalize via resumeFinalizeFromProcessing.
    */
   private async handleLateSuccessOnFailedOrderPayment(
     tx: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
-    this.logger.log(
-      `F3 Late success: Processing approved callback for failed order payment tx ${tx.id} (${tx.reference})`
-    );
+    await this.confirmLateSuccessLive(tx, callbackData, 'order');
 
-    // F3: Full success re-check (approved status, amount, XOF currency, reference match)
-    if (!this.isMockedTransaction(tx)) {
-      const recheckTx = this.withFedaPayRecheckId(tx, callbackData);
-      await this.mobilePaymentsService.assertProviderConfirmsCallback(
-        recheckTx,
-        'SUCCESS'
-      );
-      
-      // Validate amount matches
-      if (callbackData.entity.amount && tx.amount) {
-        const callbackAmount = Number(callbackData.entity.amount);
-        if (callbackAmount !== tx.amount) {
-          this.logger.error(
-            `F3 Late success amount mismatch: order tx ${tx.id} expected ${tx.amount} but callback has ${callbackAmount}`
-          );
-          await reportMoneyAnomaly(
-            this.logger,
-            'late_success_order_amount_mismatch',
-            `Late success amount mismatch for order tx ${tx.id}: expected ${tx.amount}, got ${callbackAmount}`,
-            {
-              transactionId: tx.id,
-              reference: tx.reference,
-              orderId: tx.entity_id,
-              expectedAmount: tx.amount,
-              callbackAmount: callbackAmount,
-            }
-          );
-          return;
-        }
-      }
-      
-      // Validate currency is XOF
-      if (callbackData.entity.currency && callbackData.entity.currency !== 'XOF') {
-        this.logger.error(
-          `F3 Late success currency invalid: order tx ${tx.id} has ${callbackData.entity.currency}, expected XOF`
-        );
-        await reportMoneyAnomaly(
-          this.logger,
-          'late_success_order_currency_invalid',
-          `Late success currency invalid for order tx ${tx.id}: got ${callbackData.entity.currency}, expected XOF`,
-          {
-            transactionId: tx.id,
-            reference: tx.reference,
-            orderId: tx.entity_id,
-            currency: callbackData.entity.currency,
-          }
-        );
-        return;
-      }
-      
-      // Validate reference matches (if available in callback)
-      const customMetadata = callbackData.entity.custom_metadata;
-      if (customMetadata?.externalId && tx.reference && customMetadata.externalId !== tx.reference) {
-        this.logger.error(
-          `F3 Late success reference mismatch: order tx ${tx.id} expected ${tx.reference} but callback has ${customMetadata.externalId}`
-        );
-        await reportMoneyAnomaly(
-          this.logger,
-          'late_success_order_reference_mismatch',
-          `Late success reference mismatch for order tx ${tx.id}: expected ${tx.reference}, got ${customMetadata.externalId}`,
-          {
-            transactionId: tx.id,
-            orderId: tx.entity_id,
-            expectedReference: tx.reference,
-            callbackReference: customMetadata.externalId,
-          }
-        );
-        return;
-      }
-    }
-
-    // F3: CAS claim failed→processing BEFORE attempting to apply
     const claimed = await this.databaseService.updateTransactionIfStatus(
       tx.id,
       'failed',
       { status: 'processing' }
     );
-
     if (!claimed) {
       this.logger.warn(
         `Late success on failed order payment ${tx.id}: concurrent claim won`
@@ -796,76 +706,51 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
 
-    // Try to apply the payment through the existing order payment handler
-    try {
-      const handlers = this.resolveHandlers();
-      const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
-      
-      if (!handler) {
-        this.logger.error(
-          `F3 Late success: No payment handler found for order tx ${tx.id}, cannot apply payment safely`
+    const credited = await this.creditWalletIfNeeded(tx);
+    if (!credited) {
+      await this.databaseService
+        .updateTransactionIfStatus(tx.id, 'processing', { status: 'failed' })
+        .catch((e: any) =>
+          this.logger.error(
+            `Could not release late-success claim on ${tx.id}: ${e?.message ?? e}`
+          )
         );
-        await this.databaseService.updateTransaction(tx.id, { status: 'failed' });
-        await reportMoneyAnomaly(
-          this.logger,
-          'late_success_order_no_handler',
-          `Late success for order tx ${tx.id}: approved after decline but no handler to apply payment`,
-          {
-            transactionId: tx.id,
-            reference: tx.reference,
-            orderId: tx.entity_id,
-            amount: tx.amount,
-          }
-        );
-        return;
-      }
-
-      // Attempt to apply the payment
-      await handler.onPaymentSuccess(tx);
-      
-      // Mark success
-      await this.databaseService.updateTransaction(tx.id, {
-        status: 'success',
-        error_code: LATE_SUCCESS_APPLIED,
-      });
-      
-      this.logger.log(
-        `F3 Late success: Successfully applied order payment for tx ${tx.id} (${tx.reference})`
+      throw new Error(
+        `Wallet credit failed for late success on failed order payment ${tx.id}; will retry`
       );
-      
-      // Raise money alert
-      await reportMoneyAnomaly(
-        this.logger,
-        'late_success_order_applied',
-        `Late success: order tx ${tx.id} declined then approved, payment applied to order ${tx.entity_id}`,
-        {
-          transactionId: tx.id,
-          reference: tx.reference,
-          orderId: tx.entity_id,
-          amount: tx.amount,
-          currency: tx.currency,
-        }
-      );
-    } catch (error: any) {
-      // Failed to apply payment safely - keep as processing and raise anomaly
-      this.logger.error(
-        `F3 Late success: Failed to apply order payment for tx ${tx.id}: ${error?.message}`,
-        error?.stack
-      );
-      await reportMoneyAnomaly(
-        this.logger,
-        'late_success_order_apply_failed',
-        `Late success for order tx ${tx.id}: approved after decline but failed to apply payment: ${error?.message}`,
-        {
-          transactionId: tx.id,
-          reference: tx.reference,
-          orderId: tx.entity_id,
-          amount: tx.amount,
-          error: error?.message,
-        }
-      );
-      // Don't throw - we've raised the anomaly, manual intervention needed
     }
+
+    // Keep the stored transaction_id (F-L3); only status and marker change.
+    const marked = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'processing',
+      { status: 'success', error_code: LATE_SUCCESS_APPLIED }
+    );
+    if (!marked) {
+      this.logger.warn(
+        `Late success on failed order payment ${tx.id}: processing -> success CAS lost`
+      );
+      return;
+    }
+
+    await reportMoneyAnomaly(
+      this.logger,
+      'late_success_order_credited',
+      `Late success: order tx ${tx.id} declined then approved; wallet credited, applying to order ${tx.entity_id}`,
+      {
+        transactionId: tx.id,
+        reference: tx.reference,
+        orderId: tx.entity_id,
+        amount: tx.amount,
+        currency: tx.currency,
+      }
+    );
+
+    await this.runHandlerOrRestoreProcessing({
+      ...tx,
+      status: 'success',
+      error_code: LATE_SUCCESS_APPLIED,
+    });
   }
 
   private async processPendingMypvit(

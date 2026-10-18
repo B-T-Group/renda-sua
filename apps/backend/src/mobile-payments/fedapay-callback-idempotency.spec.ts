@@ -352,6 +352,30 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
   });
 
   describe('N5: expired status handling', () => {
+    it('handles transaction.updated with expired status as terminal failed', async () => {
+      const expiredCallback: FedaPayCallbackDto = {
+        entity: { id: 456, status: 'expired', amount: 1000, reference: 'fedapay-tx-456', custom_metadata: { externalId: 'REF456' } } as any,
+        name: 'transaction.updated',
+      };
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+
+      await processor.processFedaPayCallback(expiredCallback);
+
+      // The failPendingAttempt method is called, which updates the transaction
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.anything(),
+        'FAILED'
+      );
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        'tx-123',
+        'pending',
+        expect.objectContaining({ status: 'failed' })
+      );
+    });
+
     it('handles transaction.expired event as terminal failed', async () => {
       const expiredCallback: FedaPayCallbackDto = {
         entity: { id: 456, status: 'expired', amount: 1000, reference: 'fedapay-tx-456', custom_metadata: { externalId: 'REF456' } } as any,
@@ -365,7 +389,10 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
       await processor.processFedaPayCallback(expiredCallback);
 
       // The failPendingAttempt method is called, which updates the transaction
-      // Note: assertProviderConfirmsCallback is NOT called for expired status - only for SUCCESS
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.anything(),
+        'FAILED'
+      );
       expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
         'tx-123',
         'pending',

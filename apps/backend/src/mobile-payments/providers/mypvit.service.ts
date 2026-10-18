@@ -136,11 +136,7 @@ export class MyPVitService {
     // Get the MyPVit configuration from the configuration service
     const mypvitConfig = this.configService.get<MyPVitConfig>('mypvit');
 
-    this.logger.log(
-      'Raw MyPVit config from ConfigService:',
-      JSON.stringify(mypvitConfig, null, 2)
-    );
-
+    // Never dump the raw config: it can carry the Airtel/Moov secret keys.
     this.config = {
       baseUrl: mypvitConfig?.baseUrl || 'https://api.mypvit.pro',
       merchantSlug: mypvitConfig?.merchantSlug || 'MR_1755783875',

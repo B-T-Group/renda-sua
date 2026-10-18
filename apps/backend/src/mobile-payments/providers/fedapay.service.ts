@@ -430,8 +430,9 @@ export class FedaPayService implements OnModuleInit {
       this.logger.error(`Failed to initiate FedaPay payment: ${sanitized.message}`);
       return {
         success: false,
+        // Redacted: the SDK error text can echo the API key or bearer token.
         message: normalizeProviderMessage(
-          error.message,
+          sanitized.message,
           'Failed to initiate payment'
         ),
         errorCode: error.code || 'INITIATION_FAILED',
@@ -520,8 +521,9 @@ export class FedaPayService implements OnModuleInit {
       this.logger.error(`Failed to initiate FedaPay payout: ${sanitized.message}`);
       return {
         success: false,
+        // Redacted: the SDK error text can echo the API key or bearer token.
         message: normalizeProviderMessage(
-          error.message,
+          sanitized.message,
           'Failed to initiate payout'
         ),
         errorCode: error.code || 'WITHDRAWAL_FAILED',

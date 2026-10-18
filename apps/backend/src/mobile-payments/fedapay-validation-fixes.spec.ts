@@ -339,20 +339,14 @@ describe('FedaPay Validation Fixes', () => {
       );
     });
 
-    it('should recognize airtel/moov as MyPVit-compatible providers', () => {
-      // F-M5: The mapProviderName function maps display names to database names
-      // 'MyPVit' -> 'mypvit', 'airtel' -> 'mypvit', 'moov' -> 'mypvit'
-      // This documents that airtel and moov are MyPVit-backed in the database
-      const mapping = {
-        'MyPVit': 'mypvit',
-        'airtel': 'mypvit',
-        'moov': 'mypvit',
-      };
-      
-      // All three display names map to mypvit provider
-      expect(mapping['MyPVit']).toBe('mypvit');
-      expect(mapping['airtel']).toBe('mypvit');
-      expect(mapping['moov']).toBe('mypvit');
+    it.each(['airtel', 'moov'])('GA with only a "%s" row still lists MyPVit (F-M5)', async (name) => {
+      mockHasuraSystemService.executeQuery.mockResolvedValue({
+        supported_payment_systems: [{ name, country: 'GA', active: true }],
+      });
+
+      const providers = await service.getProvidersForCountry('GA');
+
+      expect(providers.map((p: { name: string }) => p.name)).toEqual(['MyPVit']);
     });
 
     it('should handle mixed provider names including airtel/moov', async () => {
