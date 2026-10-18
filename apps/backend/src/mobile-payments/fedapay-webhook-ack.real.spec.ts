@@ -97,6 +97,9 @@ function build(rowOver: Row = {}) {
   const handler = {
     entityType: 'account_recharge',
     canHandle: () => true,
+    supportsPaymentEntity: () => true,
+    finalizeCashReconciliationAfterPayment: jest.fn(async () => undefined),
+    onLateSuccessAfterSupersede: jest.fn(async () => 'applied' as const),
     onPaymentSuccess: jest.fn(async () => undefined),
     onPaymentFailure: jest.fn(async () => undefined),
   };
@@ -125,7 +128,7 @@ function build(rowOver: Row = {}) {
   const controller = new MobilePaymentsController(
     mps, db as any, any, any, any, processor, any, any, any, config as any
   );
-  return { entityId, row, db, deposits, ledger, mps, processor, controller };
+  return { entityId, row, db, deposits, ledger, handler, mps, processor, controller };
 }
 
 function live(entityId: number, over: Row = {}) {
@@ -388,16 +391,17 @@ describe('QA #587 A2: late success on a superseded FedaPay order row uses withFe
   const superseded = { payment_entity: 'order', entity_id: 'order-1', status: 'cancelled', error_code: 'SUPERSEDED_BY_RETRY', transaction_id: null };
 
   it('a row with no transaction_id is re-checked by the webhook entity id, credited once and closed', async () => {
-    const { entityId, row, db, deposits, controller } = build(superseded);
+    const { entityId, row, db, deposits, handler, controller } = build(superseded);
     (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId));
 
     const res = await controller.fedapayCallback(signedRequest(entityId));
+    expect(handler.onLateSuccessAfterSupersede).toHaveBeenCalledTimes(1);
 
     expect(res).toEqual({ received: true, transactionId: entityId });
     expect(Transaction.retrieve).toHaveBeenCalledWith(entityId, expect.anything());
     expect(deposits).toHaveLength(1);
     expect(db.byId.get(row.id)).toEqual(
-      expect.objectContaining({ status: 'success', transaction_id: String(entityId) })
+      expect.objectContaining({ status: 'success', transaction_id: String(entityId), error_code: 'LATE_SUCCESS_APPLIED' })
     );
     expect(anomalies()).toHaveLength(0);
   });
