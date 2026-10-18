@@ -200,7 +200,24 @@ describe('EligibleAgentsQueryService', () => {
       } as unknown as ConfigService<Configuration>;
     }
 
-    it('excludes agents with no GPS update in the last 30 minutes by default', async () => {
+    it('applies no cutoff by default (config unset)', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        agent_locations: [
+          agentRow('days-old', 4.01, { updated_at: minutesAgo(3 * 24 * 60) }),
+        ],
+      });
+
+      const result = await service.findEligibleAgents({
+        originLat: 4,
+        originLon: 9,
+        targetCountry: 'CM',
+        targetState: 'Littoral',
+      });
+
+      expect(result.map((c) => c.agentId)).toEqual(['days-old']);
+    });
+
+    it('excludes agents with no GPS update in the last 30 minutes when configured to 30', async () => {
       hasuraSystemService.executeQuery.mockResolvedValue({
         agent_locations: [
           agentRow('fresh', 4.01, { updated_at: minutesAgo(29) }),
@@ -209,6 +226,12 @@ describe('EligibleAgentsQueryService', () => {
           agentRow('no-timestamp', 4.001, { updated_at: null }),
         ],
       });
+      service = new EligibleAgentsQueryService(
+        hasuraSystemService,
+        {} as unknown as GoogleDistanceService,
+        undefined,
+        configWith(30)
+      );
 
       const result = await service.findEligibleAgents({
         originLat: 4,

@@ -25,6 +25,25 @@ describe('resolveDispatchRadiusKm', () => {
     }
   });
 
+  it('round 2 defaults to the round 1 radius when round2RadiusKm is unset', () => {
+    expect(
+      resolveDispatchRadiusKm({
+        round: 2,
+        countryRadiusKm: 5,
+        round1RadiusKm: null,
+        round2RadiusKm: null,
+      })
+    ).toBe(5);
+    expect(
+      resolveDispatchRadiusKm({
+        round: 2,
+        countryRadiusKm: 5,
+        round1RadiusKm: 8,
+        round2RadiusKm: undefined,
+      })
+    ).toBe(8);
+  });
+
   it('round 2 uses round2RadiusKm', () => {
     expect(
       resolveDispatchRadiusKm({

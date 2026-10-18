@@ -17,6 +17,7 @@ describe('OrderOffersService', () => {
   let paymentRoutingService: any;
   let agentHoldService: any;
   let offersConfig: Record<string, unknown>;
+  let deliveryAvailabilityConfig: Record<string, unknown>;
 
   const now = new Date('2026-01-01T00:00:00.000Z');
 
@@ -37,9 +38,14 @@ describe('OrderOffersService', () => {
     } as unknown as jest.Mocked<NotificationsService>;
 
     offersConfig = { ttlSeconds: 45, maxAgents: 2 };
+    deliveryAvailabilityConfig = { enforceEnabled: true };
     const configService = {
       get: jest.fn((key: string) =>
-        key === 'orderOffers' ? offersConfig : undefined
+        key === 'orderOffers'
+          ? offersConfig
+          : key === 'deliveryAvailability'
+            ? deliveryAvailabilityConfig
+            : undefined
       ),
     } as unknown as jest.Mocked<ConfigService<Configuration>>;
 
@@ -48,7 +54,9 @@ describe('OrderOffersService', () => {
     const eligibleAgentsQueryService = new EligibleAgentsQueryService(
       hasuraSystemService,
       // Fixtures always carry region addresses, so reverse-geocode is unused.
-      {} as unknown as GoogleDistanceService
+      {} as unknown as GoogleDistanceService,
+      undefined,
+      configService
     );
 
     const waitAndExecuteScheduleService = {
@@ -436,7 +444,7 @@ describe('OrderOffersService', () => {
     ];
 
     beforeEach(() => {
-      offersConfig = { ttlSeconds: 45, maxAgents: 10, round2RadiusKm: 20 };
+      offersConfig = { ttlSeconds: 45, maxAgents: 10 };
     });
 
     it('round 1 defaults to the country checkout radius when round1RadiusKm is unset', async () => {
@@ -461,7 +469,18 @@ describe('OrderOffersService', () => {
       ]);
     });
 
-    it('round 2 widens to round2RadiusKm instead of reusing the round 1 radius', async () => {
+    it('round 2 keeps the round 1 radius when round2RadiusKm is unset (no silent widening)', async () => {
+      mockDispatch(agents(), { dispatch_round: 1 });
+
+      await service.runDispatchRound('order-1', 2);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-3km',
+      ]);
+    });
+
+    it('round 2 widens to round2RadiusKm when configured', async () => {
+      offersConfig = { ...offersConfig, round2RadiusKm: 20 };
       mockDispatch(agents(), { dispatch_round: 1 });
 
       await service.runDispatchRound('order-1', 2);
@@ -473,7 +492,11 @@ describe('OrderOffersService', () => {
       ]);
     });
 
-    it('does not offer agents whose last GPS update is older than 30 minutes', async () => {
+    it('does not offer agents whose last GPS update is older than the configured 30 minutes', async () => {
+      deliveryAvailabilityConfig = {
+        enforceEnabled: true,
+        agentLocationMaxAgeMinutes: 30,
+      };
       const stale = new Date(now.getTime() - 31 * 60 * 1000).toISOString();
       mockDispatch([
         buildAgentLocation('agent-stale', 'user-stale', 4.005, {
@@ -491,6 +514,21 @@ describe('OrderOffersService', () => {
       expect(notificationsService.sendOrderOfferPush).toHaveBeenCalledWith(
         expect.objectContaining({ userId: 'user-fresh' })
       );
+    });
+
+    it('still offers a stale-GPS agent when the cutoff is off (default)', async () => {
+      const stale = new Date(now.getTime() - 31 * 60 * 1000).toISOString();
+      mockDispatch([
+        buildAgentLocation('agent-stale', 'user-stale', 4.005, {
+          updated_at: stale,
+        }),
+      ]);
+
+      await service.runDispatchRound('order-1', 1);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-stale',
+      ]);
     });
   });
 

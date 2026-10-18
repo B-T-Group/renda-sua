@@ -17,8 +17,8 @@ function positiveOrNull(value: number | null | undefined): number | null {
 
 /**
  * Search radius for a dispatch round. Round 1 uses `round1RadiusKm` (default:
- * the country checkout radius). Round 2 uses `round2RadiusKm` but is never
- * narrower than round 1, so escalation can only widen the search.
+ * the country checkout radius). Round 2 uses `round2RadiusKm` (default: the
+ * round 1 radius, i.e. no widening) and is never narrower than round 1.
  */
 export function resolveDispatchRadiusKm(input: DispatchRadiusInput): number {
   const round1 =

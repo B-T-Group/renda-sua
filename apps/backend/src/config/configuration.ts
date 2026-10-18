@@ -407,9 +407,11 @@ export interface OrderOffersConfig {
    */
   round1RadiusKm: number | null;
   /**
-   * Round 2 (escalated) search radius in km. Never narrower than round 1.
+   * Round 2 (escalated) search radius in km. Null (env unset) means the same
+   * radius as round 1, so nothing widens unless OFFER_ROUND2_RADIUS_KM is set.
+   * Never narrower than round 1.
    */
-  round2RadiusKm: number;
+  round2RadiusKm: number | null;
   /** Seconds to wait after a round's offers expire before escalating/finalizing. */
   roundGapSeconds: number;
 }
@@ -425,7 +427,8 @@ export interface DeliveryAvailabilityConfig {
   /**
    * Agents whose last GPS update (`agent_locations.updated_at`) is older than
    * this many minutes are not eligible: no checkout availability, no nearby
-   * badge, no offers. AGENT_LOCATION_MAX_AGE_MINUTES, default 30; 0 disables.
+   * badge, no offers. AGENT_LOCATION_MAX_AGE_MINUTES; default 0 = off
+   * (DEV sets 30 in .env.development).
    */
   agentLocationMaxAgeMinutes: number;
 }
@@ -1241,7 +1244,9 @@ export default (): Configuration => {
       round1RadiusKm: parseOptionalPositiveNumber(
         process.env.OFFER_ROUND1_RADIUS_KM
       ),
-      round2RadiusKm: parseFloat(process.env.OFFER_ROUND2_RADIUS_KM ?? '20'),
+      round2RadiusKm: parseOptionalPositiveNumber(
+        process.env.OFFER_ROUND2_RADIUS_KM
+      ),
       roundGapSeconds: parseInt(
         process.env.OFFER_ROUND_GAP_SECONDS ??
           process.env.OFFER_TTL_SECONDS ??
@@ -1253,7 +1258,7 @@ export default (): Configuration => {
       enforceEnabled: process.env.DELIVERY_AVAILABILITY_ENFORCE !== 'false',
       agentLocationMaxAgeMinutes: parseNonNegativeInt(
         process.env.AGENT_LOCATION_MAX_AGE_MINUTES,
-        30
+        0
       ),
     },
     push: {

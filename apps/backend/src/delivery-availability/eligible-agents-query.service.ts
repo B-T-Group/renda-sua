@@ -30,8 +30,8 @@ export interface EligibleAgentSearchParams {
   maxDistanceKm?: number | null;
 }
 
-/** Default GPS last-seen cutoff when config is unavailable. */
-export const DEFAULT_AGENT_LOCATION_MAX_AGE_MINUTES = 30;
+/** Default GPS last-seen cutoff when config is unavailable: 0 = off. */
+export const DEFAULT_AGENT_LOCATION_MAX_AGE_MINUTES = 0;
 
 /**
  * True when the agent's last GPS update is recent enough to trust. A
@@ -107,7 +107,7 @@ const ELIGIBLE_AGENTS_QUERY = `
  *
  * Eligibility: agent is available, verified, delivery-focused (not
  * commercial-only), not suspended, has a GPS update within
- * `deliveryAvailability.agentLocationMaxAgeMinutes` (default 30), and
+ * `deliveryAvailability.agentLocationMaxAgeMinutes` (when > 0; default off), and
  * operates in the target country/state (profile address, falling back to
  * GPS reverse-geocode).
  */
