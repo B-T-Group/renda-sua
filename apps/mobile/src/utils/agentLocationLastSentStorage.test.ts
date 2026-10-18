@@ -2,13 +2,16 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import {
   beginSend,
   endSend,
-  recordAttempt,
+  recordFailure,
+  clearFailure,
   canRetryAfterFailure,
+  __testOnly_resetState,
 } from './agentLocationLastSentStorage';
 
 describe('agentLocationLastSentStorage - in-flight guard and failure backoff', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    __testOnly_resetState();
   });
 
   describe('in-flight guard', () => {
@@ -41,36 +44,36 @@ describe('agentLocationLastSentStorage - in-flight guard and failure backoff', (
   });
 
   describe('failure backoff', () => {
-    it('should allow retry before any attempt', () => {
+    it('should allow retry before any failure', () => {
       expect(canRetryAfterFailure(60_000)).toBe(true);
     });
 
-    it('should block retry immediately after attempt', () => {
-      recordAttempt();
+    it('should block retry immediately after failure', () => {
+      recordFailure();
       vi.advanceTimersByTime(100);
       expect(canRetryAfterFailure(60_000)).toBe(false);
     });
 
     it('should allow retry after backoff period', () => {
-      recordAttempt();
+      recordFailure();
       vi.advanceTimersByTime(60_000);
       expect(canRetryAfterFailure(60_000)).toBe(true);
     });
 
     it('should allow retry just at backoff threshold', () => {
-      recordAttempt();
+      recordFailure();
       vi.advanceTimersByTime(59_999);
       expect(canRetryAfterFailure(60_000)).toBe(false);
       vi.advanceTimersByTime(1);
       expect(canRetryAfterFailure(60_000)).toBe(true);
     });
 
-    it('should handle multiple attempts', () => {
-      recordAttempt();
+    it('should handle multiple failures', () => {
+      recordFailure();
       vi.advanceTimersByTime(30_000);
       expect(canRetryAfterFailure(60_000)).toBe(false);
       
-      recordAttempt();
+      recordFailure();
       vi.advanceTimersByTime(30_000);
       expect(canRetryAfterFailure(60_000)).toBe(false);
       
@@ -79,10 +82,31 @@ describe('agentLocationLastSentStorage - in-flight guard and failure backoff', (
     });
 
     it('should handle different backoff periods', () => {
-      recordAttempt();
+      recordFailure();
       vi.advanceTimersByTime(30_000);
       expect(canRetryAfterFailure(30_000)).toBe(true);
       expect(canRetryAfterFailure(60_000)).toBe(false);
+    });
+
+    it('should allow immediate retry after successful send (success does not block)', () => {
+      expect(canRetryAfterFailure(60_000)).toBe(true);
+      
+      clearFailure();
+      vi.advanceTimersByTime(2_000);
+      
+      expect(canRetryAfterFailure(60_000)).toBe(true);
+    });
+
+    it('should clear failure after success, allowing immediate next send', () => {
+      recordFailure();
+      vi.advanceTimersByTime(100);
+      expect(canRetryAfterFailure(60_000)).toBe(false);
+      
+      clearFailure();
+      expect(canRetryAfterFailure(60_000)).toBe(true);
+      
+      vi.advanceTimersByTime(2_000);
+      expect(canRetryAfterFailure(60_000)).toBe(true);
     });
   });
 });

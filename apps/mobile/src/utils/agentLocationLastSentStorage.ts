@@ -27,10 +27,11 @@ let stopGeneration = 0;
 let sendInFlight = false;
 
 /**
- * Timestamp of the last send attempt (successful or failed), used for failure backoff.
+ * Timestamp of the last failed send, used for failure backoff.
  * After a failed send, we wait at least FAILURE_BACKOFF_MS before retrying.
+ * Cleared when a send succeeds.
  */
-let lastAttemptMs = 0;
+let lastFailureMs = 0;
 
 /**
  * Read the last-sent location for the given user.
@@ -138,18 +139,35 @@ export function endSend(): void {
 }
 
 /**
- * Record a send attempt (successful or failed) with the current timestamp.
- * Used for failure backoff logic.
+ * Record that a send failed. Sets lastFailureMs to now.
+ * Used to enforce backoff period before next retry.
  */
-export function recordAttempt(): void {
-  lastAttemptMs = Date.now();
+export function recordFailure(): void {
+  lastFailureMs = Date.now();
 }
 
 /**
- * Check if enough time has passed since the last attempt to allow a retry
- * after a failed send. Returns true if at least backoffMs has passed.
+ * Clear the failure timestamp. Called after a successful send.
+ */
+export function clearFailure(): void {
+  lastFailureMs = 0;
+}
+
+/**
+ * Check if enough time has passed since the last failure to allow a retry.
+ * Returns true if there was no recent failure, or if at least backoffMs has passed.
  */
 export function canRetryAfterFailure(backoffMs: number): boolean {
-  if (lastAttemptMs === 0) return true;
-  return Date.now() - lastAttemptMs >= backoffMs;
+  if (lastFailureMs === 0) return true;
+  return Date.now() - lastFailureMs >= backoffMs;
+}
+
+/**
+ * Test-only helper to reset all module state between tests.
+ * Clears in-flight flag, failure timestamp, and stop generation counter.
+ */
+export function __testOnly_resetState(): void {
+  sendInFlight = false;
+  lastFailureMs = 0;
+  stopGeneration = 0;
 }

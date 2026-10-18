@@ -17,7 +17,8 @@ import {
   getStopGeneration,
   beginSend,
   endSend,
-  recordAttempt,
+  recordFailure,
+  clearFailure,
   canRetryAfterFailure,
 } from '../utils/agentLocationLastSentStorage';
 import { shouldSendLocation } from '../utils/shouldSendLocation';
@@ -136,15 +137,17 @@ export function useAgentLocationTracker(options: TrackerOptions) {
 
       if (!canRetryAfterFailure(FAILURE_BACKOFF_MS)) return;
 
-      recordAttempt();
       const res = await updateMyAgentLocation(latitude, longitude);
       if (!res.success) {
+        recordFailure();
         setError(res.error ?? 'Failed to send location');
         return;
       }
+      clearFailure();
       await writeLastSentLocation(latitude, longitude, nowMs, auth.user.id, generation);
       setLastUpdate(nowMs);
     } catch (e: unknown) {
+      recordFailure();
       setError(e instanceof Error ? e.message : 'Location error');
     } finally {
       isUpdatingRef.current = false;

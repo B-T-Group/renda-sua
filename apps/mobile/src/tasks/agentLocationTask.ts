@@ -27,7 +27,8 @@ import {
   getStopGeneration,
   beginSend,
   endSend,
-  recordAttempt,
+  recordFailure,
+  clearFailure,
   canRetryAfterFailure,
 } from '../utils/agentLocationLastSentStorage';
 import { haversineDistanceM } from '../utils/haversineDistanceM';
@@ -82,9 +83,12 @@ TaskManager.defineTask(AGENT_LOCATION_TASK_NAME, async ({ data, error }) => {
 
       if (!canRetryAfterFailure(FAILURE_BACKOFF_MS)) return;
 
-      recordAttempt();
       const res = await updateMyAgentLocation(latitude, longitude);
-      if (!res.success) return;
+      if (!res.success) {
+        recordFailure();
+        return;
+      }
+      clearFailure();
       await writeLastSentLocation(latitude, longitude, nowMs, user.id, generation);
     } finally {
       endSend();
