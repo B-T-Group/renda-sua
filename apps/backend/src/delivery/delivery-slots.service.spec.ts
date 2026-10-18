@@ -136,10 +136,11 @@ describe('DeliverySlotsService', () => {
       slot('a', 'Afternoon', '12:00:00', '16:00:00'),
       slot('e', 'Evening', '16:00:00', '20:00:00'),
     ];
-    const fast = [slot('mf', 'Morning Fast', '08:00:00', '12:00:00', 'fast')];
+    // Named like a standard slot on purpose: only the slot type keeps it out of the filter.
+    const fast = [slot('mf', 'Morning', '08:00:00', '12:00:00', 'fast')];
 
     function stubWithPickup(disabled: string[]) {
-      hasura.executeQuery.mockImplementation(async (query: string, vars: any) => {
+      hasura.executeQuery.mockImplementation(async (query: string, vars: { slot_ids?: string[]; slot_type?: string; id?: string }) => {
         if (vars?.slot_ids) {
           return {
             delivery_time_slots: (vars.slot_ids as string[]).map((id) => ({ id, max_orders_per_slot: 10 })),

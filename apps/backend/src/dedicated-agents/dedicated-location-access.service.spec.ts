@@ -14,7 +14,7 @@ function setup(opts: {
   delegationsFlag?: boolean;
   delegation?: { user_id: string; location: string; status?: string; permissions: string[] };
 }) {
-  const executeQuery = jest.fn(async (query: string, vars: any) => {
+  const executeQuery = jest.fn(async (query: string, vars: { locationId?: string; id?: string }) => {
     const op = /query (\w+)/.exec(query)?.[1];
     if (op === 'DedicatedLocationOwner') {
       return {

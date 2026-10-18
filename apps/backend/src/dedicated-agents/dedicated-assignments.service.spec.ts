@@ -25,6 +25,11 @@ const A2 = 'BBBBBBBB-0000-0000-0000-000000000002';
 const A3 = 'cccccccc-0000-0000-0000-000000000003';
 const A4 = 'dddddddd-0000-0000-0000-000000000004';
 
+/** GraphQL variables / rows as the fake receives them (shape varies per operation). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Loose = Record<string, any>;
+type Notice = Parameters<NotificationsService['sendDedicatedAgentNotice']>[0];
+
 interface Row {
   id: string;
   business_location_id: string;
@@ -84,7 +89,7 @@ function world() {
     faults: [] as Array<{ assigned_agent_id: string; business_location_id: string }>,
     accounts: [] as Array<{ user_id: string; currency: string; available_balance: number }>,
     deadlocksLeft: 0,
-    mutations: [] as Array<{ op: string; vars: any }>,
+    mutations: [] as Array<{ op: string; vars: Loose }>,
     nextId: 1,
   };
 
@@ -99,7 +104,7 @@ function world() {
   const rowView = (r: Row) => ({ ...r, agent: agentView(r.agent_id), business_location: locationView(r.business_location_id) });
   const live = (r: Row) => r.status === 'active' || r.status === 'paused';
 
-  const insertRow = (o: any) => {
+  const insertRow = (o: Loose) => {
     const capCount = state.rows.filter((r) => r.agent_id === o.agent_id && live(r)).length;
     if (capCount >= state.cap) {
       throw hasuraError(
@@ -129,7 +134,7 @@ function world() {
     return [row];
   };
 
-  const executeQuery = jest.fn(async (query: string, vars: any) => {
+  const executeQuery = jest.fn(async (query: string, vars: Loose) => {
     const op = /query (\w+)/.exec(query)?.[1] ?? '?';
     switch (op) {
       case 'DedicatedAgentsConfig':
@@ -204,7 +209,7 @@ function world() {
     }
   });
 
-  const executeMutation = jest.fn(async (mutation: string, vars: any) => {
+  const executeMutation = jest.fn(async (mutation: string, vars: Loose) => {
     const op = /mutation (\w+)/.exec(mutation)?.[1] ?? '?';
     state.mutations.push({ op, vars: JSON.parse(JSON.stringify(vars)) });
     if (state.deadlocksLeft > 0) {
@@ -216,7 +221,7 @@ function world() {
         // One transaction: all rows or none.
         const snapshot = state.rows.map((r) => ({ ...r }));
         try {
-          const inserted = (vars.objects as any[]).map((o) => {
+          const inserted = (vars.objects as Loose[]).map((o) => {
             const row = insertRow(o);
             state.rows.push(row);
             return row;
@@ -249,8 +254,8 @@ function world() {
   });
 
   const hasura = { executeQuery, executeMutation } as unknown as HasuraSystemService;
-  const notices: any[] = [];
-  const notifications = { sendDedicatedAgentNotice: jest.fn(async (p: any) => void notices.push(p)) };
+  const notices: Notice[] = [];
+  const notifications = { sendDedicatedAgentNotice: jest.fn(async (p: Notice) => void notices.push(p)) };
   const deliveryConfig = {
     getTimezone: jest.fn(async () => 'Africa/Douala'),
     getCurrency: jest.fn(async () => 'XAF'),
@@ -715,7 +720,7 @@ describe('DedicatedAssignmentsService — pickup slots (AC-B1, B2, B4)', () => {
 
     const save = w.writes('SaveDedicatedPickupSlots');
     expect(save).toHaveLength(1);
-    expect(save[0].vars.pauses.map((p: any) => p.where.id._eq)).toEqual([r1.id, r2.id, r3.id]);
+    expect(save[0].vars.pauses.map((p: Loose) => p.where.id._eq)).toEqual([r1.id, r2.id, r3.id]);
     expect([r1, r2, r3].every((r) => r.status === 'paused' && r.paused_by_user_id === OWNER)).toBe(true);
     expect(already.paused_at).toBe('old');
     expect(morning.status).toBe('active');
