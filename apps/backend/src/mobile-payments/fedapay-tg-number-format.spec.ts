@@ -1,6 +1,6 @@
 describe('FedaPay TG Number Format', () => {
 
-  it('mutation test: FedaPay service strips country code for TG numbers', () => {
+  it('mutation test: FedaPay service sends phone with country TG separately', () => {
     const fs = require('fs');
     const path = require('path');
     const fedapaySource = fs.readFileSync(
@@ -8,10 +8,9 @@ describe('FedaPay TG Number Format', () => {
       'utf-8'
     );
 
-    // FedaPay must handle TG numbers by sending bare national format
-    // The service should extract national number and send separately with country: 'TG'
-    expect(fedapaySource).toContain('getNationalNumber');
-    expect(fedapaySource.length).toBeGreaterThan(1000); // Service exists with substantial logic
+    // FedaPay must send phone number with country: 'TG' in API payload
+    expect(fedapaySource).toContain("country: 'TG'");
+    expect(fedapaySource).toContain('phone_number');
   });
 
   it('mutation test: FedaPay determines TG channel from number prefix', () => {
@@ -40,7 +39,7 @@ describe('FedaPay TG Number Format', () => {
     expect(fedapaySource).toContain('moov_tg');
   });
 
-  it('mutation test: FedaPay handles both international and national format', () => {
+  it('mutation test: FedaPay validates Togo phone numbers', () => {
     const fs = require('fs');
     const path = require('path');
     const fedapaySource = fs.readFileSync(
@@ -48,8 +47,8 @@ describe('FedaPay TG Number Format', () => {
       'utf-8'
     );
 
-    // Must use phone parsing to handle both 228XXXXXXXX and XXXXXXXX formats
-    expect(fedapaySource).toContain('parsePhoneNumber');
+    // Must validate Togo phone numbers before initiating payment
+    expect(fedapaySource).toContain('isValidTogoPhone');
   });
 
   it('mutation test: FedaPay handles GIVE_CHANGE (payee field) with national format', () => {

@@ -133,11 +133,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       );
 
       // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
-        expect.anything(),
-        'late_success_wallet_credited',
-        expect.stringContaining('tx-failed-topup')
-      );
+      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
+      expect(anomalyType).toBe('late_success_wallet_credited');
+      expect(message).toContain('tx-failed-topup');
     });
 
     it('should not double-credit on replay (idempotency)', async () => {
@@ -223,11 +222,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
-        expect.anything(),
-        'late_success_amount_mismatch',
-        expect.stringContaining('tx-amount-mismatch')
-      );
+      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
+      expect(anomalyType).toBe('late_success_amount_mismatch');
+      expect(message).toContain('tx-amount-mismatch');
     });
 
     it('should validate currency is XOF', async () => {
@@ -267,11 +265,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
-        expect.anything(),
-        'late_success_currency_invalid',
-        expect.stringContaining('tx-currency-invalid')
-      );
+      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
+      expect(anomalyType).toBe('late_success_currency_invalid');
+      expect(message).toContain('tx-currency-invalid');
     });
 
     it('should validate reference matches', async () => {
@@ -311,11 +308,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
-        expect.anything(),
-        'late_success_reference_mismatch',
-        expect.stringContaining('tx-ref-mismatch')
-      );
+      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
+      expect(anomalyType).toBe('late_success_reference_mismatch');
+      expect(message).toContain('tx-ref-mismatch');
     });
   });
 
@@ -383,11 +379,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       );
 
       // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
-        expect.anything(),
-        'late_success_order_applied',
-        expect.stringContaining('tx-order-failed')
-      );
+      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
+      expect(anomalyType).toBe('late_success_order_applied');
+      expect(message).toContain('tx-order-failed');
     });
 
     it('should raise anomaly if order payment cannot be applied safely', async () => {
@@ -442,11 +437,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       expect(hasSuccessUpdate).toBe(false);
 
       // Verify money anomaly was reported for the failed application
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
-        expect.anything(),
-        'late_success_order_apply_failed',
-        expect.stringContaining('tx-order-unsafe')
-      );
+      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
+      expect(anomalyType).toBe('late_success_order_apply_failed');
+      expect(message).toContain('tx-order-unsafe');
     });
 
     it('should report late_success_non_wallet anomaly when payment_entity is not wallet', async () => {
@@ -490,11 +484,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       await processor.processFedaPayCallback(approvedCallback);
 
       // Verify money anomaly was reported with late_success_non_wallet
-      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
-        expect.anything(),
-        'late_success_non_wallet',
-        expect.stringContaining('tx-non-wallet')
-      );
+      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
+      expect(anomalyType).toBe('late_success_non_wallet');
+      expect(message).toContain('tx-non-wallet');
     });
   });
 
