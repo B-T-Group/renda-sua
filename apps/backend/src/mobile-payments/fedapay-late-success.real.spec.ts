@@ -594,6 +594,22 @@ describe('S4 expiry (real processor + live FedaPay re-check)', () => {
     );
   });
 
+  it('N3 is only for a live status mismatch: expired event, live expired but wrong reference -> FAILED mismatch acknowledged, no re-verify', async () => {
+    const { db, ledger, processor } = build([pendingTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(
+      liveFedaPayTx({ status: 'expired', amount: 2000, custom_metadata: { externalId: 'OTHER-REF' } })
+    );
+    const res = await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
+    expect(res).toEqual({ received: true, transactionId: 777 });
+    expect(Transaction.retrieve).toHaveBeenCalledTimes(1); // no SUCCESS re-verify
+    expect(ledger.deposits).toHaveLength(0);
+    expect(db.byId.get('tx-pending')?.status).toBe('pending');
+    expect(anomalyTypes()).toEqual(['fedapay_callback_live_mismatch']);
+    expect((reportMoneyAnomaly as jest.Mock).mock.calls[0][3]).toEqual(
+      expect.objectContaining({ reason: 'reference_mismatch', claimed: 'FAILED' })
+    );
+  });
+
   describe('N2: expiry runs onPaymentFailure for orders, deposits and claims, like a decline', () => {
     function withFailureSpies(entity: string | null) {
       const built = build([pendingTopUp()].map((r) => ({ ...r, payment_entity: entity, entity_id: entity ? 'ORD1' : null })));
