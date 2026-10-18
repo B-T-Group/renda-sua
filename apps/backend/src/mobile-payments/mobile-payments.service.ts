@@ -88,6 +88,12 @@ export interface MobilePaymentResponse {
   reason?: 'provider_ambiguous';
 }
 
+/** FedaPay live amount: a finite number (or numeric string), else undefined (QA #587 A1). */
+export function liveFedaPayAmount(value: unknown): number | undefined {
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
+}
+
 export interface MobileTransactionStatus {
   transactionId: string;
   /**
@@ -97,7 +103,11 @@ export interface MobileTransactionStatus {
    * leave the row alone and flag it for manual review.
    */
   status: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous' | 'refunded';
-  amount: number;
+  /**
+   * Live amount. FedaPay leaves it undefined when the live record has none (QA #587 A1:
+   * missing is transient, not 0, so it can't turn into a definite amount mismatch).
+   */
+  amount?: number;
   currency: string;
   reference: string;
   message?: string;
@@ -341,13 +351,23 @@ export class MobilePaymentsService {
         if (tx.currency && tx.currency !== 'XOF') {
           throw mismatch('stored_currency_not_xof', `stored currency ${tx.currency}`);
         }
+        // QA #587 A1: an incomplete live record (no currency or no amount) is not a definite
+        // mismatch: FedaPay may fill it in on a later read. Plain error -> 5xx -> FedaPay
+        // retries, and nothing is credited meanwhile. No values in the message.
         if (!live.currency) {
-          throw mismatch('missing_live_currency', 'live record has no currency (fail closed)');
+          throw new Error(
+            `Rejecting SUCCESS callback for ${tx.id}: live record has no currency (transient, will retry)`
+          );
         }
         if (live.currency !== 'XOF') {
           throw mismatch('live_currency_not_xof', `live currency ${live.currency}`);
         }
-        if (tx.amount !== undefined && live.amount !== undefined && live.amount !== tx.amount) {
+        if (live.amount === undefined || !Number.isFinite(live.amount)) {
+          throw new Error(
+            `Rejecting SUCCESS callback for ${tx.id}: live record has no amount (transient, will retry)`
+          );
+        }
+        if (tx.amount !== undefined && live.amount !== tx.amount) {
           throw mismatch('amount_mismatch', `expected ${tx.amount}, live ${live.amount}`);
         }
         // live.reference = custom_metadata.externalId || FedaPay id; must equal ours exactly.
@@ -928,8 +948,9 @@ export class MobilePaymentsService {
           status = {
             transactionId: fedapayStatus.transactionId,
             status: statusMap[fedapayStatus.status] || 'pending',
-            amount: fedapayStatus.amount || 0,
-            currency: fedapayStatus.currency || '', // Pass through real currency, fail closed on missing
+            // QA #587 A1: a missing amount stays undefined (transient re-check), never 0.
+            amount: liveFedaPayAmount(fedapayStatus.amount),
+            currency: fedapayStatus.currency || '', // Pass through real currency; missing is transient
             reference: fedapayStatus.merchantRef || fedapayStatus.reference || '',
             message: fedapayStatus.reason || fedapayStatus.message,
             provider: 'fedapay',

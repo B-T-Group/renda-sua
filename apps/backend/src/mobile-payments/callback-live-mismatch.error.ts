@@ -17,7 +17,6 @@ export type CallbackLiveMismatchReason =
   | 'live_status_mismatch'
   | 'live_refunded'
   | 'stored_currency_not_xof'
-  | 'missing_live_currency'
   | 'live_currency_not_xof'
   | 'amount_mismatch'
   | 'missing_stored_reference'

@@ -220,7 +220,15 @@ export class MobilePaymentCallbackProcessor {
       callbackData.name === 'transaction.updated' && callbackData.entity.status === 'expired';
     const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name) || isExpiredUpdate;
     const isTerminalStatus = TERMINAL_STATUSES.includes(callbackData.entity.status);
-    
+
+    // QA #587 A3: a refund (transaction.refunded, or any event whose entity is refunded).
+    if (
+      callbackData.entity?.status === 'refunded' ||
+      callbackData.name === 'transaction.refunded'
+    ) {
+      return this.handleFedaPayRefundEvent(callbackData);
+    }
+
     if (!isTerminalEvent || !isTerminalStatus) {
       this.logger.log(
         `FedaPay non-terminal event: name=${callbackData.name} status=${callbackData.entity.status} entity_id=${callbackData.entity.id}, acknowledging without state change`
@@ -268,6 +276,51 @@ export class MobilePaymentCallbackProcessor {
   }
 
   /**
+   * QA #587 A3: FedaPay refunded a collect. The webhook signature is verified by the
+   * controller (mandatory secret), so the event itself is trusted. Nothing changes here:
+   * we never debit a wallet or reverse an order automatically. If we already credited
+   * the payer (row success, or processing = credit in flight), the money left FedaPay
+   * twice from our point of view, so finance must reconcile: raise a money anomaly.
+   * Otherwise (pending / failed / cancelled / unknown) nothing was credited; log only.
+   * Always 2xx: a refund never becomes creditable, so retrying cannot help.
+   */
+  private async handleFedaPayRefundEvent(
+    callbackData: FedaPayCallbackDto
+  ): Promise<{ received: boolean; transactionId: number }> {
+    const tx = await this.lookupFedaPayTransaction(callbackData);
+    if (!tx) {
+      this.logger.warn(
+        `FedaPay refund event for unknown entity ${callbackData.entity?.id}; acknowledging`
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+    await this.databaseService.logCallback(tx.id, callbackData);
+    if (tx.status === 'success' || tx.status === 'processing') {
+      reportMoneyAnomaly(
+        this.logger,
+        'fedapay_refund_after_credit',
+        `FedaPay refunded tx ${tx.id} after we credited it (row ${tx.status}${
+          tx.error_code ? `, ${tx.error_code}` : ''
+        }); no automatic reversal, reconcile manually`,
+        {
+          transactionId: tx.id,
+          reference: tx.reference,
+          amount: tx.amount,
+          rowStatus: tx.status,
+          paymentEntity: tx.payment_entity,
+          event: callbackData.name,
+          fedapayEntityId: callbackData.entity?.id,
+        }
+      );
+    } else {
+      this.logger.warn(
+        `FedaPay refund event for tx ${tx.id} (row ${tx.status}, never credited); acknowledging without state change`
+      );
+    }
+    return { received: true, transactionId: callbackData.entity.id };
+  }
+
+  /**
    * N2: a FedaPay row can be pending without a transaction_id (the provider id
    * was never stored, e.g. the push failed or the process died right after
    * Transaction.create). The webhook was matched by custom_metadata.externalId,
@@ -279,11 +332,21 @@ export class MobilePaymentCallbackProcessor {
    */
   private withFedaPayRecheckId(
     tx: MobilePaymentTransaction,
-    callbackData: FedaPayCallbackDto
+    callbackOrEntityId: FedaPayCallbackDto | string | number | null | undefined
   ): MobilePaymentTransaction {
+    // FedaPay rows only: other providers' re-checks have no reference-match guard.
+    if (tx.provider?.toLowerCase() !== 'fedapay') return tx;
     if (tx.transaction_id?.trim()) return tx;
-    const entityId = callbackData.entity?.id;
-    if (!tx.reference?.trim() || entityId === undefined || entityId === null) {
+    const entityId =
+      typeof callbackOrEntityId === 'object' && callbackOrEntityId !== null
+        ? callbackOrEntityId.entity?.id
+        : callbackOrEntityId;
+    if (
+      !tx.reference?.trim() ||
+      entityId === undefined ||
+      entityId === null ||
+      String(entityId).trim() === ''
+    ) {
       return tx;
     }
     this.logger.warn(
@@ -564,8 +627,10 @@ export class MobilePaymentCallbackProcessor {
     providerTransactionId: string
   ): Promise<void> {
     if (!this.skipsLiveRecheck(tx)) {
+      // QA #587 A2: a superseded FedaPay row may have no transaction_id (N2); re-check the
+      // webhook's entity id (reference must still match) instead of rejecting it.
       await this.mobilePaymentsService.assertProviderConfirmsCallback(
-        tx,
+        this.withFedaPayRecheckId(tx, providerTransactionId),
         'SUCCESS'
       );
     }
