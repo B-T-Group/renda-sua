@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import 'source-map-support/register';
+import { FedapayMonitoringStack } from './lib/fedapay-monitoring-stack';
 import { HasuraEc2EnvironmentStack } from './lib/hasura-ec2-infrastructure-stack';
 import { RendasuaInfrastructureStack } from './lib/rendasua-infrastructure-stack';
 
@@ -16,6 +17,39 @@ const awsRegion = 'ca-central-1';
 
 new RendasuaInfrastructureStack(app, `RendasuaInfrastructure-${environment}`, {
   environment,
+  env: {
+    account: awsAccount,
+    region: awsRegion,
+  },
+});
+
+// FedaPay monitoring stacks for dev and production environments
+// These monitor the backend log groups for the fedapay_live_record_incomplete marker
+// which indicates incomplete mobile money transaction records that need attention
+// before FedaPay can go live in Togo.
+
+// Get alarm SNS topic ARN from context (optional)
+// If not provided, alarms will be created without notification actions
+// Example: cdk deploy --context fedapayAlarmTopicArn=arn:aws:sns:ca-central-1:235680477887:backend-alerts
+const fedapayDevAlarmTopicArn = app.node.tryGetContext('fedapayDevAlarmTopicArn');
+const fedapayProdAlarmTopicArn = app.node.tryGetContext('fedapayProdAlarmTopicArn');
+
+// Development environment monitoring
+new FedapayMonitoringStack(app, 'FedapayMonitoring-dev', {
+  environment: 'dev',
+  logGroupName: 'rendasua-backend-dev',
+  alarmTopicArn: fedapayDevAlarmTopicArn,
+  env: {
+    account: awsAccount,
+    region: awsRegion,
+  },
+});
+
+// Production environment monitoring
+new FedapayMonitoringStack(app, 'FedapayMonitoring-production', {
+  environment: 'production',
+  logGroupName: 'rendasua-backend-prod',
+  alarmTopicArn: fedapayProdAlarmTopicArn,
   env: {
     account: awsAccount,
     region: awsRegion,
