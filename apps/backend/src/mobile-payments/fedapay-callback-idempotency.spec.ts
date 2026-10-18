@@ -367,7 +367,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
       // The failPendingAttempt method is called, which updates the transaction
       // Note: assertProviderConfirmsCallback is NOT called for expired status - only for SUCCESS
       expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
-        'fedapay-tx-123',
+        'tx-123',
         'pending',
         expect.objectContaining({ status: 'failed' })
       );
