@@ -37,3 +37,20 @@ export class CallbackLiveMismatchError extends Error {
     super(`Rejecting FedaPay ${claimed} callback for ${txId}: ${reason}`);
   }
 }
+
+/**
+ * QA #587 A1: the live FedaPay record is incomplete (no currency or no amount). Transient:
+ * the webhook answers 5xx so FedaPay retries. A distinct class (not a plain Error) so the
+ * callback processor can count repeats per transaction and alert before FedaPay disables
+ * the webhook (it does after 10 consecutive failed deliveries). Message carries no values.
+ */
+export class LiveRecordIncompleteError extends Error {
+  override readonly name = 'LiveRecordIncompleteError';
+
+  constructor(
+    readonly txId: string,
+    readonly missing: 'currency' | 'amount'
+  ) {
+    super(`Rejecting SUCCESS callback for ${txId}: live record has no ${missing} (transient, will retry)`);
+  }
+}

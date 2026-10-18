@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   CallbackLiveMismatchError,
   CallbackLiveMismatchReason,
+  LiveRecordIncompleteError,
 } from './callback-live-mismatch.error';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
@@ -355,17 +356,13 @@ export class MobilePaymentsService {
         // mismatch: FedaPay may fill it in on a later read. Plain error -> 5xx -> FedaPay
         // retries, and nothing is credited meanwhile. No values in the message.
         if (!live.currency) {
-          throw new Error(
-            `Rejecting SUCCESS callback for ${tx.id}: live record has no currency (transient, will retry)`
-          );
+          throw new LiveRecordIncompleteError(tx.id, 'currency');
         }
         if (live.currency !== 'XOF') {
           throw mismatch('live_currency_not_xof', `live currency ${live.currency}`);
         }
         if (live.amount === undefined || !Number.isFinite(live.amount)) {
-          throw new Error(
-            `Rejecting SUCCESS callback for ${tx.id}: live record has no amount (transient, will retry)`
-          );
+          throw new LiveRecordIncompleteError(tx.id, 'amount');
         }
         if (tx.amount !== undefined && live.amount !== tx.amount) {
           throw mismatch('amount_mismatch', `expected ${tx.amount}, live ${live.amount}`);

@@ -1,5 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
+import {
+  CallbackLiveMismatchError,
+  LiveRecordIncompleteError,
+} from './callback-live-mismatch.error';
 import { ModuleRef } from '@nestjs/core';
 import type { Request } from 'express';
 import { AccountsService } from '../accounts/accounts.service';
@@ -48,6 +51,11 @@ export type FreemopayCallbackProcessResult = {
   reference: string;
   skipped?: boolean;
 };
+
+/** QA #587 Low: alert once the same tx's live record was incomplete this many times. */
+export const INCOMPLETE_LIVE_RECORD_ALERT_AFTER = 3;
+const INCOMPLETE_LIVE_RECORD_WINDOW_MS = 24 * 60 * 60 * 1000;
+const INCOMPLETE_LIVE_RECORD_MAX_TRACKED = 1000;
 
 @Injectable()
 export class MobilePaymentCallbackProcessor {
@@ -184,6 +192,10 @@ export class MobilePaymentCallbackProcessor {
     try {
       return await this.processFedaPayCallbackChecked(callbackData);
     } catch (error: unknown) {
+      if (error instanceof LiveRecordIncompleteError) {
+        this.noteIncompleteLiveRecord(error, callbackData);
+        throw error; // still transient: 5xx, FedaPay retries
+      }
       if (!(error instanceof CallbackLiveMismatchError)) throw error;
       if (!error.alerted) {
         reportMoneyAnomaly(
@@ -203,6 +215,69 @@ export class MobilePaymentCallbackProcessor {
       return { received: true, transactionId: callbackData.entity.id };
     }
   }
+
+  /**
+   * QA #587 (Low): an incomplete live record answers 5xx (A1), and FedaPay disables the
+   * webhook after 10 consecutive failed deliveries, so a record that stays incomplete must
+   * reach a human before that.
+   *
+   * - Every failure logs the stable marker `fedapay_live_record_incomplete` with the count,
+   *   so a CloudWatch metric filter / log alarm can aggregate across instances and restarts.
+   * - On the Nth failure for the same transaction (N = 3) a single money anomaly
+   *   (`fedapay_live_record_incomplete_repeated`) goes to Sentry.
+   *
+   * Why N = 3: one or two misses can be a read racing FedaPay filling in the record; a
+   * third retry of the same transaction is persistent. It still leaves 7 of FedaPay's 10
+   * attempts (hours of its backoff) for someone to act, and stays under 10 even if the
+   * deliveries are spread over up to 4 instances (alert by delivery 4 x 2 + 1 = 9).
+   *
+   * Why in-memory dedup (bounded map keyed by our tx id, 24 h window): the counter sits on
+   * a failing path, so it must not depend on Redis or the DB (which may be what's failing),
+   * and it must never turn the transient 5xx into something else. The worst case of losing
+   * it on a restart/deploy is one more alert after N new failures, never a missed marker.
+   */
+  private noteIncompleteLiveRecord(
+    error: LiveRecordIncompleteError,
+    callbackData: FedaPayCallbackDto
+  ): void {
+    const now = Date.now();
+    const key = error.txId;
+    let entry = this.incompleteLiveRecordFailures.get(key);
+    if (!entry || now - entry.firstAt > INCOMPLETE_LIVE_RECORD_WINDOW_MS) {
+      entry = { count: 0, firstAt: now, alerted: false };
+    }
+    entry.count += 1;
+    // Re-insert so Map order is least-recently-failed first, then cap the size.
+    this.incompleteLiveRecordFailures.delete(key);
+    this.incompleteLiveRecordFailures.set(key, entry);
+    while (this.incompleteLiveRecordFailures.size > INCOMPLETE_LIVE_RECORD_MAX_TRACKED) {
+      const oldest = this.incompleteLiveRecordFailures.keys().next().value as string;
+      this.incompleteLiveRecordFailures.delete(oldest);
+    }
+    this.logger.warn(
+      `fedapay_live_record_incomplete tx=${key} missing=${error.missing} failures=${entry.count} (5xx, FedaPay will retry)`
+    );
+    if (entry.count >= INCOMPLETE_LIVE_RECORD_ALERT_AFTER && !entry.alerted) {
+      entry.alerted = true;
+      reportMoneyAnomaly(
+        this.logger,
+        'fedapay_live_record_incomplete_repeated',
+        `FedaPay live record for tx ${key} has no ${error.missing}; callback answered 5xx ${entry.count} times. FedaPay disables the webhook after 10 consecutive failed deliveries: check the transaction in the FedaPay dashboard`,
+        {
+          transactionId: key,
+          missing: error.missing,
+          failures: entry.count,
+          event: callbackData?.name,
+          fedapayEntityId: callbackData?.entity?.id,
+        }
+      );
+    }
+  }
+
+  private readonly incompleteLiveRecordFailures = new Map<
+    string,
+    { count: number; firstAt: number; alerted: boolean }
+  >();
 
   private async processFedaPayCallbackChecked(
     callbackData: FedaPayCallbackDto
