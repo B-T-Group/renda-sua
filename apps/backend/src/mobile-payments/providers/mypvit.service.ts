@@ -20,6 +20,27 @@ import {
   sanitizeProviderError,
   toSanitizedError,
 } from '../sanitize-provider-error.util';
+import { mypvitSecretName } from '../secret-refresh-auth';
+
+/**
+ * QA #593 S3: the Airtel/Moov operation account codes have no hard-coded fallback. Missing or
+ * identical codes used to fall back to ACC_68A722C33473B for both, so payments ran on
+ * accounts whose keys the secret-refresh webhook refuses to rotate (silent failure). Throwing
+ * here makes Nest fail at boot instead.
+ */
+export function requireOperationAccountCodes(
+  config: Partial<Pick<MyPVitConfig, 'airtelMerchantOperationAccountCode' | 'moovMerchantOperationAccountCode'>> | undefined
+): { airtel: string; moov: string } {
+  const airtel = config?.airtelMerchantOperationAccountCode?.trim() ?? '';
+  const moov = config?.moovMerchantOperationAccountCode?.trim() ?? '';
+  if (!airtel || !moov || airtel === moov) {
+    throw new Error(
+      'MyPVit misconfigured: MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE and ' +
+        'MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE must both be set and distinct'
+    );
+  }
+  return { airtel, moov };
+}
 
 export interface MyPVitPaymentRequest {
   amount: number;
@@ -141,6 +162,9 @@ export class MyPVitService {
     // Get the MyPVit configuration from the configuration service
     const mypvitConfig = this.configService.get<MyPVitConfig>('mypvit');
 
+    // Fails boot when the codes are missing or identical (no hard-coded fallback).
+    const accountCodes = requireOperationAccountCodes(mypvitConfig);
+
     // Never dump the raw config: it can carry the Airtel/Moov secret keys.
     this.config = {
       baseUrl: mypvitConfig?.baseUrl || 'https://api.mypvit.pro',
@@ -150,10 +174,8 @@ export class MyPVitService {
       environment: mypvitConfig?.environment || 'test',
       callbackUrlCode: mypvitConfig?.callbackUrlCode || 'FJXSU',
       secretRefreshUrlCode: mypvitConfig?.secretRefreshUrlCode || 'TRUVU',
-      airtelMerchantOperationAccountCode:
-        mypvitConfig?.airtelMerchantOperationAccountCode || 'ACC_68A722C33473B',
-      moovMerchantOperationAccountCode:
-        mypvitConfig?.moovMerchantOperationAccountCode || 'ACC_68F90896204C1',
+      airtelMerchantOperationAccountCode: accountCodes.airtel,
+      moovMerchantOperationAccountCode: accountCodes.moov,
       paymentEndpointCode:
         mypvitConfig?.paymentEndpointCode || 'X5T3RIBYQUDFBZSH',
       statusEndpointCode:
@@ -699,9 +721,8 @@ export class MyPVitService {
    */
   private async getCurrentSecretKey(phoneNumber?: string): Promise<string> {
     try {
-      const environment =
-        this.configService.get<string>('NODE_ENV') || 'development';
-      const secretName = `${environment}-rendasua-backend-secrets`;
+      // Same name the secret-refresh webhook writes to (MYPVIT_SECRET_NAME override).
+      const secretName = mypvitSecretName();
 
       this.logger.log(`Fetching current secret key from: ${secretName}`);
 

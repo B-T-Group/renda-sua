@@ -11,6 +11,7 @@ import { WINSTON_MODULE_PROVIDER } from 'nest-winston';
 import { Observable, tap } from 'rxjs';
 import { Logger } from 'winston';
 import { getRequestLogContext } from '../request-context-log.util';
+import { redactSensitivePath } from '../redact-sensitive-path.util';
 
 const SKIP_ACCESS_LOG_PATHS = new Set(['/api/health', '/health']);
 
@@ -80,6 +81,7 @@ export class LoggingInterceptor implements NestInterceptor {
   private pathWithoutQuery(request: Request): string {
     const raw = request.originalUrl || request.url || '';
     const q = raw.indexOf('?');
-    return q === -1 ? raw : raw.slice(0, q);
+    // Path tokens (e.g. the MyPVit secret-refresh URL) are credentials: never log them.
+    return redactSensitivePath(q === -1 ? raw : raw.slice(0, q));
   }
 }
