@@ -115,15 +115,13 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       );
 
       // Verify wallet was credited with idempotency key
-      expect(accountsService.creditWallet).toHaveBeenCalledWith(
-        'acc-123',
-        5000,
-        'XOF',
-        'momo-deposit:tx-failed-topup',
-        expect.objectContaining({
-          reference: 'REF-TOPUP-123',
-        })
-      );
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledWith({
+        accountId: 'acc-123',
+        amount: 5000,
+        memo: expect.stringContaining('REF-TOPUP-123'),
+        referenceId: 'tx-failed-topup',
+        idempotencyKey: 'momo-deposit:tx-failed-topup',
+      });
 
       // Verify transaction marked as success
       expect(databaseService.updateTransaction).toHaveBeenCalledWith(
@@ -177,7 +175,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
 
       await processor.processFedaPayCallback(approvedCallback);
 
-      expect(accountsService.creditWallet).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
 
       // Replay: CAS fails (already processing or success)
       databaseService.updateTransactionIfStatus.mockResolvedValueOnce(false);
@@ -185,7 +183,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       await processor.processFedaPayCallback(approvedCallback);
 
       // Still only credited once (idempotency key prevents double-credit even if CAS passed)
-      expect(accountsService.creditWallet).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
     });
 
     it('should validate amount matches', async () => {
@@ -221,7 +219,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       await processor.processFedaPayCallback(approvedCallback);
 
       // Should NOT credit wallet due to amount mismatch
-      expect(accountsService.creditWallet).not.toHaveBeenCalled();
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported
@@ -265,7 +263,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       await processor.processFedaPayCallback(approvedCallback);
 
       // Should NOT credit wallet due to invalid currency
-      expect(accountsService.creditWallet).not.toHaveBeenCalled();
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported
@@ -309,7 +307,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       await processor.processFedaPayCallback(approvedCallback);
 
       // Should NOT credit wallet due to reference mismatch
-      expect(accountsService.creditWallet).not.toHaveBeenCalled();
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported

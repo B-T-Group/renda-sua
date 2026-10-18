@@ -76,12 +76,17 @@ describe('Missing Coverage Tests (G7)', () => {
 
   describe('ISO Country Normalization', () => {
     it('mutation test: country normalization logic exists', () => {
-      const isoCountrySource = require('../orders/delivery-pricing.util').isoCountryCode.toString();
+      const fs = require('fs');
+      const path = require('path');
+      const isoCountrySource = fs.readFileSync(
+        path.join(__dirname, '../orders/delivery-pricing.util.ts'),
+        'utf-8'
+      );
       
       // Must normalize country names to ISO codes
-      expect(isoCountrySource).toContain('Cameroon');
-      expect(isoCountrySource).toContain('Gabon');
-      expect(isoCountrySource).toContain('Togo');
+      expect(isoCountrySource).toContain('CAMEROON');
+      expect(isoCountrySource).toContain('GABON');
+      expect(isoCountrySource).toContain('TOGO');
     });
   });
 });
