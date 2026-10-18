@@ -20,14 +20,18 @@ interface SanitizedError {
  *
  * Performance (QA #589 D1): this runs synchronously on attacker-controlled text (request
  * URLs in every sampled Sentry transaction, provider error bodies). The key prefix is
- * anchored with a lookbehind (a match can only start where a [\w-] run starts) and bounded
- * to 40 chars, so the scan is linear. An unanchored lazy `[\w-]*?` here was quadratic
- * (16 KB took ~400 ms).
+ * bounded to 40 chars, so each start position does at most ~40 steps and the scan is
+ * linear; input is also capped at MAX_REDACT_INPUT. An unbounded lazy `[\w-]*?` here was
+ * quadratic (16 KB took ~400 ms). QA's version also anchored the prefix with a lookbehind
+ * (?<![\w-]); that is not needed for linearity and would let a key with a prefix longer
+ * than 40 chars (`some_very_long_service_name_prefix_xyz_api_key=…`) go unredacted, because
+ * the match could no longer start mid-run. Without it the match starts up to 40 chars
+ * before the key name and group 1 re-emits the text unchanged.
  */
 const SECRET_KEY_NAMES =
   'new_secret_key|secret[_-]?key|client[_-]?secret|x[_-]secret|api[_-]?key|app[_-]?key|password|token|authorization|secret';
 const SECRET_KEY_VALUE = new RegExp(
-  `((?<![\\w-])["']?[\\w-]{0,40}?(${SECRET_KEY_NAMES})["']?\\s*[:=]\\s*)` +
+  `(["']?[\\w-]{0,40}?(${SECRET_KEY_NAMES})["']?\\s*[:=]\\s*)` +
     `(?:(["'])((?:\\\\.|(?!\\3)[^\\\\\\r\\n])*)(?:\\3|(?=[\\r\\n])|$)` +
     `|([^"',}\\s&]+(?:[ \\t]+[^"',}\\s&]+)*))`,
   'gi'

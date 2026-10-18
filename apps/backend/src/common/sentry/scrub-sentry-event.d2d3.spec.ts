@@ -94,3 +94,21 @@ describe('D3: null-safe scrub, fail-closed hooks', () => {
     expect(sentryBeforeSendTransaction(poisoned)).toBeNull();
   });
 });
+
+describe('request headers with harmless names are still value-scrubbed', () => {
+  it('a secret inside a non-sensitive header value is redacted; plain values kept', () => {
+    const out: any = scrubSentryEvent({
+      request: {
+        headers: {
+          referer: `https://app.rendasua.com/cb?token=${FEED_TOKEN}`,
+          'x-debug': `Bearer ${LIVE}`,
+          'user-agent': 'Python Requests 2.34',
+        },
+      },
+    } as any);
+    const dump = inspect(out, { depth: 10 });
+    expect(dump).not.toContain(FEED_TOKEN);
+    expect(dump).not.toContain(LIVE);
+    expect(out.request.headers['user-agent']).toBe('Python Requests 2.34');
+  });
+});

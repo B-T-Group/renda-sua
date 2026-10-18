@@ -104,3 +104,23 @@ describe('D4: extra patterns', () => {
     }
   });
 });
+
+describe('D1: bounded prefix still catches long key names', () => {
+  it('a key whose prefix is longer than 40 chars is redacted (match may start mid-word)', () => {
+    const prefix = 'some_very_long_service_name_prefix_for_tests_xyz_'; // 49 chars
+    for (const input of [
+      `${prefix}api_key=longprefixval1`,
+      `{"${prefix}secret_key":"longprefixval2"}`,
+      `${'a'.repeat(200)}token=longprefixval3`,
+    ]) {
+      const out = redactSecrets(input);
+      expect(out).not.toMatch(/longprefixval\d/);
+      expect(out).toContain('REDACTED');
+    }
+  });
+
+  it('keeps the key text intact when the match starts mid-word', () => {
+    const prefix = 'x'.repeat(60);
+    expect(redactSecrets(`${prefix}_password=hunter2`)).toBe(`${prefix}_password=[REDACTED]`);
+  });
+});
