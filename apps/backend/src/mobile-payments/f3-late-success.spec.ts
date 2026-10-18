@@ -6,6 +6,11 @@ import { PaymentCallbackRegistryService } from './payment-callback/payment-callb
 import { MobilePaymentsService } from './mobile-payments.service';
 import { ModuleRef } from '@nestjs/core';
 import type { FedaPayCallbackDto } from './mobile-payment-callback.dto';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+
+jest.mock('../common/utils/money-alert.util', () => ({
+  reportMoneyAnomaly: jest.fn(),
+}));
 
 describe('F3: Late Success Handling (Declined then Approved)', () => {
   let processor: MobilePaymentCallbackProcessor;
@@ -15,6 +20,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
   let registryService: jest.Mocked<PaymentCallbackRegistryService>;
 
   beforeEach(async () => {
+    (reportMoneyAnomaly as jest.Mock).mockClear();
     databaseService = {
       logCallback: jest.fn().mockResolvedValue(undefined),
       updateTransactionIfStatus: jest.fn(),
@@ -123,6 +129,13 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
           error_code: 'LATE_SUCCESS_APPLIED',
         })
       );
+
+      // Verify money anomaly was reported
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'late_success_wallet_credited',
+        expect.stringContaining('tx-failed-topup')
+      );
     });
 
     it('should not double-credit on replay (idempotency)', async () => {
@@ -206,6 +219,13 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       // Should NOT credit wallet due to amount mismatch
       expect(accountsService.creditWallet).not.toHaveBeenCalled();
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
+
+      // Verify money anomaly was reported
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'late_success_amount_mismatch',
+        expect.stringContaining('tx-amount-mismatch')
+      );
     });
 
     it('should validate currency is XOF', async () => {
@@ -243,6 +263,13 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       // Should NOT credit wallet due to invalid currency
       expect(accountsService.creditWallet).not.toHaveBeenCalled();
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
+
+      // Verify money anomaly was reported
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'late_success_currency_invalid',
+        expect.stringContaining('tx-currency-invalid')
+      );
     });
 
     it('should validate reference matches', async () => {
@@ -280,6 +307,13 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       // Should NOT credit wallet due to reference mismatch
       expect(accountsService.creditWallet).not.toHaveBeenCalled();
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
+
+      // Verify money anomaly was reported
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'late_success_reference_mismatch',
+        expect.stringContaining('tx-ref-mismatch')
+      );
     });
   });
 
@@ -345,6 +379,13 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
           error_code: 'LATE_SUCCESS_APPLIED',
         })
       );
+
+      // Verify money anomaly was reported
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'late_success_order_applied',
+        expect.stringContaining('tx-order-failed')
+      );
     });
 
     it('should raise anomaly if order payment cannot be applied safely', async () => {
@@ -397,6 +438,61 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         (call) => call[1]?.status === 'success'
       );
       expect(hasSuccessUpdate).toBe(false);
+
+      // Verify money anomaly was reported for the failed application
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'late_success_order_apply_failed',
+        expect.stringContaining('tx-order-unsafe')
+      );
+    });
+
+    it('should report late_success_non_wallet anomaly when payment_entity is not wallet', async () => {
+      // This test specifically verifies the late_success_non_wallet anomaly type
+      const mockHandler = {
+        canHandle: jest.fn().mockReturnValue(false), // No handler can handle it
+      };
+
+      registryService.getHandlers.mockReturnValue([mockHandler as any]);
+
+      const failedNonWalletPayment: MobilePaymentTransaction = {
+        id: 'tx-non-wallet',
+        reference: 'REF-NON-WALLET',
+        transaction_id: '525503',
+        status: 'failed',
+        transaction_type: 'PAYMENT',
+        payment_entity: 'rental_deposit', // Non-wallet entity
+        entity_id: 'rental-123',
+        amount: 15000,
+        currency: 'XOF',
+        account_id: 'acc-non-wallet',
+        provider: 'fedapay',
+        customer_phone: '+22890123456',
+        created_at: new Date().toISOString(),
+      };
+
+      databaseService.getTransactionByTransactionId.mockResolvedValue(failedNonWalletPayment);
+      databaseService.updateTransactionIfStatus.mockResolvedValue(true);
+
+      const approvedCallback: FedaPayCallbackDto = {
+        name: 'transaction.approved',
+        entity: {
+          id: 525503,
+          status: 'approved',
+          amount: 15000,
+          currency: 'XOF',
+          custom_metadata: { externalId: 'REF-NON-WALLET' },
+        } as any,
+      };
+
+      await processor.processFedaPayCallback(approvedCallback);
+
+      // Verify money anomaly was reported with late_success_non_wallet
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+        expect.anything(),
+        'late_success_non_wallet',
+        expect.stringContaining('tx-non-wallet')
+      );
     });
   });
 
