@@ -1,0 +1,45 @@
+table:
+  name: dedicated_agent_applications
+  schema: public
+object_relationships:
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+  - name: posting
+    using:
+      foreign_key_constraint_on: posting_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - posting_id
+        - agent_id
+        - status
+        - decided_at
+        - withdrawn_at
+        - created_at
+        - updated_at
+      filter:
+        agent:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - posting_id
+        - agent_id
+        - status
+        - decided_at
+        - withdrawn_at
+        - created_at
+        - updated_at
+      filter:
+        posting:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id

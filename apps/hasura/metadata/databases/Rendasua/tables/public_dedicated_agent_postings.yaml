@@ -1,0 +1,73 @@
+table:
+  name: dedicated_agent_postings
+  schema: public
+object_relationships:
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
+array_relationships:
+  - name: applications
+    using:
+      foreign_key_constraint_on:
+        column: posting_id
+        table:
+          name: dedicated_agent_applications
+          schema: public
+  - name: slots
+    using:
+      manual_configuration:
+        column_mapping:
+          id: posting_id
+        insertion_order: null
+        remote_table:
+          name: dedicated_agent_posting_slots
+          schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - headcount
+        - accepted_count
+        - days_of_week
+        - terms
+        - terms_updated_at
+        - status
+        - expires_at
+        - filled_at
+        - closed_at
+        - created_at
+        - updated_at
+      filter:
+        _or:
+          - status:
+              _eq: open
+          - applications:
+              agent:
+                user:
+                  id:
+                    _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - headcount
+        - accepted_count
+        - days_of_week
+        - terms
+        - terms_updated_at
+        - status
+        - expires_at
+        - filled_at
+        - closed_at
+        - created_at
+        - updated_at
+        - closed_reason
+      filter:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

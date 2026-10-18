@@ -1,0 +1,45 @@
+table:
+  name: dedicated_agent_posting_slots
+  schema: public
+object_relationships:
+  - name: posting
+    using:
+      manual_configuration:
+        column_mapping:
+          posting_id: id
+        insertion_order: null
+        remote_table:
+          name: dedicated_agent_postings
+          schema: public
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - posting_id
+        - business_location_id
+        - slot_key
+        - is_open
+      filter:
+        posting:
+          _or:
+            - status:
+                _eq: open
+            - applications:
+                agent:
+                  user:
+                    id:
+                      _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - posting_id
+        - business_location_id
+        - slot_key
+        - is_open
+      filter:
+        posting:
+          business_location:
+            business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
