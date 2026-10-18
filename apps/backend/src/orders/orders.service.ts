@@ -227,7 +227,6 @@ import {
   DepositRefundService,
   RESOLVED_DEPOSIT_STATUSES,
 } from './deposit-refund.service';
-import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
 
 export interface OrderStatusChangeRequest {
@@ -6280,7 +6279,6 @@ export class OrdersService {
     const provider = momo.provider;
 
     const depositLongReference = `${order.order_number}-DEP-${Date.now()}-retry`;
-    const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
 
     // Step 1: Create pending mobile_payment_transactions row FIRST (real FK target)
     const depositTransaction =
@@ -6410,7 +6408,7 @@ export class OrdersService {
 
     const depositResult = await this.mobilePaymentsService.initiatePayment(
       depositPaymentRequest,
-      depositShortReference,
+      depositLongReference,
       user.id
     );
 
@@ -14719,9 +14717,10 @@ export class OrdersService {
       try {
         const depositCalc = depositQuote;
 
-          // Generate references: long for DB, short for MyPVIT (≤15 chars)
+          // Long reference is stored on the row and sent to the provider.
+          // MyPVit shortens internally (≤15 chars); FedaPay/Freemopay keep it so
+          // webhook live-recheck matches custom_metadata.externalId.
           const depositLongReference = `${order.order_number}-DEP-${Date.now()}`;
-          const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
 
           const depositPaymentRequest = {
             amount: depositCalc.depositAmount,
@@ -14732,10 +14731,9 @@ export class OrdersService {
             transactionType: 'PAYMENT' as const,
           };
 
-          // Initiate MoMo payment (short reference ≤15 chars for MyPVIT)
           const depositResult = await this.mobilePaymentsService.initiatePayment(
             depositPaymentRequest,
-            depositShortReference,
+            depositLongReference,
             user.id
           );
 

@@ -15,6 +15,7 @@ import { MobileTransactionAccessService } from './mobile-transaction-access.serv
 import { MtnMomoService } from './providers/mtn-momo.service';
 import { OrangeMomoService } from './providers/orange-momo.service';
 import { FreemopayService } from './providers/freemopay.service';
+import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
 
 describe('FedaPay Integration Tests (B2, B4, B5)', () => {
   let controller: MobilePaymentsController;
@@ -347,6 +348,52 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
       ).rejects.toThrow(/live currency XAF is not XOF/i);
+    });
+
+    it('accepts FedaPay live reference that is the MyPVit short hash of the stored deposit ref', async () => {
+      const stored = 'ORD-99-DEP-1730000000000';
+      const shortRef = buildShortReferenceForMyPVit(stored);
+      const tx = {
+        id: 'tx-dep',
+        transaction_id: 'fedapay_tx_dep',
+        amount: 1000,
+        currency: 'XOF',
+        reference: stored,
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        merchantRef: shortRef,
+      });
+
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).resolves.toBeUndefined();
+    });
+
+    it('rejects a FedaPay short hash that was not derived from the stored reference', async () => {
+      const tx = {
+        id: 'tx-dep-bad',
+        transaction_id: 'fedapay_tx_dep_bad',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'ORD-99-DEP-1730000000000',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        merchantRef: buildShortReferenceForMyPVit('SOME-OTHER-REF'),
+      });
+
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.toThrow(/reference mismatch/i);
     });
 
     it('should reject when live reference mismatches stored reference', async () => {

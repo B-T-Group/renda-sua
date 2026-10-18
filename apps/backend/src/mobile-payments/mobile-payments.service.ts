@@ -305,14 +305,13 @@ export class MobilePaymentsService {
             `Rejecting FedaPay callback for ${tx.id}: amount mismatch (expected ${tx.amount}, got ${live.amount})`
           );
         }
-        // Check reference matches stored reference exactly (B4)
-        // live.reference contains merchantRef || fedapay_id (from mapping at :719)
+        // live.reference is merchantRef || fedapay_id (mapped at checkTransactionStatus).
         if (!live.reference) {
           throw new Error(
             `Rejecting FedaPay callback for ${tx.id}: missing live reference (fail closed)`
           );
         }
-        if (tx.reference && live.reference !== tx.reference) {
+        if (!this.fedapayReferenceMatches(tx.reference, live.reference)) {
           throw new Error(
             `Rejecting FedaPay callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference})`
           );
@@ -334,13 +333,26 @@ export class MobilePaymentsService {
     // (with N2 substitution, a declined result could otherwise be confirmed on status alone)
     if (
       tx.provider === 'fedapay' &&
-      tx.reference &&
-      live.reference !== tx.reference
+      !this.fedapayReferenceMatches(tx.reference, live.reference)
     ) {
       throw new Error(
         `Rejecting FedaPay FAILED callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference || '<missing>'})`
       );
     }
+  }
+
+  /**
+   * FedaPay custom_metadata.externalId must belong to this row. Deposit create
+   * historically passed MyPVit's 15-char hash to the provider while storing the
+   * long DB reference — accept that hash so a paid collect is not rejected.
+   */
+  private fedapayReferenceMatches(
+    stored: string | null | undefined,
+    live: string | null | undefined
+  ): boolean {
+    if (!stored) return true;
+    if (!live) return false;
+    return live === stored || live === buildShortReferenceForMyPVit(stored);
   }
 
   /** Account withdrawals (GIVE_CHANGE): valid CM, GA, or TG MSISDN. */
