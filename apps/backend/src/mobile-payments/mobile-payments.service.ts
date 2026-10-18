@@ -1074,7 +1074,7 @@ export class MobilePaymentsService {
       // and an AWS SDK error can echo the request. Name and AWS code only.
       const label = describeSecretError(error);
       this.logger.error(`Failed to update secret ${secretName} (key ${key}): ${label}`);
-      throw new Error(`Failed to update secret ${key}: ${label}`);
+      throw new Error(`Failed to update secret ${key} (${label})`);
     }
   }
 

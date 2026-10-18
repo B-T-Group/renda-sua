@@ -940,8 +940,12 @@ export class MobilePaymentsController {
         }`
       );
 
-      if (!webhookData.secret_key) {
-        throw new Error('Missing required webhook data: secret_key');
+      // Validation failures are 4xx: Sentry captures 5xx, with the request attached.
+      if (!webhookData?.secret_key) {
+        throw new HttpException(
+          { success: false, message: 'Missing required webhook data: secret_key' },
+          HttpStatus.BAD_REQUEST
+        );
       }
 
       const environment = process.env.NODE_ENV || 'development';
@@ -965,7 +969,10 @@ export class MobilePaymentsController {
         secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
         this.logger.log('Updating MOOV secret key');
       } else {
-        throw new Error('Invalid merchant operation account code');
+        throw new HttpException(
+          { success: false, message: 'Invalid merchant operation account code' },
+          HttpStatus.BAD_REQUEST
+        );
       }
 
       this.logger.log(`Updating ${secretKeyName} in AWS Secrets Manager: ${secretName}`);
@@ -987,6 +994,9 @@ export class MobilePaymentsController {
         },
       };
     } catch (error: any) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
       const sanitized = sanitizeProviderError(error);
       this.logger.error(`Error handling secret refresh webhook: ${sanitized.message}`);
       throw new HttpException(
