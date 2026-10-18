@@ -8,7 +8,10 @@
  *
  * - A definite mismatch with the live record -> 2xx `{ received, transactionId }`, no credit,
  *   no transaction write, one money-anomaly alert; the body echoes none of our values.
- * - Transient (live pending, FedaPay API/network error) -> 500 so FedaPay retries, no alert.
+ * - Transient (live pending, FedaPay API/network error, live record missing amount or
+ *   currency [QA #587 A1]) -> 500 so FedaPay retries, no alert.
+ * - A refund event on a row we already credited raises a money anomaly (QA #587 A3).
+ * - A superseded order row without transaction_id is re-checked by the webhook entity id (A2).
  * - FedaPay `refunded` is mapped explicitly and never credited or replayed.
  */
 import { HttpException, Logger, RequestMethod } from '@nestjs/common';
@@ -174,7 +177,6 @@ describe('definite mismatch with the live record -> acknowledged (2xx), no credi
     ['SUCCESS claimed, live declined', 'approved', {}, { status: 'declined' }, 'live_status_mismatch'],
     ['SUCCESS claimed, live canceled', 'approved', {}, { status: 'canceled' }, 'live_status_mismatch'],
     ['live currency XAF', 'approved', {}, { currency: { iso: 'XAF' } }, 'live_currency_not_xof'],
-    ['live currency missing', 'approved', {}, { currency: undefined }, 'missing_live_currency'],
     ['stored currency not XOF', 'approved', { currency: 'XAF' }, {}, 'stored_currency_not_xof'],
     ['amount mismatch', 'approved', {}, { amount: 4999 }, 'amount_mismatch'],
     ['live reference mismatch', 'approved', {}, { custom_metadata: { externalId: LIVE_REF_OTHER } }, 'reference_mismatch'],
@@ -325,6 +327,148 @@ describe('transient conditions stay 5xx so FedaPay retries (no alert, no credit)
     jest.spyOn(processor as any, 'processPendingFedaPay').mockRejectedValue(new Error('Wallet credit failed; will retry'));
     const err = (await controller.fedapayCallback(signedRequest(entityId)).catch((e: unknown) => e)) as HttpException;
     expect(err.getStatus()).toBe(500);
+    expect(anomalies()).toHaveLength(0);
+  });
+});
+
+describe('QA #587 A1: a live record missing amount or currency is transient (5xx, not acknowledged)', () => {
+  it.each([
+    ['currency missing', { currency: undefined }],
+    ['currency without iso', { currency: {} }],
+    ['amount missing', { amount: undefined }],
+    ['amount null', { amount: null }],
+  ])('%s -> 500 generic body, no credit, no write, no alert; the retry with a complete record credits once', async (_l, liveOver) => {
+    const { entityId, row, db, deposits, controller } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValueOnce(live(entityId, liveOver));
+
+    const err = (await controller.fedapayCallback(signedRequest(entityId)).catch((e: unknown) => e)) as HttpException;
+
+    expect(err).toBeInstanceOf(HttpException);
+    expect(err.getStatus()).toBe(500);
+    expect(err.getResponse()).toEqual({ success: false, message: 'Failed to process FedaPay callback' });
+    const body = JSON.stringify(err.getResponse());
+    for (const value of [STORED_REF, row.id, '5000', 'XOF', 'transient']) expect(body).not.toContain(value);
+    expect(deposits).toHaveLength(0);
+    expect(db.updateTransaction).not.toHaveBeenCalled();
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(db.byId.get(row.id)?.status).toBe('pending');
+    expect(anomalies()).toHaveLength(0);
+
+    // Not recorded as seen: FedaPay's retry re-checks, now complete, and credits exactly once.
+    (Transaction.retrieve as jest.Mock).mockResolvedValueOnce(live(entityId));
+    const res = await controller.fedapayCallback(signedRequest(entityId));
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(deposits).toHaveLength(1);
+    expect(deposits[0]).toEqual(expect.objectContaining({ amount: 5000, idempotencyKey: `momo-deposit:${row.id}` }));
+    expect(db.byId.get(row.id)?.status).toBe('success');
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('a present live amount of 0 is a real value: still a definite amount_mismatch (acknowledged)', async () => {
+    const { entityId, deposits, controller } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { amount: 0 }));
+    const res = await controller.fedapayCallback(signedRequest(entityId));
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(deposits).toHaveLength(0);
+    expect(anomalies()[0][3]).toEqual(expect.objectContaining({ reason: 'amount_mismatch' }));
+  });
+
+  it('checkTransactionStatus keeps a missing FedaPay amount undefined (never 0) and parses numeric strings', async () => {
+    const { entityId, mps } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValueOnce(live(entityId, { amount: undefined }));
+    expect((await mps.checkTransactionStatus(String(entityId), 'fedapay')).amount).toBeUndefined();
+    (Transaction.retrieve as jest.Mock).mockResolvedValueOnce(live(entityId, { amount: '5000' }));
+    expect((await mps.checkTransactionStatus(String(entityId), 'fedapay')).amount).toBe(5000);
+    (Transaction.retrieve as jest.Mock).mockResolvedValueOnce(live(entityId, { amount: 0 }));
+    expect((await mps.checkTransactionStatus(String(entityId), 'fedapay')).amount).toBe(0);
+  });
+});
+
+describe('QA #587 A2: late success on a superseded FedaPay order row uses withFedaPayRecheckId', () => {
+  const superseded = { payment_entity: 'order', entity_id: 'order-1', status: 'cancelled', error_code: 'SUPERSEDED_BY_RETRY', transaction_id: null };
+
+  it('a row with no transaction_id is re-checked by the webhook entity id, credited once and closed', async () => {
+    const { entityId, row, db, deposits, controller } = build(superseded);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId));
+
+    const res = await controller.fedapayCallback(signedRequest(entityId));
+
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(Transaction.retrieve).toHaveBeenCalledWith(entityId, expect.anything());
+    expect(deposits).toHaveLength(1);
+    expect(db.byId.get(row.id)).toEqual(
+      expect.objectContaining({ status: 'success', transaction_id: String(entityId) })
+    );
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('the entity-id re-check still requires the reference to match (fail closed): acknowledged, no credit', async () => {
+    const { entityId, row, db, deposits, controller } = build(superseded);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(
+      live(entityId, { custom_metadata: { externalId: LIVE_REF_OTHER } })
+    );
+    const res = await controller.fedapayCallback(signedRequest(entityId));
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(deposits).toHaveLength(0);
+    expect(db.byId.get(row.id)?.status).toBe('cancelled');
+    expect(anomalies()).toHaveLength(1);
+    expect(anomalies()[0][3]).toEqual(expect.objectContaining({ reason: 'reference_mismatch' }));
+  });
+
+  it('withFedaPayRecheckId never substitutes an id for a non-FedaPay row', () => {
+    const { processor } = build();
+    const mypvitRow = { id: 'tx-m', provider: 'mypvit', transaction_id: null, reference: 'R-1' };
+    expect((processor as any).withFedaPayRecheckId(mypvitRow, '123')).toBe(mypvitRow);
+    const fedaRow = { id: 'tx-f', provider: 'fedapay', transaction_id: null, reference: 'R-1' };
+    expect((processor as any).withFedaPayRecheckId(fedaRow, '123')).toEqual({ ...fedaRow, transaction_id: '123' });
+    expect((processor as any).withFedaPayRecheckId(fedaRow, '')).toBe(fedaRow);
+  });
+});
+
+describe('QA #587 A3: a FedaPay refund after we credited raises a money anomaly', () => {
+  it.each([
+    ['transaction.refunded on a success row', 'success', 'transaction.refunded'],
+    ['transaction.updated (status refunded) on a success row', 'success', 'transaction.updated'],
+    ['transaction.refunded while the credit is in flight (processing)', 'processing', 'transaction.refunded'],
+  ])('%s -> 2xx, one fedapay_refund_after_credit alert, no write, no live call', async (_l, rowStatus, eventName) => {
+    const { entityId, row, db, deposits, controller } = build({ status: rowStatus, error_code: 'LATE_SUCCESS_APPLIED' });
+
+    const res = await controller.fedapayCallback(signedRequest(entityId, 'refunded', eventName));
+
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    for (const value of [STORED_REF, row.id, '5000', 'refund']) expect(JSON.stringify(res)).not.toContain(value);
+    expect(anomalies()).toHaveLength(1);
+    const [, marker, message, context] = anomalies()[0];
+    expect(marker).toBe('fedapay_refund_after_credit');
+    expect(message).toContain(`FedaPay refunded tx ${row.id} after we credited it (row ${rowStatus}, LATE_SUCCESS_APPLIED)`);
+    expect(context).toEqual(
+      expect.objectContaining({ transactionId: row.id, reference: STORED_REF, amount: 5000, rowStatus, event: eventName, fedapayEntityId: entityId })
+    );
+    expect(db.logCallback).toHaveBeenCalledWith(row.id, expect.anything());
+    expect(db.updateTransaction).not.toHaveBeenCalled();
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(db.byId.get(row.id)?.status).toBe(rowStatus);
+    expect(deposits).toHaveLength(0);
+    expect(Transaction.retrieve).not.toHaveBeenCalled();
+  });
+
+  it.each([['pending'], ['failed'], ['cancelled']])(
+    'a refund on a %s row (never credited) -> 2xx, no alert, no write',
+    async (rowStatus) => {
+      const { entityId, row, db, controller } = build({ status: rowStatus });
+      const res = await controller.fedapayCallback(signedRequest(entityId, 'refunded'));
+      expect(res).toEqual({ received: true, transactionId: entityId });
+      expect(anomalies()).toHaveLength(0);
+      expect(db.updateTransaction).not.toHaveBeenCalled();
+      expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+      expect(db.byId.get(row.id)?.status).toBe(rowStatus);
+    }
+  );
+
+  it('a refund for an unknown entity -> 2xx, no alert', async () => {
+    const { controller } = build({ transaction_id: 'other', reference: 'OTHER-REF' });
+    const res = await controller.fedapayCallback(signedRequest(999_999_1, 'refunded'));
+    expect(res).toEqual({ received: true, transactionId: 999_999_1 });
     expect(anomalies()).toHaveLength(0);
   });
 });

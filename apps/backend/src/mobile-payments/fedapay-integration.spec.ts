@@ -1,3 +1,4 @@
+import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -372,7 +373,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch', detail: expect.stringMatching(/expected REF789, live WRONG_REF/) });
     });
 
-    it('should reject when live currency is missing (fail closed)', async () => {
+    it('should reject when live currency is missing (transient: plain error, FedaPay retries; QA #587 A1)', async () => {
       const tx = {
         id: 'tx-4',
         transaction_id: 'fedapay_tx_4',
@@ -392,7 +393,38 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'missing_live_currency' });
+      ).rejects.toThrow(/live record has no currency \(transient, will retry\)/);
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.not.toBeInstanceOf(CallbackLiveMismatchError);
+    });
+
+    it.each([
+      ['undefined', undefined],
+      ['null', null],
+      ['non-numeric', 'n/a'],
+    ])('should reject when live amount is %s (transient, QA #587 A1)', async (_l, amount) => {
+      const tx = {
+        id: 'tx-amt',
+        transaction_id: 'feda-amt',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF111',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount,
+        currency: 'XOF',
+        merchantRef: 'REF111',
+        reference: 'feda-amt',
+      });
+      process.env.ENABLE_FEDAPAY_TOGO_INTEGRATION = 'false';
+      const err = await realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS').catch((e: unknown) => e);
+      expect(err).not.toBeInstanceOf(CallbackLiveMismatchError);
+      expect(String((err as Error).message)).toMatch(/live record has no amount \(transient, will retry\)/);
+      expect(String((err as Error).message)).not.toContain('1000');
     });
 
     it('should reject when live reference is missing (fail closed)', async () => {
