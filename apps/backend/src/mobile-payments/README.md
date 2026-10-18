@@ -87,7 +87,7 @@ Overwrites the live MyPVit operation-account secret, so it fails closed:
   - Exact IPv4 match only: no CIDR ranges and no IPv6 (an IPv4-mapped `::ffff:a.b.c.d` is normalised to `a.b.c.d`).
   - `req.ip` is only trustworthy with `trust proxy = 1` (one hop: the Lightsail load balancer). The backend refuses to start in production if `TRUST_PROXY` resolves to anything else; leave it unset or set it to `1`.
 - **One answer for every auth failure:** the IP check and the token compare always both run, and an unconfigured token, a non-allow-listed IP and a wrong token all return the same `401 {"success":false,"message":"Unauthorized"}`. The reason (and the caller IP) goes to the log only.
-- **Account codes:** `MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE` and `MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE` must be set. There is no fallback in code: `MyPVitService` throws at construction, so **the backend fails at boot** when either is missing or blank. Identical codes still boot (payments work; DEV's sandbox config uses one account for both), but `MyPVitService` warns, and this webhook refuses deliveries with 503 because it can't tell which key to rotate.
+- **Account codes:** `MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE` and `MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE` must be set. There is no fallback in code: `MyPVitService` throws at construction, so **the backend fails at boot** when either is missing or blank. Identical codes mean one MyPVit account with one secret (DEV's sandbox config uses one account for both). Outside production they boot with a warning, and this webhook stores the delivered key under **both** `AIRTEL_MYPVIT_SECRET_KEY` and `MOOV_MYPVIT_SECRET_KEY` in a single Secrets Manager write. **In production** (`NODE_ENV` or `DEPLOYMENT_ENV` = `production`) identical codes are a misconfiguration and **fail boot**.
 - **Secret name:** `MYPVIT_SECRET_NAME` wins if set. Otherwise the same rule as `main.ts`: `DEPLOYMENT_ENV` (then `NODE_ENV`) equal to `production` gives `production-rendasua-backend-secrets`; anything else gives `development-rendasua-backend-secrets`. The webhook writer and `MyPVitService`'s reader use the same function.
 - **Old URL:** the unauthenticated `POST /mobile-payments/secret-refresh` always returns 401.
 
@@ -102,7 +102,7 @@ Overwrites the live MyPVit operation-account secret, so it fails closed:
 - `200 { "success": true, "data": { "updated_at": "…" } }`. It echoes nothing about the secret store.
 - 401: any auth failure (token missing/wrong/unconfigured, or IP not allowed), identical body.
 - 400: invalid payload (missing/blank/oversized secret, missing account code) or unknown account code.
-- 503: account codes identical (or missing at request time, defence in depth).
+- 503: account codes missing at request time (defence in depth; boot already fails without them). Identical codes are not an error: the key is stored under both names.
 - 500: store failure, with a generic body; only the error class name is logged.
 
 **Deploy runbook (do these in order):**
@@ -110,7 +110,7 @@ Overwrites the live MyPVit operation-account secret, so it fails closed:
 2. Deploy the backend. Confirm it started (no "MyPVit misconfigured" / "Refusing to start: trust proxy" in the logs).
 3. In the MyPVit portal, update the reception URL code `BQ1TV` (prod; `TRUVU` on DEV) to `https://<api-host>/api/mobile-payments/secret-refresh/<token>`.
 4. Invoke the `refresh-airtel-…` and `refresh-moov-…` Lambdas once by hand.
-5. Confirm the backend log line `MyPVit secret refresh stored AIRTEL_MYPVIT_SECRET_KEY` (and `MOOV_…`) and that a MyPVit status call still works.
+5. Confirm the backend log line `MyPVit secret refresh stored AIRTEL_MYPVIT_SECRET_KEY` (and `MOOV_…`) and that a MyPVit status call still works. With identical codes (DEV) it is one line: `stored AIRTEL_MYPVIT_SECRET_KEY and MOOV_MYPVIT_SECRET_KEY`.
 6. Rollback: redeploy the previous image and point `BQ1TV` back to `/api/mobile-payments/secret-refresh`. The secrets already stored stay valid; only the new token entry becomes unused.
 
 #### Perform KYC
