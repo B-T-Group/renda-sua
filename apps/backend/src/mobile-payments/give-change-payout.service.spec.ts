@@ -110,6 +110,34 @@ describe('GiveChangePayoutService', () => {
       expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledTimes(1);
     });
 
+    it('keeps the hold when FedaPay reports an ambiguous payout', async () => {
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: true,
+        transactionId: 'fedapay-payout-amb',
+        provider: 'fedapay',
+        status: 'pending',
+        reason: 'provider_ambiguous',
+        message: 'Payout send timed out',
+      });
+
+      const result = await service.executeGiveChangePayout(params, {
+        throwOnWithdrawalFailure: false,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toMatchObject({
+        providerTransactionId: 'fedapay-payout-amb',
+        status: 'pending',
+        reason: 'provider_ambiguous',
+      });
+      expect(databaseService.updateTransaction).toHaveBeenCalledWith('mobile-tx-1', {
+        transaction_id: 'fedapay-payout-amb',
+        status: 'pending',
+      });
+      expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+      expect(accountsService.registerHoldIfNotExists).toHaveBeenCalledTimes(1);
+    });
+
     it('does not write transaction_id when the provider returned none', async () => {
       mobilePaymentsService.initiatePayment.mockResolvedValue({
         success: false,
