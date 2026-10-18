@@ -12,12 +12,30 @@ interface SanitizedError {
 }
 
 /**
- * Keys whose values are always secret, in JSON / header / query forms. Quoted values are
- * redacted up to the closing quote; unquoted ones up to the next separator, except an
- * unquoted Authorization value, which runs to the end of the line ("Token abc").
+ * Keys whose values are always secret, in JSON / header / query forms.
+ * - Quoted values are redacted up to the closing quote, honouring backslash escapes. An
+ *   unterminated quote (e.g. after truncation) is redacted to the end of the line/input.
+ * - Unquoted values are redacted up to the next separator, except an unquoted Authorization
+ *   value, which runs to the end of the line ("Token abc").
+ *
+ * Performance (QA #589 D1): this runs synchronously on attacker-controlled text (request
+ * URLs in every sampled Sentry transaction, provider error bodies). The key prefix is
+ * anchored with a lookbehind (a match can only start where a [\w-] run starts) and bounded
+ * to 40 chars, so the scan is linear. An unanchored lazy `[\w-]*?` here was quadratic
+ * (16 KB took ~400 ms).
  */
-const SECRET_KEY_VALUE =
-  /((?:["']?)[\w-]*?(new_secret_key|secret[_-]?key|x[_-]secret|api[_-]?key|app[_-]?key|password|token|authorization)["']?\s*[:=]\s*)(?:(["'])([^"'\r\n]*)\3|([^"',}\s&]+(?:[ \t]+[^"',}\s&]+)*))/gi;
+const SECRET_KEY_NAMES =
+  'new_secret_key|secret[_-]?key|client[_-]?secret|x[_-]secret|api[_-]?key|app[_-]?key|password|token|authorization|secret';
+const SECRET_KEY_VALUE = new RegExp(
+  `((?<![\\w-])["']?[\\w-]{0,40}?(${SECRET_KEY_NAMES})["']?\\s*[:=]\\s*)` +
+    `(?:(["'])((?:\\\\.|(?!\\3)[^\\\\\\r\\n])*)(?:\\3|(?=[\\r\\n])|$)` +
+    `|([^"',}\\s&]+(?:[ \\t]+[^"',}\\s&]+)*))`,
+  'gi'
+);
+
+/** redactSecrets never scans more than this many characters (QA #589 D1). */
+export const MAX_REDACT_INPUT = 8192;
+const TRUNCATED_MARKER = '…[truncated]';
 
 function redactKeyValue(
   match: string,
@@ -56,19 +74,28 @@ export function safeStringify(value: unknown): string {
 
 /**
  * Redact API keys, bearer tokens and basic credentials from text.
- * Patterns: sk_(live|sandbox|test)_..., Bearer <token>, Basic <base64>, and key/value forms
- * (secret_key, new_secret_key, X-Secret, apiKey, app_key, secretKey, password, token,
- * Authorization) in JSON, header and query syntax. Non-string input is stringified first.
+ * Patterns: sk_(live|sandbox|test)_..., pk_(live|test)_..., whsec_..., Bearer <token>,
+ * Basic <base64>, and key/value forms (secret, secret_key, new_secret_key, client_secret,
+ * X-Secret, apiKey, app_key, secretKey, password, token, Authorization) in JSON, header and
+ * query syntax. Non-string input is stringified first; input is capped at MAX_REDACT_INPUT.
  */
 export function redactSecrets(text: unknown): string {
-  const input = safeStringify(text);
+  let input = safeStringify(text);
   if (!input) return input;
+  // Bound the work on attacker-controlled input; nothing past the cap is ever emitted.
+  if (input.length > MAX_REDACT_INPUT) {
+    input = `${input.slice(0, MAX_REDACT_INPUT)}${TRUNCATED_MARKER}`;
+  }
 
   // Redact FedaPay/Stripe-style keys (keep the type visible but redact the value)
   let redacted = input.replace(
     /sk_(live|sandbox|test)_[A-Za-z0-9_-]+/gi,
     'sk_$1_REDACTED'
   );
+
+  // Stripe-style publishable keys and webhook signing secrets (QA #589 D4)
+  redacted = redacted.replace(/pk_(live|test)_[A-Za-z0-9_-]+/gi, 'pk_$1_REDACTED');
+  redacted = redacted.replace(/whsec_[A-Za-z0-9_+/=-]+/gi, 'whsec_REDACTED');
 
   // Redact Bearer tokens (base64 / JWT / opaque, including + / = ~)
   redacted = redacted.replace(
@@ -159,7 +186,8 @@ export function redactProviderPayload(payload: unknown, maxLength = 500): string
       text = '[unserializable payload]';
     }
   }
-  const redacted = redactSecrets(text ?? '');
+  // Cap before redacting so a huge provider body never costs more than a bounded scan.
+  const redacted = redactSecrets((text ?? '').slice(0, maxLength * 4));
   return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…` : redacted;
 }
 

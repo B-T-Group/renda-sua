@@ -26,14 +26,27 @@ export function initSentry(): void {
   });
 }
 
+/**
+ * Fail closed (QA #589 D3): an event we could not fully scrub is never sent. Returning null
+ * from the hook drops it; letting the hook throw would make the SDK send its own
+ * "Event processing pipeline threw" event instead.
+ */
+export function scrubAll<E>(event: E): E | null {
+  try {
+    return scrubSentryEvent(event);
+  } catch {
+    return null;
+  }
+}
+
 /** Drops expected-unavailable noise, then scrubs bodies, credentials and secrets. */
 export function sentryBeforeSend<E>(event: E, hint?: { originalException?: unknown }): E | null {
   if (isExpectedUnavailable(hint?.originalException)) return null;
-  return scrubSentryEvent(event);
+  return scrubAll(event);
 }
 
-export function sentryBeforeSendTransaction<E>(event: E): E {
-  return scrubSentryEvent(event);
+export function sentryBeforeSendTransaction<E>(event: E): E | null {
+  return scrubAll(event);
 }
 
 const EXPECTED_UNAVAILABLE_MESSAGES = [
