@@ -24,13 +24,17 @@ Each topic sends notifications for both **ALARM** (when threshold is breached) a
 ### Metric Details
 
 - **Namespace**: `Rendasua/Backend`
-- **Metric Name**: `FedapayLiveRecordIncomplete`
-- **Dimension**: `Environment` (either `dev` or `production`)
+- **Metric Names**: Per-environment to avoid dimension conflicts
+  - Dev: `FedapayLiveRecordIncomplete-dev`
+  - Production: `FedapayLiveRecordIncomplete-production`
 - **Unit**: Count (each log occurrence increments by 1)
+- **Filter Pattern**: JSON pattern matching message field: `{ $.message = "fedapay_live_record_incomplete tx=*" }`
+  - Parses JSON log format
+  - Prevents false matches on variants like `fedapay_live_record_incomplete_repeated`
 
 ### Alarm Configuration
 
-- **Threshold**: Sum >= 3 over a single 15-minute evaluation period
+- **Threshold**: Sum >= 2 over a single 1-hour evaluation period
 - **Missing Data Treatment**: `NOT_BREACHING` (missing data doesn't trigger the alarm)
 - **Alarm Names**:
   - Dev: `fedapay-live-record-incomplete-dev`
@@ -156,13 +160,23 @@ aws cloudwatch describe-alarms \
 To verify the metric is being published after the backend emits the marker:
 
 ```bash
+# Dev environment
 aws cloudwatch get-metric-statistics \
   --namespace Rendasua/Backend \
-  --metric-name FedapayLiveRecordIncomplete \
-  --dimensions Name=Environment,Value=dev \
-  --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
+  --metric-name FedapayLiveRecordIncomplete-dev \
+  --start-time $(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%S) \
   --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 900 \
+  --period 3600 \
+  --statistics Sum \
+  --region ca-central-1
+
+# Production environment
+aws cloudwatch get-metric-statistics \
+  --namespace Rendasua/Backend \
+  --metric-name FedapayLiveRecordIncomplete-production \
+  --start-time $(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%S) \
+  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+  --period 3600 \
   --statistics Sum \
   --region ca-central-1
 ```
@@ -189,8 +203,8 @@ View topics and subscriptions:
 
 ### Alarm States
 
-- **OK**: No incomplete records detected (< 3 in 15 minutes)
-- **ALARM**: 3 or more incomplete records detected in a 15-minute window
+- **OK**: Fewer than 2 incomplete records detected in a 1-hour window
+- **ALARM**: 2 or more incomplete records detected in a 1-hour window
 - **INSUFFICIENT_DATA**: Alarm just created or no data points yet
 
 ### Email Notifications
@@ -299,13 +313,13 @@ Then redeploy the stack.
 
 4. Check metric data points:
    ```bash
+   # Dev
    aws cloudwatch get-metric-statistics \
      --namespace Rendasua/Backend \
-     --metric-name FedapayLiveRecordIncomplete \
-     --dimensions Name=Environment,Value=dev \
-     --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
+     --metric-name FedapayLiveRecordIncomplete-dev \
+     --start-time $(date -u -d '2 hours ago' +%Y-%m-%dT%H:%M:%S) \
      --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-     --period 900 \
+     --period 3600 \
      --statistics Sum \
      --region ca-central-1
    ```
@@ -364,18 +378,4 @@ npx cdk destroy FedapayMonitoring-production
 
 After deployment, the stack exports these values:
 
-- `FedapayMonitoringSnsTopicArn-{env}`: SNS topic ARN for alerts
-- `FedapayLiveRecordIncompleteFilterName-{env}`: Metric filter logical ID
-- `FedapayLiveRecordIncompleteAlarmName-{env}`: Alarm name
-- `MetricNamespace-{env}`: CloudWatch metric namespace (Rendasua/Backend)
-- `MetricName-{env}`: CloudWatch metric name (FedapayLiveRecordIncomplete)
-
-Example: Get the SNS topic ARN from stack outputs:
-
-```bash
-aws cloudformation describe-stacks \
-  --stack-name FedapayMonitoring-dev \
-  --query 'Stacks[0].Outputs[?OutputKey==`SnsTopicArndev`].OutputValue' \
-  --output text \
-  --region ca-central-1
-```
+- `SnsTopicArn-{env}`: SNS topic ARN for alerts
