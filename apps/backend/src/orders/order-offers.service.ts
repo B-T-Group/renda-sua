@@ -7,6 +7,7 @@ import type { Configuration } from '../config/configuration';
 import { EligibleAgentsQueryService } from '../delivery-availability/eligible-agents-query.service';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { normalizeDeliveryCountryCode } from './delivery-pricing.util';
+import { resolveDispatchRadiusKm } from './dispatch-radius.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
@@ -196,10 +197,7 @@ export class OrderOffersService {
       const country = normalizeDeliveryCountryCode(
         order.business_location?.address?.country
       );
-      const maxDistanceKm =
-        await this.deliveryConfigService.getDeliveryAvailabilityRadiusKm(
-          country
-        );
+      const maxDistanceKm = await this.resolveRoundRadiusKm(round, country);
       const candidates = await this.findClosestEligibleAgents(
         order,
         pickupLat,
@@ -236,6 +234,22 @@ export class OrderOffersService {
         }`
       );
     }
+  }
+
+  /** Round 1 = round1RadiusKm (default: country checkout radius); round 2 = round2RadiusKm. */
+  private async resolveRoundRadiusKm(
+    round: number,
+    country: string
+  ): Promise<number> {
+    const offersConfig = this.configService.get('orderOffers');
+    const countryRadiusKm =
+      await this.deliveryConfigService.getDeliveryAvailabilityRadiusKm(country);
+    return resolveDispatchRadiusKm({
+      round,
+      countryRadiusKm,
+      round1RadiusKm: offersConfig?.round1RadiusKm,
+      round2RadiusKm: offersConfig?.round2RadiusKm,
+    });
   }
 
   private isDispatchable(order: OfferOrderDetails): boolean {

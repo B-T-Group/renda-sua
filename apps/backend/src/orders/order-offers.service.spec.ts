@@ -16,6 +16,7 @@ describe('OrderOffersService', () => {
   let notificationsService: jest.Mocked<NotificationsService>;
   let paymentRoutingService: any;
   let agentHoldService: any;
+  let offersConfig: Record<string, unknown>;
 
   const now = new Date('2026-01-01T00:00:00.000Z');
 
@@ -35,9 +36,10 @@ describe('OrderOffersService', () => {
       sendOrderOfferCancelledPush: jest.fn(),
     } as unknown as jest.Mocked<NotificationsService>;
 
+    offersConfig = { ttlSeconds: 45, maxAgents: 2 };
     const configService = {
       get: jest.fn((key: string) =>
-        key === 'orderOffers' ? { ttlSeconds: 45, maxAgents: 2 } : undefined
+        key === 'orderOffers' ? offersConfig : undefined
       ),
     } as unknown as jest.Mocked<ConfigService<Configuration>>;
 
@@ -385,6 +387,113 @@ describe('OrderOffersService', () => {
     });
   });
 
+  describe('round radius (round1RadiusKm / round2RadiusKm)', () => {
+    // Pickup at lat 4, lon 9. 0.01 deg lat ~= 1.11 km.
+    function mockDispatch(
+      agents: ReturnType<typeof buildAgentLocation>[],
+      orderOverrides: Record<string, unknown> = {}
+    ) {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('orders_by_pk')) {
+            return { orders_by_pk: { ...buildOfferOrder(), ...orderOverrides } };
+          }
+          if (query.includes('agent_locations')) {
+            return { agent_locations: agents };
+          }
+          if (query.includes('mobile_push_tokens')) {
+            return {
+              mobile_push_tokens: agents.map((a) => ({ user_id: a.agent.user.id })),
+            };
+          }
+          if (query.includes('pickup_reliability_score')) {
+            return {
+              agents: agents.map((a) => ({
+                id: a.agent.id,
+                pickup_reliability_score: 100,
+              })),
+            };
+          }
+          return {};
+        }
+      );
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        insert_order_offers: { affected_rows: 1 },
+        update_orders_by_pk: { id: 'order-1' },
+      });
+      commissionsService.calculateAgentEarnings.mockResolvedValue({
+        totalEarnings: 400,
+        currency: 'XAF',
+      } as any);
+      notificationsService.sendOrderOfferPush.mockResolvedValue(undefined);
+    }
+
+    const agents = () => [
+      buildAgentLocation('agent-3km', 'user-3km', 4.027),
+      buildAgentLocation('agent-7km', 'user-7km', 4.063),
+      buildAgentLocation('agent-15km', 'user-15km', 4.135),
+      buildAgentLocation('agent-30km', 'user-30km', 4.27),
+    ];
+
+    beforeEach(() => {
+      offersConfig = { ttlSeconds: 45, maxAgents: 10, round2RadiusKm: 20 };
+    });
+
+    it('round 1 defaults to the country checkout radius when round1RadiusKm is unset', async () => {
+      mockDispatch(agents());
+
+      await service.runDispatchRound('order-1', 1);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-3km',
+      ]);
+    });
+
+    it('round 1 reads round1RadiusKm when configured', async () => {
+      offersConfig = { ...offersConfig, round1RadiusKm: 8 };
+      mockDispatch(agents());
+
+      await service.runDispatchRound('order-1', 1);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-3km',
+        'agent-7km',
+      ]);
+    });
+
+    it('round 2 widens to round2RadiusKm instead of reusing the round 1 radius', async () => {
+      mockDispatch(agents(), { dispatch_round: 1 });
+
+      await service.runDispatchRound('order-1', 2);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-3km',
+        'agent-7km',
+        'agent-15km',
+      ]);
+    });
+
+    it('does not offer agents whose last GPS update is older than 30 minutes', async () => {
+      const stale = new Date(now.getTime() - 31 * 60 * 1000).toISOString();
+      mockDispatch([
+        buildAgentLocation('agent-stale', 'user-stale', 4.005, {
+          updated_at: stale,
+        }),
+        buildAgentLocation('agent-fresh', 'user-fresh', 4.02),
+      ]);
+
+      await service.runDispatchRound('order-1', 1);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-fresh',
+      ]);
+      expect(notificationsService.sendOrderOfferPush).toHaveBeenCalledTimes(1);
+      expect(notificationsService.sendOrderOfferPush).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-fresh' })
+      );
+    });
+  });
+
   function getInsertedOffers() {
     const call = hasuraSystemService.executeMutation.mock.calls.find(
       (c) =>
@@ -450,6 +559,8 @@ describe('OrderOffersService', () => {
     return {
       latitude,
       longitude: 9,
+      updated_at:
+        (overrides.updated_at as string | undefined) ?? now.toISOString(),
       agent: {
         id: agentId,
         is_available: overrides.is_available ?? true,

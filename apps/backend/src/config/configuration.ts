@@ -400,9 +400,15 @@ export interface OrderOffersConfig {
   maxAgents: number;
   /** Minutes before the scheduled delivery/pickup window that agent dispatch opens. */
   dispatchLeadMinutes: number;
-  /** Round 1 (closest agents) search radius in km. */
-  round1RadiusKm: number;
-  /** Round 2 (escalated) search radius in km. */
+  /**
+   * Round 1 (closest agents) search radius in km. Null (env unset) means the
+   * country `delivery_availability_radius_km`, the same radius checkout uses,
+   * so round 1 only reaches agents that made delivery available.
+   */
+  round1RadiusKm: number | null;
+  /**
+   * Round 2 (escalated) search radius in km. Never narrower than round 1.
+   */
   round2RadiusKm: number;
   /** Seconds to wait after a round's offers expire before escalating/finalizing. */
   roundGapSeconds: number;
@@ -416,6 +422,12 @@ export interface DeliveryAvailabilityConfig {
    * disable the hard gate (rollback lever) while keeping evaluation/logging.
    */
   enforceEnabled: boolean;
+  /**
+   * Agents whose last GPS update (`agent_locations.updated_at`) is older than
+   * this many minutes are not eligible: no checkout availability, no nearby
+   * badge, no offers. AGENT_LOCATION_MAX_AGE_MINUTES, default 30; 0 disables.
+   */
+  agentLocationMaxAgeMinutes: number;
 }
 
 /** Shared secret for Lambda → Nest internal notification routes (e.g. SMS). */
@@ -719,6 +731,25 @@ function parseDiasporaFxRates(value: string | undefined): Record<string, number>
     rates[key] = parsed;
   }
   return rates;
+}
+
+/** Positive number from env, or null when unset/blank/invalid. */
+export function parseOptionalPositiveNumber(
+  value: string | undefined
+): number | null {
+  if (value == null || value.trim() === '') return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+/** Non-negative integer from env, or the fallback when unset/invalid. */
+export function parseNonNegativeInt(
+  value: string | undefined,
+  fallback: number
+): number {
+  if (value == null || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 // Secrets are now loaded in main.ts before NestJS starts
@@ -1207,7 +1238,9 @@ export default (): Configuration => {
         process.env.OFFER_DISPATCH_LEAD_MINUTES ?? '30',
         10
       ),
-      round1RadiusKm: parseFloat(process.env.OFFER_ROUND1_RADIUS_KM ?? '8'),
+      round1RadiusKm: parseOptionalPositiveNumber(
+        process.env.OFFER_ROUND1_RADIUS_KM
+      ),
       round2RadiusKm: parseFloat(process.env.OFFER_ROUND2_RADIUS_KM ?? '20'),
       roundGapSeconds: parseInt(
         process.env.OFFER_ROUND_GAP_SECONDS ??
@@ -1218,6 +1251,10 @@ export default (): Configuration => {
     },
     deliveryAvailability: {
       enforceEnabled: process.env.DELIVERY_AVAILABILITY_ENFORCE !== 'false',
+      agentLocationMaxAgeMinutes: parseNonNegativeInt(
+        process.env.AGENT_LOCATION_MAX_AGE_MINUTES,
+        30
+      ),
     },
     push: {
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
