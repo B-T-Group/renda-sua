@@ -799,7 +799,7 @@ export class MobilePaymentCallbackProcessor {
     // Try to apply the payment through the existing order payment handler
     try {
       const handlers = this.resolveHandlers();
-      const handler = findPaymentCallbackHandler(handlers, tx);
+      const handler = findPaymentCallbackHandler(handlers, tx.payment_entity);
       
       if (!handler) {
         this.logger.error(
@@ -821,7 +821,7 @@ export class MobilePaymentCallbackProcessor {
       }
 
       // Attempt to apply the payment
-      await handler.onSuccess(tx);
+      await handler.onPaymentSuccess(tx);
       
       // Mark success
       await this.databaseService.updateTransaction(tx.id, {

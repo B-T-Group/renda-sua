@@ -319,7 +319,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
     it('should handle failed order payment when declined then approved', async () => {
       const mockOrderHandler = {
         supportsPaymentEntity: jest.fn().mockReturnValue(true),
-        onSuccess: jest.fn().mockResolvedValue(undefined),
+        onPaymentSuccess: jest.fn().mockResolvedValue(undefined),
       };
 
       registryService.getHandlers.mockReturnValue([mockOrderHandler as any]);
@@ -367,7 +367,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       );
 
       // Verify order payment handler was called
-      expect(mockOrderHandler.onSuccess).toHaveBeenCalledWith(failedOrderPayment);
+      expect(mockOrderHandler.onPaymentSuccess).toHaveBeenCalledWith(failedOrderPayment);
 
       // Verify transaction marked as success
       expect(databaseService.updateTransaction).toHaveBeenCalledWith(
@@ -388,7 +388,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
     it('should raise anomaly if order payment cannot be applied safely', async () => {
       const mockOrderHandler = {
         supportsPaymentEntity: jest.fn().mockReturnValue(true),
-        onSuccess: jest.fn().mockRejectedValue(new Error('Order already paid')),
+        onPaymentSuccess: jest.fn().mockRejectedValue(new Error('Order already paid')),
       };
 
       registryService.getHandlers.mockReturnValue([mockOrderHandler as any]);
@@ -427,7 +427,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       await processor.processFedaPayCallback(approvedCallback);
 
       // Verify handler was attempted
-      expect(mockOrderHandler.onSuccess).toHaveBeenCalled();
+      expect(mockOrderHandler.onPaymentSuccess).toHaveBeenCalled();
 
       // Transaction should remain in processing (not marked success)
       const updateCalls = databaseService.updateTransaction.mock.calls;

@@ -412,10 +412,13 @@ export class ReelAiTokensService {
       });
       // G2: Schedule mock callback AFTER persisting transaction_id
       if (paymentResponse.transactionId.startsWith('mock-')) {
-        await this.mobilePaymentsService.scheduleMockCallback(
-          paymentResponse.transactionId,
-          reference
-        );
+        const tx = await this.mobilePaymentsDatabaseService.getTransactionById(transactionId);
+        if (tx) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentResponse.transactionId,
+            tx.reference
+          );
+        }
       }
       return;
     }
