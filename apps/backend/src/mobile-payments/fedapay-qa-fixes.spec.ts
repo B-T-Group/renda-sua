@@ -120,7 +120,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       );
     });
 
-    it('should still process transaction.updated with expired status', async () => {
+    it('should process transaction.expired event', async () => {
       const updatedExpired: FedaPayCallbackDto = {
         entity: {
           id: 789,
@@ -129,7 +129,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
           reference: 'REF-EXPIRED',
           custom_metadata: { externalId: 'REF-EXPIRED' },
         } as any,
-        name: 'transaction.updated',
+        name: 'transaction.expired',
       };
 
       mockDatabaseService.getTransactionByTransactionId.mockResolvedValue(expiredTx);

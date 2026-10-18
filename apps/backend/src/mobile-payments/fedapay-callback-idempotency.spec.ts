@@ -352,10 +352,10 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
   });
 
   describe('N5: expired status handling', () => {
-    it('handles transaction.updated with expired status as terminal failed', async () => {
+    it('handles transaction.expired event as terminal failed', async () => {
       const expiredCallback: FedaPayCallbackDto = {
         entity: { id: 456, status: 'expired', amount: 1000, reference: 'fedapay-tx-456', custom_metadata: { externalId: 'REF456' } } as any,
-        name: 'transaction.updated',
+        name: 'transaction.expired',
       };
       mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
       mockDatabaseService.logCallback.mockResolvedValue(undefined);
