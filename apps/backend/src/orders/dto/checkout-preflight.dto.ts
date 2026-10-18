@@ -257,6 +257,27 @@ export class CheckoutBlockerDto {
   details?: CookedFoodStoreClosedDetailsDto;
 }
 
+/** #594 AC-C1b: a scheduled slot a dedicated agent covers for this cart. */
+export class DedicatedCoveredSlotDto {
+  @ApiProperty({ description: 'Local date (YYYY-MM-DD) in the seller country timezone.' })
+  date!: string;
+
+  @ApiProperty({ description: 'delivery_time_slots.id; send it as delivery_window.slot_id.' })
+  slot_id!: string;
+
+  @ApiProperty({ enum: ['morning', 'afternoon', 'evening'] })
+  slot_key!: 'morning' | 'afternoon' | 'evening';
+
+  @ApiProperty({ description: 'Slot start, local HH:MM.' })
+  start!: string;
+
+  @ApiProperty({ description: 'Slot end, local HH:MM.' })
+  end!: string;
+
+  @ApiProperty({ description: 'Business pickup time for this slot, local HH:MM.' })
+  pickup_time!: string;
+}
+
 export class DeliveryAvailabilityDto {
   @ApiProperty({
     description:
@@ -269,6 +290,19 @@ export class DeliveryAvailabilityDto {
     nullable: true,
   })
   estimated_delivery_minutes!: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      '#594, only when dedicated agents are enabled for the seller country: whether ASAP delivery passes today\'s rules (same value as `available`). Named apart from the store-hours `asap_available`.',
+  })
+  delivery_asap_available?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      '#594, only when dedicated agents are enabled: scheduled slots (next 3 local days) a dedicated agent covers when ASAP delivery is unavailable because no agent is nearby. Empty when ASAP delivery is available, scheduling is not allowed, or delivery is blocked for another reason. Order create accepts delivery only for one of these slots when `delivery_asap_available` is false.',
+    type: [DedicatedCoveredSlotDto],
+  })
+  dedicated_covered_slots?: DedicatedCoveredSlotDto[];
 }
 
 export class CheckoutItemLineDto {

@@ -6,6 +6,7 @@ import { CommerceIntegrationsModule } from '../commerce-integrations/commerce-in
 import { CommissionsModule } from '../commissions/commissions.module';
 import { DeliveryAvailabilityModule } from '../delivery-availability/delivery-availability.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
+import { DedicatedCoverageModule } from '../dedicated-agents/dedicated-coverage.module';
 import { DeliveryModule } from '../delivery/delivery.module';
 import { LocationsModule } from '../locations/locations.module';
 import { GoogleModule } from '../google/google.module';
@@ -93,6 +94,8 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     AgentsModule,
     DeliveryModule,
     DeliveryAvailabilityModule,
+    // #594: preflight covered slots + order-create coverage flag check.
+    DedicatedCoverageModule,
     AgentContractsModule,
     DeliveryConfigModule,
     CommissionsModule,

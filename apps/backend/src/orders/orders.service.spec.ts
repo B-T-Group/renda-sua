@@ -2323,6 +2323,266 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('createOrder #594 dedicated coverage (scheduled windows only)', () => {
+    type EvalCtx = { dedicated?: { slotId?: string; preferredDate?: string } };
+    type GateError = { getStatus?: () => number; getResponse?: () => unknown } | null;
+    const STOP = new Error('stop-after-insert-variables');
+    const WINDOW = { slot_id: 'slot-afternoon', preferred_date: '2026-10-20' };
+    const NO_AGENT = {
+      available: false,
+      estimatedDeliveryMinutes: null,
+      reason: 'NO_ELIGIBLE_AGENT',
+      ruleId: 'agent-in-region',
+      metadata: { radiusKm: 10, eligibleAgentCount: 0 },
+    };
+    const COVERED = {
+      available: true,
+      estimatedDeliveryMinutes: null,
+      reason: null,
+      ruleId: null,
+      metadata: {
+        radiusKm: 10,
+        eligibleAgentCount: 0,
+        coverage: 'dedicated',
+        coverageSlotKey: 'afternoon',
+        coverageDate: '2026-10-20',
+        dedicatedAgentCount: 1,
+      },
+    };
+    const NEARBY = {
+      available: true,
+      estimatedDeliveryMinutes: 30,
+      reason: null,
+      ruleId: null,
+      metadata: { radiusKm: 10, eligibleAgentCount: 2 },
+    };
+
+    function inventoryFixture() {
+      return {
+        id: 'inventory-ded-1',
+        computed_available_quantity: 10,
+        selling_price: 5000,
+        is_active: true,
+        business_location_id: 'location-ded-1',
+        item_variant_id: null,
+        variant_price_overrides: [],
+        item_variant: null,
+        business_location: {
+          id: 'location-ded-1',
+          business_id: 'business-ded-1',
+          is_active: true,
+          operating_hours: null,
+          mobile_payment_phone: { is_verified: true },
+          address: { country: 'CM', city: 'Douala', state: 'Littoral', latitude: 4.05, longitude: 9.7 },
+          business: {
+            id: 'business-ded-1',
+            name: 'Dedicated Store',
+            can_accept_orders: true,
+            is_verified: true,
+            user: { id: 'merchant-ded', email: 'm@example.com', first_name: 'M', last_name: 'S', country: 'CM' },
+          },
+        },
+        item: {
+          id: 'item-ded-1',
+          name: 'Rice',
+          description: 'Rice',
+          pay_on_delivery_enabled: true,
+          pay_at_pickup_enabled: true,
+          shipping_enabled: false,
+          currency: 'XAF',
+          weight: 1,
+          max_order_quantity: null,
+          stripe_tax_code_id: null,
+          item_variants: [],
+          item_sub_category: { item_category: { name: 'Groceries' } },
+        },
+      };
+    }
+
+    /**
+     * Runs createOrder up to the order insert and returns the insert variables
+     * (or the HttpException the gate threw), plus the availability contexts.
+     */
+    async function place(opts: {
+      flag: boolean;
+      window?: typeof WINDOW | null;
+      evaluate: (ctx: EvalCtx) => unknown;
+    }) {
+      // Private collaborators are swapped the same way as the rest of this file.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const loose = service as any;
+      hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'client',
+        jwtAllowedRoles: ['client'],
+      });
+      hasuraSystemService.getAllUserAddresses.mockResolvedValue([
+        { id: 'address-ded', address_line_1: '1 Rue', city: 'Douala', state: 'Littoral', postal_code: '00237', country: 'CM', latitude: 4.06, longitude: 9.71 },
+      ] as never);
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'acc-ded', available_balance: 0 } as never);
+      loose.paymentRoutingService = {
+        resolveOrderRail: jest.fn().mockResolvedValue({ rail: 'mobile_money', isDiaspora: false }),
+        getUserCountryCode: jest.fn().mockResolvedValue('CM'),
+        getBusinessCountryCode: jest.fn().mockResolvedValue('CM'),
+        resolveTrustedPayerCountry: jest.fn().mockResolvedValue('CM'),
+      };
+      const isEnabled = jest.fn(async (country?: string | null) => opts.flag && country === 'CM');
+      loose.dedicatedAgentsConfig = { isEnabled };
+      const evaluate = jest.fn(async (ctx: EvalCtx) => opts.evaluate(ctx));
+      loose.deliveryAvailabilityService = { evaluate };
+      jest.spyOn(loose, 'isMarketFlagEnabled').mockResolvedValue(true);
+      jest.spyOn(loose, 'assertMerchantOpenForCheckout').mockResolvedValue(undefined);
+      jest.spyOn(loose, 'calculateItemDeliveryFee').mockResolvedValue({
+        baseDeliveryFee: 500,
+        perKmDeliveryFee: 0,
+        deliveryFee: 500,
+        method: 'flat_fee',
+        currency: 'XAF',
+        country: 'CM',
+        isFirstOrderClient: false,
+        firstOrderDeliveryFeePromo: false,
+        firstOrderBaseDeliveryDiscountAmount: 0,
+        baseDeliveryFeeBeforeDiscount: 500,
+      });
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({ business_inventory: [inventoryFixture()] })
+        .mockResolvedValueOnce({ supported_payment_systems: [] })
+        .mockResolvedValueOnce({ item_deals: [] });
+      let insertVars: Record<string, unknown> | null = null;
+      hasuraSystemService.executeMutation.mockImplementation(async (q: string, vars?: Record<string, unknown>) => {
+        if (q.includes('mutation CreateOrderWithItems')) {
+          insertVars = vars ?? null;
+          throw STOP;
+        }
+        return {};
+      });
+      let error: unknown = null;
+      try {
+        await service.createOrder({
+          fulfillment_method: 'delivery',
+          payment_timing: 'pay_at_delivery',
+          phone_number: '+237670000000',
+          items: [{ business_inventory_id: 'inventory-ded-1', quantity: 2 }],
+          delivery_address_id: 'address-ded',
+          ...(opts.window ? { delivery_window: opts.window } : {}),
+        });
+      } catch (e) {
+        error = e;
+      }
+      if (error === STOP) error = null;
+      return { insertVars: insertVars as Record<string, unknown> | null, error: error as GateError, evaluate, isEnabled };
+    }
+
+    const isCoveredCtx = (ctx: EvalCtx) =>
+      ctx.dedicated?.slotId === WINDOW.slot_id && ctx.dedicated?.preferredDate === WINDOW.preferred_date;
+
+    it('scheduled window covered only by a dedicated agent -> order inserted with coverage_slot_key', async () => {
+      const r = await place({
+        flag: true,
+        window: WINDOW,
+        evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT),
+      });
+      expect(r.error).toBeNull();
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: 'afternoon' }));
+      expect(r.evaluate).toHaveBeenCalledTimes(2);
+      // First pass is today's rules; the re-check carries the window, rail and this cart's subtotal.
+      expect(r.evaluate.mock.calls[0][0].dedicated).toBeUndefined();
+      expect(r.evaluate.mock.calls[1][0]).toEqual(
+        expect.objectContaining({
+          stage: 'place_order',
+          businessLocationId: 'location-ded-1',
+          dedicated: {
+            slotId: 'slot-afternoon',
+            preferredDate: '2026-10-20',
+            rail: 'mobile_money',
+            subtotal: 10000,
+            currency: 'XAF',
+          },
+        })
+      );
+    });
+
+    it('the insert mutation writes coverage_slot_key', async () => {
+      const r = await place({ flag: true, window: WINDOW, evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT) });
+      const insertQuery = hasuraSystemService.executeMutation.mock.calls.find(([q]) =>
+        String(q).includes('mutation CreateOrderWithItems')
+      )?.[0] as string;
+      expect(r.insertVars).not.toBeNull();
+      expect(insertQuery).toContain('coverage_slot_key: $coverageSlotKey');
+    });
+
+    it('scheduled window nobody covers -> 400 DELIVERY_UNAVAILABLE, no insert', async () => {
+      const r = await place({ flag: true, window: WINDOW, evaluate: () => NO_AGENT });
+      expect(r.insertVars).toBeNull();
+      expect(r.error?.getStatus?.()).toBe(400);
+      expect(r.error?.getResponse?.()).toMatchObject({ error: 'DELIVERY_UNAVAILABLE' });
+      expect(r.evaluate).toHaveBeenCalledTimes(2);
+    });
+
+    it('ASAP with only dedicated coverage stays DELIVERY_UNAVAILABLE (no dedicated re-check)', async () => {
+      const r = await place({ flag: true, window: null, evaluate: (ctx) => (ctx.dedicated ? COVERED : NO_AGENT) });
+      expect(r.insertVars).toBeNull();
+      expect(r.error?.getResponse?.()).toMatchObject({ error: 'DELIVERY_UNAVAILABLE' });
+      expect(r.evaluate).toHaveBeenCalledTimes(1);
+      expect(r.evaluate.mock.calls[0][0].dedicated).toBeUndefined();
+    });
+
+    it('a window with a slot but no date is not a scheduled window for coverage', async () => {
+      const r = await place({
+        flag: true,
+        window: { slot_id: 'slot-afternoon', preferred_date: '' },
+        evaluate: (ctx) => (ctx.dedicated ? COVERED : NO_AGENT),
+      });
+      expect(r.error?.getResponse?.()).toMatchObject({ error: 'DELIVERY_UNAVAILABLE' });
+      expect(r.evaluate).toHaveBeenCalledTimes(1);
+    });
+
+    it('flag off: scheduled window with no nearby agent is rejected exactly as before', async () => {
+      const r = await place({ flag: false, window: WINDOW, evaluate: (ctx) => (ctx.dedicated ? COVERED : NO_AGENT) });
+      expect(r.insertVars).toBeNull();
+      expect(r.error?.getResponse?.()).toMatchObject({ error: 'DELIVERY_UNAVAILABLE' });
+      expect(r.evaluate).toHaveBeenCalledTimes(1);
+      expect(r.evaluate.mock.calls[0][0].dedicated).toBeUndefined();
+    });
+
+    it('flag off: an available delivery order inserts coverage_slot_key null', async () => {
+      const r = await place({ flag: false, window: WINDOW, evaluate: () => NEARBY });
+      expect(r.error).toBeNull();
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: null }));
+      expect(r.evaluate).toHaveBeenCalledTimes(1);
+    });
+
+    it('nearby agent: one evaluation, no coverage_slot_key', async () => {
+      const r = await place({ flag: true, window: WINDOW, evaluate: (ctx) => (ctx.dedicated ? COVERED : NEARBY) });
+      expect(r.error).toBeNull();
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: null }));
+      expect(r.evaluate).toHaveBeenCalledTimes(1);
+    });
+
+    it('failure other than "no agent nearby" (e.g. service area off) is rejected at once', async () => {
+      const r = await place({
+        flag: true,
+        window: WINDOW,
+        evaluate: (ctx) =>
+          ctx.dedicated
+            ? COVERED
+            : { available: false, estimatedDeliveryMinutes: null, reason: 'SERVICE_AREA_DISABLED', ruleId: 'service-area-enabled' },
+      });
+      expect(r.insertVars).toBeNull();
+      expect(r.error?.getResponse?.()).toMatchObject({ error: 'DELIVERY_UNAVAILABLE' });
+      expect(r.evaluate).toHaveBeenCalledTimes(1);
+    });
+
+    it('DELIVERY_AVAILABILITY_ENFORCE=false: uncovered window still places, without coverage_slot_key', async () => {
+      configService.get.mockImplementation((key: string) =>
+        key === 'deliveryAvailability' ? { enforceEnabled: false } : undefined
+      );
+      const r = await place({ flag: true, window: WINDOW, evaluate: () => NO_AGENT });
+      expect(r.error).toBeNull();
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: null }));
+    });
+  });
+
   describe('captureStripeAuthorizedOrderIfNeeded', () => {
     const authorizedPickup = {
       id: 'order-123',

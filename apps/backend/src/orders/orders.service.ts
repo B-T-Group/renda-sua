@@ -28,6 +28,12 @@ import { canRecipientCompletePickup } from './recipient-pickup-complete.util';
 import type { Configuration } from '../config/configuration';
 import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import {
+  DedicatedDeliveryRequest,
+  DeliveryAvailabilityResult,
+  DeliveryUnavailableReason,
+} from '../delivery-availability/delivery-availability.types';
+import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import {
@@ -698,7 +704,9 @@ export class OrdersService {
     @Optional()
     private readonly moduleRef?: ModuleRef,
     @Optional()
-    private readonly agentContractGate?: AgentContractGateService
+    private readonly agentContractGate?: AgentContractGateService,
+    @Optional()
+    private readonly dedicatedAgentsConfig?: DedicatedAgentsConfigService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -13214,17 +13222,37 @@ export class OrdersService {
   }
 
   /**
+   * #594 AC-E1: the chosen window when this delivery order may use dedicated
+   * coverage: scheduled (slot + date) and the flag on for the seller country.
+   */
+  private async dedicatedCoverageWindow(
+    deliveryWindow: { slot_id?: string; preferred_date?: string } | null | undefined,
+    sellerCountry: string | null | undefined
+  ): Promise<Pick<DedicatedDeliveryRequest, 'slotId' | 'preferredDate'> | null> {
+    const slotId = deliveryWindow?.slot_id?.trim();
+    const preferredDate = deliveryWindow?.preferred_date?.trim();
+    if (!slotId || !preferredDate || !this.dedicatedAgentsConfig) return null;
+    const country = isoCountryCode(sellerCountry) ?? sellerCountry;
+    if (!(await this.dedicatedAgentsConfig.isEnabled(country))) return null;
+    return { slotId, preferredDate };
+  }
+
+  /**
    * Rejects delivery orders when the availability rules fail (unless
    * DELIVERY_AVAILABILITY_ENFORCE=false). The public error message never
-   * exposes the internal reason.
+   * exposes the internal reason. `deferNoNearbyAgent` (#594 scheduled
+   * windows) returns `deferred` instead of rejecting when the only failure is
+   * "no agent nearby", so the caller can re-check with `dedicated` once the
+   * rail and subtotal are known.
    */
   private async assertDeliveryAvailable(
     inventories: any[],
     deliveryAddress: any,
     clientId: string,
     requiresFastDelivery: boolean,
-    verifiedAgentDelivery: boolean
-  ): Promise<void> {
+    verifiedAgentDelivery: boolean,
+    options: { deferNoNearbyAgent?: boolean; dedicated?: DedicatedDeliveryRequest } = {}
+  ): Promise<{ result: DeliveryAvailabilityResult; deferred: boolean }> {
     const inventory = inventories[0];
     const address = inventory?.business_location?.address;
     const result = await this.deliveryAvailabilityService.evaluate(
@@ -13247,15 +13275,22 @@ export class OrdersService {
         verifiedAgentDelivery,
         clientId,
         stage: 'place_order',
+        dedicated: options.dedicated,
       })
     );
-    if (result.available) return;
+    if (result.available) return { result, deferred: false };
+    if (
+      options.deferNoNearbyAgent &&
+      result.reason === DeliveryUnavailableReason.NO_ELIGIBLE_AGENT
+    ) {
+      return { result, deferred: true };
+    }
 
     const enforce =
       this.configService.get<Configuration['deliveryAvailability']>(
         'deliveryAvailability'
       )?.enforceEnabled !== false;
-    if (!enforce) return;
+    if (!enforce) return { result, deferred: false };
 
     throw new HttpException(
       {
@@ -13858,14 +13893,28 @@ export class OrdersService {
     // Hard delivery availability gate — clients must not be able to place a
     // delivery order the platform cannot currently fulfill. The public error
     // intentionally carries no internal reason.
+    // #594: a scheduled window may still be served by a dedicated agent when
+    // nobody is nearby; that check needs the rail and subtotal, so it runs
+    // further down. ASAP orders and flag-off countries are unchanged.
+    const coverageWindow =
+      fulfillmentMethod === 'delivery'
+        ? await this.dedicatedCoverageWindow(
+            orderData.delivery_window,
+            businessInventories[0]?.business_location?.address?.country
+          )
+        : null;
+    let dedicatedGatePending = false;
     if (fulfillmentMethod === 'delivery') {
-      await this.assertDeliveryAvailable(
+      const gate = await this.assertDeliveryAvailable(
         businessInventories,
         address,
         client.id,
         orderData.requires_fast_delivery === true,
-        orderData.verified_agent_delivery === true
+        orderData.verified_agent_delivery === true,
+        { deferNoNearbyAgent: coverageWindow != null }
       );
+      // Existing specs stub this gate to resolve undefined.
+      dedicatedGatePending = gate?.deferred === true;
     }
 
     // Calculate total weight for delivery fee calculation (variant weight overrides item weight)
@@ -14086,6 +14135,28 @@ export class OrdersService {
         },
         HttpStatus.BAD_REQUEST
       );
+    }
+
+    // #594 AC-E1: nobody nearby, so delivery stands only if a dedicated agent
+    // covers the chosen slot for this cart (AgentInRegionRule dedicated pass).
+    let coverageSlotKey: string | null = null;
+    if (dedicatedGatePending && coverageWindow) {
+      const gate = await this.assertDeliveryAvailable(
+        businessInventories,
+        address,
+        client.id,
+        orderData.requires_fast_delivery === true,
+        orderData.verified_agent_delivery === true,
+        {
+          dedicated: {
+            ...coverageWindow,
+            rail: railResolution.rail,
+            subtotal: totalAmount,
+            currency,
+          },
+        }
+      );
+      coverageSlotKey = dedicatedCoverageSlotKey(gate?.result);
     }
 
     // MUST-FIX 2: Enforce momo_pay_now_delivery_enabled flag
@@ -14391,7 +14462,8 @@ export class OrdersService {
         $isCookedFoodPickup: Boolean!,
         $payAfterMerchantConfirm: Boolean!,
         $eatIn: Boolean!,
-        $serviceFee: numeric!
+        $serviceFee: numeric!,
+        $coverageSlotKey: String
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -14447,6 +14519,7 @@ export class OrdersService {
           is_cooked_food_pickup: $isCookedFoodPickup,
           pay_after_merchant_confirm: $payAfterMerchantConfirm,
           eat_in: $eatIn,
+          coverage_slot_key: $coverageSlotKey,
           order_items: {
             data: $orderItems
           }
@@ -14625,6 +14698,7 @@ export class OrdersService {
         isCookedFoodPickup,
         payAfterMerchantConfirm,
         eatIn,
+        coverageSlotKey,
       }
     );
 
@@ -18371,4 +18445,13 @@ export class OrdersService {
       );
     }
   }
+}
+
+/** Slot key the dedicated pass covered, stored as `orders.coverage_slot_key` (#594 AC-E1). */
+function dedicatedCoverageSlotKey(
+  result: DeliveryAvailabilityResult | undefined
+): string | null {
+  if (result?.metadata?.coverage !== 'dedicated') return null;
+  const key = result.metadata.coverageSlotKey;
+  return typeof key === 'string' && key ? key : null;
 }

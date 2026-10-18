@@ -41,10 +41,15 @@ import {
 import { computeEffectiveCapacity } from './dedicated-capacity.util';
 import { DEDICATED_AGENT_LOAD_QUERY, DEDICATED_AGENT_BALANCES_QUERY } from './dedicated-coverage.queries';
 import { DEDICATED_ACTIVE_ORDER_STATUSES, DedicatedCoverageService } from './dedicated-coverage.service';
-import { localDateTimeAt, timeToMinutes, type DedicatedSlotBounds } from './dedicated-slot.util';
+import {
+  defaultPickupTime,
+  localDateTimeAt,
+  shortTime,
+  timeToMinutes,
+  type DedicatedSlotBounds,
+} from './dedicated-slot.util';
 
-/** AC-B2: default pickup time is slot start + 30 min. */
-export const DEFAULT_PICKUP_OFFSET_MINUTES = 30;
+export { DEFAULT_PICKUP_OFFSET_MINUTES, defaultPickupTime } from './dedicated-slot.util';
 const DONE_STATUSES = ['delivered', 'complete'];
 const REMOVED_REASON_MAX = 500;
 
@@ -180,24 +185,6 @@ export interface MyDedicatedAssignment {
 
 function fullName(user: { first_name?: string | null; last_name?: string | null } | null | undefined): string {
   return [user?.first_name, user?.last_name].map((s) => (s ?? '').trim()).filter(Boolean).join(' ');
-}
-
-function minutesToTime(total: number): string {
-  const h = Math.floor(total / 60);
-  const m = total % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-}
-
-/** `HH:MM[:SS]` -> `HH:MM`. */
-function shortTime(time: string): string {
-  const minutes = timeToMinutes(time);
-  return minutes == null ? time : minutesToTime(minutes);
-}
-
-export function defaultPickupTime(slot: Pick<DedicatedSlotBounds, 'startTime' | 'endTime'>): string {
-  const start = timeToMinutes(slot.startTime) as number;
-  const end = timeToMinutes(slot.endTime) as number;
-  return minutesToTime(Math.min(start + DEFAULT_PICKUP_OFFSET_MINUTES, Math.max(start, end - 1)));
 }
 
 /** AC-B2: a pickup time must fall inside the slot's hours (start <= t < end). */

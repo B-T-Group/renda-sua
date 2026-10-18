@@ -140,6 +140,8 @@ export const SERVER_SITE_EVENT_TYPES = [
   'agent.claim_topup_failed',
   'agent.claim_topup_cancelled',
   'checkout.delivery_availability',
+  // #594 dedicated agents: delivery allowed only because a dedicated agent covers the slot
+  'dedicated.coverage_used_at_checkout',
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',

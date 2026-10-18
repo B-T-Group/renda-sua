@@ -11,19 +11,21 @@ import { DedicatedAgentsAgentController } from './dedicated-agents-agent.control
 import { DedicatedAgentsBusinessController } from './dedicated-agents-business.controller';
 import { DedicatedAgentsConfigModule } from './dedicated-agents-config.module';
 import { DedicatedAssignmentsService } from './dedicated-assignments.service';
-import { DedicatedCoverageService } from './dedicated-coverage.service';
+import { DedicatedCoverageModule } from './dedicated-coverage.module';
 import { DedicatedLocationAccessService } from './dedicated-location-access.service';
 
 /**
  * #594 dedicated delivery agents, behind `dedicated_agents_enabled` (off).
  * PR 1: config. PR 2: coverage/eligibility core. PR 3: assignment lifecycle
  * (super-user assign, business pause/remove, Off today, My stores) and
- * location pickup slots.
+ * location pickup slots. PR 4: coverage lives in DedicatedCoverageModule so
+ * checkout can use it.
  */
 @Module({
   imports: [
     HasuraModule,
     DedicatedAgentsConfigModule,
+    DedicatedCoverageModule,
     AgentsModule,
     AgentContractsModule,
     DeliveryConfigModule,
@@ -36,7 +38,7 @@ import { DedicatedLocationAccessService } from './dedicated-location-access.serv
     DedicatedAgentsBusinessController,
     DedicatedAgentsAgentController,
   ],
-  providers: [DedicatedCoverageService, DedicatedAssignmentsService, DedicatedLocationAccessService],
-  exports: [DedicatedAgentsConfigModule, DedicatedCoverageService, DedicatedAssignmentsService],
+  providers: [DedicatedAssignmentsService, DedicatedLocationAccessService],
+  exports: [DedicatedAgentsConfigModule, DedicatedCoverageModule, DedicatedAssignmentsService],
 })
 export class DedicatedAgentsModule {}
