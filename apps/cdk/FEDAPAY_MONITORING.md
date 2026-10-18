@@ -46,26 +46,37 @@ The metric filters monitor these CloudWatch Log Groups:
 
 ## Deployment
 
-### Standard Deployment Flow
+### Automatic Deployment Flow
 
-This infrastructure follows the normal Rendasua deployment process:
+This infrastructure deploys automatically through GitHub Actions:
 
 1. **QA Review**: Code review and approval on PR
-2. **Merge to main**: Merge approved PR
-3. **Deploy to dev**: Automatically or manually deploy to dev environment
-4. **Production promotion**: Deploy to production with the next main→prod promote
+2. **Merge to main**: Merge approved PR to main branch
+3. **Automatic dev deployment**: GitHub Actions deploys `FedapayMonitoring-dev` stack
+4. **Email confirmation**: Check `tech@rendasua.com` inbox and confirm SNS subscription
+5. **Production promotion**: Push to `prod` branch (main→prod promote)
+6. **Automatic prod deployment**: GitHub Actions deploys `FedapayMonitoring-production` stack
+7. **Email confirmation**: Confirm production SNS subscription (if not already confirmed)
 
-### Deploy Command
+**GitHub Actions workflows**:
+- **Dev**: `.github/workflows/deploy-cdk.yml` (triggered on push to `main`, path filter `apps/cdk/**`)
+- **Production**: `.github/workflows/deploy-cdk-production.yml` (triggered on push to `prod` branch)
+
+### Manual Deployment (Optional)
+
+If you need to deploy manually or outside the normal workflow:
 
 ```bash
 cd apps/cdk
 
-# Deploy both dev and production stacks
-npx cdk deploy FedapayMonitoring-dev FedapayMonitoring-production
-
-# Or deploy individually
+# Deploy dev only
 npx cdk deploy FedapayMonitoring-dev
+
+# Deploy production only
 npx cdk deploy FedapayMonitoring-production
+
+# Deploy both (not recommended, use workflows instead)
+npx cdk deploy FedapayMonitoring-dev FedapayMonitoring-production
 ```
 
 ### First-Time Email Confirmation
