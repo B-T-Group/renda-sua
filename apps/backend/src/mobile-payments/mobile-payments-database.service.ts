@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { sanitizeProviderError } from './sanitize-provider-error.util';
 import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
 import { normalizeProviderMessage } from './normalize-provider-message';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 
 export interface MobilePaymentTransaction {
   id: string;
@@ -157,8 +157,7 @@ export class MobilePaymentsDatabaseService {
       );
       return response.insert_mobile_payment_transactions_one;
     } catch (error) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to create mobile payment transaction: ${sanitized.message}`);
+      this.logger.error(`Failed to create mobile payment transaction: ${safeErrorMessage(error)}`);
       throw error;
     }
   }
@@ -222,8 +221,7 @@ export class MobilePaymentsDatabaseService {
       );
       return response.update_mobile_payment_transactions_by_pk;
     } catch (error) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to update mobile payment transaction: ${sanitized.message}`);
+      this.logger.error(`Failed to update mobile payment transaction: ${safeErrorMessage(error)}`);
       throw error;
     }
   }
@@ -265,8 +263,7 @@ export class MobilePaymentsDatabaseService {
       const response = await this.hasuraService.executeQuery(query, variables);
       return response.mobile_payment_transactions_by_pk;
     } catch (error) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to get mobile payment transaction: ${sanitized.message}`);
+      this.logger.error(`Failed to get mobile payment transaction: ${safeErrorMessage(error)}`);
       throw error;
     }
   }
@@ -310,7 +307,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to get mobile payment transaction by reference:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -380,7 +377,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to find MyPVIT transaction by short reference:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -430,7 +427,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to get mobile payment transaction by transaction_id:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -465,7 +462,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to get order numbers with pending claim order:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -502,7 +499,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to check pending claim order for order number:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -791,7 +788,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to check pending rental booking payment:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -833,7 +830,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to get pending claim order transactions for customer email:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -881,7 +878,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to get pending claim order transaction by customer email and order number:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -923,7 +920,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to get pending claim order transactions for user:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -969,7 +966,7 @@ export class MobilePaymentsDatabaseService {
     } catch (error) {
       this.logger.error(
         'Failed to get pending claim order transaction for user and order:',
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -1045,8 +1042,7 @@ export class MobilePaymentsDatabaseService {
       const response = await this.hasuraService.executeQuery(query);
       return response.mobile_payment_transactions;
     } catch (error) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to get mobile payment transactions: ${sanitized.message}`);
+      this.logger.error(`Failed to get mobile payment transactions: ${safeErrorMessage(error)}`);
       throw error;
     }
   }
@@ -1097,8 +1093,7 @@ export class MobilePaymentsDatabaseService {
       const response = await this.hasuraService.executeQuery(query);
       return response.mobile_payment_transactions;
     } catch (error) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to get pending GIVE_CHANGE withdrawals: ${sanitized.message}`);
+      this.logger.error(`Failed to get pending GIVE_CHANGE withdrawals: ${safeErrorMessage(error)}`);
       throw error;
     }
   }
@@ -1148,8 +1143,7 @@ export class MobilePaymentsDatabaseService {
       const response = await this.hasuraService.executeQuery(query);
       return response.mobile_payment_transactions;
     } catch (error) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to get pending integration transactions: ${sanitized.message}`);
+      this.logger.error(`Failed to get pending integration transactions: ${safeErrorMessage(error)}`);
       throw error;
     }
   }
@@ -1239,8 +1233,7 @@ export class MobilePaymentsDatabaseService {
 
       return stats;
     } catch (error) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to get transaction statistics: ${sanitized.message}`);
+      this.logger.error(`Failed to get transaction statistics: ${safeErrorMessage(error)}`);
       throw error;
     }
   }
@@ -1294,8 +1287,7 @@ export class MobilePaymentsDatabaseService {
         `Payment callback logged for transaction: ${transaction.id}`
       );
     } catch (error) {
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Failed to log payment callback: ${sanitized.message}`);
+      this.logger.error(`Failed to log payment callback: ${safeErrorMessage(error)}`);
       // Don't throw error as this is just logging
     }
   }

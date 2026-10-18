@@ -482,8 +482,11 @@ export class MobilePaymentsService {
         }>;
       }>(query, { country: upperCountry });
       
-      this.logger.log(
-        `Found ${result.supported_payment_systems.length} active providers for ${upperCountry}: ${JSON.stringify(result.supported_payment_systems)}`
+      // L8: names only, at debug (this runs on every provider lookup).
+      this.logger.debug(
+        `Found ${result.supported_payment_systems.length} active providers for ${upperCountry}: ${result.supported_payment_systems
+          .map((p) => p.name)
+          .join(', ')}`
       );
       
       // F-M5: GA rows are stored as airtel/moov but are served by MyPVit, so

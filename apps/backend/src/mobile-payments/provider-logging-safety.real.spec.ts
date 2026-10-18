@@ -151,6 +151,37 @@ describe('MyPVitService call sites', () => {
   });
 });
 
+describe('MyPVitService response interceptor (L2, real axios instance)', () => {
+  function realMypvit() {
+    const svc = new MyPVitService(
+      config('mypvit', { baseUrl: 'https://mypvit.test', airtelSecretKey: SECRET, moovSecretKey: SECRET })
+    );
+    const handlers = (svc as any).httpClient.interceptors.response.handlers;
+    return { fulfilled: handlers[0].fulfilled, rejected: handlers[0].rejected };
+  }
+
+  it('success responses log status and path only, never the body (phones, renewed secret)', () => {
+    const { fulfilled } = realMypvit();
+    fulfilled({
+      status: 200,
+      config: { url: '/v2/kyc' },
+      data: { msisdn: '24177123456', new_secret_key: 'NEWSECRET_abc123' },
+    });
+    expect(allLogs()).toContain('MyPVit API Response: 200 /v2/kyc');
+    expect(allLogs()).not.toContain('77123456');
+    expect(allLogs()).not.toContain('NEWSECRET_abc123');
+  });
+
+  it('expected 404 misses log the status only, never the body', async () => {
+    const { rejected } = realMypvit();
+    const err: any = new Error('Request failed with status code 404');
+    err.response = { status: 404, data: { error: 'not found', msisdn: '24177123456' } };
+    await expect(rejected(err)).rejects.toBe(err);
+    expect(allLogs()).toContain('MyPVit resource not found (expected miss): 404');
+    expect(allLogs()).not.toContain('77123456');
+  });
+});
+
 describe('MobilePaymentsController callback catch blocks', () => {
   function controller(processor: Record<string, jest.Mock>) {
     return new MobilePaymentsController(
@@ -312,5 +343,20 @@ describe('MobilePaymentsService error sites (real service, provider faked)', () 
     await expect((mps as any).isFedaPayActiveForTogo()).resolves.toBe(false);
     expect(allLogs()).not.toContain(SECRET);
     expect(allLogs()).toContain('Failed to check FedaPay active status');
+  });
+});
+
+describe('getProvidersForCountry logging (L8)', () => {
+  it('logs provider names only, not the raw rows JSON', async () => {
+    const hasura = {
+      executeQuery: jest.fn().mockResolvedValue({
+        supported_payment_systems: [{ name: 'airtel', country: 'GA', active: true }],
+      }),
+    };
+    const mypvit = { testConnection: jest.fn().mockResolvedValue(true) };
+    const mps = new MobilePaymentsService(mypvit as any, {} as any, {} as any, {} as any, {} as any, { testConnection: jest.fn().mockResolvedValue(true) } as any, { testConnection: jest.fn().mockResolvedValue(true) } as any, hasura as any);
+    await mps.getProvidersForCountry('GA');
+    expect(allLogs()).toContain('active providers for GA: airtel');
+    expect(allLogs()).not.toContain('"country":"GA"');
   });
 });

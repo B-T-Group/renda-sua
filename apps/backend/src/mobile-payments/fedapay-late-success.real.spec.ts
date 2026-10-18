@@ -4,6 +4,11 @@
  * FedaPay SDK. Only the FedaPay SDK is mocked. The database and the ledger are
  * small in-memory fakes that enforce status CAS and idempotency keys, so replays
  * behave like production.
+ *
+ * Order rows go through the real OrderPaymentCallbackHandler and the real
+ * OrdersService classification (handleLateSuccessOnSupersededOrderTx ->
+ * classifyExtraOrderPayment -> recordDuplicateOrderPayment). Only the order lookup,
+ * the (huge) finalizeOrderAfterIncomingPayment and the push notification are stubbed.
  */
 import { HttpException, Logger } from '@nestjs/common';
 import { Transaction } from 'fedapay';
@@ -11,6 +16,8 @@ import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsService } from './mobile-payments.service';
 import { FedaPayService } from './providers/fedapay.service';
+import { OrderPaymentCallbackHandler } from '../orders/order-payment-callback.handler';
+import { OrdersService } from '../orders/orders.service';
 
 jest.mock('fedapay', () => ({
   FedaPay: { setApiKey: jest.fn(), setEnvironment: jest.fn() },
@@ -114,18 +121,38 @@ const failedOrderRow = (over: Row = {}): Row => ({
   ...over,
 });
 
-function build(rows: Row[]) {
+function build(rows: Row[], order: Row = { order_number: 'ORD1', current_status: 'pending_payment', payment_status: 'pending' }) {
   const db = makeDb(rows);
   const ledger = makeLedger();
   const calls: string[] = [];
-  const handler = {
-    supportsPaymentEntity: (e: string) => e === 'order',
-    onPaymentSuccess: jest.fn(async (tx: Row) => {
-      calls.push(`handler:${tx.status}`);
-    }),
-    onPaymentFailure: jest.fn(),
-    onLateSuccessAfterSupersede: jest.fn(async () => 'applied' as const),
+  const orders: any = Object.create(OrdersService.prototype);
+  orders.logger = new Logger('OrdersService');
+  orders.mobilePaymentsDatabaseService = {
+    listOrderTransactionsByStatus: jest.fn(async (orderNumber: string, status: string) =>
+      [...db.byId.values()]
+        .filter((r) => r.entity_id === orderNumber && r.status === status)
+        .map((r) => ({ ...r }))
+    ),
+    updateTransactionIfStatus: (...args: [string, string, Row]) =>
+      db.updateTransactionIfStatus(...args),
+    updateTransaction: (...args: [string, Row]) => db.updateTransaction(...args),
   };
+  orders.notificationsService = {
+    sendDuplicatePaymentCreditedPush: jest.fn(async () => undefined),
+  };
+  orders.requireOrderDetailsByNumber = jest.fn(async () => ({
+    id: 'order-uuid',
+    client: { user_id: 'user-1' },
+    ...order,
+  }));
+  orders.finalizeOrderAfterIncomingPayment = jest.fn(async (tx: Row) => {
+    calls.push(`order:finalize:${tx.id}`);
+  });
+  const handler = new OrderPaymentCallbackHandler(orders as OrdersService) as any;
+  jest.spyOn(handler, 'onPaymentSuccess').mockImplementation(async (tx: any) => {
+    calls.push(`handler:${tx.status}`);
+  });
+  jest.spyOn(handler, 'onLateSuccessAfterSupersede');
   const registry = { getHandlers: jest.fn(() => [handler]) };
   const fedapay = new FedaPayService(
     {
@@ -175,7 +202,7 @@ function build(rows: Row[]) {
     ledger.deposits.push(args);
     return { success: true, alreadyExists: false };
   });
-  return { db, ledger, handler, processor, calls };
+  return { db, ledger, handler, processor, calls, orders };
 }
 
 const anomalyTypes = () =>
@@ -206,7 +233,23 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
     );
   });
 
-  it('plain declined->approved order: live re-check, CAS, credit, THEN apply; replay applies nothing twice', async () => {
+  it('routes a CANCELLED superseded (SUPERSEDED_BY_RETRY) order row to the #545 path: credited, applied, row success', async () => {
+    const row = failedOrderRow({ status: 'cancelled', error_code: 'SUPERSEDED_BY_RETRY' });
+    const { db, ledger, handler, processor } = build([row]);
+
+    await processor.processFedaPayCallback(approved());
+
+    expect(Transaction.retrieve).toHaveBeenCalledWith(777, { include: 'currency' });
+    expect(ledger.deposits).toEqual([
+      expect.objectContaining({ idempotencyKey: 'momo-deposit:tx-order', amount: 8000 }),
+    ]);
+    expect(handler.onLateSuccessAfterSupersede).toHaveBeenCalledTimes(1);
+    expect(db.byId.get('tx-order')).toEqual(
+      expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED', transaction_id: '777' })
+    );
+  });
+
+  it('plain declined->approved order on an unpaid live order: live re-check, CAS, credit, THEN apply; replay applies nothing twice', async () => {
     const { db, ledger, handler, processor, calls } = build([failedOrderRow()]);
 
     await processor.processFedaPayCallback(approved());
@@ -215,9 +258,10 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
       'live-retrieve',
       'cas:failed->processing',
       'deposit:momo-deposit:tx-order',
+      'order:finalize:tx-order',
       'cas:processing->success',
-      'handler:success',
     ]);
+    expect(handler.onLateSuccessAfterSupersede).toHaveBeenCalledTimes(1);
     expect(db.byId.get('tx-order')).toEqual(
       expect.objectContaining({
         status: 'success',
@@ -225,7 +269,7 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
         transaction_id: '777',
       })
     );
-    expect(anomalyTypes()).toContain('late_success_order_credited');
+    expect(anomalyTypes()).toEqual(['late_success_order_applied']);
 
     // FedaPay replays the same approved webhook.
     calls.length = 0;
@@ -234,8 +278,79 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
     // The late-success claim is not taken again and the wallet is not credited twice.
     expect(calls).not.toContain('cas:failed->processing');
     expect(ledger.deposits).toHaveLength(1);
-    expect(handler.onPaymentSuccess.mock.calls[0][0]).toEqual(
-      expect.objectContaining({ id: 'tx-order', status: 'success' })
+  });
+
+  it('M1: late approval on an order cancelled after the decline -> wallet credited, order NOT applied, DUPLICATE_PAYMENT_CREDITED, duplicate alert', async () => {
+    const { db, ledger, processor, calls, orders } = build([failedOrderRow()], {
+      order_number: 'ORD1',
+      current_status: 'cancelled',
+      payment_status: 'cancelled',
+    });
+
+    await processor.processFedaPayCallback(approved());
+
+    expect(ledger.deposits).toEqual([
+      expect.objectContaining({ idempotencyKey: 'momo-deposit:tx-order', amount: 8000 }),
+    ]);
+    expect(orders.finalizeOrderAfterIncomingPayment).not.toHaveBeenCalled();
+    expect(calls).not.toContain('handler:success');
+    expect(db.byId.get('tx-order')).toEqual(
+      expect.objectContaining({ status: 'success', error_code: 'DUPLICATE_PAYMENT_CREDITED' })
+    );
+    const types = anomalyTypes();
+    expect(types).toContain('duplicate_momo_collect');
+    expect(types).toContain('late_success_order_duplicate');
+    expect(types).not.toContain('late_success_order_applied');
+    // The alert goes out only after the outcome is known.
+    expect(types.indexOf('late_success_order_duplicate')).toBeGreaterThan(
+      types.indexOf('duplicate_momo_collect')
+    );
+    expect((reportMoneyAnomaly as jest.Mock).mock.calls.find((c) => c[1] === 'duplicate_momo_collect')?.[2]).toContain('reason=order_cancelled');
+    expect(orders.notificationsService.sendDuplicatePaymentCreditedPush).toHaveBeenCalledTimes(1);
+  });
+
+  it('M1: late approval on an order already paid by a newer attempt -> wallet credited, order NOT re-applied, DUPLICATE_PAYMENT_CREDITED', async () => {
+    const newer = failedOrderRow({
+      id: 'tx-newer',
+      reference: 'ORD1-REF-2',
+      transaction_id: '888',
+      status: 'success',
+      error_code: null,
+    });
+    const { db, ledger, processor, orders } = build([failedOrderRow(), newer], {
+      order_number: 'ORD1',
+      current_status: 'confirmed',
+      payment_status: 'paid',
+    });
+
+    await processor.processFedaPayCallback(approved());
+
+    expect(ledger.deposits).toHaveLength(1);
+    expect(orders.finalizeOrderAfterIncomingPayment).not.toHaveBeenCalled();
+    expect(db.byId.get('tx-order')).toEqual(
+      expect.objectContaining({ status: 'success', error_code: 'DUPLICATE_PAYMENT_CREDITED' })
+    );
+    expect(db.byId.get('tx-newer')?.status).toBe('success');
+    expect(anomalyTypes()).toEqual(['duplicate_momo_collect', 'late_success_order_duplicate']);
+    expect((reportMoneyAnomaly as jest.Mock).mock.calls[0][2]).toContain('reason=duplicate');
+  });
+
+  it('M1: an unpaid order with a newer pending attempt is paid by this approval and the newer prompt is superseded', async () => {
+    const pendingRetry = failedOrderRow({
+      id: 'tx-retry',
+      reference: 'ORD1-REF-3',
+      transaction_id: '999',
+      status: 'pending',
+      error_code: null,
+    });
+    const { db, processor, orders } = build([failedOrderRow(), pendingRetry]);
+
+    await processor.processFedaPayCallback(approved());
+
+    expect(orders.finalizeOrderAfterIncomingPayment).toHaveBeenCalledTimes(1);
+    expect(db.byId.get('tx-order')?.error_code).toBe('LATE_SUCCESS_APPLIED');
+    expect(db.byId.get('tx-retry')).toEqual(
+      expect.objectContaining({ status: 'cancelled', error_code: 'SUPERSEDED_BY_LATE_SUCCESS' })
     );
   });
 
@@ -248,13 +363,13 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
     expect(err).toBeInstanceOf(HttpException);
     expect((err as HttpException).getStatus()).toBe(409);
     expect(ledger.deposits).toHaveLength(0);
-    expect(handler.onPaymentSuccess).not.toHaveBeenCalled();
+    expect(handler.onLateSuccessAfterSupersede).not.toHaveBeenCalled();
     expect(db.byId.get('tx-order')?.status).toBe('failed');
     expect(anomalyTypes()).toContain('late_success_order_live_mismatch');
   });
 
   it('ignores a lying callback body when the live record confirms (body amount/currency are not trusted)', async () => {
-    const { ledger, handler, processor } = build([failedOrderRow()]);
+    const { ledger, processor, orders } = build([failedOrderRow()]);
 
     await processor.processFedaPayCallback(
       approved({ amount: 1, currency: 'XAF' })
@@ -263,7 +378,7 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
     expect(ledger.deposits).toEqual([
       expect.objectContaining({ amount: 8000, idempotencyKey: 'momo-deposit:tx-order' }),
     ]);
-    expect(handler.onPaymentSuccess).toHaveBeenCalledTimes(1);
+    expect(orders.finalizeOrderAfterIncomingPayment).toHaveBeenCalledTimes(1);
   });
 
   it('live status declined -> 409, row stays failed', async () => {
@@ -277,16 +392,22 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
     expect(db.byId.get('tx-order')?.status).toBe('failed');
   });
 
-  it('order handler failure keeps the money in the wallet, puts the row back to processing and rethrows for retry', async () => {
-    const { db, ledger, handler, processor } = build([failedOrderRow()]);
-    handler.onPaymentSuccess.mockRejectedValueOnce(new Error('order cancelled meanwhile'));
+  it('order classification failure keeps the money in the wallet, puts the row back to failed and rethrows; the retry finishes once', async () => {
+    const { db, ledger, processor, orders } = build([failedOrderRow()]);
+    orders.finalizeOrderAfterIncomingPayment.mockRejectedValueOnce(new Error('db timeout'));
 
-    await expect(processor.processFedaPayCallback(approved())).rejects.toThrow(
-      /will retry/
-    );
+    await expect(processor.processFedaPayCallback(approved())).rejects.toThrow(/will retry/);
 
     expect(ledger.deposits).toHaveLength(1);
-    expect(db.byId.get('tx-order')?.status).toBe('processing');
+    expect(db.byId.get('tx-order')?.status).toBe('failed');
+    expect(anomalyTypes()).not.toContain('late_success_order_applied');
+
+    // FedaPay retries the webhook: same path, no second credit, now applied.
+    await processor.processFedaPayCallback(approved());
+    expect(ledger.deposits).toHaveLength(1);
+    expect(db.byId.get('tx-order')).toEqual(
+      expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' })
+    );
   });
 });
 
@@ -323,6 +444,28 @@ describe('S1 top-up late success (real processor + live FedaPay re-check)', () =
     );
     expect(db.logCallback).toHaveBeenCalledTimes(2);
     expect(anomalyTypes()).toContain('late_success_wallet_credited');
+  });
+
+  it('L5: success mark and credit-failure release are CAS on our processing claim', async () => {
+    const live = liveFedaPayTx({ amount: 5000, custom_metadata: { externalId: 'TOPUP-REF' } });
+    const cb = approved({ amount: 5000, custom_metadata: { externalId: 'TOPUP-REF' } });
+
+    // Credit fails: the claim is released with a CAS (processing -> failed) and the call throws.
+    const failing = build([failedTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live);
+    failing.ledger.registerDepositIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
+    await expect(failing.processor.processFedaPayCallback(cb)).rejects.toThrow(/will retry/);
+    expect(failing.calls).toContain('cas:processing->failed');
+    expect(failing.db.byId.get('tx-topup')?.status).toBe('failed');
+    expect(failing.db.updateTransaction).not.toHaveBeenCalled();
+
+    // Credit works: success is written with a CAS, never a blind update.
+    const ok = build([failedTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live);
+    await ok.processor.processFedaPayCallback(cb);
+    expect(ok.calls).toContain('cas:processing->success');
+    expect(ok.db.updateTransaction).not.toHaveBeenCalled();
+    expect(ok.db.byId.get('tx-topup')?.status).toBe('success');
   });
 
   it('live currency XAF -> 422, nothing credited, anomaly raised', async () => {
@@ -403,5 +546,47 @@ describe('S4 expiry (real processor + live FedaPay re-check)', () => {
 
     expect(Transaction.retrieve).not.toHaveBeenCalled();
     expect(db.byId.get('tx-pending')?.status).toBe('pending');
+  });
+});
+
+describe('L4: a FedaPay mock- PAYMENT row only skips the live re-check when FedaPay mock mode is on', () => {
+  const pendingMockTopUp = (): Row => ({
+    id: 'tx-mock',
+    reference: 'TOPUP-M',
+    transaction_id: 'mock-abc-1',
+    status: 'pending',
+    transaction_type: 'PAYMENT',
+    payment_entity: null,
+    entity_id: null,
+    amount: 8000,
+    currency: 'XOF',
+    account_id: 'acct-client',
+    provider: 'fedapay',
+    customer_phone: '+22890123456',
+    updated_at: '2026-10-17T10:00:00.000Z',
+  });
+  const approvedMock = () =>
+    approved({ id: 123, reference: 'mock-abc-1', custom_metadata: { externalId: 'TOPUP-M' } });
+
+  it('mock mode OFF (prod): the mock- row is re-checked live and nothing is credited when FedaPay does not confirm it', async () => {
+    const { db, ledger, processor } = build([pendingMockTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockRejectedValue(new Error('Transaction not found'));
+
+    await expect(processor.processFedaPayCallback(approvedMock())).rejects.toBeDefined();
+
+    expect(Transaction.retrieve).toHaveBeenCalled();
+    expect(ledger.deposits).toHaveLength(0);
+    expect(db.byId.get('tx-mock')?.status).toBe('pending');
+  });
+
+  it('mock mode ON (DEV): the mock- row skips the live re-check and is credited', async () => {
+    const { db, ledger, processor } = build([pendingMockTopUp()]);
+    jest.spyOn(processor as any, 'isFedaPayMockEnabled').mockReturnValue(true);
+
+    await processor.processFedaPayCallback(approvedMock());
+
+    expect(Transaction.retrieve).not.toHaveBeenCalled();
+    expect(ledger.deposits).toHaveLength(1);
+    expect(db.byId.get('tx-mock')?.status).toBe('success');
   });
 });

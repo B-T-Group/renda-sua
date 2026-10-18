@@ -1,5 +1,7 @@
 /**
  * Sanitize provider errors to prevent logging sensitive data (Authorization headers, API keys).
+ * Never log a raw axios error: its config.headers carry Authorization (FreemoPay Basic
+ * base64(appKey:secretKey), FedaPay Bearer sk_...).
  * Returns only safe error properties: message (redacted), status, code.
  */
 
@@ -10,8 +12,8 @@ interface SanitizedError {
 }
 
 /**
- * Redact API keys and bearer tokens from text.
- * Patterns: sk_(live|sandbox|test)_... and Bearer ...
+ * Redact API keys, bearer tokens and basic credentials from text.
+ * Patterns: sk_(live|sandbox|test)_..., Bearer ... and Basic <base64>
  */
 function redactSecrets(text: string): string {
   if (!text) return text;
@@ -26,6 +28,12 @@ function redactSecrets(text: string): string {
   redacted = redacted.replace(
     /Bearer\s+[A-Za-z0-9._-]+/gi,
     'Bearer REDACTED'
+  );
+
+  // Redact Basic credentials (FreemoPay: base64(appKey:secretKey))
+  redacted = redacted.replace(
+    /Basic\s+[A-Za-z0-9+/=]+/gi,
+    'Basic REDACTED'
   );
   
   return redacted;

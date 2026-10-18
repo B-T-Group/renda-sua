@@ -198,6 +198,7 @@ import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 import {
   anyLocationPayAtConfirm,
   PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY,
@@ -1065,7 +1066,7 @@ export class OrdersService {
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to fetch item deals for order pricing:', error);
+      this.logger.error('Failed to fetch item deals for order pricing:', safeErrorMessage(error));
       return {};
     }
   }
@@ -3117,8 +3118,13 @@ export class OrdersService {
       user.id
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -3263,8 +3269,7 @@ export class OrdersService {
 
       // Log the error and throw a generic error
       this.logger.error(
-        `Failed to claim order with topup: ${error.message}`,
-        error.stack
+        `Failed to claim order with topup: ${safeErrorMessage(error)}`
       );
 
       throw new HttpException(
@@ -4236,8 +4241,13 @@ export class OrdersService {
       momo.payerUserId
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -4475,8 +4485,13 @@ export class OrdersService {
       momo.payerUserId
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -4700,8 +4715,13 @@ export class OrdersService {
       momo.payerUserId
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -5691,8 +5711,13 @@ export class OrdersService {
       momo.payerUserId
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -5866,8 +5891,9 @@ export class OrdersService {
   }
 
   /**
-   * Provider SUCCESS for an order attempt we cancelled as superseded (called by the
-   * callback processor after it verified the provider status and credited the wallet).
+   * Provider SUCCESS for an order attempt we cancelled as superseded, or for a plain
+   * attempt we had marked failed (F3 declined-then-approved, M1). Called by the
+   * callback processor after it verified the provider status and credited the wallet.
    * First success wins: an unpaid live order is finalized with this attempt and any
    * newer pending attempt is cancelled. A paid or cancelled order keeps the money in
    * the client's wallet (D5) and raises an alert.
@@ -6187,8 +6213,13 @@ export class OrdersService {
       momo.payerUserId
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -6451,8 +6482,13 @@ export class OrdersService {
       momo.payerUserId
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -7008,8 +7044,13 @@ export class OrdersService {
       momo.payerUserId
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -10899,7 +10940,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to finalize deposit for order ${orderNumber}:`,
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -12674,7 +12715,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to mark deposit_status=failed for order ${orderId}:`,
-        error
+        safeErrorMessage(error)
       );
     }
     await this.orderSystemJobsService.onOrderPaymentFailed(
@@ -12747,7 +12788,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to read market flag ${configKey} for ${countryCode}:`,
-        error
+        safeErrorMessage(error)
       );
       return false; // Default to false on error
     }
@@ -13417,7 +13458,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to get fast delivery fee for country ${country}:`,
-        error
+        safeErrorMessage(error)
       );
       return { fee: 0, enabled: false };
     }
@@ -14902,7 +14943,7 @@ export class OrdersService {
           }
         );
       } catch (error) {
-        this.logger.error('Failed to create delivery window:', error);
+        this.logger.error('Failed to create delivery window:', safeErrorMessage(error));
         await this.markOrderTimingScheduled(order.id);
       }
     }
@@ -15078,7 +15119,7 @@ export class OrdersService {
         } catch (error: any) {
           this.logger.error(
             `Deposit collection failed for order ${order.order_number}:`,
-            error
+            safeErrorMessage(error)
           );
           await this.compensateUnpaidCreate(
             order.id,
@@ -15640,8 +15681,13 @@ export class OrdersService {
       params.userId
     );
     if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
       throw new HttpException(
-        validationError.message,
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
         HttpStatus.BAD_REQUEST
       );
     }
@@ -17990,7 +18036,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to calculate tiered delivery fee for country ${country}:`,
-        error
+        safeErrorMessage(error)
       );
 
       return calculateDeliveryFeeFallback({

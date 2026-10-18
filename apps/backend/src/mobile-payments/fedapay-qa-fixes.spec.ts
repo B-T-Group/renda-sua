@@ -209,8 +209,10 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
         'failed',
         expect.objectContaining({ status: 'processing' })
       );
-      expect(mockDatabaseService.updateTransaction).toHaveBeenCalledWith(
+      // L5: success is a CAS on our processing claim
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
         failedTopUpTx.id,
+        'processing',
         expect.objectContaining({ status: 'success' })
       );
     });
@@ -369,10 +371,10 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       await processor.processFedaPayCallback(lateApproval);
 
-      // The final updateTransaction call should NOT include transaction_id
-      const finalUpdateCall = mockDatabaseService.updateTransaction.mock.calls.find(
-        (call) => call[1].status === 'success'
-      );
+      // The final success write (CAS since L5) should NOT include transaction_id
+      const finalUpdateCall = mockDatabaseService.updateTransactionIfStatus.mock.calls
+        .map((call: any[]) => [call[0], call[2]])
+        .find((call: any[]) => call[1].status === 'success');
       expect(finalUpdateCall).toBeDefined();
       expect(finalUpdateCall[1]).not.toHaveProperty('transaction_id');
     });

@@ -193,7 +193,8 @@ describe('Security: Error Sanitization & Phone Masking', () => {
 
     afterEach(() => {
       loggerSpy.mockRestore();
-      jest.clearAllMocks();
+      // L7: undo the fedapay SDK spies so later tests see the real module.
+      jest.restoreAllMocks();
     });
 
     it('should not log Authorization header when checkTransactionStatus fails', async () => {
@@ -211,7 +212,7 @@ describe('Security: Error Sanitization & Phone Masking', () => {
 
       // Mock Transaction.retrieve to throw
       const { Transaction } = require('fedapay');
-      Transaction.retrieve = jest.fn().mockRejectedValue(axiosLikeError);
+      jest.spyOn(Transaction, 'retrieve').mockRejectedValue(axiosLikeError);
 
       try {
         await service.checkTransactionStatus('123', 'REF-123');
@@ -247,7 +248,7 @@ describe('Security: Error Sanitization & Phone Masking', () => {
       };
 
       const { Transaction } = require('fedapay');
-      Transaction.retrieve = jest.fn().mockRejectedValue(errorWithAuthHeader);
+      jest.spyOn(Transaction, 'retrieve').mockRejectedValue(errorWithAuthHeader);
 
       try {
         await service.checkTransactionStatus('123');

@@ -68,6 +68,17 @@ export class MobilePaymentCallbackProcessor {
   }
 
   /**
+   * L4: a mock- id only skips the live provider re-check when that provider's mock
+   * mode is actually on. For FedaPay, a mock- row with FEDAPAY_MOCK off (e.g. data
+   * left over from DEV) is re-checked live and therefore fails closed.
+   */
+  private skipsLiveRecheck(tx: MobilePaymentTransaction): boolean {
+    if (!this.isMockedTransaction(tx)) return false;
+    if (tx.provider === 'fedapay') return this.isFedaPayMockEnabled();
+    return true;
+  }
+
+  /**
    * G1: Check if FedaPay mock mode is currently enabled.
    * Fail closed: if we can't resolve the service, assume mock is off.
    */
@@ -203,7 +214,7 @@ export class MobilePaymentCallbackProcessor {
       return { received: true, transactionId: callbackData.entity.id };
     }
 
-    if (!this.isMockedTransaction(tx)) {
+    if (!this.skipsLiveRecheck(tx)) {
       await this.mobilePaymentsService.assertProviderConfirmsCallback(
         this.withFedaPayRecheckId(tx, callbackData),
         normalizedStatus
@@ -515,7 +526,7 @@ export class MobilePaymentCallbackProcessor {
     tx: MobilePaymentTransaction,
     providerTransactionId: string
   ): Promise<void> {
-    if (!this.isMockedTransaction(tx)) {
+    if (!this.skipsLiveRecheck(tx)) {
       await this.mobilePaymentsService.assertProviderConfirmsCallback(
         tx,
         'SUCCESS'
@@ -606,17 +617,30 @@ export class MobilePaymentCallbackProcessor {
     // F3: Credit wallet with idempotency key momo-deposit:<tx id>
     const credited = await this.creditWalletIfNeeded(tx);
     if (!credited) {
-      await this.databaseService.updateTransaction(tx.id, { status: 'failed' });
+      // L5: release our own claim only (CAS), like the order path.
+      await this.databaseService
+        .updateTransactionIfStatus(tx.id, 'processing', { status: 'failed' })
+        .catch((e: any) =>
+          this.logger.error(
+            `Could not release late-success claim on ${tx.id}: ${e?.message ?? e}`
+          )
+        );
       throw new Error(
         `Wallet credit failed for late success on failed top-up ${tx.id}; will retry`
       );
     }
 
-    // F3: Mark success, KEEP the stored transaction_id (don't overwrite)
-    await this.databaseService.updateTransaction(tx.id, {
-      status: 'success',
-      error_code: LATE_SUCCESS_APPLIED,
-    });
+    // F3: Mark success (CAS on our processing claim), KEEP the stored transaction_id
+    const marked = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'processing',
+      { status: 'success', error_code: LATE_SUCCESS_APPLIED }
+    );
+    if (!marked) {
+      this.logger.warn(
+        `Late success on failed top-up ${tx.id}: processing -> success CAS lost`
+      );
+    }
     
     this.logger.log(
       `F3 Late success: Successfully credited wallet for tx ${tx.id} (${tx.reference})`
@@ -653,7 +677,7 @@ export class MobilePaymentCallbackProcessor {
     callbackData: FedaPayCallbackDto,
     kind: 'top_up' | 'order'
   ): Promise<void> {
-    if (this.isMockedTransaction(tx)) return;
+    if (this.skipsLiveRecheck(tx)) return;
     try {
       await this.mobilePaymentsService.assertProviderConfirmsCallback(
         this.withFedaPayRecheckId(tx, callbackData),
@@ -680,13 +704,18 @@ export class MobilePaymentCallbackProcessor {
   /**
    * F3: approve-after-decline on a plain FAILED order attempt. Superseded attempts
    * (isRecoverableLateOrderSuccess) never get here; they take
-   * handleLateSuccessOnSupersededOrderTx first. Same money order as the normal order
-   * path (finalizeOrderPaymentSuccess): live re-check, CAS failed -> processing,
-   * credit the wallet (momo-deposit:<tx id>), mark success, then let the order
-   * handler apply it. If the order can no longer take the payment (cancelled or
-   * already paid), the handler leaves the money in the wallet. A handler failure
-   * puts the row back to processing and rethrows, so the provider retry resumes
-   * finalize via resumeFinalizeFromProcessing.
+   * handleLateSuccessOnSupersededOrderTx first. Money order:
+   * 1. live re-check (amount / XOF / reference on the provider record),
+   * 2. CAS failed -> processing (one writer),
+   * 3. credit the payer wallet (momo-deposit:<tx id>, idempotent),
+   * 4. let the order classify it exactly like the superseded path (M1): an unpaid live
+   *    order is paid with this attempt ('applied'); a cancelled / terminal order or one
+   *    already paid by another attempt or the wallet keeps the money in the wallet and
+   *    records DUPLICATE_PAYMENT_CREDITED ('duplicate'); the order is never reopened,
+   * 5. CAS processing -> success with LATE_SUCCESS_APPLIED or DUPLICATE_PAYMENT_CREDITED,
+   * 6. alert, now that the outcome is known.
+   * A failure in 3-4 puts the row back to failed and rethrows, so the provider retry
+   * runs this path again (credit and finalize are idempotent).
    */
   private async handleLateSuccessOnFailedOrderPayment(
     tx: MobilePaymentTransaction,
@@ -706,8 +735,22 @@ export class MobilePaymentCallbackProcessor {
       return;
     }
 
-    const credited = await this.creditWalletIfNeeded(tx);
-    if (!credited) {
+    let outcome: 'applied' | 'duplicate';
+    try {
+      const credited = await this.creditWalletIfNeeded(tx);
+      if (!credited) {
+        throw new Error(
+          `Wallet credit failed for late success on failed order payment ${tx.id}; will retry`
+        );
+      }
+      const handler = findPaymentCallbackHandler(
+        this.resolveHandlers(),
+        tx.payment_entity
+      );
+      outcome = handler?.onLateSuccessAfterSupersede
+        ? await handler.onLateSuccessAfterSupersede(tx)
+        : 'duplicate';
+    } catch (error: any) {
       await this.databaseService
         .updateTransactionIfStatus(tx.id, 'processing', { status: 'failed' })
         .catch((e: any) =>
@@ -716,41 +759,41 @@ export class MobilePaymentCallbackProcessor {
           )
         );
       throw new Error(
-        `Wallet credit failed for late success on failed order payment ${tx.id}; will retry`
+        `Late success on failed order payment ${tx.id} not finished: ${
+          error?.message ?? error
+        }; will retry`
       );
     }
 
     // Keep the stored transaction_id (F-L3); only status and marker change.
+    const errorCode =
+      outcome === 'applied' ? LATE_SUCCESS_APPLIED : DUPLICATE_PAYMENT_CREDITED;
     const marked = await this.databaseService.updateTransactionIfStatus(
       tx.id,
       'processing',
-      { status: 'success', error_code: LATE_SUCCESS_APPLIED }
+      { status: 'success', error_code: errorCode }
     );
     if (!marked) {
       this.logger.warn(
         `Late success on failed order payment ${tx.id}: processing -> success CAS lost`
       );
-      return;
     }
 
     await reportMoneyAnomaly(
       this.logger,
-      'late_success_order_credited',
-      `Late success: order tx ${tx.id} declined then approved; wallet credited, applying to order ${tx.entity_id}`,
+      outcome === 'applied' ? 'late_success_order_applied' : 'late_success_order_duplicate',
+      outcome === 'applied'
+        ? `Late success: order tx ${tx.id} declined then approved; wallet credited and applied to order ${tx.entity_id}`
+        : `Late success: order tx ${tx.id} declined then approved; order ${tx.entity_id} was cancelled or already paid, amount kept in the client wallet`,
       {
         transactionId: tx.id,
         reference: tx.reference,
         orderId: tx.entity_id,
         amount: tx.amount,
         currency: tx.currency,
+        outcome,
       }
     );
-
-    await this.runHandlerOrRestoreProcessing({
-      ...tx,
-      status: 'success',
-      error_code: LATE_SUCCESS_APPLIED,
-    });
   }
 
   private async processPendingMypvit(

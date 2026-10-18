@@ -165,6 +165,13 @@ describe('OrdersService validates before creating the payment row', () => {
 
     expect(err).toBeInstanceOf(HttpException);
     expect((err as HttpException).getStatus()).toBe(400);
+    // L3: the app gets the machine-readable code, not only the text.
+    expect((err as HttpException).getResponse()).toEqual({
+      success: false,
+      message: 'FedaPay requires a Togo (+228) phone number',
+      error: 'INVALID_PHONE_NUMBER',
+    });
+    expect((err as HttpException).message).toBe('FedaPay requires a Togo (+228) phone number');
     expect(database.createTransaction).not.toHaveBeenCalled();
     expect(initiate).not.toHaveBeenCalled();
   });

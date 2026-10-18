@@ -328,7 +328,13 @@ export class FedaPayService implements OnModuleInit {
       this.logger.warn(`Cannot schedule callback for ${mockRef}: not found in mockOutcomes`);
       return;
     }
-    this.scheduleAutoCallback(mockRef, externalId, stored.outcome === 'pending' ? 'approved' : stored.outcome);
+    if (stored.outcome === 'pending') {
+      // M2: FEDAPAY_MOCK_PENDING_PHONES payers stay pending with no callback (DEV
+      // pending-path QA: N2/N5/reconciler/supersede). Never auto-approve them.
+      this.logger.log(`Mock ${mockRef} is on the pending list: no auto-callback`);
+      return;
+    }
+    this.scheduleAutoCallback(mockRef, externalId, stored.outcome);
   }
 
   async initiatePayment(

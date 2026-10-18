@@ -189,9 +189,10 @@ export class MyPVitService {
     // Add response interceptor for logging
     this.httpClient.interceptors.response.use(
       (response) => {
+        // L2: status + path only. Bodies carry phones (KYC/status) and, for
+        // renew-secret, the new secret key.
         this.logger.debug(
-          `MyPVit API Response: ${response.status}`,
-          response.data
+          `MyPVit API Response: ${response.status} ${response.config?.url ?? ''}`.trim()
         );
         return response;
       },
@@ -208,7 +209,9 @@ export class MyPVitService {
   }): void {
     const payload = error.response?.data ?? error.message;
     if (isNotFoundHttpError(error)) {
-      this.logger.debug('MyPVit resource not found (expected miss):', payload);
+      this.logger.debug(
+        `MyPVit resource not found (expected miss): ${error.response?.status ?? ''}`.trim()
+      );
       return;
     }
     const sanitized = sanitizeProviderError(payload);

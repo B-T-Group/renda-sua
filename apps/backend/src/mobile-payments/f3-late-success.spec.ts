@@ -124,9 +124,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         idempotencyKey: 'momo-deposit:tx-failed-topup',
       });
 
-      // Verify transaction marked as success
-      expect(databaseService.updateTransaction).toHaveBeenCalledWith(
+      // Verify transaction marked as success (CAS on the processing claim, L5)
+      expect(databaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
         'tx-failed-topup',
+        'processing',
         expect.objectContaining({
           status: 'success',
           error_code: 'LATE_SUCCESS_APPLIED',
@@ -348,8 +349,10 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       const calls: string[] = [];
       const mockOrderHandler = {
         supportsPaymentEntity: jest.fn().mockReturnValue(true),
-        onPaymentSuccess: jest.fn(async () => {
+        onPaymentSuccess: jest.fn(),
+        onLateSuccessAfterSupersede: jest.fn(async () => {
           calls.push('handler');
+          return 'applied';
         }),
       };
       registryService.getHandlers.mockReturnValue([mockOrderHandler as any]);
@@ -413,17 +416,19 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         'processing',
         expect.objectContaining({ status: 'success', error_code: 'LATE_SUCCESS_APPLIED' })
       );
-      expect(mockOrderHandler.onPaymentSuccess).toHaveBeenCalledWith(
-        expect.objectContaining({ id: 'tx-order-failed', status: 'success' })
+      expect(mockOrderHandler.onLateSuccessAfterSupersede).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'tx-order-failed' })
       );
+      expect(mockOrderHandler.onPaymentSuccess).not.toHaveBeenCalled();
       const anomalyTypes = (reportMoneyAnomaly as jest.Mock).mock.calls.map((c) => c[1]);
-      expect(anomalyTypes).toContain('late_success_order_credited');
+      expect(anomalyTypes).toEqual(['late_success_order_applied']);
     });
 
-    it('should restore processing and rethrow if the order cannot be applied (deposit kept for retry)', async () => {
+    it('should release the claim to failed and rethrow if the order cannot be classified (deposit kept for retry)', async () => {
       const mockOrderHandler = {
         supportsPaymentEntity: jest.fn().mockReturnValue(true),
-        onPaymentSuccess: jest.fn().mockRejectedValue(new Error('Order already paid')),
+        onPaymentSuccess: jest.fn(),
+        onLateSuccessAfterSupersede: jest.fn().mockRejectedValue(new Error('db timeout')),
       };
       registryService.getHandlers.mockReturnValue([mockOrderHandler as any]);
 
@@ -457,16 +462,17 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
         } as any,
       };
 
-      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toThrow('Payment handler failed for order order-456; will retry');
+      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toThrow(/will retry/);
 
       expect(accountsService.registerDepositIfNotExists).toHaveBeenCalledTimes(1);
-      expect(mockOrderHandler.onPaymentSuccess).toHaveBeenCalled();
-      // success -> processing so a FedaPay retry resumes the order apply
+      expect(mockOrderHandler.onLateSuccessAfterSupersede).toHaveBeenCalled();
+      // processing -> failed so the FedaPay retry runs the late-success path again
       expect(databaseService.updateTransactionIfStatus).toHaveBeenLastCalledWith(
         'tx-order-unsafe',
-        'success',
-        expect.objectContaining({ status: 'processing' })
+        'processing',
+        { status: 'failed' }
       );
+      expect(reportMoneyAnomaly).not.toHaveBeenCalled();
     });
 
     it('should report late_success_non_wallet anomaly when payment_entity is not wallet', async () => {

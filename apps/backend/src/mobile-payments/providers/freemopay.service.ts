@@ -487,11 +487,16 @@ export class FreemopayService implements OnModuleInit {
         ),
       };
     } catch (error: any) {
+      // H1: never log or rethrow the raw axios error; its config.headers carry
+      // Authorization: Basic base64(appKey:secretKey).
+      const sanitized = sanitizeProviderError(error);
       this.logger.error(
-        'Failed to check Freemopay transaction status:',
-        error
+        `Failed to check Freemopay transaction status: ${sanitized.message}`
       );
-      throw error;
+      throw Object.assign(new Error(sanitized.message), {
+        ...(sanitized.status !== undefined ? { status: sanitized.status } : {}),
+        ...(sanitized.code ? { code: sanitized.code } : {}),
+      });
     }
   }
 
