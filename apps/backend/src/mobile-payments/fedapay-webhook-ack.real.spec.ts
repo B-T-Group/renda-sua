@@ -539,14 +539,21 @@ describe('FedaPay sends transaction.expired (DEV payment 525277 shape) -> termin
     }
   );
 
-  it('transaction.expired whose live record is approved is a definite mismatch: acknowledged, row untouched', async () => {
-    const { entityId, row, db, controller } = build();
+  it('N3: transaction.expired whose live record is approved is credited through the SUCCESS path (once)', async () => {
+    const { entityId, row, db, deposits, controller } = build();
     (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'approved' }));
     const res = await controller.fedapayCallback(expiredRequest(entityId));
     expect(res).toEqual({ received: true, transactionId: entityId });
-    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
-    expect(db.byId.get(row.id)?.status).toBe('pending');
-    expect(anomalies()[0][3]).toEqual(expect.objectContaining({ reason: 'live_status_mismatch', claimed: 'FAILED' }));
+    expect(deposits).toHaveLength(1);
+    expect(deposits[0]).toEqual(expect.objectContaining({ idempotencyKey: `momo-deposit:${row.id}` }));
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith(row.id, 'pending', { status: 'processing' });
+    expect(db.byId.get(row.id)?.status).toBe('success');
+    expect(anomalies()).toHaveLength(0);
+    expect(
+      (Logger.prototype.warn as unknown as jest.Mock).mock.calls.some((c) =>
+        String(c[0]).startsWith(`fedapay_expired_event_live_approved tx=${row.id}`)
+      )
+    ).toBe(true);
   });
 
   it('a CAS that loses the race (row left pending meanwhile) writes nothing else', async () => {
@@ -557,6 +564,99 @@ describe('FedaPay sends transaction.expired (DEV payment 525277 shape) -> termin
     expect(res).toEqual({ received: true, transactionId: entityId });
     expect(db.updateTransaction).not.toHaveBeenCalled();
     expect(db.byId.get(row.id)?.status).toBe('pending');
+  });
+});
+
+describe('N4: the replay cache key is name:entity.id:t', () => {
+  function request(entityId: number, name: string, status: string, t: number) {
+    const payload = JSON.stringify({
+      name,
+      entity: { id: entityId, status, amount: 5000, currency: 'XOF', custom_metadata: { externalId: STORED_REF } },
+    });
+    const header = Webhook.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET, timestamp: t });
+    return { headers: { 'x-fedapay-signature': header }, body: Buffer.from(payload) } as any;
+  }
+
+  it('two different events for one entity signed in the same second are both processed', async () => {
+    const { entityId, row, deposits, controller } = build();
+    const t = Math.floor(Date.now() / 1000);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId));
+
+    const first = await controller.fedapayCallback(request(entityId, 'transaction.created', 'pending', t));
+    expect(first).toEqual({ received: true, transactionId: entityId });
+    const second = await controller.fedapayCallback(request(entityId, 'transaction.approved', 'approved', t));
+
+    expect(second).toEqual({ received: true, transactionId: entityId });
+    expect(deposits).toHaveLength(1);
+    expect(deposits[0]).toEqual(expect.objectContaining({ idempotencyKey: `momo-deposit:${row.id}` }));
+  });
+
+  it('the same event name, entity and t is still a duplicate (200, not reprocessed)', async () => {
+    const { entityId, deposits, controller } = build();
+    const t = Math.floor(Date.now() / 1000);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'declined' }));
+    await controller.fedapayCallback(request(entityId, 'transaction.declined', 'declined', t));
+    const again = (await controller
+      .fedapayCallback(request(entityId, 'transaction.declined', 'declined', t))
+      .catch((e: unknown) => e)) as HttpException;
+    expect(again.getStatus()).toBe(200);
+    expect(again.getResponse()).toEqual({ success: true, message: 'Duplicate event' });
+    expect(Transaction.retrieve).toHaveBeenCalledTimes(1);
+    expect(deposits).toHaveLength(0);
+  });
+
+  it('the key format is name:entity.id:t', () => {
+    const { controller } = build();
+    expect((controller as any).fedapayReplayKey('transaction.approved', '42', '1700000000')).toBe(
+      'transaction.approved:42:1700000000'
+    );
+  });
+});
+
+describe('N1: a failure event after we credited raises fedapay_failure_after_credit (mirrors refund-after-credit)', () => {
+  it.each([
+    ['transaction.declined', 'declined', 'success'],
+    ['transaction.canceled', 'canceled', 'success'],
+    ['transaction.expired', 'expired', 'success'],
+    ['transaction.declined', 'declined', 'processing'],
+  ])('%s (%s) on a %s row -> 2xx, one alert with full context, no write, no live call', async (name, status, rowStatus) => {
+    const { entityId, row, db, deposits, controller } = build({ status: rowStatus, error_code: 'LATE_SUCCESS_APPLIED' });
+
+    const res = await controller.fedapayCallback(signedRequest(entityId, status, name));
+
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    for (const value of [STORED_REF, row.id, '5000']) expect(JSON.stringify(res)).not.toContain(value);
+    expect(anomalies()).toHaveLength(1);
+    const [, marker, message, context] = anomalies()[0];
+    expect(marker).toBe('fedapay_failure_after_credit');
+    expect(message).toContain(`FedaPay sent ${name} (status ${status}) for tx ${row.id} after we credited it (row ${rowStatus}, LATE_SUCCESS_APPLIED)`);
+    expect(context).toEqual({
+      transactionId: row.id,
+      reference: STORED_REF,
+      amount: 5000,
+      rowStatus,
+      paymentEntity: null,
+      event: name,
+      fedapayStatus: status,
+      fedapayEntityId: entityId,
+    });
+    expect(db.updateTransaction).not.toHaveBeenCalled();
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(db.byId.get(row.id)?.status).toBe(rowStatus);
+    expect(deposits).toHaveLength(0);
+    expect(Transaction.retrieve).not.toHaveBeenCalled();
+  });
+
+  it.each([['failed'], ['cancelled']])('a failure event on a %s row (never credited) raises no alert', async (rowStatus) => {
+    const { entityId, controller } = build({ status: rowStatus });
+    await controller.fedapayCallback(signedRequest(entityId, 'declined'));
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it('an approved redelivery on a success row raises no failure alert', async () => {
+    const { entityId, controller } = build({ status: 'success' });
+    await controller.fedapayCallback(signedRequest(entityId, 'approved'));
+    expect(anomalies().filter((a) => a[1] === 'fedapay_failure_after_credit')).toHaveLength(0);
   });
 });
 

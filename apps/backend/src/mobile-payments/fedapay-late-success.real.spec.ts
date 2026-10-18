@@ -522,17 +522,136 @@ describe('S4 expiry (real processor + live FedaPay re-check)', () => {
     }
   );
 
-  it('rejects the expiry when the live record says approved: acknowledged (2xx), row stays pending, alerted', async () => {
-    const { db, processor } = build([pendingTopUp()]);
-    (Transaction.retrieve as jest.Mock).mockResolvedValue(
-      liveFedaPayTx({ status: 'approved', amount: 2000, custom_metadata: { externalId: 'EXP-REF' } })
-    );
+  const liveApproved = (over: Row = {}) =>
+    liveFedaPayTx({ status: 'approved', amount: 2000, custom_metadata: { externalId: 'EXP-REF' }, ...over });
+
+  it('N3: expired event + live approved -> re-verified as SUCCESS and credited once through the CAS path', async () => {
+    const { db, ledger, processor, calls } = build([pendingTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockImplementation(async () => {
+      calls.push('live-retrieve');
+      return liveApproved();
+    });
 
     const res = await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
 
     expect(res).toEqual({ received: true, transactionId: 777 });
+    expect(calls.filter((c) => c === 'live-retrieve')).toHaveLength(2); // FAILED check, then SUCCESS re-verify
+    expect(calls).toEqual(
+      expect.arrayContaining(['cas:pending->processing', 'deposit:momo-deposit:tx-pending', 'cas:processing->success'])
+    );
+    expect(calls.indexOf('cas:pending->processing')).toBeLessThan(calls.indexOf('deposit:momo-deposit:tx-pending'));
+    expect(ledger.deposits).toEqual([expect.objectContaining({ amount: 2000, idempotencyKey: 'momo-deposit:tx-pending' })]);
+    expect(db.byId.get('tx-pending')).toEqual(expect.objectContaining({ status: 'success', transaction_id: '777' }));
+    expect(anomalyTypes()).toEqual([]);
+  });
+
+  it('N3: a later transaction.approved for the same tx never credits twice', async () => {
+    const { db, ledger, processor } = build([pendingTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(liveApproved());
+    await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
+    await processor.processFedaPayCallback(approved({ amount: 2000, custom_metadata: { externalId: 'EXP-REF' } }));
+    await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
+    expect(ledger.deposits).toHaveLength(1);
+    expect(db.byId.get('tx-pending')?.status).toBe('success');
+  });
+
+  it('N3: expired and approved delivered concurrently -> exactly one credit (CAS + ledger key)', async () => {
+    const { db, ledger, processor } = build([pendingTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(liveApproved());
+    await Promise.allSettled([
+      processor.processFedaPayCallback(expiredEvent('transaction.expired')),
+      processor.processFedaPayCallback(approved({ amount: 2000, custom_metadata: { externalId: 'EXP-REF' } })),
+    ]);
+    expect(ledger.deposits).toHaveLength(1);
+    expect(ledger.deposits[0]).toEqual(expect.objectContaining({ idempotencyKey: 'momo-deposit:tx-pending' }));
+    expect(db.byId.get('tx-pending')?.status).toBe('success');
+  });
+
+  it('N3: the SUCCESS re-verify still applies: live approved but wrong amount -> acknowledged mismatch, no credit', async () => {
+    const { db, ledger, processor } = build([pendingTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(liveApproved({ amount: 1999 }));
+    const res = await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
+    expect(res).toEqual({ received: true, transactionId: 777 });
+    expect(ledger.deposits).toHaveLength(0);
     expect(db.byId.get('tx-pending')?.status).toBe('pending');
     expect(anomalyTypes()).toEqual(['fedapay_callback_live_mismatch']);
+    expect((reportMoneyAnomaly as jest.Mock).mock.calls[0][3]).toEqual(
+      expect.objectContaining({ reason: 'amount_mismatch', claimed: 'SUCCESS' })
+    );
+  });
+
+  it('N3 is only for expiry: a declined event with a live approved record stays an acknowledged mismatch', async () => {
+    const { db, ledger, processor } = build([pendingTopUp()]);
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(liveApproved());
+    await processor.processFedaPayCallback({
+      ...expiredEvent('transaction.declined'),
+      entity: { ...expiredEvent('transaction.declined').entity, status: 'declined' },
+    });
+    expect(ledger.deposits).toHaveLength(0);
+    expect(db.byId.get('tx-pending')?.status).toBe('pending');
+    expect((reportMoneyAnomaly as jest.Mock).mock.calls[0][3]).toEqual(
+      expect.objectContaining({ reason: 'live_status_mismatch', claimed: 'FAILED' })
+    );
+  });
+
+  describe('N2: expiry runs onPaymentFailure for orders, deposits and claims, like a decline', () => {
+    function withFailureSpies(entity: string | null) {
+      const built = build([pendingTopUp()].map((r) => ({ ...r, payment_entity: entity, entity_id: entity ? 'ORD1' : null })));
+      const orders = built.orders;
+      orders.getOrderForProcessingByNumber = jest.fn(async () => ({ id: 'order-uuid' }));
+      orders.onOrderPaymentFailed = jest.fn(async () => undefined);
+      orders.onDepositPaymentFailed = jest.fn(async () => undefined);
+      orders.emitClaimTopupFailed = jest.fn(async () => undefined);
+      (Transaction.retrieve as jest.Mock).mockResolvedValue(
+        liveFedaPayTx({ status: 'expired', amount: 2000, custom_metadata: { externalId: 'EXP-REF' } })
+      );
+      return { ...built, orders };
+    }
+    const declinedEvent = () => ({
+      ...expiredEvent('transaction.declined'),
+      entity: { ...expiredEvent('transaction.declined').entity, status: 'declined' },
+    });
+
+    it.each([
+      ['order', 'onOrderPaymentFailed', ['order-uuid', 'expired']],
+      ['order_deposit', 'onDepositPaymentFailed', ['order-uuid', 'expired']],
+      ['claim_order', 'emitClaimTopupFailed', [expect.objectContaining({ id: 'tx-pending' }), 'expired']],
+    ])('%s: transaction.expired fails the row and calls %s', async (entity, method, args) => {
+      const { db, processor, orders } = withFailureSpies(entity);
+      await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
+      expect(db.byId.get('tx-pending')?.status).toBe('failed');
+      expect(orders[method]).toHaveBeenCalledTimes(1);
+      expect(orders[method]).toHaveBeenCalledWith(...args);
+    });
+
+    it.each([
+      ['order', 'onOrderPaymentFailed'],
+      ['order_deposit', 'onDepositPaymentFailed'],
+      ['claim_order', 'emitClaimTopupFailed'],
+    ])('%s: same handler call as a decline (parity)', async (entity, method) => {
+      const { processor, orders } = withFailureSpies(entity);
+      (Transaction.retrieve as jest.Mock).mockResolvedValue(
+        liveFedaPayTx({ status: 'declined', amount: 2000, custom_metadata: { externalId: 'EXP-REF' } })
+      );
+      await processor.processFedaPayCallback(declinedEvent());
+      expect(orders[method]).toHaveBeenCalledTimes(1);
+      expect((orders[method] as jest.Mock).mock.calls[0][1]).toBe('declined');
+    });
+
+    it('expiry does not run failure handlers when the CAS loses (row no longer pending)', async () => {
+      const { db, processor, orders } = withFailureSpies('order');
+      db.updateTransactionIfStatus.mockResolvedValueOnce(false);
+      await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
+      expect(orders.onOrderPaymentFailed).not.toHaveBeenCalled();
+    });
+
+    it('other entities (a wallet top-up) keep no failure side effects on expiry', async () => {
+      const { db, processor, handler } = withFailureSpies(null);
+      const onFailure = jest.spyOn(handler, 'onPaymentFailure');
+      await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
+      expect(db.byId.get('tx-pending')?.status).toBe('failed');
+      expect(onFailure).not.toHaveBeenCalled();
+    });
   });
 
   it('transaction.updated with a non-expired status stays a no-op', async () => {
