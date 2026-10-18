@@ -7,10 +7,11 @@ import {
   AGENT_LOCATION_TASK_NAME,
 } from '../constants/agentLocationBackground';
 
-const DEFAULT_UPDATE_INTERVAL_MS = 20 * 60 * 1000;
+const DEFAULT_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 const ACTIVE_UPDATE_INTERVAL_MS = 60 * 1000;
 const MIN_DISTANCE_CHANGE_M = 100;
 const ACTIVE_MIN_DISTANCE_M = 50;
+const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000;
 
 let lastActiveDeliveryMode: boolean | null = null;
 
@@ -24,19 +25,29 @@ export function buildLocationTaskOptions(
     ? ACTIVE_UPDATE_INTERVAL_MS
     : DEFAULT_UPDATE_INTERVAL_MS;
   const distanceM = active ? ACTIVE_MIN_DISTANCE_M : MIN_DISTANCE_CHANGE_M;
+
   const base: Location.LocationTaskOptions = {
     accuracy: active ? Location.Accuracy.High : Location.Accuracy.Balanced,
-    distanceInterval: distanceM,
-    deferredUpdatesDistance: distanceM,
-    deferredUpdatesInterval: intervalMs,
     showsBackgroundLocationIndicator: true,
   };
+
   if (Platform.OS === 'android') {
+    base.timeInterval = intervalMs;
+    base.distanceInterval = active ? distanceM : 0;
     base.foregroundService = {
       notificationTitle,
       notificationBody,
     };
+  } else {
+    base.distanceInterval = active ? distanceM : 0;
+    base.deferredUpdatesDistance = active ? distanceM : 0;
+    base.deferredUpdatesInterval = intervalMs;
+    base.pausesUpdatesAutomatically = false;
   }
+
+  return base;
+}
+
   return base;
 }
 

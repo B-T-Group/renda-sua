@@ -11,10 +11,11 @@ import { useStore } from '../stores/RootStore';
 import { updateMyAgentLocation } from '../services/agentLocationHasura';
 import { haversineDistanceM } from '../utils/haversineDistanceM';
 import {
-  readLastSentCoords,
-  writeLastSentCoords,
-  clearLastSentCoords,
+  readLastSentLocation,
+  writeLastSentLocation,
+  clearLastSentLocation,
 } from '../utils/agentLocationLastSentStorage';
+import { shouldSendLocation } from '../utils/shouldSendLocation';
 import {
   startBackgroundLocationUpdates,
   stopBackgroundLocationUpdates,
@@ -23,8 +24,9 @@ import { runAgentLocationPermissionFlow } from '../utils/agentLocationPermission
 import { useAgentLocationPermissionSync } from './useAgentLocationPermissionSync';
 import type { AgentLocationTrackingConsent } from '../types/agentLocationConsent';
 
-const DEFAULT_UPDATE_INTERVAL_MS = 20 * 60 * 1000;
+const DEFAULT_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 const MIN_DISTANCE_CHANGE_M = 100;
+const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000;
 
 type TrackerOptions = {
   consent: AgentLocationTrackingConsent;
@@ -86,7 +88,7 @@ export function useAgentLocationTracker(options: TrackerOptions) {
     await stopBackgroundLocationUpdates();
     backgroundUpdatesActiveRef.current = false;
     lastCoordsRef.current = null;
-    await clearLastSentCoords();
+    await clearLastSentLocation();
     setLocationSetupReady(false);
     setDisclosureVisible(false);
     setTrackingMode('off');
@@ -109,15 +111,20 @@ export function useAgentLocationTracker(options: TrackerOptions) {
       });
       const { latitude, longitude } = location.coords;
 
-      if (lastCoordsRef.current) {
-        const distance = haversineDistanceM(
-          lastCoordsRef.current.lat,
-          lastCoordsRef.current.lng,
-          latitude,
-          longitude
-        );
-        if (distance < minDistanceChangeM) return;
-      }
+      const prev = await readLastSentLocation();
+      const nowMs = Date.now();
+
+      const shouldSend = shouldSendLocation(
+        prev,
+        latitude,
+        longitude,
+        nowMs,
+        minDistanceChangeM,
+        HEARTBEAT_INTERVAL_MS,
+        haversineDistanceM
+      );
+
+      if (!shouldSend) return;
 
       const res = await updateMyAgentLocation(latitude, longitude);
       if (!res.success) {
@@ -125,8 +132,8 @@ export function useAgentLocationTracker(options: TrackerOptions) {
         return;
       }
       lastCoordsRef.current = { lat: latitude, lng: longitude };
-      await writeLastSentCoords(latitude, longitude);
-      setLastUpdate(Date.now());
+      await writeLastSentLocation(latitude, longitude, nowMs);
+      setLastUpdate(nowMs);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Location error');
     } finally {
@@ -217,7 +224,7 @@ export function useAgentLocationTracker(options: TrackerOptions) {
       void stopTracking();
       return undefined;
     }
-    void readLastSentCoords().then((stored) => {
+    void readLastSentLocation().then((stored) => {
       if (stored) lastCoordsRef.current = { lat: stored.lat, lng: stored.lng };
     });
     return () => {

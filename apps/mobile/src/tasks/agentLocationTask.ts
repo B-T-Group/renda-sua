@@ -1,6 +1,9 @@
 /**
  * Background location task — must be registered at app entry (see index.js).
  * Sends fixes to Hasura when the OS delivers batched location updates.
+ * 
+ * iOS note: iOS may still throttle background location updates despite
+ * pausesUpdatesAutomatically: false. This is best-effort on iOS.
  */
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -13,11 +16,16 @@ import {
   AGENT_LOCATION_TASK_NAME,
 } from '../constants/agentLocationBackground';
 import { updateMyAgentLocation } from '../services/agentLocationHasura';
-import { readLastSentCoords, writeLastSentCoords } from '../utils/agentLocationLastSentStorage';
+import {
+  readLastSentLocation,
+  writeLastSentLocation,
+} from '../utils/agentLocationLastSentStorage';
 import { haversineDistanceM } from '../utils/haversineDistanceM';
+import { shouldSendLocation } from '../utils/shouldSendLocation';
 
 const IDLE_MIN_DISTANCE_M = 100;
 const ACTIVE_MIN_DISTANCE_M = 50;
+const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000;
 
 TaskManager.defineTask(AGENT_LOCATION_TASK_NAME, async ({ data, error }) => {
   if (error) return;
@@ -37,15 +45,24 @@ TaskManager.defineTask(AGENT_LOCATION_TASK_NAME, async ({ data, error }) => {
       (await AsyncStorage.getItem(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY)) === '1';
     const minDistance = activeDelivery ? ACTIVE_MIN_DISTANCE_M : IDLE_MIN_DISTANCE_M;
 
-    const prev = await readLastSentCoords();
-    if (prev) {
-      const d = haversineDistanceM(prev.lat, prev.lng, latitude, longitude);
-      if (d < minDistance) return;
-    }
+    const prev = await readLastSentLocation();
+    const nowMs = Date.now();
+
+    const shouldSend = shouldSendLocation(
+      prev,
+      latitude,
+      longitude,
+      nowMs,
+      minDistance,
+      HEARTBEAT_INTERVAL_MS,
+      haversineDistanceM
+    );
+
+    if (!shouldSend) return;
 
     const res = await updateMyAgentLocation(latitude, longitude);
     if (!res.success) return;
-    await writeLastSentCoords(latitude, longitude);
+    await writeLastSentLocation(latitude, longitude, nowMs);
   } catch {
     /* avoid throwing from task worker */
   }
