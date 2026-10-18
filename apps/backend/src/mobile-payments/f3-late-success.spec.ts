@@ -318,7 +318,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
   describe('Order Payment Late Success', () => {
     it('should handle failed order payment when declined then approved', async () => {
       const mockOrderHandler = {
-        canHandle: jest.fn().mockReturnValue(true),
+        supportsPaymentEntity: jest.fn().mockReturnValue(true),
         onSuccess: jest.fn().mockResolvedValue(undefined),
       };
 
@@ -387,7 +387,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
 
     it('should raise anomaly if order payment cannot be applied safely', async () => {
       const mockOrderHandler = {
-        canHandle: jest.fn().mockReturnValue(true),
+        supportsPaymentEntity: jest.fn().mockReturnValue(true),
         onSuccess: jest.fn().mockRejectedValue(new Error('Order already paid')),
       };
 
@@ -446,7 +446,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
     it('should report late_success_non_wallet anomaly when payment_entity is not wallet', async () => {
       // This test specifically verifies the late_success_non_wallet anomaly type
       const mockHandler = {
-        canHandle: jest.fn().mockReturnValue(false), // No handler can handle it
+        supportsPaymentEntity: jest.fn().mockReturnValue(false), // No handler can handle it
       };
 
       registryService.getHandlers.mockReturnValue([mockHandler as any]);
