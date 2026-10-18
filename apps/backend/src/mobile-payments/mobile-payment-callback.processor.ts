@@ -1,4 +1,5 @@
-import { HttpException, Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
 import { ModuleRef } from '@nestjs/core';
 import type { Request } from 'express';
 import { AccountsService } from '../accounts/accounts.service';
@@ -166,9 +167,45 @@ export class MobilePaymentCallbackProcessor {
     return { received: true, reference: callbackData.reference };
   }
 
+  /**
+   * PE-approved response policy: a definite mismatch between the event and the live FedaPay
+   * record (CallbackLiveMismatchError) is acknowledged with the normal 2xx result. Nothing
+   * is credited and no transaction state changes, because every live re-check runs before
+   * any write. It is logged and raised as a money anomaly instead, since FedaPay counts any
+   * non-2xx as a failed delivery and disables the webhook after 10 failures. Transient
+   * errors (API/network, live pending or ambiguous) still propagate, so the controller
+   * answers 5xx and FedaPay retries. The body is the usual `{ received, transactionId }`,
+   * echoing only FedaPay's own entity id, never our references or expected/actual values.
+   */
   async processFedaPayCallback(
     callbackData: FedaPayCallbackDto,
     _req?: Request
+  ): Promise<{ received: boolean; transactionId: number }> {
+    try {
+      return await this.processFedaPayCallbackChecked(callbackData);
+    } catch (error: unknown) {
+      if (!(error instanceof CallbackLiveMismatchError)) throw error;
+      if (!error.alerted) {
+        reportMoneyAnomaly(
+          this.logger,
+          'fedapay_callback_live_mismatch',
+          `${error.message} (${error.detail}); acknowledged without credit or state change`,
+          {
+            transactionId: error.txId,
+            reason: error.reason,
+            claimed: error.claimed,
+            event: callbackData?.name,
+            fedapayEntityId: callbackData?.entity?.id,
+          }
+        );
+        error.alerted = true;
+      }
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+  }
+
+  private async processFedaPayCallbackChecked(
+    callbackData: FedaPayCallbackDto
   ): Promise<{ received: boolean; transactionId: number }> {
     // FedaPay docs (docs.fedapay.com/en/integration-api/collects-management, "Collect Lifecycle"):
     // 'expired' = "the collect was not completed within the allowed time frame" (unpaid collections expire after 24h).
@@ -668,9 +705,10 @@ export class MobilePaymentCallbackProcessor {
    * F3: Late success is confirmed against the LIVE provider record only, never the
    * webhook body. assertProviderConfirmsCallback re-fetches the FedaPay transaction
    * and requires live status approved, live currency XOF, live amount === stored
-   * amount and live reference === stored reference. A definite mismatch (4xx
-   * HttpException) is reported as a money anomaly and rethrown, so nothing is
-   * credited; transient errors are rethrown for the provider retry.
+   * amount and live reference === stored reference. A definite mismatch
+   * (CallbackLiveMismatchError) is reported here as a money anomaly and rethrown, so
+   * nothing is credited; processFedaPayCallback then acknowledges it (2xx) without a
+   * second alert. Transient errors are rethrown for the provider retry (5xx).
    */
   private async confirmLateSuccessLive(
     tx: MobilePaymentTransaction,
@@ -683,19 +721,20 @@ export class MobilePaymentCallbackProcessor {
         this.withFedaPayRecheckId(tx, callbackData),
         'SUCCESS'
       );
-    } catch (error: any) {
-      if (error instanceof HttpException) {
-        await reportMoneyAnomaly(
+    } catch (error: unknown) {
+      if (error instanceof CallbackLiveMismatchError && !error.alerted) {
+        reportMoneyAnomaly(
           this.logger,
           `late_success_${kind}_live_mismatch`,
-          `Late success on ${kind} tx ${tx.id} rejected by live re-check: ${error.message}`,
+          `Late success on ${kind} tx ${tx.id} rejected by live re-check: ${error.message} (${error.detail})`,
           {
             transactionId: tx.id,
             reference: tx.reference,
             amount: tx.amount,
-            httpStatus: error.getStatus(),
+            reason: error.reason,
           }
         );
+        error.alerted = true;
       }
       throw error;
     }

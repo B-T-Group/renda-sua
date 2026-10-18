@@ -4,6 +4,7 @@
  * Hasura and the MyPVit HTTP wrapper are faked.
  */
 import { HttpException, Logger } from '@nestjs/common';
+import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
 import { Transaction } from 'fedapay';
 import { OrdersService } from '../orders/orders.service';
 import { MobilePaymentsController } from './mobile-payments.controller';
@@ -103,23 +104,23 @@ describe('409/422 are FedaPay-only (assertProviderConfirmsCallback)', () => {
     reference: 'REF-F',
   };
 
-  it('FedaPay: live declined vs claimed SUCCESS -> 409', async () => {
+  it('FedaPay: live declined vs claimed SUCCESS -> definite mismatch (acknowledged upstream)', async () => {
     const { mps } = realMps();
     (Transaction.retrieve as jest.Mock).mockResolvedValue({
       id: 777, status: 'declined', amount: 1000, currency: { iso: 'XOF' }, custom_metadata: { externalId: 'REF-F' },
     });
     const err = await mps.assertProviderConfirmsCallback(fedapayTx, 'SUCCESS').catch((e) => e);
-    expect(err).toBeInstanceOf(HttpException);
-    expect((err as HttpException).getStatus()).toBe(409);
+    expect(err).toBeInstanceOf(CallbackLiveMismatchError);
+    expect((err as CallbackLiveMismatchError).reason).toBe('live_status_mismatch');
   });
 
-  it('FedaPay: live currency XAF -> 422', async () => {
+  it('FedaPay: live currency XAF -> definite mismatch', async () => {
     const { mps } = realMps();
     (Transaction.retrieve as jest.Mock).mockResolvedValue({
       id: 777, status: 'approved', amount: 1000, currency: { iso: 'XAF' }, custom_metadata: { externalId: 'REF-F' },
     });
     const err = await mps.assertProviderConfirmsCallback(fedapayTx, 'SUCCESS').catch((e) => e);
-    expect((err as HttpException).getStatus()).toBe(422);
+    expect((err as CallbackLiveMismatchError).reason).toBe('live_currency_not_xof');
   });
 
   it('MyPVit: the same definite mismatch is a plain (5xx, retried) error, not a 409', async () => {

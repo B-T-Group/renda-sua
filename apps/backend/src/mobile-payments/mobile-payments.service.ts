@@ -1,4 +1,8 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import {
+  CallbackLiveMismatchError,
+  CallbackLiveMismatchReason,
+} from './callback-live-mismatch.error';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
@@ -86,8 +90,13 @@ export interface MobilePaymentResponse {
 
 export interface MobileTransactionStatus {
   transactionId: string;
-  /** Normalized provider status; `ambiguous` maps MyPVit AMBIGUOUS (uncertain, recheck later). */
-  status: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous';
+  /**
+   * Normalized provider status; `ambiguous` maps MyPVit AMBIGUOUS (uncertain, recheck later).
+   * `refunded` (FedaPay only): the collect was approved and then returned to the payer. We
+   * hold no funds, so it is never credited, and it is not a plain decline either; callers
+   * leave the row alone and flag it for manual review.
+   */
+  status: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous' | 'refunded';
   amount: number;
   currency: string;
   reference: string;
@@ -254,6 +263,15 @@ export class MobilePaymentsService {
     claimed: 'SUCCESS' | 'FAILED'
   ): Promise<void> {
     const providerTxId = tx.transaction_id?.trim();
+    if (!providerTxId && tx.provider?.toLowerCase() === 'fedapay') {
+      // Nothing to re-check against, and a retry can't add an id: definite, acknowledge.
+      throw new CallbackLiveMismatchError(
+        'missing_transaction_id',
+        tx.id,
+        claimed,
+        'stored row has no provider transaction_id and the webhook gave none'
+      );
+    }
     if (!providerTxId) {
       throw new Error(
         `Cannot verify callback for ${tx.id}: missing provider transaction_id`
@@ -292,113 +310,78 @@ export class MobilePaymentsService {
     claimed: 'SUCCESS' | 'FAILED',
     live: MobileTransactionStatus
   ): void {
+    const isFedaPay = tx.provider?.toLowerCase() === 'fedapay';
+    const mismatch = (reason: CallbackLiveMismatchReason, detail: string) =>
+      new CallbackLiveMismatchError(reason, tx.id, claimed, detail);
+
+    // Transient: stays 5xx so the provider retries (FedaPay included).
+    if (live.status === 'pending' || live.status === 'ambiguous') {
+      throw new Error(
+        `Rejecting ${claimed} callback for ${tx.id}: provider status is ${live.status} (transient, will retry)`
+      );
+    }
+    // Refunded is terminal at FedaPay and never creditable, whatever the event claims.
+    if (live.status === 'refunded') {
+      if (isFedaPay) {
+        throw mismatch('live_refunded', `claimed ${claimed}, live status refunded`);
+      }
+      throw new Error(`Rejecting ${claimed} callback for ${tx.id}: provider status is refunded`);
+    }
+
     if (claimed === 'SUCCESS') {
-      // (b) Transient/pending status stays 5xx so FedaPay retries
-      if (live.status === 'pending' || live.status === 'ambiguous') {
+      if (live.status !== 'success') {
+        if (isFedaPay) {
+          throw mismatch('live_status_mismatch', `claimed SUCCESS, live status ${live.status}`);
+        }
         throw new Error(
-          `Rejecting SUCCESS callback for ${tx.id}: provider status is ${live.status} (transient, will retry)`
+          `Rejecting SUCCESS callback for ${tx.id}: provider status is ${live.status} (non-FedaPay, will retry)`
         );
       }
-      // (b) Definite mismatch (failed/cancelled when SUCCESS claimed)
-      // FedaPay gets 409 (which it understands); other providers get 5xx to trigger retry
-      if (live.status !== 'success') {
-        if (tx.provider === 'fedapay') {
-          throw new HttpException(
-            `Rejecting SUCCESS callback for ${tx.id}: provider status is ${live.status}`,
-            HttpStatus.CONFLICT
-          );
-        } else {
-          throw new Error(
-            `Rejecting SUCCESS callback for ${tx.id}: provider status is ${live.status} (non-FedaPay, will retry)`
-          );
-        }
-      }
-      if (tx.provider === 'fedapay') {
-        // Check stored tx currency is XOF
+      if (isFedaPay) {
         if (tx.currency && tx.currency !== 'XOF') {
-          throw new Error(
-            `Rejecting FedaPay callback for ${tx.id}: stored currency ${tx.currency} is not XOF`
-          );
+          throw mismatch('stored_currency_not_xof', `stored currency ${tx.currency}`);
         }
-        // Check live currency is XOF (fail closed if missing)
         if (!live.currency) {
-          throw new Error(
-            `Rejecting FedaPay callback for ${tx.id}: missing live currency (fail closed)`
-          );
+          throw mismatch('missing_live_currency', 'live record has no currency (fail closed)');
         }
-        // (b) Definite currency mismatch returns 422 Unprocessable Entity
         if (live.currency !== 'XOF') {
-          throw new HttpException(
-            `Rejecting FedaPay callback for ${tx.id}: live currency ${live.currency} is not XOF`,
-            HttpStatus.UNPROCESSABLE_ENTITY
-          );
+          throw mismatch('live_currency_not_xof', `live currency ${live.currency}`);
         }
-        // (b) Definite amount mismatch returns 409 Conflict
         if (tx.amount !== undefined && live.amount !== undefined && live.amount !== tx.amount) {
-          throw new HttpException(
-            `Rejecting FedaPay callback for ${tx.id}: amount mismatch (expected ${tx.amount}, got ${live.amount})`,
-            HttpStatus.CONFLICT
-          );
+          throw mismatch('amount_mismatch', `expected ${tx.amount}, live ${live.amount}`);
         }
-        // Check reference matches stored reference exactly (B4)
-        // live.reference contains merchantRef || fedapay_id (from mapping at :719)
-        // N6: Fail closed if stored reference is empty/null (422 for consistency with FAILED case)
+        // live.reference = custom_metadata.externalId || FedaPay id; must equal ours exactly.
         if (!tx.reference?.trim()) {
-          throw new HttpException(
-            `Rejecting FedaPay callback for ${tx.id}: missing stored reference (fail closed)`,
-            HttpStatus.UNPROCESSABLE_ENTITY
-          );
+          throw mismatch('missing_stored_reference', 'stored row has no reference (fail closed)');
         }
         if (!live.reference) {
-          throw new HttpException(
-            `Rejecting FedaPay callback for ${tx.id}: missing live reference (fail closed)`,
-            HttpStatus.UNPROCESSABLE_ENTITY
-          );
+          throw mismatch('missing_live_reference', 'live record has no reference (fail closed)');
         }
-        // (b) Definite reference mismatch returns 409 Conflict
         if (live.reference !== tx.reference) {
-          throw new HttpException(
-            `Rejecting FedaPay callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference})`,
-            HttpStatus.CONFLICT
-          );
+          throw mismatch('reference_mismatch', `expected ${tx.reference}, live ${live.reference}`);
         }
       }
       return;
     }
-    // (b) Definite mismatch (success when FAILED claimed)
-    // FedaPay gets 409 (which it understands); other providers get 5xx to trigger retry
+
+    // claimed FAILED
     if (live.status === 'success') {
-      if (tx.provider === 'fedapay') {
-        throw new HttpException(
-          `Rejecting FAILED callback for ${tx.id}: provider reports success`,
-          HttpStatus.CONFLICT
-        );
-      } else {
-        throw new Error(
-          `Rejecting FAILED callback for ${tx.id}: provider reports success (non-FedaPay, will retry)`
-        );
+      if (isFedaPay) {
+        throw mismatch('live_status_mismatch', 'claimed FAILED, live status success');
       }
-    }
-    // (b) Transient/pending status stays 5xx so FedaPay retries
-    if (live.status === 'pending' || live.status === 'ambiguous') {
       throw new Error(
-        `Rejecting FAILED callback for ${tx.id}: provider still ${live.status} (transient, will retry)`
+        `Rejecting FAILED callback for ${tx.id}: provider reports success (non-FedaPay, will retry)`
       );
     }
-    // N6: For FedaPay, also verify reference on DECLINED/failed outcomes
-    // (with N2 substitution, a declined result could otherwise be confirmed on status alone)
-    // Fail closed if stored reference is empty/null
-    if (tx.provider === 'fedapay') {
+    // N6: a FedaPay decline is confirmed by reference too (fail closed).
+    if (isFedaPay) {
       if (!tx.reference?.trim()) {
-        throw new HttpException(
-          `Rejecting FedaPay FAILED callback for ${tx.id}: missing stored reference (fail closed)`,
-          HttpStatus.UNPROCESSABLE_ENTITY
-        );
+        throw mismatch('missing_stored_reference', 'stored row has no reference (fail closed)');
       }
       if (live.reference !== tx.reference) {
-        throw new HttpException(
-          `Rejecting FedaPay FAILED callback for ${tx.id}: reference mismatch (expected ${tx.reference}, got ${live.reference || '<missing>'})`,
-          HttpStatus.UNPROCESSABLE_ENTITY
+        throw mismatch(
+          'reference_mismatch',
+          `expected ${tx.reference}, live ${live.reference || '<missing>'}`
         );
       }
     }
@@ -938,6 +921,9 @@ export class MobilePaymentsService {
             pending: 'pending',
             transferred: 'success',
             expired: 'failed', // FedaPay docs: unpaid collections expire after 24h
+            // Approved, then returned to the payer: explicit so it is never 'pending' (5xx
+            // retry loop) nor 'failed' (failure side effects on money that moved twice).
+            refunded: 'refunded',
           };
           status = {
             transactionId: fedapayStatus.transactionId,

@@ -323,7 +323,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/amount mismatch.*expected 1000.*got 999/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'amount_mismatch', detail: expect.stringMatching(/expected 1000, live 999/) });
     });
 
     it('should reject when live currency is not XOF', async () => {
@@ -346,7 +346,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/live currency XAF is not XOF/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'live_currency_not_xof', detail: expect.stringMatching(/live currency XAF/) });
     });
 
     it('should reject when live reference mismatches stored reference', async () => {
@@ -369,7 +369,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/reference mismatch.*expected REF789.*got WRONG_REF/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch', detail: expect.stringMatching(/expected REF789, live WRONG_REF/) });
     });
 
     it('should reject when live currency is missing (fail closed)', async () => {
@@ -392,7 +392,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/missing live currency.*fail closed/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'missing_live_currency' });
     });
 
     it('should reject when live reference is missing (fail closed)', async () => {
@@ -415,7 +415,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/missing live reference.*fail closed/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'missing_live_reference' });
     });
 
     it('should accept when all fields match', async () => {
@@ -451,12 +451,12 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       it('rejects an expired webhook while FedaPay still reports pending', async () => {
         mockFedaPayService.checkTransactionStatus.mockResolvedValue({ status: 'pending', amount: 1000, currency: 'XOF', merchantRef: 'REF-EXP' });
-        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toThrow(/provider still pending/);
+        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toThrow(/provider status is pending \(transient, will retry\)/);
       });
 
       it('rejects an expired webhook whose live reference mismatches', async () => {
         mockFedaPayService.checkTransactionStatus.mockResolvedValue({ status: 'expired', amount: 1000, currency: 'XOF', merchantRef: 'OTHER' });
-        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toThrow(/reference mismatch/);
+        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch' });
       });
     });
 
@@ -480,7 +480,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         });
         await expect(
           realService.assertProviderConfirmsCallback(declinedTx as any, 'FAILED')
-        ).rejects.toThrow(/FAILED callback.*reference mismatch.*expected REF-N6.*got OTHER-REF/i);
+        ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch', detail: expect.stringMatching(/expected REF-N6, live OTHER-REF/) });
       });
 
       it('rejects a declined callback with no live reference (fail closed)', async () => {
@@ -492,7 +492,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         });
         await expect(
           realService.assertProviderConfirmsCallback(declinedTx as any, 'FAILED')
-        ).rejects.toThrow(/reference mismatch.*<missing>/i);
+        ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch', detail: expect.stringMatching(/live <missing>/) });
       });
 
       it('accepts a legitimate declined callback whose reference matches', async () => {

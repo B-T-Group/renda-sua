@@ -790,7 +790,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       await expect(
         realService.assertProviderConfirmsCallback(tx, 'SUCCESS')
-      ).rejects.toThrow(/missing stored reference/);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'missing_stored_reference' });
     });
 
     it('should reject FAILED callback when stored reference is null', async () => {
@@ -818,7 +818,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       await expect(
         realService.assertProviderConfirmsCallback(tx, 'FAILED')
-      ).rejects.toThrow(/missing stored reference/);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'missing_stored_reference' });
     });
 
     it('should reject SUCCESS callback when stored reference is whitespace', async () => {
@@ -846,7 +846,7 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
 
       await expect(
         realService.assertProviderConfirmsCallback(tx, 'SUCCESS')
-      ).rejects.toThrow(/missing stored reference/);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'missing_stored_reference' });
     });
   });
 });

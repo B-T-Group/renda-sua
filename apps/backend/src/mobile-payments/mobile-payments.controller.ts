@@ -1549,8 +1549,9 @@ export class MobilePaymentsController {
     transactionId: string,
     status: Pick<MobileTransactionStatus, 'status' | 'message'>
   ): Promise<void> {
+    // ambiguous / refunded never change the row from a poll (refunded needs manual review).
     const persistedStatus =
-      status.status === 'ambiguous' ? 'pending' : status.status;
+      status.status === 'ambiguous' || status.status === 'refunded' ? 'pending' : status.status;
     await this.databaseService.updateTransaction(transactionId, {
       status: persistedStatus,
       error_message: status.message,

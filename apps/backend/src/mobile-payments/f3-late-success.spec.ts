@@ -5,7 +5,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 import { ModuleRef } from '@nestjs/core';
-import { ConflictException, UnprocessableEntityException } from '@nestjs/common';
+import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
 import type { FedaPayCallbackDto } from './mobile-payment-callback.dto';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 
@@ -219,10 +219,14 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
 
       // The callback body is NOT trusted; the LIVE provider re-check decides.
       mobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValueOnce(
-        new ConflictException('live mismatch')
+        new CallbackLiveMismatchError('amount_mismatch', 'tx-x', 'SUCCESS', 'expected 5000, live 6000')
       );
 
-      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toBeInstanceOf(ConflictException);
+      // Definite mismatch: acknowledged with the normal 2xx body, nothing echoed.
+      await expect(processor.processFedaPayCallback(approvedCallback)).resolves.toEqual({
+        received: true,
+        transactionId: approvedCallback.entity.id,
+      });
       expect(mobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
         expect.objectContaining({ transaction_id: expect.any(String) }),
         'SUCCESS'
@@ -233,7 +237,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      expect(reportMoneyAnomaly).toHaveBeenCalledTimes(1);
       const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
       expect(anomalyType).toBe('late_success_top_up_live_mismatch');
       expect(message).toContain('tx-amount-mismatch');
@@ -271,10 +275,14 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
 
       // The callback body is NOT trusted; the LIVE provider re-check decides.
       mobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValueOnce(
-        new UnprocessableEntityException('live mismatch')
+        new CallbackLiveMismatchError('live_currency_not_xof', 'tx-x', 'SUCCESS', 'live currency XAF')
       );
 
-      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toBeInstanceOf(UnprocessableEntityException);
+      // Definite mismatch: acknowledged with the normal 2xx body, nothing echoed.
+      await expect(processor.processFedaPayCallback(approvedCallback)).resolves.toEqual({
+        received: true,
+        transactionId: approvedCallback.entity.id,
+      });
       expect(mobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
         expect.objectContaining({ transaction_id: expect.any(String) }),
         'SUCCESS'
@@ -285,7 +293,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      expect(reportMoneyAnomaly).toHaveBeenCalledTimes(1);
       const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
       expect(anomalyType).toBe('late_success_top_up_live_mismatch');
       expect(message).toContain('tx-currency-invalid');
@@ -323,10 +331,14 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
 
       // The callback body is NOT trusted; the LIVE provider re-check decides.
       mobilePaymentsService.assertProviderConfirmsCallback.mockRejectedValueOnce(
-        new ConflictException('live mismatch')
+        new CallbackLiveMismatchError('reference_mismatch', 'tx-x', 'SUCCESS', 'expected A, live B')
       );
 
-      await expect(processor.processFedaPayCallback(approvedCallback)).rejects.toBeInstanceOf(ConflictException);
+      // Definite mismatch: acknowledged with the normal 2xx body, nothing echoed.
+      await expect(processor.processFedaPayCallback(approvedCallback)).resolves.toEqual({
+        received: true,
+        transactionId: approvedCallback.entity.id,
+      });
       expect(mobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
         expect.objectContaining({ transaction_id: expect.any(String) }),
         'SUCCESS'
@@ -337,7 +349,7 @@ describe('F3: Late Success Handling (Declined then Approved)', () => {
       expect(databaseService.updateTransactionIfStatus).not.toHaveBeenCalled();
 
       // Verify money anomaly was reported
-      expect(reportMoneyAnomaly).toHaveBeenCalled();
+      expect(reportMoneyAnomaly).toHaveBeenCalledTimes(1);
       const [, anomalyType, message] = (reportMoneyAnomaly as jest.Mock).mock.calls[0];
       expect(anomalyType).toBe('late_success_top_up_live_mismatch');
       expect(message).toContain('tx-ref-mismatch');

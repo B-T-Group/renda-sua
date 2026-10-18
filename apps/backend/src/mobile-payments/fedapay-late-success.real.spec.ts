@@ -10,7 +10,7 @@
  * classifyExtraOrderPayment -> recordDuplicateOrderPayment). Only the order lookup,
  * the (huge) finalizeOrderAfterIncomingPayment and the push notification are stubbed.
  */
-import { HttpException, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import { Transaction } from 'fedapay';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
@@ -354,18 +354,18 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
     );
   });
 
-  it('decides on the LIVE record: callback body says 8000 XOF but live amount is 9000 -> 409, nothing credited or applied', async () => {
+  it('decides on the LIVE record: callback body says 8000 XOF but live amount is 9000 -> acknowledged (2xx), nothing credited or applied, one alert', async () => {
     const { db, ledger, handler, processor } = build([failedOrderRow()]);
     (Transaction.retrieve as jest.Mock).mockResolvedValue(liveFedaPayTx({ amount: 9000 }));
 
-    const err = await processor.processFedaPayCallback(approved()).catch((e) => e);
+    const res = await processor.processFedaPayCallback(approved());
 
-    expect(err).toBeInstanceOf(HttpException);
-    expect((err as HttpException).getStatus()).toBe(409);
+    expect(res).toEqual({ received: true, transactionId: expect.any(Number) });
     expect(ledger.deposits).toHaveLength(0);
     expect(handler.onLateSuccessAfterSupersede).not.toHaveBeenCalled();
     expect(db.byId.get('tx-order')?.status).toBe('failed');
-    expect(anomalyTypes()).toContain('late_success_order_live_mismatch');
+    // Exactly one alert: the late-success marker, not a second generic one.
+    expect(anomalyTypes()).toEqual(['late_success_order_live_mismatch']);
   });
 
   it('ignores a lying callback body when the live record confirms (body amount/currency are not trusted)', async () => {
@@ -381,13 +381,13 @@ describe('S1 order late success (real processor + live FedaPay re-check)', () =>
     expect(orders.finalizeOrderAfterIncomingPayment).toHaveBeenCalledTimes(1);
   });
 
-  it('live status declined -> 409, row stays failed', async () => {
+  it('live status declined -> acknowledged (2xx), row stays failed', async () => {
     const { db, ledger, processor } = build([failedOrderRow()]);
     (Transaction.retrieve as jest.Mock).mockResolvedValue(liveFedaPayTx({ status: 'declined' }));
 
-    const err = await processor.processFedaPayCallback(approved()).catch((e) => e);
+    const res = await processor.processFedaPayCallback(approved());
 
-    expect((err as HttpException).getStatus()).toBe(409);
+    expect(res).toEqual({ received: true, transactionId: expect.any(Number) });
     expect(ledger.deposits).toHaveLength(0);
     expect(db.byId.get('tx-order')?.status).toBe('failed');
   });
@@ -468,17 +468,17 @@ describe('S1 top-up late success (real processor + live FedaPay re-check)', () =
     expect(ok.db.byId.get('tx-topup')?.status).toBe('success');
   });
 
-  it('live currency XAF -> 422, nothing credited, anomaly raised', async () => {
+  it('live currency XAF -> acknowledged (2xx), nothing credited, anomaly raised', async () => {
     const { db, ledger, processor } = build([failedTopUp()]);
     (Transaction.retrieve as jest.Mock).mockResolvedValue(
       liveFedaPayTx({ amount: 5000, currency: { iso: 'XAF' }, custom_metadata: { externalId: 'TOPUP-REF' } })
     );
 
-    const err = await processor
-      .processFedaPayCallback(approved({ amount: 5000, custom_metadata: { externalId: 'TOPUP-REF' } }))
-      .catch((e) => e);
+    const res = await processor.processFedaPayCallback(
+      approved({ amount: 5000, custom_metadata: { externalId: 'TOPUP-REF' } })
+    );
 
-    expect((err as HttpException).getStatus()).toBe(422);
+    expect(res).toEqual({ received: true, transactionId: expect.any(Number) });
     expect(ledger.deposits).toHaveLength(0);
     expect(db.byId.get('tx-topup')?.status).toBe('failed');
     expect(anomalyTypes()).toContain('late_success_top_up_live_mismatch');
@@ -522,18 +522,17 @@ describe('S4 expiry (real processor + live FedaPay re-check)', () => {
     }
   );
 
-  it('rejects the expiry when the live record says approved (409) and leaves the row pending', async () => {
+  it('rejects the expiry when the live record says approved: acknowledged (2xx), row stays pending, alerted', async () => {
     const { db, processor } = build([pendingTopUp()]);
     (Transaction.retrieve as jest.Mock).mockResolvedValue(
       liveFedaPayTx({ status: 'approved', amount: 2000, custom_metadata: { externalId: 'EXP-REF' } })
     );
 
-    const err = await processor
-      .processFedaPayCallback(expiredEvent('transaction.expired'))
-      .catch((e) => e);
+    const res = await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
 
-    expect((err as HttpException).getStatus()).toBe(409);
+    expect(res).toEqual({ received: true, transactionId: 777 });
     expect(db.byId.get('tx-pending')?.status).toBe('pending');
+    expect(anomalyTypes()).toEqual(['fedapay_callback_live_mismatch']);
   });
 
   it('transaction.updated with a non-expired status stays a no-op', async () => {

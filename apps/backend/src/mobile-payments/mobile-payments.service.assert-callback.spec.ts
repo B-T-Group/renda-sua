@@ -1,3 +1,4 @@
+import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
 import { MobilePaymentsService } from './mobile-payments.service';
 
 describe('MobilePaymentsService.assertProviderConfirmsCallback', () => {
@@ -81,51 +82,51 @@ describe('MobilePaymentsService.assertProviderConfirmsCallback', () => {
       reference: 'REF-123',
     };
 
-    it('returns 409 for amount mismatch', async () => {
+    it('amount mismatch is a definite CallbackLiveMismatchError (acknowledged upstream)', async () => {
       const service = buildFedaPayService({ status: 'success', amount: 2000 });
       
       try {
         await service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS');
-        fail('Should have thrown HttpException');
+        fail('Should have thrown CallbackLiveMismatchError');
       } catch (error: any) {
-        expect(error.getStatus()).toBe(409); // CONFLICT
-        expect(error.message).toContain('amount mismatch');
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('amount_mismatch');
       }
     });
 
-    it('returns 422 for currency mismatch', async () => {
+    it('currency mismatch is a definite CallbackLiveMismatchError', async () => {
       const service = buildFedaPayService({ status: 'success', currency: 'USD' });
       
       try {
         await service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS');
-        fail('Should have thrown HttpException');
+        fail('Should have thrown CallbackLiveMismatchError');
       } catch (error: any) {
-        expect(error.getStatus()).toBe(422); // UNPROCESSABLE_ENTITY
-        expect(error.message).toContain('live currency USD is not XOF');
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('live_currency_not_xof');
       }
     });
 
-    it('returns 409 for reference mismatch', async () => {
+    it('reference mismatch is a definite CallbackLiveMismatchError', async () => {
       const service = buildFedaPayService({ status: 'success', reference: 'WRONG-REF' });
       
       try {
         await service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS');
-        fail('Should have thrown HttpException');
+        fail('Should have thrown CallbackLiveMismatchError');
       } catch (error: any) {
-        expect(error.getStatus()).toBe(409); // CONFLICT
-        expect(error.message).toContain('reference mismatch');
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('reference_mismatch');
       }
     });
 
-    it('returns 409 for status mismatch (SUCCESS claimed but provider says failed)', async () => {
+    it('status mismatch (SUCCESS claimed, provider failed) is a definite CallbackLiveMismatchError', async () => {
       const service = buildFedaPayService({ status: 'failed' });
       
       try {
         await service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS');
-        fail('Should have thrown HttpException');
+        fail('Should have thrown CallbackLiveMismatchError');
       } catch (error: any) {
-        expect(error.getStatus()).toBe(409); // CONFLICT
-        expect(error.message).toContain('provider status is failed');
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('live_status_mismatch');
       }
     });
 
