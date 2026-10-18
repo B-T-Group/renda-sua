@@ -83,7 +83,14 @@ TaskManager.defineTask(AGENT_LOCATION_TASK_NAME, async ({ data, error }) => {
 
       if (!canRetryAfterFailure(FAILURE_BACKOFF_MS)) return;
 
-      const res = await updateMyAgentLocation(latitude, longitude);
+      let res;
+      try {
+        res = await updateMyAgentLocation(latitude, longitude);
+      } catch {
+        recordFailure();
+        return;
+      }
+
       if (!res.success) {
         recordFailure();
         return;

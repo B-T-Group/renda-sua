@@ -137,7 +137,15 @@ export function useAgentLocationTracker(options: TrackerOptions) {
 
       if (!canRetryAfterFailure(FAILURE_BACKOFF_MS)) return;
 
-      const res = await updateMyAgentLocation(latitude, longitude);
+      let res;
+      try {
+        res = await updateMyAgentLocation(latitude, longitude);
+      } catch (e: unknown) {
+        recordFailure();
+        setError(e instanceof Error ? e.message : 'Network error');
+        return;
+      }
+
       if (!res.success) {
         recordFailure();
         setError(res.error ?? 'Failed to send location');
@@ -147,7 +155,6 @@ export function useAgentLocationTracker(options: TrackerOptions) {
       await writeLastSentLocation(latitude, longitude, nowMs, auth.user.id, generation);
       setLastUpdate(nowMs);
     } catch (e: unknown) {
-      recordFailure();
       setError(e instanceof Error ? e.message : 'Location error');
     } finally {
       isUpdatingRef.current = false;
