@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nestjs';
+import { scrubSentryEvent } from './common/sentry/scrub-sentry-event';
 
 /**
  * Initialize Sentry when SENTRY_DSN is set.
@@ -16,10 +17,36 @@ export function initSentry(): void {
       process.env.DEPLOYMENT_ENV || process.env.NODE_ENV || 'development',
     release: process.env.GIT_SHA || process.env.GITHUB_SHA || undefined,
     tracesSampleRate: 0.1,
-    beforeSend(event, hint) {
-      return isExpectedUnavailable(hint?.originalException) ? null : event;
-    },
+    // Never attach request bodies or cookies (webhook bodies carry live provider secrets).
+    integrations: [
+      Sentry.requestDataIntegration({ include: { data: false, cookies: false } }),
+    ],
+    beforeSend: sentryBeforeSend,
+    beforeSendTransaction: sentryBeforeSendTransaction,
   });
+}
+
+/**
+ * Fail closed (QA #589 D3): an event we could not fully scrub is never sent. Returning null
+ * from the hook drops it; letting the hook throw would make the SDK send its own
+ * "Event processing pipeline threw" event instead.
+ */
+export function scrubAll<E>(event: E): E | null {
+  try {
+    return scrubSentryEvent(event);
+  } catch {
+    return null;
+  }
+}
+
+/** Drops expected-unavailable noise, then scrubs bodies, credentials and secrets. */
+export function sentryBeforeSend<E>(event: E, hint?: { originalException?: unknown }): E | null {
+  if (isExpectedUnavailable(hint?.originalException)) return null;
+  return scrubAll(event);
+}
+
+export function sentryBeforeSendTransaction<E>(event: E): E | null {
+  return scrubAll(event);
 }
 
 const EXPECTED_UNAVAILABLE_MESSAGES = [

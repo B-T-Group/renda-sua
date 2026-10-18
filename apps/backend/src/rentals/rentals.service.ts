@@ -10,7 +10,7 @@ import { AccountsService } from '../accounts/accounts.service';
 import { AddressesService } from '../addresses/addresses.service';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
-import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import { MobilePaymentsService, MobilePaymentRequest } from '../mobile-payments/mobile-payments.service';
 import { resolveItemCountry } from '../mobile-payments/item-country.util';
 import { DeliveryPinService } from '../delivery-pin/delivery-pin.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -2377,7 +2377,7 @@ export class RentalsService {
     }
 
     const provider = params.itemCountry
-      ? this.mobilePaymentsService.getProviderForCountry(params.itemCountry)
+      ? await this.mobilePaymentsService.getProviderForCountry(params.itemCountry)
       : this.mobilePaymentsService.getProvider(params.phoneNumber);
 
     const isMyPVitLike = provider === 'mypvit';
@@ -2398,7 +2398,7 @@ export class RentalsService {
       amount: params.amount,
       currency: params.currency,
       description: descriptionShort,
-      provider,
+      provider: await provider,
       payment_method: 'mobile_money',
       customer_phone: params.phoneNumber,
       ...(params.email ? { customer_email: params.email } : {}),
@@ -2408,16 +2408,15 @@ export class RentalsService {
       entity_id: params.bookingNumber,
     });
 
-    const paymentRequest = {
+    const paymentRequest: MobilePaymentRequest = {
       amount: params.amount,
       currency: params.currency,
       description: descriptionShort,
       customerPhone: params.phoneNumber,
-      provider,
+      provider: await provider,
       itemCountry: params.itemCountry ?? undefined,
       ownerCharge: 'CUSTOMER' as const,
       transactionType: 'PAYMENT' as const,
-      payment_entity: params.paymentEntity,
     };
 
     const paymentResponse = await this.mobilePaymentsService.initiatePayment(

@@ -88,7 +88,7 @@ export class AdminMobilePaymentsController {
     const tx = await this.requireTransaction(id);
     const providerTxId = this.requireProviderTxId(tx);
     const provider = this.resolveProvider(tx);
-    const live = await this.checkLiveStatus(tx, providerTxId, provider);
+    const live = await this.checkLiveStatus(tx, providerTxId, await provider);
     return {
       success: true,
       data: {
@@ -115,11 +115,11 @@ export class AdminMobilePaymentsController {
     const tx = await this.requirePendingResolvable(id);
     const providerTxId = this.requireProviderTxId(tx);
     const provider = this.resolveProvider(tx);
-    const live = await this.checkLiveStatus(tx, providerTxId, provider);
+    const live = await this.checkLiveStatus(tx, await providerTxId, await provider);
     if (live.status === 'pending' || live.status === 'ambiguous') {
-      return this.stillPendingResponse(live, provider);
+      return this.stillPendingResponse(live, await provider);
     }
-    return this.replayTerminal(tx, live, provider, req);
+    return this.replayTerminal(tx, live, await provider, req);
   }
 
   private async requireTransaction(
@@ -153,11 +153,11 @@ export class AdminMobilePaymentsController {
     return providerTxId;
   }
 
-  private resolveProvider(
+  private async resolveProvider(
     tx: MobilePaymentTransaction
-  ): MobilePaymentIntegrationProvider {
+  ): Promise<MobilePaymentIntegrationProvider> {
     try {
-      return this.mobilePaymentsService.resolveAdminIntegrationProvider(
+      return await this.mobilePaymentsService.resolveAdminIntegrationProvider(
         tx.customer_phone,
         tx.provider
       );
@@ -182,10 +182,12 @@ export class AdminMobilePaymentsController {
     provider: MobilePaymentIntegrationProvider
   ): Promise<MobileTransactionStatus> {
     try {
+      const isGiveChange = tx.transaction_type === 'GIVE_CHANGE';
       return await this.mobilePaymentsService.checkTransactionStatus(
         providerTxId,
         provider,
-        tx.customer_phone
+        tx.customer_phone,
+        isGiveChange
       );
     } catch (error: any) {
       this.logger.warn(

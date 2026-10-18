@@ -40,6 +40,8 @@ export interface GiveChangePayoutResult {
     paymentUrl?: string;
     message?: string;
     provider?: string;
+    status?: 'pending';
+    reason?: 'provider_ambiguous';
   };
 }
 
@@ -307,9 +309,10 @@ export class GiveChangePayoutService {
     reference: string,
     params: GiveChangePayoutParams,
     message: string | undefined,
-    errorCode: string | undefined
+    errorCode: string | undefined,
+    providerTxId?: string
   ): Promise<void> {
-    await this.markFailed(mobileTxId, message, errorCode);
+    await this.markFailed(mobileTxId, message, errorCode, providerTxId);
     await this.releaseGiveChangeHold(
       params.accountId,
       params.amount,
@@ -321,13 +324,15 @@ export class GiveChangePayoutService {
   private async markFailed(
     mobileTxId: string,
     message: string | undefined,
-    errorCode: string | undefined
+    errorCode: string | undefined,
+    providerTxId?: string
   ): Promise<void> {
     try {
       await this.databaseService.updateTransaction(mobileTxId, {
         status: 'failed',
         error_message: message,
         error_code: errorCode,
+        ...(providerTxId ? { transaction_id: providerTxId } : {}),
       });
     } catch (error: any) {
       this.logger.error(
@@ -351,6 +356,7 @@ export class GiveChangePayoutService {
       paymentUrl: paymentResponse.paymentUrl,
       message: paymentResponse.message,
       provider: paymentResponse.provider,
+      ...(paymentResponse.reason ? { status: paymentResponse.status, reason: paymentResponse.reason } : {}),
     };
 
     if (!paymentResponse.success || !providerTxId) {
@@ -359,7 +365,8 @@ export class GiveChangePayoutService {
         reference,
         params,
         paymentResponse.message,
-        paymentResponse.errorCode || 'PROVIDER_INIT_FAILED'
+        paymentResponse.errorCode || 'PROVIDER_INIT_FAILED',
+        providerTxId // Keep FedaPay id on failed withdrawal rows for audit trail
       );
       return { success: false, data };
     }
