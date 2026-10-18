@@ -125,7 +125,7 @@ describe('dedicated agents migration (20261018180000)', () => {
     expect(up).toMatch(/FROM public\.agents WHERE id = NEW\.agent_id FOR UPDATE/);
     expect(up).toContain("config_key = 'dedicated_max_assignments_per_agent'");
     expect(up).toMatch(
-      /CREATE TRIGGER dedicated_agent_assignments_enforce_cap\s+BEFORE INSERT OR UPDATE OF status, agent_id ON public\.dedicated_agent_assignments\s+FOR EACH ROW EXECUTE FUNCTION public\.dedicated_agent_assignments_enforce_cap\(\);/
+      /^CREATE TRIGGER dedicated_agent_assignments_enforce_cap\s+BEFORE INSERT OR UPDATE OF status, agent_id ON public\.dedicated_agent_assignments\s+FOR EACH ROW EXECUTE FUNCTION public\.dedicated_agent_assignments_enforce_cap\(\);/m
     );
   });
 
