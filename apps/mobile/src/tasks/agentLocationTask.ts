@@ -25,12 +25,17 @@ import {
   readLastSentLocation,
   writeLastSentLocation,
   getStopGeneration,
+  beginSend,
+  endSend,
+  recordAttempt,
+  canRetryAfterFailure,
 } from '../utils/agentLocationLastSentStorage';
 import { haversineDistanceM } from '../utils/haversineDistanceM';
 import { shouldSendLocation } from '../utils/shouldSendLocation';
 
 const IDLE_MIN_DISTANCE_M = 100;
 const ACTIVE_MIN_DISTANCE_M = 50;
+const FAILURE_BACKOFF_MS = 60 * 1000;
 
 TaskManager.defineTask(AGENT_LOCATION_TASK_NAME, async ({ data, error }) => {
   if (error) return;
@@ -59,22 +64,31 @@ TaskManager.defineTask(AGENT_LOCATION_TASK_NAME, async ({ data, error }) => {
     const prev = await readLastSentLocation(user.id);
     const nowMs = Date.now();
 
-    const shouldSend = shouldSendLocation(
-      prev,
-      latitude,
-      longitude,
-      nowMs,
-      minDistance,
-      HEARTBEAT_INTERVAL_MS,
-      HEARTBEAT_SLACK_MS,
-      haversineDistanceM
-    );
+    if (!beginSend()) return;
 
-    if (!shouldSend) return;
+    try {
+      const shouldSend = shouldSendLocation(
+        prev,
+        latitude,
+        longitude,
+        nowMs,
+        minDistance,
+        HEARTBEAT_INTERVAL_MS,
+        HEARTBEAT_SLACK_MS,
+        haversineDistanceM
+      );
 
-    const res = await updateMyAgentLocation(latitude, longitude);
-    if (!res.success) return;
-    await writeLastSentLocation(latitude, longitude, nowMs, user.id, generation);
+      if (!shouldSend) return;
+
+      if (!canRetryAfterFailure(FAILURE_BACKOFF_MS)) return;
+
+      recordAttempt();
+      const res = await updateMyAgentLocation(latitude, longitude);
+      if (!res.success) return;
+      await writeLastSentLocation(latitude, longitude, nowMs, user.id, generation);
+    } finally {
+      endSend();
+    }
   } catch {
     /* avoid throwing from task worker */
   }

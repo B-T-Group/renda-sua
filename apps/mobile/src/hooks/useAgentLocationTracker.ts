@@ -15,6 +15,10 @@ import {
   writeLastSentLocation,
   clearLastSentLocation,
   getStopGeneration,
+  beginSend,
+  endSend,
+  recordAttempt,
+  canRetryAfterFailure,
 } from '../utils/agentLocationLastSentStorage';
 import { shouldSendLocation } from '../utils/shouldSendLocation';
 import { HEARTBEAT_INTERVAL_MS, HEARTBEAT_SLACK_MS } from '../constants/agentLocationBackground';
@@ -28,6 +32,7 @@ import type { AgentLocationTrackingConsent } from '../types/agentLocationConsent
 
 const DEFAULT_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 const MIN_DISTANCE_CHANGE_M = 100;
+const FAILURE_BACKOFF_MS = 60 * 1000;
 
 type TrackerOptions = {
   consent: AgentLocationTrackingConsent;
@@ -98,6 +103,8 @@ export function useAgentLocationTracker(options: TrackerOptions) {
     if (!auth.user?.id) return;
     if (isUpdatingRef.current) return;
 
+    if (!beginSend()) return;
+
     try {
       isUpdatingRef.current = true;
       setError(null);
@@ -127,6 +134,9 @@ export function useAgentLocationTracker(options: TrackerOptions) {
 
       if (!shouldSend) return;
 
+      if (!canRetryAfterFailure(FAILURE_BACKOFF_MS)) return;
+
+      recordAttempt();
       const res = await updateMyAgentLocation(latitude, longitude);
       if (!res.success) {
         setError(res.error ?? 'Failed to send location');
@@ -138,6 +148,7 @@ export function useAgentLocationTracker(options: TrackerOptions) {
       setError(e instanceof Error ? e.message : 'Location error');
     } finally {
       isUpdatingRef.current = false;
+      endSend();
     }
   }, [auth.user?.id, locationSetupReady, minDistanceChangeM, shouldTrack]);
 
