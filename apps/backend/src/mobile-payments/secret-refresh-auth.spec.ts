@@ -230,7 +230,6 @@ describe('H1: no hard-coded account-code fallback', () => {
     ['both unset', undefined, undefined],
     ['airtel unset', undefined, MOOV],
     ['moov unset', AIRTEL, undefined],
-    ['identical codes', AIRTEL, AIRTEL],
   ])('%s -> 503 and nothing stored, even with the old repo default code', async (_l, airtel, moov) => {
     if (airtel === undefined) delete process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE;
     else process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE = airtel;
@@ -241,6 +240,44 @@ describe('H1: no hard-coded account-code fallback', () => {
       await status(ctrl.handleSecretRefreshCallback(TOKEN, body({ merchant_operation_account_code: OLD_HARDCODED }), req()))
     ).toBe(503);
     expect(update).not.toHaveBeenCalled();
+  });
+
+  it('QA #593 R1: identical codes (one account, DEV) store the key under both names, no 503', async () => {
+    process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE = ` ${AIRTEL} `;
+    const ctrl = controller();
+    const res = await ctrl.handleSecretRefreshCallback(TOKEN, body(), req());
+    expect(res.success).toBe(true);
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(mypvitSecretName(), 'AIRTEL_MYPVIT_SECRET_KEY', NEW_SECRET, {
+      MOOV_MYPVIT_SECRET_KEY: NEW_SECRET,
+    });
+    expect(JSON.stringify(logged)).toContain('stored AIRTEL_MYPVIT_SECRET_KEY and MOOV_MYPVIT_SECRET_KEY');
+    expectNothingLeaked([res]);
+  });
+
+  it('QA #593 R1: identical codes still reject an unknown account (400) and a bad token (401)', async () => {
+    process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE = AIRTEL;
+    const ctrl = controller();
+    expect(
+      await status(ctrl.handleSecretRefreshCallback(TOKEN, body({ merchant_operation_account_code: MOOV }), req()))
+    ).toBe(400);
+    expect(await status(ctrl.handleSecretRefreshCallback('tok_wrong', body(), req()))).toBe(401);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('QA #593 R1: identical codes + a failing store -> 500 naming both keys, nothing leaked', async () => {
+    process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE = AIRTEL;
+    const ctrl = controller();
+    update.mockRejectedValueOnce(new Error(`could not parse {"AIRTEL_MYPVIT_SECRET_KEY":"${NEW_SECRET}"}`));
+    let caught: unknown;
+    try {
+      await ctrl.handleSecretRefreshCallback(TOKEN, body(), req());
+    } catch (e) {
+      caught = e;
+    }
+    expect((caught as HttpException).getStatus()).toBe(500);
+    expect(JSON.stringify(logged)).toContain('failed to store AIRTEL_MYPVIT_SECRET_KEY and MOOV_MYPVIT_SECRET_KEY: Error');
+    expectNothingLeaked([(caught as HttpException).getResponse()]);
   });
 
   it('the old hard-coded code is just an unknown account when real codes are configured -> 400', async () => {
@@ -390,13 +427,41 @@ describe('QA #593 S3: no account-code fallback anywhere; the app fails at boot',
     expect(JSON.stringify(warn.mock.calls)).not.toContain('identical');
   });
 
-  it('identical codes (DEV sandbox) still boot, but warn that secret refresh will be refused', () => {
+  it('identical codes outside production (DEV) still boot, with a warning', () => {
+    process.env.NODE_ENV = 'development';
+    delete process.env.DEPLOYMENT_ENV;
     const warn = freshWarnSpy();
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const { MyPVitService, requireOperationAccountCodes } = require('./providers/mypvit.service');
     const cfg = { airtelMerchantOperationAccountCode: AIRTEL, moovMerchantOperationAccountCode: ` ${AIRTEL}` };
-    expect(requireOperationAccountCodes(cfg)).toEqual({ airtel: AIRTEL, moov: AIRTEL, identical: true });
+    expect(requireOperationAccountCodes(cfg, { NODE_ENV: 'development' })).toEqual({ airtel: AIRTEL, moov: AIRTEL, identical: true });
+    expect(requireOperationAccountCodes(cfg, { NODE_ENV: 'test' })).toEqual({ airtel: AIRTEL, moov: AIRTEL, identical: true });
     expect(() => new MyPVitService({ get: () => cfg } as never)).not.toThrow();
     expect(JSON.stringify(warn.mock.calls)).toContain('operation account codes are identical');
+    expect(JSON.stringify(warn.mock.calls)).toContain('stores the key under both names');
+  });
+
+  it.each([
+    ['NODE_ENV=production', { NODE_ENV: 'production' }],
+    ['NODE_ENV= Production ', { NODE_ENV: ' Production ' }],
+    ['DEPLOYMENT_ENV=production, NODE_ENV=development', { NODE_ENV: 'development', DEPLOYMENT_ENV: 'production' }],
+  ])('QA #593 R1: identical codes fail boot in production (%s)', (_l, env) => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { MyPVitService, requireOperationAccountCodes } = require('./providers/mypvit.service');
+    const cfg = { airtelMerchantOperationAccountCode: AIRTEL, moovMerchantOperationAccountCode: AIRTEL };
+    expect(() => requireOperationAccountCodes(cfg, env)).toThrow(/must differ in production/);
+    // The constructor reads process.env, as Nest does at boot.
+    delete process.env.DEPLOYMENT_ENV;
+    Object.assign(process.env, env);
+    expect(() => new MyPVitService({ get: () => cfg } as never)).toThrow(/must differ in production/);
+  });
+
+  it('QA #593 R1: distinct codes boot fine in production', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { MyPVitService, requireOperationAccountCodes } = require('./providers/mypvit.service');
+    const cfg = { airtelMerchantOperationAccountCode: AIRTEL, moovMerchantOperationAccountCode: MOOV };
+    expect(requireOperationAccountCodes(cfg, { NODE_ENV: 'production' })).toEqual({ airtel: AIRTEL, moov: MOOV, identical: false });
+    process.env.NODE_ENV = 'production';
+    expect(() => new MyPVitService({ get: () => cfg } as never)).not.toThrow();
   });
 });

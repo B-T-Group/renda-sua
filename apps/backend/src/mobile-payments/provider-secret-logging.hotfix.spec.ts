@@ -38,6 +38,7 @@ import { MobilePaymentsService } from './mobile-payments.service';
 import { FedaPayService } from './providers/fedapay.service';
 import { FreemopayService } from './providers/freemopay.service';
 import { MyPVitService } from './providers/mypvit.service';
+import { mypvitSecretName } from './secret-refresh-auth';
 import { redactSecrets } from './sanitize-provider-error.util';
 
 // Dummy keys are assembled at runtime so no key-shaped literal sits in the source
@@ -229,8 +230,34 @@ describe('1. MyPVit secret rotation never logs secret values', () => {
     const update = awsSend.mock.calls.map(([c]) => c).find((c: any) => c.kind === 'update');
     expect(JSON.parse(update.input.SecretString).AIRTEL_MYPVIT_SECRET_KEY).toBe(NEW_SECRET);
     const text = everything([res]);
-    expect(text).toContain('Updating secret production-rendasua-backend-secrets with key AIRTEL_MYPVIT_SECRET_KEY'.replace('production', process.env.NODE_ENV || 'development'));
+    // QA #593 R3: the name comes from mypvitSecretName() (DEPLOYMENT_ENV/NODE_ENV rule), not NODE_ENV.
+    expect(update.input.SecretId).toBe(mypvitSecretName());
+    expect(text).toContain(`Updating secret ${mypvitSecretName()} with key AIRTEL_MYPVIT_SECRET_KEY`);
     expect(text).toContain('MyPVit secret refresh stored AIRTEL_MYPVIT_SECRET_KEY');
+    expectNoSecrets(text);
+  });
+
+  it('QA #593 R1: identical codes (one account) store the key under BOTH names in one write', async () => {
+    process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE = 'ACC_AIRTEL';
+    awsSend.mockImplementation(async (cmd: any) =>
+      cmd.kind === 'get'
+        ? { SecretString: JSON.stringify({ AIRTEL_MYPVIT_SECRET_KEY: OLD_AIRTEL, MOOV_MYPVIT_SECRET_KEY: OLD_MOOV, OTHER: 'kept' }) }
+        : {}
+    );
+
+    const res = await controller(mps()).handleSecretRefreshCallback(REFRESH_TOKEN, webhook, MYPVIT_REQ);
+
+    expect(res.success).toBe(true);
+    const updates = awsSend.mock.calls.map(([c]) => c).filter((c: any) => c.kind === 'update');
+    expect(updates).toHaveLength(1);
+    expect(updates[0].input.SecretId).toBe(mypvitSecretName());
+    expect(JSON.parse(updates[0].input.SecretString)).toEqual({
+      AIRTEL_MYPVIT_SECRET_KEY: NEW_SECRET,
+      MOOV_MYPVIT_SECRET_KEY: NEW_SECRET,
+      OTHER: 'kept',
+    });
+    const text = everything([res]);
+    expect(text).toContain('MyPVit secret refresh stored AIRTEL_MYPVIT_SECRET_KEY and MOOV_MYPVIT_SECRET_KEY');
     expectNoSecrets(text);
   });
 

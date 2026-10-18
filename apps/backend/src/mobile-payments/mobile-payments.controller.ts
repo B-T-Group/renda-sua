@@ -1008,14 +1008,17 @@ export class MobilePaymentsController {
     const [primaryKey, ...alsoKeys] = secretKeyNames;
     const keysLabel = secretKeyNames.join(' and ');
     try {
-      await this.mobilePaymentsService.updateSecretInSecretsManager(
-        mypvitSecretName(),
-        primaryKey,
-        secret,
-        alsoKeys.length > 0
-          ? Object.fromEntries(alsoKeys.map((k) => [k, secret]))
-          : undefined
-      );
+      if (alsoKeys.length > 0) {
+        // One write: the extra names ride in the same merged SecretString.
+        await this.mobilePaymentsService.updateSecretInSecretsManager(
+          mypvitSecretName(),
+          primaryKey,
+          secret,
+          Object.fromEntries(alsoKeys.map((k) => [k, secret]))
+        );
+      } else {
+        await this.mobilePaymentsService.updateSecretInSecretsManager(mypvitSecretName(), primaryKey, secret);
+      }
     } catch (error: unknown) {
       // Name only: the message can quote the secret store (JSON.parse) or the request.
       const name = (error as { name?: string } | null)?.name || 'Error';
