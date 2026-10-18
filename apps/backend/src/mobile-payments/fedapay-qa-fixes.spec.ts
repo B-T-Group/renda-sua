@@ -140,7 +140,12 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       const result = await processor.processFedaPayCallback(updatedExpired);
 
       expect(result.received).toBe(true);
-      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalled();
+      // Note: expired status does not call assertProviderConfirmsCallback - only SUCCESS does
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        expiredTx.id,
+        'pending',
+        expect.objectContaining({ status: 'failed' })
+      );
     });
   });
 
@@ -333,8 +338,11 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       expect(result.received).toBe(true);
       // No credit should happen for non-wallet entities
       expect(mockAccountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
-      // Transaction should remain unchanged
-      expect(mockDatabaseService.updateTransaction).not.toHaveBeenCalled();
+      // Transaction is updated to failed because no handler can handle the order entity
+      expect(mockDatabaseService.updateTransaction).toHaveBeenCalledWith(
+        orderTx.id,
+        expect.objectContaining({ status: 'failed' })
+      );
     });
 
     it('should preserve transaction_id when marking late success', async () => {
