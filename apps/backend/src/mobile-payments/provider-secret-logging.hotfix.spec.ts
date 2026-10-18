@@ -244,7 +244,7 @@ describe('1. MyPVit secret rotation never logs secret values', () => {
       .updateSecretInSecretsManager('s', 'AIRTEL_MYPVIT_SECRET_KEY', NEW_SECRET)
       .catch((e: unknown) => e);
 
-    expect((err as Error).message).toBe('Failed to update secret AIRTEL_MYPVIT_SECRET_KEY: InvalidRequestException');
+    expect((err as Error).message).toBe('Failed to update secret AIRTEL_MYPVIT_SECRET_KEY (InvalidRequestException)');
     expectNoSecrets(everything([err]));
   });
 
@@ -263,6 +263,23 @@ describe('1. MyPVit secret rotation never logs secret values', () => {
     expect(body.error).toBe('could not store sk_live_REDACTED');
     expect(everything()).toContain('Error handling secret refresh webhook: could not store sk_live_REDACTED');
     expectNoSecrets(everything([body]));
+  });
+
+  it('validation failures are 4xx (Sentry only captures 5xx) and touch nothing', async () => {
+    const service = { updateSecretInSecretsManager: jest.fn() } as any;
+    const ctrl = controller(service);
+
+    const missing = await ctrl
+      .handleSecretRefreshCallback({ ...webhook, secret_key: '' }, 'mypvit')
+      .catch((e: unknown) => e);
+    const unknown = await ctrl
+      .handleSecretRefreshCallback({ ...webhook, merchant_operation_account_code: 'ACC_ATTACKER' }, 'mypvit')
+      .catch((e: unknown) => e);
+
+    expect((missing as HttpException).getStatus()).toBe(400);
+    expect((unknown as HttpException).getStatus()).toBe(400);
+    expect(service.updateSecretInSecretsManager).not.toHaveBeenCalled();
+    expectNoSecrets(everything([(unknown as HttpException).getResponse()]));
   });
 
   it('MyPVit getCurrentSecretKey: a corrupt blob is not quoted in the log', async () => {
