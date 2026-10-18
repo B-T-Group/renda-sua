@@ -11,7 +11,11 @@ import type { FedaPayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
 import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
 import type { FedaPayCallbackDto } from '../mobile-payment-callback.dto';
-import { sanitizeProviderError, maskPhoneNumber } from '../sanitize-provider-error.util';
+import {
+  sanitizeProviderError,
+  maskPhoneNumber,
+  toSanitizedError,
+} from '../sanitize-provider-error.util';
 
 export interface FedaPayPaymentRequest {
   payer: string;
@@ -709,7 +713,7 @@ export class FedaPayService implements OnModuleInit {
       this.logger.error(
         `Failed to check FedaPay payout status: ${sanitized.message}`
       );
-      throw new Error(sanitized.message);
+      throw toSanitizedError(error);
     }
   }
 
@@ -753,7 +757,7 @@ export class FedaPayService implements OnModuleInit {
         sanitized.status ? `Status: ${sanitized.status}` : undefined,
         sanitized.code ? `Code: ${sanitized.code}` : undefined
       );
-      throw new Error(sanitized.message);
+      throw toSanitizedError(error);
     }
   }
 

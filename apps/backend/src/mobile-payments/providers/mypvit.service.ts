@@ -6,7 +6,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
-import { sanitizeProviderError, maskPhoneNumber } from '../sanitize-provider-error.util';
+import {
+  maskPhoneNumber,
+  redactProviderPayload,
+  redactSecrets,
+  sanitizeProviderError,
+  toSanitizedError,
+} from '../sanitize-provider-error.util';
 import {
   MYP_VIT_STATUS_OPERATIONS,
   buildMypvitStatusPath,
@@ -214,8 +220,9 @@ export class MyPVitService {
       );
       return;
     }
-    const sanitized = sanitizeProviderError(payload);
-    this.logger.error(`MyPVit API Error: ${sanitized.message}`);
+    this.logger.error(
+      `MyPVit API Error: ${error.response?.status ?? ''} ${redactProviderPayload(payload)}`
+    );
   }
 
   /**
@@ -301,8 +308,11 @@ export class MyPVitService {
       }
     } catch (error: any) {
       this.logger.error(
-        'Failed to initiate payment:',
-        error.response?.data?.message
+        `Failed to initiate payment: ${
+          error.response?.data?.message
+            ? redactSecrets(String(error.response.data.message))
+            : sanitizeProviderError(error).message
+        }`
       );
       return {
         success: false,
@@ -348,9 +358,10 @@ export class MyPVitService {
       return response.data;
     } catch (error: any) {
       if (!isNotFoundHttpError(error)) {
+        // Never log or rethrow the raw axios error: config.headers carry X-Secret (sk_live_...).
         const sanitized = sanitizeProviderError(error);
         this.logger.error(`Failed to check transaction status: ${sanitized.message}`);
-        throw error;
+        throw toSanitizedError(error);
       }
       return this.fetchStatusAfterPathMiss(
         transactionId,
@@ -398,7 +409,7 @@ export class MyPVitService {
       if (isNotFoundHttpError(error)) {
         return null;
       }
-      throw error;
+      throw toSanitizedError(error);
     }
   }
 
@@ -558,7 +569,7 @@ export class MyPVitService {
     } catch (error) {
       const sanitized = sanitizeProviderError(error);
       this.logger.error(`Failed to check balance: ${sanitized.message}`);
-      throw error;
+      throw toSanitizedError(error);
     }
   }
 
@@ -712,7 +723,10 @@ export class MyPVitService {
       }
       return secretValue.AIRTEL_MYPVIT_SECRET_KEY || '';
     } catch (error: any) {
-      this.logger.error(`Failed to fetch current secret key: ${error.message}`);
+      // No error.message: a JSON.parse SyntaxError quotes the start of the stored secret.
+      this.logger.error(
+        `Failed to fetch current secret key (${error?.name ?? 'Error'}); using the cached key`
+      );
       // Fallback to cached secret key
       return phoneNumber
         ? this.getSecretKeyForProvider(phoneNumber)

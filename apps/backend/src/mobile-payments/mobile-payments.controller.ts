@@ -949,10 +949,14 @@ export class MobilePaymentsController {
     @Query('provider') provider?: string
   ) {
     try {
-      console.log('Received secret refresh webhook:', {
-        ...(webhookData as object),
-        provider,
-      });
+      // Never log secret_key: it is the new live MyPVit secret.
+      this.logger.log(
+        `Received secret refresh webhook: account=${
+          webhookData?.merchant_operation_account_code ?? ''
+        } expires_in=${webhookData?.expires_in ?? ''} provider=${provider ?? ''} secret_key=${
+          webhookData?.secret_key ? 'PRESENT' : 'MISSING'
+        }`
+      );
 
       if (!webhookData.secret_key) {
         throw new Error('Missing required webhook data: secret_key');
@@ -972,20 +976,17 @@ export class MobilePaymentsController {
       let secretKeyName: string;
       if (webhookData.merchant_operation_account_code === airtelAccountCode) {
         secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY'; // RENAMED
-        console.log('Updating Airtel secret key');
+        this.logger.log('Updating Airtel secret key');
       } else if (
         webhookData.merchant_operation_account_code === moovAccountCode
       ) {
         secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
-        console.log('Updating MOOV secret key');
+        this.logger.log('Updating MOOV secret key');
       } else {
         throw new Error('Invalid merchant operation account code');
       }
 
-      console.log(
-        `Updating ${secretKeyName} in AWS Secrets Manager:`,
-        secretName
-      );
+      this.logger.log(`Updating ${secretKeyName} in AWS Secrets Manager: ${secretName}`);
 
       await this.mobilePaymentsService.updateSecretInSecretsManager(
         secretName,
@@ -1004,12 +1005,13 @@ export class MobilePaymentsController {
         },
       };
     } catch (error: any) {
-      console.error('Error handling secret refresh webhook:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Error handling secret refresh webhook: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,
           message: 'Failed to handle secret refresh webhook',
-          error: error.message,
+          error: sanitized.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );

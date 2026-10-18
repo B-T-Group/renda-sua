@@ -5,7 +5,11 @@ import { randomUUID } from 'crypto';
 import axios, { AxiosInstance } from 'axios';
 import { FreemopayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
-import { sanitizeProviderError, maskPhoneNumber } from '../sanitize-provider-error.util';
+import {
+  sanitizeProviderError,
+  maskPhoneNumber,
+  redactProviderPayload,
+} from '../sanitize-provider-error.util';
 import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
 import type { FreemopayCallbackDto } from '../mobile-payment-callback.dto';
 
@@ -120,9 +124,13 @@ export class FreemopayService implements OnModuleInit {
         return response;
       },
       (error) => {
+        // Never log the raw axios error (config.headers carry Basic credentials).
         this.logger.error(
-          'Freemopay API Error:',
-          error.response?.data || error.message
+          `Freemopay API Error: ${error.response?.status ?? ''} ${
+            error.response?.data !== undefined
+              ? redactProviderPayload(error.response.data)
+              : sanitizeProviderError(error).message
+          }`
         );
         return Promise.reject(error);
       }
@@ -220,7 +228,7 @@ export class FreemopayService implements OnModuleInit {
       } catch (error: any) {
         this.logger.error(
           `Failed to process auto-callback for ${mockReference}: ${
-            error?.message || error
+            sanitizeProviderError(error).message
           }`
         );
       }
