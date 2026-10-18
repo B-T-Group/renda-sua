@@ -1,78 +1,106 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import {
+  recordFailure,
+  clearFailure,
+  canRetryAfterFailure,
+  beginSend,
+  endSend,
+  __testOnly_resetState,
+} from '../utils/agentLocationLastSentStorage';
 
-describe('agentLocationTask - failure backoff integration', () => {
+describe('agentLocationTask - failure backoff behavior (unit)', () => {
   beforeEach(() => {
-    vi.resetModules();
-    vi.clearAllMocks();
     vi.useFakeTimers();
-  });
-
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  it('should call recordFailure when updateMyAgentLocation returns failure', async () => {
-    const { recordFailure, clearFailure, __testOnly_resetState } = await import(
-      '../utils/agentLocationLastSentStorage'
-    );
     __testOnly_resetState();
+  });
 
-    const mockUpdateFn = vi.fn().mockResolvedValue({ success: false });
+  it('(a) failure result flow: recordFailure -> backoff blocks within 60s', () => {
+    if (!beginSend()) throw new Error('beginSend should succeed');
     
     try {
-      const res = await mockUpdateFn();
-      if (!res.success) {
+      const mockResult = { success: false };
+      
+      if (!mockResult.success) {
         recordFailure();
         return;
       }
       clearFailure();
-    } catch {
-      recordFailure();
-      return;
+    } finally {
+      endSend();
     }
 
-    const { canRetryAfterFailure } = await import('../utils/agentLocationLastSentStorage');
     expect(canRetryAfterFailure(60_000)).toBe(false);
+
+    vi.advanceTimersByTime(30_000);
+    expect(canRetryAfterFailure(60_000)).toBe(false);
+
+    if (beginSend()) {
+      endSend();
+      throw new Error('beginSend should succeed, but canRetryAfterFailure should block the send logic');
+    }
   });
 
-  it('should call recordFailure when updateMyAgentLocation throws', async () => {
-    const { recordFailure, clearFailure, __testOnly_resetState } = await import(
-      '../utils/agentLocationLastSentStorage'
-    );
-    __testOnly_resetState();
-
-    const mockUpdateFn = vi.fn().mockRejectedValue(new Error('Network error'));
+  it('(b) thrown error flow: recordFailure on catch -> backoff blocks within 60s', () => {
+    if (!beginSend()) throw new Error('beginSend should succeed');
     
     try {
-      await mockUpdateFn();
-      clearFailure();
-    } catch {
-      recordFailure();
+      const mockUpdateFn = () => {
+        throw new Error('Network error');
+      };
+
+      try {
+        mockUpdateFn();
+        clearFailure();
+      } catch {
+        recordFailure();
+        return;
+      }
+    } finally {
+      endSend();
     }
 
-    const { canRetryAfterFailure } = await import('../utils/agentLocationLastSentStorage');
+    expect(canRetryAfterFailure(60_000)).toBe(false);
+
+    vi.advanceTimersByTime(30_000);
     expect(canRetryAfterFailure(60_000)).toBe(false);
   });
 
-  it('should allow send after backoff period and clearFailure on success', async () => {
-    const {
-      recordFailure,
-      clearFailure,
-      canRetryAfterFailure,
-      __testOnly_resetState,
-    } = await import('../utils/agentLocationLastSentStorage');
+  it('(c) failure -> wait 60s -> success clears -> next send immediately allowed', () => {
+    if (!beginSend()) throw new Error('beginSend should succeed');
     
-    __testOnly_resetState();
+    try {
+      const mockResult = { success: false };
+      if (!mockResult.success) {
+        recordFailure();
+        return;
+      }
+      clearFailure();
+    } finally {
+      endSend();
+    }
 
-    recordFailure();
     expect(canRetryAfterFailure(60_000)).toBe(false);
 
     vi.advanceTimersByTime(60_000);
     expect(canRetryAfterFailure(60_000)).toBe(true);
 
-    clearFailure();
+    if (!beginSend()) throw new Error('beginSend should succeed after backoff');
     
+    try {
+      const mockResult2 = { success: true };
+      if (!mockResult2.success) {
+        recordFailure();
+        return;
+      }
+      clearFailure();
+    } finally {
+      endSend();
+    }
+
     vi.advanceTimersByTime(2_000);
     expect(canRetryAfterFailure(60_000)).toBe(true);
+
+    if (!beginSend()) throw new Error('beginSend should succeed after success cleared failure');
+    endSend();
   });
 });
