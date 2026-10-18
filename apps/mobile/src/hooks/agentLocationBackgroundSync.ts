@@ -11,7 +11,6 @@ const DEFAULT_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 const ACTIVE_UPDATE_INTERVAL_MS = 60 * 1000;
 const MIN_DISTANCE_CHANGE_M = 100;
 const ACTIVE_MIN_DISTANCE_M = 50;
-const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000;
 
 let lastActiveDeliveryMode: boolean | null = null;
 
@@ -27,7 +26,7 @@ export function buildLocationTaskOptions(
   const distanceM = active ? ACTIVE_MIN_DISTANCE_M : MIN_DISTANCE_CHANGE_M;
 
   const base: Location.LocationTaskOptions = {
-    accuracy: active ? Location.Accuracy.High : Location.Accuracy.Balanced,
+    accuracy: active ? Location.Accuracy.High : Location.Accuracy.Low,
     showsBackgroundLocationIndicator: true,
   };
 
@@ -39,14 +38,10 @@ export function buildLocationTaskOptions(
       notificationBody,
     };
   } else {
-    base.distanceInterval = active ? distanceM : 0;
+    base.distanceInterval = distanceM;
     base.deferredUpdatesDistance = active ? distanceM : 0;
     base.deferredUpdatesInterval = intervalMs;
-    base.pausesUpdatesAutomatically = false;
   }
-
-  return base;
-}
 
   return base;
 }
@@ -103,8 +98,7 @@ export async function startBackgroundLocationUpdates(
     { activeDelivery }
   );
 
-  // Prefer starting the new config first; only stop the old task after success
-  // when Expo requires a restart (already running with different options).
+  // Stop the old task before starting with new options (Expo requires a restart when options change).
   if (has) {
     try {
       await Location.stopLocationUpdatesAsync(AGENT_LOCATION_TASK_NAME);

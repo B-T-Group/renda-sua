@@ -14,8 +14,10 @@ import {
   readLastSentLocation,
   writeLastSentLocation,
   clearLastSentLocation,
+  getStopGeneration,
 } from '../utils/agentLocationLastSentStorage';
 import { shouldSendLocation } from '../utils/shouldSendLocation';
+import { HEARTBEAT_INTERVAL_MS, HEARTBEAT_SLACK_MS } from '../constants/agentLocationBackground';
 import {
   startBackgroundLocationUpdates,
   stopBackgroundLocationUpdates,
@@ -26,7 +28,6 @@ import type { AgentLocationTrackingConsent } from '../types/agentLocationConsent
 
 const DEFAULT_UPDATE_INTERVAL_MS = 10 * 60 * 1000;
 const MIN_DISTANCE_CHANGE_M = 100;
-const HEARTBEAT_INTERVAL_MS = 10 * 60 * 1000;
 
 type TrackerOptions = {
   consent: AgentLocationTrackingConsent;
@@ -63,7 +64,6 @@ export function useAgentLocationTracker(options: TrackerOptions) {
   const [trackingMode, setTrackingMode] = useState<'background' | 'foreground' | 'off'>('off');
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   const isUpdatingRef = useRef(false);
   const appStateRef = useRef<AppStateStatus>(AppState.currentState);
   const backgroundUpdatesActiveRef = useRef(false);
@@ -87,7 +87,6 @@ export function useAgentLocationTracker(options: TrackerOptions) {
     stopInterval();
     await stopBackgroundLocationUpdates();
     backgroundUpdatesActiveRef.current = false;
-    lastCoordsRef.current = null;
     await clearLastSentLocation();
     setLocationSetupReady(false);
     setDisclosureVisible(false);
@@ -106,12 +105,13 @@ export function useAgentLocationTracker(options: TrackerOptions) {
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== Location.PermissionStatus.GRANTED) return;
 
+      const generation = getStopGeneration();
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.Balanced,
       });
       const { latitude, longitude } = location.coords;
 
-      const prev = await readLastSentLocation();
+      const prev = await readLastSentLocation(auth.user.id);
       const nowMs = Date.now();
 
       const shouldSend = shouldSendLocation(
@@ -121,6 +121,7 @@ export function useAgentLocationTracker(options: TrackerOptions) {
         nowMs,
         minDistanceChangeM,
         HEARTBEAT_INTERVAL_MS,
+        HEARTBEAT_SLACK_MS,
         haversineDistanceM
       );
 
@@ -131,8 +132,7 @@ export function useAgentLocationTracker(options: TrackerOptions) {
         setError(res.error ?? 'Failed to send location');
         return;
       }
-      lastCoordsRef.current = { lat: latitude, lng: longitude };
-      await writeLastSentLocation(latitude, longitude, nowMs);
+      await writeLastSentLocation(latitude, longitude, nowMs, auth.user.id, generation);
       setLastUpdate(nowMs);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Location error');
@@ -224,9 +224,6 @@ export function useAgentLocationTracker(options: TrackerOptions) {
       void stopTracking();
       return undefined;
     }
-    void readLastSentLocation().then((stored) => {
-      if (stored) lastCoordsRef.current = { lat: stored.lat, lng: stored.lng };
-    });
     return () => {
       void stopTracking();
     };
