@@ -80,3 +80,17 @@ describe('QA #593: production must trust exactly one proxy hop', () => {
     expect(() => assertProductionTrustProxy('loopback', {})).not.toThrow();
   });
 });
+
+describe('main.ts wires the production trust-proxy assertion', () => {
+  it('asserts before app.set("trust proxy") (static check of the bootstrap)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { readFileSync } = require('fs');
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const { join } = require('path');
+    const main: string = readFileSync(join(__dirname, '..', '..', 'main.ts'), 'utf8');
+    const assertAt = main.indexOf('assertProductionTrustProxy(trustProxy);');
+    const setAt = main.indexOf("app.set('trust proxy', trustProxy);");
+    expect(assertAt).toBeGreaterThan(-1);
+    expect(setAt).toBeGreaterThan(assertAt);
+  });
+});
