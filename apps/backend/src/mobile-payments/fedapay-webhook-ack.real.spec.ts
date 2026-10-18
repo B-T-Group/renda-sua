@@ -216,6 +216,21 @@ describe('definite mismatch with the live record -> acknowledged (2xx), no credi
     expect(anomalies()[0][2]).toContain('expected 5000, live 4999');
   });
 
+  it('the error message names only the reason and our tx id; values stay in detail', async () => {
+    const { entityId, mps } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(
+      live(entityId, { amount: 4999, custom_metadata: { externalId: LIVE_REF_OTHER } })
+    );
+    const err = (await mps
+      .assertProviderConfirmsCallback(
+        { id: 'tx-msg', provider: 'fedapay', transaction_id: String(entityId), reference: STORED_REF, amount: 5000, currency: 'XOF' } as any,
+        'SUCCESS'
+      )
+      .catch((e: unknown) => e)) as CallbackLiveMismatchError;
+    expect(err.message).toBe('Rejecting FedaPay SUCCESS callback for tx-msg: amount_mismatch');
+    expect(err.detail).toBe('expected 5000, live 4999');
+  });
+
   it('an acknowledged event is recorded, so a redelivery of it is a duplicate, not reprocessed', async () => {
     const { entityId, controller } = build();
     (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'declined' }));
