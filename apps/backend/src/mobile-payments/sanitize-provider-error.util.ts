@@ -15,7 +15,7 @@ interface SanitizedError {
  * Redact API keys, bearer tokens and basic credentials from text.
  * Patterns: sk_(live|sandbox|test)_..., Bearer ... and Basic <base64>
  */
-function redactSecrets(text: string): string {
+export function redactSecrets(text: string): string {
   if (!text) return text;
   
   // Redact FedaPay/Stripe-style keys (keep the type visible but redact the value)
@@ -69,6 +69,43 @@ export function sanitizeProviderError(error: any): SanitizedError {
     ...(status !== undefined ? { status } : {}),
     ...(code ? { code } : {}),
   };
+}
+
+/**
+ * A plain Error built from the sanitized fields, safe to rethrow to callers that log it.
+ * Keeps message, status (also as response.status, for callers that branch on it) and code;
+ * drops config, headers, request and the response body.
+ */
+export function toSanitizedError(
+  error: any
+): Error & { status?: number; code?: string; response?: { status: number } } {
+  const sanitized = sanitizeProviderError(error);
+  return Object.assign(new Error(sanitized.message), {
+    ...(sanitized.status !== undefined
+      ? { status: sanitized.status, response: { status: sanitized.status } }
+      : {}),
+    ...(sanitized.code ? { code: sanitized.code } : {}),
+  });
+}
+
+/**
+ * Provider response body (or any payload) as a redacted, length-capped string.
+ * For interceptor logs: keeps provider diagnostics without dumping objects.
+ */
+export function redactProviderPayload(payload: unknown, maxLength = 500): string {
+  if (payload === undefined || payload === null) return '';
+  let text: string;
+  if (typeof payload === 'string') {
+    text = payload;
+  } else {
+    try {
+      text = JSON.stringify(payload);
+    } catch {
+      text = '[unserializable payload]';
+    }
+  }
+  const redacted = redactSecrets(text ?? '');
+  return redacted.length > maxLength ? `${redacted.slice(0, maxLength)}…` : redacted;
 }
 
 /**

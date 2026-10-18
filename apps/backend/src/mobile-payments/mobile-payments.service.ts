@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { sanitizeProviderError, toSanitizedError } from './sanitize-provider-error.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
@@ -672,7 +673,8 @@ export class MobilePaymentsService {
 
       return response;
     } catch (error) {
-      this.logger.error('Failed to initiate mobile payment:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate mobile payment: ${sanitized.message}`);
       return {
         success: false,
         message: 'Failed to initiate payment',
@@ -805,8 +807,10 @@ export class MobilePaymentsService {
 
       return status;
     } catch (error) {
-      this.logger.error('Failed to check transaction status:', error);
-      throw error;
+      // Provider errors can carry Authorization / X-Secret headers: never log or rethrow them raw.
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check transaction status: ${sanitized.message}`);
+      throw toSanitizedError(error);
     }
   }
 
@@ -895,7 +899,8 @@ export class MobilePaymentsService {
 
       return success;
     } catch (error) {
-      this.logger.error('Failed to cancel transaction:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to cancel transaction: ${sanitized.message}`);
       return false;
     }
   }
@@ -930,7 +935,8 @@ export class MobilePaymentsService {
           return false;
       }
     } catch (error) {
-      this.logger.error('Failed to verify callback:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to verify callback: ${sanitized.message}`);
       return false;
     }
   }
@@ -961,7 +967,8 @@ export class MobilePaymentsService {
           return [];
       }
     } catch (error) {
-      this.logger.error('Failed to get transaction history:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get transaction history: ${sanitized.message}`);
       return [];
     }
   }
@@ -986,8 +993,10 @@ export class MobilePaymentsService {
           );
       }
     } catch (error) {
-      this.logger.error('Failed to check balance:', error);
-      throw error;
+      // Provider errors can carry Authorization / X-Secret headers: never log or rethrow them raw.
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check balance: ${sanitized.message}`);
+      throw toSanitizedError(error);
     }
   }
 
@@ -1011,8 +1020,10 @@ export class MobilePaymentsService {
           throw new Error(`Unsupported provider for KYC: ${provider}`);
       }
     } catch (error) {
-      this.logger.error('Failed to perform KYC:', error);
-      throw error;
+      // Provider errors can carry Authorization / X-Secret headers: never log or rethrow them raw.
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to perform KYC: ${sanitized.message}`);
+      throw toSanitizedError(error);
     }
   }
 
@@ -1026,6 +1037,7 @@ export class MobilePaymentsService {
     metadata?: Record<string, unknown>
   ): Promise<{ success: boolean; message?: string }> {
     try {
+      // Log the key NAME only, never the value or the merged secret blob.
       this.logger.log(`Updating secret ${secretName} with key ${key}`);
 
       // Get current secret value
@@ -1058,8 +1070,11 @@ export class MobilePaymentsService {
         message: 'Secret updated successfully',
       };
     } catch (error) {
-      this.logger.error(`Failed to update secret ${secretName}:`, error);
-      throw error;
+      // No error.message or object: a JSON.parse SyntaxError quotes the stored secret,
+      // and an AWS SDK error can echo the request. Name and AWS code only.
+      const label = describeSecretError(error);
+      this.logger.error(`Failed to update secret ${secretName} (key ${key}): ${label}`);
+      throw new Error(`Failed to update secret ${key}: ${label}`);
     }
   }
 
@@ -1426,4 +1441,12 @@ export class MobilePaymentsService {
       }`
     );
   }
+}
+
+/** Error name plus AWS error code, never the message (it can quote secret values). */
+function describeSecretError(error: unknown): string {
+  const e = error as { name?: string; Code?: string; code?: string } | null;
+  const name = e?.name || 'Error';
+  const code = e?.Code || e?.code;
+  return code && code !== name ? `${name} (${code})` : name;
 }

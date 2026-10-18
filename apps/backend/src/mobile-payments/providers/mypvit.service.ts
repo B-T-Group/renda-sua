@@ -14,6 +14,12 @@ import {
   unindexedMypvitStatusBody,
   type MypvitStatusOperation,
 } from './mypvit-status.util';
+import {
+  redactProviderPayload,
+  redactSecrets,
+  sanitizeProviderError,
+  toSanitizedError,
+} from '../sanitize-provider-error.util';
 
 export interface MyPVitPaymentRequest {
   amount: number;
@@ -188,9 +194,9 @@ export class MyPVitService {
     // Add response interceptor for logging
     this.httpClient.interceptors.response.use(
       (response) => {
+        // Never log the body: renew-secret responses carry the new secret key.
         this.logger.debug(
-          `MyPVit API Response: ${response.status}`,
-          response.data
+          `MyPVit API Response: ${response.status} ${response.config?.url ?? ''}`.trim()
         );
         return response;
       },
@@ -207,10 +213,14 @@ export class MyPVitService {
   }): void {
     const payload = error.response?.data ?? error.message;
     if (isNotFoundHttpError(error)) {
-      this.logger.debug('MyPVit resource not found (expected miss):', payload);
+      this.logger.debug(
+        `MyPVit resource not found (expected miss): ${error.response?.status ?? ''}`.trim()
+      );
       return;
     }
-    this.logger.error('MyPVit API Error:', payload);
+    this.logger.error(
+      `MyPVit API Error: ${error.response?.status ?? ''} ${redactProviderPayload(payload)}`
+    );
   }
 
   /**
@@ -296,8 +306,11 @@ export class MyPVitService {
       }
     } catch (error: any) {
       this.logger.error(
-        'Failed to initiate payment:',
-        error.response?.data?.message
+        `Failed to initiate payment: ${
+          error.response?.data?.message
+            ? redactSecrets(String(error.response.data.message))
+            : sanitizeProviderError(error).message
+        }`
       );
       return {
         success: false,
@@ -343,8 +356,10 @@ export class MyPVitService {
       return response.data;
     } catch (error: any) {
       if (!isNotFoundHttpError(error)) {
-        this.logger.error('Failed to check transaction status:', error);
-        throw error;
+        // Never log or rethrow the raw axios error: config.headers carry X-Secret (sk_live_...).
+        const sanitized = sanitizeProviderError(error);
+        this.logger.error(`Failed to check transaction status: ${sanitized.message}`);
+        throw toSanitizedError(error);
       }
       return this.fetchStatusAfterPathMiss(
         transactionId,
@@ -392,7 +407,7 @@ export class MyPVitService {
       if (isNotFoundHttpError(error)) {
         return null;
       }
-      throw error;
+      throw toSanitizedError(error);
     }
   }
 
@@ -447,7 +462,8 @@ export class MyPVitService {
       // MyPVit supports these payment methods based on their documentation
       return ['mobile_money', 'card', 'bank_transfer'];
     } catch (error) {
-      this.logger.error('Failed to get supported payment methods:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get supported payment methods: ${sanitized.message}`);
       return [];
     }
   }
@@ -479,7 +495,8 @@ export class MyPVitService {
 
       return response.data.success || false;
     } catch (error) {
-      this.logger.error('Failed to cancel transaction:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to cancel transaction: ${sanitized.message}`);
       return false;
     }
   }
@@ -513,7 +530,8 @@ export class MyPVitService {
         return [];
       }
     } catch (error) {
-      this.logger.error('Failed to get transaction history:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get transaction history: ${sanitized.message}`);
       return [];
     }
   }
@@ -547,8 +565,9 @@ export class MyPVitService {
         throw new Error(response.data.message || 'Failed to check balance');
       }
     } catch (error) {
-      this.logger.error('Failed to check balance:', error);
-      throw error;
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check balance: ${sanitized.message}`);
+      throw toSanitizedError(error);
     }
   }
 
@@ -580,7 +599,8 @@ export class MyPVitService {
         };
       }
     } catch (error) {
-      this.logger.error('Failed to renew secret key:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to renew secret key: ${sanitized.message}`);
       return {
         success: false,
         message: 'Failed to renew secret key',
@@ -619,7 +639,8 @@ export class MyPVitService {
         };
       }
     } catch (error) {
-      this.logger.error('Failed to perform KYC:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to perform KYC: ${sanitized.message}`);
       return {
         success: false,
         kycStatus: 'failed',
@@ -637,7 +658,8 @@ export class MyPVitService {
       await this.checkBalance();
       return true;
     } catch (error) {
-      this.logger.error('MyPVit connection test failed:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`MyPVit connection test failed: ${sanitized.message}`);
       return false;
     }
   }
@@ -699,7 +721,10 @@ export class MyPVitService {
       }
       return secretValue.AIRTEL_MYPVIT_SECRET_KEY || '';
     } catch (error: any) {
-      this.logger.error(`Failed to fetch current secret key: ${error.message}`);
+      // No error.message: a JSON.parse SyntaxError quotes the start of the stored secret.
+      this.logger.error(
+        `Failed to fetch current secret key (${error?.name ?? 'Error'}); using the cached key`
+      );
       // Fallback to cached secret key
       return phoneNumber
         ? this.getSecretKeyForProvider(phoneNumber)
