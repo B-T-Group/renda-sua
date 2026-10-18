@@ -27,18 +27,17 @@ new RendasuaInfrastructureStack(app, `RendasuaInfrastructure-${environment}`, {
 // These monitor the backend log groups for the fedapay_live_record_incomplete marker
 // which indicates incomplete mobile money transaction records that need attention
 // before FedaPay can go live in Togo.
-
-// Get alarm SNS topic ARN from context (optional)
-// If not provided, alarms will be created without notification actions
-// Example: cdk deploy --context fedapayAlarmTopicArn=arn:aws:sns:ca-central-1:235680477887:backend-alerts
-const fedapayDevAlarmTopicArn = app.node.tryGetContext('fedapayDevAlarmTopicArn');
-const fedapayProdAlarmTopicArn = app.node.tryGetContext('fedapayProdAlarmTopicArn');
+//
+// Each stack creates:
+// - SNS topic for alerts (fedapay-monitoring-{env})
+// - Email subscription to tech@rendasua.com (requires one-time confirmation after first deploy)
+// - Metric filter for the log marker
+// - CloudWatch alarm (Sum >= 3 over 15 minutes)
 
 // Development environment monitoring
 new FedapayMonitoringStack(app, 'FedapayMonitoring-dev', {
   environment: 'dev',
   logGroupName: 'rendasua-backend-dev',
-  alarmTopicArn: fedapayDevAlarmTopicArn,
   env: {
     account: awsAccount,
     region: awsRegion,
@@ -49,7 +48,6 @@ new FedapayMonitoringStack(app, 'FedapayMonitoring-dev', {
 new FedapayMonitoringStack(app, 'FedapayMonitoring-production', {
   environment: 'production',
   logGroupName: 'rendasua-backend-prod',
-  alarmTopicArn: fedapayProdAlarmTopicArn,
   env: {
     account: awsAccount,
     region: awsRegion,

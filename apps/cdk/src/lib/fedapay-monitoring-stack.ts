@@ -3,6 +3,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as sns from 'aws-cdk-lib/aws-sns';
+import * as subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 import { Construct } from 'constructs';
 
 export interface FedapayMonitoringStackProps extends cdk.StackProps {
@@ -16,13 +17,6 @@ export interface FedapayMonitoringStackProps extends cdk.StackProps {
    * (e.g., 'rendasua-backend-dev' or 'rendasua-backend-prod')
    */
   logGroupName: string;
-
-  /**
-   * ARN of the SNS topic to send alarm notifications to.
-   * If not provided, alarms will be created without actions.
-   * You must create and configure the SNS topic separately.
-   */
-  alarmTopicArn?: string;
 }
 
 export class FedapayMonitoringStack extends cdk.Stack {
@@ -33,7 +27,23 @@ export class FedapayMonitoringStack extends cdk.Stack {
   ) {
     super(scope, id, props);
 
-    const { environment, logGroupName, alarmTopicArn } = props;
+    const { environment, logGroupName } = props;
+
+    // Create SNS topic for FedaPay monitoring alerts
+    const alarmTopic = new sns.Topic(
+      this,
+      `FedapayMonitoringTopic-${environment}`,
+      {
+        topicName: `fedapay-monitoring-${environment}`,
+        displayName: `FedaPay Monitoring Alerts (${environment})`,
+      }
+    );
+
+    // Add email subscription to tech@rendasua.com
+    // Note: Requires one-time confirmation click in the inbox after first deploy
+    alarmTopic.addSubscription(
+      new subscriptions.EmailSubscription('tech@rendasua.com')
+    );
 
     // Reference the existing log group
     const logGroup = logs.LogGroup.fromLogGroupName(
@@ -88,17 +98,18 @@ export class FedapayMonitoringStack extends cdk.Stack {
       }
     );
 
-    // Add SNS action if topic ARN is provided
-    if (alarmTopicArn) {
-      const alarmTopic = sns.Topic.fromTopicArn(
-        this,
-        `AlarmTopic-${environment}`,
-        alarmTopicArn
-      );
-      alarm.addAlarmAction(new cloudwatch_actions.SnsAction(alarmTopic));
-    }
+    // Add alarm actions (ALARM and OK states)
+    const snsAction = new cloudwatch_actions.SnsAction(alarmTopic);
+    alarm.addAlarmAction(snsAction);
+    alarm.addOkAction(snsAction);
 
     // Outputs
+    new cdk.CfnOutput(this, `SnsTopicArn-${environment}`, {
+      value: alarmTopic.topicArn,
+      description: `SNS topic ARN for FedaPay monitoring alerts in ${environment}`,
+      exportName: `FedapayMonitoringSnsTopicArn-${environment}`,
+    });
+
     new cdk.CfnOutput(this, `MetricFilterName-${environment}`, {
       value: metricFilter.node.id,
       description: `Metric filter name for fedapay_live_record_incomplete in ${environment}`,

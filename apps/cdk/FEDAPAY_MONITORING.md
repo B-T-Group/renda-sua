@@ -6,11 +6,20 @@ This CDK infrastructure monitors the backend logs for the `fedapay_live_record_i
 
 The monitoring infrastructure consists of:
 
-1. **CloudWatch Metric Filters**: Parse backend logs for the literal marker `fedapay_live_record_incomplete` and publish to a custom CloudWatch metric
-2. **CloudWatch Alarms**: Alert when the marker appears 3 or more times within a 15-minute period
-3. **Per-environment setup**: Separate monitoring for dev and production environments
+1. **SNS Topics**: Dedicated alert topic per environment (`fedapay-monitoring-dev`, `fedapay-monitoring-production`)
+2. **Email Subscriptions**: Alerts sent to `tech@rendasua.com` (requires one-time confirmation after first deploy)
+3. **CloudWatch Metric Filters**: Parse backend logs for the literal marker `fedapay_live_record_incomplete` and publish to a custom CloudWatch metric
+4. **CloudWatch Alarms**: Alert when the marker appears 3 or more times within a 15-minute period
+5. **Per-environment setup**: Separate monitoring for dev and production environments
 
 ## Architecture
+
+### SNS Topics
+
+- **Dev**: `fedapay-monitoring-dev` → `tech@rendasua.com`
+- **Production**: `fedapay-monitoring-production` → `tech@rendasua.com`
+
+Each topic sends notifications for both **ALARM** (when threshold is breached) and **OK** (when alarm recovers) states.
 
 ### Metric Details
 
@@ -26,6 +35,7 @@ The monitoring infrastructure consists of:
 - **Alarm Names**:
   - Dev: `fedapay-live-record-incomplete-dev`
   - Production: `fedapay-live-record-incomplete-production`
+- **Actions**: Sends SNS notification on ALARM and OK state changes
 
 ### Log Groups
 
@@ -36,84 +46,76 @@ The metric filters monitor these CloudWatch Log Groups:
 
 ## Deployment
 
-### Prerequisites
+### Standard Deployment Flow
 
-1. AWS CLI configured with appropriate credentials
-2. CDK CLI installed (`npm install -g aws-cdk`)
-3. CDK bootstrapped in `ca-central-1` region
-4. (Optional) SNS topics created for alarm notifications
+This infrastructure follows the normal Rendasua deployment process:
 
-### Deploy Both Stacks
+1. **QA Review**: Code review and approval on PR
+2. **Merge to main**: Merge approved PR
+3. **Deploy to dev**: Automatically or manually deploy to dev environment
+4. **Production promotion**: Deploy to production with the next main→prod promote
 
-To deploy both dev and production monitoring:
+### Deploy Command
 
 ```bash
 cd apps/cdk
 
-# Without SNS notification
+# Deploy both dev and production stacks
 npx cdk deploy FedapayMonitoring-dev FedapayMonitoring-production
 
-# With SNS notification (recommended)
-npx cdk deploy FedapayMonitoring-dev FedapayMonitoring-production \
-  --context fedapayDevAlarmTopicArn=arn:aws:sns:ca-central-1:235680477887:backend-alerts-dev \
-  --context fedapayProdAlarmTopicArn=arn:aws:sns:ca-central-1:235680477887:backend-alerts-prod
-```
-
-### Deploy Individual Stack
-
-To deploy only one environment:
-
-```bash
-# Dev only
+# Or deploy individually
 npx cdk deploy FedapayMonitoring-dev
-
-# Production only
 npx cdk deploy FedapayMonitoring-production
 ```
 
-### SNS Topic Configuration
+### First-Time Email Confirmation
 
-The alarms can optionally send notifications to an SNS topic. You must:
+**⚠️ Important**: After the first deployment, an email confirmation is required:
 
-1. **Create the SNS topic** (if it doesn't exist):
+1. AWS SNS will send a subscription confirmation email to `tech@rendasua.com`
+2. Someone with access to that inbox must click the "Confirm subscription" link
+3. The subscription will show as "PendingConfirmation" until confirmed
+4. Once confirmed, alerts will be delivered to the email address
+
+To check subscription status:
 
 ```bash
-# Example: Create dev alert topic
-aws sns create-topic \
-  --name backend-alerts-dev \
-  --region ca-central-1
-
-# Example: Create production alert topic
-aws sns create-topic \
-  --name backend-alerts-prod \
+# List subscriptions for dev topic
+aws sns list-subscriptions-by-topic \
+  --topic-arn $(aws cloudformation describe-stacks \
+    --stack-name FedapayMonitoring-dev \
+    --query 'Stacks[0].Outputs[?OutputKey==`SnsTopicArndev`].OutputValue' \
+    --output text \
+    --region ca-central-1) \
   --region ca-central-1
 ```
 
-2. **Subscribe to the topic** (email, SMS, Slack, etc.):
-
-```bash
-# Example: Subscribe email to dev alerts
-aws sns subscribe \
-  --topic-arn arn:aws:sns:ca-central-1:235680477887:backend-alerts-dev \
-  --protocol email \
-  --notification-endpoint your-email@example.com \
-  --region ca-central-1
-
-# Confirm the subscription by clicking the link in the email
-```
-
-3. **Deploy with the topic ARN**:
-
-```bash
-npx cdk deploy FedapayMonitoring-dev \
-  --context fedapayDevAlarmTopicArn=arn:aws:sns:ca-central-1:235680477887:backend-alerts-dev
-```
-
-If you don't provide an SNS topic ARN, the alarm will be created **without notification actions** and will only be visible in the CloudWatch console.
+Look for `"SubscriptionArn": "PendingConfirmation"` (before confirmation) or an actual ARN (after confirmation).
 
 ## Verification
 
 After deployment, verify the resources were created:
+
+### Check SNS Topics
+
+```bash
+# List SNS topics
+aws sns list-topics --region ca-central-1 | grep fedapay-monitoring
+```
+
+### Check Subscriptions
+
+```bash
+# Dev subscriptions
+aws sns list-subscriptions-by-topic \
+  --topic-arn arn:aws:sns:ca-central-1:235680477887:fedapay-monitoring-dev \
+  --region ca-central-1
+
+# Production subscriptions
+aws sns list-subscriptions-by-topic \
+  --topic-arn arn:aws:sns:ca-central-1:235680477887:fedapay-monitoring-production \
+  --region ca-central-1
+```
 
 ### Check Metric Filters
 
@@ -140,14 +142,7 @@ aws cloudwatch describe-alarms \
 
 ### Test the Metric Filter
 
-To test that the metric filter is working, emit a test log with the marker:
-
-```bash
-# Note: This requires the backend to be running and logging to CloudWatch
-# The marker should appear in the backend logs when there's an incomplete FedaPay record
-```
-
-You can verify the metric is being published:
+To verify the metric is being published after the backend emits the marker:
 
 ```bash
 aws cloudwatch get-metric-statistics \
@@ -172,13 +167,100 @@ View the alarms in the CloudWatch console:
 3. Navigate to **Alarms** → **All alarms**
 4. Search for: `fedapay-live-record-incomplete`
 
+### SNS Console
+
+View topics and subscriptions:
+
+1. Go to: https://console.aws.amazon.com/sns/
+2. Region: ca-central-1
+3. Navigate to **Topics**
+4. Search for: `fedapay-monitoring`
+
 ### Alarm States
 
 - **OK**: No incomplete records detected (< 3 in 15 minutes)
 - **ALARM**: 3 or more incomplete records detected in a 15-minute window
 - **INSUFFICIENT_DATA**: Alarm just created or no data points yet
 
+### Email Notifications
+
+When the alarm triggers (ALARM state):
+- **Subject**: `ALARM: "fedapay-live-record-incomplete-{env}" in ca-central-1`
+- **Body**: Includes alarm details, threshold breach information, and timestamp
+- **From**: `no-reply@sns.amazonaws.com`
+
+When the alarm recovers (OK state):
+- **Subject**: `OK: "fedapay-live-record-incomplete-{env}" in ca-central-1`
+- **Body**: Confirmation that the alarm has returned to OK state
+
+## Adding More Subscribers
+
+To add additional email addresses, Slack channels, or other notification endpoints:
+
+### Via AWS Console
+
+1. Go to SNS console → Topics
+2. Select `fedapay-monitoring-dev` or `fedapay-monitoring-production`
+3. Click "Create subscription"
+4. Choose protocol (Email, HTTPS, Lambda, etc.)
+5. Enter endpoint
+6. Confirm subscription (for email)
+
+### Via AWS CLI
+
+```bash
+# Add another email
+aws sns subscribe \
+  --topic-arn arn:aws:sns:ca-central-1:235680477887:fedapay-monitoring-dev \
+  --protocol email \
+  --notification-endpoint another-email@example.com \
+  --region ca-central-1
+
+# Add Slack via HTTPS webhook
+aws sns subscribe \
+  --topic-arn arn:aws:sns:ca-central-1:235680477887:fedapay-monitoring-dev \
+  --protocol https \
+  --notification-endpoint https://hooks.slack.com/services/YOUR/WEBHOOK/URL \
+  --region ca-central-1
+```
+
+### Via CDK (Code Change)
+
+Edit `apps/cdk/src/lib/fedapay-monitoring-stack.ts` and add more subscriptions:
+
+```typescript
+alarmTopic.addSubscription(
+  new subscriptions.EmailSubscription('another-email@example.com')
+);
+
+alarmTopic.addSubscription(
+  new subscriptions.UrlSubscription('https://hooks.slack.com/services/YOUR/WEBHOOK/URL')
+);
+```
+
+Then redeploy the stack.
+
 ## Troubleshooting
+
+### Email not received
+
+1. **Check spam folder** in tech@rendasua.com inbox
+2. **Verify subscription is confirmed**:
+   ```bash
+   aws sns list-subscriptions-by-topic \
+     --topic-arn arn:aws:sns:ca-central-1:235680477887:fedapay-monitoring-dev \
+     --region ca-central-1
+   ```
+   Look for `"SubscriptionArn": "PendingConfirmation"` – if present, click the confirmation link in the email
+
+3. **Test SNS topic manually**:
+   ```bash
+   aws sns publish \
+     --topic-arn arn:aws:sns:ca-central-1:235680477887:fedapay-monitoring-dev \
+     --message "Test notification" \
+     --subject "Test" \
+     --region ca-central-1
+   ```
 
 ### Alarm not triggering
 
@@ -204,19 +286,43 @@ View the alarms in the CloudWatch console:
      --region ca-central-1
    ```
 
-### SNS notifications not received
-
-1. Check SNS topic subscriptions are confirmed:
+4. Check metric data points:
    ```bash
-   aws sns list-subscriptions-by-topic \
-     --topic-arn arn:aws:sns:ca-central-1:235680477887:backend-alerts-dev \
+   aws cloudwatch get-metric-statistics \
+     --namespace Rendasua/Backend \
+     --metric-name FedapayLiveRecordIncomplete \
+     --dimensions Name=Environment,Value=dev \
+     --start-time $(date -u -d '1 hour ago' +%Y-%m-%dT%H:%M:%S) \
+     --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
+     --period 900 \
+     --statistics Sum \
      --region ca-central-1
    ```
 
-2. Verify the alarm has the SNS action:
+### Subscription shows PendingConfirmation
+
+This means the confirmation email was sent but not clicked:
+
+1. Check tech@rendasua.com inbox and spam folder
+2. Look for email from `no-reply@sns.amazonaws.com`
+3. Click "Confirm subscription" link
+4. If email is lost, delete and recreate the subscription:
    ```bash
-   aws cloudwatch describe-alarms \
-     --alarm-names fedapay-live-record-incomplete-dev \
+   # Get subscription ARN
+   aws sns list-subscriptions-by-topic \
+     --topic-arn arn:aws:sns:ca-central-1:235680477887:fedapay-monitoring-dev \
+     --region ca-central-1
+
+   # Unsubscribe (if needed)
+   aws sns unsubscribe \
+     --subscription-arn <SUBSCRIPTION_ARN> \
+     --region ca-central-1
+
+   # Re-subscribe
+   aws sns subscribe \
+     --topic-arn arn:aws:sns:ca-central-1:235680477887:fedapay-monitoring-dev \
+     --protocol email \
+     --notification-endpoint tech@rendasua.com \
      --region ca-central-1
    ```
 
@@ -235,6 +341,8 @@ npx cdk destroy FedapayMonitoring-dev
 npx cdk destroy FedapayMonitoring-production
 ```
 
+**Note**: This will delete the SNS topics and all subscriptions.
+
 ## Related
 
 - **Log marker PR**: renda-sua#587 (backend code that emits the marker)
@@ -245,7 +353,18 @@ npx cdk destroy FedapayMonitoring-production
 
 After deployment, the stack exports these values:
 
+- `FedapayMonitoringSnsTopicArn-{env}`: SNS topic ARN for alerts
 - `FedapayLiveRecordIncompleteFilterName-{env}`: Metric filter logical ID
 - `FedapayLiveRecordIncompleteAlarmName-{env}`: Alarm name
 - `MetricNamespace-{env}`: CloudWatch metric namespace (Rendasua/Backend)
 - `MetricName-{env}`: CloudWatch metric name (FedapayLiveRecordIncomplete)
+
+Example: Get the SNS topic ARN from stack outputs:
+
+```bash
+aws cloudformation describe-stacks \
+  --stack-name FedapayMonitoring-dev \
+  --query 'Stacks[0].Outputs[?OutputKey==`SnsTopicArndev`].OutputValue' \
+  --output text \
+  --region ca-central-1
+```
