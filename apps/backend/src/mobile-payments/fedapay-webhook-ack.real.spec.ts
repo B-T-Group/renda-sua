@@ -18,8 +18,11 @@ import { HttpException, Logger, RequestMethod } from '@nestjs/common';
 import { HTTP_CODE_METADATA, METHOD_METADATA } from '@nestjs/common/constants';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { AdminMobilePaymentsController } from './admin-mobile-payments.controller';
-import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
-import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
+import { CallbackLiveMismatchError, LiveRecordIncompleteError } from './callback-live-mismatch.error';
+import {
+  INCOMPLETE_LIVE_RECORD_ALERT_AFTER,
+  MobilePaymentCallbackProcessor,
+} from './mobile-payment-callback.processor';
 import { MobilePaymentsController } from './mobile-payments.controller';
 import { MobilePaymentsService } from './mobile-payments.service';
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
@@ -384,6 +387,176 @@ describe('QA #587 A1: a live record missing amount or currency is transient (5xx
     expect((await mps.checkTransactionStatus(String(entityId), 'fedapay')).amount).toBe(5000);
     (Transaction.retrieve as jest.Mock).mockResolvedValueOnce(live(entityId, { amount: 0 }));
     expect((await mps.checkTransactionStatus(String(entityId), 'fedapay')).amount).toBe(0);
+  });
+});
+
+describe('QA #587 Low: repeated incomplete-live-record 5xx -> stable marker every time, one alert at N = 3', () => {
+  const warns = () => (Logger.prototype.warn as unknown as jest.Mock).mock.calls.map((c) => String(c[0]));
+  const markers = () => warns().filter((m) => m.startsWith('fedapay_live_record_incomplete '));
+  const repeatedAlerts = () => anomalies().filter((a) => a[1] === 'fedapay_live_record_incomplete_repeated');
+
+  async function deliver(controller: MobilePaymentsController, entityId: number) {
+    return (await controller.fedapayCallback(signedRequest(entityId)).catch((e: unknown) => e)) as HttpException;
+  }
+
+  it('N is 3', () => {
+    expect(INCOMPLETE_LIVE_RECORD_ALERT_AFTER).toBe(3);
+  });
+
+  it('failures 1-2: marker only; 3: one alert; 4-5: markers, no second alert; every answer stays a generic 500', async () => {
+    const { entityId, row, deposits, db, controller } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { amount: undefined }));
+
+    for (let i = 1; i <= 5; i++) {
+      const err = await deliver(controller, entityId);
+      expect(err.getStatus()).toBe(500);
+      expect(err.getResponse()).toEqual({ success: false, message: 'Failed to process FedaPay callback' });
+      expect(markers()).toHaveLength(i);
+      expect(markers()[i - 1]).toBe(
+        `fedapay_live_record_incomplete tx=${row.id} missing=amount failures=${i} (5xx, FedaPay will retry)`
+      );
+      expect(repeatedAlerts()).toHaveLength(i < 3 ? 0 : 1);
+    }
+    const [, , message, context] = repeatedAlerts()[0];
+    expect(message).toContain('callback answered 5xx 3 times');
+    expect(message).toContain('disables the webhook after 10 consecutive failed deliveries');
+    expect(context).toEqual({
+      transactionId: row.id,
+      missing: 'amount',
+      failures: 3,
+      event: 'transaction.approved',
+      fedapayEntityId: entityId,
+    });
+    expect(deposits).toHaveLength(0);
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(anomalies()).toHaveLength(1);
+  });
+
+  it('counts per transaction: two transactions failing twice each raise no alert', async () => {
+    const a = build();
+    (Transaction.retrieve as jest.Mock).mockImplementation(async (id: number) => live(id, { currency: undefined }));
+    // Same processor for both rows: put the second row in the first build's DB.
+    const otherId = a.entityId + 500;
+    a.db.byId.set(`tx-${otherId}`, { ...a.row, id: `tx-${otherId}`, transaction_id: String(otherId) });
+    for (const id of [a.entityId, otherId, a.entityId, otherId]) await deliver(a.controller, id);
+    expect(markers()).toHaveLength(4);
+    expect(markers().filter((m) => m.includes('missing=currency failures=2'))).toHaveLength(2);
+    expect(repeatedAlerts()).toHaveLength(0);
+  });
+
+  it('the 24 h window restarts the count (and allows one new alert)', async () => {
+    const { entityId, controller } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { amount: null }));
+    const now = jest.spyOn(Date, 'now');
+    now.mockReturnValue(1_000_000);
+    for (let i = 0; i < 3; i++) await deliver(controller, entityId);
+    expect(repeatedAlerts()).toHaveLength(1);
+    now.mockReturnValue(1_000_000 + 24 * 60 * 60 * 1000 + 1);
+    await deliver(controller, entityId);
+    expect(markers()[3]).toContain('failures=1');
+    for (let i = 0; i < 2; i++) await deliver(controller, entityId);
+    expect(repeatedAlerts()).toHaveLength(2);
+  });
+
+  it('a definite mismatch or a pending live status is not counted', async () => {
+    const { entityId, controller } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'pending' }));
+    for (let i = 0; i < 4; i++) await deliver(controller, entityId);
+    expect(markers()).toHaveLength(0);
+    expect(repeatedAlerts()).toHaveLength(0);
+  });
+
+  it('the tracking map is bounded (1000), evicting the least recently failed transaction', () => {
+    const { processor } = build();
+    const note = (id: string) =>
+      (processor as any).noteIncompleteLiveRecord(new LiveRecordIncompleteError(id, 'amount'), { name: 'transaction.approved', entity: { id: 1 } });
+    for (let i = 0; i < 1005; i++) note(`tx-cap-${i}`);
+    const map: Map<string, unknown> = (processor as any).incompleteLiveRecordFailures;
+    expect(map.size).toBe(1000);
+    expect(map.has('tx-cap-0')).toBe(false);
+    expect(map.has('tx-cap-5')).toBe(true);
+    note('tx-cap-5'); // refreshed: now the most recent
+    note('tx-cap-new');
+    expect(map.has('tx-cap-5')).toBe(true);
+    expect(map.has('tx-cap-6')).toBe(false);
+  });
+});
+
+describe('FedaPay sends transaction.expired (DEV payment 525277 shape) -> terminal, via the CAS failure path', () => {
+  function expiredRequest(entityId: number) {
+    // The shape FedaPay sandbox sent: event transaction.expired, entity status expired.
+    const payload = JSON.stringify({
+      name: 'transaction.expired',
+      object: 'event',
+      entity: {
+        klass: 'v1/transaction',
+        id: entityId,
+        reference: `trx_${entityId}`,
+        amount: 5000,
+        status: 'expired',
+        mode: null,
+        custom_metadata: { externalId: STORED_REF },
+      },
+    });
+    const header = Webhook.generateTestHeaderString({ payload, secret: WEBHOOK_SECRET, timestamp: Math.floor(Date.now() / 1000) });
+    return { headers: { 'x-fedapay-signature': header }, body: Buffer.from(payload) } as any;
+  }
+  const nonTerminalLogs = () =>
+    (Logger.prototype.log as unknown as jest.Mock).mock.calls.filter((c) => String(c[0]).includes('non-terminal event'));
+
+  it('a pending row is re-checked live and moved pending -> failed by CAS (error_message expired); no credit, no alert', async () => {
+    const { entityId, row, db, deposits, handler, controller } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'expired' }));
+
+    const res = await controller.fedapayCallback(expiredRequest(entityId));
+
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(nonTerminalLogs()).toHaveLength(0);
+    expect(Transaction.retrieve).toHaveBeenCalledWith(entityId, expect.anything());
+    expect(db.updateTransactionIfStatus).toHaveBeenCalledWith(row.id, 'pending', {
+      status: 'failed',
+      transaction_id: String(entityId),
+      error_message: 'expired',
+    });
+    expect(db.updateTransaction).not.toHaveBeenCalled();
+    expect(db.byId.get(row.id)?.status).toBe('failed');
+    expect(deposits).toHaveLength(0);
+    expect(handler.onPaymentFailure).not.toHaveBeenCalled(); // expiry is not a decline (no failure side effects)
+    expect(anomalies()).toHaveLength(0);
+  });
+
+  it.each([['success'], ['processing']])(
+    'a %s row (credited / crediting) is never touched by transaction.expired',
+    async (status) => {
+      const { entityId, row, db, deposits, controller } = build({ status });
+      (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'expired' }));
+      const res = await controller.fedapayCallback(expiredRequest(entityId));
+      expect(res).toEqual({ received: true, transactionId: entityId });
+      expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+      expect(db.updateTransaction).not.toHaveBeenCalled();
+      expect(db.byId.get(row.id)?.status).toBe(status);
+      expect(deposits).toHaveLength(0);
+    }
+  );
+
+  it('transaction.expired whose live record is approved is a definite mismatch: acknowledged, row untouched', async () => {
+    const { entityId, row, db, controller } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'approved' }));
+    const res = await controller.fedapayCallback(expiredRequest(entityId));
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(db.byId.get(row.id)?.status).toBe('pending');
+    expect(anomalies()[0][3]).toEqual(expect.objectContaining({ reason: 'live_status_mismatch', claimed: 'FAILED' }));
+  });
+
+  it('a CAS that loses the race (row left pending meanwhile) writes nothing else', async () => {
+    const { entityId, row, db, controller } = build();
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'expired' }));
+    db.updateTransactionIfStatus.mockResolvedValueOnce(false);
+    const res = await controller.fedapayCallback(expiredRequest(entityId));
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(db.updateTransaction).not.toHaveBeenCalled();
+    expect(db.byId.get(row.id)?.status).toBe('pending');
   });
 });
 
