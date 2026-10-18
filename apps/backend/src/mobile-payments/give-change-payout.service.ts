@@ -219,6 +219,12 @@ export class GiveChangePayoutService {
         options.initiatorUserId ?? params.mtnUserId
       );
     } catch (error: any) {
+      // Log detailed error server-side (sanitized for secrets)
+      this.logger.error(
+        `Withdrawal initiation failed for reference ${reference}: ${error?.message}`,
+        error?.stack
+      );
+      
       await this.failInitiation(
         transaction.id,
         reference,
@@ -226,14 +232,16 @@ export class GiveChangePayoutService {
         error?.message || 'Withdrawal initiation failed',
         'INITIATION_EXCEPTION'
       );
+      
       if (options.throwOnWithdrawalFailure) {
-        throw error instanceof HttpException
-          ? error
+        // Never return raw provider errors to the client
+        throw error instanceof HttpException && error.getStatus() < 500
+          ? error // Pre-validated client errors (e.g., INSUFFICIENT_FUNDS) are safe
           : new HttpException(
               {
                 success: false,
-                message: 'Failed to initiate withdrawal',
-                error: 'INITIATION_EXCEPTION',
+                message: 'Failed to initiate withdrawal. Please try again or contact support.',
+                error: 'PAYOUT_PROVIDER_ERROR',
               },
               HttpStatus.BAD_GATEWAY
             );
