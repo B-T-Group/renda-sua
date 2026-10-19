@@ -1,5 +1,8 @@
 import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
-import { MobilePaymentsService } from './mobile-payments.service';
+import {
+  MobilePaymentsService,
+  storedAmountMatchesLive,
+} from './mobile-payments.service';
 
 describe('MobilePaymentsService.assertProviderConfirmsCallback', () => {
   function buildService(liveStatus: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous') {
@@ -94,6 +97,30 @@ describe('MobilePaymentsService.assertProviderConfirmsCallback', () => {
       }
     });
 
+    it('Hasura numeric-string stored amounts still match the live number (NODE-NESTJS-4D)', async () => {
+      const service = buildFedaPayService({ status: 'success', amount: 1000 });
+      await expect(
+        service.assertProviderConfirmsCallback(
+          { ...fedaPayTx, amount: '1000.00' },
+          'SUCCESS'
+        )
+      ).resolves.toBeUndefined();
+    });
+
+    it('a stored amount that is not a finite number still fails closed', async () => {
+      const service = buildFedaPayService({ status: 'success', amount: 1000 });
+      try {
+        await service.assertProviderConfirmsCallback(
+          { ...fedaPayTx, amount: 'not-a-number' },
+          'SUCCESS'
+        );
+        fail('Should have thrown CallbackLiveMismatchError');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('amount_mismatch');
+      }
+    });
+
     it('currency mismatch is a definite CallbackLiveMismatchError', async () => {
       const service = buildFedaPayService({ status: 'success', currency: 'USD' });
       
@@ -137,6 +164,25 @@ describe('MobilePaymentsService.assertProviderConfirmsCallback', () => {
         service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS')
       ).rejects.toThrow(/provider status is pending/);
     });
+  });
+});
+
+describe('storedAmountMatchesLive', () => {
+  it('treats Hasura DECIMAL strings as equal to the live number', () => {
+    expect(storedAmountMatchesLive('5000.00', 5000)).toBe(true);
+    expect(storedAmountMatchesLive('5000', 5000)).toBe(true);
+    expect(storedAmountMatchesLive(5000, 5000)).toBe(true);
+  });
+
+  it('fails closed on a real difference or an unparseable stored value', () => {
+    expect(storedAmountMatchesLive('5000.00', 6000)).toBe(false);
+    expect(storedAmountMatchesLive('', 5000)).toBe(false);
+    expect(storedAmountMatchesLive('abc', 5000)).toBe(false);
+  });
+
+  it('skips the compare when no stored amount is present', () => {
+    expect(storedAmountMatchesLive(undefined, 5000)).toBe(true);
+    expect(storedAmountMatchesLive(null, 5000)).toBe(true);
   });
 });
 

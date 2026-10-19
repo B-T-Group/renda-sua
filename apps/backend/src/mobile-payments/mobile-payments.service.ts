@@ -95,6 +95,21 @@ export function liveFedaPayAmount(value: unknown): number | undefined {
   return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
 }
 
+/**
+ * Hasura `numeric` / DECIMAL(10,2) often arrives as `"5000.00"` while FedaPay
+ * retrieve is already coerced to a number. `!==` would then raise a definite
+ * amount_mismatch (2xx, no credit, no retry). Compare numerically; a stored
+ * value that is present but not a finite number still fails closed.
+ */
+export function storedAmountMatchesLive(
+  stored: unknown,
+  liveAmount: number
+): boolean {
+  if (stored === undefined || stored === null) return true;
+  const storedAmount = liveFedaPayAmount(stored);
+  return storedAmount !== undefined && storedAmount === liveAmount;
+}
+
 export interface MobileTransactionStatus {
   transactionId: string;
   /**
@@ -266,7 +281,7 @@ export class MobilePaymentsService {
       transaction_id?: string | null;
       customer_phone?: string | null;
       provider: string;
-      amount?: number;
+      amount?: number | string;
       currency?: string | null;
       reference?: string | null;
       transaction_type?: string | null;
@@ -314,7 +329,7 @@ export class MobilePaymentsService {
     tx: {
       id: string;
       provider: string;
-      amount?: number;
+      amount?: number | string;
       currency?: string | null;
       reference?: string | null;
     },
@@ -364,7 +379,7 @@ export class MobilePaymentsService {
         if (live.amount === undefined || !Number.isFinite(live.amount)) {
           throw new LiveRecordIncompleteError(tx.id, 'amount');
         }
-        if (tx.amount !== undefined && live.amount !== tx.amount) {
+        if (!storedAmountMatchesLive(tx.amount, live.amount)) {
           throw mismatch('amount_mismatch', `expected ${tx.amount}, live ${live.amount}`);
         }
         // live.reference = custom_metadata.externalId || FedaPay id; must equal ours exactly.
