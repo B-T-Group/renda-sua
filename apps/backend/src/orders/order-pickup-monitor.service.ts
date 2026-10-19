@@ -82,6 +82,12 @@ export class OrderPickupMonitorService {
     } catch (error: any) {
       this.logger.error(`Pickup monitor failed: ${error?.message}`);
     }
+    // #608 follow-up: release agent holds stranded by a failed release + lost revert.
+    try {
+      await this.reassignment.reconcileStrandedAgentHolds();
+    } catch (error: any) {
+      this.logger.error(`Stranded hold reconciler failed: ${error?.message}`);
+    }
   }
 
   async requestExtension(
