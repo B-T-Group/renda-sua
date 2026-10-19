@@ -1,3 +1,4 @@
+import type { SiteEventsService } from '../site-events/site-events.service';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import type { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import type { AgentHoldService } from '../agents/agent-hold.service';
@@ -271,13 +272,20 @@ function world() {
     { signedIdsOrSkip: jest.fn(async () => null) } as unknown as AgentContractGateService,
     deliveryConfig as unknown as DeliveryConfigService
   );
+  const siteEvents = { trackEvent: jest.fn().mockResolvedValue(undefined) };
+  const events = (type: string) =>
+    siteEvents.trackEvent.mock.calls
+      .map((c) => c[0] as { eventType: string; metadata: Record<string, unknown> })
+      .filter((e) => e.eventType === type)
+      .map((e) => e.metadata);
   const service = new DedicatedAssignmentsService(
     hasura,
     config,
     coverage,
     deliveryConfig as unknown as DeliveryConfigService,
     agentHold as unknown as AgentHoldService,
-    notifications as unknown as NotificationsService
+    notifications as unknown as NotificationsService,
+    siteEvents as unknown as SiteEventsService
   );
 
   const addAgent = (id: string, over: Partial<AgentFake> & { lang?: string | null } = {}) => {
@@ -308,7 +316,7 @@ function world() {
     return row;
   };
   const writes = (op: string) => state.mutations.filter((m) => m.op === op);
-  return { state, service, notifications, notices, executeMutation, executeQuery, addAgent, seedRow, writes, agentHold };
+  return { state, service, notifications, notices, executeMutation, executeQuery, addAgent, seedRow, writes, agentHold, events };
 }
 
 const assign = (w: ReturnType<typeof world>, agentId: string, slotKeys: unknown, locationId = LOC) =>
@@ -735,7 +743,7 @@ describe('DedicatedAssignmentsService — pickup slots (AC-B1, B2, B4)', () => {
     w.addAgent(A1);
     w.seedRow({ agent_id: A1, slot_key: 'evening' });
     w.state.deadlocksLeft = 1;
-    await w.service.updatePickupSlots(actor, { slots: [{ slotKey: 'evening', isEnabled: false }], confirmPauseAgents: true });
+    await w.service.updatePickupSlots({ userId: OWNER, locationId: LOC }, { slots: [{ slotKey: 'evening', isEnabled: false }], confirmPauseAgents: true });
     expect(w.writes('SaveDedicatedPickupSlots')).toHaveLength(2);
     expect(w.state.rows[0].status).toBe('paused');
   });
@@ -818,5 +826,97 @@ describe('DedicatedAssignmentsService — business cards (AC-B7, B17)', () => {
     const w = world();
     w.state.flag = false;
     await expect(w.service.listForLocation(LOC)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+
+describe('DedicatedAssignmentsService — PR 8 analytics (AC section 5)', () => {
+  it('assignment_status_changed carries the source for assign, pause, resume and remove', async () => {
+    const w = world();
+    w.addAgent(A1);
+    await assign(w, A1, ['morning']);
+    const row = w.state.rows[0];
+    await w.service.setPaused({ userId: OWNER, locationId: LOC }, row.id, true);
+    await w.service.setPaused({ userId: ADMIN }, row.id, false);
+    await w.service.remove({ userId: OWNER, locationId: LOC }, row.id, 'x');
+    expect(w.events('dedicated.assignment_status_changed').map((e) => [e.source, e.from, e.to, e.cause])).toEqual([
+      ['superuser_assign', null, 'active', 'superuser_assign'],
+      ['superuser_assign', 'active', 'paused', 'business'],
+      ['superuser_assign', 'paused', 'active', 'superuser'],
+      ['superuser_assign', 'active', 'removed', 'business'],
+    ]);
+    expect(w.events('dedicated.assignment_status_changed')[0]).toMatchObject({ assignmentId: row.id, agentId: A1, businessLocationId: LOC, slotKey: 'morning' });
+  });
+
+  it('no event when nothing changed (idempotent pause / remove) or the write is refused', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const paused = w.seedRow({ agent_id: A1, slot_key: 'morning', status: 'paused', paused_at: 'x' });
+    await w.service.setPaused({ userId: OWNER, locationId: LOC }, paused.id, true);
+    const removed = w.seedRow({ agent_id: A1, slot_key: 'evening', status: 'removed', removed_at: 'x' });
+    await w.service.remove({ userId: OWNER, locationId: LOC }, removed.id, null);
+    expect(w.events('dedicated.assignment_status_changed')).toEqual([]);
+  });
+
+  it('turning a slot off reports each paused agent with cause slot_disabled', async () => {
+    const w = world();
+    for (const id of [A1, A2]) w.addAgent(id);
+    w.seedRow({ agent_id: A2, slot_key: 'evening', source: 'superuser_assign' });
+    w.seedRow({ agent_id: A1, slot_key: 'evening' });
+    await w.service.updatePickupSlots({ userId: OWNER, locationId: LOC }, { slots: [{ slotKey: 'evening', isEnabled: false }], confirmPauseAgents: true });
+    const got = w.events('dedicated.assignment_status_changed').map((e) => [e.agentId, e.source, e.to, e.cause]);
+    expect(got).toHaveLength(2);
+    expect(got).toEqual(
+      expect.arrayContaining([
+        [A1, 'posting', 'paused', 'slot_disabled'],
+        [A2, 'superuser_assign', 'paused', 'slot_disabled'],
+      ])
+    );
+  });
+
+  it('off_today_toggled on set and clear, with the local date', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const row = w.seedRow({ agent_id: A1, slot_key: 'morning' });
+    const LATE = new Date('2026-10-18T23:30:00Z');
+    await w.service.setOffToday(`u-${A1}`, row.id, true, LATE);
+    await w.service.setOffToday(`u-${A1}`, row.id, false, LATE);
+    expect(w.events('dedicated.off_today_toggled')).toEqual([
+      { assignmentId: row.id, agentId: A1, businessLocationId: LOC, slotKey: 'morning', off: true, localDate: '2026-10-19' },
+      { assignmentId: row.id, agentId: A1, businessLocationId: LOC, slotKey: 'morning', off: false, localDate: '2026-10-19' },
+    ]);
+  });
+});
+
+describe('DedicatedAssignmentsService.pickerStats (AC-S2 picker)', () => {
+  it('load for everyone; balance and orders covered only for independents; none when there is no typical order', async () => {
+    const w = world();
+    w.addAgent(A1, { is_internal: true });
+    w.addAgent(A2);
+    w.state.orders.push(
+      { assigned_agent_id: A2, current_status: 'in_transit', business_location_id: OTHER_LOC, subtotal: 0 },
+      { assigned_agent_id: A1, current_status: 'picked_up', business_location_id: LOC, subtotal: 0 },
+      { assigned_agent_id: A2, current_status: 'delivered', business_location_id: LOC, subtotal: 10_000 }
+    );
+    w.state.accounts.push({ user_id: `u-${A2}`, currency: 'XAF', available_balance: 12_000 });
+    const stats = await w.service.pickerStats(
+      LOC,
+      'CM',
+      [
+        { id: A1, userId: `u-${A1}`, isInternal: true },
+        { id: A2, userId: `u-${A2}`, isInternal: false },
+      ],
+      new Date('2026-10-18T10:00:00Z')
+    );
+    expect(stats.get(A1)).toEqual({ activeOrders: 1, outstandingDedicatedOffers: 0, availableBalance: null, balanceCoversOrders: null });
+    // Typical subtotal 10 000 -> hold 5 000; 12 000 covers 2 (1 active of 10).
+    expect(stats.get(A2)).toEqual({ activeOrders: 1, outstandingDedicatedOffers: 0, availableBalance: 12_000, balanceCoversOrders: 2 });
+    expect(w.agentHold.resolveOrderHoldWithCeiling).not.toHaveBeenCalledWith(expect.anything(), A1, expect.anything());
+
+    const empty = world();
+    empty.addAgent(A2);
+    const none = await empty.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }]);
+    expect(none.get(A2)).toMatchObject({ balanceCoversOrders: null, availableBalance: 0 });
+    await expect(empty.service.pickerStats(LOC, 'CM', [])).resolves.toEqual(new Map());
   });
 });

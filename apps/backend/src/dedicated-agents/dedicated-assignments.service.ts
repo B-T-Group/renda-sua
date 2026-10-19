@@ -4,7 +4,10 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
+import { SiteEventsService } from '../site-events/site-events.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { DELEGATION_PERMISSIONS } from '../delegations/delegation.constants';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
@@ -230,8 +233,31 @@ export class DedicatedAssignmentsService {
     private readonly coverage: DedicatedCoverageService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly agentHoldService: AgentHoldService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    @Optional() private readonly siteEventsService?: SiteEventsService
   ) {}
+
+  /** AC section 5: `dedicated.assignment_status_changed (source)`, one per assignment row. */
+  statusChanged(
+    rows: Array<{ id: string; agent_id: string; business_location_id?: string; slot_key: string; source: string }>,
+    from: string | null,
+    to: string,
+    cause: string,
+    locationId?: string
+  ): void {
+    for (const r of rows) {
+      emitServerSiteEvent(this.siteEventsService, 'dedicated.assignment_status_changed', {
+        assignmentId: r.id,
+        agentId: r.agent_id,
+        businessLocationId: r.business_location_id ?? locationId ?? null,
+        slotKey: r.slot_key,
+        source: r.source,
+        from,
+        to,
+        cause,
+      });
+    }
+  }
 
   // ---------------------------------------------------------------- super user
 
@@ -294,10 +320,57 @@ export class DedicatedAssignmentsService {
         locationId: location.id,
       });
     }
+    this.statusChanged(assignments, null, 'active', 'superuser_assign', location.id);
     this.logger.log(
       `dedicated superuser_assign location=${location.id} agent=${agent.id} slots=${slotKeys.join(',')} country=${country}`
     );
     return { assignments };
+  }
+
+  /**
+   * AC-S2 picker numbers for candidate agents at a location: current load,
+   * and for independents the balance and how many typical orders it covers.
+   */
+  async pickerStats(
+    locationId: string,
+    country: string,
+    agents: Array<{ id: string; userId: string | null; isInternal: boolean }>,
+    now = new Date()
+  ): Promise<
+    Map<string, { activeOrders: number; outstandingDedicatedOffers: number; availableBalance: number | null; balanceCoversOrders: number | null }>
+  > {
+    const out = new Map<string, { activeOrders: number; outstandingDedicatedOffers: number; availableBalance: number | null; balanceCoversOrders: number | null }>();
+    if (agents.length === 0) return out;
+    const config = await this.configService.getConfig(country);
+    const ids = agents.map((a) => a.id);
+    const [load, stats] = await Promise.all([this.loadAgentLoad(ids, now), this.loadCardStats(locationId, ids)]);
+    const independents = agents.filter((a) => !a.isInternal);
+    const balances = await this.loadBalances(
+      [...new Set(independents.map((a) => a.userId).filter((id): id is string => !!id))],
+      country
+    );
+    for (const a of agents) {
+      const activeOrders = load.active.get(a.id) ?? 0;
+      const outstanding = load.offers.get(a.id) ?? 0;
+      const balance = a.isInternal ? null : balances.get(a.userId ?? '') ?? 0;
+      let covers: number | null = null;
+      if (!a.isInternal && stats.typicalSubtotal > 0) {
+        const hold = Number((await this.agentHoldService.resolveOrderHoldWithCeiling(stats.typicalSubtotal, a.id, 'mobile_money')).holdAmount);
+        if (Number.isFinite(hold) && hold > 0) {
+          covers = computeEffectiveCapacity({
+            maxActiveOrders: config.maxActiveOrders,
+            activeOrders,
+            outstandingDedicatedOffers: outstanding,
+            isInternal: false,
+            rail: 'mobile_money',
+            availableBalance: balance,
+            typicalHold: hold,
+          });
+        }
+      }
+      out.set(a.id, { activeOrders, outstandingDedicatedOffers: outstanding, availableBalance: balance, balanceCoversOrders: covers });
+    }
+    return out;
   }
 
   /** Business + agent of an assignment, for the admin geo-scope check. */
@@ -334,6 +407,7 @@ export class DedicatedAssignmentsService {
       ? { status: 'paused', paused_at: now, paused_by_user_id: actor.userId }
       : { status: 'active', paused_at: null, paused_by_user_id: null };
     const updated = await this.guardedUpdate(row.id, [row.status], set);
+    this.statusChanged([row], row.status, target, actor.locationId ? 'business' : 'superuser');
     await this.notifyAgentForRow(paused ? 'paused' : 'resumed', row);
     return { assignment: updated };
   }
@@ -350,6 +424,7 @@ export class DedicatedAssignmentsService {
       removed_by_user_id: actor.userId,
       removed_reason: trimmed || null,
     });
+    this.statusChanged([row], row.status, 'removed', actor.locationId ? 'business' : 'superuser');
     await this.notifyAgentForRow('removed', row);
     return { assignment: updated };
   }
@@ -529,6 +604,7 @@ export class DedicatedAssignmentsService {
         pauses.length > 0 ? { slots: objects, pauses } : { slots: objects }
       )
     );
+    this.statusChanged(toPause, 'active', 'paused', 'slot_disabled');
     for (const row of toPause) await this.notifyAgentForRow('paused', row);
     return { ...(await this.getPickupSlots(location.id)), pausedAssignmentIds: toPause.map((a) => a.id) };
   }
@@ -596,6 +672,14 @@ export class DedicatedAssignmentsService {
     const localToday = localDateTimeAt(now, await this.timeZone(country)).date;
     const updated = await this.guardedUpdate(row.id, ['active', 'paused'], {
       off_today_date: off ? localToday : null,
+    });
+    emitServerSiteEvent(this.siteEventsService, 'dedicated.off_today_toggled', {
+      assignmentId: row.id,
+      agentId: agent.id,
+      businessLocationId: row.business_location_id,
+      slotKey: row.slot_key,
+      off,
+      localDate: localToday,
     });
     return { assignment: updated, offToday: off, localDate: localToday };
   }

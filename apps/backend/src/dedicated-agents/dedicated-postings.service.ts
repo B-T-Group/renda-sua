@@ -1,10 +1,6 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  Logger,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
+import { SiteEventsService } from '../site-events/site-events.service';
 import { randomUUID } from 'crypto';
 import { haversineMeters } from '../common/geo.utils';
 import { DELEGATION_PERMISSIONS } from '../delegations/delegation.constants';
@@ -265,8 +261,14 @@ export class DedicatedPostingsService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly configService: DedicatedAgentsConfigService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    @Optional() private readonly siteEventsService?: SiteEventsService
   ) {}
+
+  /** AC section 5 event, fire-and-forget. */
+  track(event: Parameters<typeof emitServerSiteEvent>[1], metadata: Record<string, unknown>): void {
+    emitServerSiteEvent(this.siteEventsService, event, metadata);
+  }
 
   async create(
     actor: { userId: string; locationId: string },
@@ -310,6 +312,7 @@ export class DedicatedPostingsService {
     this.logger.log(
       JSON.stringify({ event: 'dedicated.posting_created', postingId: id, locationId: location.id, headcount, slotKeys, expiresAt })
     );
+    this.track('dedicated.posting_created', { postingId: id, businessLocationId: location.id, headcount, slotKeys, expiresAt });
     return { posting: postingView(await this.loadPosting(id)) };
   }
 
@@ -370,6 +373,9 @@ export class DedicatedPostingsService {
     this.logger.log(
       JSON.stringify({ event: 'dedicated.posting_closed', postingId: posting.id, by: actor.userId, autoDeclined: declined.length })
     );
+    if (declined.length > 0) {
+      this.track('dedicated.application_auto_declined', { postingId: posting.id, count: declined.length, cause: 'closed' });
+    }
     return { posting: postingView(await this.loadPosting(posting.id)), autoDeclined: declined.length };
   }
 
@@ -454,6 +460,26 @@ export class DedicatedPostingsService {
         autoDeclined: autoDeclined.length,
       })
     );
+    const created = assignments?.dedicated_agent_assignments ?? [];
+    this.track('dedicated.application_accepted', { postingId: posting.id, applicationId, agentId: application.agent_id });
+    for (const a of created) {
+      this.track('dedicated.assignment_status_changed', {
+        assignmentId: a.id,
+        agentId: application.agent_id,
+        businessLocationId: posting.business_location_id,
+        slotKey: a.slot_key,
+        source: 'posting',
+        from: null,
+        to: 'active',
+        cause: 'posting_accept',
+      });
+    }
+    if (after.status === 'filled') {
+      this.track('dedicated.posting_filled', { postingId: posting.id, headcount: after.headcount, acceptedCount: after.accepted_count });
+    }
+    if (autoDeclined.length > 0) {
+      this.track('dedicated.application_auto_declined', { postingId: posting.id, count: autoDeclined.length, cause: 'filled' });
+    }
     return {
       application: { id: applicationId, status: 'accepted' as const },
       assignments: assignments?.dedicated_agent_assignments ?? [],
@@ -508,6 +534,10 @@ export class DedicatedPostingsService {
     result.autoDeclined = declined.length;
     for (const p of expired) {
       const agentIds = declined.filter((d) => d.posting_id === p.id).map((d) => d.agent_id);
+      this.track('dedicated.posting_expired', { postingId: p.id, autoDeclined: agentIds.length });
+      if (agentIds.length > 0) {
+        this.track('dedicated.application_auto_declined', { postingId: p.id, count: agentIds.length, cause: 'expired' });
+      }
       if (agentIds.length === 0) continue;
       try {
         await this.notifyAgentIds('closed', await this.loadPosting(p.id), agentIds);

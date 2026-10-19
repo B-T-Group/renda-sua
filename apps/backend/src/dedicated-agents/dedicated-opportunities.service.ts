@@ -163,6 +163,7 @@ export class DedicatedOpportunitiesService {
     await this.assertEligible(agent);
     const eligible = agent as OpportunityAgent;
     if (!eligible.user?.profile_picture_url?.trim()) {
+      this.postings.track('dedicated.photo_gate_shown', { postingId: posting.id, agentId: eligible.id });
       throw new UnprocessableEntityException({
         error: DEDICATED_OPPORTUNITY_ERRORS.photoRequired,
         code: DEDICATED_OPPORTUNITY_ERRORS.photoRequired,
@@ -207,12 +208,14 @@ export class DedicatedOpportunitiesService {
       { id: row.id, at: now.toISOString() }
     );
     if (late?.update_dedicated_agent_applications?.affected_rows) {
+      this.postings.track('dedicated.application_auto_declined', { postingId: posting.id, count: 1, cause: 'late' });
       throw new ConflictException({ code: DEDICATED_POSTING_ERRORS.notOpen, message: 'This posting is no longer open' });
     }
     await this.postings.notifyBusinessNewApplication(posting, eligible.user?.first_name?.trim() || 'Agent');
     this.logger.log(
       JSON.stringify({ event: 'dedicated.posting_applied', postingId: posting.id, applicationId: row.id, agentId: eligible.id })
     );
+    this.postings.track('dedicated.application_submitted', { postingId: posting.id, applicationId: row.id, agentId: eligible.id });
     return { application: { id: row.id, status: 'applied' as const } };
   }
 
@@ -228,6 +231,7 @@ export class DedicatedOpportunitiesService {
     if (!res?.update_dedicated_agent_applications?.affected_rows) {
       throw new ConflictException({ code: DEDICATED_OPPORTUNITY_ERRORS.notApplied, message: 'There is no pending application to withdraw' });
     }
+    this.postings.track('dedicated.application_withdrawn', { postingId: posting.id, agentId: agent.id });
     return { application: { postingId: posting.id, status: 'withdrawn' as const } };
   }
 

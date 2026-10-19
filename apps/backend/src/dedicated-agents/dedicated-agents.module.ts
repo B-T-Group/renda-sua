@@ -6,6 +6,9 @@ import { DelegationsModule } from '../delegations/delegations.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { SiteEventsModule } from '../site-events/site-events.module';
+import { DedicatedAdminPostingsController, DedicatedAdminViewsController } from './dedicated-admin-views.controller';
+import { DedicatedAdminViewsService } from './dedicated-admin-views.service';
 import { DedicatedAgentsAdminController } from './dedicated-agents-admin.controller';
 import { DedicatedAgentsAgentController } from './dedicated-agents-agent.controller';
 import { DedicatedAgentsBusinessController } from './dedicated-agents-business.controller';
@@ -25,7 +28,8 @@ import { DedicatedPostingsService } from './dedicated-postings.service';
  * (super-user assign, business pause/remove, Off today, My stores) and
  * location pickup slots. PR 4: coverage lives in DedicatedCoverageModule so
  * checkout can use it. PR 7: postings, applications, the locked accept and
- * Opportunities, with the 14-day expiry sweeper.
+ * Opportunities, with the 14-day expiry sweeper. PR 8: super-user views
+ * (S1 list + S5 relation badge, S3 postings, S4 coverage, S2 picker) and analytics.
  */
 @Module({
   imports: [
@@ -38,9 +42,12 @@ import { DedicatedPostingsService } from './dedicated-postings.service';
     NotificationsModule,
     DelegationsModule,
     AdminAuthModule,
+    SiteEventsModule,
   ],
   controllers: [
     DedicatedAgentsAdminController,
+    DedicatedAdminViewsController,
+    DedicatedAdminPostingsController,
     DedicatedAgentsBusinessController,
     DedicatedAgentsAgentController,
     DedicatedPostingsBusinessController,
@@ -52,6 +59,7 @@ import { DedicatedPostingsService } from './dedicated-postings.service';
     DedicatedPostingsService,
     DedicatedOpportunitiesService,
     DedicatedPostingsSweeperService,
+    DedicatedAdminViewsService,
   ],
   exports: [DedicatedAgentsConfigModule, DedicatedCoverageModule, DedicatedAssignmentsService],
 })

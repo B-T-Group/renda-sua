@@ -152,6 +152,18 @@ export const SERVER_SITE_EVENT_TYPES = [
   // #594 PR 6: auto-assign release (A6b), day-of slot reminder (A8)
   'dedicated.auto_assign_released',
   'dedicated.slot_reminder_sent',
+  // #594 PR 8: AC section 5 events not emitted by earlier PRs
+  'dedicated.assignment_status_changed',
+  'dedicated.off_today_toggled',
+  'dedicated.posting_created',
+  'dedicated.posting_filled',
+  'dedicated.posting_expired',
+  'dedicated.application_submitted',
+  'dedicated.application_withdrawn',
+  'dedicated.application_accepted',
+  'dedicated.application_auto_declined',
+  'dedicated.photo_gate_shown',
+  'dedicated.slot_full',
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',

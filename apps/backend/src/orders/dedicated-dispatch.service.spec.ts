@@ -733,6 +733,39 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
     expect(w.dedicatedOffers().map((o) => o.agent_id)).toEqual(['ind']);
   });
 
+  it('PR 8 slot_full: every dedicated agent on the slot is at capacity -> dedicated.slot_full, no offer', async () => {
+    const w = world();
+    w.addAgent('busy1', { internal: true });
+    w.addAgent('busy2', { balance: 50000 });
+    for (const id of ['busy1', 'busy2']) {
+      for (let i = 0; i < 10; i++) w.state.activeOrders.push({ id: `o-${id}-${i}`, assigned_agent_id: id, current_status: 'in_transit' });
+    }
+    await w.offersService.runDispatchRound(ORDER, 1);
+    await w.flush();
+    expect(w.dedicatedOffers()).toEqual([]);
+    expect(w.events('dedicated.slot_full')).toEqual([
+      expect.objectContaining({ orderId: ORDER, slotKey: 'afternoon', assignedAgents: 2 }),
+    ]);
+  });
+
+  it('PR 8 slot_full is not sent when one agent has room, or when the skip is for another reason', async () => {
+    const w = world();
+    w.addAgent('busy', { internal: true });
+    w.addAgent('ind', { balance: 50000 });
+    for (let i = 0; i < 10; i++) w.state.activeOrders.push({ id: `o-${i}`, assigned_agent_id: 'busy', current_status: 'in_transit' });
+    await w.offersService.runDispatchRound(ORDER, 1);
+    await w.flush();
+    expect(w.events('dedicated.slot_full')).toEqual([]);
+
+    const x = world();
+    x.addAgent('busy', { internal: true });
+    x.addAgent('broke', { balance: 0 });
+    for (let i = 0; i < 10; i++) x.state.activeOrders.push({ id: `o-${i}`, assigned_agent_id: 'busy', current_status: 'in_transit' });
+    await x.offersService.runDispatchRound(ORDER, 1);
+    await x.flush();
+    expect(x.events('dedicated.slot_full')).toEqual([]);
+  });
+
   it('verified-agent delivery with only an independent: no dedicated offer, the client gets the no-agent fallback', async () => {
     const w = world();
     w.addAgent('ind', { balance: 50000 });
