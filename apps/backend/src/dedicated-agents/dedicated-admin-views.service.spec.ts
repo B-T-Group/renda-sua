@@ -9,7 +9,7 @@ import {
   deliveryShare,
   slotCoverage,
 } from './dedicated-admin-views.service';
-import { ADMIN_VIEW_LIMIT } from './dedicated-admin-views.queries';
+import { ADMIN_VIEW_LIMIT, DEDICATED_ADMIN_COVERAGE_QUERY } from './dedicated-admin-views.queries';
 import type { DedicatedAssignmentsService } from './dedicated-assignments.service';
 import type { DedicatedPostingsService } from './dedicated-postings.service';
 
@@ -133,16 +133,18 @@ function world() {
   const assignments = {
     locationBusinessId: jest.fn(async (id: string) => loc(id).business_id),
     pickerStats: jest.fn(async (_l: string, _c: string, agents: Array<{ id: string; isInternal: boolean }>) =>
-      new Map(agents.map((a) => [a.id, { activeOrders: 2, outstandingDedicatedOffers: 1, availableBalance: a.isInternal ? null : 9000, balanceCoversOrders: a.isInternal ? null : 3 }]))
+      new Map(agents.map((a) => [a.id, { activeOrders: 2, outstandingDedicatedOffers: 1, balanceCoversOrders: a.isInternal ? null : 3 }]))
     ),
   };
   const postings = { close: jest.fn(async () => ({ posting: { id: 'p' }, autoDeclined: 2 })) };
+  const contractGate = { isRequired: jest.fn(async () => true) };
   const service = new DedicatedAdminViewsService(
     hasura,
     config as unknown as DedicatedAgentsConfigService,
     geo as unknown as GeoScopeService,
     assignments as unknown as DedicatedAssignmentsService,
-    postings as unknown as DedicatedPostingsService
+    postings as unknown as DedicatedPostingsService,
+    contractGate as unknown as AgentContractGateService
   );
   let n = 0;
   const addAssignment = (over: Loose = {}) => {
@@ -162,7 +164,7 @@ function world() {
     state.assignments.push(a);
     return a;
   };
-  return { state, service, geo, config, assignments, postings, addAssignment, executeQuery };
+  return { state, service, geo, config, assignments, postings, contractGate, addAssignment, executeQuery };
 }
 
 const ALL: GeoScope = { all: true };
@@ -358,10 +360,15 @@ describe('DedicatedAdminViewsService.coverage (AC-S4)', () => {
     expect((await w.service.coverage(ALL, {})).totals.dedicatedShare).toBeNull();
   });
 
-  it('helpers: no row = enabled; only an active assignment covers; unknown sources count as standard, null ignored', () => {
+  it('helpers: no row = enabled; only an active assignment covers; unknown and NULL sources count as standard', () => {
     expect(slotCoverage([], [])).toEqual({ enabledSlots: ['morning', 'afternoon', 'evening'], coveredSlots: [], uncoveredSlots: ['morning', 'afternoon', 'evening'] });
     expect(slotCoverage([{ slot_key: 'morning', is_enabled: false }], ['morning'])).toEqual({ enabledSlots: ['afternoon', 'evening'], coveredSlots: [], uncoveredSlots: ['afternoon', 'evening'] });
-    expect(deliveryShare(['dedicated_auto', 'dedicated_offer', 'admin', 'offer', null, undefined])).toEqual({ dedicated: 2, standard: 2 });
+    // QA #619 N1: every assigned order counts; NULL source (standard offer / open claim) = standard.
+    expect(deliveryShare(['dedicated_auto', 'dedicated_offer', 'admin', 'offer', null, undefined])).toEqual({ dedicated: 2, standard: 4 });
+    expect(deliveryShare([null, null, 'dedicated_auto'])).toEqual({ dedicated: 1, standard: 2 });
+    // ...and the coverage query fetches every assigned order, not only stamped ones.
+    expect(DEDICATED_ADMIN_COVERAGE_QUERY).toContain('assigned_agent_id: { _is_null: false }');
+    expect(DEDICATED_ADMIN_COVERAGE_QUERY).not.toContain('assignment_source: { _is_null: false }');
   });
 });
 
@@ -372,18 +379,33 @@ describe('DedicatedAdminViewsService.picker (AC-S2)', () => {
     const w = world();
     w.state.agents = [agent({ id: 'int', is_internal: true, live: { aggregate: { count: 2 } } }), agent({ id: 'ind' }), agent({ id: 'sales', focus: 'commercial' })];
     const res = await w.service.picker(CM, 'loc-dla');
-    expect(res.agents.map((a) => [a.id, a.chip, a.assignmentCount, a.activeOrders, a.availableBalance, a.balanceCoversOrders])).toEqual([
-      ['int', 'internal', 2, 2, null, null],
-      ['ind', 'verified_independent', 1, 2, 9000, 3],
+    expect(res.agents.map((a) => [a.id, a.chip, a.assignmentCount, a.activeOrders, a.balanceCoversOrders])).toEqual([
+      ['int', 'internal', 2, 2, null],
+      ['ind', 'verified_independent', 1, 2, 3],
     ]);
+    // QA #619 N3: no raw balance in the response.
+    expect(JSON.stringify(res)).not.toContain('availableBalance');
     const where = (w.executeQuery.mock.calls.find(([q]) => op(q) === 'DedicatedPickerAgents') as [string, Loose])[1].where;
+    // QA #619 N4: verified for everyone (internal too), contracted while the flag is on.
+    expect(JSON.stringify(where)).not.toContain('is_internal');
     expect(JSON.stringify(where)).toContain('"is_verified":{"_eq":true}');
+    expect(JSON.stringify(where)).toContain('"agent_contracts":{"status":{"_eq":"signed"}}');
     expect(JSON.stringify(where)).toContain('"_not":{"status":{"_eq":"suspended"}}');
     expect(JSON.stringify(where)).toContain('"country":{"_ilike":"CM"}');
     expect(w.assignments.pickerStats).toHaveBeenCalledWith('loc-dla', 'CM', [
       { id: 'int', userId: 'u-x', isInternal: true },
       { id: 'ind', userId: 'u-x', isInternal: false },
       ], expect.any(Date));
+  });
+
+  it('QA #619 N4: with the contract flag off, unsigned agents are listed', async () => {
+    const w = world();
+    w.contractGate.isRequired.mockResolvedValue(false);
+    w.state.agents = [agent({ id: 'ind' })];
+    await w.service.picker(CM, 'loc-dla');
+    const where = (w.executeQuery.mock.calls.find(([q]) => op(q) === 'DedicatedPickerAgents') as [string, Loose])[1].where;
+    expect(JSON.stringify(where)).not.toContain('agent_contracts');
+    expect(JSON.stringify(where)).toContain('"is_verified":{"_eq":true}');
   });
 
   it('404 out of scope and when the flag is off for the store', async () => {

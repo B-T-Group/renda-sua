@@ -161,14 +161,14 @@ export const DEDICATED_ADMIN_COVERAGE_QUERY = `
         slot_key
         agent_id
       }
-      orders(where: { created_at: { _gte: $since }, assignment_source: { _is_null: false } }) {
+      orders(where: { created_at: { _gte: $since }, assigned_agent_id: { _is_null: false } }) {
         assignment_source
       }
     }
   }
 `;
 
-/** AC-S2 picker: internal agents and verified independents, not suspended, in the location's country. */
+/** AC-S2 picker: verified agents (internal and independent), not suspended, contracted when required, in the location's country. */
 export const DEDICATED_PICKER_AGENTS_QUERY = `
   query DedicatedPickerAgents($where: agents_bool_exp!, $limit: Int!) {
     agents(where: $where, order_by: [{ is_internal: desc }, { created_at: asc }], limit: $limit) {

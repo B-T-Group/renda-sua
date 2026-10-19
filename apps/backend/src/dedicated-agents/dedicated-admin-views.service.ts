@@ -4,6 +4,7 @@ import { normalizeCity } from '../common/same-region.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { GeoScopeService } from '../rbac/geo-scope.service';
 import type { GeoScope } from '../rbac/platform-permissions';
+import { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import { DedicatedAgentsConfigService } from './dedicated-agents-config.service';
 import {
   DEDICATED_ASSIGNMENT_SOURCES,
@@ -93,13 +94,14 @@ export function slotCoverage(
   };
 }
 
-/** Dedicated (dedicated_offer / dedicated_auto) vs every other assignment source. */
+/** Dedicated (dedicated_offer / dedicated_auto) vs every other assigned order (NULL source = standard). */
 export function deliveryShare(sources: Array<string | null | undefined>): { dedicated: number; standard: number } {
   let dedicated = 0;
   let standard = 0;
+  // QA #619 N1: one entry per assigned order. Only the dedicated claim path stamps a
+  // source; standard offer accepts and open claims leave it NULL, so NULL = standard.
   for (const s of sources) {
-    if (!s) continue;
-    if (DEDICATED_ORDER_SOURCES.has(s)) dedicated++;
+    if (s && DEDICATED_ORDER_SOURCES.has(s)) dedicated++;
     else standard++;
   }
   return { dedicated, standard };
@@ -120,7 +122,8 @@ export class DedicatedAdminViewsService {
     private readonly config: DedicatedAgentsConfigService,
     private readonly geo: GeoScopeService,
     private readonly assignments: DedicatedAssignmentsService,
-    private readonly postings: DedicatedPostingsService
+    private readonly postings: DedicatedPostingsService,
+    private readonly contractGate: AgentContractGateService
   ) {}
 
   async listAssignments(scope: GeoScope, filters: AdminAssignmentFilters) {
@@ -255,7 +258,7 @@ export class DedicatedAdminViewsService {
     };
   }
 
-  /** AC-S2 picker: internal agents + verified independents (chip) in the store's country and the caller's scope. */
+  /** AC-S2 picker: verified (and, under the contract flag, contracted) internal agents and independents in the store's country and the caller's scope. */
   async picker(scope: GeoScope, locationId: string, now = new Date()) {
     const businessId = await this.assignments.locationBusinessId(locationId);
     await this.geo.assertBusiness(scope, businessId);
@@ -263,7 +266,10 @@ export class DedicatedAdminViewsService {
     await this.requireEnabled(country);
     const geoAddress = await this.geo.addressWhere(scope);
     const where = and([
-      { _or: [{ is_internal: { _eq: true } }, { is_verified: { _eq: true } }] },
+      // QA #619 N4: only agents the assign accepts and coverage can use: verified
+      // (internal too) and, while the contract flag is on, with a signed contract.
+      { is_verified: { _eq: true } },
+      (await this.contractGate.isRequired()) ? { agent_contracts: { status: { _eq: 'signed' } } } : null,
       { _not: { status: { _eq: 'suspended' } } },
       { agent_addresses: { address: { country: { _ilike: country } } } },
       geoAddress ? { agent_addresses: { address: geoAddress } } : null,
@@ -288,7 +294,7 @@ export class DedicatedAdminViewsService {
         isInternal: a.is_internal === true,
         chip: a.is_internal === true ? ('internal' as const) : ('verified_independent' as const),
         assignmentCount: a.live?.aggregate?.count ?? 0,
-        ...(stats.get(a.id) ?? { activeOrders: 0, outstandingDedicatedOffers: 0, availableBalance: null, balanceCoversOrders: null }),
+        ...(stats.get(a.id) ?? { activeOrders: 0, outstandingDedicatedOffers: 0, balanceCoversOrders: null }),
       })),
     };
   }

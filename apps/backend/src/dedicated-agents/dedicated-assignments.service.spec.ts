@@ -976,20 +976,41 @@ describe('DedicatedAssignmentsService.pickerStats (AC-S2 picker)', () => {
       ],
       new Date('2026-10-18T10:00:00Z')
     );
-    expect(stats.get(A1)).toEqual({ activeOrders: 1, outstandingDedicatedOffers: 0, availableBalance: null, balanceCoversOrders: null });
+    expect(stats.get(A1)).toEqual({ activeOrders: 1, outstandingDedicatedOffers: 0, balanceCoversOrders: null });
     // Typical subtotal 10 000 -> hold 5 000; 12 000 covers 2 (1 active of 10).
-    expect(stats.get(A2)).toEqual({ activeOrders: 1, outstandingDedicatedOffers: 0, availableBalance: 12_000, balanceCoversOrders: 2 });
+    // QA #619 N3: no raw balance, only the orders it covers.
+    expect(stats.get(A2)).toEqual({ activeOrders: 1, outstandingDedicatedOffers: 0, balanceCoversOrders: 2 });
     expect(w.agentHold.resolveOrderHoldWithCeiling).not.toHaveBeenCalledWith(expect.anything(), A1, expect.anything());
 
     const empty = world();
     empty.addAgent(A2);
     const none = await empty.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }]);
-    expect(none.get(A2)).toMatchObject({ balanceCoversOrders: null, availableBalance: 0 });
+    expect(none.get(A2)).toEqual({ activeOrders: 0, outstandingDedicatedOffers: 0, balanceCoversOrders: null });
     await expect(empty.service.pickerStats(LOC, 'CM', [])).resolves.toEqual(new Map());
+
+    // QA #619 N2: no per-agent card aggregates (only the typical-subtotal query), and
+    // the hold lookups run concurrently instead of one awaited call after another.
+    const statsCalls = w.executeQuery.mock.calls.filter(([q]) => String(q).includes('query DedicatedCardStats'));
+    expect(statsCalls.length).toBeGreaterThan(0);
+    for (const [, vars] of statsCalls) expect(Object.keys(vars as Loose).filter((k) => /^a\d+$/.test(k))).toEqual([]);
+    let inFlight = 0;
+    let peak = 0;
+    w.agentHold.resolveOrderHoldWithCeiling.mockImplementation(async (subtotal: number) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return { holdAmount: Math.round(subtotal * 0.5) };
+    });
+    const many = Array.from({ length: 12 }, (_, i) => ({ id: `ag-${i}`, userId: `u-${i}`, isInternal: false }));
+    const batch = await w.service.pickerStats(LOC, 'CM', many, new Date('2026-10-18T10:00:00Z'));
+    expect(batch.size).toBe(12);
+    expect(peak).toBe(10);
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledTimes(12 + 1);
 
     // A zero hold (e.g. hold waived) means no balance limit to show: covers stays null.
     w.agentHold.resolveOrderHoldWithCeiling.mockResolvedValueOnce({ holdAmount: 0 });
     const zero = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], new Date('2026-10-18T10:00:00Z'));
-    expect(zero.get(A2)).toMatchObject({ availableBalance: 12_000, balanceCoversOrders: null });
+    expect(zero.get(A2)).toMatchObject({ balanceCoversOrders: null });
   });
 });

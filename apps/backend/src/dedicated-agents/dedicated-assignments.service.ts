@@ -221,6 +221,9 @@ function assertSlotKeys(raw: unknown): DedicatedSlotKey[] {
  * agent_id order, and are behind `dedicated_agents_enabled` for the location's
  * country (off -> 404, as for other flagged routes).
  */
+/** QA #619 N2: concurrent hold lookups per batch in the super-user picker. */
+const PICKER_HOLD_BATCH = 10;
+
 @Injectable()
 export class DedicatedAssignmentsService {
   private readonly logger = new Logger(DedicatedAssignmentsService.name);
@@ -353,41 +356,60 @@ export class DedicatedAssignmentsService {
     country: string,
     agents: Array<{ id: string; userId: string | null; isInternal: boolean }>,
     now = new Date()
-  ): Promise<
-    Map<string, { activeOrders: number; outstandingDedicatedOffers: number; availableBalance: number | null; balanceCoversOrders: number | null }>
-  > {
-    const out = new Map<string, { activeOrders: number; outstandingDedicatedOffers: number; availableBalance: number | null; balanceCoversOrders: number | null }>();
+  ): Promise<Map<string, { activeOrders: number; outstandingDedicatedOffers: number; balanceCoversOrders: number | null }>> {
+    const out = new Map<string, { activeOrders: number; outstandingDedicatedOffers: number; balanceCoversOrders: number | null }>();
     if (agents.length === 0) return out;
     const config = await this.configService.getConfig(country);
     const ids = agents.map((a) => a.id);
-    const [load, stats] = await Promise.all([this.loadAgentLoad(ids, now), this.loadCardStats(locationId, ids)]);
+    // QA #619 N2: the picker only needs the store's typical subtotal, not the per-agent
+    // card aggregates (no agent aliases: dedicatedCardStatsQuery(0) is just `recent`).
+    const [load, stats] = await Promise.all([this.loadAgentLoad(ids, now), this.loadCardStats(locationId, [])]);
     const independents = agents.filter((a) => !a.isInternal);
     const balances = await this.loadBalances(
       [...new Set(independents.map((a) => a.userId).filter((id): id is string => !!id))],
       country
     );
+    const holds = stats.typicalSubtotal > 0 ? await this.batchHolds(stats.typicalSubtotal, independents.map((a) => a.id)) : new Map<string, number>();
     for (const a of agents) {
       const activeOrders = load.active.get(a.id) ?? 0;
       const outstanding = load.offers.get(a.id) ?? 0;
-      const balance = a.isInternal ? null : balances.get(a.userId ?? '') ?? 0;
       let covers: number | null = null;
-      if (!a.isInternal && stats.typicalSubtotal > 0) {
-        const hold = Number((await this.agentHoldService.resolveOrderHoldWithCeiling(stats.typicalSubtotal, a.id, 'mobile_money')).holdAmount);
-        if (Number.isFinite(hold) && hold > 0) {
-          covers = computeEffectiveCapacity({
-            maxActiveOrders: config.maxActiveOrders,
-            activeOrders,
-            outstandingDedicatedOffers: outstanding,
-            isInternal: false,
-            rail: 'mobile_money',
-            availableBalance: balance,
-            typicalHold: hold,
-          });
-        }
+      const hold = holds.get(a.id) ?? 0;
+      // N5 (PE call, note only): the hold is the MoMo-rail hold. On a Stripe-rail store the
+      // hold is 0 (AC-E4), so this shows null ("no balance limit"), never a number.
+      if (!a.isInternal && Number.isFinite(hold) && hold > 0) {
+        covers = computeEffectiveCapacity({
+          maxActiveOrders: config.maxActiveOrders,
+          activeOrders,
+          outstandingDedicatedOffers: outstanding,
+          isInternal: false,
+          rail: 'mobile_money',
+          availableBalance: balances.get(a.userId ?? '') ?? 0,
+          typicalHold: hold,
+        });
       }
-      out.set(a.id, { activeOrders, outstandingDedicatedOffers: outstanding, availableBalance: balance, balanceCoversOrders: covers });
+      // QA #619 N3: only how many orders the balance covers, never the balance itself.
+      out.set(a.id, { activeOrders, outstandingDedicatedOffers: outstanding, balanceCoversOrders: covers });
     }
     return out;
+  }
+
+  /** QA #619 N2: hold lookups in parallel batches instead of one awaited call per agent. */
+  private async batchHolds(subtotal: number, agentIds: string[]): Promise<Map<string, number>> {
+    const holds = new Map<string, number>();
+    for (let i = 0; i < agentIds.length; i += PICKER_HOLD_BATCH) {
+      const chunk = agentIds.slice(i, i + PICKER_HOLD_BATCH);
+      const values = await Promise.all(
+        chunk.map((id) =>
+          this.agentHoldService
+            .resolveOrderHoldWithCeiling(subtotal, id, 'mobile_money')
+            .then((r) => Number(r.holdAmount))
+            .catch(() => 0)
+        )
+      );
+      chunk.forEach((id, k) => holds.set(id, values[k]));
+    }
+    return holds;
   }
 
   /** Business + agent of an assignment, for the admin geo-scope check. */
