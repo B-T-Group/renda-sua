@@ -98,7 +98,7 @@ function world() {
             // Hasura's orders_aggregate: counts only (QA #619 N9), using the query's own source list.
             ...(() => {
               const recent = (l.orders ?? []).filter((o: Loose) => o.created_at >= vars.since && o.assigned !== false);
-              const sources = JSON.parse((/assignment_source: \{ _in: (\[[^\]]*\]) \}/.exec(q) ?? [, '[]'])[1]) as string[];
+              const sources = JSON.parse(/assignment_source: \{ _in: (\[[^\]]*\]) \}/.exec(q)?.[1] ?? '[]') as string[];
               return {
                 dedicatedOrders: { aggregate: { count: recent.filter((o: Loose) => sources.includes(o.assignment_source)).length } },
                 assignedOrders: { aggregate: { count: recent.length } },
