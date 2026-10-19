@@ -263,7 +263,10 @@ function world() {
         }
         expect(vars.pauses).toBeUndefined();
         state.onSave?.();
-        if (!vars.offSlots) return { insert_business_location_pickup_slots: { affected_rows: vars.slots.length } };
+        // Hasura ignores variables the document doesn't declare: no predicate update, no pause.
+        if (!vars.offSlots || !/paused: update_dedicated_agent_assignments\(\s*where: \{ business_location_id: \{ _eq: \$locationId \}, slot_key: \{ _in: \$offSlots \}, status: \{ _eq: "active" \} \}/.test(mutation)) {
+          return { insert_business_location_pickup_slots: { affected_rows: vars.slots.length } };
+        }
         // Pause by predicate in the same request (QA #603 N2): whatever is active on the slot now.
         const hit = state.rows.filter(
           (r) => r.business_location_id === vars.locationId && vars.offSlots.includes(r.slot_key) && r.status === 'active'
