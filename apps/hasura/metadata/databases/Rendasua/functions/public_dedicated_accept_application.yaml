@@ -1,0 +1,3 @@
+function:
+  name: dedicated_accept_application
+  schema: public

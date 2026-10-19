@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { haversineDistanceKm } from '../common/agent-proximity.util';
 import { AgentHoldService } from '../agents/agent-hold.service';
@@ -12,6 +12,12 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
+import type { OfferDeclineReason } from '../dedicated-agents/dedicated-agents.constants';
+import {
+  DedicatedDispatchService,
+  type DedicatedFallbackOutcome,
+} from './dedicated-dispatch.service';
+import type { ClaimAssignment } from './dedicated-claim.port';
 
 /** Final "round" value used to signal the exhaustion check rather than a real dispatch round. */
 const EXHAUSTION_CHECK_ROUND = 3;
@@ -26,6 +32,8 @@ interface OfferOrderDetails {
   verified_agent_delivery: boolean;
   dispatch_ready_at: string | null;
   dispatch_round: number;
+  /** #594: set only when dedicated coverage made delivery possible at checkout. */
+  coverage_slot_key?: string | null;
   business_location?: {
     name?: string | null;
     address?: {
@@ -124,7 +132,9 @@ export class OrderOffersService {
     private readonly waitAndExecuteScheduleService: WaitAndExecuteScheduleService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly paymentRoutingService: PaymentRoutingService,
-    private readonly agentHoldService: AgentHoldService
+    private readonly agentHoldService: AgentHoldService,
+    @Optional()
+    private readonly dedicatedDispatch?: DedicatedDispatchService
   ) {}
 
   private get ttlSeconds(): number {
@@ -206,11 +216,26 @@ export class OrderOffersService {
       );
 
       await this.markRoundDispatched(orderId, round);
+      if (round === 1 && order.coverage_slot_key) {
+        await this.dedicatedDispatch?.noteDispatchStarted(orderId, candidates.length);
+      }
 
       if (candidates.length === 0) {
         this.logger.log(
           `No eligible agents within ${maxDistanceKm}km for order ${orderId} round ${round}`
         );
+        // #594 PR 5: a confirmed window placed on dedicated coverage falls back
+        // to its dedicated agents before the next round / exhaustion.
+        const fallback = await this.dedicatedFallback(order);
+        if (fallback.kind === 'auto_assigned') return;
+        if (fallback.kind === 'offered' || fallback.kind === 'pending') {
+          await this.waitAndExecuteScheduleService.scheduleDispatchRound(
+            orderId,
+            round === 1 ? 2 : EXHAUSTION_CHECK_ROUND,
+            Math.max(this.roundGapSeconds, fallback.waitSeconds)
+          );
+          return;
+        }
         await this.scheduleNextStep(orderId, round);
         return;
       }
@@ -306,7 +331,29 @@ export class OrderOffersService {
       // beyond what round 2 scheduling already covers.
       return;
     }
+    // #594 PR 5: last chance for dedicated agents; live offers push the check back.
+    const fallback = await this.dedicatedFallback(order);
+    if (fallback.kind === 'auto_assigned') return;
+    if (fallback.kind === 'offered' || fallback.kind === 'pending') {
+      await this.waitAndExecuteScheduleService.scheduleDispatchRound(
+        order.id,
+        EXHAUSTION_CHECK_ROUND,
+        fallback.waitSeconds
+      );
+      return;
+    }
     await this.markDispatchExhausted(order);
+  }
+
+  /** Only orders placed on dedicated coverage (PE: no backfill) reach the dedicated service. */
+  private async dedicatedFallback(order: OfferOrderDetails): Promise<DedicatedFallbackOutcome> {
+    if (!this.dedicatedDispatch || !order.coverage_slot_key) return { kind: 'none' };
+    return this.dedicatedDispatch.fallback(order.id);
+  }
+
+  /** #594: accepting a dedicated offer re-checks eligibility and returns the assignment stamp. */
+  async dedicatedAcceptAssignment(orderId: string, agentId: string): Promise<ClaimAssignment | undefined> {
+    return this.dedicatedDispatch?.acceptAssignment(orderId, agentId);
   }
 
   private async markDispatchExhausted(order: OfferOrderDetails): Promise<void> {
@@ -507,7 +554,7 @@ export class OrderOffersService {
   async getActiveOfferForAgent(
     orderId: string,
     agentId: string
-  ): Promise<{ id: string; expires_at: string } | null> {
+  ): Promise<{ id: string; expires_at: string; offer_kind?: string | null } | null> {
     const query = `
       query ActiveOffer($orderId: uuid!, $agentId: uuid!, $now: timestamptz!) {
         order_offers(
@@ -523,6 +570,7 @@ export class OrderOffersService {
         ) {
           id
           expires_at
+          offer_kind
         }
       }
     `;
@@ -780,17 +828,36 @@ export class OrderOffersService {
   }
 
   /**
-   * Mark the caller's offer as declined.
+   * Mark the caller's offer as declined. #594: a dedicated offer also records
+   * the agent's reason (null when none was given); a standard offer is unchanged.
    */
-  async declineOffer(orderId: string, agentId: string): Promise<void> {
+  async declineOffer(
+    orderId: string,
+    agentId: string,
+    reason: OfferDeclineReason | null = null
+  ): Promise<void> {
     const mutation = `
-      mutation DeclineOffer($orderId: uuid!, $agentId: uuid!) {
-        update_order_offers(
+      mutation DeclineOffer($orderId: uuid!, $agentId: uuid!, $reason: String) {
+        dedicated: update_order_offers(
           where: {
             _and: [
               { order_id: { _eq: $orderId } }
               { agent_id: { _eq: $agentId } }
               { status: { _eq: "offered" } }
+              { offer_kind: { _eq: "dedicated" } }
+            ]
+          }
+          _set: { status: "declined", responded_at: "now()", decline_reason: $reason }
+        ) {
+          affected_rows
+        }
+        standard: update_order_offers(
+          where: {
+            _and: [
+              { order_id: { _eq: $orderId } }
+              { agent_id: { _eq: $agentId } }
+              { status: { _eq: "offered" } }
+              { offer_kind: { _neq: "dedicated" } }
             ]
           }
           _set: { status: "declined", responded_at: "now()" }
@@ -799,10 +866,16 @@ export class OrderOffersService {
         }
       }
     `;
-    await this.hasuraSystemService.executeMutation(mutation, {
+    const result = await this.hasuraSystemService.executeMutation<{
+      dedicated?: { affected_rows: number } | null;
+    }>(mutation, {
       orderId,
       agentId,
+      reason,
     });
+    if ((result?.dedicated?.affected_rows ?? 0) > 0) {
+      this.dedicatedDispatch?.onOfferDeclined(orderId, agentId, reason);
+    }
   }
 
   /**
@@ -847,6 +920,7 @@ export class OrderOffersService {
           verified_agent_delivery
           dispatch_ready_at
           dispatch_round
+          coverage_slot_key
           business {
             name
           }
@@ -888,8 +962,11 @@ export class OrderOffersService {
       }
     );
 
+    // #594 PR 6: on an order placed on dedicated coverage, an agent who declined its
+    // dedicated offer or released its auto-assignment isn't offered it again.
+    const excluded = order.coverage_slot_key ? await this.dedicatedDeclinedAgentIds(order.id) : new Set<string>();
     const eligible: CandidateAgent[] = candidates
-      .filter((c) => c.userId != null)
+      .filter((c) => c.userId != null && !excluded.has(c.agentId))
       .map((c) => ({
         agentId: c.agentId,
         userId: c.userId as string,
@@ -899,6 +976,24 @@ export class OrderOffersService {
     const withPushToken = await this.filterAgentsWithPushToken(eligible);
     const ranked = await this.rankByPickupReliability(withPushToken);
     return ranked.slice(0, this.maxAgents);
+  }
+
+  private async dedicatedDeclinedAgentIds(orderId: string): Promise<Set<string>> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      order_offers: Array<{ agent_id: string }>;
+    }>(
+      `query DedicatedDeclinedAgents($orderId: uuid!) {
+        order_offers(
+          where: {
+            order_id: { _eq: $orderId }
+            offer_kind: { _eq: "dedicated" }
+            status: { _eq: declined }
+          }
+        ) { agent_id }
+      }`,
+      { orderId }
+    );
+    return new Set((res?.order_offers ?? []).map((o) => o.agent_id));
   }
 
   /** Prefer closer agents; among similar distance, prefer higher pickup reliability. */
@@ -1092,18 +1187,45 @@ export class OrderOffersService {
               { order_id: { _eq: $orderId } }
               { agent_id: { _eq: $agentId } }
               { status: { _eq: "offered" } }
+              # QA #607 N2: a dedicated offer is accepted only by a stamped dedicated claim.
+              {
+                _or: [
+                  { offer_kind: { _neq: "dedicated" } }
+                  { order: { assignment_source: { _eq: "dedicated_offer" } } }
+                ]
+              }
             ]
           }
           _set: { status: "accepted", responded_at: "now()" }
         ) {
           affected_rows
+          returning { offer_kind }
+        }
+        # Runs after the update above: the winner's offers still open are dedicated
+        # offers the claim didn't stamp; close them so they stop counting as load.
+        unstamped: update_order_offers(
+          where: {
+            _and: [
+              { order_id: { _eq: $orderId } }
+              { agent_id: { _eq: $agentId } }
+              { status: { _eq: "offered" } }
+            ]
+          }
+          _set: { status: "cancelled", responded_at: "now()" }
+        ) {
+          affected_rows
         }
       }
     `;
-    await this.hasuraSystemService.executeMutation(mutation, {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_order_offers?: { returning?: Array<{ offer_kind?: string | null }> } | null;
+    }>(mutation, {
       orderId,
       agentId: winnerAgentId,
     });
+    if (result?.update_order_offers?.returning?.some((r) => r.offer_kind === 'dedicated')) {
+      this.dedicatedDispatch?.onOfferAccepted(orderId, winnerAgentId);
+    }
   }
 
   private async cancelSiblingOffers(

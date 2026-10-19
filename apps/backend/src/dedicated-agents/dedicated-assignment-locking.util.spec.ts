@@ -40,3 +40,12 @@ describe('isRetryableAssignmentError', () => {
     expect(isRetryableAssignmentError(err)).toBe(expected);
   });
 });
+
+describe('isRetryableAssignmentError (QA #613 N4)', () => {
+  it('retries a serialization failure surfaced only as a message (Hasura drops the SQLSTATE)', () => {
+    expect(isRetryableAssignmentError(new Error('could not serialize access due to concurrent update'))).toBe(true);
+  });
+  it('does not retry unrelated errors', () => {
+    expect(isRetryableAssignmentError(new Error('unique violation'))).toBe(false);
+  });
+});

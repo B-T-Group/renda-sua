@@ -151,4 +151,42 @@ describe('DeliveryAvailabilityService Phase 0 Events', () => {
 
     expect(result.available).toBe(true);
   });
+
+  describe('#594 deferLogFor (order create re-evaluates a deferred NO_ELIGIBLE_AGENT)', () => {
+    async function evaluateWith(
+      reason: DeliveryUnavailableReason,
+      options?: { deferLogFor?: DeliveryUnavailableReason }
+    ) {
+      const rule: DeliveryAvailabilityRule = {
+        id: 'agent-in-region',
+        order: 1,
+        evaluate: jest.fn().mockResolvedValue({ pass: false, reason, metadata: { eligibleAgentCount: 0 } }),
+      };
+      const events = { trackEvent: jest.fn().mockResolvedValue(undefined) };
+      const svc = new DeliveryAvailabilityService([rule], events as never);
+      const result = await svc.evaluate(mockContext, options);
+      await new Promise((resolve) => setImmediate(resolve));
+      return { result, events };
+    }
+
+    it('skips the event for the deferred reason and still returns the result', async () => {
+      const { result, events } = await evaluateWith(DeliveryUnavailableReason.NO_ELIGIBLE_AGENT, {
+        deferLogFor: DeliveryUnavailableReason.NO_ELIGIBLE_AGENT,
+      });
+      expect(result).toMatchObject({ available: false, reason: DeliveryUnavailableReason.NO_ELIGIBLE_AGENT });
+      expect(events.trackEvent).not.toHaveBeenCalled();
+    });
+
+    it('still emits for any other failure reason', async () => {
+      const { events } = await evaluateWith(DeliveryUnavailableReason.SERVICE_AREA_DISABLED, {
+        deferLogFor: DeliveryUnavailableReason.NO_ELIGIBLE_AGENT,
+      });
+      expect(events.trackEvent).toHaveBeenCalledTimes(1);
+    });
+
+    it('emits NO_ELIGIBLE_AGENT as before without the option', async () => {
+      const { events } = await evaluateWith(DeliveryUnavailableReason.NO_ELIGIBLE_AGENT);
+      expect(events.trackEvent).toHaveBeenCalledTimes(1);
+    });
+  });
 });

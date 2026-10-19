@@ -291,6 +291,8 @@ select_permissions:
         - deposit_forfeited_at
         - deposit_forfeited_by_user_id
         - deposit_refunded_at
+        - assignment_source
+        - dedicated_release_until
       filter:
         assigned_agent:
           user:
