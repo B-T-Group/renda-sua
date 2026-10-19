@@ -734,3 +734,57 @@ describe('L4: a FedaPay mock- PAYMENT row only skips the live re-check when Feda
     expect(db.byId.get('tx-mock')?.status).toBe('success');
   });
 });
+
+describe('#615 QA L1: live FedaPay lookup timeout (real processor + FedaPayService)', () => {
+  const pending = (): Row =>
+    failedOrderRow({ id: 'tx-hang', reference: 'HANG-REF', status: 'pending', payment_entity: null, entity_id: null, amount: 2000 });
+  const approvedHang = () =>
+    approved({ amount: 2000, custom_metadata: { externalId: 'HANG-REF' } });
+  const saved = FedaPayService.liveLookupTimeoutMs;
+  afterEach(() => {
+    FedaPayService.liveLookupTimeoutMs = saved;
+  });
+
+  it('defaults to 10 s', () => {
+    expect(saved).toBe(10_000);
+  });
+
+  it('a never-settling Transaction.retrieve on the pending path rejects (5xx, FedaPay retries): no credit, row still pending', async () => {
+    FedaPayService.liveLookupTimeoutMs = 30;
+    const { db, ledger, processor, calls } = build([pending()]);
+    (Transaction.retrieve as jest.Mock).mockImplementation(() => {
+      calls.push('live-retrieve');
+      return new Promise(() => undefined);
+    });
+    const started = Date.now();
+    await expect(processor.processFedaPayCallback(approvedHang())).rejects.toBeDefined();
+    expect(Date.now() - started).toBeLessThan(5_000);
+    expect(calls).toContain('live-retrieve');
+    expect(ledger.deposits).toEqual([]);
+    expect(db.byId.get('tx-hang')?.status).toBe('pending');
+  });
+
+  it('a retrieve that answers in time is unaffected (credited once)', async () => {
+    FedaPayService.liveLookupTimeoutMs = 2_000;
+    const { db, ledger, processor } = build([pending()]);
+    (Transaction.retrieve as jest.Mock).mockImplementation(
+      () => new Promise((res) => setTimeout(() => res(liveFedaPayTx({ amount: 2000, custom_metadata: { externalId: 'HANG-REF' } })), 20))
+    );
+    await processor.processFedaPayCallback(approvedHang());
+    expect(ledger.deposits).toEqual([expect.objectContaining({ idempotencyKey: 'momo-deposit:tx-hang', amount: 2000 })]);
+    expect(db.byId.get('tx-hang')?.status).toBe('success');
+  });
+
+  it('checkTransactionStatus and checkPayoutStatus reject with a timeout instead of hanging', async () => {
+    FedaPayService.liveLookupTimeoutMs = 30;
+    const fedapay = new FedaPayService(
+      { get: (k: string) => (k === 'fedapay' ? { secretKey: 'sk_sandbox_test', environment: 'sandbox', mockEnabled: false } : undefined) } as any,
+      { get: jest.fn() } as any
+    );
+    const { Payout } = jest.requireMock('fedapay');
+    (Transaction.retrieve as jest.Mock).mockImplementation(() => new Promise(() => undefined));
+    (Payout.retrieve as jest.Mock).mockImplementation(() => new Promise(() => undefined));
+    await expect(fedapay.checkTransactionStatus('777')).rejects.toThrow(/timed out after 30ms/);
+    await expect(fedapay.checkPayoutStatus('888')).rejects.toThrow(/timed out after 30ms/);
+  });
+});
