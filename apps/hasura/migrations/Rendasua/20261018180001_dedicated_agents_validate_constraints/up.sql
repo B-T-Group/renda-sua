@@ -2,8 +2,9 @@
 -- 20261018180000 and build the two partial indexes on the hot tables.
 -- VALIDATE CONSTRAINT takes SHARE UPDATE EXCLUSIVE (reads and writes continue) while it scans.
 -- CREATE INDEX takes SHARE (reads continue, writes wait for the build; both indexes are partial
--- and start empty). CONCURRENTLY isn't usable: apply-hasura runs without
--- --per-migration-transaction. lock_timeout: fail fast rather than queue; re-run on timeout.
+-- and start empty). apply-hasura runs `migrate apply --per-migration-transaction`, so this
+-- file commits separately from 180000 and its ACCESS EXCLUSIVE locks are released first.
+-- lock_timeout: fail fast rather than queue; re-run on timeout.
 SET LOCAL lock_timeout = '5s';
 
 ALTER TABLE public.orders VALIDATE CONSTRAINT orders_coverage_slot_key_check;
