@@ -1,5 +1,6 @@
 import type { SiteEventsService } from '../site-events/site-events.service';
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import type { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import type { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import type { AgentHoldService } from '../agents/agent-hold.service';
 import type { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
@@ -302,6 +303,8 @@ function world() {
     deliveryConfig as unknown as DeliveryConfigService
   );
   const siteEvents = { trackEvent: jest.fn().mockResolvedValue(undefined) };
+  // QA #619 N5: the store's rail comes from PaymentRoutingService.resolveRailForBusiness.
+  const routing = { resolveRailForBusiness: jest.fn(async (_businessId: string): Promise<'stripe' | 'mobile_money'> => 'mobile_money') };
   const events = (type: string) =>
     siteEvents.trackEvent.mock.calls
       .map((c) => c[0] as { eventType: string; metadata: Record<string, unknown> })
@@ -314,7 +317,8 @@ function world() {
     deliveryConfig as unknown as DeliveryConfigService,
     agentHold as unknown as AgentHoldService,
     notifications as unknown as NotificationsService,
-    siteEvents as unknown as SiteEventsService
+    siteEvents as unknown as SiteEventsService,
+    routing as unknown as PaymentRoutingService
   );
 
   const addAgent = (id: string, over: Partial<AgentFake> & { lang?: string | null } = {}) => {
@@ -345,7 +349,7 @@ function world() {
     return row;
   };
   const writes = (op: string) => state.mutations.filter((m) => m.op === op);
-  return { state, service, notifications, notices, executeMutation, executeQuery, addAgent, seedRow, writes, agentHold, events };
+  return { state, service, notifications, notices, executeMutation, executeQuery, addAgent, seedRow, writes, agentHold, events, routing };
 }
 
 const assign = (w: ReturnType<typeof world>, agentId: string, slotKeys: unknown, locationId = LOC) =>
@@ -1012,5 +1016,70 @@ describe('DedicatedAssignmentsService.pickerStats (AC-S2 picker)', () => {
     w.agentHold.resolveOrderHoldWithCeiling.mockResolvedValueOnce({ holdAmount: 0 });
     const zero = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], new Date('2026-10-18T10:00:00Z'));
     expect(zero.get(A2)).toMatchObject({ balanceCoversOrders: null });
+  });
+});
+
+describe('QA #619 N5/N2: picker and card coverage use the store rail; failed hold lookups are logged', () => {
+  const NOW = new Date('2026-10-18T10:00:00Z');
+  // The real AgentHoldService rule (agent-hold.service.ts): a Stripe-rail order has no hold.
+  const realishHold = async (subtotal: number, _agentId: string, rail: string) => ({ holdAmount: rail === 'stripe' ? 0 : Math.round(subtotal * 0.5) });
+  const seed = () => {
+    const w = world();
+    w.addAgent(A2);
+    w.state.orders.push({ assigned_agent_id: A2, current_status: 'delivered', business_location_id: LOC, subtotal: 10_000 });
+    w.state.accounts.push({ user_id: `u-${A2}`, currency: 'XAF', available_balance: 12_000 });
+    w.agentHold.resolveOrderHoldWithCeiling.mockImplementation(realishHold);
+    return w;
+  };
+  const warns = () => (Logger.prototype.warn as jest.Mock).mock.calls.map((c) => String(c[0]));
+  beforeEach(() => {
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('picker on a Stripe-rail store: hold asked on the stripe rail, so no MoMo-based "covers n"', async () => {
+    const w = seed();
+    w.routing.resolveRailForBusiness.mockResolvedValue('stripe');
+    const stats = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], NOW);
+    expect(w.routing.resolveRailForBusiness).toHaveBeenCalledWith('biz-1');
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'stripe');
+    expect(w.agentHold.resolveOrderHoldWithCeiling).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'mobile_money');
+    expect(stats.get(A2)).toMatchObject({ balanceCoversOrders: null });
+  });
+
+  it('picker on a MoMo store still shows how many orders the balance covers', async () => {
+    const w = seed();
+    const stats = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], NOW);
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'mobile_money');
+    expect(stats.get(A2)).toMatchObject({ balanceCoversOrders: 2 });
+  });
+
+  it('business cards on a Stripe-rail store use the stripe rail too', async () => {
+    const w = seed();
+    w.routing.resolveRailForBusiness.mockResolvedValue('stripe');
+    w.seedRow({ agent_id: A2, slot_key: 'morning', status: 'active' });
+    const { assignments } = await w.service.listForLocation(LOC, NOW);
+    expect(w.routing.resolveRailForBusiness).toHaveBeenCalledWith('biz-1');
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'stripe');
+    expect(assignments[0]).toMatchObject({ balanceCoversOrders: null });
+  });
+
+  it('a failed rail lookup falls back to MoMo and is logged', async () => {
+    const w = seed();
+    w.routing.resolveRailForBusiness.mockRejectedValue(new Error('hasura down'));
+    const stats = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], NOW);
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'mobile_money');
+    expect(stats.get(A2)).toMatchObject({ balanceCoversOrders: 2 });
+    expect(warns().some((m) => m.startsWith(`dedicated.rail_lookup_failed location=${LOC}`))).toBe(true);
+  });
+
+  it('QA #619 N2: a failed hold lookup shows null coverage and is logged (not swallowed)', async () => {
+    const w = seed();
+    w.agentHold.resolveOrderHoldWithCeiling.mockRejectedValue(new Error('ledger timeout'));
+    const stats = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], NOW);
+    expect(stats.get(A2)).toMatchObject({ balanceCoversOrders: null });
+    expect(warns()).toEqual(
+      expect.arrayContaining([expect.stringMatching(new RegExp(`^dedicated\\.hold_lookup_failed location=${LOC} agent=${A2} rail=mobile_money: ledger timeout`))])
+    );
   });
 });

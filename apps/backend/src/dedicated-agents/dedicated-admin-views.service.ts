@@ -15,6 +15,7 @@ import {
 } from './dedicated-agents.constants';
 import {
   ADMIN_VIEW_LIMIT,
+  PICKER_AGENT_LIMIT,
   DEDICATED_ADMIN_ASSIGNMENT_BY_ID_QUERY,
   DEDICATED_ADMIN_ASSIGNMENTS_QUERY,
   DEDICATED_ADMIN_COVERAGE_QUERY,
@@ -30,7 +31,6 @@ import { relationBadge, type RelationSignal } from './relation-signals.util';
 /** Pages fetched before the in-memory city filter; the response says when it stopped early. */
 export const ADMIN_VIEW_MAX_PAGES = 5;
 export const COVERAGE_SHARE_DAYS = 30;
-const DEDICATED_ORDER_SOURCES = new Set(['dedicated_offer', 'dedicated_auto']);
 type BoolExp = Record<string, unknown>;
 
 export interface AdminAssignmentFilters {
@@ -94,17 +94,20 @@ export function slotCoverage(
   };
 }
 
-/** Dedicated (dedicated_offer / dedicated_auto) vs every other assigned order (NULL source = standard). */
-export function deliveryShare(sources: Array<string | null | undefined>): { dedicated: number; standard: number } {
-  let dedicated = 0;
-  let standard = 0;
-  // QA #619 N1: one entry per assigned order. Only the dedicated claim path stamps a
-  // source; standard offer accepts and open claims leave it NULL, so NULL = standard.
-  for (const s of sources) {
-    if (s && DEDICATED_ORDER_SOURCES.has(s)) dedicated++;
-    else standard++;
-  }
-  return { dedicated, standard };
+/**
+ * Dedicated (dedicated_offer / dedicated_auto) vs every other assigned order.
+ * QA #619 N1: every assigned order counts; only the dedicated claim path stamps a
+ * source, so a NULL source (standard offer accept, open claim) is standard.
+ * QA #619 N9: built from two aggregates (dedicated count, assigned count), so
+ * standard = assigned - dedicated. Cancelled-after-assignment orders are included.
+ */
+export function deliveryShare(dedicatedCount: number | null | undefined, assignedCount: number | null | undefined): {
+  dedicated: number;
+  standard: number;
+} {
+  const dedicated = Math.max(0, Number(dedicatedCount) || 0);
+  const assigned = Math.max(0, Number(assignedCount) || 0);
+  return { dedicated, standard: Math.max(0, assigned - dedicated) };
 }
 
 /**
@@ -237,7 +240,7 @@ export class DedicatedAdminViewsService {
         businessId: r.business_id,
         city: r.address?.city ?? '',
         ...slotCoverage(r.pickup_slots ?? [], (r.dedicated_agent_assignments ?? []).map((a) => a.slot_key)),
-        orders: deliveryShare((r.orders ?? []).map((o) => o.assignment_source)),
+        orders: deliveryShare(r.dedicatedOrders?.aggregate?.count, r.assignedOrders?.aggregate?.count),
       }));
     const totals = locations.reduce(
       (t, l) => ({
@@ -276,9 +279,12 @@ export class DedicatedAdminViewsService {
     ]);
     const res = await this.hasura.executeQuery<{ agents: PickerAgentRow[] }>(DEDICATED_PICKER_AGENTS_QUERY, {
       where,
-      limit: ADMIN_VIEW_LIMIT,
+      limit: PICKER_AGENT_LIMIT,
     });
-    const rows = (res?.agents ?? []).filter((a) => showsDeliveryChrome(a.focus));
+    const fetched = res?.agents ?? [];
+    const truncated = fetched.length >= PICKER_AGENT_LIMIT;
+    if (truncated) this.logger.warn(`dedicated.picker_truncated location=${locationId} limit=${PICKER_AGENT_LIMIT}`);
+    const rows = fetched.filter((a) => showsDeliveryChrome(a.focus));
     const stats = await this.assignments.pickerStats(
       locationId,
       country,
@@ -296,6 +302,7 @@ export class DedicatedAdminViewsService {
         assignmentCount: a.live?.aggregate?.count ?? 0,
         ...(stats.get(a.id) ?? { activeOrders: 0, outstandingDedicatedOffers: 0, balanceCoversOrders: null }),
       })),
+      truncated,
     };
   }
 
@@ -450,7 +457,8 @@ interface CoverageRow {
   address: { city: string | null; state: string | null; country: string | null } | null;
   pickup_slots: Array<{ slot_key: string; is_enabled: boolean }> | null;
   dedicated_agent_assignments: Array<{ slot_key: string; agent_id: string }> | null;
-  orders: Array<{ assignment_source: string | null }> | null;
+  dedicatedOrders: { aggregate: { count: number } | null } | null;
+  assignedOrders: { aggregate: { count: number } | null } | null;
 }
 
 interface PickerAgentRow {

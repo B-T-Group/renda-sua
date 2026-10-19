@@ -11,7 +11,9 @@ import { SiteEventsService } from '../site-events/site-events.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { DELEGATION_PERMISSIONS } from '../delegations/delegation.constants';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { PaymentRoutingService, type PaymentRail } from '../stripe-payments/payment-routing.service';
 import {
   buildDedicatedAgentMessage,
   buildDedicatedAssignedBusinessMessage,
@@ -235,7 +237,8 @@ export class DedicatedAssignmentsService {
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly agentHoldService: AgentHoldService,
     private readonly notifications: NotificationsService,
-    @Optional() private readonly siteEventsService?: SiteEventsService
+    @Optional() private readonly siteEventsService?: SiteEventsService,
+    @Optional() private readonly paymentRoutingService?: PaymentRoutingService
   ) {}
 
   /** AC section 5: `dedicated.assignment_status_changed (source)`, one per assignment row. */
@@ -369,21 +372,27 @@ export class DedicatedAssignmentsService {
       [...new Set(independents.map((a) => a.userId).filter((id): id is string => !!id))],
       country
     );
-    const holds = stats.typicalSubtotal > 0 ? await this.batchHolds(stats.typicalSubtotal, independents.map((a) => a.id)) : new Map<string, number>();
+    // QA #619 N5: the store's own rail (as dedicated dispatch resolves it), not MoMo.
+    const rail = await this.railForLocation(locationId);
+    const holds =
+      stats.typicalSubtotal > 0
+        ? await this.batchHolds(stats.typicalSubtotal, independents.map((a) => a.id), rail, locationId)
+        : new Map<string, number>();
     for (const a of agents) {
       const activeOrders = load.active.get(a.id) ?? 0;
       const outstanding = load.offers.get(a.id) ?? 0;
       let covers: number | null = null;
       const hold = holds.get(a.id) ?? 0;
-      // N5 (PE call, note only): the hold is the MoMo-rail hold. On a Stripe-rail store the
-      // hold is 0 (AC-E4), so this shows null ("no balance limit"), never a number.
+      // QA #619 N5: the hold is requested on the store's rail. On a Stripe-rail store
+      // resolveOrderHoldWithCeiling returns 0 (AC-E4), so this stays null ("no balance
+      // limit"); on a MoMo store it is how many typical orders the balance covers.
       if (!a.isInternal && Number.isFinite(hold) && hold > 0) {
         covers = computeEffectiveCapacity({
           maxActiveOrders: config.maxActiveOrders,
           activeOrders,
           outstandingDedicatedOffers: outstanding,
           isInternal: false,
-          rail: 'mobile_money',
+          rail,
           availableBalance: balances.get(a.userId ?? '') ?? 0,
           typicalHold: hold,
         });
@@ -394,17 +403,47 @@ export class DedicatedAssignmentsService {
     return out;
   }
 
-  /** QA #619 N2: hold lookups in parallel batches instead of one awaited call per agent. */
-  private async batchHolds(subtotal: number, agentIds: string[]): Promise<Map<string, number>> {
+  /**
+   * Payment rail of a location's business (QA #619 N5). Same source as dedicated
+   * dispatch (`resolveRailForBusiness`). Without the routing service (unit wiring)
+   * or on a lookup error it falls back to MoMo, the only rail with a hold, which is
+   * the conservative reading (it can only understate coverage).
+   */
+  private async railForLocation(locationId: string, businessId?: string): Promise<PaymentRail> {
+    if (!this.paymentRoutingService) return 'mobile_money';
+    try {
+      const id = businessId ?? (await this.loadLocation(locationId)).business_id;
+      return await this.paymentRoutingService.resolveRailForBusiness(id);
+    } catch (error) {
+      this.logger.warn(`dedicated.rail_lookup_failed location=${locationId}: ${safeErrorMessage(error)}`);
+      return 'mobile_money';
+    }
+  }
+
+  /**
+   * QA #619 N2: hold lookups in parallel batches instead of one awaited call per agent.
+   * A failed lookup counts as "no hold" (coverage shown as null) and is logged.
+   */
+  private async batchHolds(
+    subtotal: number,
+    agentIds: string[],
+    rail: PaymentRail,
+    locationId: string
+  ): Promise<Map<string, number>> {
     const holds = new Map<string, number>();
     for (let i = 0; i < agentIds.length; i += PICKER_HOLD_BATCH) {
       const chunk = agentIds.slice(i, i + PICKER_HOLD_BATCH);
       const values = await Promise.all(
         chunk.map((id) =>
           this.agentHoldService
-            .resolveOrderHoldWithCeiling(subtotal, id, 'mobile_money')
-            .then((r) => Number(r.holdAmount))
-            .catch(() => 0)
+            .resolveOrderHoldWithCeiling(subtotal, id, rail)
+            .then((r) => Number(r.holdAmount) || 0)
+            .catch((error) => {
+              this.logger.warn(
+                `dedicated.hold_lookup_failed location=${locationId} agent=${id} rail=${rail}: ${safeErrorMessage(error)}`
+              );
+              return 0;
+            })
         )
       );
       chunk.forEach((id, k) => holds.set(id, values[k]));
@@ -486,13 +525,12 @@ export class DedicatedAssignmentsService {
       [...new Set(independents.map((r) => r.agent?.user_id).filter((id): id is string => !!id))],
       country
     );
-    const holds = new Map<string, number>();
-    if (stats.typicalSubtotal > 0) {
-      for (const agentId of new Set(independents.map((r) => r.agent_id))) {
-        const hold = await this.agentHoldService.resolveOrderHoldWithCeiling(stats.typicalSubtotal, agentId, 'mobile_money');
-        holds.set(agentId, Number(hold.holdAmount) || 0);
-      }
-    }
+    // QA #619 N5: the store's rail, as in the picker.
+    const rail = await this.railForLocation(locationId, location.business_id);
+    const holds =
+      stats.typicalSubtotal > 0
+        ? await this.batchHolds(stats.typicalSubtotal, [...new Set(independents.map((r) => r.agent_id))], rail, locationId)
+        : new Map<string, number>();
 
     const assignments = rows.map((row): DedicatedAgentCard => {
       const isInternal = row.agent?.is_internal === true;
@@ -525,7 +563,7 @@ export class DedicatedAssignmentsService {
                 activeOrders,
                 outstandingDedicatedOffers: outstanding,
                 isInternal,
-                rail: 'mobile_money',
+                rail,
                 availableBalance: balance,
                 typicalHold: hold,
               }),

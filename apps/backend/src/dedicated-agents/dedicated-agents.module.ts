@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { AdminAuthModule } from '../admin/admin-auth.module';
 import { AgentContractsModule } from '../agent-contracts/agent-contracts.module';
 import { AgentsModule } from '../agents/agents.module';
@@ -7,6 +7,7 @@ import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.modul
 import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
+import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { DedicatedAdminPostingsController, DedicatedAdminViewsController } from './dedicated-admin-views.controller';
 import { DedicatedAdminViewsService } from './dedicated-admin-views.service';
 import { DedicatedAgentsAdminController } from './dedicated-agents-admin.controller';
@@ -33,6 +34,8 @@ import { DedicatedPostingsService } from './dedicated-postings.service';
  */
 @Module({
   imports: [
+    // QA #619 N5: PaymentRoutingService for the store's rail in the picker/cards.
+    forwardRef(() => StripePaymentsModule),
     HasuraModule,
     DedicatedAgentsConfigModule,
     DedicatedCoverageModule,

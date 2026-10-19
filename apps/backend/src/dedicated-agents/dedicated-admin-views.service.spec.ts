@@ -9,7 +9,7 @@ import {
   deliveryShare,
   slotCoverage,
 } from './dedicated-admin-views.service';
-import { ADMIN_VIEW_LIMIT, DEDICATED_ADMIN_COVERAGE_QUERY } from './dedicated-admin-views.queries';
+import { ADMIN_VIEW_LIMIT, DEDICATED_ADMIN_COVERAGE_QUERY, PICKER_AGENT_LIMIT } from './dedicated-admin-views.queries';
 import type { DedicatedAssignmentsService } from './dedicated-assignments.service';
 import type { DedicatedPostingsService } from './dedicated-postings.service';
 
@@ -95,7 +95,15 @@ function world() {
             ...l,
             pickup_slots: l.pickup_slots ?? [],
             dedicated_agent_assignments: state.assignments.filter((a) => a.business_location_id === l.id && a.status === 'active'),
-            orders: (l.orders ?? []).filter((o: Loose) => o.created_at >= vars.since),
+            // Hasura's orders_aggregate: counts only (QA #619 N9), using the query's own source list.
+            ...(() => {
+              const recent = (l.orders ?? []).filter((o: Loose) => o.created_at >= vars.since && o.assigned !== false);
+              const sources = JSON.parse((/assignment_source: \{ _in: (\[[^\]]*\]) \}/.exec(q) ?? [, '[]'])[1]) as string[];
+              return {
+                dedicatedOrders: { aggregate: { count: recent.filter((o: Loose) => sources.includes(o.assignment_source)).length } },
+                assignedOrders: { aggregate: { count: recent.length } },
+              };
+            })(),
           }));
         return { business_locations: page(rows, vars) };
       }
@@ -321,7 +329,7 @@ describe('DedicatedAdminViewsService postings (AC-S3)', () => {
 });
 
 describe('DedicatedAdminViewsService.coverage (AC-S4)', () => {
-  it('2 covered / 1 uncovered enabled slot (one slot turned off), and the dedicated share (3 of 5) over 30 days', async () => {
+  it('2 covered / 1 uncovered enabled slot (one slot turned off), and the dedicated share (3 of 6, a NULL source is standard) over 30 days', async () => {
     const w = world();
     const NOW = new Date('2026-10-19T12:00:00Z');
     Object.assign(w.state.locations[0], {
@@ -333,6 +341,7 @@ describe('DedicatedAdminViewsService.coverage (AC-S4)', () => {
         { assignment_source: 'offer', created_at: '2026-10-11T00:00:00Z' },
         { assignment_source: 'open_claim', created_at: '2026-10-12T00:00:00Z' },
         { assignment_source: 'dedicated_auto', created_at: '2026-09-01T00:00:00Z' },
+        { assignment_source: null, created_at: '2026-10-13T00:00:00Z' },
       ],
     });
     Object.assign(w.state.locations[1], { pickup_slots: [{ slot_key: 'evening', is_enabled: false }] });
@@ -343,10 +352,10 @@ describe('DedicatedAdminViewsService.coverage (AC-S4)', () => {
 
     const res = await w.service.coverage(ALL, {}, NOW);
     expect(res.locations).toEqual([
-      expect.objectContaining({ locationId: 'loc-dla', enabledSlots: ['morning', 'afternoon', 'evening'], coveredSlots: ['morning', 'afternoon'], uncoveredSlots: ['evening'], orders: { dedicated: 3, standard: 2 } }),
+      expect.objectContaining({ locationId: 'loc-dla', enabledSlots: ['morning', 'afternoon', 'evening'], coveredSlots: ['morning', 'afternoon'], uncoveredSlots: ['evening'], orders: { dedicated: 3, standard: 3 } }),
       expect.objectContaining({ locationId: 'loc-yde', enabledSlots: ['morning', 'afternoon'], coveredSlots: [], uncoveredSlots: ['morning', 'afternoon'], orders: { dedicated: 0, standard: 0 } }),
     ]);
-    expect(res.totals).toEqual({ enabledSlots: 5, coveredSlots: 2, uncoveredSlots: 3, dedicatedOrders: 3, standardOrders: 2, dedicatedShare: 0.6 });
+    expect(res.totals).toEqual({ enabledSlots: 5, coveredSlots: 2, uncoveredSlots: 3, dedicatedOrders: 3, standardOrders: 3, dedicatedShare: 0.5 });
     expect(w.state.queries.find((q) => q.op === 'DedicatedAdminCoverage')?.vars.since).toBe('2026-09-19T12:00:00.000Z');
   });
 
@@ -363,12 +372,18 @@ describe('DedicatedAdminViewsService.coverage (AC-S4)', () => {
   it('helpers: no row = enabled; only an active assignment covers; unknown and NULL sources count as standard', () => {
     expect(slotCoverage([], [])).toEqual({ enabledSlots: ['morning', 'afternoon', 'evening'], coveredSlots: [], uncoveredSlots: ['morning', 'afternoon', 'evening'] });
     expect(slotCoverage([{ slot_key: 'morning', is_enabled: false }], ['morning'])).toEqual({ enabledSlots: ['afternoon', 'evening'], coveredSlots: [], uncoveredSlots: ['afternoon', 'evening'] });
-    // QA #619 N1: every assigned order counts; NULL source (standard offer / open claim) = standard.
-    expect(deliveryShare(['dedicated_auto', 'dedicated_offer', 'admin', 'offer', null, undefined])).toEqual({ dedicated: 2, standard: 4 });
-    expect(deliveryShare([null, null, 'dedicated_auto'])).toEqual({ dedicated: 1, standard: 2 });
-    // ...and the coverage query fetches every assigned order, not only stamped ones.
-    expect(DEDICATED_ADMIN_COVERAGE_QUERY).toContain('assigned_agent_id: { _is_null: false }');
+    // QA #619 N1/N9: standard = every assigned order (NULL source included) minus the dedicated count.
+    expect(deliveryShare(2, 6)).toEqual({ dedicated: 2, standard: 4 });
+    expect(deliveryShare(1, 3)).toEqual({ dedicated: 1, standard: 2 });
+    expect(deliveryShare(null, undefined)).toEqual({ dedicated: 0, standard: 0 });
+    expect(deliveryShare(3, 2)).toEqual({ dedicated: 3, standard: 0 });
+    // ...the total counts every assigned order, not only stamped ones...
+    expect(DEDICATED_ADMIN_COVERAGE_QUERY).toContain(
+      'assignedOrders: orders_aggregate(where: { created_at: { _gte: $since }, assigned_agent_id: { _is_null: false } })'
+    );
     expect(DEDICATED_ADMIN_COVERAGE_QUERY).not.toContain('assignment_source: { _is_null: false }');
+    // ...and no per-order rows are fetched (QA #619 N9).
+    expect(DEDICATED_ADMIN_COVERAGE_QUERY).not.toMatch(/\borders\(where/);
   });
 });
 
@@ -406,6 +421,17 @@ describe('DedicatedAdminViewsService.picker (AC-S2)', () => {
     const where = (w.executeQuery.mock.calls.find(([q]) => op(q) === 'DedicatedPickerAgents') as [string, Loose])[1].where;
     expect(JSON.stringify(where)).not.toContain('agent_contracts');
     expect(JSON.stringify(where)).toContain('"is_verified":{"_eq":true}');
+  });
+
+  it('QA #619 N2: the picker asks for at most PICKER_AGENT_LIMIT (200) agents and flags a full page as truncated', async () => {
+    const w = world();
+    w.state.agents = [agent({ id: 'ind' })];
+    const small = await w.service.picker(CM, 'loc-dla');
+    expect((w.executeQuery.mock.calls.find(([q]) => op(q) === 'DedicatedPickerAgents') as [string, Loose])[1].limit).toBe(200);
+    expect(PICKER_AGENT_LIMIT).toBe(200);
+    expect(small.truncated).toBe(false);
+    w.state.agents = Array.from({ length: 200 }, (_, i) => agent({ id: `ind-${i}` }));
+    expect((await w.service.picker(CM, 'loc-dla')).truncated).toBe(true);
   });
 
   it('404 out of scope and when the flag is off for the store', async () => {

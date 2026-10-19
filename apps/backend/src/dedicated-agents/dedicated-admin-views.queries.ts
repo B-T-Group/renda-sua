@@ -1,6 +1,13 @@
 /** #594 PR 8 super-user views (AC-S1, S3, S4, S5). System role; geo where is built by GeoScopeService. */
 
 export const ADMIN_VIEW_LIMIT = 500;
+/**
+ * QA #619 N2: the assign picker is one unpaged list (internal agents first, then
+ * oldest), with a hold lookup per independent. It is capped well below the page
+ * size and reports `truncated`; paging / name search is a follow-up if a market
+ * ever has more candidates than this.
+ */
+export const PICKER_AGENT_LIMIT = 200;
 
 export const DEDICATED_ADMIN_ASSIGNMENTS_QUERY = `
   query DedicatedAdminAssignments($where: dedicated_agent_assignments_bool_exp!, $limit: Int!, $offset: Int!) {
@@ -161,8 +168,18 @@ export const DEDICATED_ADMIN_COVERAGE_QUERY = `
         slot_key
         agent_id
       }
-      orders(where: { created_at: { _gte: $since }, assigned_agent_id: { _is_null: false } }) {
-        assignment_source
+      # QA #619 N9: two counts per location, not one row per assigned order.
+      dedicatedOrders: orders_aggregate(
+        where: {
+          created_at: { _gte: $since }
+          assigned_agent_id: { _is_null: false }
+          assignment_source: { _in: ["dedicated_offer", "dedicated_auto"] }
+        }
+      ) {
+        aggregate { count }
+      }
+      assignedOrders: orders_aggregate(where: { created_at: { _gte: $since }, assigned_agent_id: { _is_null: false } }) {
+        aggregate { count }
       }
     }
   }
