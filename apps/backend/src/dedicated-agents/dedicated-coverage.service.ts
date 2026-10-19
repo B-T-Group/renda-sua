@@ -28,6 +28,7 @@ import {
   localDateTimeAt,
   resolveSlotForLocalTime,
   toDedicatedSlotBounds,
+  type DedicatedSlotBounds,
   type DeliveryTimeSlotRow,
 } from './dedicated-slot.util';
 
@@ -302,6 +303,10 @@ export class DedicatedCoverageService {
   }
 
   /** Standard slots for the state, else the country `__DEFAULT__` rows (same rule as DeliverySlotsService). */
+  async slotBoundsFor(country: string, state: string): Promise<DedicatedSlotBounds[]> {
+    return this.loadSlotBounds(country, state);
+  }
+
   private async loadSlotBounds(country: string, state: string) {
     const states = state ? [state, DEFAULT_DELIVERY_SLOT_STATE] : [DEFAULT_DELIVERY_SLOT_STATE];
     const res = await this.hasuraSystemService.executeQuery<{

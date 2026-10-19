@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { DedicatedAgentsConfigModule } from '../dedicated-agents/dedicated-agents-config.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { DeliveryEstimateController } from './delivery-estimate.controller';
@@ -8,7 +9,7 @@ import { DeliveryWindowsController } from './delivery-windows.controller';
 import { DeliveryWindowsService } from './delivery-windows.service';
 
 @Module({
-  imports: [HasuraModule, DeliveryConfigModule],
+  imports: [HasuraModule, DeliveryConfigModule, DedicatedAgentsConfigModule],
   controllers: [DeliveryWindowsController, DeliveryEstimateController],
   providers: [
     DeliverySlotsService,
