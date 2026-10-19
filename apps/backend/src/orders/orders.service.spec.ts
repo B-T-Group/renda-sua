@@ -2438,6 +2438,7 @@ describe('OrdersService', () => {
           id: 'item-ded-1',
           name: 'Rice',
           description: 'Rice',
+          moderation_status: 'approved',
           pay_on_delivery_enabled: true,
           pay_at_pickup_enabled: true,
           shipping_enabled: false,
