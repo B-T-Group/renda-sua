@@ -25,8 +25,8 @@ import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { RequirePermissions } from '../rbac/permissions.decorator';
-import { PlatformPermissions } from '../rbac/platform-permissions';
+import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
+import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
 import { GeoScopeService } from '../rbac/geo-scope.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { AdminOrdersService } from './admin-orders.service';
@@ -38,6 +38,7 @@ import type {
 import {
   AcknowledgeRiskIncidentDto,
   AddAdminNoteDto,
+  AdminFullRefundCancelDto,
   AdminOrderStatsPeriod,
   GetAdminOrderStatsDto,
   GetAdminOrdersDto,
@@ -264,6 +265,47 @@ export class AdminOrdersController {
       success: false,
       message: `Order in status "${order.current_status}" cannot be redispatched`,
     };
+  }
+
+  /**
+   * Ops cleanup: cancel an order with a FULL refund to the client and release any
+   * agent hold. Superuser, or an admin holding platform.financial.refunds (in geo
+   * scope); the class-level ORDERS_CROSS_BUSINESS alone is not enough.
+   *
+   * Money: the cancel is recorded as cancelled_by=system, which the order.cancelled
+   * Lambda never charges a cancellation fee for, and whose client and agent releases
+   * use the per-order `cancel_release_key_prefix` idempotency keys (exactly once,
+   * even when the message is redelivered). A business or system cancel also refunds
+   * a paid deposit, after the lock point too. The status write is a compare-and-set
+   * on the status read, so of two concurrent calls one wins and the other gets 409
+   * before any side effect.
+   *
+   * Audit: an `admin_intervention` order event (action full_refund_cancel, actor,
+   * reason, previous status) plus a status-history entry.
+   */
+  @Post(':orderId/full-refund-cancel')
+  @RequireRoles(PlatformRoles.SUPERUSER)
+  @RequirePermissions(PlatformPermissions.FINANCIAL_REFUNDS)
+  @ApiOperation({
+    summary: 'Cancel with a full refund (ops cleanup)',
+    description:
+      'Superuser / financial-refunds admin only. No cancellation fee; the client is fully refunded and agent holds are released exactly once. Refused once the agent has picked the order up.',
+  })
+  @ApiResponse({ status: 201, description: 'Cancelled; refund queued (order.cancelled)' })
+  @ApiResponse({ status: 409, description: 'Already cancelled / status moved / goods already picked up' })
+  async fullRefundCancel(
+    @Param('orderId') orderId: string,
+    @Body() dto: AdminFullRefundCancelDto
+  ) {
+    const scope = await this.geo.require(PlatformPermissions.FINANCIAL_REFUNDS);
+    await this.geo.assertOrder(scope, orderId);
+    const result = await this.ordersService.adminFullRefundCancel(orderId, dto.reason);
+    await this.recordIntervention(orderId, 'full_refund_cancel', {
+      reason: dto.reason,
+      previousStatus: result.previousStatus,
+      cancellationFee: 0,
+    });
+    return result;
   }
 
   @Patch(':orderId/status')

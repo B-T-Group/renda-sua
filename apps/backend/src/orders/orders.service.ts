@@ -671,6 +671,9 @@ export interface DeclineOrderOfferRequest {
   reason?: string | null;
 }
 
+/** Admin full-refund cancel is refused once the agent holds the goods. */
+const ADMIN_FULL_REFUND_REFUSED_STATUSES = new Set(['picked_up', 'in_transit', 'out_for_delivery']);
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -8464,6 +8467,59 @@ export class OrdersService {
       success: true,
       order: updatedOrder,
       message: 'Order cancelled successfully',
+    };
+  }
+
+  /**
+   * Ops cleanup (admin full-refund cancel): cancel as `system`, so the order.cancelled
+   * Lambda charges no cancellation fee, releases the client's hold (or refunds the
+   * payment) and any agent hold under its per-order idempotency keys, and a paid
+   * deposit is refunded. Refused after pickup (the goods are with the agent: use the
+   * return / refund flow). The status write is a compare-and-set on the status read
+   * here (expectedFromStatus), so a concurrent second call gets 409 before any side
+   * effect; the caller audit-logs only after this returns.
+   */
+  async adminFullRefundCancel(orderId: string, reason: string) {
+    const order = await this.requireCancellableAdminOrder(orderId);
+    const previousStatus = order.current_status;
+    if (ADMIN_FULL_REFUND_REFUSED_STATUSES.has(previousStatus)) {
+      throw new HttpException(
+        {
+          message: `The order is ${previousStatus}: the goods are with the agent. Use the return / refund flow.`,
+          error: 'ORDER_ALREADY_PICKED_UP',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    const adminUserId = await this.resolveOptionalUserId();
+    if (!adminUserId) {
+      throw new HttpException('Admin user required', HttpStatus.UNAUTHORIZED);
+    }
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
+      viaCancelEndpoint: true,
+      viaSystem: true,
+      expectedFromStatus: previousStatus,
+    });
+    // Only the compare-and-set winner reaches here.
+    await this.releaseStripeAuthorizationIfNeeded(order);
+    await this.supersedePendingOrderTxsOnCancel(order);
+    const notes = `Admin full refund: ${reason}`;
+    await this.persistCancellationMetadata(order.id, 'system', notes);
+    await this.createStatusHistoryEntry(
+      order.id,
+      'cancelled',
+      'Order cancelled by admin with a full refund (no cancellation fee)',
+      'system',
+      adminUserId,
+      notes
+    );
+    await this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes);
+    return {
+      success: true,
+      order: updatedOrder,
+      previousStatus,
+      cancellationFee: 0,
+      message: 'Order cancelled with a full refund; the refund and hold releases are queued',
     };
   }
 

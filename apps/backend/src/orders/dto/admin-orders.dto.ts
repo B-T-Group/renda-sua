@@ -7,7 +7,9 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 import {
   ORDER_RISK_TYPES,
@@ -124,6 +126,15 @@ export class UnassignRedispatchDto {
   @IsOptional()
   @IsString()
   reason?: string;
+}
+
+/** Ops cleanup: cancel with a full refund (no cancellation fee). The reason is required for the audit trail. */
+export class AdminFullRefundCancelDto {
+  @ApiProperty({ description: 'Why ops is cancelling with a full refund (kept on the order timeline)', minLength: 3, maxLength: 1000 })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(1000)
+  reason!: string;
 }
 
 export class UpdateOrderStatusDto {
