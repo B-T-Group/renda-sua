@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import 'source-map-support/register';
+import { FedapayMonitoringStack } from './lib/fedapay-monitoring-stack';
 import { HasuraEc2EnvironmentStack } from './lib/hasura-ec2-infrastructure-stack';
 import { RendasuaInfrastructureStack } from './lib/rendasua-infrastructure-stack';
 
@@ -16,6 +17,37 @@ const awsRegion = 'ca-central-1';
 
 new RendasuaInfrastructureStack(app, `RendasuaInfrastructure-${environment}`, {
   environment,
+  env: {
+    account: awsAccount,
+    region: awsRegion,
+  },
+});
+
+// FedaPay monitoring stacks for dev and production environments
+// These monitor the backend log groups for the fedapay_live_record_incomplete marker
+// which indicates incomplete mobile money transaction records that need attention
+// before FedaPay can go live in Togo.
+//
+// Each stack creates:
+// - SNS topic for alerts (fedapay-monitoring-{env})
+// - Email subscription to tech@rendasua.com (requires one-time confirmation after first deploy)
+// - Metric filter: JSON pattern { $.message = "fedapay_live_record_incomplete tx=*" }
+// - CloudWatch alarm (Sum >= 2 over one 1-hour period)
+
+// Development environment monitoring
+new FedapayMonitoringStack(app, 'FedapayMonitoring-dev', {
+  environment: 'dev',
+  logGroupName: 'rendasua-backend-dev',
+  env: {
+    account: awsAccount,
+    region: awsRegion,
+  },
+});
+
+// Production environment monitoring
+new FedapayMonitoringStack(app, 'FedapayMonitoring-production', {
+  environment: 'production',
+  logGroupName: 'rendasua-backend-prod',
   env: {
     account: awsAccount,
     region: awsRegion,

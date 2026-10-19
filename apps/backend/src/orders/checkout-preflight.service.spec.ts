@@ -61,6 +61,7 @@ function makeInventoryRow(overrides: {
   canAcceptOrders?: boolean;
   phoneVerified?: boolean;
   exportAvailable?: boolean;
+  moderationStatus?: string;
 } = {}) {
   const sellerCountry = overrides.sellerCountry ?? 'CM';
   const isStripeCountry = sellerCountry === 'CA';
@@ -93,6 +94,7 @@ function makeInventoryRow(overrides: {
       weight: 0,
       max_order_quantity: null as number | null,
       export_available: overrides.exportAvailable ?? false,
+      moderation_status: overrides.moderationStatus ?? 'approved',
       pay_on_delivery_enabled: overrides.payOnDelivery ?? false,
       pay_at_pickup_enabled: overrides.payAtPickup ?? false,
       initial_deposit_enabled: overrides.initialDepositEnabled ?? false,
@@ -1234,6 +1236,34 @@ describe('CheckoutPreflightService', () => {
           (error) => error.code === 'COOKED_FOOD_STORE_CLOSED'
         )
       ).toBe(false);
+    });
+  });
+
+  describe('F-M7: moderation gate', () => {
+    it.each(['draft', 'pending', 'rejected'])(
+      'blocks checkout when the item moderation_status is %s',
+      async (moderationStatus) => {
+        mockInventory([makeInventoryRow({ itemName: 'Draft item', moderationStatus })]);
+
+        const result = await service.resolve(
+          { items: [{ business_inventory_id: 'inv-1', quantity: 1 }], provisional_country: 'CM' },
+          false
+        );
+
+        expect(result.can_proceed).toBe(false);
+        expect(result.blocking_errors.map((error) => error.code)).toContain('ITEM_UNAVAILABLE');
+      }
+    );
+
+    it('selects item.moderation_status in the inventory query', async () => {
+      mockInventory([makeInventoryRow()]);
+      await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 1 }], provisional_country: 'CM' },
+        false
+      );
+      const queries = (hasuraSystemService.executeQuery as jest.Mock).mock.calls.map((c) => String(c[0]));
+      const preflightQuery = queries.find((q) => q.includes('GetInventoryForPreflight'));
+      expect(preflightQuery).toContain('moderation_status');
     });
   });
 
