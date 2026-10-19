@@ -290,7 +290,7 @@ export class DedicatedAssignmentsService {
         insert_dedicated_agent_assignments: {
           returning: Array<{ id: string; agent_id: string; slot_key: string; status: string; source: string }>;
         };
-      }>(INSERT_DEDICATED_ASSIGNMENTS_MUTATION, { objects })
+      }>(INSERT_DEDICATED_ASSIGNMENTS_MUTATION, { locationId: location.id, objects })
     );
     const assignments = res?.insert_dedicated_agent_assignments?.returning ?? [];
     // QA #603 N2: a slot turned off between the check above and the insert pauses these rows too.
@@ -301,7 +301,15 @@ export class DedicatedAssignmentsService {
         status: 'paused',
         paused_at: new Date().toISOString(),
         paused_by_user_id: params.actorUserId,
-      }).catch(() => null);
+      }).catch((error: unknown) => {
+        // QA #603: never swallow silently; the row stays active on a now-off slot.
+        this.logger.error(
+          `dedicated.post_insert_pause_failed assignment=${a.id} location=${location.id} slot=${a.slot_key}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+        return null;
+      });
       if (paused) a.status = 'paused';
     }
     const firstId = assignments[0]?.id;
@@ -553,7 +561,7 @@ export class DedicatedAssignmentsService {
               offSlots,
               pauseSet: { status: 'paused', paused_at: now, paused_by_user_id: actor.userId },
             }
-          : { slots: objects }
+          : { slots: objects, locationId: location.id }
       )
     );
     const paused = res?.paused?.returning ?? [];
