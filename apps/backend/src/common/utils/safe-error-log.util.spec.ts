@@ -93,12 +93,17 @@ describe('#616 log maskers', () => {
     expect(maskPhoneForLog('90123456')).toBe('***456');
     expect(maskPhoneForLog(undefined)).toBe('***');
   });
-  it('maskAccountRefForLog masks phone-like values only; a UUID is logged as is', () => {
+  it('maskAccountRefForLog: a UUID is logged as is; everything else is masked', () => {
     expect(maskAccountRefForLog('90123456')).toBe('***456');
     expect(maskAccountRefForLog('+228 90-12.34 (56)')).toBe('***456');
     expect(maskAccountRefForLog('3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab')).toBe('3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab');
-    expect(maskAccountRefForLog('12345-67')).toBe('12345-67');
-    expect(maskAccountRefForLog('1234567')).toBe('1234567');
+    // QA #620 L2: only UUID-shaped values pass; anything else is masked.
+    expect(maskAccountRefForLog('3F2B9C1E-7A4D-4E8B-9C0D-1234567890AB')).toBe('3F2B9C1E-7A4D-4E8B-9C0D-1234567890AB');
+    expect(maskAccountRefForLog('1234567')).toBe('***567');
+    expect(maskAccountRefForLog('acc-90123456')).toBe('***456');
+    expect(maskAccountRefForLog('jane@example.com')).not.toContain('jane');
+    expect(maskAccountRefForLog('3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab-x')).not.toContain('3f2b9c1e');
+    expect(maskAccountRefForLog('3f2b9c1e7a4d4e8b9c0d1234567890ab')).not.toContain('3f2b9c1e');
     expect(maskAccountRefForLog(undefined)).toBe('unknown');
   });
 });

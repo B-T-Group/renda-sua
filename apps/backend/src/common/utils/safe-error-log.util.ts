@@ -37,15 +37,17 @@ export function maskPhoneForLog(phone: string | null | undefined): string {
   return phone ? maskPhoneNumber(String(phone)) : '***';
 }
 
+/** RFC 4122-shaped id (any version): the only account reference logged as is. */
+const UUID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
- * #616 QA L1: an account reference for a log line. Callers pass either a payer
- * phone or a wallet account UUID. Only a phone-like value (digits with optional
- * `+`, spaces, dashes, dots or parentheses, and at least 8 digits) is masked; any
- * other id (a UUID) is not PII and is logged unchanged so the line stays traceable.
+ * #616 QA L1/L2: an account reference for a log line. Callers pass either a payer
+ * phone or a wallet account UUID. Only a UUID-shaped value passes through (not PII,
+ * and it keeps the line traceable); everything else is masked like a phone, so an
+ * unexpected format (a raw MSISDN in another shape, an email, a name) never leaks.
  */
 export function maskAccountRefForLog(value: string | null | undefined): string {
   if (value === null || value === undefined || value === '') return 'unknown';
-  const text = String(value);
-  const phoneLike = /^\+?[\d\s().-]+$/.test(text) && text.replace(/\D/g, '').length >= 8;
-  return phoneLike ? maskPhoneNumber(text) : text;
+  const text = String(value).trim();
+  return UUID_SHAPE.test(text) ? text : maskPhoneNumber(text);
 }
