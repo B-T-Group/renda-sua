@@ -172,6 +172,10 @@ function world() {
             .filter((a) => vars.userIds?.includes(a.user_id))
             .map((a) => ({ id: a.user_id, preferred_language: a.preferred_language })),
         };
+      case 'PushTokens':
+        return { mobile_push_tokens: ((vars.userIds as string[]) ?? []).map((u) => ({ user_id: u })) };
+      case 'AgentPickupRel':
+        return { agents: ((vars.ids as string[]) ?? []).map((id) => ({ id, pickup_reliability_score: 100 })) };
       case 'AgentUser':
         return { agents_by_pk: { user_id: state.agents.get(String(vars.id))?.user_id ?? null } };
       case 'ClientForNoAgent':
@@ -237,6 +241,12 @@ function world() {
         rows.forEach((o) => (o.status = 'cancelled'));
         return { update_order_offers: { returning: rows.map((o) => ({ user_id: o.user_id })) } };
       }
+      case 'UpsertOffers':
+        for (const obj of vars.objects ?? []) {
+          state.offers = state.offers.filter((o) => !(o.order_id === obj.order_id && o.agent_id === obj.agent_id));
+          state.offers.push({ offer_kind: 'standard', decline_reason: null, ...obj });
+        }
+        return { insert_order_offers: { affected_rows: vars.objects?.length ?? 0 } };
       case 'DeclineOffer': {
         const dedicated = forAgent(vars, (o) => o.offer_kind === 'dedicated');
         dedicated.forEach((o) => {
@@ -749,6 +759,74 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       });
       expect(w.claimer.claimOrderForAgent).not.toHaveBeenCalled();
       expect(w.state.order.assigned_agent_id).toBeNull();
+    });
+
+    it('flag off: the 409 carries code DEDICATED_DISABLED and a message in the agent\'s saved language', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000, locale: 'en' });
+      w.addAgent('a2', { balance: 50000, locale: 'fr-CM' });
+      w.addAgent('a3', { balance: 50000, locale: null });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      w.state.flag = false;
+      jest.setSystemTime(new Date(NOW.getTime() + 31_000));
+      const refusal = async (agent: string) => {
+        const err = await w.accept(agent).catch((e: unknown) => e);
+        return (err as { getStatus: () => number; getResponse: () => unknown });
+      };
+      const en = await refusal('a1');
+      expect(en.getStatus()).toBe(HttpStatus.CONFLICT);
+      expect(en.getResponse()).toEqual({
+        error: 'DEDICATED_OFFER_INELIGIBLE',
+        code: 'DEDICATED_DISABLED',
+        reason: 'dedicated_disabled',
+        message: 'Dedicated deliveries are turned off for now. This order goes back to the usual dispatch.',
+      });
+      const frMsg =
+        "Les livraisons dédiées sont désactivées pour le moment. Cette commande repasse par l'attribution habituelle.";
+      expect((await refusal('a2')).getResponse()).toMatchObject({ code: 'DEDICATED_DISABLED', message: frMsg });
+      // No saved language: the default language (French).
+      expect((await refusal('a3')).getResponse()).toMatchObject({ code: 'DEDICATED_DISABLED', message: frMsg });
+    });
+
+    it('other refusals keep code DEDICATED_OFFER_INELIGIBLE, also localized', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000, locale: 'fr' });
+      w.addAgent('a2', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      for (let i = 0; i < 10; i++) w.state.activeOrders.push({ id: `o-${i}`, assigned_agent_id: 'a1', current_status: 'in_transit' });
+      await expect(w.offersService.dedicatedAcceptAssignment(ORDER, 'a1')).rejects.toMatchObject({
+        response: {
+          error: 'DEDICATED_OFFER_INELIGIBLE',
+          code: 'DEDICATED_OFFER_INELIGIBLE',
+          reason: 'at_capacity',
+          message: 'Vous ne pouvez plus prendre cette livraison dédiée.',
+        },
+      });
+    });
+
+    it('flag off with dedicated offers live: the order goes back to today\'s dispatch (standard offers, then exhaustion, no dedicated step)', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      expect(w.dedicatedOffers()).toHaveLength(1);
+      w.state.flag = false;
+      jest.setSystemTime(new Date(NOW.getTime() + 31_000));
+      await expect(w.accept('a1')).rejects.toMatchObject({ response: expect.objectContaining({ code: 'DEDICATED_DISABLED' }) });
+      // Round 2 (scheduled as today): a nearby agent gets a standard offer.
+      w.nearby.push({ agentId: 'near', userId: 'u-near', distanceKm: 1 });
+      w.state.order.dispatch_round = 1;
+      await w.offersService.runDispatchRound(ORDER, 2);
+      expect(w.state.offers.filter((o) => o.offer_kind === 'standard').map((o) => o.agent_id)).toEqual(['near']);
+      expect(w.notifications.sendOrderOfferPush).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u-near' }));
+      // Nobody claims: the exhaustion check marks it exhausted as today, without a dedicated retry.
+      jest.setSystemTime(new Date(NOW.getTime() + 600_000));
+      const before = w.dedicatedOffers().length;
+      w.state.order.dispatch_round = 2;
+      await w.offersService.runDispatchRound(ORDER, 3);
+      expect(w.state.order.dispatch_exhausted_at).not.toBeNull();
+      expect(w.dedicatedOffers()).toHaveLength(before);
+      expect(w.state.order.assigned_agent_id).toBeNull();
+      expect(w.claimer.claimOrderForAgent).not.toHaveBeenCalled();
     });
 
     it('leaves a dropped balance to the claim (its hold error), stamping the assignment', async () => {
