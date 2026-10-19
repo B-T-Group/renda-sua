@@ -144,6 +144,16 @@ const EXPIRE_DEDICATED_OFFERS = `
   }
 `;
 
+/** Saved locale of each offered agent (PR 3 notice rule: saved locale, else the default). */
+const OFFER_RECIPIENT_LOCALES = `
+  query DedicatedOfferLocales($userIds: [uuid!]!) {
+    users(where: { id: { _in: $userIds } }) {
+      id
+      preferred_language
+    }
+  }
+`;
+
 const AGENT_FOR_SYSTEM_CLAIM = `
   query DedicatedClaimAgent($agentId: uuid!) {
     agents_by_pk(id: $agentId) {
@@ -230,8 +240,11 @@ export class DedicatedDispatchService {
       if (reachable.length === 0) return none;
 
       if (reachable.length === 1 && reachable[0].isInternal) {
-        const assigned = await this.autoAssign(order, slot, reachable[0], country);
-        if (assigned) return { kind: 'auto_assigned', agentId: reachable[0].agentId };
+        const failure = await this.autoAssign(order, slot, reachable[0], country);
+        if (!failure) return { kind: 'auto_assigned', agentId: reachable[0].agentId };
+        this.logger.warn(
+          `Dedicated auto-assign of order ${order.order_number} to agent ${reachable[0].agentId} failed (${failure}); standard dispatch continues`
+        );
         return none;
       }
       const config = await this.dedicatedConfig.getConfig(country);
@@ -289,16 +302,20 @@ export class DedicatedDispatchService {
    */
   async acceptAssignment(orderId: string, agentId: string): Promise<ClaimAssignment> {
     const { order } = await this.loadOrder(orderId);
-    const window = order?.delivery_time_windows?.[0];
+    if (!order) throw this.ineligible('slot_unavailable');
+    // Flag turned off while the offer was live: nobody qualifies as dedicated any more.
+    const country = isoCountryCode(order.business_location?.address?.country);
+    if (!(await this.dedicatedConfig.isEnabled(country))) throw this.ineligible('dedicated_disabled');
+    const window = order.delivery_time_windows?.[0];
     const slot =
-      order && window?.slot_id && window.preferred_date
+      window?.slot_id && window.preferred_date
         ? await this.coverage.resolveSlot({
             locationId: order.business_location_id,
             preferredDate: window.preferred_date,
             slotId: window.slot_id,
           })
         : null;
-    if (!order || !slot) throw this.ineligible('slot_unavailable');
+    if (!slot) throw this.ineligible('slot_unavailable');
     const rail = await this.paymentRoutingService.resolveRailForBusiness(order.business_id);
     const result = await this.coverage.evaluate({
       locationId: order.business_location_id,
@@ -365,7 +382,7 @@ export class DedicatedDispatchService {
     slot: ResolvedDedicatedSlot,
     agent: DedicatedEligibleAgent,
     country: string | null
-  ): Promise<boolean> {
+  ): Promise<string | null> {
     const res = await this.hasuraSystemService.executeQuery<{
       agents_by_pk: {
         id: string;
@@ -375,7 +392,7 @@ export class DedicatedDispatchService {
       } | null;
     }>(AGENT_FOR_SYSTEM_CLAIM, { agentId: agent.agentId });
     const row = res?.agents_by_pk;
-    if (!row?.user) return false;
+    if (!row?.user) return 'agent_not_found';
     const config = await this.dedicatedConfig.getConfig(country);
     const releaseUntil = new Date(Date.now() + config.autoAssignReleaseSeconds * 1000).toISOString();
     try {
@@ -391,12 +408,7 @@ export class DedicatedDispatchService {
         },
       });
     } catch (error) {
-      this.logger.warn(
-        `Dedicated auto-assign of order ${order.order_number} to ${agent.agentId} failed: ${
-          error instanceof HttpException ? JSON.stringify(error.getResponse()) : String(error)
-        }`
-      );
-      return false;
+      return error instanceof HttpException ? JSON.stringify(error.getResponse()) : String(error);
     }
     emitServerSiteEvent(this.siteEventsService, 'dedicated.auto_assigned', {
       orderId: order.id,
@@ -424,7 +436,7 @@ export class DedicatedDispatchService {
         persona: 'agent',
       })
       .catch(() => undefined);
-    return true;
+    return null;
   }
 
   private async offer(
@@ -460,9 +472,14 @@ export class DedicatedDispatchService {
       this.hasuraSystemService.executeMutation(UPSERT_DEDICATED_OFFERS, { objects })
     );
     const storeName = this.storeName(order);
+    const locales = await this.loadLocales(agents.map((a) => a.userId as string));
     await Promise.all(
       agents.map((a) => {
-        const msg = buildDedicatedOfferMessage({ storeName, slotKey: slot.slotKey });
+        const msg = buildDedicatedOfferMessage({
+          storeName,
+          slotKey: slot.slotKey,
+          preferredLanguage: locales.get(a.userId as string) ?? null,
+        });
         return this.notificationsService
           .sendOrderOfferPush({
             userId: a.userId as string,
@@ -488,6 +505,23 @@ export class DedicatedDispatchService {
         ttlSeconds,
         offerCount: agents.length,
       });
+    }
+  }
+
+  /** A lookup failure only costs the locale: the push goes out in the default language. */
+  private async loadLocales(userIds: string[]): Promise<Map<string, string | null>> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        users: Array<{ id: string; preferred_language: string | null }>;
+      }>(OFFER_RECIPIENT_LOCALES, { userIds });
+      return new Map((res?.users ?? []).map((u) => [u.id, u.preferred_language]));
+    } catch (error) {
+      this.logger.warn(
+        `Offer locale lookup failed; default language used: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return new Map();
     }
   }
 

@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import type { ModuleRef } from '@nestjs/core';
 import type { ConfigService } from '@nestjs/config';
 import type { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
@@ -87,7 +87,9 @@ function world() {
       { id: 'cm-e', state: 'Littoral', slot_name: 'Evening', slot_type: 'standard', start_time: '16:00:00', end_time: '20:00:00' },
     ],
     assignments: [] as Array<{ id: string; agent_id: string; slot_key: string; status: string; off_today_date: string | null }>,
-    agents: new Map<string, { id: string; user_id: string; is_verified: boolean; is_internal: boolean; status: string; focus: string }>(),
+    agents: new Map<string, { id: string; user_id: string; is_verified: boolean; is_internal: boolean; status: string; focus: string; preferred_language: string | null }>(),
+    localeLookupFails: false,
+    claimAgentMissing: null as 'agent' | 'user' | null,
     activeOrders: [] as Array<{ id: string; assigned_agent_id: string; current_status: string }>,
     accounts: [] as Array<{ user_id: string; currency: string; available_balance: number; business_location_id: null; is_active: boolean }>,
     offers: [] as OfferRow[],
@@ -154,13 +156,22 @@ function world() {
           accounts: state.accounts.filter((a) => vars.userIds?.includes(a.user_id) && a.currency === vars.currency),
         };
       case 'DedicatedClaimAgent': {
-        const a = state.agents.get(String(vars.agentId));
+        const a = state.claimAgentMissing === 'agent' ? undefined : state.agents.get(String(vars.agentId));
+        const user =
+          a && state.claimAgentMissing !== 'user'
+            ? { id: a.user_id, first_name: 'A', last_name: a.id, preferred_language: a.preferred_language }
+            : null;
         return {
-          agents_by_pk: a
-            ? { id: a.id, is_verified: a.is_verified, is_internal: a.is_internal, user: { id: a.user_id, first_name: 'A', last_name: a.id, preferred_language: 'en' } }
-            : null,
+          agents_by_pk: a ? { id: a.id, is_verified: a.is_verified, is_internal: a.is_internal, user } : null,
         };
       }
+      case 'DedicatedOfferLocales':
+        if (state.localeLookupFails) throw new Error('hasura down');
+        return {
+          users: [...state.agents.values()]
+            .filter((a) => vars.userIds?.includes(a.user_id))
+            .map((a) => ({ id: a.user_id, preferred_language: a.preferred_language })),
+        };
       case 'AgentUser':
         return { agents_by_pk: { user_id: state.agents.get(String(vars.id))?.user_id ?? null } };
       case 'ClientForNoAgent':
@@ -324,8 +335,19 @@ function world() {
   );
   holder.offers = offersService;
 
-  const addAgent = (id: string, over: { internal?: boolean; balance?: number; slot?: string } = {}) => {
-    state.agents.set(id, { id, user_id: `u-${id}`, is_verified: true, is_internal: over.internal === true, status: 'active', focus: 'delivery' });
+  const addAgent = (
+    id: string,
+    over: { internal?: boolean; balance?: number; slot?: string; locale?: string | null } = {}
+  ) => {
+    state.agents.set(id, {
+      id,
+      user_id: `u-${id}`,
+      is_verified: true,
+      is_internal: over.internal === true,
+      status: 'active',
+      focus: 'delivery',
+      preferred_language: over.locale === undefined ? 'en' : over.locale,
+    });
     state.assignments.push({ id: `as-${id}`, agent_id: id, slot_key: over.slot ?? 'afternoon', status: 'active', off_today_date: null });
     if (over.balance != null) {
       state.accounts.push({ user_id: `u-${id}`, currency: 'XAF', available_balance: over.balance, business_location_id: null, is_active: true });
@@ -432,6 +454,80 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
     await w.flush();
     expect(w.events('dedicated.offer_sent')).toHaveLength(2);
     expect(w.events('dedicated.offer_accepted')).toEqual([{ orderId: ORDER, agentId: 'zed' }]);
+  });
+
+  it('offer push in each agent\'s saved locale, the default language (French) when none is saved', async () => {
+    const w = world();
+    w.addAgent('amy', { balance: 50000, locale: 'en' });
+    w.addAgent('bob', { balance: 50000, locale: 'fr-CM' });
+    w.addAgent('cat', { balance: 50000, locale: null });
+    await w.offersService.runDispatchRound(ORDER, 1);
+    const pushFor = (userId: string) =>
+      w.notifications.sendOrderOfferPush.mock.calls.map((c) => c[0]).find((p) => p.userId === userId);
+    expect(pushFor('u-amy')).toMatchObject({
+      title: 'Dedicated delivery available',
+      body: 'Pickup: Chez Mama Akwa (Afternoon) - Tap to respond',
+    });
+    expect(pushFor('u-bob')).toMatchObject({ title: 'Livraison dédiée disponible' });
+    expect(pushFor('u-cat')).toMatchObject({ title: 'Livraison dédiée disponible' });
+  });
+
+  it('a failed locale lookup still sends the offers, in the default language', async () => {
+    const w = world();
+    w.addAgent('amy', { balance: 50000, locale: 'en' });
+    w.addAgent('bob', { balance: 50000, locale: 'en' });
+    w.state.localeLookupFails = true;
+    await w.offersService.runDispatchRound(ORDER, 1);
+    expect(w.notifications.sendOrderOfferPush).toHaveBeenCalledTimes(2);
+    for (const [p] of w.notifications.sendOrderOfferPush.mock.calls) {
+      expect(p).toMatchObject({ title: 'Livraison dédiée disponible' });
+    }
+  });
+
+  describe('a failed auto-assign is logged, then today\'s path continues', () => {
+    let warn: jest.SpyInstance;
+    beforeEach(() => {
+      warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    });
+    afterEach(() => warn.mockRestore());
+    const autoAssignWarnings = () =>
+      warn.mock.calls.map((c) => String(c[0])).filter((m) => m.startsWith('Dedicated auto-assign of order ORD-1'));
+
+    it('the claim is refused', async () => {
+      const w = world();
+      w.addAgent('int', { internal: true });
+      w.claimer.claimOrderForAgent.mockRejectedValueOnce(
+        new HttpException({ error: 'AGENT_CONTRACT_REQUIRED' }, HttpStatus.FORBIDDEN)
+      );
+      await w.offersService.runDispatchRound(ORDER, 1);
+      expect(autoAssignWarnings()).toEqual([
+        'Dedicated auto-assign of order ORD-1 to agent int failed ({"error":"AGENT_CONTRACT_REQUIRED"}); standard dispatch continues',
+      ]);
+      expect(w.state.order.assigned_agent_id).toBeNull();
+      expect(w.schedule.scheduleDispatchRound).toHaveBeenCalledWith(ORDER, 2, 30);
+      await w.flush();
+      expect(w.events('dedicated.auto_assigned')).toHaveLength(0);
+    });
+
+    it.each(['agent', 'user'] as const)('the claim can no longer load the %s', async (missing) => {
+      const w = world();
+      w.addAgent('int', { internal: true });
+      // Eligible in the assignment view, gone by the time the claim loads the agent.
+      w.state.claimAgentMissing = missing;
+      await w.offersService.runDispatchRound(ORDER, 1);
+      expect(autoAssignWarnings()).toEqual([
+        'Dedicated auto-assign of order ORD-1 to agent int failed (agent_not_found); standard dispatch continues',
+      ]);
+      expect(w.claimer.claimOrderForAgent).not.toHaveBeenCalled();
+      expect(w.schedule.scheduleDispatchRound).toHaveBeenCalledWith(ORDER, 2, 30);
+    });
+
+    it('a successful auto-assign logs nothing', async () => {
+      const w = world();
+      w.addAgent('int', { internal: true });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      expect(autoAssignWarnings()).toEqual([]);
+    });
   });
 
   it('a single independent agent gets a 120 s offer, never an auto-assignment', async () => {
@@ -637,6 +733,22 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
         status: HttpStatus.CONFLICT,
         response: expect.objectContaining({ error: 'DEDICATED_OFFER_INELIGIBLE', reason: 'at_capacity' }),
       });
+    });
+
+    it('flag turned off while offers were live: the accept is still re-checked and refused, no claim', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000 });
+      w.addAgent('a2', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      w.state.flag = false;
+      // Past the 30 s config cache, inside the 120 s offer TTL.
+      jest.setSystemTime(new Date(NOW.getTime() + 31_000));
+      await expect(w.accept('a1')).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: expect.objectContaining({ error: 'DEDICATED_OFFER_INELIGIBLE', reason: 'dedicated_disabled' }),
+      });
+      expect(w.claimer.claimOrderForAgent).not.toHaveBeenCalled();
+      expect(w.state.order.assigned_agent_id).toBeNull();
     });
 
     it('leaves a dropped balance to the claim (its hold error), stamping the assignment', async () => {
