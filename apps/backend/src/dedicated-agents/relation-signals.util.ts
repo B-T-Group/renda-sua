@@ -37,9 +37,8 @@ export function relationSignals(input: RelationInput): RelationSignal[] {
   // AC-S5 is about independents; internal agents are staff.
   if (input.isInternal) return [];
   const signals: RelationSignal[] = [];
-  const agentPhones = input.agentPhones.filter((p): p is string => !!p && !!p.trim());
-  const businessPhones = input.businessPhones.filter((p): p is string => !!p && !!p.trim());
-  if (agentPhones.some((a) => businessPhones.some((b) => samePhone(a, b)))) signals.push('shared_phone');
+  // samePhone already treats null/blank/digit-less values as "no match".
+  if (input.agentPhones.some((a) => input.businessPhones.some((b) => samePhone(a, b)))) signals.push('shared_phone');
   if (
     (!!input.businessReferredByAgentId && input.businessReferredByAgentId === input.agentId) ||
     (!!input.agentReferredByBusinessId && input.agentReferredByBusinessId === input.businessId)
