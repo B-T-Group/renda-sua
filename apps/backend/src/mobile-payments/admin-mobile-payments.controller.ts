@@ -116,7 +116,8 @@ export class AdminMobilePaymentsController {
     const providerTxId = this.requireProviderTxId(tx);
     const provider = this.resolveProvider(tx);
     const live = await this.checkLiveStatus(tx, await providerTxId, await provider);
-    if (live.status === 'pending' || live.status === 'ambiguous') {
+    if (live.status === 'pending' || live.status === 'ambiguous' || live.status === 'refunded') {
+      // refunded: approved then returned to the payer. Never replay it as success or failure.
       return this.stillPendingResponse(live, await provider);
     }
     return this.replayTerminal(tx, live, await provider, req);
@@ -222,9 +223,11 @@ export class AdminMobilePaymentsController {
       success: true,
       replayed: false,
       message:
-        live.status === 'ambiguous'
-          ? 'Provider status uncertain; try again later'
-          : 'Provider still pending',
+        live.status === 'refunded'
+          ? 'Provider reports the payment was refunded; manual review required, nothing replayed'
+          : live.status === 'ambiguous'
+            ? 'Provider status uncertain; try again later'
+            : 'Provider still pending',
       data: { providerStatus: live, provider },
     };
   }

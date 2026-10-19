@@ -9,6 +9,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { AssistantIdentityService } from '../../assistant/assistant-identity.service';
 import { AssistantService } from '../../assistant/assistant.service';
+import { maskPhoneNumber } from '../../mobile-payments/sanitize-provider-error.util';
 import type {
   AssistantChatMessage,
   AssistantTurnResult,
@@ -521,7 +522,7 @@ export class WhatsAppReplyService implements OnModuleInit {
   ) {
     this.cancelAssistantForPhone(fromPhone);
     if (!userId) {
-      this.logger.warn(`WhatsApp STOP from unknown phone ${fromPhone}`);
+      this.logger.warn(`WhatsApp STOP from unknown phone ${maskPhoneNumber(fromPhone)}`);
       return { handled: false, command };
     }
     await this.prefs.disableWhatsApp(userId);

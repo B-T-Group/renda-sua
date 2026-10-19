@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { DepositLedgerService, depositLedgerKey } from './deposit-ledger.service';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 
 /**
  * Deposit forfeit reason codes (immutable audit trail)
@@ -154,7 +155,7 @@ export class DepositRefundService {
         message: 'Deposit refunded to client wallet',
       };
     } catch (error: any) {
-      this.logger.error(`Failed to refund deposit for order ${orderId}:`, error);
+      this.logger.error(`Failed to refund deposit for order ${orderId}:`, safeErrorMessage(error));
       await this.markRefundFailed(orderId, error?.message);
       return {
         success: false,
@@ -242,7 +243,7 @@ export class DepositRefundService {
 
       return this.moveForfeitLedger(order, clientAccount.id, reason);
     } catch (error: any) {
-      this.logger.error(`Failed to forfeit deposit for order ${orderId}:`, error);
+      this.logger.error(`Failed to forfeit deposit for order ${orderId}:`, safeErrorMessage(error));
       return {
         success: false,
         message: error.message || 'Deposit forfeit failed',

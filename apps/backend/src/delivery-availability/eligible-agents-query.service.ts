@@ -1,10 +1,12 @@
 import { Injectable, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import { showsDeliveryChrome } from '../agents/agent-focus.util';
 import {
   agentMatchesRegion,
   haversineDistanceKm,
 } from '../common/agent-proximity.util';
+import type { Configuration } from '../config/configuration';
 import { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
@@ -28,9 +30,30 @@ export interface EligibleAgentSearchParams {
   maxDistanceKm?: number | null;
 }
 
+/** Default GPS last-seen cutoff when config is unavailable: 0 = off. */
+export const DEFAULT_AGENT_LOCATION_MAX_AGE_MINUTES = 0;
+
+/**
+ * True when the agent's last GPS update is recent enough to trust. A
+ * missing or unparseable timestamp counts as stale. `maxAgeMinutes <= 0`
+ * disables the cutoff.
+ */
+export function isAgentLocationFresh(
+  updatedAt: string | null | undefined,
+  maxAgeMinutes: number,
+  nowMs: number = Date.now()
+): boolean {
+  if (!(maxAgeMinutes > 0)) return true;
+  if (!updatedAt) return false;
+  const updatedMs = new Date(updatedAt).getTime();
+  if (Number.isNaN(updatedMs)) return false;
+  return nowMs - updatedMs <= maxAgeMinutes * 60 * 1000;
+}
+
 interface EligibleAgentRow {
   latitude: number | string;
   longitude: number | string;
+  updated_at?: string | null;
   agent: {
     id: string;
     is_available: boolean;
@@ -54,6 +77,7 @@ const ELIGIBLE_AGENTS_QUERY = `
     agent_locations {
       latitude
       longitude
+      updated_at
       agent {
         id
         is_available
@@ -82,16 +106,28 @@ const ELIGIBLE_AGENTS_QUERY = `
  * the delivery availability rules so eligibility filters never diverge.
  *
  * Eligibility: agent is available, verified, delivery-focused (not
- * commercial-only), not suspended, and operates in the target country/state
- * (profile address, falling back to GPS reverse-geocode).
+ * commercial-only), not suspended, has a GPS update within
+ * `deliveryAvailability.agentLocationMaxAgeMinutes` (when > 0; default off), and
+ * operates in the target country/state (profile address, falling back to
+ * GPS reverse-geocode).
  */
 @Injectable()
 export class EligibleAgentsQueryService {
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly googleDistanceService: GoogleDistanceService,
-    @Optional() private readonly agentContractGate?: AgentContractGateService
+    @Optional() private readonly agentContractGate?: AgentContractGateService,
+    @Optional()
+    private readonly configService?: ConfigService<Configuration>
   ) {}
+
+  private get locationMaxAgeMinutes(): number {
+    const value = this.configService?.get('deliveryAvailability')
+      ?.agentLocationMaxAgeMinutes;
+    return typeof value === 'number' && value >= 0
+      ? value
+      : DEFAULT_AGENT_LOCATION_MAX_AGE_MINUTES;
+  }
 
   /**
    * Returns eligible agents sorted by ascending Haversine distance from the
@@ -105,7 +141,11 @@ export class EligibleAgentsQueryService {
   async findEligibleAgents(
     params: EligibleAgentSearchParams
   ): Promise<EligibleAgentCandidate[]> {
-    const rows = await this.fetchAgentLocations();
+    const maxAgeMinutes = this.locationMaxAgeMinutes;
+    const nowMs = Date.now();
+    const rows = (await this.fetchAgentLocations()).filter((row) =>
+      isAgentLocationFresh(row.updated_at, maxAgeMinutes, nowMs)
+    );
     const signedIds = await this.agentContractGate?.signedIdsOrSkip(
       rows.map((row) => row.agent?.id).filter((id): id is string => !!id)
     );
