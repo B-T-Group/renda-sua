@@ -151,6 +151,7 @@ import type {
   NotifyRequest,
 } from './orchestration/notification.types';
 import type { RatingType } from '../ratings/dto/create-rating.dto';
+import { maskEmailForLog, maskPhoneForLog } from '../common/utils/safe-error-log.util';
 
 export type {
   AgentOrderPaymentFailedEmailPayload,
@@ -2704,7 +2705,7 @@ export class NotificationsService {
     if (error) {
       throw new Error(JSON.stringify(error));
     }
-    this.logger.log(`Agent business referred email sent to ${to} (HTML fallback)`);
+    this.logger.log(`Agent business referred email sent to ${maskEmailForLog(to)} (HTML fallback)`);
   }
 
   private renderNotificationHtmlTemplate(
@@ -3813,7 +3814,7 @@ export class NotificationsService {
           });
         } catch (error: unknown) {
           this.logger.warn(
-            `Failed to send order status email to ${recipient.email}: ${error instanceof Error ? error.message : String(error)}`
+            `Failed to send order status email to ${maskEmailForLog(recipient.email)}: ${error instanceof Error ? error.message : String(error)}`
           );
         }
       }
@@ -5130,10 +5131,10 @@ export class NotificationsService {
       if (error) {
         throw new Error(JSON.stringify(error));
       }
-      this.logger.log(`Email sent to ${to} (template ${templateKey})`);
+      this.logger.log(`Email sent to ${maskEmailForLog(to)} (template ${templateKey})`);
     } catch (error: any) {
       this.logger.error(
-        `Failed to send email to ${to}: ${
+        `Failed to send email to ${maskEmailForLog(to)}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -6284,7 +6285,7 @@ export class NotificationsService {
     try {
       const result = await this.smsService.sendSms({ to, message: body });
       if (result.success) {
-        this.logger.log(`Order SMS sent via Orange to ${to}`);
+        this.logger.log(`Order SMS sent via Orange to ${maskPhoneForLog(to)}`);
       } else {
         this.logger.warn(`Order SMS failed: ${result.error ?? 'unknown'}`);
       }
@@ -6359,11 +6360,11 @@ export class NotificationsService {
       });
 
       this.logger.log(
-        `Proximity notification sent to agent ${agentEmail} for order ${orderData.orderNumber}`
+        `Proximity notification sent to agent ${maskEmailForLog(agentEmail)} for order ${orderData.orderNumber}`
       );
     } catch (error: any) {
       this.logger.error(
-        `Failed to send proximity notification to ${agentEmail}: ${
+        `Failed to send proximity notification to ${maskEmailForLog(agentEmail)}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );

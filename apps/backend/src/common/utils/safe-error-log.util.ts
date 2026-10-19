@@ -2,6 +2,7 @@ import {
   maskPhoneNumber,
   sanitizeProviderError,
 } from '../../mobile-payments/sanitize-provider-error.util';
+import { maskEmailForOtp } from '../../auth/otp-channel.util';
 
 /**
  * L1: text that is safe to put in a log line for any caught error.
@@ -24,4 +25,14 @@ export function maskPhoneDigits(text: string): string {
     const digits = match.replace(/\D/g, '');
     return digits.length >= 8 ? maskPhoneNumber(digits) : match;
   });
+}
+
+/** #616: recipient email for a log line: `ja***@example.com`; anything else `***`. */
+export function maskEmailForLog(email: string | null | undefined): string {
+  return maskEmailForOtp(email) ?? '***';
+}
+
+/** #616: recipient phone for a log line: last 3 digits only (`***456`). */
+export function maskPhoneForLog(phone: string | null | undefined): string {
+  return phone ? maskPhoneNumber(String(phone)) : '***';
 }

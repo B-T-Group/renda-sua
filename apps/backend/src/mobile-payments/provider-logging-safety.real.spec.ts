@@ -143,6 +143,14 @@ describe('MyPVitService call sites', () => {
     expect(allLogs()).toContain('***456');
   });
 
+  it('#616: payment log masks a raw 8-digit Togo account number', async () => {
+    const { svc, post } = mypvit();
+    post.mockResolvedValue({ data: { status: 'PENDING', reference_id: 'R1' } });
+    await svc.initiatePayment({ amount: 100, customer_account_number: '90123456' } as any, 'REF1').catch(() => undefined);
+    expect(allLogs()).toContain('Initiating payment for account: ***456');
+    expect(allLogs()).not.toContain('90123456');
+  });
+
   it('KYC provider error is sanitized', async () => {
     const { svc, post } = mypvit();
     post.mockRejectedValue(providerError());
@@ -334,6 +342,24 @@ describe('MobilePaymentsService error sites (real service, provider faked)', () 
     expect(JSON.stringify(res)).not.toContain(SECRET);
     expect(allLogs()).not.toContain(SECRET);
     expect(allLogs()).toContain('Failed to initiate mobile payment');
+  });
+
+  it('#616: initiatePayment without a customer phone masks a phone-like accountId', async () => {
+    const fedapay = new FedaPayService(
+      config('fedapay', { secretKey: 'sk_sandbox_x', environment: 'sandbox', mockEnabled: false }),
+      { get: jest.fn() } as any
+    );
+    jest.spyOn(fedapay, 'initiatePayment').mockRejectedValue(providerError());
+    const hasura = {
+      executeQuery: jest.fn(async (q: string) =>
+        q.includes('CheckFedaPayActive') ? { supported_payment_systems: [{ active: true }] } : {}
+      ),
+    };
+    const mps = new MobilePaymentsService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any, fedapay, hasura as any);
+    await mps
+      .initiatePayment({ amount: 1000, currency: 'XOF', description: 'x', accountId: '90123456', provider: 'fedapay', reference: 'REF-2' } as any)
+      .catch(() => undefined);
+    expect(allLogs()).not.toContain('90123456');
   });
 
   it('isFedaPayActiveForTogo: a Hasura error is logged redacted', async () => {

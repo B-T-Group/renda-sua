@@ -768,7 +768,9 @@ export class MobilePaymentsService {
         `Initiating mobile payment for account: ${
           paymentRequest.customerPhone
             ? maskPhoneNumber(paymentRequest.customerPhone)
-            : paymentRequest.accountId || 'unknown'
+            : paymentRequest.accountId
+              ? maskPhoneNumber(paymentRequest.accountId)
+              : 'unknown'
         }`
       );
 

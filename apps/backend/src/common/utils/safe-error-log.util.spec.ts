@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { ClientError } from 'graphql-request';
 import { inspect } from 'util';
 import { MobilePaymentsDatabaseService } from '../../mobile-payments/mobile-payments-database.service';
-import { maskPhoneDigits, safeErrorMessage } from './safe-error-log.util';
+import { maskEmailForLog, maskPhoneDigits, maskPhoneForLog, safeErrorMessage } from './safe-error-log.util';
 
 /** A real graphql-request 5.2 ClientError: its message embeds query + variables. */
 function hasuraError(): ClientError {
@@ -78,5 +78,19 @@ describe('MobilePaymentsDatabaseService logs Hasura errors without PII (L1)', ()
 
     const text = logged.map((a) => inspect(a, { depth: 10 })).join('\n');
     expect(text).not.toContain('650123456');
+  });
+});
+
+describe('#616 log maskers', () => {
+  it('maskEmailForLog keeps 2 chars of the local part and the domain; junk becomes ***', () => {
+    expect(maskEmailForLog('Jane.Doe@Example.com')).toBe('ja***@example.com');
+    expect(maskEmailForLog('a@b.co')).toBe('a***@b.co');
+    expect(maskEmailForLog('not-an-email')).toBe('***');
+    expect(maskEmailForLog(null)).toBe('***');
+  });
+  it('maskPhoneForLog keeps the last 3 digits only', () => {
+    expect(maskPhoneForLog('+228 90 12 34 56')).toBe('***456');
+    expect(maskPhoneForLog('90123456')).toBe('***456');
+    expect(maskPhoneForLog(undefined)).toBe('***');
   });
 });
