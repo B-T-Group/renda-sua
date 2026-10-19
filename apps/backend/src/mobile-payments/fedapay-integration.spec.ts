@@ -530,7 +530,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
-      ).rejects.toThrow(/amount mismatch/i);
+      ).rejects.toThrow(/amount[_ ]mismatch/i);
     });
 
     it('should accept when all fields match', async () => {
