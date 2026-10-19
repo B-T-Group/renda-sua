@@ -179,6 +179,14 @@ const AGENT_FOR_SYSTEM_CLAIM = `
  * wins through the atomic claim. Re-entry from SFN retries never re-offers:
  * dedicated offer rows on the order are the idempotency guard.
  */
+/**
+ * AC section 5 `dedicated.slot_full`: the slot has dedicated agents and every
+ * one of them was skipped only because they're at capacity (AC-E2 load cap).
+ */
+export function isSlotFull(result: { eligible: unknown[]; rejected: Array<{ reason: string }> }): boolean {
+  return result.eligible.length === 0 && result.rejected.length > 0 && result.rejected.every((r) => r.reason === 'at_capacity');
+}
+
 @Injectable()
 export class DedicatedDispatchService {
   private readonly logger = new Logger(DedicatedDispatchService.name);
@@ -229,7 +237,7 @@ export class DedicatedDispatchService {
       });
       if (!slot) return none;
       const rail = await this.paymentRoutingService.resolveRailForBusiness(order.business_id);
-      const eligible = await this.coverage.eligibleAgents({
+      const evaluation = await this.coverage.evaluate({
         locationId: order.business_location_id,
         slotKey: slot.slotKey,
         fulfillmentTiming: order.fulfillment_timing,
@@ -243,6 +251,16 @@ export class DedicatedDispatchService {
         excludeOrderId: order.id,
         slotDate: slot.date,
       });
+      const eligible = evaluation.eligible;
+      if (isSlotFull(evaluation)) {
+        emitServerSiteEvent(this.siteEventsService, 'dedicated.slot_full', {
+          orderId: order.id,
+          businessLocationId: order.business_location_id,
+          slotKey: slot.slotKey,
+          date: slot.date,
+          assignedAgents: evaluation.rejected.length,
+        });
+      }
       const reachable = eligible.filter((a) => !!a.userId && !declined.has(a.agentId));
       if (reachable.length === 0) return none;
 

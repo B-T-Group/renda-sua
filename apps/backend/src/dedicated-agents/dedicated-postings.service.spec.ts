@@ -1,3 +1,4 @@
+import type { SiteEventsService } from '../site-events/site-events.service';
 import {
   BadRequestException,
   ConflictException,
@@ -513,7 +514,18 @@ function world() {
   const notices: Notice[] = [];
   const notifications = { sendDedicatedAgentNotice: jest.fn(async (p: Notice) => void notices.push(p)) };
   const config = new DedicatedAgentsConfigService(hasura);
-  const postings = new DedicatedPostingsService(hasura, config, notifications as unknown as NotificationsService);
+  const siteEvents = { trackEvent: jest.fn().mockResolvedValue(undefined) };
+  const events = (type: string) =>
+    siteEvents.trackEvent.mock.calls
+      .map((c) => c[0] as { eventType: string; metadata: Record<string, unknown> })
+      .filter((e) => e.eventType === type)
+      .map((e) => e.metadata);
+  const postings = new DedicatedPostingsService(
+    hasura,
+    config,
+    notifications as unknown as NotificationsService,
+    siteEvents as unknown as SiteEventsService
+  );
   const coverage = {
     slotBoundsFor: jest.fn(async () => [
       { slotKey: 'morning', slotId: 's-m', startTime: '08:00:00', endTime: '12:00:00' },
@@ -532,7 +544,7 @@ function world() {
   );
   addLocation({ id: LOC });
   const writes = (op: string) => state.mutations.filter((m) => m.op === op);
-  return { state, postings, opportunities, notices, addLocation, addAgent, seedPosting, seedApp, writes, executeMutation, contractGate };
+  return { state, postings, opportunities, notices, addLocation, addAgent, seedPosting, seedApp, writes, executeMutation, contractGate, events };
 }
 
 const actor = { userId: OWNER, locationId: LOC };
@@ -1219,5 +1231,104 @@ describe('opportunityDisabledReason', () => {
     expect(opportunityDisabledReason(posting, [{ business_location_id: 'X', slot_key: 'a' }, { business_location_id: 'Y', slot_key: 'b' }], 3)).toBe('max_assignments');
     expect(opportunityDisabledReason(posting, [{ business_location_id: 'L', slot_key: 'evening' }], 1)).toBe('holds_slot');
     expect(opportunityDisabledReason(posting, [{ business_location_id: 'L', slot_key: 'afternoon' }], 3)).toBeNull();
+  });
+});
+
+
+describe('PR 8 analytics (AC section 5): postings and applications', () => {
+  it('posting_created on create', async () => {
+    const w = world();
+    const { posting } = await w.postings.create(actor, { headcount: 2, slotKeys: ['morning'] }, NOW);
+    expect(w.events('dedicated.posting_created')).toEqual([
+      expect.objectContaining({ postingId: posting.id, businessLocationId: LOC, headcount: 2, slotKeys: ['morning'] }),
+    ]);
+  });
+
+  it('accepting the last spot: application_accepted, one assignment_status_changed per slot (source posting), posting_filled, auto_declined (filled)', async () => {
+    const w = world();
+    const p = w.seedPosting({ headcount: 1, slotKeys: ['morning', 'evening'] });
+    w.addAgent('a1');
+    w.addAgent('a2');
+    const x1 = w.seedApp(p.id, 'a1');
+    w.seedApp(p.id, 'a2');
+    await w.postings.accept(actor, p.id, x1.id);
+    expect(w.events('dedicated.application_accepted')).toEqual([{ postingId: p.id, applicationId: x1.id, agentId: 'a1' }]);
+    expect(w.events('dedicated.assignment_status_changed').map((e) => [e.slotKey, e.source, e.from, e.to, e.cause])).toEqual([
+      ['evening', 'posting', null, 'active', 'posting_accept'],
+      ['morning', 'posting', null, 'active', 'posting_accept'],
+    ]);
+    expect(w.events('dedicated.posting_filled')).toEqual([{ postingId: p.id, headcount: 1, acceptedCount: 1 }]);
+    expect(w.events('dedicated.application_auto_declined')).toEqual([{ postingId: p.id, count: 1, cause: 'filled' }]);
+  });
+
+  it('accept #1 of 2: no posting_filled and no auto_declined', async () => {
+    const w = world();
+    const p = w.seedPosting({ headcount: 2 });
+    w.addAgent('a1');
+    w.addAgent('a2');
+    const x1 = w.seedApp(p.id, 'a1');
+    w.seedApp(p.id, 'a2');
+    await w.postings.accept(actor, p.id, x1.id);
+    expect(w.events('dedicated.posting_filled')).toEqual([]);
+    expect(w.events('dedicated.application_auto_declined')).toEqual([]);
+  });
+
+  it('close: auto_declined (closed) with the count; none when nobody was pending', async () => {
+    const w = world();
+    const p = w.seedPosting();
+    w.addAgent('a1');
+    w.seedApp(p.id, 'a1');
+    await w.postings.close(actor, p.id, null, NOW);
+    expect(w.events('dedicated.application_auto_declined')).toEqual([{ postingId: p.id, count: 1, cause: 'closed' }]);
+    const q = w.seedPosting({ slotKeys: ['evening'] });
+    await w.postings.close(actor, q.id, null, NOW);
+    expect(w.events('dedicated.application_auto_declined')).toHaveLength(1);
+  });
+
+  it('expiry: posting_expired per posting and auto_declined (expired)', async () => {
+    const w = world();
+    const due = w.seedPosting({ expires_at: '2026-10-20T08:59:00Z' });
+    const empty = w.seedPosting({ expires_at: '2026-10-20T08:59:00Z', slotKeys: ['evening'] });
+    w.addAgent('a1');
+    w.seedApp(due.id, 'a1');
+    await w.postings.expireDue(NOW);
+    expect(w.events('dedicated.posting_expired')).toEqual(
+      expect.arrayContaining([
+        { postingId: due.id, autoDeclined: 1 },
+        { postingId: empty.id, autoDeclined: 0 },
+      ])
+    );
+    expect(w.events('dedicated.posting_expired')).toHaveLength(2);
+    expect(w.events('dedicated.application_auto_declined')).toEqual([{ postingId: due.id, count: 1, cause: 'expired' }]);
+  });
+
+  it('apply: application_submitted once (idempotent re-apply sends none); withdraw: application_withdrawn', async () => {
+    const w = world();
+    w.addAgent('a1');
+    const p = w.seedPosting();
+    const { application } = await w.opportunities.apply('u-a1', p.id, NOW);
+    await w.opportunities.apply('u-a1', p.id, NOW);
+    expect(w.events('dedicated.application_submitted')).toEqual([{ postingId: p.id, applicationId: application.id, agentId: 'a1' }]);
+    await w.opportunities.withdraw('u-a1', p.id, NOW);
+    expect(w.events('dedicated.application_withdrawn')).toEqual([{ postingId: p.id, agentId: 'a1' }]);
+  });
+
+  it('no photo: photo_gate_shown and no application_submitted', async () => {
+    const w = world();
+    w.addAgent('a1', {}, { profile_picture_url: null });
+    const p = w.seedPosting();
+    await w.opportunities.apply('u-a1', p.id, NOW).catch(() => undefined);
+    expect(w.events('dedicated.photo_gate_shown')).toEqual([{ postingId: p.id, agentId: 'a1' }]);
+    expect(w.events('dedicated.application_submitted')).toEqual([]);
+  });
+
+  it('a close racing the insert: auto_declined (late), no application_submitted', async () => {
+    const w = world();
+    w.addAgent('a1');
+    const p = w.seedPosting();
+    w.state.closeDuringApply = true;
+    await w.opportunities.apply('u-a1', p.id, NOW).catch(() => undefined);
+    expect(w.events('dedicated.application_auto_declined')).toEqual([{ postingId: p.id, count: 1, cause: 'late' }]);
+    expect(w.events('dedicated.application_submitted')).toEqual([]);
   });
 });

@@ -4,11 +4,16 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
+import { SiteEventsService } from '../site-events/site-events.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
 import { DELEGATION_PERMISSIONS } from '../delegations/delegation.constants';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { PaymentRoutingService, type PaymentRail } from '../stripe-payments/payment-routing.service';
 import {
   buildDedicatedAgentMessage,
   buildDedicatedAssignedBusinessMessage,
@@ -218,6 +223,9 @@ function assertSlotKeys(raw: unknown): DedicatedSlotKey[] {
  * agent_id order, and are behind `dedicated_agents_enabled` for the location's
  * country (off -> 404, as for other flagged routes).
  */
+/** QA #619 N2: concurrent hold lookups per batch in the super-user picker. */
+const PICKER_HOLD_BATCH = 10;
+
 @Injectable()
 export class DedicatedAssignmentsService {
   private readonly logger = new Logger(DedicatedAssignmentsService.name);
@@ -228,8 +236,32 @@ export class DedicatedAssignmentsService {
     private readonly coverage: DedicatedCoverageService,
     private readonly deliveryConfigService: DeliveryConfigService,
     private readonly agentHoldService: AgentHoldService,
-    private readonly notifications: NotificationsService
+    private readonly notifications: NotificationsService,
+    @Optional() private readonly siteEventsService?: SiteEventsService,
+    @Optional() private readonly paymentRoutingService?: PaymentRoutingService
   ) {}
+
+  /** AC section 5: `dedicated.assignment_status_changed (source)`, one per assignment row. */
+  statusChanged(
+    rows: Array<{ id: string; agent_id: string; business_location_id?: string; slot_key: string; source: string }>,
+    from: string | null,
+    to: string,
+    cause: string,
+    locationId?: string
+  ): void {
+    for (const r of rows) {
+      emitServerSiteEvent(this.siteEventsService, 'dedicated.assignment_status_changed', {
+        assignmentId: r.id,
+        agentId: r.agent_id,
+        businessLocationId: r.business_location_id ?? locationId ?? null,
+        slotKey: r.slot_key,
+        source: r.source,
+        from,
+        to,
+        cause,
+      });
+    }
+  }
 
   // ---------------------------------------------------------------- super user
 
@@ -311,10 +343,112 @@ export class DedicatedAssignmentsService {
         locationId: location.id,
       });
     }
+    this.statusChanged(assignments, null, 'active', 'superuser_assign', location.id);
     this.logger.log(
       `dedicated superuser_assign location=${location.id} agent=${agent.id} slots=${slotKeys.join(',')} country=${country}`
     );
     return { assignments };
+  }
+
+  /**
+   * AC-S2 picker numbers for candidate agents at a location: current load,
+   * and for independents the balance and how many typical orders it covers.
+   */
+  async pickerStats(
+    locationId: string,
+    country: string,
+    agents: Array<{ id: string; userId: string | null; isInternal: boolean }>,
+    now = new Date()
+  ): Promise<Map<string, { activeOrders: number; outstandingDedicatedOffers: number; balanceCoversOrders: number | null }>> {
+    const out = new Map<string, { activeOrders: number; outstandingDedicatedOffers: number; balanceCoversOrders: number | null }>();
+    if (agents.length === 0) return out;
+    const config = await this.configService.getConfig(country);
+    const ids = agents.map((a) => a.id);
+    // QA #619 N2: the picker only needs the store's typical subtotal, not the per-agent
+    // card aggregates (no agent aliases: dedicatedCardStatsQuery(0) is just `recent`).
+    const [load, stats] = await Promise.all([this.loadAgentLoad(ids, now), this.loadCardStats(locationId, [])]);
+    const independents = agents.filter((a) => !a.isInternal);
+    const balances = await this.loadBalances(
+      [...new Set(independents.map((a) => a.userId).filter((id): id is string => !!id))],
+      country
+    );
+    // QA #619 N5: the store's own rail (as dedicated dispatch resolves it), not MoMo.
+    const rail = await this.railForLocation(locationId);
+    const holds =
+      stats.typicalSubtotal > 0
+        ? await this.batchHolds(stats.typicalSubtotal, independents.map((a) => a.id), rail, locationId)
+        : new Map<string, number>();
+    for (const a of agents) {
+      const activeOrders = load.active.get(a.id) ?? 0;
+      const outstanding = load.offers.get(a.id) ?? 0;
+      let covers: number | null = null;
+      const hold = holds.get(a.id) ?? 0;
+      // QA #619 N5: the hold is requested on the store's rail. On a Stripe-rail store
+      // resolveOrderHoldWithCeiling returns 0 (AC-E4), so this stays null ("no balance
+      // limit"); on a MoMo store it is how many typical orders the balance covers.
+      if (!a.isInternal && Number.isFinite(hold) && hold > 0) {
+        covers = computeEffectiveCapacity({
+          maxActiveOrders: config.maxActiveOrders,
+          activeOrders,
+          outstandingDedicatedOffers: outstanding,
+          isInternal: false,
+          rail,
+          availableBalance: balances.get(a.userId ?? '') ?? 0,
+          typicalHold: hold,
+        });
+      }
+      // QA #619 N3: only how many orders the balance covers, never the balance itself.
+      out.set(a.id, { activeOrders, outstandingDedicatedOffers: outstanding, balanceCoversOrders: covers });
+    }
+    return out;
+  }
+
+  /**
+   * Payment rail of a location's business (QA #619 N5). Same source as dedicated
+   * dispatch (`resolveRailForBusiness`). Without the routing service (unit wiring)
+   * or on a lookup error it falls back to MoMo, the only rail with a hold, which is
+   * the conservative reading (it can only understate coverage).
+   */
+  private async railForLocation(locationId: string, businessId?: string): Promise<PaymentRail> {
+    if (!this.paymentRoutingService) return 'mobile_money';
+    try {
+      const id = businessId ?? (await this.loadLocation(locationId)).business_id;
+      return await this.paymentRoutingService.resolveRailForBusiness(id);
+    } catch (error) {
+      this.logger.warn(`dedicated.rail_lookup_failed location=${locationId}: ${safeErrorMessage(error)}`);
+      return 'mobile_money';
+    }
+  }
+
+  /**
+   * QA #619 N2: hold lookups in parallel batches instead of one awaited call per agent.
+   * A failed lookup counts as "no hold" (coverage shown as null) and is logged.
+   */
+  private async batchHolds(
+    subtotal: number,
+    agentIds: string[],
+    rail: PaymentRail,
+    locationId: string
+  ): Promise<Map<string, number>> {
+    const holds = new Map<string, number>();
+    for (let i = 0; i < agentIds.length; i += PICKER_HOLD_BATCH) {
+      const chunk = agentIds.slice(i, i + PICKER_HOLD_BATCH);
+      const values = await Promise.all(
+        chunk.map((id) =>
+          this.agentHoldService
+            .resolveOrderHoldWithCeiling(subtotal, id, rail)
+            .then((r) => Number(r.holdAmount) || 0)
+            .catch((error) => {
+              this.logger.warn(
+                `dedicated.hold_lookup_failed location=${locationId} agent=${id} rail=${rail}: ${safeErrorMessage(error)}`
+              );
+              return 0;
+            })
+        )
+      );
+      chunk.forEach((id, k) => holds.set(id, values[k]));
+    }
+    return holds;
   }
 
   /** Business + agent of an assignment, for the admin geo-scope check. */
@@ -351,6 +485,7 @@ export class DedicatedAssignmentsService {
       ? { status: 'paused', paused_at: now, paused_by_user_id: actor.userId }
       : { status: 'active', paused_at: null, paused_by_user_id: null };
     const updated = await this.guardedUpdate(row.id, [row.status], set);
+    this.statusChanged([row], row.status, target, actor.locationId ? 'business' : 'superuser');
     await this.notifyAgentForRow(paused ? 'paused' : 'resumed', row);
     return { assignment: updated };
   }
@@ -367,6 +502,7 @@ export class DedicatedAssignmentsService {
       removed_by_user_id: actor.userId,
       removed_reason: trimmed || null,
     });
+    this.statusChanged([row], row.status, 'removed', actor.locationId ? 'business' : 'superuser');
     await this.notifyAgentForRow('removed', row);
     return { assignment: updated };
   }
@@ -389,13 +525,12 @@ export class DedicatedAssignmentsService {
       [...new Set(independents.map((r) => r.agent?.user_id).filter((id): id is string => !!id))],
       country
     );
-    const holds = new Map<string, number>();
-    if (stats.typicalSubtotal > 0) {
-      for (const agentId of new Set(independents.map((r) => r.agent_id))) {
-        const hold = await this.agentHoldService.resolveOrderHoldWithCeiling(stats.typicalSubtotal, agentId, 'mobile_money');
-        holds.set(agentId, Number(hold.holdAmount) || 0);
-      }
-    }
+    // QA #619 N5: the store's rail, as in the picker.
+    const rail = await this.railForLocation(locationId, location.business_id);
+    const holds =
+      stats.typicalSubtotal > 0
+        ? await this.batchHolds(stats.typicalSubtotal, [...new Set(independents.map((r) => r.agent_id))], rail, locationId)
+        : new Map<string, number>();
 
     const assignments = rows.map((row): DedicatedAgentCard => {
       const isInternal = row.agent?.is_internal === true;
@@ -428,7 +563,7 @@ export class DedicatedAssignmentsService {
                 activeOrders,
                 outstandingDedicatedOffers: outstanding,
                 isInternal,
-                rail: 'mobile_money',
+                rail,
                 availableBalance: balance,
                 typicalHold: hold,
               }),
@@ -553,10 +688,13 @@ export class DedicatedAssignmentsService {
     );
     const paused = res?.paused?.returning ?? [];
     const known = new Map(live.map((r) => [r.id, r]));
+    const pausedRows = [];
     for (const p of paused) {
       const row = known.get(p.id) ?? (await this.loadAssignment(p.id).catch(() => null));
-      if (row) await this.notifyAgentForRow('paused', row);
+      if (row) pausedRows.push(row);
     }
+    this.statusChanged(pausedRows, 'active', 'paused', 'slot_disabled');
+    for (const row of pausedRows) await this.notifyAgentForRow('paused', row);
     return { ...(await this.getPickupSlots(location.id)), pausedAssignmentIds: paused.map((a) => a.id) };
   }
 
@@ -623,6 +761,14 @@ export class DedicatedAssignmentsService {
     const localToday = localDateTimeAt(now, await this.timeZone(country)).date;
     const updated = await this.guardedUpdate(row.id, ['active', 'paused'], {
       off_today_date: off ? localToday : null,
+    });
+    emitServerSiteEvent(this.siteEventsService, 'dedicated.off_today_toggled', {
+      assignmentId: row.id,
+      agentId: agent.id,
+      businessLocationId: row.business_location_id,
+      slotKey: row.slot_key,
+      off,
+      localDate: localToday,
     });
     return { assignment: updated, offToday: off, localDate: localToday };
   }
