@@ -11,6 +11,24 @@ const ORDER_ENTITIES = new Set([
   'order_deposit',
 ]);
 
+/** Order statuses after which a MoMo failure must not touch the order (QA #597 F1). */
+const FINISHED_ORDER_STATUSES = new Set(['cancelled', 'failed', 'refunded', 'complete']);
+
+/**
+ * QA #597 F1: the order is still waiting for this MoMo payment: not cancelled or finished,
+ * and not paid. payment_status `pending`, or `failed` from an earlier attempt (retries do not
+ * reset it, so a failed retry must still notify). Pay-now (`pending_payment`) and pay-later
+ * orders (confirmed / ready_for_pickup / out_for_delivery) both qualify.
+ */
+export function isOrderAwaitingMomoPayment(order: {
+  current_status?: string | null;
+  payment_status?: string | null;
+}): boolean {
+  if (!order) return false;
+  if (FINISHED_ORDER_STATUSES.has(String(order.current_status))) return false;
+  return order.payment_status === 'pending' || order.payment_status === 'failed';
+}
+
 @Injectable()
 export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
   private readonly logger = new Logger(OrderPaymentCallbackHandler.name);
@@ -98,6 +116,15 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
       const order = await this.ordersService.getOrderForProcessingByNumber(
         orderNumber
       );
+      // QA #597 F1: a MoMo failure (e.g. FedaPay expiry ~24h later) only fails the order
+      // while the order is still waiting for this payment. Stripe and other callers of
+      // onOrderPaymentFailed are not routed through here and keep their behaviour.
+      if (!isOrderAwaitingMomoPayment(order)) {
+        this.logger.log(
+          `momo_failure_ignored order=${order.order_number} status=${order.current_status} payment_status=${(order as any).payment_status} tx=${transaction.id}`
+        );
+        return;
+      }
       await this.ordersService.onOrderPaymentFailed(order.id, message);
       return;
     }

@@ -614,7 +614,12 @@ describe('S4 expiry (real processor + live FedaPay re-check)', () => {
     function withFailureSpies(entity: string | null) {
       const built = build([pendingTopUp()].map((r) => ({ ...r, payment_entity: entity, entity_id: entity ? 'ORD1' : null })));
       const orders = built.orders;
-      orders.getOrderForProcessingByNumber = jest.fn(async () => ({ id: 'order-uuid' }));
+      orders.getOrderForProcessingByNumber = jest.fn(async () => ({
+        id: 'order-uuid',
+        order_number: 'ORD1',
+        current_status: 'pending_payment',
+        payment_status: 'pending',
+      }));
       orders.onOrderPaymentFailed = jest.fn(async () => undefined);
       orders.onDepositPaymentFailed = jest.fn(async () => undefined);
       orders.emitClaimTopupFailed = jest.fn(async () => undefined);
