@@ -24,6 +24,10 @@ Object.defineProperty(globalThis, 'crypto', {
 process.env.TWILIO_ACCOUNT_SID ||= 'test_sid';
 process.env.TWILIO_ACCOUNT_TOKEN ||= 'test_token';
 process.env.TWILIO_VERIFY_SERVICE_SID ||= 'test_verify_sid';
+// QA #593 R3: MyPVitService fails boot without both operation account codes (S3); set them
+// here so the smoke test does not depend on apps/backend/.env being loaded.
+process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE ||= 'ACC_BOOT_AIRTEL';
+process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE ||= 'ACC_BOOT_MOOV';
 // Keep Redis-backed services on their in-memory fallback so the smoke test
 // neither needs a local Redis nor hangs in app.close() retrying a dead socket.
 process.env.REDIS_HOST = '';

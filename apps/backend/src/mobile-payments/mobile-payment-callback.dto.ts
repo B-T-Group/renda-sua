@@ -17,6 +17,7 @@ export interface FedaPayCallbackDto {
     status: string;
     amount: number;
     reference: string;
+    currency?: string;
     custom_metadata?: {
       externalId?: string;
     };

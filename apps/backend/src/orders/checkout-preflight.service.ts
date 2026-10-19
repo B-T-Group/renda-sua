@@ -138,6 +138,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         preparation_minutes
         pay_on_delivery_enabled
         export_available
+        moderation_status
         pay_at_pickup_enabled
         shipping_enabled
         shipping_price
@@ -336,6 +337,12 @@ export class CheckoutPreflightService {
           message: `Item ${line.business_inventory_id} was not found or is unavailable.`,
         });
       } else if (!inv.is_active) {
+        blockers.push({
+          code: 'ITEM_UNAVAILABLE',
+          message: `${inv.item?.name ?? 'An item'} is not currently available.`,
+        });
+      } else if (inv.item?.moderation_status !== 'approved') {
+        // F-M7: draft/pending/rejected items are hidden from browse; never sellable
         blockers.push({
           code: 'ITEM_UNAVAILABLE',
           message: `${inv.item?.name ?? 'An item'} is not currently available.`,

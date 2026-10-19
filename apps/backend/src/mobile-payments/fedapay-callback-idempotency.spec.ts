@@ -1,9 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { ModuleRef } from '@nestjs/core';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsDatabaseService } from './mobile-payments-database.service';
 import { MobilePaymentsService } from './mobile-payments.service';
 import { AccountsService } from '../accounts/accounts.service';
 import { PaymentCallbackRegistryService } from './payment-callback/payment-callback-registry.service';
+import { FedaPayService } from './providers/fedapay.service';
 import { FedaPayCallbackDto } from './mobile-payment-callback.dto';
 
 describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
@@ -29,6 +31,10 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
     findHandlerFor: jest.fn().mockReturnValue(null),
   };
 
+  const mockFedaPayService = {
+    mockEnabled: true,
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -37,6 +43,7 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
         { provide: MobilePaymentsService, useValue: mockMobilePaymentsService },
         { provide: AccountsService, useValue: mockAccountsService },
         { provide: PaymentCallbackRegistryService, useValue: mockRegistryService },
+        { provide: FedaPayService, useValue: mockFedaPayService },
       ],
     }).compile();
 
@@ -320,6 +327,28 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
       expect(mockDatabaseService.logCallback).toHaveBeenCalledWith('gc-1', expect.anything());
     });
+
+    it('does not match GIVE_CHANGE row when mock mode is off', async () => {
+      // Temporarily disable mock mode
+      mockFedaPayService.mockEnabled = false;
+
+      const mockGc = { ...gcRow, transaction_id: 'mock-abc123-xyz' };
+      mockDatabaseService.getTransactionByTransactionId.mockImplementation(async (k: string) => (k === 'mock-abc123-xyz' ? mockGc : null));
+      mockDatabaseService.getTransactionByReference.mockImplementation(async (k: string) => (k === 'REFGC' ? null : mockGc));
+
+      await processor
+        .processFedaPayCallback({
+          entity: { id: parseInt('abc123', 36), status: 'approved', amount: 0, reference: 'mock-abc123-xyz', custom_metadata: { externalId: 'REFGC' } } as any,
+          name: 'transaction.approved',
+        })
+        .catch(() => undefined);
+
+      // Should not match the GIVE_CHANGE row
+      expect(mockDatabaseService.logCallback).not.toHaveBeenCalledWith('gc-1', expect.anything());
+
+      // Restore mock mode for other tests
+      mockFedaPayService.mockEnabled = true;
+    });
   });
 
   describe('N5: expired status handling', () => {
@@ -335,12 +364,40 @@ describe('MobilePaymentCallbackProcessor - FedaPay Idempotency', () => {
 
       await processor.processFedaPayCallback(expiredCallback);
 
+      // The failPendingAttempt method is called, which updates the transaction
       expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
         expect.anything(),
         'FAILED'
       );
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        'tx-123',
+        'pending',
+        expect.objectContaining({ status: 'failed' })
+      );
+    });
+
+    it('handles transaction.expired event as terminal failed', async () => {
+      const expiredCallback: FedaPayCallbackDto = {
+        entity: { id: 456, status: 'expired', amount: 1000, reference: 'fedapay-tx-456', custom_metadata: { externalId: 'REF456' } } as any,
+        name: 'transaction.expired',
+      };
+      mockDatabaseService.getTransactionByTransactionId.mockResolvedValueOnce(mockTransaction);
+      mockDatabaseService.logCallback.mockResolvedValue(undefined);
+      mockDatabaseService.updateTransactionIfStatus.mockResolvedValue(true);
+      mockMobilePaymentsService.assertProviderConfirmsCallback.mockResolvedValue(undefined);
+
+      await processor.processFedaPayCallback(expiredCallback);
+
       // The failPendingAttempt method is called, which updates the transaction
-      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalled();
+      expect(mockMobilePaymentsService.assertProviderConfirmsCallback).toHaveBeenCalledWith(
+        expect.anything(),
+        'FAILED'
+      );
+      expect(mockDatabaseService.updateTransactionIfStatus).toHaveBeenCalledWith(
+        'tx-123',
+        'pending',
+        expect.objectContaining({ status: 'failed' })
+      );
     });
 
     it('ignores transaction.updated with non-terminal status (stays no-op)', async () => {
