@@ -60,12 +60,20 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
     );
     return r.rows[0].id;
   }
-  async function agent(first: string): Promise<string> {
+  async function agent(first: string, opts: { verified?: boolean; contract?: string | null } = {}): Promise<string> {
     const userId = await user(first);
     const r = await db.query(
-      `INSERT INTO agents (user_id, vehicle_type_id, is_verified) VALUES ($1, 'wheeler_2', true) RETURNING id`,
-      [userId]
+      `INSERT INTO agents (user_id, vehicle_type_id, is_verified) VALUES ($1, 'wheeler_2', $2) RETURNING id`,
+      [userId, opts.verified ?? true]
     );
+    const contract = opts.contract === undefined ? 'signed' : opts.contract;
+    if (contract) {
+      await db.query(
+        `INSERT INTO agent_contracts (agent_id, template_key, boldsign_template_id, boldsign_document_id, contract_number, status)
+         VALUES ($1, 'agent_v1', 'tpl', $2, $2, $3::contract_status_enum)`,
+        [r.rows[0].id, `doc-${process.pid}-${++seq}`, contract]
+      );
+    }
     return r.rows[0].id;
   }
   async function location(): Promise<{ id: string; owner: string }> {
@@ -268,6 +276,108 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
     expect(s.posting).toMatchObject({ status: 'open', accepted_count: 0 });
     expect(s.apps).toEqual({ [x]: 'applied', [y]: 'applied' });
     expect(s.assignments).toEqual([]);
+  });
+
+  describe('QA #613 N2/N3: re-checks under the lock', () => {
+    async function expectNothingWritten(p: string, x: string) {
+      const s = await snapshot(p);
+      expect(s.posting).toMatchObject({ status: 'open', accepted_count: 0 });
+      expect(s.apps[x]).toBe('applied');
+      expect(s.assignments).toEqual([]);
+    }
+
+    it('refuses when a posting slot was switched off at the store; an unrelated off slot does not matter', async () => {
+      const loc = await location();
+      const p = await posting(loc, 1, ['morning', 'evening']);
+      const x = await apply(p, await agent('Ana'));
+      await db.query(
+        `INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'afternoon', false)`,
+        [loc.id]
+      );
+      await db.query(
+        `INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'morning', true)`,
+        [loc.id]
+      );
+      const other = await location();
+      await db.query(
+        `INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'evening', false)`,
+        [other.id]
+      );
+      await db.query(
+        `INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'evening', false)`,
+        [loc.id]
+      );
+      await expect(accept(db, x, loc.owner)).rejects.toThrow(/dedicated_accept_slot_disabled/);
+      await expectNothingWritten(p, x);
+      await db.query(`UPDATE business_location_pickup_slots SET is_enabled = true WHERE business_location_id = $1 AND slot_key = 'evening'`, [loc.id]);
+      expect((await accept(db, x, loc.owner)).rows.find((r) => r.id === x)?.status).toBe('accepted');
+    });
+
+    it('a slot toggle racing the accept waits on the slot row lock', async () => {
+      const loc = await location();
+      await db.query(
+        `INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'morning', true)`,
+        [loc.id]
+      );
+      const p = await posting(loc, 1, ['morning']);
+      const x = await apply(p, await agent('Race'));
+      const c1 = await connect(dbName);
+      const c2 = await connect(dbName);
+      try {
+        await c1.query('BEGIN');
+        expect((await accept(c1, x, loc.owner)).rows.find((r) => r.id === x)?.status).toBe('accepted');
+        await c2.query(`SET lock_timeout = '300ms'`);
+        await expect(
+          c2.query(`UPDATE business_location_pickup_slots SET is_enabled = false WHERE business_location_id = $1`, [loc.id])
+        ).rejects.toThrow(/lock timeout/);
+        await c1.query('COMMIT');
+      } finally {
+        await c1.end();
+        await c2.end();
+      }
+    });
+
+    it.each([
+      ['not_verified', { verified: false }],
+      ['contract_unsigned', { contract: null }],
+      ['contract_unsigned', { contract: 'sent' }],
+    ] as const)('refuses an applicant who is %s (%o)', async (reason, opts) => {
+      const loc = await location();
+      const p = await posting(loc, 1, ['morning']);
+      const x = await apply(p, await agent('Nope', opts));
+      await expect(accept(db, x, loc.owner)).rejects.toThrow(new RegExp(`dedicated_accept_agent_ineligible: ${reason}`));
+      await expectNothingWritten(p, x);
+    });
+
+    it('refuses an applicant suspended after applying', async () => {
+      const loc = await location();
+      const p = await posting(loc, 1, ['morning']);
+      const a = await agent('Sus');
+      const x = await apply(p, a);
+      await db.query(`UPDATE agents SET status = 'suspended' WHERE id = $1`, [a]);
+      await expect(accept(db, x, loc.owner)).rejects.toThrow(/dedicated_accept_agent_ineligible: suspended/);
+      await expectNothingWritten(p, x);
+    });
+
+    it('does not require a contract when the global flag is off (country rows are ignored)', async () => {
+      const loc = await location();
+      const p = await posting(loc, 1, ['morning']);
+      const x = await apply(p, await agent('Free', { contract: null }));
+      const prev = await db.query(
+        `SELECT boolean_value FROM application_configurations WHERE config_key = 'agent_contract_required' AND country_code IS NULL`
+      );
+      try {
+        await db.query(
+          `UPDATE application_configurations SET boolean_value = false WHERE config_key = 'agent_contract_required' AND country_code IS NULL`
+        );
+        expect((await accept(db, x, loc.owner)).rows.find((r) => r.id === x)?.status).toBe('accepted');
+      } finally {
+        await db.query(
+          `UPDATE application_configurations SET boolean_value = $1 WHERE config_key = 'agent_contract_required' AND country_code IS NULL`,
+          [prev.rows[0]?.boolean_value ?? true]
+        );
+      }
+    });
   });
 
   it('an unknown application returns no rows', async () => {
