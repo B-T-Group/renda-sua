@@ -553,6 +553,7 @@ describe('S4 expiry (real processor + live FedaPay re-check)', () => {
     await processor.processFedaPayCallback(expiredEvent('transaction.expired'));
     expect(ledger.deposits).toHaveLength(1);
     expect(db.byId.get('tx-pending')?.status).toBe('success');
+    expect(anomalyTypes()).toEqual([]);
   });
 
   it('N3: expired and approved delivered concurrently -> exactly one credit (CAS + ledger key)', async () => {
