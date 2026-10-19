@@ -1,5 +1,34 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable, Logger } from '@nestjs/common';
+import { uuidOrNull } from '../common/uuid.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+
+export const CONFIRM_DELIVERY_WINDOW_MUTATION = `
+  mutation ConfirmDeliveryWindow($order_id: uuid!, $confirmed_by: uuid) {
+    update_delivery_time_windows(
+      where: { order_id: { _eq: $order_id } },
+      _set: {
+        is_confirmed: true,
+        confirmed_at: "now()",
+        confirmed_by: $confirmed_by
+      }
+    ) {
+      returning {
+        id
+        order_id
+        slot_id
+        preferred_date
+        time_slot_start
+        time_slot_end
+        is_confirmed
+        special_instructions
+        confirmed_at
+        confirmed_by
+        created_at
+        updated_at
+      }
+    }
+  }
+`;
 
 export interface DeliveryTimeWindow {
   id: string;
@@ -211,51 +240,42 @@ export class DeliveryWindowsService {
   /**
    * Confirm a delivery time window (business only)
    */
-  async confirmDeliveryWindow(orderId: string, confirmedBy: string): Promise<DeliveryTimeWindow> {
+  async confirmDeliveryWindow(
+    orderId: string,
+    confirmedBy?: string | null
+  ): Promise<DeliveryTimeWindow> {
     try {
-      const confirmQuery = `
-        mutation ConfirmDeliveryWindow($order_id: uuid!, $confirmed_by: uuid!) {
-          update_delivery_time_windows(
-            where: { order_id: { _eq: $order_id } },
-            _set: {
-              is_confirmed: true,
-              confirmed_at: "now()",
-              confirmed_by: $confirmed_by
-            }
-          ) {
-            returning {
-              id
-              order_id
-              slot_id
-              preferred_date
-              time_slot_start
-              time_slot_end
-              is_confirmed
-              special_instructions
-              confirmed_at
-              confirmed_by
-              created_at
-              updated_at
-            }
-          }
+      const confirmResponse = await this.hasuraSystemService.executeQuery(
+        CONFIRM_DELIVERY_WINDOW_MUTATION,
+        {
+          order_id: orderId,
+          confirmed_by: uuidOrNull(confirmedBy),
         }
-      `;
-
-      const confirmResponse = await this.hasuraSystemService.executeQuery(confirmQuery, {
-        order_id: orderId,
-        confirmed_by: confirmedBy,
-      });
-
-      const deliveryWindow = confirmResponse.update_delivery_time_windows?.returning?.[0];
-      if (!deliveryWindow) {
-        throw new Error('Delivery window not found');
-      }
-
-      return deliveryWindow;
+      );
+      return this.requireWindow(
+        confirmResponse.update_delivery_time_windows?.returning?.[0]
+      );
     } catch (error) {
-      this.logger.error('Failed to confirm delivery window:', error);
+      this.logConfirmFailure(error);
       throw error;
     }
+  }
+
+  private logConfirmFailure(error: unknown): void {
+    if (error instanceof HttpException && error.getStatus() < 500) {
+      return;
+    }
+    this.logger.error('Failed to confirm delivery window:', error);
+  }
+
+  private requireWindow(window?: DeliveryTimeWindow): DeliveryTimeWindow {
+    if (!window) {
+      throw new HttpException(
+        'Delivery window not found',
+        HttpStatus.NOT_FOUND
+      );
+    }
+    return window;
   }
 
   /**

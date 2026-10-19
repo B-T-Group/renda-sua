@@ -7,6 +7,12 @@ export function isUuid(value?: string | null): value is string {
   return !!value?.trim() && UUID_RE.test(value.trim());
 }
 
+/** UUID columns must not receive sentinels such as "system" or "anonymous". */
+export function uuidOrNull(value?: string | null): string | null {
+  const trimmed = value?.trim();
+  return isUuid(trimmed) ? trimmed : null;
+}
+
 export function requireUuid(value: string | undefined, fieldName: string): string {
   const trimmed = value?.trim();
   if (!isUuid(trimmed)) {

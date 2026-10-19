@@ -19,6 +19,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
+import { ReqContext } from '../auth/req-context.decorator';
+import type { RequestContext } from '../auth/request-context';
 import { DeliverySlotsService } from './delivery-slots.service';
 import type {
   CreateDeliveryWindowDto,
@@ -149,18 +151,7 @@ export class DeliveryWindowsController {
         message: 'Available delivery slots retrieved successfully',
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      const errorMessage = error.message || 'Failed to get available slots';
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.rethrowAsHttp(error, 'Failed to get available slots');
     }
   }
 
@@ -284,18 +275,7 @@ export class DeliveryWindowsController {
         message: 'Next available day retrieved successfully',
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      const errorMessage = error.message || 'Failed to get next available day';
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.rethrowAsHttp(error, 'Failed to get next available day');
     }
   }
 
@@ -335,14 +315,7 @@ export class DeliveryWindowsController {
         message: 'Delivery window created successfully',
       };
     } catch (error: any) {
-      const errorMessage = error.message || 'Failed to create delivery window';
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.rethrowAsHttp(error, 'Failed to create delivery window');
     }
   }
 
@@ -384,18 +357,7 @@ export class DeliveryWindowsController {
         message: 'Delivery window retrieved successfully',
       };
     } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-
-      const errorMessage = error.message || 'Failed to get delivery window';
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.rethrowAsHttp(error, 'Failed to get delivery window');
     }
   }
 
@@ -443,14 +405,7 @@ export class DeliveryWindowsController {
         message: 'Delivery window updated successfully',
       };
     } catch (error: any) {
-      const errorMessage = error.message || 'Failed to update delivery window';
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.rethrowAsHttp(error, 'Failed to update delivery window');
     }
   }
 
@@ -470,15 +425,15 @@ export class DeliveryWindowsController {
     status: 200,
     description: 'Delivery window confirmed successfully',
   })
-  async confirmDeliveryWindow(@Param('orderId') orderId: string) {
+  async confirmDeliveryWindow(
+    @Param('orderId') orderId: string,
+    @ReqContext() ctx: RequestContext
+  ) {
     try {
-      // TODO: Get confirmed_by from authenticated user
-      const confirmedBy = 'system'; // Placeholder - should come from auth context
-
       const deliveryWindow =
         await this.deliveryWindowsService.confirmDeliveryWindow(
           orderId,
-          confirmedBy
+          ctx.userId
         );
 
       return {
@@ -487,14 +442,7 @@ export class DeliveryWindowsController {
         message: 'Delivery window confirmed successfully',
       };
     } catch (error: any) {
-      const errorMessage = error.message || 'Failed to confirm delivery window';
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.rethrowAsHttp(error, 'Failed to confirm delivery window');
     }
   }
 
@@ -523,14 +471,18 @@ export class DeliveryWindowsController {
         message: 'Delivery window deleted successfully',
       };
     } catch (error: any) {
-      const errorMessage = error.message || 'Failed to delete delivery window';
-      throw new HttpException(
-        {
-          success: false,
-          error: errorMessage,
-        },
-        HttpStatus.INTERNAL_SERVER_ERROR
-      );
+      this.rethrowAsHttp(error, 'Failed to delete delivery window');
     }
+  }
+
+  private rethrowAsHttp(error: any, fallback: string): never {
+    if (error instanceof HttpException) {
+      throw error;
+    }
+    const message = error?.message || fallback;
+    throw new HttpException(
+      { success: false, error: message, message },
+      HttpStatus.INTERNAL_SERVER_ERROR
+    );
   }
 }

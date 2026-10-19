@@ -1,5 +1,10 @@
 import { HttpException, HttpStatus, UnauthorizedException } from '@nestjs/common';
-import { isUuid, requireAuthUserUuid, requireUuid } from './uuid.util';
+import {
+  isUuid,
+  requireAuthUserUuid,
+  requireUuid,
+  uuidOrNull,
+} from './uuid.util';
 
 describe('isUuid', () => {
   it('accepts a canonical UUID', () => {
@@ -17,6 +22,22 @@ describe('isUuid', () => {
     expect(isUuid('auth0|abc123')).toBe(false);
     expect(isUuid('auth0|test-phone|+24174000000')).toBe(false);
     expect(isUuid('HTTPS')).toBe(false);
+  });
+});
+
+describe('uuidOrNull', () => {
+  it('keeps a trimmed UUID', () => {
+    expect(uuidOrNull(' 11111111-1111-4111-8111-111111111111 ')).toBe(
+      '11111111-1111-4111-8111-111111111111'
+    );
+  });
+
+  it('drops system sentinels and other non-UUIDs', () => {
+    expect(uuidOrNull('system')).toBeNull();
+    expect(uuidOrNull('anonymous')).toBeNull();
+    expect(uuidOrNull('')).toBeNull();
+    expect(uuidOrNull(null)).toBeNull();
+    expect(uuidOrNull(undefined)).toBeNull();
   });
 });
 
