@@ -76,8 +76,10 @@ runs:
           return "${ec}"
         }
 
+        # --per-migration-transaction: each migration file commits in its own transaction
+        # (a pending batch no longer runs as one transaction holding every lock to the end).
         run_logged "hasura migrate apply" \
-          hasura migrate apply --database-name "${HASURA_DB_NAME}" --endpoint "${HASURA_ENDPOINT}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
+          hasura migrate apply --per-migration-transaction --database-name "${HASURA_DB_NAME}" --endpoint "${HASURA_ENDPOINT}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
 
         run_logged "hasura metadata apply" \
           hasura metadata apply --endpoint "${HASURA_ENDPOINT}" --admin-secret "${HASURA_GRAPHQL_ADMIN_SECRET}" --project .
