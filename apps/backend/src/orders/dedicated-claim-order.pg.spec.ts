@@ -132,6 +132,10 @@ suite('dedicated_claim_order (real Postgres, QA #607 N1/N4)', () => {
     const o = await order();
     await claim(db, o, a.id);
     await expect(claim(db, o, b.id)).resolves.toMatchObject({ rows: [] });
+    // Still ready_for_pickup but someone holds it: not claimable either.
+    const held = await order('ready_for_pickup', a.id);
+    await expect(claim(db, held, b.id)).resolves.toMatchObject({ rows: [] });
+    expect((await db.query(`SELECT assigned_agent_id FROM orders WHERE id = $1`, [held])).rows[0].assigned_agent_id).toBe(a.id);
   });
 
   it('auto-assign counts other live dedicated offers; an accept (countOffers=false) does not, and never its own', async () => {
