@@ -618,6 +618,110 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'missing_live_reference' });
     });
 
+    it('accepts a Hasura numeric string amount against a FedaPay number', async () => {
+      const tx = {
+        id: 'tx-decimal',
+        transaction_id: 'fedapay_tx_dec',
+        amount: '1000.00',
+        currency: 'XOF',
+        reference: 'REF333',
+        provider: 'fedapay',
+        status: 'pending',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF333',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
+      ).resolves.toBeUndefined();
+    });
+
+    it('still rejects a real amount mismatch when the stored amount is a numeric string', async () => {
+      const tx = {
+        id: 'tx-decimal-bad',
+        transaction_id: 'fedapay_tx_dec_bad',
+        amount: '1000.00',
+        currency: 'XOF',
+        reference: 'REF333',
+        provider: 'fedapay',
+        status: 'pending',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 999,
+        currency: 'XOF',
+        reference: 'REF333',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
+      ).rejects.toThrow(/amount[_ ]mismatch/i);
+    });
+
+    describe('#591 QA L1/L2: strict stored-amount parsing', () => {
+      const row = (amount: unknown) => ({
+        id: 'tx-strict',
+        transaction_id: 'fedapay_tx_strict',
+        amount,
+        currency: 'XOF',
+        reference: 'REF777',
+        provider: 'fedapay',
+        status: 'pending',
+      });
+      const live = (amount: number) =>
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+          status: 'approved',
+          amount,
+          currency: 'XOF',
+          reference: 'REF777',
+        });
+
+      it.each([
+        [1000, 1000],
+        ['1000', 1000],
+        ['1000.00', 1000],
+        ['1000.5', 1000.5],
+        [0, 0],
+        ['0', 0],
+      ])('accepts stored %p vs live %p', async (stored, liveAmount) => {
+        live(liveAmount);
+        await expect(
+          realService.assertProviderConfirmsCallback(row(stored) as any, 'SUCCESS')
+        ).resolves.toBeUndefined();
+      });
+
+      it.each([
+        ['', 0],
+        [' ', 0],
+        ['1e3', 1000],
+        ['0x3E8', 1000],
+        [' 1000', 1000],
+        ['-1000', 1000],
+        ['1000.', 1000],
+        [true, 1],
+        [[1000], 1000],
+        [NaN, 1000],
+        [Infinity, 1000],
+        ['999.99', 1000],
+      ])('treats stored %p vs live %p as a definite amount_mismatch', async (stored, liveAmount) => {
+        live(liveAmount as number);
+        await expect(
+          realService.assertProviderConfirmsCallback(row(stored) as any, 'SUCCESS')
+        ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'amount_mismatch' });
+      });
+
+      it.each([null, undefined])('L1: a %p stored amount is a mismatch, never a credit', async (stored) => {
+        live(1000);
+        await expect(
+          realService.assertProviderConfirmsCallback(row(stored) as any, 'SUCCESS')
+        ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'amount_mismatch' });
+      });
+    });
+
     it('should accept when all fields match', async () => {
       const tx = {
         id: 'tx-6',

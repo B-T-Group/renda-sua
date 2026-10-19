@@ -89,6 +89,18 @@ export interface MobilePaymentResponse {
   reason?: 'provider_ambiguous';
 }
 
+const STRICT_DECIMAL_AMOUNT = /^\d+(\.\d+)?$/;
+
+/** #591 QA L2: a finite number, or a plain decimal string; anything else is undefined. */
+export function parseStrictAmount(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string' && STRICT_DECIMAL_AMOUNT.test(value)) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
 /**
  * #592 QA L2: rows created before this cutoff may carry a FedaPay externalId that is the
  * MyPVit short hash of the stored reference. FEDAPAY_LEGACY_SHORT_REF_CUTOFF (ISO time, set per
@@ -392,7 +404,9 @@ export class MobilePaymentsService {
         if (live.amount === undefined || !Number.isFinite(live.amount)) {
           throw new LiveRecordIncompleteError(tx.id, 'amount');
         }
-        if (tx.amount !== undefined && live.amount !== tx.amount) {
+        // #591: Hasura can return numeric as a string ("1000.00") while FedaPay sends 1000.
+        // Strict parse (QA L2); a missing or unparseable stored amount is a mismatch (QA L1).
+        if (!this.fedapayAmountsEqual(tx.amount, live.amount)) {
           throw mismatch('amount_mismatch', `expected ${tx.amount}, live ${live.amount}`);
         }
         // live.reference = custom_metadata.externalId || FedaPay id; must equal ours exactly.
@@ -431,6 +445,17 @@ export class MobilePaymentsService {
         );
       }
     }
+  }
+
+  /**
+   * Strict numeric equality for the FedaPay amount check (#591, QA L1/L2). Only finite numbers
+   * or plain decimal strings (`^\d+(\.\d+)?$`, e.g. Hasura numeric "1000.00") are accepted;
+   * null, undefined, "", "1e3", "0x3E8", booleans and arrays never compare equal.
+   */
+  private fedapayAmountsEqual(expected: unknown, actual: unknown): boolean {
+    const left = parseStrictAmount(expected);
+    const right = parseStrictAmount(actual);
+    return left !== undefined && right !== undefined && left === right;
   }
 
   /**
