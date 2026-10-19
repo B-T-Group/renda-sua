@@ -1,6 +1,11 @@
 import type { GoogleDistanceService } from '../google/google-distance.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import { EligibleAgentsQueryService } from './eligible-agents-query.service';
+import type { ConfigService } from '@nestjs/config';
+import type { Configuration } from '../config/configuration';
+import {
+  EligibleAgentsQueryService,
+  isAgentLocationFresh,
+} from './eligible-agents-query.service';
 
 describe('EligibleAgentsQueryService', () => {
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
@@ -25,6 +30,10 @@ describe('EligibleAgentsQueryService', () => {
     return {
       latitude,
       longitude: 9,
+      updated_at:
+        'updated_at' in overrides
+          ? (overrides.updated_at as string | null)
+          : new Date().toISOString(),
       agent: {
         id: agentId,
         is_available: overrides.is_available ?? true,
@@ -177,5 +186,117 @@ describe('EligibleAgentsQueryService', () => {
       'both-cased',
     ]);
   });
-});
+  describe('GPS last-seen cutoff', () => {
+    const minutesAgo = (m: number) =>
+      new Date(Date.now() - m * 60 * 1000).toISOString();
 
+    function configWith(agentLocationMaxAgeMinutes: number) {
+      return {
+        get: jest.fn((key: string) =>
+          key === 'deliveryAvailability'
+            ? { enforceEnabled: true, agentLocationMaxAgeMinutes }
+            : undefined
+        ),
+      } as unknown as ConfigService<Configuration>;
+    }
+
+    it('applies no cutoff by default (config unset)', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        agent_locations: [
+          agentRow('days-old', 4.01, { updated_at: minutesAgo(3 * 24 * 60) }),
+        ],
+      });
+
+      const result = await service.findEligibleAgents({
+        originLat: 4,
+        originLon: 9,
+        targetCountry: 'CM',
+        targetState: 'Littoral',
+      });
+
+      expect(result.map((c) => c.agentId)).toEqual(['days-old']);
+    });
+
+    it('excludes agents with no GPS update in the last 30 minutes when configured to 30', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        agent_locations: [
+          agentRow('fresh', 4.01, { updated_at: minutesAgo(29) }),
+          agentRow('stale', 4.005, { updated_at: minutesAgo(31) }),
+          agentRow('days-old', 4.002, { updated_at: minutesAgo(3 * 24 * 60) }),
+          agentRow('no-timestamp', 4.001, { updated_at: null }),
+        ],
+      });
+      service = new EligibleAgentsQueryService(
+        hasuraSystemService,
+        {} as unknown as GoogleDistanceService,
+        undefined,
+        configWith(30)
+      );
+
+      const result = await service.findEligibleAgents({
+        originLat: 4,
+        originLon: 9,
+        targetCountry: 'CM',
+        targetState: 'Littoral',
+      });
+
+      expect(result.map((c) => c.agentId)).toEqual(['fresh']);
+    });
+
+    it('reads the cutoff from deliveryAvailability.agentLocationMaxAgeMinutes', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        agent_locations: [
+          agentRow('ten-min', 4.01, { updated_at: minutesAgo(10) }),
+          agentRow('four-min', 4.02, { updated_at: minutesAgo(4) }),
+        ],
+      });
+      service = new EligibleAgentsQueryService(
+        hasuraSystemService,
+        {} as unknown as GoogleDistanceService,
+        undefined,
+        configWith(5)
+      );
+
+      const result = await service.findEligibleAgents({
+        originLat: 4,
+        originLon: 9,
+        targetCountry: 'CM',
+        targetState: 'Littoral',
+      });
+
+      expect(result.map((c) => c.agentId)).toEqual(['four-min']);
+    });
+
+    it('disables the cutoff when configured to 0', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        agent_locations: [
+          agentRow('old', 4.01, { updated_at: minutesAgo(600) }),
+        ],
+      });
+      service = new EligibleAgentsQueryService(
+        hasuraSystemService,
+        {} as unknown as GoogleDistanceService,
+        undefined,
+        configWith(0)
+      );
+
+      const result = await service.findEligibleAgents({
+        originLat: 4,
+        originLon: 9,
+        targetCountry: 'CM',
+        targetState: 'Littoral',
+      });
+
+      expect(result.map((c) => c.agentId)).toEqual(['old']);
+    });
+
+    it('isAgentLocationFresh treats the boundary as fresh and bad input as stale', () => {
+      const now = Date.parse('2026-10-18T12:00:00.000Z');
+      expect(isAgentLocationFresh('2026-10-18T11:30:00.000Z', 30, now)).toBe(true);
+      expect(isAgentLocationFresh('2026-10-18T11:29:59.000Z', 30, now)).toBe(false);
+      expect(isAgentLocationFresh('not-a-date', 30, now)).toBe(false);
+      expect(isAgentLocationFresh(undefined, 30, now)).toBe(false);
+      expect(isAgentLocationFresh(undefined, 0, now)).toBe(true);
+    });
+  });
+});
