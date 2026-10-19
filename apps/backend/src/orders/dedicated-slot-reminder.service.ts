@@ -108,6 +108,19 @@ const RECIPIENT_LOCALES_QUERY = `
 export const SLOT_REMINDER_SENDS_PKEY = 'dedicated_slot_reminder_sends_pkey';
 
 /** Returns null when this agent already got the slot's reminder (primary key conflict). */
+/** QA #608 N2: give the claim back when the in-app reminder wasn't written, so a later callback retries. */
+const UNCLAIM_SEND_MUTATION = `
+  mutation UnclaimDedicatedSlotReminder(
+    $locationId: uuid!, $slotKey: String!, $slotDate: date!, $agentId: uuid!
+  ) {
+    delete_dedicated_slot_reminder_sends_by_pk(
+      business_location_id: $locationId, slot_key: $slotKey, slot_date: $slotDate, agent_id: $agentId
+    ) {
+      agent_id
+    }
+  }
+`;
+
 const CLAIM_SEND_MUTATION = `
   mutation ClaimDedicatedSlotReminder($object: dedicated_slot_reminder_sends_insert_input!) {
     insert_dedicated_slot_reminder_sends_one(
@@ -211,7 +224,7 @@ export class DedicatedSlotReminderService {
       });
       // Claim before the push: at most one reminder per agent and slot.
       if (!(await this.claimSend(order, slot, t))) continue;
-      await this.notificationsService.sendDedicatedAgentNotice({
+      const delivered = await this.notificationsService.sendDedicatedAgentNotice({
         userId: t.userId,
         title: msg.title,
         body: msg.body,
@@ -222,6 +235,11 @@ export class DedicatedSlotReminderService {
         persona: 'agent',
         locationId: order.business_location_id,
       });
+      if (!delivered) {
+        // QA #608 N2: no in-app row -> unclaim, so the next callback for the group retries.
+        await this.unclaimSend(order, slot, t.agentId);
+        continue;
+      }
       emitServerSiteEvent(this.siteEventsService, 'dedicated.slot_reminder_sent', {
         orderId: order.id,
         agentId: t.agentId,
@@ -310,6 +328,24 @@ export class DedicatedSlotReminderService {
       return new Map((res?.users ?? []).map((u) => [u.id, u.preferred_language]));
     } catch {
       return new Map();
+    }
+  }
+
+  private async unclaimSend(order: ReminderOrder, slot: ResolvedDedicatedSlot, agentId: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(UNCLAIM_SEND_MUTATION, {
+        locationId: order.business_location_id,
+        slotKey: slot.slotKey,
+        slotDate: slot.date,
+        agentId,
+      });
+      this.logger.warn(`Dedicated slot reminder for agent ${agentId} (${slot.slotKey} ${slot.date}) not written; unclaimed for retry`);
+    } catch (error: unknown) {
+      this.logger.error(
+        `Dedicated slot reminder unclaim failed for agent ${agentId} (${slot.slotKey} ${slot.date}): ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 

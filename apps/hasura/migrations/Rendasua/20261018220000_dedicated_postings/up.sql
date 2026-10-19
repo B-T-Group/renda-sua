@@ -34,6 +34,8 @@ DECLARE
   v_posting_id uuid;
   post public.dedicated_agent_postings%ROWTYPE;
   app public.dedicated_agent_applications%ROWTYPE;
+  ag public.agents%ROWTYPE;
+  v_contract_required boolean;
   v_now timestamptz := now();
 BEGIN
   SELECT a.posting_id INTO v_posting_id
@@ -61,6 +63,50 @@ BEGIN
      ) THEN
     RETURN QUERY SELECT * FROM public.dedicated_agent_applications WHERE id = p_application_id;
     RETURN;
+  END IF;
+
+  -- QA #613 N2: a slot the business switched off since posting (AC-B4) is refused.
+  -- The settings rows are locked FOR SHARE so a concurrent toggle (whose predicate
+  -- pause then sees these assignments) waits for this accept.
+  PERFORM 1
+     FROM public.business_location_pickup_slots b
+     JOIN public.dedicated_agent_posting_slots s ON s.slot_key = b.slot_key AND s.posting_id = post.id
+    WHERE b.business_location_id = post.business_location_id
+      FOR SHARE OF b;
+  IF EXISTS (
+    SELECT 1
+      FROM public.business_location_pickup_slots b
+      JOIN public.dedicated_agent_posting_slots s ON s.slot_key = b.slot_key AND s.posting_id = post.id
+     WHERE b.business_location_id = post.business_location_id
+       AND b.is_enabled = false
+  ) THEN
+    RAISE EXCEPTION 'dedicated_accept_slot_disabled: posting % has a slot the store turned off', post.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+
+  -- QA #613 N3: the applicant must still be verified, not suspended and under contract.
+  -- Agent row lock (FOR NO KEY UPDATE, the cap trigger's lock): a concurrent suspension
+  -- (UPDATE agents) is serialised with this check.
+  SELECT * INTO ag FROM public.agents WHERE id = app.agent_id FOR NO KEY UPDATE;
+  IF NOT FOUND OR ag.is_verified IS DISTINCT FROM true THEN
+    RAISE EXCEPTION 'dedicated_accept_agent_ineligible: not_verified' USING ERRCODE = 'check_violation';
+  END IF;
+  IF ag.status = 'suspended' THEN
+    RAISE EXCEPTION 'dedicated_accept_agent_ineligible: suspended' USING ERRCODE = 'check_violation';
+  END IF;
+  -- Same rule as AgentContractGateService: required unless the global flag is set false.
+  SELECT COALESCE((
+    SELECT c.boolean_value
+      FROM public.application_configurations c
+     WHERE c.config_key = 'agent_contract_required'
+       AND c.status = 'active'
+       AND c.country_code IS NULL
+     LIMIT 1
+  ), true) INTO v_contract_required;
+  IF v_contract_required AND NOT EXISTS (
+    SELECT 1 FROM public.agent_contracts k WHERE k.agent_id = ag.id AND k.status = 'signed'
+  ) THEN
+    RAISE EXCEPTION 'dedicated_accept_agent_ineligible: contract_unsigned' USING ERRCODE = 'check_violation';
   END IF;
 
   INSERT INTO public.dedicated_agent_assignments (

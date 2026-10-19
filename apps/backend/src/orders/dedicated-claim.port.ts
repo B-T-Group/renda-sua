@@ -9,6 +9,13 @@ export interface ClaimAssignment {
   dedicatedAssignmentId: string | null;
   /** dedicated_auto: until when the agent may hand the order back (PR 6). */
   releaseUntil?: string | null;
+  /**
+   * QA #607 N1: the market's per-agent order cap. When set, the claim runs as
+   * `dedicated_claim_order` (agent row lock + count + assign in one transaction).
+   */
+  maxActiveOrders?: number;
+  /** Count the agent's other live dedicated offers too (auto-assign); an accept doesn't (QA #607 N4). */
+  countOffers?: boolean;
 }
 
 /** What the dedicated dispatch needs from the claim core (OrdersService.claimOrderForAgent). */

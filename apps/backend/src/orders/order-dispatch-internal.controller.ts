@@ -14,6 +14,7 @@ import {
   DedicatedSlotReminderService,
   type SlotReminderOutcome,
 } from './dedicated-slot-reminder.service';
+import { internalKeyMatches } from './internal-key.util';
 import { OrderOffersService } from './order-offers.service';
 
 @ApiTags('Orders')
@@ -31,7 +32,7 @@ export class OrderDispatchInternalController {
       this.configService.get<Configuration['notificationsInternal']>(
         'notificationsInternal'
       )?.apiKey ?? '';
-    if (!expected || internalKey !== expected) {
+    if (!internalKeyMatches(internalKey, expected)) {
       throw new UnauthorizedException();
     }
   }

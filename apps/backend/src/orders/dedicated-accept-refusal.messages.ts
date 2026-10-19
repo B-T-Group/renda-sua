@@ -55,6 +55,10 @@ const RELEASE_REFUSAL_COPY: Record<DedicatedReleaseRefusal, { en: string; fr: st
     en: 'We could not release this order. Please try again.',
     fr: "Nous n'avons pas pu libérer cette commande. Veuillez réessayer.",
   },
+  release_lost: {
+    en: 'This order was released and another courier has taken it.',
+    fr: 'Cette commande a été libérée et un autre livreur l’a prise.',
+  },
 };
 
 /** #594 PR 6: the release refusal in the agent's saved language (default language otherwise). */

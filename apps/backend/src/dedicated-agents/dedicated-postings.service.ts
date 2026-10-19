@@ -62,7 +62,38 @@ export const DEDICATED_POSTING_ERRORS = {
   expired: 'posting_expired',
   applicationNotPending: 'application_not_pending',
   holdsSlot: 'agent_holds_slot',
+  /** QA #613 N3: the applicant is no longer verified, is suspended, or has no signed contract. */
+  agentIneligible: 'agent_ineligible',
 } as const;
+
+/**
+ * QA #613 N2/N3: the accept function refuses (nothing written) when a posting slot
+ * was switched off or the applicant is no longer eligible; mapped to 409.
+ */
+export function acceptCheckRefusal(error: unknown): ConflictException | null {
+  const e = error as { message?: unknown; response?: { errors?: unknown } } | null;
+  let text = typeof e?.message === 'string' ? e.message : '';
+  try {
+    if (e?.response?.errors) text += ` ${JSON.stringify(e.response.errors)}`;
+  } catch {
+    // ignore
+  }
+  if (text.includes('dedicated_accept_slot_disabled')) {
+    return new ConflictException({
+      code: DEDICATED_POSTING_ERRORS.slotDisabled,
+      message: 'The store has turned off one of this posting\'s slots',
+    });
+  }
+  const m = /dedicated_accept_agent_ineligible: (not_verified|suspended|contract_unsigned)/.exec(text);
+  if (m) {
+    return new ConflictException({
+      code: DEDICATED_POSTING_ERRORS.agentIneligible,
+      reason: m[1],
+      message: 'This agent can no longer be accepted; choose another applicant',
+    });
+  }
+  return null;
+}
 
 export interface PostingRow {
   id: string;
@@ -433,7 +464,9 @@ export class DedicatedPostingsService {
       this.hasuraSystemService.executeMutation<{
         dedicated_accept_application: Array<{ id: string; agent_id: string; status: string }>;
       }>(ACCEPT_DEDICATED_APPLICATION_MUTATION, { applicationId, actorUserId: actor.userId })
-    );
+    ).catch((error: unknown) => {
+      throw acceptCheckRefusal(error) ?? error;
+    });
     const rows = res?.dedicated_accept_application ?? [];
     const mine = rows.find((r) => r.id === applicationId);
     if (mine?.status !== 'accepted') {
