@@ -279,6 +279,8 @@ describe('Security: Error Sanitization & Phone Masking', () => {
           apiUrl: 'https://test.mypvit.com',
           merchantCode: 'TEST',
           secretKey: 'sk_test_SECRET',
+          airtelMerchantOperationAccountCode: 'ACC_T1',
+          moovMerchantOperationAccountCode: 'ACC_T2',
         })),
       };
 

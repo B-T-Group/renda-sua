@@ -123,7 +123,7 @@ describe('FedaPayService call sites (DEV mock mode, no SDK calls)', () => {
 describe('MyPVitService call sites', () => {
   function mypvit() {
     const svc = new MyPVitService(
-      config('mypvit', { baseUrl: 'https://mypvit.test', airtelSecretKey: SECRET, moovSecretKey: SECRET })
+      config('mypvit', { baseUrl: 'https://mypvit.test', airtelSecretKey: SECRET, moovSecretKey: SECRET, airtelMerchantOperationAccountCode: 'ACC_T1', moovMerchantOperationAccountCode: 'ACC_T2' })
     );
     const post = jest.fn();
     (svc as any).httpClient = { post, get: jest.fn() };
@@ -154,7 +154,7 @@ describe('MyPVitService call sites', () => {
 describe('MyPVitService response interceptor (L2, real axios instance)', () => {
   function realMypvit() {
     const svc = new MyPVitService(
-      config('mypvit', { baseUrl: 'https://mypvit.test', airtelSecretKey: SECRET, moovSecretKey: SECRET })
+      config('mypvit', { baseUrl: 'https://mypvit.test', airtelSecretKey: SECRET, moovSecretKey: SECRET, airtelMerchantOperationAccountCode: 'ACC_T1', moovMerchantOperationAccountCode: 'ACC_T2' })
     );
     const handlers = (svc as any).httpClient.interceptors.response.handlers;
     return { fulfilled: handlers[0].fulfilled, rejected: handlers[0].rejected };

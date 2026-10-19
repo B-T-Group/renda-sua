@@ -71,36 +71,47 @@ POST /mobile-payments/initiate
 GET /mobile-payments/balance?provider=mypvit
 ```
 
-#### Secret Refresh Webhook Callback
+#### Secret Refresh Webhook Callback (MyPVit "URL de réception de clé secrète")
 
 ```http
-POST /mobile-payments/callback/secret-refresh?provider=mypvit
+POST /mobile-payments/secret-refresh/<MYPVIT_SECRET_REFRESH_TOKEN>
 ```
 
-**Request Body:**
+Overwrites the live MyPVit operation-account secret, so it fails closed:
+
+- **Token in the URL:** register the URL above, with the token as its last path segment, in the MyPVit portal (Paramétrages → Urls → "Réception de clé secrète"). MyPVit documents no signature or custom header for this call.
+  - Store the token in Secrets Manager as `MYPVIT_SECRET_REFRESH_TOKEN`: at least 32 random characters, e.g. `openssl rand -base64 48 | tr -d '/+=' | cut -c1-48`.
+  - It is compared in constant time (SHA-256 of both sides, then `timingSafeEqual`).
+- **Source IP:** `req.ip` must be one of MyPVit's documented IPs (`176.31.65.18`, `176.31.65.20`, `176.31.65.21`, `13.59.249.167`, from docs.mypvit.pro "liste blanche").
+  - Override with `MYPVIT_SECRET_REFRESH_ALLOWED_IPS` (comma separated). An empty or blank override falls back to the documented list; it never means "allow all".
+  - Exact IPv4 match only: no CIDR ranges and no IPv6 (an IPv4-mapped `::ffff:a.b.c.d` is normalised to `a.b.c.d`).
+  - `req.ip` is only trustworthy with `trust proxy = 1` (one hop: the Lightsail load balancer). The backend refuses to start in production if `TRUST_PROXY` resolves to anything else; leave it unset or set it to `1`.
+- **One answer for every auth failure:** the IP check and the token compare always both run, and an unconfigured token, a non-allow-listed IP and a wrong token all return the same `401 {"success":false,"message":"Unauthorized"}`. The reason (and the caller IP) goes to the log only.
+- **Account codes:** `MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE` and `MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE` must be set. There is no fallback in code: `MyPVitService` throws at construction, so **the backend fails at boot** when either is missing or blank. Identical codes mean one MyPVit account with one secret (DEV's sandbox config uses one account for both). Outside production they boot with a warning, and this webhook stores the delivered key under **both** `AIRTEL_MYPVIT_SECRET_KEY` and `MOOV_MYPVIT_SECRET_KEY` in a single Secrets Manager write. **In production** (`NODE_ENV` or `DEPLOYMENT_ENV` = `production`) identical codes are a misconfiguration and **fail boot**.
+- **Secret name:** `MYPVIT_SECRET_NAME` wins if set. Otherwise the same rule as `main.ts`: `DEPLOYMENT_ENV` (then `NODE_ENV`) equal to `production` gives `production-rendasua-backend-secrets`; anything else gives `development-rendasua-backend-secrets`. The webhook writer and `MyPVitService`'s reader use the same function.
+- **Old URL:** the unauthenticated `POST /mobile-payments/secret-refresh` always returns 401.
+
+**Request body.** docs.mypvit.pro documents the renewed secret as `SyncSecretKeyResponse { operation_account_code, secret, expires_in }` (the synchronous v2 `renew-secret` response). The body MyPVit pushes to the reception URL after the v1 `renew-secret` call (the one our refresh Lambdas make) is not documented, and this handler historically read `merchant_operation_account_code` / `secret_key`. Both spellings are accepted; the documented one wins when both are non-empty:
 
 ```json
-{
-  "operation_account_code": "ACC_672CD66E148BD",
-  "secret_key": "sk_live_xxx",
-  "expires_in": 3600
-}
+{ "operation_account_code": "ACC_xxx", "secret": "sk_live_xxx", "expires_in": 3600 }
+{ "merchant_operation_account_code": "ACC_xxx", "secret_key": "sk_live_xxx", "expires_in": 3600 }
 ```
 
-**Response:**
+**Responses:**
+- `200 { "success": true, "data": { "updated_at": "…" } }`. It echoes nothing about the secret store.
+- 401: any auth failure (token missing/wrong/unconfigured, or IP not allowed), identical body.
+- 400: invalid payload (missing/blank/oversized secret, missing account code) or unknown account code.
+- 503: account codes missing at request time (defence in depth; boot already fails without them). Identical codes are not an error: the key is stored under both names.
+- 500: store failure, with a generic body; only the error class name is logged.
 
-```json
-{
-  "success": true,
-  "data": {
-    "message": "Secret key updated successfully",
-    "secretName": "development-rendasua-backend-secrets",
-    "operation_account_code": "ACC_672CD66E148BD",
-    "expires_in": 3600,
-    "updated_at": "2024-01-01T00:00:00.000Z"
-  }
-}
-```
+**Deploy runbook (do these in order):**
+1. In Secrets Manager (`production-rendasua-backend-secrets`; `development-…` for DEV) set `MYPVIT_SECRET_REFRESH_TOKEN` (≥32 random chars) and both account codes. Production: Airtel `ACC_68B8C1E5663B4`, Moov `ACC_68F90896204C1`. Check that `TRUST_PROXY` is absent or `1`. Without the codes the new build will not boot.
+2. Deploy the backend. Confirm it started (no "MyPVit misconfigured" / "Refusing to start: trust proxy" in the logs).
+3. In the MyPVit portal, update the reception URL code `BQ1TV` (prod; `TRUVU` on DEV) to `https://<api-host>/api/mobile-payments/secret-refresh/<token>`.
+4. Invoke the `refresh-airtel-…` and `refresh-moov-…` Lambdas once by hand.
+5. Confirm the backend log line `MyPVit secret refresh stored AIRTEL_MYPVIT_SECRET_KEY` (and `MOOV_…`) and that a MyPVit status call still works. With identical codes (DEV) it is one line: `stored AIRTEL_MYPVIT_SECRET_KEY and MOOV_MYPVIT_SECRET_KEY`.
+6. Rollback: redeploy the previous image and point `BQ1TV` back to `/api/mobile-payments/secret-refresh`. The secrets already stored stay valid; only the new token entry becomes unused.
 
 #### Perform KYC
 
