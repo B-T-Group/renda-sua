@@ -25,8 +25,26 @@ const REDACTED = '[REDACTED]';
 const MAX_DEPTH = 6;
 
 /** redactSecrets plus credential query parameters, for anything that may hold a URL. */
+/**
+ * #588 QA S1: personal data in error text (Hasura `Key (phone_number)=(+228…)`, provider
+ * bodies). Emails; E.164 numbers (`+` and 8–15 digits, optional single space/dot/dash
+ * separators); and any standalone run of 8+ digits (local phone numbers; runs inside hex ids/UUIDs are left alone). Linear patterns only.
+ */
+const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+const E164_PHONE = /\+\d(?:[ .-]?\d){7,14}(?!\d)/g;
+const LOCAL_DIGIT_RUN = /(?<![A-Za-z0-9])\d{8,}(?![A-Za-z0-9])/g;
+export const REDACTED_EMAIL = '[REDACTED_EMAIL]';
+export const REDACTED_PHONE = '[REDACTED_PHONE]';
+
+export function maskPersonalData(value: string): string {
+  return value
+    .replace(EMAIL, REDACTED_EMAIL)
+    .replace(E164_PHONE, REDACTED_PHONE)
+    .replace(LOCAL_DIGIT_RUN, REDACTED_PHONE);
+}
+
 export function redactSentryString(value: string): string {
-  return redactSecrets(value).replace(SENSITIVE_QUERY_PARAM, `$1${REDACTED}`);
+  return maskPersonalData(redactSecrets(value).replace(SENSITIVE_QUERY_PARAM, `$1${REDACTED}`));
 }
 
 /**

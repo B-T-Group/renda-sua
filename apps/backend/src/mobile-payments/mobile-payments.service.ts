@@ -89,6 +89,42 @@ export interface MobilePaymentResponse {
   reason?: 'provider_ambiguous';
 }
 
+const STRICT_DECIMAL_AMOUNT = /^\d+(\.\d+)?$/;
+
+/** #591 QA L2: a finite number, or a plain decimal string; anything else is undefined. */
+export function parseStrictAmount(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string' && STRICT_DECIMAL_AMOUNT.test(value)) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * #592 QA L2: rows created before this cutoff may carry a FedaPay externalId that is the
+ * MyPVit short hash of the stored reference. FEDAPAY_LEGACY_SHORT_REF_CUTOFF (ISO time, set per
+ * environment to #592's deploy time) enables it. Unset or unparseable: legacy matching is
+ * disabled (fail closed).
+ */
+export function fedapayLegacyShortRefCutoffMs(
+  env: Record<string, string | undefined> = process.env
+): number | undefined {
+  const configured = env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF?.trim();
+  const parsed = configured ? Date.parse(configured) : NaN;
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function isLegacyFedaPayShortRefRow(
+  tx: { payment_entity?: string | null; created_at?: string | null },
+  cutoffMs: number | undefined = fedapayLegacyShortRefCutoffMs()
+): boolean {
+  if (cutoffMs === undefined) return false;
+  if (tx.payment_entity !== 'order_deposit') return false;
+  const createdMs = tx.created_at ? Date.parse(tx.created_at) : NaN;
+  return Number.isFinite(createdMs) && createdMs < cutoffMs;
+}
+
 /** FedaPay live amount: a finite number (or numeric string), else undefined (QA #587 A1). */
 export function liveFedaPayAmount(value: unknown): number | undefined {
   const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
@@ -269,6 +305,8 @@ export class MobilePaymentsService {
       amount?: number;
       currency?: string | null;
       reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
       transaction_type?: string | null;
     },
     claimed: 'SUCCESS' | 'FAILED'
@@ -317,6 +355,8 @@ export class MobilePaymentsService {
       amount?: number;
       currency?: string | null;
       reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
     },
     claimed: 'SUCCESS' | 'FAILED',
     live: MobileTransactionStatus
@@ -364,7 +404,9 @@ export class MobilePaymentsService {
         if (live.amount === undefined || !Number.isFinite(live.amount)) {
           throw new LiveRecordIncompleteError(tx.id, 'amount');
         }
-        if (tx.amount !== undefined && live.amount !== tx.amount) {
+        // #591: Hasura can return numeric as a string ("1000.00") while FedaPay sends 1000.
+        // Strict parse (QA L2); a missing or unparseable stored amount is a mismatch (QA L1).
+        if (!this.fedapayAmountsEqual(tx.amount, live.amount)) {
           throw mismatch('amount_mismatch', `expected ${tx.amount}, live ${live.amount}`);
         }
         // live.reference = custom_metadata.externalId || FedaPay id; must equal ours exactly.
@@ -374,7 +416,8 @@ export class MobilePaymentsService {
         if (!live.reference) {
           throw mismatch('missing_live_reference', 'live record has no reference (fail closed)');
         }
-        if (live.reference !== tx.reference) {
+        // #592: also accepts the MyPVit short hash of the stored reference (in-flight deposits).
+        if (!this.fedapayReferenceMatches(tx, live.reference)) {
           throw mismatch('reference_mismatch', `expected ${tx.reference}, live ${live.reference}`);
         }
       }
@@ -395,13 +438,54 @@ export class MobilePaymentsService {
       if (!tx.reference?.trim()) {
         throw mismatch('missing_stored_reference', 'stored row has no reference (fail closed)');
       }
-      if (live.reference !== tx.reference) {
+      if (!this.fedapayReferenceMatches(tx, live.reference)) {
         throw mismatch(
           'reference_mismatch',
           `expected ${tx.reference}, live ${live.reference || '<missing>'}`
         );
       }
     }
+  }
+
+  /**
+   * Strict numeric equality for the FedaPay amount check (#591, QA L1/L2). Only finite numbers
+   * or plain decimal strings (`^\d+(\.\d+)?$`, e.g. Hasura numeric "1000.00") are accepted;
+   * null, undefined, "", "1e3", "0x3E8", booleans and arrays never compare equal.
+   */
+  private fedapayAmountsEqual(expected: unknown, actual: unknown): boolean {
+    const left = parseStrictAmount(expected);
+    const right = parseStrictAmount(actual);
+    return left !== undefined && right !== undefined && left === right;
+  }
+
+  /**
+   * FedaPay custom_metadata.externalId must equal this row's stored reference.
+   *
+   * Legacy (#592 QA L2): before #592, deposit create/retry stored the long reference but sent
+   * MyPVit's short hash to FedaPay. The short-hash match is accepted only for `order_deposit`
+   * rows created before FEDAPAY_LEGACY_SHORT_REF_CUTOFF (disabled when unset), and every use logs `fedapay_legacy_short_ref_matched` so
+   * the fallback can be removed once no such rows remain in flight (FedaPay expires
+   * collections after ~24h). Empty stored or live references never match (QA L1).
+   */
+  private fedapayReferenceMatches(
+    tx: {
+      id: string;
+      reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
+    },
+    live: string | null | undefined
+  ): boolean {
+    const stored = tx.reference?.trim();
+    if (!stored) return false;
+    if (!live) return false;
+    if (live === stored) return true;
+    if (!isLegacyFedaPayShortRefRow(tx)) return false;
+    if (live !== buildShortReferenceForMyPVit(stored)) return false;
+    this.logger.warn(
+      `fedapay_legacy_short_ref_matched tx=${tx.id} payment_entity=${tx.payment_entity}`
+    );
+    return true;
   }
 
   /** Account withdrawals (GIVE_CHANGE): valid CM, GA, or TG MSISDN. */

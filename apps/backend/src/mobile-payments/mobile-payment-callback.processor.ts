@@ -756,35 +756,25 @@ export class MobilePaymentCallbackProcessor {
     );
   }
 
+  /**
+   * True only when the live record passes the same strict SUCCESS check used to credit
+   * (status, amount #591, currency, reference #592 incl. its scoped legacy rule). Anything
+   * else (missing stored or live reference, amount/currency mismatch, transient, incomplete,
+   * read failure, mock) returns false so the alert fires: fail toward alerting.
+   */
   private async isLiveFedaPayStillApproved(
     tx: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<boolean> {
     if (this.skipsLiveRecheck(tx)) return false;
     const recheck = this.withFedaPayRecheckId(tx, callbackData);
-    const providerTxId = recheck.transaction_id?.trim();
-    if (!providerTxId) return false;
+    if (!recheck.transaction_id?.trim()) return false;
     try {
-      const live = await this.mobilePaymentsService.checkTransactionStatus(
-        providerTxId,
-        'fedapay',
-        recheck.customer_phone ?? undefined,
-        recheck.transaction_type === 'GIVE_CHANGE'
-      );
-      return this.liveCollectStillApproved(tx, live);
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(recheck, 'SUCCESS');
+      return true;
     } catch {
       return false;
     }
-  }
-
-  private liveCollectStillApproved(
-    tx: MobilePaymentTransaction,
-    live: { status: string; reference?: string | null }
-  ): boolean {
-    if (live.status !== 'success') return false;
-    const stored = tx.reference?.trim();
-    const liveRef = live.reference?.trim();
-    return !stored || !liveRef || stored === liveRef;
   }
 
   /** Order attempt we cancelled to make room for a retry (or a late winner), #545. */

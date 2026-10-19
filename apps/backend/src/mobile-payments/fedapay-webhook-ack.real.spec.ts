@@ -686,6 +686,20 @@ describe('N1: a failure event after we credited raises fedapay_failure_after_cre
     expect(anomalies()[0][1]).toBe('fedapay_failure_after_credit');
   });
 
+  it.each([
+    ['stored reference missing', { reference: null }, {}],
+    ['stored reference blank', { reference: '   ' }, {}],
+    ['live externalId missing', {}, { custom_metadata: {} }],
+    ['live amount differs', {}, { amount: 6000 }],
+    ['live currency differs', {}, { currency: { iso: 'XAF' } }],
+  ])('live approved but %s still alerts (fail toward alerting)', async (_label, rowOver, liveOver) => {
+    const { entityId, controller } = build({ status: 'success', ...(rowOver as Row) });
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, liveOver as Row));
+    const res = await controller.fedapayCallback(signedRequest(entityId, 'declined'));
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(anomalies().filter((a) => a[1] === 'fedapay_failure_after_credit')).toHaveLength(1);
+  });
+
   it('a live read failure still alerts (fail closed) and answers 2xx', async () => {
     const { entityId, row, db, controller } = build({ status: 'success' });
     (Transaction.retrieve as jest.Mock).mockRejectedValue(new Error('fedapay timeout'));
