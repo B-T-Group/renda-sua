@@ -375,7 +375,7 @@ describe('OrdersService', () => {
             getOfferDetailsForAgent: jest.fn(),
             getPendingOfferForAgent: jest.fn(),
             getActiveOfferForAgent: jest.fn(),
-            markOfferExpired: jest.fn(),
+            markOfferLost: jest.fn(),
             cancelAllOffers: jest.fn().mockResolvedValue(undefined),
           },
         },
@@ -5031,7 +5031,7 @@ describe('OrdersService', () => {
       const offers = {
         getActiveOfferForAgent: jest.fn().mockResolvedValue({ id: 'offer-1', expires_at: 'x', offer_kind: 'dedicated' }),
         dedicatedAcceptAssignment: jest.fn().mockResolvedValue({ source: 'dedicated_offer', dedicatedAssignmentId: 'as-9' }),
-        markOfferExpired: jest.fn(),
+        markOfferLost: jest.fn(),
       };
       loose().orderOffersService = offers;
       const assign = jest.spyOn(loose(), 'assignOrderToAgent').mockResolvedValue({ id: 'order-123' });
@@ -5045,6 +5045,103 @@ describe('OrdersService', () => {
         source: 'dedicated_offer',
         dedicatedAssignmentId: 'as-9',
       });
+    });
+
+    describe('#594 DEV QA N1: an open-pool claim while holding a live dedicated offer', () => {
+      const stampOffer = { source: 'dedicated_offer' as const, dedicatedAssignmentId: 'as-9', maxActiveOrders: 2, countOffers: false };
+      const offers = (kind: string | null, accept: () => Promise<unknown>) => {
+        loose().orderOffersService = {
+          getActiveOfferForAgent: jest.fn().mockResolvedValue(kind ? { id: 'of-1', expires_at: 'x', offer_kind: kind } : null),
+          dedicatedAcceptAssignment: jest.fn(accept),
+          handleOrderAssigned: jest.fn(),
+        };
+        return loose().orderOffersService;
+      };
+
+      it('goes through the dedicated re-check and the capped claim, and is stamped dedicated_offer', async () => {
+        arrangeClaim({ holdAmount: 0, balance: 0 });
+        jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+        const svc = offers('dedicated', async () => stampOffer);
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockImplementation(async (q: string) => (String(q).includes('DedicatedClaimOrder') ? claimed : assigned));
+        await service.claimOrder({ orderId: 'order-123' });
+        expect(svc.dedicatedAcceptAssignment).toHaveBeenCalledWith('order-123', 'agent-123');
+        expect(dedicatedClaims()).toHaveLength(1);
+        expect(dedicatedClaims()[0][1]).toMatchObject({ source: 'dedicated_offer', assignmentId: 'as-9', max: 2 });
+        expect(assignMutations()).toHaveLength(0);
+      });
+
+      it('at the cap the claim is refused (409 DEDICATED_AT_CAPACITY); no uncapped plain assign', async () => {
+        arrangeClaim({ holdAmount: 0, balance: 0 });
+        offers('dedicated', async () => stampOffer);
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockImplementation(async (q: string) => {
+          if (String(q).includes('DedicatedClaimOrder')) throw new Error('dedicated_order_cap_exceeded: agent a has 2 of 2');
+          return assigned;
+        });
+        const err = await service.claimOrder({ orderId: 'order-123' }).catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(HttpException);
+        expect((err as HttpException).getResponse()).toMatchObject({ error: 'DEDICATED_AT_CAPACITY' });
+        expect(assignMutations()).toHaveLength(0);
+      });
+
+      it('the re-check refusing AT THE CAP blocks the claim (409); nothing is assigned', async () => {
+        arrangeClaim({ holdAmount: 0, balance: 0 });
+        const refusal = new HttpException({ error: 'DEDICATED_OFFER_INELIGIBLE', reason: 'at_capacity' }, HttpStatus.CONFLICT);
+        offers('dedicated', async () => Promise.reject(refusal));
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockResolvedValue(assigned);
+        await expect(service.claimOrder({ orderId: 'order-123' })).rejects.toBe(refusal);
+        expect(assignMutations()).toHaveLength(0);
+        expect(dedicatedClaims()).toHaveLength(0);
+      });
+
+      it.each([
+        ['off_today', { code: 'off_today' }],
+        ['inactive assignment', { code: 'assignment_inactive' }],
+        ['slot disabled', { code: 'slot_disabled' }],
+        ['ineligible, not cap', { error: 'DEDICATED_OFFER_INELIGIBLE', reason: 'contract_unsigned' }],
+      ])('any other refusal (%s) falls back to a plain, unstamped claim', async (_l, body) => {
+        arrangeClaim({ holdAmount: 0, balance: 0 });
+        jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+        const svc = offers('dedicated', async () => Promise.reject(new HttpException(body, HttpStatus.CONFLICT)));
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockResolvedValue(assigned);
+        await expect(service.claimOrder({ orderId: 'order-123' })).resolves.toMatchObject({ success: true });
+        expect(svc.dedicatedAcceptAssignment).toHaveBeenCalledTimes(1);
+        expect(dedicatedClaims()).toHaveLength(0);
+        expect(assignMutations()).toHaveLength(1);
+        expect(assignMutations()[0][0]).not.toContain('assignment_source');
+      });
+
+      it('a standard offer (or none) keeps the unstamped open-pool claim', async () => {
+        for (const kind of ['standard', null]) {
+          arrangeClaim({ holdAmount: 0, balance: 0 });
+          jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+          const svc = offers(kind, async () => stampOffer);
+          hasuraSystemService.executeMutation.mockReset();
+          hasuraSystemService.executeMutation.mockResolvedValue(assigned);
+          await service.claimOrder({ orderId: 'order-123' });
+          expect(svc.dedicatedAcceptAssignment).not.toHaveBeenCalled();
+          expect(dedicatedClaims()).toHaveLength(0);
+          expect(assignMutations()[0][0]).not.toContain('assignment_source');
+        }
+      });
+    });
+
+    it('#594 DEV QA F1: a lost accept closes the caller\'s offer via markOfferLost (not expired)', async () => {
+      arrangeClaim({ holdAmount: 0, balance: 0 });
+      const offers = {
+        getActiveOfferForAgent: jest.fn().mockResolvedValue({ id: 'offer-1', expires_at: 'x', offer_kind: 'standard' }),
+        dedicatedAcceptAssignment: jest.fn(),
+        markOfferLost: jest.fn(),
+      };
+      loose().orderOffersService = offers;
+      jest.spyOn(loose(), 'assignOrderToAgent').mockRejectedValue(
+        new HttpException({ error: 'ALREADY_ASSIGNED' }, HttpStatus.CONFLICT)
+      );
+      await expect(service.acceptOrderOffer({ orderId: 'order-123' })).rejects.toBeInstanceOf(HttpException);
+      expect(offers.markOfferLost).toHaveBeenCalledWith('order-123', 'agent-123');
     });
 
     it('accepting a standard offer runs no dedicated re-check', async () => {
