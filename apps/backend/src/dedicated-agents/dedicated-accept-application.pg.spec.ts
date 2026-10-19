@@ -366,6 +366,11 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
       const prev = await db.query(
         `SELECT boolean_value FROM application_configurations WHERE config_key = 'agent_contract_required' AND country_code IS NULL`
       );
+      // A country row saying "required" must not override the global flag (the gate reads the global row).
+      await db.query(
+        `INSERT INTO application_configurations (config_key, config_name, data_type, boolean_value, country_code)
+         VALUES ('agent_contract_required', 'Agent contract required (CM)', 'boolean', true, 'CM')`
+      );
       try {
         await db.query(
           `UPDATE application_configurations SET boolean_value = false WHERE config_key = 'agent_contract_required' AND country_code IS NULL`
@@ -376,6 +381,7 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
           `UPDATE application_configurations SET boolean_value = $1 WHERE config_key = 'agent_contract_required' AND country_code IS NULL`,
           [prev.rows[0]?.boolean_value ?? true]
         );
+        await db.query(`DELETE FROM application_configurations WHERE config_key = 'agent_contract_required' AND country_code = 'CM'`);
       }
     });
   });
