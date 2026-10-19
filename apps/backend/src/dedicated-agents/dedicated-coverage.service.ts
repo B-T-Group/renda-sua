@@ -67,6 +67,11 @@ export interface DedicatedEligibilityParams {
   verifiedAgentDelivery: boolean;
   /** Re-check at offer/claim: don't count this order's own outstanding dedicated offer. */
   excludeOrderId?: string | null;
+  /**
+   * Local date (YYYY-MM-DD) of the slot being covered. Off today only removes
+   * an agent from that day's slots; defaults to today in the country timezone.
+   */
+  slotDate?: string;
   now?: Date;
 }
 
@@ -188,7 +193,7 @@ export class DedicatedCoverageService {
       this.agentContractGate.signedIdsOrSkip(agentIds),
     ]);
     const eligibilityCtx = {
-      localToday: localDateTimeAt(now, ctx.timeZone).date,
+      localToday: params.slotDate ?? localDateTimeAt(now, ctx.timeZone).date,
       maxActiveOrders: ctx.config.maxActiveOrders,
       rail: params.rail,
       verifiedAgentDelivery: params.verifiedAgentDelivery,
@@ -225,23 +230,35 @@ export class DedicatedCoverageService {
         params.currency
       );
       for (const { row, facts } of needMoney) {
-        const hold = await this.agentHoldService.resolveOrderHoldWithCeiling(
-          params.subtotal,
-          row.agent_id,
-          params.rail
-        );
-        const holdAmount = Number(hold.holdAmount) || 0;
+        const holdAmount = await this.holdFor(params, row.agent_id);
         const userId = row.agent?.user_id ?? null;
         const balance = userId ? balances.get(userId) ?? 0 : 0;
-        const reason = dedicatedBalanceIneligibleReason(balance, holdAmount);
+        // QA N2: an unknown hold fails closed for this agent only.
+        const reason =
+          holdAmount == null ? 'hold_unavailable' : dedicatedBalanceIneligibleReason(balance, holdAmount);
         if (reason) {
           result.rejected.push({ agentId: row.agent_id, assignmentId: row.id, reason });
         } else {
-          result.eligible.push(this.toEligible(row, facts, holdAmount, balance));
+          result.eligible.push(this.toEligible(row, facts, holdAmount as number, balance));
         }
       }
     }
     return result;
+  }
+
+  /** The agent's hold for this order, or null when it can't be resolved or isn't a finite amount >= 0. */
+  private async holdFor(params: DedicatedEligibilityParams, agentId: string): Promise<number | null> {
+    try {
+      const hold = await this.agentHoldService.resolveOrderHoldWithCeiling(params.subtotal, agentId, params.rail);
+      const amount = Number(hold?.holdAmount);
+      if (Number.isFinite(amount) && amount >= 0) return amount;
+      this.logger.warn(`dedicated hold for agent ${agentId} is not a finite amount (${String(hold?.holdAmount)}); skipping agent`);
+    } catch (error) {
+      this.logger.warn(
+        `dedicated hold for agent ${agentId} failed: ${error instanceof Error ? error.message : String(error)}; skipping agent`
+      );
+    }
+    return null;
   }
 
   private toEligible(

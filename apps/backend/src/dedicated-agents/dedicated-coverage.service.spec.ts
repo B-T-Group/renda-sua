@@ -324,6 +324,48 @@ describe('DedicatedCoverageService.eligibleAgents', () => {
     expect(ids(await w.service.eligibleAgents(params()))).toEqual(['ind', 'int']);
   });
 
+  it('QA N1: Off today is compared with the slot date when one is given', async () => {
+    const w = world();
+    w.addAgent('a', { is_internal: true, offToday: '2026-10-18' });
+    // Off today (the 18th) does not block a slot tomorrow...
+    expect(ids(await w.service.eligibleAgents(params({ slotDate: '2026-10-19' })))).toEqual(['a']);
+    // ...and blocks a slot on the 18th even when checking out the day before.
+    await expect(
+      w.service.eligibleAgents(params({ slotDate: '2026-10-18', now: new Date('2026-10-17T09:00:00Z') }))
+    ).resolves.toEqual([]);
+  });
+
+  it('QA N2: a non-finite or negative hold fails closed for that agent', async () => {
+    const w = world();
+    w.addAgent('nan', { balance: 1_000_000 });
+    w.addAgent('neg', { balance: 1_000_000 });
+    w.addAgent('ok', { balance: 1_000_000 });
+    w.holds.set('nan', Number.NaN);
+    w.holds.set('neg', -5);
+    w.holds.set('ok', 4000);
+    const res = await w.service.evaluate(params());
+    expect(ids(res.eligible)).toEqual(['ok']);
+    expect(Object.fromEntries(res.rejected.map((r) => [r.agentId, r.reason]))).toEqual({
+      nan: 'hold_unavailable',
+      neg: 'hold_unavailable',
+    });
+  });
+
+  it('QA N2: a hold error rejects only that agent; the others are still evaluated', async () => {
+    const w = world();
+    w.addAgent('boom', { balance: 1_000_000 });
+    w.addAgent('ok', { balance: 1_000_000 });
+    w.holds.set('ok', 4000);
+    const real = w.agentHoldService.resolveOrderHoldWithCeiling.getMockImplementation()!;
+    w.agentHoldService.resolveOrderHoldWithCeiling.mockImplementation(async (s: number, id: string, r: string) => {
+      if (id === 'boom') throw new Error('hold service down');
+      return real(s, id, r);
+    });
+    const res = await w.service.evaluate(params());
+    expect(ids(res.eligible)).toEqual(['ok']);
+    expect(res.rejected).toEqual([{ agentId: 'boom', assignmentId: 'as-boom-afternoon', reason: 'hold_unavailable' }]);
+  });
+
   it('Off today is compared with today in the country timezone', async () => {
     const w = world();
     w.addAgent('a', { is_internal: true, offToday: '2026-10-18' });
