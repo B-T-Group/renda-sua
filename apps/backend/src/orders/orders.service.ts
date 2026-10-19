@@ -34,6 +34,16 @@ import {
   DeliveryUnavailableReason,
 } from '../delivery-availability/delivery-availability.types';
 import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
+import {
+  OFFER_DECLINE_REASONS,
+  type OfferDeclineReason,
+} from '../dedicated-agents/dedicated-agents.constants';
+import type { ClaimAssignment } from './dedicated-claim.port';
+import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
+import {
+  buildDedicatedConfirmReminderMessage,
+  DEDICATED_ORDER_MESSAGE_TYPES,
+} from '../notifications/dedicated-order-push.messages';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import {
@@ -647,6 +657,14 @@ export interface ClaimingAgent {
   id: string;
   is_verified?: boolean | null;
   is_internal?: boolean | null;
+}
+
+export type { ClaimAssignment } from './dedicated-claim.port';
+
+/** Optional body field on POST /orders/offers/decline (#594). */
+export interface DeclineOrderOfferRequest {
+  orderId: string;
+  reason?: string | null;
 }
 
 @Injectable()
@@ -2176,6 +2194,72 @@ export class OrdersService {
   }
 
   /**
+   * #594 PR 5 (PE): an order placed on dedicated coverage (`coverage_slot_key`)
+   * gets the dedicated fallback only once the business confirms its window, so
+   * remind the business when the order reaches it. No-op for every other order,
+   * when the flag is off, or once the window is confirmed. Never throws.
+   */
+  async remindBusinessToConfirmCoveredOrder(orderId: string): Promise<void> {
+    if (!this.dedicatedAgentsConfig) return;
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        orders_by_pk: {
+          id: string;
+          order_number: string;
+          coverage_slot_key: string | null;
+          business?: { user_id?: string | null; user?: { preferred_language?: string | null } | null } | null;
+          business_location?: { address?: { country?: string | null } | null } | null;
+          delivery_time_windows?: Array<{ preferred_date: string | null; is_confirmed: boolean | null }>;
+        } | null;
+      }>(
+        `query DedicatedConfirmReminder($id: uuid!) {
+          orders_by_pk(id: $id) {
+            id
+            order_number
+            coverage_slot_key
+            business { user_id user { preferred_language } }
+            business_location { address { country } }
+            delivery_time_windows(order_by: { created_at: desc }, limit: 1) {
+              preferred_date
+              is_confirmed
+            }
+          }
+        }`,
+        { id: orderId }
+      );
+      const order = res?.orders_by_pk;
+      const window = order?.delivery_time_windows?.[0];
+      const businessUserId = order?.business?.user_id;
+      if (!order?.coverage_slot_key || !window || window.is_confirmed === true || !businessUserId) {
+        return;
+      }
+      const country = isoCountryCode(order.business_location?.address?.country);
+      if (!(await this.dedicatedAgentsConfig.isEnabled(country))) return;
+      const msg = buildDedicatedConfirmReminderMessage({
+        orderNumber: order.order_number,
+        slotKey: order.coverage_slot_key,
+        date: window.preferred_date ?? '',
+        preferredLanguage: order.business?.user?.preferred_language,
+      });
+      await this.notificationsService.sendDedicatedOrderNotice({
+        userId: businessUserId,
+        title: msg.title,
+        body: msg.body,
+        messageType: DEDICATED_ORDER_MESSAGE_TYPES.confirmReminder,
+        orderId: order.id,
+        event: 'dedicated.confirm_window_reminder',
+        persona: 'business',
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Dedicated confirm-window reminder failed for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  /**
    * Resolve the confirmed delivery window (if any) into UTC dispatch/pickup
    * timestamps. Falls back to "dispatch now" when there is no future window.
    */
@@ -2728,7 +2812,8 @@ export class OrdersService {
   async claimOrder(
     request: GetOrderRequest,
     platformHeader?: string,
-    fundsCheckSource?: 'claim' | 'offer_accept'
+    fundsCheckSource?: 'claim' | 'offer_accept',
+    assignment?: ClaimAssignment
   ) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
@@ -2743,6 +2828,7 @@ export class OrdersService {
       agent,
       fundsCheckSource: fundsCheckSource || 'claim',
       locationConsent: { platformHeader },
+      assignment,
     });
   }
 
@@ -2760,6 +2846,7 @@ export class OrdersService {
     agent: ClaimingAgent;
     fundsCheckSource: 'claim' | 'offer_accept';
     locationConsent?: { platformHeader?: string };
+    assignment?: ClaimAssignment;
   }) {
     const { user, agent, fundsCheckSource } = params;
     const request = { orderId: params.orderId };
@@ -2866,7 +2953,8 @@ export class OrdersService {
     const updatedOrder = await this.assignOrderToAgent(
       request.orderId,
       agent.id,
-      'assigned_to_agent'
+      'assigned_to_agent',
+      params.assignment
     );
 
     try {
@@ -2892,12 +2980,15 @@ export class OrdersService {
       throw error;
     }
 
+    const autoAssigned = params.assignment?.source === 'dedicated_auto';
     await this.createStatusHistoryEntry(
       request.orderId,
       'assigned_to_agent',
-      `Order assigned to agent ${user.first_name} ${user.last_name}`,
-      'agent',
-      user.id
+      autoAssigned
+        ? `Order auto-assigned to dedicated agent ${user.first_name} ${user.last_name}`
+        : `Order assigned to agent ${user.first_name} ${user.last_name}`,
+      autoAssigned ? 'system' : 'agent',
+      autoAssigned ? null : user.id
     );
     await this.onOrderAssignedToAgent(request.orderId, agent.id);
     return {
@@ -2965,8 +3056,21 @@ export class OrdersService {
       );
     }
 
+    // #594: a dedicated offer re-checks AC-E2 and stamps the dedicated assignment.
+    const assignment =
+      activeOffer.offer_kind === 'dedicated'
+        ? await this.orderOffersService.dedicatedAcceptAssignment(
+            request.orderId,
+            agent.id
+          )
+        : undefined;
     try {
-      return await this.claimOrder(request, platformHeader, 'offer_accept');
+      return await this.claimOrder(
+        request,
+        platformHeader,
+        'offer_accept',
+        assignment
+      );
     } catch (error: any) {
       const responseError =
         error instanceof HttpException
@@ -2985,12 +3089,17 @@ export class OrdersService {
   /**
    * Decline a delivery offer for the authenticated agent.
    */
-  async declineOrderOffer(request: GetOrderRequest) {
+  async declineOrderOffer(request: DeclineOrderOfferRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.agent?.id) {
       return { success: true, message: 'Offer declined' };
     }
-    await this.orderOffersService.declineOffer(request.orderId, user.agent.id);
+    const reason = parseOfferDeclineReason(request.reason);
+    await this.orderOffersService.declineOffer(
+      request.orderId,
+      user.agent.id,
+      reason
+    );
     return { success: true, message: 'Offer declined' };
   }
 
@@ -10489,6 +10598,7 @@ export class OrdersService {
           `Failed to start acceptance SLA after authorization for ${order.id}: ${slaError?.message}`
         );
       }
+      void this.remindBusinessToConfirmCoveredOrder(order.id);
       await this.sendOrderPlacedNotifications(orderWithDetails, 'pending');
     } catch (error) {
       this.logger.error(
@@ -10629,6 +10739,7 @@ export class OrdersService {
           `Failed to start acceptance SLA after deposit for ${order.id}: ${error?.message}`
         );
       }
+      void this.remindBusinessToConfirmCoveredOrder(order.id);
 
       // Send order.created message to SQS queue after deposit success
       try {
@@ -12641,6 +12752,7 @@ export class OrdersService {
           `Failed to start acceptance SLA for ${orderId}: ${error?.message}`
         );
       }
+      void this.remindBusinessToConfirmCoveredOrder(orderId);
       return true;
     }
     const updated = await this.updateOrderPaymentStatusOnly(orderId, 'paid', {
@@ -14817,6 +14929,9 @@ export class OrdersService {
           `Failed to start acceptance SLA for ${order.id}: ${error?.message}`
         );
       }
+      if (coverageSlotKey && deliveryWindow) {
+        void this.remindBusinessToConfirmCoveredOrder(order.id);
+      }
     }
 
     // Send order.created message to SQS queue for all creates EXCEPT MoMo deposit-required
@@ -16296,10 +16411,21 @@ export class OrdersService {
   private async assignOrderToAgent(
     orderId: string,
     agentId: string,
-    status: string
+    status: string,
+    assignment?: ClaimAssignment
   ): Promise<any> {
+    // #594: a dedicated claim stamps its source in the same atomic update.
+    const dedicatedVars = assignment
+      ? ', $assignmentSource: String!, $dedicatedAssignmentId: uuid, $dedicatedReleaseUntil: timestamptz'
+      : '';
+    const dedicatedSet = assignment
+      ? `,
+            assignment_source: $assignmentSource,
+            dedicated_assignment_id: $dedicatedAssignmentId,
+            dedicated_release_until: $dedicatedReleaseUntil`
+      : '';
     const mutation = `
-      mutation AssignOrderToAgent($orderId: uuid!, $agentId: uuid!, $status: order_status!) {
+      mutation AssignOrderToAgent($orderId: uuid!, $agentId: uuid!, $status: order_status!${dedicatedVars}) {
         update_orders(
           where: {
             _and: [
@@ -16312,7 +16438,7 @@ export class OrdersService {
             current_status: $status,
             assigned_agent_id: $agentId,
             assigned_at: "now()",
-            updated_at: "now()"
+            updated_at: "now()"${dedicatedSet}
           }
         ) {
           affected_rows
@@ -16326,11 +16452,21 @@ export class OrdersService {
         }
       }
     `;
-    const result = await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      agentId,
-      status,
-    });
+    const variables = assignment
+      ? {
+          orderId,
+          agentId,
+          status,
+          assignmentSource: assignment.source,
+          dedicatedAssignmentId: assignment.dedicatedAssignmentId,
+          dedicatedReleaseUntil: assignment.releaseUntil ?? null,
+        }
+      : { orderId, agentId, status };
+    const run = () =>
+      this.hasuraSystemService.executeMutation(mutation, variables);
+    // The FK to dedicated_agent_assignments can meet the cap trigger's agent-row
+    // locks: retry a 40P01 abort (a single-statement, guarded update).
+    const result = assignment ? await runAssignmentWrite(run) : await run();
     const affectedRows = result?.update_orders?.affected_rows ?? 0;
     if (affectedRows !== 1) {
       throw new HttpException(
@@ -18496,6 +18632,26 @@ export class OrdersService {
       );
     }
   }
+}
+
+/**
+ * #594: `reason` on an offer decline. Absent or blank -> null (unchanged
+ * behaviour); anything else must be one of OFFER_DECLINE_REASONS (400).
+ */
+export function parseOfferDeclineReason(raw: unknown): OfferDeclineReason | null {
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return null;
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if ((OFFER_DECLINE_REASONS as readonly string[]).includes(value)) {
+    return value as OfferDeclineReason;
+  }
+  throw new HttpException(
+    {
+      success: false,
+      error: 'INVALID_DECLINE_REASON',
+      message: `reason must be one of: ${OFFER_DECLINE_REASONS.join(', ')}`,
+    },
+    HttpStatus.BAD_REQUEST
+  );
 }
 
 /** Slot key the dedicated pass covered, stored as `orders.coverage_slot_key` (#594 AC-E1). */

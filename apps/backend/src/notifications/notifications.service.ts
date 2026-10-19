@@ -2495,6 +2495,61 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * #594 PR 5 order-level dedicated notice (auto-assignment to the agent,
+   * confirm-the-window reminder to the business): in-app row on the order plus
+   * push. Push needs push.enabled; the in-app row is always written. Never throws.
+   */
+  async sendDedicatedOrderNotice(params: {
+    userId: string;
+    title: string;
+    body: string;
+    messageType: string;
+    orderId: string;
+    event: string;
+    persona: 'agent' | 'business';
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId) return;
+    const path = `/orders/${params.orderId}`;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+          mutation InsertDedicatedOrderNotice($object: user_messages_insert_input!) {
+            insert_user_messages_one(object: $object) { id }
+          }
+        `,
+        {
+          object: {
+            user_id: userId,
+            entity_type: 'order',
+            entity_id: params.orderId,
+            message_type: params.messageType,
+            message: params.body,
+            message_payload: { path, event: params.event, persona: params.persona, orderId: params.orderId },
+          },
+        }
+      );
+    } catch (error: unknown) {
+      this.logger.warn(
+        `sendDedicatedOrderNotice in-app failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        url: path,
+        event: params.event,
+        persona: params.persona,
+        orderId: params.orderId,
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `sendDedicatedOrderNotice push failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
   async notifySuperusersPaymentScheduleDecision(params: {
     assignmentId: string;
     scheduleName: string;

@@ -142,6 +142,13 @@ export const SERVER_SITE_EVENT_TYPES = [
   'checkout.delivery_availability',
   // #594 dedicated agents: delivery allowed only because a dedicated agent covers the slot
   'dedicated.coverage_used_at_checkout',
+  // #594 PR 5: dedicated fallback at the scheduled dispatch gate
+  'dedicated.offer_sent',
+  'dedicated.offer_accepted',
+  'dedicated.offer_declined',
+  'dedicated.offer_expired',
+  'dedicated.auto_assigned',
+  'dedicated.coverage_unconfirmed_at_dispatch',
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',
