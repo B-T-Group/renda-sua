@@ -219,7 +219,7 @@ export class CatalogStopsService {
               is_active: { _eq: true }
               item_variant_id: { _is_null: true }
               ${SELLABLE_PARENT_STOCK_GQL}
-              item: { is_active: { _eq: true } }
+              item: { is_active: { _eq: true }, moderation_status: { _eq: "approved" } }
               business_location: $locationWhere
             }
           }
@@ -312,6 +312,7 @@ export class CatalogStopsService {
               is_active: { _eq: true }
               item_variant_id: { _is_null: true }
               ${SELLABLE_PARENT_STOCK_GQL}
+              item: { moderation_status: { _eq: "approved" } }
             }
           ) {
             aggregate {
@@ -364,6 +365,7 @@ export class CatalogStopsService {
             id: { _nin: $excludeIds }
             item: {
               is_active: { _eq: true }
+              moderation_status: { _eq: "approved" }
               item_sub_category: {
                 item_category_id: { _in: $categoryIds }
               }
@@ -402,6 +404,8 @@ export class CatalogStopsService {
   ): Record<string, unknown> {
     const itemWhere: Record<string, unknown> = {
       is_active: { _eq: true },
+      // F-M7: only moderated (approved) items may surface in catalog modules
+      moderation_status: { _eq: 'approved' },
     };
     if (subcategory?.trim()) {
       itemWhere.item_sub_category = { name: { _eq: subcategory.trim() } };

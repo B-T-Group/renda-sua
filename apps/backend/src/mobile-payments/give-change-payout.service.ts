@@ -8,6 +8,8 @@ import {
   MobilePaymentResponse,
   MobilePaymentsService,
 } from './mobile-payments.service';
+import { FedaPayService } from './providers/fedapay.service';
+import { sanitizeProviderError } from './sanitize-provider-error.util';
 
 export type GiveChangeProvider =
   | 'mypvit'
@@ -42,8 +44,13 @@ export interface GiveChangePayoutResult {
     provider?: string;
     status?: 'pending';
     reason?: 'provider_ambiguous';
+    error?: 'PAYOUT_PROVIDER_ERROR';
   };
 }
+
+/** S3: what a client sees when the provider refuses a payout. Never provider text. */
+export const PAYOUT_PROVIDER_ERROR_MESSAGE =
+  'Failed to initiate withdrawal. Please try again or contact support.';
 
 type HttpErr = { status: HttpStatus; body: Record<string, unknown> };
 
@@ -54,7 +61,8 @@ export class GiveChangePayoutService {
   constructor(
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly mobilePaymentsService: MobilePaymentsService,
-    private readonly accountsService: AccountsService
+    private readonly accountsService: AccountsService,
+    private readonly fedaPayService: FedaPayService,
   ) {}
 
   buildDefaultCallbackUrl(): string {
@@ -179,11 +187,13 @@ export class GiveChangePayoutService {
       ...(params.paymentEntity ? { payment_entity: params.paymentEntity } : {}),
     });
 
+    // F-L5: Idempotency key prevents duplicate holds on retry/race
     const holdResult = await this.accountsService.registerHoldIfNotExists({
       accountId: params.accountId,
       amount: params.amount,
       referenceId: transaction.id,
       memo: `GIVE_CHANGE hold - ${reference}`,
+      idempotencyKey: `give-change-hold:${reference}`,
     });
     if (!holdResult.success) {
       await this.markFailed(
@@ -215,21 +225,29 @@ export class GiveChangePayoutService {
         options.initiatorUserId ?? params.mtnUserId
       );
     } catch (error: any) {
+      // Log the failure server-side, sanitized for secrets (no raw message or stack)
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(
+        `Withdrawal initiation failed for reference ${reference}: ${sanitized.message}`
+      );
+      
       await this.failInitiation(
         transaction.id,
         reference,
         params,
-        error?.message || 'Withdrawal initiation failed',
+        sanitized.message || 'Withdrawal initiation failed',
         'INITIATION_EXCEPTION'
       );
+      
       if (options.throwOnWithdrawalFailure) {
-        throw error instanceof HttpException
-          ? error
+        // Never return raw provider errors to the client
+        throw error instanceof HttpException && error.getStatus() < 500
+          ? error // Pre-validated client errors (e.g., INSUFFICIENT_FUNDS) are safe
           : new HttpException(
               {
                 success: false,
-                message: 'Failed to initiate withdrawal',
-                error: 'INITIATION_EXCEPTION',
+                message: PAYOUT_PROVIDER_ERROR_MESSAGE,
+                error: 'PAYOUT_PROVIDER_ERROR',
               },
               HttpStatus.BAD_GATEWAY
             );
@@ -368,14 +386,31 @@ export class GiveChangePayoutService {
         paymentResponse.errorCode || 'PROVIDER_INIT_FAILED',
         providerTxId // Keep FedaPay id on failed withdrawal rows for audit trail
       );
-      return { success: false, data };
+      // S3: the provider's message stays server-side (error_message on the row);
+      // the caller only gets a generic message and a stable error code.
+      return {
+        success: false,
+        data: {
+          transactionId: mobileTxId,
+          providerTransactionId: providerTxId,
+          provider: paymentResponse.provider,
+          message: PAYOUT_PROVIDER_ERROR_MESSAGE,
+          error: 'PAYOUT_PROVIDER_ERROR',
+        },
+      };
     }
 
-    // Pending is only valid once we have a provider transaction_id.
+    // G2: Pending is only valid once we have a provider transaction_id.
+    // For mock payouts, this MUST complete before scheduling the auto-callback.
     await this.databaseService.updateTransaction(mobileTxId, {
       transaction_id: providerTxId,
       status: 'pending',
     });
+
+    // G2: Schedule mock payout callback AFTER persisting the mock id
+    if (providerTxId?.startsWith('mock-')) {
+      this.fedaPayService.scheduleMockCallback(providerTxId, reference);
+    }
 
     this.logger.log(
       `GIVE_CHANGE ${mobileTxId} initiated (${reference}); funds held until provider confirms`
