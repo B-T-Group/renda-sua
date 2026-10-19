@@ -2892,6 +2892,15 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
+    // #594 DEV QA N1: the agent's own open-pool claim while it holds a live dedicated
+    // offer on this order goes through the dedicated re-check (AC-E2) and the cap, and
+    // is stamped, like the top-up claim (QA #607 N2) and the offer accept. Without
+    // this, a plain claim bypassed the cap and left the offer rows unaccepted.
+    const assignment =
+      params.assignment ??
+      (fundsCheckSource === 'claim'
+        ? await this.dedicatedClaimAssignment(order.id, agent.id)
+        : undefined);
     const { rail, holdPercentage, holdAmount } =
       await this.resolveOrderHoldAmount(order, agent.id);
     const agentAccount = await this.hasuraSystemService.getAccount(
@@ -2962,7 +2971,7 @@ export class OrdersService {
       request.orderId,
       agent.id,
       'assigned_to_agent',
-      params.assignment
+      assignment
     );
 
     try {
@@ -2988,7 +2997,7 @@ export class OrdersService {
       throw error;
     }
 
-    const autoAssigned = params.assignment?.source === 'dedicated_auto';
+    const autoAssigned = assignment?.source === 'dedicated_auto';
     await this.createStatusHistoryEntry(
       request.orderId,
       'assigned_to_agent',
@@ -3085,7 +3094,7 @@ export class OrdersService {
           ? (error.getResponse() as any)?.error
           : undefined;
       if (responseError === 'ALREADY_ASSIGNED') {
-        await this.orderOffersService.markOfferExpired(
+        await this.orderOffersService.markOfferLost(
           request.orderId,
           agent.id
         );

@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface DeliveryTimeWindow {
@@ -206,6 +206,25 @@ export class DeliveryWindowsService {
       this.logger.error('Failed to update delivery window:', error);
       throw error;
     }
+  }
+
+  /**
+   * #594 DEV QA N3: confirm as the order's business owner. 404 when the order does
+   * not exist, 403 when the caller does not own its business; confirmed_by = caller.
+   */
+  async confirmDeliveryWindowAsBusiness(orderId: string, userId: string): Promise<DeliveryTimeWindow> {
+    const res = await this.hasuraSystemService.executeQuery(
+      `query DeliveryWindowOrderOwner($id: uuid!) {
+        orders_by_pk(id: $id) { id business { user_id } }
+      }`,
+      { id: orderId }
+    );
+    const order = res?.orders_by_pk;
+    if (!order) throw new NotFoundException('Order not found');
+    if (!userId || order.business?.user_id !== userId) {
+      throw new ForbiddenException('Only the business on this order can confirm its delivery window');
+    }
+    return this.confirmDeliveryWindow(orderId, userId);
   }
 
   /**
