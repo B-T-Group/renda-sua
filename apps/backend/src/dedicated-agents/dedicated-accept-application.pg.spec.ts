@@ -215,6 +215,17 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
     expect(s.assignments).toEqual([]);
   });
 
+  it('refuses when the count is already at headcount even if the status still says open (defence in depth)', async () => {
+    const loc = await location();
+    const p = await posting(loc, 1, ['morning']);
+    await db.query(`UPDATE dedicated_agent_postings SET accepted_count = 1 WHERE id = $1`, [p]);
+    const x = await apply(p, await agent('Over'));
+    expect((await accept(db, x, loc.owner)).rows).toEqual([{ id: x, status: 'applied' }]);
+    const s = await snapshot(p);
+    expect(s.posting).toMatchObject({ status: 'open', accepted_count: 1 });
+    expect(s.assignments).toEqual([]);
+  });
+
   it('refuses an application that is no longer pending (withdrawn)', async () => {
     const loc = await location();
     const p = await posting(loc, 1, ['morning']);
