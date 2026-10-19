@@ -1,4 +1,6 @@
-import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
+import type { SiteEventsService } from '../site-events/site-events.service';
+import { BadRequestException, ConflictException, Logger, NotFoundException } from '@nestjs/common';
+import type { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import type { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import type { AgentHoldService } from '../agents/agent-hold.service';
 import type { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
@@ -315,13 +317,23 @@ function world() {
     { signedIdsOrSkip: jest.fn(async () => null) } as unknown as AgentContractGateService,
     deliveryConfig as unknown as DeliveryConfigService
   );
+  const siteEvents = { trackEvent: jest.fn().mockResolvedValue(undefined) };
+  // QA #619 N5: the store's rail comes from PaymentRoutingService.resolveRailForBusiness.
+  const routing = { resolveRailForBusiness: jest.fn(async (_businessId: string): Promise<'stripe' | 'mobile_money'> => 'mobile_money') };
+  const events = (type: string) =>
+    siteEvents.trackEvent.mock.calls
+      .map((c) => c[0] as { eventType: string; metadata: Record<string, unknown> })
+      .filter((e) => e.eventType === type)
+      .map((e) => e.metadata);
   const service = new DedicatedAssignmentsService(
     hasura,
     config,
     coverage,
     deliveryConfig as unknown as DeliveryConfigService,
     agentHold as unknown as AgentHoldService,
-    notifications as unknown as NotificationsService
+    notifications as unknown as NotificationsService,
+    siteEvents as unknown as SiteEventsService,
+    routing as unknown as PaymentRoutingService
   );
 
   const addAgent = (id: string, over: Partial<AgentFake> & { lang?: string | null } = {}) => {
@@ -352,7 +364,7 @@ function world() {
     return row;
   };
   const writes = (op: string) => state.mutations.filter((m) => m.op === op);
-  return { state, service, notifications, notices, executeMutation, executeQuery, addAgent, seedRow, writes, agentHold };
+  return { state, service, notifications, notices, executeMutation, executeQuery, addAgent, seedRow, writes, agentHold, events, routing };
 }
 
 const assign = (w: ReturnType<typeof world>, agentId: string, slotKeys: unknown, locationId = LOC) =>
@@ -848,7 +860,7 @@ describe('DedicatedAssignmentsService — pickup slots (AC-B1, B2, B4)', () => {
     w.addAgent(A1);
     w.seedRow({ agent_id: A1, slot_key: 'evening' });
     w.state.deadlocksLeft = 1;
-    await w.service.updatePickupSlots(actor, { slots: [{ slotKey: 'evening', isEnabled: false }], confirmPauseAgents: true });
+    await w.service.updatePickupSlots({ userId: OWNER, locationId: LOC }, { slots: [{ slotKey: 'evening', isEnabled: false }], confirmPauseAgents: true });
     expect(w.writes('SaveDedicatedPickupSlots')).toHaveLength(2);
     expect(w.state.rows[0].status).toBe('paused');
   });
@@ -932,5 +944,188 @@ describe('DedicatedAssignmentsService — business cards (AC-B7, B17)', () => {
     const w = world();
     w.state.flag = false;
     await expect(w.service.listForLocation(LOC)).rejects.toBeInstanceOf(NotFoundException);
+  });
+});
+
+
+describe('DedicatedAssignmentsService — PR 8 analytics (AC section 5)', () => {
+  it('assignment_status_changed carries the source for assign, pause, resume and remove', async () => {
+    const w = world();
+    w.addAgent(A1);
+    await assign(w, A1, ['morning']);
+    const row = w.state.rows[0];
+    await w.service.setPaused({ userId: OWNER, locationId: LOC }, row.id, true);
+    await w.service.setPaused({ userId: ADMIN }, row.id, false);
+    await w.service.remove({ userId: OWNER, locationId: LOC }, row.id, 'x');
+    expect(w.events('dedicated.assignment_status_changed').map((e) => [e.source, e.from, e.to, e.cause])).toEqual([
+      ['superuser_assign', null, 'active', 'superuser_assign'],
+      ['superuser_assign', 'active', 'paused', 'business'],
+      ['superuser_assign', 'paused', 'active', 'superuser'],
+      ['superuser_assign', 'active', 'removed', 'business'],
+    ]);
+    expect(w.events('dedicated.assignment_status_changed')[0]).toMatchObject({ assignmentId: row.id, agentId: A1, businessLocationId: LOC, slotKey: 'morning' });
+  });
+
+  it('no event when nothing changed (idempotent pause / remove) or the write is refused', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const paused = w.seedRow({ agent_id: A1, slot_key: 'morning', status: 'paused', paused_at: 'x' });
+    await w.service.setPaused({ userId: OWNER, locationId: LOC }, paused.id, true);
+    const removed = w.seedRow({ agent_id: A1, slot_key: 'evening', status: 'removed', removed_at: 'x' });
+    await w.service.remove({ userId: OWNER, locationId: LOC }, removed.id, null);
+    expect(w.events('dedicated.assignment_status_changed')).toEqual([]);
+  });
+
+  it('turning a slot off reports each paused agent with cause slot_disabled', async () => {
+    const w = world();
+    for (const id of [A1, A2]) w.addAgent(id);
+    w.seedRow({ agent_id: A2, slot_key: 'evening', source: 'superuser_assign' });
+    w.seedRow({ agent_id: A1, slot_key: 'evening' });
+    await w.service.updatePickupSlots({ userId: OWNER, locationId: LOC }, { slots: [{ slotKey: 'evening', isEnabled: false }], confirmPauseAgents: true });
+    const got = w.events('dedicated.assignment_status_changed').map((e) => [e.agentId, e.source, e.to, e.cause]);
+    expect(got).toHaveLength(2);
+    expect(got).toEqual(
+      expect.arrayContaining([
+        [A1, 'posting', 'paused', 'slot_disabled'],
+        [A2, 'superuser_assign', 'paused', 'slot_disabled'],
+      ])
+    );
+  });
+
+  it('off_today_toggled on set and clear, with the local date', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const row = w.seedRow({ agent_id: A1, slot_key: 'morning' });
+    const LATE = new Date('2026-10-18T23:30:00Z');
+    await w.service.setOffToday(`u-${A1}`, row.id, true, LATE);
+    await w.service.setOffToday(`u-${A1}`, row.id, false, LATE);
+    expect(w.events('dedicated.off_today_toggled')).toEqual([
+      { assignmentId: row.id, agentId: A1, businessLocationId: LOC, slotKey: 'morning', off: true, localDate: '2026-10-19' },
+      { assignmentId: row.id, agentId: A1, businessLocationId: LOC, slotKey: 'morning', off: false, localDate: '2026-10-19' },
+    ]);
+  });
+});
+
+describe('DedicatedAssignmentsService.pickerStats (AC-S2 picker)', () => {
+  it('load for everyone; balance and orders covered only for independents; none when there is no typical order', async () => {
+    const w = world();
+    w.addAgent(A1, { is_internal: true });
+    w.addAgent(A2);
+    w.state.orders.push(
+      { assigned_agent_id: A2, current_status: 'in_transit', business_location_id: OTHER_LOC, subtotal: 0 },
+      { assigned_agent_id: A1, current_status: 'picked_up', business_location_id: LOC, subtotal: 0 },
+      { assigned_agent_id: A2, current_status: 'delivered', business_location_id: LOC, subtotal: 10_000 }
+    );
+    w.state.accounts.push({ user_id: `u-${A2}`, currency: 'XAF', available_balance: 12_000 });
+    const stats = await w.service.pickerStats(
+      LOC,
+      'CM',
+      [
+        { id: A1, userId: `u-${A1}`, isInternal: true },
+        { id: A2, userId: `u-${A2}`, isInternal: false },
+      ],
+      new Date('2026-10-18T10:00:00Z')
+    );
+    expect(stats.get(A1)).toEqual({ activeOrders: 1, outstandingDedicatedOffers: 0, balanceCoversOrders: null });
+    // Typical subtotal 10 000 -> hold 5 000; 12 000 covers 2 (1 active of 10).
+    // QA #619 N3: no raw balance, only the orders it covers.
+    expect(stats.get(A2)).toEqual({ activeOrders: 1, outstandingDedicatedOffers: 0, balanceCoversOrders: 2 });
+    expect(w.agentHold.resolveOrderHoldWithCeiling).not.toHaveBeenCalledWith(expect.anything(), A1, expect.anything());
+
+    const empty = world();
+    empty.addAgent(A2);
+    const none = await empty.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }]);
+    expect(none.get(A2)).toEqual({ activeOrders: 0, outstandingDedicatedOffers: 0, balanceCoversOrders: null });
+    await expect(empty.service.pickerStats(LOC, 'CM', [])).resolves.toEqual(new Map());
+
+    // QA #619 N2: no per-agent card aggregates (only the typical-subtotal query), and
+    // the hold lookups run concurrently instead of one awaited call after another.
+    const statsCalls = w.executeQuery.mock.calls.filter(([q]) => String(q).includes('query DedicatedCardStats'));
+    expect(statsCalls.length).toBeGreaterThan(0);
+    for (const [, vars] of statsCalls) expect(Object.keys(vars as Loose).filter((k) => /^a\d+$/.test(k))).toEqual([]);
+    let inFlight = 0;
+    let peak = 0;
+    w.agentHold.resolveOrderHoldWithCeiling.mockImplementation(async (subtotal: number) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      return { holdAmount: Math.round(subtotal * 0.5) };
+    });
+    const many = Array.from({ length: 12 }, (_, i) => ({ id: `ag-${i}`, userId: `u-${i}`, isInternal: false }));
+    const batch = await w.service.pickerStats(LOC, 'CM', many, new Date('2026-10-18T10:00:00Z'));
+    expect(batch.size).toBe(12);
+    expect(peak).toBe(10);
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledTimes(12 + 1);
+
+    // A zero hold (e.g. hold waived) means no balance limit to show: covers stays null.
+    w.agentHold.resolveOrderHoldWithCeiling.mockResolvedValueOnce({ holdAmount: 0 });
+    const zero = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], new Date('2026-10-18T10:00:00Z'));
+    expect(zero.get(A2)).toMatchObject({ balanceCoversOrders: null });
+  });
+});
+
+describe('QA #619 N5/N2: picker and card coverage use the store rail; failed hold lookups are logged', () => {
+  const NOW = new Date('2026-10-18T10:00:00Z');
+  // The real AgentHoldService rule (agent-hold.service.ts): a Stripe-rail order has no hold.
+  const realishHold = async (subtotal: number, _agentId: string, rail: string) => ({ holdAmount: rail === 'stripe' ? 0 : Math.round(subtotal * 0.5) });
+  const seed = () => {
+    const w = world();
+    w.addAgent(A2);
+    w.state.orders.push({ assigned_agent_id: A2, current_status: 'delivered', business_location_id: LOC, subtotal: 10_000 });
+    w.state.accounts.push({ user_id: `u-${A2}`, currency: 'XAF', available_balance: 12_000 });
+    w.agentHold.resolveOrderHoldWithCeiling.mockImplementation(realishHold);
+    return w;
+  };
+  const warns = () => (Logger.prototype.warn as jest.Mock).mock.calls.map((c) => String(c[0]));
+  beforeEach(() => {
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+  });
+  afterEach(() => jest.restoreAllMocks());
+
+  it('picker on a Stripe-rail store: hold asked on the stripe rail, so no MoMo-based "covers n"', async () => {
+    const w = seed();
+    w.routing.resolveRailForBusiness.mockResolvedValue('stripe');
+    const stats = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], NOW);
+    expect(w.routing.resolveRailForBusiness).toHaveBeenCalledWith('biz-1');
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'stripe');
+    expect(w.agentHold.resolveOrderHoldWithCeiling).not.toHaveBeenCalledWith(expect.anything(), expect.anything(), 'mobile_money');
+    expect(stats.get(A2)).toMatchObject({ balanceCoversOrders: null });
+  });
+
+  it('picker on a MoMo store still shows how many orders the balance covers', async () => {
+    const w = seed();
+    const stats = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], NOW);
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'mobile_money');
+    expect(stats.get(A2)).toMatchObject({ balanceCoversOrders: 2 });
+  });
+
+  it('business cards on a Stripe-rail store use the stripe rail too', async () => {
+    const w = seed();
+    w.routing.resolveRailForBusiness.mockResolvedValue('stripe');
+    w.seedRow({ agent_id: A2, slot_key: 'morning', status: 'active' });
+    const { assignments } = await w.service.listForLocation(LOC, NOW);
+    expect(w.routing.resolveRailForBusiness).toHaveBeenCalledWith('biz-1');
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'stripe');
+    expect(assignments[0]).toMatchObject({ balanceCoversOrders: null });
+  });
+
+  it('a failed rail lookup falls back to MoMo and is logged', async () => {
+    const w = seed();
+    w.routing.resolveRailForBusiness.mockRejectedValue(new Error('hasura down'));
+    const stats = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], NOW);
+    expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'mobile_money');
+    expect(stats.get(A2)).toMatchObject({ balanceCoversOrders: 2 });
+    expect(warns().some((m) => m.startsWith(`dedicated.rail_lookup_failed location=${LOC}`))).toBe(true);
+  });
+
+  it('QA #619 N2: a failed hold lookup shows null coverage and is logged (not swallowed)', async () => {
+    const w = seed();
+    w.agentHold.resolveOrderHoldWithCeiling.mockRejectedValue(new Error('ledger timeout'));
+    const stats = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], NOW);
+    expect(stats.get(A2)).toMatchObject({ balanceCoversOrders: null });
+    expect(warns()).toEqual(
+      expect.arrayContaining([expect.stringMatching(new RegExp(`^dedicated\\.hold_lookup_failed location=${LOC} agent=${A2} rail=mobile_money: ledger timeout`))])
+    );
   });
 });
