@@ -2450,6 +2450,13 @@ export class RentalsService {
       await this.mobilePaymentsDatabaseService.updateTransaction(transaction.id, {
         transaction_id: paymentResponse.transactionId,
       });
+      // G2: Schedule mock callback AFTER persisting transaction_id
+      if (paymentResponse.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentResponse.transactionId,
+          providerReference
+        );
+      }
     }
   }
 

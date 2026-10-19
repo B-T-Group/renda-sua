@@ -176,11 +176,11 @@ describe('dedicated agents migration (20261018180000)', () => {
     expect(validateDown).toContain('DROP INDEX IF EXISTS public.order_offers_dedicated_outstanding_idx;');
   });
 
-  it('QA N1: apply-hasura commits each migration separately, so 180001 never runs under 180000\'s ACCESS EXCLUSIVE locks', () => {
+  it('apply-hasura uses only flags Hasura CLI v2 supports (no --per-migration-transaction; v2 sends each file as its own run_sql)', () => {
     const action = readFileSync(join(__dirname, '../../../../.github/actions/apply-hasura/action.yml'), 'utf8');
     const applies = action.split('\n').filter((l) => /hasura migrate apply\b/.test(l) && !/run_logged|^\s*#/.test(l));
     expect(applies.length).toBeGreaterThan(0);
-    for (const line of applies) expect(line).toMatch(/\s--per-migration-transaction\s/);
+    for (const line of applies) expect(line).not.toMatch(/--per-migration-transaction/);
   });
 
   it('touches orders / order_offers without a table rewrite or a scan in 180000 (constraints NOT VALID, validated in 180001)', () => {

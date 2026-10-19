@@ -198,6 +198,7 @@ import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 import {
   anyLocationPayAtConfirm,
   PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY,
@@ -227,7 +228,6 @@ import {
   DepositRefundService,
   RESOLVED_DEPOSIT_STATUSES,
 } from './deposit-refund.service';
-import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
 
 export interface OrderStatusChangeRequest {
@@ -1065,7 +1065,7 @@ export class OrdersService {
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to fetch item deals for order pricing:', error);
+      this.logger.error('Failed to fetch item deals for order pricing:', safeErrorMessage(error));
       return {};
     }
   }
@@ -3105,6 +3105,29 @@ export class OrdersService {
     const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: holdAmount,
+      },
+      user.id
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     // Create transaction record before initiating payment
     let paymentTransaction = null;
     let transaction = null;
@@ -3189,6 +3212,14 @@ export class OrdersService {
             transaction_id: paymentTransaction.transactionId,
           }
         );
+        
+        // G2: Schedule mock callback AFTER persisting the transaction_id
+        if (paymentTransaction.transactionId.startsWith('mock-')) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentTransaction.transactionId,
+            reference
+          );
+        }
       }
 
       this.logger.log(
@@ -3237,8 +3268,7 @@ export class OrdersService {
 
       // Log the error and throw a generic error
       this.logger.error(
-        `Failed to claim order with topup: ${error.message}`,
-        error.stack
+        `Failed to claim order with topup: ${safeErrorMessage(error)}`
       );
 
       throw new HttpException(
@@ -4198,6 +4228,29 @@ export class OrdersService {
       };
     }
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4249,6 +4302,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     return {
@@ -4411,6 +4472,29 @@ export class OrdersService {
       };
     }
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4462,6 +4546,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     // Clear a prior failed payment_status so clients polling after a new push
@@ -4610,6 +4702,29 @@ export class OrdersService {
     );
     const chargeAmount = Number(order.total_amount) || 0;
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider: momo.provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4657,6 +4772,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
     await this.resetOrderPaymentFailure(orderId);
   }
@@ -5575,6 +5698,29 @@ export class OrdersService {
     const reference = this.buildOrderPaymentAttemptReference(order.order_number);
     const chargeAmount = Number(order.total_amount) || 0;
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: params.phone,
+        provider: momo.provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     let tx: MobilePaymentTransaction;
     try {
       tx = await this.mobilePaymentsDatabaseService.createTransaction({
@@ -5679,6 +5825,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: sent.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (sent.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          sent.transactionId,
+          reference
+        );
+      }
     }
     // D3: persist the new number only after the provider accepted the request.
     if (params.phoneChanged) {
@@ -5736,8 +5890,9 @@ export class OrdersService {
   }
 
   /**
-   * Provider SUCCESS for an order attempt we cancelled as superseded (called by the
-   * callback processor after it verified the provider status and credited the wallet).
+   * Provider SUCCESS for an order attempt we cancelled as superseded, or for a plain
+   * attempt we had marked failed (F3 declined-then-approved, M1). Called by the
+   * callback processor after it verified the provider status and credited the wallet.
    * First success wins: an unpaid live order is finalized with this attempt and any
    * newer pending attempt is cancelled. A paid or cancelled order keeps the money in
    * the client's wallet (D5) and raises an alert.
@@ -6044,6 +6199,30 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: Number(order.total_amount),
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: Number(order.total_amount),
@@ -6095,6 +6274,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     await this.resetOrderPaymentFailure(orderId);
@@ -6280,7 +6467,29 @@ export class OrdersService {
     const provider = momo.provider;
 
     const depositLongReference = `${order.order_number}-DEP-${Date.now()}-retry`;
-    const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
+
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: depositAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     // Step 1: Create pending mobile_payment_transactions row FIRST (real FK target)
     const depositTransaction =
@@ -6410,7 +6619,7 @@ export class OrdersService {
 
     const depositResult = await this.mobilePaymentsService.initiatePayment(
       depositPaymentRequest,
-      depositShortReference,
+      depositLongReference,
       user.id
     );
 
@@ -6502,6 +6711,14 @@ export class OrdersService {
           transaction_id: depositResult.transactionId,
         }
       );
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (depositResult.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          depositResult.transactionId,
+          depositLongReference
+        );
+      }
     }
 
     try {
@@ -6812,6 +7029,30 @@ export class OrdersService {
     const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
       order as any
     );
+
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phone,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -6861,6 +7102,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     return {
@@ -10689,7 +10938,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to finalize deposit for order ${orderNumber}:`,
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -12464,7 +12713,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to mark deposit_status=failed for order ${orderId}:`,
-        error
+        safeErrorMessage(error)
       );
     }
     await this.orderSystemJobsService.onOrderPaymentFailed(
@@ -12537,7 +12786,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to read market flag ${configKey} for ${countryCode}:`,
-        error
+        safeErrorMessage(error)
       );
       return false; // Default to false on error
     }
@@ -13207,7 +13456,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to get fast delivery fee for country ${country}:`,
-        error
+        safeErrorMessage(error)
       );
       return { fee: 0, enabled: false };
     }
@@ -13510,6 +13759,7 @@ export class OrdersService {
             description
             pay_on_delivery_enabled
             export_available
+            moderation_status
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price
@@ -13704,6 +13954,18 @@ export class OrdersService {
       if (!businessInventory.is_active) {
         throw new Error(
           `Item ${businessInventory.item.name} is not currently available`
+        );
+      }
+
+      // F-M7: unmoderated (draft/pending/rejected) items cannot be ordered
+      if (businessInventory.item?.moderation_status !== 'approved') {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'ITEM_UNAVAILABLE',
+            message: `Item ${businessInventory.item?.name ?? ''} is not currently available`,
+          },
+          HttpStatus.BAD_REQUEST
         );
       }
 
@@ -14679,7 +14941,7 @@ export class OrdersService {
           }
         );
       } catch (error) {
-        this.logger.error('Failed to create delivery window:', error);
+        this.logger.error('Failed to create delivery window:', safeErrorMessage(error));
         await this.markOrderTimingScheduled(order.id);
       }
     }
@@ -14719,9 +14981,10 @@ export class OrdersService {
       try {
         const depositCalc = depositQuote;
 
-          // Generate references: long for DB, short for MyPVIT (≤15 chars)
+          // Long reference is stored on the row and sent to the provider.
+          // MyPVit shortens internally (≤15 chars); FedaPay/Freemopay keep it so
+          // webhook live-recheck matches custom_metadata.externalId.
           const depositLongReference = `${order.order_number}-DEP-${Date.now()}`;
-          const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
 
           const depositPaymentRequest = {
             amount: depositCalc.depositAmount,
@@ -14732,10 +14995,9 @@ export class OrdersService {
             transactionType: 'PAYMENT' as const,
           };
 
-          // Initiate MoMo payment (short reference ≤15 chars for MyPVIT)
           const depositResult = await this.mobilePaymentsService.initiatePayment(
             depositPaymentRequest,
-            depositShortReference,
+            depositLongReference,
             user.id
           );
 
@@ -14772,6 +15034,14 @@ export class OrdersService {
               entity_id: order.order_number,
               transaction_id: depositResult.transactionId,
             });
+          
+          // G2: Schedule mock callback AFTER persisting the transaction_id
+          if (depositResult.transactionId?.startsWith('mock-')) {
+            await this.mobilePaymentsService.scheduleMockCallback(
+              depositResult.transactionId,
+              depositLongReference
+            );
+          }
 
           // Update order with deposit info (keep status pending_payment until callback)
           const updateDepositMutation = `
@@ -14847,7 +15117,7 @@ export class OrdersService {
         } catch (error: any) {
           this.logger.error(
             `Deposit collection failed for order ${order.order_number}:`,
-            error
+            safeErrorMessage(error)
           );
           await this.compensateUnpaidCreate(
             order.id,
@@ -15397,6 +15667,29 @@ export class OrdersService {
     itemCountry?: string;
     userId?: string;
   }): Promise<{ transaction: any; paymentTransaction: any }> {
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: params.phoneNumber,
+        provider: params.provider,
+        itemCountry: params.itemCountry,
+        currency: params.currency,
+        amount: params.totalAmount,
+      },
+      params.userId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const transaction =
       await this.mobilePaymentsDatabaseService.createTransaction({
         reference: params.orderNumber,
@@ -15458,6 +15751,14 @@ export class OrdersService {
         transaction.id,
         { transaction_id: paymentTransaction.transactionId }
       );
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          params.orderNumber
+        );
+      }
     }
 
     this.logger.log(
@@ -17733,7 +18034,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to calculate tiered delivery fee for country ${country}:`,
-        error
+        safeErrorMessage(error)
       );
 
       return calculateDeliveryFeeFallback({
