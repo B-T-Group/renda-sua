@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { ClientError } from 'graphql-request';
 import { inspect } from 'util';
 import { MobilePaymentsDatabaseService } from '../../mobile-payments/mobile-payments-database.service';
-import { maskEmailForLog, maskPhoneDigits, maskPhoneForLog, safeErrorMessage } from './safe-error-log.util';
+import { maskAccountRefForLog, maskEmailForLog, maskPhoneDigits, maskPhoneForLog, safeErrorMessage } from './safe-error-log.util';
 
 /** A real graphql-request 5.2 ClientError: its message embeds query + variables. */
 function hasuraError(): ClientError {
@@ -92,5 +92,13 @@ describe('#616 log maskers', () => {
     expect(maskPhoneForLog('+228 90 12 34 56')).toBe('***456');
     expect(maskPhoneForLog('90123456')).toBe('***456');
     expect(maskPhoneForLog(undefined)).toBe('***');
+  });
+  it('maskAccountRefForLog masks phone-like values only; a UUID is logged as is', () => {
+    expect(maskAccountRefForLog('90123456')).toBe('***456');
+    expect(maskAccountRefForLog('+228 90-12.34 (56)')).toBe('***456');
+    expect(maskAccountRefForLog('3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab')).toBe('3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab');
+    expect(maskAccountRefForLog('12345-67')).toBe('12345-67');
+    expect(maskAccountRefForLog('1234567')).toBe('1234567');
+    expect(maskAccountRefForLog(undefined)).toBe('unknown');
   });
 });

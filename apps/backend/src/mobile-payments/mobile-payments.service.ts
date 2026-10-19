@@ -24,6 +24,7 @@ import {
   maskPhoneNumber,
   toSanitizedError,
 } from './sanitize-provider-error.util';
+import { maskAccountRefForLog } from '../common/utils/safe-error-log.util';
 import {
   FreemopayPaymentRequest,
   FreemopayPaymentResponse,
@@ -768,9 +769,7 @@ export class MobilePaymentsService {
         `Initiating mobile payment for account: ${
           paymentRequest.customerPhone
             ? maskPhoneNumber(paymentRequest.customerPhone)
-            : paymentRequest.accountId
-              ? maskPhoneNumber(paymentRequest.accountId)
-              : 'unknown'
+            : maskAccountRefForLog(paymentRequest.accountId)
         }`
       );
 

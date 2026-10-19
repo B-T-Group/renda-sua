@@ -36,3 +36,16 @@ export function maskEmailForLog(email: string | null | undefined): string {
 export function maskPhoneForLog(phone: string | null | undefined): string {
   return phone ? maskPhoneNumber(String(phone)) : '***';
 }
+
+/**
+ * #616 QA L1: an account reference for a log line. Callers pass either a payer
+ * phone or a wallet account UUID. Only a phone-like value (digits with optional
+ * `+`, spaces, dashes, dots or parentheses, and at least 8 digits) is masked; any
+ * other id (a UUID) is not PII and is logged unchanged so the line stays traceable.
+ */
+export function maskAccountRefForLog(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === '') return 'unknown';
+  const text = String(value);
+  const phoneLike = /^\+?[\d\s().-]+$/.test(text) && text.replace(/\D/g, '').length >= 8;
+  return phoneLike ? maskPhoneNumber(text) : text;
+}

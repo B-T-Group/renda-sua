@@ -118,6 +118,25 @@ describe('FedaPayService call sites (DEV mock mode, no SDK calls)', () => {
     await fedapay().withdraw({ payee: '90123456', amount: 100, channel: 'togocel', externalId: 'R' } as any, 'R');
     expect(allLogs()).not.toContain('90123456');
   });
+
+  it('#616 QA L1: initiatePayment without a customer phone logs a wallet accountId UUID unchanged', async () => {
+    const fedapay = new FedaPayService(
+      config('fedapay', { secretKey: 'sk_sandbox_x', environment: 'sandbox', mockEnabled: false }),
+      { get: jest.fn() } as any
+    );
+    jest.spyOn(fedapay, 'initiatePayment').mockRejectedValue(providerError());
+    const hasura = {
+      executeQuery: jest.fn(async (q: string) =>
+        q.includes('CheckFedaPayActive') ? { supported_payment_systems: [{ active: true }] } : {}
+      ),
+    };
+    const mps = new MobilePaymentsService({} as any, {} as any, {} as any, {} as any, {} as any, {} as any, fedapay, hasura as any);
+    const accountId = '3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab';
+    await mps
+      .initiatePayment({ amount: 1000, currency: 'XOF', description: 'x', accountId, provider: 'fedapay', reference: 'REF-3' } as any)
+      .catch(() => undefined);
+    expect(allLogs()).toContain(`Initiating mobile payment for account: ${accountId}`);
+  });
 });
 
 describe('MyPVitService call sites', () => {
