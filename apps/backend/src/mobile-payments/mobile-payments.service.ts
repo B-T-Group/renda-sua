@@ -91,24 +91,23 @@ export interface MobilePaymentResponse {
 
 /**
  * #592 QA L2: rows created before this cutoff may carry a FedaPay externalId that is the
- * MyPVit short hash of the stored reference. FEDAPAY_LEGACY_SHORT_REF_CUTOFF (ISO time) pins
- * it per environment; otherwise it is this process's start time, so only rows that existed
- * before the code that sends the long reference was running can qualify.
+ * MyPVit short hash of the stored reference. FEDAPAY_LEGACY_SHORT_REF_CUTOFF (ISO time, set per
+ * environment to #592's deploy time) enables it. Unset or unparseable: legacy matching is
+ * disabled (fail closed).
  */
-const PROCESS_STARTED_AT_MS = Date.now();
-
 export function fedapayLegacyShortRefCutoffMs(
   env: Record<string, string | undefined> = process.env
-): number {
+): number | undefined {
   const configured = env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF?.trim();
   const parsed = configured ? Date.parse(configured) : NaN;
-  return Number.isFinite(parsed) ? parsed : PROCESS_STARTED_AT_MS;
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 export function isLegacyFedaPayShortRefRow(
   tx: { payment_entity?: string | null; created_at?: string | null },
-  cutoffMs: number = fedapayLegacyShortRefCutoffMs()
+  cutoffMs: number | undefined = fedapayLegacyShortRefCutoffMs()
 ): boolean {
+  if (cutoffMs === undefined) return false;
   if (tx.payment_entity !== 'order_deposit') return false;
   const createdMs = tx.created_at ? Date.parse(tx.created_at) : NaN;
   return Number.isFinite(createdMs) && createdMs < cutoffMs;
@@ -439,7 +438,7 @@ export class MobilePaymentsService {
    *
    * Legacy (#592 QA L2): before #592, deposit create/retry stored the long reference but sent
    * MyPVit's short hash to FedaPay. The short-hash match is accepted only for `order_deposit`
-   * rows created before the cutoff, and every use logs `fedapay_legacy_short_ref_matched` so
+   * rows created before FEDAPAY_LEGACY_SHORT_REF_CUTOFF (disabled when unset), and every use logs `fedapay_legacy_short_ref_matched` so
    * the fallback can be removed once no such rows remain in flight (FedaPay expires
    * collections after ~24h). Empty stored or live references never match (QA L1).
    */

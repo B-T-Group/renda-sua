@@ -352,6 +352,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
     });
 
     it('accepts FedaPay live reference that is the MyPVit short hash of the stored deposit ref', async () => {
+      process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = '2026-10-19T00:00:00Z';
       const stored = 'ORD-99-DEP-1730000000000';
       const shortRef = buildShortReferenceForMyPVit(stored);
       const tx = {
@@ -372,9 +373,13 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         merchantRef: shortRef,
       });
 
-      await expect(
-        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).resolves.toBeUndefined();
+      try {
+        await expect(
+          realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+        ).resolves.toBeUndefined();
+      } finally {
+        delete process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF;
+      }
     });
 
     describe('#592 QA L1/L2: legacy short-hash scope', () => {
@@ -461,6 +466,19 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
           realService['assertProviderConfirmsCallback'](legacyRow() as any, 'FAILED')
         ).rejects.toMatchObject({ reason: 'reference_mismatch' });
       });
+
+      it.each([undefined, '', 'not-a-date'])(
+        'cutoff %p: legacy matching is disabled (fail closed)',
+        async (cutoff) => {
+          if (cutoff === undefined) delete process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF;
+          else process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = cutoff;
+          liveWith(buildShortReferenceForMyPVit(stored));
+          await expect(
+            realService['assertProviderConfirmsCallback'](legacyRow({ created_at: '2020-01-01T00:00:00Z' }) as any, 'SUCCESS')
+          ).rejects.toMatchObject({ reason: 'reference_mismatch' });
+          expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('fedapay_legacy_short_ref_matched'));
+        }
+      );
 
       it('L1: an empty stored reference never matches', () => {
         const matches = (realService as any).fedapayReferenceMatches.bind(realService);
