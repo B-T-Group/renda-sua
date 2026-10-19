@@ -274,7 +274,8 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       expect(firstError.message).toMatch(/Failed to process FedaPay callback/);
       expect(firstError.cause).toBeInstanceOf(Error);
       expect(firstError.cause.message).toBe('DB timeout');
-      expect(firstError.getResponse().error).toBe('DB timeout');
+      // #587: the 5xx body stays generic; the inner error is only on `cause`.
+      expect(firstError.getResponse()).toEqual({ success: false, message: 'Failed to process FedaPay callback' });
 
       // Second call: same event retried, processing succeeds this time
       mockCallbackProcessor.processFedaPayCallback.mockResolvedValueOnce({ received: true });
