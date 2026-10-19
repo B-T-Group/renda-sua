@@ -1,5 +1,6 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
 import type { OfferDeclineReason } from '../dedicated-agents/dedicated-agents.constants';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
@@ -126,6 +127,50 @@ const RECORD_DEDICATED_RELEASE_MUTATION = `
   }
 `;
 
+/** #608 follow-up: Sentry/Slack money-anomaly marker for an agent hold left withheld. */
+export const STRANDED_HOLD_MARKER = 'agent_hold_stranded';
+
+interface StrandedHoldPayload {
+  agentId?: string | null;
+  agentUserId?: string | null;
+  amount?: number;
+  currency?: string;
+  path?: string;
+  holdId?: string;
+}
+
+const STRANDED_HOLDS_QUERY = `
+  query StrandedAgentHolds($limit: Int!, $since: timestamptz!) {
+    order_events(
+      where: { event_type: { _eq: "agent_hold_stranded" }, created_at: { _gte: $since } }
+      order_by: { created_at: desc }
+      limit: $limit
+    ) {
+      id
+      order_id
+      payload
+    }
+  }
+`;
+
+const STRANDED_HOLDS_RESOLVED_QUERY = `
+  query StrandedAgentHoldsResolved($orderIds: [uuid!]!) {
+    order_events(where: { event_type: { _eq: "agent_hold_stranded_released" }, order_id: { _in: $orderIds } }) {
+      order_id
+      payload
+    }
+  }
+`;
+
+/** Stranded-hold events older than this are left to finance (they keep their alert). */
+const STRANDED_HOLD_LOOKBACK_DAYS = 30;
+
+const STRANDED_HOLD_ORDER_QUERY = `
+  query StrandedHoldOrder($id: uuid!) {
+    orders_by_pk(id: $id) { id order_number assigned_agent_id }
+  }
+`;
+
 @Injectable()
 export class OrderReassignmentService {
   private readonly logger = new Logger(OrderReassignmentService.name);
@@ -227,11 +272,12 @@ export class OrderReassignmentService {
       log('refused', { refusal: 'window_closed', cause: 'cas_lost' });
       return this.refuse('window_closed', 'The release window for this order has closed');
     }
-    const holdReleased = await this.releaseHold(order as unknown as MonitoredPickupOrder);
-    if (!holdReleased) {
+    const holdResult = await this.releaseHoldDetailed(order as unknown as MonitoredPickupOrder);
+    if (!holdResult.released) {
       const restored = await this.revertDedicatedRelease(order);
       if (restored) await this.dropExclusion(order.id, agentId, nowIso);
       if (!restored) {
+        await this.recordStrandedHold(order as unknown as MonitoredPickupOrder, holdResult.hold, 'dedicated_release');
         log('failed', { refusal: 'release_lost', cause: 'hold_release_failed_and_reclaimed' });
         return this.refuse('release_lost', 'The order was released and another agent has taken it');
       }
@@ -559,31 +605,133 @@ export class OrderReassignmentService {
     );
     const affected = result?.update_orders?.affected_rows ?? 0;
     if (affected !== 1) return false;
-    const released = await this.releaseHold(order);
-    if (!released) {
-      await this.revertSystemDrop(order);
+    const holdResult = await this.releaseHoldDetailed(order);
+    if (!holdResult.released) {
+      const restored = await this.revertSystemDrop(order);
+      if (!restored) await this.recordStrandedHold(order, holdResult.hold, 'pickup_reassignment');
       return false;
     }
     await this.insertHistory(order.id, 'System reassigned order after pickup SLA');
     return true;
   }
 
-  private async releaseHold(order: MonitoredPickupOrder): Promise<boolean> {
+  /** The hold read before the credit is returned, so a failure can be recorded with it. */
+  private async releaseHoldDetailed(
+    order: MonitoredPickupOrder
+  ): Promise<{ released: boolean; hold: { id: string; agent_hold_amount: number } | null }> {
     const hold = await this.fetchActiveAgentHold(order.id);
-    if (!hold) return true;
+    if (!hold) return { released: true, hold: null };
     const credited = await this.creditHoldRelease(order, hold);
     if (!credited) {
       this.logger.error(
         `Hold row left active for order ${order.order_number}: release failed`
       );
-      return false;
+      return { released: false, hold };
     }
     await this.cancelHoldRow(hold.id);
-    return true;
+    return { released: true, hold };
   }
 
-  private async revertSystemDrop(order: MonitoredPickupOrder): Promise<void> {
-    await this.hasura.executeMutation(
+  /**
+   * #608 follow-up: the hold credit failed AND the order could not be given back
+   * (another agent claimed it in the window). The releasing agent's withheld funds
+   * are stranded: the shared order_holds row (UNIQUE order_id) is rewritten for the
+   * new agent's claim, so the amount and agent are captured here, at failure time.
+   * One money-anomaly alert (Sentry, fingerprinted), plus an `agent_hold_stranded`
+   * order event that reconcileStrandedAgentHolds works from.
+   */
+  private async recordStrandedHold(
+    order: MonitoredPickupOrder,
+    hold: { id: string; agent_hold_amount: number } | null,
+    path: 'dedicated_release' | 'pickup_reassignment'
+  ): Promise<void> {
+    const amount = Number(hold?.agent_hold_amount ?? 0);
+    if (!hold || !(amount > 0)) return; // no money held (e.g. internal agent): nothing stranded
+    const agentId = order.assigned_agent_id;
+    const agentUserId = order.assigned_agent?.user_id ?? null;
+    const currency = (order as { currency?: string }).currency || 'XAF';
+    reportMoneyAnomaly(
+      this.logger,
+      STRANDED_HOLD_MARKER,
+      `Agent hold stranded for order ${order.order_number}: release failed and another agent took the order`,
+      { orderId: order.id, orderNumber: order.order_number, holdId: hold.id, agentId, agentUserId, amount, currency, path }
+    );
+    await this.orderEvents.recordEvent({
+      orderId: order.id,
+      eventType: 'agent_hold_stranded',
+      actorType: 'system',
+      payload: { agentId, agentUserId, amount, currency, path, holdId: hold.id },
+    });
+  }
+
+  /**
+   * #608 follow-up reconciler (run by the pickup monitor cron). For each
+   * `agent_hold_stranded` event without an `agent_hold_stranded_released` one:
+   * - skipped while that agent holds the order again (its hold is live, not stranded);
+   * - otherwise the agent's withheld amount is released with
+   *   registerReleaseIfNotExists (keyed on account + order: a retry or a run racing
+   *   another never credits twice), then the resolution event is written.
+   * A failed release is logged and retried on the next run.
+   */
+  async reconcileStrandedAgentHolds(limit = 50): Promise<{ released: number; skipped: number; failed: number }> {
+    const out = { released: 0, skipped: 0, failed: 0 };
+    const since = new Date(Date.now() - STRANDED_HOLD_LOOKBACK_DAYS * 86_400_000).toISOString();
+    const res = await this.hasura.executeQuery<{
+      order_events: Array<{ id: string; order_id: string; payload: StrandedHoldPayload | null }>;
+    }>(STRANDED_HOLDS_QUERY, { limit, since });
+    const stranded = res?.order_events ?? [];
+    if (stranded.length === 0) return out;
+    const resolved = await this.hasura.executeQuery<{
+      order_events: Array<{ order_id: string; payload: { strandedEventId?: string } | null }>;
+    }>(STRANDED_HOLDS_RESOLVED_QUERY, { orderIds: [...new Set(stranded.map((e) => e.order_id))] });
+    const done = new Set((resolved?.order_events ?? []).map((r) => r.payload?.strandedEventId).filter(Boolean));
+    for (const ev of stranded) {
+      if (done.has(ev.id)) continue;
+      const p = ev.payload ?? ({} as StrandedHoldPayload);
+      const amount = Number(p.amount);
+      if (!p.agentUserId || !(amount > 0)) {
+        out.skipped++;
+        continue;
+      }
+      try {
+        const order = await this.hasura.executeQuery<{
+          orders_by_pk: { id: string; order_number: string; assigned_agent_id: string | null } | null;
+        }>(STRANDED_HOLD_ORDER_QUERY, { id: ev.order_id });
+        const o = order?.orders_by_pk;
+        if (!o || (p.agentId && o.assigned_agent_id === p.agentId)) {
+          out.skipped++;
+          continue;
+        }
+        const account = await this.hasura.getAccount(p.agentUserId, p.currency || 'XAF');
+        if (!account) throw new Error('agent account missing');
+        const released = await this.accountsService.registerReleaseIfNotExists({
+          accountId: account.id,
+          amount,
+          memo: `Hold released for order ${o.order_number}. Stranded after release (reconciled).`,
+          referenceId: ev.order_id,
+        });
+        if (!released.success) throw new Error(released.error || 'release failed');
+        await this.orderEvents.recordEvent({
+          orderId: ev.order_id,
+          eventType: 'agent_hold_stranded_released',
+          actorType: 'system',
+          payload: { strandedEventId: ev.id, agentId: p.agentId, amount, alreadyExisted: released.alreadyExists === true },
+        });
+        this.logger.log(`Stranded agent hold released for order ${o.order_number} (${amount} ${p.currency || 'XAF'})`);
+        out.released++;
+      } catch (error: unknown) {
+        out.failed++;
+        this.logger.warn(
+          `Stranded agent hold for order ${ev.order_id} not released yet: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+    return out;
+  }
+
+  /** True when the order went back to this agent (false: someone claimed it meanwhile). */
+  private async revertSystemDrop(order: MonitoredPickupOrder): Promise<boolean> {
+    const res = await this.hasura.executeMutation<{ update_orders?: { affected_rows?: number } | null }>(
       `mutation RevertSystemDrop($id: uuid!, $agentId: uuid!) {
         update_orders(
           where: {
@@ -600,6 +748,7 @@ export class OrderReassignmentService {
       }`,
       { id: order.id, agentId: order.assigned_agent_id }
     );
+    return (res?.update_orders?.affected_rows ?? 0) === 1;
   }
 
   private async fetchActiveAgentHold(

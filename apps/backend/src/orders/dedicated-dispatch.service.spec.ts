@@ -1402,6 +1402,25 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({ refusal: 'release_lost' });
       expect(w.state.order.assigned_agent_id).toBe('thief');
       expect(errors.mock.calls.some((c) => String(c[0]).includes('"event":"dedicated.release_revert_failed"'))).toBe(true);
+      // #608 follow-up: the stranded hold raises one money-anomaly alert and is queued for the reconciler.
+      expect(errors.mock.calls.filter((c) => String(c[0]).startsWith('agent_hold_stranded '))).toHaveLength(1);
+      expect(w.orderEvents.recordEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'agent_hold_stranded',
+          payload: expect.objectContaining({ agentId: 'int', amount: 500, path: 'dedicated_release', holdId: 'hold-1' }),
+        })
+      );
+      errors.mockRestore();
+    });
+
+    it('#608 follow-up: a failed release that IS reverted strands nothing (no alert, no event)', async () => {
+      const w = await autoAssigned((x) => x.state.holds.push({ id: 'hold-1', agent_hold_amount: 500, status: 'active' }));
+      w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' });
+      const errors = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      jest.setSystemTime(at(10));
+      await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({ refusal: 'release_failed' });
+      expect(errors.mock.calls.some((c) => String(c[0]).startsWith('agent_hold_stranded'))).toBe(false);
+      expect(w.orderEvents.recordEvent).not.toHaveBeenCalledWith(expect.objectContaining({ eventType: 'agent_hold_stranded' }));
       errors.mockRestore();
     });
 

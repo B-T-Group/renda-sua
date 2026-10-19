@@ -35,7 +35,9 @@ export type OrderEventType =
   | 'risk_superusers_alerted'
   | 'risk_incident_acknowledged'
   | 'admin_intervention'
-  | 'acceptance_reminder_sent';
+  | 'acceptance_reminder_sent'
+  | 'agent_hold_stranded'
+  | 'agent_hold_stranded_released';
 
 export type OrderEventActorType =
   | 'client'
