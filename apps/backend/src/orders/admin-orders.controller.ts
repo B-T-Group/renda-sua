@@ -62,6 +62,10 @@ import type {
 } from '../credits/credit.types';
 import { isAdminOperationalStatus } from './admin-order-status.util';
 import { safeErrorMessage } from '../common/utils/safe-error-log.util';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+
+/** The full-refund cancel succeeded but its audit event could not be written. */
+export const FULL_REFUND_CANCEL_AUDIT_FAILED_MARKER = 'admin_full_refund_cancel_audit_failed';
 
 @ApiTags('admin/orders')
 @Controller('admin/orders')
@@ -300,12 +304,46 @@ export class AdminOrdersController {
     const scope = await this.geo.require(PlatformPermissions.FINANCIAL_REFUNDS);
     await this.geo.assertOrder(scope, orderId);
     const result = await this.ordersService.adminFullRefundCancel(orderId, dto.reason);
-    await this.recordIntervention(orderId, 'full_refund_cancel', {
-      reason: dto.reason,
-      previousStatus: result.previousStatus,
-      cancellationFee: 0,
-    });
+    await this.auditFullRefundCancel(orderId, dto.reason, result.previousStatus);
     return result;
+  }
+
+  /**
+   * The audit event after a successful full-refund cancel. The cancel (and its refund)
+   * has already happened, so a failure here must not turn it into an error: it is
+   * raised as an alert (`admin_full_refund_cancel_audit_failed`, Sentry + CloudWatch
+   * marker) with who/what/why so the trail can be restored by hand. Written directly
+   * (not via OrderEventsService.recordEvent, which swallows insert errors) so a
+   * failed insert is seen.
+   */
+  private async auditFullRefundCancel(orderId: string, reason: string, previousStatus: string): Promise<void> {
+    let actorId: string | null = null;
+    try {
+      actorId = (await this.hasuraUserService.getUser())?.id ?? null;
+      await this.hasuraSystemService.executeMutation(
+        `mutation AuditFullRefundCancel($orderId: uuid!, $actorId: uuid, $payload: jsonb!) {
+          insert_order_events_one(object: {
+            order_id: $orderId
+            event_type: "admin_intervention"
+            actor_type: "support"
+            actor_id: $actorId
+            payload: $payload
+          }) { id }
+        }`,
+        {
+          orderId,
+          actorId,
+          payload: { action: 'full_refund_cancel', reason, previousStatus, cancellationFee: 0 },
+        }
+      );
+    } catch (error: unknown) {
+      reportMoneyAnomaly(
+        this.logger,
+        FULL_REFUND_CANCEL_AUDIT_FAILED_MARKER,
+        `Audit event not written for the full-refund cancel of order ${orderId} (the cancel succeeded): ${safeErrorMessage(error)}`,
+        { orderId, actorId, previousStatus, reason }
+      );
+    }
   }
 
   @Patch(':orderId/status')

@@ -5,6 +5,8 @@
  * runs exactly once, refused after pickup, and audit-logged only on success.
  */
 jest.mock('../notifications/notifications.service', () => ({ NotificationsService: class NotificationsService {} }));
+jest.mock('../common/utils/money-alert.util', () => ({ reportMoneyAnomaly: jest.fn() }));
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { HttpException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
@@ -76,6 +78,15 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect(calls).toEqual([]);
   });
 
+  it.each(['delivered', 'complete', 'cancelled', 'refunded'])('a %s order is refused (400) with nothing written', async (status) => {
+    const { svc, calls } = service(status);
+    const err = await svc.adminFullRefundCancel('o-1', 'r').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(400);
+    expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    expect(calls).toEqual([]);
+  });
+
   it('without a resolvable admin user nothing is cancelled', async () => {
     const { svc } = service('pending');
     svc.hasuraUserService.getUser.mockRejectedValue(new Error('no user'));
@@ -109,7 +120,8 @@ describe('POST /admin/orders/:orderId/full-refund-cancel', () => {
     ctrl.geo = { require: jest.fn(async () => ({ all: true })), assertOrder: jest.fn(async () => undefined) };
     ctrl.ordersService = { adminFullRefundCancel: cancel };
     ctrl.hasuraUserService = { getUser: jest.fn(async () => ({ id: 'admin-1' })) };
-    ctrl.orderEventsService = { recordEvent: jest.fn(async () => undefined) };
+    ctrl.hasuraSystemService = { executeMutation: jest.fn(async () => ({ insert_order_events_one: { id: 'ev-1' } })) };
+    ctrl.logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn() };
     return ctrl;
   };
 
@@ -118,19 +130,35 @@ describe('POST /admin/orders/:orderId/full-refund-cancel', () => {
     await ctrl.fullRefundCancel('o-1', { reason: 'QA leftover' });
     expect(ctrl.geo.require).toHaveBeenCalledWith('platform.financial.refunds');
     expect(ctrl.geo.assertOrder).toHaveBeenCalledWith({ all: true }, 'o-1');
-    expect(ctrl.orderEventsService.recordEvent).toHaveBeenCalledWith({
+    expect(ctrl.hasuraSystemService.executeMutation).toHaveBeenCalledWith(expect.stringContaining('event_type: "admin_intervention"'), {
       orderId: 'o-1',
-      eventType: 'admin_intervention',
-      actorType: 'support',
       actorId: 'admin-1',
       payload: { action: 'full_refund_cancel', reason: 'QA leftover', previousStatus: 'ready_for_pickup', cancellationFee: 0 },
     });
+    expect(ctrl.hasuraSystemService.executeMutation.mock.calls[0][0]).toContain('actor_type: "support"');
+  });
+
+  it('the audit write failing does not fail the (already done) cancel; it alerts with who/what/why', async () => {
+    const ctrl = controller(jest.fn(async () => ({ success: true, previousStatus: 'confirmed', cancellationFee: 0 })));
+    ctrl.hasuraSystemService.executeMutation.mockRejectedValueOnce(new Error('hasura down'));
+    await expect(ctrl.fullRefundCancel('o-1', { reason: 'cleanup' })).resolves.toMatchObject({ success: true });
+    expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect.anything(),
+      'admin_full_refund_cancel_audit_failed',
+      expect.stringContaining('hasura down'),
+      expect.objectContaining({ orderId: 'o-1', actorId: 'admin-1', previousStatus: 'confirmed', reason: 'cleanup' })
+    );
+    // An actor lookup failure is caught the same way.
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    ctrl.hasuraUserService.getUser.mockRejectedValueOnce(new Error('no ctx'));
+    await expect(ctrl.fullRefundCancel('o-1', { reason: 'cleanup' })).resolves.toMatchObject({ success: true });
+    expect(reportMoneyAnomaly).toHaveBeenCalledTimes(1);
   });
 
   it('a refused cancel (409 / out of scope) writes no audit event', async () => {
     const ctrl = controller(jest.fn(async () => Promise.reject(new HttpException('moved', 409))));
     await expect(ctrl.fullRefundCancel('o-1', { reason: 'x' })).rejects.toBeInstanceOf(HttpException);
-    expect(ctrl.orderEventsService.recordEvent).not.toHaveBeenCalled();
+    expect(ctrl.hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     ctrl.geo.assertOrder.mockRejectedValueOnce(new HttpException('Access denied', 403));
     await expect(ctrl.fullRefundCancel('o-1', { reason: 'x' })).rejects.toBeInstanceOf(HttpException);
     expect(ctrl.ordersService.adminFullRefundCancel).toHaveBeenCalledTimes(1);
