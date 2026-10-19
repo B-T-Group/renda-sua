@@ -491,6 +491,16 @@ describe('DedicatedCoverageService slot by id and coverWindow (PR 4)', () => {
     ).resolves.toBeNull();
   });
 
+  it('QA #603 N5: order create (coverWindow) refuses a slot the business turned off, even with an eligible agent', async () => {
+    const w = world();
+    w.addAgent('int', { is_internal: true, slot: 'afternoon' });
+    await expect(w.service.coverWindow(win())).resolves.not.toBeNull();
+    w.state.pickupSlots = [{ slot_key: 'afternoon', is_enabled: false }];
+    await expect(w.service.coverWindow(win())).resolves.toBeNull();
+    w.state.pickupSlots = [{ slot_key: 'afternoon', is_enabled: true }];
+    await expect(w.service.coverWindow(win())).resolves.not.toBeNull();
+  });
+
   it('coverWindow: the chosen slot with its eligible agents; none eligible -> null', async () => {
     const w = world();
     w.addAgent('int', { is_internal: true, slot: 'afternoon' });

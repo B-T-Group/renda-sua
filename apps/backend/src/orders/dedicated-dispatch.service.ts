@@ -111,6 +111,9 @@ const UPSERT_DEDICATED_OFFERS = `
       objects: $objects
       on_conflict: {
         constraint: order_offers_order_agent_unique
+        # QA #607 N3: only an expired row is re-offered; a declined (or live,
+        # accepted, cancelled) row is never brought back by an overlapping run.
+        where: { status: { _eq: expired } }
         update_columns: [
           status
           offer_kind
@@ -334,13 +337,23 @@ export class DedicatedDispatchService {
       currency: order.currency,
       verifiedAgentDelivery: order.verified_agent_delivery === true,
       excludeOrderId: order.id,
+      // QA #607 N4: the agent's other live offers don't block this accept; the
+      // claim re-checks active orders < cap under the agent lock (N1).
+      ignoreOutstandingOffers: true,
       slotDate: slot.date,
     });
+    const { maxActiveOrders } = await this.dedicatedConfig.getConfig(country);
+    const stamp = (assignmentId: string): ClaimAssignment => ({
+      source: 'dedicated_offer',
+      dedicatedAssignmentId: assignmentId,
+      maxActiveOrders,
+      countOffers: false,
+    });
     const mine = result.eligible.find((a) => a.agentId === agentId);
-    if (mine) return { source: 'dedicated_offer', dedicatedAssignmentId: mine.assignmentId };
+    if (mine) return stamp(mine.assignmentId);
     const rejected = result.rejected.find((a) => a.agentId === agentId);
     if (rejected && MONEY_REASONS.has(rejected.reason)) {
-      return { source: 'dedicated_offer', dedicatedAssignmentId: rejected.assignmentId };
+      return stamp(rejected.assignmentId);
     }
     throw await refuse(rejected?.reason ?? 'not_assigned');
   }
@@ -410,6 +423,8 @@ export class DedicatedDispatchService {
           source: 'dedicated_auto',
           dedicatedAssignmentId: agent.assignmentId,
           releaseUntil,
+          maxActiveOrders: config.maxActiveOrders,
+          countOffers: true,
         },
       });
     } catch (error) {

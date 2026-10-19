@@ -46,7 +46,7 @@ describe('NotificationsService.sendDedicatedAgentNotice', () => {
 
   it('writes the in-app message and sends the push', async () => {
     const { service, executeMutation, push } = setup(true);
-    await service.sendDedicatedAgentNotice(params);
+    await expect(service.sendDedicatedAgentNotice(params)).resolves.toBe(true);
     expect(executeMutation).toHaveBeenCalledWith(expect.stringContaining('insert_user_messages_one'), {
       object: {
         user_id: 'u-1',
@@ -68,20 +68,21 @@ describe('NotificationsService.sendDedicatedAgentNotice', () => {
 
   it('push off: in-app only', async () => {
     const { service, executeMutation, push } = setup(false);
-    await service.sendDedicatedAgentNotice(params);
+    await expect(service.sendDedicatedAgentNotice(params)).resolves.toBe(true);
     expect(executeMutation).toHaveBeenCalledTimes(1);
     expect(push).not.toHaveBeenCalled();
   });
 
   it('a failed in-app write still pushes and never throws', async () => {
     const { service, push } = setup(true, true);
-    await expect(service.sendDedicatedAgentNotice(params)).resolves.toBeUndefined();
+    // QA #608 N2: tells the caller the in-app row is missing.
+    await expect(service.sendDedicatedAgentNotice(params)).resolves.toBe(false);
     expect(push).toHaveBeenCalledTimes(1);
   });
 
   it('no user: nothing', async () => {
     const { service, executeMutation, push } = setup(true);
-    await service.sendDedicatedAgentNotice({ ...params, userId: ' ' });
+    await expect(service.sendDedicatedAgentNotice({ ...params, userId: ' ' })).resolves.toBe(false);
     expect(executeMutation).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
   });

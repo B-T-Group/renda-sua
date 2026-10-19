@@ -2455,9 +2455,12 @@ export class NotificationsService {
     event: string;
     persona: 'agent' | 'business';
     locationId: string;
-  }): Promise<void> {
+  }): Promise<boolean> {
+    // Returns whether the in-app row was written (QA #608 N2: the slot reminder
+    // unclaims its send when it wasn't). Never throws.
     const userId = params.userId?.trim();
-    if (!userId) return;
+    if (!userId) return false;
+    let inApp = false;
     const posting = params.postingId?.trim();
     try {
       await this.hasuraSystemService.executeMutation(
@@ -2482,10 +2485,11 @@ export class NotificationsService {
           },
         }
       );
+      inApp = true;
     } catch (error: any) {
       this.logger.warn(`sendDedicatedAgentNotice in-app failed for ${userId}: ${error?.message ?? error}`);
     }
-    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return inApp;
     try {
       await this.sendPushNotificationByUserId(userId, params.title, params.body, {
         url: params.path,
@@ -2497,6 +2501,7 @@ export class NotificationsService {
     } catch (error: any) {
       this.logger.warn(`sendDedicatedAgentNotice push failed for ${userId}: ${error?.message ?? error}`);
     }
+    return inApp;
   }
 
   /**
