@@ -155,6 +155,14 @@ function pgHasura(
         );
         return { insert_account_transactions_one: r.rows[0] ?? null };
       }
+      case 'ReleaseAgentOrderHold': {
+        // As Hasura runs a tracked VOLATILE function: one statement, one transaction.
+        const r = await pool.query(
+          `SELECT id, amount::float AS amount FROM public.release_agent_order_hold($1, $2, $3, $4, $5)`,
+          [v.accountId, v.orderId, v.cap, v.key, v.memo]
+        );
+        return { release_agent_order_hold: r.rows };
+      }
       case 'MarkStrandedAgentHold': {
         const e = mem.events.find((x) => x.id === v.id);
         if (e) e.payload = { ...e.payload, ...v.patch };
@@ -206,6 +214,10 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
           'utf8'
         )}\nCOMMIT;`
       );
+    // The function under test, from its migration as-is.
+    await pool.query(
+      `BEGIN;\n${readFileSync(join(MIGRATIONS, '20261019230000_release_agent_order_hold', 'up.sql'), 'utf8')}\nCOMMIT;`
+    );
   });
   afterAll(async () => {
     await pool?.end();
@@ -375,7 +387,7 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
     );
     expect(resolved).toEqual([
       expect.objectContaining({
-        payload: expect.objectContaining({ released: 700, net: 700 }),
+        payload: expect.objectContaining({ released: 700, net: 0 }),
       }),
     ]);
 
@@ -425,6 +437,57 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
     const rel = await w.releases();
     expect(rel.reduce((t: number, r: any) => t + r.amount, 0)).toBe(1_400); // 700 per cycle, never more
     expect(rel).toHaveLength(2);
+  });
+
+  it('PE blocker: re-claimed and released mid-reconcile -> the live release and the reconciler credit the strand once; other orders untouched', async () => {
+    for (let round = 0; round < 6; round++) {
+      const w = await setup();
+      const otherOrder = '9e2b1c33-4d5e-4f60-8a71-0b1c2d3e4f5' + round;
+      await w.accounts.registerTransaction({ accountId: w.accountId, amount: 450, transactionType: 'hold', memo: 'other order', referenceId: otherOrder });
+      await w.claim(); // cycle 1
+      await w.strand(); // its release failed and the order was lost: 700 stranded
+      await w.claim(); // the agent re-claims (cycle 2): 1400 held on this order
+      expect(await w.balance()).toEqual({ a: 3_150, w: 1_850 });
+      // ...and is released while the reconciler (which saw the order not theirs) runs.
+      const jobs = [w.credit(), w.svc.reconcileStrandedAgentHolds(), w.svc2.reconcileStrandedAgentHolds()];
+      if (round % 2) jobs.reverse();
+      const out = await Promise.all(jobs);
+      expect(out.filter((r) => r === false)).toEqual([]);
+      const rel = await w.releases();
+      expect(rel.reduce((t: number, r: any) => t + r.amount, 0)).toBe(1_400); // never 2100
+      expect(await w.balance()).toEqual({ a: 4_550, w: 450 }); // the other order's 450 stays held
+      const net = await pool.query(
+        `SELECT coalesce(sum(CASE WHEN transaction_type = 'hold' THEN amount ELSE -amount END), 0)::float AS n
+           FROM account_transactions WHERE account_id = $1 AND reference_id = $2`,
+        [w.accountId, w.orderId]
+      );
+      expect(net.rows[0].n).toBe(0);
+    }
+  });
+
+  it('the function writes the balance and the ledger row together (no balance move without its row)', async () => {
+    const w = await setup();
+    await w.claim();
+    const r = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, NULL, 'm')`, [w.accountId, w.orderId]);
+    expect(r.rows).toHaveLength(1);
+    expect(Number(r.rows[0].amount)).toBe(700);
+    expect(r.rows[0].idempotency_key).toBe(`agent-hold-release:${w.orderId}:${w.accountId}:h1:r0`);
+    expect(await w.balance()).toEqual({ a: 5_000, w: 0 });
+    // A withheld balance short of the net raises and writes nothing (balance nor row).
+    await w.claim();
+    await pool.query(`UPDATE accounts SET withheld_balance = 100 WHERE id = $1`, [w.accountId]);
+    await expect(pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, NULL, 'm')`, [w.accountId, w.orderId])).rejects.toThrow(/agent_hold_release_withheld_short/);
+    expect(await w.releases()).toHaveLength(1);
+    expect((await w.balance()).w).toBe(100);
+    // The cap: never more than p_cap even when more is held.
+    await pool.query(`UPDATE accounts SET withheld_balance = 700 WHERE id = $1`, [w.accountId]);
+    const c = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, 200, 'cap-test', 'm')`, [w.accountId, w.orderId]);
+    expect(Number(c.rows[0].amount)).toBe(200);
+    expect((await w.balance()).w).toBe(500);
+    // An existing key is a no-op.
+    const k = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, $3, 'm')`, [w.accountId, w.orderId, `agent-hold-release:${w.orderId}:${w.accountId}:h1:r0`]);
+    expect(k.rows).toHaveLength(0);
+    expect((await w.balance()).w).toBe(500);
   });
 
   it("QA #622 F2: two pods reconcile the same strand concurrently -> one credit; another order's hold is untouched", async () => {

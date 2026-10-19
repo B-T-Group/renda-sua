@@ -194,10 +194,19 @@ const MARK_STRANDED_HOLD_MUTATION = `
 /** Stranded-hold events older than this are left to finance (they keep their alert). */
 const STRANDED_HOLD_LOOKBACK_DAYS = 30;
 
-/** #622: back-off (ms) between net re-reads after a refused release (see releaseNetAgentHold). */
-const NET_RELEASE_RECHECK_MS = [25, 75, 200];
+/** #622: release min(net, cap) under the account row lock (migration 20261019230000). */
+const RELEASE_AGENT_ORDER_HOLD_MUTATION = `
+  mutation ReleaseAgentOrderHold($accountId: uuid!, $orderId: uuid!, $cap: numeric, $key: String, $memo: String!) {
+    release_agent_order_hold(
+      args: { p_account_id: $accountId, p_order_id: $orderId, p_cap: $cap, p_idempotency_key: $key, p_memo: $memo }
+    ) {
+      id
+      amount
+    }
+  }
+`;
 
-/** #622: one statement, so both lists are one snapshot (see releaseNetAgentHold). */
+/** #622: the net held for reporting (one statement, so one snapshot). */
 export const AGENT_HOLD_LEDGER_QUERY = `
   query AgentHoldLedger($accountId: uuid!, $orderId: uuid!) {
     holds: account_transactions(
@@ -228,7 +237,9 @@ export class OrderReassignmentService {
     private readonly orderEvents: OrderEventsService,
     private readonly notifications: NotificationsService,
     private readonly orderOffers: OrderOffersService,
-    private readonly accountsService: AccountsService,
+    // Unused since #622 (agent hold releases go through release_agent_order_hold); kept so the
+    // constructor positions (and every caller) stay unchanged.
+    _accountsService: AccountsService,
     @Optional()
     private readonly dedicatedConfig?: DedicatedAgentsConfigService,
     @Optional()
@@ -863,8 +874,8 @@ export class OrderReassignmentService {
     limit = 50
   ): Promise<{ released: number; skipped: number; failed: number }> {
     const out = { released: 0, skipped: 0, failed: 0 };
-    // F2 (QA #622): no overlapping runs in this process. Across processes, the
-    // per-strand ledger key below is the database-enforced guard.
+    // F2 (QA #622): no overlapping runs in this process. Across processes (and
+    // against a live release), release_agent_order_hold's account row lock is the guard.
     if (this.reconcilingStrandedHolds) return out;
     this.reconcilingStrandedHolds = true;
     try {
@@ -897,9 +908,12 @@ export class OrderReassignmentService {
    * One strand. QA #622:
    * - F1: release min(net held for this account and order, stranded amount), never
    *   a reference-only dedupe.
-   * - F2: the ledger key `stranded:release:<eventId>` is UNIQUE in
-   *   account_transactions, so two runs (or two pods) credit a strand at most once.
-   *   The loser's balance move is reverted by AccountsService.
+   * - F2 / PE blocker: the credit is `release_agent_order_hold` (see
+   *   releaseNetAgentHold): under the agent account row lock it recomputes the net
+   *   and writes balance + ledger row together, so two runs, two pods, or a run and a
+   *   live creditHoldRelease credit the held money once. The key
+   *   `stranded:release:<eventId>` (UNIQUE in account_transactions) also makes a
+   *   strand's own credit a one-off.
    * - The strand is marked resolved only after its credit exists (written now, or
    *   found by its key), or when the net held is confirmed 0.
    */
@@ -939,7 +953,7 @@ export class OrderReassignmentService {
         resolvedAt: new Date().toISOString(),
         released: released.released,
         net: released.net,
-        alreadyExisted: released.alreadyExists === true,
+        
       };
       await this.hasura.executeMutation(MARK_STRANDED_HOLD_MUTATION, {
         id: ev.id,
@@ -1088,86 +1102,45 @@ export class OrderReassignmentService {
   }
 
   /**
-   * #622: release what the agent account still holds for this order: the NET of
-   * its `hold` minus `release` ledger rows (as OrdersService.netHoldAmountForOrder),
-   * never more. A zero or negative net is a no-op.
+   * #622: release what this agent account still holds for this order (holds minus
+   * releases), capped at `opts.cap`, in ONE database transaction:
+   * `release_agent_order_hold` locks the account row FOR NO KEY UPDATE, computes the
+   * net from account_transactions, and writes the balance change and the ledger row
+   * together. A live creditHoldRelease and the stranded-hold reconciler serialise on
+   * that lock, and the second one computes the net after the first one's row is
+   * committed, so a hold is credited once whichever wins. The balance can no longer
+   * move before its ledger row exists.
    *
-   * Idempotency and concurrency. The ledger is written from several requests, so
-   * there is no database lock to take around "read net, then release". Instead the
-   * release's UNIQUE idempotency key is derived from the ledger state that was
-   * read: `agent-hold-release:<order>:<account>:h<#holds>:r<#releases>`. Both rows
-   * lists come from one GraphQL query (one SQL statement, so one snapshot).
-   * - Any two writers that read the same state (a retry, two reconciler runs, the
-   *   reconciler racing creditHoldRelease) compute the same key. The UNIQUE
-   *   constraint keeps one row; AccountsService reverts the loser's balance move.
-   * - A writer that reads after a release sees the new state and a net of 0.
-   * - A new claim (a new hold row) changes the key, so its later release is not
-   *   mistaken for an older one.
-   * Rows are never deleted, so a (holds, releases) pair is never seen twice.
-   * One key per ledger state (not per stranded event) is what stops the reconciler
-   * and a live release from both crediting the same money.
+   * Idempotency: `opts.idempotencyKey` (the reconciler's `stranded:release:<eventId>`)
+   * is honoured by the function. Without it, the function derives
+   * `agent-hold-release:<order>:<account>:h<#holds>:r<#releases>` under the lock.
+   * `released` is what this call credited (0 when the net was already 0 or the key
+   * existed); `net` is the net held after the call.
    */
   private async releaseNetAgentHold(
     accountId: string,
     orderId: string,
     memo: string,
     opts: { cap?: number; idempotencyKey?: string } = {}
-  ): Promise<{
-    success: boolean;
-    released: number;
-    net: number;
-    alreadyExists?: boolean;
-    error?: string;
-  }> {
-    const { holds, releases, net } = await this.agentHoldLedger(
-      accountId,
-      orderId
-    );
-    if (!(net > 0)) return { success: true, released: 0, net };
-    // Never more than the net; a stranded release is also capped at what was stranded.
-    const amount = Number(Math.min(net, opts.cap ?? net).toFixed(2));
-    if (!(amount > 0)) return { success: true, released: 0, net };
-    const result = await this.accountsService.registerTransaction({
-      accountId,
-      amount,
-      transactionType: 'release',
-      memo,
-      referenceId: orderId,
-      idempotencyKey:
-        opts.idempotencyKey ??
-        `agent-hold-release:${orderId}:${accountId}:h${holds.length}:r${releases.length}`,
-    });
-    if (!result.success) {
-      // A concurrent writer that read the same state may have moved the balance first.
-      // The withheld-balance guard then refuses this one. AccountsService moves the
-      // balance before it writes the ledger row, so that writer's row can still be in
-      // flight: re-read the net a few times before reporting a failure. Settled if the
-      // net is now 0. A real failure still fails, and the caller reverts or records the
-      // stranded hold.
-      for (const waitMs of NET_RELEASE_RECHECK_MS) {
-        const after = await this.agentHoldLedger(accountId, orderId);
-        if (!(after.net > 0))
-          return {
-            success: true,
-            released: 0,
-            net: after.net,
-            alreadyExists: true,
-          };
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-      }
-      const last = await this.agentHoldLedger(accountId, orderId);
-      if (!(last.net > 0))
-        return {
-          success: true,
-          released: 0,
-          net: last.net,
-          alreadyExists: true,
-        };
-      return { success: false, released: 0, net, error: result.error };
+  ): Promise<{ success: boolean; released: number; net: number; error?: string }> {
+    try {
+      const res = await this.hasura.executeMutation<{
+        release_agent_order_hold: Array<{ id: string; amount: number }>;
+      }>(RELEASE_AGENT_ORDER_HOLD_MUTATION, {
+        accountId,
+        orderId,
+        cap: opts.cap ?? null,
+        key: opts.idempotencyKey ?? null,
+        memo,
+      });
+      const released = Number(res?.release_agent_order_hold?.[0]?.amount ?? 0);
+      const { net } = await this.agentHoldLedger(accountId, orderId);
+      return { success: true, released, net };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      const { net } = await this.agentHoldLedger(accountId, orderId).catch(() => ({ net: NaN }));
+      return { success: false, released: 0, net, error: message };
     }
-    if (result.alreadyExists)
-      return { success: true, released: 0, net, alreadyExists: true };
-    return { success: true, released: amount, net };
   }
 
   private async agentHoldLedger(accountId: string, orderId: string) {

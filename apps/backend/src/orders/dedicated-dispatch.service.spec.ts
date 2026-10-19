@@ -404,6 +404,22 @@ function world() {
     const name = op(mutation);
     state.mutations.push(name);
     switch (name) {
+      case 'ReleaseAgentOrderHold': {
+        // #622: mirrors release_agent_order_hold (net, min(net, cap), one ledger write).
+        const held = state.holds.filter((h) => Number(h.agent_hold_amount) > 0).reduce((t, h) => t + Number(h.agent_hold_amount), 0);
+        const net = held - state.ledgerReleases.reduce((t, r) => t + r.amount, 0);
+        const amount = Math.min(net, vars.cap ?? net);
+        if (!(amount > 0)) return { release_agent_order_hold: [] };
+        const r = await accounts.registerTransaction({
+          accountId: vars.accountId,
+          amount,
+          transactionType: 'release',
+          referenceId: vars.orderId,
+          idempotencyKey: (vars.key as string) ?? `agent-hold-release:${vars.orderId}:${vars.accountId}:h${state.holds.filter((h) => Number(h.agent_hold_amount) > 0).length}:r${state.ledgerReleases.length}`,
+        } as any);
+        if (!r.success) throw new Error((r as { error?: string }).error || 'release failed');
+        return { release_agent_order_hold: [{ id: 'tx', amount }] };
+      }
       case 'MarkDispatchRound':
         state.order.dispatch_round = Number(vars.round);
         return { update_orders_by_pk: { id: ORDER } };

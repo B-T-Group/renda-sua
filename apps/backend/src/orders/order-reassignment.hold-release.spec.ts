@@ -43,7 +43,11 @@ describe('OrderReassignmentService hold release safety', () => {
       return {};
     });
 
-    const executeMutation = jest.fn(async (mutation: string) => {
+    const executeMutation = jest.fn(async (mutation: string, vars: any = {}) => {
+      if (mutation.includes('ReleaseAgentOrderHold')) {
+        if (!releaseSuccess) throw new Error('agent_hold_release_withheld_short');
+        return { release_agent_order_hold: [{ id: 'tx-1', amount: vars.cap ?? holdAmount }] };
+      }
       if (mutation.includes('SystemDropOrder')) {
         return { update_orders: { affected_rows: 1 } };
       }
@@ -100,16 +104,12 @@ describe('OrderReassignmentService hold release safety', () => {
     const result = await service.reassignOrder('order-1', 'pickup_sla');
 
     expect(result.success).toBe(true);
-    // #622: the net hold, released under a ledger-state idempotency key.
-    expect(accountsService.registerTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({
-        accountId: 'acct-1',
-        amount: 50,
-        transactionType: 'release',
-        referenceId: 'order-1',
-        idempotencyKey: 'agent-hold-release:order-1:acct-1:h1:r0',
-      })
+    // #622: the net hold, released in one SQL function (key derived under its lock).
+    expect(executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('release_agent_order_hold('),
+      expect.objectContaining({ accountId: 'acct-1', orderId: 'order-1', cap: null, key: null })
     );
+    expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
     expect(
       executeMutation.mock.calls.some((c) => String(c[0]).includes('CancelHold'))
@@ -124,7 +124,7 @@ describe('OrderReassignmentService hold release safety', () => {
     const result = await service.reassignOrder('order-1', 'pickup_sla');
 
     expect(result.success).toBe(false);
-    expect(accountsService.registerTransaction).toHaveBeenCalled();
+    expect(executeMutation.mock.calls.some((c) => String(c[0]).includes('ReleaseAgentOrderHold'))).toBe(true);
     expect(
       executeMutation.mock.calls.some((c) => String(c[0]).includes('CancelHold'))
     ).toBe(false);

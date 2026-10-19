@@ -119,6 +119,23 @@ function world(opts: { revertWins?: boolean; releaseOk?: boolean } = {}) {
   const state = { current: 'agent-2' as string | null };
   const executeMutation = jest.fn(
     async (mutation: string, vars: Record<string, any> = {}) => {
+      if (mutation.includes('ReleaseAgentOrderHold')) {
+        // Mirrors release_agent_order_hold: net under the (here implicit) lock, min(net,
+        // cap), the given key or a state-derived one; the ledger write itself goes
+        // through accounts.registerTransaction so tests can make it fail.
+        const rows = ledger.filter((l) => l.accountId === vars.accountId && l.referenceId === vars.orderId);
+        const holds = rows.filter((l) => l.type === 'hold');
+        const rels = rows.filter((l) => l.type === 'release');
+        const net = holds.reduce((t, l) => t + l.amount, 0) - rels.reduce((t, l) => t + l.amount, 0);
+        const key = vars.key ?? `agent-hold-release:${vars.orderId}:${vars.accountId}:h${holds.length}:r${rels.length}`;
+        if (ledger.some((l) => l.key === key)) return { release_agent_order_hold: [] };
+        const amount = Math.min(net, vars.cap ?? net);
+        if (!(amount > 0)) return { release_agent_order_hold: [] };
+        const r = await accounts.registerTransaction({ accountId: vars.accountId, referenceId: vars.orderId, amount, transactionType: 'release', idempotencyKey: key });
+        if (!r.success) throw new Error(r.error || 'release failed');
+        if ((r as any).alreadyExists) return { release_agent_order_hold: [] };
+        return { release_agent_order_hold: [{ id: `tx-${ledger.length}`, amount }] };
+      }
       if (mutation.includes('MarkStrandedAgentHold')) {
         const e = events.find((x) => x.id === vars.id);
         if (e) e.payload = { ...e.payload, ...vars.patch };
@@ -192,7 +209,7 @@ function world(opts: { revertWins?: boolean; releaseOk?: boolean } = {}) {
     { runDispatchRound: jest.fn() } as any,
     accounts as any
   );
-  return { service, events, ledger, releases, accounts, state, orderEvents };
+  return { service, events, ledger, releases, accounts, state, orderEvents, executeMutation };
 }
 
 const stranded = (w: ReturnType<typeof world>) =>
@@ -311,7 +328,7 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
           strandedEventId: stranded(w)[0].id,
           amount: 700,
           released: 700,
-          net: 700,
+          net: 0,
         }),
       }),
     ]);
@@ -370,7 +387,7 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
     expect(
       w.events.filter((e) => e.event_type === 'agent_hold_stranded_released')[0]
         .payload
-    ).toMatchObject({ released: 0, alreadyExisted: true });
+    ).toMatchObject({ released: 0 });
   });
 
   it('#622: claim -> release -> re-claim -> stranded: the second hold is released (a reference check would see the first release)', async () => {
@@ -549,7 +566,7 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
   });
 });
 
-describe('#622: creditHoldRelease under a concurrent writer', () => {
+describe('#622: creditHoldRelease goes through release_agent_order_hold', () => {
   const order = {
     id: 'order-1',
     order_number: 'ORD-1',
@@ -557,60 +574,17 @@ describe('#622: creditHoldRelease under a concurrent writer', () => {
     assigned_agent: { id: 'agent-1', user_id: 'agent-user-1' },
   };
 
-  it('a refused release (guard) after another writer released the same hold counts as released', async () => {
+  it('one call to the function, no cap, no key (derived under the lock); the net is released', async () => {
     const w = world();
-    w.accounts.registerTransaction.mockImplementationOnce(async () => {
-      // The other writer's release lands; ours is refused by the withheld guard.
-      w.ledger.push({
-        accountId: 'acct-agent-user-1',
-        referenceId: 'order-1',
-        amount: 700,
-        type: 'release',
-        key: 'other-writer',
-      });
-      return {
-        success: false,
-        error: 'Insufficient funds for this transaction',
-      };
-    });
-    await expect(
-      (w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })
-    ).resolves.toBe(true);
-    expect(w.releases()).toHaveLength(1);
+    await expect((w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })).resolves.toBe(true);
+    const calls = (w as any).executeMutation.mock.calls.filter(([q]: [string]) => q.includes('ReleaseAgentOrderHold'));
+    expect(calls).toEqual([[expect.any(String), expect.objectContaining({ accountId: 'acct-agent-user-1', orderId: 'order-1', cap: null, key: null })]]);
+    expect(w.releases().map((r) => r.amount)).toEqual([700]);
   });
 
-  it("the other writer's row arriving a little later is still seen (bounded re-check)", async () => {
+  it('the function raising (e.g. withheld short) is a failure', async () => {
     const w = world();
-    w.accounts.registerTransaction.mockImplementationOnce(async () => {
-      setTimeout(
-        () =>
-          w.ledger.push({
-            accountId: 'acct-agent-user-1',
-            referenceId: 'order-1',
-            amount: 700,
-            type: 'release',
-            key: 'late',
-          }),
-        40
-      );
-      return {
-        success: false,
-        error: 'Insufficient funds for this transaction',
-      };
-    });
-    await expect(
-      (w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })
-    ).resolves.toBe(true);
-  });
-
-  it('a refused release with the hold still outstanding is a failure', async () => {
-    const w = world();
-    w.accounts.registerTransaction.mockResolvedValueOnce({
-      success: false,
-      error: 'ledger down',
-    } as any);
-    await expect(
-      (w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })
-    ).resolves.toBe(false);
+    w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'agent_hold_release_withheld_short' } as any);
+    await expect((w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })).resolves.toBe(false);
   });
 });
