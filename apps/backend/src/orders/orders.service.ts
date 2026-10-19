@@ -40,6 +40,7 @@ import {
 } from '../dedicated-agents/dedicated-agents.constants';
 import type { ClaimAssignment } from './dedicated-claim.port';
 import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
+import { dedicatedReleaseRefusalMessage } from './dedicated-accept-refusal.messages';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
 import {
   buildDedicatedConfirmReminderMessage,
@@ -16290,8 +16291,14 @@ export class OrdersService {
         : result.refusal === 'unavailable'
           ? HttpStatus.NOT_FOUND
           : HttpStatus.CONFLICT;
+    const code = DEDICATED_RELEASE_ERRORS[result.refusal];
     throw new HttpException(
-      { message: result.message, error: DEDICATED_RELEASE_ERRORS[result.refusal] },
+      {
+        message: dedicatedReleaseRefusalMessage(result.refusal, user?.preferred_language),
+        error: code,
+        code,
+        reason: result.refusal,
+      },
       status
     );
   }
@@ -18676,6 +18683,7 @@ export class OrdersService {
 /** Error codes of a refused dedicated release (AC-A6b). */
 export const DEDICATED_RELEASE_ERRORS = {
   unavailable: 'DEDICATED_RELEASE_UNAVAILABLE',
+  dedicated_disabled: 'DEDICATED_DISABLED',
   not_assigned: 'DEDICATED_RELEASE_NOT_ASSIGNED',
   not_auto_assigned: 'DEDICATED_RELEASE_NOT_AUTO_ASSIGNED',
   window_closed: 'DEDICATED_RELEASE_WINDOW_CLOSED',

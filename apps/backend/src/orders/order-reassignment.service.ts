@@ -15,6 +15,7 @@ import type { MonitoredPickupOrder } from './order-pickup.types';
 /** Why a dedicated auto-assignment release was refused (the controller maps these to 4xx). */
 export type DedicatedReleaseRefusal =
   | 'unavailable'
+  | 'dedicated_disabled'
   | 'not_assigned'
   | 'not_auto_assigned'
   | 'window_closed'
@@ -126,21 +127,34 @@ export class OrderReassignmentService {
   ): Promise<DedicatedReleaseResult> {
     const order = await this.fetchDedicatedReleaseOrder(orderId);
     const country = isoCountryCode(order?.business_location?.address?.country);
-    if (!order || !this.dedicatedConfig || !(await this.dedicatedConfig.isEnabled(country))) {
+    const log = (outcome: string, extra: Record<string, unknown> = {}) =>
+      this.logRelease(outcome, { orderId, agentId, reason, country, ...extra }, order, now);
+    if (!order || !this.dedicatedConfig) {
+      log('refused', { refusal: 'unavailable' });
       return this.refuse('unavailable', 'Dedicated release is not available for this order');
     }
+    if (!(await this.dedicatedConfig.isEnabled(country))) {
+      log('refused', { refusal: 'dedicated_disabled' });
+      return this.refuse('dedicated_disabled', 'Dedicated deliveries are turned off');
+    }
     if (order.current_status !== 'assigned_to_agent' || order.assigned_agent_id !== agentId) {
+      log('refused', { refusal: 'not_assigned' });
       return this.refuse('not_assigned', 'This order is not assigned to you, or it was already picked up');
     }
     if (order.assignment_source !== 'dedicated_auto') {
+      log('refused', { refusal: 'not_auto_assigned' });
       return this.refuse('not_auto_assigned', 'Only an automatic dedicated assignment can be released');
     }
     const until = order.dedicated_release_until ? new Date(order.dedicated_release_until).getTime() : 0;
     if (!(until > now.getTime())) {
+      log('refused', { refusal: 'window_closed', cause: 'expired' });
       return this.refuse('window_closed', 'The release window for this order has closed');
     }
     const userId = order.assigned_agent?.user_id;
-    if (!userId) return this.refuse('release_failed', 'Agent user missing');
+    if (!userId) {
+      log('failed', { refusal: 'release_failed', cause: 'agent_user_missing' });
+      return this.refuse('release_failed', 'Agent user missing');
+    }
 
     const nowIso = now.toISOString();
     // CAS on the stored window: the database refuses a release once it has passed.
@@ -151,6 +165,7 @@ export class OrderReassignmentService {
       )
     );
     if ((released?.update_orders?.affected_rows ?? 0) !== 1) {
+      log('refused', { refusal: 'window_closed', cause: 'cas_lost' });
       return this.refuse('window_closed', 'The release window for this order has closed');
     }
     try {
@@ -176,11 +191,13 @@ export class OrderReassignmentService {
         }`
       );
       await this.revertDedicatedRelease(order);
+      log('failed', { refusal: 'release_failed', cause: 'exclusion_write_failed' });
       return this.refuse('release_failed', 'Could not release the order');
     }
     const holdReleased = await this.releaseHold(order as unknown as MonitoredPickupOrder);
     if (!holdReleased) {
       await this.revertDedicatedRelease(order);
+      log('failed', { refusal: 'release_failed', cause: 'hold_release_failed' });
       return this.refuse('release_failed', 'Could not release the order');
     }
     await this.insertAgentHistory(
@@ -202,8 +219,34 @@ export class OrderReassignmentService {
       reason,
       secondsLeft: Math.max(0, Math.floor((until - now.getTime()) / 1000)),
     });
+    log('released', { secondsLeft: Math.max(0, Math.floor((until - now.getTime()) / 1000)) });
     await this.redispatch(order.id);
     return { success: true, message: 'Order released; dispatch restarted without you' };
+  }
+
+  /**
+   * #594 PR 6: one structured line per release attempt (PE: no reliability
+   * signal, but measurable later): `{"event":"dedicated.auto_assign_release",
+   * "outcome":"released"|"refused"|"failed", ...}`.
+   */
+  private logRelease(
+    outcome: string,
+    fields: Record<string, unknown>,
+    order: DedicatedReleaseOrder | null,
+    now: Date
+  ): void {
+    const line = {
+      event: 'dedicated.auto_assign_release',
+      outcome,
+      ...fields,
+      orderNumber: order?.order_number ?? null,
+      assignmentId: order?.dedicated_assignment_id ?? null,
+      assignmentSource: order?.assignment_source ?? null,
+      releaseUntil: order?.dedicated_release_until ?? null,
+      at: now.toISOString(),
+    };
+    if (outcome === 'failed') this.logger.warn(JSON.stringify(line));
+    else this.logger.log(JSON.stringify(line));
   }
 
   private refuse(refusal: DedicatedReleaseRefusal, message: string): DedicatedReleaseResult {

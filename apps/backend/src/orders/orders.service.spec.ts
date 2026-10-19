@@ -4856,16 +4856,43 @@ describe('OrdersService', () => {
       });
 
       it.each([
-        ['unavailable', 404, 'DEDICATED_RELEASE_UNAVAILABLE'],
-        ['not_assigned', 409, 'DEDICATED_RELEASE_NOT_ASSIGNED'],
-        ['not_auto_assigned', 409, 'DEDICATED_RELEASE_NOT_AUTO_ASSIGNED'],
-        ['window_closed', 409, 'DEDICATED_RELEASE_WINDOW_CLOSED'],
-        ['release_failed', 500, 'DEDICATED_RELEASE_FAILED'],
-      ])('refusal %s -> %i %s', async (refusal, status, error) => {
-        reassign().releaseDedicatedAutoAssignment.mockResolvedValue({ success: false, refusal, message: 'no' });
+        ['unavailable', 404, 'DEDICATED_RELEASE_UNAVAILABLE', 'Cette commande ne peut pas être libérée.'],
+        [
+          'dedicated_disabled',
+          409,
+          'DEDICATED_DISABLED',
+          'Les livraisons dédiées sont désactivées pour le moment : cette commande ne peut pas être libérée.',
+        ],
+        ['not_assigned', 409, 'DEDICATED_RELEASE_NOT_ASSIGNED', "Cette commande ne vous est plus attribuée, ou elle a déjà été récupérée."],
+        [
+          'not_auto_assigned',
+          409,
+          'DEDICATED_RELEASE_NOT_AUTO_ASSIGNED',
+          'Seule une commande que RendaSua vous a attribuée automatiquement peut être libérée.',
+        ],
+        ['window_closed', 409, 'DEDICATED_RELEASE_WINDOW_CLOSED', 'Les 2 minutes pour libérer cette commande sont écoulées.'],
+        ['release_failed', 500, 'DEDICATED_RELEASE_FAILED', "Nous n'avons pas pu libérer cette commande. Veuillez réessayer."],
+      ])('refusal %s -> %i %s, code plus a message in the default language', async (refusal, status, error, message) => {
+        reassign().releaseDedicatedAutoAssignment.mockResolvedValue({ success: false, refusal, message: 'internal' });
         await expect(service.releaseDedicatedAutoAssignment('order-1', null)).rejects.toMatchObject({
           status,
-          response: { message: 'no', error },
+          response: { message, error, code: error, reason: refusal },
+        });
+      });
+
+      it("the refusal message follows the agent's saved language", async () => {
+        hasuraUserService.getUser.mockResolvedValue({ ...agentUser, preferred_language: 'en' });
+        reassign().releaseDedicatedAutoAssignment.mockResolvedValue({ success: false, refusal: 'window_closed', message: 'x' });
+        await expect(service.releaseDedicatedAutoAssignment('order-1', null)).rejects.toMatchObject({
+          response: expect.objectContaining({ code: 'DEDICATED_RELEASE_WINDOW_CLOSED', message: 'The 2 minutes to release this order are over.' }),
+        });
+        hasuraUserService.getUser.mockResolvedValue({ ...agentUser, preferred_language: 'en-US' });
+        reassign().releaseDedicatedAutoAssignment.mockResolvedValue({ success: false, refusal: 'dedicated_disabled', message: 'x' });
+        await expect(service.releaseDedicatedAutoAssignment('order-1', null)).rejects.toMatchObject({
+          response: expect.objectContaining({
+            code: 'DEDICATED_DISABLED',
+            message: 'Dedicated deliveries are turned off for now, so this order cannot be released.',
+          }),
         });
       });
 

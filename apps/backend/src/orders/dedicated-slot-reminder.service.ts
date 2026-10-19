@@ -35,15 +35,7 @@ export type SlotReminderOutcome =
   | { kind: 'sent'; recipients: number }
   | {
       kind: 'skipped';
-      reason:
-        | 'flag_off'
-        | 'not_covered'
-        | 'not_confirmed'
-        | 'not_live'
-        | 'no_slot'
-        | 'stale'
-        | 'not_leader'
-        | 'no_agents';
+      reason: 'flag_off' | 'not_covered' | 'no_slot' | 'stale' | 'no_orders' | 'no_agents';
     };
 
 interface ReminderOrder {
@@ -112,18 +104,17 @@ const RECIPIENT_LOCALES_QUERY = `
   }
 `;
 
-const DEDUPE_QUERY = `
-  query DedicatedSlotReminderDedupe($keys: [String!]!) {
-    notification_events(where: { dedupe_key: { _in: $keys } }) {
-      dedupe_key
-    }
-  }
-`;
+/** Primary key of dedicated_slot_reminder_sends (location, slot, date, agent): the idempotency key. */
+export const SLOT_REMINDER_SENDS_PKEY = 'dedicated_slot_reminder_sends_pkey';
 
-const RECORD_DEDUPE_MUTATION = `
-  mutation RecordDedicatedSlotReminder($object: notification_events_insert_input!) {
-    insert_notification_events_one(object: $object) {
-      id
+/** Returns null when this agent already got the slot's reminder (primary key conflict). */
+const CLAIM_SEND_MUTATION = `
+  mutation ClaimDedicatedSlotReminder($object: dedicated_slot_reminder_sends_insert_input!) {
+    insert_dedicated_slot_reminder_sends_one(
+      object: $object
+      on_conflict: { constraint: ${SLOT_REMINDER_SENDS_PKEY}, update_columns: [] }
+    ) {
+      agent_id
     }
   }
 `;
@@ -132,10 +123,14 @@ const RECORD_DEDUPE_MUTATION = `
  * #594 PR 6 (AC-A8): day-of reminder at slot start - `dedicated_slot_reminder_minutes`
  * (30) in the country timezone, to each agent on duty for the slot at the
  * store: "{{n}} scheduled orders at {{store}} · pickup {{time}}". Every order
- * placed on dedicated coverage schedules one wait-and-execute callback at
- * create; at send time the order with the smallest id among the slot's live,
- * confirmed orders sends for all of them (the others skip), and a per-agent
- * dedupe key in notification_events stops a repeated callback. Behind the flag.
+ * placed on dedicated coverage schedules its own wait-and-execute callback at
+ * create, and any of those callbacks sends for the whole slot (its live,
+ * confirmed orders), whatever the triggering order's own state. The send is
+ * idempotent per agent and slot: a row in dedicated_slot_reminder_sends is
+ * claimed (insert on the primary key, on conflict nothing) before the push.
+ * So one failed schedule doesn't drop the group's reminder: the next order
+ * created in the group schedules a callback that covers it, and concurrent or
+ * repeated callbacks still send once. Behind the flag.
  */
 @Injectable()
 export class DedicatedSlotReminderService {
@@ -174,10 +169,8 @@ export class DedicatedSlotReminderService {
     const ctx = await this.loadContext(orderId);
     if ('skip' in ctx) return { kind: 'skipped', reason: ctx.skip };
     const { order, slot, reminderAt, slotStart, config } = ctx;
-    if (!ctx.confirmed) return { kind: 'skipped', reason: 'not_confirmed' };
-    if (!(SLOT_REMINDER_ORDER_STATUSES as readonly string[]).includes(order.current_status)) {
-      return { kind: 'skipped', reason: 'not_live' };
-    }
+    // The triggering order only names the slot: it may be cancelled or
+    // unconfirmed by now, and the slot's other orders still get their reminder.
     // A window moved since scheduling (or a late retry): this callback is not the reminder.
     if (
       now.getTime() < reminderAt.getTime() - EARLY_SLACK_SECONDS * 1000 ||
@@ -186,7 +179,7 @@ export class DedicatedSlotReminderService {
       return { kind: 'skipped', reason: 'stale' };
     }
     const group = await this.loadGroup(order.business_location_id, slot);
-    if (group[0]?.id !== order.id) return { kind: 'skipped', reason: 'not_leader' };
+    if (group.length === 0) return { kind: 'skipped', reason: 'no_orders' };
 
     const agents = await this.coverage.onDutyAgents({
       locationId: order.business_location_id,
@@ -198,20 +191,17 @@ export class DedicatedSlotReminderService {
         ...a,
         // Orders already with another agent aren't this agent's to collect.
         orderCount: group.filter((o) => !o.assigned_agent_id || o.assigned_agent_id === a.agentId).length,
-        dedupeKey: `dedicated.slot_reminder:${order.business_location_id}:${slot.slotKey}:${slot.date}:${a.userId}`,
       }))
       .filter((a) => a.orderCount > 0);
     if (targets.length === 0) return { kind: 'skipped', reason: 'no_agents' };
 
-    const [sent, locales, pickupTime] = await Promise.all([
-      this.alreadySent(targets.map((t) => t.dedupeKey)),
+    const [locales, pickupTime] = await Promise.all([
       this.loadLocales(targets.map((t) => t.userId)),
       this.pickupTime(order.business_location_id, slot),
     ]);
     const storeName = order.business_location?.name || order.business?.name || '';
     let recipients = 0;
     for (const t of targets) {
-      if (sent.has(t.dedupeKey)) continue;
       const msg = buildDedicatedSlotReminderMessage({
         orderCount: t.orderCount,
         storeName,
@@ -219,7 +209,8 @@ export class DedicatedSlotReminderService {
         slotKey: slot.slotKey,
         preferredLanguage: locales.get(t.userId) ?? null,
       });
-      await this.recordSent(t.dedupeKey, t.userId, t.assignmentId);
+      // Claim before the push: at most one reminder per agent and slot.
+      if (!(await this.claimSend(order, slot, t))) continue;
       await this.notificationsService.sendDedicatedAgentNotice({
         userId: t.userId,
         title: msg.title,
@@ -254,8 +245,6 @@ export class DedicatedSlotReminderService {
         reminderAt: Date;
         slotStart: Date;
         config: { slotReminderMinutes: number };
-        /** Scheduling happens at create, before confirmation; sending needs it (PE). */
-        confirmed: boolean;
       }
   > {
     const res = await this.hasuraSystemService.executeQuery<{ orders_by_pk: ReminderOrder | null }>(
@@ -278,7 +267,7 @@ export class DedicatedSlotReminderService {
     const start = DateTime.fromISO(`${slot.date}T${shortTime(slot.startTime)}`, { zone: slot.timeZone });
     const slotStart = start.toJSDate();
     const reminderAt = start.minus({ minutes: config.slotReminderMinutes }).toJSDate();
-    return { order, slot, reminderAt, slotStart, config, confirmed: window.is_confirmed === true };
+    return { order, slot, reminderAt, slotStart, config };
   }
 
   private async loadGroup(
@@ -324,25 +313,33 @@ export class DedicatedSlotReminderService {
     }
   }
 
-  private async alreadySent(keys: string[]): Promise<Set<string>> {
-    const res = await this.hasuraSystemService.executeQuery<{
-      notification_events: Array<{ dedupe_key: string | null }>;
-    }>(DEDUPE_QUERY, { keys });
-    return new Set((res?.notification_events ?? []).map((r) => r.dedupe_key as string));
-  }
-
-  private async recordSent(dedupeKey: string, userId: string, assignmentId: string): Promise<void> {
-    await this.hasuraSystemService.executeMutation(RECORD_DEDUPE_MUTATION, {
-      object: {
-        notification_type: 'dedicated.slot_reminder',
-        category: 'actionable',
-        user_id: userId,
-        channel: 'push',
-        status: 'sent',
-        dedupe_key: dedupeKey,
-        entity_type: 'dedicated_agent_assignment',
-        entity_id: assignmentId,
-      },
-    });
+  private async claimSend(
+    order: ReminderOrder,
+    slot: ResolvedDedicatedSlot,
+    target: { agentId: string; assignmentId: string; orderCount: number }
+  ): Promise<boolean> {
+    try {
+      const res = await this.hasuraSystemService.executeMutation<{
+        insert_dedicated_slot_reminder_sends_one: { agent_id: string } | null;
+      }>(CLAIM_SEND_MUTATION, {
+        object: {
+          business_location_id: order.business_location_id,
+          slot_key: slot.slotKey,
+          slot_date: slot.date,
+          agent_id: target.agentId,
+          assignment_id: target.assignmentId,
+          trigger_order_id: order.id,
+          order_count: target.orderCount,
+        },
+      });
+      return !!res?.insert_dedicated_slot_reminder_sends_one;
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Dedicated slot reminder claim failed for agent ${target.agentId} (${slot.slotKey} ${slot.date}): ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return false;
+    }
   }
 }

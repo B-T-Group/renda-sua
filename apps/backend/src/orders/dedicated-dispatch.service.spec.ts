@@ -1015,6 +1015,71 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       ]);
     });
 
+    describe('structured release log (PE: no reliability signal, measurable later)', () => {
+      const lines = (spies: jest.SpyInstance[]) =>
+        spies
+          .flatMap((s) => s.mock.calls.map((c) => c[0]))
+          .filter((m): m is string => typeof m === 'string' && m.startsWith('{'))
+          .map((m) => JSON.parse(m) as Record<string, unknown>)
+          .filter((l) => l.event === 'dedicated.auto_assign_release');
+      let spies: jest.SpyInstance[];
+      beforeEach(() => {
+        spies = [
+          jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined),
+          jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined),
+        ];
+      });
+      afterEach(() => spies.forEach((s) => s.mockRestore()));
+
+      it('a release logs one JSON line with the outcome, ids, reason and seconds left', async () => {
+        const w = await autoAssigned();
+        jest.setSystemTime(at(100));
+        await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', 'too_far');
+        expect(lines(spies)).toEqual([
+          {
+            event: 'dedicated.auto_assign_release',
+            outcome: 'released',
+            orderId: ORDER,
+            agentId: 'int',
+            reason: 'too_far',
+            country: 'CM',
+            secondsLeft: 20,
+            orderNumber: w.state.order.order_number,
+            assignmentId: 'as-int',
+            assignmentSource: 'dedicated_auto',
+            releaseUntil: at(120).toISOString(),
+            at: at(100).toISOString(),
+          },
+        ]);
+      });
+
+      it('refusals and failures are logged too, with the refusal and its cause', async () => {
+        const w = await autoAssigned();
+        jest.setSystemTime(at(120));
+        await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null);
+        await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'someone-else', null);
+        jest.setSystemTime(at(10));
+        w.state.releaseRowFails = true;
+        await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null);
+        expect(lines(spies).map((l) => [l.outcome, l.refusal, l.cause, l.agentId])).toEqual([
+          ['refused', 'window_closed', 'expired', 'int'],
+          ['refused', 'not_assigned', undefined, 'someone-else'],
+          ['failed', 'release_failed', 'exclusion_write_failed', 'int'],
+        ]);
+        // A failure is a warning, a refusal is not.
+        const warned = spies[1].mock.calls.map((c) => String(c[0])).filter((m) => m.includes('"outcome":"failed"'));
+        expect(warned).toHaveLength(1);
+      });
+
+      it('flag off is logged as dedicated_disabled', async () => {
+        const w = await autoAssigned();
+        w.state.flag = false;
+        jest.setSystemTime(at(31));
+        await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null);
+        expect(lines(spies)).toEqual([expect.objectContaining({ outcome: 'refused', refusal: 'dedicated_disabled' })]);
+      });
+    });
+
     it.each([120, 121])('at %i s the stored window has closed: 409-style refusal, order untouched', async (sec) => {
       const w = await autoAssigned();
       jest.setSystemTime(at(sec));
@@ -1155,13 +1220,13 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       expect(w.state.mutations).not.toContain('ReleaseDedicatedAutoAssignment');
     });
 
-    it('flag off: unavailable, nothing written', async () => {
+    it('flag off: dedicated_disabled, nothing written', async () => {
       const w = await autoAssigned();
       w.state.flag = false;
       // Past the 30 s config cache, inside the release window.
       jest.setSystemTime(at(31));
       await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({
-        refusal: 'unavailable',
+        refusal: 'dedicated_disabled',
       });
       expect(w.state.order.assigned_agent_id).toBe('int');
       expect(w.state.mutations).not.toContain('ReleaseDedicatedAutoAssignment');

@@ -37,7 +37,8 @@ function world() {
     assignments: [] as Array<{ id: string; agent_id: string; slot_key: string; status: string; off_today_date: string | null }>,
     pickupSlots: [] as Array<{ slot_key: string; is_enabled: boolean; pickup_time: string | null }>,
     unsigned: new Set<string>(),
-    events: [] as Array<{ dedupe_key: string; user_id: string; entity_id: string }>,
+    sends: [] as Array<{ business_location_id: string; slot_key: string; slot_date: string; agent_id: string; order_count: number; trigger_order_id: string }>,
+    claimFailsFor: new Set<string>(),
     mutations: [] as string[],
   };
   const op = (q: string) => /(?:query|mutation) (\w+)/.exec(q)?.[1] ?? '?';
@@ -110,8 +111,6 @@ function world() {
             .filter((a) => (vars.userIds as string[]).includes(a.user_id))
             .map((a) => ({ id: a.user_id, preferred_language: a.preferred_language })),
         };
-      case 'DedicatedSlotReminderDedupe':
-        return { notification_events: state.events.filter((e) => (vars.keys as string[]).includes(e.dedupe_key)) };
       case 'DedicatedLocationPickupSlots':
         return { business_location_pickup_slots: state.pickupSlots };
       default:
@@ -121,10 +120,26 @@ function world() {
   const executeMutation = jest.fn(async (mutation: string, vars: Vars) => {
     const name = op(mutation);
     state.mutations.push(name);
-    if (name === 'RecordDedicatedSlotReminder') {
-      const o = vars.object as { dedupe_key: string; user_id: string; entity_id: string };
-      state.events.push({ dedupe_key: o.dedupe_key, user_id: o.user_id, entity_id: o.entity_id });
-      return { insert_notification_events_one: { id: 'e' } };
+    if (name === 'ClaimDedicatedSlotReminder') {
+      // Primary key (location, slot, date, agent); the insert yields nothing on a conflict
+      // only when the mutation asks for it (on_conflict on the pkey), else Postgres errors.
+      const o = vars.object as (typeof state.sends)[number];
+      if (state.claimFailsFor.has(o.agent_id)) throw new Error('hasura down');
+      const dup = state.sends.some(
+        (r) =>
+          r.business_location_id === o.business_location_id &&
+          r.slot_key === o.slot_key &&
+          r.slot_date === o.slot_date &&
+          r.agent_id === o.agent_id
+      );
+      if (dup) {
+        if (!mutation.includes('constraint: dedicated_slot_reminder_sends_pkey, update_columns: []')) {
+          throw new Error('duplicate key value violates unique constraint "dedicated_slot_reminder_sends_pkey"');
+        }
+        return { insert_dedicated_slot_reminder_sends_one: null };
+      }
+      state.sends.push({ ...o });
+      return { insert_dedicated_slot_reminder_sends_one: { agent_id: o.agent_id } };
     }
     throw new Error(`unexpected mutation ${name}`);
   });
@@ -266,11 +281,19 @@ describe('#594 PR 6 (AC-A8) DedicatedSlotReminderService', () => {
         },
       ]);
       // The other order's callback, and a repeat of this one, send nothing more.
-      await expect(w.service.sendForOrder('o-b', REMINDER_AT)).resolves.toEqual({ kind: 'skipped', reason: 'not_leader' });
+      await expect(w.service.sendForOrder('o-b', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 0 });
       await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 0 });
       expect(w.notices()).toHaveLength(1);
-      expect(w.state.events).toEqual([
-        { dedupe_key: `dedicated.slot_reminder:${LOCATION}:afternoon:${DATE}:u-amy`, user_id: 'u-amy', entity_id: 'as-amy' },
+      expect(w.state.sends).toEqual([
+        {
+          business_location_id: LOCATION,
+          slot_key: 'afternoon',
+          slot_date: DATE,
+          agent_id: 'amy',
+          assignment_id: 'as-amy',
+          trigger_order_id: 'o-a',
+          order_count: 2,
+        },
       ]);
       await w.flush();
       expect(w.events('dedicated.slot_reminder_sent')).toEqual([
@@ -283,17 +306,18 @@ describe('#594 PR 6 (AC-A8) DedicatedSlotReminderService', () => {
       w.addOrder('o-a', { current_status: 'cancelled' });
       w.addOrder('o-b', { current_status: 'cancelled' });
       w.addAgent('amy');
-      await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'skipped', reason: 'not_live' });
-      await expect(w.service.sendForOrder('o-b', REMINDER_AT)).resolves.toEqual({ kind: 'skipped', reason: 'not_live' });
+      await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'skipped', reason: 'no_orders' });
+      await expect(w.service.sendForOrder('o-b', REMINDER_AT)).resolves.toEqual({ kind: 'skipped', reason: 'no_orders' });
       expect(w.notices()).toEqual([]);
     });
 
-    it('the leader was cancelled: the next order sends, singular copy, in French for a French agent', async () => {
+    it("a cancelled order's callback still reminds for the slot's other orders (singular copy, French agent)", async () => {
       const w = world();
       w.addOrder('o-a', { current_status: 'cancelled' });
       w.addOrder('o-b');
       w.addAgent('amy', { locale: 'fr' });
-      await expect(w.service.sendForOrder('o-b', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 1 });
+      // Only o-a's schedule may have succeeded: its callback covers o-b.
+      await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 1 });
       expect(w.notices()[0]).toMatchObject({
         title: 'Créneau dédié bientôt (Après-midi)',
         body: '1 commande programmée chez Chez Mama Louis · collecte à 12:30',
@@ -325,15 +349,78 @@ describe('#594 PR 6 (AC-A8) DedicatedSlotReminderService', () => {
       expect(w.notices().map((n) => n.userId)).toEqual(['u-bob']);
     });
 
-    it('an unconfirmed window: no reminder, and unconfirmed siblings are not counted', async () => {
+    it('unconfirmed windows are not counted; an unconfirmed order\'s callback still covers the confirmed ones', async () => {
       const w = world();
       w.addOrder('o-a', { window: { slot_id: 'ga-a', preferred_date: DATE, is_confirmed: false } });
       w.addOrder('o-b');
       w.addOrder('o-c', { window: { slot_id: 'ga-a', preferred_date: DATE, is_confirmed: null } });
       w.addAgent('amy');
-      await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'skipped', reason: 'not_confirmed' });
-      await w.service.sendForOrder('o-b', REMINDER_AT);
+      await w.service.sendForOrder('o-a', REMINDER_AT);
       expect(w.notices().map((n) => n.body)).toEqual(['1 scheduled order at Chez Mama Louis · pickup 12:30']);
+    });
+
+    it('only unconfirmed orders: nothing to remind', async () => {
+      const w = world();
+      w.addOrder('o-a', { window: { slot_id: 'ga-a', preferred_date: DATE, is_confirmed: false } });
+      w.addAgent('amy');
+      await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'skipped', reason: 'no_orders' });
+      expect(w.notices()).toEqual([]);
+    });
+
+    it('PE gap: the first order\'s schedule failed; the next order created in the slot schedules a callback that covers both', async () => {
+      const w = world();
+      w.addAgent('amy');
+      w.addOrder('o-a');
+      w.schedule.scheduleDedicatedSlotReminder.mockRejectedValueOnce(new Error('sfn throttled'));
+      await w.service.scheduleForOrder('o-a');
+      w.addOrder('o-b');
+      await w.service.scheduleForOrder('o-b');
+      expect(w.schedule.scheduleDedicatedSlotReminder.mock.calls).toEqual([
+        ['o-a', 91_800],
+        ['o-b', 91_800],
+      ]);
+      // Only o-b's callback ever fires.
+      await expect(w.service.sendForOrder('o-b', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 1 });
+      expect(w.notices().map((n) => n.body)).toEqual(['2 scheduled orders at Chez Mama Louis · pickup 12:30']);
+    });
+
+    it('concurrent callbacks for the same slot send once per agent', async () => {
+      const w = world();
+      w.addOrder('o-a');
+      w.addOrder('o-b');
+      w.addOrder('o-c');
+      w.addAgent('amy');
+      w.addAgent('bob');
+      const out = await Promise.all(['o-a', 'o-b', 'o-c'].map((id) => w.service.sendForOrder(id, REMINDER_AT)));
+      expect(out.reduce((n, o) => n + (o.kind === 'sent' ? o.recipients : 0), 0)).toBe(2);
+      expect(w.notices().map((n) => n.userId).sort()).toEqual(['u-amy', 'u-bob']);
+      expect(w.state.sends.map((r) => r.agent_id).sort()).toEqual(['amy', 'bob']);
+    });
+
+    it('the send is keyed per agent, slot and date: the same agent still gets another slot\'s reminder', async () => {
+      const w = world();
+      w.addOrder('o-a');
+      w.addOrder('o-m', { coverage_slot_key: 'morning', window: { slot_id: 'ga-m', preferred_date: DATE, is_confirmed: true } });
+      w.addAgent('amy');
+      w.state.assignments.push({ id: 'as-amy-m', agent_id: 'amy', slot_key: 'morning', status: 'active', off_today_date: null });
+      await w.service.sendForOrder('o-a', REMINDER_AT);
+      // Morning starts 08:00 Libreville = 07:00Z; reminder 06:30Z.
+      await w.service.sendForOrder('o-m', new Date('2026-10-19T06:30:00Z'));
+      expect(w.state.sends.map((r) => [r.agent_id, r.slot_key])).toEqual([
+        ['amy', 'afternoon'],
+        ['amy', 'morning'],
+      ]);
+      expect(w.notices()).toHaveLength(2);
+    });
+
+    it('a failed claim skips only that agent (never a push without a claim)', async () => {
+      const w = world();
+      w.addOrder('o-a');
+      w.addAgent('amy');
+      w.addAgent('bob');
+      w.state.claimFailsFor.add('amy');
+      await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 1 });
+      expect(w.notices().map((n) => n.userId)).toEqual(['u-bob']);
     });
 
     it('a callback well before the reminder time or after the slot started is stale', async () => {

@@ -1,4 +1,5 @@
 import { normalizeLanguage } from '../notifications/email-template-data';
+import type { DedicatedReleaseRefusal } from './order-reassignment.service';
 
 /** Client-facing codes on a refused dedicated accept (409 DEDICATED_OFFER_INELIGIBLE). */
 export const DEDICATED_ACCEPT_REFUSAL_CODES = {
@@ -27,4 +28,40 @@ export function dedicatedAcceptRefusal(
     code: DEDICATED_ACCEPT_REFUSAL_CODES.ineligible,
     message: fr ? 'Vous ne pouvez plus prendre cette livraison dédiée.' : 'You can no longer take this dedicated delivery.',
   };
+}
+
+const RELEASE_REFUSAL_COPY: Record<DedicatedReleaseRefusal, { en: string; fr: string }> = {
+  unavailable: {
+    en: 'This order cannot be released.',
+    fr: 'Cette commande ne peut pas être libérée.',
+  },
+  dedicated_disabled: {
+    en: 'Dedicated deliveries are turned off for now, so this order cannot be released.',
+    fr: 'Les livraisons dédiées sont désactivées pour le moment : cette commande ne peut pas être libérée.',
+  },
+  not_assigned: {
+    en: 'This order is no longer assigned to you, or it was already picked up.',
+    fr: "Cette commande ne vous est plus attribuée, ou elle a déjà été récupérée.",
+  },
+  not_auto_assigned: {
+    en: 'Only an order RendaSua assigned to you automatically can be released.',
+    fr: 'Seule une commande que RendaSua vous a attribuée automatiquement peut être libérée.',
+  },
+  window_closed: {
+    en: 'The 2 minutes to release this order are over.',
+    fr: 'Les 2 minutes pour libérer cette commande sont écoulées.',
+  },
+  release_failed: {
+    en: 'We could not release this order. Please try again.',
+    fr: "Nous n'avons pas pu libérer cette commande. Veuillez réessayer.",
+  },
+};
+
+/** #594 PR 6: the release refusal in the agent's saved language (default language otherwise). */
+export function dedicatedReleaseRefusalMessage(
+  refusal: DedicatedReleaseRefusal,
+  preferredLanguage?: string | null
+): string {
+  const copy = RELEASE_REFUSAL_COPY[refusal];
+  return normalizeLanguage(preferredLanguage) === 'fr' ? copy.fr : copy.en;
 }
