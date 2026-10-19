@@ -141,6 +141,19 @@ function world() {
       state.sends.push({ ...o });
       return { insert_dedicated_slot_reminder_sends_one: { agent_id: o.agent_id } };
     }
+    if (name === 'UnclaimDedicatedSlotReminder') {
+      const before = state.sends.length;
+      state.sends = state.sends.filter(
+        (r) =>
+          !(
+            r.business_location_id === vars.locationId &&
+            r.slot_key === vars.slotKey &&
+            r.slot_date === vars.slotDate &&
+            r.agent_id === vars.agentId
+          )
+      );
+      return { delete_dedicated_slot_reminder_sends_by_pk: before > state.sends.length ? { agent_id: vars.agentId } : null };
+    }
     throw new Error(`unexpected mutation ${name}`);
   });
   const hasura = { executeQuery, executeMutation } as unknown as HasuraSystemService;
@@ -154,7 +167,7 @@ function world() {
     gate as unknown as AgentContractGateService,
     deliveryConfig as unknown as DeliveryConfigService
   );
-  const notifications = { sendDedicatedAgentNotice: jest.fn().mockResolvedValue(undefined) };
+  const notifications = { sendDedicatedAgentNotice: jest.fn().mockResolvedValue(true) };
   const schedule = { scheduleDedicatedSlotReminder: jest.fn().mockResolvedValue(undefined) };
   const siteEvents = { trackEvent: jest.fn().mockResolvedValue(undefined) };
   const service = new DedicatedSlotReminderService(
@@ -421,6 +434,24 @@ describe('#594 PR 6 (AC-A8) DedicatedSlotReminderService', () => {
       w.state.claimFailsFor.add('amy');
       await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 1 });
       expect(w.notices().map((n) => n.userId)).toEqual(['u-bob']);
+    });
+
+    it('QA #608 N2: the in-app reminder not written -> the claim is given back and the next callback sends it', async () => {
+      const w = world();
+      w.addOrder('o-a');
+      w.addOrder('o-b');
+      w.addAgent('amy');
+      w.addAgent('bob');
+      w.notifications.sendDedicatedAgentNotice.mockImplementationOnce(async () => false);
+      await expect(w.service.sendForOrder('o-a', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 1 });
+      const firstUser = w.notices()[0].userId;
+      expect(w.state.sends.map((r) => `u-${r.agent_id}`)).not.toContain(firstUser);
+      expect(w.state.sends).toHaveLength(1);
+      // The next order's callback in the group retries only the agent that missed it.
+      w.notifications.sendDedicatedAgentNotice.mockClear();
+      await expect(w.service.sendForOrder('o-b', REMINDER_AT)).resolves.toEqual({ kind: 'sent', recipients: 1 });
+      expect(w.notices().map((n) => n.userId)).toEqual([firstUser]);
+      expect(w.state.sends).toHaveLength(2);
     });
 
     it('a callback well before the reminder time or after the slot started is stale', async () => {

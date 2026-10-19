@@ -34,6 +34,7 @@ interface OfferRow {
   decline_reason: string | null;
   expires_at: string;
   created_at?: string;
+  responded_at?: string;
   currency?: string | null;
   estimated_earnings?: number | null;
 }
@@ -84,6 +85,8 @@ function world() {
       dedicated_assignment_id: null as string | null,
       dedicated_release_until: null as string | null,
       reassignment_count: 0,
+      pickup_due_at: null as string | null,
+      pickup_state: null as string | null,
       window: { slot_id: 'cm-a', preferred_date: '2026-10-18', is_confirmed: true as boolean | null } as
         | { slot_id: string; preferred_date: string; is_confirmed: boolean | null }
         | null,
@@ -107,6 +110,8 @@ function world() {
     holds: [] as Array<{ id: string; agent_hold_amount: number; status: string }>,
     releaseRowFails: false,
     releaseCasDeadlocks: 0,
+    /** Another agent claims the order right after the release CAS (QA #608 N1). */
+    claimAfterRelease: null as string | null,
   };
 
   const op = (q: string) => /(?:query|mutation) (\w+)/.exec(q)?.[1] ?? '?';
@@ -312,8 +317,18 @@ function world() {
           dedicated_release_until: null,
           dispatch_round: 0,
           dispatch_exhausted_at: null,
+          pickup_due_at: null,
+          pickup_state: null,
         });
+        if (state.claimAfterRelease) Object.assign(o, { assigned_agent_id: state.claimAfterRelease, current_status: 'assigned_to_agent' });
         return { update_orders: { affected_rows: 1 } };
+      }
+      case 'DropDedicatedReleaseExclusion': {
+        const before = state.offers.length;
+        state.offers = state.offers.filter(
+          (x) => !(x.order_id === vars.orderId && x.agent_id === vars.agentId && x.status === 'declined' && x.responded_at === vars.at)
+        );
+        return { delete_order_offers: { affected_rows: before - state.offers.length } };
       }
       case 'RecordDedicatedRelease': {
         if (state.releaseRowFails) throw new Error('insert failed');
@@ -324,7 +339,9 @@ function world() {
       }
       case 'RevertDedicatedRelease': {
         const o = state.order;
-        if (o.assigned_agent_id || o.current_status !== 'ready_for_pickup') return { update_orders: { affected_rows: 0 } };
+        if (o.assigned_agent_id || o.current_status !== 'ready_for_pickup') return { update_orders: { affected_rows: 0 }, restore: { affected_rows: 0 } };
+        if (mutation.includes('_set: $pickup')) Object.assign(o, vars.pickup);
+        if (!mutation.includes('restore: update_orders')) return { update_orders: { affected_rows: 1 } };
         Object.assign(o, {
           assigned_agent_id: vars.agentId,
           current_status: 'assigned_to_agent',
@@ -332,7 +349,7 @@ function world() {
           dedicated_assignment_id: vars.assignmentId,
           dedicated_release_until: vars.releaseUntil,
         });
-        return { update_orders: { affected_rows: 1 } };
+        return { update_orders: { affected_rows: 1 }, restore: { affected_rows: 1 } };
       }
       case 'CancelHold':
         state.holds.filter((h) => h.id === vars.id).forEach((h) => (h.status = 'cancelled'));
@@ -1127,6 +1144,7 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
         expect(lines(spies)).toEqual([
           {
             event: 'dedicated.auto_assign_release',
+          flagOn: true,
             outcome: 'released',
             orderId: ORDER,
             agentId: 'int',
@@ -1160,12 +1178,12 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
         expect(warned).toHaveLength(1);
       });
 
-      it('flag off is logged as dedicated_disabled', async () => {
+      it('QA #608 N3: flag off is logged as a release with flagOn=false', async () => {
         const w = await autoAssigned();
         w.state.flag = false;
         jest.setSystemTime(at(31));
         await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null);
-        expect(lines(spies)).toEqual([expect.objectContaining({ outcome: 'refused', refusal: 'dedicated_disabled' })]);
+        expect(lines(spies)).toEqual([expect.objectContaining({ outcome: 'released', flagOn: false })]);
       });
     });
 
@@ -1309,25 +1327,27 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       expect(w.state.mutations).not.toContain('ReleaseDedicatedAutoAssignment');
     });
 
-    it('flag off: dedicated_disabled, nothing written', async () => {
+    it('QA #608 N3: flag off (kill switch) still honours the open release window', async () => {
       const w = await autoAssigned();
       w.state.flag = false;
       // Past the 30 s config cache, inside the release window.
       jest.setSystemTime(at(31));
-      await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({
-        refusal: 'dedicated_disabled',
-      });
-      expect(w.state.order.assigned_agent_id).toBe('int');
-      expect(w.state.mutations).not.toContain('ReleaseDedicatedAutoAssignment');
+      await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({ success: true });
+      expect(w.state.order.assigned_agent_id).toBeNull();
+      expect(w.dedicatedOffers().find((o) => o.agent_id === 'int')).toMatchObject({ status: 'declined' });
+      // ... but the kill switch still blocks a new dedicated assignment.
+      expect(w.claimer.claimOrderForAgent).not.toHaveBeenCalled();
     });
 
-    it('the exclusion row cannot be written: the release is undone and dispatch does not restart', async () => {
+    it('QA #608 N1: the exclusion row cannot be written: nothing is released (it is written before the unassign)', async () => {
       const w = await autoAssigned();
       w.state.releaseRowFails = true;
       jest.setSystemTime(at(10));
       await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({
         refusal: 'release_failed',
       });
+      expect(w.state.mutations).not.toContain('ReleaseDedicatedAutoAssignment');
+      expect(w.state.mutations).not.toContain('RevertDedicatedRelease');
       expect(w.state.order).toMatchObject({
         assigned_agent_id: 'int',
         current_status: 'assigned_to_agent',
@@ -1336,7 +1356,53 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
         dedicated_release_until: at(120).toISOString(),
       });
       expect(w.schedule.scheduleDispatchRound).not.toHaveBeenCalled();
-      expect(w.state.order.dispatch_round).toBe(0);
+    });
+
+    it('QA #608 N1: the exclusion row is in place before the order is unassigned', async () => {
+      const w = await autoAssigned();
+      jest.setSystemTime(at(10));
+      await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null);
+      const m = w.state.mutations;
+      expect(m.indexOf('RecordDedicatedRelease')).toBeGreaterThanOrEqual(0);
+      expect(m.indexOf('RecordDedicatedRelease')).toBeLessThan(m.indexOf('ReleaseDedicatedAutoAssignment'));
+    });
+
+    it('QA #608 N1: a lost CAS (window closed) removes this attempt\'s exclusion row', async () => {
+      const w = await autoAssigned();
+      jest.setSystemTime(at(10));
+      w.state.order.dedicated_release_until = at(5).toISOString();
+      const real = w.state.order;
+      void real;
+      await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({ refusal: 'window_closed' });
+      expect(w.dedicatedOffers().filter((o) => o.agent_id === 'int')).toEqual([]);
+      expect(w.state.order.assigned_agent_id).toBe('int');
+    });
+
+    it('QA #608 N1: hold release fails -> the agent is put back with pickup timers restored and no exclusion left', async () => {
+      const w = await autoAssigned((x) => x.state.holds.push({ id: 'hold-1', agent_hold_amount: 500, status: 'active' }));
+      Object.assign(w.state.order, { pickup_due_at: at(900).toISOString(), pickup_state: 'en_route' });
+      w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' });
+      jest.setSystemTime(at(10));
+      await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({ refusal: 'release_failed' });
+      expect(w.state.order).toMatchObject({
+        assigned_agent_id: 'int',
+        assignment_source: 'dedicated_auto',
+        pickup_due_at: at(900).toISOString(),
+        pickup_state: 'en_route',
+      });
+      expect(w.dedicatedOffers().filter((o) => o.agent_id === 'int')).toEqual([]);
+    });
+
+    it('QA #608 N1: hold release fails after another agent claimed it -> release_lost, logged, not reported as kept', async () => {
+      const w = await autoAssigned((x) => x.state.holds.push({ id: 'hold-1', agent_hold_amount: 500, status: 'active' }));
+      w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' });
+      w.state.claimAfterRelease = 'thief';
+      const errors = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      jest.setSystemTime(at(10));
+      await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({ refusal: 'release_lost' });
+      expect(w.state.order.assigned_agent_id).toBe('thief');
+      expect(errors.mock.calls.some((c) => String(c[0]).includes('"event":"dedicated.release_revert_failed"'))).toBe(true);
+      errors.mockRestore();
     });
 
     it('the hold cannot be released: the release is undone and dispatch does not restart', async () => {

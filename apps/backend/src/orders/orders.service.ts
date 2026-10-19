@@ -18847,6 +18847,7 @@ export const DEDICATED_RELEASE_ERRORS = {
   not_auto_assigned: 'DEDICATED_RELEASE_NOT_AUTO_ASSIGNED',
   window_closed: 'DEDICATED_RELEASE_WINDOW_CLOSED',
   release_failed: 'DEDICATED_RELEASE_FAILED',
+  release_lost: 'DEDICATED_RELEASE_LOST',
 } as const;
 
 export function parseOfferDeclineReason(raw: unknown): OfferDeclineReason | null {

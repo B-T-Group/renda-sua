@@ -1779,7 +1779,7 @@ export class OrdersController {
   @ApiResponse({
     status: 409,
     description:
-      'DEDICATED_DISABLED (flag off), DEDICATED_RELEASE_NOT_ASSIGNED, DEDICATED_RELEASE_NOT_AUTO_ASSIGNED or DEDICATED_RELEASE_WINDOW_CLOSED. Body: { error, code, reason, message } with message in the agent\'s language',
+      'DEDICATED_RELEASE_NOT_ASSIGNED, DEDICATED_RELEASE_NOT_AUTO_ASSIGNED, DEDICATED_RELEASE_WINDOW_CLOSED or DEDICATED_RELEASE_LOST (could not finish and another agent took the order). The flag being off does not block a release. Body: { error, code, reason, message } with message in the agent\'s language',
   })
   @ApiResponse({ status: 500, description: 'DEDICATED_RELEASE_FAILED (nothing changed; retry)' })
   async releaseDedicatedAutoAssignment(

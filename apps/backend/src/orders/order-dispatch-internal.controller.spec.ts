@@ -1,4 +1,6 @@
 import { UnauthorizedException } from '@nestjs/common';
+import * as crypto from 'crypto';
+import { internalKeyMatches } from './internal-key.util';
 import { OrderDispatchInternalController } from './order-dispatch-internal.controller';
 
 const ORDER_ID = '3f2b8c1e-9d4a-4e6b-8a7c-1d2e3f4a5b6c';
@@ -14,6 +16,23 @@ describe('OrderDispatchInternalController', () => {
     configService.get.mockReturnValue({ apiKey: 'internal-secret' });
     reminder.sendForOrder.mockResolvedValue({ kind: 'sent', recipients: 2 });
     controller = new OrderDispatchInternalController(offers as never, configService as never, reminder as never);
+  });
+
+  describe('QA #608 N4: internal key compare', () => {
+    it('internalKeyMatches: exact match only, any length, empty expected never matches', () => {
+      expect(internalKeyMatches('internal-secret', 'internal-secret')).toBe(true);
+      for (const bad of ['internal-secreT', 'internal-secret ', '', 'x'.repeat(500)]) expect(internalKeyMatches(bad, 'internal-secret')).toBe(false);
+      expect(internalKeyMatches(undefined, 'internal-secret')).toBe(false);
+      expect(internalKeyMatches('', '')).toBe(false);
+    });
+
+    it('compares in constant time (crypto.timingSafeEqual), on both internal endpoints', async () => {
+      const spy = jest.spyOn(crypto, 'timingSafeEqual');
+      await controller.dedicatedSlotReminder({ orderId: ORDER_ID }, 'internal-secret');
+      await controller.dedicatedSlotReminder({ orderId: ORDER_ID }, 'nope').catch(() => undefined);
+      expect(spy).toHaveBeenCalledTimes(2);
+      spy.mockRestore();
+    });
   });
 
   describe('#594 PR 6 dedicated-slot-reminder (AC-A8)', () => {
