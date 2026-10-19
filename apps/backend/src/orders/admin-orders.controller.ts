@@ -63,6 +63,7 @@ import type {
 import { isAdminOperationalStatus } from './admin-order-status.util';
 import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+import { maskPersonalData } from '../common/sentry/scrub-sentry-event';
 
 /** The full-refund cancel succeeded but its audit event could not be written. */
 export const FULL_REFUND_CANCEL_AUDIT_FAILED_MARKER = 'admin_full_refund_cancel_audit_failed';
@@ -284,8 +285,19 @@ export class AdminOrdersController {
    * on the status read, so of two concurrent calls one wins and the other gets 409
    * before any side effect.
    *
+   * Where the money goes (QA A5): the refund is to the client's Rendasua WALLET, not
+   * back to the payment provider. Funds held on the wallet are released to its
+   * available balance and a paid deposit is credited back to the wallet; no MoMo /
+   * provider payout is made (the client withdraws as usual). A card authorisation is
+   * voided rather than captured.
+   *
+   * The deposit refund result is returned as `depositRefund` (QA A2): when it failed
+   * or was refused the response says so and a money alert is raised; it never claims
+   * a full refund that did not happen.
+   *
    * Audit: an `admin_intervention` order event (action full_refund_cancel, actor,
-   * reason, previous status) plus a status-history entry.
+   * reason, previous status) plus a status-history entry. The free-text reason is
+   * PII-masked (emails, phone numbers) before it is stored or logged (QA A4).
    */
   @Post(':orderId/full-refund-cancel')
   @RequireRoles(PlatformRoles.SUPERUSER)
@@ -293,7 +305,7 @@ export class AdminOrdersController {
   @ApiOperation({
     summary: 'Cancel with a full refund (ops cleanup)',
     description:
-      'Superuser / financial-refunds admin only. No cancellation fee; the client is fully refunded and agent holds are released exactly once. Refused once the agent has picked the order up.',
+      'Superuser / financial-refunds admin only. No cancellation fee; the client is refunded to their Rendasua wallet (not to the payment provider) and agent holds are released exactly once. Only before pickup (pending_payment, pending, confirmed, preparing, ready_for_pickup, assigned_to_agent). The response carries depositRefund.status.',
   })
   @ApiResponse({ status: 201, description: 'Cancelled; refund queued (order.cancelled)' })
   @ApiResponse({ status: 409, description: 'Already cancelled / status moved / goods already picked up' })
@@ -303,8 +315,9 @@ export class AdminOrdersController {
   ) {
     const scope = await this.geo.require(PlatformPermissions.FINANCIAL_REFUNDS);
     await this.geo.assertOrder(scope, orderId);
-    const result = await this.ordersService.adminFullRefundCancel(orderId, dto.reason);
-    await this.auditFullRefundCancel(orderId, dto.reason, result.previousStatus);
+    const reason = maskPersonalData(dto.reason);
+    const result = await this.ordersService.adminFullRefundCancel(orderId, reason);
+    await this.auditFullRefundCancel(orderId, reason, result.previousStatus);
     return result;
   }
 
@@ -312,30 +325,20 @@ export class AdminOrdersController {
    * The audit event after a successful full-refund cancel. The cancel (and its refund)
    * has already happened, so a failure here must not turn it into an error: it is
    * raised as an alert (`admin_full_refund_cancel_audit_failed`, Sentry + CloudWatch
-   * marker) with who/what/why so the trail can be restored by hand. Written directly
-   * (not via OrderEventsService.recordEvent, which swallows insert errors) so a
-   * failed insert is seen.
+   * marker) with who/what/why so the trail can be restored by hand. Written with
+   * OrderEventsService.recordEventStrict (recordEvent swallows insert errors).
    */
   private async auditFullRefundCancel(orderId: string, reason: string, previousStatus: string): Promise<void> {
     let actorId: string | null = null;
     try {
       actorId = (await this.hasuraUserService.getUser())?.id ?? null;
-      await this.hasuraSystemService.executeMutation(
-        `mutation AuditFullRefundCancel($orderId: uuid!, $actorId: uuid, $payload: jsonb!) {
-          insert_order_events_one(object: {
-            order_id: $orderId
-            event_type: "admin_intervention"
-            actor_type: "support"
-            actor_id: $actorId
-            payload: $payload
-          }) { id }
-        }`,
-        {
-          orderId,
-          actorId,
-          payload: { action: 'full_refund_cancel', reason, previousStatus, cancellationFee: 0 },
-        }
-      );
+      await this.orderEventsService.recordEventStrict({
+        orderId,
+        eventType: 'admin_intervention',
+        actorType: 'support',
+        actorId,
+        payload: { action: 'full_refund_cancel', reason, previousStatus, cancellationFee: 0 },
+      });
     } catch (error: unknown) {
       reportMoneyAnomaly(
         this.logger,

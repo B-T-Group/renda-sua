@@ -672,7 +672,28 @@ export interface DeclineOrderOfferRequest {
 }
 
 /** Admin full-refund cancel is refused once the agent holds the goods. */
-const ADMIN_FULL_REFUND_REFUSED_STATUSES = new Set(['picked_up', 'in_transit', 'out_for_delivery']);
+/**
+ * QA #626 A1: an ALLOWLIST of pre-pickup statuses. Anything else (picked_up, in_transit,
+ * out_for_delivery, awaiting_shipment, shipped, in_delivery, delivered, complete, the
+ * refund states, cancelled, failed, and any status added later) is refused.
+ */
+export const ADMIN_FULL_REFUND_ALLOWED_STATUSES: ReadonlySet<string> = new Set([
+  'pending_payment',
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned_to_agent',
+]);
+
+export const ADMIN_FULL_REFUND_DEPOSIT_FAILED_MARKER = 'admin_full_refund_cancel_deposit_refund_failed';
+
+/** What happened to a paid deposit on cancel. */
+export type DepositCancelOutcome =
+  | { status: 'none' }
+  | { status: 'refunded' }
+  | { status: 'forfeited' }
+  | { status: 'failed'; message: string; errorCode?: string };
 
 @Injectable()
 export class OrdersService {
@@ -8482,10 +8503,10 @@ export class OrdersService {
   async adminFullRefundCancel(orderId: string, reason: string) {
     const order = await this.requireCancellableAdminOrder(orderId);
     const previousStatus = order.current_status;
-    if (ADMIN_FULL_REFUND_REFUSED_STATUSES.has(previousStatus)) {
+    if (!ADMIN_FULL_REFUND_ALLOWED_STATUSES.has(previousStatus)) {
       throw new HttpException(
         {
-          message: `The order is ${previousStatus}: the goods are with the agent. Use the return / refund flow.`,
+          message: `The order is ${previousStatus}: a full-refund cancel is only possible before pickup. Use the return / refund flow.`,
           error: 'ORDER_ALREADY_PICKED_UP',
         },
         HttpStatus.CONFLICT
@@ -8513,13 +8534,26 @@ export class OrdersService {
       adminUserId,
       notes
     );
-    await this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes);
+    const deposit = await this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes);
+    // Refunds go to the client's Rendasua wallet, never back to the payment provider.
+    const depositFailed = deposit.status === 'failed';
+    if (depositFailed) {
+      reportMoneyAnomaly(
+        this.logger,
+        ADMIN_FULL_REFUND_DEPOSIT_FAILED_MARKER,
+        `Deposit not refunded on the admin full-refund cancel of order ${order.order_number ?? orderId}: ${deposit.message}`,
+        { orderId, previousStatus, adminUserId, errorCode: deposit.errorCode }
+      );
+    }
     return {
       success: true,
       order: updatedOrder,
       previousStatus,
       cancellationFee: 0,
-      message: 'Order cancelled with a full refund; the refund and hold releases are queued',
+      depositRefund: deposit,
+      message: depositFailed
+        ? 'Order cancelled with no fee and the wallet releases queued, but the DEPOSIT REFUND FAILED and needs manual follow-up'
+        : 'Order cancelled with a full refund to the client wallet; the refund and hold releases are queued',
     };
   }
 
@@ -12196,7 +12230,7 @@ export class OrdersService {
     notes?: string,
     sqsReason?: string,
     actorUserId?: string
-  ): Promise<void> {
+  ): Promise<DepositCancelOutcome> {
     try {
       await this.purchaseCreditsService?.restore(orderId);
     } catch (error: any) {
@@ -12244,7 +12278,7 @@ export class OrdersService {
     }
 
     // MUST-FIX 3: Handle deposit refund/forfeit on cancellation
-    await this.handleDepositOnCancellation(
+    const deposit = await this.handleDepositOnCancellation(
       order,
       orderId,
       previousStatus,
@@ -12260,6 +12294,7 @@ export class OrdersService {
       previousStatus,
       sqsReason ?? notes
     );
+    return deposit;
   }
 
   /**
@@ -12415,13 +12450,13 @@ export class OrdersService {
     notes?: string,
     reason?: string,
     actorUserId?: string
-  ): Promise<void> {
+  ): Promise<DepositCancelOutcome> {
     const depositStatus = (order as any).deposit_status;
     const depositAmount = (order as any).deposit_amount;
     
     // Only process if deposit was captured
     if (depositStatus !== 'paid' || !depositAmount || depositAmount <= 0) {
-      return;
+      return { status: 'none' };
     }
 
     const fulfillmentMethod = (order as any).fulfillment_method as
@@ -12444,7 +12479,7 @@ export class OrdersService {
         'customer_no_show_pickup',
         actorUserId
       );
-      return;
+      return { status: 'forfeited' };
     }
 
     // Business/system cancel → always refund (even after lock)
@@ -12458,17 +12493,22 @@ export class OrdersService {
           this.logger.error(
             `Deposit refund failed for ${cancelledBy} cancel of order ${orderId}: ${refundResult.message}`
           );
-        } else {
-          this.logger.log(
-            `Deposit refund initiated for ${cancelledBy} cancel of order ${orderId}`
-          );
+          return {
+            status: 'failed',
+            message: refundResult.message || 'Deposit refund refused',
+            errorCode: refundResult.errorCode,
+          };
         }
+        this.logger.log(
+          `Deposit refund initiated for ${cancelledBy} cancel of order ${orderId}`
+        );
+        return { status: 'refunded' };
       } catch (error: any) {
         this.logger.error(
           `Failed to process deposit refund for ${cancelledBy} cancel: ${error.message}`
         );
+        return { status: 'failed', message: error?.message || 'Deposit refund threw' };
       }
-      return;
     }
 
     // Customer cancel
@@ -12495,8 +12535,10 @@ export class OrdersService {
         }
       } else {
         await this.applyDepositForfeit(orderId, 'customer_cancel_after_lock');
+        return { status: 'forfeited' };
       }
     }
+    return { status: 'none' };
   }
 
   private async handleNoshowDeposit(

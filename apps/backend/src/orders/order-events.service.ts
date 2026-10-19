@@ -15,20 +15,34 @@ export interface OrderEventRow {
   created_at: string;
 }
 
+export interface RecordOrderEventParams {
+  orderId: string;
+  eventType: OrderEventType;
+  actorType: OrderEventActorType;
+  actorId?: string | null;
+  payload?: Record<string, unknown>;
+}
+
 @Injectable()
 export class OrderEventsService {
   private readonly logger = new Logger(OrderEventsService.name);
 
   constructor(private readonly hasura: HasuraSystemService) {}
 
-  async recordEvent(params: {
-    orderId: string;
-    eventType: OrderEventType;
-    actorType: OrderEventActorType;
-    actorId?: string | null;
-    payload?: Record<string, unknown>;
-  }): Promise<void> {
+  /** Best effort: an insert failure is logged, never thrown. */
+  async recordEvent(params: RecordOrderEventParams): Promise<void> {
     try {
+      await this.recordEventStrict(params);
+    } catch (error: any) {
+      this.logger.error(
+        `recordEvent ${params.eventType} failed for ${params.orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  /** Same insert, but a failure is thrown so the caller can alert on it. */
+  async recordEventStrict(params: RecordOrderEventParams): Promise<void> {
+    {
       await this.hasura.executeMutation(
         `mutation InsertOrderEvent(
           $orderId: uuid!
@@ -52,10 +66,6 @@ export class OrderEventsService {
           actorId: params.actorId ?? null,
           payload: params.payload ?? {},
         }
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `recordEvent ${params.eventType} failed for ${params.orderId}: ${error?.message}`
       );
     }
   }
