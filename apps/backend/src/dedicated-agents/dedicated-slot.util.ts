@@ -89,3 +89,25 @@ export function localDateTimeAt(at: Date, timeZone: string): { date: string; tim
   const zoned = local.isValid ? local : DateTime.fromJSDate(at, { zone: 'utc' });
   return { date: zoned.toFormat('yyyy-MM-dd'), time: zoned.toFormat('HH:mm') };
 }
+
+/** AC-B2: default pickup time is slot start + 30 min. */
+export const DEFAULT_PICKUP_OFFSET_MINUTES = 30;
+
+export function minutesToTime(total: number): string {
+  const h = Math.floor(total / 60);
+  const m = total % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+/** `HH:MM[:SS]` -> `HH:MM`. */
+export function shortTime(time: string): string {
+  const minutes = timeToMinutes(time);
+  return minutes == null ? time : minutesToTime(minutes);
+}
+
+/** AC-B2 default: slot start + 30 min, kept inside the slot. */
+export function defaultPickupTime(slot: Pick<DedicatedSlotBounds, 'startTime' | 'endTime'>): string {
+  const start = timeToMinutes(slot.startTime) as number;
+  const end = timeToMinutes(slot.endTime) as number;
+  return minutesToTime(Math.min(start + DEFAULT_PICKUP_OFFSET_MINUTES, Math.max(start, end - 1)));
+}
