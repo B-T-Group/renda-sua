@@ -4909,6 +4909,34 @@ describe('OrdersService', () => {
         expect(dedicatedClaims()).toHaveLength(0);
         expect(assignMutations()[0][0]).not.toContain('assignment_source');
       });
+
+      it('QA #607 R1: a cap refusal at completion is final, never an uncapped plain claim', async () => {
+        const order = { id: 'order-123', order_number: 'ORD-123', assigned_agent_id: null };
+        // 1. dedicated_claim_order over the cap (409 DEDICATED_AT_CAPACITY).
+        offers('dedicated', async () => stampOffer);
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockImplementation(async (q: string) => {
+          if (String(q).includes('DedicatedClaimOrder')) {
+            throw Object.assign(new Error('database query error'), {
+              response: { errors: [{ message: 'dedicated_order_cap_exceeded: agent agent-123 has 10 of 10 active dedicated orders' }] },
+            });
+          }
+          return assigned;
+        });
+        await expect(loose().assignClaimIfOpen(order, 'agent-123')).resolves.toBe('at_capacity');
+        expect(dedicatedClaims()).toHaveLength(1);
+        expect(assignMutations()).toHaveLength(0);
+
+        // 2. the accept re-check itself refuses at the cap.
+        offers('dedicated', async () =>
+          Promise.reject(new HttpException({ error: 'DEDICATED_OFFER_INELIGIBLE', code: 'at_capacity', reason: 'at_capacity' }, HttpStatus.CONFLICT))
+        );
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockResolvedValue(assigned);
+        await expect(loose().assignClaimIfOpen(order, 'agent-123')).resolves.toBe('at_capacity');
+        expect(dedicatedClaims()).toHaveLength(0);
+        expect(assignMutations()).toHaveLength(0);
+      });
     });
 
     it('a normal claim keeps today\'s mutation (no dedicated columns) and agent history', async () => {
