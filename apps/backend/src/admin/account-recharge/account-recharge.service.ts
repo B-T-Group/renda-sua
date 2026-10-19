@@ -3,6 +3,7 @@ import { AccountsService } from '../../accounts/accounts.service';
 import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { MobilePaymentsDatabaseService } from '../../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../../mobile-payments/mobile-payments.service';
+import { maskPhoneNumber } from '../../mobile-payments/sanitize-provider-error.util';
 import type { InitiateAccountRechargeDto } from './account-recharge.dto';
 
 const XAF = 'XAF';
@@ -72,10 +73,10 @@ export class AccountRechargeService {
       reference
     );
 
-    await this.recordProviderResponse(tx.id, paymentResponse);
+    await this.recordProviderResponse(tx.id, paymentResponse, reference);
 
     this.logger.log(
-      `HQ recharge initiated: ref=${reference} phone=${fullPhone} amount=${dto.amount} provider=${provider} success=${paymentResponse.success}`
+      `HQ recharge initiated: ref=${reference} phone=${maskPhoneNumber(fullPhone)} amount=${dto.amount} provider=${provider} success=${paymentResponse.success}`
     );
 
     return {
@@ -140,12 +141,21 @@ export class AccountRechargeService {
 
   private async recordProviderResponse(
     txId: string,
-    paymentResponse: { success: boolean; transactionId?: string; message?: string; errorCode?: string }
+    paymentResponse: { success: boolean; transactionId?: string; message?: string; errorCode?: string },
+    reference: string
   ): Promise<void> {
     if (paymentResponse.success && paymentResponse.transactionId) {
       await this.mobilePaymentsDatabaseService.updateTransaction(txId, {
         transaction_id: paymentResponse.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentResponse.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentResponse.transactionId,
+          reference
+        );
+      }
     } else {
       await this.mobilePaymentsDatabaseService.updateTransaction(txId, {
         status: 'failed',

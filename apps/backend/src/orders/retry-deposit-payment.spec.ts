@@ -52,6 +52,8 @@ describe('OrdersService - retryDepositPayment', () => {
     mobilePaymentsService = {
       resolveProvider: jest.fn().mockReturnValue('mypvit'),
       initiatePayment: jest.fn(),
+      validatePaymentRequest: jest.fn().mockResolvedValue(null),
+      scheduleMockCallback: jest.fn(),
     } as any;
 
     hasuraSystemService = {
