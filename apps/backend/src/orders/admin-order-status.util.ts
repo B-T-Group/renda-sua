@@ -76,3 +76,26 @@ export function isAdminOperationalStatus(status: string): boolean {
 export function isAdminSettlementStatus(status: string): boolean {
   return (ADMIN_SETTLEMENT_STATUSES as readonly string[]).includes(status);
 }
+
+/** Post-pickup statuses the override may still move between (agent en route). */
+const ADMIN_OVERRIDE_POST_PICKUP_STATUSES: readonly string[] = ['in_transit', 'out_for_delivery'];
+
+/**
+ * #627 C1: the explicit allowed transitions for PATCH /admin/orders/:id/status (a
+ * non-cancel override), checked against the CURRENT status:
+ * - from a pre-pickup status (the cancel allowlist minus pending_payment, which only
+ *   the payment flow may leave) to any operational status;
+ * - from in_transit / out_for_delivery only to in_transit / out_for_delivery (never
+ *   back to a pre-pickup status, which would let a cancel or full refund follow);
+ * - from anything else (pending_payment, picked_up, shipping statuses, delivered,
+ *   complete, refund states, cancelled, failed, or a status added later): nothing;
+ * - a move to the same status is not a transition.
+ */
+export function isAdminOverrideTransitionAllowed(from: string, to: string): boolean {
+  if (from === to || !isAdminOperationalStatus(to)) return false;
+  if (from !== 'pending_payment' && isAdminPrePickupCancellableStatus(from)) return true;
+  return (
+    ADMIN_OVERRIDE_POST_PICKUP_STATUSES.includes(from) &&
+    ADMIN_OVERRIDE_POST_PICKUP_STATUSES.includes(to)
+  );
+}

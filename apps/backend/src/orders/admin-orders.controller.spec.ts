@@ -26,7 +26,7 @@ describe('AdminOrdersController.updateStatus', () => {
       }),
     };
     const hasuraSystemService = {
-      executeMutation: jest.fn().mockResolvedValue({}),
+      executeMutation: jest.fn().mockResolvedValue({ update_orders: { affected_rows: 1 } }),
     };
     const orderEventsService = {
       recordEvent: jest.fn().mockResolvedValue(undefined),
@@ -65,6 +65,8 @@ describe('AdminOrdersController.updateStatus', () => {
     expect(ordersService.cancelOrderAsAdmin).toHaveBeenCalledWith(
       'order-1',
       'Customer asked support to cancel'
+    ,
+      'confirmed'
     );
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
     expect(result).toEqual({
@@ -76,7 +78,7 @@ describe('AdminOrdersController.updateStatus', () => {
   it('uses the reason the admin UI sends (reason wins over notes, trimmed)', async () => {
     const { controller, ordersService } = buildController();
     await controller.updateStatus('order-1', { status: 'cancelled', reason: '  dup order ', notes: 'n' } as any);
-    expect(ordersService.cancelOrderAsAdmin).toHaveBeenCalledWith('order-1', 'dup order');
+    expect(ordersService.cancelOrderAsAdmin).toHaveBeenCalledWith('order-1', 'dup order', 'confirmed');
   });
 
   it.each([undefined, '', '   '])('requires a reason to cancel (reason=%p): 400, nothing cancelled', async (reason) => {
@@ -101,7 +103,7 @@ describe('AdminOrdersController.updateStatus', () => {
     async (status) => {
       const { controller, ordersService } = buildController({ status });
       await controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any);
-      expect(ordersService.cancelOrderAsAdmin).toHaveBeenCalledWith('order-1', 'r');
+      expect(ordersService.cancelOrderAsAdmin).toHaveBeenCalledWith('order-1', 'r', status);
     }
   );
 
@@ -155,7 +157,10 @@ describe('AdminOrdersController.updateStatus', () => {
     });
 
     expect(result.success).toBe(true);
-    const [mutation, variables] = hasuraSystemService.executeMutation.mock.calls[0];
+    const [cas, casVars] = hasuraSystemService.executeMutation.mock.calls[0];
+    expect(cas).toContain('current_status: { _eq: $previousStatus }');
+    expect(casVars).toEqual({ orderId: 'order-1', status: 'preparing', previousStatus: 'confirmed' });
+    const [mutation, variables] = hasuraSystemService.executeMutation.mock.calls[1];
     expect(mutation).toContain('status: $status');
     expect(mutation).toContain('previous_status: $previousStatus');
     expect(mutation).toContain('changed_by_type: "system"');
@@ -168,5 +173,25 @@ describe('AdminOrdersController.updateStatus', () => {
       notes: 'Merchant confirmed prep',
     });
     expect(orderEventsService.recordEvent).toHaveBeenCalled();
+  });
+
+  it('#627 C2: a concurrent status change (CAS lost) is a 409 with no history or event', async () => {
+    const { controller, hasuraSystemService, orderEventsService } = buildController();
+    hasuraSystemService.executeMutation.mockResolvedValueOnce({ update_orders: { affected_rows: 0 } });
+    await expect(controller.updateStatus('order-1', { status: 'preparing', notes: 'x' })).rejects.toMatchObject({
+      status: HttpStatus.CONFLICT,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledTimes(1);
+    expect(orderEventsService.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('#627 C1: no backward move out of a post-pickup status', async () => {
+    for (const status of ['in_transit', 'out_for_delivery', 'shipped', 'picked_up']) {
+      const { controller, hasuraSystemService } = buildController({ status });
+      await expect(controller.updateStatus('order-1', { status: 'pending', notes: 'x' })).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+      });
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    }
   });
 });

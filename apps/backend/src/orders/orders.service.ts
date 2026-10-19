@@ -8465,11 +8465,19 @@ export class OrdersService {
     };
   }
 
-  async cancelOrderAsAdmin(orderId: string, notes?: string) {
+  /**
+   * #627 C2: the cancel write is a compare-and-set on `expectedFromStatus` (the status
+   * the caller validated; defaults to the one read here), so a concurrent change gets
+   * 409 before the card authorisation is released or anything else runs.
+   */
+  async cancelOrderAsAdmin(orderId: string, notes?: string, expectedFromStatus?: string) {
     const order = await this.requireCancellableAdminOrder(orderId);
     const adminUserId = await this.resolveOptionalUserId();
+    const updatedOrder = await this.markOrderCancelledAsSystem(
+      orderId,
+      expectedFromStatus ?? order.current_status
+    );
     await this.releaseStripeAuthorizationIfNeeded(order);
-    const updatedOrder = await this.markOrderCancelledAsSystem(orderId);
     await this.finishAdminCancellation(order, adminUserId, notes);
     return {
       success: true,
@@ -8504,10 +8512,11 @@ export class OrdersService {
     }
   }
 
-  private async markOrderCancelledAsSystem(orderId: string) {
+  private async markOrderCancelledAsSystem(orderId: string, expectedFromStatus: string) {
     return this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
       viaCancelEndpoint: true,
       viaSystem: true,
+      expectedFromStatus,
     });
   }
 

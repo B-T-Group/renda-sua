@@ -61,6 +61,7 @@ import type {
 } from '../credits/credit.types';
 import {
   isAdminOperationalStatus,
+  isAdminOverrideTransitionAllowed,
   isAdminPrePickupCancellableStatus,
 } from './admin-order-status.util';
 import { safeErrorMessage } from '../common/utils/safe-error-log.util';
@@ -291,9 +292,14 @@ export class AdminOrdersController {
       if (dto.status === 'cancelled') {
         const reason = this.requireCancelReason(dto);
         this.assertPrePickupCancellable(order.current_status);
-        return await this.ordersService.cancelOrderAsAdmin(orderId, reason);
+        return await this.ordersService.cancelOrderAsAdmin(
+          orderId,
+          reason,
+          order.current_status,
+        );
       }
       this.assertOperationalAdminStatus(dto.status);
+      this.assertOverrideTransition(order.current_status, dto.status);
       await this.writeOperationalAdminStatus(order, dto);
       return {
         success: true,
@@ -326,6 +332,14 @@ export class AdminOrdersController {
     );
   }
 
+  private assertOverrideTransition(from: string, to: string): void {
+    if (isAdminOverrideTransitionAllowed(from, to)) return;
+    throw new HttpException(
+      `Cannot move an order from ${from} to ${to} via status override`,
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
   private assertOperationalAdminStatus(status: string): void {
     if (isAdminOperationalStatus(status)) return;
     throw new HttpException(
@@ -338,18 +352,42 @@ export class AdminOrdersController {
     order: { id: string; current_status: string },
     dto: UpdateOrderStatusDto,
   ): Promise<void> {
-    await this.hasuraSystemService.executeMutation(
+    const updated = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number };
+    }>(
       `
       mutation AdminOperationalStatus(
         $orderId: uuid!
         $status: order_status!
         $previousStatus: order_status!
+      ) {
+        update_orders(
+          where: { id: { _eq: $orderId }, current_status: { _eq: $previousStatus } }
+          _set: { current_status: $status }
+        ) { affected_rows }
+      }
+      `,
+      {
+        orderId: order.id,
+        status: dto.status,
+        previousStatus: order.current_status,
+      },
+    );
+    // #627 C2: compare-and-set on the status checked above; a concurrent change -> 409.
+    if (!(updated?.update_orders?.affected_rows > 0)) {
+      throw new HttpException(
+        'Order status already changed. Please refresh and try again.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    await this.hasuraSystemService.executeMutation(
+      `
+      mutation AdminOperationalStatusHistory(
+        $orderId: uuid!
+        $status: order_status!
+        $previousStatus: order_status!
         $notes: String
       ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: { current_status: $status }
-        ) { id current_status }
         insert_order_status_history_one(
           object: {
             order_id: $orderId

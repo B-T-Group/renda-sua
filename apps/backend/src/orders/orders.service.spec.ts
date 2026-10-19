@@ -5596,7 +5596,11 @@ describe('OrdersService', () => {
       expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
         'order-123',
         'cancelled',
-        { viaCancelEndpoint: true, viaSystem: true }
+        { viaCancelEndpoint: true, viaSystem: true, expectedFromStatus: 'assigned_to_agent' }
+      );
+      // #627 C2: the card authorisation is released only after the CAS write won.
+      expect(orderStatusService.updateOrderStatus.mock.invocationCallOrder[0]).toBeLessThan(
+        releaseStripe.mock.invocationCallOrder[0]
       );
       expect(persistMeta).toHaveBeenCalledWith(
         'order-123',
@@ -5623,6 +5627,18 @@ describe('OrdersService', () => {
         { status: HttpStatus.BAD_REQUEST }
       );
       expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    });
+
+    it('#627 C2: a lost CAS (409) releases nothing and runs no side effects', async () => {
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(openOrder);
+      hasuraUserService.getUser.mockResolvedValue({ id: 'admin-1' } as any);
+      const releaseStripe = jest.spyOn(service as any, 'releaseStripeAuthorizationIfNeeded').mockResolvedValue(undefined);
+      const finish = jest.spyOn(service as any, 'finishAdminCancellation').mockResolvedValue(undefined);
+      orderStatusService.updateOrderStatus.mockRejectedValueOnce(new HttpException('moved', HttpStatus.CONFLICT));
+      await expect(service.cancelOrderAsAdmin('order-123', 'r', 'confirmed')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith('order-123', 'cancelled', expect.objectContaining({ expectedFromStatus: 'confirmed' }));
+      expect(releaseStripe).not.toHaveBeenCalled();
+      expect(finish).not.toHaveBeenCalled();
     });
 
     it.each(['picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'complete'])(

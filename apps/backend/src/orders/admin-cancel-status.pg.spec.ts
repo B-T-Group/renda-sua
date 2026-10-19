@@ -12,7 +12,7 @@ import { HttpException } from '@nestjs/common';
 import { Client } from 'pg';
 import { AdminOrdersController } from './admin-orders.controller';
 import { OrdersService } from './orders.service';
-import { ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES } from './admin-order-status.util';
+import { ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES, ADMIN_STATUS_OVERRIDE_VALUES } from './admin-order-status.util';
 
 const TEMPLATE = process.env.DEDICATED_PG_TEMPLATE?.trim();
 const suite = TEMPLATE ? describe : describe.skip;
@@ -37,6 +37,8 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
     ctrl.ordersService = { getOrderById: jest.fn(async () => ({ id: 'o-1', current_status: status })), cancelOrderAsAdmin: cancel };
     ctrl.geo = { require: jest.fn(async () => ({ all: true })), assertOrder: jest.fn(async () => undefined) };
     ctrl.logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn() };
+    ctrl.hasuraSystemService = { executeMutation: jest.fn(async () => ({ update_orders: { affected_rows: 1 } })) };
+    ctrl.orderEventsService = { recordEvent: jest.fn(async () => undefined) };
     return { ctrl, cancel };
   };
 
@@ -66,7 +68,7 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
       const svc = service(status);
       const s = await svc.cancelOrderAsAdmin('o-1', 'r').catch((e: unknown) => e);
       if (ok) {
-        expect(cancel).toHaveBeenCalledWith('o-1', 'r');
+        expect(cancel).toHaveBeenCalledWith('o-1', 'r', status);
         expect(s).toMatchObject({ success: true });
       } else {
         expect(c).toBeInstanceOf(HttpException);
@@ -80,5 +82,37 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
       seen.push([status, ok]);
     }
     expect(seen.filter(([, ok]) => ok).map(([s]) => s).sort()).toEqual([...allowed].sort());
+  });
+
+  it('#627 C1: every (from x to) override pair over the real enum follows the explicit transition map', async () => {
+    // Independent oracle: pre-pickup (not pending_payment) -> any operational target;
+    // in_transit/out_for_delivery -> each other only; everything else -> nothing.
+    const prePickup = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned_to_agent'];
+    const enRoute = ['in_transit', 'out_for_delivery'];
+    const targets = (ADMIN_STATUS_OVERRIDE_VALUES as readonly string[]).filter((t) => t !== 'cancelled');
+    const oracle = (from: string, to: string) =>
+      from !== to && targets.includes(to) && (prePickup.includes(from) || (enRoute.includes(from) && enRoute.includes(to)));
+    let allowedPairs = 0;
+    for (const from of statuses) {
+      for (const to of [...targets, ...statuses.filter((s) => !targets.includes(s) && s !== 'cancelled')]) {
+        const { ctrl } = controller(from);
+        const res = await ctrl.updateStatus('o-1', { status: to, notes: 'n' }).catch((e: unknown) => e);
+        if (oracle(from, to)) {
+          allowedPairs++;
+          expect([from, to, res]).toEqual([from, to, expect.objectContaining({ success: true })]);
+        } else {
+          expect([from, to, res instanceof HttpException && (res as HttpException).getStatus()]).toEqual([from, to, 400]);
+          expect(ctrl.hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+        }
+      }
+    }
+    // No backward move out of any status outside the pre-pickup allowlist into it.
+    for (const from of statuses.filter((s) => !(ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES as readonly string[]).includes(s))) {
+      for (const to of prePickup) {
+        const { ctrl } = controller(from);
+        await expect(ctrl.updateStatus('o-1', { status: to, notes: 'n' })).rejects.toBeInstanceOf(HttpException);
+      }
+    }
+    expect(allowedPairs).toBe(5 * 6 + 2);
   });
 });
