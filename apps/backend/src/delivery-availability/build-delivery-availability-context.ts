@@ -1,5 +1,8 @@
 import { normalizeDeliveryCountryCode } from '../orders/delivery-pricing.util';
-import { DeliveryAvailabilityContext } from './delivery-availability.types';
+import {
+  DedicatedDeliveryRequest,
+  DeliveryAvailabilityContext,
+} from './delivery-availability.types';
 
 export interface DeliveryAvailabilityContextInput {
   businessId: string;
@@ -21,6 +24,7 @@ export interface DeliveryAvailabilityContextInput {
   clientId?: string;
   evaluatedAt?: Date;
   stage?: 'preflight' | 'place_order';
+  dedicated?: DedicatedDeliveryRequest | null;
 }
 
 /** Shared by checkout preflight and order create so both gates see the same inputs. */
@@ -47,6 +51,7 @@ export function buildDeliveryAvailabilityContext(
     clientId: input.clientId,
     evaluatedAt: input.evaluatedAt ?? new Date(),
     stage: input.stage,
+    ...(input.dedicated ? { dedicated: input.dedicated } : {}),
   };
 }
 

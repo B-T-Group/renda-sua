@@ -218,6 +218,55 @@ describe('OrdersService Phase 0 Events', () => {
       );
     });
 
+    it('QA #607 R1: at capacity -> claim_topup_failed, tx marked, agent notified, no hold', async () => {
+      const harness = createHarness();
+      const updateTransaction = jest.fn().mockResolvedValue({});
+      const sendDedicatedOrderNotice = jest.fn().mockResolvedValue(undefined);
+      Object.assign(harness.service as any, {
+        mobilePaymentsDatabaseService: { updateTransaction },
+        notificationsService: { sendDedicatedOrderNotice },
+      });
+      jest.spyOn(harness.service as any, 'loadClaimPaymentContext').mockResolvedValue({
+        order: mockOrder(),
+        agentId: 'agent-123',
+        accountId: 'account-123',
+        userId: 'user-123',
+      });
+      jest.spyOn(harness.service as any, 'assignClaimIfOpen').mockResolvedValue('at_capacity');
+      const hold = jest.spyOn(harness.service as any, 'placeClaimHoldOrRevert').mockResolvedValue(undefined);
+      const record = jest.spyOn(harness.service as any, 'recordNewClaimAssignment').mockResolvedValue(undefined);
+
+      await harness.service.processClaimOrderPayment({
+        id: 'tx-cap',
+        entity_id: 'ORD-001',
+        amount: 8000,
+        currency: 'XOF',
+        transaction_id: 'momo-tx-cap',
+        provider: 'fedapay',
+        account_id: 'account-123',
+        created_at: new Date().toISOString(),
+      });
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(hold).not.toHaveBeenCalled();
+      expect(record).not.toHaveBeenCalled();
+      expect(updateTransaction).toHaveBeenCalledWith('tx-cap', expect.objectContaining({ error_code: 'DEDICATED_AT_CAPACITY' }));
+      expect(sendDedicatedOrderNotice).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-123', messageType: 'DEDICATED_CLAIM_AT_CAPACITY', persona: 'agent', orderId: 'order-123' })
+      );
+      expect(harness.trackEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eventType: 'agent.claim_topup_failed',
+          metadata: expect.objectContaining({ reason: 'dedicated_at_capacity', holdAmount: 8000, agentId: 'agent-123' }),
+        }),
+        expect.any(Object)
+      );
+      expect(harness.trackEvent).not.toHaveBeenCalledWith(
+        expect.objectContaining({ eventType: 'agent.claim_topup_succeeded' }),
+        expect.any(Object)
+      );
+    });
+
     it('does not emit on slot already-mine (replay)', async () => {
       const harness = createHarness();
       const mockTransaction = {

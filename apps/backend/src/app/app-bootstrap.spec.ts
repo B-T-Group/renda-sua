@@ -7,6 +7,16 @@ import { InventoryItemsService } from '../inventory-items/inventory-items.servic
 import { PaymentCallbackRegistryService } from '../mobile-payments/payment-callback/payment-callback-registry.service';
 import { OrdersService } from '../orders/orders.service';
 import { RentalsService } from '../rentals/rentals.service';
+import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
+import { DedicatedCheckoutCoverageService } from '../dedicated-agents/dedicated-checkout-coverage.service';
+import { DedicatedCoverageService } from '../dedicated-agents/dedicated-coverage.service';
+import { DedicatedDispatchService } from '../orders/dedicated-dispatch.service';
+import { DedicatedSlotReminderService } from '../orders/dedicated-slot-reminder.service';
+import { OrderDispatchInternalController } from '../orders/order-dispatch-internal.controller';
+import { OrderReassignmentService } from '../orders/order-reassignment.service';
+import { OrderOffersService } from '../orders/order-offers.service';
+import { AgentInRegionRule } from '../delivery-availability/rules/agent-in-region.rule';
+import { CheckoutPreflightService } from '../orders/checkout-preflight.service';
 import { AppModule } from './app.module';
 
 Object.defineProperty(globalThis, 'crypto', {
@@ -94,5 +104,31 @@ describe('App bootstrap (DI smoke test)', () => {
       limit: 20,
     });
     expect(hasuraSystemMock.executeQuery).toHaveBeenCalled();
+  });
+
+  it('#594: checkout, order create and the agent-in-region rule get the dedicated coverage services', () => {
+    // These are @Optional() injections, so a missing module import would fail silently.
+    const rule = app.get(AgentInRegionRule) as unknown as { dedicatedCoverage?: unknown };
+    expect(rule.dedicatedCoverage).toBeInstanceOf(DedicatedCoverageService);
+    const preflight = app.get(CheckoutPreflightService) as unknown as { dedicatedCheckoutCoverage?: unknown };
+    expect(preflight.dedicatedCheckoutCoverage).toBeInstanceOf(DedicatedCheckoutCoverageService);
+    const orders = app.get(OrdersService) as unknown as { dedicatedAgentsConfig?: unknown };
+    expect(orders.dedicatedAgentsConfig).toBeInstanceOf(DedicatedAgentsConfigService);
+  });
+
+  it('#594 PR 5: the dispatch gate gets the dedicated fallback, which resolves the claim core', () => {
+    const offers = app.get(OrderOffersService) as unknown as { dedicatedDispatch?: unknown };
+    expect(offers.dedicatedDispatch).toBeInstanceOf(DedicatedDispatchService);
+    const claimer = (offers.dedicatedDispatch as unknown as { claimer: () => unknown }).claimer();
+    expect(claimer).toBe(app.get(OrdersService));
+  });
+
+  it('#594 PR 6: release and slot reminder wiring (all @Optional())', () => {
+    const reassignment = app.get(OrderReassignmentService) as unknown as { dedicatedConfig?: unknown };
+    expect(reassignment.dedicatedConfig).toBeInstanceOf(DedicatedAgentsConfigService);
+    const orders = app.get(OrdersService) as unknown as { dedicatedSlotReminder?: unknown };
+    expect(orders.dedicatedSlotReminder).toBeInstanceOf(DedicatedSlotReminderService);
+    const internal = app.get(OrderDispatchInternalController) as unknown as { slotReminderService?: unknown };
+    expect(internal.slotReminderService).toBe(orders.dedicatedSlotReminder);
   });
 });

@@ -2447,14 +2447,21 @@ export class NotificationsService {
     title: string;
     body: string;
     messageType: string;
-    assignmentId: string;
+    /** Assignment notices (PR 3, PR 6). */
+    assignmentId?: string;
+    /** #594 PR 7 posting notices hang off the posting instead (entity_type dedicated_agent_posting). */
+    postingId?: string;
     path: string;
     event: string;
     persona: 'agent' | 'business';
     locationId: string;
-  }): Promise<void> {
+  }): Promise<boolean> {
+    // Returns whether the in-app row was written (QA #608 N2: the slot reminder
+    // unclaims its send when it wasn't). Never throws.
     const userId = params.userId?.trim();
-    if (!userId) return;
+    if (!userId) return false;
+    let inApp = false;
+    const posting = params.postingId?.trim();
     try {
       await this.hasuraSystemService.executeMutation(
         `
@@ -2465,8 +2472,8 @@ export class NotificationsService {
         {
           object: {
             user_id: userId,
-            entity_type: 'dedicated_agent_assignment',
-            entity_id: params.assignmentId,
+            entity_type: posting ? 'dedicated_agent_posting' : 'dedicated_agent_assignment',
+            entity_id: posting || params.assignmentId,
             message_type: params.messageType,
             message: params.body,
             message_payload: {
@@ -2478,20 +2485,77 @@ export class NotificationsService {
           },
         }
       );
+      inApp = true;
     } catch (error: any) {
       this.logger.warn(`sendDedicatedAgentNotice in-app failed for ${userId}: ${error?.message ?? error}`);
     }
-    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return inApp;
     try {
       await this.sendPushNotificationByUserId(userId, params.title, params.body, {
         url: params.path,
         event: params.event,
         persona: params.persona,
-        assignmentId: params.assignmentId,
+        ...(posting ? { postingId: posting } : { assignmentId: params.assignmentId }),
         locationId: params.locationId,
       });
     } catch (error: any) {
       this.logger.warn(`sendDedicatedAgentNotice push failed for ${userId}: ${error?.message ?? error}`);
+    }
+    return inApp;
+  }
+
+  /**
+   * #594 PR 5 order-level dedicated notice (auto-assignment to the agent,
+   * confirm-the-window reminder to the business): in-app row on the order plus
+   * push. Push needs push.enabled; the in-app row is always written. Never throws.
+   */
+  async sendDedicatedOrderNotice(params: {
+    userId: string;
+    title: string;
+    body: string;
+    messageType: string;
+    orderId: string;
+    event: string;
+    persona: 'agent' | 'business';
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId) return;
+    const path = `/orders/${params.orderId}`;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+          mutation InsertDedicatedOrderNotice($object: user_messages_insert_input!) {
+            insert_user_messages_one(object: $object) { id }
+          }
+        `,
+        {
+          object: {
+            user_id: userId,
+            entity_type: 'order',
+            entity_id: params.orderId,
+            message_type: params.messageType,
+            message: params.body,
+            message_payload: { path, event: params.event, persona: params.persona, orderId: params.orderId },
+          },
+        }
+      );
+    } catch (error: unknown) {
+      this.logger.warn(
+        `sendDedicatedOrderNotice in-app failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        url: path,
+        event: params.event,
+        persona: params.persona,
+        orderId: params.orderId,
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `sendDedicatedOrderNotice push failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 

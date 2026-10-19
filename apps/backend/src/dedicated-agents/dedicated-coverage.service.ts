@@ -51,6 +51,7 @@ export interface ResolvedDedicatedSlot {
 
 export type ResolveDedicatedSlotParams =
   | { locationId: string; preferredDate: string; windowStart: string }
+  | { locationId: string; preferredDate: string; slotId: string }
   | { locationId: string; at: Date };
 
 export interface DedicatedEligibilityParams {
@@ -68,12 +69,31 @@ export interface DedicatedEligibilityParams {
   verifiedAgentDelivery: boolean;
   /** Re-check at offer/claim: don't count this order's own outstanding dedicated offer. */
   excludeOrderId?: string | null;
+  /** Accept-time check (QA #607 N4): count active orders only, not other live offers. */
+  ignoreOutstandingOffers?: boolean;
   /**
    * Local date (YYYY-MM-DD) of the slot being covered. Off today only removes
    * an agent from that day's slots; defaults to today in the country timezone.
    */
   slotDate?: string;
   now?: Date;
+}
+
+/** A scheduled window (`delivery_time_windows` slot + date) to cover at checkout or order create. */
+export interface DedicatedWindowCoverageParams {
+  locationId: string;
+  slotId: string;
+  preferredDate: string;
+  rail: DedicatedRail;
+  subtotal: number;
+  currency: string;
+  verifiedAgentDelivery: boolean;
+  now?: Date;
+}
+
+export interface DedicatedWindowCoverage {
+  slot: ResolvedDedicatedSlot;
+  eligible: DedicatedEligibleAgent[];
 }
 
 export interface DedicatedEligibleAgent {
@@ -131,8 +151,8 @@ interface LocationContext {
 /**
  * #594 PR 2: AC-E1/E2/E5 core. Answers "which dedicated agents can take this
  * scheduled order for this location-slot", and maps a window to its slot in
- * the country timezone (D12). No callers yet; checkout (PR 4) and the
- * scheduled dispatch gate (PR 5) use it. Everything is behind
+ * the country timezone (D12). Checkout and order create use it (PR 4); the
+ * scheduled dispatch gate (PR 5) will too. Everything is behind
  * `dedicated_agents_enabled` (off): flag off -> no slot, no agents.
  */
 @Injectable()
@@ -156,21 +176,103 @@ export class DedicatedCoverageService {
   async resolveSlot(params: ResolveDedicatedSlotParams): Promise<ResolvedDedicatedSlot | null> {
     const ctx = await this.loadLocationContext(params.locationId);
     if (!ctx) return null;
-    const local =
-      'at' in params
-        ? localDateTimeAt(params.at, ctx.timeZone)
-        : { date: params.preferredDate, time: params.windowStart };
     const slots = await this.loadSlotBounds(ctx.country, ctx.state);
-    const slot = resolveSlotForLocalTime(slots, local.time, ctx.config.slotEndGraceMinutes);
+    let slot: DedicatedSlotBounds | null;
+    let date: string;
+    if ('at' in params) {
+      const local = localDateTimeAt(params.at, ctx.timeZone);
+      slot = resolveSlotForLocalTime(slots, local.time, ctx.config.slotEndGraceMinutes);
+      date = local.date;
+    } else if ('slotId' in params) {
+      // The client picked a `delivery_time_slots` row: only a standard keyed slot counts.
+      slot = slots.find((s) => s.slotId === params.slotId) ?? null;
+      date = params.preferredDate;
+    } else {
+      slot = resolveSlotForLocalTime(slots, params.windowStart, ctx.config.slotEndGraceMinutes);
+      date = params.preferredDate;
+    }
     if (!slot || ctx.disabledSlots.has(slot.slotKey)) return null;
     return {
       slotKey: slot.slotKey,
       slotId: slot.slotId,
       startTime: slot.startTime,
       endTime: slot.endTime,
-      date: local.date,
+      date,
       timeZone: ctx.timeZone,
     };
+  }
+
+  /**
+   * AC-E1/E2 for one chosen window: its slot and the dedicated agents who can
+   * take this cart there. Null when the flag is off, the slot isn't a keyed
+   * standard slot the business offers, or nobody is eligible.
+   */
+  async coverWindow(params: DedicatedWindowCoverageParams): Promise<DedicatedWindowCoverage | null> {
+    const slot = await this.resolveSlot({
+      locationId: params.locationId,
+      preferredDate: params.preferredDate,
+      slotId: params.slotId,
+    });
+    if (!slot) return null;
+    const eligible = await this.eligibleAgents({
+      locationId: params.locationId,
+      slotKey: slot.slotKey,
+      fulfillmentTiming: 'scheduled',
+      hasDeliveryWindow: true,
+      rail: params.rail,
+      subtotal: params.subtotal,
+      currency: params.currency,
+      verifiedAgentDelivery: params.verifiedAgentDelivery,
+      slotDate: slot.date,
+      now: params.now,
+    });
+    return eligible.length > 0 ? { slot, eligible } : null;
+  }
+
+  /**
+   * #594 PR 6 (AC-A8): agents on duty for a location-slot on a local date,
+   * whatever the order: an active assignment, not Off today on that date, and
+   * a profile that passes AC-E2 (verified, signed, not suspended, delivery
+   * focus). Load and money are per order and left to dispatch. Flag off -> [].
+   */
+  async onDutyAgents(params: {
+    locationId: string;
+    slotKey: string;
+    date: string;
+  }): Promise<Array<{ agentId: string; userId: string; assignmentId: string }>> {
+    const ctx = await this.loadLocationContext(params.locationId);
+    if (!ctx || ctx.disabledSlots.has(params.slotKey)) return [];
+    const assignments = await this.loadAssignments(params.locationId, params.slotKey);
+    if (assignments.length === 0) return [];
+    const signedIds = await this.agentContractGate.signedIdsOrSkip([
+      ...new Set(assignments.map((a) => a.agent_id)),
+    ]);
+    const out: Array<{ agentId: string; userId: string; assignmentId: string }> = [];
+    for (const row of assignments) {
+      const agent = row.agent;
+      if (!agent?.user_id) continue;
+      const reason = dedicatedProfileIneligibleReason(
+        {
+          assignmentStatus: row.status,
+          offTodayDate: row.off_today_date,
+          isVerified: agent.is_verified === true,
+          isInternal: agent.is_internal === true,
+          agentStatus: agent.status ?? null,
+          focus: agent.focus ?? null,
+          contractSigned: !signedIds || signedIds.has(row.agent_id),
+          activeOrders: 0,
+          outstandingDedicatedOffers: 0,
+        },
+        {
+          localToday: params.date,
+          maxActiveOrders: ctx.config.maxActiveOrders,
+          rail: 'mobile_money',
+          verifiedAgentDelivery: false,
+        }
+      );
+      if (!reason) out.push({ agentId: row.agent_id, userId: agent.user_id, assignmentId: row.id });
+    }
+    return out;
   }
 
   async eligibleAgents(params: DedicatedEligibilityParams): Promise<DedicatedEligibleAgent[]> {
@@ -213,7 +315,7 @@ export class DedicatedCoverageService {
         focus: agent?.focus ?? null,
         contractSigned: !signedIds || signedIds.has(row.agent_id),
         activeOrders: load.active.get(row.agent_id) ?? 0,
-        outstandingDedicatedOffers: load.offers.get(row.agent_id) ?? 0,
+        outstandingDedicatedOffers: params.ignoreOutstandingOffers ? 0 : load.offers.get(row.agent_id) ?? 0,
       };
       const reason = agent ? dedicatedProfileIneligibleReason(facts, eligibilityCtx) : 'not_verified';
       if (reason) {

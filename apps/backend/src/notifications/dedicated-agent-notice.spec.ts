@@ -46,7 +46,7 @@ describe('NotificationsService.sendDedicatedAgentNotice', () => {
 
   it('writes the in-app message and sends the push', async () => {
     const { service, executeMutation, push } = setup(true);
-    await service.sendDedicatedAgentNotice(params);
+    await expect(service.sendDedicatedAgentNotice(params)).resolves.toBe(true);
     expect(executeMutation).toHaveBeenCalledWith(expect.stringContaining('insert_user_messages_one'), {
       object: {
         user_id: 'u-1',
@@ -68,21 +68,65 @@ describe('NotificationsService.sendDedicatedAgentNotice', () => {
 
   it('push off: in-app only', async () => {
     const { service, executeMutation, push } = setup(false);
-    await service.sendDedicatedAgentNotice(params);
+    await expect(service.sendDedicatedAgentNotice(params)).resolves.toBe(true);
     expect(executeMutation).toHaveBeenCalledTimes(1);
     expect(push).not.toHaveBeenCalled();
   });
 
   it('a failed in-app write still pushes and never throws', async () => {
     const { service, push } = setup(true, true);
-    await expect(service.sendDedicatedAgentNotice(params)).resolves.toBeUndefined();
+    // QA #608 N2: tells the caller the in-app row is missing.
+    await expect(service.sendDedicatedAgentNotice(params)).resolves.toBe(false);
     expect(push).toHaveBeenCalledTimes(1);
   });
 
   it('no user: nothing', async () => {
     const { service, executeMutation, push } = setup(true);
-    await service.sendDedicatedAgentNotice({ ...params, userId: ' ' });
+    await expect(service.sendDedicatedAgentNotice({ ...params, userId: ' ' })).resolves.toBe(false);
     expect(executeMutation).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
+  });
+});
+
+describe('NotificationsService.sendDedicatedAgentNotice for a posting (#594 PR 7)', () => {
+  it('hangs the in-app row and the push off the posting', async () => {
+    const executeMutation = jest.fn(async () => ({ insert_user_messages_one: { id: 'm-1' } }));
+    const config = { get: jest.fn((key: string) => (key === 'push' ? { enabled: true } : undefined)) };
+    const none = {} as never;
+    const service = new NotificationsService(
+      config as unknown as ConfigService,
+      { executeMutation } as unknown as HasuraSystemService,
+      none,
+      none,
+      none,
+      none,
+      none,
+      none,
+      none
+    );
+    const push = jest
+      .spyOn(service as unknown as { sendPushNotificationByUserId: () => Promise<unknown> }, 'sendPushNotificationByUserId')
+      .mockResolvedValue({ webSent: 1, expoSent: 1 });
+    await service.sendDedicatedAgentNotice({
+      userId: 'u-2',
+      title: 'New applicant',
+      body: 'Awa applied to be your dedicated agent (Morning)',
+      messageType: 'DEDICATED_POSTING_NEW_APPLICATION',
+      postingId: 'po-1',
+      path: '/business/locations/loc-1/dedicated-agents/postings/po-1',
+      event: 'dedicated_posting_new_application',
+      persona: 'business',
+      locationId: 'loc-1',
+    });
+    expect(executeMutation).toHaveBeenCalledWith(expect.any(String), {
+      object: expect.objectContaining({ entity_type: 'dedicated_agent_posting', entity_id: 'po-1' }),
+    });
+    expect(push).toHaveBeenCalledWith('u-2', 'New applicant', expect.any(String), {
+      url: '/business/locations/loc-1/dedicated-agents/postings/po-1',
+      event: 'dedicated_posting_new_application',
+      persona: 'business',
+      postingId: 'po-1',
+      locationId: 'loc-1',
+    });
   });
 });

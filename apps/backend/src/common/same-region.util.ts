@@ -16,7 +16,8 @@ function normalizeRegionPart(value: string | null | undefined): string {
   return stripped.replace(/^(du|de|des|of|the)\s+/, '').trim();
 }
 
-function normalizeCity(value: string | null | undefined): string {
+/** City for comparisons: accents, case, punctuation and a trailing "city" ignored ("Douala " = "douala"). */
+export function normalizeCity(value: string | null | undefined): string {
   return (value ?? '')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
