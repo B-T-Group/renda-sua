@@ -112,3 +112,36 @@ describe('request headers with harmless names are still value-scrubbed', () => {
     expect(out.request.headers['user-agent']).toBe('Python Requests 2.34');
   });
 });
+
+describe('#589 QA D2b: a leading parameter without "?" is redacted too', () => {
+  it('redacts the FIRST parameter of a bare query string (code / state / key / sig)', () => {
+    expect(redactSentryString(`code=${OAUTH_CODE}&state=st1&page=2`)).toBe(
+      'code=[REDACTED]&state=[REDACTED]&page=2'
+    );
+    expect(redactSentryString('state=st1&page=2')).toBe('state=[REDACTED]&page=2');
+    expect(redactSentryString(`key=${FEED_TOKEN}`)).toBe('key=[REDACTED]');
+    expect(redactSentryString('SIG=abc123&x=1')).toBe('SIG=[REDACTED]&x=1');
+    expect(redactSentryString(`token=${FEED_TOKEN}&page=2`)).toBe('token=[REDACTED]&page=2');
+  });
+
+  it('does not touch other names or a name that merely ends with a sensitive one', () => {
+    expect(redactSentryString('page=2&sort=asc')).toBe('page=2&sort=asc');
+    expect(redactSentryString('zipcode=12345&page=2')).toBe('zipcode=12345&page=2');
+    expect(redactSentryString('error code=500 occurred')).toBe('error code=500 occurred');
+  });
+
+  it("request.query_string (Sentry's form, no '?') loses its first credential on both hooks", () => {
+    const event: any = {
+      request: { url: 'https://api.test/cb', query_string: `code=${OAUTH_CODE}&page=2` },
+    };
+    const scrubbed: any = scrubSentryEvent(JSON.parse(JSON.stringify(event)));
+    expect(scrubbed.request.query_string).toBe('code=[REDACTED]&page=2');
+    const viaHook: any = sentryBeforeSend(JSON.parse(JSON.stringify(event)), {});
+    expect(inspect(viaHook, { depth: 10 })).not.toContain(OAUTH_CODE);
+    const viaTx: any = sentryBeforeSendTransaction(
+      { ...JSON.parse(JSON.stringify(event)), type: 'transaction' },
+      {}
+    );
+    expect(inspect(viaTx, { depth: 10 })).not.toContain(OAUTH_CODE);
+  });
+});

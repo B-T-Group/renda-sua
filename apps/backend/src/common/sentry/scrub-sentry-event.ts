@@ -14,11 +14,13 @@ const SENSITIVE_FIELD =
   /^(new_)?secret([-_]?key)?$|^client[-_]?secret$|^x[-_]secret$|^api[-_]?key$|^app[-_]?key$|^secretkey$|^password$|^pass$|^token$|^access[-_]?token$|^refresh[-_]?token$|^authorization$|^cookie$|signature/i;
 /**
  * Query parameters that carry credentials in inbound URLs (QA #589 D2): feed access tokens
- * (?token=), OAuth callbacks (?code=, ?state=), signatures. Only `?name=` / `&name=` forms, so
- * free text such as "code: 500" is untouched. Linear: no nested quantifiers.
+ * (?token=), OAuth callbacks (?code=, ?state=), signatures. Only `?name=` / `&name=` forms, or
+ * `name=` at the very start of the string (#589 QA D2b: Sentry's request.query_string has no
+ * leading '?', so its first parameter would otherwise slip through). Free text such as
+ * "code: 500" or "zipcode=1" is untouched. Linear: no nested quantifiers.
  */
 const SENSITIVE_QUERY_PARAM =
-  /([?&](?:code|state|token|access_token|refresh_token|id_token|secret|client_secret|password|signature|sig|key|api_key|apikey)=)[^&#\s"'<>]*/gi;
+  /((?:^|[?&])(?:code|state|token|access_token|refresh_token|id_token|secret|client_secret|password|signature|sig|key|api_key|apikey)=)[^&#\s"'<>]*/gi;
 const REDACTED = '[REDACTED]';
 const MAX_DEPTH = 6;
 
