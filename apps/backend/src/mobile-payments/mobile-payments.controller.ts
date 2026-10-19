@@ -803,7 +803,7 @@ export class MobilePaymentsController {
       const eventId = callbackData.entity?.id ? String(callbackData.entity.id) : null;
       const timestamp = (callbackData as any).webhookTimestamp || Math.floor(Date.now() / 1000);
       if (eventId) {
-        this.recordFedaPayEvent(callbackData.name, eventId, String(timestamp));
+        this.recordFedaPayEvent(eventId, String(timestamp));
       }
       
       return result;
@@ -881,10 +881,8 @@ export class MobilePaymentsController {
     
     const eventId = event.entity?.id ? String(event.entity.id) : null;
     const timestampStr = String(timestamp);
-    if (eventId && this.hasSeenFedaPayEvent(event.name, eventId, timestampStr)) {
-      this.logger.log(
-        `FedaPay webhook: duplicate name=${event.name} entity_id=${eventId}, returning 200`
-      );
+    if (eventId && this.hasSeenFedaPayEvent(eventId, timestampStr)) {
+      this.logger.log(`FedaPay webhook: duplicate event_id=${eventId}, returning 200`);
       throw new HttpException(
         {
           success: true,
@@ -903,34 +901,14 @@ export class MobilePaymentsController {
   }
 
   private fedapayEventCache = new Map<string, number>();
-
-  /**
-   * FedaPay signs each delivery with a unix-second timestamp and emits
-   * transaction.updated in the same second as transaction.approved.
-   * Keying only on entity id drops the approval (HTTP 200, order stays unpaid).
-   */
-  private fedapayReplayKey(
-    name: string | undefined,
-    eventId: string,
-    timestamp: string
-  ): string {
-    return `${name || 'unknown'}:${eventId}:${timestamp}`;
+  
+  private hasSeenFedaPayEvent(eventId: string, timestamp: string): boolean {
+    const key = `${eventId}:${timestamp}`;
+    return this.fedapayEventCache.has(key);
   }
   
-  private hasSeenFedaPayEvent(
-    name: string | undefined,
-    eventId: string,
-    timestamp: string
-  ): boolean {
-    return this.fedapayEventCache.has(this.fedapayReplayKey(name, eventId, timestamp));
-  }
-
-  private recordFedaPayEvent(
-    name: string | undefined,
-    eventId: string,
-    timestamp: string
-  ): void {
-    const key = this.fedapayReplayKey(name, eventId, timestamp);
+  private recordFedaPayEvent(eventId: string, timestamp: string): void {
+    const key = `${eventId}:${timestamp}`;
     const timestampNum = parseInt(timestamp, 10);
     this.fedapayEventCache.set(key, timestampNum);
     
