@@ -18,6 +18,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { resolveTimeZone } from '../restock-alerts/restock-time.util';
 import { DedicatedAgentsConfigService } from './dedicated-agents-config.service';
 import {
+  DEDICATED_AGENT_NOTICE_PATH,
+  DEDICATED_BUSINESS_NOTICE_PATH,
   DEDICATED_SLOT_KEYS,
   type DedicatedAgentsConfig,
   type DedicatedSlotKey,
@@ -59,9 +61,7 @@ export const DEDICATED_NOTICE_MESSAGE_TYPES: Record<DedicatedNoticeEvent, string
   resumed: 'DEDICATED_AGENT_RESUMED',
   removed: 'DEDICATED_AGENT_REMOVED',
 };
-export const DEDICATED_BUSINESS_NOTICE_PATH = (locationId: string) =>
-  `/business/locations/${locationId}/dedicated-agents`;
-export const DEDICATED_AGENT_NOTICE_PATH = '/agent/dedicated-assignments';
+export { DEDICATED_AGENT_NOTICE_PATH, DEDICATED_BUSINESS_NOTICE_PATH } from './dedicated-agents.constants';
 
 interface LocationRow {
   id: string;

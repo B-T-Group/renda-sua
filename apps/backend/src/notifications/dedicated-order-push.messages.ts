@@ -8,6 +8,9 @@ export const DEDICATED_ORDER_MESSAGE_TYPES = {
   claimAtCapacity: 'DEDICATED_CLAIM_AT_CAPACITY',
 } as const;
 
+/** PR 6 (AC-A8) in-app type, seeded by 20261018210000_dedicated_slot_reminder_notice_type. */
+export const DEDICATED_SLOT_REMINDER_MESSAGE_TYPE = 'DEDICATED_SLOT_REMINDER';
+
 /** Agent: QA #607 R1, the top-up claim hit the active-order cap; the money stays in the wallet. */
 export function buildDedicatedClaimAtCapacityMessage(params: {
   orderNumber: string;
@@ -85,5 +88,28 @@ export function buildDedicatedConfirmReminderMessage(params: {
   return {
     title: 'Confirm the delivery window',
     body: `Order ${params.orderNumber}: a dedicated agent covers ${slot} on ${params.date}. Confirm the window so they are sent.`,
+  };
+}
+
+/** AC-A8 day-of reminder: "{{n}} scheduled orders at {{store}} · pickup {{time}}" (AC copy table). */
+export function buildDedicatedSlotReminderMessage(params: {
+  orderCount: number;
+  storeName: string;
+  pickupTime: string;
+  slotKey: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const slot = dedicatedSlotLabel(params.slotKey, locale);
+  const n = params.orderCount;
+  if (locale === 'fr') {
+    return {
+      title: `Créneau dédié bientôt (${slot})`,
+      body: `${n} ${n === 1 ? 'commande programmée' : 'commandes programmées'} chez ${params.storeName} · collecte à ${params.pickupTime}`,
+    };
+  }
+  return {
+    title: `Dedicated slot soon (${slot})`,
+    body: `${n} scheduled ${n === 1 ? 'order' : 'orders'} at ${params.storeName} · pickup ${params.pickupTime}`,
   };
 }

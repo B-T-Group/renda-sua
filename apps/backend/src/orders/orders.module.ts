@@ -43,6 +43,7 @@ import { OrderEventsService } from './order-events.service';
 import { OrderNotificationsInternalController } from './order-notifications-internal.controller';
 import { OrderOffersService } from './order-offers.service';
 import { DedicatedDispatchService } from './dedicated-dispatch.service';
+import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
 import { DEDICATED_ORDER_CLAIMER } from './dedicated-claim.port';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
 import { OrderPickupAnalyticsService } from './order-pickup-analytics.service';
@@ -145,6 +146,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     OrderQueueService,
     OrderOffersService,
     DedicatedDispatchService,
+    DedicatedSlotReminderService,
     { provide: DEDICATED_ORDER_CLAIMER, useExisting: OrdersService },
     WaitAndExecuteScheduleService,
     FailedDeliveriesService,

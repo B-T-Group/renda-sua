@@ -27,6 +27,7 @@ describe('OrdersController', () => {
       failDelivery: jest.fn(),
       cancelOrder: jest.fn(),
       refundOrder: jest.fn(),
+      releaseDedicatedAutoAssignment: jest.fn(),
     };
 
     const mockHasuraUserService = {
@@ -56,6 +57,15 @@ describe('OrdersController', () => {
   });
 
   describe('createOrder', () => {
+    it('#594 PR 6: POST :id/dedicated-release passes the order id and reason to the service', async () => {
+      ordersService.releaseDedicatedAutoAssignment.mockResolvedValue({ success: true, message: 'ok' } as never);
+      await expect(controller.releaseDedicatedAutoAssignment('order-1', { reason: 'busy' })).resolves.toEqual({
+        success: true,
+        message: 'ok',
+      });
+      expect(ordersService.releaseDedicatedAutoAssignment).toHaveBeenCalledWith('order-1', 'busy');
+    });
+
     it('should create an order successfully', async () => {
       const orderData = {
         item: { business_inventory_id: 'inv-123', quantity: 2 },

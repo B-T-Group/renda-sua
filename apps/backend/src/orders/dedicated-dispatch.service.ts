@@ -41,7 +41,7 @@ export type DedicatedFallbackOutcome =
   | { kind: 'offered'; agentIds: string[]; waitSeconds: number }
   /** Offers from an earlier callback are still live. */
   | { kind: 'pending'; waitSeconds: number }
-  /** Offers from an earlier callback were all declined or expired: exhaustion may proceed. */
+  /** Offers from an earlier callback have run out (expired; declined agents are excluded): exhaustion may proceed. */
   | { kind: 'done' };
 
 interface DispatchOfferRow {
@@ -217,7 +217,10 @@ export class DedicatedDispatchService {
       ) {
         return none;
       }
-      if (offers.length > 0) return this.followUp(order, offers);
+      // Declined rows (a declined offer, or a released auto-assignment, PR 6) are
+      // exclusions, not a sign the fallback already ran: those agents are skipped below.
+      const declined = new Set(offers.filter((o) => o.status === 'declined').map((o) => o.agent_id));
+      if (offers.some((o) => o.status !== 'declined')) return this.followUp(order, offers);
 
       const slot = await this.coverage.resolveSlot({
         locationId: order.business_location_id,
@@ -240,7 +243,7 @@ export class DedicatedDispatchService {
         excludeOrderId: order.id,
         slotDate: slot.date,
       });
-      const reachable = eligible.filter((a) => !!a.userId);
+      const reachable = eligible.filter((a) => !!a.userId && !declined.has(a.agentId));
       if (reachable.length === 0) return none;
 
       if (reachable.length === 1 && reachable[0].isInternal) {

@@ -1,10 +1,130 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
+import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
+import type { OfferDeclineReason } from '../dedicated-agents/dedicated-agents.constants';
+import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
+import { SiteEventsService } from '../site-events/site-events.service';
+import { isoCountryCode } from './delivery-pricing.util';
 import { OrderEventsService } from './order-events.service';
 import { OrderOffersService } from './order-offers.service';
 import type { MonitoredPickupOrder } from './order-pickup.types';
+
+/** Why a dedicated auto-assignment release was refused (the controller maps these to 4xx). */
+export type DedicatedReleaseRefusal =
+  | 'unavailable'
+  | 'dedicated_disabled'
+  | 'not_assigned'
+  | 'not_auto_assigned'
+  | 'window_closed'
+  | 'release_failed'
+  /** QA #608 N1: the release could not complete and another agent claimed the order meanwhile. */
+  | 'release_lost';
+
+export type DedicatedReleaseResult =
+  | { success: true; message: string }
+  | { success: false; refusal: DedicatedReleaseRefusal; message: string };
+
+interface DedicatedReleaseOrder {
+  id: string;
+  order_number: string;
+  current_status: string;
+  assigned_agent_id: string | null;
+  currency: string;
+  assignment_source: string | null;
+  dedicated_assignment_id: string | null;
+  dedicated_release_until: string | null;
+  business_location?: { address?: { country?: string | null } | null } | null;
+  assigned_agent?: { id: string; user_id: string | null } | null;
+  /** Pickup monitoring state, restored if the release has to be undone (QA #608 N1). */
+  pickup_state?: string | null;
+  pickup_due_at?: string | null;
+  pickup_reminder_sent_at?: string | null;
+  pickup_at_risk_at?: string | null;
+  pickup_overdue_at?: string | null;
+  pickup_extension_minutes?: number | null;
+  pickup_paused_at?: string | null;
+  pickup_pause_reason?: string | null;
+  pickup_pause_remaining_ms?: number | null;
+  last_agent_distance_m?: number | null;
+  last_agent_progress_at?: string | null;
+  agent_arrived_pickup_at?: string | null;
+}
+
+/** The pickup columns the release clears; the revert puts them back. */
+const PICKUP_MONITOR_FIELDS = [
+  'pickup_state',
+  'pickup_due_at',
+  'pickup_reminder_sent_at',
+  'pickup_at_risk_at',
+  'pickup_overdue_at',
+  'pickup_extension_minutes',
+  'pickup_paused_at',
+  'pickup_pause_reason',
+  'pickup_pause_remaining_ms',
+  'last_agent_distance_m',
+  'last_agent_progress_at',
+  'agent_arrived_pickup_at',
+] as const;
+
+/** Unassign only while still auto-assigned to this agent, before pickup, inside the stored window. */
+const RELEASE_DEDICATED_AUTO_MUTATION = `
+  mutation ReleaseDedicatedAutoAssignment($id: uuid!, $agentId: uuid!, $now: timestamptz!) {
+    update_orders(
+      where: {
+        _and: [
+          { id: { _eq: $id } }
+          { current_status: { _eq: "assigned_to_agent" } }
+          { assigned_agent_id: { _eq: $agentId } }
+          { assignment_source: { _eq: "dedicated_auto" } }
+          { dedicated_release_until: { _gt: $now } }
+        ]
+      }
+      _set: {
+        assigned_agent_id: null
+        current_status: "ready_for_pickup"
+        assignment_source: null
+        dedicated_assignment_id: null
+        dedicated_release_until: null
+        pickup_state: null
+        pickup_due_at: null
+        pickup_reminder_sent_at: null
+        pickup_at_risk_at: null
+        pickup_overdue_at: null
+        pickup_extension_minutes: 0
+        pickup_paused_at: null
+        pickup_pause_reason: null
+        pickup_pause_remaining_ms: null
+        last_agent_distance_m: null
+        last_agent_progress_at: null
+        agent_arrived_pickup_at: null
+        dispatch_round: 0
+        dispatch_exhausted_at: null
+        dispatch_ready_at: "now()"
+        updated_at: "now()"
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+/** The released agent's row: a declined dedicated offer, which dispatch skips (PR 6). */
+const RECORD_DEDICATED_RELEASE_MUTATION = `
+  mutation RecordDedicatedRelease($object: order_offers_insert_input!) {
+    insert_order_offers_one(
+      object: $object
+      on_conflict: {
+        constraint: order_offers_order_agent_unique
+        update_columns: [status, offer_kind, decline_reason, expires_at, responded_at]
+      }
+    ) {
+      id
+    }
+  }
+`;
 
 @Injectable()
 export class OrderReassignmentService {
@@ -15,8 +135,270 @@ export class OrderReassignmentService {
     private readonly orderEvents: OrderEventsService,
     private readonly notifications: NotificationsService,
     private readonly orderOffers: OrderOffersService,
-    private readonly accountsService: AccountsService
+    private readonly accountsService: AccountsService,
+    @Optional()
+    private readonly dedicatedConfig?: DedicatedAgentsConfigService,
+    @Optional()
+    private readonly siteEventsService?: SiteEventsService
   ) {}
+
+  /**
+   * #594 PR 6 (AC-A6b): an internal agent auto-assigned a dedicated order may
+   * release it while `now < orders.dedicated_release_until` (the stored window,
+   * `dedicated_auto_assign_release_seconds`, 120 s). No strike, no reliability
+   * or reassignment-count penalty. The release is stored as a declined
+   * dedicated offer row, which every later dispatch round and the dedicated
+   * fallback skip, then dispatch restarts at round 1 without this agent.
+   */
+  async releaseDedicatedAutoAssignment(
+    orderId: string,
+    agentId: string,
+    reason: OfferDeclineReason | null,
+    now: Date = new Date()
+  ): Promise<DedicatedReleaseResult> {
+    const order = await this.fetchDedicatedReleaseOrder(orderId);
+    const country = isoCountryCode(order?.business_location?.address?.country);
+    const log = (outcome: string, extra: Record<string, unknown> = {}) =>
+      this.logRelease(outcome, { orderId, agentId, reason, country, ...extra }, order, now);
+    if (!order) {
+      log('refused', { refusal: 'unavailable' });
+      return this.refuse('unavailable', 'Dedicated release is not available for this order');
+    }
+    // QA #608 N3: the kill switch only stops new dedicated assignments. A window
+    // opened while the flag was on is honoured; the release only gives work back.
+    const flagOn = this.dedicatedConfig ? await this.dedicatedConfig.isEnabled(country).catch(() => false) : false;
+    if (order.current_status !== 'assigned_to_agent' || order.assigned_agent_id !== agentId) {
+      log('refused', { refusal: 'not_assigned' });
+      return this.refuse('not_assigned', 'This order is not assigned to you, or it was already picked up');
+    }
+    if (order.assignment_source !== 'dedicated_auto') {
+      log('refused', { refusal: 'not_auto_assigned' });
+      return this.refuse('not_auto_assigned', 'Only an automatic dedicated assignment can be released');
+    }
+    const until = order.dedicated_release_until ? new Date(order.dedicated_release_until).getTime() : 0;
+    if (!(until > now.getTime())) {
+      log('refused', { refusal: 'window_closed', cause: 'expired' });
+      return this.refuse('window_closed', 'The release window for this order has closed');
+    }
+    const userId = order.assigned_agent?.user_id;
+    if (!userId) {
+      log('failed', { refusal: 'release_failed', cause: 'agent_user_missing' });
+      return this.refuse('release_failed', 'Agent user missing');
+    }
+
+    const nowIso = now.toISOString();
+    // QA #608 N1: write the exclusion row first (idempotent upsert), so the order
+    // is never unassigned without it; then the CAS on the stored window.
+    const exclusion = {
+      order_id: order.id,
+      agent_id: agentId,
+      user_id: userId,
+      status: 'declined',
+      offer_kind: 'dedicated',
+      decline_reason: reason,
+      expires_at: nowIso,
+      created_at: nowIso,
+      responded_at: nowIso,
+    };
+    try {
+      await runAssignmentWrite(() => this.hasura.executeMutation(RECORD_DEDICATED_RELEASE_MUTATION, { object: exclusion }));
+    } catch (error: unknown) {
+      this.logger.error(
+        `Dedicated release of ${order.order_number}: exclusion not recorded, nothing released: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      log('failed', { refusal: 'release_failed', cause: 'exclusion_write_failed' });
+      return this.refuse('release_failed', 'Could not release the order');
+    }
+    // CAS on the stored window: the database refuses a release once it has passed.
+    const released = await runAssignmentWrite(() =>
+      this.hasura.executeMutation<{ update_orders: { affected_rows: number } | null }>(
+        RELEASE_DEDICATED_AUTO_MUTATION,
+        { id: order.id, agentId, now: nowIso }
+      )
+    ).catch(async (error: unknown) => {
+      await this.dropExclusion(order.id, agentId, nowIso);
+      throw error;
+    });
+    if ((released?.update_orders?.affected_rows ?? 0) !== 1) {
+      // The agent keeps the order: the exclusion row of this attempt goes away.
+      await this.dropExclusion(order.id, agentId, nowIso);
+      log('refused', { refusal: 'window_closed', cause: 'cas_lost' });
+      return this.refuse('window_closed', 'The release window for this order has closed');
+    }
+    const holdReleased = await this.releaseHold(order as unknown as MonitoredPickupOrder);
+    if (!holdReleased) {
+      const restored = await this.revertDedicatedRelease(order);
+      if (restored) await this.dropExclusion(order.id, agentId, nowIso);
+      if (!restored) {
+        log('failed', { refusal: 'release_lost', cause: 'hold_release_failed_and_reclaimed' });
+        return this.refuse('release_lost', 'The order was released and another agent has taken it');
+      }
+      log('failed', { refusal: 'release_failed', cause: 'hold_release_failed' });
+      return this.refuse('release_failed', 'Could not release the order');
+    }
+    await this.insertAgentHistory(
+      order.id,
+      userId,
+      'Dedicated agent released the automatic assignment (no strike); dispatch restarted without this agent'
+    );
+    await this.orderEvents.recordEvent({
+      orderId: order.id,
+      eventType: 'reassignment_started',
+      actorType: 'agent',
+      actorId: agentId,
+      payload: { reason: 'dedicated_auto_release', declineReason: reason },
+    });
+    emitServerSiteEvent(this.siteEventsService, 'dedicated.auto_assign_released', {
+      orderId: order.id,
+      agentId,
+      assignmentId: order.dedicated_assignment_id,
+      reason,
+      secondsLeft: Math.max(0, Math.floor((until - now.getTime()) / 1000)),
+    });
+    log('released', { flagOn, secondsLeft: Math.max(0, Math.floor((until - now.getTime()) / 1000)) });
+    await this.redispatch(order.id);
+    return { success: true, message: 'Order released; dispatch restarted without you' };
+  }
+
+  /**
+   * #594 PR 6: one structured line per release attempt (PE: no reliability
+   * signal, but measurable later): `{"event":"dedicated.auto_assign_release",
+   * "outcome":"released"|"refused"|"failed", ...}`.
+   */
+  private logRelease(
+    outcome: string,
+    fields: Record<string, unknown>,
+    order: DedicatedReleaseOrder | null,
+    now: Date
+  ): void {
+    const line = {
+      event: 'dedicated.auto_assign_release',
+      outcome,
+      ...fields,
+      orderNumber: order?.order_number ?? null,
+      assignmentId: order?.dedicated_assignment_id ?? null,
+      assignmentSource: order?.assignment_source ?? null,
+      releaseUntil: order?.dedicated_release_until ?? null,
+      at: now.toISOString(),
+    };
+    if (outcome === 'failed') this.logger.warn(JSON.stringify(line));
+    else this.logger.log(JSON.stringify(line));
+  }
+
+  private refuse(refusal: DedicatedReleaseRefusal, message: string): DedicatedReleaseResult {
+    return { success: false, refusal, message };
+  }
+
+  private async fetchDedicatedReleaseOrder(orderId: string): Promise<DedicatedReleaseOrder | null> {
+    const res = await this.hasura.executeQuery<{ orders_by_pk: DedicatedReleaseOrder | null }>(
+      `query DedicatedReleaseOrder($id: uuid!) {
+        orders_by_pk(id: $id) {
+          id order_number current_status assigned_agent_id currency
+          assignment_source dedicated_assignment_id dedicated_release_until
+          pickup_state pickup_due_at pickup_reminder_sent_at pickup_at_risk_at pickup_overdue_at
+          pickup_extension_minutes pickup_paused_at pickup_pause_reason pickup_pause_remaining_ms
+          last_agent_distance_m last_agent_progress_at agent_arrived_pickup_at
+          business_location { address { country } }
+          assigned_agent { id user_id }
+        }
+      }`,
+      { id: orderId }
+    );
+    return res?.orders_by_pk ?? null;
+  }
+
+  /**
+   * Puts the agent back on the order when the release could not complete, with
+   * its pickup timers restored (QA #608 N1). Returns false when the order was
+   * claimed by someone else in between (affected_rows 0), which is logged.
+   */
+  private async revertDedicatedRelease(order: DedicatedReleaseOrder): Promise<boolean> {
+    const pickup: Record<string, unknown> = {};
+    for (const f of PICKUP_MONITOR_FIELDS) pickup[f] = order[f] ?? (f === 'pickup_extension_minutes' ? 0 : null);
+    const res = await this.hasura
+      .executeMutation<{ update_orders: { affected_rows: number } | null }>(
+        `mutation RevertDedicatedRelease(
+          $id: uuid!, $agentId: uuid!, $assignmentId: uuid, $releaseUntil: timestamptz, $pickup: orders_set_input!
+        ) {
+          update_orders(
+            where: {
+              id: { _eq: $id }
+              assigned_agent_id: { _is_null: true }
+              current_status: { _eq: ready_for_pickup }
+            }
+            _set: $pickup
+          ) { affected_rows }
+          restore: update_orders(
+            where: { id: { _eq: $id }, assigned_agent_id: { _is_null: true }, current_status: { _eq: ready_for_pickup } }
+            _set: {
+              assigned_agent_id: $agentId
+              current_status: assigned_to_agent
+              assignment_source: "dedicated_auto"
+              dedicated_assignment_id: $assignmentId
+              dedicated_release_until: $releaseUntil
+              updated_at: "now()"
+            }
+          ) { affected_rows }
+        }`,
+        {
+          id: order.id,
+          agentId: order.assigned_agent_id,
+          assignmentId: order.dedicated_assignment_id,
+          releaseUntil: order.dedicated_release_until,
+          pickup,
+        }
+      )
+      .catch((error: unknown) => {
+        this.logger.error(`RevertDedicatedRelease ${order.id}: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+      });
+    const restored = ((res as { restore?: { affected_rows?: number } } | null)?.restore?.affected_rows ?? 0) === 1;
+    if (!restored) {
+      this.logger.error(
+        JSON.stringify({ event: 'dedicated.release_revert_failed', orderId: order.id, agentId: order.assigned_agent_id, orderNumber: order.order_number })
+      );
+    }
+    return restored;
+  }
+
+  /** Removes this attempt's exclusion row (matched on its responded_at) when the agent keeps the order. */
+  private async dropExclusion(orderId: string, agentId: string, at: string): Promise<void> {
+    await this.hasura
+      .executeMutation(
+        `mutation DropDedicatedReleaseExclusion($orderId: uuid!, $agentId: uuid!, $at: timestamptz!) {
+          delete_order_offers(
+            where: {
+              order_id: { _eq: $orderId }
+              agent_id: { _eq: $agentId }
+              offer_kind: { _eq: "dedicated" }
+              status: { _eq: declined }
+              responded_at: { _eq: $at }
+            }
+          ) { affected_rows }
+        }`,
+        { orderId, agentId, at }
+      )
+      .catch((error: unknown) =>
+        this.logger.warn(`DropDedicatedReleaseExclusion ${orderId}: ${error instanceof Error ? error.message : String(error)}`)
+      );
+  }
+
+  private async insertAgentHistory(orderId: string, userId: string, notes: string): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation DedicatedReleaseHistory($orderId: uuid!, $userId: uuid!, $notes: String!) {
+        insert_order_status_history(objects: [{
+          order_id: $orderId
+          status: ready_for_pickup
+          notes: $notes
+          changed_by_type: "agent"
+          changed_by_user_id: $userId
+        }]) { affected_rows }
+      }`,
+      { orderId, userId, notes }
+    );
+  }
 
   async reassignOrder(
     orderId: string,
