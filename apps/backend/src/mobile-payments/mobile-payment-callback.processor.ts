@@ -84,10 +84,20 @@ export class MobilePaymentCallbackProcessor {
    * mode is actually on. For FedaPay, a mock- row with FEDAPAY_MOCK off (e.g. data
    * left over from DEV) is re-checked live and therefore fails closed.
    */
-  private skipsLiveRecheck(tx: MobilePaymentTransaction): boolean {
+  private skipsLiveRecheck(tx: MobilePaymentTransaction, claimed: 'SUCCESS' | 'FAILED' = 'SUCCESS'): boolean {
     if (!this.isMockedTransaction(tx)) return false;
-    if (tx.provider === 'fedapay') return this.isFedaPayMockEnabled();
-    return true;
+    if (tx.provider !== 'fedapay') return true;
+    if (this.isFedaPayMockEnabled()) return true;
+    // #618: a leftover DEV mock- row with the mock off can never be confirmed live (FedaPay
+    // has no such id), so retrying is pointless and FedaPay would disable the webhook after
+    // 10 failed deliveries. A definite mismatch: acknowledged 2xx with a money-anomaly
+    // alert, no credit and no state change (see processFedaPayCallback).
+    throw new CallbackLiveMismatchError(
+      'mock_row_mock_disabled',
+      tx.id,
+      claimed,
+      'stored transaction_id is a DEV mock- id but FEDAPAY_MOCK is off (leftover mock data)'
+    );
   }
 
   /**
@@ -337,7 +347,7 @@ export class MobilePaymentCallbackProcessor {
       return { received: true, transactionId: callbackData.entity.id };
     }
 
-    if (!this.skipsLiveRecheck(tx)) {
+    if (!this.skipsLiveRecheck(tx, normalizedStatus)) {
       const recheckTx = this.withFedaPayRecheckId(tx, callbackData);
       try {
         await this.mobilePaymentsService.assertProviderConfirmsCallback(recheckTx, normalizedStatus);
