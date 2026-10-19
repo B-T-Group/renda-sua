@@ -2573,6 +2573,45 @@ describe('OrdersService', () => {
       expect(r.evaluate).toHaveBeenCalledTimes(1);
     });
 
+    it('one checkout.delivery_availability per create: the deferred pass defers its log, the re-check logs', async () => {
+      const r = await place({ flag: true, window: WINDOW, evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT) });
+      expect(r.evaluate).toHaveBeenCalledTimes(2);
+      expect(r.evaluate.mock.calls[0][1]).toEqual({ deferLogFor: 'NO_ELIGIBLE_AGENT' });
+      expect(r.evaluate.mock.calls[1][1]).toEqual({});
+    });
+
+    it('a pass that cannot be deferred (ASAP) logs as before', async () => {
+      const r = await place({ flag: true, window: null, evaluate: () => NEARBY });
+      expect(r.evaluate).toHaveBeenCalledTimes(1);
+      expect(r.evaluate.mock.calls[0][1]).toEqual({});
+    });
+
+    it('an uncovered window is refused before the wallet account, phone registry and delivery-fee lookups', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const loose = service as any;
+      const chargePhone = jest.spyOn(loose, 'resolveCheckoutChargePhone');
+      chargePhone.mockClear();
+      hasuraSystemService.getAccount.mockClear();
+      const r = await place({ flag: true, window: WINDOW, evaluate: () => NO_AGENT });
+      expect(r.error?.getResponse?.()).toMatchObject({ error: 'DELIVERY_UNAVAILABLE' });
+      expect(hasuraSystemService.getAccount).not.toHaveBeenCalled();
+      expect(chargePhone).not.toHaveBeenCalled();
+      expect(loose.calculateItemDeliveryFee).not.toHaveBeenCalled();
+    });
+
+    it('a covered window then runs those lookups (control for the test above)', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const loose = service as any;
+      const chargePhone = jest.spyOn(loose, 'resolveCheckoutChargePhone');
+      chargePhone.mockClear();
+      hasuraSystemService.getAccount.mockClear();
+      const r = await place({ flag: true, window: WINDOW, evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT) });
+      expect(r.error).toBeNull();
+      expect(hasuraSystemService.getAccount).toHaveBeenCalled();
+      expect(chargePhone).toHaveBeenCalled();
+      expect(loose.calculateItemDeliveryFee).toHaveBeenCalled();
+    });
+
     it('DELIVERY_AVAILABILITY_ENFORCE=false: uncovered window still places, without coverage_slot_key', async () => {
       configService.get.mockImplementation((key: string) =>
         key === 'deliveryAvailability' ? { enforceEnabled: false } : undefined

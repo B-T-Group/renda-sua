@@ -13318,7 +13318,11 @@ export class OrdersService {
         clientId,
         stage: 'place_order',
         dedicated: options.dedicated,
-      })
+      }),
+      // A deferred NO_ELIGIBLE_AGENT is re-evaluated (and logged) by the dedicated re-check.
+      options.deferNoNearbyAgent
+        ? { deferLogFor: DeliveryUnavailableReason.NO_ELIGIBLE_AGENT }
+        : {}
     );
     if (result.available) return { result, deferred: false };
     if (
@@ -13959,6 +13963,58 @@ export class OrdersService {
       dedicatedGatePending = gate?.deferred === true;
     }
 
+    // Calculate order amounts for all items
+    const totalAmount = lineContexts.reduce((sum, ctx, idx) => {
+      const deal = dealsMap[ctx.inventory.id];
+      const unitPrice = this.computeUnitPriceFromVariantOrInventory(
+        ctx.inventory,
+        ctx.variant,
+        deal
+      );
+      return sum + unitPrice * orderData.items[idx].quantity;
+    }, 0);
+    const sellerCountry = resolveItemCountry(
+      businessInventories[0]?.business_location?.address?.country,
+      businessInventories[0]?.business_location?.business?.user?.country
+    );
+    // Payer and rail are read-only lookups, resolved before anything below
+    // writes (wallet account, phone registry) or calls a provider (distance
+    // matrix), so the #594 dedicated re-check can refuse first.
+    const trustedPayer = await this.resolveTrustedOrderPayer(
+      user,
+      orderData.payer_country
+    );
+    // The seller country decides the rail as it always has. A payer billing
+    // from a Stripe country may additionally fund a mobile-money merchant —
+    // that is the diaspora path, and the card still charges the platform.
+    const railResolution = await this.paymentRoutingService.resolveOrderRail({
+      sellerCountry: sellerCountry ?? undefined,
+      payerCountry: trustedPayer.payer_country,
+    });
+
+    // #594 AC-E1: nobody nearby, so delivery stands only if a dedicated agent
+    // covers the chosen slot for this cart (AgentInRegionRule dedicated pass).
+    let coverageSlotKey: string | null = null;
+    if (dedicatedGatePending && coverageWindow) {
+      const gate = await this.assertDeliveryAvailable(
+        businessInventories,
+        address,
+        client.id,
+        orderData.requires_fast_delivery === true,
+        orderData.verified_agent_delivery === true,
+        {
+          dedicated: {
+            ...coverageWindow,
+            rail: railResolution.rail,
+            subtotal: totalAmount,
+            currency,
+          },
+        }
+      );
+      coverageSlotKey = dedicatedCoverageSlotKey(gate?.result);
+    }
+
+
     // Calculate total weight for delivery fee calculation (variant weight overrides item weight)
     const totalWeight = lineContexts.reduce((sum, ctx, idx) => {
       const w =
@@ -14010,17 +14066,6 @@ export class OrdersService {
     );
 
     const orderNumber = this.createOrderNumber();
-
-    // Calculate order amounts for all items
-    const totalAmount = lineContexts.reduce((sum, ctx, idx) => {
-      const deal = dealsMap[ctx.inventory.id];
-      const unitPrice = this.computeUnitPriceFromVariantOrInventory(
-        ctx.inventory,
-        ctx.variant,
-        deal
-      );
-      return sum + unitPrice * orderData.items[idx].quantity;
-    }, 0);
 
     if (fulfillmentMethod === 'delivery') {
       const sellerBusinessId =
@@ -14084,10 +14129,6 @@ export class OrdersService {
       }
     }
 
-    const sellerCountry = resolveItemCountry(
-      businessInventories[0]?.business_location?.address?.country,
-      businessInventories[0]?.business_location?.business?.user?.country
-    );
     const serviceFee = await this.serviceFeeService.resolve(sellerCountry, currency);
     total_amount = Number((total_amount + serviceFee).toFixed(2));
 
@@ -14113,10 +14154,7 @@ export class OrdersService {
           : address?.country
       ) ?? isoCountryCode(itemCountry);
 
-    const payer = this.applyCheckoutPaymentPhone(
-      await this.resolveTrustedOrderPayer(user, orderData.payer_country),
-      phoneNumber
-    );
+    const payer = this.applyCheckoutPaymentPhone(trustedPayer, phoneNumber);
     
     // If recipient_id is provided, fetch the saved recipient and use it
     // Fail the order if recipient is not found (no soft-fallback after inventory reserve)
@@ -14140,13 +14178,6 @@ export class OrdersService {
       fulfillmentCountry,
     });
 
-    // The seller country decides the rail as it always has. A payer billing
-    // from a Stripe country may additionally fund a mobile-money merchant —
-    // that is the diaspora path, and the card still charges the platform.
-    const railResolution = await this.paymentRoutingService.resolveOrderRail({
-      sellerCountry: itemCountry ?? undefined,
-      payerCountry: payer.payer_country,
-    });
     // Checked before the phone and wallet rules below, which all assume a
     // payer who is standing in the fulfillment market.
     assertDiasporaPaymentTiming({
@@ -14177,28 +14208,6 @@ export class OrdersService {
         },
         HttpStatus.BAD_REQUEST
       );
-    }
-
-    // #594 AC-E1: nobody nearby, so delivery stands only if a dedicated agent
-    // covers the chosen slot for this cart (AgentInRegionRule dedicated pass).
-    let coverageSlotKey: string | null = null;
-    if (dedicatedGatePending && coverageWindow) {
-      const gate = await this.assertDeliveryAvailable(
-        businessInventories,
-        address,
-        client.id,
-        orderData.requires_fast_delivery === true,
-        orderData.verified_agent_delivery === true,
-        {
-          dedicated: {
-            ...coverageWindow,
-            rail: railResolution.rail,
-            subtotal: totalAmount,
-            currency,
-          },
-        }
-      );
-      coverageSlotKey = dedicatedCoverageSlotKey(gate?.result);
     }
 
     // MUST-FIX 2: Enforce momo_pay_now_delivery_enabled flag
