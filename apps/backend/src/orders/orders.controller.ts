@@ -1673,7 +1673,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Retry deposit payment (client only)',
     description:
-      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. If the prior MoMo transaction already succeeded, replays deposit finalize. Returns 409 if a prior deposit payment request is still pending at the provider (client should poll that transaction instead).',
+      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. If the prior MoMo transaction already succeeded (locally or at the provider), replays deposit finalize. Returns 409 if a prior deposit payment is still pending or processing (client should wait) or if the provider status cannot be confirmed.',
   })
   @ApiParam({ name: 'id', description: 'Order ID', type: String })
   @ApiBody({
