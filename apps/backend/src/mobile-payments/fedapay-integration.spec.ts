@@ -270,7 +270,13 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       mockCallbackProcessor.processFedaPayCallback.mockRejectedValueOnce(new Error('DB timeout'));
 
       const req1 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
-      await expect(controller.fedapayCallback(req1)).rejects.toThrow(/Failed to process FedaPay callback/);
+      const firstError = await controller.fedapayCallback(req1).catch((e: any) => e);
+      expect(firstError).toBeInstanceOf(HttpException);
+      expect(firstError.message).toMatch(/Failed to process FedaPay callback/);
+      expect(firstError.cause).toBeInstanceOf(Error);
+      expect(firstError.cause.message).toBe('DB timeout');
+      // #587: the 5xx body stays generic; the inner error is only on `cause`.
+      expect(firstError.getResponse()).toEqual({ success: false, message: 'Failed to process FedaPay callback' });
 
       // Second call: same event retried, processing succeeds this time
       mockCallbackProcessor.processFedaPayCallback.mockResolvedValueOnce({ received: true });
@@ -737,6 +743,29 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
       ).resolves.not.toThrow();
+    });
+
+    it('accepts SUCCESS when live XOF came from currency_id and merchantRef', async () => {
+      const tx = {
+        id: 'tx-curr-id',
+        transaction_id: '7450',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF-CURR-ID',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        merchantRef: 'REF-CURR-ID',
+        reference: '7450',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
+      ).resolves.toBeUndefined();
     });
 
     describe('N5: expired is confirmed by the live re-check (service statusMap)', () => {
