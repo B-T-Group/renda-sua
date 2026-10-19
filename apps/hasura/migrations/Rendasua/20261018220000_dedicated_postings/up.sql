@@ -32,18 +32,29 @@ VOLATILE
 AS $$
 DECLARE
   v_posting_id uuid;
+  v_location_id uuid;
   post public.dedicated_agent_postings%ROWTYPE;
   app public.dedicated_agent_applications%ROWTYPE;
   ag public.agents%ROWTYPE;
   v_contract_required boolean;
   v_now timestamptz := now();
 BEGIN
-  SELECT a.posting_id INTO v_posting_id
+  SELECT a.posting_id, p.business_location_id INTO v_posting_id, v_location_id
     FROM public.dedicated_agent_applications a
+    JOIN public.dedicated_agent_postings p ON p.id = a.posting_id
    WHERE a.id = p_application_id;
   IF NOT FOUND THEN
     RETURN;
   END IF;
+
+  -- Residual slot race: the store's business_locations row is locked FIRST, like the
+  -- slot toggle and the super-user assign (no-op update_business_locations_by_pk in
+  -- their Hasura mutations). A toggle then either commits before this check (and the
+  -- accept refuses below) or waits for this accept (and its predicate pause sees the
+  -- new assignments). FOR NO KEY UPDATE, not FOR UPDATE: inserts into child tables
+  -- take FOR KEY SHARE on the location for their FK check.
+  -- Lock order (all #594 writers): business_locations -> posting -> application -> agents.
+  PERFORM 1 FROM public.business_locations WHERE id = v_location_id FOR NO KEY UPDATE;
 
   SELECT * INTO post FROM public.dedicated_agent_postings WHERE id = v_posting_id FOR UPDATE;
   SELECT * INTO app FROM public.dedicated_agent_applications WHERE id = p_application_id FOR UPDATE;
@@ -66,13 +77,8 @@ BEGIN
   END IF;
 
   -- QA #613 N2: a slot the business switched off since posting (AC-B4) is refused.
-  -- The settings rows are locked FOR SHARE so a concurrent toggle (whose predicate
-  -- pause then sees these assignments) waits for this accept.
-  PERFORM 1
-     FROM public.business_location_pickup_slots b
-     JOIN public.dedicated_agent_posting_slots s ON s.slot_key = b.slot_key AND s.posting_id = post.id
-    WHERE b.business_location_id = post.business_location_id
-      FOR SHARE OF b;
+  -- Read under the location lock, so a toggle can't change it until this commits
+  -- (this also covers a slot with no settings row yet, which a row lock could not).
   IF EXISTS (
     SELECT 1
       FROM public.business_location_pickup_slots b

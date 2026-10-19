@@ -43,6 +43,7 @@ import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service'
 import { dedicatedReleaseRefusalMessage } from './dedicated-accept-refusal.messages';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
 import {
+  buildDedicatedClaimAtCapacityMessage,
   buildDedicatedConfirmReminderMessage,
   DEDICATED_ORDER_MESSAGE_TYPES,
 } from '../notifications/dedicated-order-push.messages';
@@ -12371,6 +12372,27 @@ export class OrdersService {
   private async finishClaimOrderPayment(transaction: any): Promise<void> {
     const ctx = await this.loadClaimPaymentContext(transaction);
     const slot = await this.assignClaimIfOpen(ctx.order, ctx.agentId);
+    if (slot === 'at_capacity') {
+      // QA #607 R1: the capped dedicated claim refused (active-order cap). Same as a
+      // lost race: no assignment, no hold, the top-up stays in the wallet; never retry
+      // as an uncapped plain claim.
+      await this.markClaimAtCapacity(transaction.id);
+      this.logger.warn(
+        `Claim top-up for ${ctx.order.order_number} stayed in the wallet; agent ${ctx.agentId} is at the dedicated active-order cap`
+      );
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_failed', {
+        orderId: ctx.order.id,
+        orderNumber: ctx.order.order_number,
+        agentId: ctx.agentId,
+        holdAmount: transaction.amount,
+        transactionId: transaction.transaction_id,
+        provider: transaction.provider,
+        currency: transaction.currency,
+        reason: 'dedicated_at_capacity',
+      });
+      await this.notifyClaimAtCapacity(ctx);
+      return;
+    }
     if (slot === 'lost') {
       await this.markClaimOrderTaken(transaction.id);
       this.logger.warn(
@@ -12448,31 +12470,82 @@ export class OrdersService {
     };
   }
 
+  private async markClaimAtCapacity(transactionId?: string): Promise<void> {
+    if (!transactionId) return;
+    try {
+      await this.mobilePaymentsDatabaseService.updateTransaction(transactionId, {
+        error_code: 'DEDICATED_AT_CAPACITY',
+        error_message: 'You already have the maximum number of active deliveries; the top-up stays in your wallet',
+      });
+    } catch (error: any) {
+      this.logger.warn(`Could not mark claim ${transactionId} as at capacity: ${error?.message}`);
+    }
+  }
+
+  private async notifyClaimAtCapacity(ctx: { order: Orders; userId: string }): Promise<void> {
+    try {
+      const user = await this.hasuraSystemService.getUserById(ctx.userId);
+      const msg = buildDedicatedClaimAtCapacityMessage({
+        orderNumber: ctx.order.order_number,
+        preferredLanguage: (user as { preferred_language?: string | null } | null)?.preferred_language,
+      });
+      await this.notificationsService.sendDedicatedOrderNotice({
+        userId: ctx.userId,
+        title: msg.title,
+        body: msg.body,
+        messageType: DEDICATED_ORDER_MESSAGE_TYPES.claimAtCapacity,
+        orderId: ctx.order.id,
+        event: 'dedicated.claim_at_capacity',
+        persona: 'agent',
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Claim at-capacity notice failed for ${ctx.order.id}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
   private async assignClaimIfOpen(
     order: Orders,
     agentId: string
-  ): Promise<'assigned' | 'already-mine' | 'lost'> {
+  ): Promise<'assigned' | 'already-mine' | 'lost' | 'at_capacity'> {
     if (order.assigned_agent_id && order.assigned_agent_id !== agentId) return 'lost';
     if (order.assigned_agent_id === agentId) return 'already-mine';
     // QA #607 N2: a top-up claim on a dedicated offer is stamped (and re-checked)
     // when the payment completes. A refusal now (offer gone, no longer eligible)
     // assigns as a plain claim: the agent has paid, and the offer is then not
     // marked accepted (handleOrderAssigned only accepts stamped dedicated claims).
+    // QA #607 R1: a refusal at the cap is final (like a lost race): the agent must not
+    // get the order through an uncapped plain claim.
+    let atCapacity = false;
     const assignment = await this.dedicatedClaimAssignment(order.id, agentId).catch((error) => {
+      atCapacity = this.isClaimAtCapacity(error);
       this.logger.warn(
         `dedicated re-check at top-up completion refused for order ${order.id} agent ${agentId}: ${error?.message ?? error}`
       );
       return undefined;
     });
+    if (atCapacity) return 'at_capacity';
     try {
       await this.assignOrderToAgent(order.id, agentId, 'assigned_to_agent', assignment);
       return 'assigned';
     } catch (error) {
+      if (this.isClaimAtCapacity(error)) return 'at_capacity';
       if (!this.isClaimAssignConflict(error)) throw error;
       return (await this.claimStillMine(order.order_number, agentId))
         ? 'already-mine'
         : 'lost';
     }
+  }
+
+  /** QA #607 R1: dedicated_claim_order refused at the cap (409 DEDICATED_AT_CAPACITY). */
+  private isClaimAtCapacity(error: unknown): boolean {
+    if (!(error instanceof HttpException)) return false;
+    const body = error.getResponse();
+    if (typeof body !== 'object' || body === null) return false;
+    const b = body as { error?: string; reason?: string };
+    // dedicated_claim_order over the cap, or the accept re-check refusing at the cap.
+    return b.error === 'DEDICATED_AT_CAPACITY' || (b.error === 'DEDICATED_OFFER_INELIGIBLE' && b.reason === 'at_capacity');
   }
 
   private isClaimAssignConflict(error: unknown): boolean {

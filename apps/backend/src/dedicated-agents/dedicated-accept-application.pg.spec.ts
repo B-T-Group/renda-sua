@@ -313,12 +313,40 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
       expect((await accept(db, x, loc.owner)).rows.find((r) => r.id === x)?.status).toBe('accepted');
     });
 
-    it('a slot toggle racing the accept waits on the slot row lock', async () => {
-      const loc = await location();
-      await db.query(
-        `INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'morning', true)`,
-        [loc.id]
+    // The slot toggle's Hasura mutation, as SQL: location lock (no-op updated_at update),
+    // settings upsert, predicate pause (savePickupSlotsMutation in #603).
+    const toggleLockAndOff = async (c: Client, locId: string) => {
+      await c.query('BEGIN');
+      await c.query(`UPDATE business_locations SET updated_at = now() WHERE id = $1`, [locId]);
+      await c.query(
+        `INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'morning', false)
+         ON CONFLICT ON CONSTRAINT business_location_pickup_slots_location_slot_key DO UPDATE SET is_enabled = EXCLUDED.is_enabled`,
+        [locId]
       );
+    };
+    const togglePauseAndCommit = async (c: Client, locId: string) => {
+      const r = await c.query(
+        `UPDATE dedicated_agent_assignments SET status = 'paused', paused_at = now()
+          WHERE business_location_id = $1 AND slot_key = 'morning' AND status = 'active' RETURNING id`,
+        [locId]
+      );
+      await c.query('COMMIT');
+      return r.rowCount;
+    };
+    const waitingOnLock = async (c: Client) => {
+      const pid = (await c.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      return async () => {
+        for (let i = 0; i < 50; i++) {
+          const r = await db.query(`SELECT wait_event_type FROM pg_stat_activity WHERE pid = $1`, [pid]);
+          if (r.rows[0]?.wait_event_type === 'Lock') return true;
+          await new Promise((res) => setTimeout(res, 20));
+        }
+        return false;
+      };
+    };
+
+    it('race, accept first (no settings row yet): the toggle waits on the location lock, then pauses the new assignment', async () => {
+      const loc = await location();
       const p = await posting(loc, 1, ['morning']);
       const x = await apply(p, await agent('Race'));
       const c1 = await connect(dbName);
@@ -326,11 +354,45 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
       try {
         await c1.query('BEGIN');
         expect((await accept(c1, x, loc.owner)).rows.find((r) => r.id === x)?.status).toBe('accepted');
-        await c2.query(`SET lock_timeout = '300ms'`);
-        await expect(
-          c2.query(`UPDATE business_location_pickup_slots SET is_enabled = false WHERE business_location_id = $1`, [loc.id])
-        ).rejects.toThrow(/lock timeout/);
+        const isWaiting = await waitingOnLock(c2);
+        const toggle = toggleLockAndOff(c2, loc.id).then(() => togglePauseAndCommit(c2, loc.id));
+        expect(await isWaiting()).toBe(true);
+        // FOR NO KEY UPDATE, not FOR UPDATE: a child-row FK insert (KEY SHARE) still goes through.
+        const c3 = await connect(dbName);
+        try {
+          await c3.query(`SET lock_timeout = '300ms'`);
+          await expect(
+            c3.query(`INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'evening', true)`, [loc.id])
+          ).resolves.toBeDefined();
+        } finally {
+          await c3.end();
+        }
         await c1.query('COMMIT');
+        expect(await toggle).toBe(1);
+        expect((await snapshot(p)).assignments.map((a) => a.status)).toEqual(['paused']);
+      } finally {
+        await c1.end();
+        await c2.end();
+      }
+    });
+
+    it('race, toggle first: the accept waits on the location lock, then refuses the turned-off slot', async () => {
+      const loc = await location();
+      const p = await posting(loc, 1, ['morning']);
+      const x = await apply(p, await agent('Race2'));
+      const c1 = await connect(dbName);
+      const c2 = await connect(dbName);
+      try {
+        await toggleLockAndOff(c2, loc.id);
+        const isWaiting = await waitingOnLock(c1);
+        const acc = accept(c1, x, loc.owner).then(
+          () => 'accepted',
+          (e: Error) => e.message
+        );
+        expect(await isWaiting()).toBe(true);
+        expect(await togglePauseAndCommit(c2, loc.id)).toBe(0);
+        expect(await acc).toMatch(/dedicated_accept_slot_disabled/);
+        await expectNothingWritten(p, x);
       } finally {
         await c1.end();
         await c2.end();
