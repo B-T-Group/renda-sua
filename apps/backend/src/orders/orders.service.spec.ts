@@ -4467,6 +4467,123 @@ describe('OrdersService', () => {
     });
   });
 
+  describe('claimOrder money path (#594 claim core)', () => {
+    const verifiedAgentUser = {
+      ...mockAgentUser,
+      agent: { id: 'agent-123', user_id: 'agent-123', is_verified: true, is_internal: false },
+    };
+    let assign: jest.SpyInstance;
+    let revert: jest.SpyInstance;
+    let updateHold: jest.SpyInstance;
+    let assigned: jest.SpyInstance;
+
+    const arrange = (opts: { holdAmount: number; balance: number; pendingClaim?: boolean }) => {
+      // Private collaborators are swapped the same way as the rest of this file.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const loose = service as any;
+      hasuraUserService.getUser.mockResolvedValue(verifiedAgentUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({
+        jwtDefaultRole: 'agent',
+        jwtAllowedRoles: ['agent'],
+      });
+      jest.spyOn(loose, 'getOrderWithItems').mockResolvedValue({
+        ...mockReadyOrder,
+        id: 'order-123',
+        order_number: 'ORD-123',
+        subtotal: 10000,
+        fulfillment_method: 'delivery',
+        currency: 'XAF',
+        verified_agent_delivery: false,
+      });
+      jest.spyOn(loose, 'assertClaimableFulfillment').mockReturnValue(undefined);
+      jest.spyOn(loose, 'getAgentStatus').mockResolvedValue('active');
+      jest.spyOn(loose, 'resolveOrderHoldAmount').mockResolvedValue({
+        rail: opts.holdAmount > 0 ? 'mobile_money' : 'stripe',
+        holdPercentage: opts.holdAmount > 0 ? 80 : 0,
+        holdAmount: opts.holdAmount,
+      });
+      jest.spyOn(loose, 'claimHoldCycle').mockResolvedValue(0);
+      jest.spyOn(loose, 'createStatusHistoryEntry').mockResolvedValue(undefined);
+      assigned = jest.spyOn(loose, 'onOrderAssignedToAgent').mockResolvedValue(undefined);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-1',
+        available_balance: opts.balance,
+      });
+      loose.mobilePaymentsDatabaseService.hasPendingClaimOrderForOrderNumber = jest
+        .fn()
+        .mockResolvedValue(opts.pendingClaim === true);
+      assign = jest
+        .spyOn(loose, 'assignOrderToAgent')
+        .mockResolvedValue({ id: 'order-123', assigned_agent_id: 'agent-123' });
+      revert = jest.spyOn(loose, 'revertOrderAssignment').mockResolvedValue(undefined);
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({ id: 'hold-1' } as never);
+      updateHold = jest.spyOn(service, 'updateOrderHold').mockResolvedValue({ id: 'hold-1' } as never);
+      accountsService.registerTransaction.mockReset();
+      accountsService.registerTransaction.mockResolvedValue({ success: true });
+    };
+
+    it('holds the computed amount on the agent account and records it on the order hold', async () => {
+      arrange({ holdAmount: 8000, balance: 9000 });
+      const result = await service.claimOrder({ orderId: 'order-123' });
+      expect(result).toMatchObject({ success: true, holdAmount: 8000 });
+      expect(assign).toHaveBeenCalledWith('order-123', 'agent-123', 'assigned_to_agent');
+      expect(updateHold).toHaveBeenCalledWith('hold-1', { agent_hold_amount: 8000, agent_id: 'agent-123' });
+      expect(accountsService.registerTransaction).toHaveBeenCalledTimes(1);
+      expect(accountsService.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'account-1',
+          amount: 8000,
+          transactionType: 'hold',
+          referenceId: 'order-123',
+          idempotencyKey: 'claim:hold:order-123:agent-123:0',
+        })
+      );
+      expect(assigned).toHaveBeenCalledWith('order-123', 'agent-123');
+      expect(revert).not.toHaveBeenCalled();
+    });
+
+    it('hold 0 (internal agent or Stripe): no balance check, no hold transaction, agent_hold_amount 0', async () => {
+      arrange({ holdAmount: 0, balance: -500 });
+      const result = await service.claimOrder({ orderId: 'order-123' });
+      expect(result).toMatchObject({ success: true, holdAmount: 0 });
+      expect(updateHold).toHaveBeenCalledWith('hold-1', { agent_hold_amount: 0, agent_id: 'agent-123' });
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    });
+
+    it('reverts the assignment when the hold transaction fails', async () => {
+      arrange({ holdAmount: 8000, balance: 9000 });
+      accountsService.registerTransaction.mockResolvedValue({ success: false, error: 'Insufficient funds' });
+      await expect(service.claimOrder({ orderId: 'order-123' })).rejects.toMatchObject({
+        status: HttpStatus.PAYMENT_REQUIRED,
+      });
+      expect(assign).toHaveBeenCalled();
+      expect(revert).toHaveBeenCalledWith('order-123');
+      expect(assigned).not.toHaveBeenCalled();
+    });
+
+    it('refuses a negative balance before assigning', async () => {
+      arrange({ holdAmount: 8000, balance: -1 });
+      await expect(service.claimOrder({ orderId: 'order-123' })).rejects.toThrow(/balance is negative/i);
+      expect(assign).not.toHaveBeenCalled();
+      expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+    });
+
+    it('refuses a balance below the hold before assigning', async () => {
+      arrange({ holdAmount: 8000, balance: 7999 });
+      await expect(service.claimOrder({ orderId: 'order-123' })).rejects.toThrow(/Insufficient balance/);
+      expect(assign).not.toHaveBeenCalled();
+    });
+
+    it('refuses with PENDING_CLAIM when another agent is completing a claim top-up', async () => {
+      arrange({ holdAmount: 8000, balance: 9000, pendingClaim: true });
+      await expect(service.claimOrder({ orderId: 'order-123' })).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: { error: 'PENDING_CLAIM' },
+      });
+      expect(assign).not.toHaveBeenCalled();
+    });
+  });
+
   describe('switchToPickup', () => {
     const switchOrder = {
       ...mockOrder,

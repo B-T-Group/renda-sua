@@ -635,6 +635,20 @@ const MARK_DEPOSIT_CAPTURED_ONLY = `
  * (optional explicit RequestContext on HasuraUserService methods).
  * Must remain usable from HTTP and payment callbacks without Nest Scope.REQUEST.
  */
+/** The agent side of a claim: `users` row fields the claim core reads. */
+export interface ClaimingAgentUser {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
+/** The `agents` row fields the claim core reads. */
+export interface ClaimingAgent {
+  id: string;
+  is_verified?: boolean | null;
+  is_internal?: boolean | null;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -2723,13 +2737,41 @@ export class OrdersService {
       'Only agent users can get orders'
     );
     const agent = this.requireAgentRecord(user);
+    return this.claimOrderForAgent({
+      orderId: request.orderId,
+      user,
+      agent,
+      fundsCheckSource: fundsCheckSource || 'claim',
+      locationConsent: { platformHeader },
+    });
+  }
+
+  /**
+   * The claim core shared by the agent's own claim / offer accept and the
+   * system (dedicated dispatch, #594 PR 5): verification, contract gate,
+   * suspension, order checks, funds check, atomic assignment, hold (reverted
+   * on failure), status history and the post-assignment hooks. The mobile
+   * location-consent check runs only for a request the agent made
+   * (`locationConsent` set), at the same point as before the split.
+   */
+  async claimOrderForAgent(params: {
+    orderId: string;
+    user: ClaimingAgentUser;
+    agent: ClaimingAgent;
+    fundsCheckSource: 'claim' | 'offer_accept';
+    locationConsent?: { platformHeader?: string };
+  }) {
+    const { user, agent, fundsCheckSource } = params;
+    const request = { orderId: params.orderId };
     this.assertAgentVerifiedForClaim(agent);
     await this.agentContractGate?.assertCanOperate(agent.id);
-    await assertMobileLocationConsentAccepted(
-      this.hasuraSystemService,
-      agent.id,
-      platformHeader
-    );
+    if (params.locationConsent) {
+      await assertMobileLocationConsentAccepted(
+        this.hasuraSystemService,
+        agent.id,
+        params.locationConsent.platformHeader
+      );
+    }
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
       throw new HttpException(
@@ -2786,7 +2828,7 @@ export class OrdersService {
         needsTopUp: availableBalance < holdAmount,
         hasEnoughFunds: availableBalance >= holdAmount,
         rail,
-        source: fundsCheckSource || 'claim',
+        source: fundsCheckSource,
       });
 
       if (availableBalance < 0) {
