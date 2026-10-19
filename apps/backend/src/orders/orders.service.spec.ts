@@ -2407,6 +2407,10 @@ describe('OrdersService', () => {
       flag: boolean;
       window?: typeof WINDOW | null;
       evaluate: (ctx: EvalCtx) => unknown;
+      /** dedicated_covered_slots preflight would list (default: the window). */
+      offered?: Array<{ slot_id: string; date: string }>;
+      /** Let the insert succeed and fail the window insert (QA #605 N2). */
+      windowFails?: boolean;
     }) {
       // Private collaborators are swapped the same way as the rest of this file.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2428,6 +2432,13 @@ describe('OrdersService', () => {
       };
       const isEnabled = jest.fn(async (country?: string | null) => opts.flag && country === 'CM');
       loose.dedicatedAgentsConfig = { isEnabled };
+      const coveredSlots = jest.fn(async () => opts.offered ?? [{ slot_id: WINDOW.slot_id, date: WINDOW.preferred_date }]);
+      loose.dedicatedCheckoutCoverage = { coveredSlots };
+      const compensate = jest.spyOn(loose, 'compensateUnpaidCreate').mockResolvedValue(undefined);
+      if (opts.windowFails) {
+        jest.spyOn(loose, 'updateReservedQuantities').mockResolvedValue(undefined);
+        loose.deliveryWindowsService = { createDeliveryWindow: jest.fn().mockRejectedValue(new Error('window insert failed')) };
+      }
       const evaluate = jest.fn(async (ctx: EvalCtx) => opts.evaluate(ctx));
       loose.deliveryAvailabilityService = { evaluate };
       jest.spyOn(loose, 'isMarketFlagEnabled').mockResolvedValue(true);
@@ -2452,8 +2463,12 @@ describe('OrdersService', () => {
       hasuraSystemService.executeMutation.mockImplementation(async (q: string, vars?: Record<string, unknown>) => {
         if (q.includes('mutation CreateOrderWithItems')) {
           insertVars = vars ?? null;
+          if (opts.windowFails) {
+            return { insert_orders_one: { id: 'order-ded-1', order_number: 'ORD-DED-1', current_status: 'pending', payment_status: 'pending' } };
+          }
           throw STOP;
         }
+        if (opts.windowFails && q.includes('mutation MarkOrderTimingScheduled')) throw STOP;
         return {};
       });
       let error: unknown = null;
@@ -2470,7 +2485,7 @@ describe('OrdersService', () => {
         error = e;
       }
       if (error === STOP) error = null;
-      return { insertVars: insertVars as Record<string, unknown> | null, error: error as GateError, evaluate, isEnabled };
+      return { insertVars: insertVars as Record<string, unknown> | null, error: error as GateError, evaluate, isEnabled, coveredSlots, compensate };
     }
 
     const isCoveredCtx = (ctx: EvalCtx) =>
@@ -2500,6 +2515,44 @@ describe('OrdersService', () => {
           },
         })
       );
+    });
+
+    it('QA #605 N1: a window preflight did not offer gets no dedicated pass and is refused', async () => {
+      for (const offered of [[], [{ slot_id: WINDOW.slot_id, date: '2026-10-25' }], [{ slot_id: 'slot-morning', date: WINDOW.preferred_date }]]) {
+        const r = await place({
+          flag: true,
+          window: WINDOW,
+          offered,
+          evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT),
+        });
+        expect(r.insertVars).toBeNull();
+        expect(r.error?.getStatus?.()).toBeGreaterThanOrEqual(400);
+        expect(r.evaluate.mock.calls.every(([ctx]) => ctx.dedicated === undefined)).toBe(true);
+      }
+    });
+
+    it('QA #605 N1: the offered check uses this cart (location, market, rail, subtotal)', async () => {
+      const r = await place({ flag: true, window: WINDOW, evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT) });
+      expect(r.coveredSlots).toHaveBeenCalledWith(
+        expect.objectContaining({ locationId: 'location-ded-1', country: 'CM', state: 'Littoral', rail: 'mobile_money', subtotal: 10000, currency: 'XAF' })
+      );
+    });
+
+    it('QA #605 N2: the window insert failing for a coverage-only order fails the create and compensates it', async () => {
+      const r = await place({ flag: true, window: WINDOW, windowFails: true, evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT) });
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: 'afternoon' }));
+      expect(r.error?.getStatus?.()).toBe(503);
+      expect(r.error?.getResponse?.()).toMatchObject({ code: 'dedicated_window_failed' });
+      expect(r.compensate).toHaveBeenCalledWith('order-ded-1', 'Create failed: dedicated coverage window', { allowPendingUnpaid: true });
+    });
+
+    it('QA #605 N2: with a nearby agent a window failure keeps today\'s behaviour (no dedicated refusal)', async () => {
+      const r = await place({ flag: true, window: WINDOW, windowFails: true, evaluate: () => NEARBY });
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: null }));
+      expect(JSON.stringify(r.error?.getResponse?.() ?? null)).not.toContain('dedicated_window_failed');
+      // Reached the old "mark scheduled" fallback (the spec stops there).
+      expect(hasuraSystemService.executeMutation.mock.calls.some(([q]) => String(q).includes('mutation MarkOrderTimingScheduled'))).toBe(true);
+      expect(r.compensate).not.toHaveBeenCalledWith('order-ded-1', 'Create failed: dedicated coverage window', expect.anything());
     });
 
     it('the insert mutation writes coverage_slot_key', async () => {

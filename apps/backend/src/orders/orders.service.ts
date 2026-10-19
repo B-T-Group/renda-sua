@@ -34,6 +34,7 @@ import {
   DeliveryUnavailableReason,
 } from '../delivery-availability/delivery-availability.types';
 import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
+import { DedicatedCheckoutCoverageService } from '../dedicated-agents/dedicated-checkout-coverage.service';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import {
@@ -706,7 +707,9 @@ export class OrdersService {
     @Optional()
     private readonly agentContractGate?: AgentContractGateService,
     @Optional()
-    private readonly dedicatedAgentsConfig?: DedicatedAgentsConfigService
+    private readonly dedicatedAgentsConfig?: DedicatedAgentsConfigService,
+    @Optional()
+    private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -13237,6 +13240,38 @@ export class OrdersService {
     return { slotId, preferredDate };
   }
 
+  /** QA #605 N1: the window is one of the dedicated_covered_slots preflight lists for this cart. */
+  private async isPreflightOfferedWindow(
+    window: Pick<DedicatedDeliveryRequest, 'slotId' | 'preferredDate'>,
+    params: {
+      location: { id?: string; address?: { country?: string | null; state?: string | null } | null } | null | undefined;
+      rail: DedicatedDeliveryRequest['rail'];
+      subtotal: number;
+      currency: string;
+      verifiedAgentDelivery: boolean;
+    }
+  ): Promise<boolean> {
+    const locationId = params.location?.id;
+    if (!this.dedicatedCheckoutCoverage || !locationId) return false;
+    const country = isoCountryCode(params.location?.address?.country) ?? params.location?.address?.country ?? '';
+    const offered = await this.dedicatedCheckoutCoverage.coveredSlots({
+      locationId,
+      country,
+      state: (params.location?.address?.state ?? '').trim(),
+      rail: params.rail,
+      subtotal: params.subtotal,
+      currency: params.currency,
+      verifiedAgentDelivery: params.verifiedAgentDelivery,
+    });
+    const ok = offered.some((s) => s.slot_id === window.slotId && s.date === window.preferredDate);
+    if (!ok) {
+      this.logger.warn(
+        `dedicated window not offered at preflight location=${locationId} slot=${window.slotId} date=${window.preferredDate}`
+      );
+    }
+    return ok;
+  }
+
   /**
    * Rejects delivery orders when the availability rules fail (unless
    * DELIVERY_AVAILABILITY_ENFORCE=false). The public error message never
@@ -14141,22 +14176,34 @@ export class OrdersService {
     // covers the chosen slot for this cart (AgentInRegionRule dedicated pass).
     let coverageSlotKey: string | null = null;
     if (dedicatedGatePending && coverageWindow) {
+      // QA #605 N1: only a window preflight offered (dedicated_covered_slots:
+      // bookable today, inside the 3-day horizon, covered for this cart).
+      // Anything else gets no dedicated pass, so the gate below refuses it.
+      const offered = await this.isPreflightOfferedWindow(coverageWindow, {
+        location: businessInventories[0]?.business_location,
+        rail: railResolution.rail,
+        subtotal: totalAmount,
+        currency,
+        verifiedAgentDelivery: orderData.verified_agent_delivery === true,
+      });
       const gate = await this.assertDeliveryAvailable(
         businessInventories,
         address,
         client.id,
         orderData.requires_fast_delivery === true,
         orderData.verified_agent_delivery === true,
-        {
-          dedicated: {
-            ...coverageWindow,
-            rail: railResolution.rail,
-            subtotal: totalAmount,
-            currency,
-          },
-        }
+        offered
+          ? {
+              dedicated: {
+                ...coverageWindow,
+                rail: railResolution.rail,
+                subtotal: totalAmount,
+                currency,
+              },
+            }
+          : {}
       );
-      coverageSlotKey = dedicatedCoverageSlotKey(gate?.result);
+      coverageSlotKey = offered ? dedicatedCoverageSlotKey(gate?.result) : null;
     }
 
     // MUST-FIX 2: Enforce momo_pay_now_delivery_enabled flag
@@ -14754,6 +14801,22 @@ export class OrdersService {
         );
       } catch (error) {
         this.logger.error('Failed to create delivery window:', error);
+        if (coverageSlotKey) {
+          // QA #605 N2: this order was admitted only through dedicated coverage of
+          // this window. Without the window row it must not exist (AC-E1), so the
+          // create fails and the unpaid order is compensated.
+          await this.compensateUnpaidCreate(order.id, 'Create failed: dedicated coverage window', {
+            allowPendingUnpaid: true,
+          });
+          throw new HttpException(
+            {
+              success: false,
+              code: 'dedicated_window_failed',
+              error: 'We could not save your delivery time. Please try again.',
+            },
+            HttpStatus.SERVICE_UNAVAILABLE
+          );
+        }
         await this.markOrderTimingScheduled(order.id);
       }
     }
