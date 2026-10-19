@@ -8,6 +8,27 @@ import requests
 from botocore.exceptions import ClientError
 
 
+def _expires_in(response: Any) -> Any:
+    """Only the non-secret expires_in field of the renew-secret response, if present."""
+    try:
+        body = response.json()
+        return body.get('expires_in') if isinstance(body, dict) else None
+    except Exception:
+        return None
+
+
+def _safe_error(error: Exception) -> str:
+    """
+    Error text that is safe to log. A requests exception's text can carry the request URL
+    (with the code-url-secret path) or a response body (renew-secret returns the live secret),
+    so only its type and HTTP status are kept.
+    """
+    if isinstance(error, requests.exceptions.RequestException):
+        status = getattr(getattr(error, 'response', None), 'status_code', None)
+        return f"{type(error).__name__}" + (f" (HTTP {status})" if status is not None else '')
+    return str(error)
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda function to refresh Airtel mobile payments key
@@ -59,7 +80,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
 
         # Make POST request to MyPVit renew-secret endpoint
         api_url = f'https://api.mypvit.pro/{mypvit_secret_key}/renew-secret'
-        print(f"Making request to: {api_url}")
+        # api_url embeds the code-url-secret path segment: never log it.
         
         response = requests.post(
             api_url,
@@ -70,8 +91,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             timeout=30,
         )
 
-        print(f"MyPVit API Response Status: {response.status_code}")
-        print(f"MyPVit API Response Data: {response.text}")
+        # The renew-secret response body is {operation_account_code, secret, expires_in}:
+        # `secret` is the live sk_live key, so the body is never logged or returned.
+        expires_in = _expires_in(response)
+        print(f"MyPVit API Response Status: {response.status_code} (expires_in: {expires_in})")
 
         return {
             'statusCode': 200,
@@ -82,25 +105,20 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'environment': os.environ.get('ENVIRONMENT'),
                 'responseStatus': response.status_code,
-                'responseData': response.text,
+                'expiresIn': expires_in,
             }),
         }
 
     except Exception as error:
-        print(f"Error refreshing Airtel mobile payments key: {str(error)}")
-
-        if isinstance(error, requests.exceptions.RequestException):
-            print(f"Request Error Details: {str(error)}")
-            if hasattr(error, 'response') and error.response is not None:
-                print(f"Response Status: {error.response.status_code}")
-                print(f"Response Text: {error.response.text}")
+        safe_error = _safe_error(error)
+        print(f"Error refreshing Airtel mobile payments key: {safe_error}")
 
         return {
             'statusCode': 500,
             'body': json.dumps({
                 'success': False,
                 'provider': 'airtel',
-                'error': str(error),
+                'error': safe_error,
                 'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'environment': os.environ.get('ENVIRONMENT'),
             }),
