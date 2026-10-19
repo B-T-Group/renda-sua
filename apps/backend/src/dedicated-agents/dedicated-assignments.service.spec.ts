@@ -454,6 +454,7 @@ describe('DedicatedAssignmentsService — super-user assign (AC-S2)', () => {
     await assign(w, A1, ['morning']);
     expect(w.writes('InsertDedicatedAssignments')).toHaveLength(3);
     expect(w.state.rows).toHaveLength(1);
+    expect(w.writes('InsertDedicatedAssignments')[0].vars.locationId).toBe(LOC);
     expect(w.notices.filter((n) => n.userId === `u-${A1}`)).toHaveLength(1);
   });
 
@@ -707,6 +708,8 @@ describe('DedicatedAssignmentsService — pickup slots (AC-B1, B2, B4)', () => {
     await w.service.updatePickupSlots(actor, { slots: [{ slotKey: 'morning', pickupTime: '09:15' }] });
     expect(w.state.pickup).toEqual([{ business_location_id: LOC, slot_key: 'morning', is_enabled: true, pickup_time: '09:15' }]);
     expect(w.writes('SaveDedicatedPickupSlots')[0].vars.slots[0].updated_by_user_id).toBe(OWNER);
+    // Residual slot race: the toggle locks this store's business_locations row first.
+    expect(w.writes('SaveDedicatedPickupSlots')[0].vars.locationId).toBe(LOC);
 
     for (const bad of ['12:00', '07:59', '25:00', 'soon']) {
       const err = await w.service.updatePickupSlots(actor, { slots: [{ slotKey: 'morning', pickupTime: bad }] }).catch((e) => e);
@@ -781,6 +784,17 @@ describe('DedicatedAssignmentsService — pickup slots (AC-B1, B2, B4)', () => {
     const bySlot = Object.fromEntries(w.state.rows.map((r) => [r.slot_key, r.status]));
     expect(bySlot).toEqual({ morning: 'paused', evening: 'active' });
     expect(Object.fromEntries(res.assignments.map((a) => [a.slot_key, a.status]))).toEqual({ morning: 'paused', evening: 'active' });
+  });
+
+  it('QA #603: a failing post-insert pause is logged, not swallowed (the row stays active)', async () => {
+    const w = world();
+    w.addAgent(A1);
+    w.state.offAfterInsert = 'morning';
+    jest.spyOn(w.service as any, 'guardedUpdate').mockRejectedValue(new Error('hasura down'));
+    const errors = jest.spyOn((w.service as any).logger, 'error').mockImplementation(() => undefined);
+    const res = await assign(w, A1, ['morning']);
+    expect(res.assignments[0].status).toBe('active');
+    expect(errors).toHaveBeenCalledWith(expect.stringMatching(/dedicated\.post_insert_pause_failed .*slot=morning: hasura down/));
   });
 
   it('the pickup-slot write retries a 40P01 abort', async () => {
