@@ -13,13 +13,19 @@ import { DedicatedAgentsConfigModule } from './dedicated-agents-config.module';
 import { DedicatedAssignmentsService } from './dedicated-assignments.service';
 import { DedicatedCoverageModule } from './dedicated-coverage.module';
 import { DedicatedLocationAccessService } from './dedicated-location-access.service';
+import { DedicatedOpportunitiesController } from './dedicated-opportunities.controller';
+import { DedicatedOpportunitiesService } from './dedicated-opportunities.service';
+import { DedicatedPostingsBusinessController } from './dedicated-postings-business.controller';
+import { DedicatedPostingsSweeperService } from './dedicated-postings-sweeper.service';
+import { DedicatedPostingsService } from './dedicated-postings.service';
 
 /**
  * #594 dedicated delivery agents, behind `dedicated_agents_enabled` (off).
  * PR 1: config. PR 2: coverage/eligibility core. PR 3: assignment lifecycle
  * (super-user assign, business pause/remove, Off today, My stores) and
  * location pickup slots. PR 4: coverage lives in DedicatedCoverageModule so
- * checkout can use it.
+ * checkout can use it. PR 7: postings, applications, the locked accept and
+ * Opportunities, with the 14-day expiry sweeper.
  */
 @Module({
   imports: [
@@ -37,8 +43,16 @@ import { DedicatedLocationAccessService } from './dedicated-location-access.serv
     DedicatedAgentsAdminController,
     DedicatedAgentsBusinessController,
     DedicatedAgentsAgentController,
+    DedicatedPostingsBusinessController,
+    DedicatedOpportunitiesController,
   ],
-  providers: [DedicatedAssignmentsService, DedicatedLocationAccessService],
+  providers: [
+    DedicatedAssignmentsService,
+    DedicatedLocationAccessService,
+    DedicatedPostingsService,
+    DedicatedOpportunitiesService,
+    DedicatedPostingsSweeperService,
+  ],
   exports: [DedicatedAgentsConfigModule, DedicatedCoverageModule, DedicatedAssignmentsService],
 })
 export class DedicatedAgentsModule {}

@@ -87,3 +87,46 @@ describe('NotificationsService.sendDedicatedAgentNotice', () => {
     expect(push).not.toHaveBeenCalled();
   });
 });
+
+describe('NotificationsService.sendDedicatedAgentNotice for a posting (#594 PR 7)', () => {
+  it('hangs the in-app row and the push off the posting', async () => {
+    const executeMutation = jest.fn(async () => ({ insert_user_messages_one: { id: 'm-1' } }));
+    const config = { get: jest.fn((key: string) => (key === 'push' ? { enabled: true } : undefined)) };
+    const none = {} as never;
+    const service = new NotificationsService(
+      config as unknown as ConfigService,
+      { executeMutation } as unknown as HasuraSystemService,
+      none,
+      none,
+      none,
+      none,
+      none,
+      none,
+      none
+    );
+    const push = jest
+      .spyOn(service as unknown as { sendPushNotificationByUserId: () => Promise<unknown> }, 'sendPushNotificationByUserId')
+      .mockResolvedValue({ webSent: 1, expoSent: 1 });
+    await service.sendDedicatedAgentNotice({
+      userId: 'u-2',
+      title: 'New applicant',
+      body: 'Awa applied to be your dedicated agent (Morning)',
+      messageType: 'DEDICATED_POSTING_NEW_APPLICATION',
+      postingId: 'po-1',
+      path: '/business/locations/loc-1/dedicated-agents/postings/po-1',
+      event: 'dedicated_posting_new_application',
+      persona: 'business',
+      locationId: 'loc-1',
+    });
+    expect(executeMutation).toHaveBeenCalledWith(expect.any(String), {
+      object: expect.objectContaining({ entity_type: 'dedicated_agent_posting', entity_id: 'po-1' }),
+    });
+    expect(push).toHaveBeenCalledWith('u-2', 'New applicant', expect.any(String), {
+      url: '/business/locations/loc-1/dedicated-agents/postings/po-1',
+      event: 'dedicated_posting_new_application',
+      persona: 'business',
+      postingId: 'po-1',
+      locationId: 'loc-1',
+    });
+  });
+});

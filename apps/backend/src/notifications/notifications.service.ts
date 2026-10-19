@@ -2447,7 +2447,10 @@ export class NotificationsService {
     title: string;
     body: string;
     messageType: string;
-    assignmentId: string;
+    /** Assignment notices (PR 3, PR 6). */
+    assignmentId?: string;
+    /** #594 PR 7 posting notices hang off the posting instead (entity_type dedicated_agent_posting). */
+    postingId?: string;
     path: string;
     event: string;
     persona: 'agent' | 'business';
@@ -2458,6 +2461,7 @@ export class NotificationsService {
     const userId = params.userId?.trim();
     if (!userId) return false;
     let inApp = false;
+    const posting = params.postingId?.trim();
     try {
       await this.hasuraSystemService.executeMutation(
         `
@@ -2468,8 +2472,8 @@ export class NotificationsService {
         {
           object: {
             user_id: userId,
-            entity_type: 'dedicated_agent_assignment',
-            entity_id: params.assignmentId,
+            entity_type: posting ? 'dedicated_agent_posting' : 'dedicated_agent_assignment',
+            entity_id: posting || params.assignmentId,
             message_type: params.messageType,
             message: params.body,
             message_payload: {
@@ -2491,7 +2495,7 @@ export class NotificationsService {
         url: params.path,
         event: params.event,
         persona: params.persona,
-        assignmentId: params.assignmentId,
+        ...(posting ? { postingId: posting } : { assignmentId: params.assignmentId }),
         locationId: params.locationId,
       });
     } catch (error: any) {
