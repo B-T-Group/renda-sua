@@ -5085,6 +5085,35 @@ describe('OrdersService', () => {
         expect(assignMutations()).toHaveLength(0);
       });
 
+      it('the re-check refusing AT THE CAP blocks the claim (409); nothing is assigned', async () => {
+        arrangeClaim({ holdAmount: 0, balance: 0 });
+        const refusal = new HttpException({ error: 'DEDICATED_OFFER_INELIGIBLE', reason: 'at_capacity' }, HttpStatus.CONFLICT);
+        offers('dedicated', async () => Promise.reject(refusal));
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockResolvedValue(assigned);
+        await expect(service.claimOrder({ orderId: 'order-123' })).rejects.toBe(refusal);
+        expect(assignMutations()).toHaveLength(0);
+        expect(dedicatedClaims()).toHaveLength(0);
+      });
+
+      it.each([
+        ['off_today', { code: 'off_today' }],
+        ['inactive assignment', { code: 'assignment_inactive' }],
+        ['slot disabled', { code: 'slot_disabled' }],
+        ['ineligible, not cap', { error: 'DEDICATED_OFFER_INELIGIBLE', reason: 'contract_unsigned' }],
+      ])('any other refusal (%s) falls back to a plain, unstamped claim', async (_l, body) => {
+        arrangeClaim({ holdAmount: 0, balance: 0 });
+        jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+        const svc = offers('dedicated', async () => Promise.reject(new HttpException(body, HttpStatus.CONFLICT)));
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockResolvedValue(assigned);
+        await expect(service.claimOrder({ orderId: 'order-123' })).resolves.toMatchObject({ success: true });
+        expect(svc.dedicatedAcceptAssignment).toHaveBeenCalledTimes(1);
+        expect(dedicatedClaims()).toHaveLength(0);
+        expect(assignMutations()).toHaveLength(1);
+        expect(assignMutations()[0][0]).not.toContain('assignment_source');
+      });
+
       it('a standard offer (or none) keeps the unstamped open-pool claim', async () => {
         for (const kind of ['standard', null]) {
           arrangeClaim({ holdAmount: 0, balance: 0 });
