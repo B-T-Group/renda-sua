@@ -149,6 +149,9 @@ export const SERVER_SITE_EVENT_TYPES = [
   'dedicated.offer_expired',
   'dedicated.auto_assigned',
   'dedicated.coverage_unconfirmed_at_dispatch',
+  // #594 PR 6: auto-assign release (A6b), day-of slot reminder (A8)
+  'dedicated.auto_assign_released',
+  'dedicated.slot_reminder_sent',
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',

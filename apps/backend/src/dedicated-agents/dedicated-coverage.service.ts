@@ -227,6 +227,52 @@ export class DedicatedCoverageService {
     return eligible.length > 0 ? { slot, eligible } : null;
   }
 
+  /**
+   * #594 PR 6 (AC-A8): agents on duty for a location-slot on a local date,
+   * whatever the order: an active assignment, not Off today on that date, and
+   * a profile that passes AC-E2 (verified, signed, not suspended, delivery
+   * focus). Load and money are per order and left to dispatch. Flag off -> [].
+   */
+  async onDutyAgents(params: {
+    locationId: string;
+    slotKey: string;
+    date: string;
+  }): Promise<Array<{ agentId: string; userId: string; assignmentId: string }>> {
+    const ctx = await this.loadLocationContext(params.locationId);
+    if (!ctx || ctx.disabledSlots.has(params.slotKey)) return [];
+    const assignments = await this.loadAssignments(params.locationId, params.slotKey);
+    if (assignments.length === 0) return [];
+    const signedIds = await this.agentContractGate.signedIdsOrSkip([
+      ...new Set(assignments.map((a) => a.agent_id)),
+    ]);
+    const out: Array<{ agentId: string; userId: string; assignmentId: string }> = [];
+    for (const row of assignments) {
+      const agent = row.agent;
+      if (!agent?.user_id) continue;
+      const reason = dedicatedProfileIneligibleReason(
+        {
+          assignmentStatus: row.status,
+          offTodayDate: row.off_today_date,
+          isVerified: agent.is_verified === true,
+          isInternal: agent.is_internal === true,
+          agentStatus: agent.status ?? null,
+          focus: agent.focus ?? null,
+          contractSigned: !signedIds || signedIds.has(row.agent_id),
+          activeOrders: 0,
+          outstandingDedicatedOffers: 0,
+        },
+        {
+          localToday: params.date,
+          maxActiveOrders: ctx.config.maxActiveOrders,
+          rail: 'mobile_money',
+          verifiedAgentDelivery: false,
+        }
+      );
+      if (!reason) out.push({ agentId: row.agent_id, userId: agent.user_id, assignmentId: row.id });
+    }
+    return out;
+  }
+
   async eligibleAgents(params: DedicatedEligibilityParams): Promise<DedicatedEligibleAgent[]> {
     return (await this.evaluate(params)).eligible;
   }

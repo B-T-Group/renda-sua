@@ -39,6 +39,7 @@ import {
   type OfferDeclineReason,
 } from '../dedicated-agents/dedicated-agents.constants';
 import type { ClaimAssignment } from './dedicated-claim.port';
+import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
 import {
   buildDedicatedConfirmReminderMessage,
@@ -738,7 +739,9 @@ export class OrdersService {
     @Optional()
     private readonly agentContractGate?: AgentContractGateService,
     @Optional()
-    private readonly dedicatedAgentsConfig?: DedicatedAgentsConfigService
+    private readonly dedicatedAgentsConfig?: DedicatedAgentsConfigService,
+    @Optional()
+    private readonly dedicatedSlotReminder?: DedicatedSlotReminderService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -14920,6 +14923,10 @@ export class OrdersService {
         await this.markOrderTimingScheduled(order.id);
       }
     }
+    // #594 PR 6 (AC-A8): day-of reminder to the slot's dedicated agents (never throws).
+    if (coverageSlotKey && deliveryWindow) {
+      void this.dedicatedSlotReminder?.scheduleForOrder(order.id);
+    }
 
     if (current_status === 'pending') {
       try {
@@ -16259,6 +16266,34 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
+  }
+
+  /**
+   * #594 PR 6 (AC-A6b) "Can't take this": the auto-assigned internal agent
+   * releases the order inside the stored window (no strike); dispatch restarts
+   * without them. `reason` is optional, one of OFFER_DECLINE_REASONS.
+   */
+  async releaseDedicatedAutoAssignment(orderId: string, rawReason?: unknown) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can release an assignment');
+    const agent = this.requireAgentRecord(user);
+    const reason = parseOfferDeclineReason(rawReason);
+    const result = await this.orderReassignmentService.releaseDedicatedAutoAssignment(
+      orderId,
+      agent.id,
+      reason
+    );
+    if (result.success) return result;
+    const status =
+      result.refusal === 'release_failed'
+        ? HttpStatus.INTERNAL_SERVER_ERROR
+        : result.refusal === 'unavailable'
+          ? HttpStatus.NOT_FOUND
+          : HttpStatus.CONFLICT;
+    throw new HttpException(
+      { message: result.message, error: DEDICATED_RELEASE_ERRORS[result.refusal] },
+      status
+    );
   }
 
   async reportPickupIssue(orderId: string, reason: string) {
@@ -18638,6 +18673,15 @@ export class OrdersService {
  * #594: `reason` on an offer decline. Absent or blank -> null (unchanged
  * behaviour); anything else must be one of OFFER_DECLINE_REASONS (400).
  */
+/** Error codes of a refused dedicated release (AC-A6b). */
+export const DEDICATED_RELEASE_ERRORS = {
+  unavailable: 'DEDICATED_RELEASE_UNAVAILABLE',
+  not_assigned: 'DEDICATED_RELEASE_NOT_ASSIGNED',
+  not_auto_assigned: 'DEDICATED_RELEASE_NOT_AUTO_ASSIGNED',
+  window_closed: 'DEDICATED_RELEASE_WINDOW_CLOSED',
+  release_failed: 'DEDICATED_RELEASE_FAILED',
+} as const;
+
 export function parseOfferDeclineReason(raw: unknown): OfferDeclineReason | null {
   if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return null;
   const value = typeof raw === 'string' ? raw.trim() : '';

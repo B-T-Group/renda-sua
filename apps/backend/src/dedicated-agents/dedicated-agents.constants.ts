@@ -84,3 +84,8 @@ export const DEFAULT_DEDICATED_AGENTS_CONFIG: DedicatedAgentsConfig = {
   postingExpiryDays: 14,
   slotEndGraceMinutes: 15,
 };
+
+/** In-app / push paths of the dedicated-agent notices (PR 3; the PR 6 slot reminder reuses the agent one). */
+export const DEDICATED_BUSINESS_NOTICE_PATH = (locationId: string) =>
+  `/business/locations/${locationId}/dedicated-agents`;
+export const DEDICATED_AGENT_NOTICE_PATH = '/agent/dedicated-assignments';

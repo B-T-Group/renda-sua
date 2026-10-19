@@ -948,8 +948,11 @@ export class OrderOffersService {
       }
     );
 
+    // #594 PR 6: on an order placed on dedicated coverage, an agent who declined its
+    // dedicated offer or released its auto-assignment isn't offered it again.
+    const excluded = order.coverage_slot_key ? await this.dedicatedDeclinedAgentIds(order.id) : new Set<string>();
     const eligible: CandidateAgent[] = candidates
-      .filter((c) => c.userId != null)
+      .filter((c) => c.userId != null && !excluded.has(c.agentId))
       .map((c) => ({
         agentId: c.agentId,
         userId: c.userId as string,
@@ -959,6 +962,24 @@ export class OrderOffersService {
     const withPushToken = await this.filterAgentsWithPushToken(eligible);
     const ranked = await this.rankByPickupReliability(withPushToken);
     return ranked.slice(0, this.maxAgents);
+  }
+
+  private async dedicatedDeclinedAgentIds(orderId: string): Promise<Set<string>> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      order_offers: Array<{ agent_id: string }>;
+    }>(
+      `query DedicatedDeclinedAgents($orderId: uuid!) {
+        order_offers(
+          where: {
+            order_id: { _eq: $orderId }
+            offer_kind: { _eq: "dedicated" }
+            status: { _eq: declined }
+          }
+        ) { agent_id }
+      }`,
+      { orderId }
+    );
+    return new Set((res?.order_offers ?? []).map((o) => o.agent_id));
   }
 
   /** Prefer closer agents; among similar distance, prefer higher pickup reliability. */

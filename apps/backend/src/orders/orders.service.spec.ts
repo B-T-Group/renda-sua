@@ -402,6 +402,7 @@ describe('OrdersService', () => {
           useValue: {
             reportIssueAndRelease: jest.fn(),
             reassignOrder: jest.fn(),
+            releaseDedicatedAutoAssignment: jest.fn(),
           },
         },
         {
@@ -2407,6 +2408,8 @@ describe('OrdersService', () => {
       flag: boolean;
       window?: typeof WINDOW | null;
       evaluate: (ctx: EvalCtx) => unknown;
+      /** Let the insert succeed and run on past it (PR 6: the slot reminder is scheduled after the window). */
+      complete?: boolean;
     }) {
       // Private collaborators are swapped the same way as the rest of this file.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2448,11 +2451,27 @@ describe('OrdersService', () => {
         .mockResolvedValueOnce({ business_inventory: [inventoryFixture()] })
         .mockResolvedValueOnce({ supported_payment_systems: [] })
         .mockResolvedValueOnce({ item_deals: [] });
+      const scheduleForOrder = jest.fn().mockResolvedValue(undefined);
+      loose.dedicatedSlotReminder = { scheduleForOrder };
+      if (opts.complete) {
+        loose.deliveryWindowsService = { createDeliveryWindow: jest.fn().mockResolvedValue({ id: 'window-ded-1' }) };
+        jest.spyOn(loose, 'updateReservedQuantities').mockResolvedValue(undefined);
+      }
       let insertVars: Record<string, unknown> | null = null;
       hasuraSystemService.executeMutation.mockImplementation(async (q: string, vars?: Record<string, unknown>) => {
         if (q.includes('mutation CreateOrderWithItems')) {
           insertVars = vars ?? null;
-          throw STOP;
+          if (!opts.complete) throw STOP;
+          return {
+            insert_orders_one: {
+              id: 'order-ded-1',
+              order_number: 'ORD-DED-1',
+              current_status: 'pending',
+              currency: 'XAF',
+              total_amount: 10500,
+              payment_source: 'mobile_payment',
+            },
+          };
         }
         return {};
       });
@@ -2470,7 +2489,13 @@ describe('OrdersService', () => {
         error = e;
       }
       if (error === STOP) error = null;
-      return { insertVars: insertVars as Record<string, unknown> | null, error: error as GateError, evaluate, isEnabled };
+      return {
+        insertVars: insertVars as Record<string, unknown> | null,
+        error: error as GateError,
+        evaluate,
+        isEnabled,
+        scheduleForOrder,
+      };
     }
 
     const isCoveredCtx = (ctx: EvalCtx) =>
@@ -2500,6 +2525,24 @@ describe('OrdersService', () => {
           },
         })
       );
+    });
+
+    it('#594 PR 6: an order placed on dedicated coverage schedules its day-of slot reminder after the window', async () => {
+      const r = await place({
+        flag: true,
+        window: WINDOW,
+        complete: true,
+        evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT),
+      });
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: 'afternoon' }));
+      expect(r.scheduleForOrder).toHaveBeenCalledTimes(1);
+      expect(r.scheduleForOrder).toHaveBeenCalledWith('order-ded-1');
+    });
+
+    it('#594 PR 6: an order with a nearby agent (no coverage_slot_key) schedules no slot reminder', async () => {
+      const r = await place({ flag: true, window: WINDOW, complete: true, evaluate: () => NEARBY });
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: null }));
+      expect(r.scheduleForOrder).not.toHaveBeenCalled();
     });
 
     it('the insert mutation writes coverage_slot_key', async () => {
@@ -4783,6 +4826,62 @@ describe('OrdersService', () => {
         response: expect.objectContaining({ error: 'INVALID_DECLINE_REASON' }),
       });
       expect(offers.declineOffer).toHaveBeenCalledTimes(3);
+    });
+
+    describe('#594 PR 6 releaseDedicatedAutoAssignment (AC-A6b)', () => {
+      const reassign = () => module.get(OrderReassignmentService) as unknown as { releaseDedicatedAutoAssignment: jest.Mock };
+      beforeEach(() => {
+        hasuraUserService.getUser.mockResolvedValue(agentUser);
+        hasuraUserService.sessionPersonaContext.mockReturnValue({ jwtDefaultRole: 'agent', jwtAllowedRoles: ['agent'] });
+        reassign().releaseDedicatedAutoAssignment.mockReset();
+      });
+
+      it('releases as the calling agent with the parsed reason', async () => {
+        reassign().releaseDedicatedAutoAssignment.mockResolvedValue({ success: true, message: 'released' });
+        await expect(service.releaseDedicatedAutoAssignment('order-1', ' busy ')).resolves.toEqual({
+          success: true,
+          message: 'released',
+        });
+        expect(reassign().releaseDedicatedAutoAssignment).toHaveBeenCalledWith('order-1', 'agent-123', 'busy');
+        await service.releaseDedicatedAutoAssignment('order-1', undefined);
+        expect(reassign().releaseDedicatedAutoAssignment).toHaveBeenLastCalledWith('order-1', 'agent-123', null);
+      });
+
+      it('an unknown reason is a 400 before anything is released', async () => {
+        await expect(service.releaseDedicatedAutoAssignment('order-1', 'lazy')).rejects.toMatchObject({
+          status: 400,
+          response: expect.objectContaining({ error: 'INVALID_DECLINE_REASON' }),
+        });
+        expect(reassign().releaseDedicatedAutoAssignment).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['unavailable', 404, 'DEDICATED_RELEASE_UNAVAILABLE'],
+        ['not_assigned', 409, 'DEDICATED_RELEASE_NOT_ASSIGNED'],
+        ['not_auto_assigned', 409, 'DEDICATED_RELEASE_NOT_AUTO_ASSIGNED'],
+        ['window_closed', 409, 'DEDICATED_RELEASE_WINDOW_CLOSED'],
+        ['release_failed', 500, 'DEDICATED_RELEASE_FAILED'],
+      ])('refusal %s -> %i %s', async (refusal, status, error) => {
+        reassign().releaseDedicatedAutoAssignment.mockResolvedValue({ success: false, refusal, message: 'no' });
+        await expect(service.releaseDedicatedAutoAssignment('order-1', null)).rejects.toMatchObject({
+          status,
+          response: { message: 'no', error },
+        });
+      });
+
+      it('only agents can release', async () => {
+        hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+        hasuraUserService.sessionPersonaContext.mockReturnValue({ jwtDefaultRole: 'client', jwtAllowedRoles: ['client'] });
+        await expect(service.releaseDedicatedAutoAssignment('order-1', null)).rejects.toBeDefined();
+        expect(reassign().releaseDedicatedAutoAssignment).not.toHaveBeenCalled();
+      });
+
+      it('an agent account acting in another persona gets 403', async () => {
+        hasuraUserService.getUser.mockResolvedValue({ ...agentUser, active_persona: 'client', client: { id: 'c-1', user_id: 'agent-123' } });
+        hasuraUserService.sessionPersonaContext.mockReturnValue({ jwtDefaultRole: 'client', jwtAllowedRoles: ['client', 'agent'] });
+        await expect(service.releaseDedicatedAutoAssignment('order-1', null)).rejects.toMatchObject({ status: 403 });
+        expect(reassign().releaseDedicatedAutoAssignment).not.toHaveBeenCalled();
+      });
     });
 
     describe('remindBusinessToConfirmCoveredOrder', () => {

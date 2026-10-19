@@ -1758,6 +1758,36 @@ export class OrdersController {
     return this.ordersService.requestPickupDelay(orderId);
   }
 
+  @Post(':id/dedicated-release')
+  @ApiOperation({
+    summary:
+      "#594 AC-A6b: an auto-assigned dedicated agent releases the order (\"Can't take this\") inside the release window; no strike, dispatch restarts without them",
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({
+    required: false,
+    schema: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', enum: [...OFFER_DECLINE_REASONS] },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Released; dispatch restarted without this agent' })
+  @ApiResponse({ status: 400, description: 'INVALID_DECLINE_REASON' })
+  @ApiResponse({ status: 404, description: 'DEDICATED_RELEASE_UNAVAILABLE (flag off or unknown order)' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'DEDICATED_RELEASE_NOT_ASSIGNED, DEDICATED_RELEASE_NOT_AUTO_ASSIGNED or DEDICATED_RELEASE_WINDOW_CLOSED',
+  })
+  async releaseDedicatedAutoAssignment(
+    @Param('id') orderId: string,
+    @Body() body: { reason?: string } = {}
+  ) {
+    return this.ordersService.releaseDedicatedAutoAssignment(orderId, body?.reason);
+  }
+
   @Post(':id/report-pickup-issue')
   @ApiOperation({
     summary: 'Agent reports a pickup issue and releases the order',
