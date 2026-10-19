@@ -1,3 +1,4 @@
+import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
 import { MobilePaymentsService } from './mobile-payments.service';
 
 describe('MobilePaymentsService.assertProviderConfirmsCallback', () => {
@@ -49,6 +50,93 @@ describe('MobilePaymentsService.assertProviderConfirmsCallback', () => {
     await expect(
       buildService('success').assertProviderConfirmsCallback(tx, 'FAILED')
     ).rejects.toThrow(/provider reports success/i);
+  });
+
+  describe('FedaPay mismatch HTTP status codes', () => {
+    function buildFedaPayService(liveData: { 
+      status: string; 
+      amount?: number; 
+      currency?: string; 
+      reference?: string;
+    }) {
+      const service = Object.create(MobilePaymentsService.prototype) as MobilePaymentsService;
+      (service as any).resolveAdminIntegrationProvider = jest.fn().mockReturnValue('fedapay');
+      (service as any).checkTransactionStatus = jest.fn().mockResolvedValue({
+        transactionId: '12345',
+        status: liveData.status,
+        amount: liveData.amount ?? 1000,
+        currency: liveData.currency ?? 'XOF',
+        reference: liveData.reference ?? 'REF-123',
+        provider: 'fedapay',
+      });
+      return service;
+    }
+
+    const fedaPayTx = {
+      id: 'tx-fedapay-1',
+      transaction_id: '12345',
+      customer_phone: '+22890123456',
+      provider: 'fedapay',
+      amount: 1000,
+      currency: 'XOF',
+      reference: 'REF-123',
+    };
+
+    it('amount mismatch is a definite CallbackLiveMismatchError (acknowledged upstream)', async () => {
+      const service = buildFedaPayService({ status: 'success', amount: 2000 });
+      
+      try {
+        await service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS');
+        fail('Should have thrown CallbackLiveMismatchError');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('amount_mismatch');
+      }
+    });
+
+    it('currency mismatch is a definite CallbackLiveMismatchError', async () => {
+      const service = buildFedaPayService({ status: 'success', currency: 'USD' });
+      
+      try {
+        await service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS');
+        fail('Should have thrown CallbackLiveMismatchError');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('live_currency_not_xof');
+      }
+    });
+
+    it('reference mismatch is a definite CallbackLiveMismatchError', async () => {
+      const service = buildFedaPayService({ status: 'success', reference: 'WRONG-REF' });
+      
+      try {
+        await service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS');
+        fail('Should have thrown CallbackLiveMismatchError');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('reference_mismatch');
+      }
+    });
+
+    it('status mismatch (SUCCESS claimed, provider failed) is a definite CallbackLiveMismatchError', async () => {
+      const service = buildFedaPayService({ status: 'failed' });
+      
+      try {
+        await service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS');
+        fail('Should have thrown CallbackLiveMismatchError');
+      } catch (error: any) {
+        expect(error).toBeInstanceOf(CallbackLiveMismatchError);
+        expect(error.reason).toBe('live_status_mismatch');
+      }
+    });
+
+    it('throws 5xx for transient pending status (FedaPay will retry)', async () => {
+      const service = buildFedaPayService({ status: 'pending' });
+      
+      await expect(
+        service.assertProviderConfirmsCallback(fedaPayTx, 'SUCCESS')
+      ).rejects.toThrow(/provider status is pending/);
+    });
   });
 });
 

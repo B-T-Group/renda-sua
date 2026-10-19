@@ -1,3 +1,4 @@
+import { CallbackLiveMismatchError } from './callback-live-mismatch.error';
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -15,6 +16,7 @@ import { MobileTransactionAccessService } from './mobile-transaction-access.serv
 import { MtnMomoService } from './providers/mtn-momo.service';
 import { OrangeMomoService } from './providers/orange-momo.service';
 import { FreemopayService } from './providers/freemopay.service';
+import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
 
 describe('FedaPay Integration Tests (B2, B4, B5)', () => {
   let controller: MobilePaymentsController;
@@ -268,7 +270,13 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       mockCallbackProcessor.processFedaPayCallback.mockRejectedValueOnce(new Error('DB timeout'));
 
       const req1 = { headers: { 'x-fedapay-signature': header }, body: rawBody } as any;
-      await expect(controller.fedapayCallback(req1)).rejects.toThrow(/Failed to process FedaPay callback/);
+      const firstError = await controller.fedapayCallback(req1).catch((e: any) => e);
+      expect(firstError).toBeInstanceOf(HttpException);
+      expect(firstError.message).toMatch(/Failed to process FedaPay callback/);
+      expect(firstError.cause).toBeInstanceOf(Error);
+      expect(firstError.cause.message).toBe('DB timeout');
+      // #587: the 5xx body stays generic; the inner error is only on `cause`.
+      expect(firstError.getResponse()).toEqual({ success: false, message: 'Failed to process FedaPay callback' });
 
       // Second call: same event retried, processing succeeds this time
       mockCallbackProcessor.processFedaPayCallback.mockResolvedValueOnce({ received: true });
@@ -323,7 +331,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/amount mismatch.*expected 1000.*got 999/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'amount_mismatch', detail: expect.stringMatching(/expected 1000, live 999/) });
     });
 
     it('should reject when live currency is not XOF', async () => {
@@ -346,7 +354,168 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/live currency XAF is not XOF/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'live_currency_not_xof', detail: expect.stringMatching(/live currency XAF/) });
+    });
+
+    it('accepts FedaPay live reference that is the MyPVit short hash of the stored deposit ref', async () => {
+      process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = '2026-10-19T00:00:00Z';
+      const stored = 'ORD-99-DEP-1730000000000';
+      const shortRef = buildShortReferenceForMyPVit(stored);
+      const tx = {
+        id: 'tx-dep',
+        transaction_id: 'fedapay_tx_dep',
+        amount: 1000,
+        currency: 'XOF',
+        reference: stored,
+        provider: 'fedapay',
+        status: 'PENDING',
+        payment_entity: 'order_deposit',
+        created_at: '2026-10-18T12:00:00Z',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        merchantRef: shortRef,
+      });
+
+      try {
+        await expect(
+          realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+        ).resolves.toBeUndefined();
+      } finally {
+        delete process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF;
+      }
+    });
+
+    describe('#592 QA L1/L2: legacy short-hash scope', () => {
+      const stored = 'ORD-99-DEP-1730000000000';
+      const legacyRow = (over: Record<string, unknown> = {}) => ({
+        id: 'tx-dep-l2',
+        transaction_id: 'fedapay_tx_dep_l2',
+        amount: 1000,
+        currency: 'XOF',
+        reference: stored,
+        provider: 'fedapay',
+        status: 'PENDING',
+        payment_entity: 'order_deposit',
+        created_at: '2026-10-18T12:00:00Z',
+        ...over,
+      });
+      const liveWith = (merchantRef: string) =>
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+          status: 'approved',
+          amount: 1000,
+          currency: 'XOF',
+          merchantRef,
+        });
+      let warnSpy: jest.SpyInstance;
+      beforeEach(() => {
+        warnSpy = jest.spyOn((realService as any).logger, 'warn').mockImplementation(() => undefined);
+      });
+      afterEach(() => {
+        warnSpy.mockRestore();
+        delete process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF;
+      });
+
+      it('accepts the short hash for an order_deposit row created before the cutoff and logs a warning', async () => {
+        process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = '2026-10-19T00:00:00Z';
+        liveWith(buildShortReferenceForMyPVit(stored));
+        await expect(
+          realService['assertProviderConfirmsCallback'](legacyRow() as any, 'SUCCESS')
+        ).resolves.toBeUndefined();
+        expect(warnSpy).toHaveBeenCalledWith(
+          expect.stringContaining('fedapay_legacy_short_ref_matched tx=tx-dep-l2')
+        );
+      });
+
+      it('rejects the short hash for an order_deposit row created after the cutoff', async () => {
+        process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = '2026-10-18T00:00:00Z';
+        liveWith(buildShortReferenceForMyPVit(stored));
+        await expect(
+          realService['assertProviderConfirmsCallback'](legacyRow() as any, 'SUCCESS')
+        ).rejects.toMatchObject({ reason: 'reference_mismatch' });
+        expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('fedapay_legacy_short_ref_matched'));
+      });
+
+      it.each(['order', 'claim_order', null])(
+        'rejects the short hash for payment_entity=%s even when old',
+        async (entity) => {
+          process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = '2026-10-19T00:00:00Z';
+          liveWith(buildShortReferenceForMyPVit(stored));
+          await expect(
+            realService['assertProviderConfirmsCallback'](
+              legacyRow({ payment_entity: entity }) as any,
+              'SUCCESS'
+            )
+          ).rejects.toMatchObject({ reason: 'reference_mismatch' });
+        }
+      );
+
+      it('rejects the short hash when created_at is missing', async () => {
+        process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = '2026-10-19T00:00:00Z';
+        liveWith(buildShortReferenceForMyPVit(stored));
+        await expect(
+          realService['assertProviderConfirmsCallback'](legacyRow({ created_at: undefined }) as any, 'SUCCESS')
+        ).rejects.toMatchObject({ reason: 'reference_mismatch' });
+      });
+
+      it('applies the same scope on the FAILED path', async () => {
+        process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = '2026-10-18T00:00:00Z';
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+          status: 'declined',
+          amount: 1000,
+          currency: 'XOF',
+          merchantRef: buildShortReferenceForMyPVit(stored),
+        });
+        await expect(
+          realService['assertProviderConfirmsCallback'](legacyRow() as any, 'FAILED')
+        ).rejects.toMatchObject({ reason: 'reference_mismatch' });
+      });
+
+      it.each([undefined, '', 'not-a-date'])(
+        'cutoff %p: legacy matching is disabled (fail closed)',
+        async (cutoff) => {
+          if (cutoff === undefined) delete process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF;
+          else process.env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF = cutoff;
+          liveWith(buildShortReferenceForMyPVit(stored));
+          await expect(
+            realService['assertProviderConfirmsCallback'](legacyRow({ created_at: '2020-01-01T00:00:00Z' }) as any, 'SUCCESS')
+          ).rejects.toMatchObject({ reason: 'reference_mismatch' });
+          expect(warnSpy).not.toHaveBeenCalledWith(expect.stringContaining('fedapay_legacy_short_ref_matched'));
+        }
+      );
+
+      it('L1: an empty stored reference never matches', () => {
+        const matches = (realService as any).fedapayReferenceMatches.bind(realService);
+        expect(matches(legacyRow({ reference: '' }), '')).toBe(false);
+        expect(matches(legacyRow({ reference: '   ' }), 'X')).toBe(false);
+        expect(matches(legacyRow({ reference: null }), buildShortReferenceForMyPVit(''))).toBe(false);
+        expect(matches(legacyRow(), '')).toBe(false);
+        expect(matches(legacyRow(), stored)).toBe(true);
+      });
+    });
+
+    it('rejects a FedaPay short hash that was not derived from the stored reference', async () => {
+      const tx = {
+        id: 'tx-dep-bad',
+        transaction_id: 'fedapay_tx_dep_bad',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'ORD-99-DEP-1730000000000',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        merchantRef: buildShortReferenceForMyPVit('SOME-OTHER-REF'),
+      });
+
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.toThrow(/reference[_ ]mismatch/i);
     });
 
     it('should reject when live reference mismatches stored reference', async () => {
@@ -369,10 +538,10 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/reference mismatch.*expected REF789.*got WRONG_REF/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch', detail: expect.stringMatching(/expected REF789, live WRONG_REF/) });
     });
 
-    it('should reject when live currency is missing (fail closed)', async () => {
+    it('should reject when live currency is missing (transient: plain error, FedaPay retries; QA #587 A1)', async () => {
       const tx = {
         id: 'tx-4',
         transaction_id: 'fedapay_tx_4',
@@ -392,7 +561,38 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/missing live currency.*fail closed/i);
+      ).rejects.toThrow(/live record has no currency \(transient, will retry\)/);
+      await expect(
+        realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
+      ).rejects.not.toBeInstanceOf(CallbackLiveMismatchError);
+    });
+
+    it.each([
+      ['undefined', undefined],
+      ['null', null],
+      ['non-numeric', 'n/a'],
+    ])('should reject when live amount is %s (transient, QA #587 A1)', async (_l, amount) => {
+      const tx = {
+        id: 'tx-amt',
+        transaction_id: 'feda-amt',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF111',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount,
+        currency: 'XOF',
+        merchantRef: 'REF111',
+        reference: 'feda-amt',
+      });
+      process.env.ENABLE_FEDAPAY_TOGO_INTEGRATION = 'false';
+      const err = await realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS').catch((e: unknown) => e);
+      expect(err).not.toBeInstanceOf(CallbackLiveMismatchError);
+      expect(String((err as Error).message)).toMatch(/live record has no amount \(transient, will retry\)/);
+      expect(String((err as Error).message)).not.toContain('1000');
     });
 
     it('should reject when live reference is missing (fail closed)', async () => {
@@ -415,7 +615,111 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/missing live reference.*fail closed/i);
+      ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'missing_live_reference' });
+    });
+
+    it('accepts a Hasura numeric string amount against a FedaPay number', async () => {
+      const tx = {
+        id: 'tx-decimal',
+        transaction_id: 'fedapay_tx_dec',
+        amount: '1000.00',
+        currency: 'XOF',
+        reference: 'REF333',
+        provider: 'fedapay',
+        status: 'pending',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF333',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
+      ).resolves.toBeUndefined();
+    });
+
+    it('still rejects a real amount mismatch when the stored amount is a numeric string', async () => {
+      const tx = {
+        id: 'tx-decimal-bad',
+        transaction_id: 'fedapay_tx_dec_bad',
+        amount: '1000.00',
+        currency: 'XOF',
+        reference: 'REF333',
+        provider: 'fedapay',
+        status: 'pending',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 999,
+        currency: 'XOF',
+        reference: 'REF333',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
+      ).rejects.toThrow(/amount[_ ]mismatch/i);
+    });
+
+    describe('#591 QA L1/L2: strict stored-amount parsing', () => {
+      const row = (amount: unknown) => ({
+        id: 'tx-strict',
+        transaction_id: 'fedapay_tx_strict',
+        amount,
+        currency: 'XOF',
+        reference: 'REF777',
+        provider: 'fedapay',
+        status: 'pending',
+      });
+      const live = (amount: number) =>
+        mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+          status: 'approved',
+          amount,
+          currency: 'XOF',
+          reference: 'REF777',
+        });
+
+      it.each([
+        [1000, 1000],
+        ['1000', 1000],
+        ['1000.00', 1000],
+        ['1000.5', 1000.5],
+        [0, 0],
+        ['0', 0],
+      ])('accepts stored %p vs live %p', async (stored, liveAmount) => {
+        live(liveAmount);
+        await expect(
+          realService.assertProviderConfirmsCallback(row(stored) as any, 'SUCCESS')
+        ).resolves.toBeUndefined();
+      });
+
+      it.each([
+        ['', 0],
+        [' ', 0],
+        ['1e3', 1000],
+        ['0x3E8', 1000],
+        [' 1000', 1000],
+        ['-1000', 1000],
+        ['1000.', 1000],
+        [true, 1],
+        [[1000], 1000],
+        [NaN, 1000],
+        [Infinity, 1000],
+        ['999.99', 1000],
+      ])('treats stored %p vs live %p as a definite amount_mismatch', async (stored, liveAmount) => {
+        live(liveAmount as number);
+        await expect(
+          realService.assertProviderConfirmsCallback(row(stored) as any, 'SUCCESS')
+        ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'amount_mismatch' });
+      });
+
+      it.each([null, undefined])('L1: a %p stored amount is a mismatch, never a credit', async (stored) => {
+        live(1000);
+        await expect(
+          realService.assertProviderConfirmsCallback(row(stored) as any, 'SUCCESS')
+        ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'amount_mismatch' });
+      });
     });
 
     it('should accept when all fields match', async () => {
@@ -441,6 +745,29 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
       ).resolves.not.toThrow();
     });
 
+    it('accepts SUCCESS when live XOF came from currency_id and merchantRef', async () => {
+      const tx = {
+        id: 'tx-curr-id',
+        transaction_id: '7450',
+        amount: 1000,
+        currency: 'XOF',
+        reference: 'REF-CURR-ID',
+        provider: 'fedapay',
+        status: 'PENDING',
+      };
+      mockFedaPayService.checkTransactionStatus.mockResolvedValue({
+        status: 'approved',
+        amount: 1000,
+        currency: 'XOF',
+        merchantRef: 'REF-CURR-ID',
+        reference: '7450',
+      });
+
+      await expect(
+        realService.assertProviderConfirmsCallback(tx as any, 'SUCCESS')
+      ).resolves.toBeUndefined();
+    });
+
     describe('N5: expired is confirmed by the live re-check (service statusMap)', () => {
       const expTx = { id: 'tx-exp', transaction_id: 'fedapay_tx_exp', amount: 1000, currency: 'XOF', reference: 'REF-EXP', provider: 'fedapay', status: 'pending' };
 
@@ -451,12 +778,12 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       it('rejects an expired webhook while FedaPay still reports pending', async () => {
         mockFedaPayService.checkTransactionStatus.mockResolvedValue({ status: 'pending', amount: 1000, currency: 'XOF', merchantRef: 'REF-EXP' });
-        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toThrow(/provider still pending/);
+        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toThrow(/provider status is pending \(transient, will retry\)/);
       });
 
       it('rejects an expired webhook whose live reference mismatches', async () => {
         mockFedaPayService.checkTransactionStatus.mockResolvedValue({ status: 'expired', amount: 1000, currency: 'XOF', merchantRef: 'OTHER' });
-        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toThrow(/reference mismatch/);
+        await expect(realService.assertProviderConfirmsCallback(expTx as any, 'FAILED')).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch' });
       });
     });
 
@@ -480,7 +807,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         });
         await expect(
           realService.assertProviderConfirmsCallback(declinedTx as any, 'FAILED')
-        ).rejects.toThrow(/FAILED callback.*reference mismatch.*expected REF-N6.*got OTHER-REF/i);
+        ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch', detail: expect.stringMatching(/expected REF-N6, live OTHER-REF/) });
       });
 
       it('rejects a declined callback with no live reference (fail closed)', async () => {
@@ -492,7 +819,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
         });
         await expect(
           realService.assertProviderConfirmsCallback(declinedTx as any, 'FAILED')
-        ).rejects.toThrow(/reference mismatch.*<missing>/i);
+        ).rejects.toMatchObject({ name: 'CallbackLiveMismatchError', reason: 'reference_mismatch', detail: expect.stringMatching(/live <missing>/) });
       });
 
       it('accepts a legitimate declined callback whose reference matches', async () => {
@@ -654,18 +981,22 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       const mockSelectProvider = jest.spyOn(realService as any, 'selectProvider')
         .mockResolvedValue('fedapay');
+      const mockResolveRegion = jest.spyOn(realService as any, 'resolvePhoneDefaultRegion')
+        .mockResolvedValue('TG');
 
       const result = await realService.initiatePayment({
         amount: 1000,
         currency: 'XAF',
         accountId: 'acc-test',
         description: 'Test',
+        provider: 'fedapay',
       });
 
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/only supports XOF currency/i);
 
       mockSelectProvider.mockRestore();
+      mockResolveRegion.mockRestore();
     });
 
     it('should reject initiatePayment with decimal amount for fedapay (service:512-519)', async () => {
@@ -682,18 +1013,22 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       const mockSelectProvider = jest.spyOn(realService as any, 'selectProvider')
         .mockResolvedValue('fedapay');
+      const mockResolveRegion = jest.spyOn(realService as any, 'resolvePhoneDefaultRegion')
+        .mockResolvedValue('TG');
 
       const result = await realService.initiatePayment({
         amount: 100.5,
         currency: 'XOF',
         accountId: 'acc-test',
         description: 'Test',
+        provider: 'fedapay',
       });
 
       expect(result.success).toBe(false);
       expect(result.message).toMatch(/amounts must be integers/i);
 
       mockSelectProvider.mockRestore();
+      mockResolveRegion.mockRestore();
     });
   });
 

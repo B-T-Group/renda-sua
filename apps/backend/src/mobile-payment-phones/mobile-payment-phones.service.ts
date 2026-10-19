@@ -480,6 +480,13 @@ export class MobilePaymentPhonesService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentResponse.transactionId,
       });
+      // G2: Schedule mock callback AFTER persisting transaction_id
+      if (paymentResponse.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentResponse.transactionId,
+          reference
+        );
+      }
     } else {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         status: 'failed',

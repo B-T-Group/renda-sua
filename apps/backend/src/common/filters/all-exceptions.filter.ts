@@ -22,6 +22,7 @@ import {
   remapHasuraDataException,
 } from '../../hasura/hasura-request.util';
 import { getRequestLogContext } from '../request-context-log.util';
+import { redactSensitivePath } from '../redact-sensitive-path.util';
 
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
@@ -165,6 +166,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private pathWithoutQuery(request: Request): string {
     const raw = request.originalUrl || request.url || '';
     const q = raw.indexOf('?');
-    return q === -1 ? raw : raw.slice(0, q);
+    // Path tokens (e.g. the MyPVit secret-refresh URL) are credentials: never log them.
+    return redactSensitivePath(q === -1 ? raw : raw.slice(0, q));
   }
 }
