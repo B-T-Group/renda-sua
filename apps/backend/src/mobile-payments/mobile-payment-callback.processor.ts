@@ -52,6 +52,9 @@ export type FreemopayCallbackProcessResult = {
   skipped?: boolean;
 };
 
+/** N2: payment entities whose expiry runs onPaymentFailure like a decline. */
+export const EXPIRY_FAILS_PAYMENT_ENTITIES = new Set(['order', 'order_deposit', 'claim_order']);
+
 /** QA #587 Low: alert once the same tx's live record was incomplete this many times. */
 export const INCOMPLETE_LIVE_RECORD_ALERT_AFTER = 3;
 const INCOMPLETE_LIVE_RECORD_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -335,10 +338,13 @@ export class MobilePaymentCallbackProcessor {
     }
 
     if (!this.skipsLiveRecheck(tx)) {
-      await this.mobilePaymentsService.assertProviderConfirmsCallback(
-        this.withFedaPayRecheckId(tx, callbackData),
-        normalizedStatus
-      );
+      const recheckTx = this.withFedaPayRecheckId(tx, callbackData);
+      try {
+        await this.mobilePaymentsService.assertProviderConfirmsCallback(recheckTx, normalizedStatus);
+      } catch (error: unknown) {
+        if (!this.isExpiredEventLiveApproved(error, callbackData)) throw error;
+        return this.creditExpiredEventLiveApproved(tx, recheckTx, callbackData);
+      }
     } else {
       this.logger.log(
         `Skipping live provider confirmation for mocked transaction: ${tx.id}`
@@ -347,6 +353,43 @@ export class MobilePaymentCallbackProcessor {
     
     await this.processPendingFedaPay(tx, callbackData);
 
+    return { received: true, transactionId: callbackData.entity.id };
+  }
+
+  /** N3: an `expired` event whose live record is approved (the live re-check said success). */
+  private isExpiredEventLiveApproved(error: unknown, callbackData: FedaPayCallbackDto): boolean {
+    return (
+      error instanceof CallbackLiveMismatchError &&
+      error.reason === 'live_status_mismatch' &&
+      error.claimed === 'FAILED' &&
+      callbackData.entity?.status === 'expired'
+    );
+  }
+
+  /**
+   * N3: FedaPay sent `expired`, but the live record is approved (the customer paid at the
+   * last moment). The money moved, so take the normal SUCCESS path instead of acknowledging
+   * a mismatch:
+   * 1. re-verify against the live record as a SUCCESS claim (status, XOF, amount, reference;
+   *    a mismatch there is acknowledged and alerted as usual, nothing credited);
+   * 2. process it exactly like `transaction.approved` (processPendingFedaPay): CAS
+   *    pending -> processing, idempotent credit (momo-deposit:<tx id>), CAS -> success.
+   * A concurrent or later `transaction.approved` for the same tx loses the CAS / finds the
+   * row success, and the ledger key makes a second credit impossible.
+   */
+  private async creditExpiredEventLiveApproved(
+    tx: MobilePaymentTransaction,
+    recheckTx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<{ received: boolean; transactionId: number }> {
+    await this.mobilePaymentsService.assertProviderConfirmsCallback(recheckTx, 'SUCCESS');
+    this.logger.warn(
+      `fedapay_expired_event_live_approved tx=${tx.id} entity=${callbackData.entity.id}: expired event but live record approved; crediting through the SUCCESS path`
+    );
+    await this.processPendingFedaPay(tx, {
+      ...callbackData,
+      entity: { ...callbackData.entity, status: 'approved' },
+    });
     return { received: true, transactionId: callbackData.entity.id };
   }
 
@@ -656,7 +699,30 @@ export class MobilePaymentCallbackProcessor {
     if (tx.status === 'success' && isApproved) {
       await this.retrySuccessSideEffects(tx);
     }
-    
+
+    // N1: mirrors refund-after-credit. A failure event (declined / canceled / expired) for a
+    // row we already credited (success, or processing = credit in flight). The signature is
+    // verified, nothing is changed or reversed automatically: finance reconciles.
+    if (!isApproved && (tx.status === 'success' || tx.status === 'processing')) {
+      reportMoneyAnomaly(
+        this.logger,
+        'fedapay_failure_after_credit',
+        `FedaPay sent ${callbackData.name} (status ${callbackData.entity.status}) for tx ${tx.id} after we credited it (row ${tx.status}${
+          tx.error_code ? `, ${tx.error_code}` : ''
+        }); no automatic reversal, reconcile manually`,
+        {
+          transactionId: tx.id,
+          reference: tx.reference,
+          amount: tx.amount,
+          rowStatus: tx.status,
+          paymentEntity: tx.payment_entity,
+          event: callbackData.name,
+          fedapayStatus: callbackData.entity.status,
+          fedapayEntityId: callbackData.entity?.id,
+        }
+      );
+    }
+
     this.logger.log(
       `FedaPay callback skipped (already ${tx.status}): ${tx.id}`
     );
@@ -1816,7 +1882,12 @@ export class MobilePaymentCallbackProcessor {
     transaction: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
-    if (callbackData.entity.status !== 'declined' && callbackData.entity.status !== 'canceled') {
+    const status = callbackData.entity.status;
+    // N2: expiry fails orders, deposits and claims exactly like a decline (the customer never
+    // paid, the order must not stay waiting). Other entities keep the old behaviour.
+    const expiryFails =
+      status === 'expired' && EXPIRY_FAILS_PAYMENT_ENTITIES.has(String(transaction.payment_entity || ''));
+    if (status !== 'declined' && status !== 'canceled' && !expiryFails) {
       return;
     }
     const handlers = this.resolveHandlers();
