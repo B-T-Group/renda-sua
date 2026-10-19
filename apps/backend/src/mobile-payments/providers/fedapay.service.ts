@@ -19,6 +19,8 @@ import {
 
 /** #615 QA L1: bound on one live FedaPay retrieve (the SDK has no timeout). */
 export const FEDAPAY_LIVE_LOOKUP_TIMEOUT_MS = 10_000;
+/** QA #621 I3: log marker for a live lookup that hit the timeout (metric filter / alarm). */
+export const FEDAPAY_LIVE_LOOKUP_TIMEOUT_MARKER = 'fedapay_live_lookup_timeout';
 
 export class FedaPayLiveLookupTimeoutError extends Error {
   constructor(message: string) {
@@ -716,10 +718,11 @@ export class FedaPayService implements OnModuleInit {
     const ms = FedaPayService.liveLookupTimeoutMs;
     let timer: NodeJS.Timeout | undefined;
     const timeout = new Promise<never>((_, reject) => {
-      timer = setTimeout(
-        () => reject(new FedaPayLiveLookupTimeoutError(`FedaPay ${kind} lookup timed out after ${ms}ms`)),
-        ms
-      );
+      timer = setTimeout(() => {
+        // QA #621 I3: stable CloudWatch marker (one line per timed-out lookup).
+        this.logger.error(`${FEDAPAY_LIVE_LOOKUP_TIMEOUT_MARKER} kind=${kind} timeout_ms=${ms}`);
+        reject(new FedaPayLiveLookupTimeoutError(`FedaPay ${kind} lookup timed out after ${ms}ms`));
+      }, ms);
     });
     try {
       return await Promise.race([lookup(), timeout]);

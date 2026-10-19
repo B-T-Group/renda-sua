@@ -15,7 +15,7 @@ import { Transaction } from 'fedapay';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { MobilePaymentCallbackProcessor } from './mobile-payment-callback.processor';
 import { MobilePaymentsService } from './mobile-payments.service';
-import { FedaPayService } from './providers/fedapay.service';
+import { FEDAPAY_LIVE_LOOKUP_TIMEOUT_MARKER, FedaPayService } from './providers/fedapay.service';
 import { OrderPaymentCallbackHandler } from '../orders/order-payment-callback.handler';
 import { OrdersService } from '../orders/orders.service';
 
@@ -786,5 +786,25 @@ describe('#615 QA L1: live FedaPay lookup timeout (real processor + FedaPayServi
     (Payout.retrieve as jest.Mock).mockImplementation(() => new Promise(() => undefined));
     await expect(fedapay.checkTransactionStatus('777')).rejects.toThrow(/timed out after 30ms/);
     await expect(fedapay.checkPayoutStatus('888')).rejects.toThrow(/timed out after 30ms/);
+  });
+
+  it('QA #621 I3: each timed-out lookup logs the fedapay_live_lookup_timeout marker once; a lookup in time logs none', async () => {
+    FedaPayService.liveLookupTimeoutMs = 30;
+    const fedapay = new FedaPayService(
+      { get: (k: string) => (k === 'fedapay' ? { secretKey: 'sk_sandbox_test', environment: 'sandbox', mockEnabled: false } : undefined) } as any,
+      { get: jest.fn() } as any
+    );
+    const marker = () =>
+      (Logger.prototype.error as jest.Mock).mock.calls.map((c) => String(c[0])).filter((m) => m.startsWith('fedapay_live_lookup_timeout '));
+    (Transaction.retrieve as jest.Mock).mockImplementation(() => new Promise(() => undefined));
+    await expect(fedapay.checkTransactionStatus('777')).rejects.toThrow(/timed out/);
+    expect(marker()).toEqual(['fedapay_live_lookup_timeout kind=transaction timeout_ms=30']);
+    expect(FEDAPAY_LIVE_LOOKUP_TIMEOUT_MARKER).toBe('fedapay_live_lookup_timeout');
+
+    (Logger.prototype.error as jest.Mock).mockClear();
+    (Transaction.retrieve as jest.Mock).mockImplementation(async () => liveFedaPayTx());
+    await fedapay.checkTransactionStatus('777');
+    await new Promise((r) => setTimeout(r, 60)); // past the timeout: the cleared timer must not fire
+    expect(marker()).toEqual([]);
   });
 });
