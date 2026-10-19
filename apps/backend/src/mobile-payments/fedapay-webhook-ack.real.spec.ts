@@ -619,8 +619,9 @@ describe('N1: a failure event after we credited raises fedapay_failure_after_cre
     ['transaction.canceled', 'canceled', 'success'],
     ['transaction.expired', 'expired', 'success'],
     ['transaction.declined', 'declined', 'processing'],
-  ])('%s (%s) on a %s row -> 2xx, one alert with full context, no write, no live call', async (name, status, rowStatus) => {
+  ])('%s (%s) on a %s row -> 2xx, one alert when live confirms the failure, no write', async (name, status, rowStatus) => {
     const { entityId, row, db, deposits, controller } = build({ status: rowStatus, error_code: 'LATE_SUCCESS_APPLIED' });
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status }));
 
     const res = await controller.fedapayCallback(signedRequest(entityId, status, name));
 
@@ -644,7 +645,57 @@ describe('N1: a failure event after we credited raises fedapay_failure_after_cre
     expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
     expect(db.byId.get(row.id)?.status).toBe(rowStatus);
     expect(deposits).toHaveLength(0);
-    expect(Transaction.retrieve).not.toHaveBeenCalled();
+    expect(Transaction.retrieve).toHaveBeenCalledWith(entityId, expect.anything());
+  });
+
+  it.each([
+    ['transaction.declined', 'declined', 'success'],
+    ['transaction.canceled', 'canceled', 'success'],
+    ['transaction.expired', 'expired', 'success'],
+    ['transaction.declined', 'declined', 'processing'],
+  ])('%s (%s) on a %s row is stale when live is still approved: 2xx, no alert, no write', async (name, status, rowStatus) => {
+    const { entityId, row, db, deposits, controller } = build({ status: rowStatus, error_code: 'LATE_SUCCESS_APPLIED' });
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId));
+
+    const res = await controller.fedapayCallback(signedRequest(entityId, status, name));
+
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(anomalies().filter((a) => a[1] === 'fedapay_failure_after_credit')).toHaveLength(0);
+    expect(db.updateTransaction).not.toHaveBeenCalled();
+    expect(db.updateTransactionIfStatus).not.toHaveBeenCalled();
+    expect(db.byId.get(row.id)?.status).toBe(rowStatus);
+    expect(deposits).toHaveLength(0);
+    expect(Transaction.retrieve).toHaveBeenCalledWith(entityId, expect.anything());
+  });
+
+  it('live transferred (funds already moved) is still approved: no alert', async () => {
+    const { entityId, controller } = build({ status: 'success' });
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(live(entityId, { status: 'transferred' }));
+    const res = await controller.fedapayCallback(signedRequest(entityId, 'expired', 'transaction.expired'));
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(anomalies().filter((a) => a[1] === 'fedapay_failure_after_credit')).toHaveLength(0);
+  });
+
+  it('live approved with a different reference still alerts (fail closed)', async () => {
+    const { entityId, controller } = build({ status: 'success' });
+    (Transaction.retrieve as jest.Mock).mockResolvedValue(
+      live(entityId, { custom_metadata: { externalId: LIVE_REF_OTHER } })
+    );
+    await controller.fedapayCallback(signedRequest(entityId, 'declined'));
+    expect(anomalies()).toHaveLength(1);
+    expect(anomalies()[0][1]).toBe('fedapay_failure_after_credit');
+  });
+
+  it('a live read failure still alerts (fail closed) and answers 2xx', async () => {
+    const { entityId, row, db, controller } = build({ status: 'success' });
+    (Transaction.retrieve as jest.Mock).mockRejectedValue(new Error('fedapay timeout'));
+
+    const res = await controller.fedapayCallback(signedRequest(entityId, 'expired', 'transaction.expired'));
+
+    expect(res).toEqual({ received: true, transactionId: entityId });
+    expect(anomalies()).toHaveLength(1);
+    expect(anomalies()[0][1]).toBe('fedapay_failure_after_credit');
+    expect(db.byId.get(row.id)?.status).toBe('success');
   });
 
   it.each([['failed'], ['cancelled']])('a failure event on a %s row (never credited) raises no alert', async (rowStatus) => {
