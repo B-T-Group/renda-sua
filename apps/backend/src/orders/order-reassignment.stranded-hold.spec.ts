@@ -209,3 +209,33 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
     expect(w.accounts.registerTransaction).not.toHaveBeenCalled();
   });
 });
+
+describe('#622: creditHoldRelease under a concurrent writer', () => {
+  const order = { id: 'order-1', order_number: 'ORD-1', currency: 'XAF', assigned_agent: { id: 'agent-1', user_id: 'agent-user-1' } };
+
+  it('a refused release (guard) after another writer released the same hold counts as released', async () => {
+    const w = world();
+    w.accounts.registerTransaction.mockImplementationOnce(async () => {
+      // The other writer's release lands; ours is refused by the withheld guard.
+      w.ledger.push({ accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700, type: 'release', key: 'other-writer' });
+      return { success: false, error: 'Insufficient funds for this transaction' };
+    });
+    await expect((w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })).resolves.toBe(true);
+    expect(w.releases()).toHaveLength(1);
+  });
+
+  it('the other writer\'s row arriving a little later is still seen (bounded re-check)', async () => {
+    const w = world();
+    w.accounts.registerTransaction.mockImplementationOnce(async () => {
+      setTimeout(() => w.ledger.push({ accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700, type: 'release', key: 'late' }), 40);
+      return { success: false, error: 'Insufficient funds for this transaction' };
+    });
+    await expect((w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })).resolves.toBe(true);
+  });
+
+  it('a refused release with the hold still outstanding is a failure', async () => {
+    const w = world();
+    w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
+    await expect((w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })).resolves.toBe(false);
+  });
+});

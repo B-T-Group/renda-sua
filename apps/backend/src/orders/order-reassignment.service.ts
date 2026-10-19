@@ -165,6 +165,9 @@ const STRANDED_HOLDS_RESOLVED_QUERY = `
 /** Stranded-hold events older than this are left to finance (they keep their alert). */
 const STRANDED_HOLD_LOOKBACK_DAYS = 30;
 
+/** #622: back-off (ms) between net re-reads after a refused release (see releaseNetAgentHold). */
+const NET_RELEASE_RECHECK_MS = [25, 75, 200];
+
 /** #622: one statement, so both lists are one snapshot (see releaseNetAgentHold). */
 export const AGENT_HOLD_LEDGER_QUERY = `
   query AgentHoldLedger($accountId: uuid!, $orderId: uuid!) {
@@ -870,10 +873,19 @@ export class OrderReassignmentService {
       idempotencyKey: `agent-hold-release:${orderId}:${accountId}:h${holds.length}:r${releases.length}`,
     });
     if (!result.success) {
-      // A concurrent writer with a different snapshot may have released it first:
-      // the withheld-balance guard then refuses this one. Settled if the net is now 0.
-      const after = await this.agentHoldLedger(accountId, orderId);
-      if (!(after.net > 0)) return { success: true, released: 0, net: after.net, alreadyExists: true };
+      // A concurrent writer that read the same state may have moved the balance first.
+      // The withheld-balance guard then refuses this one. AccountsService moves the
+      // balance before it writes the ledger row, so that writer's row can still be in
+      // flight: re-read the net a few times before reporting a failure. Settled if the
+      // net is now 0. A real failure still fails, and the caller reverts or records the
+      // stranded hold.
+      for (const waitMs of NET_RELEASE_RECHECK_MS) {
+        const after = await this.agentHoldLedger(accountId, orderId);
+        if (!(after.net > 0)) return { success: true, released: 0, net: after.net, alreadyExists: true };
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+      }
+      const last = await this.agentHoldLedger(accountId, orderId);
+      if (!(last.net > 0)) return { success: true, released: 0, net: last.net, alreadyExists: true };
       return { success: false, released: 0, net, error: result.error };
     }
     if (result.alreadyExists) return { success: true, released: 0, net, alreadyExists: true };
