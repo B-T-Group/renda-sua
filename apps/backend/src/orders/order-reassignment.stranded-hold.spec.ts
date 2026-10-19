@@ -15,7 +15,11 @@ type Ev = { id: string; order_id: string; event_type: string; payload: Record<st
 
 function world(opts: { revertWins?: boolean; releaseOk?: boolean } = {}) {
   const events: Ev[] = [];
-  const ledger: Array<{ accountId: string; referenceId: string; amount: number }> = [];
+  // Agent account ledger for the order: the claim's hold, releases with their keys.
+  const ledger: Array<{ accountId: string; referenceId: string; amount: number; type: 'hold' | 'release'; key?: string }> = [
+    { accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700, type: 'hold' },
+  ];
+  const releases = () => ledger.filter((l) => l.type === 'release');
   const order = {
     id: 'order-1',
     order_number: 'ORD-1',
@@ -29,6 +33,13 @@ function world(opts: { revertWins?: boolean; releaseOk?: boolean } = {}) {
   };
   const executeQuery = jest.fn(async (query: string, vars: Record<string, any>) => {
     if (query.includes('query ReassignOrder')) return { orders_by_pk: { ...order } };
+    if (query.includes('query AgentHoldLedger')) {
+      const rows = ledger.filter((l) => l.accountId === vars.accountId && l.referenceId === vars.orderId);
+      return {
+        holds: rows.filter((l) => l.type === 'hold').map((l) => ({ amount: l.amount })),
+        releases: rows.filter((l) => l.type === 'release').map((l) => ({ amount: l.amount })),
+      };
+    }
     if (query.includes('query OrderHold')) return { order_holds: [{ id: 'hold-1', agent_hold_amount: 700, status: 'active' }] };
     if (query.includes('query StrandedAgentHoldsResolved')) {
       return { order_events: events.filter((e) => e.event_type === 'agent_hold_stranded_released' && vars.orderIds.includes(e.order_id)) };
@@ -50,13 +61,16 @@ function world(opts: { revertWins?: boolean; releaseOk?: boolean } = {}) {
     return {};
   });
   const accounts = {
-    registerReleaseIfNotExists: jest.fn(async (r: { accountId: string; referenceId: string; amount: number }) => {
-      if (opts.releaseOk === false) return { success: false, error: 'ledger down' };
-      if (ledger.some((l) => l.accountId === r.accountId && l.referenceId === r.referenceId)) return { success: true, alreadyExists: true };
-      ledger.push(r);
-      return { success: true, alreadyExists: false };
-    }),
-    registerTransaction: jest.fn(),
+    registerReleaseIfNotExists: jest.fn(),
+    // Mirrors AccountsService: the UNIQUE idempotency key makes a repeat a no-op.
+    registerTransaction: jest.fn(
+      async (r: { accountId: string; referenceId: string; amount: number; transactionType: 'release'; idempotencyKey?: string }) => {
+        if (opts.releaseOk === false) return { success: false, error: 'ledger down' };
+        if (r.idempotencyKey && ledger.some((l) => l.key === r.idempotencyKey)) return { success: true, alreadyExists: true };
+        ledger.push({ accountId: r.accountId, referenceId: r.referenceId, amount: r.amount, type: r.transactionType, key: r.idempotencyKey });
+        return { success: true };
+      }
+    ),
   };
   let seq = 0;
   const orderEvents = {
@@ -71,7 +85,7 @@ function world(opts: { revertWins?: boolean; releaseOk?: boolean } = {}) {
     { runDispatchRound: jest.fn() } as any,
     accounts as any
   );
-  return { service, events, ledger, accounts, state, orderEvents };
+  return { service, events, ledger, releases, accounts, state, orderEvents };
 }
 
 const stranded = (w: ReturnType<typeof world>) => w.events.filter((e) => e.event_type === 'agent_hold_stranded');
@@ -87,7 +101,7 @@ afterEach(() => jest.restoreAllMocks());
 describe('#608 follow-up: stranded agent hold on the pickup reassignment path', () => {
   it('release fails and the revert loses the order -> one money-anomaly alert and an agent_hold_stranded event', async () => {
     const w = world({ revertWins: false });
-    w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
+    w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
     const res = await w.service.reassignOrder('order-1', 'pickup_sla');
     expect(res.success).toBe(false);
     expect(reportMoneyAnomaly).toHaveBeenCalledTimes(1);
@@ -105,7 +119,7 @@ describe('#608 follow-up: stranded agent hold on the pickup reassignment path', 
 
   it('release fails but the revert gives the order back -> nothing stranded, no alert', async () => {
     const w = world({ revertWins: true });
-    w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
+    w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
     await w.service.reassignOrder('order-1', 'pickup_sla');
     expect(reportMoneyAnomaly).not.toHaveBeenCalled();
     expect(stranded(w)).toEqual([]);
@@ -114,7 +128,7 @@ describe('#608 follow-up: stranded agent hold on the pickup reassignment path', 
 
 describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
   const seedStranded = async (w: ReturnType<typeof world>) => {
-    w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
+    w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
     await w.service.reassignOrder('order-1', 'pickup_sla');
     expect(stranded(w)).toHaveLength(1);
   };
@@ -123,23 +137,52 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
     const w = world({ revertWins: false });
     await seedStranded(w);
     await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 1, skipped: 0, failed: 0 });
-    expect(w.ledger).toEqual([expect.objectContaining({ accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700 })]);
+    expect(w.releases()).toEqual([
+      expect.objectContaining({ accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700, key: 'agent-hold-release:order-1:acct-agent-user-1:h1:r0' }),
+    ]);
     const resolved = w.events.filter((e) => e.event_type === 'agent_hold_stranded_released');
-    expect(resolved).toEqual([expect.objectContaining({ payload: expect.objectContaining({ strandedEventId: stranded(w)[0].id, amount: 700 }) })]);
+    expect(resolved).toEqual([
+      expect.objectContaining({ payload: expect.objectContaining({ strandedEventId: stranded(w)[0].id, amount: 700, released: 700, net: 700 }) }),
+    ]);
 
     // Idempotent: a second run does nothing.
     await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 0, skipped: 0, failed: 0 });
-    expect(w.ledger).toHaveLength(1);
-    expect(w.accounts.registerReleaseIfNotExists).toHaveBeenCalledTimes(2); // the failed one + the reconcile
+    expect(w.releases()).toHaveLength(1);
+    expect(w.accounts.registerTransaction).toHaveBeenCalledTimes(2); // the failed one + the reconcile
   });
 
-  it('a release already in the ledger (e.g. a racing run) is not credited twice; the event is still resolved', async () => {
+  it('#622: a zero net (already released some other way) credits nothing; the event is still resolved', async () => {
     const w = world({ revertWins: false });
     await seedStranded(w);
-    w.ledger.push({ accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700 });
+    w.ledger.push({ accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700, type: 'release', key: 'other' });
     await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 1, skipped: 0, failed: 0 });
-    expect(w.ledger).toHaveLength(1);
-    expect(w.events.filter((e) => e.event_type === 'agent_hold_stranded_released')[0].payload).toMatchObject({ alreadyExisted: true });
+    expect(w.releases()).toHaveLength(1);
+    expect(w.events.filter((e) => e.event_type === 'agent_hold_stranded_released')[0].payload).toMatchObject({ released: 0, net: 0 });
+  });
+
+  it('#622: a racing writer that read the same ledger state is a no-op (same key)', async () => {
+    const w = world({ revertWins: false });
+    await seedStranded(w);
+    // Another writer read the same snapshot (h1, r0) and won the UNIQUE key first:
+    // AccountsService answers alreadyExists for our write.
+    w.accounts.registerTransaction.mockImplementationOnce(async () => ({ success: true, alreadyExists: true }));
+    await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 1, skipped: 0, failed: 0 });
+    expect(w.releases()).toHaveLength(0);
+    expect(w.events.filter((e) => e.event_type === 'agent_hold_stranded_released')[0].payload).toMatchObject({ released: 0, alreadyExisted: true });
+  });
+
+  it('#622: claim -> release -> re-claim -> stranded: the second hold is released (a reference check would see the first release)', async () => {
+    const w = world({ revertWins: false });
+    w.ledger.push(
+      { accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700, type: 'release', key: 'first-cycle' },
+      { accountId: 'acct-agent-user-1', referenceId: 'order-1', amount: 700, type: 'hold' }
+    );
+    await seedStranded(w);
+    await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 1, skipped: 0, failed: 0 });
+    expect(w.releases().map((r) => [r.amount, r.key])).toEqual([
+      [700, 'first-cycle'],
+      [700, 'agent-hold-release:order-1:acct-agent-user-1:h2:r1'],
+    ]);
   });
 
   it('skipped while the same agent holds the order again (its hold is live)', async () => {
@@ -147,22 +190,22 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
     await seedStranded(w);
     w.state.current = 'agent-1';
     await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 0, skipped: 1, failed: 0 });
-    expect(w.ledger).toEqual([]);
+    expect(w.releases()).toEqual([]);
   });
 
   it('a failed release is counted, not resolved, and retried on the next run', async () => {
     const w = world({ revertWins: false });
     await seedStranded(w);
-    w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
+    w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
     await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 0, skipped: 0, failed: 1 });
     expect(w.events.filter((e) => e.event_type === 'agent_hold_stranded_released')).toEqual([]);
     await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 1, skipped: 0, failed: 0 });
-    expect(w.ledger).toHaveLength(1);
+    expect(w.releases()).toHaveLength(1);
   });
 
   it('no stranded events: one query, nothing else', async () => {
     const w = world();
     await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 0, skipped: 0, failed: 0 });
-    expect(w.accounts.registerReleaseIfNotExists).not.toHaveBeenCalled();
+    expect(w.accounts.registerTransaction).not.toHaveBeenCalled();
   });
 });

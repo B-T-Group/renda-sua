@@ -165,6 +165,22 @@ const STRANDED_HOLDS_RESOLVED_QUERY = `
 /** Stranded-hold events older than this are left to finance (they keep their alert). */
 const STRANDED_HOLD_LOOKBACK_DAYS = 30;
 
+/** #622: one statement, so both lists are one snapshot (see releaseNetAgentHold). */
+export const AGENT_HOLD_LEDGER_QUERY = `
+  query AgentHoldLedger($accountId: uuid!, $orderId: uuid!) {
+    holds: account_transactions(
+      where: { account_id: { _eq: $accountId }, reference_id: { _eq: $orderId }, transaction_type: { _eq: hold } }
+    ) {
+      amount
+    }
+    releases: account_transactions(
+      where: { account_id: { _eq: $accountId }, reference_id: { _eq: $orderId }, transaction_type: { _eq: release } }
+    ) {
+      amount
+    }
+  }
+`;
+
 const STRANDED_HOLD_ORDER_QUERY = `
   query StrandedHoldOrder($id: uuid!) {
     orders_by_pk(id: $id) { id order_number assigned_agent_id }
@@ -704,20 +720,28 @@ export class OrderReassignmentService {
         }
         const account = await this.hasura.getAccount(p.agentUserId, p.currency || 'XAF');
         if (!account) throw new Error('agent account missing');
-        const released = await this.accountsService.registerReleaseIfNotExists({
-          accountId: account.id,
-          amount,
-          memo: `Hold released for order ${o.order_number}. Stranded after release (reconciled).`,
-          referenceId: ev.order_id,
-        });
+        const released = await this.releaseNetAgentHold(
+          account.id,
+          ev.order_id,
+          `Hold released for order ${o.order_number}. Stranded after release (reconciled).`
+        );
         if (!released.success) throw new Error(released.error || 'release failed');
         await this.orderEvents.recordEvent({
           orderId: ev.order_id,
           eventType: 'agent_hold_stranded_released',
           actorType: 'system',
-          payload: { strandedEventId: ev.id, agentId: p.agentId, amount, alreadyExisted: released.alreadyExists === true },
+          payload: {
+            strandedEventId: ev.id,
+            agentId: p.agentId,
+            amount,
+            released: released.released,
+            net: released.net,
+            alreadyExisted: released.alreadyExists === true,
+          },
         });
-        this.logger.log(`Stranded agent hold released for order ${o.order_number} (${amount} ${p.currency || 'XAF'})`);
+        this.logger.log(
+          `Stranded agent hold reconciled for order ${o.order_number}: released ${released.released} of net ${released.net} ${p.currency || 'XAF'}`
+        );
         out.released++;
       } catch (error: unknown) {
         out.failed++;
@@ -793,12 +817,14 @@ export class OrderReassignmentService {
       );
       return false;
     }
-    const released = await this.accountsService.registerReleaseIfNotExists({
-      accountId: account.id,
-      amount: hold.agent_hold_amount,
-      memo: `Hold released for order ${order.order_number}. System reassignment.`,
-      referenceId: order.id,
-    });
+    // #622: release the agent's NET hold on this order (holds - releases), not the
+    // row amount behind a reference check: after claim -> release -> re-claim, the
+    // reference check saw the first release and credited nothing.
+    const released = await this.releaseNetAgentHold(
+      account.id,
+      order.id,
+      `Hold released for order ${order.order_number}. System reassignment.`
+    );
     if (!released.success) {
       this.logger.error(
         `Hold release failed for order ${order.order_number}: ${released.error}`
@@ -806,6 +832,63 @@ export class OrderReassignmentService {
       return false;
     }
     return true;
+  }
+
+  /**
+   * #622: release what the agent account still holds for this order: the NET of
+   * its `hold` minus `release` ledger rows (as OrdersService.netHoldAmountForOrder),
+   * never more. A zero or negative net is a no-op.
+   *
+   * Idempotency and concurrency. The ledger is written from several requests, so
+   * there is no database lock to take around "read net, then release". Instead the
+   * release's UNIQUE idempotency key is derived from the ledger state that was
+   * read: `agent-hold-release:<order>:<account>:h<#holds>:r<#releases>`. Both rows
+   * lists come from one GraphQL query (one SQL statement, so one snapshot).
+   * - Any two writers that read the same state (a retry, two reconciler runs, the
+   *   reconciler racing creditHoldRelease) compute the same key. The UNIQUE
+   *   constraint keeps one row; AccountsService reverts the loser's balance move.
+   * - A writer that reads after a release sees the new state and a net of 0.
+   * - A new claim (a new hold row) changes the key, so its later release is not
+   *   mistaken for an older one.
+   * Rows are never deleted, so a (holds, releases) pair is never seen twice.
+   * One key per ledger state (not per stranded event) is what stops the reconciler
+   * and a live release from both crediting the same money.
+   */
+  private async releaseNetAgentHold(
+    accountId: string,
+    orderId: string,
+    memo: string
+  ): Promise<{ success: boolean; released: number; net: number; alreadyExists?: boolean; error?: string }> {
+    const { holds, releases, net } = await this.agentHoldLedger(accountId, orderId);
+    if (!(net > 0)) return { success: true, released: 0, net };
+    const result = await this.accountsService.registerTransaction({
+      accountId,
+      amount: net,
+      transactionType: 'release',
+      memo,
+      referenceId: orderId,
+      idempotencyKey: `agent-hold-release:${orderId}:${accountId}:h${holds.length}:r${releases.length}`,
+    });
+    if (!result.success) {
+      // A concurrent writer with a different snapshot may have released it first:
+      // the withheld-balance guard then refuses this one. Settled if the net is now 0.
+      const after = await this.agentHoldLedger(accountId, orderId);
+      if (!(after.net > 0)) return { success: true, released: 0, net: after.net, alreadyExists: true };
+      return { success: false, released: 0, net, error: result.error };
+    }
+    if (result.alreadyExists) return { success: true, released: 0, net, alreadyExists: true };
+    return { success: true, released: net, net };
+  }
+
+  private async agentHoldLedger(accountId: string, orderId: string) {
+    const ledger = await this.hasura.executeQuery<{
+      holds: Array<{ amount: number | string }>;
+      releases: Array<{ amount: number | string }>;
+    }>(AGENT_HOLD_LEDGER_QUERY, { accountId, orderId });
+    const holds = ledger?.holds ?? [];
+    const releases = ledger?.releases ?? [];
+    const sum = (rows: Array<{ amount: number | string }>) => rows.reduce((t, r) => t + Number(r.amount || 0), 0);
+    return { holds, releases, net: Number((sum(holds) - sum(releases)).toFixed(2)) };
   }
 
   private async cancelHoldRow(holdId: string): Promise<void> {

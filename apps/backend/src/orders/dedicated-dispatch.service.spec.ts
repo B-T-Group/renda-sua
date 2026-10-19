@@ -108,6 +108,7 @@ function world() {
     /** Users with a push token (standard rounds only offer to them); null = everyone. */
     pushTokenUsers: null as Set<string> | null,
     holds: [] as Array<{ id: string; agent_hold_amount: number; status: string }>,
+    ledgerReleases: [] as Array<{ amount: number; idempotencyKey?: string }>,
     releaseRowFails: false,
     releaseCasDeadlocks: 0,
     /** Another agent claims the order right after the release CAS (QA #608 N1). */
@@ -215,6 +216,12 @@ function world() {
       }
       case 'OrderHold':
         return { order_holds: state.holds.filter((h) => h.status === 'active') };
+      case 'AgentHoldLedger':
+        // #622: the agent's ledger for the order (one hold row per claim, releases so far).
+        return {
+          holds: state.holds.filter((h) => Number(h.agent_hold_amount) > 0).map((h) => ({ amount: h.agent_hold_amount })),
+          releases: state.ledgerReleases.map((r) => ({ amount: r.amount })),
+        };
       case 'PushTokens':
         return {
           mobile_push_tokens: (vars.userIds ?? [])
@@ -463,7 +470,12 @@ function world() {
   );
   holder.offers = offersService;
   const orderEvents = { recordEvent: jest.fn().mockResolvedValue(undefined) };
-  const accounts = { registerReleaseIfNotExists: jest.fn().mockResolvedValue({ success: true }) };
+  const accounts = {
+    registerTransaction: jest.fn(async (r: { amount: number; idempotencyKey?: string }) => {
+      state.ledgerReleases.push(r);
+      return { success: true };
+    }),
+  };
   const reassignment = new OrderReassignmentService(
     hasura,
     orderEvents as unknown as OrderEventsService,
@@ -1414,7 +1426,7 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
     it('QA #608 N1: hold release fails -> the agent is put back with pickup timers restored and no exclusion left', async () => {
       const w = await autoAssigned((x) => x.state.holds.push({ id: 'hold-1', agent_hold_amount: 500, status: 'active' }));
       Object.assign(w.state.order, { pickup_due_at: at(900).toISOString(), pickup_state: 'en_route' });
-      w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' });
+      w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' });
       jest.setSystemTime(at(10));
       await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({ refusal: 'release_failed' });
       expect(w.state.order).toMatchObject({
@@ -1428,7 +1440,7 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
 
     it('QA #608 N1: hold release fails after another agent claimed it -> release_lost, logged, not reported as kept', async () => {
       const w = await autoAssigned((x) => x.state.holds.push({ id: 'hold-1', agent_hold_amount: 500, status: 'active' }));
-      w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' });
+      w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' });
       w.state.claimAfterRelease = 'thief';
       const errors = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
       jest.setSystemTime(at(10));
@@ -1448,7 +1460,7 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
 
     it('#608 follow-up: a failed release that IS reverted strands nothing (no alert, no event)', async () => {
       const w = await autoAssigned((x) => x.state.holds.push({ id: 'hold-1', agent_hold_amount: 500, status: 'active' }));
-      w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' });
+      w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' });
       const errors = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
       jest.setSystemTime(at(10));
       await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({ refusal: 'release_failed' });
@@ -1459,7 +1471,7 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
 
     it('the hold cannot be released: the release is undone and dispatch does not restart', async () => {
       const w = await autoAssigned((x) => x.state.holds.push({ id: 'hold-1', agent_hold_amount: 500, status: 'active' }));
-      w.accounts.registerReleaseIfNotExists.mockResolvedValueOnce({ success: false, error: 'ledger down' });
+      w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' });
       jest.setSystemTime(at(10));
       await expect(w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null)).resolves.toMatchObject({
         refusal: 'release_failed',
@@ -1473,9 +1485,15 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       const w = await autoAssigned((x) => x.state.holds.push({ id: 'hold-1', agent_hold_amount: 500, status: 'active' }));
       jest.setSystemTime(at(10));
       await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null);
-      expect(w.accounts.registerReleaseIfNotExists).toHaveBeenCalledTimes(1);
-      expect(w.accounts.registerReleaseIfNotExists).toHaveBeenCalledWith(
-        expect.objectContaining({ accountId: 'acct-u-int', amount: 500, referenceId: ORDER })
+      expect(w.accounts.registerTransaction).toHaveBeenCalledTimes(1);
+      expect(w.accounts.registerTransaction).toHaveBeenCalledWith(
+        expect.objectContaining({
+          accountId: 'acct-u-int',
+          amount: 500,
+          transactionType: 'release',
+          referenceId: ORDER,
+          idempotencyKey: `agent-hold-release:${ORDER}:acct-u-int:h1:r0`,
+        })
       );
     });
 
