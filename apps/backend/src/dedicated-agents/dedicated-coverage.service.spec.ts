@@ -468,6 +468,81 @@ describe('DedicatedCoverageService.resolveSlot', () => {
   });
 });
 
+describe('DedicatedCoverageService slot by id and coverWindow (PR 4)', () => {
+  const win = (over: Record<string, unknown> = {}) => ({
+    locationId: LOCATION,
+    slotId: 'cm-a',
+    preferredDate: '2026-10-20',
+    rail: 'mobile_money' as const,
+    subtotal: 5000,
+    currency: 'XAF',
+    verifiedAgentDelivery: false,
+    now: NOW,
+    ...over,
+  });
+
+  it('resolves the picked delivery_time_slots row by id; a fast or unknown slot id is not covered', async () => {
+    const w = world();
+    await expect(
+      w.service.resolveSlot({ locationId: LOCATION, preferredDate: '2026-10-20', slotId: 'cm-e' })
+    ).resolves.toMatchObject({ slotKey: 'evening', slotId: 'cm-e', date: '2026-10-20' });
+    await expect(
+      w.service.resolveSlot({ locationId: LOCATION, preferredDate: '2026-10-20', slotId: 'fast-1' })
+    ).resolves.toBeNull();
+  });
+
+  it('QA #603 N5: order create (coverWindow) refuses a slot the business turned off, even with an eligible agent', async () => {
+    const w = world();
+    w.addAgent('int', { is_internal: true, slot: 'afternoon' });
+    await expect(w.service.coverWindow(win())).resolves.not.toBeNull();
+    w.state.pickupSlots = [{ slot_key: 'afternoon', is_enabled: false }];
+    await expect(w.service.coverWindow(win())).resolves.toBeNull();
+    w.state.pickupSlots = [{ slot_key: 'afternoon', is_enabled: true }];
+    await expect(w.service.coverWindow(win())).resolves.not.toBeNull();
+  });
+
+  it('coverWindow: the chosen slot with its eligible agents; none eligible -> null', async () => {
+    const w = world();
+    w.addAgent('int', { is_internal: true, slot: 'afternoon' });
+    const covered = await w.service.coverWindow(win());
+    expect(covered?.slot).toMatchObject({ slotKey: 'afternoon', date: '2026-10-20' });
+    expect(ids(covered?.eligible ?? [])).toEqual(['int']);
+    await expect(w.service.coverWindow(win({ slotId: 'cm-m' }))).resolves.toBeNull();
+  });
+
+  it('coverWindow: independent on MoMo below the hold for this cart -> null; enough balance -> covered', async () => {
+    const w = world();
+    w.addAgent('ind', { balance: 3999 });
+    await expect(w.service.coverWindow(win())).resolves.toBeNull(); // hold = 80% of 5000
+    w.state.accounts[0].available_balance = 4000;
+    expect(ids((await w.service.coverWindow(win()))?.eligible ?? [])).toEqual(['ind']);
+  });
+
+  it('Off today only removes the agent from today\'s slots, not a later date', async () => {
+    const w = world();
+    w.addAgent('a', { is_internal: true, offToday: '2026-10-18' });
+    await expect(w.service.coverWindow(win({ preferredDate: '2026-10-18' }))).resolves.toBeNull();
+    expect(ids((await w.service.coverWindow(win({ preferredDate: '2026-10-19' })))?.eligible ?? [])).toEqual(['a']);
+    // eligibleAgents without slotDate keeps today's rule.
+    await expect(w.service.eligibleAgents(params())).resolves.toEqual([]);
+    expect(ids(await w.service.eligibleAgents(params({ slotDate: '2026-10-19' })))).toEqual(['a']);
+  });
+
+  it('flag off -> null', async () => {
+    const w = world();
+    w.state.flag = false;
+    w.addAgent('int', { is_internal: true });
+    await expect(w.service.coverWindow(win())).resolves.toBeNull();
+  });
+
+  it('coverWindow: verified_agent_delivery stays internal-only; Stripe needs no balance', async () => {
+    const w = world();
+    w.addAgent('ind', {});
+    await expect(w.service.coverWindow(win({ rail: 'stripe', verifiedAgentDelivery: true }))).resolves.toBeNull();
+    expect(ids((await w.service.coverWindow(win({ rail: 'stripe' })))?.eligible ?? [])).toEqual(['ind']);
+  });
+});
+
 describe('active order statuses', () => {
   it("match the agent's Active orders count (HasuraSystemService.countAgentActiveOrders)", () => {
     const src = readFileSync(join(__dirname, '../hasura/hasura-system.service.ts'), 'utf8');

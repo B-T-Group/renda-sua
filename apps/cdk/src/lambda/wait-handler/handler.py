@@ -428,6 +428,13 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 "Dispatch round",
             )
 
+        if event_type == "order.dedicated_slot_reminder":
+            return _call_backend_internal(
+                "dedicated-slot-reminder",
+                {"orderId": order_id},
+                "Dedicated slot reminder",
+            )
+
         if event_type == "order.payment_failed":
             return _handle_unpaid_order_timeout(
                 order_id,

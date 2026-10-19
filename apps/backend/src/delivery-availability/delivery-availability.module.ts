@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AgentContractsModule } from '../agent-contracts/agent-contracts.module';
+import { DedicatedCoverageModule } from '../dedicated-agents/dedicated-coverage.module';
 import { DeliveryConfigModule } from '../delivery-configs/delivery-configs.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { SiteEventsModule } from '../site-events/site-events.module';
@@ -17,7 +18,14 @@ import { ServiceAreaEnabledRule } from './rules/service-area-enabled.rule';
  * DELIVERY_AVAILABILITY_RULES factory below — no checkout changes required.
  */
 @Module({
-  imports: [HasuraModule, DeliveryConfigModule, SiteEventsModule, AgentContractsModule],
+  imports: [
+    HasuraModule,
+    DeliveryConfigModule,
+    SiteEventsModule,
+    AgentContractsModule,
+    // #594: AgentInRegionRule's dedicated pass for scheduled windows.
+    DedicatedCoverageModule,
+  ],
   providers: [
     EligibleAgentsQueryService,
     ServiceAreaEnabledRule,
