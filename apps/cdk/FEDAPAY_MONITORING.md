@@ -8,8 +8,8 @@ The monitoring infrastructure consists of:
 
 1. **SNS Topics**: Dedicated alert topic per environment (`fedapay-monitoring-dev`, `fedapay-monitoring-production`)
 2. **Email Subscriptions**: Alerts sent to `tech@rendasua.com` (requires one-time confirmation after first deploy)
-3. **CloudWatch Metric Filters**: Parse backend logs for the literal marker `fedapay_live_record_incomplete` and publish to a custom CloudWatch metric
-4. **CloudWatch Alarms**: Alert when the marker appears 3 or more times within a 15-minute period
+3. **CloudWatch Metric Filters**: Match backend JSON log events with the pattern `{ $.message = "fedapay_live_record_incomplete tx=*" }` (so `fedapay_live_record_incomplete_repeated` lines are not counted) and publish to a custom CloudWatch metric
+4. **CloudWatch Alarms**: Alert when the marker appears 2 or more times within a single 1-hour period (Sum >= 2, one 3600 s evaluation period)
 5. **Per-environment setup**: Separate monitoring for dev and production environments
 
 ## Architecture
@@ -300,7 +300,7 @@ Then redeploy the stack.
    ```bash
    aws logs filter-log-events \
      --log-group-name rendasua-backend-dev \
-     --filter-pattern "fedapay_live_record_incomplete" \
+     --filter-pattern '{ $.message = "fedapay_live_record_incomplete tx=*" }' \
      --region ca-central-1
    ```
 

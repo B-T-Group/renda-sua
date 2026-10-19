@@ -31,8 +31,8 @@ new RendasuaInfrastructureStack(app, `RendasuaInfrastructure-${environment}`, {
 // Each stack creates:
 // - SNS topic for alerts (fedapay-monitoring-{env})
 // - Email subscription to tech@rendasua.com (requires one-time confirmation after first deploy)
-// - Metric filter for the log marker
-// - CloudWatch alarm (Sum >= 3 over 15 minutes)
+// - Metric filter: JSON pattern { $.message = "fedapay_live_record_incomplete tx=*" }
+// - CloudWatch alarm (Sum >= 2 over one 1-hour period)
 
 // Development environment monitoring
 new FedapayMonitoringStack(app, 'FedapayMonitoring-dev', {
