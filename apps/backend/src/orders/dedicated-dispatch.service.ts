@@ -21,6 +21,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { emitServerSiteEvent } from '../site-events/server-site-events.helper';
 import { SiteEventsService } from '../site-events/site-events.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
+import { dedicatedAcceptRefusal } from './dedicated-accept-refusal.messages';
 import { isoCountryCode } from './delivery-pricing.util';
 import {
   DEDICATED_ORDER_CLAIMER,
@@ -304,11 +305,12 @@ export class DedicatedDispatchService {
    * hold check answers with its usual errors. Returns how the assignment is stamped.
    */
   async acceptAssignment(orderId: string, agentId: string): Promise<ClaimAssignment> {
-    const { order } = await this.loadOrder(orderId);
-    if (!order) throw this.ineligible('slot_unavailable');
+    const { order, offers } = await this.loadOrder(orderId);
+    const refuse = (reason: string) => this.refuseAccept(reason, offers, agentId);
+    if (!order) throw await refuse('slot_unavailable');
     // Flag turned off while the offer was live: nobody qualifies as dedicated any more.
     const country = isoCountryCode(order.business_location?.address?.country);
-    if (!(await this.dedicatedConfig.isEnabled(country))) throw this.ineligible('dedicated_disabled');
+    if (!(await this.dedicatedConfig.isEnabled(country))) throw await refuse('dedicated_disabled');
     const window = order.delivery_time_windows?.[0];
     const slot =
       window?.slot_id && window.preferred_date
@@ -318,7 +320,7 @@ export class DedicatedDispatchService {
             slotId: window.slot_id,
           })
         : null;
-    if (!slot) throw this.ineligible('slot_unavailable');
+    if (!slot) throw await refuse('slot_unavailable');
     const rail = await this.paymentRoutingService.resolveRailForBusiness(order.business_id);
     const result = await this.coverage.evaluate({
       locationId: order.business_location_id,
@@ -340,7 +342,7 @@ export class DedicatedDispatchService {
     if (rejected && MONEY_REASONS.has(rejected.reason)) {
       return { source: 'dedicated_offer', dedicatedAssignmentId: rejected.assignmentId };
     }
-    throw this.ineligible(rejected?.reason ?? 'not_assigned');
+    throw await refuse(rejected?.reason ?? 'not_assigned');
   }
 
   /** `handleOrderAssigned` saw the winner's dedicated offer accepted. */
@@ -544,13 +546,17 @@ export class DedicatedDispatchService {
     return order.business_location?.name || order.business?.name || 'a store';
   }
 
-  private ineligible(reason: string): HttpException {
+  /**
+   * 409 for a refused dedicated accept: `error` stays DEDICATED_OFFER_INELIGIBLE,
+   * `code` is the client-facing code (DEDICATED_DISABLED once the flag is off)
+   * and `message` is in the agent's saved language (default language otherwise).
+   */
+  private async refuseAccept(reason: string, offers: DispatchOfferRow[], agentId: string): Promise<HttpException> {
+    const userId = offers.find((o) => o.agent_id === agentId)?.user_id ?? null;
+    const locales = userId ? await this.loadLocales([userId]) : new Map<string, string | null>();
+    const { code, message } = dedicatedAcceptRefusal(reason, userId ? locales.get(userId) : null);
     return new HttpException(
-      {
-        message: 'You can no longer take this dedicated delivery.',
-        error: 'DEDICATED_OFFER_INELIGIBLE',
-        reason,
-      },
+      { message, error: 'DEDICATED_OFFER_INELIGIBLE', code, reason },
       HttpStatus.CONFLICT
     );
   }
