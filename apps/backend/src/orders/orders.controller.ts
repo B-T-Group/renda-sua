@@ -1775,12 +1775,13 @@ export class OrdersController {
   })
   @ApiResponse({ status: 200, description: 'Released; dispatch restarted without this agent' })
   @ApiResponse({ status: 400, description: 'INVALID_DECLINE_REASON' })
-  @ApiResponse({ status: 404, description: 'DEDICATED_RELEASE_UNAVAILABLE (flag off or unknown order)' })
+  @ApiResponse({ status: 404, description: 'DEDICATED_RELEASE_UNAVAILABLE (unknown order)' })
   @ApiResponse({
     status: 409,
     description:
-      'DEDICATED_RELEASE_NOT_ASSIGNED, DEDICATED_RELEASE_NOT_AUTO_ASSIGNED or DEDICATED_RELEASE_WINDOW_CLOSED',
+      'DEDICATED_DISABLED (flag off), DEDICATED_RELEASE_NOT_ASSIGNED, DEDICATED_RELEASE_NOT_AUTO_ASSIGNED or DEDICATED_RELEASE_WINDOW_CLOSED. Body: { error, code, reason, message } with message in the agent\'s language',
   })
+  @ApiResponse({ status: 500, description: 'DEDICATED_RELEASE_FAILED (nothing changed; retry)' })
   async releaseDedicatedAutoAssignment(
     @Param('id') orderId: string,
     @Body() body: { reason?: string } = {}
