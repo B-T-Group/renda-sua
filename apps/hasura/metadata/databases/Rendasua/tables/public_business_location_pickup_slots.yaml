@@ -1,0 +1,46 @@
+table:
+  name: business_location_pickup_slots
+  schema: public
+object_relationships:
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - slot_key
+        - is_enabled
+        - pickup_time
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          dedicated_agent_assignments:
+            _and:
+              - agent:
+                  user:
+                    id:
+                      _eq: X-Hasura-User-Id
+              - status:
+                  _in:
+                    - active
+                    - paused
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - slot_key
+        - is_enabled
+        - pickup_time
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

@@ -2,6 +2,9 @@ table:
   name: orders
   schema: public
 object_relationships:
+  - name: dedicated_assignment
+    using:
+      foreign_key_constraint_on: dedicated_assignment_id
   - name: assigned_agent
     using:
       foreign_key_constraint_on: assigned_agent_id
