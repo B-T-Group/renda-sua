@@ -183,8 +183,25 @@ export const DEDICATED_LOCATION_PICKUP_SLOTS_QUERY = `
   }
 `;
 
+/**
+ * Residual slot race (QA #603/#613): every writer that ties assignments to a store's
+ * slots takes the business_locations row lock FIRST, in the same transaction:
+ * the slot toggle, the super-user assign and dedicated_accept_application.
+ * - FOR NO KEY UPDATE, never FOR UPDATE: inserts into child tables take FOR KEY SHARE
+ *   on the location (FK check), which FOR UPDATE would block (and deadlock against).
+ *   The no-op `update_business_locations_by_pk` sets only `updated_at` (which the
+ *   BEFORE UPDATE trigger sets anyway): a non-key column, so FOR NO KEY UPDATE.
+ *   Never put `id` in the _set: with a BEFORE UPDATE trigger Postgres picks the lock
+ *   mode from the SET target list, so `id = id` takes FOR UPDATE (proven in
+ *   dedicated-location-lock.pg.spec).
+ * - Lock order: business_locations -> (posting -> application) -> agents. The agent
+ *   lock (cap trigger, dedicated_claim_order) is always taken after the location.
+ */
+const LOCK_LOCATION_FIELD = `lockLocation: update_business_locations_by_pk(pk_columns: { id: $locationId }, _set: { updated_at: "now()" }) { id }`;
+
 export const INSERT_DEDICATED_ASSIGNMENTS_MUTATION = `
-  mutation InsertDedicatedAssignments($objects: [dedicated_agent_assignments_insert_input!]!) {
+  mutation InsertDedicatedAssignments($locationId: uuid!, $objects: [dedicated_agent_assignments_insert_input!]!) {
+    ${LOCK_LOCATION_FIELD}
     insert_dedicated_agent_assignments(objects: $objects) {
       returning {
         id
@@ -226,9 +243,11 @@ export const UPDATE_DEDICATED_ASSIGNMENT_MUTATION = `
 export function savePickupSlotsMutation(withPauses: boolean): string {
   return `
     mutation SaveDedicatedPickupSlots(
+      $locationId: uuid!
       $slots: [business_location_pickup_slots_insert_input!]!
-      ${withPauses ? '$locationId: uuid!, $offSlots: [String!]!, $pauseSet: dedicated_agent_assignments_set_input!' : ''}
+      ${withPauses ? '$offSlots: [String!]!, $pauseSet: dedicated_agent_assignments_set_input!' : ''}
     ) {
+      ${LOCK_LOCATION_FIELD}
       insert_business_location_pickup_slots(
         objects: $slots
         on_conflict: {
