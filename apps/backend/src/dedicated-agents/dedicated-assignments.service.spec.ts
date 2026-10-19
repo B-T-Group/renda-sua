@@ -972,5 +972,10 @@ describe('DedicatedAssignmentsService.pickerStats (AC-S2 picker)', () => {
     const none = await empty.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }]);
     expect(none.get(A2)).toMatchObject({ balanceCoversOrders: null, availableBalance: 0 });
     await expect(empty.service.pickerStats(LOC, 'CM', [])).resolves.toEqual(new Map());
+
+    // A zero hold (e.g. hold waived) means no balance limit to show: covers stays null.
+    w.agentHold.resolveOrderHoldWithCeiling.mockResolvedValueOnce({ holdAmount: 0 });
+    const zero = await w.service.pickerStats(LOC, 'CM', [{ id: A2, userId: `u-${A2}`, isInternal: false }], new Date('2026-10-18T10:00:00Z'));
+    expect(zero.get(A2)).toMatchObject({ availableBalance: 12_000, balanceCoversOrders: null });
   });
 });

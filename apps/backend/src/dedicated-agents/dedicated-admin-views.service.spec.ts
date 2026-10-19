@@ -319,7 +319,7 @@ describe('DedicatedAdminViewsService postings (AC-S3)', () => {
 });
 
 describe('DedicatedAdminViewsService.coverage (AC-S4)', () => {
-  it('2 covered / 1 uncovered enabled slot (one slot turned off), and the dedicated vs standard share over 30 days', async () => {
+  it('2 covered / 1 uncovered enabled slot (one slot turned off), and the dedicated share (3 of 5) over 30 days', async () => {
     const w = world();
     const NOW = new Date('2026-10-19T12:00:00Z');
     Object.assign(w.state.locations[0], {
@@ -327,6 +327,7 @@ describe('DedicatedAdminViewsService.coverage (AC-S4)', () => {
       orders: [
         { assignment_source: 'dedicated_auto', created_at: '2026-10-18T00:00:00Z' },
         { assignment_source: 'dedicated_offer', created_at: '2026-10-10T00:00:00Z' },
+        { assignment_source: 'dedicated_auto', created_at: '2026-10-15T00:00:00Z' },
         { assignment_source: 'offer', created_at: '2026-10-11T00:00:00Z' },
         { assignment_source: 'open_claim', created_at: '2026-10-12T00:00:00Z' },
         { assignment_source: 'dedicated_auto', created_at: '2026-09-01T00:00:00Z' },
@@ -340,10 +341,10 @@ describe('DedicatedAdminViewsService.coverage (AC-S4)', () => {
 
     const res = await w.service.coverage(ALL, {}, NOW);
     expect(res.locations).toEqual([
-      expect.objectContaining({ locationId: 'loc-dla', enabledSlots: ['morning', 'afternoon', 'evening'], coveredSlots: ['morning', 'afternoon'], uncoveredSlots: ['evening'], orders: { dedicated: 2, standard: 2 } }),
+      expect.objectContaining({ locationId: 'loc-dla', enabledSlots: ['morning', 'afternoon', 'evening'], coveredSlots: ['morning', 'afternoon'], uncoveredSlots: ['evening'], orders: { dedicated: 3, standard: 2 } }),
       expect.objectContaining({ locationId: 'loc-yde', enabledSlots: ['morning', 'afternoon'], coveredSlots: [], uncoveredSlots: ['morning', 'afternoon'], orders: { dedicated: 0, standard: 0 } }),
     ]);
-    expect(res.totals).toEqual({ enabledSlots: 5, coveredSlots: 2, uncoveredSlots: 3, dedicatedOrders: 2, standardOrders: 2, dedicatedShare: 0.5 });
+    expect(res.totals).toEqual({ enabledSlots: 5, coveredSlots: 2, uncoveredSlots: 3, dedicatedOrders: 3, standardOrders: 2, dedicatedShare: 0.6 });
     expect(w.state.queries.find((q) => q.op === 'DedicatedAdminCoverage')?.vars.since).toBe('2026-09-19T12:00:00.000Z');
   });
 
