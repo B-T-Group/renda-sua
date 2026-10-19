@@ -15,6 +15,22 @@ export enum DeliveryUnavailableReason {
   EVALUATION_ERROR = 'EVALUATION_ERROR',
 }
 
+/**
+ * #594 AC-E1: a scheduled delivery order's chosen window, with what the
+ * dedicated eligibility check needs. Only set for orders with
+ * `fulfillment_timing='scheduled'` and a `delivery_time_windows` slot, and only
+ * when `dedicated_agents_enabled` is on for the seller's country. ASAP orders
+ * never carry it.
+ */
+export interface DedicatedDeliveryRequest {
+  slotId: string;
+  preferredDate: string;
+  rail: 'mobile_money' | 'stripe';
+  /** Cart subtotal: the hold base for an independent dedicated agent. */
+  subtotal: number;
+  currency: string;
+}
+
 /** Everything a rule may need to decide whether delivery can be offered. */
 export interface DeliveryAvailabilityContext {
   businessId: string;
@@ -37,6 +53,8 @@ export interface DeliveryAvailabilityContext {
   clientId?: string;
   evaluatedAt: Date;
   stage?: 'preflight' | 'place_order';
+  /** Scheduled window that dedicated coverage may serve (AgentInRegionRule). */
+  dedicated?: DedicatedDeliveryRequest;
 }
 
 /** Internal evaluation result (service + logs). */

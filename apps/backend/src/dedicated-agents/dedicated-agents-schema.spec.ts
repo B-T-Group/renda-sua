@@ -229,6 +229,12 @@ describe('parseSimpleYaml', () => {
 describe('dedicated agents Hasura metadata', () => {
   const includes = read(TABLES, 'tables.yaml');
 
+  it('#594 PR 6: the assigned agent can read assignment_source and dedicated_release_until (the "Can\'t take this" button)', () => {
+    const agent = parseSimpleYaml(read(TABLES, 'public_orders.yaml')) as TableMeta;
+    const cols = agent.select_permissions?.find((p) => p.role === 'agent')?.permission.columns ?? [];
+    expect(cols).toEqual(expect.arrayContaining(['assignment_source', 'dedicated_release_until']));
+  });
+
   it('tracks every new table', () => {
     for (const t of NEW_TABLES) {
       expect(includes).toContain(`- "!include public_${t}.yaml"`);

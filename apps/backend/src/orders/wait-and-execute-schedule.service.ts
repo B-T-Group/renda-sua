@@ -93,6 +93,15 @@ export class WaitAndExecuteScheduleService {
     );
   }
 
+  /** #594 PR 6 (AC-A8): day-of dedicated slot reminder, slot start - `dedicated_slot_reminder_minutes`. */
+  async scheduleDedicatedSlotReminder(orderId: string, waitSeconds: number): Promise<void> {
+    await this.scheduleEvent(
+      'order.dedicated_slot_reminder',
+      { order_id: orderId },
+      Math.max(1, waitSeconds)
+    );
+  }
+
   private async scheduleEvent(
     eventType: string,
     payload: WaitExecutePayload,
