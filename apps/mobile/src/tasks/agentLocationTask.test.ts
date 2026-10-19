@@ -77,8 +77,29 @@ vi.mock('../utils/agentLocationLastSentStorage', async () => {
   };
 });
 
+import {
+  AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY,
+  AGENT_LOCATION_BG_ACTIVE_KEY,
+  AUTH_STORAGE_IS_AUTHENTICATED_KEY,
+  AUTH_STORAGE_USER_KEY,
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_SLACK_MS,
+} from '../constants/agentLocationBackground';
 import { updateMyAgentLocation } from '../services/agentLocationHasura';
 import * as storage from '../utils/agentLocationLastSentStorage';
+
+const EARTH_RADIUS_M = 6371e3;
+
+function northOfLastSent(meters: number): number {
+  return lastSentData.lat + (meters / EARTH_RADIUS_M) * (180 / Math.PI);
+}
+
+function locationFix(latitude: number, longitude = lastSentData.lng) {
+  return {
+    data: { locations: [{ coords: { latitude, longitude }, timestamp: Date.now() }] },
+    error: null,
+  };
+}
 
 describe('agentLocationTask - real handler with failure backoff', () => {
   beforeEach(async () => {
@@ -138,6 +159,7 @@ describe('agentLocationTask - real handler with failure backoff', () => {
     });
 
     expect(updateMyAgentLocation).toHaveBeenCalledTimes(1);
+    expect(storage.writeLastSentLocation).not.toHaveBeenCalled();
   });
 
   it('(b) throw, then fix within 60s: called 1 time', async () => {
@@ -160,6 +182,7 @@ describe('agentLocationTask - real handler with failure backoff', () => {
     });
 
     expect(updateMyAgentLocation).toHaveBeenCalledTimes(1);
+    expect(storage.writeLastSentLocation).not.toHaveBeenCalled();
   });
 
   it('(c) failure, advance past 60s, success sends and clears backoff', async () => {
@@ -183,5 +206,92 @@ describe('agentLocationTask - real handler with failure backoff', () => {
 
     expect(updateMyAgentLocation).toHaveBeenCalledTimes(2);
     expect(storage.writeLastSentLocation).toHaveBeenCalledTimes(1);
+    expect(storage.writeLastSentLocation).toHaveBeenCalledWith(
+      10.6,
+      20.6,
+      expect.any(Number),
+      'user-123',
+      0
+    );
+  });
+
+  it('does not send when the task errors or delivers no fixes', async () => {
+    await capturedHandler!({
+      data: { locations: [{ coords: { latitude: 11, longitude: 21 }, timestamp: 1 }] },
+      error: new Error('gps'),
+    });
+    await capturedHandler!({ data: {}, error: null });
+    await capturedHandler!({ data: { locations: [] }, error: null });
+
+    expect(updateMyAgentLocation).not.toHaveBeenCalled();
+  });
+
+  it('does not send without background consent, auth, or a user id', async () => {
+    mockAsyncStorage.delete(AGENT_LOCATION_BG_ACTIVE_KEY);
+    await capturedHandler!(locationFix(11));
+    mockAsyncStorage.set(AGENT_LOCATION_BG_ACTIVE_KEY, '1');
+    mockAsyncStorage.set(AUTH_STORAGE_IS_AUTHENTICATED_KEY, 'TRUE');
+    await capturedHandler!(locationFix(11));
+    mockAsyncStorage.set(AUTH_STORAGE_IS_AUTHENTICATED_KEY, 'true');
+    mockAsyncStorage.set(AUTH_STORAGE_USER_KEY, JSON.stringify({}));
+    await capturedHandler!(locationFix(11));
+    mockAsyncStorage.set(AUTH_STORAGE_USER_KEY, '{');
+    await capturedHandler!(locationFix(11));
+
+    expect(updateMyAgentLocation).not.toHaveBeenCalled();
+  });
+
+  it('uses 50m while a delivery is active and 100m when idle', async () => {
+    lastSentData.timestampMs = Date.now() - 60_000;
+
+    await capturedHandler!(locationFix(northOfLastSent(49)));
+    expect(updateMyAgentLocation).not.toHaveBeenCalled();
+
+    await capturedHandler!(locationFix(northOfLastSent(51)));
+    expect(updateMyAgentLocation).toHaveBeenCalledTimes(1);
+
+    (updateMyAgentLocation as any).mockClear();
+    mockAsyncStorage.delete(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY);
+    lastSentData.timestampMs = Date.now() - 60_000;
+
+    await capturedHandler!(locationFix(northOfLastSent(99)));
+    expect(updateMyAgentLocation).not.toHaveBeenCalled();
+
+    await capturedHandler!(locationFix(northOfLastSent(101)));
+    expect(updateMyAgentLocation).toHaveBeenCalledTimes(1);
+  });
+
+  it('sends a stationary heartbeat at 9 minutes and not one millisecond earlier', async () => {
+    expect(HEARTBEAT_INTERVAL_MS).toBe(10 * 60 * 1000);
+    expect(HEARTBEAT_SLACK_MS).toBe(60 * 1000);
+    const dueMs = HEARTBEAT_INTERVAL_MS - HEARTBEAT_SLACK_MS;
+    lastSentData.timestampMs = Date.now() - (dueMs - 1);
+
+    await capturedHandler!(locationFix(lastSentData.lat, lastSentData.lng));
+    expect(updateMyAgentLocation).not.toHaveBeenCalled();
+
+    lastSentData.timestampMs = Date.now() - dueMs;
+    await capturedHandler!(locationFix(lastSentData.lat, lastSentData.lng));
+    expect(updateMyAgentLocation).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips a second fix while a send is still in flight', async () => {
+    vi.useRealTimers();
+    let release: (value: { success: boolean }) => void = () => undefined;
+    (updateMyAgentLocation as any).mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        })
+    );
+
+    const first = capturedHandler!(locationFix(11, 21));
+    await vi.waitFor(() => expect(updateMyAgentLocation).toHaveBeenCalledTimes(1));
+
+    await capturedHandler!(locationFix(12, 22));
+    expect(updateMyAgentLocation).toHaveBeenCalledTimes(1);
+
+    release({ success: true });
+    await first;
   });
 });
