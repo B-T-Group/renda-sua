@@ -901,6 +901,54 @@ describe('FedaPayService', () => {
       expect(result.currency).toBe('');
     });
 
+    it('maps official FedaPay currency_id 1 to XOF when currency.iso is absent', async () => {
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve.mockResolvedValue({
+        id: 7450,
+        status: 'approved',
+        amount: 1000,
+        currency_id: 1,
+        custom_metadata: { externalId: 'ref-curr-id' },
+      });
+
+      const result = await service.checkTransactionStatus('7450');
+
+      expect(result.currency).toBe('XOF');
+      expect(result.merchantRef).toBe('ref-curr-id');
+    });
+
+    it('uses merchant_reference when custom_metadata.externalId is missing', async () => {
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve.mockResolvedValue({
+        id: 7451,
+        status: 'approved',
+        amount: 1000,
+        currency_id: 1,
+        merchant_reference: 'ORD-REF-7451',
+        custom_metadata: null,
+      });
+
+      const result = await service.checkTransactionStatus('7451');
+
+      expect(result.currency).toBe('XOF');
+      expect(result.merchantRef).toBe('ORD-REF-7451');
+    });
+
+    it('keeps currency empty for an unknown currency_id (fail closed)', async () => {
+      const { Transaction } = require('fedapay');
+      Transaction.retrieve.mockResolvedValue({
+        id: 7452,
+        status: 'approved',
+        amount: 1000,
+        currency_id: 99,
+        custom_metadata: { externalId: 'ref-unknown-curr' },
+      });
+
+      const result = await service.checkTransactionStatus('7452');
+
+      expect(result.currency).toBe('');
+    });
+
     it('should read real currency from payout', async () => {
       const { Payout } = require('fedapay');
       Payout.retrieve.mockResolvedValue({
@@ -928,6 +976,22 @@ describe('FedaPayService', () => {
       const result = await service.checkPayoutStatus('payout-no-currency');
 
       expect(result.currency).toBe('');
+    });
+
+    it('maps payout currency_id 1 to XOF when currency.iso is absent', async () => {
+      const { Payout } = require('fedapay');
+      Payout.retrieve.mockResolvedValue({
+        id: 8801,
+        status: 'sent',
+        amount: 5000,
+        currency_id: 1,
+        custom_metadata: { externalId: 'payout-curr-id' },
+      });
+
+      const result = await service.checkPayoutStatus('8801');
+
+      expect(result.currency).toBe('XOF');
+      expect(result.merchantRef).toBe('payout-curr-id');
     });
   });
 

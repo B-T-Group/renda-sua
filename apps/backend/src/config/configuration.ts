@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   DEFAULT_TEST_PHONE_SUFFIX,
   isProductionRuntime,
@@ -400,10 +401,18 @@ export interface OrderOffersConfig {
   maxAgents: number;
   /** Minutes before the scheduled delivery/pickup window that agent dispatch opens. */
   dispatchLeadMinutes: number;
-  /** Round 1 (closest agents) search radius in km. */
-  round1RadiusKm: number;
-  /** Round 2 (escalated) search radius in km. */
-  round2RadiusKm: number;
+  /**
+   * Round 1 (closest agents) search radius in km. Null (env unset) means the
+   * country `delivery_availability_radius_km`, the same radius checkout uses,
+   * so round 1 only reaches agents that made delivery available.
+   */
+  round1RadiusKm: number | null;
+  /**
+   * Round 2 (escalated) search radius in km. Null (env unset) means the same
+   * radius as round 1, so nothing widens unless OFFER_ROUND2_RADIUS_KM is set.
+   * Never narrower than round 1.
+   */
+  round2RadiusKm: number | null;
   /** Seconds to wait after a round's offers expire before escalating/finalizing. */
   roundGapSeconds: number;
 }
@@ -416,6 +425,13 @@ export interface DeliveryAvailabilityConfig {
    * disable the hard gate (rollback lever) while keeping evaluation/logging.
    */
   enforceEnabled: boolean;
+  /**
+   * Agents whose last GPS update (`agent_locations.updated_at`) is older than
+   * this many minutes are not eligible: no checkout availability, no nearby
+   * badge, no offers. AGENT_LOCATION_MAX_AGE_MINUTES; default 0 = off
+   * (DEV sets 30 in .env.development).
+   */
+  agentLocationMaxAgeMinutes: number;
 }
 
 /** Shared secret for Lambda → Nest internal notification routes (e.g. SMS). */
@@ -721,6 +737,41 @@ function parseDiasporaFxRates(value: string | undefined): Record<string, number>
   return rates;
 }
 
+const configLogger = new Logger('Configuration');
+
+/** Warn once at startup when an env value is set but cannot be parsed. */
+function warnUnparseable(name: string | undefined, value: string, using: string) {
+  if (!name) return;
+  configLogger.warn(
+    `${name}=${JSON.stringify(value)} cannot be parsed; using ${using}`
+  );
+}
+
+/** Positive number from env, or null when unset/blank/invalid (invalid warns). */
+export function parseOptionalPositiveNumber(
+  value: string | undefined,
+  name?: string
+): number | null {
+  if (value == null || value.trim() === '') return null;
+  const parsed = Number(value);
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  warnUnparseable(name, value, 'the default (unset)');
+  return null;
+}
+
+/** Non-negative integer from env, or the fallback when unset/invalid (invalid warns). */
+export function parseNonNegativeInt(
+  value: string | undefined,
+  fallback: number,
+  name?: string
+): number {
+  if (value == null || value.trim() === '') return fallback;
+  const parsed = Number(value);
+  if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+  warnUnparseable(name, value, String(fallback));
+  return fallback;
+}
+
 // Secrets are now loaded in main.ts before NestJS starts
 // This function is synchronous and reads from process.env
 export default (): Configuration => {
@@ -769,12 +820,12 @@ export default (): Configuration => {
       callbackUrlCode: process.env.MYPVIT_CALLBACK_URL_CODE || 'FJXSU',
       secretRefreshUrlCode:
         process.env.MYPVIT_SECRET_REFRESH_URL_CODE || 'TRUVU',
+      // No hard-coded fallback (QA #593 S3): MyPVitService refuses to start without both
+      // codes, so payments and the secret-refresh webhook always use the same accounts.
       airtelMerchantOperationAccountCode:
-        process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B', // RENAMED
+        process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE?.trim() || '',
       moovMerchantOperationAccountCode:
-        process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B', // NEW
+        process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE?.trim() || '',
       paymentEndpointCode:
         process.env.MYPVIT_PAYMENT_ENDPOINT_CODE || 'X5T3RIBYQUDFBZSH',
       statusEndpointCode:
@@ -1207,8 +1258,14 @@ export default (): Configuration => {
         process.env.OFFER_DISPATCH_LEAD_MINUTES ?? '30',
         10
       ),
-      round1RadiusKm: parseFloat(process.env.OFFER_ROUND1_RADIUS_KM ?? '8'),
-      round2RadiusKm: parseFloat(process.env.OFFER_ROUND2_RADIUS_KM ?? '20'),
+      round1RadiusKm: parseOptionalPositiveNumber(
+        process.env.OFFER_ROUND1_RADIUS_KM,
+        'OFFER_ROUND1_RADIUS_KM'
+      ),
+      round2RadiusKm: parseOptionalPositiveNumber(
+        process.env.OFFER_ROUND2_RADIUS_KM,
+        'OFFER_ROUND2_RADIUS_KM'
+      ),
       roundGapSeconds: parseInt(
         process.env.OFFER_ROUND_GAP_SECONDS ??
           process.env.OFFER_TTL_SECONDS ??
@@ -1218,6 +1275,11 @@ export default (): Configuration => {
     },
     deliveryAvailability: {
       enforceEnabled: process.env.DELIVERY_AVAILABILITY_ENFORCE !== 'false',
+      agentLocationMaxAgeMinutes: parseNonNegativeInt(
+        process.env.AGENT_LOCATION_MAX_AGE_MINUTES,
+        0,
+        'AGENT_LOCATION_MAX_AGE_MINUTES'
+      ),
     },
     push: {
       vapidPublicKey: process.env.VAPID_PUBLIC_KEY ?? '',
