@@ -18,6 +18,13 @@ object_relationships:
     using:
       foreign_key_constraint_on: referred_by_business_id
 array_relationships:
+  - name: dedicated_agent_assignments
+    using:
+      foreign_key_constraint_on:
+        column: agent_id
+        table:
+          name: dedicated_agent_assignments
+          schema: public
   - name: representative_compensation_events
     using:
       foreign_key_constraint_on:

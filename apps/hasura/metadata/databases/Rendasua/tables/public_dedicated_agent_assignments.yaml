@@ -1,0 +1,60 @@
+table:
+  name: dedicated_agent_assignments
+  schema: public
+object_relationships:
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+  - name: application
+    using:
+      foreign_key_constraint_on: application_id
+  - name: business_location
+    using:
+      foreign_key_constraint_on: business_location_id
+  - name: posting
+    using:
+      foreign_key_constraint_on: posting_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - agent_id
+        - slot_key
+        - status
+        - source
+        - posting_id
+        - off_today_date
+        - paused_at
+        - removed_at
+        - created_at
+        - updated_at
+      filter:
+        agent:
+          user:
+            id:
+              _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - business_location_id
+        - agent_id
+        - slot_key
+        - status
+        - source
+        - posting_id
+        - application_id
+        - off_today_date
+        - paused_at
+        - removed_at
+        - removed_reason
+        - created_at
+        - updated_at
+      filter:
+        business_location:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
