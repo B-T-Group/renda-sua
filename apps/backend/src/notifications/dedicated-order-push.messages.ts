@@ -5,7 +5,26 @@ import { normalizeLanguage } from './email-template-data';
 export const DEDICATED_ORDER_MESSAGE_TYPES = {
   autoAssigned: 'DEDICATED_ORDER_AUTO_ASSIGNED',
   confirmReminder: 'DEDICATED_COVERAGE_CONFIRM_REMINDER',
+  claimAtCapacity: 'DEDICATED_CLAIM_AT_CAPACITY',
 } as const;
+
+/** Agent: QA #607 R1, the top-up claim hit the active-order cap; the money stays in the wallet. */
+export function buildDedicatedClaimAtCapacityMessage(params: {
+  orderNumber: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  if (locale === 'fr') {
+    return {
+      title: 'Commande non attribuée',
+      body: `Vous avez déjà le nombre maximum de livraisons en cours : la commande ${params.orderNumber} ne vous a pas été attribuée. Votre recharge reste dans votre portefeuille.`,
+    };
+  }
+  return {
+    title: 'Order not assigned',
+    body: `You already have the maximum number of active deliveries, so order ${params.orderNumber} was not assigned to you. Your top-up stays in your wallet.`,
+  };
+}
 
 /** Agent: the dispatch gate assigned this order to them as the slot's only eligible internal agent. */
 export function buildDedicatedAutoAssignedMessage(params: {
