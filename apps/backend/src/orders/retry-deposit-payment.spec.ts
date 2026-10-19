@@ -416,6 +416,16 @@ describe('OrdersService - retryDepositPayment', () => {
       expect(result.amount_due).toBe(8000);
       expect(result.payment_transaction.transaction_id).toBe('provider-tx-new');
 
+      const createdRef =
+        mobilePaymentsDatabaseService.createTransaction.mock.calls[0][0]
+          .reference;
+      expect(createdRef).toMatch(/^ORD-123-DEP-\d+-retry$/);
+      expect(mobilePaymentsService.initiatePayment).toHaveBeenCalledWith(
+        expect.any(Object),
+        createdRef,
+        'user-123'
+      );
+
       expect(
         mobilePaymentsDatabaseService.createTransaction.mock
           .invocationCallOrder[0]
