@@ -55,4 +55,15 @@ describe('agent_locations updated_at trigger migrations replay on a fresh databa
     }
     expect(exists).toBe(true);
   });
+
+  it('rolling back only 1764197000000 keeps the trigger 1764196194000 still owns', () => {
+    const down = code(
+      readFileSync(join(MIGRATIONS, ups.find((u) => u.dir.startsWith('1764197000000_'))!.dir, 'down.sql'), 'utf8')
+    );
+    const owner = code(
+      readFileSync(join(MIGRATIONS, ups.find((u) => u.dir.startsWith('1764196194000_'))!.dir, 'down.sql'), 'utf8')
+    );
+    expect(down).not.toMatch(new RegExp(`DROP\\s+TRIGGER[^;]*${TRIGGER}`, 'i'));
+    expect(owner).toMatch(new RegExp(`DROP\\s+TRIGGER[^;]*${TRIGGER}`, 'i'));
+  });
 });
