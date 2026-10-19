@@ -14,7 +14,9 @@ export type DedicatedIneligibleReason =
   | 'internal_only'
   | 'at_capacity'
   | 'negative_balance'
-  | 'insufficient_balance';
+  | 'insufficient_balance'
+  /** The order hold could not be resolved for this agent (fail closed). */
+  | 'hold_unavailable';
 
 export interface DedicatedAgentFacts {
   assignmentStatus: DedicatedAssignmentStatus | string;
