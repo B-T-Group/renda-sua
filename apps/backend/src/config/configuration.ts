@@ -820,12 +820,12 @@ export default (): Configuration => {
       callbackUrlCode: process.env.MYPVIT_CALLBACK_URL_CODE || 'FJXSU',
       secretRefreshUrlCode:
         process.env.MYPVIT_SECRET_REFRESH_URL_CODE || 'TRUVU',
+      // No hard-coded fallback (QA #593 S3): MyPVitService refuses to start without both
+      // codes, so payments and the secret-refresh webhook always use the same accounts.
       airtelMerchantOperationAccountCode:
-        process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B', // RENAMED
+        process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE?.trim() || '',
       moovMerchantOperationAccountCode:
-        process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B', // NEW
+        process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE?.trim() || '',
       paymentEndpointCode:
         process.env.MYPVIT_PAYMENT_ENDPOINT_CODE || 'X5T3RIBYQUDFBZSH',
       statusEndpointCode:

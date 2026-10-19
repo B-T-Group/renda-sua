@@ -373,6 +373,8 @@ export class PendingWithdrawalResolveService {
     status: MobileTransactionStatus['status'] | string
   ): MobileTransactionStatus['status'] {
     const value = String(status || '').toLowerCase();
+    // refunded: money went back at the provider; don't auto-resolve (no balance return).
+    if (value === 'refunded') return 'ambiguous';
     if (
       value === 'pending' ||
       value === 'created' ||

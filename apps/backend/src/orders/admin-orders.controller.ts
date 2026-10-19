@@ -60,6 +60,7 @@ import type {
   CreditOrderResult,
 } from '../credits/credit.types';
 import { isAdminOperationalStatus } from './admin-order-status.util';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 
 @ApiTags('admin/orders')
 @Controller('admin/orders')
@@ -120,7 +121,7 @@ export class AdminOrdersController {
     try {
       return await this.adminOrdersService.list(query);
     } catch (error: any) {
-      this.logger.error('Failed to fetch admin orders', error);
+      this.logger.error('Failed to fetch admin orders', safeErrorMessage(error));
       throw new HttpException(
         error.message || 'Failed to fetch orders',
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -188,7 +189,7 @@ export class AdminOrdersController {
     try {
       return await this.adminOrdersService.getStats(query);
     } catch (error: any) {
-      this.logger.error('Failed to fetch admin order stats', error);
+      this.logger.error('Failed to fetch admin order stats', safeErrorMessage(error));
       throw new HttpException(
         error.message || 'Failed to fetch order statistics',
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -295,7 +296,7 @@ export class AdminOrdersController {
       };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
-      this.logger.error('Failed to update status', error);
+      this.logger.error('Failed to update status', safeErrorMessage(error));
       throw new HttpException(
         error.message || 'Failed to update status',
         HttpStatus.INTERNAL_SERVER_ERROR,
