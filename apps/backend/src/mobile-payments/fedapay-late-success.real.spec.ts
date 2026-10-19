@@ -723,6 +723,27 @@ describe('L4: a FedaPay mock- PAYMENT row only skips the live re-check when Feda
     expect(anomalyLog()).toContain('mock_row_mock_disabled');
   });
 
+  it.each([
+    ['OFF', false],
+    ['ON', true],
+  ])('#621 QA: a failure event on a credited mock- row (mock %s) raises fedapay_failure_after_credit, not live_mismatch', async (_l, on) => {
+    const { db, ledger, processor } = build([{ ...pendingMockTopUp(), status: 'success' }]);
+    jest.spyOn(processor as any, 'isFedaPayMockEnabled').mockReturnValue(on);
+
+    await expect(
+      processor.processFedaPayCallback({
+        ...approvedMock(),
+        name: 'transaction.declined',
+        entity: { ...approvedMock().entity, status: 'declined' },
+      })
+    ).resolves.toEqual({ received: true, transactionId: 123 });
+
+    expect(Transaction.retrieve).not.toHaveBeenCalled();
+    expect(anomalyTypes()).toEqual(['fedapay_failure_after_credit']);
+    expect(ledger.deposits).toHaveLength(0);
+    expect(db.byId.get('tx-mock')?.status).toBe('success');
+  });
+
   it('mock mode ON (DEV): the mock- row skips the live re-check and is credited', async () => {
     const { db, ledger, processor } = build([pendingMockTopUp()]);
     jest.spyOn(processor as any, 'isFedaPayMockEnabled').mockReturnValue(true);
