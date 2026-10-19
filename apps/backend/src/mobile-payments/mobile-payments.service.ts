@@ -177,6 +177,13 @@ function normalizeSupportedSystemName(name: string): string {
   return SUPPORTED_SYSTEM_PROVIDER_ALIASES[lower] ?? lower;
 }
 
+/** #618: Togo payments are FedaPay-only; while TG is off they get this 400. */
+const TOGO_NOT_SUPPORTED = {
+  success: false as const,
+  message: 'Mobile money payments are not available in Togo yet',
+  errorCode: 'TG_NOT_SUPPORTED',
+};
+
 @Injectable()
 export class MobilePaymentsService {
   private readonly logger = new Logger(MobilePaymentsService.name);
@@ -225,6 +232,12 @@ export class MobilePaymentsService {
     }
     
     return provider;
+  }
+
+  /** #618: a +228 payer or a Togo item. */
+  private isTogoPayment(req: { customerPhone?: string; itemCountry?: string | null }, phoneRegion?: string): boolean {
+    if (isoCountryCode(req.itemCountry) === 'TG') return true;
+    return !!req.customerPhone?.trim() && validatePhoneNumber(req.customerPhone, phoneRegion).regionCode === 'TG';
   }
 
   private async isFedaPayActiveForTogo(): Promise<boolean> {
@@ -717,6 +730,16 @@ export class MobilePaymentsService {
       }
     }
 
+    // #618: Togo is FedaPay-only. When TG is off the resolver falls back to another
+    // provider (MyPVit), which cannot charge a +228 payer: refuse cleanly instead.
+    if (
+      paymentRequest.provider &&
+      paymentRequest.provider !== 'fedapay' &&
+      this.isTogoPayment(paymentRequest, phoneRegion)
+    ) {
+      return TOGO_NOT_SUPPORTED;
+    }
+
     // FedaPay currency validation
     if (paymentRequest.provider === 'fedapay') {
       if (paymentRequest.currency && paymentRequest.currency !== 'XOF') {
@@ -774,6 +797,9 @@ export class MobilePaymentsService {
 
       // Determine the best provider based on request
       const provider = await this.selectProvider(paymentRequest);
+      if (provider !== 'fedapay' && this.isTogoPayment(paymentRequest, phoneRegion)) {
+        return TOGO_NOT_SUPPORTED;
+      }
       
       // B5: Validate against the RESOLVED provider (critical for requests without explicit provider)
       if (provider === 'fedapay') {
