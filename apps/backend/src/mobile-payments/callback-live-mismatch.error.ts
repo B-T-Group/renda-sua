@@ -21,7 +21,9 @@ export type CallbackLiveMismatchReason =
   | 'amount_mismatch'
   | 'missing_stored_reference'
   | 'missing_live_reference'
-  | 'reference_mismatch';
+  | 'reference_mismatch'
+  /** #618: a DEV `mock-` row reached the live path (FEDAPAY_MOCK is off): nothing to verify. */
+  | 'mock_row_mock_disabled';
 
 export class CallbackLiveMismatchError extends Error {
   override readonly name = 'CallbackLiveMismatchError';

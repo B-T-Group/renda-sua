@@ -17,6 +17,18 @@ import {
   toSanitizedError,
 } from '../sanitize-provider-error.util';
 
+/** #615 QA L1: bound on one live FedaPay retrieve (the SDK has no timeout). */
+export const FEDAPAY_LIVE_LOOKUP_TIMEOUT_MS = 10_000;
+/** QA #621 I3: log marker for a live lookup that hit the timeout (metric filter / alarm). */
+export const FEDAPAY_LIVE_LOOKUP_TIMEOUT_MARKER = 'fedapay_live_lookup_timeout';
+
+export class FedaPayLiveLookupTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FedaPayLiveLookupTimeoutError';
+  }
+}
+
 export interface FedaPayPaymentRequest {
   payer: string;
   amount: number;
@@ -606,7 +618,7 @@ export class FedaPayService implements OnModuleInit {
   ): Promise<FedaPayWithdrawalResponse> {
     let liveStatus: string | undefined;
     try {
-      const live: any = await Payout.retrieve(parseInt(payoutId, 10));
+      const live: any = await this.liveLookup('payout', () => Payout.retrieve(parseInt(payoutId, 10)));
       liveStatus = live?.status;
     } catch (retrieveError: any) {
       const sanitized = sanitizeProviderError(retrieveError);
@@ -661,7 +673,7 @@ export class FedaPayService implements OnModuleInit {
       // Created but never sent (e.g. an earlier sendNow failed): resend it.
       let existing: any;
       try {
-        existing = await Payout.retrieve(parseInt(payoutId, 10));
+        existing = await this.liveLookup('payout', () => Payout.retrieve(parseInt(payoutId, 10)));
       } catch (retrieveError: any) {
         const sanitized = sanitizeProviderError(retrieveError);
         this.logger.warn(
@@ -693,6 +705,32 @@ export class FedaPayService implements OnModuleInit {
     };
   }
 
+  /**
+   * #615 QA L1: the FedaPay SDK sets no request timeout, so a lookup that never
+   * settles would hang the webhook (and the payout flows) indefinitely. Every live
+   * retrieve is bounded; on timeout it rejects like any other lookup error, so the
+   * callers' existing handling applies (pending path: 5xx so FedaPay retries;
+   * after-credit path: alert; ambiguous payout: stays pending for polling).
+   */
+  static liveLookupTimeoutMs = FEDAPAY_LIVE_LOOKUP_TIMEOUT_MS;
+
+  private async liveLookup<T>(kind: 'transaction' | 'payout', lookup: () => Promise<T>): Promise<T> {
+    const ms = FedaPayService.liveLookupTimeoutMs;
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // QA #621 I3: stable CloudWatch marker (one line per timed-out lookup).
+        this.logger.error(`${FEDAPAY_LIVE_LOOKUP_TIMEOUT_MARKER} kind=${kind} timeout_ms=${ms}`);
+        reject(new FedaPayLiveLookupTimeoutError(`FedaPay ${kind} lookup timed out after ${ms}ms`));
+      }, ms);
+    });
+    try {
+      return await Promise.race([lookup(), timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   async checkPayoutStatus(
     payoutId: string
   ): Promise<FedaPayTransactionStatus> {
@@ -703,7 +741,7 @@ export class FedaPayService implements OnModuleInit {
     try {
       this.logger.log(`Checking FedaPay payout status: ${payoutId}`);
 
-      const payout = await Payout.retrieve(parseInt(payoutId, 10), { include: 'currency' });
+      const payout = await this.liveLookup('payout', () => Payout.retrieve(parseInt(payoutId, 10), { include: 'currency' }));
 
       if (!payout) {
         throw new Error(`Payout ${payoutId} not found`);
@@ -752,7 +790,9 @@ export class FedaPayService implements OnModuleInit {
     try {
       this.logger.log(`Checking FedaPay transaction status: ${reference}`);
 
-      const transaction = await Transaction.retrieve(parseInt(reference, 10), { include: 'currency' });
+      const transaction = await this.liveLookup('transaction', () =>
+        Transaction.retrieve(parseInt(reference, 10), { include: 'currency' })
+      );
 
       if (!transaction) {
         throw new Error(`Transaction ${reference} not found`);

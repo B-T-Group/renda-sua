@@ -70,6 +70,60 @@ describe('F-M5: GA airtel/moov rows are served by MyPVit', () => {
   });
 });
 
+describe('#618: TG off -> clean TG_NOT_SUPPORTED instead of falling through to MyPVit', () => {
+  const flag = (active: boolean | 'error') => ({
+    executeQuery: jest.fn(async (q: string) => {
+      if (!q.includes('CheckFedaPayActive')) return {};
+      if (active === 'error') throw new Error('hasura down');
+      return { supported_payment_systems: [{ active }] };
+    }),
+  });
+  const pay = { amount: 1000, currency: 'XOF', description: 'x', reference: 'R' };
+
+  it.each([
+    ['a +228 payer, no hint', { customerPhone: '+22890123456' }],
+    ['a +228 payer, mypvit hint', { customerPhone: '+22890123456', provider: 'mypvit' }],
+    ['a Togo item, no phone', { itemCountry: 'Togo' }],
+  ])('initiatePayment: %s while TG is off -> TG_NOT_SUPPORTED, MyPVit never called', async (_k, req) => {
+    const mypvit = { initiatePayment: jest.fn(), testConnection: jest.fn() };
+    const { mps } = realMps({ hasura: flag(false), mypvit });
+    const res = await mps.initiatePayment({ ...pay, ...req } as any);
+    expect(res).toEqual(expect.objectContaining({ success: false, errorCode: 'TG_NOT_SUPPORTED' }));
+    expect(mypvit.initiatePayment).not.toHaveBeenCalled();
+  });
+
+  it('a Hasura error on the flag check fails closed', async () => {
+    const mypvit = { initiatePayment: jest.fn(), testConnection: jest.fn() };
+    const { mps } = realMps({ hasura: flag('error'), mypvit });
+    const res = await mps.initiatePayment({ ...pay, customerPhone: '+22890123456' } as any);
+    expect(res).toEqual(expect.objectContaining({ errorCode: 'TG_NOT_SUPPORTED' }));
+    expect(mypvit.initiatePayment).not.toHaveBeenCalled();
+  });
+
+  it('a Gabon payer still goes to MyPVit while TG is off', async () => {
+    const mypvit = { initiatePayment: jest.fn().mockRejectedValue(new Error('stop here')), testConnection: jest.fn() };
+    const { mps } = realMps({ hasura: flag(false), mypvit });
+    const res = await mps.initiatePayment({ ...pay, currency: 'XAF', customerPhone: '+24177123456', itemCountry: 'GA' } as any);
+    expect(res.errorCode).not.toBe('TG_NOT_SUPPORTED');
+  });
+
+  it('validatePaymentRequest (order flows): a Togo payment resolved to a non-FedaPay provider is refused', async () => {
+    const { mps } = realMps({ hasura: flag(false) });
+    await expect(
+      mps.validatePaymentRequest({ customerPhone: '+22890123456', itemCountry: 'TG', provider: 'mypvit', currency: 'XOF', amount: 1000 })
+    ).resolves.toEqual(expect.objectContaining({ errorCode: 'TG_NOT_SUPPORTED' }));
+    await expect(
+      mps.validatePaymentRequest({ itemCountry: 'Togo', provider: 'mypvit', currency: 'XOF', amount: 1000 })
+    ).resolves.toEqual(expect.objectContaining({ errorCode: 'TG_NOT_SUPPORTED' }));
+    await expect(
+      mps.validatePaymentRequest({ customerPhone: '+22890123456', itemCountry: 'TG', provider: 'fedapay', currency: 'XOF', amount: 1000 })
+    ).resolves.toBeNull();
+    await expect(
+      mps.validatePaymentRequest({ customerPhone: '+24177123456', itemCountry: 'GA', provider: 'mypvit' })
+    ).resolves.toBeNull();
+  });
+});
+
 describe('Service FedaPay TG check (validatePaymentRequest)', () => {
   it('a non-Togo phone with the fedapay hint is refused with the Togo message', async () => {
     const { mps } = realMps();

@@ -397,6 +397,12 @@ describe('FedaPay QA Fixes (Phase 1 Findings)', () => {
       updated_at: new Date().toISOString(),
     };
 
+    // A mock- row is only processed when FedaPay mock mode is on (#618: with the mock off
+    // it is acknowledged with an alert, see fedapay-late-success.real.spec L4).
+    beforeEach(() => {
+      jest.spyOn(processor as any, 'isFedaPayMockEnabled').mockReturnValue(true);
+    });
+
     it('should preserve mock- id and not overwrite with numeric entity id', async () => {
       const mockCallback: FedaPayCallbackDto = {
         entity: {
