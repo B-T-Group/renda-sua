@@ -207,6 +207,8 @@ function build(rows: Row[], order: Row = { order_number: 'ORD1', current_status:
 
 const anomalyTypes = () =>
   (reportMoneyAnomaly as jest.Mock).mock.calls.map((c) => c[1]);
+const anomalyLog = () =>
+  (reportMoneyAnomaly as jest.Mock).mock.calls.map((c) => JSON.stringify(c.slice(1))).join('\n');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -707,15 +709,17 @@ describe('L4: a FedaPay mock- PAYMENT row only skips the live re-check when Feda
   const approvedMock = () =>
     approved({ id: 123, reference: 'mock-abc-1', custom_metadata: { externalId: 'TOPUP-M' } });
 
-  it('mock mode OFF (prod): the mock- row is re-checked live and nothing is credited when FedaPay does not confirm it', async () => {
+  it('#618 mock mode OFF (prod): a leftover mock- row is acknowledged 2xx with an alert; no live call, no credit, no state change', async () => {
     const { db, ledger, processor } = build([pendingMockTopUp()]);
     (Transaction.retrieve as jest.Mock).mockRejectedValue(new Error('Transaction not found'));
 
-    await expect(processor.processFedaPayCallback(approvedMock())).rejects.toBeDefined();
+    await expect(processor.processFedaPayCallback(approvedMock())).resolves.toEqual({ received: true, transactionId: 123 });
 
-    expect(Transaction.retrieve).toHaveBeenCalled();
+    expect(Transaction.retrieve).not.toHaveBeenCalled();
     expect(ledger.deposits).toHaveLength(0);
     expect(db.byId.get('tx-mock')?.status).toBe('pending');
+    expect(anomalyTypes()).toEqual(['fedapay_callback_live_mismatch']);
+    expect(anomalyLog()).toContain('mock_row_mock_disabled');
   });
 
   it('mock mode ON (DEV): the mock- row skips the live re-check and is credited', async () => {
