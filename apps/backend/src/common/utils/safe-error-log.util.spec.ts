@@ -2,7 +2,7 @@ import { Logger } from '@nestjs/common';
 import { ClientError } from 'graphql-request';
 import { inspect } from 'util';
 import { MobilePaymentsDatabaseService } from '../../mobile-payments/mobile-payments-database.service';
-import { maskPhoneDigits, safeErrorMessage } from './safe-error-log.util';
+import { maskAccountRefForLog, maskEmailForLog, maskPhoneDigits, maskPhoneForLog, safeErrorMessage } from './safe-error-log.util';
 
 /** A real graphql-request 5.2 ClientError: its message embeds query + variables. */
 function hasuraError(): ClientError {
@@ -78,5 +78,32 @@ describe('MobilePaymentsDatabaseService logs Hasura errors without PII (L1)', ()
 
     const text = logged.map((a) => inspect(a, { depth: 10 })).join('\n');
     expect(text).not.toContain('650123456');
+  });
+});
+
+describe('#616 log maskers', () => {
+  it('maskEmailForLog keeps 2 chars of the local part and the domain; junk becomes ***', () => {
+    expect(maskEmailForLog('Jane.Doe@Example.com')).toBe('ja***@example.com');
+    expect(maskEmailForLog('a@b.co')).toBe('a***@b.co');
+    expect(maskEmailForLog('not-an-email')).toBe('***');
+    expect(maskEmailForLog(null)).toBe('***');
+  });
+  it('maskPhoneForLog keeps the last 3 digits only', () => {
+    expect(maskPhoneForLog('+228 90 12 34 56')).toBe('***456');
+    expect(maskPhoneForLog('90123456')).toBe('***456');
+    expect(maskPhoneForLog(undefined)).toBe('***');
+  });
+  it('maskAccountRefForLog: a UUID is logged as is; everything else is masked', () => {
+    expect(maskAccountRefForLog('90123456')).toBe('***456');
+    expect(maskAccountRefForLog('+228 90-12.34 (56)')).toBe('***456');
+    expect(maskAccountRefForLog('3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab')).toBe('3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab');
+    // QA #620 L2: only UUID-shaped values pass; anything else is masked.
+    expect(maskAccountRefForLog('3F2B9C1E-7A4D-4E8B-9C0D-1234567890AB')).toBe('3F2B9C1E-7A4D-4E8B-9C0D-1234567890AB');
+    expect(maskAccountRefForLog('1234567')).toBe('***567');
+    expect(maskAccountRefForLog('acc-90123456')).toBe('***456');
+    expect(maskAccountRefForLog('jane@example.com')).not.toContain('jane');
+    expect(maskAccountRefForLog('3f2b9c1e-7a4d-4e8b-9c0d-1234567890ab-x')).not.toContain('3f2b9c1e');
+    expect(maskAccountRefForLog('3f2b9c1e7a4d4e8b9c0d1234567890ab')).not.toContain('3f2b9c1e');
+    expect(maskAccountRefForLog(undefined)).toBe('unknown');
   });
 });

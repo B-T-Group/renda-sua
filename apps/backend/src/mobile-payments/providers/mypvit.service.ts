@@ -283,7 +283,7 @@ export class MyPVitService {
       }
 
       this.logger.log(
-        `Initiating payment for account: ${paymentRequest.customer_account_number}`
+        `Initiating payment for account: ${maskPhoneNumber(paymentRequest.customer_account_number)}`
       );
 
       const freeInfo = sanitizeFreeInfo(paymentRequest.free_info);
