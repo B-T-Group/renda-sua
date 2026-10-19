@@ -143,28 +143,25 @@ export const DEDICATED_NOTICE_DELEGATES_QUERY = `
   }
 `;
 
-/** Card stats for this store: completed deliveries, agent-fault failures, recent subtotals (typical hold). */
-export const DEDICATED_CARD_STATS_QUERY = `
-  query DedicatedCardStats($locationId: uuid!, $agentIds: [uuid!]!, $doneStatuses: [order_status!]!) {
-    delivered: orders(
-      where: {
-        business_location_id: { _eq: $locationId }
-        assigned_agent_id: { _in: $agentIds }
-        current_status: { _in: $doneStatuses }
-      }
-    ) {
-      assigned_agent_id
-    }
-    missed: failed_deliveries(
-      where: {
-        resolution_type: { _eq: agent_fault }
-        order: { business_location_id: { _eq: $locationId }, assigned_agent_id: { _in: $agentIds } }
-      }
-    ) {
-      order {
-        assigned_agent_id
-      }
-    }
+/**
+ * Card stats for this store (QA #603 N4: counted in Postgres, not row lists):
+ * per agent `d<i>` completed deliveries and `m<i>` agent-fault failures as
+ * aggregates, plus the last 20 completed subtotals (typical hold).
+ */
+export function dedicatedCardStatsQuery(agentCount: number): string {
+  const vars = Array.from({ length: agentCount }, (_, i) => `$a${i}: uuid!`).join(' ');
+  const counts = Array.from(
+    { length: agentCount },
+    (_, i) => `
+    d${i}: orders_aggregate(
+      where: { business_location_id: { _eq: $locationId }, assigned_agent_id: { _eq: $a${i} }, current_status: { _in: $doneStatuses } }
+    ) { aggregate { count } }
+    m${i}: failed_deliveries_aggregate(
+      where: { resolution_type: { _eq: agent_fault }, order: { business_location_id: { _eq: $locationId }, assigned_agent_id: { _eq: $a${i} } } }
+    ) { aggregate { count } }`
+  ).join('');
+  return `
+  query DedicatedCardStats($locationId: uuid!, $doneStatuses: [order_status!]! ${vars}) {${counts}
     recent: orders(
       where: { business_location_id: { _eq: $locationId }, current_status: { _in: $doneStatuses } }
       order_by: { created_at: desc }
@@ -174,6 +171,7 @@ export const DEDICATED_CARD_STATS_QUERY = `
     }
   }
 `;
+}
 
 export const DEDICATED_LOCATION_PICKUP_SLOTS_QUERY = `
   query DedicatedLocationPickupSlots($locationId: uuid!) {
@@ -220,11 +218,16 @@ export const UPDATE_DEDICATED_ASSIGNMENT_MUTATION = `
 `;
 
 /** One transaction: upsert the slot settings, then pause (agent_id order) agents of slots turned off. */
+/**
+ * Saves the slot switches and, when any slot is turned off, pauses that slot's
+ * active assignments by predicate in the same transaction (QA #603 N2), so an
+ * assignment created after the caller's read is paused too.
+ */
 export function savePickupSlotsMutation(withPauses: boolean): string {
   return `
     mutation SaveDedicatedPickupSlots(
       $slots: [business_location_pickup_slots_insert_input!]!
-      ${withPauses ? '$pauses: [dedicated_agent_assignments_updates!]!' : ''}
+      ${withPauses ? '$locationId: uuid!, $offSlots: [String!]!, $pauseSet: dedicated_agent_assignments_set_input!' : ''}
     ) {
       insert_business_location_pickup_slots(
         objects: $slots
@@ -235,7 +238,16 @@ export function savePickupSlotsMutation(withPauses: boolean): string {
       ) {
         affected_rows
       }
-      ${withPauses ? 'update_dedicated_agent_assignments_many(updates: $pauses) { affected_rows }' : ''}
+      ${
+        withPauses
+          ? `paused: update_dedicated_agent_assignments(
+        where: { business_location_id: { _eq: $locationId }, slot_key: { _in: $offSlots }, status: { _eq: "active" } }
+        _set: $pauseSet
+      ) {
+        returning { id agent_id slot_key source business_location_id }
+      }`
+          : ''
+      }
     }
   `;
 }
