@@ -20,6 +20,7 @@ const CATEGORY_QUERY = `query CatalogCategories($locationWhere: business_locatio
       items_aggregate(
         where: {
           is_active: { _eq: true }
+          moderation_status: { _eq: "approved" }
           business_inventories: {
             is_active: { _eq: true }
             computed_available_quantity: { _gt: 0 }

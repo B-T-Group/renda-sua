@@ -7,6 +7,13 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
 import {
+  maskPhoneNumber,
+  redactProviderPayload,
+  redactSecrets,
+  sanitizeProviderError,
+  toSanitizedError,
+} from '../sanitize-provider-error.util';
+import {
   MYP_VIT_STATUS_OPERATIONS,
   buildMypvitStatusPath,
   isNotFoundHttpError,
@@ -14,12 +21,6 @@ import {
   unindexedMypvitStatusBody,
   type MypvitStatusOperation,
 } from './mypvit-status.util';
-import {
-  redactProviderPayload,
-  redactSecrets,
-  sanitizeProviderError,
-  toSanitizedError,
-} from '../sanitize-provider-error.util';
 import { mypvitSecretName } from '../secret-refresh-auth';
 import { isProductionEnv } from '../../common/utils/resolve-trust-proxy';
 
@@ -235,7 +236,8 @@ export class MyPVitService {
     // Add response interceptor for logging
     this.httpClient.interceptors.response.use(
       (response) => {
-        // Never log the body: renew-secret responses carry the new secret key.
+        // L2: status + path only. Bodies carry phones (KYC/status) and, for
+        // renew-secret, the new secret key.
         this.logger.debug(
           `MyPVit API Response: ${response.status} ${response.config?.url ?? ''}`.trim()
         );
@@ -659,7 +661,7 @@ export class MyPVitService {
     customerEmail?: string;
   }): Promise<{ success: boolean; kycStatus: string; message?: string }> {
     try {
-      this.logger.log(`Performing KYC for customer: ${kycData.customerPhone}`);
+      this.logger.log(`Performing KYC for customer: ${maskPhoneNumber(kycData.customerPhone)}`);
 
       const response = await this.httpClient.post(
         '/W2OZPE4QDSWH3Z5R/kyc',

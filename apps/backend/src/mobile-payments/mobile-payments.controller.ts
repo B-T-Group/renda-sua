@@ -25,6 +25,10 @@ import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
+import { BadRequestException } from '@nestjs/common';
+import { isoCountryCode } from '../orders/delivery-pricing.util';
+import { validatePhoneNumber } from './phone-validation.util';
+import { sanitizeProviderError } from './sanitize-provider-error.util';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
@@ -49,7 +53,6 @@ import { MobileTransactionAccessService } from './mobile-transaction-access.serv
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
-import { sanitizeProviderError } from './sanitize-provider-error.util';
 import {
   MIN_SECRET_REFRESH_TOKEN_LENGTH,
   allowedSecretRefreshIps,
@@ -322,6 +325,16 @@ export class MobilePaymentsController {
 
       this.assertMobileMoneyCurrency(paymentRequest, resolvedProvider);
 
+      // F-L2, F-M3, F-M6: Validate phone before ANY row creation
+      if (paymentRequest.customerPhone) {
+        const itemCountry = (paymentRequest as any).itemCountry;
+        await this.validatePhoneForPayment(
+          paymentRequest.customerPhone,
+          resolvedProvider,
+          itemCountry
+        );
+      }
+
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
         paymentRequest.callbackUrl ||
@@ -374,6 +387,14 @@ export class MobilePaymentsController {
         await this.databaseService.updateTransaction(transaction.id, {
           transaction_id: paymentResponse.transactionId,
         });
+        
+        // G2: Schedule mock callback AFTER persisting the transaction_id
+        if (paymentResponse.transactionId.startsWith('mock-')) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentResponse.transactionId,
+            reference
+          );
+        }
       } else {
         await this.databaseService.updateTransaction(transaction.id, {
           status: 'failed',
@@ -665,7 +686,6 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      // The status re-check can fail with a provider error: never log it raw.
       const sanitized = sanitizeProviderError(error);
       this.logger.error(`MyPVIT callback processing error: ${sanitized.message}`);
       throw new HttpException(
@@ -715,7 +735,6 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      // The status re-check can fail with a provider error: never log it raw.
       const sanitized = sanitizeProviderError(error);
       this.logger.error(`Freemopay callback processing error: ${sanitized.message}`);
       throw new HttpException(
@@ -792,9 +811,8 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error(
-        `FedaPay callback processing error: ${sanitizeProviderError(error).message}`
-      );
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`FedaPay callback processing error: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,
@@ -1394,6 +1412,83 @@ export class MobilePaymentsController {
     }
   }
 
+  /**
+   * F-L2, F-M3, F-M6: Validate phone number against provider and market BEFORE creating any row.
+   * Returns 400 BadRequestException on validation failure.
+   */
+  private async validatePhoneForPayment(
+    customerPhone: string,
+    provider: string,
+    itemCountry?: string
+  ): Promise<void> {
+    // Derive region from resolved provider for accurate phone parsing
+    const providerRegionMap: Record<string, string> = {
+      fedapay: 'TG',
+      freemopay: 'CM',
+      mypvit: 'GA',
+      airtel: 'GA',
+      moov: 'GA',
+    };
+    const region = providerRegionMap[provider] || 'GA';
+    const phoneValidation = validatePhoneNumber(customerPhone, region);
+    
+    if (!phoneValidation.isValid) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Invalid phone number format',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
+    const phoneCountry = phoneValidation.regionCode;
+
+    // F-M3 & F-M6: Phone country must match item/market country (bidirectional)
+    // This check MUST run before provider-specific checks so that country mismatches
+    // are reported as PHONE_COUNTRY_MISMATCH rather than generic INVALID_PHONE_NUMBER
+    if (itemCountry) {
+      // Normalize item country to ISO (handles "Togo", "TOGO", "TG", etc.)
+      const normalizedItemCountry = isoCountryCode(itemCountry);
+      if (normalizedItemCountry && phoneCountry !== normalizedItemCountry) {
+        throw new BadRequestException({
+          success: false,
+          message: `Payment phone number must match the item's country (${normalizedItemCountry})`,
+          error: 'PHONE_COUNTRY_MISMATCH',
+          data: {
+            phoneCountry,
+            itemCountry: normalizedItemCountry,
+          },
+        });
+      }
+    }
+
+    // F-L2: FedaPay requires Togo phone
+    if (provider === 'fedapay' && phoneCountry !== 'TG') {
+      throw new BadRequestException({
+        success: false,
+        message: 'FedaPay requires a Togo (+228) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
+    // F-M6: Provider-specific country validation
+    // Freemopay -> CM only
+    if (provider === 'freemopay' && phoneCountry !== 'CM') {
+      throw new BadRequestException({
+        success: false,
+        message: 'Freemopay requires a Cameroon (+237) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+    // MyPVit/Airtel/Moov -> GA only
+    if (['mypvit', 'airtel', 'moov'].includes(provider) && phoneCountry !== 'GA') {
+      throw new BadRequestException({
+        success: false,
+        message: `${provider} requires a Gabon (+241) phone number`,
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+  }
+
   private assertMobileMoneyCurrency(
     request: InitiatePaymentDto,
     resolvedProvider: string
@@ -1511,6 +1606,7 @@ export class MobilePaymentsController {
         message: result.data?.message,
         provider: result.data?.provider,
         ...(result.data?.reason ? { status: result.data.status, reason: result.data.reason } : {}),
+        ...(result.data?.error ? { error: result.data.error } : {}),
       },
     };
   }
@@ -1519,8 +1615,9 @@ export class MobilePaymentsController {
     transactionId: string,
     status: Pick<MobileTransactionStatus, 'status' | 'message'>
   ): Promise<void> {
+    // ambiguous / refunded never change the row from a poll (refunded needs manual review).
     const persistedStatus =
-      status.status === 'ambiguous' ? 'pending' : status.status;
+      status.status === 'ambiguous' || status.status === 'refunded' ? 'pending' : status.status;
     await this.databaseService.updateTransaction(transactionId, {
       status: persistedStatus,
       error_message: status.message,

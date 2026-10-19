@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 import type { PaymentCallbackHandler } from '../mobile-payments/payment-callback/payment-callback-handler.interface';
 import type { MobilePaymentTransaction } from '../mobile-payments/mobile-payments-database.service';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 
 const ORDER_ENTITIES = new Set([
   'order',
@@ -109,7 +110,7 @@ export class OrderPaymentCallbackHandler implements PaymentCallbackHandler {
         transaction,
         message
       ).catch((error) => {
-        this.logger.error('Failed to emit claim topup failed event', error);
+        this.logger.error('Failed to emit claim topup failed event', safeErrorMessage(error));
       });
     }
   }
