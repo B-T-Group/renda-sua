@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import {
   DEFAULT_TEST_PHONE_SUFFIX,
   isProductionRuntime,
@@ -736,23 +737,39 @@ function parseDiasporaFxRates(value: string | undefined): Record<string, number>
   return rates;
 }
 
-/** Positive number from env, or null when unset/blank/invalid. */
+const configLogger = new Logger('Configuration');
+
+/** Warn once at startup when an env value is set but cannot be parsed. */
+function warnUnparseable(name: string | undefined, value: string, using: string) {
+  if (!name) return;
+  configLogger.warn(
+    `${name}=${JSON.stringify(value)} cannot be parsed; using ${using}`
+  );
+}
+
+/** Positive number from env, or null when unset/blank/invalid (invalid warns). */
 export function parseOptionalPositiveNumber(
-  value: string | undefined
+  value: string | undefined,
+  name?: string
 ): number | null {
   if (value == null || value.trim() === '') return null;
   const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  if (Number.isFinite(parsed) && parsed > 0) return parsed;
+  warnUnparseable(name, value, 'the default (unset)');
+  return null;
 }
 
-/** Non-negative integer from env, or the fallback when unset/invalid. */
+/** Non-negative integer from env, or the fallback when unset/invalid (invalid warns). */
 export function parseNonNegativeInt(
   value: string | undefined,
-  fallback: number
+  fallback: number,
+  name?: string
 ): number {
   if (value == null || value.trim() === '') return fallback;
   const parsed = Number(value);
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : fallback;
+  if (Number.isInteger(parsed) && parsed >= 0) return parsed;
+  warnUnparseable(name, value, String(fallback));
+  return fallback;
 }
 
 // Secrets are now loaded in main.ts before NestJS starts
@@ -1242,10 +1259,12 @@ export default (): Configuration => {
         10
       ),
       round1RadiusKm: parseOptionalPositiveNumber(
-        process.env.OFFER_ROUND1_RADIUS_KM
+        process.env.OFFER_ROUND1_RADIUS_KM,
+        'OFFER_ROUND1_RADIUS_KM'
       ),
       round2RadiusKm: parseOptionalPositiveNumber(
-        process.env.OFFER_ROUND2_RADIUS_KM
+        process.env.OFFER_ROUND2_RADIUS_KM,
+        'OFFER_ROUND2_RADIUS_KM'
       ),
       roundGapSeconds: parseInt(
         process.env.OFFER_ROUND_GAP_SECONDS ??
@@ -1258,7 +1277,8 @@ export default (): Configuration => {
       enforceEnabled: process.env.DELIVERY_AVAILABILITY_ENFORCE !== 'false',
       agentLocationMaxAgeMinutes: parseNonNegativeInt(
         process.env.AGENT_LOCATION_MAX_AGE_MINUTES,
-        0
+        0,
+        'AGENT_LOCATION_MAX_AGE_MINUTES'
       ),
     },
     push: {
