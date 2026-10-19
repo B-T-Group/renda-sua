@@ -1,6 +1,11 @@
 /* eslint-disable */
 import { readFileSync } from 'fs';
 
+// Specs run in UTC whatever the host timezone, so local-time math (e.g. the
+// Nov 1 DST change in America/Toronto) can't shift expectations. Set here,
+// before Jest spawns workers, so every worker inherits it.
+process.env.TZ = 'UTC';
+
 // Reading the SWC compilation config for the spec files
 const swcJestConfig = JSON.parse(
   readFileSync(`${__dirname}/.spec.swcrc`, 'utf-8')

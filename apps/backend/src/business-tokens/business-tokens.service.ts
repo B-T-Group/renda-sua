@@ -563,6 +563,16 @@ export class BusinessTokensService {
       await this.mobilePaymentsDatabaseService.updateTransaction(transactionId, {
         transaction_id: paymentResponse.transactionId,
       });
+      // G2: Schedule mock callback AFTER persisting transaction_id
+      if (paymentResponse.transactionId.startsWith('mock-')) {
+        const tx = await this.mobilePaymentsDatabaseService.getTransactionById(transactionId);
+        if (tx) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentResponse.transactionId,
+            tx.reference
+          );
+        }
+      }
       return;
     }
     if (paymentResponse.success) return;

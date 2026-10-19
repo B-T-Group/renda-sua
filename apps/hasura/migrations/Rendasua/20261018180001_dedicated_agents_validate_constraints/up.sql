@@ -2,8 +2,9 @@
 -- 20261018180000 and build the two partial indexes on the hot tables.
 -- VALIDATE CONSTRAINT takes SHARE UPDATE EXCLUSIVE (reads and writes continue) while it scans.
 -- CREATE INDEX takes SHARE (reads continue, writes wait for the build; both indexes are partial
--- and start empty). apply-hasura runs `migrate apply --per-migration-transaction`, so this
--- file commits separately from 180000 and its ACCESS EXCLUSIVE locks are released first.
+-- and start empty). Hasura CLI v2 `migrate apply` sends each migration file as its own
+-- run_sql request (its own transaction), so 180000 commits and releases its ACCESS EXCLUSIVE
+-- locks before this file starts. Confirm on DEV before prod, or ship 180001 in a later deploy.
 -- lock_timeout: fail fast rather than queue; re-run on timeout.
 SET LOCAL lock_timeout = '5s';
 

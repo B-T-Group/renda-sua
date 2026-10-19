@@ -1,4 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  CallbackLiveMismatchError,
+  LiveRecordIncompleteError,
+} from './callback-live-mismatch.error';
+import { ModuleRef } from '@nestjs/core';
 import type { Request } from 'express';
 import { AccountsService } from '../accounts/accounts.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
@@ -47,6 +52,14 @@ export type FreemopayCallbackProcessResult = {
   skipped?: boolean;
 };
 
+/** N2: payment entities whose expiry runs onPaymentFailure like a decline. */
+export const EXPIRY_FAILS_PAYMENT_ENTITIES = new Set(['order', 'order_deposit', 'claim_order']);
+
+/** QA #587 Low: alert once the same tx's live record was incomplete this many times. */
+export const INCOMPLETE_LIVE_RECORD_ALERT_AFTER = 3;
+const INCOMPLETE_LIVE_RECORD_WINDOW_MS = 24 * 60 * 60 * 1000;
+const INCOMPLETE_LIVE_RECORD_MAX_TRACKED = 1000;
+
 @Injectable()
 export class MobilePaymentCallbackProcessor {
   private readonly logger = new Logger(MobilePaymentCallbackProcessor.name);
@@ -55,7 +68,8 @@ export class MobilePaymentCallbackProcessor {
     private readonly databaseService: MobilePaymentsDatabaseService,
     private readonly accountsService: AccountsService,
     private readonly paymentCallbackRegistry: PaymentCallbackRegistryService,
-    private readonly mobilePaymentsService: MobilePaymentsService
+    private readonly mobilePaymentsService: MobilePaymentsService,
+    private readonly moduleRef: ModuleRef
   ) {}
 
   /**
@@ -63,6 +77,31 @@ export class MobilePaymentCallbackProcessor {
    */
   private isMockedTransaction(tx: MobilePaymentTransaction): boolean {
     return tx.transaction_id?.startsWith('mock-') ?? false;
+  }
+
+  /**
+   * L4: a mock- id only skips the live provider re-check when that provider's mock
+   * mode is actually on. For FedaPay, a mock- row with FEDAPAY_MOCK off (e.g. data
+   * left over from DEV) is re-checked live and therefore fails closed.
+   */
+  private skipsLiveRecheck(tx: MobilePaymentTransaction): boolean {
+    if (!this.isMockedTransaction(tx)) return false;
+    if (tx.provider === 'fedapay') return this.isFedaPayMockEnabled();
+    return true;
+  }
+
+  /**
+   * G1: Check if FedaPay mock mode is currently enabled.
+   * Fail closed: if we can't resolve the service, assume mock is off.
+   */
+  private isFedaPayMockEnabled(): boolean {
+    try {
+      const FedaPayService = require('./providers/fedapay.service').FedaPayService;
+      const fedapay = this.moduleRef.get(FedaPayService, { strict: false });
+      return fedapay?.['mockEnabled'] === true;
+    } catch {
+      return false;
+    }
   }
 
   private resolveHandlers(): PaymentCallbackHandler[] {
@@ -139,20 +178,135 @@ export class MobilePaymentCallbackProcessor {
     return { received: true, reference: callbackData.reference };
   }
 
+  /**
+   * PE-approved response policy: a definite mismatch between the event and the live FedaPay
+   * record (CallbackLiveMismatchError) is acknowledged with the normal 2xx result. Nothing
+   * is credited and no transaction state changes, because every live re-check runs before
+   * any write. It is logged and raised as a money anomaly instead, since FedaPay counts any
+   * non-2xx as a failed delivery and disables the webhook after 10 failures. Transient
+   * errors (API/network, live pending or ambiguous) still propagate, so the controller
+   * answers 5xx and FedaPay retries. The body is the usual `{ received, transactionId }`,
+   * echoing only FedaPay's own entity id, never our references or expected/actual values.
+   */
   async processFedaPayCallback(
     callbackData: FedaPayCallbackDto,
     _req?: Request
   ): Promise<{ received: boolean; transactionId: number }> {
+    try {
+      return await this.processFedaPayCallbackChecked(callbackData);
+    } catch (error: unknown) {
+      if (error instanceof LiveRecordIncompleteError) {
+        this.noteIncompleteLiveRecord(error, callbackData);
+        throw error; // still transient: 5xx, FedaPay retries
+      }
+      if (!(error instanceof CallbackLiveMismatchError)) throw error;
+      if (!error.alerted) {
+        reportMoneyAnomaly(
+          this.logger,
+          'fedapay_callback_live_mismatch',
+          `${error.message} (${error.detail}); acknowledged without credit or state change`,
+          {
+            transactionId: error.txId,
+            reason: error.reason,
+            claimed: error.claimed,
+            event: callbackData?.name,
+            fedapayEntityId: callbackData?.entity?.id,
+          }
+        );
+        error.alerted = true;
+      }
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+  }
+
+  /**
+   * QA #587 (Low): an incomplete live record answers 5xx (A1), and FedaPay disables the
+   * webhook after 10 consecutive failed deliveries, so a record that stays incomplete must
+   * reach a human before that.
+   *
+   * - Every failure logs the stable marker `fedapay_live_record_incomplete` with the count,
+   *   so a CloudWatch metric filter / log alarm can aggregate across instances and restarts.
+   * - On the Nth failure for the same transaction (N = 3) a single money anomaly
+   *   (`fedapay_live_record_incomplete_repeated`) goes to Sentry.
+   *
+   * Why N = 3: one or two misses can be a read racing FedaPay filling in the record; a
+   * third retry of the same transaction is persistent. It still leaves 7 of FedaPay's 10
+   * attempts (hours of its backoff) for someone to act, and stays under 10 even if the
+   * deliveries are spread over up to 4 instances (alert by delivery 4 x 2 + 1 = 9).
+   *
+   * Why in-memory dedup (bounded map keyed by our tx id, 24 h window): the counter sits on
+   * a failing path, so it must not depend on Redis or the DB (which may be what's failing),
+   * and it must never turn the transient 5xx into something else. The worst case of losing
+   * it on a restart/deploy is one more alert after N new failures, never a missed marker.
+   */
+  private noteIncompleteLiveRecord(
+    error: LiveRecordIncompleteError,
+    callbackData: FedaPayCallbackDto
+  ): void {
+    const now = Date.now();
+    const key = error.txId;
+    let entry = this.incompleteLiveRecordFailures.get(key);
+    if (!entry || now - entry.firstAt > INCOMPLETE_LIVE_RECORD_WINDOW_MS) {
+      entry = { count: 0, firstAt: now, alerted: false };
+    }
+    entry.count += 1;
+    // Re-insert so Map order is least-recently-failed first, then cap the size.
+    this.incompleteLiveRecordFailures.delete(key);
+    this.incompleteLiveRecordFailures.set(key, entry);
+    while (this.incompleteLiveRecordFailures.size > INCOMPLETE_LIVE_RECORD_MAX_TRACKED) {
+      const oldest = this.incompleteLiveRecordFailures.keys().next().value as string;
+      this.incompleteLiveRecordFailures.delete(oldest);
+    }
+    this.logger.warn(
+      `fedapay_live_record_incomplete tx=${key} missing=${error.missing} failures=${entry.count} (5xx, FedaPay will retry)`
+    );
+    if (entry.count >= INCOMPLETE_LIVE_RECORD_ALERT_AFTER && !entry.alerted) {
+      entry.alerted = true;
+      reportMoneyAnomaly(
+        this.logger,
+        'fedapay_live_record_incomplete_repeated',
+        `FedaPay live record for tx ${key} has no ${error.missing}; callback answered 5xx ${entry.count} times. FedaPay disables the webhook after 10 consecutive failed deliveries: check the transaction in the FedaPay dashboard`,
+        {
+          transactionId: key,
+          missing: error.missing,
+          failures: entry.count,
+          event: callbackData?.name,
+          fedapayEntityId: callbackData?.entity?.id,
+        }
+      );
+    }
+  }
+
+  private readonly incompleteLiveRecordFailures = new Map<
+    string,
+    { count: number; firstAt: number; alerted: boolean }
+  >();
+
+  private async processFedaPayCallbackChecked(
+    callbackData: FedaPayCallbackDto
+  ): Promise<{ received: boolean; transactionId: number }> {
     // FedaPay docs (docs.fedapay.com/en/integration-api/collects-management, "Collect Lifecycle"):
     // 'expired' = "the collect was not completed within the allowed time frame" (unpaid collections expire after 24h).
-    // No transaction.expired event; expiry arrives as transaction.updated with status 'expired'.
-    const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled', 'transaction.updated'];
+    // Expiry can arrive as transaction.expired (what FedaPay webhooks send in practice)
+    // or as transaction.updated with status 'expired' (transaction.updated is the
+    // documented status-change event). Support both. transaction.updated only counts
+    // when the status is 'expired'; approved/declined/canceled have their own events.
+    const TERMINAL_EVENTS = ['transaction.approved', 'transaction.declined', 'transaction.canceled', 'transaction.expired'];
     const TERMINAL_STATUSES = ['approved', 'declined', 'canceled', 'expired'];
-    
-    const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name) &&
-      (callbackData.name !== 'transaction.updated' || callbackData.entity.status === 'expired');
+
+    const isExpiredUpdate =
+      callbackData.name === 'transaction.updated' && callbackData.entity.status === 'expired';
+    const isTerminalEvent = TERMINAL_EVENTS.includes(callbackData.name) || isExpiredUpdate;
     const isTerminalStatus = TERMINAL_STATUSES.includes(callbackData.entity.status);
-    
+
+    // QA #587 A3: a refund (transaction.refunded, or any event whose entity is refunded).
+    if (
+      callbackData.entity?.status === 'refunded' ||
+      callbackData.name === 'transaction.refunded'
+    ) {
+      return this.handleFedaPayRefundEvent(callbackData);
+    }
+
     if (!isTerminalEvent || !isTerminalStatus) {
       this.logger.log(
         `FedaPay non-terminal event: name=${callbackData.name} status=${callbackData.entity.status} entity_id=${callbackData.entity.id}, acknowledging without state change`
@@ -183,11 +337,14 @@ export class MobilePaymentCallbackProcessor {
       return { received: true, transactionId: callbackData.entity.id };
     }
 
-    if (!this.isMockedTransaction(tx)) {
-      await this.mobilePaymentsService.assertProviderConfirmsCallback(
-        this.withFedaPayRecheckId(tx, callbackData),
-        normalizedStatus
-      );
+    if (!this.skipsLiveRecheck(tx)) {
+      const recheckTx = this.withFedaPayRecheckId(tx, callbackData);
+      try {
+        await this.mobilePaymentsService.assertProviderConfirmsCallback(recheckTx, normalizedStatus);
+      } catch (error: unknown) {
+        if (!this.isExpiredEventLiveApproved(error, callbackData)) throw error;
+        return this.creditExpiredEventLiveApproved(tx, recheckTx, callbackData);
+      }
     } else {
       this.logger.log(
         `Skipping live provider confirmation for mocked transaction: ${tx.id}`
@@ -196,6 +353,88 @@ export class MobilePaymentCallbackProcessor {
     
     await this.processPendingFedaPay(tx, callbackData);
 
+    return { received: true, transactionId: callbackData.entity.id };
+  }
+
+  /** N3: an `expired` event whose live record is approved (the live re-check said success). */
+  private isExpiredEventLiveApproved(error: unknown, callbackData: FedaPayCallbackDto): boolean {
+    return (
+      error instanceof CallbackLiveMismatchError &&
+      error.reason === 'live_status_mismatch' &&
+      error.claimed === 'FAILED' &&
+      callbackData.entity?.status === 'expired'
+    );
+  }
+
+  /**
+   * N3: FedaPay sent `expired`, but the live record is approved (the customer paid at the
+   * last moment). The money moved, so take the normal SUCCESS path instead of acknowledging
+   * a mismatch:
+   * 1. re-verify against the live record as a SUCCESS claim (status, XOF, amount, reference;
+   *    a mismatch there is acknowledged and alerted as usual, nothing credited);
+   * 2. process it exactly like `transaction.approved` (processPendingFedaPay): CAS
+   *    pending -> processing, idempotent credit (momo-deposit:<tx id>), CAS -> success.
+   * A concurrent or later `transaction.approved` for the same tx loses the CAS / finds the
+   * row success, and the ledger key makes a second credit impossible.
+   */
+  private async creditExpiredEventLiveApproved(
+    tx: MobilePaymentTransaction,
+    recheckTx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<{ received: boolean; transactionId: number }> {
+    await this.mobilePaymentsService.assertProviderConfirmsCallback(recheckTx, 'SUCCESS');
+    this.logger.warn(
+      `fedapay_expired_event_live_approved tx=${tx.id} entity=${callbackData.entity.id}: expired event but live record approved; crediting through the SUCCESS path`
+    );
+    await this.processPendingFedaPay(tx, {
+      ...callbackData,
+      entity: { ...callbackData.entity, status: 'approved' },
+    });
+    return { received: true, transactionId: callbackData.entity.id };
+  }
+
+  /**
+   * QA #587 A3: FedaPay refunded a collect. The webhook signature is verified by the
+   * controller (mandatory secret), so the event itself is trusted. Nothing changes here:
+   * we never debit a wallet or reverse an order automatically. If we already credited
+   * the payer (row success, or processing = credit in flight), the money left FedaPay
+   * twice from our point of view, so finance must reconcile: raise a money anomaly.
+   * Otherwise (pending / failed / cancelled / unknown) nothing was credited; log only.
+   * Always 2xx: a refund never becomes creditable, so retrying cannot help.
+   */
+  private async handleFedaPayRefundEvent(
+    callbackData: FedaPayCallbackDto
+  ): Promise<{ received: boolean; transactionId: number }> {
+    const tx = await this.lookupFedaPayTransaction(callbackData);
+    if (!tx) {
+      this.logger.warn(
+        `FedaPay refund event for unknown entity ${callbackData.entity?.id}; acknowledging`
+      );
+      return { received: true, transactionId: callbackData.entity.id };
+    }
+    await this.databaseService.logCallback(tx.id, callbackData);
+    if (tx.status === 'success' || tx.status === 'processing') {
+      reportMoneyAnomaly(
+        this.logger,
+        'fedapay_refund_after_credit',
+        `FedaPay refunded tx ${tx.id} after we credited it (row ${tx.status}${
+          tx.error_code ? `, ${tx.error_code}` : ''
+        }); no automatic reversal, reconcile manually`,
+        {
+          transactionId: tx.id,
+          reference: tx.reference,
+          amount: tx.amount,
+          rowStatus: tx.status,
+          paymentEntity: tx.payment_entity,
+          event: callbackData.name,
+          fedapayEntityId: callbackData.entity?.id,
+        }
+      );
+    } else {
+      this.logger.warn(
+        `FedaPay refund event for tx ${tx.id} (row ${tx.status}, never credited); acknowledging without state change`
+      );
+    }
     return { received: true, transactionId: callbackData.entity.id };
   }
 
@@ -211,11 +450,21 @@ export class MobilePaymentCallbackProcessor {
    */
   private withFedaPayRecheckId(
     tx: MobilePaymentTransaction,
-    callbackData: FedaPayCallbackDto
+    callbackOrEntityId: FedaPayCallbackDto | string | number | null | undefined
   ): MobilePaymentTransaction {
+    // FedaPay rows only: other providers' re-checks have no reference-match guard.
+    if (tx.provider?.toLowerCase() !== 'fedapay') return tx;
     if (tx.transaction_id?.trim()) return tx;
-    const entityId = callbackData.entity?.id;
-    if (!tx.reference?.trim() || entityId === undefined || entityId === null) {
+    const entityId =
+      typeof callbackOrEntityId === 'object' && callbackOrEntityId !== null
+        ? callbackOrEntityId.entity?.id
+        : callbackOrEntityId;
+    if (
+      !tx.reference?.trim() ||
+      entityId === undefined ||
+      entityId === null ||
+      String(entityId).trim() === ''
+    ) {
       return tx;
     }
     this.logger.warn(
@@ -276,10 +525,15 @@ export class MobilePaymentCallbackProcessor {
     // Exclude GIVE_CHANGE rows: they hold payout ids, not transaction ids.
     // FedaPay payout and transaction ids are separate sequences and can collide.
     // DEV mock payouts (transaction_id "mock-…") are resolved by FedaPayService's
-    // auto-callback through this same path, so keep matching those.
+    // auto-callback through this same path, so keep matching those, but only when
+    // mock mode is actually on (G1).
     const isFedaPayCollection = (tx: MobilePaymentTransaction | null | undefined) => {
       if (tx?.provider !== 'fedapay') return null;
-      if (tx.transaction_type === 'GIVE_CHANGE' && !this.isMockedTransaction(tx)) return null;
+      if (tx.transaction_type === 'GIVE_CHANGE') {
+        const isMocked = this.isMockedTransaction(tx);
+        if (!isMocked) return null;
+        if (!this.isFedaPayMockEnabled()) return null;
+      }
       return tx;
     };
     const byProviderId = isFedaPayCollection(
@@ -405,24 +659,51 @@ export class MobilePaymentCallbackProcessor {
       );
       return { received: true, transactionId: callbackData.entity.id };
     }
+    
     const isApproved = callbackData.entity.status === 'approved';
+    
+    // F3: ALWAYS log the callback for non-pending transactions, even if we skip processing
+    // This ensures late-success callbacks are visible in logs and database
+    await this.databaseService.logCallback(tx.id, callbackData);
+    
     // Resume finalize when approved arrives on a processing row (crash recovery)
     if (tx.status === 'processing' && isApproved) {
-      await this.databaseService.logCallback(tx.id, callbackData);
       await this.resumeFinalizeFromProcessing(tx, String(callbackData.entity.id));
       return { received: true, transactionId: callbackData.entity.id };
     }
+    
+    // #545: superseded / retry-terminal order attempts take the proven recovery path FIRST
+    // (credit, then onLateSuccessAfterSupersede decides applied vs duplicate).
     if (this.isRecoverableLateOrderSuccess(tx) && isApproved) {
-      await this.databaseService.logCallback(tx.id, callbackData);
       await this.handleLateSuccessOnSupersededOrderTx(
         tx,
         String(callbackData.entity.id)
       );
       return { received: true, transactionId: callbackData.entity.id };
     }
+
+    // F3: Handle late success on FAILED transactions (declined then approved)
+    if (tx.status === 'failed' && isApproved) {
+      // Handle order payments
+      if (tx.payment_entity === 'order') {
+        await this.handleLateSuccessOnFailedOrderPayment(tx, callbackData);
+        return { received: true, transactionId: callbackData.entity.id };
+      }
+      // Handle wallet top-ups (PAYMENT type, entity null or 'account')
+      if (tx.transaction_type === 'PAYMENT') {
+        await this.handleLateSuccessOnFailedTopUp(tx, callbackData);
+        return { received: true, transactionId: callbackData.entity.id };
+      }
+    }
+
     if (tx.status === 'success' && isApproved) {
       await this.retrySuccessSideEffects(tx);
     }
+
+    if (!isApproved && (tx.status === 'success' || tx.status === 'processing')) {
+      await this.handleFailureEventAfterCredit(tx, callbackData);
+    }
+
     this.logger.log(
       `FedaPay callback skipped (already ${tx.status}): ${tx.id}`
     );
@@ -430,6 +711,70 @@ export class MobilePaymentCallbackProcessor {
       received: true,
       transactionId: callbackData.entity.id,
     };
+  }
+
+  /**
+   * N1: a signed failure event on a row we already credited. FedaPay treats declined
+   * and canceled as non-final, and a last-moment pay emits both expired and approved
+   * (N3). Live-check first: if the collect is still approved/transferred, this is a
+   * stale sibling — log only. If live confirms a failure (or the read fails closed),
+   * raise fedapay_failure_after_credit. Never reverse automatically. Always 2xx.
+   */
+  private async handleFailureEventAfterCredit(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    if (await this.isLiveFedaPayStillApproved(tx, callbackData)) {
+      this.logger.log(
+        `FedaPay stale ${callbackData.name} (status ${callbackData.entity.status}) for credited tx ${tx.id}; live still approved`
+      );
+      return;
+    }
+    this.reportFailureAfterCredit(tx, callbackData);
+  }
+
+  private reportFailureAfterCredit(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): void {
+    reportMoneyAnomaly(
+      this.logger,
+      'fedapay_failure_after_credit',
+      `FedaPay sent ${callbackData.name} (status ${callbackData.entity.status}) for tx ${tx.id} after we credited it (row ${tx.status}${
+        tx.error_code ? `, ${tx.error_code}` : ''
+      }); no automatic reversal, reconcile manually`,
+      {
+        transactionId: tx.id,
+        reference: tx.reference,
+        amount: tx.amount,
+        rowStatus: tx.status,
+        paymentEntity: tx.payment_entity,
+        event: callbackData.name,
+        fedapayStatus: callbackData.entity.status,
+        fedapayEntityId: callbackData.entity?.id,
+      }
+    );
+  }
+
+  /**
+   * True only when the live record passes the same strict SUCCESS check used to credit
+   * (status, amount #591, currency, reference #592 incl. its scoped legacy rule). Anything
+   * else (missing stored or live reference, amount/currency mismatch, transient, incomplete,
+   * read failure, mock) returns false so the alert fires: fail toward alerting.
+   */
+  private async isLiveFedaPayStillApproved(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<boolean> {
+    if (this.skipsLiveRecheck(tx)) return false;
+    const recheck = this.withFedaPayRecheckId(tx, callbackData);
+    if (!recheck.transaction_id?.trim()) return false;
+    try {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(recheck, 'SUCCESS');
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** Order attempt we cancelled to make room for a retry (or a late winner), #545. */
@@ -467,9 +812,11 @@ export class MobilePaymentCallbackProcessor {
     tx: MobilePaymentTransaction,
     providerTransactionId: string
   ): Promise<void> {
-    if (!this.isMockedTransaction(tx)) {
+    if (!this.skipsLiveRecheck(tx)) {
+      // QA #587 A2: a superseded FedaPay row may have no transaction_id (N2); re-check the
+      // webhook's entity id (reference must still match) instead of rejecting it.
       await this.mobilePaymentsService.assertProviderConfirmsCallback(
-        tx,
+        this.withFedaPayRecheckId(tx, providerTransactionId),
         'SUCCESS'
       );
     }
@@ -501,6 +848,241 @@ export class MobilePaymentCallbackProcessor {
       `Late success on superseded order tx ${tx.id} (${tx.reference}): ${outcome}${
         moved ? '' : ' (row already moved by a concurrent delivery)'
       }`
+    );
+  }
+
+  /**
+   * F3: Handle approve-after-decline for wallet top-up rows ONLY.
+   * Re-check live, CAS claim BEFORE credit, keep transaction_id.
+   */
+  private async handleLateSuccessOnFailedTopUp(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    this.logger.log(
+      `F3 Late success: Processing approved callback for failed top-up tx ${tx.id} (${tx.reference})`
+    );
+    
+    // F3: Wallet top-ups have payment_entity null or 'account'
+    const isWalletTopUp = tx.payment_entity == null || tx.payment_entity === 'account';
+    
+    if (!isWalletTopUp) {
+      // Money captured but not applied - this is an anomaly that requires investigation
+      this.logger.error(
+        `Late success on failed ${tx.payment_entity} tx ${tx.id} (${tx.reference}): money captured but entity is not a wallet. MONEY ANOMALY - requires manual review.`
+      );
+      await reportMoneyAnomaly(
+        this.logger,
+        'late_success_non_wallet',
+        `Late success on ${tx.payment_entity} tx ${tx.id}: approved after decline, money captured but not applied`,
+        {
+          transactionId: tx.id,
+          reference: tx.reference,
+          entity: tx.payment_entity,
+          entityId: tx.entity_id,
+        }
+      );
+      return;
+    }
+
+    // F3: Live re-check (status, amount, XOF, reference) against the provider record
+    await this.confirmLateSuccessLive(tx, callbackData, 'top_up');
+
+    // F3: CAS claim failed→processing BEFORE crediting
+    const claimed = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'failed',
+      { status: 'processing' }
+    );
+
+    if (!claimed) {
+      this.logger.warn(
+        `Late success on failed top-up ${tx.id}: concurrent claim won`
+      );
+      return;
+    }
+
+    // F3: Credit wallet with idempotency key momo-deposit:<tx id>
+    const credited = await this.creditWalletIfNeeded(tx);
+    if (!credited) {
+      // L5: release our own claim only (CAS), like the order path.
+      await this.databaseService
+        .updateTransactionIfStatus(tx.id, 'processing', { status: 'failed' })
+        .catch((e: any) =>
+          this.logger.error(
+            `Could not release late-success claim on ${tx.id}: ${e?.message ?? e}`
+          )
+        );
+      throw new Error(
+        `Wallet credit failed for late success on failed top-up ${tx.id}; will retry`
+      );
+    }
+
+    // F3: Mark success (CAS on our processing claim), KEEP the stored transaction_id
+    const marked = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'processing',
+      { status: 'success', error_code: LATE_SUCCESS_APPLIED }
+    );
+    if (!marked) {
+      this.logger.warn(
+        `Late success on failed top-up ${tx.id}: processing -> success CAS lost`
+      );
+    }
+    
+    this.logger.log(
+      `F3 Late success: Successfully credited wallet for tx ${tx.id} (${tx.reference})`
+    );
+    
+    // F3: Raise money alert for late success
+    await reportMoneyAnomaly(
+      this.logger,
+      'late_success_wallet_credited',
+      `Late success: tx ${tx.id} declined then approved, wallet credited`,
+      {
+        transactionId: tx.id,
+        reference: tx.reference,
+        amount: tx.amount,
+        currency: tx.currency,
+      }
+    );
+
+    this.logger.warn(
+      `Late success on failed top-up ${tx.id} (${tx.reference}): claimed, credited, success`
+    );
+  }
+
+  /**
+   * F3: Late success is confirmed against the LIVE provider record only, never the
+   * webhook body. assertProviderConfirmsCallback re-fetches the FedaPay transaction
+   * and requires live status approved, live currency XOF, live amount === stored
+   * amount and live reference === stored reference. A definite mismatch
+   * (CallbackLiveMismatchError) is reported here as a money anomaly and rethrown, so
+   * nothing is credited; processFedaPayCallback then acknowledges it (2xx) without a
+   * second alert. Transient errors are rethrown for the provider retry (5xx).
+   */
+  private async confirmLateSuccessLive(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto,
+    kind: 'top_up' | 'order'
+  ): Promise<void> {
+    if (this.skipsLiveRecheck(tx)) return;
+    try {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(
+        this.withFedaPayRecheckId(tx, callbackData),
+        'SUCCESS'
+      );
+    } catch (error: unknown) {
+      if (error instanceof CallbackLiveMismatchError && !error.alerted) {
+        reportMoneyAnomaly(
+          this.logger,
+          `late_success_${kind}_live_mismatch`,
+          `Late success on ${kind} tx ${tx.id} rejected by live re-check: ${error.message} (${error.detail})`,
+          {
+            transactionId: tx.id,
+            reference: tx.reference,
+            amount: tx.amount,
+            reason: error.reason,
+          }
+        );
+        error.alerted = true;
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * F3: approve-after-decline on a plain FAILED order attempt. Superseded attempts
+   * (isRecoverableLateOrderSuccess) never get here; they take
+   * handleLateSuccessOnSupersededOrderTx first. Money order:
+   * 1. live re-check (amount / XOF / reference on the provider record),
+   * 2. CAS failed -> processing (one writer),
+   * 3. credit the payer wallet (momo-deposit:<tx id>, idempotent),
+   * 4. let the order classify it exactly like the superseded path (M1): an unpaid live
+   *    order is paid with this attempt ('applied'); a cancelled / terminal order or one
+   *    already paid by another attempt or the wallet keeps the money in the wallet and
+   *    records DUPLICATE_PAYMENT_CREDITED ('duplicate'); the order is never reopened,
+   * 5. CAS processing -> success with LATE_SUCCESS_APPLIED or DUPLICATE_PAYMENT_CREDITED,
+   * 6. alert, now that the outcome is known.
+   * A failure in 3-4 puts the row back to failed and rethrows, so the provider retry
+   * runs this path again (credit and finalize are idempotent).
+   */
+  private async handleLateSuccessOnFailedOrderPayment(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    await this.confirmLateSuccessLive(tx, callbackData, 'order');
+
+    const claimed = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'failed',
+      { status: 'processing' }
+    );
+    if (!claimed) {
+      this.logger.warn(
+        `Late success on failed order payment ${tx.id}: concurrent claim won`
+      );
+      return;
+    }
+
+    let outcome: 'applied' | 'duplicate';
+    try {
+      const credited = await this.creditWalletIfNeeded(tx);
+      if (!credited) {
+        throw new Error(
+          `Wallet credit failed for late success on failed order payment ${tx.id}; will retry`
+        );
+      }
+      const handler = findPaymentCallbackHandler(
+        this.resolveHandlers(),
+        tx.payment_entity
+      );
+      outcome = handler?.onLateSuccessAfterSupersede
+        ? await handler.onLateSuccessAfterSupersede(tx)
+        : 'duplicate';
+    } catch (error: any) {
+      await this.databaseService
+        .updateTransactionIfStatus(tx.id, 'processing', { status: 'failed' })
+        .catch((e: any) =>
+          this.logger.error(
+            `Could not release late-success claim on ${tx.id}: ${e?.message ?? e}`
+          )
+        );
+      throw new Error(
+        `Late success on failed order payment ${tx.id} not finished: ${
+          error?.message ?? error
+        }; will retry`
+      );
+    }
+
+    // Keep the stored transaction_id (F-L3); only status and marker change.
+    const errorCode =
+      outcome === 'applied' ? LATE_SUCCESS_APPLIED : DUPLICATE_PAYMENT_CREDITED;
+    const marked = await this.databaseService.updateTransactionIfStatus(
+      tx.id,
+      'processing',
+      { status: 'success', error_code: errorCode }
+    );
+    if (!marked) {
+      this.logger.warn(
+        `Late success on failed order payment ${tx.id}: processing -> success CAS lost`
+      );
+    }
+
+    await reportMoneyAnomaly(
+      this.logger,
+      outcome === 'applied' ? 'late_success_order_applied' : 'late_success_order_duplicate',
+      outcome === 'applied'
+        ? `Late success: order tx ${tx.id} declined then approved; wallet credited and applied to order ${tx.entity_id}`
+        : `Late success: order tx ${tx.id} declined then approved; order ${tx.entity_id} was cancelled or already paid, amount kept in the client wallet`,
+      {
+        transactionId: tx.id,
+        reference: tx.reference,
+        orderId: tx.entity_id,
+        amount: tx.amount,
+        currency: tx.currency,
+        outcome,
+      }
     );
   }
 
@@ -564,7 +1146,10 @@ export class MobilePaymentCallbackProcessor {
     tx: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
-    const providerTxId = String(callbackData.entity.id);
+    // F-L3: Preserve stored mock- transaction_id; don't overwrite with numeric id
+    const providerTxId = tx.transaction_id?.startsWith('mock-')
+      ? tx.transaction_id
+      : String(callbackData.entity.id);
     const isApproved = callbackData.entity.status === 'approved';
     
     if (
@@ -902,17 +1487,24 @@ export class MobilePaymentCallbackProcessor {
     }
   }
 
+  /**
+   * F-L3: Mark processing→success. Never overwrite a stored mock-* transaction_id.
+   */
   private async markProcessingSuccess(
     transactionId: string,
     providerTransactionId: string
   ): Promise<boolean> {
+    // F-L3: Always include transaction_id when provided (including mock- ids).
+    // Mock ids are explicitly passed through to ensure they're preserved and not overwritten.
+    const updateFields: any = { status: 'success' };
+    if (providerTransactionId) {
+      updateFields.transaction_id = providerTransactionId;
+    }
+    
     return this.databaseService.updateTransactionIfStatus(
       transactionId,
       'processing',
-      {
-        status: 'success',
-        ...(providerTransactionId ? { transaction_id: providerTransactionId } : {}),
-      }
+      updateFields
     );
   }
 
@@ -1335,7 +1927,12 @@ export class MobilePaymentCallbackProcessor {
     transaction: MobilePaymentTransaction,
     callbackData: FedaPayCallbackDto
   ): Promise<void> {
-    if (callbackData.entity.status !== 'declined' && callbackData.entity.status !== 'canceled') {
+    const status = callbackData.entity.status;
+    // N2: expiry fails orders, deposits and claims exactly like a decline (the customer never
+    // paid, the order must not stay waiting). Other entities keep the old behaviour.
+    const expiryFails =
+      status === 'expired' && EXPIRY_FAILS_PAYMENT_ENTITIES.has(String(transaction.payment_entity || ''));
+    if (status !== 'declined' && status !== 'canceled' && !expiryFails) {
       return;
     }
     const handlers = this.resolveHandlers();
