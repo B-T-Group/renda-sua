@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
   Logger,
@@ -24,6 +25,10 @@ import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
 import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
+import { BadRequestException } from '@nestjs/common';
+import { isoCountryCode } from '../orders/delivery-pricing.util';
+import { validatePhoneNumber } from './phone-validation.util';
+import { sanitizeProviderError } from './sanitize-provider-error.util';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
@@ -48,7 +53,14 @@ import { MobileTransactionAccessService } from './mobile-transaction-access.serv
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
-import { sanitizeProviderError } from './sanitize-provider-error.util';
+import {
+  MIN_SECRET_REFRESH_TOKEN_LENGTH,
+  allowedSecretRefreshIps,
+  firstNonEmptyString,
+  mypvitSecretName,
+  normalizeIp,
+  secretRefreshTokenMatches,
+} from './secret-refresh-auth';
 
 export const INITIATE_TRANSACTION_TYPES = ['PAYMENT', 'GIVE_CHANGE'] as const;
 
@@ -313,6 +325,16 @@ export class MobilePaymentsController {
 
       this.assertMobileMoneyCurrency(paymentRequest, resolvedProvider);
 
+      // F-L2, F-M3, F-M6: Validate phone before ANY row creation
+      if (paymentRequest.customerPhone) {
+        const itemCountry = (paymentRequest as any).itemCountry;
+        await this.validatePhoneForPayment(
+          paymentRequest.customerPhone,
+          resolvedProvider,
+          itemCountry
+        );
+      }
+
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
         paymentRequest.callbackUrl ||
@@ -365,6 +387,14 @@ export class MobilePaymentsController {
         await this.databaseService.updateTransaction(transaction.id, {
           transaction_id: paymentResponse.transactionId,
         });
+        
+        // G2: Schedule mock callback AFTER persisting the transaction_id
+        if (paymentResponse.transactionId.startsWith('mock-')) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentResponse.transactionId,
+            reference
+          );
+        }
       } else {
         await this.databaseService.updateTransaction(transaction.id, {
           status: 'failed',
@@ -656,7 +686,6 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      // The status re-check can fail with a provider error: never log it raw.
       const sanitized = sanitizeProviderError(error);
       this.logger.error(`MyPVIT callback processing error: ${sanitized.message}`);
       throw new HttpException(
@@ -706,7 +735,6 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      // The status re-check can fail with a provider error: never log it raw.
       const sanitized = sanitizeProviderError(error);
       this.logger.error(`Freemopay callback processing error: ${sanitized.message}`);
       throw new HttpException(
@@ -783,9 +811,8 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error(
-        `FedaPay callback processing error: ${sanitizeProviderError(error).message}`
-      );
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`FedaPay callback processing error: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,
@@ -917,97 +944,154 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Handle secret refresh webhook callback
+   * MyPVit secret reception webhook ("URL de réception de clé secrète").
+   *
+   * Overwrites the live MyPVit operation-account secret, so it fails closed:
+   * - the URL must carry MYPVIT_SECRET_REFRESH_TOKEN as its last path segment (MyPVit
+   *   documents no signature or custom header for this call); constant-time compare;
+   * - the caller must be one of MyPVit's documented IPs (MYPVIT_SECRET_REFRESH_ALLOWED_IPS
+   *   overrides the list);
+   * - the Airtel/Moov operation account codes must be configured (no hard-coded fallback);
+   * - the response echoes nothing about the secret store.
+   * Validation failures are 4xx; secret values are never logged.
    */
   @Public()
-  @Post('secret-refresh')
+  @Post('secret-refresh/:token')
+  @HttpCode(HttpStatus.OK)
   async handleSecretRefreshCallback(
+    @Param('token') token: string,
     @Body()
     webhookData: {
-      merchant_operation_account_code: string;
-      secret_key: string;
-      expires_in: number;
+      merchant_operation_account_code?: string;
+      operation_account_code?: string;
+      secret_key?: string;
+      secret?: string;
+      expires_in?: number;
     },
-    @Query('provider') provider?: string
+    @Req() req: Request
   ) {
-    try {
-      // Never log secret_key: it is the new live MyPVit secret.
-      this.logger.log(
-        `Received secret refresh webhook: account=${
-          webhookData?.merchant_operation_account_code ?? ''
-        } expires_in=${webhookData?.expires_in ?? ''} provider=${provider ?? ''} secret_key=${
-          webhookData?.secret_key ? 'PRESENT' : 'MISSING'
-        }`
-      );
+    this.assertSecretRefreshAuthorized(token, req);
 
-      // Validation failures are 4xx: Sentry captures 5xx, with the request attached.
-      if (!webhookData?.secret_key) {
-        throw new HttpException(
-          { success: false, message: 'Missing required webhook data: secret_key' },
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
-      const environment = process.env.NODE_ENV || 'development';
-      const secretName = `${environment}-rendasua-backend-secrets`;
-
-      // Determine which secret key to update based on operation account code
-      const airtelAccountCode =
-        process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B';
-      const moovAccountCode =
-        process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B';
-
-      let secretKeyName: string;
-      if (webhookData.merchant_operation_account_code === airtelAccountCode) {
-        secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY'; // RENAMED
-        this.logger.log('Updating Airtel secret key');
-      } else if (
-        webhookData.merchant_operation_account_code === moovAccountCode
-      ) {
-        secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
-        this.logger.log('Updating MOOV secret key');
-      } else {
-        throw new HttpException(
-          { success: false, message: 'Invalid merchant operation account code' },
-          HttpStatus.BAD_REQUEST
-        );
-      }
-
-      this.logger.log(`Updating ${secretKeyName} in AWS Secrets Manager: ${secretName}`);
-
-      await this.mobilePaymentsService.updateSecretInSecretsManager(
-        secretName,
-        secretKeyName,
-        webhookData.secret_key
-      );
-
-      return {
-        success: true,
-        data: {
-          message: `${secretKeyName} updated successfully`,
-          secretName,
-          operation_account_code: webhookData.merchant_operation_account_code,
-          expires_in: webhookData.expires_in,
-          updated_at: new Date().toISOString(),
-        },
-      };
-    } catch (error: any) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      const sanitized = sanitizeProviderError(error);
-      this.logger.error(`Error handling secret refresh webhook: ${sanitized.message}`);
+    // docs.mypvit.pro documents `secret` / `operation_account_code` (SyncSecretKeyResponse);
+    // the long-standing handler read `secret_key` / `merchant_operation_account_code`. The
+    // first non-empty string of each pair wins, so either shape (or both) is accepted.
+    const secret = firstNonEmptyString(webhookData?.secret, webhookData?.secret_key);
+    const accountCode = firstNonEmptyString(
+      webhookData?.operation_account_code,
+      webhookData?.merchant_operation_account_code
+    );
+    if (secret === undefined || secret.length > 512) {
       throw new HttpException(
-        {
-          success: false,
-          message: 'Failed to handle secret refresh webhook',
-          error: sanitized.message,
-        },
+        { success: false, message: 'Invalid secret refresh payload' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (accountCode === undefined) {
+      throw new HttpException(
+        { success: false, message: 'Invalid secret refresh payload' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const airtelAccountCode =
+      process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE?.trim();
+    const moovAccountCode = process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE?.trim();
+    if (!airtelAccountCode || !moovAccountCode) {
+      this.logger.error(
+        'MyPVit secret refresh rejected: Airtel/Moov operation account codes are not configured'
+      );
+      throw new HttpException(
+        { success: false, message: 'Secret refresh is not available' },
+        HttpStatus.SERVICE_UNAVAILABLE
+      );
+    }
+
+    // QA #593 R1: identical codes = one account, one secret: store it under both names
+    // (one atomic Secrets Manager write). Production refuses to boot with identical codes.
+    let secretKeyNames: Array<'AIRTEL_MYPVIT_SECRET_KEY' | 'MOOV_MYPVIT_SECRET_KEY'>;
+    if (accountCode === airtelAccountCode && accountCode === moovAccountCode) {
+      secretKeyNames = ['AIRTEL_MYPVIT_SECRET_KEY', 'MOOV_MYPVIT_SECRET_KEY'];
+    } else if (accountCode === airtelAccountCode) {
+      secretKeyNames = ['AIRTEL_MYPVIT_SECRET_KEY'];
+    } else if (accountCode === moovAccountCode) {
+      secretKeyNames = ['MOOV_MYPVIT_SECRET_KEY'];
+    } else {
+      this.logger.warn('MyPVit secret refresh rejected: unknown operation account code');
+      throw new HttpException(
+        { success: false, message: 'Invalid secret refresh payload' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const [primaryKey, ...alsoKeys] = secretKeyNames;
+    const keysLabel = secretKeyNames.join(' and ');
+    try {
+      if (alsoKeys.length > 0) {
+        // One write: the extra names ride in the same merged SecretString.
+        await this.mobilePaymentsService.updateSecretInSecretsManager(
+          mypvitSecretName(),
+          primaryKey,
+          secret,
+          Object.fromEntries(alsoKeys.map((k) => [k, secret]))
+        );
+      } else {
+        await this.mobilePaymentsService.updateSecretInSecretsManager(mypvitSecretName(), primaryKey, secret);
+      }
+    } catch (error: unknown) {
+      // Name only: the message can quote the secret store (JSON.parse) or the request.
+      const name = (error as { name?: string } | null)?.name || 'Error';
+      this.logger.error(`MyPVit secret refresh failed to store ${keysLabel}: ${name}`);
+      throw new HttpException(
+        { success: false, message: 'Failed to handle secret refresh webhook' },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+
+    this.logger.log(`MyPVit secret refresh stored ${keysLabel}`);
+    return { success: true, data: { updated_at: new Date().toISOString() } };
+  }
+
+  /** Old unauthenticated URL: always refused, so a stale registration fails closed. */
+  @Public()
+  @Post('secret-refresh')
+  rejectUnauthenticatedSecretRefresh(@Req() req: Request): never {
+    this.logger.warn(
+      `MyPVit secret refresh rejected: no token in URL (ip=${normalizeIp(req?.ip)})`
+    );
+    throw new HttpException({ success: false, message: 'Unauthorized' }, HttpStatus.UNAUTHORIZED);
+  }
+
+  /**
+   * QA #593 S4: one response for every authentication failure, decided in a constant order.
+   * The IP check and the token compare both always run (no short-circuit), and an
+   * unconfigured token, a non-allow-listed IP and a wrong token all get the same 401 body, so
+   * a caller learns nothing about which check failed (or whether the endpoint is configured).
+   * The reason goes to the log only.
+   */
+  private assertSecretRefreshAuthorized(token: string | undefined, req: Request): void {
+    const expected = process.env.MYPVIT_SECRET_REFRESH_TOKEN?.trim() ?? '';
+    const configured = expected.length >= MIN_SECRET_REFRESH_TOKEN_LENGTH;
+    const ip = normalizeIp(req?.ip);
+    const allowed = allowedSecretRefreshIps(process.env.MYPVIT_SECRET_REFRESH_ALLOWED_IPS);
+    const ipAllowed = allowed.includes(ip);
+    // Always compare (against a dummy when unconfigured) so timing doesn't reveal the state.
+    const tokenOk = secretRefreshTokenMatches(
+      token,
+      configured ? expected : 'x'.repeat(MIN_SECRET_REFRESH_TOKEN_LENGTH)
+    );
+    if (configured && ipAllowed && tokenOk) return;
+
+    if (!configured) {
+      this.logger.error(
+        'MyPVit secret refresh rejected: MYPVIT_SECRET_REFRESH_TOKEN is not configured'
+      );
+    } else {
+      const reasons = [!ipAllowed ? 'ip not allow-listed' : '', !tokenOk ? 'bad token' : '']
+        .filter(Boolean)
+        .join(', ');
+      this.logger.warn(`MyPVit secret refresh rejected: ${reasons} (ip=${ip})`);
+    }
+    throw new HttpException({ success: false, message: 'Unauthorized' }, HttpStatus.UNAUTHORIZED);
   }
 
   /**
@@ -1328,6 +1412,83 @@ export class MobilePaymentsController {
     }
   }
 
+  /**
+   * F-L2, F-M3, F-M6: Validate phone number against provider and market BEFORE creating any row.
+   * Returns 400 BadRequestException on validation failure.
+   */
+  private async validatePhoneForPayment(
+    customerPhone: string,
+    provider: string,
+    itemCountry?: string
+  ): Promise<void> {
+    // Derive region from resolved provider for accurate phone parsing
+    const providerRegionMap: Record<string, string> = {
+      fedapay: 'TG',
+      freemopay: 'CM',
+      mypvit: 'GA',
+      airtel: 'GA',
+      moov: 'GA',
+    };
+    const region = providerRegionMap[provider] || 'GA';
+    const phoneValidation = validatePhoneNumber(customerPhone, region);
+    
+    if (!phoneValidation.isValid) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Invalid phone number format',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
+    const phoneCountry = phoneValidation.regionCode;
+
+    // F-M3 & F-M6: Phone country must match item/market country (bidirectional)
+    // This check MUST run before provider-specific checks so that country mismatches
+    // are reported as PHONE_COUNTRY_MISMATCH rather than generic INVALID_PHONE_NUMBER
+    if (itemCountry) {
+      // Normalize item country to ISO (handles "Togo", "TOGO", "TG", etc.)
+      const normalizedItemCountry = isoCountryCode(itemCountry);
+      if (normalizedItemCountry && phoneCountry !== normalizedItemCountry) {
+        throw new BadRequestException({
+          success: false,
+          message: `Payment phone number must match the item's country (${normalizedItemCountry})`,
+          error: 'PHONE_COUNTRY_MISMATCH',
+          data: {
+            phoneCountry,
+            itemCountry: normalizedItemCountry,
+          },
+        });
+      }
+    }
+
+    // F-L2: FedaPay requires Togo phone
+    if (provider === 'fedapay' && phoneCountry !== 'TG') {
+      throw new BadRequestException({
+        success: false,
+        message: 'FedaPay requires a Togo (+228) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
+    // F-M6: Provider-specific country validation
+    // Freemopay -> CM only
+    if (provider === 'freemopay' && phoneCountry !== 'CM') {
+      throw new BadRequestException({
+        success: false,
+        message: 'Freemopay requires a Cameroon (+237) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+    // MyPVit/Airtel/Moov -> GA only
+    if (['mypvit', 'airtel', 'moov'].includes(provider) && phoneCountry !== 'GA') {
+      throw new BadRequestException({
+        success: false,
+        message: `${provider} requires a Gabon (+241) phone number`,
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+  }
+
   private assertMobileMoneyCurrency(
     request: InitiatePaymentDto,
     resolvedProvider: string
@@ -1445,6 +1606,7 @@ export class MobilePaymentsController {
         message: result.data?.message,
         provider: result.data?.provider,
         ...(result.data?.reason ? { status: result.data.status, reason: result.data.reason } : {}),
+        ...(result.data?.error ? { error: result.data.error } : {}),
       },
     };
   }
@@ -1453,8 +1615,9 @@ export class MobilePaymentsController {
     transactionId: string,
     status: Pick<MobileTransactionStatus, 'status' | 'message'>
   ): Promise<void> {
+    // ambiguous / refunded never change the row from a poll (refunded needs manual review).
     const persistedStatus =
-      status.status === 'ambiguous' ? 'pending' : status.status;
+      status.status === 'ambiguous' || status.status === 'refunded' ? 'pending' : status.status;
     await this.databaseService.updateTransaction(transactionId, {
       status: persistedStatus,
       error_message: status.message,

@@ -38,6 +38,7 @@ import { MobilePaymentsService } from './mobile-payments.service';
 import { FedaPayService } from './providers/fedapay.service';
 import { FreemopayService } from './providers/freemopay.service';
 import { MyPVitService } from './providers/mypvit.service';
+import { mypvitSecretName } from './secret-refresh-auth';
 import { redactSecrets } from './sanitize-provider-error.util';
 
 // Dummy keys are assembled at runtime so no key-shaped literal sits in the source
@@ -186,12 +187,35 @@ function fedapaySdkError() {
   });
 }
 
+// #593: /secret-refresh is authenticated (path token + MyPVit IP) and needs both account codes.
+const REFRESH_TOKEN = 'T'.repeat(40);
+const MYPVIT_REQ = { ip: '176.31.65.18' } as any;
+const REFRESH_ENV = {
+  MYPVIT_SECRET_REFRESH_TOKEN: REFRESH_TOKEN,
+  MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE: 'ACC_AIRTEL',
+  MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE: 'ACC_MOOV',
+};
+
 describe('1. MyPVit secret rotation never logs secret values', () => {
   const webhook = {
-    merchant_operation_account_code: 'ACC_68A722C33473B',
+    merchant_operation_account_code: 'ACC_AIRTEL',
     secret_key: NEW_SECRET,
     expires_in: 3600,
   };
+  const savedEnv: Record<string, string | undefined> = {};
+  beforeEach(() => {
+    for (const [k, v] of Object.entries(REFRESH_ENV)) {
+      savedEnv[k] = process.env[k];
+      process.env[k] = v;
+    }
+    delete process.env.MYPVIT_SECRET_REFRESH_ALLOWED_IPS;
+  });
+  afterEach(() => {
+    for (const [k, v] of Object.entries(savedEnv)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
 
   it('success: logs only key names; the new secret goes to AWS but to no log line', async () => {
     awsSend.mockImplementation(async (cmd: any) =>
@@ -200,14 +224,40 @@ describe('1. MyPVit secret rotation never logs secret values', () => {
         : {}
     );
 
-    const res = await controller(mps()).handleSecretRefreshCallback(webhook, 'mypvit');
+    const res = await controller(mps()).handleSecretRefreshCallback(REFRESH_TOKEN, webhook, MYPVIT_REQ);
 
     expect(res.success).toBe(true);
     const update = awsSend.mock.calls.map(([c]) => c).find((c: any) => c.kind === 'update');
     expect(JSON.parse(update.input.SecretString).AIRTEL_MYPVIT_SECRET_KEY).toBe(NEW_SECRET);
     const text = everything([res]);
-    expect(text).toContain('Updating secret production-rendasua-backend-secrets with key AIRTEL_MYPVIT_SECRET_KEY'.replace('production', process.env.NODE_ENV || 'development'));
-    expect(text).toContain('secret_key=PRESENT');
+    // QA #593 R3: the name comes from mypvitSecretName() (DEPLOYMENT_ENV/NODE_ENV rule), not NODE_ENV.
+    expect(update.input.SecretId).toBe(mypvitSecretName());
+    expect(text).toContain(`Updating secret ${mypvitSecretName()} with key AIRTEL_MYPVIT_SECRET_KEY`);
+    expect(text).toContain('MyPVit secret refresh stored AIRTEL_MYPVIT_SECRET_KEY');
+    expectNoSecrets(text);
+  });
+
+  it('QA #593 R1: identical codes (one account) store the key under BOTH names in one write', async () => {
+    process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE = 'ACC_AIRTEL';
+    awsSend.mockImplementation(async (cmd: any) =>
+      cmd.kind === 'get'
+        ? { SecretString: JSON.stringify({ AIRTEL_MYPVIT_SECRET_KEY: OLD_AIRTEL, MOOV_MYPVIT_SECRET_KEY: OLD_MOOV, OTHER: 'kept' }) }
+        : {}
+    );
+
+    const res = await controller(mps()).handleSecretRefreshCallback(REFRESH_TOKEN, webhook, MYPVIT_REQ);
+
+    expect(res.success).toBe(true);
+    const updates = awsSend.mock.calls.map(([c]) => c).filter((c: any) => c.kind === 'update');
+    expect(updates).toHaveLength(1);
+    expect(updates[0].input.SecretId).toBe(mypvitSecretName());
+    expect(JSON.parse(updates[0].input.SecretString)).toEqual({
+      AIRTEL_MYPVIT_SECRET_KEY: NEW_SECRET,
+      MOOV_MYPVIT_SECRET_KEY: NEW_SECRET,
+      OTHER: 'kept',
+    });
+    const text = everything([res]);
+    expect(text).toContain('MyPVit secret refresh stored AIRTEL_MYPVIT_SECRET_KEY and MOOV_MYPVIT_SECRET_KEY');
     expectNoSecrets(text);
   });
 
@@ -221,12 +271,14 @@ describe('1. MyPVit secret rotation never logs secret values', () => {
     expect(() => JSON.parse(OLD_AIRTEL)).toThrow('"sk_live_OL"');
 
     const err = await controller(mps())
-      .handleSecretRefreshCallback(webhook, 'mypvit')
+      .handleSecretRefreshCallback(REFRESH_TOKEN, webhook, MYPVIT_REQ)
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(HttpException);
     const body = (err as HttpException).getResponse();
-    expect(JSON.stringify(body)).toContain('SyntaxError');
+    // #593 handler: generic body, error class name in the log only.
+    expect(body).toEqual({ success: false, message: 'Failed to handle secret refresh webhook' });
+    expect(everything()).toContain('failed to store AIRTEL_MYPVIT_SECRET_KEY: Error');
     expectNoSecrets(everything([body, err]));
   });
 
@@ -255,13 +307,13 @@ describe('1. MyPVit secret rotation never logs secret values', () => {
     const service = { updateSecretInSecretsManager: jest.fn().mockRejectedValue(raw) } as any;
 
     const err = await controller(service)
-      .handleSecretRefreshCallback(webhook, 'mypvit')
+      .handleSecretRefreshCallback(REFRESH_TOKEN, webhook, MYPVIT_REQ)
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(HttpException);
     const body = (err as HttpException).getResponse() as any;
-    expect(body.error).toBe('could not store sk_live_REDACTED');
-    expect(everything()).toContain('Error handling secret refresh webhook: could not store sk_live_REDACTED');
+    expect(body).toEqual({ success: false, message: 'Failed to handle secret refresh webhook' });
+    expect(everything()).toContain('MyPVit secret refresh failed to store AIRTEL_MYPVIT_SECRET_KEY: Error');
     expectNoSecrets(everything([body]));
   });
 
@@ -270,10 +322,10 @@ describe('1. MyPVit secret rotation never logs secret values', () => {
     const ctrl = controller(service);
 
     const missing = await ctrl
-      .handleSecretRefreshCallback({ ...webhook, secret_key: '' }, 'mypvit')
+      .handleSecretRefreshCallback(REFRESH_TOKEN, { ...webhook, secret_key: '' }, MYPVIT_REQ)
       .catch((e: unknown) => e);
     const unknown = await ctrl
-      .handleSecretRefreshCallback({ ...webhook, merchant_operation_account_code: 'ACC_ATTACKER' }, 'mypvit')
+      .handleSecretRefreshCallback(REFRESH_TOKEN, { ...webhook, merchant_operation_account_code: 'ACC_ATTACKER' }, MYPVIT_REQ)
       .catch((e: unknown) => e);
 
     expect((missing as HttpException).getStatus()).toBe(400);
