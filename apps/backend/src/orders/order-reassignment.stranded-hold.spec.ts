@@ -121,13 +121,14 @@ function world(opts: { revertWins?: boolean; releaseOk?: boolean } = {}) {
     async (mutation: string, vars: Record<string, any> = {}) => {
       if (mutation.includes('ReleaseAgentOrderHold')) {
         // Mirrors release_agent_order_hold: net under the (here implicit) lock, min(net,
-        // cap), the given key or a state-derived one; the ledger write itself goes
+        // cap), the one state-derived key (QA N1); the ledger write itself goes
         // through accounts.registerTransaction so tests can make it fail.
         const rows = ledger.filter((l) => l.accountId === vars.accountId && l.referenceId === vars.orderId);
         const holds = rows.filter((l) => l.type === 'hold');
         const rels = rows.filter((l) => l.type === 'release');
         const net = holds.reduce((t, l) => t + l.amount, 0) - rels.reduce((t, l) => t + l.amount, 0);
-        const key = vars.key ?? `agent-hold-release:${vars.orderId}:${vars.accountId}:h${holds.length}:r${rels.length}`;
+        expect(vars).not.toHaveProperty('key');
+        const key = `agent-hold-release:${vars.orderId}:${vars.accountId}:h${holds.length}:r${rels.length}`;
         if (ledger.some((l) => l.key === key)) return { release_agent_order_hold: [] };
         const amount = Math.min(net, vars.cap ?? net);
         if (!(amount > 0)) return { release_agent_order_hold: [] };
@@ -209,7 +210,7 @@ function world(opts: { revertWins?: boolean; releaseOk?: boolean } = {}) {
     { runDispatchRound: jest.fn() } as any,
     accounts as any
   );
-  return { service, events, ledger, releases, accounts, state, orderEvents, executeMutation };
+  return { service, events, ledger, releases, accounts, state, orderEvents, executeMutation, executeQuery };
 }
 
 const stranded = (w: ReturnType<typeof world>) =>
@@ -303,7 +304,7 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
     expect(stranded(w)).toHaveLength(1);
   };
 
-  it("releases the first agent's hold once (their account, the stranded amount, keyed on the strand) and records the resolution", async () => {
+  it("releases the first agent's hold once (their account, the stranded amount, under the one function-derived key) and records the resolution", async () => {
     const w = world({ revertWins: false });
     await seedStranded(w);
     await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({
@@ -316,7 +317,7 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
         accountId: 'acct-agent-user-1',
         referenceId: 'order-1',
         amount: 700,
-        key: `stranded:release:${stranded(w)[0].id}`,
+        key: 'agent-hold-release:order-1:acct-agent-user-1:h1:r0',
       }),
     ]);
     const resolved = w.events.filter(
@@ -345,6 +346,20 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
     });
     expect(w.releases()).toHaveLength(1);
     expect(w.accounts.registerTransaction).toHaveBeenCalledTimes(2); // the failed one + the reconcile
+  });
+
+  it('QA #622 N2: the aged-out alert query failing does not stop the reconcile pass', async () => {
+    const w = world({ revertWins: false });
+    await seedStranded(w);
+    const real = w.executeQuery.getMockImplementation()!;
+    w.executeQuery.mockImplementation(async (q: string, v: Record<string, any>) => {
+      if (q.includes('query AgedOutStrandedAgentHolds')) throw new Error('hasura down');
+      return real(q, v);
+    });
+    const errSpy = jest.spyOn((w.service as any).logger, 'error').mockImplementation(() => undefined);
+    await expect(w.service.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 1, skipped: 0, failed: 0 });
+    expect(w.releases()).toHaveLength(1);
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('hasura down'));
   });
 
   it('#622: a zero net (already released some other way) credits nothing; the event is still resolved', async () => {
@@ -415,7 +430,7 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
     });
     expect(w.releases().map((r) => [r.amount, r.key])).toEqual([
       [700, 'first-cycle'],
-      [700, `stranded:release:${stranded(w)[0].id}`],
+      [700, "agent-hold-release:order-1:acct-agent-user-1:h2:r1"],
     ]);
   });
 
@@ -494,7 +509,7 @@ describe('#608 follow-up: reconcileStrandedAgentHolds', () => {
       failed: 0,
     });
     expect(w.releases()).toEqual([
-      expect.objectContaining({ key: 'stranded:release:oldest' }),
+      expect.objectContaining({ amount: 700, key: expect.stringMatching(/^agent-hold-release:/) }),
     ]);
   });
 
@@ -578,7 +593,7 @@ describe('#622: creditHoldRelease goes through release_agent_order_hold', () => 
     const w = world();
     await expect((w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })).resolves.toBe(true);
     const calls = (w as any).executeMutation.mock.calls.filter(([q]: [string]) => q.includes('ReleaseAgentOrderHold'));
-    expect(calls).toEqual([[expect.any(String), expect.objectContaining({ accountId: 'acct-agent-user-1', orderId: 'order-1', cap: null, key: null })]]);
+    expect(calls).toEqual([[expect.any(String), expect.objectContaining({ accountId: 'acct-agent-user-1', orderId: 'order-1', cap: null })]]);
     expect(w.releases().map((r) => r.amount)).toEqual([700]);
   });
 

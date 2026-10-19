@@ -107,7 +107,7 @@ describe('OrderReassignmentService hold release safety', () => {
     // #622: the net hold, released in one SQL function (key derived under its lock).
     expect(executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('release_agent_order_hold('),
-      expect.objectContaining({ accountId: 'acct-1', orderId: 'order-1', cap: null, key: null })
+      expect.objectContaining({ accountId: 'acct-1', orderId: 'order-1', cap: null })
     );
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
     expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();

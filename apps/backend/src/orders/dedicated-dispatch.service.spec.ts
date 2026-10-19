@@ -415,7 +415,7 @@ function world() {
           amount,
           transactionType: 'release',
           referenceId: vars.orderId,
-          idempotencyKey: (vars.key as string) ?? `agent-hold-release:${vars.orderId}:${vars.accountId}:h${state.holds.filter((h) => Number(h.agent_hold_amount) > 0).length}:r${state.ledgerReleases.length}`,
+          idempotencyKey: `agent-hold-release:${vars.orderId}:${vars.accountId}:h${state.holds.filter((h) => Number(h.agent_hold_amount) > 0).length}:r${state.ledgerReleases.length}`,
         } as any);
         if (!r.success) throw new Error((r as { error?: string }).error || 'release failed');
         return { release_agent_order_hold: [{ id: 'tx', amount }] };

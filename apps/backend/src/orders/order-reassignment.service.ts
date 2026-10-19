@@ -196,9 +196,9 @@ const STRANDED_HOLD_LOOKBACK_DAYS = 30;
 
 /** #622: release min(net, cap) under the account row lock (migration 20261019230000). */
 const RELEASE_AGENT_ORDER_HOLD_MUTATION = `
-  mutation ReleaseAgentOrderHold($accountId: uuid!, $orderId: uuid!, $cap: numeric, $key: String, $memo: String!) {
+  mutation ReleaseAgentOrderHold($accountId: uuid!, $orderId: uuid!, $cap: numeric, $memo: String!) {
     release_agent_order_hold(
-      args: { p_account_id: $accountId, p_order_id: $orderId, p_cap: $cap, p_idempotency_key: $key, p_memo: $memo }
+      args: { p_account_id: $accountId, p_order_id: $orderId, p_cap: $cap, p_memo: $memo }
     ) {
       id
       amount
@@ -882,7 +882,16 @@ export class OrderReassignmentService {
       const since = new Date(
         Date.now() - STRANDED_HOLD_LOOKBACK_DAYS * 86_400_000
       ).toISOString();
-      await this.alertAgedOutStrandedHolds(since);
+      // QA N2: an alert-query failure must not stop the reconcile pass itself.
+      try {
+        await this.alertAgedOutStrandedHolds(since);
+      } catch (error: unknown) {
+        this.logger.error(
+          `Stranded agent hold aged-out alert check failed: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
+      }
       // F3: unresolved only, oldest first, so a backlog can't starve older strands.
       const res = await this.hasura.executeQuery<{
         order_events: Array<{
@@ -911,9 +920,8 @@ export class OrderReassignmentService {
    * - F2 / PE blocker: the credit is `release_agent_order_hold` (see
    *   releaseNetAgentHold): under the agent account row lock it recomputes the net
    *   and writes balance + ledger row together, so two runs, two pods, or a run and a
-   *   live creditHoldRelease credit the held money once. The key
-   *   `stranded:release:<eventId>` (UNIQUE in account_transactions) also makes a
-   *   strand's own credit a one-off.
+   *   live creditHoldRelease credit the held money once. Both paths use the same
+   *   function-derived key (QA N1), so there is one key scheme, not two.
    * - The strand is marked resolved only after its credit exists (written now, or
    *   found by its key), or when the net held is confirmed 0.
    */
@@ -945,7 +953,7 @@ export class OrderReassignmentService {
         account.id,
         ev.order_id,
         `Hold released for order ${o.order_number}. Stranded after release (reconciled).`,
-        { cap: amount, idempotencyKey: `stranded:release:${ev.id}` }
+        { cap: amount }
       );
       if (!released.success)
         throw new Error(released.error || 'release failed');
@@ -1111,17 +1119,17 @@ export class OrderReassignmentService {
    * committed, so a hold is credited once whichever wins. The balance can no longer
    * move before its ledger row exists.
    *
-   * Idempotency: `opts.idempotencyKey` (the reconciler's `stranded:release:<eventId>`)
-   * is honoured by the function. Without it, the function derives
-   * `agent-hold-release:<order>:<account>:h<#holds>:r<#releases>` under the lock.
-   * `released` is what this call credited (0 when the net was already 0 or the key
-   * existed); `net` is the net held after the call.
+   * Idempotency (QA N1): one key scheme for every caller. The function derives
+   * `agent-hold-release:<order>:<account>:h<#holds>:r<#releases>` under the lock; no
+   * caller-supplied key exists, so the live path and the reconciler cannot credit the
+   * same hold under two different keys. `released` is what this call credited (0 when
+   * the net was already 0 or the key existed); `net` is the net held after the call.
    */
   private async releaseNetAgentHold(
     accountId: string,
     orderId: string,
     memo: string,
-    opts: { cap?: number; idempotencyKey?: string } = {}
+    opts: { cap?: number } = {}
   ): Promise<{ success: boolean; released: number; net: number; error?: string }> {
     try {
       const res = await this.hasura.executeMutation<{
@@ -1130,7 +1138,6 @@ export class OrderReassignmentService {
         accountId,
         orderId,
         cap: opts.cap ?? null,
-        key: opts.idempotencyKey ?? null,
         memo,
       });
       const released = Number(res?.release_agent_order_hold?.[0]?.amount ?? 0);

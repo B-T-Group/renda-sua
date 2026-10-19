@@ -22,11 +22,13 @@
 -- FOR UPDATE, so ledger inserts by other writers on this account (FK KEY SHARE) are
 -- not blocked by the lock itself.
 --
--- Idempotency: p_idempotency_key, when given, is honoured (UNIQUE
--- account_transactions.idempotency_key): an existing row with that key -> nothing
--- credited. When NULL, the key is derived under the lock from the ledger state,
--- agent-hold-release:<order>:<account>:h<#holds>:r<#releases>, so a retry of the same
--- state is a no-op too.
+-- Idempotency: ONE key scheme for every caller (live creditHoldRelease and the
+-- stranded-hold reconciler alike). The key is derived under the lock from the ledger
+-- state, agent-hold-release:<order>:<account>:h<#holds>:r<#releases>, and is
+-- UNIQUE (account_transactions.idempotency_key). Two callers that see the same ledger
+-- state derive the same key, so only one credit can land; a caller that runs after it
+-- sees r+1 and a net of 0. There is no caller-supplied key, so no second scheme can
+-- open an over-release window.
 --
 -- Returns the ledger row it wrote, or no row when nothing was credited (net <= 0, or
 -- the key already exists). A withheld balance smaller than the amount raises
@@ -37,7 +39,6 @@ CREATE OR REPLACE FUNCTION public.release_agent_order_hold(
   p_account_id uuid,
   p_order_id uuid,
   p_cap numeric,
-  p_idempotency_key text,
   p_memo text
 )
 RETURNS SETOF public.account_transactions
@@ -69,10 +70,7 @@ BEGIN
      AND reference_id = p_order_id
      AND transaction_type IN ('hold', 'release');
 
-  v_key := coalesce(
-    nullif(p_idempotency_key, ''),
-    format('agent-hold-release:%s:%s:h%s:r%s', p_order_id, p_account_id, v_holds, v_releases)
-  );
+  v_key := format('agent-hold-release:%s:%s:h%s:r%s', p_order_id, p_account_id, v_holds, v_releases);
   IF EXISTS (SELECT 1 FROM public.account_transactions WHERE idempotency_key = v_key) THEN
     RETURN;
   END IF;
@@ -101,5 +99,5 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION public.release_agent_order_hold(uuid, uuid, numeric, text, text) IS
+COMMENT ON FUNCTION public.release_agent_order_hold(uuid, uuid, numeric, text) IS
   '#622: release min(net held, cap) of an agent hold on one order; account row lock, balance + ledger in one transaction';

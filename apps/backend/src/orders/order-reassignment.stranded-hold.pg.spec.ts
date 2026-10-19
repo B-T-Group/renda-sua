@@ -158,8 +158,8 @@ function pgHasura(
       case 'ReleaseAgentOrderHold': {
         // As Hasura runs a tracked VOLATILE function: one statement, one transaction.
         const r = await pool.query(
-          `SELECT id, amount::float AS amount FROM public.release_agent_order_hold($1, $2, $3, $4, $5)`,
-          [v.accountId, v.orderId, v.cap, v.key, v.memo]
+          `SELECT id, amount::float AS amount FROM public.release_agent_order_hold($1, $2, $3, $4)`,
+          [v.accountId, v.orderId, v.cap, v.memo]
         );
         return { release_agent_order_hold: r.rows };
       }
@@ -380,7 +380,7 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
       (await w.releases()).map((r: any) => [r.amount, r.idempotency_key])
     ).toEqual([
       [700, `agent-hold-release:${w.orderId}:${w.accountId}:h1:r0`],
-      [700, `stranded:release:${w.mem.events[0].id}`],
+      [700, `agent-hold-release:${w.orderId}:${w.accountId}:h2:r1`],
     ]);
     const resolved = w.mem.events.filter(
       (e) => e.event_type === 'agent_hold_stranded_released'
@@ -468,7 +468,7 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
   it('the function writes the balance and the ledger row together (no balance move without its row)', async () => {
     const w = await setup();
     await w.claim();
-    const r = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, NULL, 'm')`, [w.accountId, w.orderId]);
+    const r = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, 'm')`, [w.accountId, w.orderId]);
     expect(r.rows).toHaveLength(1);
     expect(Number(r.rows[0].amount)).toBe(700);
     expect(r.rows[0].idempotency_key).toBe(`agent-hold-release:${w.orderId}:${w.accountId}:h1:r0`);
@@ -476,16 +476,22 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
     // A withheld balance short of the net raises and writes nothing (balance nor row).
     await w.claim();
     await pool.query(`UPDATE accounts SET withheld_balance = 100 WHERE id = $1`, [w.accountId]);
-    await expect(pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, NULL, 'm')`, [w.accountId, w.orderId])).rejects.toThrow(/agent_hold_release_withheld_short/);
+    await expect(pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, 'm')`, [w.accountId, w.orderId])).rejects.toThrow(/agent_hold_release_withheld_short/);
     expect(await w.releases()).toHaveLength(1);
     expect((await w.balance()).w).toBe(100);
     // The cap: never more than p_cap even when more is held.
     await pool.query(`UPDATE accounts SET withheld_balance = 700 WHERE id = $1`, [w.accountId]);
-    const c = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, 200, 'cap-test', 'm')`, [w.accountId, w.orderId]);
+    const c = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, 200, 'm')`, [w.accountId, w.orderId]);
     expect(Number(c.rows[0].amount)).toBe(200);
     expect((await w.balance()).w).toBe(500);
-    // An existing key is a no-op.
-    const k = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, $3, 'm')`, [w.accountId, w.orderId, `agent-hold-release:${w.orderId}:${w.accountId}:h1:r0`]);
+    expect(c.rows[0].idempotency_key).toBe(`agent-hold-release:${w.orderId}:${w.accountId}:h2:r1`);
+    // An existing key is a no-op: another writer that read the same state (h2:r2) already
+    // took the key (simulated with a non-hold/release row, so the counts stay h2:r2).
+    await pool.query(
+      `INSERT INTO account_transactions (account_id, amount, transaction_type, memo, idempotency_key) VALUES ($1, 1, 'deposit', 'k', $2)`,
+      [w.accountId, `agent-hold-release:${w.orderId}:${w.accountId}:h2:r2`]
+    );
+    const k = await pool.query(`SELECT * FROM release_agent_order_hold($1, $2, NULL, 'm')`, [w.accountId, w.orderId]);
     expect(k.rows).toHaveLength(0);
     expect((await w.balance()).w).toBe(500);
   });
@@ -517,7 +523,7 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
     expect(rel).toEqual([
       {
         amount: 700,
-        idempotency_key: `stranded:release:${w.mem.events[0].id}`,
+        idempotency_key: `agent-hold-release:${w.orderId}:${w.accountId}:h1:r0`,
       },
     ]);
     expect(w.mem.events[0].payload).toHaveProperty('resolvedAt');
