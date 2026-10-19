@@ -35,6 +35,7 @@ import {
   DEDICATED_NOTICE_DELEGATES_QUERY,
   INSERT_DEDICATED_ASSIGNMENTS_MUTATION,
   dedicatedCardStatsQuery,
+  RESUME_DEDICATED_ASSIGNMENT_MUTATION,
   UPDATE_DEDICATED_ASSIGNMENT_MUTATION,
   savePickupSlotsMutation,
 } from './dedicated-assignments.queries';
@@ -363,7 +364,9 @@ export class DedicatedAssignmentsService {
     const set = paused
       ? { status: 'paused', paused_at: now, paused_by_user_id: actor.userId }
       : { status: 'active', paused_at: null, paused_by_user_id: null };
-    const updated = await this.guardedUpdate(row.id, [row.status], set);
+    const updated = paused
+      ? await this.guardedUpdate(row.id, [row.status], set)
+      : await this.resumeGuarded(row, set);
     await this.notifyAgentForRow(paused ? 'paused' : 'resumed', row);
     return { assignment: updated };
   }
@@ -650,6 +653,36 @@ export class DedicatedAssignmentsService {
       paused_at: row.paused_at,
       removed_at: row.removed_at,
     };
+  }
+
+  /**
+   * QA #603 R3: resume under the location lock with the slot check in the update's
+   * own predicate (see RESUME_DEDICATED_ASSIGNMENT_MUTATION). The earlier
+   * disabledSlots read is only a fast, friendly refusal; this is the guard.
+   */
+  private async resumeGuarded(
+    row: { id: string; business_location_id: string; slot_key: string },
+    set: Record<string, unknown>
+  ) {
+    const res = await runAssignmentWrite(() =>
+      this.hasuraSystemService.executeMutation<{
+        update_dedicated_agent_assignments: { affected_rows: number; returning: Array<Record<string, unknown>> };
+      }>(RESUME_DEDICATED_ASSIGNMENT_MUTATION, {
+        locationId: row.business_location_id,
+        id: row.id,
+        slotKey: row.slot_key,
+        set,
+      })
+    );
+    const out = res?.update_dedicated_agent_assignments;
+    if (out && out.affected_rows > 0) return out.returning[0];
+    if ((await this.disabledSlots(row.business_location_id)).has(row.slot_key)) {
+      throw new ConflictException({
+        code: 'slot_disabled',
+        message: 'Turn the slot back on before resuming its agents',
+      });
+    }
+    throw new ConflictException({ code: 'assignment_changed', message: 'This assignment changed; reload and retry' });
   }
 
   private async guardedUpdate(id: string, from: string[], set: Record<string, unknown>) {
