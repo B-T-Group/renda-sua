@@ -44,15 +44,25 @@ export const ADMIN_STATUS_OVERRIDE_VALUES = [
   ...ADMIN_OPERATIONAL_STATUSES,
 ] as const;
 
-/** Goods have left the business: a plain admin cancel must not run (no fee-free release after pickup). */
-export const ADMIN_POST_PICKUP_STATUSES = [
-  'picked_up',
-  'in_transit',
-  'out_for_delivery',
+/**
+ * ALLOWLIST of pre-pickup statuses an admin may cancel. Everything else (picked_up,
+ * in_transit, out_for_delivery, awaiting_shipment, shipped, in_delivery, delivered,
+ * complete, the refund states, cancelled, failed, and any status added later) is
+ * refused.
+ * TODO(#626): #626 defines the same list as ADMIN_FULL_REFUND_ALLOWED_STATUSES in
+ * orders.service.ts; once both are on main, make that one reuse this constant.
+ */
+export const ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES = [
+  'pending_payment',
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned_to_agent',
 ] as const;
 
-export function isAdminPostPickupStatus(status: string): boolean {
-  return (ADMIN_POST_PICKUP_STATUSES as readonly string[]).includes(status);
+export function isAdminPrePickupCancellableStatus(status: string): boolean {
+  return (ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES as readonly string[]).includes(status);
 }
 
 export function isAdminTerminalStatus(status: string): boolean {

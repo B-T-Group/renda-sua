@@ -186,7 +186,7 @@ import {
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
-import { isAdminPostPickupStatus, isAdminTerminalStatus } from './admin-order-status.util';
+import { isAdminPrePickupCancellableStatus, isAdminTerminalStatus } from './admin-order-status.util';
 import { GET_ORDERS } from './orders.queries';
 import {
   withDeliveryContact,
@@ -8474,7 +8474,7 @@ export class OrdersService {
     }
     if (
       isAdminTerminalStatus(order.current_status) ||
-      isAdminPostPickupStatus(order.current_status)
+      !isAdminPrePickupCancellableStatus(order.current_status)
     ) {
       throw new HttpException(
         `Cannot cancel order in ${order.current_status} status`,

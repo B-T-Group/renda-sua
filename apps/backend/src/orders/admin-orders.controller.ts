@@ -61,7 +61,7 @@ import type {
 } from '../credits/credit.types';
 import {
   isAdminOperationalStatus,
-  isAdminPostPickupStatus,
+  isAdminPrePickupCancellableStatus,
 } from './admin-order-status.util';
 import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 
@@ -290,7 +290,7 @@ export class AdminOrdersController {
       const order = await this.requireOrder(orderId);
       if (dto.status === 'cancelled') {
         const reason = this.requireCancelReason(dto);
-        this.assertNotPastPickup(order.current_status);
+        this.assertPrePickupCancellable(order.current_status);
         return await this.ordersService.cancelOrderAsAdmin(orderId, reason);
       }
       this.assertOperationalAdminStatus(dto.status);
@@ -318,10 +318,10 @@ export class AdminOrdersController {
     );
   }
 
-  private assertNotPastPickup(status: string): void {
-    if (!isAdminPostPickupStatus(status)) return;
+  private assertPrePickupCancellable(status: string): void {
+    if (isAdminPrePickupCancellableStatus(status)) return;
     throw new HttpException(
-      `Cannot cancel an order in ${status} status: it has already been picked up`,
+      `Cannot cancel an order in ${status} status: only pre-pickup orders can be cancelled here`,
       HttpStatus.BAD_REQUEST,
     );
   }
