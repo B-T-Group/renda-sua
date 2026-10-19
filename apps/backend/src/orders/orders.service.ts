@@ -3173,13 +3173,18 @@ export class OrdersService {
     const { rail, holdPercentage, holdAmount } =
       await this.resolveOrderHoldAmount(order, agent.id);
 
+    // QA #607 N2 (AC-A6): an agent holding a live dedicated offer goes through
+    // the dedicated re-check (AC-E2) before any charge, and the claim is stamped.
+    const dedicatedAssignment = await this.dedicatedClaimAssignment(request.orderId, agent.id);
+
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // payment and assign directly
     if (holdAmount === 0) {
       const updatedOrder = await this.assignOrderToAgent(
         request.orderId,
         agent.id,
-        'assigned_to_agent'
+        'assigned_to_agent',
+        dedicatedAssignment
       );
       try {
         const orderHold = await this.getOrCreateOrderHold(order.id);
@@ -12445,8 +12450,18 @@ export class OrdersService {
   ): Promise<'assigned' | 'already-mine' | 'lost'> {
     if (order.assigned_agent_id && order.assigned_agent_id !== agentId) return 'lost';
     if (order.assigned_agent_id === agentId) return 'already-mine';
+    // QA #607 N2: a top-up claim on a dedicated offer is stamped (and re-checked)
+    // when the payment completes. A refusal now (offer gone, no longer eligible)
+    // assigns as a plain claim: the agent has paid, and the offer is then not
+    // marked accepted (handleOrderAssigned only accepts stamped dedicated claims).
+    const assignment = await this.dedicatedClaimAssignment(order.id, agentId).catch((error) => {
+      this.logger.warn(
+        `dedicated re-check at top-up completion refused for order ${order.id} agent ${agentId}: ${error?.message ?? error}`
+      );
+      return undefined;
+    });
     try {
-      await this.assignOrderToAgent(order.id, agentId, 'assigned_to_agent');
+      await this.assignOrderToAgent(order.id, agentId, 'assigned_to_agent', assignment);
       return 'assigned';
     } catch (error) {
       if (!this.isClaimAssignConflict(error)) throw error;
@@ -16477,6 +16492,9 @@ export class OrdersService {
     status: string,
     assignment?: ClaimAssignment
   ): Promise<any> {
+    if (assignment && assignment.maxActiveOrders != null) {
+      return this.claimDedicatedOrder(orderId, agentId, status, assignment, assignment.maxActiveOrders);
+    }
     // #594: a dedicated claim stamps its source in the same atomic update.
     const dedicatedVars = assignment
       ? ', $assignmentSource: String!, $dedicatedAssignmentId: uuid, $dedicatedReleaseUntil: timestamptz'
@@ -16542,6 +16560,84 @@ export class OrdersService {
       );
     }
     return result.update_orders.returning[0];
+  }
+
+  /** The dedicated stamp when the agent holds a live dedicated offer on this order (re-checks AC-E2; may throw the refusal). */
+  private async dedicatedClaimAssignment(orderId: string, agentId: string): Promise<ClaimAssignment | undefined> {
+    const offer = await this.orderOffersService?.getActiveOfferForAgent(orderId, agentId);
+    if (offer?.offer_kind !== 'dedicated') return undefined;
+    return this.orderOffersService.dedicatedAcceptAssignment(orderId, agentId);
+  }
+
+  /**
+   * QA #607 N1: dedicated claim through `dedicated_claim_order`: the agent row
+   * lock, the cap count and the guarded assign are one transaction, so two
+   * concurrent claims can't both pass the cap. Over the cap -> 409
+   * DEDICATED_AT_CAPACITY; no longer claimable -> 409 ALREADY_ASSIGNED.
+   */
+  private async claimDedicatedOrder(
+    orderId: string,
+    agentId: string,
+    status: string,
+    assignment: ClaimAssignment,
+    maxActiveOrders: number
+  ): Promise<any> {
+    const mutation = `
+      mutation DedicatedClaimOrder(
+        $orderId: uuid!, $agentId: uuid!, $status: String!, $source: String!,
+        $assignmentId: uuid, $releaseUntil: timestamptz, $max: Int!, $countOffers: Boolean!
+      ) {
+        dedicated_claim_order(args: {
+          p_order_id: $orderId, p_agent_id: $agentId, p_status: $status,
+          p_assignment_source: $source, p_dedicated_assignment_id: $assignmentId,
+          p_release_until: $releaseUntil, p_max_active: $max, p_count_offers: $countOffers
+        }) {
+          id
+          order_number
+          current_status
+          assigned_agent_id
+          updated_at
+        }
+      }
+    `;
+    const variables = {
+      orderId,
+      agentId,
+      status,
+      source: assignment.source,
+      assignmentId: assignment.dedicatedAssignmentId,
+      releaseUntil: assignment.releaseUntil ?? null,
+      max: maxActiveOrders,
+      countOffers: assignment.countOffers === true,
+    };
+    let result: { dedicated_claim_order?: any[] } | null;
+    try {
+      result = await runAssignmentWrite(() => this.hasuraSystemService.executeMutation(mutation, variables));
+    } catch (error: any) {
+      const text = `${error?.message ?? ''} ${JSON.stringify(error?.response?.errors ?? '')}`;
+      if (text.includes('dedicated_order_cap_exceeded')) {
+        throw new HttpException(
+          {
+            message: 'You already have the maximum number of active orders.',
+            error: 'DEDICATED_AT_CAPACITY',
+          },
+          HttpStatus.CONFLICT
+        );
+      }
+      throw error;
+    }
+    const row = result?.dedicated_claim_order?.[0];
+    if (!row) {
+      throw new HttpException(
+        {
+          message:
+            'This order has already been assigned to another agent. Please choose another order.',
+          error: 'ALREADY_ASSIGNED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    return row;
   }
 
   /**

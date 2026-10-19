@@ -59,6 +59,7 @@ type Vars = Record<string, unknown> & {
  */
 function world() {
   const state = {
+    afterUpsert: undefined as undefined | (() => void),
     flag: true,
     order: {
       id: ORDER,
@@ -216,9 +217,14 @@ function world() {
         return { insert_user_messages_one: { id: 'm' } };
       case 'UpsertDedicatedOffers':
         for (const obj of vars.objects ?? []) {
-          state.offers = state.offers.filter((o) => !(o.order_id === obj.order_id && o.agent_id === obj.agent_id));
+          const existing = state.offers.find((o) => o.order_id === obj.order_id && o.agent_id === obj.agent_id);
+          // on_conflict ... where: only rows matching it are updated (Postgres DO UPDATE ... WHERE).
+          const onlyExpired = /on_conflict: \{[^}]*where: \{ status: \{ _eq: expired \} \}/s.test(mutation);
+          if (existing && onlyExpired && existing.status !== 'expired') continue;
+          state.offers = state.offers.filter((o) => o !== existing);
           state.offers.push({ ...obj });
         }
+        state.afterUpsert?.();
         return { insert_order_offers: { affected_rows: vars.objects?.length ?? 0 } };
       case 'ExpireDedicatedOffers': {
         const expired = state.offers.filter(
@@ -232,8 +238,11 @@ function world() {
         return { update_order_offers: { returning: expired.map((o) => ({ agent_id: o.agent_id })) } };
       }
       case 'AcceptOffer': {
-        const rows = forAgent(vars, () => true);
+        const guarded = mutation.includes('{ order: { assignment_source: { _eq: "dedicated_offer" } } }');
+        const stamped = state.order?.assignment_source === 'dedicated_offer';
+        const rows = forAgent(vars, (o) => !guarded || o.offer_kind !== 'dedicated' || stamped);
         rows.forEach((o) => (o.status = 'accepted'));
+        if (mutation.includes('unstamped: update_order_offers')) forAgent(vars, () => true).forEach((o) => (o.status = 'cancelled'));
         return { update_order_offers: { affected_rows: rows.length, returning: rows.map((o) => ({ offer_kind: o.offer_kind })) } };
       }
       case 'CancelSiblingOffers': {
@@ -424,6 +433,9 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
           source: 'dedicated_auto',
           dedicatedAssignmentId: 'as-int',
           releaseUntil: new Date(NOW.getTime() + 120_000).toISOString(),
+          // QA #607 N1: the claim checks the cap under the agent lock, counting live offers.
+          maxActiveOrders: 10,
+          countOffers: true,
         },
       })
     );
@@ -667,6 +679,64 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
     expect(w.schedule.scheduleDispatchRound).not.toHaveBeenCalledWith(ORDER, 3, expect.anything());
   });
 
+  it('QA #607 N3: an overlapping fallback never brings a just-declined offer back', async () => {
+    const w = world();
+    w.addAgent('a1', { balance: 50000 });
+    w.addAgent('a2', { balance: 50000 });
+    let upserts = 0;
+    w.state.afterUpsert = () => {
+      // The agent declines between the two overlapping runs' writes.
+      if (++upserts === 1) {
+        const a1 = w.dedicatedOffers().find((o) => o.agent_id === 'a1');
+        if (a1) Object.assign(a1, { status: 'declined', decline_reason: 'too_far' });
+      }
+    };
+    await Promise.all([w.dispatch.fallback(ORDER), w.dispatch.fallback(ORDER)]);
+    expect(upserts).toBe(2);
+    expect(w.dedicatedOffers().find((o) => o.agent_id === 'a1')).toMatchObject({ status: 'declined', decline_reason: 'too_far' });
+  });
+
+  it('QA #607 N3: an expired offer may be offered again', async () => {
+    const w = world();
+    w.addAgent('a1', { balance: 50000 });
+    w.addAgent('a2', { balance: 50000 });
+    let upserts = 0;
+    w.state.afterUpsert = () => {
+      if (++upserts === 1) w.dedicatedOffers().forEach((o) => (o.status = 'expired'));
+    };
+    await Promise.all([w.dispatch.fallback(ORDER), w.dispatch.fallback(ORDER)]);
+    expect(w.dedicatedOffers().map((o) => o.status)).toEqual(['offered', 'offered']);
+  });
+
+  it('QA #607 N2: an unstamped claim by a dedicated-offer holder does not mark the offer accepted', async () => {
+    const w = world();
+    w.addAgent('a1', { balance: 50000 });
+    w.addAgent('a2', { balance: 50000 });
+    await w.offersService.runDispatchRound(ORDER, 1);
+    await w.claimer.claimOrderForAgent({ orderId: ORDER, user: { id: 'u-a1' }, agent: { id: 'a1' }, fundsCheckSource: 'claim' });
+    expect(w.dedicatedOffers().map((o) => [o.agent_id, o.status])).toEqual([
+      ['a1', 'cancelled'],
+      ['a2', 'cancelled'],
+    ]);
+    await w.flush();
+    expect(w.events('dedicated.offer_accepted')).toEqual([]);
+  });
+
+  it('QA #607 N2: a stamped dedicated claim marks the offer accepted', async () => {
+    const w = world();
+    w.addAgent('a1', { balance: 50000 });
+    w.addAgent('a2', { balance: 50000 });
+    await w.offersService.runDispatchRound(ORDER, 1);
+    const assignment = await w.offersService.dedicatedAcceptAssignment(ORDER, 'a1');
+    await w.claimer.claimOrderForAgent({ orderId: ORDER, user: { id: 'u-a1' }, agent: { id: 'a1' }, fundsCheckSource: 'offer_accept', assignment });
+    expect(w.dedicatedOffers().map((o) => [o.agent_id, o.status])).toEqual([
+      ['a1', 'accepted'],
+      ['a2', 'cancelled'],
+    ]);
+    await w.flush();
+    expect(w.events('dedicated.offer_accepted')).toEqual([{ orderId: ORDER, agentId: 'a1' }]);
+  });
+
   it('everyone declines: dispatch is marked exhausted exactly once, reasons recorded', async () => {
     const w = world();
     w.addAgent('a1', { balance: 50000 });
@@ -837,7 +907,24 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       await expect(w.offersService.dedicatedAcceptAssignment(ORDER, 'a1')).resolves.toEqual({
         source: 'dedicated_offer',
         dedicatedAssignmentId: 'as-a1',
+        maxActiveOrders: 10,
+        countOffers: false,
       });
+    });
+
+    it('QA #607 N4: the agent\'s other live dedicated offers do not block this accept', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      for (let i = 0; i < 8; i++) w.state.activeOrders.push({ id: `o-${i}`, assigned_agent_id: 'a1', current_status: 'in_transit' });
+      // 8 active + 2 live offers on other orders: 10 by the offer-time rule, still acceptable.
+      for (const other of ['other-1', 'other-2']) {
+        w.state.offers.push({ ...w.dedicatedOffers()[0], order_id: other });
+      }
+      await expect(w.offersService.dedicatedAcceptAssignment(ORDER, 'a1')).resolves.toMatchObject({ dedicatedAssignmentId: 'as-a1' });
+      // At the cap on active orders alone: refused.
+      w.state.activeOrders.push({ id: 'o-9', assigned_agent_id: 'a1', current_status: 'in_transit' }, { id: 'o-10', assigned_agent_id: 'a1', current_status: 'in_transit' });
+      await expect(w.offersService.dedicatedAcceptAssignment(ORDER, 'a1')).rejects.toBeInstanceOf(HttpException);
     });
 
     it('does not count the order\'s own offer against the agent', async () => {
@@ -849,6 +936,8 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       await expect(w.offersService.dedicatedAcceptAssignment(ORDER, 'a1')).resolves.toEqual({
         source: 'dedicated_offer',
         dedicatedAssignmentId: 'as-a1',
+        maxActiveOrders: 10,
+        countOffers: false,
       });
     });
   });

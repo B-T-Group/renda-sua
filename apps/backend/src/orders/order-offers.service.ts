@@ -1152,12 +1152,33 @@ export class OrderOffersService {
               { order_id: { _eq: $orderId } }
               { agent_id: { _eq: $agentId } }
               { status: { _eq: "offered" } }
+              # QA #607 N2: a dedicated offer is accepted only by a stamped dedicated claim.
+              {
+                _or: [
+                  { offer_kind: { _neq: "dedicated" } }
+                  { order: { assignment_source: { _eq: "dedicated_offer" } } }
+                ]
+              }
             ]
           }
           _set: { status: "accepted", responded_at: "now()" }
         ) {
           affected_rows
           returning { offer_kind }
+        }
+        # Runs after the update above: the winner's offers still open are dedicated
+        # offers the claim didn't stamp; close them so they stop counting as load.
+        unstamped: update_order_offers(
+          where: {
+            _and: [
+              { order_id: { _eq: $orderId } }
+              { agent_id: { _eq: $agentId } }
+              { status: { _eq: "offered" } }
+            ]
+          }
+          _set: { status: "cancelled", responded_at: "now()" }
+        ) {
+          affected_rows
         }
       }
     `;
