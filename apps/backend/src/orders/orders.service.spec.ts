@@ -2410,6 +2410,10 @@ describe('OrdersService', () => {
       evaluate: (ctx: EvalCtx) => unknown;
       /** Let the insert succeed and run on past it (PR 6: the slot reminder is scheduled after the window). */
       complete?: boolean;
+      /** dedicated_covered_slots preflight would list (default: the window). */
+      offered?: Array<{ slot_id: string; date: string }>;
+      /** Let the insert succeed and fail the window insert (QA #605 N2). */
+      windowFails?: boolean;
     }) {
       // Private collaborators are swapped the same way as the rest of this file.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -2431,6 +2435,13 @@ describe('OrdersService', () => {
       };
       const isEnabled = jest.fn(async (country?: string | null) => opts.flag && country === 'CM');
       loose.dedicatedAgentsConfig = { isEnabled };
+      const coveredSlots = jest.fn(async () => opts.offered ?? [{ slot_id: WINDOW.slot_id, date: WINDOW.preferred_date }]);
+      loose.dedicatedCheckoutCoverage = { coveredSlots };
+      const compensate = jest.spyOn(loose, 'compensateUnpaidCreate').mockResolvedValue(undefined);
+      if (opts.windowFails) {
+        jest.spyOn(loose, 'updateReservedQuantities').mockResolvedValue(undefined);
+        loose.deliveryWindowsService = { createDeliveryWindow: jest.fn().mockRejectedValue(new Error('window insert failed')) };
+      }
       const evaluate = jest.fn(async (ctx: EvalCtx) => opts.evaluate(ctx));
       loose.deliveryAvailabilityService = { evaluate };
       jest.spyOn(loose, 'isMarketFlagEnabled').mockResolvedValue(true);
@@ -2461,6 +2472,9 @@ describe('OrdersService', () => {
       hasuraSystemService.executeMutation.mockImplementation(async (q: string, vars?: Record<string, unknown>) => {
         if (q.includes('mutation CreateOrderWithItems')) {
           insertVars = vars ?? null;
+          if (opts.windowFails) {
+            return { insert_orders_one: { id: 'order-ded-1', order_number: 'ORD-DED-1', current_status: 'pending', payment_status: 'pending' } };
+          }
           if (!opts.complete) throw STOP;
           return {
             insert_orders_one: {
@@ -2473,6 +2487,7 @@ describe('OrdersService', () => {
             },
           };
         }
+        if (opts.windowFails && q.includes('mutation MarkOrderTimingScheduled')) throw STOP;
         return {};
       });
       let error: unknown = null;
@@ -2495,6 +2510,8 @@ describe('OrdersService', () => {
         evaluate,
         isEnabled,
         scheduleForOrder,
+        coveredSlots,
+        compensate,
       };
     }
 
@@ -2543,6 +2560,44 @@ describe('OrdersService', () => {
       const r = await place({ flag: true, window: WINDOW, complete: true, evaluate: () => NEARBY });
       expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: null }));
       expect(r.scheduleForOrder).not.toHaveBeenCalled();
+    });
+
+    it('QA #605 N1: a window preflight did not offer gets no dedicated pass and is refused', async () => {
+      for (const offered of [[], [{ slot_id: WINDOW.slot_id, date: '2026-10-25' }], [{ slot_id: 'slot-morning', date: WINDOW.preferred_date }]]) {
+        const r = await place({
+          flag: true,
+          window: WINDOW,
+          offered,
+          evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT),
+        });
+        expect(r.insertVars).toBeNull();
+        expect(r.error?.getStatus?.()).toBeGreaterThanOrEqual(400);
+        expect(r.evaluate.mock.calls.every(([ctx]) => ctx.dedicated === undefined)).toBe(true);
+      }
+    });
+
+    it('QA #605 N1: the offered check uses this cart (location, market, rail, subtotal)', async () => {
+      const r = await place({ flag: true, window: WINDOW, evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT) });
+      expect(r.coveredSlots).toHaveBeenCalledWith(
+        expect.objectContaining({ locationId: 'location-ded-1', country: 'CM', state: 'Littoral', rail: 'mobile_money', subtotal: 10000, currency: 'XAF' })
+      );
+    });
+
+    it('QA #605 N2: the window insert failing for a coverage-only order fails the create and compensates it', async () => {
+      const r = await place({ flag: true, window: WINDOW, windowFails: true, evaluate: (ctx) => (isCoveredCtx(ctx) ? COVERED : NO_AGENT) });
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: 'afternoon' }));
+      expect(r.error?.getStatus?.()).toBe(503);
+      expect(r.error?.getResponse?.()).toMatchObject({ code: 'dedicated_window_failed' });
+      expect(r.compensate).toHaveBeenCalledWith('order-ded-1', 'Create failed: dedicated coverage window', { allowPendingUnpaid: true });
+    });
+
+    it('QA #605 N2: with a nearby agent a window failure keeps today\'s behaviour (no dedicated refusal)', async () => {
+      const r = await place({ flag: true, window: WINDOW, windowFails: true, evaluate: () => NEARBY });
+      expect(r.insertVars).toEqual(expect.objectContaining({ coverageSlotKey: null }));
+      expect(JSON.stringify(r.error?.getResponse?.() ?? null)).not.toContain('dedicated_window_failed');
+      // Reached the old "mark scheduled" fallback (the spec stops there).
+      expect(hasuraSystemService.executeMutation.mock.calls.some(([q]) => String(q).includes('mutation MarkOrderTimingScheduled'))).toBe(true);
+      expect(r.compensate).not.toHaveBeenCalledWith('order-ded-1', 'Create failed: dedicated coverage window', expect.anything());
     });
 
     it('the insert mutation writes coverage_slot_key', async () => {
@@ -4738,6 +4793,122 @@ describe('OrdersService', () => {
         'system',
         null
       );
+    });
+
+    const dedicatedClaims = () =>
+      hasuraSystemService.executeMutation.mock.calls.filter(([q]) => String(q).includes('mutation DedicatedClaimOrder'));
+    const claimed = { dedicated_claim_order: [{ id: 'order-123', assigned_agent_id: 'agent-123' }] };
+    const stampAuto = { source: 'dedicated_auto' as const, dedicatedAssignmentId: 'as-1', releaseUntil: '2026-10-18T09:02:00.000Z', maxActiveOrders: 10, countOffers: true };
+
+    it('QA #607 N1: a capped dedicated claim runs dedicated_claim_order (lock + count + assign in one call)', async () => {
+      arrangeClaim({ holdAmount: 0, balance: 0 });
+      jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+      hasuraSystemService.executeMutation.mockReset();
+      hasuraSystemService.executeMutation.mockImplementation(async (q: string) => (String(q).includes('DedicatedClaimOrder') ? claimed : assigned));
+      await service.claimOrderForAgent({
+        orderId: 'order-123',
+        user: { id: 'agent-user', first_name: 'Awa', last_name: 'N' },
+        agent: { id: 'agent-123', is_verified: true, is_internal: true },
+        fundsCheckSource: 'claim',
+        assignment: stampAuto,
+      });
+      expect(assignMutations()).toHaveLength(0);
+      const [query, vars] = dedicatedClaims()[0];
+      expect(query).toContain('dedicated_claim_order(args:');
+      expect(vars).toEqual({
+        orderId: 'order-123',
+        agentId: 'agent-123',
+        status: 'assigned_to_agent',
+        source: 'dedicated_auto',
+        assignmentId: 'as-1',
+        releaseUntil: '2026-10-18T09:02:00.000Z',
+        max: 10,
+        countOffers: true,
+      });
+    });
+
+    it('QA #607 N1: over the cap -> 409 DEDICATED_AT_CAPACITY; no row -> ALREADY_ASSIGNED', async () => {
+      const assign = (a: unknown) => loose().assignOrderToAgent('order-123', 'agent-123', 'assigned_to_agent', a);
+      hasuraSystemService.executeMutation.mockReset();
+      hasuraSystemService.executeMutation.mockRejectedValueOnce(
+        Object.assign(new Error('database query error'), {
+          response: { errors: [{ message: 'dedicated_order_cap_exceeded: agent agent-123 has 10 of 10 active dedicated orders' }] },
+        })
+      );
+      const cap = await assign(stampAuto).catch((e: unknown) => e);
+      expect(cap).toBeInstanceOf(HttpException);
+      expect(cap.getStatus()).toBe(409);
+      expect(cap.getResponse()).toMatchObject({ error: 'DEDICATED_AT_CAPACITY' });
+      hasuraSystemService.executeMutation.mockResolvedValueOnce({ dedicated_claim_order: [] });
+      const lost = await assign(stampAuto).catch((e: unknown) => e);
+      expect(lost.getResponse()).toMatchObject({ error: 'ALREADY_ASSIGNED' });
+      const other = new Error('boom');
+      hasuraSystemService.executeMutation.mockRejectedValueOnce(other);
+      await expect(assign(stampAuto)).rejects.toBe(other);
+    });
+
+    describe('QA #607 N2: claim with top-up on a dedicated offer', () => {
+      const stampOffer = { source: 'dedicated_offer' as const, dedicatedAssignmentId: 'as-9', maxActiveOrders: 10, countOffers: false };
+      const offers = (kind: string | null, accept: () => Promise<unknown>) => {
+        loose().orderOffersService = {
+          getActiveOfferForAgent: jest.fn().mockResolvedValue(kind ? { id: 'of-1', expires_at: 'x', offer_kind: kind } : null),
+          dedicatedAcceptAssignment: jest.fn(accept),
+        };
+        return loose().orderOffersService;
+      };
+
+      it('re-checks and stamps the claim (hold 0)', async () => {
+        arrangeClaim({ holdAmount: 0, balance: 0 });
+        jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+        const svc = offers('dedicated', async () => stampOffer);
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockImplementation(async (q: string) => (String(q).includes('DedicatedClaimOrder') ? claimed : assigned));
+        await service.claimOrderWithTopup({ orderId: 'order-123' });
+        expect(svc.dedicatedAcceptAssignment).toHaveBeenCalledWith('order-123', 'agent-123');
+        expect(dedicatedClaims()[0][1]).toMatchObject({ source: 'dedicated_offer', assignmentId: 'as-9', countOffers: false });
+        expect(assignMutations()).toHaveLength(0);
+      });
+
+      it('a refused re-check stops the claim before any charge or assignment', async () => {
+        arrangeClaim({ holdAmount: 5000, balance: 0 });
+        const refusal = new HttpException({ code: 'off_today' }, HttpStatus.CONFLICT);
+        offers('dedicated', async () => Promise.reject(refusal));
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockResolvedValue(assigned);
+        await expect(service.claimOrderWithTopup({ orderId: 'order-123' })).rejects.toBe(refusal);
+        expect(assignMutations()).toHaveLength(0);
+        expect(dedicatedClaims()).toHaveLength(0);
+        expect(loose().mobilePaymentsDatabaseService.hasPendingClaimOrderForOrderNumber).not.toHaveBeenCalled();
+      });
+
+      it('a standard offer (or none) keeps today\'s unstamped claim', async () => {
+        for (const kind of ['standard', null]) {
+          arrangeClaim({ holdAmount: 0, balance: 0 });
+          jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+          const svc = offers(kind, async () => stampOffer);
+          hasuraSystemService.executeMutation.mockReset();
+          hasuraSystemService.executeMutation.mockResolvedValue(assigned);
+          await service.claimOrderWithTopup({ orderId: 'order-123' });
+          expect(svc.dedicatedAcceptAssignment).not.toHaveBeenCalled();
+          expect(assignMutations()[0][0]).not.toContain('assignment_source');
+        }
+      });
+
+      it('payment completion stamps a still-live dedicated offer; a refusal then assigns unstamped', async () => {
+        const order = { id: 'order-123', order_number: 'ORD-123', assigned_agent_id: null };
+        offers('dedicated', async () => stampOffer);
+        hasuraSystemService.executeMutation.mockReset();
+        hasuraSystemService.executeMutation.mockImplementation(async (q: string) => (String(q).includes('DedicatedClaimOrder') ? claimed : assigned));
+        await expect(loose().assignClaimIfOpen(order, 'agent-123')).resolves.toBe('assigned');
+        expect(dedicatedClaims()).toHaveLength(1);
+        expect(assignMutations()).toHaveLength(0);
+
+        offers('dedicated', async () => Promise.reject(new HttpException({ code: 'paused' }, HttpStatus.CONFLICT)));
+        hasuraSystemService.executeMutation.mockClear();
+        await expect(loose().assignClaimIfOpen(order, 'agent-123')).resolves.toBe('assigned');
+        expect(dedicatedClaims()).toHaveLength(0);
+        expect(assignMutations()[0][0]).not.toContain('assignment_source');
+      });
     });
 
     it('a normal claim keeps today\'s mutation (no dedicated columns) and agent history', async () => {

@@ -46,6 +46,7 @@ import {
   buildDedicatedConfirmReminderMessage,
   DEDICATED_ORDER_MESSAGE_TYPES,
 } from '../notifications/dedicated-order-push.messages';
+import { DedicatedCheckoutCoverageService } from '../dedicated-agents/dedicated-checkout-coverage.service';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import {
@@ -742,7 +743,9 @@ export class OrdersService {
     @Optional()
     private readonly dedicatedAgentsConfig?: DedicatedAgentsConfigService,
     @Optional()
-    private readonly dedicatedSlotReminder?: DedicatedSlotReminderService
+    private readonly dedicatedSlotReminder?: DedicatedSlotReminderService,
+    @Optional()
+    private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -3174,13 +3177,18 @@ export class OrdersService {
     const { rail, holdPercentage, holdAmount } =
       await this.resolveOrderHoldAmount(order, agent.id);
 
+    // QA #607 N2 (AC-A6): an agent holding a live dedicated offer goes through
+    // the dedicated re-check (AC-E2) before any charge, and the claim is stamped.
+    const dedicatedAssignment = await this.dedicatedClaimAssignment(request.orderId, agent.id);
+
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // payment and assign directly
     if (holdAmount === 0) {
       const updatedOrder = await this.assignOrderToAgent(
         request.orderId,
         agent.id,
-        'assigned_to_agent'
+        'assigned_to_agent',
+        dedicatedAssignment
       );
       try {
         const orderHold = await this.getOrCreateOrderHold(order.id);
@@ -12446,8 +12454,18 @@ export class OrdersService {
   ): Promise<'assigned' | 'already-mine' | 'lost'> {
     if (order.assigned_agent_id && order.assigned_agent_id !== agentId) return 'lost';
     if (order.assigned_agent_id === agentId) return 'already-mine';
+    // QA #607 N2: a top-up claim on a dedicated offer is stamped (and re-checked)
+    // when the payment completes. A refusal now (offer gone, no longer eligible)
+    // assigns as a plain claim: the agent has paid, and the offer is then not
+    // marked accepted (handleOrderAssigned only accepts stamped dedicated claims).
+    const assignment = await this.dedicatedClaimAssignment(order.id, agentId).catch((error) => {
+      this.logger.warn(
+        `dedicated re-check at top-up completion refused for order ${order.id} agent ${agentId}: ${error?.message ?? error}`
+      );
+      return undefined;
+    });
     try {
-      await this.assignOrderToAgent(order.id, agentId, 'assigned_to_agent');
+      await this.assignOrderToAgent(order.id, agentId, 'assigned_to_agent', assignment);
       return 'assigned';
     } catch (error) {
       if (!this.isClaimAssignConflict(error)) throw error;
@@ -13395,6 +13413,38 @@ export class OrdersService {
     return { slotId, preferredDate };
   }
 
+  /** QA #605 N1: the window is one of the dedicated_covered_slots preflight lists for this cart. */
+  private async isPreflightOfferedWindow(
+    window: Pick<DedicatedDeliveryRequest, 'slotId' | 'preferredDate'>,
+    params: {
+      location: { id?: string; address?: { country?: string | null; state?: string | null } | null } | null | undefined;
+      rail: DedicatedDeliveryRequest['rail'];
+      subtotal: number;
+      currency: string;
+      verifiedAgentDelivery: boolean;
+    }
+  ): Promise<boolean> {
+    const locationId = params.location?.id;
+    if (!this.dedicatedCheckoutCoverage || !locationId) return false;
+    const country = isoCountryCode(params.location?.address?.country) ?? params.location?.address?.country ?? '';
+    const offered = await this.dedicatedCheckoutCoverage.coveredSlots({
+      locationId,
+      country,
+      state: (params.location?.address?.state ?? '').trim(),
+      rail: params.rail,
+      subtotal: params.subtotal,
+      currency: params.currency,
+      verifiedAgentDelivery: params.verifiedAgentDelivery,
+    });
+    const ok = offered.some((s) => s.slot_id === window.slotId && s.date === window.preferredDate);
+    if (!ok) {
+      this.logger.warn(
+        `dedicated window not offered at preflight location=${locationId} slot=${window.slotId} date=${window.preferredDate}`
+      );
+    }
+    return ok;
+  }
+
   /**
    * Rejects delivery orders when the availability rules fail (unless
    * DELIVERY_AVAILABILITY_ENFORCE=false). The public error message never
@@ -14112,22 +14162,34 @@ export class OrdersService {
     // covers the chosen slot for this cart (AgentInRegionRule dedicated pass).
     let coverageSlotKey: string | null = null;
     if (dedicatedGatePending && coverageWindow) {
+      // QA #605 N1: only a window preflight offered (dedicated_covered_slots:
+      // bookable today, inside the 3-day horizon, covered for this cart).
+      // Anything else gets no dedicated pass, so the gate below refuses it.
+      const offered = await this.isPreflightOfferedWindow(coverageWindow, {
+        location: businessInventories[0]?.business_location,
+        rail: railResolution.rail,
+        subtotal: totalAmount,
+        currency,
+        verifiedAgentDelivery: orderData.verified_agent_delivery === true,
+      });
       const gate = await this.assertDeliveryAvailable(
         businessInventories,
         address,
         client.id,
         orderData.requires_fast_delivery === true,
         orderData.verified_agent_delivery === true,
-        {
-          dedicated: {
-            ...coverageWindow,
-            rail: railResolution.rail,
-            subtotal: totalAmount,
-            currency,
-          },
-        }
+        offered
+          ? {
+              dedicated: {
+                ...coverageWindow,
+                rail: railResolution.rail,
+                subtotal: totalAmount,
+                currency,
+              },
+            }
+          : {}
       );
-      coverageSlotKey = dedicatedCoverageSlotKey(gate?.result);
+      coverageSlotKey = offered ? dedicatedCoverageSlotKey(gate?.result) : null;
     }
 
 
@@ -14921,6 +14983,22 @@ export class OrdersService {
         );
       } catch (error) {
         this.logger.error('Failed to create delivery window:', error);
+        if (coverageSlotKey) {
+          // QA #605 N2: this order was admitted only through dedicated coverage of
+          // this window. Without the window row it must not exist (AC-E1), so the
+          // create fails and the unpaid order is compensated.
+          await this.compensateUnpaidCreate(order.id, 'Create failed: dedicated coverage window', {
+            allowPendingUnpaid: true,
+          });
+          throw new HttpException(
+            {
+              success: false,
+              code: 'dedicated_window_failed',
+              error: 'We could not save your delivery time. Please try again.',
+            },
+            HttpStatus.SERVICE_UNAVAILABLE
+          );
+        }
         await this.markOrderTimingScheduled(order.id);
       }
     }
@@ -16456,6 +16534,9 @@ export class OrdersService {
     status: string,
     assignment?: ClaimAssignment
   ): Promise<any> {
+    if (assignment && assignment.maxActiveOrders != null) {
+      return this.claimDedicatedOrder(orderId, agentId, status, assignment, assignment.maxActiveOrders);
+    }
     // #594: a dedicated claim stamps its source in the same atomic update.
     const dedicatedVars = assignment
       ? ', $assignmentSource: String!, $dedicatedAssignmentId: uuid, $dedicatedReleaseUntil: timestamptz'
@@ -16521,6 +16602,84 @@ export class OrdersService {
       );
     }
     return result.update_orders.returning[0];
+  }
+
+  /** The dedicated stamp when the agent holds a live dedicated offer on this order (re-checks AC-E2; may throw the refusal). */
+  private async dedicatedClaimAssignment(orderId: string, agentId: string): Promise<ClaimAssignment | undefined> {
+    const offer = await this.orderOffersService?.getActiveOfferForAgent(orderId, agentId);
+    if (offer?.offer_kind !== 'dedicated') return undefined;
+    return this.orderOffersService.dedicatedAcceptAssignment(orderId, agentId);
+  }
+
+  /**
+   * QA #607 N1: dedicated claim through `dedicated_claim_order`: the agent row
+   * lock, the cap count and the guarded assign are one transaction, so two
+   * concurrent claims can't both pass the cap. Over the cap -> 409
+   * DEDICATED_AT_CAPACITY; no longer claimable -> 409 ALREADY_ASSIGNED.
+   */
+  private async claimDedicatedOrder(
+    orderId: string,
+    agentId: string,
+    status: string,
+    assignment: ClaimAssignment,
+    maxActiveOrders: number
+  ): Promise<any> {
+    const mutation = `
+      mutation DedicatedClaimOrder(
+        $orderId: uuid!, $agentId: uuid!, $status: String!, $source: String!,
+        $assignmentId: uuid, $releaseUntil: timestamptz, $max: Int!, $countOffers: Boolean!
+      ) {
+        dedicated_claim_order(args: {
+          p_order_id: $orderId, p_agent_id: $agentId, p_status: $status,
+          p_assignment_source: $source, p_dedicated_assignment_id: $assignmentId,
+          p_release_until: $releaseUntil, p_max_active: $max, p_count_offers: $countOffers
+        }) {
+          id
+          order_number
+          current_status
+          assigned_agent_id
+          updated_at
+        }
+      }
+    `;
+    const variables = {
+      orderId,
+      agentId,
+      status,
+      source: assignment.source,
+      assignmentId: assignment.dedicatedAssignmentId,
+      releaseUntil: assignment.releaseUntil ?? null,
+      max: maxActiveOrders,
+      countOffers: assignment.countOffers === true,
+    };
+    let result: { dedicated_claim_order?: any[] } | null;
+    try {
+      result = await runAssignmentWrite(() => this.hasuraSystemService.executeMutation(mutation, variables));
+    } catch (error: any) {
+      const text = `${error?.message ?? ''} ${JSON.stringify(error?.response?.errors ?? '')}`;
+      if (text.includes('dedicated_order_cap_exceeded')) {
+        throw new HttpException(
+          {
+            message: 'You already have the maximum number of active orders.',
+            error: 'DEDICATED_AT_CAPACITY',
+          },
+          HttpStatus.CONFLICT
+        );
+      }
+      throw error;
+    }
+    const row = result?.dedicated_claim_order?.[0];
+    if (!row) {
+      throw new HttpException(
+        {
+          message:
+            'This order has already been assigned to another agent. Please choose another order.',
+          error: 'ALREADY_ASSIGNED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    return row;
   }
 
   /**

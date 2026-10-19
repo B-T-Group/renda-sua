@@ -30,6 +30,34 @@ describe('dedicated assignment writes', () => {
     expect(isAssignmentDuplicateError(new Error('boom'))).toBe(false);
   });
 
+  it('QA #603 N3: only the live-unique constraint is a duplicate; other unique violations pass through', () => {
+    const offerDup = new Error('Uniqueness violation. duplicate key value violates unique constraint "order_offers_order_agent_key"');
+    expect(isAssignmentDuplicateError(offerDup)).toBe(false);
+    expect(mapAssignmentWriteError(offerDup)).toBe(offerDup);
+    expect(
+      isAssignmentDuplicateError({ message: 'x', response: { errors: [{ message: 'unique constraint "dedicated_agent_assignments_live_unique_idx"' }] } })
+    ).toBe(true);
+  });
+
+  it('QA #613 N4: a 40001 serialization failure is retried like a deadlock', async () => {
+    const serial = () =>
+      Object.assign(new Error('database query error'), {
+        response: { errors: [{ message: 'database query error', extensions: { internal: { error: { status_code: '40001' } } } }] },
+      });
+    let calls = 0;
+    const out = await runAssignmentWrite(
+      async () => {
+        calls++;
+        if (calls === 1) throw serial();
+        return 'ok';
+      },
+      { backoffMs: 0 }
+    );
+    expect([out, calls]).toEqual(['ok', 2]);
+    const always = serial();
+    await expect(runAssignmentWrite(async () => Promise.reject(always), { backoffMs: 0 })).rejects.toBe(always);
+  });
+
   it('maps cap and duplicate to 409 with stable codes, leaves others alone', () => {
     const cap = mapAssignmentWriteError(capError()) as ConflictException;
     expect(cap).toBeInstanceOf(ConflictException);

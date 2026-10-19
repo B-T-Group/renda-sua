@@ -69,6 +69,8 @@ export interface DedicatedEligibilityParams {
   verifiedAgentDelivery: boolean;
   /** Re-check at offer/claim: don't count this order's own outstanding dedicated offer. */
   excludeOrderId?: string | null;
+  /** Accept-time check (QA #607 N4): count active orders only, not other live offers. */
+  ignoreOutstandingOffers?: boolean;
   /**
    * Local date (YYYY-MM-DD) of the slot being covered. Off today only removes
    * an agent from that day's slots; defaults to today in the country timezone.
@@ -313,7 +315,7 @@ export class DedicatedCoverageService {
         focus: agent?.focus ?? null,
         contractSigned: !signedIds || signedIds.has(row.agent_id),
         activeOrders: load.active.get(row.agent_id) ?? 0,
-        outstandingDedicatedOffers: load.offers.get(row.agent_id) ?? 0,
+        outstandingDedicatedOffers: params.ignoreOutstandingOffers ? 0 : load.offers.get(row.agent_id) ?? 0,
       };
       const reason = agent ? dedicatedProfileIneligibleReason(facts, eligibilityCtx) : 'not_verified';
       if (reason) {

@@ -13,7 +13,8 @@
  *   refuses REPEATABLE READ / SERIALIZABLE because the cap count would use a
  *   snapshot taken before the lock wait (QA L3).
  */
-export const DEDICATED_ASSIGNMENT_RETRYABLE_SQLSTATES = ['40P01'] as const;
+/** 40P01 deadlock_detected and 40001 serialization_failure (QA #613 N4) are retried alike. */
+export const DEDICATED_ASSIGNMENT_RETRYABLE_SQLSTATES = ['40P01', '40001'] as const;
 
 /** Postgres orders uuid by bytes, which matches lowercase hex string order. */
 function lockKey(agentId: string): string {
@@ -46,5 +47,5 @@ export function isRetryableAssignmentError(error: unknown): boolean {
     return true;
   }
   const messages = [e.message, ...(e.response?.errors ?? []).map((x) => x.message)];
-  return messages.some((m) => typeof m === 'string' && /deadlock detected/i.test(m));
+  return messages.some((m) => typeof m === 'string' && /deadlock detected|could not serialize access/i.test(m));
 }
