@@ -303,6 +303,20 @@ describe('OrderOffersService', () => {
     });
   });
 
+  describe('#594 DEV QA F1: markOfferLost', () => {
+    it('cancels (not expires) the caller\'s open offer, only when the order is another agent\'s', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValueOnce({ update_order_offers: { affected_rows: 1 } });
+      await service.markOfferLost('order-1', 'agent-1');
+      const [mutation, vars] = hasuraSystemService.executeMutation.mock.calls[0] as [string, Record<string, unknown>];
+      expect(vars).toEqual({ orderId: 'order-1', agentId: 'agent-1' });
+      expect(mutation).toContain('_set: { status: "cancelled"');
+      expect(mutation).not.toContain('"expired"');
+      // A duplicate accept by the winner itself leaves its offer for handleOrderAssigned.
+      expect(mutation.replace(/\s+/g, ' ')).toContain('{ order: { assigned_agent_id: { _is_null: false, _neq: $agentId } } }');
+      expect(mutation).toContain('{ status: { _eq: "offered" } }');
+    });
+  });
+
   describe('handleOrderAssigned', () => {
     it('accepts the winner offer, cancels siblings, and dismisses losing agents', async () => {
       hasuraSystemService.executeQuery.mockResolvedValueOnce({

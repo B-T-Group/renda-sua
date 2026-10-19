@@ -1,4 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException, Optional } from '@nestjs/common';
+import { DELEGATION_PERMISSIONS } from '../delegations/delegation.constants';
+import { DelegationAccessService } from '../delegations/delegation-access.service';
+import { GeoScopeService } from '../rbac/geo-scope.service';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
 export interface DeliveryTimeWindow {
@@ -40,7 +44,11 @@ export interface UpdateDeliveryWindowDto {
 export class DeliveryWindowsService {
   private readonly logger = new Logger(DeliveryWindowsService.name);
 
-  constructor(private readonly hasuraSystemService: HasuraSystemService) {}
+  constructor(
+    private readonly hasuraSystemService: HasuraSystemService,
+    @Optional() private readonly delegationAccess?: DelegationAccessService,
+    @Optional() private readonly geoScope?: GeoScopeService
+  ) {}
 
   /**
    * Create a delivery time window for an order
@@ -206,6 +214,45 @@ export class DeliveryWindowsService {
       this.logger.error('Failed to update delivery window:', error);
       throw error;
     }
+  }
+
+  /**
+   * #594 DEV QA N3: who may confirm an order's delivery window (confirmed_by = caller):
+   * - the owner of the order's business;
+   * - a location delegate with an active grant on the order's business location
+   *   (same business) holding orders.manage;
+   * - a platform admin whose geo scope covers the order (platform.orders.cross_business).
+   * 404 when the order does not exist, 403 otherwise.
+   */
+  async confirmDeliveryWindowAsBusiness(orderId: string, userId: string): Promise<DeliveryTimeWindow> {
+    const res = await this.hasuraSystemService.executeQuery(
+      `query DeliveryWindowOrderOwner($id: uuid!) {
+        orders_by_pk(id: $id) { id business_id business_location_id business { user_id } }
+      }`,
+      { id: orderId }
+    );
+    const order = res?.orders_by_pk;
+    if (!order) throw new NotFoundException('Order not found');
+    if (!userId || !(await this.mayConfirm(order, userId))) {
+      throw new ForbiddenException('Not allowed to confirm this order\'s delivery window');
+    }
+    return this.confirmDeliveryWindow(orderId, userId);
+  }
+
+  private async mayConfirm(
+    order: { id: string; business_id: string; business_location_id: string; business?: { user_id?: string } },
+    userId: string
+  ): Promise<boolean> {
+    if (order.business?.user_id === userId) return true;
+    const grants = (await this.delegationAccess?.listActiveForUser(userId)) ?? [];
+    const delegate = grants.some(
+      (g) =>
+        g.locationId === order.business_location_id &&
+        g.businessId === order.business_id &&
+        g.permissions.includes(DELEGATION_PERMISSIONS.ORDERS_MANAGE)
+    );
+    if (delegate) return true;
+    return (await this.geoScope?.coversOrder(userId, PlatformPermissions.ORDERS_CROSS_BUSINESS, order.id)) === true;
   }
 
   /**
