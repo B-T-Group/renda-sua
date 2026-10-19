@@ -89,3 +89,8 @@ export const DEFAULT_DEDICATED_AGENTS_CONFIG: DedicatedAgentsConfig = {
 export const DEDICATED_BUSINESS_NOTICE_PATH = (locationId: string) =>
   `/business/locations/${locationId}/dedicated-agents`;
 export const DEDICATED_AGENT_NOTICE_PATH = '/agent/dedicated-assignments';
+
+/** #594 PR 7 posting notice paths (business review screen, agent opportunity). */
+export const DEDICATED_BUSINESS_POSTING_PATH = (locationId: string, postingId: string) =>
+  `/business/locations/${locationId}/dedicated-agents/postings/${postingId}`;
+export const DEDICATED_AGENT_OPPORTUNITY_PATH = (postingId: string) => `/agent/dedicated-opportunities/${postingId}`;
