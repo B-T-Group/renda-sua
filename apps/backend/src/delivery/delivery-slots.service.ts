@@ -7,6 +7,8 @@ import {
   isSlotFullyWithinHours,
   normalizeOperatingHours,
 } from '../common/operating-hours.util';
+import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
+import { slotKeyFromSlotName } from '../dedicated-agents/dedicated-slot.util';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 
@@ -45,7 +47,8 @@ export class DeliverySlotsService {
 
   constructor(
     private readonly hasuraSystemService: HasuraSystemService,
-    private readonly deliveryConfigService: DeliveryConfigService
+    private readonly deliveryConfigService: DeliveryConfigService,
+    private readonly dedicatedAgentsConfig: DedicatedAgentsConfigService
   ) {}
 
   /**
@@ -81,10 +84,20 @@ export class DeliverySlotsService {
         : slots;
       if (slotsWithinBusinessHours.length === 0) return [];
 
+      const enabledSlots =
+        businessLocationId && !isFastDelivery
+          ? await this.filterSlotsByPickupSlots(
+              slotsWithinBusinessHours,
+              businessLocationId,
+              countryCode
+            )
+          : slotsWithinBusinessHours;
+      if (enabledSlots.length === 0) return [];
+
       return this.attachCapacityAndAvailability(
         countryCode,
         date,
-        slotsWithinBusinessHours,
+        enabledSlots,
         timezone
       );
     } catch (error) {
@@ -390,6 +403,44 @@ export class DeliverySlotsService {
     return slots.filter((slot) =>
       isSlotFullyWithinHours(dayHours, slot.start_time, slot.end_time)
     );
+  }
+
+  /**
+   * #594 AC-B5: client slot lists show only the business's enabled pickup
+   * slots. Only behind `dedicated_agents_enabled`; with the flag off the list
+   * is exactly what it was. A slot without a pickup-slot row is on (default).
+   */
+  private async filterSlotsByPickupSlots(
+    slots: DeliveryTimeSlot[],
+    businessLocationId: string,
+    countryCode: string
+  ): Promise<DeliveryTimeSlot[]> {
+    if (!(await this.dedicatedAgentsConfig.isEnabled(countryCode))) return slots;
+    const response = await this.hasuraSystemService.executeQuery<{
+      business_location_pickup_slots: Array<{ slot_key: string; is_enabled: boolean }>;
+    }>(
+      `
+        query BusinessLocationDisabledPickupSlots($id: uuid!) {
+          business_location_pickup_slots(
+            where: { business_location_id: { _eq: $id }, is_enabled: { _eq: false } }
+          ) {
+            slot_key
+            is_enabled
+          }
+        }
+      `,
+      { id: businessLocationId }
+    );
+    const disabled = new Set(
+      (response?.business_location_pickup_slots ?? [])
+        .filter((row) => row.is_enabled === false)
+        .map((row) => row.slot_key)
+    );
+    if (disabled.size === 0) return slots;
+    return slots.filter((slot) => {
+      const key = slotKeyFromSlotName(slot.slot_name);
+      return !key || !disabled.has(key);
+    });
   }
 
   private async getBusinessLocationOperatingHours(

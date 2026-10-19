@@ -2437,6 +2437,64 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * #594 dedicated-agent assignment notice: in-app row (user_messages) plus
+   * push, same shape as the payment-programme notices. Push needs push.enabled;
+   * the in-app row is always written. Never throws.
+   */
+  async sendDedicatedAgentNotice(params: {
+    userId: string;
+    title: string;
+    body: string;
+    messageType: string;
+    assignmentId: string;
+    path: string;
+    event: string;
+    persona: 'agent' | 'business';
+    locationId: string;
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId) return;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+          mutation InsertDedicatedAgentNotice($object: user_messages_insert_input!) {
+            insert_user_messages_one(object: $object) { id }
+          }
+        `,
+        {
+          object: {
+            user_id: userId,
+            entity_type: 'dedicated_agent_assignment',
+            entity_id: params.assignmentId,
+            message_type: params.messageType,
+            message: params.body,
+            message_payload: {
+              path: params.path,
+              event: params.event,
+              persona: params.persona,
+              locationId: params.locationId,
+            },
+          },
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(`sendDedicatedAgentNotice in-app failed for ${userId}: ${error?.message ?? error}`);
+    }
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        url: params.path,
+        event: params.event,
+        persona: params.persona,
+        assignmentId: params.assignmentId,
+        locationId: params.locationId,
+      });
+    } catch (error: any) {
+      this.logger.warn(`sendDedicatedAgentNotice push failed for ${userId}: ${error?.message ?? error}`);
+    }
+  }
+
   async notifySuperusersPaymentScheduleDecision(params: {
     assignmentId: string;
     scheduleName: string;

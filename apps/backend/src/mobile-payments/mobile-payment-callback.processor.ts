@@ -710,27 +710,8 @@ export class MobilePaymentCallbackProcessor {
       await this.retrySuccessSideEffects(tx);
     }
 
-    // N1: mirrors refund-after-credit. A failure event (declined / canceled / expired) for a
-    // row we already credited (success, or processing = credit in flight). The signature is
-    // verified, nothing is changed or reversed automatically: finance reconciles.
     if (!isApproved && (tx.status === 'success' || tx.status === 'processing')) {
-      reportMoneyAnomaly(
-        this.logger,
-        'fedapay_failure_after_credit',
-        `FedaPay sent ${callbackData.name} (status ${callbackData.entity.status}) for tx ${tx.id} after we credited it (row ${tx.status}${
-          tx.error_code ? `, ${tx.error_code}` : ''
-        }); no automatic reversal, reconcile manually`,
-        {
-          transactionId: tx.id,
-          reference: tx.reference,
-          amount: tx.amount,
-          rowStatus: tx.status,
-          paymentEntity: tx.payment_entity,
-          event: callbackData.name,
-          fedapayStatus: callbackData.entity.status,
-          fedapayEntityId: callbackData.entity?.id,
-        }
-      );
+      await this.handleFailureEventAfterCredit(tx, callbackData);
     }
 
     this.logger.log(
@@ -740,6 +721,70 @@ export class MobilePaymentCallbackProcessor {
       received: true,
       transactionId: callbackData.entity.id,
     };
+  }
+
+  /**
+   * N1: a signed failure event on a row we already credited. FedaPay treats declined
+   * and canceled as non-final, and a last-moment pay emits both expired and approved
+   * (N3). Live-check first: if the collect is still approved/transferred, this is a
+   * stale sibling — log only. If live confirms a failure (or the read fails closed),
+   * raise fedapay_failure_after_credit. Never reverse automatically. Always 2xx.
+   */
+  private async handleFailureEventAfterCredit(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<void> {
+    if (await this.isLiveFedaPayStillApproved(tx, callbackData)) {
+      this.logger.log(
+        `FedaPay stale ${callbackData.name} (status ${callbackData.entity.status}) for credited tx ${tx.id}; live still approved`
+      );
+      return;
+    }
+    this.reportFailureAfterCredit(tx, callbackData);
+  }
+
+  private reportFailureAfterCredit(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): void {
+    reportMoneyAnomaly(
+      this.logger,
+      'fedapay_failure_after_credit',
+      `FedaPay sent ${callbackData.name} (status ${callbackData.entity.status}) for tx ${tx.id} after we credited it (row ${tx.status}${
+        tx.error_code ? `, ${tx.error_code}` : ''
+      }); no automatic reversal, reconcile manually`,
+      {
+        transactionId: tx.id,
+        reference: tx.reference,
+        amount: tx.amount,
+        rowStatus: tx.status,
+        paymentEntity: tx.payment_entity,
+        event: callbackData.name,
+        fedapayStatus: callbackData.entity.status,
+        fedapayEntityId: callbackData.entity?.id,
+      }
+    );
+  }
+
+  /**
+   * True only when the live record passes the same strict SUCCESS check used to credit
+   * (status, amount #591, currency, reference #592 incl. its scoped legacy rule). Anything
+   * else (missing stored or live reference, amount/currency mismatch, transient, incomplete,
+   * read failure, mock) returns false so the alert fires: fail toward alerting.
+   */
+  private async isLiveFedaPayStillApproved(
+    tx: MobilePaymentTransaction,
+    callbackData: FedaPayCallbackDto
+  ): Promise<boolean> {
+    if (this.skipsLiveRecheck(tx)) return false;
+    const recheck = this.withFedaPayRecheckId(tx, callbackData);
+    if (!recheck.transaction_id?.trim()) return false;
+    try {
+      await this.mobilePaymentsService.assertProviderConfirmsCallback(recheck, 'SUCCESS');
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /** Order attempt we cancelled to make room for a retry (or a late winner), #545. */
