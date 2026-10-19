@@ -394,7 +394,7 @@ describe('FedaPay Integration Tests (B2, B4, B5)', () => {
 
       await expect(
         realService['assertProviderConfirmsCallback'](tx as any, 'SUCCESS')
-      ).rejects.toThrow(/reference mismatch/i);
+      ).rejects.toThrow(/reference[_ ]mismatch/i);
     });
 
     it('should reject when live reference mismatches stored reference', async () => {
