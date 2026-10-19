@@ -67,4 +67,16 @@ describe('NotificationsService log lines mask recipients (#616)', () => {
     expect(allLogs()).toContain('Order SMS sent via Orange to ***456');
     expect(allLogs()).not.toContain('90123456');
   });
+
+  it.each([
+    ['sent', { error: null }, 'Proximity notification sent to agent ja***@example.com for order ORD-1'],
+    ['failed', { error: { message: 'boom' } }, 'Failed to send proximity notification to ja***@example.com'],
+  ])('proximity %s log shows a masked email', async (_k, result, line) => {
+    const svc = service(jest.fn().mockResolvedValue(result), {
+      resendTemplateIds: { agent_order_proximity: 'tpl_p', agent_order_proximity_en: 'tpl_p', agent_order_proximity_fr: 'tpl_p' },
+    });
+    await svc.sendProximityOrderNotification(EMAIL, 'Jane', { orderId: 'o1', orderNumber: 'ORD-1', businessName: 'B', businessAddress: 'A' }, 'en');
+    expect(allLogs()).toContain(line);
+    expect(allLogs()).not.toContain('jane.doe');
+  });
 });
