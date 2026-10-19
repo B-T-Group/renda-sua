@@ -59,7 +59,10 @@ import type {
   CreditContactChannel,
   CreditOrderResult,
 } from '../credits/credit.types';
-import { isAdminOperationalStatus } from './admin-order-status.util';
+import {
+  isAdminOperationalStatus,
+  isAdminPostPickupStatus,
+} from './admin-order-status.util';
 import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 
 @ApiTags('admin/orders')
@@ -286,7 +289,9 @@ export class AdminOrdersController {
       // never cancel an order outside their grants).
       const order = await this.requireOrder(orderId);
       if (dto.status === 'cancelled') {
-        return await this.ordersService.cancelOrderAsAdmin(orderId, dto.notes);
+        const reason = this.requireCancelReason(dto);
+        this.assertNotPastPickup(order.current_status);
+        return await this.ordersService.cancelOrderAsAdmin(orderId, reason);
       }
       this.assertOperationalAdminStatus(dto.status);
       await this.writeOperationalAdminStatus(order, dto);
@@ -302,6 +307,23 @@ export class AdminOrdersController {
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
+  }
+
+  private requireCancelReason(dto: UpdateOrderStatusDto): string {
+    const reason = (dto.reason ?? dto.notes ?? '').trim();
+    if (reason) return reason;
+    throw new HttpException(
+      'A reason is required to cancel an order',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private assertNotPastPickup(status: string): void {
+    if (!isAdminPostPickupStatus(status)) return;
+    throw new HttpException(
+      `Cannot cancel an order in ${status} status: it has already been picked up`,
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   private assertOperationalAdminStatus(status: string): void {

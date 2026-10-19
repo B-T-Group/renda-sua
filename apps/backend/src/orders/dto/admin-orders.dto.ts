@@ -139,6 +139,14 @@ export class UpdateOrderStatusDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Reason for the change (sent by the admin UI). Required, with notes as a fallback, when status is cancelled.',
+  })
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
 
 export class AddAdminNoteDto {

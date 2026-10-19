@@ -186,7 +186,7 @@ import {
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
-import { isAdminTerminalStatus } from './admin-order-status.util';
+import { isAdminPostPickupStatus, isAdminTerminalStatus } from './admin-order-status.util';
 import { GET_ORDERS } from './orders.queries';
 import {
   withDeliveryContact,
@@ -8472,7 +8472,10 @@ export class OrdersService {
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (isAdminTerminalStatus(order.current_status)) {
+    if (
+      isAdminTerminalStatus(order.current_status) ||
+      isAdminPostPickupStatus(order.current_status)
+    ) {
       throw new HttpException(
         `Cannot cancel order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST

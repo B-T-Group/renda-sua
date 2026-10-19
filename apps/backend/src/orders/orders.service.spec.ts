@@ -5527,6 +5527,17 @@ describe('OrdersService', () => {
       );
       expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });
+
+    it.each(['picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'complete'])(
+      'refuses a %s order (after pickup) with nothing released',
+      async (status) => {
+        jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({ ...openOrder, current_status: status });
+        const releaseStripe = jest.spyOn(service as any, 'releaseStripeAuthorizationIfNeeded').mockResolvedValue(undefined);
+        await expect(service.cancelOrderAsAdmin('order-123', 'r')).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+        expect(releaseStripe).not.toHaveBeenCalled();
+        expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+      }
+    );
   });
 
   describe('finalizeDepositAfterCallback', () => {

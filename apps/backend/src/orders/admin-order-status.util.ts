@@ -44,6 +44,17 @@ export const ADMIN_STATUS_OVERRIDE_VALUES = [
   ...ADMIN_OPERATIONAL_STATUSES,
 ] as const;
 
+/** Goods have left the business: a plain admin cancel must not run (no fee-free release after pickup). */
+export const ADMIN_POST_PICKUP_STATUSES = [
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+] as const;
+
+export function isAdminPostPickupStatus(status: string): boolean {
+  return (ADMIN_POST_PICKUP_STATUSES as readonly string[]).includes(status);
+}
+
 export function isAdminTerminalStatus(status: string): boolean {
   return (ADMIN_TERMINAL_STATUSES as readonly string[]).includes(status);
 }

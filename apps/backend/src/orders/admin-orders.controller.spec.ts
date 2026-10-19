@@ -9,11 +9,12 @@ describe('AdminOrdersController.updateStatus', () => {
 
   function buildController(opts?: {
     deny?: boolean;
+    status?: string;
     cancelResult?: { success: boolean; message: string };
     cancelError?: Error;
   }) {
     const ordersService = {
-      getOrderById: jest.fn().mockResolvedValue(order),
+      getOrderById: jest.fn().mockResolvedValue({ ...order, current_status: opts?.status ?? order.current_status }),
       cancelOrderAsAdmin: jest.fn().mockImplementation(async () => {
         if (opts?.cancelError) throw opts.cancelError;
         return (
@@ -71,6 +72,38 @@ describe('AdminOrdersController.updateStatus', () => {
       message: 'Order cancelled successfully',
     });
   });
+
+  it('uses the reason the admin UI sends (reason wins over notes, trimmed)', async () => {
+    const { controller, ordersService } = buildController();
+    await controller.updateStatus('order-1', { status: 'cancelled', reason: '  dup order ', notes: 'n' } as any);
+    expect(ordersService.cancelOrderAsAdmin).toHaveBeenCalledWith('order-1', 'dup order');
+  });
+
+  it.each([undefined, '', '   '])('requires a reason to cancel (reason=%p): 400, nothing cancelled', async (reason) => {
+    const { controller, ordersService, hasuraSystemService } = buildController();
+    await expect(controller.updateStatus('order-1', { status: 'cancelled', reason } as any)).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+    });
+    expect(ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it.each(['picked_up', 'in_transit', 'out_for_delivery'])('refuses to cancel a %s order (after pickup)', async (status) => {
+    const { controller, ordersService } = buildController({ status });
+    await expect(controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any)).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+    });
+    expect(ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
+  });
+
+  it.each(['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned_to_agent'])(
+    'still cancels a pre-pickup %s order',
+    async (status) => {
+      const { controller, ordersService } = buildController({ status });
+      await controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any);
+      expect(ordersService.cancelOrderAsAdmin).toHaveBeenCalledWith('order-1', 'r');
+    }
+  );
 
   it('F-CA1: a country admin outside the order scope cannot cancel (nothing is released or restored)', async () => {
     const { controller, ordersService, hasuraSystemService } = buildController({ deny: true });
