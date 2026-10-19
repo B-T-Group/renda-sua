@@ -89,6 +89,8 @@ function world() {
     faults: [] as Array<{ assigned_agent_id: string; business_location_id: string }>,
     accounts: [] as Array<{ user_id: string; currency: string; available_balance: number }>,
     deadlocksLeft: 0,
+    onSave: undefined as undefined | (() => void),
+    offAfterInsert: undefined as undefined | string,
     mutations: [] as Array<{ op: string; vars: Loose }>,
     nextId: 1,
   };
@@ -190,18 +192,31 @@ function world() {
           orders: state.orders.filter((o) => vars.agentIds.includes(o.assigned_agent_id) && vars.activeStatuses.includes(o.current_status)),
           order_offers: [],
         };
-      case 'DedicatedCardStats':
-        return {
-          delivered: state.orders.filter(
-            (o) => o.business_location_id === vars.locationId && vars.agentIds.includes(o.assigned_agent_id) && vars.doneStatuses.includes(o.current_status)
-          ),
-          missed: state.faults
-            .filter((f) => f.business_location_id === vars.locationId && vars.agentIds.includes(f.assigned_agent_id))
-            .map((f) => ({ order: { assigned_agent_id: f.assigned_agent_id } })),
+      case 'DedicatedCardStats': {
+        // The query counts per agent with aggregates (d<i> / m<i>); no row lists for the counts.
+        expect(query).not.toMatch(/delivered:|missed:/);
+        const out: Loose = {
           recent: state.orders
             .filter((o) => o.business_location_id === vars.locationId && vars.doneStatuses.includes(o.current_status))
             .map((o) => ({ subtotal: o.subtotal })),
         };
+        for (let i = 0; vars[`a${i}`] !== undefined; i++) {
+          const agentId = vars[`a${i}`];
+          expect(query).toContain(`d${i}: orders_aggregate`);
+          expect(query).toContain(`m${i}: failed_deliveries_aggregate`);
+          out[`d${i}`] = {
+            aggregate: {
+              count: state.orders.filter(
+                (o) => o.business_location_id === vars.locationId && o.assigned_agent_id === agentId && vars.doneStatuses.includes(o.current_status)
+              ).length,
+            },
+          };
+          out[`m${i}`] = {
+            aggregate: { count: state.faults.filter((f) => f.business_location_id === vars.locationId && f.assigned_agent_id === agentId).length },
+          };
+        }
+        return out;
+      }
       case 'DedicatedAgentBalances':
         return { accounts: state.accounts.filter((a) => vars.userIds.includes(a.user_id) && a.currency === vars.currency) };
       default:
@@ -226,6 +241,10 @@ function world() {
             state.rows.push(row);
             return row;
           });
+          if (state.offAfterInsert) {
+            // A business turns the slot off right after this insert commits.
+            state.pickup.push({ business_location_id: vars.objects[0].business_location_id, slot_key: state.offAfterInsert, is_enabled: false, pickup_time: null });
+          }
           return { insert_dedicated_agent_assignments: { returning: inserted } };
         } catch (e) {
           state.rows = snapshot;
@@ -242,11 +261,18 @@ function world() {
           if (existing) Object.assign(existing, { is_enabled: s.is_enabled, pickup_time: s.pickup_time });
           else state.pickup.push({ business_location_id: s.business_location_id, slot_key: s.slot_key, is_enabled: s.is_enabled, pickup_time: s.pickup_time });
         }
-        let affected = 0;
-        for (const u of vars.pauses ?? []) {
-          affected += applyUpdate({ id: u.where.id._eq, from: [u.where.status._eq] }, u._set).length;
-        }
-        return { insert_business_location_pickup_slots: { affected_rows: vars.slots.length }, update_dedicated_agent_assignments_many: [{ affected_rows: affected }] };
+        expect(vars.pauses).toBeUndefined();
+        state.onSave?.();
+        if (!vars.offSlots) return { insert_business_location_pickup_slots: { affected_rows: vars.slots.length } };
+        // Pause by predicate in the same request (QA #603 N2): whatever is active on the slot now.
+        const hit = state.rows.filter(
+          (r) => r.business_location_id === vars.locationId && vars.offSlots.includes(r.slot_key) && r.status === 'active'
+        );
+        for (const r of hit) Object.assign(r, vars.pauseSet);
+        return {
+          insert_business_location_pickup_slots: { affected_rows: vars.slots.length },
+          paused: { returning: hit.map((r) => ({ id: r.id, agent_id: r.agent_id, slot_key: r.slot_key, source: r.source, business_location_id: r.business_location_id })) },
+        };
       }
       default:
         throw new Error(`unexpected mutation ${op}`);
@@ -720,7 +746,7 @@ describe('DedicatedAssignmentsService — pickup slots (AC-B1, B2, B4)', () => {
 
     const save = w.writes('SaveDedicatedPickupSlots');
     expect(save).toHaveLength(1);
-    expect(save[0].vars.pauses.map((p: Loose) => p.where.id._eq)).toEqual([r1.id, r2.id, r3.id]);
+    expect(save[0].vars).toMatchObject({ locationId: LOC, offSlots: ['evening'], pauseSet: { status: 'paused', paused_by_user_id: OWNER } });
     expect([r1, r2, r3].every((r) => r.status === 'paused' && r.paused_by_user_id === OWNER)).toBe(true);
     expect(already.paused_at).toBe('old');
     expect(morning.status).toBe('active');
@@ -728,6 +754,30 @@ describe('DedicatedAssignmentsService — pickup slots (AC-B1, B2, B4)', () => {
     expect(res.pausedAssignmentIds.sort()).toEqual([r1.id, r2.id, r3.id].sort());
     expect(w.notices.map((n) => n.userId).sort()).toEqual([`u-${A1}`, `u-${A2}`, `u-${A3}`].sort());
     expect(res.slots.find((s) => s.slotKey === 'evening')?.isEnabled).toBe(false);
+  });
+
+  it('QA N2: an assignment created after the read (a racing super-user assign) is paused too, and its agent told', async () => {
+    const w = world();
+    for (const id of [A1, A2]) w.addAgent(id);
+    const r1 = w.seedRow({ agent_id: A1, slot_key: 'evening' });
+    let late: Loose | null = null;
+    w.state.onSave = () => {
+      if (!late) late = w.seedRow({ agent_id: A2, slot_key: 'evening', source: 'superuser_assign' });
+    };
+    const res = await w.service.updatePickupSlots(actor, { slots: [{ slotKey: 'evening', isEnabled: false }], confirmPauseAgents: true });
+    expect([r1.status, (late as Loose | null)?.status]).toEqual(['paused', 'paused']);
+    expect(res.pausedAssignmentIds.sort()).toEqual([r1.id, (late as unknown as Loose).id].sort());
+    expect(w.notices.map((n) => n.userId).sort()).toEqual([`u-${A1}`, `u-${A2}`].sort());
+  });
+
+  it('QA N2: a super-user assign that lands after the slot was turned off ends up paused, not active', async () => {
+    const w = world();
+    w.addAgent(A1);
+    w.state.offAfterInsert = 'morning';
+    const res = await assign(w, A1, ['morning', 'evening']);
+    const bySlot = Object.fromEntries(w.state.rows.map((r) => [r.slot_key, r.status]));
+    expect(bySlot).toEqual({ morning: 'paused', evening: 'active' });
+    expect(Object.fromEntries(res.assignments.map((a) => [a.slot_key, a.status]))).toEqual({ morning: 'paused', evening: 'active' });
   });
 
   it('the pickup-slot write retries a 40P01 abort', async () => {
@@ -794,7 +844,6 @@ describe('DedicatedAssignmentsService — business cards (AC-B7, B17)', () => {
       offToday: true,
       status: 'active',
       agent: { id: A1, firstName: 'Paul', isInternal: true, photoUrl: 'https://x/p.png' },
-      availableBalance: null,
       balanceCoversOrders: null,
       deliveries: 1,
       missedDeliveries: 0,
@@ -805,13 +854,15 @@ describe('DedicatedAssignmentsService — business cards (AC-B7, B17)', () => {
       offToday: false,
       status: 'paused',
       activeOrders: 2,
-      availableBalance: 12_000,
       balanceCoversOrders: 2,
       deliveries: 2,
       missedDeliveries: 1,
     });
     expect(w.agentHold.resolveOrderHoldWithCeiling).toHaveBeenCalledWith(10_000, A2, 'mobile_money');
     expect(w.agentHold.resolveOrderHoldWithCeiling).not.toHaveBeenCalledWith(expect.anything(), A1, expect.anything());
+    // QA #603 N1: the business never gets the agent's wallet balance, only how many orders it covers.
+    for (const card of assignments) expect(card).not.toHaveProperty('availableBalance');
+    expect(JSON.stringify(assignments)).not.toContain('12000');
   });
 
   it('flag off: 404', async () => {

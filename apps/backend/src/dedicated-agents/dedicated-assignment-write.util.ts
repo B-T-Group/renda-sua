@@ -27,11 +27,8 @@ export function isAssignmentCapError(error: unknown): boolean {
 
 /** The live-unique index: this agent already holds this location-slot (active or paused). */
 export function isAssignmentDuplicateError(error: unknown): boolean {
-  const text = errorText(error);
-  return (
-    text.includes('dedicated_agent_assignments_live_unique_idx') ||
-    /Uniqueness violation/i.test(text)
-  );
+  // QA #603 N3: the constraint name only; other unique errors (e.g. order_offers) pass through unchanged.
+  return errorText(error).includes('dedicated_agent_assignments_live_unique_idx');
 }
 
 /** Cap / duplicate -> 409 with a stable code; anything else unchanged. */

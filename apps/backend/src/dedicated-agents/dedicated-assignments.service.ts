@@ -30,11 +30,11 @@ import {
   DEDICATED_ASSIGN_AGENT_QUERY,
   DEDICATED_ASSIGNMENT_BY_ID_QUERY,
   DEDICATED_ASSIGNMENT_LOCATION_QUERY,
-  DEDICATED_CARD_STATS_QUERY,
   DEDICATED_LOCATION_LIVE_ASSIGNMENTS_QUERY,
   DEDICATED_LOCATION_PICKUP_SLOTS_QUERY,
   DEDICATED_NOTICE_DELEGATES_QUERY,
   INSERT_DEDICATED_ASSIGNMENTS_MUTATION,
+  dedicatedCardStatsQuery,
   UPDATE_DEDICATED_ASSIGNMENT_MUTATION,
   savePickupSlotsMutation,
 } from './dedicated-assignments.queries';
@@ -161,9 +161,7 @@ export interface DedicatedAgentCard {
   activeOrders: number;
   maxActiveOrders: number;
   outstandingDedicatedOffers: number;
-  /** Independents only (non-Stripe hold applies); null for internal agents. */
-  availableBalance: number | null;
-  /** AC-B7 "balance covers ~n more"; null for internal agents or no typical hold yet. */
+  /** AC-B7 (QA #603 N1: the raw balance is not sent to the business); "balance covers ~n more"; null for internal agents or no typical hold yet. */
   balanceCoversOrders: number | null;
   deliveries: number;
   missedDeliveries: number;
@@ -282,6 +280,17 @@ export class DedicatedAssignmentsService {
       }>(INSERT_DEDICATED_ASSIGNMENTS_MUTATION, { objects })
     );
     const assignments = res?.insert_dedicated_agent_assignments?.returning ?? [];
+    // QA #603 N2: a slot turned off between the check above and the insert pauses these rows too.
+    const offNow = await this.disabledSlots(location.id);
+    for (const a of assignments) {
+      if (!offNow.has(a.slot_key)) continue;
+      const paused = await this.guardedUpdate(a.id, ['active'], {
+        status: 'paused',
+        paused_at: new Date().toISOString(),
+        paused_by_user_id: params.actorUserId,
+      }).catch(() => null);
+      if (paused) a.status = 'paused';
+    }
     const firstId = assignments[0]?.id;
     if (firstId) {
       await this.notifyBusinessAssigned(location, agent, slotKeys, firstId);
@@ -403,7 +412,6 @@ export class DedicatedAssignmentsService {
         activeOrders,
         maxActiveOrders: config.maxActiveOrders,
         outstandingDedicatedOffers: outstanding,
-        availableBalance: balance,
         balanceCoversOrders:
           isInternal || !(hold > 0)
             ? null
@@ -519,18 +527,29 @@ export class DedicatedAssignmentsService {
     }
 
     const now = new Date().toISOString();
-    const pauses = orderAssignmentsForLocking(toPause).map((a) => ({
-      where: { id: { _eq: a.id }, status: { _eq: 'active' } },
-      _set: { status: 'paused', paused_at: now, paused_by_user_id: actor.userId },
-    }));
-    await runAssignmentWrite(() =>
-      this.hasuraSystemService.executeMutation(
-        savePickupSlotsMutation(pauses.length > 0),
-        pauses.length > 0 ? { slots: objects, pauses } : { slots: objects }
+    const offSlots = [...turningOff];
+    const res = await runAssignmentWrite(() =>
+      this.hasuraSystemService.executeMutation<{
+        paused?: { returning: Array<{ id: string; agent_id: string; slot_key: DedicatedSlotKey; source: string; business_location_id: string }> };
+      }>(
+        savePickupSlotsMutation(offSlots.length > 0),
+        offSlots.length > 0
+          ? {
+              slots: objects,
+              locationId: location.id,
+              offSlots,
+              pauseSet: { status: 'paused', paused_at: now, paused_by_user_id: actor.userId },
+            }
+          : { slots: objects }
       )
     );
-    for (const row of toPause) await this.notifyAgentForRow('paused', row);
-    return { ...(await this.getPickupSlots(location.id)), pausedAssignmentIds: toPause.map((a) => a.id) };
+    const paused = res?.paused?.returning ?? [];
+    const known = new Map(live.map((r) => [r.id, r]));
+    for (const p of paused) {
+      const row = known.get(p.id) ?? (await this.loadAssignment(p.id).catch(() => null));
+      if (row) await this.notifyAgentForRow('paused', row);
+    }
+    return { ...(await this.getPickupSlots(location.id)), pausedAssignmentIds: paused.map((a) => a.id) };
   }
 
   // ---------------------------------------------------------------- agent
@@ -724,19 +743,20 @@ export class DedicatedAssignmentsService {
   }
 
   private async loadCardStats(locationId: string, agentIds: string[]) {
-    const res = await this.hasuraSystemService.executeQuery<{
-      delivered: Array<{ assigned_agent_id: string }>;
-      missed: Array<{ order: { assigned_agent_id: string | null } | null }>;
-      recent: Array<{ subtotal: number | string | null }>;
-    }>(DEDICATED_CARD_STATS_QUERY, { locationId, agentIds, doneStatuses: DONE_STATUSES });
+    const vars: Record<string, unknown> = { locationId, doneStatuses: DONE_STATUSES };
+    agentIds.forEach((id, i) => (vars[`a${i}`] = id));
+    const res = await this.hasuraSystemService.executeQuery<
+      Record<string, { aggregate?: { count?: number } | null } | Array<{ subtotal: number | string | null }>>
+    >(dedicatedCardStatsQuery(agentIds.length), vars);
+    const count = (key: string) => Number((res?.[key] as { aggregate?: { count?: number } } | undefined)?.aggregate?.count ?? 0);
     const delivered = new Map<string, number>();
-    for (const o of res?.delivered ?? []) delivered.set(o.assigned_agent_id, (delivered.get(o.assigned_agent_id) ?? 0) + 1);
     const missed = new Map<string, number>();
-    for (const f of res?.missed ?? []) {
-      const id = f.order?.assigned_agent_id;
-      if (id) missed.set(id, (missed.get(id) ?? 0) + 1);
-    }
-    const subtotals = (res?.recent ?? []).map((o) => Number(o.subtotal)).filter((n) => n > 0);
+    agentIds.forEach((id, i) => {
+      delivered.set(id, count(`d${i}`));
+      missed.set(id, count(`m${i}`));
+    });
+    const recent = (res?.recent as Array<{ subtotal: number | string | null }> | undefined) ?? [];
+    const subtotals = recent.map((o) => Number(o.subtotal)).filter((n) => n > 0);
     const typicalSubtotal = subtotals.length ? subtotals.reduce((a, b) => a + b, 0) / subtotals.length : 0;
     return { delivered, missed, typicalSubtotal };
   }
