@@ -115,6 +115,18 @@ export function deliveryShare(dedicatedCount: number | null | undefined, assigne
  * (S1), postings per city with Close (S3), coverage (S4) and the assign
  * picker (S2). Every read is limited to the caller's geo scope and to
  * countries where `dedicated_agents_enabled` is on; writes 404 when it's off.
+ *
+ * QA #619 N11, `truncated` (for the future admin UI). Every list response
+ * (`listAssignments`, `listPostings`, `coverage`, `picker`) carries `truncated: boolean`:
+ * - `false`: the list is complete for the caller's scope and filters.
+ * - `true`: the server stopped at its cap and more rows MAY exist. Lists stop after
+ *   ADMIN_VIEW_MAX_PAGES (5) pages of ADMIN_VIEW_LIMIT (500), so 2 500 rows. The picker
+ *   stops at PICKER_AGENT_LIMIT (200) and logs `dedicated.picker_truncated`. A list
+ *   that is exactly at the cap also reports true, because it is not counted.
+ * - On `coverage`, `totals` (and `dedicatedShare`) cover only the rows returned.
+ * - There is no cursor or offset parameter yet. When `truncated` is true the UI
+ *   should say "Showing the first N; narrow the filters (city, status) to see the
+ *   rest", not present the list or totals as complete.
  */
 @Injectable()
 export class DedicatedAdminViewsService {
