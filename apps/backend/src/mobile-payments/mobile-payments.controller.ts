@@ -29,6 +29,7 @@ import { BadRequestException } from '@nestjs/common';
 import { isoCountryCode } from '../orders/delivery-pricing.util';
 import { validatePhoneNumber } from './phone-validation.util';
 import { sanitizeProviderError } from './sanitize-provider-error.util';
+import { redactSentryString } from '../common/sentry/scrub-sentry-event';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
@@ -130,6 +131,19 @@ export interface PaymentCallbackDto {
   message?: string;
   signature?: string;
   timestamp?: string;
+}
+
+/**
+ * #588 QA S1: the cause attached to the FedaPay 500 goes to Sentry (LinkedErrors). Never the
+ * raw error: a new Error with the sanitized message, secrets and personal data masked, capped,
+ * and no further cause chain. Only the error's type name is kept.
+ */
+const MAX_CAUSE_MESSAGE = 300;
+export function sanitizedFedaPayCause(error: unknown, sanitizedMessage: string): Error {
+  const cause = new Error(redactSentryString(sanitizedMessage).slice(0, MAX_CAUSE_MESSAGE));
+  const name = (error as { name?: unknown } | null)?.name;
+  cause.name = typeof name === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) ? name : 'Error';
+  return cause;
 }
 
 @Controller('mobile-payments')
@@ -819,7 +833,7 @@ export class MobilePaymentsController {
           message: 'Failed to process FedaPay callback',
         },
         HttpStatus.INTERNAL_SERVER_ERROR,
-        { cause: error }
+        { cause: sanitizedFedaPayCause(error, sanitized.message) }
       );
     }
   }
