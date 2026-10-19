@@ -129,6 +129,11 @@ const RECORD_DEDICATED_RELEASE_MUTATION = `
 
 /** #608 follow-up: Sentry/Slack money-anomaly marker for an agent hold left withheld. */
 export const STRANDED_HOLD_MARKER = 'agent_hold_stranded';
+/** QA #622 F3: a strand that is still unresolved when it leaves the look-back window. */
+export const STRANDED_HOLD_AGED_OUT_MARKER = 'agent_hold_stranded_aged_out';
+/** QA #622 F4: the stranded event could not be written (the alert still went out). */
+export const STRANDED_HOLD_EVENT_FAILED_MARKER =
+  'agent_hold_stranded_event_failed';
 
 interface StrandedHoldPayload {
   agentId?: string | null;
@@ -142,22 +147,46 @@ interface StrandedHoldPayload {
 const STRANDED_HOLDS_QUERY = `
   query StrandedAgentHolds($limit: Int!, $since: timestamptz!) {
     order_events(
-      where: { event_type: { _eq: "agent_hold_stranded" }, created_at: { _gte: $since } }
-      order_by: { created_at: desc }
+      where: {
+        event_type: { _eq: "agent_hold_stranded" }
+        created_at: { _gte: $since }
+        _not: { payload: { _has_key: "resolvedAt" } }
+      }
+      order_by: { created_at: asc }
       limit: $limit
     ) {
       id
       order_id
+      created_at
       payload
     }
   }
 `;
 
-const STRANDED_HOLDS_RESOLVED_QUERY = `
-  query StrandedAgentHoldsResolved($orderIds: [uuid!]!) {
-    order_events(where: { event_type: { _eq: "agent_hold_stranded_released" }, order_id: { _in: $orderIds } }) {
+const AGED_OUT_STRANDED_HOLDS_QUERY = `
+  query AgedOutStrandedAgentHolds($since: timestamptz!) {
+    order_events(
+      where: {
+        event_type: { _eq: "agent_hold_stranded" }
+        created_at: { _lt: $since }
+        _not: { _or: [{ payload: { _has_key: "resolvedAt" } }, { payload: { _has_key: "agedOutAlertedAt" } }] }
+      }
+      order_by: { created_at: asc }
+      limit: 50
+    ) {
+      id
       order_id
+      created_at
       payload
+    }
+  }
+`;
+
+/** Marks a strand (resolved / aged-out alerted) on the stranded event itself, so the queries above can filter it. */
+const MARK_STRANDED_HOLD_MUTATION = `
+  mutation MarkStrandedAgentHold($id: uuid!, $patch: jsonb!) {
+    update_order_events(where: { id: { _eq: $id } }, _append: { payload: $patch }) {
+      affected_rows
     }
   }
 `;
@@ -223,26 +252,50 @@ export class OrderReassignmentService {
     const order = await this.fetchDedicatedReleaseOrder(orderId);
     const country = isoCountryCode(order?.business_location?.address?.country);
     const log = (outcome: string, extra: Record<string, unknown> = {}) =>
-      this.logRelease(outcome, { orderId, agentId, reason, country, ...extra }, order, now);
+      this.logRelease(
+        outcome,
+        { orderId, agentId, reason, country, ...extra },
+        order,
+        now
+      );
     if (!order) {
       log('refused', { refusal: 'unavailable' });
-      return this.refuse('unavailable', 'Dedicated release is not available for this order');
+      return this.refuse(
+        'unavailable',
+        'Dedicated release is not available for this order'
+      );
     }
     // QA #608 N3: the kill switch only stops new dedicated assignments. A window
     // opened while the flag was on is honoured; the release only gives work back.
-    const flagOn = this.dedicatedConfig ? await this.dedicatedConfig.isEnabled(country).catch(() => false) : false;
-    if (order.current_status !== 'assigned_to_agent' || order.assigned_agent_id !== agentId) {
+    const flagOn = this.dedicatedConfig
+      ? await this.dedicatedConfig.isEnabled(country).catch(() => false)
+      : false;
+    if (
+      order.current_status !== 'assigned_to_agent' ||
+      order.assigned_agent_id !== agentId
+    ) {
       log('refused', { refusal: 'not_assigned' });
-      return this.refuse('not_assigned', 'This order is not assigned to you, or it was already picked up');
+      return this.refuse(
+        'not_assigned',
+        'This order is not assigned to you, or it was already picked up'
+      );
     }
     if (order.assignment_source !== 'dedicated_auto') {
       log('refused', { refusal: 'not_auto_assigned' });
-      return this.refuse('not_auto_assigned', 'Only an automatic dedicated assignment can be released');
+      return this.refuse(
+        'not_auto_assigned',
+        'Only an automatic dedicated assignment can be released'
+      );
     }
-    const until = order.dedicated_release_until ? new Date(order.dedicated_release_until).getTime() : 0;
+    const until = order.dedicated_release_until
+      ? new Date(order.dedicated_release_until).getTime()
+      : 0;
     if (!(until > now.getTime())) {
       log('refused', { refusal: 'window_closed', cause: 'expired' });
-      return this.refuse('window_closed', 'The release window for this order has closed');
+      return this.refuse(
+        'window_closed',
+        'The release window for this order has closed'
+      );
     }
     const userId = order.assigned_agent?.user_id;
     if (!userId) {
@@ -265,22 +318,34 @@ export class OrderReassignmentService {
       responded_at: nowIso,
     };
     try {
-      await runAssignmentWrite(() => this.hasura.executeMutation(RECORD_DEDICATED_RELEASE_MUTATION, { object: exclusion }));
+      await runAssignmentWrite(() =>
+        this.hasura.executeMutation(RECORD_DEDICATED_RELEASE_MUTATION, {
+          object: exclusion,
+        })
+      );
     } catch (error: unknown) {
       this.logger.error(
-        `Dedicated release of ${order.order_number}: exclusion not recorded, nothing released: ${
+        `Dedicated release of ${
+          order.order_number
+        }: exclusion not recorded, nothing released: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
-      log('failed', { refusal: 'release_failed', cause: 'exclusion_write_failed' });
+      log('failed', {
+        refusal: 'release_failed',
+        cause: 'exclusion_write_failed',
+      });
       return this.refuse('release_failed', 'Could not release the order');
     }
     // CAS on the stored window: the database refuses a release once it has passed.
     const released = await runAssignmentWrite(() =>
-      this.hasura.executeMutation<{ update_orders: { affected_rows: number } | null }>(
-        RELEASE_DEDICATED_AUTO_MUTATION,
-        { id: order.id, agentId, now: nowIso }
-      )
+      this.hasura.executeMutation<{
+        update_orders: { affected_rows: number } | null;
+      }>(RELEASE_DEDICATED_AUTO_MUTATION, {
+        id: order.id,
+        agentId,
+        now: nowIso,
+      })
     ).catch(async (error: unknown) => {
       await this.dropExclusion(order.id, agentId, nowIso);
       throw error;
@@ -289,18 +354,36 @@ export class OrderReassignmentService {
       // The agent keeps the order: the exclusion row of this attempt goes away.
       await this.dropExclusion(order.id, agentId, nowIso);
       log('refused', { refusal: 'window_closed', cause: 'cas_lost' });
-      return this.refuse('window_closed', 'The release window for this order has closed');
+      return this.refuse(
+        'window_closed',
+        'The release window for this order has closed'
+      );
     }
-    const holdResult = await this.releaseHoldDetailed(order as unknown as MonitoredPickupOrder);
+    const holdResult = await this.releaseHoldDetailed(
+      order as unknown as MonitoredPickupOrder
+    );
     if (!holdResult.released) {
       const restored = await this.revertDedicatedRelease(order);
       if (restored) await this.dropExclusion(order.id, agentId, nowIso);
       if (!restored) {
-        await this.recordStrandedHold(order as unknown as MonitoredPickupOrder, holdResult.hold, 'dedicated_release');
-        log('failed', { refusal: 'release_lost', cause: 'hold_release_failed_and_reclaimed' });
-        return this.refuse('release_lost', 'The order was released and another agent has taken it');
+        await this.recordStrandedHold(
+          order as unknown as MonitoredPickupOrder,
+          holdResult.hold,
+          'dedicated_release'
+        );
+        log('failed', {
+          refusal: 'release_lost',
+          cause: 'hold_release_failed_and_reclaimed',
+        });
+        return this.refuse(
+          'release_lost',
+          'The order was released and another agent has taken it'
+        );
       }
-      log('failed', { refusal: 'release_failed', cause: 'hold_release_failed' });
+      log('failed', {
+        refusal: 'release_failed',
+        cause: 'hold_release_failed',
+      });
       return this.refuse('release_failed', 'Could not release the order');
     }
     await this.insertAgentHistory(
@@ -315,16 +398,26 @@ export class OrderReassignmentService {
       actorId: agentId,
       payload: { reason: 'dedicated_auto_release', declineReason: reason },
     });
-    emitServerSiteEvent(this.siteEventsService, 'dedicated.auto_assign_released', {
-      orderId: order.id,
-      agentId,
-      assignmentId: order.dedicated_assignment_id,
-      reason,
+    emitServerSiteEvent(
+      this.siteEventsService,
+      'dedicated.auto_assign_released',
+      {
+        orderId: order.id,
+        agentId,
+        assignmentId: order.dedicated_assignment_id,
+        reason,
+        secondsLeft: Math.max(0, Math.floor((until - now.getTime()) / 1000)),
+      }
+    );
+    log('released', {
+      flagOn,
       secondsLeft: Math.max(0, Math.floor((until - now.getTime()) / 1000)),
     });
-    log('released', { flagOn, secondsLeft: Math.max(0, Math.floor((until - now.getTime()) / 1000)) });
     await this.redispatch(order.id);
-    return { success: true, message: 'Order released; dispatch restarted without you' };
+    return {
+      success: true,
+      message: 'Order released; dispatch restarted without you',
+    };
   }
 
   /**
@@ -352,12 +445,19 @@ export class OrderReassignmentService {
     else this.logger.log(JSON.stringify(line));
   }
 
-  private refuse(refusal: DedicatedReleaseRefusal, message: string): DedicatedReleaseResult {
+  private refuse(
+    refusal: DedicatedReleaseRefusal,
+    message: string
+  ): DedicatedReleaseResult {
     return { success: false, refusal, message };
   }
 
-  private async fetchDedicatedReleaseOrder(orderId: string): Promise<DedicatedReleaseOrder | null> {
-    const res = await this.hasura.executeQuery<{ orders_by_pk: DedicatedReleaseOrder | null }>(
+  private async fetchDedicatedReleaseOrder(
+    orderId: string
+  ): Promise<DedicatedReleaseOrder | null> {
+    const res = await this.hasura.executeQuery<{
+      orders_by_pk: DedicatedReleaseOrder | null;
+    }>(
       `query DedicatedReleaseOrder($id: uuid!) {
         orders_by_pk(id: $id) {
           id order_number current_status assigned_agent_id currency
@@ -379,9 +479,12 @@ export class OrderReassignmentService {
    * its pickup timers restored (QA #608 N1). Returns false when the order was
    * claimed by someone else in between (affected_rows 0), which is logged.
    */
-  private async revertDedicatedRelease(order: DedicatedReleaseOrder): Promise<boolean> {
+  private async revertDedicatedRelease(
+    order: DedicatedReleaseOrder
+  ): Promise<boolean> {
     const pickup: Record<string, unknown> = {};
-    for (const f of PICKUP_MONITOR_FIELDS) pickup[f] = order[f] ?? (f === 'pickup_extension_minutes' ? 0 : null);
+    for (const f of PICKUP_MONITOR_FIELDS)
+      pickup[f] = order[f] ?? (f === 'pickup_extension_minutes' ? 0 : null);
     const res = await this.hasura
       .executeMutation<{ update_orders: { affected_rows: number } | null }>(
         `mutation RevertDedicatedRelease(
@@ -416,20 +519,35 @@ export class OrderReassignmentService {
         }
       )
       .catch((error: unknown) => {
-        this.logger.error(`RevertDedicatedRelease ${order.id}: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.error(
+          `RevertDedicatedRelease ${order.id}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        );
         return null;
       });
-    const restored = ((res as { restore?: { affected_rows?: number } } | null)?.restore?.affected_rows ?? 0) === 1;
+    const restored =
+      ((res as { restore?: { affected_rows?: number } } | null)?.restore
+        ?.affected_rows ?? 0) === 1;
     if (!restored) {
       this.logger.error(
-        JSON.stringify({ event: 'dedicated.release_revert_failed', orderId: order.id, agentId: order.assigned_agent_id, orderNumber: order.order_number })
+        JSON.stringify({
+          event: 'dedicated.release_revert_failed',
+          orderId: order.id,
+          agentId: order.assigned_agent_id,
+          orderNumber: order.order_number,
+        })
       );
     }
     return restored;
   }
 
   /** Removes this attempt's exclusion row (matched on its responded_at) when the agent keeps the order. */
-  private async dropExclusion(orderId: string, agentId: string, at: string): Promise<void> {
+  private async dropExclusion(
+    orderId: string,
+    agentId: string,
+    at: string
+  ): Promise<void> {
     await this.hasura
       .executeMutation(
         `mutation DropDedicatedReleaseExclusion($orderId: uuid!, $agentId: uuid!, $at: timestamptz!) {
@@ -446,11 +564,19 @@ export class OrderReassignmentService {
         { orderId, agentId, at }
       )
       .catch((error: unknown) =>
-        this.logger.warn(`DropDedicatedReleaseExclusion ${orderId}: ${error instanceof Error ? error.message : String(error)}`)
+        this.logger.warn(
+          `DropDedicatedReleaseExclusion ${orderId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
       );
   }
 
-  private async insertAgentHistory(orderId: string, userId: string, notes: string): Promise<void> {
+  private async insertAgentHistory(
+    orderId: string,
+    userId: string,
+    notes: string
+  ): Promise<void> {
     await this.hasura.executeMutation(
       `mutation DedicatedReleaseHistory($orderId: uuid!, $userId: uuid!, $notes: String!) {
         insert_order_status_history(objects: [{
@@ -627,17 +753,28 @@ export class OrderReassignmentService {
     const holdResult = await this.releaseHoldDetailed(order);
     if (!holdResult.released) {
       const restored = await this.revertSystemDrop(order);
-      if (!restored) await this.recordStrandedHold(order, holdResult.hold, 'pickup_reassignment');
+      if (!restored)
+        await this.recordStrandedHold(
+          order,
+          holdResult.hold,
+          'pickup_reassignment'
+        );
       return false;
     }
-    await this.insertHistory(order.id, 'System reassigned order after pickup SLA');
+    await this.insertHistory(
+      order.id,
+      'System reassigned order after pickup SLA'
+    );
     return true;
   }
 
   /** The hold read before the credit is returned, so a failure can be recorded with it. */
   private async releaseHoldDetailed(
     order: MonitoredPickupOrder
-  ): Promise<{ released: boolean; hold: { id: string; agent_hold_amount: number } | null }> {
+  ): Promise<{
+    released: boolean;
+    hold: { id: string; agent_hold_amount: number } | null;
+  }> {
     const hold = await this.fetchActiveAgentHold(order.id);
     if (!hold) return { released: true, hold: null };
     const credited = await this.creditHoldRelease(order, hold);
@@ -673,14 +810,44 @@ export class OrderReassignmentService {
       this.logger,
       STRANDED_HOLD_MARKER,
       `Agent hold stranded for order ${order.order_number}: release failed and another agent took the order`,
-      { orderId: order.id, orderNumber: order.order_number, holdId: hold.id, agentId, agentUserId, amount, currency, path }
+      {
+        orderId: order.id,
+        orderNumber: order.order_number,
+        holdId: hold.id,
+        agentId,
+        agentUserId,
+        amount,
+        currency,
+        path,
+      }
     );
-    await this.orderEvents.recordEvent({
-      orderId: order.id,
-      eventType: 'agent_hold_stranded',
-      actorType: 'system',
-      payload: { agentId, agentUserId, amount, currency, path, holdId: hold.id },
-    });
+    // QA #622 F4: never let this break the release / reassignment on the request path.
+    try {
+      await this.orderEvents.recordEventStrict({
+        orderId: order.id,
+        eventType: 'agent_hold_stranded',
+        actorType: 'system',
+        payload: {
+          agentId,
+          agentUserId,
+          amount,
+          currency,
+          path,
+          holdId: hold.id,
+        },
+      });
+    } catch (error: unknown) {
+      reportMoneyAnomaly(
+        this.logger,
+        STRANDED_HOLD_EVENT_FAILED_MARKER,
+        `Stranded agent hold for order ${
+          order.order_number
+        } not queued for the reconciler: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+        { orderId: order.id, holdId: hold.id, agentId, amount, currency, path }
+      );
+    }
   }
 
   /**
@@ -692,73 +859,156 @@ export class OrderReassignmentService {
    *   another never credits twice), then the resolution event is written.
    * A failed release is logged and retried on the next run.
    */
-  async reconcileStrandedAgentHolds(limit = 50): Promise<{ released: number; skipped: number; failed: number }> {
+  async reconcileStrandedAgentHolds(
+    limit = 50
+  ): Promise<{ released: number; skipped: number; failed: number }> {
     const out = { released: 0, skipped: 0, failed: 0 };
-    const since = new Date(Date.now() - STRANDED_HOLD_LOOKBACK_DAYS * 86_400_000).toISOString();
-    const res = await this.hasura.executeQuery<{
-      order_events: Array<{ id: string; order_id: string; payload: StrandedHoldPayload | null }>;
-    }>(STRANDED_HOLDS_QUERY, { limit, since });
-    const stranded = res?.order_events ?? [];
-    if (stranded.length === 0) return out;
-    const resolved = await this.hasura.executeQuery<{
-      order_events: Array<{ order_id: string; payload: { strandedEventId?: string } | null }>;
-    }>(STRANDED_HOLDS_RESOLVED_QUERY, { orderIds: [...new Set(stranded.map((e) => e.order_id))] });
-    const done = new Set((resolved?.order_events ?? []).map((r) => r.payload?.strandedEventId).filter(Boolean));
-    for (const ev of stranded) {
-      if (done.has(ev.id)) continue;
-      const p = ev.payload ?? ({} as StrandedHoldPayload);
-      const amount = Number(p.amount);
-      if (!p.agentUserId || !(amount > 0)) {
-        out.skipped++;
-        continue;
+    // F2 (QA #622): no overlapping runs in this process. Across processes, the
+    // per-strand ledger key below is the database-enforced guard.
+    if (this.reconcilingStrandedHolds) return out;
+    this.reconcilingStrandedHolds = true;
+    try {
+      const since = new Date(
+        Date.now() - STRANDED_HOLD_LOOKBACK_DAYS * 86_400_000
+      ).toISOString();
+      await this.alertAgedOutStrandedHolds(since);
+      // F3: unresolved only, oldest first, so a backlog can't starve older strands.
+      const res = await this.hasura.executeQuery<{
+        order_events: Array<{
+          id: string;
+          order_id: string;
+          created_at?: string;
+          payload: StrandedHoldPayload | null;
+        }>;
+      }>(STRANDED_HOLDS_QUERY, { limit, since });
+      for (const ev of res?.order_events ?? []) {
+        const r = await this.reconcileOneStrandedHold(ev);
+        out[r]++;
       }
-      try {
-        const order = await this.hasura.executeQuery<{
-          orders_by_pk: { id: string; order_number: string; assigned_agent_id: string | null } | null;
-        }>(STRANDED_HOLD_ORDER_QUERY, { id: ev.order_id });
-        const o = order?.orders_by_pk;
-        if (!o || (p.agentId && o.assigned_agent_id === p.agentId)) {
-          out.skipped++;
-          continue;
-        }
-        const account = await this.hasura.getAccount(p.agentUserId, p.currency || 'XAF');
-        if (!account) throw new Error('agent account missing');
-        const released = await this.releaseNetAgentHold(
-          account.id,
-          ev.order_id,
-          `Hold released for order ${o.order_number}. Stranded after release (reconciled).`
-        );
-        if (!released.success) throw new Error(released.error || 'release failed');
-        await this.orderEvents.recordEvent({
-          orderId: ev.order_id,
-          eventType: 'agent_hold_stranded_released',
-          actorType: 'system',
-          payload: {
-            strandedEventId: ev.id,
-            agentId: p.agentId,
-            amount,
-            released: released.released,
-            net: released.net,
-            alreadyExisted: released.alreadyExists === true,
-          },
-        });
-        this.logger.log(
-          `Stranded agent hold reconciled for order ${o.order_number}: released ${released.released} of net ${released.net} ${p.currency || 'XAF'}`
-        );
-        out.released++;
-      } catch (error: unknown) {
-        out.failed++;
-        this.logger.warn(
-          `Stranded agent hold for order ${ev.order_id} not released yet: ${error instanceof Error ? error.message : String(error)}`
-        );
-      }
+      return out;
+    } finally {
+      this.reconcilingStrandedHolds = false;
     }
-    return out;
+  }
+
+  private reconcilingStrandedHolds = false;
+
+  /**
+   * One strand. QA #622:
+   * - F1: release min(net held for this account and order, stranded amount), never
+   *   a reference-only dedupe.
+   * - F2: the ledger key `stranded:release:<eventId>` is UNIQUE in
+   *   account_transactions, so two runs (or two pods) credit a strand at most once.
+   *   The loser's balance move is reverted by AccountsService.
+   * - The strand is marked resolved only after its credit exists (written now, or
+   *   found by its key), or when the net held is confirmed 0.
+   */
+  private async reconcileOneStrandedHold(ev: {
+    id: string;
+    order_id: string;
+    payload: StrandedHoldPayload | null;
+  }): Promise<'released' | 'skipped' | 'failed'> {
+    const p = ev.payload ?? ({} as StrandedHoldPayload);
+    const amount = Number(p.amount);
+    if (!p.agentUserId || !(amount > 0)) return 'skipped';
+    try {
+      const order = await this.hasura.executeQuery<{
+        orders_by_pk: {
+          id: string;
+          order_number: string;
+          assigned_agent_id: string | null;
+        } | null;
+      }>(STRANDED_HOLD_ORDER_QUERY, { id: ev.order_id });
+      const o = order?.orders_by_pk;
+      if (!o || (p.agentId && o.assigned_agent_id === p.agentId))
+        return 'skipped';
+      const account = await this.hasura.getAccount(
+        p.agentUserId,
+        p.currency || 'XAF'
+      );
+      if (!account) throw new Error('agent account missing');
+      const released = await this.releaseNetAgentHold(
+        account.id,
+        ev.order_id,
+        `Hold released for order ${o.order_number}. Stranded after release (reconciled).`,
+        { cap: amount, idempotencyKey: `stranded:release:${ev.id}` }
+      );
+      if (!released.success)
+        throw new Error(released.error || 'release failed');
+      const resolution = {
+        resolvedAt: new Date().toISOString(),
+        released: released.released,
+        net: released.net,
+        alreadyExisted: released.alreadyExists === true,
+      };
+      await this.hasura.executeMutation(MARK_STRANDED_HOLD_MUTATION, {
+        id: ev.id,
+        patch: resolution,
+      });
+      await this.orderEvents.recordEvent({
+        orderId: ev.order_id,
+        eventType: 'agent_hold_stranded_released',
+        actorType: 'system',
+        payload: {
+          strandedEventId: ev.id,
+          agentId: p.agentId,
+          amount,
+          ...resolution,
+        },
+      });
+      this.logger.log(
+        `Stranded agent hold reconciled for order ${o.order_number}: released ${
+          released.released
+        } (net ${released.net}, stranded ${amount}) ${p.currency || 'XAF'}`
+      );
+      return 'released';
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Stranded agent hold for order ${ev.order_id} not released yet: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+      return 'failed';
+    }
+  }
+
+  /** F3: a strand older than the look-back that is still unresolved alerts once. */
+  private async alertAgedOutStrandedHolds(since: string): Promise<void> {
+    const res = await this.hasura.executeQuery<{
+      order_events: Array<{
+        id: string;
+        order_id: string;
+        created_at?: string;
+        payload: StrandedHoldPayload | null;
+      }>;
+    }>(AGED_OUT_STRANDED_HOLDS_QUERY, { since });
+    for (const ev of res?.order_events ?? []) {
+      reportMoneyAnomaly(
+        this.logger,
+        STRANDED_HOLD_AGED_OUT_MARKER,
+        `Stranded agent hold for order ${ev.order_id} unresolved after ${STRANDED_HOLD_LOOKBACK_DAYS} days; reconcile by hand`,
+        {
+          orderId: ev.order_id,
+          strandedEventId: ev.id,
+          agentId: ev.payload?.agentId,
+          amount: ev.payload?.amount,
+          currency: ev.payload?.currency,
+        }
+      );
+      await this.hasura.executeMutation(MARK_STRANDED_HOLD_MUTATION, {
+        id: ev.id,
+        patch: { agedOutAlertedAt: new Date().toISOString() },
+      });
+    }
   }
 
   /** True when the order went back to this agent (false: someone claimed it meanwhile). */
-  private async revertSystemDrop(order: MonitoredPickupOrder): Promise<boolean> {
-    const res = await this.hasura.executeMutation<{ update_orders?: { affected_rows?: number } | null }>(
+  private async revertSystemDrop(
+    order: MonitoredPickupOrder
+  ): Promise<boolean> {
+    const res = await this.hasura.executeMutation<{
+      update_orders?: { affected_rows?: number } | null;
+    }>(
       `mutation RevertSystemDrop($id: uuid!, $agentId: uuid!) {
         update_orders(
           where: {
@@ -860,17 +1110,32 @@ export class OrderReassignmentService {
   private async releaseNetAgentHold(
     accountId: string,
     orderId: string,
-    memo: string
-  ): Promise<{ success: boolean; released: number; net: number; alreadyExists?: boolean; error?: string }> {
-    const { holds, releases, net } = await this.agentHoldLedger(accountId, orderId);
+    memo: string,
+    opts: { cap?: number; idempotencyKey?: string } = {}
+  ): Promise<{
+    success: boolean;
+    released: number;
+    net: number;
+    alreadyExists?: boolean;
+    error?: string;
+  }> {
+    const { holds, releases, net } = await this.agentHoldLedger(
+      accountId,
+      orderId
+    );
     if (!(net > 0)) return { success: true, released: 0, net };
+    // Never more than the net; a stranded release is also capped at what was stranded.
+    const amount = Number(Math.min(net, opts.cap ?? net).toFixed(2));
+    if (!(amount > 0)) return { success: true, released: 0, net };
     const result = await this.accountsService.registerTransaction({
       accountId,
-      amount: net,
+      amount,
       transactionType: 'release',
       memo,
       referenceId: orderId,
-      idempotencyKey: `agent-hold-release:${orderId}:${accountId}:h${holds.length}:r${releases.length}`,
+      idempotencyKey:
+        opts.idempotencyKey ??
+        `agent-hold-release:${orderId}:${accountId}:h${holds.length}:r${releases.length}`,
     });
     if (!result.success) {
       // A concurrent writer that read the same state may have moved the balance first.
@@ -881,15 +1146,28 @@ export class OrderReassignmentService {
       // stranded hold.
       for (const waitMs of NET_RELEASE_RECHECK_MS) {
         const after = await this.agentHoldLedger(accountId, orderId);
-        if (!(after.net > 0)) return { success: true, released: 0, net: after.net, alreadyExists: true };
+        if (!(after.net > 0))
+          return {
+            success: true,
+            released: 0,
+            net: after.net,
+            alreadyExists: true,
+          };
         await new Promise((resolve) => setTimeout(resolve, waitMs));
       }
       const last = await this.agentHoldLedger(accountId, orderId);
-      if (!(last.net > 0)) return { success: true, released: 0, net: last.net, alreadyExists: true };
+      if (!(last.net > 0))
+        return {
+          success: true,
+          released: 0,
+          net: last.net,
+          alreadyExists: true,
+        };
       return { success: false, released: 0, net, error: result.error };
     }
-    if (result.alreadyExists) return { success: true, released: 0, net, alreadyExists: true };
-    return { success: true, released: net, net };
+    if (result.alreadyExists)
+      return { success: true, released: 0, net, alreadyExists: true };
+    return { success: true, released: amount, net };
   }
 
   private async agentHoldLedger(accountId: string, orderId: string) {
@@ -899,8 +1177,13 @@ export class OrderReassignmentService {
     }>(AGENT_HOLD_LEDGER_QUERY, { accountId, orderId });
     const holds = ledger?.holds ?? [];
     const releases = ledger?.releases ?? [];
-    const sum = (rows: Array<{ amount: number | string }>) => rows.reduce((t, r) => t + Number(r.amount || 0), 0);
-    return { holds, releases, net: Number((sum(holds) - sum(releases)).toFixed(2)) };
+    const sum = (rows: Array<{ amount: number | string }>) =>
+      rows.reduce((t, r) => t + Number(r.amount || 0), 0);
+    return {
+      holds,
+      releases,
+      net: Number((sum(holds) - sum(releases)).toFixed(2)),
+    };
   }
 
   private async cancelHoldRow(holdId: string): Promise<void> {
@@ -1085,7 +1368,10 @@ export class OrderReassignmentService {
     const denom = Math.max(1, completed + reassigned);
     const score = Math.max(
       0,
-      Math.min(100, Math.round((completed / denom) * 100 - (reassigned / denom) * 40))
+      Math.min(
+        100,
+        Math.round((completed / denom) * 100 - (reassigned / denom) * 40)
+      )
     );
     await this.hasura.executeMutation(
       `mutation SetPickupRel($id: uuid!, $score: numeric!) {
