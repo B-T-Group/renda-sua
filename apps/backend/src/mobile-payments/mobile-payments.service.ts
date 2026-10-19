@@ -89,6 +89,31 @@ export interface MobilePaymentResponse {
   reason?: 'provider_ambiguous';
 }
 
+/**
+ * #592 QA L2: rows created before this cutoff may carry a FedaPay externalId that is the
+ * MyPVit short hash of the stored reference. FEDAPAY_LEGACY_SHORT_REF_CUTOFF (ISO time) pins
+ * it per environment; otherwise it is this process's start time, so only rows that existed
+ * before the code that sends the long reference was running can qualify.
+ */
+const PROCESS_STARTED_AT_MS = Date.now();
+
+export function fedapayLegacyShortRefCutoffMs(
+  env: Record<string, string | undefined> = process.env
+): number {
+  const configured = env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF?.trim();
+  const parsed = configured ? Date.parse(configured) : NaN;
+  return Number.isFinite(parsed) ? parsed : PROCESS_STARTED_AT_MS;
+}
+
+export function isLegacyFedaPayShortRefRow(
+  tx: { payment_entity?: string | null; created_at?: string | null },
+  cutoffMs: number = fedapayLegacyShortRefCutoffMs()
+): boolean {
+  if (tx.payment_entity !== 'order_deposit') return false;
+  const createdMs = tx.created_at ? Date.parse(tx.created_at) : NaN;
+  return Number.isFinite(createdMs) && createdMs < cutoffMs;
+}
+
 /** FedaPay live amount: a finite number (or numeric string), else undefined (QA #587 A1). */
 export function liveFedaPayAmount(value: unknown): number | undefined {
   const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
@@ -269,6 +294,8 @@ export class MobilePaymentsService {
       amount?: number;
       currency?: string | null;
       reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
       transaction_type?: string | null;
     },
     claimed: 'SUCCESS' | 'FAILED'
@@ -317,6 +344,8 @@ export class MobilePaymentsService {
       amount?: number;
       currency?: string | null;
       reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
     },
     claimed: 'SUCCESS' | 'FAILED',
     live: MobileTransactionStatus
@@ -375,7 +404,7 @@ export class MobilePaymentsService {
           throw mismatch('missing_live_reference', 'live record has no reference (fail closed)');
         }
         // #592: also accepts the MyPVit short hash of the stored reference (in-flight deposits).
-        if (!this.fedapayReferenceMatches(tx.reference, live.reference)) {
+        if (!this.fedapayReferenceMatches(tx, live.reference)) {
           throw mismatch('reference_mismatch', `expected ${tx.reference}, live ${live.reference}`);
         }
       }
@@ -396,7 +425,7 @@ export class MobilePaymentsService {
       if (!tx.reference?.trim()) {
         throw mismatch('missing_stored_reference', 'stored row has no reference (fail closed)');
       }
-      if (!this.fedapayReferenceMatches(tx.reference, live.reference)) {
+      if (!this.fedapayReferenceMatches(tx, live.reference)) {
         throw mismatch(
           'reference_mismatch',
           `expected ${tx.reference}, live ${live.reference || '<missing>'}`
@@ -406,17 +435,33 @@ export class MobilePaymentsService {
   }
 
   /**
-   * FedaPay custom_metadata.externalId must belong to this row. Deposit create
-   * historically passed MyPVit's 15-char hash to the provider while storing the
-   * long DB reference — accept that hash so a paid collect is not rejected.
+   * FedaPay custom_metadata.externalId must equal this row's stored reference.
+   *
+   * Legacy (#592 QA L2): before #592, deposit create/retry stored the long reference but sent
+   * MyPVit's short hash to FedaPay. The short-hash match is accepted only for `order_deposit`
+   * rows created before the cutoff, and every use logs `fedapay_legacy_short_ref_matched` so
+   * the fallback can be removed once no such rows remain in flight (FedaPay expires
+   * collections after ~24h). Empty stored or live references never match (QA L1).
    */
   private fedapayReferenceMatches(
-    stored: string | null | undefined,
+    tx: {
+      id: string;
+      reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
+    },
     live: string | null | undefined
   ): boolean {
-    if (!stored) return true;
+    const stored = tx.reference?.trim();
+    if (!stored) return false;
     if (!live) return false;
-    return live === stored || live === buildShortReferenceForMyPVit(stored);
+    if (live === stored) return true;
+    if (!isLegacyFedaPayShortRefRow(tx)) return false;
+    if (live !== buildShortReferenceForMyPVit(stored)) return false;
+    this.logger.warn(
+      `fedapay_legacy_short_ref_matched tx=${tx.id} payment_entity=${tx.payment_entity}`
+    );
+    return true;
   }
 
   /** Account withdrawals (GIVE_CHANGE): valid CM, GA, or TG MSISDN. */
