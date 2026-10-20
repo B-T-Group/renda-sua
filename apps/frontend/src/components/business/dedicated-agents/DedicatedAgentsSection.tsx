@@ -4,13 +4,22 @@ import {
   Box,
   Button,
   CircularProgress,
+  IconButton,
   Paper,
+  Snackbar,
   Stack,
   Typography,
 } from '@mui/material';
+import { Refresh as RefreshIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
+import { useDedicatedAgentsAnalytics } from '../../../hooks/useDedicatedAgentsAnalytics';
+import {
+  extractDedicatedAgentsError,
+  isDedicatedAgentsFeatureHidden,
+  mapDedicatedAgentsErrorCode,
+} from '../../../utils/dedicatedAgentsErrors';
 import type {
   DedicatedAgentCard,
   DedicatedPostingView,
@@ -30,6 +39,7 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
   const { t } = useTranslation();
   const navigate = useNavigate();
   const dedicatedApi = useDedicatedAgents();
+  const { track } = useDedicatedAgentsAnalytics();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,6 +49,20 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
   const [maxActiveOrders, setMaxActiveOrders] = useState(10);
   const [postDialogOpen, setPostDialogOpen] = useState(false);
   const [selectedSlotForPost, setSelectedSlotForPost] = useState<SlotKey | null>(null);
+  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+  const [mutating, setMutating] = useState<string | null>(null);
+  const [offline, setOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleOnline = () => setOffline(false);
+    const handleOffline = () => setOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -46,7 +70,12 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
       setError(null);
 
       const [slotsRes, agentsRes, postingsRes] = await Promise.all([
-        dedicatedApi.getPickupSlots(locationId).catch(() => null),
+        dedicatedApi.getPickupSlots(locationId).catch((err) => {
+          if (isDedicatedAgentsFeatureHidden(err)) {
+            return null;
+          }
+          throw err;
+        }),
         dedicatedApi.getDedicatedAgents(locationId).catch(() => null),
         dedicatedApi.getPostings(locationId).catch(() => null),
       ]);
@@ -63,8 +92,18 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
       if (postingsRes) {
         setPostings(postingsRes.postings);
       }
+
+      if (slotsRes.slots.length > 0 && agentsRes) {
+        track('section_viewed', {
+          role: 'business',
+          locationId,
+          slotsEnabled: slotsRes.slots.filter((s) => s.isEnabled).length,
+          agents: agentsRes.assignments.length,
+          openPostings: postingsRes?.postings.filter((p) => p.status === 'open').length || 0,
+        });
+      }
     } catch (err: any) {
-      if (err.response?.status === 403 || err.response?.status === 404) {
+      if (isDedicatedAgentsFeatureHidden(err)) {
         return;
       }
       console.error('Error loading dedicated agents:', err);
@@ -72,49 +111,160 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
     } finally {
       setLoading(false);
     }
-  }, [locationId, dedicatedApi, t]);
+  }, [locationId, dedicatedApi, t, track]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
   const handleSlotToggle = async (slotKey: SlotKey, enabled: boolean) => {
+    if (offline) return;
+
     try {
+      setMutating(`slot-${slotKey}`);
       await dedicatedApi.updatePickupSlots(locationId, {
         slots: [{ slotKey, isEnabled: enabled }],
       });
+      
+      track('slot_toggled', {
+        role: 'business',
+        locationId,
+        slotKey,
+        enabled,
+        agentsPaused: 0,
+      });
+
       await loadData();
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      if (code === 'slot_has_dedicated_agents') {
+        throw err;
+      }
+
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      setSnackbarMessage(t(errorKey, 'An error occurred'));
+      
+      track('action_conflict', {
+        role: 'business',
+        endpoint: 'updatePickupSlots',
+        code: code || 'unknown',
+      });
+
       console.error('Error toggling slot:', err);
+    } finally {
+      setMutating(null);
     }
   };
 
   const handlePickupTimeChange = async (slotKey: SlotKey, pickupTime: string) => {
+    if (offline) return;
+
     try {
+      setMutating(`pickup-${slotKey}`);
       await dedicatedApi.updatePickupSlots(locationId, {
         slots: [{ slotKey, pickupTime }],
       });
+      
+      track('pickup_time_changed', {
+        role: 'business',
+        locationId,
+        slotKey,
+        time: pickupTime,
+      });
+
+      setSnackbarMessage(t('common.saved', 'Saved'));
       await loadData();
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      setSnackbarMessage(t(errorKey, 'An error occurred'));
+
+      track('action_conflict', {
+        role: 'business',
+        endpoint: 'updatePickupSlots',
+        code: code || 'unknown',
+      });
+
       console.error('Error updating pickup time:', err);
+      await loadData();
+    } finally {
+      setMutating(null);
     }
   };
 
   const handlePauseResume = async (assignmentId: string, status: 'active' | 'paused') => {
+    if (offline) return;
+
+    const agent = agents.find((a) => a.assignmentId === assignmentId);
+    if (!agent) return;
+
     try {
+      setMutating(`assignment-${assignmentId}`);
       await dedicatedApi.updateAssignment(locationId, assignmentId, { status });
+
+      const eventName = status === 'paused' ? 'agent_paused' : 'agent_resumed';
+      track(eventName, {
+        role: 'business',
+        locationId,
+        slotKey: agent.slotKey,
+        source: agent.source,
+        isInternal: agent.agent.isInternal,
+      });
+
+      setSnackbarMessage(t('common.saved', 'Saved'));
       await loadData();
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      setSnackbarMessage(t(errorKey, 'An error occurred'));
+
+      track('action_conflict', {
+        role: 'business',
+        endpoint: 'updateAssignment',
+        code: code || 'unknown',
+      });
+
       console.error('Error updating assignment:', err);
+      await loadData();
+    } finally {
+      setMutating(null);
     }
   };
 
   const handleRemove = async (assignmentId: string) => {
+    if (offline) return;
+
+    const agent = agents.find((a) => a.assignmentId === assignmentId);
+    if (!agent) return;
+
     try {
+      setMutating(`assignment-${assignmentId}`);
       await dedicatedApi.deleteAssignment(locationId, assignmentId);
+
+      track('agent_removed', {
+        role: 'business',
+        locationId,
+        slotKey: agent.slotKey,
+        source: agent.source,
+        isInternal: agent.agent.isInternal,
+      });
+
+      setSnackbarMessage(t('common.removed', 'Removed'));
       await loadData();
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      setSnackbarMessage(t(errorKey, 'An error occurred'));
+
+      track('action_conflict', {
+        role: 'business',
+        endpoint: 'deleteAssignment',
+        code: code || 'unknown',
+      });
+
       console.error('Error removing assignment:', err);
+    } finally {
+      setMutating(null);
     }
   };
 
@@ -131,6 +281,7 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
   const handlePostSuccess = async (postingId: string) => {
     await loadData();
     handleClosePostDialog();
+    setSnackbarMessage(t('dedicatedAgents.form.posted', 'Request posted'));
     navigate(`/business/locations/${locationId}/dedicated-agents/postings/${postingId}`);
   };
 
@@ -145,6 +296,25 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
   }
 
   if (error || slots.length === 0) {
+    if (error) {
+      return (
+        <Paper id="dedicated-agents" variant="outlined" sx={{ p: { xs: 2, sm: 3 }, maxWidth: 720 }}>
+          <Stack spacing={2} alignItems="center">
+            <Typography variant="body2" color="error">
+              {error}
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<RefreshIcon />}
+              onClick={loadData}
+              aria-label={t('dedicatedAgents.retry', 'Retry')}
+            >
+              {t('dedicatedAgents.retry', 'Retry')}
+            </Button>
+          </Stack>
+        </Paper>
+      );
+    }
     return null;
   }
 
@@ -182,6 +352,12 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
     <>
       <Paper id="dedicated-agents" variant="outlined" sx={{ p: { xs: 2, sm: 3 }, maxWidth: 720 }}>
         <Stack spacing={2}>
+          {offline && (
+            <Alert severity="warning">
+              {t('dedicatedAgents.offline', 'Offline · showing last update')}
+            </Alert>
+          )}
+
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             {t('dedicatedAgents.section.title', 'Dedicated agents')}
           </Typography>
@@ -212,6 +388,7 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
                   slot={slot}
                   onToggle={handleSlotToggle}
                   onPickupTimeChange={handlePickupTimeChange}
+                  disabled={offline || mutating === `slot-${slot.slotKey}` || mutating === `pickup-${slot.slotKey}`}
                 />
 
                 {slot.isEnabled && (
@@ -244,6 +421,8 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
                             agent={agent}
                             onPauseResume={handlePauseResume}
                             onRemove={handleRemove}
+                            disabled={offline || mutating === `assignment-${agent.assignmentId}`}
+                            loading={mutating === `assignment-${agent.assignmentId}`}
                           />
                         ))}
                       </Stack>
@@ -269,7 +448,12 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
 
           {canPost && (
             <Box display="flex" justifyContent="center" pt={2}>
-              <Button variant="contained" onClick={() => handleOpenPostDialog()}>
+              <Button
+                variant="contained"
+                onClick={() => handleOpenPostDialog()}
+                disabled={offline}
+                aria-label={t('dedicatedAgents.post', 'Post a request')}
+              >
                 📣 {t('dedicatedAgents.post', 'Post a request')}
               </Button>
             </Box>
@@ -285,6 +469,13 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
         selectedSlot={selectedSlotForPost}
         onClose={handleClosePostDialog}
         onSuccess={handlePostSuccess}
+      />
+
+      <Snackbar
+        open={!!snackbarMessage}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarMessage(null)}
+        message={snackbarMessage}
       />
     </>
   );

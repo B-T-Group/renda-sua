@@ -30,12 +30,16 @@ interface DedicatedAgentCardProps {
   agent: Agent;
   onPauseResume: (assignmentId: string, status: 'active' | 'paused') => void;
   onRemove: (assignmentId: string) => void;
+  disabled?: boolean;
+  loading?: boolean;
 }
 
 const DedicatedAgentCard: React.FC<DedicatedAgentCardProps> = ({
   agent,
   onPauseResume,
   onRemove,
+  disabled = false,
+  loading = false,
 }) => {
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -139,14 +143,14 @@ const DedicatedAgentCard: React.FC<DedicatedAgentCardProps> = ({
                 </Tooltip>
               )}
 
-              <Tooltip title={`${agent.deliveries} deliveries`}>
+              <Tooltip title={t('dedicatedAgents.metrics.deliveries', '{{n}} deliveries', { n: agent.deliveries })}>
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <DeliveriesIcon fontSize="small" color="success" />
                   <Typography variant="body2">{agent.deliveries}</Typography>
                 </Stack>
               </Tooltip>
 
-              <Tooltip title={`${agent.missedDeliveries} missed`}>
+              <Tooltip title={t('dedicatedAgents.metrics.missed', '{{n}} missed', { n: agent.missedDeliveries })}>
                 <Stack direction="row" spacing={0.5} alignItems="center">
                   <MissedIcon fontSize="small" color="error" />
                   <Typography variant="body2">{agent.missedDeliveries}</Typography>
@@ -160,6 +164,10 @@ const DedicatedAgentCard: React.FC<DedicatedAgentCardProps> = ({
                   <IconButton
                     size="small"
                     onClick={() => onPauseResume(agent.assignmentId, 'paused')}
+                    disabled={disabled || loading}
+                    aria-label={t('dedicatedAgents.ariaLabels.pauseAgent', 'Pause agent {{name}}', {
+                      name: `${agent.agent.firstName} ${agent.agent.lastName}`,
+                    })}
                   >
                     <PauseIcon />
                   </IconButton>
@@ -169,6 +177,10 @@ const DedicatedAgentCard: React.FC<DedicatedAgentCardProps> = ({
                   <IconButton
                     size="small"
                     onClick={() => onPauseResume(agent.assignmentId, 'active')}
+                    disabled={disabled || loading}
+                    aria-label={t('dedicatedAgents.ariaLabels.resumeAgent', 'Resume agent {{name}}', {
+                      name: `${agent.agent.firstName} ${agent.agent.lastName}`,
+                    })}
                   >
                     <ResumeIcon />
                   </IconButton>
@@ -176,7 +188,15 @@ const DedicatedAgentCard: React.FC<DedicatedAgentCardProps> = ({
               )}
 
               <Tooltip title={t('dedicatedAgents.actions.remove', 'Remove')}>
-                <IconButton size="small" color="error" onClick={() => setConfirmRemove(true)}>
+                <IconButton
+                  size="small"
+                  color="error"
+                  onClick={() => setConfirmRemove(true)}
+                  disabled={disabled || loading}
+                  aria-label={t('dedicatedAgents.ariaLabels.removeAgent', 'Remove agent {{name}}', {
+                    name: `${agent.agent.firstName} ${agent.agent.lastName}`,
+                  })}
+                >
                   <DeleteIcon />
                 </IconButton>
               </Tooltip>

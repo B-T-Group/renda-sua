@@ -28,8 +28,9 @@ import type { PickupSlot, SlotKey } from '../../../types/dedicatedAgents';
 
 interface DedicatedSlotRowProps {
   slot: PickupSlot;
-  onToggle: (slotKey: SlotKey, enabled: boolean) => void;
+  onToggle: (slotKey: SlotKey, enabled: boolean) => Promise<void>;
   onPickupTimeChange: (slotKey: SlotKey, pickupTime: string) => void;
+  disabled?: boolean;
 }
 
 const SlotIcon: React.FC<{ slotKey: SlotKey }> = ({ slotKey }) => {
@@ -47,9 +48,12 @@ const DedicatedSlotRow: React.FC<DedicatedSlotRowProps> = ({
   slot,
   onToggle,
   onPickupTimeChange,
+  disabled = false,
 }) => {
   const { t } = useTranslation();
   const [confirmDisable, setConfirmDisable] = useState(false);
+  const [agentsToPause, setAgentsToPause] = useState(0);
+  const [toggling, setToggling] = useState(false);
 
   const slotLabel = t(`dedicatedAgents.slots.${slot.slotKey}`, slot.slotKey);
 
@@ -70,17 +74,37 @@ const DedicatedSlotRow: React.FC<DedicatedSlotRowProps> = ({
     return options;
   };
 
-  const handleToggle = (checked: boolean) => {
+  const handleToggle = async (checked: boolean) => {
+    if (disabled || toggling) return;
+
     if (!checked && slot.liveAgents > 0) {
+      setAgentsToPause(slot.liveAgents);
       setConfirmDisable(true);
       return;
     }
-    onToggle(slot.slotKey, checked);
+
+    setToggling(true);
+    try {
+      await onToggle(slot.slotKey, checked);
+    } catch (error: any) {
+      const agentsToPauseCount = error?.response?.data?.agentsToPause;
+      if (agentsToPauseCount) {
+        setAgentsToPause(agentsToPauseCount);
+        setConfirmDisable(true);
+      }
+    } finally {
+      setToggling(false);
+    }
   };
 
-  const handleConfirmDisable = () => {
-    onToggle(slot.slotKey, false);
+  const handleConfirmDisable = async () => {
     setConfirmDisable(false);
+    setToggling(true);
+    try {
+      await onToggle(slot.slotKey, false);
+    } finally {
+      setToggling(false);
+    }
   };
 
   return (
@@ -126,21 +150,25 @@ const DedicatedSlotRow: React.FC<DedicatedSlotRowProps> = ({
           )}
         </Stack>
 
-        <Switch checked={slot.isEnabled} onChange={(e) => handleToggle(e.target.checked)} />
+        <Switch
+          checked={slot.isEnabled}
+          onChange={(e) => handleToggle(e.target.checked)}
+          disabled={disabled || toggling}
+        />
       </Box>
 
       <Dialog open={confirmDisable} onClose={() => setConfirmDisable(false)}>
         <DialogTitle>
           {t('dedicatedAgents.slots.offConfirm', 'Turn off {{slot}}? {{n}} dedicated agents will be paused.', {
             slot: slotLabel,
-            n: slot.liveAgents,
+            n: agentsToPause,
           })}
         </DialogTitle>
         <DialogActions>
           <Button onClick={() => setConfirmDisable(false)}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button variant="contained" onClick={handleConfirmDisable}>
+          <Button variant="contained" onClick={handleConfirmDisable} disabled={toggling}>
             {t('common.confirm', 'Confirm')}
           </Button>
         </DialogActions>
