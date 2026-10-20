@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { ScrollView, StyleSheet, View, Alert } from 'react-native';
 import {
   Button,
   Card,
   Chip,
   HelperText,
+  Snackbar,
   Text,
   TextInput,
 } from 'react-native-paper';
@@ -14,16 +15,18 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
+import {
+  extractDedicatedAgentsError,
+  mapDedicatedAgentsErrorCode,
+} from '../../utils/dedicatedAgentsErrors';
 import type { DayOfWeek, SlotKey } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 
 type Props = NativeStackScreenProps<BusinessRootStackParamList, 'DedicatedPostingForm'>;
 
-const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
 export default function DedicatedPostingFormScreen({ route, navigation }: Props) {
   const { locationId } = route.params;
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -33,47 +36,109 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
   const [terms, setTerms] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+
+  const dayLabels = i18n.language === 'fr'
+    ? ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+    : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+
+  useEffect(() => {
+    setHeadcount(1);
+    setSelectedSlots([]);
+    setSelectedDays([1, 2, 3, 4, 5, 6, 7]);
+    setTerms('');
+    setError(null);
+    setFieldErrors({});
+  }, []);
 
   const allSlots: SlotKey[] = ['morning', 'afternoon', 'evening'];
 
   const handleSubmit = async () => {
-    if (selectedSlots.length === 0 || selectedDays.length === 0) {
-      setError(t('common.required', 'Required'));
+    setFieldErrors({});
+    setError(null);
+
+    if (selectedSlots.length === 0) {
+      setFieldErrors({
+        slots: t('dedicatedAgents.errors.invalid_slot_keys', 'Please select at least one slot'),
+      });
+      return;
+    }
+
+    if (selectedDays.length === 0) {
+      setFieldErrors({
+        days: t('dedicatedAgents.errors.invalid_days_of_week', 'Please select at least one day'),
+      });
       return;
     }
 
     if (headcount < 1 || headcount > 10) {
-      setError(t('common.invalid', 'Invalid'));
+      setFieldErrors({
+        headcount: t(
+          'dedicatedAgents.errors.invalid_headcount',
+          'Headcount must be between 1 and 10'
+        ),
+      });
       return;
     }
 
     try {
       setSubmitting(true);
-      setError(null);
 
-      const response = await dedicatedAgentsService.createPosting(locationId, {
+      await dedicatedAgentsService.createPosting(locationId, {
         headcount,
         slotKeys: selectedSlots,
         daysOfWeek: selectedDays,
         terms: terms.trim() || null,
       });
 
-      navigation.replace('DedicatedApplicants', {
-        locationId,
-        postingId: response.posting.id,
-      });
+      setSnackbarMessage(t('dedicatedAgents.form.posted', 'Request posted'));
+      setTimeout(() => {
+        navigation.goBack();
+      }, 500);
     } catch (err: any) {
-      console.error('Error creating posting:', err);
-      if (err.response?.data?.code === 'posting_already_open') {
-        navigation.replace('DedicatedApplicants', {
-          locationId,
-          postingId: err.response.data.posting?.id,
+      const { code } = extractDedicatedAgentsError(err);
+
+      if (code === 'posting_already_open') {
+        const existingPostingId = err.response?.data?.posting?.id;
+        if (existingPostingId) {
+          navigation.replace('DedicatedApplicants', {
+            locationId,
+            postingId: existingPostingId,
+          });
+          return;
+        }
+      }
+
+      if (code === 'invalid_headcount') {
+        setFieldErrors({
+          headcount: t(
+            mapDedicatedAgentsErrorCode(code),
+            'Headcount must be between 1 and 10'
+          ),
+        });
+      } else if (code === 'invalid_slot_keys') {
+        setFieldErrors({
+          slots: t(mapDedicatedAgentsErrorCode(code), 'Please select at least one slot'),
+        });
+      } else if (code === 'invalid_days_of_week') {
+        setFieldErrors({
+          days: t(mapDedicatedAgentsErrorCode(code), 'Please select at least one day'),
+        });
+      } else if (code === 'terms_too_long') {
+        setFieldErrors({
+          terms: t(mapDedicatedAgentsErrorCode(code), 'Terms must be 1000 characters or less'),
+        });
+      } else if (code === 'slot_disabled') {
+        setFieldErrors({
+          slots: t(mapDedicatedAgentsErrorCode(code), 'Turn slot back on first'),
         });
       } else {
-        setError(
-          err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong')
-        );
+        const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+        setError(t(errorKey, 'Something went wrong'));
       }
+
+      console.error('Error creating posting:', err);
     } finally {
       setSubmitting(false);
     }
@@ -96,7 +161,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
               <Button
                 mode="outlined"
                 onPress={() => setHeadcount(Math.max(1, headcount - 1))}
-                disabled={headcount <= 1}
+                disabled={headcount <= 1 || submitting}
               >
                 −
               </Button>
@@ -106,11 +171,14 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
               <Button
                 mode="outlined"
                 onPress={() => setHeadcount(Math.min(10, headcount + 1))}
-                disabled={headcount >= 10}
+                disabled={headcount >= 10 || submitting}
               >
                 +
               </Button>
             </View>
+            {fieldErrors.headcount && (
+              <HelperText type="error">{fieldErrors.headcount}</HelperText>
+            )}
           </Card.Content>
         </Card>
 
@@ -125,18 +193,24 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
                   key={slot}
                   selected={selectedSlots.includes(slot)}
                   onPress={() => {
-                    setSelectedSlots((prev) =>
-                      prev.includes(slot)
-                        ? prev.filter((s) => s !== slot)
-                        : [...prev, slot]
-                    );
+                    if (!submitting) {
+                      setSelectedSlots((prev) =>
+                        prev.includes(slot)
+                          ? prev.filter((s) => s !== slot)
+                          : [...prev, slot]
+                      );
+                    }
                   }}
+                  disabled={submitting}
                   style={{ marginBottom: spacing.xs }}
                 >
                   {t(`dedicatedAgents.slots.${slot}`, slot)}
                 </Chip>
               ))}
             </View>
+            {fieldErrors.slots && (
+              <HelperText type="error">{fieldErrors.slots}</HelperText>
+            )}
           </Card.Content>
         </Card>
 
@@ -151,17 +225,23 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
                   key={day}
                   selected={selectedDays.includes(day)}
                   onPress={() => {
-                    setSelectedDays((prev) =>
-                      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-                    );
+                    if (!submitting) {
+                      setSelectedDays((prev) =>
+                        prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+                      );
+                    }
                   }}
                   compact
+                  disabled={submitting}
                   style={{ marginBottom: spacing.xs }}
                 >
                   {dayLabels[idx]}
                 </Chip>
               ))}
             </View>
+            {fieldErrors.days && (
+              <HelperText type="error">{fieldErrors.days}</HelperText>
+            )}
           </Card.Content>
         </Card>
 
@@ -185,14 +265,22 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
               multiline
               numberOfLines={4}
               mode="outlined"
+              error={!!fieldErrors.terms}
+              disabled={submitting}
             />
-            <HelperText type="info">
-              {terms.length}/1000 ·{' '}
-              {t('dedicatedAgents.form.termsHelper', 'Hours, dress code, what to expect.')}
-            </HelperText>
-            <HelperText type="info">
-              {t('dedicatedAgents.form.termsStrip', 'Links and phone numbers are removed.')}
-            </HelperText>
+            {fieldErrors.terms ? (
+              <HelperText type="error">{fieldErrors.terms}</HelperText>
+            ) : (
+              <>
+                <HelperText type="info">
+                  {terms.length}/1000 ·{' '}
+                  {t('dedicatedAgents.form.termsHelper', 'Hours, dress code, what to expect.')}
+                </HelperText>
+                <HelperText type="info">
+                  {t('dedicatedAgents.form.termsStrip', 'Links and phone numbers are removed.')}
+                </HelperText>
+              </>
+            )}
           </Card.Content>
         </Card>
 
@@ -220,13 +308,21 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
         <Button
           mode="contained"
           onPress={handleSubmit}
-          disabled={submitting || selectedSlots.length === 0 || selectedDays.length === 0}
+          disabled={submitting}
           loading={submitting}
           style={{ marginHorizontal: spacing.md }}
         >
           {t('dedicatedAgents.form.publish', 'Publish')}
         </Button>
       </View>
+
+      <Snackbar
+        visible={!!snackbarMessage}
+        onDismiss={() => setSnackbarMessage(null)}
+        duration={2000}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </View>
   );
 }
