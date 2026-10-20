@@ -89,6 +89,8 @@ export type RootStackParamList = {
   ClaimAwaitingPayment: ClaimAwaitingPaymentParams;
   NotificationsCenter: undefined;
   NotificationPermission: undefined;
+  DedicatedHub: { segment?: 'opportunities' | 'stores' } | undefined;
+  DedicatedOpportunityDetail: { postingId: string };
   Earnings: undefined;
   AgentAccounts: undefined;
   UserPurchaseCredits: undefined;
