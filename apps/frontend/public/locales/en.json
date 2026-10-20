@@ -1861,6 +1861,7 @@
       "withheldBalance": "Withheld Balance"
     },
     "agents": {
+      "allAgents": "All Agents",
       "filterAll": "All agents",
       "filterUnverified": "Unverified only",
       "idDocumentsList": "ID documents (view and verify, then set as verified below)",
@@ -8954,6 +8955,7 @@
       "agent_ineligible": "This agent can't be accepted right now",
       "pickup_time_outside_slot": "Choose a time between {{start}} and {{end}}",
       "assignment_removed": "This assignment was removed",
+      "assignment_changed": "This assignment has changed",
       "agent_not_verified": "This agent is not verified",
       "agent_suspended": "This agent is suspended",
       "not_found": "Resource not found",

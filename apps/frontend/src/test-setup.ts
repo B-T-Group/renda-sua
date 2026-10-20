@@ -13,6 +13,44 @@ expect.extend({
           : 'expected element to be in the document',
     };
   },
+  toBeDisabled(received: Element | null) {
+    if (!received) {
+      return {
+        pass: false,
+        message: () => 'expected element to be disabled but element was not found',
+      };
+    }
+    const pass =
+      received.hasAttribute('disabled') ||
+      received.hasAttribute('aria-disabled') ||
+      (received as HTMLButtonElement | HTMLInputElement).disabled === true;
+    return {
+      pass,
+      message: () =>
+        pass
+          ? 'expected element not to be disabled'
+          : 'expected element to be disabled',
+    };
+  },
+  toBeEnabled(received: Element | null) {
+    if (!received) {
+      return {
+        pass: false,
+        message: () => 'expected element to be enabled but element was not found',
+      };
+    }
+    const pass =
+      !received.hasAttribute('disabled') &&
+      received.getAttribute('aria-disabled') !== 'true' &&
+      (received as HTMLButtonElement | HTMLInputElement).disabled !== true;
+    return {
+      pass,
+      message: () =>
+        pass
+          ? 'expected element not to be enabled'
+          : 'expected element to be enabled',
+    };
+  },
 });
 
 jest.mock('@auth0/auth0-react', () => ({

@@ -53,6 +53,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
 
   const [activeStep, setActiveStep] = useState(0);
   const [locationQuery, setLocationQuery] = useState('');
+  const [locationSearchId, setLocationSearchId] = useState(0);
   const [locations, setLocations] = useState<AdminLocationSearchItem[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<AdminLocationSearchItem | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<SlotKey[]>([]);
@@ -97,24 +98,40 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
         return;
       }
 
+      const searchId = Date.now();
+      setLocationSearchId(searchId);
+
       try {
         setLoading(true);
         setError(null);
         const response = await dedicatedApi.getAdminLocations(query);
-        setLocations(response.locations);
+        
+        // Ignore stale responses
+        setLocations((prevLocations) => {
+          if (locationSearchId > searchId) {
+            return prevLocations;
+          }
+          return response.locations;
+        });
       } catch (err: any) {
         console.error('Error searching locations:', err);
         const status = err.response?.status;
-        if (status === 403) {
-          setError(t('dedicatedAgents.errors.geo_scope', 'Outside your admin scope'));
-        } else {
-          setError(t('dedicatedAgents.generic', 'Something went wrong'));
+        
+        // Ignore errors from stale requests
+        if (locationSearchId <= searchId) {
+          if (status === 403) {
+            setError(t('dedicatedAgents.errors.geo_scope', 'Outside your admin scope'));
+          } else if (status === 400 && err.response?.data?.code === 'query_too_short') {
+            setError(t('dedicatedAgents.errors.query_too_short', 'Search query is too short'));
+          } else {
+            setError(t('dedicatedAgents.generic', 'Something went wrong'));
+          }
         }
       } finally {
         setLoading(false);
       }
     },
-    [dedicatedApi, t]
+    [dedicatedApi, t, locationSearchId]
   );
 
   useEffect(() => {
@@ -192,9 +209,13 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
     
     // Map error codes from the backend
     if (code === 'slot_disabled') {
-      const slotNames = selectedSlots.map(slot => t(`dedicatedAgents.slots.${slot}`, slot)).join(', ');
+      // Only name the disabled slots
+      const disabledSlots = selectedSlots.filter(
+        slot => selectedLocation && !selectedLocation.enabledSlotKeys.includes(slot)
+      );
+      const slotNames = disabledSlots.map(slot => t(`dedicatedAgents.slots.${slot}`, slot)).join(', ');
       return {
-        message: t('dedicatedAgents.errors.slot_disabled', 'Turn {{slot}} back on first').replace('{{slot}}', slotNames),
+        message: t('dedicatedAgents.errors.slot_disabled', 'Turn {{slot}} back on first', { slot: slotNames }),
         step: 1
       };
     }
@@ -316,7 +337,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
   const allSlots: SlotKey[] = ['morning', 'afternoon', 'evening'];
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open={open} onClose={submitting ? undefined : onClose} maxWidth="md" fullWidth>
       <DialogTitle>
         {t('dedicatedAgents.admin.assign', 'Assign')}
       </DialogTitle>
@@ -386,20 +407,30 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
             <Stack spacing={2}>
               <Typography variant="body2">{t('dedicatedAgents.admin.selectSlots', 'Select one or more slots')}</Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap">
-                {allSlots.map((slot) => (
-                  <Chip
-                    key={slot}
-                    label={t(`dedicatedAgents.slots.${slot}`, slot)}
-                    onClick={() => {
-                      setSelectedSlots((prev) =>
-                        prev.includes(slot)
-                          ? prev.filter((s) => s !== slot)
-                          : [...prev, slot]
-                      );
-                    }}
-                    color={selectedSlots.includes(slot) ? 'primary' : 'default'}
-                  />
-                ))}
+                {allSlots.map((slot) => {
+                  const isDisabled = selectedLocation && !selectedLocation.enabledSlotKeys.includes(slot);
+                  return (
+                    <Chip
+                      key={slot}
+                      label={t(`dedicatedAgents.slots.${slot}`, slot)}
+                      onClick={() => {
+                        if (!isDisabled) {
+                          setSelectedSlots((prev) =>
+                            prev.includes(slot)
+                              ? prev.filter((s) => s !== slot)
+                              : [...prev, slot]
+                          );
+                        }
+                      }}
+                      color={selectedSlots.includes(slot) ? 'primary' : 'default'}
+                      disabled={isDisabled}
+                      sx={{
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                        opacity: isDisabled ? 0.5 : 1,
+                      }}
+                    />
+                  );
+                })}
               </Stack>
             </Stack>
           )}
@@ -468,7 +499,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
                               variant="outlined"
                             />
                             <Typography variant="caption">
-                              📦 {agent.activeOrders} · 🏪 {agent.assignmentCount}/3
+                              📦 {agent.activeOrders}/{agent.activeOrders + Math.max(0, 10 - agent.activeOrders - agent.outstandingDedicatedOffers)} · 🏪 {agent.assignmentCount}/3
                               {!agent.isInternal && agent.balanceCoversOrders !== null && (
                                 <> · 💰 ~{agent.balanceCoversOrders}</>
                               )}

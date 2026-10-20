@@ -1594,6 +1594,7 @@
       "withheldBalance": "Solde Retenu"
     },
     "agents": {
+      "allAgents": "Tous les agents",
       "filterAll": "Tous les agents",
       "filterUnverified": "Non vérifiés uniquement",
       "idDocumentsList": "Documents d'identité (consulter et vérifier, puis marquer comme vérifié ci-dessous)",
@@ -8971,6 +8972,7 @@
       "agent_ineligible": "Ce livreur ne peut pas être accepté pour le moment",
       "pickup_time_outside_slot": "Choisissez une heure entre {{start}} et {{end}}",
       "assignment_removed": "Cette affectation a été supprimée",
+      "assignment_changed": "Cette affectation a changé",
       "agent_not_verified": "Ce livreur n'est pas vérifié",
       "agent_suspended": "Ce livreur est suspendu",
       "not_found": "Ressource introuvable",

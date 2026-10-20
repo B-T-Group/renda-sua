@@ -81,7 +81,6 @@ const AdminManageAgents: React.FC = () => {
   } = useAdminAgents();
   const {
     getAdminAssignments,
-    getCapability,
   } = useDedicatedAgents();
   const { vehicleTypes } = useVehicleTypes();
   const apiClient = useApiClient();
@@ -91,7 +90,6 @@ const AdminManageAgents: React.FC = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [showDedicatedTab, setShowDedicatedTab] = useState(false);
   const [dedicatedTabError, setDedicatedTabError] = useState<string | null>(null);
-  const [currentTab, setCurrentTab] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [verificationAgentId, setVerificationAgentId] = useState<string | null>(
@@ -119,13 +117,17 @@ const AdminManageAgents: React.FC = () => {
         const status = err.response?.status;
         if (status === 403 || status === 404) {
           setShowDedicatedTab(false);
+          // Reset tab to 0 if we're currently on the dedicated tab
+          if (currentTab === 1) {
+            setCurrentTab(0);
+          }
         } else {
           setShowDedicatedTab(true);
           setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
         }
       }
     })();
-  }, [getAdminAssignments, t]);
+  }, [getAdminAssignments, t, currentTab]);
 
   const fetchIdDocuments = useCallback(
     async (agentId: string) => {

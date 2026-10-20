@@ -1,8 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
-import { AdminManageAgents } from './AdminManageAgents';
+import AdminManageAgents from './AdminManageAgents';
 
 const mockGetAdminAssignments = jest.fn();
-const mockGetCapability = jest.fn();
 const mockGetPermissions = jest.fn();
 const mockFetchAgents = jest.fn();
 
@@ -16,7 +15,6 @@ jest.mock('react-i18next', () => ({
 jest.mock('../../hooks/useDedicatedAgents', () => ({
   useDedicatedAgents: () => ({
     getAdminAssignments: mockGetAdminAssignments,
-    getCapability: mockGetCapability,
   }),
 }));
 
@@ -78,11 +76,13 @@ describe('AdminManageAgents', () => {
       isSuperuser: true,
       canManageAgents: true,
     });
-    mockGetCapability.mockResolvedValue({ enabled: false });
+    mockGetAdminAssignments.mockResolvedValue({ assignments: [] });
   });
 
-  it('hides dedicated tab when no countries have flag enabled', async () => {
-    mockGetCapability.mockResolvedValue({ enabled: false });
+  it('hides dedicated tab on 404 or 403', async () => {
+    mockGetAdminAssignments.mockRejectedValue({
+      response: { status: 404 },
+    });
 
     render(<AdminManageAgents />);
 
@@ -93,8 +93,8 @@ describe('AdminManageAgents', () => {
     });
   });
 
-  it('shows dedicated tab when at least one country has flag enabled', async () => {
-    mockGetCapability.mockResolvedValueOnce({ enabled: true });
+  it('shows dedicated tab when getAdminAssignments succeeds', async () => {
+    mockGetAdminAssignments.mockResolvedValue({ assignments: [] });
 
     render(<AdminManageAgents />);
 
