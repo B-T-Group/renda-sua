@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Platform, ScrollView, StyleSheet, View, Alert } from 'react-native';
 import {
+  ActivityIndicator,
   Button,
   Card,
   Chip,
@@ -19,17 +20,20 @@ import {
   extractDedicatedAgentsError,
   mapDedicatedAgentsErrorCode,
 } from '../../utils/dedicatedAgentsErrors';
-import type { DayOfWeek, SlotKey } from '../../types/dedicatedAgents';
+import { dedicatedAgentsAnalytics } from '../../services/dedicatedAgentsAnalytics';
+import type { DayOfWeek, SlotKey, PickupSlot, DedicatedPostingView } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 
 type Props = NativeStackScreenProps<BusinessRootStackParamList, 'DedicatedPostingForm'>;
 
 export default function DedicatedPostingFormScreen({ route, navigation }: Props) {
-  const { locationId } = route.params;
+  const { locationId, slotKey: originatingSlot } = route.params;
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
 
+  const [loading, setLoading] = useState(true);
+  const [availableSlots, setAvailableSlots] = useState<SlotKey[]>([]);
   const [headcount, setHeadcount] = useState(1);
   const [selectedSlots, setSelectedSlots] = useState<SlotKey[]>([]);
   const [selectedDays, setSelectedDays] = useState<DayOfWeek[]>([1, 2, 3, 4, 5, 6, 7]);
@@ -39,20 +43,66 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
 
-  const dayLabels = i18n.language === 'fr'
-    ? ['L', 'M', 'M', 'J', 'V', 'S', 'D']
-    : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const dayLetters = i18n.language === 'fr'
+    ? [
+        t('dedicatedAgents.dayLettersFR.monday', 'L'),
+        t('dedicatedAgents.dayLettersFR.tuesday', 'M'),
+        t('dedicatedAgents.dayLettersFR.wednesday', 'M'),
+        t('dedicatedAgents.dayLettersFR.thursday', 'J'),
+        t('dedicatedAgents.dayLettersFR.friday', 'V'),
+        t('dedicatedAgents.dayLettersFR.saturday', 'S'),
+        t('dedicatedAgents.dayLettersFR.sunday', 'D'),
+      ]
+    : [
+        t('dedicatedAgents.dayLetters.monday', 'M'),
+        t('dedicatedAgents.dayLetters.tuesday', 'T'),
+        t('dedicatedAgents.dayLetters.wednesday', 'W'),
+        t('dedicatedAgents.dayLetters.thursday', 'T'),
+        t('dedicatedAgents.dayLetters.friday', 'F'),
+        t('dedicatedAgents.dayLetters.saturday', 'S'),
+        t('dedicatedAgents.dayLetters.sunday', 'S'),
+      ];
+
+  const loadAvailableSlots = useCallback(async () => {
+    try {
+      setLoading(true);
+      const [slotsRes, postingsRes] = await Promise.all([
+        dedicatedAgentsService.getPickupSlots(locationId),
+        dedicatedAgentsService.getPostings(locationId),
+      ]);
+
+      const openPostings = postingsRes.postings.filter((p: DedicatedPostingView) => p.status === 'open');
+      const slotsWithOpenPosting = new Set<SlotKey>();
+      openPostings.forEach((p: DedicatedPostingView) => {
+        p.slotKeys.forEach((sk: SlotKey) => slotsWithOpenPosting.add(sk));
+      });
+
+      const enabledSlotsWithoutPosting = slotsRes.slots
+        .filter((s: PickupSlot) => s.isEnabled && !slotsWithOpenPosting.has(s.slotKey))
+        .map((s: PickupSlot) => s.slotKey);
+
+      setAvailableSlots(enabledSlotsWithoutPosting);
+
+      if (originatingSlot && enabledSlotsWithoutPosting.includes(originatingSlot)) {
+        setSelectedSlots([originatingSlot]);
+      }
+
+      dedicatedAgentsAnalytics.postingFormOpened({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+      });
+    } catch (err: any) {
+      console.error('Error loading available slots:', err);
+      setError(t('dedicatedAgents.generic', 'Something went wrong'));
+    } finally {
+      setLoading(false);
+    }
+  }, [locationId, originatingSlot, t]);
 
   useEffect(() => {
-    setHeadcount(1);
-    setSelectedSlots([]);
-    setSelectedDays([1, 2, 3, 4, 5, 6, 7]);
-    setTerms('');
-    setError(null);
-    setFieldErrors({});
-  }, []);
-
-  const allSlots: SlotKey[] = ['morning', 'afternoon', 'evening'];
+    loadAvailableSlots();
+  }, [loadAvailableSlots]);
 
   const handleSubmit = async () => {
     setFieldErrors({});
@@ -90,6 +140,16 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
         slotKeys: selectedSlots,
         daysOfWeek: selectedDays,
         terms: terms.trim() || null,
+      });
+
+      dedicatedAgentsAnalytics.postingCreated({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        headcount,
+        slots: selectedSlots.length,
+        days: selectedDays.length,
+        termsLength: terms.trim().length,
       });
 
       setSnackbarMessage(t('dedicatedAgents.form.posted', 'Request posted'));
@@ -144,6 +204,27 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
     }
   };
 
+  if (loading) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background.default }]}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  if (availableSlots.length === 0) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background.default }]}>
+        <Text variant="bodyMedium" style={{ color: colors.text.secondary, textAlign: 'center', paddingHorizontal: spacing.lg }}>
+          {t('dedicatedAgents.form.noSlotsAvailable', 'No slots available. Enable a slot or close an existing posting first.')}
+        </Text>
+        <Button mode="contained" onPress={() => navigation.goBack()} style={{ marginTop: spacing.md }}>
+          {t('common.back', 'Back')}
+        </Button>
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.default }}>
       <ScrollView
@@ -162,6 +243,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
                 mode="outlined"
                 onPress={() => setHeadcount(Math.max(1, headcount - 1))}
                 disabled={headcount <= 1 || submitting}
+                accessibilityLabel={t('dedicatedAgents.accessibilityLabels.decreaseCount', 'Decrease count')}
               >
                 −
               </Button>
@@ -172,6 +254,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
                 mode="outlined"
                 onPress={() => setHeadcount(Math.min(10, headcount + 1))}
                 disabled={headcount >= 10 || submitting}
+                accessibilityLabel={t('dedicatedAgents.accessibilityLabels.increaseCount', 'Increase count')}
               >
                 +
               </Button>
@@ -185,10 +268,10 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
         <Card style={{ marginBottom: spacing.md }}>
           <Card.Content>
             <Text variant="titleMedium" style={{ marginBottom: spacing.sm }}>
-              Slots
+              {t('dedicatedAgents.form.slots', 'Slots')}
             </Text>
             <View style={styles.chips}>
-              {allSlots.map((slot) => (
+              {availableSlots.map((slot) => (
                 <Chip
                   key={slot}
                   selected={selectedSlots.includes(slot)}
@@ -235,7 +318,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
                   disabled={submitting}
                   style={{ marginBottom: spacing.xs }}
                 >
-                  {dayLabels[idx]}
+                  {dayLetters[idx]}
                 </Chip>
               ))}
             </View>
@@ -251,7 +334,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
               {t('dedicatedAgents.form.payLine', 'Standard delivery pay')}
             </Text>
             <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-              (fixed)
+              {t('dedicatedAgents.form.payFixed', '(not editable)')}
             </Text>
           </Card.Content>
         </Card>
@@ -328,6 +411,12 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
 }
 
 const styles = StyleSheet.create({
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: spacing.md,
+  },
   content: {
     padding: spacing.md,
   },

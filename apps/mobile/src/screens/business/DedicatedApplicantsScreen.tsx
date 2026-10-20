@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View, Linking, Alert } from 'react-native';
+import { Platform, RefreshControl, ScrollView, StyleSheet, View, Linking, Alert } from 'react-native';
 import {
   ActivityIndicator,
   Avatar,
@@ -26,6 +26,7 @@ import {
   mapDedicatedAgentsErrorCode,
   isDedicatedAgentsFeatureHidden,
 } from '../../utils/dedicatedAgentsErrors';
+import { dedicatedAgentsAnalytics } from '../../services/dedicatedAgentsAnalytics';
 import type {
   ApplicantCard,
   DedicatedPostingView,
@@ -45,10 +46,13 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
   const [posting, setPosting] = useState<DedicatedPostingView | null>(null);
   const [applications, setApplications] = useState<ApplicantCard[]>([]);
   const [editingTerms, setEditingTerms] = useState(false);
+  const [savingTerms, setSavingTerms] = useState(false);
   const [newTerms, setNewTerms] = useState('');
   const [menuVisible, setMenuVisible] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [closingPosting, setClosingPosting] = useState(false);
   const [confirmAccept, setConfirmAccept] = useState<{ id: string; name: string } | null>(null);
+  const [acceptingApp, setAcceptingApp] = useState<string | null>(null);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
 
@@ -59,6 +63,19 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       setApplications(response.applications);
       setNewTerms(response.posting.terms || '');
       setNotFound(false);
+
+      if (!loading && !refreshing) {
+        const pending = response.applications.filter((a) => a.status === 'applied');
+        const accepted = response.applications.filter((a) => a.status === 'accepted');
+        dedicatedAgentsAnalytics.applicantsViewed({
+          platform: Platform.OS as 'ios' | 'android',
+          role: 'business',
+          locationId,
+          postingId,
+          pending: pending.length,
+          accepted: accepted.length,
+        });
+      }
     } catch (err: any) {
       if (isDedicatedAgentsFeatureHidden(err)) {
         setNotFound(true);
@@ -68,7 +85,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       setLoading(false);
       setRefreshing(false);
     }
-  }, [locationId, postingId]);
+  }, [locationId, postingId, loading, refreshing]);
 
   useEffect(() => {
     loadData();
@@ -83,9 +100,22 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
 
   const handleAccept = async (applicationId: string) => {
     try {
-      await dedicatedAgentsService.acceptApplication(locationId, postingId, applicationId);
-      await loadData();
+      setAcceptingApp(applicationId);
+      const response = await dedicatedAgentsService.acceptApplication(locationId, postingId, applicationId);
+      
+      setApplications(response.applications);
+      setPosting(response.posting);
+      
       setConfirmAccept(null);
+
+      dedicatedAgentsAnalytics.applicantAccepted({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        postingId,
+        applicationId,
+        filled: response.posting.status === 'filled',
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
 
@@ -104,6 +134,13 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
         const errorKey = mapDedicatedAgentsErrorCode(code);
         Alert.alert(t('common.error', 'Error'), t(errorKey, 'An error occurred'));
         await loadData();
+
+        dedicatedAgentsAnalytics.actionConflict({
+          platform: Platform.OS as 'ios' | 'android',
+          role: 'business',
+          endpoint: 'accept',
+          code: code,
+        });
       } else {
         Alert.alert(
           t('common.error', 'Error'),
@@ -113,6 +150,8 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
 
       console.error('Error accepting application:', err);
       setConfirmAccept(null);
+    } finally {
+      setAcceptingApp(null);
     }
   };
 
@@ -120,6 +159,14 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
     try {
       await dedicatedAgentsService.declineApplication(locationId, postingId, applicationId);
       await loadData();
+
+      dedicatedAgentsAnalytics.applicantDeclined({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        postingId,
+        applicationId,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
@@ -130,31 +177,52 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
 
   const handleUpdateTerms = async () => {
     try {
+      setSavingTerms(true);
       await dedicatedAgentsService.updatePosting(locationId, postingId, {
         terms: newTerms.trim() || null,
       });
       await loadData();
       setEditingTerms(false);
       setSnackbarMessage(t('dedicatedAgents.applicant.termsEdited', 'Applicants were notified'));
+
+      dedicatedAgentsAnalytics.postingTermsEdited({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        postingId,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
       Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
       console.error('Error updating terms:', err);
+    } finally {
+      setSavingTerms(false);
     }
   };
 
   const handleClose = async () => {
     try {
-      await dedicatedAgentsService.closePosting(locationId, postingId);
+      setClosingPosting(true);
+      const response = await dedicatedAgentsService.closePosting(locationId, postingId);
       setConfirmClose(false);
       navigation.goBack();
+
+      dedicatedAgentsAnalytics.postingClosed({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        postingId,
+        autoDeclined: response.autoDeclined,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
       Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
       console.error('Error closing posting:', err);
       setConfirmClose(false);
+    } finally {
+      setClosingPosting(false);
     }
   };
 
@@ -205,10 +273,12 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                   ))}
                 </View>
                 <Text variant="bodySmall" style={{ marginTop: spacing.xs }}>
-                  {t('dedicatedAgents.posting.progress', '{{accepted}}/{{needed}} accepted', {
-                    accepted: posting.acceptedCount,
-                    needed: posting.headcount,
-                  })}
+                  {posting.status === 'filled' 
+                    ? t('dedicatedAgents.posting.status.filled', 'Filled')
+                    : t('dedicatedAgents.posting.progress', '{{accepted}}/{{needed}} accepted', {
+                        accepted: posting.acceptedCount,
+                        needed: posting.headcount,
+                      })}
                 </Text>
               </View>
 
@@ -220,15 +290,17 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     <IconButton
                       icon="dots-vertical"
                       onPress={() => setMenuVisible(true)}
+                      accessibilityLabel={t('dedicatedAgents.accessibilityLabels.moreOptions', 'More options')}
                     />
                   }
                 >
                   <Menu.Item
+                    leadingIcon="close"
                     onPress={() => {
                       setMenuVisible(false);
                       setConfirmClose(true);
                     }}
-                    title="Close"
+                    title={t('common.close', 'Close')}
                   />
                 </Menu>
               )}
@@ -244,6 +316,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     icon="pencil"
                     size={16}
                     onPress={() => setEditingTerms(true)}
+                    accessibilityLabel={t('dedicatedAgents.accessibilityLabels.editTerms', 'Edit terms')}
                   />
                 )}
               </View>
@@ -256,13 +329,14 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     multiline
                     numberOfLines={3}
                     mode="outlined"
+                    disabled={savingTerms}
                     style={{ marginBottom: spacing.sm }}
                   />
                   <View style={styles.termsActions}>
-                    <Button mode="text" onPress={() => setEditingTerms(false)}>
+                    <Button mode="text" onPress={() => setEditingTerms(false)} disabled={savingTerms}>
                       {t('common.cancel', 'Cancel')}
                     </Button>
-                    <Button mode="contained" onPress={handleUpdateTerms}>
+                    <Button mode="contained" onPress={handleUpdateTerms} loading={savingTerms} disabled={savingTerms}>
                       {t('common.save', 'Save')}
                     </Button>
                   </View>
@@ -286,8 +360,8 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
         {(pending.length > 0 || autoDeclined.length > 0) && (
           <View style={{ marginBottom: spacing.md }}>
             <Text variant="titleMedium" style={{ marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-              Pending ({pending.length})
-              {autoDeclined.length > 0 && ` · ${autoDeclined.length} auto-declined`}
+              {t('dedicatedAgents.applicant.title', 'Pending')} ({pending.length})
+              {autoDeclined.length > 0 && ` · ${autoDeclined.length} ${t('dedicatedAgents.applicant.autoDeclined', 'auto-declined')}`}
             </Text>
             {autoDeclined.map((app) => (
               <Card
@@ -327,9 +401,12 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                         {app.agent.firstName}
                       </Text>
                       <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-                        Joined {new Date(app.agent.joinedAt).toLocaleDateString()} · ✓{' '}
-                        {app.deliveriesCompleted} · ✕ {app.missedDeliveries}
-                        {app.onTimePickupPct !== null && ` · ${app.onTimePickupPct}% on-time`}
+                        {t('dedicatedAgents.applicant.stats', 'Joined {{date}} · {{n}} deliveries · {{m}} missed', {
+                          date: new Date(app.agent.joinedAt).toLocaleDateString(),
+                          n: app.deliveriesCompleted,
+                          m: app.missedDeliveries,
+                        })}
+                        {app.onTimePickupPct !== null && ` · ${t('dedicatedAgents.applicant.onTime', '{{pct}}% on-time pickups', { pct: app.onTimePickupPct })}`}
                         {app.distanceKm !== null && ` · ${app.distanceKm.toFixed(1)} km`}
                       </Text>
                     </View>
@@ -341,6 +418,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                         mode="outlined"
                         onPress={() => handleDecline(app.applicationId)}
                         style={{ flex: 1, marginRight: spacing.xs }}
+                        disabled={acceptingApp !== null}
                       >
                         {t('dedicatedAgents.applicant.decline', 'Decline')}
                       </Button>
@@ -353,6 +431,8 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                           })
                         }
                         style={{ flex: 1, marginLeft: spacing.xs }}
+                        loading={acceptingApp === app.applicationId}
+                        disabled={acceptingApp !== null}
                       >
                         {t('dedicatedAgents.applicant.accept', 'Accept')}
                       </Button>
@@ -367,7 +447,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
         {accepted.length > 0 && (
           <View>
             <Text variant="titleMedium" style={{ marginBottom: spacing.sm, marginLeft: spacing.xs }}>
-              Accepted ({accepted.length})
+              {t('dedicatedAgents.applicant.accepted', 'Accepted')} ({accepted.length})
             </Text>
             {accepted.map((app) => (
               <Card key={app.applicationId} style={{ marginBottom: spacing.sm }}>
@@ -417,16 +497,20 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                   }))}
           </Dialog.Title>
           <Dialog.Actions>
-            <Button onPress={() => setConfirmAccept(null)}>
+            <Button onPress={() => setConfirmAccept(null)} disabled={acceptingApp !== null}>
               {t('common.cancel', 'Cancel')}
             </Button>
-            <Button onPress={() => confirmAccept && handleAccept(confirmAccept.id)}>
+            <Button 
+              onPress={() => confirmAccept && handleAccept(confirmAccept.id)}
+              loading={acceptingApp === confirmAccept?.id}
+              disabled={acceptingApp !== null}
+            >
               {t('dedicatedAgents.applicant.accept', 'Accept')}
             </Button>
           </Dialog.Actions>
         </Dialog>
 
-        <Dialog visible={confirmClose} onDismiss={() => setConfirmClose(false)}>
+        <Dialog visible={confirmClose} onDismiss={() => !closingPosting && setConfirmClose(false)}>
           <Dialog.Title>
             {pending.length > 0
               ? t('dedicatedAgents.closeWithCount', 'Close posting ({{count}} will be auto-declined)', {
@@ -438,10 +522,12 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                 )}
           </Dialog.Title>
           <Dialog.Actions>
-            <Button onPress={() => setConfirmClose(false)}>
+            <Button onPress={() => setConfirmClose(false)} disabled={closingPosting}>
               {t('common.cancel', 'Cancel')}
             </Button>
-            <Button onPress={handleClose}>Close</Button>
+            <Button onPress={handleClose} loading={closingPosting} disabled={closingPosting}>
+              {t('common.close', 'Close')}
+            </Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>

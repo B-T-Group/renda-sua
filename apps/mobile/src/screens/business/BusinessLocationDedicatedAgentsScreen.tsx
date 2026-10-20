@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, View, Alert } from 'react-native';
+import { Platform, ScrollView, StyleSheet, View, Alert } from 'react-native';
 import {
   ActivityIndicator,
   Button,
@@ -12,6 +12,7 @@ import {
   Dialog,
   Menu,
   Divider,
+  IconButton,
 } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +25,7 @@ import {
   mapDedicatedAgentsErrorCode,
   isDedicatedAgentsFeatureHidden,
 } from '../../utils/dedicatedAgentsErrors';
+import { dedicatedAgentsAnalytics } from '../../services/dedicatedAgentsAnalytics';
 import type {
   DedicatedAgentCard,
   DedicatedPostingView,
@@ -46,6 +48,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const [loading, setLoading] = useState(true);
   const [slots, setSlots] = useState<PickupSlot[]>([]);
   const [agents, setAgents] = useState<DedicatedAgentCard[]>([]);
+  const [maxActiveOrders, setMaxActiveOrders] = useState(10);
   const [postings, setPostings] = useState<DedicatedPostingView[]>([]);
   const [hidden, setHidden] = useState(false);
 
@@ -57,13 +60,17 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const [confirmRemove, setConfirmRemove] = useState<{
     assignmentId: string;
     name: string;
+    slotKey: SlotKey;
   } | null>(null);
   const [pickupMenuSlot, setPickupMenuSlot] = useState<SlotKey | null>(null);
+  const [pickupTimeError, setPickupTimeError] = useState<{ slotKey: SlotKey; message: string } | null>(null);
   const [actionsMenuAgent, setActionsMenuAgent] = useState<string | null>(null);
+  const [retryError, setRetryError] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
+      setRetryError(false);
       const [slotsRes, agentsRes, postingsRes] = await Promise.all([
         dedicatedAgentsService.getPickupSlots(locationId).catch((e) => {
           if (isDedicatedAgentsFeatureHidden(e)) {
@@ -71,29 +78,65 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
           }
           return null;
         }),
-        dedicatedAgentsService.getDedicatedAgents(locationId).catch(() => null),
+        dedicatedAgentsService.getDedicatedAgents(locationId).catch((err: any) => {
+          if (err?.response?.status >= 500) {
+            setRetryError(true);
+          }
+          return null;
+        }),
         dedicatedAgentsService.getPostings(locationId).catch(() => null),
       ]);
 
       if (!slotsRes) return;
 
       setSlots(slotsRes.slots);
-      if (agentsRes) setAgents(agentsRes.assignments);
+      if (agentsRes) {
+        setAgents(agentsRes.assignments);
+        setMaxActiveOrders(agentsRes.maxActiveOrders);
+      }
       if (postingsRes) setPostings(postingsRes.postings);
+
+      if (!loading) {
+        dedicatedAgentsAnalytics.sectionViewed({
+          platform: Platform.OS as 'ios' | 'android',
+          role: 'business',
+          locationId,
+          slotsEnabled: slotsRes.slots.filter((s) => s.isEnabled).length,
+          agents: agentsRes?.assignments.length || 0,
+          openPostings: postingsRes?.postings.filter((p) => p.status === 'open').length || 0,
+        });
+      }
     } catch (err: any) {
       console.error('Error loading dedicated agents:', err);
+      if (err?.response?.status >= 500) {
+        setRetryError(true);
+      }
     } finally {
       setLoading(false);
     }
-  }, [locationId]);
+  }, [locationId, loading]);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
 
+  const calculateSlotCapacity = (slotKey: SlotKey): number => {
+    const slotAgents = agents.filter((a) => a.slotKey === slotKey && a.status === 'active' && !a.offToday);
+    const capacity = slotAgents.reduce((sum, agent) => {
+      const available = Math.max(
+        0,
+        agent.maxActiveOrders - agent.activeOrders - agent.outstandingDedicatedOffers
+      );
+      const capped =
+        agent.balanceCoversOrders !== null ? Math.min(available, agent.balanceCoversOrders) : available;
+      return sum + capped;
+    }, 0);
+    return capacity;
+  };
+
   const handleToggleSlot = async (slotKey: SlotKey, enabled: boolean) => {
     if (!enabled) {
-          const slotAgents = agents.filter((a) => a.slotKey === slotKey && !a.offToday);
+      const slotAgents = agents.filter((a) => a.slotKey === slotKey && a.status === 'active' && !a.offToday);
       if (slotAgents.length > 0) {
         setConfirmPause({ slotKey, agentsToPause: slotAgents.length });
         return;
@@ -106,6 +149,14 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
         slots: [{ slotKey, isEnabled: enabled }],
       });
       await loadData();
+
+      dedicatedAgentsAnalytics.slotToggled({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        slotKey,
+        enabled,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       if (code === 'slot_has_dedicated_agents' && err.response?.data?.agentsToPause) {
@@ -133,6 +184,15 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
       });
       setConfirmPause(null);
       await loadData();
+
+      dedicatedAgentsAnalytics.slotToggled({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        slotKey: confirmPause.slotKey,
+        enabled: false,
+        agentsPaused: confirmPause.agentsToPause,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
@@ -144,21 +204,43 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const handleUpdatePickupTime = async (slotKey: SlotKey, pickupTime: string) => {
     try {
       setMutating(`slot-${slotKey}`);
+      setPickupTimeError(null);
       await dedicatedAgentsService.updatePickupSlots(locationId, {
         slots: [{ slotKey, pickupTime }],
       });
       await loadData();
       setPickupMenuSlot(null);
+
+      dedicatedAgentsAnalytics.pickupTimeChanged({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        slotKey,
+        time: pickupTime,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
-      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
-      Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
+      if (code === 'pickup_time_outside_slot') {
+        const slot = slots.find((s) => s.slotKey === slotKey);
+        if (slot) {
+          setPickupTimeError({
+            slotKey,
+            message: t('dedicatedAgents.errors.pickup_time_outside_slot', 'Choose a time between {{start}} and {{end}}', {
+              start: slot.startTime,
+              end: slot.endTime,
+            }),
+          });
+        }
+      } else {
+        const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+        Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
+      }
     } finally {
       setMutating(null);
     }
   };
 
-  const handlePauseAgent = async (assignmentId: string) => {
+  const handlePauseAgent = async (assignmentId: string, slotKey: SlotKey) => {
     try {
       setMutating(assignmentId);
       await dedicatedAgentsService.updateAssignment(locationId, assignmentId, {
@@ -166,6 +248,16 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
       });
       await loadData();
       setActionsMenuAgent(null);
+
+      const agent = agents.find((a) => a.assignmentId === assignmentId);
+      dedicatedAgentsAnalytics.agentPaused({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        slotKey,
+        source: agent?.source,
+        isInternal: agent?.agent.isInternal,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
@@ -175,7 +267,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
     }
   };
 
-  const handleResumeAgent = async (assignmentId: string) => {
+  const handleResumeAgent = async (assignmentId: string, slotKey: SlotKey) => {
     try {
       setMutating(assignmentId);
       await dedicatedAgentsService.updateAssignment(locationId, assignmentId, {
@@ -183,6 +275,16 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
       });
       await loadData();
       setActionsMenuAgent(null);
+
+      const agent = agents.find((a) => a.assignmentId === assignmentId);
+      dedicatedAgentsAnalytics.agentResumed({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        slotKey,
+        source: agent?.source,
+        isInternal: agent?.agent.isInternal,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
@@ -192,13 +294,23 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
     }
   };
 
-  const handleRemoveAgent = async (assignmentId: string) => {
+  const handleRemoveAgent = async (assignmentId: string, slotKey: SlotKey) => {
     try {
       setMutating(assignmentId);
       await dedicatedAgentsService.deleteAssignment(locationId, assignmentId);
       await loadData();
       setConfirmRemove(null);
       setActionsMenuAgent(null);
+
+      const agent = agents.find((a) => a.assignmentId === assignmentId);
+      dedicatedAgentsAnalytics.agentRemoved({
+        platform: Platform.OS as 'ios' | 'android',
+        role: 'business',
+        locationId,
+        slotKey,
+        source: agent?.source,
+        isInternal: agent?.agent.isInternal,
+      });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
@@ -229,8 +341,20 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
     );
   }
 
+  if (retryError) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background.default }]}>
+        <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginBottom: spacing.md }}>
+          {t('dedicatedAgents.generic', 'Something went wrong')}
+        </Text>
+        <Button mode="contained" onPress={loadData}>
+          {t('dedicatedAgents.retry', 'Retry')}
+        </Button>
+      </View>
+    );
+  }
+
   const enabledSlots = slots.filter((s) => s.isEnabled);
-  const atCapacity = agents.length >= 10;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.default }}>
@@ -254,19 +378,6 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
           </Card.Content>
         </Card>
 
-        {atCapacity && (
-          <Banner
-            visible
-            icon="alert-circle"
-            style={{ marginBottom: spacing.md, backgroundColor: colors.warningTint }}
-          >
-            {t(
-              'dedicatedAgents.atCapacity',
-              'You have 10 dedicated agents. To add more, remove one first.'
-            )}
-          </Banner>
-        )}
-
         {slots.map((slot) => {
           const slotAgents = agents.filter((a) => a.slotKey === slot.slotKey);
           const openPosting = postings.find(
@@ -274,6 +385,8 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
           );
           const isMutating = mutating === `slot-${slot.slotKey}`;
           const pickupTimes = generatePickupTimes(slot.startTime, slot.endTime);
+          const capacity = calculateSlotCapacity(slot.slotKey);
+          const showCapacityWarning = slot.isEnabled && slotAgents.length > 0 && capacity === 0;
 
           return (
             <Card key={slot.slotKey} style={{ marginBottom: spacing.md }}>
@@ -291,6 +404,10 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                     value={slot.isEnabled}
                     onValueChange={(enabled) => handleToggleSlot(slot.slotKey, enabled)}
                     disabled={isMutating}
+                    accessibilityLabel={t(
+                      slot.isEnabled ? 'dedicatedAgents.slots.turnOff' : 'dedicatedAgents.slots.turnOn',
+                      slot.isEnabled ? 'Turn off slot' : 'Turn on slot'
+                    )}
                   />
                 </View>
 
@@ -298,7 +415,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                   <View style={{ marginTop: spacing.md }}>
                     <View style={styles.row}>
                       <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-                        {t('dedicatedAgents.pickupTime', 'Pickup time')}:
+                        {t('dedicatedAgents.slots.pickup', 'Pickup time')}:
                       </Text>
                       <Menu
                         visible={pickupMenuSlot === slot.slotKey}
@@ -309,6 +426,8 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                             compact
                             onPress={() => setPickupMenuSlot(slot.slotKey)}
                             disabled={isMutating}
+                            loading={isMutating}
+                            accessibilityLabel={t('dedicatedAgents.accessibilityLabels.pickupTime', 'Select pickup time')}
                           >
                             {slot.pickupTime || slot.startTime}
                           </Button>
@@ -323,11 +442,26 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                         ))}
                       </Menu>
                     </View>
+                    {pickupTimeError && pickupTimeError.slotKey === slot.slotKey && (
+                      <Text variant="bodySmall" style={{ color: colors.error.main, marginTop: spacing.xs }}>
+                        {pickupTimeError.message}
+                      </Text>
+                    )}
+
+                    {showCapacityWarning && (
+                      <Banner
+                        visible
+                        icon="alert"
+                        style={{ marginTop: spacing.sm, marginBottom: spacing.sm, backgroundColor: colors.warningTint }}
+                      >
+                        {t('dedicatedAgents.fullWarning', 'No dedicated agent can take orders right now. Delivery follows normal rules.')}
+                      </Banner>
+                    )}
 
                     <Text variant="bodySmall" style={{ marginTop: spacing.sm, marginBottom: spacing.sm }}>
                       {t('dedicatedAgents.slotHeader', '{{n}} agents · up to {{max}} orders', {
                         n: slotAgents.length,
-                        max: 10,
+                        max: capacity,
                       })}
                     </Text>
 
@@ -350,9 +484,19 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                                       ? t('dedicatedAgents.chips.type.internal', 'Internal')
                                       : t('dedicatedAgents.chips.type.independent', 'Independent')}
                                   </Chip>
+                                  {agent.status === 'paused' && (
+                                    <Chip compact mode="outlined">
+                                      {t('dedicatedAgents.chips.status.paused', 'Paused')}
+                                    </Chip>
+                                  )}
                                   {agent.offToday && (
                                     <Chip compact mode="outlined">
-                                      {t('dedicatedAgents.chips.offToday', 'Off today')}
+                                      {t('dedicatedAgents.chips.status.offToday', 'Off today')}
+                                    </Chip>
+                                  )}
+                                  {agent.assignedByRendasua && (
+                                    <Chip compact mode="outlined">
+                                      {t('dedicatedAgents.assignedChip', 'Assigned by RendaSua')}
                                     </Chip>
                                   )}
                                 </View>
@@ -365,35 +509,34 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                                 visible={actionsMenuAgent === agent.assignmentId}
                                 onDismiss={() => setActionsMenuAgent(null)}
                                 anchor={
-                                  <Button
-                                    mode="text"
-                                    compact
+                                  <IconButton
+                                    icon="dots-vertical"
                                     onPress={() => setActionsMenuAgent(agent.assignmentId)}
                                     disabled={mutating === agent.assignmentId}
-                                  >
-                                    ⋮
-                                  </Button>
+                                    accessibilityLabel={t('dedicatedAgents.accessibilityLabels.moreOptions', 'More options')}
+                                  />
                                 }
                               >
                                 {agent.status === 'active' && (
                                   <Menu.Item
-                                    title={t('dedicatedAgents.pause', 'Pause')}
-                                    onPress={() => handlePauseAgent(agent.assignmentId)}
+                                    title={t('dedicatedAgents.actions.pause', 'Pause')}
+                                    onPress={() => handlePauseAgent(agent.assignmentId, slot.slotKey)}
                                   />
                                 )}
                                 {agent.status === 'paused' && (
                                   <Menu.Item
-                                    title={t('dedicatedAgents.resume', 'Resume')}
-                                    onPress={() => handleResumeAgent(agent.assignmentId)}
+                                    title={t('dedicatedAgents.actions.resume', 'Resume')}
+                                    onPress={() => handleResumeAgent(agent.assignmentId, slot.slotKey)}
                                   />
                                 )}
                                 <Divider />
                                 <Menu.Item
-                                  title={t('dedicatedAgents.remove', 'Remove')}
+                                  title={t('dedicatedAgents.actions.remove', 'Remove')}
                                   onPress={() =>
                                     setConfirmRemove({
                                       assignmentId: agent.assignmentId,
                                       name: agent.agent.firstName,
+                                      slotKey: slot.slotKey,
                                     })
                                   }
                                 />
@@ -468,15 +611,16 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
         <Dialog visible={!!confirmRemove} onDismiss={() => setConfirmRemove(null)}>
           <Dialog.Title>
             {confirmRemove &&
-              t('dedicatedAgents.removeConfirm', 'Remove {{name}}?', {
+              t('dedicatedAgents.removeConfirm', 'Remove {{name}} from {{slot}}?', {
                 name: confirmRemove.name,
+                slot: t(`dedicatedAgents.slots.${confirmRemove.slotKey}`, confirmRemove.slotKey),
               })}
           </Dialog.Title>
           <Dialog.Actions>
             <Button onPress={() => setConfirmRemove(null)}>
               {t('common.cancel', 'Cancel')}
             </Button>
-            <Button onPress={() => confirmRemove && handleRemoveAgent(confirmRemove.assignmentId)}>
+            <Button onPress={() => confirmRemove && handleRemoveAgent(confirmRemove.assignmentId, confirmRemove.slotKey)}>
               {t('common.confirm', 'Confirm')}
             </Button>
           </Dialog.Actions>
@@ -494,9 +638,11 @@ function generatePickupTimes(start: string, end: string): string[] {
   let h = startH;
   let m = startM;
 
-  while (h < endH || (h === endH && m <= endM)) {
+  const endMinutes = endH * 60 + endM;
+
+  while (h * 60 + m < endMinutes) {
     times.push(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`);
-    m += 30;
+    m += 15;
     if (m >= 60) {
       h += 1;
       m = 0;
