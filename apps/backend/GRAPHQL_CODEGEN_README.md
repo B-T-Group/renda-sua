@@ -180,7 +180,6 @@ src/
 │   └── index.ts
 ├── mutations/
 │   ├── users.mutations.ts
-│   ├── orders.mutations.ts
 │   └── index.ts
 └── generated/
     ├── graphql.ts

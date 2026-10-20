@@ -415,11 +415,9 @@ export class AdminOrdersController {
           };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
+      // Raw error text goes to the log only, never to the API (it can carry SQL / PII).
       this.logger.error('Failed to update status', safeErrorMessage(error));
-      throw new HttpException(
-        error.message || 'Failed to update status',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException('Failed to update status', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

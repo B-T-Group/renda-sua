@@ -128,11 +128,13 @@ export class PurchaseCreditsService {
     }
   }
 
+  /**
+   * #627 nit: delete the redemption and re-credit its grant (unless revoked) in ONE SQL
+   * function / transaction, so a crash can no longer drop the credit between the two.
+   * Once per redemption: a duplicate finds no row and credits nothing.
+   */
   private async restoreOne(row: { id: string; grant_id: string; amount: number }): Promise<void> {
-    if (!(await this.deleteRedemption(row.id))) return;
-    const grant = await this.hasura.executeQuery(GRANT_REVOKED, { id: row.grant_id });
-    if (grant.purchase_credit_grants_by_pk?.revoked_at) return;
-    await this.creditGrant(row.grant_id, row.amount);
+    await this.hasura.executeMutation(RESTORE_REDEMPTION, { id: row.id });
   }
 
   private async debitGrant(id: string, amount: number): Promise<void> {
@@ -158,10 +160,6 @@ export class PurchaseCreditsService {
     });
   }
 
-  private async deleteRedemption(id: string): Promise<boolean> {
-    const result = await this.hasura.executeMutation(DELETE_REDEMPTION, { id });
-    return Boolean(result.delete_purchase_credit_redemptions_by_pk?.id);
-  }
 
   private async loadGrants(userId: string, currency: string): Promise<GrantRow[]> {
     const result = await this.hasura.executeQuery(ACTIVE_GRANTS, { userId, currency });
@@ -354,15 +352,9 @@ const REDEMPTIONS = `
   }
 `;
 
-const DELETE_REDEMPTION = `
-  mutation DeleteRedemption($id: uuid!) {
-    delete_purchase_credit_redemptions_by_pk(id: $id) { id }
-  }
-`;
-
-const GRANT_REVOKED = `
-  query GrantRevoked($id: uuid!) {
-    purchase_credit_grants_by_pk(id: $id) { revoked_at }
+const RESTORE_REDEMPTION = `
+  mutation RestorePurchaseCreditRedemption($id: uuid!) {
+    restore_purchase_credit_redemption(args: { p_redemption_id: $id }) { id }
   }
 `;
 

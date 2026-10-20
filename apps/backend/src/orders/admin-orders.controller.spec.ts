@@ -97,6 +97,27 @@ describe('AdminOrdersController.updateStatus', () => {
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
+  it('an unexpected error is a generic 500: the raw text goes to the log only', async () => {
+    const raw = 'duplicate key value violates unique constraint "orders_pkey" (client@example.com)';
+    const { controller } = buildController({ status: 'confirmed', cancelError: new Error(raw) });
+    const log = jest.spyOn((controller as any).logger, 'error').mockImplementation(() => undefined);
+    const err: any = await controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any).catch((e) => e);
+    expect(err.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(err.getResponse()).toBe('Failed to update status');
+    expect(JSON.stringify(err.getResponse())).not.toContain('orders_pkey');
+    expect(JSON.stringify(log.mock.calls)).toContain('orders_pkey');
+  });
+
+  it('PATCH cancel of an already-cancelled order surfaces the service 409 ORDER_ALREADY_CANCELLED', async () => {
+    const { HttpException } = jest.requireActual('@nestjs/common');
+    const { adminPrePickupRefusal } = jest.requireActual('./admin-order-status.util');
+    const refusal: InstanceType<typeof HttpException> = adminPrePickupRefusal('cancelled');
+    const { controller } = buildController({ status: 'cancelled', cancelError: refusal });
+    const err: any = await controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any).catch((e) => e);
+    expect(err.getStatus()).toBe(409);
+    expect(err.getResponse()).toMatchObject({ error: 'ORDER_ALREADY_CANCELLED' });
+  });
+
   it.each(['picked_up', 'in_transit', 'out_for_delivery'])('refuses to cancel a %s order (after pickup)', async (status) => {
     const { controller, ordersService } = buildController({ status });
     // PE: the shared pre-pickup refusal is 409 ORDER_ALREADY_PICKED_UP on the PATCH cancel too.

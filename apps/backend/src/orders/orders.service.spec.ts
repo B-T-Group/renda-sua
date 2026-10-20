@@ -5576,7 +5576,7 @@ describe('OrdersService', () => {
       });
 
       await expect(service.cancelOrderAsAdmin('order-123')).rejects.toMatchObject(
-        { status: HttpStatus.CONFLICT, response: expect.objectContaining({ error: 'ORDER_ALREADY_PICKED_UP' }) }
+        { status: HttpStatus.CONFLICT, response: expect.objectContaining({ error: 'ORDER_ALREADY_CANCELLED' }) }
       );
       expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });

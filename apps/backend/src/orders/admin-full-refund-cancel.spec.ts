@@ -196,7 +196,7 @@ describe('OrdersService.adminFullRefundCancel', () => {
     } else {
       expect(res).toBeInstanceOf(HttpException);
       expect((res as HttpException).getStatus()).toBe(409);
-      expect((res as HttpException).getResponse()).toMatchObject({ error: 'ORDER_ALREADY_PICKED_UP' });
+      expect((res as HttpException).getResponse()).toMatchObject({ error: status === 'cancelled' ? 'ORDER_ALREADY_CANCELLED' : 'ORDER_ALREADY_PICKED_UP' });
       expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
       expect(calls).toEqual([]);
     }
@@ -308,12 +308,12 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect(calls).toEqual([]);
   });
 
-  it.each(['delivered', 'complete', 'cancelled', 'refunded'])('a %s order is refused (409 ORDER_ALREADY_PICKED_UP) with nothing written', async (status) => {
+  it.each(['delivered', 'complete', 'cancelled', 'refunded'])('a %s order is refused (409; ORDER_ALREADY_CANCELLED when cancelled, else ORDER_ALREADY_PICKED_UP) with nothing written', async (status) => {
     const { svc, calls } = service(status);
     const err = await svc.adminFullRefundCancel('o-1', 'r').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(HttpException);
     expect((err as HttpException).getStatus()).toBe(409);
-    expect((err as HttpException).getResponse()).toMatchObject({ error: 'ORDER_ALREADY_PICKED_UP' });
+    expect((err as HttpException).getResponse()).toMatchObject({ error: status === 'cancelled' ? 'ORDER_ALREADY_CANCELLED' : 'ORDER_ALREADY_PICKED_UP' });
     expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     expect(calls).toEqual([]);
   });
