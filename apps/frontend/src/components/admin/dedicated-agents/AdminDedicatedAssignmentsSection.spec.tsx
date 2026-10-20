@@ -1,5 +1,4 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import React from 'react';
 import { AdminDedicatedAssignmentsSection } from './AdminDedicatedAssignmentsSection';
 
 const mockGetAdminAssignments = jest.fn();
@@ -47,46 +46,77 @@ jest.mock('./AdminDedicatedAssignDialog', () => ({
 }));
 
 describe('AdminDedicatedAssignmentsSection', () => {
-  const mockAssignment = {
-    assignmentId: 'a1',
-    slotKey: 'morning',
-    status: 'active' as const,
-    agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
-    location: {
-      businessName: 'Shop',
-      name: 'Akwa',
-      city: 'Douala',
-      state: 'Littoral',
-    },
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
+    mockGetAdminAssignments.mockResolvedValue({ assignments: [] });
   });
 
-  it('shows busy spinner on pause action', async () => {
+  it('renders component with filters and controls', () => {
+    render(<AdminDedicatedAssignmentsSection />);
+
+    expect(screen.getByLabelText(/city/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /assign/i })).toBeInTheDocument();
+  });
+
+  it('tracks busy state during update to prevent double-submission', async () => {
+    const mockAssignment = {
+      assignmentId: 'a1',
+      slotKey: 'morning',
+      status: 'active' as const,
+      agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
+      location: {
+        businessName: 'Shop',
+        name: 'Akwa',
+        city: 'Douala',
+        state: 'Littoral',
+      },
+    };
+
     mockGetAdminAssignments.mockResolvedValue({ assignments: [mockAssignment] });
-    let resolveUpdate: any;
-    mockUpdateAdminAssignment.mockReturnValue(
-      new Promise((resolve) => {
-        resolveUpdate = resolve;
-      })
+    
+    let resolveUpdate!: () => void;
+    mockUpdateAdminAssignment.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveUpdate = resolve;
+        })
     );
 
     render(<AdminDedicatedAssignmentsSection />);
 
-    const agentCell = await screen.findByText(/Doe/, {}, { timeout: 3000 });
-    expect(agentCell).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText(/doe/i)).toBeInTheDocument(), {
+      timeout: 5000,
+    });
 
     const pauseButton = screen.getByLabelText(/pause/i);
+    expect(pauseButton).toBeEnabled();
+
     fireEvent.click(pauseButton);
 
-    await waitFor(() => expect(pauseButton).toBeDisabled());
+    await waitFor(() => expect(pauseButton).toBeDisabled(), { timeout: 1000 });
 
-    resolveUpdate({});
+    resolveUpdate();
+
+    await waitFor(() => expect(mockUpdateAdminAssignment).toHaveBeenCalled(), {
+      timeout: 1000,
+    });
   });
 
-  it('shows snackbar on 409 conflict', async () => {
+  it('shows snackbar on 409 conflict and refetches', async () => {
+    const mockAssignment = {
+      assignmentId: 'a1',
+      slotKey: 'morning',
+      status: 'active' as const,
+      agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
+      location: {
+        businessName: 'Shop',
+        name: 'Akwa',
+        city: 'Douala',
+        state: 'Littoral',
+      },
+    };
+
     mockGetAdminAssignments.mockResolvedValue({ assignments: [mockAssignment] });
     mockUpdateAdminAssignment.mockRejectedValue({
       response: { status: 409, data: { code: 'assignment_removed' } },
@@ -94,26 +124,45 @@ describe('AdminDedicatedAssignmentsSection', () => {
 
     render(<AdminDedicatedAssignmentsSection />);
 
-    await screen.findByText(/Doe/, {}, { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByText(/doe/i)).toBeInTheDocument(), {
+      timeout: 5000,
+    });
 
     const pauseButton = screen.getByLabelText(/pause/i);
     fireEvent.click(pauseButton);
 
-    await waitFor(() => expect(mockEnqueueSnackbar).toHaveBeenCalled());
+    await waitFor(() => expect(mockEnqueueSnackbar).toHaveBeenCalled(), { timeout: 2000 });
+    expect(mockGetAdminAssignments).toHaveBeenCalledTimes(2);
   });
 
   it('disables remove button during deletion', async () => {
+    const mockAssignment = {
+      assignmentId: 'a1',
+      slotKey: 'morning',
+      status: 'active' as const,
+      agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
+      location: {
+        businessName: 'Shop',
+        name: 'Akwa',
+        city: 'Douala',
+        state: 'Littoral',
+      },
+    };
+
     mockGetAdminAssignments.mockResolvedValue({ assignments: [mockAssignment] });
-    let resolveDelete: any;
-    mockDeleteAdminAssignment.mockReturnValue(
-      new Promise((resolve) => {
-        resolveDelete = resolve;
-      })
+    let resolveDelete!: () => void;
+    mockDeleteAdminAssignment.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveDelete = resolve;
+        })
     );
 
     render(<AdminDedicatedAssignmentsSection />);
 
-    await screen.findByText(/Doe/, {}, { timeout: 3000 });
+    await waitFor(() => expect(screen.queryByText(/doe/i)).toBeInTheDocument(), {
+      timeout: 5000,
+    });
 
     const removeButton = screen.getByLabelText(/remove/i);
     fireEvent.click(removeButton);
@@ -125,10 +174,9 @@ describe('AdminDedicatedAssignmentsSection', () => {
       (btn) => btn.textContent === 'Remove' && btn.closest('.MuiDialog-root')
     );
 
-    if (removeConfirm) {
-      fireEvent.click(removeConfirm);
-      await waitFor(() => expect(removeConfirm).toBeDisabled());
-      resolveDelete({});
-    }
+    expect(removeConfirm).toBeDefined();
+    fireEvent.click(removeConfirm!);
+    await waitFor(() => expect(removeConfirm).toBeDisabled());
+    resolveDelete();
   });
 });

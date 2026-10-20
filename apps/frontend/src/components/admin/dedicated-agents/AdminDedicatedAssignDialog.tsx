@@ -58,6 +58,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
   const [agents, setAgents] = useState<AdminAgentPickerItem[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<AdminAgentPickerItem | null>(null);
   const [agentFilter, setAgentFilter] = useState('');
+  const [agentsTruncated, setAgentsTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -139,12 +140,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       setError(null);
       const response = await dedicatedApi.getAdminAgentPicker(selectedLocation.id);
       setAgents(response.agents);
-      if (response.truncated) {
-        enqueueSnackbar(
-          t('dedicatedAgents.admin.truncated', 'Showing the first results; refine the search'),
-          { variant: 'info' }
-        );
-      }
+      setAgentsTruncated(response.truncated);
     } catch (err: any) {
       console.error('Error loading agents:', err);
       const status = err.response?.status;
@@ -239,7 +235,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
     }
     
     return {
-      message: err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'),
+      message: t('dedicatedAgents.generic', 'Something went wrong'),
       step: null
     };
   };
@@ -323,7 +319,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
           <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
             {steps.map((label, index) => (
               <Step key={label}>
-                <StepLabel>{t(`dedicatedAgents.admin.steps.${label.toLowerCase()}`, label)}</StepLabel>
+                <StepLabel>{label}</StepLabel>
               </Step>
             ))}
           </Stepper>
@@ -410,6 +406,12 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
                 size="small"
                 fullWidth
               />
+
+              {agentsTruncated && (
+                <Alert severity="info">
+                  {t('dedicatedAgents.admin.truncated', 'Showing the first results; refine the search')}
+                </Alert>
+              )}
 
               {loading && (
                 <Box display="flex" justifyContent="center" py={2}>

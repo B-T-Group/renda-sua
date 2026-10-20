@@ -4824,7 +4824,8 @@
       }
     },
     "source": "Source",
-    "city": "Ville"
+    "city": "Ville",
+    "required": "Requis"
   },
   "dashboard": {
     "client": {
