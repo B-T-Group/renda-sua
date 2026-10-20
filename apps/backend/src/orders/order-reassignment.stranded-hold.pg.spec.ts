@@ -514,6 +514,41 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
     );
   });
 
+  it('#628 E1: withheld < net on a strand alerts ONCE across reconciler runs (stamped like agedOutAlertedAt); the strand stays open', async () => {
+    const w = await setup();
+    await w.claim();
+    await w.strand();
+    await pool.query(`UPDATE accounts SET withheld_balance = 100 WHERE id = $1`, [w.accountId]);
+    const { reportMoneyAnomaly } = jest.requireMock('../common/utils/money-alert.util');
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    for (let run = 0; run < 3; run++) {
+      await expect(w.svc.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 0, skipped: 0, failed: 1 });
+    }
+    const short = (reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'agent_hold_withheld_short');
+    expect(short).toHaveLength(1);
+    const ev = w.mem.events.find((e: any) => e.event_type === 'agent_hold_stranded');
+    expect(ev.payload.withheldShortAlertedAt).toEqual(expect.any(String));
+    expect('resolvedAt' in ev.payload).toBe(false);
+    expect(await w.releases()).toHaveLength(0);
+    // Once the books are fixed, the same strand still reconciles.
+    await pool.query(`UPDATE accounts SET withheld_balance = 700 WHERE id = $1`, [w.accountId]);
+    await expect(w.svc.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 1, skipped: 0, failed: 0 });
+  });
+
+  it('#628 E1: a second strand (different event) gets its own alert; a live release (no strand) alerts every time', async () => {
+    const w = await setup();
+    await w.claim();
+    await pool.query(`UPDATE accounts SET withheld_balance = 100 WHERE id = $1`, [w.accountId]);
+    const { reportMoneyAnomaly } = jest.requireMock('../common/utils/money-alert.util');
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    await (w.svc as any).releaseNetAgentHold(w.accountId, w.orderId, 'm');
+    await (w.svc as any).releaseNetAgentHold(w.accountId, w.orderId, 'm');
+    await w.strand();
+    await w.svc.reconcileStrandedAgentHolds();
+    await w.svc.reconcileStrandedAgentHolds();
+    expect((reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'agent_hold_withheld_short')).toHaveLength(3);
+  });
+
   it("QA #622 F2: two pods reconcile the same strand concurrently -> one credit; another order's hold is untouched", async () => {
     const w = await setup();
     const otherOrder = '9e2b1c33-4d5e-4f60-8a71-0b1c2d3e4f50';
