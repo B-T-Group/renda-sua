@@ -26,11 +26,11 @@ jest.mock('notistack', () => ({
   useSnackbar: () => ({ enqueueSnackbar: mockEnqueueSnackbar }),
 }));
 
-jest.mock('../../hooks/useOnlineStatus', () => ({
+jest.mock('../../../hooks/useOnlineStatus', () => ({
   useOnlineStatus: () => true,
 }));
 
-jest.mock('../../hooks/useTrackSiteEvent', () => ({
+jest.mock('../../../hooks/useTrackSiteEvent', () => ({
   useTrackSiteEvent: () => ({ trackSiteEvent: jest.fn() }),
   SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STARTED: 'dedicated_ui.admin_assign_started',
   SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STEP: 'dedicated_ui.admin_assign_step',
