@@ -240,8 +240,13 @@ function ProfileScreen() {
         await auth.setLocalProfilePhoto(uri);
         
         // Upload to server
-        const { uploadProfilePhoto } = await import('../services/profilePhotoApi');
-        const uploadResult = await uploadProfilePhoto(uri);
+        if (!me?.id) {
+          Alert.alert(t('common.error'), t('profile.photoError', 'Failed to upload photo'));
+          return;
+        }
+
+        const { uploadProfilePhoto } = await import('../../services/profilePhotoApi');
+        const uploadResult = await uploadProfilePhoto(uri, me.id);
         
         if (!uploadResult.success) {
           Alert.alert(
@@ -259,7 +264,7 @@ function ProfileScreen() {
     } finally {
       setPhotoLoading(false);
     }
-  }, [auth, t, refetchMe]);
+  }, [auth, t, refetchMe, me]);
 
   const persistProfile = useCallback(async () => {
     if (!me) return;

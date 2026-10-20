@@ -89,6 +89,7 @@
     "camera": "Camera",
     "gallery": "Gallery",
     "confirm": "Confirm",
+    "offline": "You are offline",
     "dayLetters": {
       "M": "M",
       "T": "T",

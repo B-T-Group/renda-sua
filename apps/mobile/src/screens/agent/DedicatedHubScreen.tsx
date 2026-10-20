@@ -26,6 +26,7 @@ import type {
 } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedHub'>;
 
@@ -48,6 +49,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
   const { colors } = useTheme();
   const { auth } = useStore();
   const insets = useSafeAreaInsets();
+  const { me } = auth;
 
   const isInternal = auth.user?.agent?.is_internal === true;
 
@@ -62,6 +64,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
   const [gateReason, setGateReason] = useState<OpportunityIneligibleReason | null>(null);
   const [snackMessage, setSnackMessage] = useState<string | null>(null);
   const [offTodayOptimistic, setOffTodayOptimistic] = useState<Record<string, boolean>>({});
+  const { isOffline } = useNetworkStatus();
 
   const loadData = useCallback(async () => {
     try {
@@ -124,6 +127,11 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
   }, [loadData]);
 
   const handleToggleOffToday = async (assignmentId: string, newValue: boolean) => {
+    if (isOffline) {
+      setSnackMessage(t('common.offline', 'You are offline'));
+      return;
+    }
+
     const originalValue = assignments.find(a => a.assignmentId === assignmentId)?.offToday ?? false;
     
     setOffTodayOptimistic(prev => ({ ...prev, [assignmentId]: newValue }));
@@ -203,6 +211,13 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.default }}>
+      {isOffline && (
+        <View style={{ backgroundColor: colors.warning.main, padding: spacing.sm }}>
+          <Text variant="bodyMedium" style={{ color: '#fff', textAlign: 'center', fontWeight: '600' }}>
+            {t('common.offline', 'You are offline')}
+          </Text>
+        </View>
+      )}
       {!isInternal && (
         <View style={{ padding: spacing.md }}>
           <SegmentedButtons

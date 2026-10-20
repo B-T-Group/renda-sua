@@ -69,8 +69,14 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
         // Save locally first
         await auth.setLocalProfilePhoto(result.assets[0].uri);
 
-        // Upload to server
-        const uploadResult = await uploadProfilePhoto(result.assets[0].uri);
+        // Upload to server - need user ID
+        if (!auth.user?.id) {
+          const msg = t('profile.photoError', 'Failed to upload photo');
+          setError(msg);
+          return false;
+        }
+
+        const uploadResult = await uploadProfilePhoto(result.assets[0].uri, auth.user.id);
         
         if (!uploadResult.success) {
           const msg = uploadResult.error || t('profile.photoError', 'Failed to upload photo');

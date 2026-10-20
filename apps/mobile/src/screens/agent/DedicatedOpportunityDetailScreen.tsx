@@ -13,6 +13,7 @@ import { spacing } from '../../theme/spacing';
 import { useProfilePhotoUpload } from '../../hooks/useProfilePhotoUpload';
 import { mapDedicatedError } from '../../utils/dedicatedAgentsErrors';
 import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedOpportunityDetail'>;
 
@@ -44,6 +45,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const [snackMessage, setSnackMessage] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+  const { isOffline } = useNetworkStatus();
   
   const loadData = useCallback(async (isRefresh = false) => {
     try {
@@ -77,6 +79,10 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   }, [loadData, postingId, route.params.storeName]);
 
   const handleApply = async () => {
+    if (isOffline) {
+      setSnackMessage(t('common.offline', 'You are offline'));
+      return;
+    }
     try {
       dedicatedAnalytics.trackDedicatedApplyTapped(postingId);
       setSubmitting(true);
@@ -122,6 +128,10 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   };
 
   const handleWithdraw = () => {
+    if (isOffline) {
+      setSnackMessage(t('common.offline', 'You are offline'));
+      return;
+    }
     Alert.alert(
       t('common.confirm', 'Confirm'),
       t('dedicatedAgents.agent.withdrawConfirm', 'Withdraw your application?'),
@@ -220,6 +230,13 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.default }}>
+      {isOffline && (
+        <View style={{ backgroundColor: colors.warning.main, padding: spacing.sm }}>
+          <Text style={{ color: '#fff', textAlign: 'center', fontWeight: '600' }}>
+            {t('common.offline', 'You are offline')}
+          </Text>
+        </View>
+      )}
       <ScrollView
         contentContainerStyle={[
           styles.content,
