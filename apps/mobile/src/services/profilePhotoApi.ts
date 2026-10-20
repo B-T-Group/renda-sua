@@ -1,5 +1,4 @@
 import { api } from './apiClient';
-import { graphqlClient } from './graphqlClient';
 
 export interface UploadProfilePhotoResponse {
   success: boolean;
@@ -50,23 +49,17 @@ export async function uploadProfilePhoto(uri: string, userId: string): Promise<U
       return { success: false, error: 'Failed to upload photo to S3' };
     }
 
-    // Update user profile_picture_url in Hasura
-    const mutation = `
-      mutation UpdateUserProfilePicture($id: uuid!, $profile_picture_url: String) {
-        update_users_by_pk(
-          pk_columns: { id: $id }
-          _set: { profile_picture_url: $profile_picture_url }
-        ) {
-          id
-          profile_picture_url
-        }
-      }
-    `;
-
-    await graphqlClient.request(mutation, {
-      id: userId,
+    // Update user profile_picture_url via backend endpoint
+    const updateRes = await api.post<{
+      success: boolean;
+      error?: string;
+    }>('/users/me/profile-picture', {
       profile_picture_url: presignRes.final_url,
     });
+
+    if (!updateRes.success) {
+      return { success: false, error: updateRes.error || 'Failed to update profile' };
+    }
 
     return { success: true, profile_picture_url: presignRes.final_url };
   } catch (error: any) {
