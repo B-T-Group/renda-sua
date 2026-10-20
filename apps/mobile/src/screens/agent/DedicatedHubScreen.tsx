@@ -67,7 +67,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
   const [showNoAddressPrompt, setShowNoAddressPrompt] = useState(false);
   const { isOffline } = useNetworkStatus();
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (forceRefresh = false) => {
     try {
       if (segment === 'opportunities') {
         const res = await dedicatedAgentsService.getOpportunities();
@@ -302,7 +302,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
                   key={opp.id}
                   style={[
                     { marginBottom: spacing.md },
-                    isDisabled && { opacity: 0.6, backgroundColor: colors.surfaceVariant }
+                    isDisabled && { opacity: 0.6, backgroundColor: colors.surfaceInput }
                   ]}
                   onPress={isDisabled ? undefined : () =>
                     navigation.navigate('DedicatedOpportunityDetail', { postingId: opp.id })
@@ -356,12 +356,12 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
 
                     <View style={[styles.chips, { marginTop: spacing.xs }]}>
                       {opp.application && (
-                        <Chip compact style={{ backgroundColor: colors.primaryContainer }}>
+                        <Chip compact style={{ backgroundColor: colors.primarySubtle }}>
                           {t('dedicatedAgents.agent.applied', 'Applied')}
                         </Chip>
                       )}
                       {opp.termsUpdatedSinceApplied && (
-                        <Chip compact style={{ backgroundColor: colors.tertiaryContainer }}>
+                        <Chip compact style={{ backgroundColor: colors.surfaceSelected }}>
                           {t('dedicatedAgents.agent.updatedChip', 'Updated')}
                         </Chip>
                       )}
@@ -430,7 +430,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
 
                   <View style={[styles.chips, { marginTop: spacing.sm }]}>
                     {assignment.status === 'active' && !currentOffToday && (
-                      <Chip compact style={{ backgroundColor: colors.successContainer }}>
+                      <Chip compact style={{ backgroundColor: colors.successTint }}>
                         {t('dedicatedAgents.chips.status.active', 'Active')}
                       </Chip>
                     )}
@@ -440,7 +440,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
                       </Chip>
                     )}
                     {currentOffToday && (
-                      <Chip compact style={{ backgroundColor: colors.tertiaryContainer }}>
+                      <Chip compact style={{ backgroundColor: colors.surfaceSelected }}>
                         {t('dedicatedAgents.agent.offToday', 'Off today')}
                       </Chip>
                     )}

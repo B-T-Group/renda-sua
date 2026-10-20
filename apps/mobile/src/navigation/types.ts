@@ -428,3 +428,5 @@ export type AccountManagementScreenProps = NativeStackScreenProps<
   ClientRootStackParamList,
   'AccountManagement'
 >;
+
+export type { AgentRootStackParamList, AgentMainTabParamList } from './AgentRootNavigator';

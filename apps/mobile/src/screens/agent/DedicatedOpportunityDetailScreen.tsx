@@ -31,7 +31,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const { colors, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const { pickAndUploadPhoto, uploading: uploadingPhoto, error: uploadError } = useProfilePhotoUpload({
+  const { pickAndUploadPhoto, uploading: uploadingPhoto, error: photoUploadError } = useProfilePhotoUpload({
     onSuccess: async () => {
       await loadData(true);
       await handleApply();
@@ -124,7 +124,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
     setUploadError(null);
     const uploadSuccess = await pickAndUploadPhoto(source);
     if (!uploadSuccess) {
-      setUploadError(error || t('dedicatedAgents.agent.photoError', 'Failed to upload photo'));
+      setUploadError(photoUploadError || t('dedicatedAgents.agent.photoError', 'Failed to upload photo'));
       return;
     }
 
@@ -350,7 +350,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
         )}
 
         {opportunity.disabledReason && (
-          <Card style={{ marginTop: spacing.md, backgroundColor: colors.surfaceVariant }}>
+          <Card style={{ marginTop: spacing.md, backgroundColor: colors.surfaceInput }}>
             <Card.Content>
               <Text variant="bodyMedium">
                 {t(
@@ -458,7 +458,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
 
             <View style={[styles.photoButtonRow, { marginBottom: spacing.lg }]}>
               <Pressable
-                style={[styles.photoButton, { backgroundColor: colors.surfaceVariant, borderRadius: borderRadius.card }]}
+                style={[styles.photoButton, { backgroundColor: colors.surfaceInput, borderRadius: borderRadius.card }]}
                 onPress={() => handlePhotoSource('camera')}
                 disabled={uploadingPhoto}
               >
@@ -469,7 +469,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
               </Pressable>
 
               <Pressable
-                style={[styles.photoButton, { backgroundColor: colors.surfaceVariant, borderRadius: borderRadius.card }]}
+                style={[styles.photoButton, { backgroundColor: colors.surfaceInput, borderRadius: borderRadius.card }]}
                 onPress={() => handlePhotoSource('gallery')}
                 disabled={uploadingPhoto}
               >
