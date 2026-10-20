@@ -26,6 +26,7 @@ import type {
 } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
+import { shouldShowGate, shouldHideOnError } from '../../utils/dedicatedAgentsErrors';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedHub'>;
@@ -91,7 +92,6 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
       const errorCode = err.response?.data?.code;
       const reason = err.response?.data?.reason;
 
-      const { shouldShowGate, shouldHideOnError } = await import('../../utils/dedicatedAgentsErrors');
       
       // Handle 403 no_address as address prompt state, not an error
       if (status === 403 && reason === 'no_address') {
