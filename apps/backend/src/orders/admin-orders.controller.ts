@@ -46,6 +46,7 @@ import {
   SendOrderContactSmsDto,
   UnassignRedispatchDto,
   UpdateOrderStatusDto,
+  ADMIN_CANCEL_REASON_MAX_LENGTH,
   type OrderContactRecipientType,
 } from './dto/admin-orders.dto';
 import { OrderEventsService } from './order-events.service';
@@ -59,6 +60,7 @@ import type {
   CreditContactChannel,
   CreditOrderResult,
 } from '../credits/credit.types';
+import { maskPersonalData } from '../common/sentry/scrub-sentry-event';
 import {
   isAdminOperationalStatus,
   isAdminOverrideTransitionAllowed,
@@ -316,7 +318,15 @@ export class AdminOrdersController {
   }
 
   private requireCancelReason(dto: UpdateOrderStatusDto): string {
-    const reason = (dto.reason ?? dto.notes ?? '').trim();
+    const raw = (dto.reason ?? dto.notes ?? '').trim();
+    if (raw.length > ADMIN_CANCEL_REASON_MAX_LENGTH) {
+      throw new HttpException(
+        `The reason must be at most ${ADMIN_CANCEL_REASON_MAX_LENGTH} characters`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    // PII (emails, phone numbers) is masked before the reason is stored or logged.
+    const reason = maskPersonalData(raw);
     if (reason) return reason;
     throw new HttpException(
       'A reason is required to cancel an order',

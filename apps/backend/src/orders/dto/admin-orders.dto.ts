@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  MaxLength,
 } from 'class-validator';
 import {
   ORDER_RISK_TYPES,
@@ -126,6 +127,8 @@ export class UnassignRedispatchDto {
   reason?: string;
 }
 
+export const ADMIN_CANCEL_REASON_MAX_LENGTH = 1000;
+
 export class UpdateOrderStatusDto {
   @ApiProperty({
     description:
@@ -146,6 +149,7 @@ export class UpdateOrderStatusDto {
   })
   @IsOptional()
   @IsString()
+  @MaxLength(ADMIN_CANCEL_REASON_MAX_LENGTH)
   reason?: string;
 }
 

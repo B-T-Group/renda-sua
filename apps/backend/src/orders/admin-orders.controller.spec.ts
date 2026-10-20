@@ -185,6 +185,17 @@ describe('AdminOrdersController.updateStatus', () => {
     expect(orderEventsService.recordEvent).not.toHaveBeenCalled();
   });
 
+  it('#627: the cancel reason is length-limited (400 over 1000) and PII-masked before it is stored', async () => {
+    const { controller, ordersService } = buildController();
+    await expect(controller.updateStatus('order-1', { status: 'cancelled', reason: 'x'.repeat(1001) } as any)).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+    });
+    expect(ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
+    await controller.updateStatus('order-1', { status: 'cancelled', reason: 'x'.repeat(1000) } as any);
+    await controller.updateStatus('order-1', { status: 'cancelled', reason: 'call jo@x.com on +237 670 123 456' } as any);
+    expect(ordersService.cancelOrderAsAdmin).toHaveBeenLastCalledWith('order-1', 'call [REDACTED_EMAIL] on [REDACTED_PHONE]', 'confirmed');
+  });
+
   it('#627 C1: no backward move out of a post-pickup status', async () => {
     for (const status of ['in_transit', 'out_for_delivery', 'shipped', 'picked_up']) {
       const { controller, hasuraSystemService } = buildController({ status });
