@@ -33,7 +33,7 @@ import { useAccountById } from '../../hooks/useAccountInfo';
 import { useAirtelMoney } from '../../hooks/useAirtelMoney';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
 import { useApiClient } from '../../hooks/useApiClient';
-import { useMobilePayments } from '../../hooks/useMobilePayments';
+import { useMobilePayments, MobilePaymentRequest } from '../../hooks/useMobilePayments';
 import { useMtnMomoTopUp } from '../../hooks/useMtnMomoTopUp';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { useStripeWithdraw } from '../../hooks/useStripeWithdraw';
@@ -364,10 +364,12 @@ const UserAccount: React.FC<UserAccountProps> = ({
       );
 
       if (route.endpoint === 'initiate') {
-        await initiatePayment(route.body as any);
+        // TypeScript: route.body includes provider?: 'fedapay' which MobilePaymentRequest doesn't have,
+        // but it's structurally compatible and the backend accepts it
+        await initiatePayment(route.body as MobilePaymentRequest);
       } else {
-        // route.endpoint === 'mtn-legacy'
-        await requestTopUp(route.body as any);
+        // TypeScript now knows route.body is LegacyTopUpBody
+        await requestTopUp(route.body);
       }
 
       setShowTopUpSuccess(true);

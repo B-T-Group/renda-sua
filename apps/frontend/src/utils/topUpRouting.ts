@@ -2,27 +2,27 @@
  * Routing logic for top-up payment methods
  */
 
-export interface InitiatePaymentBody {
-  amount: number;
-  currency: string;
-  description: string;
-  customerPhone: string;
-  accountId: string;
-  paymentMethod: string;
-  transactionType: string;
-  provider: string;
-}
-
 export interface LegacyTopUpBody {
   amount: string;
   phoneNumber: string;
   currency: string;
 }
 
-export interface TopUpRoute {
-  endpoint: 'initiate' | 'mtn-legacy';
-  body: InitiatePaymentBody | LegacyTopUpBody;
-}
+export type TopUpRoute =
+  | {
+      endpoint: 'initiate';
+      body: {
+        amount: number;
+        currency: string;
+        description: string;
+        customerPhone?: string;
+        accountId?: string;
+        paymentMethod?: string;
+        transactionType?: string;
+        provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'fedapay';
+      };
+    }
+  | { endpoint: 'mtn-legacy'; body: LegacyTopUpBody };
 
 export function resolveTopUpRequest(
   paymentMethod: string,
