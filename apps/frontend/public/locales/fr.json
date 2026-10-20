@@ -183,7 +183,9 @@
       "airtelMoneyInfo": "Rechargez votre compte en utilisant Airtel Money",
       "topUpInfoCM": "Rechargez avec MTN Mobile Money ou Orange Money.",
       "topUpInfoGA": "Rechargez avec Airtel Money ou Moov Money.",
-      "airtelMoneySuccess": "Demande de recharge envoyée avec succès."
+      "topUpInfoTG": "Rechargez avec Moov Money ou Mixx by Yas (Togocel).",
+      "airtelMoneySuccess": "Demande de recharge envoyée avec succès.",
+      "fedapaySuccess": "Demande de paiement envoyée avec succès via FedaPay."
     },
     "paymentMethod": "Méthode de Paiement",
     "paymentMethods": {
@@ -8818,140 +8820,13 @@
       "unknown": "Inconnu"
     }
   },
-  "dedicatedAgents": {
-    "section": {
-      "title": "Livreurs dédiés",
-      "explainer": "Les livreurs dédiés reçoivent les commandes quand aucun livreur proche ne les prend.",
-      "scheduledOnly": "Commandes programmées uniquement."
-    },
-    "slots": {
-      "morning": "Matin",
-      "afternoon": "Après-midi",
-      "evening": "Soir",
-      "pickup": "Heure de collecte",
-      "offConfirm": "Désactiver le créneau {{slot}} ? {{n}} livreurs dédiés seront mis en pause.",
-      "pausedGroup": "{{n}} livreurs en pause"
-    },
-    "empty": "Aucun livreur dédié",
-    "post": "Publier une demande",
-    "slotHeader": "{{n}} livreurs · jusqu'à {{max}} commandes",
-    "load": "{{active}}/{{max}} commandes",
-    "balanceShort": "~{{n}} de plus",
-    "fullWarning": "Aucun livreur dédié disponible pour le moment. La livraison suit les règles habituelles.",
-    "chips": {
-      "type": {
-        "internal": "Interne",
-        "independent": "Indépendant"
-      },
-      "status": {
-        "active": "Actif",
-        "paused": "En pause",
-        "offToday": "Absent aujourd'hui"
-      }
-    },
-    "assignedChip": "Affecté par RendaSua",
-    "actions": {
-      "pause": "Mettre en pause",
-      "resume": "Reprendre",
-      "remove": "Retirer"
-    },
-    "removeConfirm": "Retirer {{name}} du créneau {{slot}} ?",
-    "form": {
-      "agentsNeeded": "Livreurs recherchés",
-      "days": "Jours",
-      "payLine": "Rémunération standard par livraison",
-      "termsField": "Conditions / remarques",
-      "termsHelper": "Horaires, tenue, ce qui est attendu. Toute rémunération supplémentaire proposée ici est à votre charge, pas à celle de RendaSua.",
-      "termsStrip": "Les liens et numéros de téléphone sont retirés.",
-      "publish": "Publier",
-      "posted": "Demande publiée",
-      "alreadyPosted": "Déjà publiée"
-    },
-    "posting": {
-      "row": "Demande ouverte · {{accepted}}/{{needed}} acceptés · {{n}} nouvelles",
-      "progress": "{{accepted}}/{{needed}} acceptés",
-      "status": {
-        "open": "Ouverte",
-        "filled": "Complète",
-        "closed": "Fermée",
-        "expired": "Expirée"
-      }
-    },
-    "applicant": {
-      "stats": "Inscrit le {{date}} · {{n}} livraisons · {{m}} manquées",
-      "onTime": "{{pct}} % de collectes à l'heure",
-      "acceptConfirm": "Accepter {{name}} ?",
-      "acceptLastConfirm": "Accepter {{name}} ? La demande sera complète et les autres candidatures refusées.",
-      "accept": "Accepter",
-      "decline": "Refuser",
-      "autoDeclined": "Refusée automatiquement",
-      "closeConfirm": "Fermer cette demande ? Les candidatures en attente seront refusées.",
-      "termsEdited": "Les candidats ont été prévenus"
-    },
-    "agent": {
-      "opportunities": "Opportunités",
-      "myStores": "Mes boutiques",
-      "spots": "{{accepted}}/{{needed}} places pourvues",
-      "apply": "Postuler",
-      "photoGate": "Ajoutez une photo de profil pour postuler",
-      "applied": "Candidature envoyée",
-      "withdraw": "Retirer",
-      "withdrawConfirm": "Retirer votre candidature ?",
-      "filled": "Ce poste a été pourvu",
-      "accepted": "Vous êtes désormais livreur dédié de {{store}} ({{slot}})",
-      "updatedChip": "Mis à jour",
-      "noTerms": "Aucune condition particulière",
-      "disabled": {
-        "holds_slot": "Vous couvrez déjà ce créneau dans cette boutique",
-        "max_assignments": "Vous avez atteint {{max}} boutiques"
-      },
-      "opp": {
-        "empty": "Aucune offre près de chez vous pour le moment",
-        "noAddress": "Ajoutez votre adresse pour voir les boutiques proches",
-        "gone": "Cette opportunité n'est plus disponible"
-      },
-      "gate": {
-        "not_verified": "Faites vérifier votre compte pour voir les opportunités",
-        "verifyAccount": "Vérifier mon compte",
-        "contract_unsigned": "Signez votre contrat de livreur pour continuer",
-        "sign": "Signer",
-        "suspended": "Votre compte est suspendu",
-        "contactSupport": "Contacter le support"
-      },
-      "offToday": "Absent aujourd'hui",
-      "pausedByStore": "Mis en pause par la boutique",
-      "stores": {
-        "empty": "Aucune boutique pour l'instant",
-        "seeOpportunities": "Voir les opportunités",
-        "emptyInternal": "RendaSua vous affectera à des boutiques"
-      },
-      "removedByStore": "Cette boutique vous a retiré"
-    },
-    "admin": {
-      "assign": "Affecter",
-      "steps": {
-        "store": "Boutique",
-        "slots": "Créneaux",
-        "agent": "Livreur"
-      },
-      "assigned": "Affecté. La boutique et le livreur ont été prévenus.",
-      "truncated": "Premiers résultats affichés ; affinez la recherche"
-    },
-    "offline": "Hors ligne · dernière mise à jour affichée",
-    "generic": "Une erreur est survenue",
-    "retry": "Réessayer",
-    "errors": {
-      "posting_filled": "Cette demande est déjà complète",
-      "posting_not_open": "Cette demande n'est plus ouverte",
-      "posting_expired": "Cette demande n'est plus ouverte",
-      "application_not_pending": "Cette candidature n'est plus en attente",
-      "agent_holds_slot": "Ce livreur couvre déjà ce créneau",
-      "cap_exceeded": "Ce livreur a déjà le nombre maximum de boutiques",
-      "duplicate": "Ce livreur est déjà affecté à ce créneau",
-      "slot_disabled": "Réactivez d'abord le créneau {{slot}}",
-      "agent_ineligible": "Ce livreur ne peut pas être accepté pour le moment",
-      "pickup_time_outside_slot": "Choisissez une heure entre {{start}} et {{end}}",
-      "assignment_removed": "Cette affectation a été supprimée"
+  "payment": {
+    "togoOperator": {
+      "label": "Opérateur Mobile Money",
+      "moov": "Moov Money",
+      "mixx": "Mixx by Yas",
+      "mismatch": "L'opérateur sélectionné ne correspond pas au préfixe du numéro de téléphone. Veuillez sélectionner le bon opérateur ou mettre à jour le numéro de téléphone.",
+      "unavailable": "Le paiement mobile FedaPay n'est actuellement pas disponible pour le Togo. Veuillez réessayer plus tard ou contacter le support."
     }
   }
 }
