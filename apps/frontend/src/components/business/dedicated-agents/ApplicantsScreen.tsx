@@ -14,6 +14,7 @@ import {
   DialogTitle,
   IconButton,
   Paper,
+  Snackbar,
   Stack,
   TextField,
   Typography,
@@ -29,6 +30,12 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
+import { useDedicatedAgentsAnalytics } from '../../../hooks/useDedicatedAgentsAnalytics';
+import {
+  extractDedicatedAgentsError,
+  mapDedicatedAgentsErrorCode,
+  isDedicatedAgentsFeatureHidden,
+} from '../../../utils/dedicatedAgentsErrors';
 import type {
   ApplicantCard,
   DedicatedPostingView,
@@ -39,6 +46,7 @@ const ApplicantsScreen: React.FC = () => {
   const navigate = useNavigate();
   const { locationId, postingId } = useParams<{ locationId: string; postingId: string }>();
   const dedicatedApi = useDedicatedAgents();
+  const { track } = useDedicatedAgentsAnalytics();
 
   const [loading, setLoading] = useState(true);
   const [posting, setPosting] = useState<DedicatedPostingView | null>(null);
@@ -47,6 +55,8 @@ const ApplicantsScreen: React.FC = () => {
   const [newTerms, setNewTerms] = useState('');
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmAccept, setConfirmAccept] = useState<{ id: string; name: string } | null>(null);
+  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!locationId || !postingId) return;
@@ -57,12 +67,28 @@ const ApplicantsScreen: React.FC = () => {
       setPosting(response.posting);
       setApplications(response.applications);
       setNewTerms(response.posting.terms || '');
+      setNotFound(false);
+      
+      if (response.applications.length > 0) {
+        const pending = response.applications.filter((a) => a.status === 'applied').length;
+        const accepted = response.applications.filter((a) => a.status === 'accepted').length;
+        track('applicants_viewed', {
+          role: 'business',
+          locationId,
+          postingId,
+          pending,
+          accepted,
+        });
+      }
     } catch (err: any) {
+      if (isDedicatedAgentsFeatureHidden(err)) {
+        setNotFound(true);
+      }
       console.error('Error loading applications:', err);
     } finally {
       setLoading(false);
     }
-  }, [locationId, postingId, dedicatedApi]);
+  }, [locationId, postingId, dedicatedApi, track]);
 
   useEffect(() => {
     loadData();
@@ -74,11 +100,47 @@ const ApplicantsScreen: React.FC = () => {
     if (!locationId || !postingId) return;
 
     try {
-      await dedicatedApi.acceptApplication(locationId, postingId, applicationId);
+      const response = await dedicatedApi.acceptApplication(locationId, postingId, applicationId);
       await loadData();
       setConfirmAccept(null);
+      
+      const filled = posting && posting.acceptedCount + 1 === posting.headcount;
+      track('applicant_accepted', {
+        role: 'business',
+        locationId,
+        postingId,
+        filled: !!filled,
+      });
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      
+      const errorCodes = [
+        'posting_filled',
+        'posting_not_open',
+        'posting_expired',
+        'application_not_pending',
+        'agent_holds_slot',
+        'dedicated_agent_assignment_cap_exceeded',
+        'slot_disabled',
+        'agent_ineligible',
+      ];
+      
+      if (code && errorCodes.includes(code)) {
+        const errorKey = mapDedicatedAgentsErrorCode(code);
+        setSnackbarMessage(t(errorKey, 'An error occurred'));
+        await loadData();
+      } else {
+        setSnackbarMessage(t('dedicatedAgents.generic', 'Something went wrong'));
+      }
+      
+      track('action_conflict', {
+        role: 'business',
+        endpoint: 'acceptApplication',
+        code: code || 'unknown',
+      });
+      
       console.error('Error accepting application:', err);
+      setConfirmAccept(null);
     }
   };
 
@@ -88,7 +150,16 @@ const ApplicantsScreen: React.FC = () => {
     try {
       await dedicatedApi.declineApplication(locationId, postingId, applicationId);
       await loadData();
+      
+      track('applicant_declined', {
+        role: 'business',
+        locationId,
+        postingId,
+      });
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      setSnackbarMessage(t(errorKey, 'Something went wrong'));
       console.error('Error declining application:', err);
     }
   };
@@ -102,7 +173,17 @@ const ApplicantsScreen: React.FC = () => {
       });
       await loadData();
       setEditingTerms(false);
+      setSnackbarMessage(t('dedicatedAgents.applicant.termsEdited', 'Applicants were notified'));
+      
+      track('posting_terms_edited', {
+        role: 'business',
+        locationId,
+        postingId,
+      });
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      setSnackbarMessage(t(errorKey, 'Something went wrong'));
       console.error('Error updating terms:', err);
     }
   };
@@ -111,10 +192,22 @@ const ApplicantsScreen: React.FC = () => {
     if (!locationId || !postingId) return;
 
     try {
-      await dedicatedApi.closePosting(locationId, postingId);
+      const response = await dedicatedApi.closePosting(locationId, postingId);
+      
+      track('posting_closed', {
+        role: 'business',
+        locationId,
+        postingId,
+        autoDeclined: response.autoDeclined || 0,
+      });
+      
       navigate(`/business/locations/${locationId}/dedicated-agents`);
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      setSnackbarMessage(t(errorKey, 'Something went wrong'));
       console.error('Error closing posting:', err);
+      setConfirmClose(false);
     }
   };
 
@@ -126,16 +219,27 @@ const ApplicantsScreen: React.FC = () => {
     );
   }
 
-  if (!posting) {
+  if (!posting || notFound) {
     return (
       <Container maxWidth="md" sx={{ py: 4 }}>
-        <Alert severity="error">Posting not found</Alert>
+        <Button
+          variant="text"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate(`/business/locations/${locationId}/dedicated-agents`)}
+          sx={{ mb: 2 }}
+        >
+          {t('common.back', 'Back')}
+        </Button>
+        <Alert severity="info">
+          {t('dedicatedAgents.noLongerAvailable', 'This posting is no longer available')}
+        </Alert>
       </Container>
     );
   }
 
   const pending = applications.filter((a) => a.status === 'applied');
   const accepted = applications.filter((a) => a.status === 'accepted');
+  const autoDeclined = applications.filter((a) => a.status === 'auto_declined');
   const isOpen = posting.status === 'open';
 
   return (
@@ -180,53 +284,80 @@ const ApplicantsScreen: React.FC = () => {
             )}
           </Stack>
 
-          {posting.terms && (
-            <Box>
-              <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="body2" fontWeight={600}>
-                  {t('dedicatedAgents.form.termsField', 'Terms / notes')}
-                </Typography>
-                {isOpen && !editingTerms && (
-                  <IconButton size="small" onClick={() => setEditingTerms(true)}>
-                    <EditIcon />
-                  </IconButton>
-                )}
-              </Stack>
-
-              {editingTerms ? (
-                <Stack spacing={1}>
-                  <TextField
-                    multiline
-                    rows={3}
-                    value={newTerms}
-                    onChange={(e) => setNewTerms(e.target.value.slice(0, 1000))}
-                    fullWidth
-                  />
-                  <Stack direction="row" spacing={1} justifyContent="flex-end">
-                    <Button size="small" onClick={() => setEditingTerms(false)}>
-                      {t('common.cancel', 'Cancel')}
-                    </Button>
-                    <Button size="small" variant="contained" onClick={handleUpdateTerms}>
-                      {t('common.save', 'Save')}
-                    </Button>
-                  </Stack>
-                </Stack>
-              ) : (
-                <Typography variant="body2" color="text.secondary">
-                  {posting.terms}
-                </Typography>
+          <Box>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
+              <Typography variant="body2" fontWeight={600}>
+                {t('dedicatedAgents.form.termsField', 'Terms / notes')}
+              </Typography>
+              {isOpen && !editingTerms && (
+                <IconButton
+                  size="small"
+                  onClick={() => setEditingTerms(true)}
+                  aria-label={t('dedicatedAgents.ariaLabels.editTerms', 'Edit terms')}
+                >
+                  <EditIcon />
+                </IconButton>
               )}
-            </Box>
-          )}
+            </Stack>
+
+            {editingTerms ? (
+              <Stack spacing={1}>
+                <TextField
+                  multiline
+                  rows={3}
+                  value={newTerms}
+                  onChange={(e) => setNewTerms(e.target.value.slice(0, 1000))}
+                  fullWidth
+                />
+                <Stack direction="row" spacing={1} justifyContent="flex-end">
+                  <Button size="small" onClick={() => setEditingTerms(false)}>
+                    {t('common.cancel', 'Cancel')}
+                  </Button>
+                  <Button size="small" variant="contained" onClick={handleUpdateTerms}>
+                    {t('common.save', 'Save')}
+                  </Button>
+                </Stack>
+              </Stack>
+            ) : posting.terms ? (
+              <Typography variant="body2" color="text.secondary">
+                {posting.terms}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                {t('dedicatedAgents.agent.noTerms', 'No extra terms')}
+              </Typography>
+            )}
+          </Box>
         </Stack>
       </Paper>
 
-      {pending.length > 0 && (
+      {(pending.length > 0 || autoDeclined.length > 0) && (
         <Box mb={3}>
           <Typography variant="subtitle1" fontWeight={600} mb={2}>
             Pending ({pending.length})
+            {autoDeclined.length > 0 && ` · ${autoDeclined.length} auto-declined`}
           </Typography>
           <Stack spacing={1.5}>
+            {autoDeclined.map((app) => (
+              <Paper key={app.applicationId} variant="outlined" sx={{ p: 2, opacity: 0.6 }}>
+                <Stack direction="row" spacing={2} alignItems="center">
+                  <Avatar src={app.agent.photoUrl || undefined}>
+                    {app.agent.firstName[0]}
+                  </Avatar>
+                  
+                  <Stack flex={1} spacing={0.5}>
+                    <Typography variant="body1" fontWeight={600}>
+                      {app.agent.firstName} {app.agent.lastName[0]}.
+                    </Typography>
+                    <Chip
+                      label={t('dedicatedAgents.applicant.autoDeclined', 'Auto-declined')}
+                      size="small"
+                      color="default"
+                    />
+                  </Stack>
+                </Stack>
+              </Paper>
+            ))}
             {pending.map((app) => (
               <Paper key={app.applicationId} variant="outlined" sx={{ p: 2 }}>
                 <Stack direction="row" spacing={2} alignItems="center">
@@ -339,10 +470,14 @@ const ApplicantsScreen: React.FC = () => {
 
       <Dialog open={confirmClose} onClose={() => setConfirmClose(false)}>
         <DialogTitle>
-          {t(
-            'dedicatedAgents.applicant.closeConfirm',
-            'Close this request? Pending applicants will be declined.'
-          )}
+          {pending.length > 0
+            ? t('dedicatedAgents.closeWithCount', 'Close posting ({{count}} will be auto-declined)', {
+                count: pending.length,
+              })
+            : t(
+                'dedicatedAgents.applicant.closeConfirm',
+                'Close this request? Pending applicants will be declined.'
+              )}
         </DialogTitle>
         <DialogActions>
           <Button onClick={() => setConfirmClose(false)}>
@@ -353,6 +488,13 @@ const ApplicantsScreen: React.FC = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={!!snackbarMessage}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarMessage(null)}
+        message={snackbarMessage}
+      />
     </Container>
   );
 };
