@@ -1,81 +1,107 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import * as apiRequest from '../services/apiRequest';
+import { renderHook, waitFor } from '@testing-library/react';
+import { useDedicatedAgentsCapability } from './useDedicatedAgentsCapability';
+import * as apiClient from '../services/apiClient';
 
-vi.mock('../services/apiRequest');
+vi.mock('../services/apiClient', () => ({
+  apiRequest: vi.fn(),
+}));
 
-// Simple unit tests for the capability hook logic without rendering
-
-describe('useDedicatedAgentsCapability logic', () => {
+describe('useDedicatedAgentsCapability', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('should determine shouldShow as true when enabled is true', () => {
-    const capability = {
+  it('should return enabled true when capability is enabled', async () => {
+    vi.spyOn(apiClient, 'apiRequest').mockResolvedValue({
       success: true,
       enabled: true,
       country: 'CM',
       reason: null,
-    };
-    
-    const shouldShow = capability.success === true && capability.enabled === true;
-    expect(shouldShow).toBe(true);
+    });
+
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
+
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(true);
+    });
+
+    expect(result.current.capability).toEqual({
+      success: true,
+      enabled: true,
+      country: 'CM',
+      reason: null,
+    });
   });
 
-  it('should determine shouldShow as false when enabled is false', () => {
-    const capability = {
+  it('should return enabled false when capability is disabled', async () => {
+    vi.spyOn(apiClient, 'apiRequest').mockResolvedValue({
       success: true,
       enabled: false,
       country: null,
       reason: null,
-    };
-    
-    const shouldShow = capability.success === true && capability.enabled === true;
-    expect(shouldShow).toBe(false);
+    });
+
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
+
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(false);
+    });
   });
 
-  it('should show when enabled with no_address reason', () => {
-    const capability = {
+  it('should show dedicated agents when enabled with no_address reason', async () => {
+    vi.spyOn(apiClient, 'apiRequest').mockResolvedValue({
       success: true,
       enabled: true,
       country: 'CM',
-      reason: 'no_address' as const,
-    };
-    
-    const shouldShow = capability.success === true && capability.enabled === true;
-    expect(shouldShow).toBe(true);
-    expect(capability.reason).toBe('no_address');
+      reason: 'no_address',
+    });
+
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
+
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(true);
+      expect(result.current.capability?.reason).toBe('no_address');
+    });
   });
 
-  it('should show when enabled with no_country reason', () => {
-    const capability = {
+  it('should show dedicated agents when enabled with no_country reason', async () => {
+    vi.spyOn(apiClient, 'apiRequest').mockResolvedValue({
       success: true,
       enabled: true,
       country: null,
-      reason: 'no_country' as const,
-    };
-    
-    const shouldShow = capability.success === true && capability.enabled === true;
-    expect(shouldShow).toBe(true);
-    expect(capability.reason).toBe('no_country');
+      reason: 'no_country',
+    });
+
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
+
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(true);
+      expect(result.current.capability?.reason).toBe('no_country');
+    });
   });
 
-  it('should call apiRequest with correct endpoint', async () => {
-    const mockApiRequest = vi.spyOn(apiRequest, 'apiRequest').mockResolvedValue({
-      success: true,
-      enabled: true,
-      country: 'CM',
-      reason: null,
+  it('should handle 404 as feature disabled', async () => {
+    vi.spyOn(apiClient, 'apiRequest').mockRejectedValue({
+      response: { status: 404 },
     });
 
-    await apiRequest.apiRequest({
-      method: 'GET',
-      endpoint: '/agents/me/dedicated-agents/capability',
-    });
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
 
-    expect(mockApiRequest).toHaveBeenCalledWith({
-      method: 'GET',
-      endpoint: '/agents/me/dedicated-agents/capability',
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(false);
+      expect(result.current.featureUnavailable).toBe(true);
+    });
+  });
+
+  it('should handle network errors', async () => {
+    vi.spyOn(apiClient, 'apiRequest').mockRejectedValue(new Error('Network error'));
+
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeTruthy();
     });
   });
 });
