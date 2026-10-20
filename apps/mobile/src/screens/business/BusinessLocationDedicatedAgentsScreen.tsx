@@ -93,7 +93,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
 
   const handleToggleSlot = async (slotKey: SlotKey, enabled: boolean) => {
     if (!enabled) {
-      const slotAgents = agents.filter((a) => a.slotKey === slotKey && a.status !== 'off_today');
+          const slotAgents = agents.filter((a) => a.slotKey === slotKey && !a.offToday);
       if (slotAgents.length > 0) {
         setConfirmPause({ slotKey, agentsToPause: slotAgents.length });
         return;
@@ -102,7 +102,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
 
     try {
       setMutating(`slot-${slotKey}`);
-      await dedicatedAgentsService.updatePickupSlot(locationId, slotKey, {
+      await dedicatedAgentsService.updatePickupSlots(locationId, slotKey, {
         isEnabled: enabled,
       });
       await loadData();
@@ -127,11 +127,10 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
     if (!confirmPause) return;
 
     try {
-      await dedicatedAgentsService.updatePickupSlot(
+      await dedicatedAgentsService.updatePickupSlots(
         locationId,
         confirmPause.slotKey,
-        { isEnabled: false },
-        true
+        { isEnabled: false, confirmPauseAgents: true }
       );
       setConfirmPause(null);
       await loadData();
@@ -146,7 +145,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const handleUpdatePickupTime = async (slotKey: SlotKey, pickupTime: string) => {
     try {
       setMutating(`slot-${slotKey}`);
-      await dedicatedAgentsService.updatePickupSlot(locationId, slotKey, { pickupTime });
+      await dedicatedAgentsService.updatePickupSlots(locationId, slotKey, { pickupTime });
       await loadData();
       setPickupMenuSlot(null);
     } catch (err: any) {
@@ -161,7 +160,9 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const handlePauseAgent = async (assignmentId: string) => {
     try {
       setMutating(assignmentId);
-      await dedicatedAgentsService.pauseAssignment(locationId, assignmentId);
+      await dedicatedAgentsService.updateAssignment(locationId, assignmentId, {
+        status: 'paused',
+      });
       await loadData();
       setActionsMenuAgent(null);
     } catch (err: any) {
@@ -176,7 +177,9 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const handleResumeAgent = async (assignmentId: string) => {
     try {
       setMutating(assignmentId);
-      await dedicatedAgentsService.resumeAssignment(locationId, assignmentId);
+      await dedicatedAgentsService.updateAssignment(locationId, assignmentId, {
+        status: 'active',
+      });
       await loadData();
       setActionsMenuAgent(null);
     } catch (err: any) {
@@ -191,7 +194,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const handleRemoveAgent = async (assignmentId: string) => {
     try {
       setMutating(assignmentId);
-      await dedicatedAgentsService.removeAssignment(locationId, assignmentId);
+      await dedicatedAgentsService.deleteAssignment(locationId, assignmentId);
       await loadData();
       setConfirmRemove(null);
       setActionsMenuAgent(null);
@@ -346,7 +349,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                                       ? t('dedicatedAgents.chips.type.internal', 'Internal')
                                       : t('dedicatedAgents.chips.type.independent', 'Independent')}
                                   </Chip>
-                                  {agent.status === 'off_today' && (
+                                  {agent.offToday && (
                                     <Chip compact mode="outlined">
                                       {t('dedicatedAgents.chips.offToday', 'Off today')}
                                     </Chip>
