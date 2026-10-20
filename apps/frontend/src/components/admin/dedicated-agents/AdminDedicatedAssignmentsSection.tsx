@@ -122,8 +122,8 @@ export function AdminDedicatedAssignmentsSection() {
       console.error('Error pause/resume:', err);
       const code = err.response?.data?.code;
       if (err.response?.status === 409) {
-        const message = code && t(`dedicatedAgents.errors.${code}`, null) 
-          ? t(`dedicatedAgents.errors.${code}`) 
+        const message = code && t(`dedicatedAgents.errors.${code}`, { defaultValue: t('dedicatedAgents.generic', 'Something went wrong') })
+          ? t(`dedicatedAgents.errors.${code}`, t('dedicatedAgents.generic', 'Something went wrong'))
           : t('dedicatedAgents.generic', 'Something went wrong');
         enqueueSnackbar(message, { variant: 'error' });
         await loadAssignments();
@@ -161,8 +161,8 @@ export function AdminDedicatedAssignmentsSection() {
       console.error('Error removing:', err);
       const code = err.response?.data?.code;
       if (err.response?.status === 409) {
-        const message = code && t(`dedicatedAgents.errors.${code}`, null)
-          ? t(`dedicatedAgents.errors.${code}`)
+        const message = code && t(`dedicatedAgents.errors.${code}`, { defaultValue: t('dedicatedAgents.generic', 'Something went wrong') })
+          ? t(`dedicatedAgents.errors.${code}`, t('dedicatedAgents.generic', 'Something went wrong'))
           : t('dedicatedAgents.generic', 'Something went wrong');
         enqueueSnackbar(message, { variant: 'error' });
         await loadAssignments();
