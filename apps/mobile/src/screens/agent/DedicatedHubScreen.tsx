@@ -154,12 +154,12 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
       if (errorCode === 'assignment_removed') {
         dedicatedAnalytics.trackDedicatedActionConflict('toggle_off_today', 'assignment_removed');
         setSnackMessage(t('dedicatedAgents.agent.removedByStore', 'This store removed you'));
-        await loadData();
+        await loadData(true);
       } else if (errorCode === 'assignment_changed') {
         dedicatedAnalytics.trackDedicatedActionConflict('toggle_off_today', 'assignment_changed');
         const msg = mapDedicatedError(errorCode, t);
         setSnackMessage(msg);
-        await loadData();
+        await loadData(true);
       } else {
         const msg = errorCode ? mapDedicatedError(errorCode, t) : t('dedicatedAgents.generic', 'Something went wrong');
         setSnackMessage(msg);

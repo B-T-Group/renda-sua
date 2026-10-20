@@ -99,11 +99,11 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       } else if (errorCode === 'posting_not_open' || errorCode === 'application_closed') {
         const msg = mapDedicatedError(errorCode, t);
         setSnackMessage(msg);
-        await loadData();
+        await loadData(true);
       } else if (errorCode === 'holds_slot' || errorCode === 'max_assignments') {
         const msg = mapDedicatedError(errorCode, t);
         setSnackMessage(msg);
-        await loadData();
+        await loadData(true);
       } else {
         const msg = errorCode ? mapDedicatedError(errorCode, t) : t('dedicatedAgents.generic', 'Something went wrong');
         setSnackMessage(msg);
@@ -113,18 +113,43 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
     }
   };
 
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const handlePhotoSource = async (source: 'camera' | 'gallery') => {
     if (source === 'camera') {
       dedicatedAnalytics.trackDedicatedPhotoGateCameraOpened();
     } else {
       dedicatedAnalytics.trackDedicatedPhotoGateGalleryOpened();
     }
-    const success = await pickAndUploadPhoto(source);
-    if (success) {
-      dedicatedAnalytics.trackDedicatedPhotoGateCompleted();
-      setPhotoGateVisible(false);
+    setUploadError(null);
+    const uploadSuccess = await pickAndUploadPhoto(source);
+    if (!uploadSuccess) {
+      setUploadError(error || t('dedicatedAgents.agent.photoError', 'Failed to upload photo'));
+      return;
     }
-    // If failed, keep sheet open for retry (don't close)
+
+    dedicatedAnalytics.trackDedicatedPhotoGateCompleted();
+    
+    // Try to apply again after successful upload
+    try {
+      setSubmitting(true);
+      await dedicatedAgentsService.applyToOpportunity(postingId);
+      dedicatedAnalytics.trackDedicatedApplySucceeded(postingId, opportunity?.storeName || 'Unknown');
+      setSnackMessage(t('dedicatedAgents.agent.appliedSnackbar', 'Application submitted'));
+      setPhotoGateVisible(false);
+      await loadData(true);
+    } catch (err: any) {
+      const errorCode = err.response?.data?.code;
+      const msg = errorCode ? mapDedicatedError(errorCode, t) : t('dedicatedAgents.generic', 'Something went wrong');
+      setUploadError(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleRetryPhotoApply = () => {
+    setUploadError(null);
+    // Let user pick photo again
   };
 
   const handleWithdraw = () => {
@@ -173,27 +198,41 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
     );
   }
 
-  if (error) {
-    const isNotFound = error === t('dedicatedAgents.agent.noLongerAvailable', 'This opportunity is no longer available');
+  if (notFound) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background.default }]}>
         <MaterialCommunityIcons 
-          name={isNotFound ? "alert-circle" : "wifi-off"} 
+          name="alert-circle" 
           size={48} 
           color={colors.text.disabled} 
         />
         <Text variant="titleMedium" style={{ marginTop: spacing.md, marginBottom: spacing.lg }}>
+          {t('dedicatedAgents.agent.opp.gone', 'This opportunity is no longer available')}
+        </Text>
+        <Button mode="outlined" onPress={() => navigation.goBack()}>
+          {t('common.back', 'Back')}
+        </Button>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background.default }]}>
+        <MaterialCommunityIcons 
+          name="wifi-off" 
+          size={48} 
+          color={colors.text.disabled} 
+        />
+        <Text variant="titleMedium" style={{ marginTop: spacing.md, marginBottom: spacing.lg }}>
+          {t('dedicatedAgents.agent.noLongerAvailable', 'This opportunity is no longer available')}
+        </Text>
+        <Text variant="bodyMedium" style={{ marginBottom: spacing.lg, color: colors.text.secondary }}>
           {error}
         </Text>
-        {!isNotFound ? (
-          <Button mode="outlined" onPress={() => loadData()}>
-            {t('common.retry', 'Retry')}
-          </Button>
-        ) : (
-          <Button mode="outlined" onPress={() => navigation.goBack()}>
-            {t('common.back', 'Back')}
-          </Button>
-        )}
+        <Button mode="outlined" onPress={() => loadData(true)}>
+          {t('dedicatedAgents.retry', 'Retry')}
+        </Button>
       </View>
     );
   }
@@ -447,6 +486,21 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
                 <Text variant="bodySmall" style={{ marginTop: spacing.xs, color: colors.text.secondary }}>
                   {t('actionLoading.upload', 'Uploading...')}
                 </Text>
+              </View>
+            )}
+
+            {uploadError && !uploadingPhoto && (
+              <View style={{ backgroundColor: colors.error.light, padding: spacing.md, borderRadius: borderRadius.card, marginBottom: spacing.md }}>
+                <Text variant="bodyMedium" style={{ color: colors.error.main }}>
+                  {uploadError}
+                </Text>
+                <Button 
+                  mode="contained" 
+                  onPress={handleRetryPhotoApply}
+                  style={{ marginTop: spacing.sm }}
+                >
+                  {t('dedicatedAgents.retry', 'Retry')}
+                </Button>
               </View>
             )}
 
