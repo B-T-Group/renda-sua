@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { mapDedicatedError, shouldHideOnError, shouldShowGate } from './dedicatedAgentsErrors';
+import { mapDedicatedError, shouldHideOnError, shouldShowGate, getGateIcon, type GateReason } from './dedicatedAgentsErrors';
 
 describe('dedicatedAgentsErrors', () => {
   describe('mapDedicatedError', () => {
@@ -43,11 +43,19 @@ describe('dedicatedAgentsErrors', () => {
     });
 
     it('should hide on 403 with non-eligibility code', () => {
-      expect(shouldHideOnError(403, 'some_other_code')).toBe(true);
+      expect(shouldHideOnError(403, 'some_other_code')).toBe(false);
     });
 
-    it('should not hide on 403 with DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', () => {
-      expect(shouldHideOnError(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE')).toBe(false);
+    it('should not hide on 403 with DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE and not_verified', () => {
+      expect(shouldHideOnError(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'not_verified')).toBe(false);
+    });
+
+    it('should hide on 403 with DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE and commercial_focus', () => {
+      expect(shouldHideOnError(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'commercial_focus')).toBe(true);
+    });
+
+    it('should hide on 403 with DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE and no_agent', () => {
+      expect(shouldHideOnError(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'no_agent')).toBe(true);
     });
 
     it('should not hide on other status codes', () => {
@@ -88,6 +96,40 @@ describe('dedicatedAgentsErrors', () => {
 
     it('should not show gate without reason', () => {
       expect(shouldShowGate(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', null)).toBe(false);
+    });
+
+    it('should not show gate for commercial_focus reason', () => {
+      expect(shouldShowGate(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'commercial_focus')).toBe(false);
+    });
+
+    it('should not show gate for no_agent reason', () => {
+      expect(shouldShowGate(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'no_agent')).toBe(false);
+    });
+  });
+
+  describe('getGateIcon', () => {
+    it('should return correct icon for not_verified', () => {
+      expect(getGateIcon('not_verified')).toBe('shield-check');
+    });
+
+    it('should return correct icon for contract_unsigned', () => {
+      expect(getGateIcon('contract_unsigned')).toBe('file-document-edit');
+    });
+
+    it('should return correct icon for suspended', () => {
+      expect(getGateIcon('suspended')).toBe('alert-circle');
+    });
+
+    it('should return correct icon for commercial_focus', () => {
+      expect(getGateIcon('commercial_focus')).toBe('storefront');
+    });
+
+    it('should return correct icon for no_agent', () => {
+      expect(getGateIcon('no_agent')).toBe('account-off');
+    });
+
+    it('should return default icon for unknown reason', () => {
+      expect(getGateIcon('unknown' as GateReason)).toBe('alert-circle');
     });
   });
 });
