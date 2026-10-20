@@ -7750,6 +7750,15 @@
       "pickupTime": "Sélectionner l'heure de collecte",
       "decreaseCount": "Diminuer le nombre",
       "increaseCount": "Augmenter le nombre"
+    },
+    "dayLettersFR": {
+      "monday": "L",
+      "tuesday": "M",
+      "wednesday": "M",
+      "thursday": "J",
+      "friday": "V",
+      "saturday": "S",
+      "sunday": "D"
     }
   }
 }
