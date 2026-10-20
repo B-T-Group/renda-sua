@@ -1,4 +1,47 @@
+/**
+ * #594 dedicated agents UI events sent by the web and mobile clients
+ * (business #644, agent #645, admin #646). Client-emitted, so public.
+ */
+export const DEDICATED_UI_SITE_EVENT_TYPES = [
+  // Shared (business #644, admin #646)
+  'dedicated_ui.section_viewed',
+  'dedicated_ui.agent_paused',
+  'dedicated_ui.agent_resumed',
+  'dedicated_ui.agent_removed',
+  'dedicated_ui.action_conflict',
+  // Admin assign flow (#646)
+  'dedicated_ui.admin_assign_started',
+  'dedicated_ui.admin_assign_step',
+  'dedicated_ui.admin_assign_succeeded',
+  'dedicated_ui.admin_assign_failed',
+  // Business (#644)
+  'dedicated_ui.slot_toggled',
+  'dedicated_ui.pickup_time_changed',
+  'dedicated_ui.posting_form_opened',
+  'dedicated_ui.posting_created',
+  'dedicated_ui.posting_closed',
+  'dedicated_ui.posting_terms_edited',
+  'dedicated_ui.applicants_viewed',
+  'dedicated_ui.applicant_accepted',
+  'dedicated_ui.applicant_declined',
+  // Agent (#645)
+  'dedicated_ui.opportunities_viewed',
+  'dedicated_ui.opportunity_opened',
+  'dedicated_ui.apply_tapped',
+  'dedicated_ui.apply_succeeded',
+  'dedicated_ui.photo_gate_shown',
+  'dedicated_ui.photo_gate_camera_opened',
+  'dedicated_ui.photo_gate_gallery_opened',
+  'dedicated_ui.photo_gate_completed',
+  'dedicated_ui.application_withdrawn',
+  'dedicated_ui.my_stores_viewed',
+  'dedicated_ui.off_today_toggled',
+  'dedicated_ui.agent_gate_shown',
+  'dedicated_ui.agent_gate_dismissed',
+] as const;
+
 export const SITE_EVENT_TYPES_V1 = [
+  ...DEDICATED_UI_SITE_EVENT_TYPES,
   'inventory.cta.buy_now_click',
   'inventory.cta.order_now_click',
   'inventory.cta.browse_more_click',
