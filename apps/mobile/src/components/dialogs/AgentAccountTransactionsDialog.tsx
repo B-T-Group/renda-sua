@@ -47,7 +47,7 @@ function lineColor(
   amount: number,
   colors: { success: { main: string }; error: { main: string }; text: { secondary: string } }
 ): string {
-  if (type === 'hold' || type === 'release') return colors.text.secondary;
+  if (type === 'hold' || type === 'release' || type === 'forfeit') return colors.text.secondary;
   if (['deposit', 'refund', 'exchange'].includes(type)) return colors.success.main;
   if (['withdrawal', 'payment', 'fee', 'transfer'].includes(type)) return colors.error.main;
   if (type === 'adjustment') return amount > 0 ? colors.success.main : colors.error.main;
@@ -56,7 +56,7 @@ function lineColor(
 
 function formatSignedAmount(type: string, amount: number, currency: string): string {
   const abs = formatMoney(amount, currency);
-  if (type === 'hold' || type === 'release') return abs;
+  if (type === 'hold' || type === 'release' || type === 'forfeit') return abs;
   if (['deposit', 'refund', 'exchange'].includes(type)) return `+${abs}`;
   if (['withdrawal', 'payment', 'fee', 'transfer'].includes(type)) return `-${abs}`;
   if (type === 'adjustment') return `${amount > 0 ? '+' : '-'}${abs}`;
