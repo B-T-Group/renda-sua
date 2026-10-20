@@ -143,6 +143,8 @@ interface StrandedHoldPayload {
   currency?: string;
   path?: string;
   holdId?: string;
+  /** #628 E1: set once the withheld-below-net alert fired for this strand. */
+  withheldShortAlertedAt?: string;
 }
 
 const STRANDED_HOLDS_QUERY = `
@@ -948,7 +950,7 @@ export class OrderReassignmentService {
         account.id,
         ev.order_id,
         `Hold released for order ${o.order_number}. Stranded after release (reconciled).`,
-        { cap: amount }
+        { cap: amount, strand: { eventId: ev.id, withheldShortAlertedAt: p.withheldShortAlertedAt } }
       );
       if (!released.success)
         throw new Error(released.error || 'release failed');
@@ -1124,7 +1126,11 @@ export class OrderReassignmentService {
     accountId: string,
     orderId: string,
     memo: string,
-    opts: { cap?: number } = {}
+    opts: {
+      cap?: number;
+      /** #628 E1: the strand being reconciled, so its withheld-short alert fires once (like agedOutAlertedAt). */
+      strand?: { eventId: string; withheldShortAlertedAt?: string };
+    } = {}
   ): Promise<{ success: boolean; released: number; net: number; error?: string }> {
     try {
       const res = await this.hasura.executeMutation<{
@@ -1141,7 +1147,7 @@ export class OrderReassignmentService {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       const { net } = await this.agentHoldLedger(accountId, orderId).catch(() => ({ net: NaN }));
-      if (message.includes('agent_hold_release_withheld_short')) {
+      if (message.includes('agent_hold_release_withheld_short') && !opts.strand?.withheldShortAlertedAt) {
         // #622 I1: the ledger says more is held than the account's withheld balance:
         // the books disagree, so nothing was released and a human must look.
         reportMoneyAnomaly(
@@ -1150,8 +1156,23 @@ export class OrderReassignmentService {
           `Agent hold not released for order ${orderId}: withheld balance is below the net held (${net}): ${message}`,
           { accountId, orderId, net, cap: opts.cap ?? null }
         );
+        if (opts.strand) await this.stampWithheldShortAlert(opts.strand.eventId);
       }
       return { success: false, released: 0, net, error: message };
+    }
+  }
+
+  /** #628 E1: once per strand. A failed stamp only means the alert may repeat next run. */
+  private async stampWithheldShortAlert(eventId: string): Promise<void> {
+    try {
+      await this.hasura.executeMutation(MARK_STRANDED_HOLD_MUTATION, {
+        id: eventId,
+        patch: { withheldShortAlertedAt: new Date().toISOString() },
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Could not stamp withheldShortAlertedAt on strand ${eventId}: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
