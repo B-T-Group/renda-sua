@@ -4,7 +4,6 @@ import {
   Box,
   Button,
   CircularProgress,
-  IconButton,
   Paper,
   Snackbar,
   Stack,
@@ -46,7 +45,6 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
   const [slots, setSlots] = useState<PickupSlot[]>([]);
   const [agents, setAgents] = useState<DedicatedAgentCard[]>([]);
   const [postings, setPostings] = useState<DedicatedPostingView[]>([]);
-  const [maxActiveOrders, setMaxActiveOrders] = useState(10);
   const [postDialogOpen, setPostDialogOpen] = useState(false);
   const [selectedSlotForPost, setSelectedSlotForPost] = useState<SlotKey | null>(null);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
@@ -87,7 +85,6 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
       setSlots(slotsRes.slots);
       if (agentsRes) {
         setAgents(agentsRes.assignments);
-        setMaxActiveOrders(agentsRes.maxActiveOrders);
       }
       if (postingsRes) {
         setPostings(postingsRes.postings);
