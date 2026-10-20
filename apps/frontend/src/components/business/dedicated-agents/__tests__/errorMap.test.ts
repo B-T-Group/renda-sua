@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { mapDedicatedAgentsErrorCode } from '../../../../utils/dedicatedAgentsErrors';
 import enLocale from '../../../../../public/locales/en.json';
 import frLocale from '../../../../../public/locales/fr.json';
@@ -65,11 +64,13 @@ describe('Dedicated Agents Error Map', () => {
   it('should have a generic error key in both locales', () => {
     const genericKey = mapDedicatedAgentsErrorCode('unknown_error');
     
+    expect(genericKey).toBe('dedicatedAgents.errors.generic');
+    
     // Check en.json
     const enKeyPath = genericKey.split('.');
     let enValue: any = enLocale;
     enKeyPath.forEach((key) => {
-      enValue = enValue[key];
+      enValue = enValue?.[key];
     });
     expect(enValue).toBeDefined();
     expect(typeof enValue).toBe('string');
@@ -78,7 +79,7 @@ describe('Dedicated Agents Error Map', () => {
     const frKeyPath = genericKey.split('.');
     let frValue: any = frLocale;
     frKeyPath.forEach((key) => {
-      frValue = frValue[key];
+      frValue = frValue?.[key];
     });
     expect(frValue).toBeDefined();
     expect(typeof frValue).toBe('string');

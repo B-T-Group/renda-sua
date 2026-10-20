@@ -1,4 +1,3 @@
-import { describe, it, expect } from 'vitest';
 import { isDedicatedAgentsFeatureHidden } from '../../../../utils/dedicatedAgentsErrors';
 
 describe('Permission/Probe Hide Logic', () => {

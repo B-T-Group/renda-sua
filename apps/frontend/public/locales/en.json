@@ -8972,7 +8972,8 @@
       "slot_has_dedicated_agents": "This slot has dedicated agents that will be paused",
       "invalid_headcount": "Headcount must be between 1 and 10",
       "invalid_days_of_week": "Please select at least one day",
-      "terms_too_long": "Terms must be 1000 characters or less"
+      "terms_too_long": "Terms must be 1000 characters or less",
+      "generic": "Something went wrong"
     },
     "superuser": {
       "tab": "Dedicated",

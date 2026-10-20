@@ -1,11 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import '@testing-library/jest-dom';
 import DedicatedSlotRow from '../DedicatedSlotRow';
 import type { PickupSlot } from '../../../../types/dedicatedAgents';
 
 // Mock i18next
-vi.mock('react-i18next', () => ({
+jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, defaultValue?: string, params?: any) => {
       if (key === 'dedicatedAgents.slots.offConfirm') {
@@ -14,6 +12,8 @@ vi.mock('react-i18next', () => ({
       if (key === 'dedicatedAgents.slots.morning') return 'Morning';
       if (key === 'common.cancel') return 'Cancel';
       if (key === 'common.confirm') return 'Confirm';
+      if (key === 'dedicatedAgents.ariaLabels.slotToggle') return `Toggle ${params?.slot} slot`;
+      if (key === 'dedicatedAgents.ariaLabels.pickupTimeSelect') return `Select pickup time for ${params?.slot}`;
       return defaultValue || key;
     },
   }),
@@ -29,12 +29,12 @@ describe('DedicatedSlotRow - Slot Toggle Confirm/Revert', () => {
     liveAgents: 3,
   };
 
-  let onToggleMock: ReturnType<typeof vi.fn>;
-  let onPickupTimeChangeMock: ReturnType<typeof vi.fn>;
+  let onToggleMock: jest.Mock;
+  let onPickupTimeChangeMock: jest.Mock;
 
   beforeEach(() => {
-    onToggleMock = vi.fn().mockResolvedValue(undefined);
-    onPickupTimeChangeMock = vi.fn();
+    onToggleMock = jest.fn().mockResolvedValue(undefined);
+    onPickupTimeChangeMock = jest.fn().mockResolvedValue({});
   });
 
   it('shows confirm dialog when turning off slot with live agents', async () => {
@@ -110,6 +110,11 @@ describe('DedicatedSlotRow - Slot Toggle Confirm/Revert', () => {
   });
 
   it('handles 409 error with agentsToPause from server', async () => {
+    const slotWithNoAgents = {
+      ...mockSlot,
+      liveAgents: 0, // Start with no agents so no initial confirm
+    };
+    
     const error = {
       response: {
         data: {
@@ -119,11 +124,11 @@ describe('DedicatedSlotRow - Slot Toggle Confirm/Revert', () => {
       },
     };
 
-    onToggleMock = vi.fn().mockRejectedValueOnce(error);
+    onToggleMock = jest.fn().mockRejectedValueOnce(error);
 
     render(
       <DedicatedSlotRow
-        slot={mockSlot}
+        slot={slotWithNoAgents}
         onToggle={onToggleMock}
         onPickupTimeChange={onPickupTimeChangeMock}
       />
@@ -132,6 +137,7 @@ describe('DedicatedSlotRow - Slot Toggle Confirm/Revert', () => {
     const toggle = screen.getByRole('checkbox');
     fireEvent.click(toggle);
 
+    // The error triggers a confirm dialog with the server's agent count
     await waitFor(() => {
       expect(screen.getByText(/5 dedicated agents will be paused/)).toBeInTheDocument();
     });

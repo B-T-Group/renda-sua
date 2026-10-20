@@ -8989,7 +8989,8 @@
       "slot_has_dedicated_agents": "Ce créneau a des livreurs dédiés qui seront mis en pause",
       "invalid_headcount": "Le nombre doit être entre 1 et 10",
       "invalid_days_of_week": "Veuillez sélectionner au moins un jour",
-      "terms_too_long": "Les conditions doivent faire 1000 caractères maximum"
+      "terms_too_long": "Les conditions doivent faire 1000 caractères maximum",
+      "generic": "Une erreur est survenue"
     },
     "superuser": {
       "tab": "Dédiés",
