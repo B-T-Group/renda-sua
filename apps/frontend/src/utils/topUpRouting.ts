@@ -1,3 +1,5 @@
+import type { MobilePaymentRequest } from '../hooks/useMobilePayments';
+
 /**
  * Routing logic for top-up payment methods
  */
@@ -11,16 +13,8 @@ export interface LegacyTopUpBody {
 export type TopUpRoute =
   | {
       endpoint: 'initiate';
-      body: {
-        amount: number;
-        currency: string;
-        description: string;
-        customerPhone?: string;
-        accountId?: string;
-        paymentMethod?: string;
-        transactionType?: string;
-        provider?: 'fedapay'; // Only present for FedaPay, omitted for airtel/moov
-      };
+      /** `provider` is set only for FedaPay; Airtel/Moov omit it so the backend resolves from the phone. */
+      body: Omit<MobilePaymentRequest, 'provider'> & { provider?: 'fedapay' };
     }
   | { endpoint: 'mtn-legacy'; body: LegacyTopUpBody };
 
