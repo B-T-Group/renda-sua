@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -190,7 +191,7 @@ import {
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
-import { isAdminTerminalStatus } from './admin-order-status.util';
+import { isAdminPrePickupCancellableStatus, isAdminTerminalStatus } from './admin-order-status.util';
 import { GET_ORDERS } from './orders.queries';
 import {
   withDeliveryContact,
@@ -253,6 +254,22 @@ import {
   RESOLVED_DEPOSIT_STATUSES,
 } from './deposit-refund.service';
 import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
+import {
+  ADMIN_CANCEL_LEASE_MS,
+  ADMIN_CANCEL_NON_REPEATABLE,
+  ADMIN_CANCEL_STEPS,
+  type AdminCancelProgress,
+  type AdminCancelProgressRow,
+  type AdminCancelStepName,
+  type AdminCancelStepState,
+  casAdminCancelProgress,
+  insertAdminCancelProgress,
+  leaseIsLive,
+  loadAdminCancelProgress,
+  pendingSteps,
+} from './admin-cancel-progress';
+export { ADMIN_CANCEL_STEPS, type AdminCancelStepName } from './admin-cancel-progress';
+
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -673,6 +690,26 @@ export type { ClaimAssignment } from './dedicated-claim.port';
 export interface DeclineOrderOfferRequest {
   orderId: string;
   reason?: string | null;
+}
+
+export const ADMIN_CANCEL_STEP_FAILED_MARKER = 'admin_cancel_step_failed';
+/** Statuses after which the commerce inventory hook must release committed stock. */
+const INVENTORY_COMMITTED_STATUSES = new Set([
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned_to_agent',
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+]);
+interface AdminCancelContext {
+  order: Orders;
+  previousStatus: string;
+  adminUserId: string | null;
+  notes?: string;
 }
 
 @Injectable()
@@ -8469,16 +8506,218 @@ export class OrdersService {
     };
   }
 
-  async cancelOrderAsAdmin(orderId: string, notes?: string) {
+  /**
+   * #627 C2: the cancel write is a compare-and-set on `expectedFromStatus` (the status
+   * the caller validated; defaults to the one read here), so a concurrent change gets
+   * 409 before the card authorisation is released or anything else runs.
+   *
+   * #627 C4/C7: after the status CAS, every step runs on its own, keyed by a durable
+   * per-step marker (admin-cancel-progress.ts). A failed step never stops the others;
+   * it is alerted and listed in failedSteps (names only). A retry of this endpoint on
+   * the cancelled order resumes only the steps not yet done, one resume at a time.
+   */
+  async cancelOrderAsAdmin(orderId: string, notes?: string, expectedFromStatus?: string) {
+    const existing = await loadAdminCancelProgress(this.hasuraSystemService, orderId);
+    if (existing) return this.resumeAdminCancel(orderId, existing);
     const order = await this.requireCancellableAdminOrder(orderId);
     const adminUserId = await this.resolveOptionalUserId();
-    await this.releaseStripeAuthorizationIfNeeded(order);
-    const updatedOrder = await this.markOrderCancelledAsSystem(orderId);
-    await this.finishAdminCancellation(order, adminUserId, notes);
+    await this.markOrderCancelledAsSystem(orderId, expectedFromStatus ?? order.current_status);
+    // The order IS cancelled now, and only this caller won the status CAS.
+    const ctx: AdminCancelContext = { order, previousStatus: order.current_status, adminUserId, notes };
+    const owner = randomUUID();
+    let row: AdminCancelProgressRow | null = null;
+    try {
+      row = await insertAdminCancelProgress(this.hasuraSystemService, orderId, adminUserId, {
+        version: 1,
+        previousStatus: ctx.previousStatus,
+        notes: notes ?? null,
+        adminUserId,
+        steps: Object.fromEntries(ADMIN_CANCEL_STEPS.map((n) => [n, 'pending'])) as AdminCancelProgress['steps'],
+        leaseOwner: owner,
+        leaseUntil: new Date(Date.now() + ADMIN_CANCEL_LEASE_MS).toISOString(),
+      });
+    } catch (error: unknown) {
+      // No durable markers: still run every step once now, but a retry cannot resume.
+      reportMoneyAnomaly(
+        this.logger,
+        ADMIN_CANCEL_STEP_FAILED_MARKER,
+        `Admin cancel of order ${order.order_number}: progress marker not written: ${safeErrorMessage(error)}`,
+        { orderId, step: 'progressMarker' }
+      );
+    }
+    const failedSteps = await this.runAdminCancelSteps(ctx, row, owner);
+    return this.adminCancelResult(orderId, failedSteps, false);
+  }
+
+  /** A retry on an order that already has a progress row: resume what is not done. */
+  private async resumeAdminCancel(orderId: string, row: AdminCancelProgressRow) {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (pendingSteps(row.payload).length === 0) {
+      throw new HttpException(`Cannot cancel order in ${order.current_status} status`, HttpStatus.BAD_REQUEST);
+    }
+    if (leaseIsLive(row.payload)) {
+      throw new HttpException('This cancellation is already being resumed', HttpStatus.CONFLICT);
+    }
+    const owner = randomUUID();
+    const claimed = await casAdminCancelProgress(this.hasuraSystemService, row, {
+      ...row.payload,
+      leaseOwner: owner,
+      leaseUntil: new Date(Date.now() + ADMIN_CANCEL_LEASE_MS).toISOString(),
+    });
+    if (!claimed) {
+      throw new HttpException('This cancellation is already being resumed', HttpStatus.CONFLICT);
+    }
+    const ctx: AdminCancelContext = {
+      order,
+      previousStatus: row.payload.previousStatus,
+      adminUserId: (await this.resolveOptionalUserId()) ?? row.payload.adminUserId,
+      notes: row.payload.notes ?? undefined,
+    };
+    const failedSteps = await this.runAdminCancelSteps(ctx, claimed, owner);
+    return this.adminCancelResult(orderId, failedSteps, true);
+  }
+
+  /** One admin-cancel step. Repeatable ones are idempotent on their own keys. */
+  private async adminCancelStep(name: AdminCancelStepName, ctx: AdminCancelContext): Promise<void> {
+    const { order } = ctx;
+    switch (name) {
+      case 'voidStripeAuthorization':
+        return this.voidStripeAuthorizationOrThrow(order);
+      case 'persistCancellationMetadata':
+        return this.persistCancellationMetadata(order.id, 'system', ctx.notes);
+      case 'createStatusHistoryEntry':
+        if (!ctx.adminUserId) return;
+        return this.createStatusHistoryEntry(
+          order.id,
+          'cancelled',
+          'Order cancelled by admin',
+          'system',
+          ctx.adminUserId,
+          ctx.notes
+        );
+      case 'restorePurchaseCredits':
+        await this.purchaseCreditsService?.restore(order.id);
+        return;
+      case 'releaseReservedStock':
+        return this.updateReservedQuantities(order.order_items || [], 'decrement');
+      case 'inventoryReleaseHook':
+        if (!this.commerceOrderInventoryHook || !INVENTORY_COMMITTED_STATUSES.has(ctx.previousStatus)) return;
+        return this.commerceOrderInventoryHook.onOrderCancelledAfterCommit({
+          orderId: order.id,
+          items: (order.order_items || []).map((oi: any) => ({
+            id: oi.id,
+            business_inventory_id: oi.business_inventory_id,
+            quantity: oi.quantity,
+          })),
+        });
+      case 'depositRefund':
+        return this.refundDepositForAdminCancel(order);
+      case 'enqueueOrderCancelled':
+        return this.orderQueueService.sendOrderCancelledMessage(
+          order.id,
+          'system',
+          ctx.notes,
+          ctx.previousStatus,
+          `order.cancelled:${order.id}`,
+          { strict: true }
+        );
+    }
+  }
+
+  /** System cancel: a captured deposit is refunded (even after lock); a failure throws. */
+  private async refundDepositForAdminCancel(order: Orders): Promise<void> {
+    const depositStatus = (order as any).deposit_status;
+    const depositAmount = Number((order as any).deposit_amount) || 0;
+    if (depositStatus !== 'paid' || depositAmount <= 0) return;
+    const result = await this.depositRefundService.refundDeposit(order.id, { allowAfterLock: true });
+    if (!result.success) {
+      throw new Error(`Deposit refund failed: ${result.message ?? 'unknown'}`);
+    }
+  }
+
+  private async runAdminCancelSteps(
+    ctx: AdminCancelContext,
+    start: AdminCancelProgressRow | null,
+    owner: string
+  ): Promise<AdminCancelStepName[]> {
+    let row = start;
+    const failed: AdminCancelStepName[] = [];
+    const lost = () => {
+      throw new HttpException('This cancellation is being resumed by another request', HttpStatus.CONFLICT);
+    };
+    const setStep = async (name: AdminCancelStepName, state: AdminCancelStepState) => {
+      if (!row) return;
+      const next = await casAdminCancelProgress(this.hasuraSystemService, row, {
+        ...row.payload,
+        steps: { ...row.payload.steps, [name]: state },
+        leaseUntil: new Date(Date.now() + ADMIN_CANCEL_LEASE_MS).toISOString(),
+      });
+      if (!next) lost();
+      row = next;
+    };
+    const alert = (name: AdminCancelStepName, detail: string) =>
+      reportMoneyAnomaly(
+        this.logger,
+        ADMIN_CANCEL_STEP_FAILED_MARKER,
+        `Admin cancel of order ${ctx.order.order_number}: step ${name} ${detail} (the order is cancelled)`,
+        { orderId: ctx.order.id, step: name, previousStatus: ctx.previousStatus }
+      );
+    const steps = row ? pendingSteps(row.payload) : [...ADMIN_CANCEL_STEPS];
+    for (const name of steps) {
+      const state = row?.payload.steps?.[name] ?? 'pending';
+      if (state === 'running' && ADMIN_CANCEL_NON_REPEATABLE.includes(name)) {
+        // Outcome unknown (an earlier run died mid-step): never run it twice.
+        failed.push(name);
+        alert(name, 'has an unknown outcome and is not re-run; check it by hand');
+        continue;
+      }
+      await setStep(name, 'running');
+      try {
+        await this.adminCancelStep(name, ctx);
+      } catch (error: unknown) {
+        failed.push(name);
+        // The detail goes to the log / alert only, never to the API response.
+        alert(name, `failed: ${safeErrorMessage(error)}`);
+        await setStep(name, 'failed');
+        continue;
+      }
+      await setStep(name, 'done');
+    }
+    if (row && row.payload.leaseOwner === owner) {
+      const released = await casAdminCancelProgress(this.hasuraSystemService, row, {
+        ...row.payload,
+        leaseOwner: null,
+        leaseUntil: null,
+      }).catch(() => null);
+      if (!released) this.logger.warn(`Admin cancel lease of ${ctx.order.id} not released (expires on its own)`);
+    }
+    return failed;
+  }
+
+  /** Stripe void whose non-throwing failure result counts as a failed step. */
+  private async voidStripeAuthorizationOrThrow(order: Orders): Promise<void> {
+    const result = await this.releaseStripeAuthorizationIfNeeded(order);
+    if (result && !result.ok) {
+      throw new Error(`Stripe authorization void failed: ${result.message ?? 'unknown'}`);
+    }
+  }
+
+  /** I2: the response carries the order as it is now (re-read after the steps). */
+  private async adminCancelResult(orderId: string, failedSteps: AdminCancelStepName[], resumed: boolean) {
+    const order = await this.getOrderDetails(orderId).catch(() => null);
+    const partial = failedSteps.length > 0;
     return {
       success: true,
-      order: updatedOrder,
-      message: 'Order cancelled successfully',
+      partialFailure: partial,
+      failedSteps,
+      resumed,
+      order,
+      message: partial
+        ? `Order cancelled, but ${failedSteps.join(', ')} failed and needs follow-up (alerted). Retry this request to resume.`
+        : resumed
+        ? 'Order cancellation completed (resumed)'
+        : 'Order cancelled successfully',
     };
   }
 
@@ -8487,7 +8726,10 @@ export class OrdersService {
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (isAdminTerminalStatus(order.current_status)) {
+    if (
+      isAdminTerminalStatus(order.current_status) ||
+      !isAdminPrePickupCancellableStatus(order.current_status)
+    ) {
       throw new HttpException(
         `Cannot cancel order in ${order.current_status} status`,
         HttpStatus.BAD_REQUEST
@@ -8505,36 +8747,12 @@ export class OrdersService {
     }
   }
 
-  private async markOrderCancelledAsSystem(orderId: string) {
+  private async markOrderCancelledAsSystem(orderId: string, expectedFromStatus: string) {
     return this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
       viaCancelEndpoint: true,
       viaSystem: true,
+      expectedFromStatus,
     });
-  }
-
-  private async finishAdminCancellation(
-    order: Orders,
-    adminUserId: string | null,
-    notes?: string
-  ): Promise<void> {
-    await this.persistCancellationMetadata(order.id, 'system', notes);
-    if (adminUserId) {
-      await this.createStatusHistoryEntry(
-        order.id,
-        'cancelled',
-        'Order cancelled by admin',
-        'system',
-        adminUserId,
-        notes
-      );
-    }
-    await this.runOrderCancellationSideEffects(
-      order,
-      order.id,
-      order.current_status,
-      'system',
-      notes
-    );
   }
 
   private async persistCancellationMetadata(
@@ -12534,7 +12752,9 @@ export class OrdersService {
     );
   }
 
-  private async releaseStripeAuthorizationIfNeeded(order: Orders): Promise<void> {
+  private async releaseStripeAuthorizationIfNeeded(
+    order: Orders
+  ): Promise<{ ok: boolean; message?: string } | void> {
     if ((order as any).payment_source !== 'credit_card') return;
     const ps = (order as any).payment_status;
     if (ps !== 'authorized' && ps !== 'pending') return;
@@ -12549,7 +12769,9 @@ export class OrdersService {
       this.logger.warn(
         `Stripe authorization cancel failed for order ${order.order_number}: ${cancelResult.message}`
       );
+      return { ok: false, message: cancelResult.message };
     }
+    return { ok: true };
   }
 
   private isTerminalOrderStatus(status: string): boolean {
