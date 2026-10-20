@@ -113,7 +113,7 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
     const p = w.events[0].payload;
     expect([p.leaseOwner, p.leaseUntil]).toEqual([null, null]);
     // A further retry on the completed cancel is refused, nothing re-runs.
-    await expect(w.svc.cancelOrderAsAdmin('o-1', 'again')).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    await expect(w.svc.cancelOrderAsAdmin('o-1', 'again')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
     expect(w.m.enqueue).toHaveBeenCalledTimes(1);
   });
 
@@ -219,7 +219,7 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
 
   it('a cancelled order without a progress row (cancelled elsewhere) is refused', async () => {
     const w = build({ status: 'cancelled' });
-    await expect(w.svc.cancelOrderAsAdmin('o-1', 'r')).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+    await expect(w.svc.cancelOrderAsAdmin('o-1', 'r')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
     expect(w.svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
   });
 

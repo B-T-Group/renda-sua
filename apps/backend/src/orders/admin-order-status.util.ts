@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 export const ADMIN_OPERATIONAL_STATUSES = [
   'pending',
   'confirmed',
@@ -49,8 +50,7 @@ export const ADMIN_STATUS_OVERRIDE_VALUES = [
  * in_transit, out_for_delivery, awaiting_shipment, shipped, in_delivery, delivered,
  * complete, the refund states, cancelled, failed, and any status added later) is
  * refused.
- * TODO(#626): #626 defines the same list as ADMIN_FULL_REFUND_ALLOWED_STATUSES in
- * orders.service.ts; once both are on main, make that one reuse this constant.
+ * Shared by the PATCH cancel, cancelOrderAsAdmin and the #626 full-refund cancel.
  */
 export const ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES = [
   'pending_payment',
@@ -63,6 +63,26 @@ export const ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES = [
 
 export function isAdminPrePickupCancellableStatus(status: string): boolean {
   return (ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES as readonly string[]).includes(status);
+}
+
+export const ORDER_ALREADY_PICKED_UP = 'ORDER_ALREADY_PICKED_UP';
+
+/**
+ * PE (#626/#627): the one refusal for an admin cancel outside the pre-pickup allowlist,
+ * on every cancel path: 409 with error ORDER_ALREADY_PICKED_UP.
+ */
+export function adminPrePickupRefusal(status: string, hint = 'Use the return / refund flow.'): HttpException {
+  return new HttpException(
+    {
+      message: `Cannot cancel an order in ${status} status: only pre-pickup orders can be cancelled here. ${hint}`,
+      error: ORDER_ALREADY_PICKED_UP,
+    },
+    HttpStatus.CONFLICT
+  );
+}
+
+export function assertAdminPrePickupCancellable(status: string): void {
+  if (!isAdminPrePickupCancellableStatus(status)) throw adminPrePickupRefusal(status);
 }
 
 export function isAdminTerminalStatus(status: string): boolean {

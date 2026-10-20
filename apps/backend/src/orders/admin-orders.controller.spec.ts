@@ -99,8 +99,10 @@ describe('AdminOrdersController.updateStatus', () => {
 
   it.each(['picked_up', 'in_transit', 'out_for_delivery'])('refuses to cancel a %s order (after pickup)', async (status) => {
     const { controller, ordersService } = buildController({ status });
+    // PE: the shared pre-pickup refusal is 409 ORDER_ALREADY_PICKED_UP on the PATCH cancel too.
     await expect(controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any)).rejects.toMatchObject({
-      status: HttpStatus.BAD_REQUEST,
+      status: HttpStatus.CONFLICT,
+      response: expect.objectContaining({ error: 'ORDER_ALREADY_PICKED_UP' }),
     });
     expect(ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
   });
@@ -269,7 +271,8 @@ describe('AdminOrdersController.updateStatus', () => {
     for (const status of ['picked_up', 'delivered', 'failed']) {
       const b = buildController({ status });
       await expect(b.controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any)).rejects.toMatchObject({
-        status: HttpStatus.BAD_REQUEST,
+        status: HttpStatus.CONFLICT,
+        response: expect.objectContaining({ error: 'ORDER_ALREADY_PICKED_UP' }),
       });
       expect(b.ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
     }

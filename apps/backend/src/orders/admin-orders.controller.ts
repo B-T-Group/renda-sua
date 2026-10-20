@@ -25,8 +25,8 @@ import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { RequirePermissions } from '../rbac/permissions.decorator';
-import { PlatformPermissions } from '../rbac/platform-permissions';
+import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
+import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
 import { GeoScopeService } from '../rbac/geo-scope.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { AdminOrdersService } from './admin-orders.service';
@@ -38,6 +38,7 @@ import type {
 import {
   AcknowledgeRiskIncidentDto,
   AddAdminNoteDto,
+  AdminFullRefundCancelDto,
   AdminOrderStatsPeriod,
   GetAdminOrderStatsDto,
   GetAdminOrdersDto,
@@ -54,7 +55,7 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderRiskIncidentsService } from './order-risk-incidents.service';
 import type { OrderRiskIncident } from './order-risk.types';
 import { OrderRiskMonitorService } from './order-risk-monitor.service';
-import { OrdersService } from './orders.service';
+import { OrdersService, type DepositCancelOutcome } from './orders.service';
 import { CreditsService } from '../credits/credits.service';
 import type {
   CreditContactChannel,
@@ -65,9 +66,12 @@ import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import {
   isAdminOperationalStatus,
   isAdminOverrideTransitionAllowed,
-  isAdminPrePickupCancellableStatus,
+  assertAdminPrePickupCancellable,
 } from './admin-order-status.util';
 import { safeErrorMessage } from '../common/utils/safe-error-log.util';
+
+/** The full-refund cancel succeeded but its audit event could not be written. */
+export const FULL_REFUND_CANCEL_AUDIT_FAILED_MARKER = 'admin_full_refund_cancel_audit_failed';
 
 @ApiTags('admin/orders')
 @Controller('admin/orders')
@@ -273,6 +277,89 @@ export class AdminOrdersController {
     };
   }
 
+  /**
+   * Ops cleanup: cancel an order with a FULL refund to the client and release any
+   * agent hold. Superuser, or an admin holding platform.financial.refunds (in geo
+   * scope); the class-level ORDERS_CROSS_BUSINESS alone is not enough.
+   *
+   * Money: the cancel is recorded as cancelled_by=system, which the order.cancelled
+   * Lambda never charges a cancellation fee for, and whose client and agent releases
+   * use the per-order `cancel_release_key_prefix` idempotency keys (exactly once,
+   * even when the message is redelivered). A business or system cancel also refunds
+   * a paid deposit, after the lock point too. The status write is a compare-and-set
+   * on the status read, so of two concurrent calls one wins and the other gets 409
+   * before any side effect.
+   *
+   * Where the money goes (QA A5): the refund is to the client's Rendasua WALLET, not
+   * back to the payment provider. Funds held on the wallet are released to its
+   * available balance and a paid deposit is credited back to the wallet; no MoMo /
+   * provider payout is made (the client withdraws as usual). A card authorisation is
+   * voided rather than captured.
+   *
+   * The deposit refund result is returned as `depositRefund` (QA A2): when it failed
+   * or was refused the response says so and a money alert is raised; it never claims
+   * a full refund that did not happen.
+   *
+   * Audit: an `admin_intervention` order event (action full_refund_cancel, actor,
+   * reason, previous status) plus a status-history entry. The free-text reason is
+   * PII-masked (emails, phone numbers) before it is stored or logged (QA A4).
+   */
+  @Post(':orderId/full-refund-cancel')
+  @RequireRoles(PlatformRoles.SUPERUSER)
+  @RequirePermissions(PlatformPermissions.FINANCIAL_REFUNDS)
+  @ApiOperation({
+    summary: 'Cancel with a full refund (ops cleanup)',
+    description:
+      'Superuser / financial-refunds admin only. No cancellation fee; the client is refunded to their Rendasua wallet (not to the payment provider) and agent holds are released exactly once. Only before pickup (pending_payment, pending, confirmed, preparing, ready_for_pickup, assigned_to_agent). The response carries depositRefund.status.',
+  })
+  @ApiResponse({ status: 201, description: 'Cancelled; refund queued (order.cancelled)' })
+  @ApiResponse({ status: 409, description: 'Already cancelled / status moved / goods already picked up' })
+  async fullRefundCancel(
+    @Param('orderId') orderId: string,
+    @Body() dto: AdminFullRefundCancelDto
+  ) {
+    const scope = await this.geo.require(PlatformPermissions.FINANCIAL_REFUNDS);
+    await this.geo.assertOrder(scope, orderId);
+    const reason = maskPersonalData(dto.reason);
+    const result = await this.ordersService.adminFullRefundCancel(orderId, reason);
+    await this.auditFullRefundCancel(orderId, reason, result.previousStatus, result.depositRefund, result.failedSteps);
+    return result;
+  }
+
+  /**
+   * The audit event after a successful full-refund cancel. The cancel (and its refund)
+   * has already happened, so a failure here must not turn it into an error: it is
+   * raised as an alert (`admin_full_refund_cancel_audit_failed`, Sentry + CloudWatch
+   * marker) with who/what/why so the trail can be restored by hand. Written with
+   * OrderEventsService.recordEventStrict (recordEvent swallows insert errors).
+   */
+  private async auditFullRefundCancel(
+    orderId: string,
+    reason: string,
+    previousStatus: string,
+    depositRefund: DepositCancelOutcome,
+    failedSteps: Array<{ step: string; error: string }>
+  ): Promise<void> {
+    let actorId: string | null = null;
+    try {
+      actorId = (await this.hasuraUserService.getUser())?.id ?? null;
+      await this.orderEventsService.recordEventStrict({
+        orderId,
+        eventType: 'admin_intervention',
+        actorType: 'support',
+        actorId,
+        payload: { action: 'full_refund_cancel', reason, previousStatus, cancellationFee: 0, depositRefund, failedSteps },
+      });
+    } catch (error: unknown) {
+      reportMoneyAnomaly(
+        this.logger,
+        FULL_REFUND_CANCEL_AUDIT_FAILED_MARKER,
+        `Audit event not written for the full-refund cancel of order ${orderId} (the cancel succeeded): ${safeErrorMessage(error)}`,
+        { orderId, actorId, previousStatus, reason }
+      );
+    }
+  }
+
   @Patch(':orderId/status')
   @ApiOperation({
     summary: 'Override order status',
@@ -354,11 +441,7 @@ export class AdminOrdersController {
   }
 
   private assertPrePickupCancellable(status: string): void {
-    if (isAdminPrePickupCancellableStatus(status)) return;
-    throw new HttpException(
-      `Cannot cancel an order in ${status} status: only pre-pickup orders can be cancelled here`,
-      HttpStatus.BAD_REQUEST,
-    );
+    assertAdminPrePickupCancellable(status);
   }
 
   /** C6: override notes are capped and PII-masked like the cancel reason. */

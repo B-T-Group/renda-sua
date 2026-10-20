@@ -5575,7 +5575,7 @@ describe('OrdersService', () => {
       });
 
       await expect(service.cancelOrderAsAdmin('order-123')).rejects.toMatchObject(
-        { status: HttpStatus.BAD_REQUEST }
+        { status: HttpStatus.CONFLICT, response: expect.objectContaining({ error: 'ORDER_ALREADY_PICKED_UP' }) }
       );
       expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });
@@ -5599,7 +5599,10 @@ describe('OrdersService', () => {
       async (status) => {
         jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({ ...openOrder, current_status: status });
         const releaseStripe = jest.spyOn(service as any, 'releaseStripeAuthorizationIfNeeded').mockResolvedValue(undefined);
-        await expect(service.cancelOrderAsAdmin('order-123', 'r')).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+        await expect(service.cancelOrderAsAdmin('order-123', 'r')).rejects.toMatchObject({
+          status: HttpStatus.CONFLICT,
+          response: expect.objectContaining({ error: 'ORDER_ALREADY_PICKED_UP' }),
+        });
         expect(releaseStripe).not.toHaveBeenCalled();
         expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
       }
