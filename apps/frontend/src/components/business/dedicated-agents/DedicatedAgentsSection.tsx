@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Alert,
   Box,
@@ -14,6 +14,9 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
 import { useDedicatedAgentsAnalytics } from '../../../hooks/useDedicatedAgentsAnalytics';
+import { useUserProfileContext } from '../../../contexts/UserProfileContext';
+import { usePermissions } from '../../../hooks/usePermissions';
+import { DELEGATION_PERMISSIONS } from '../../../types/delegation';
 import {
   extractDedicatedAgentsError,
   isDedicatedAgentsFeatureHidden,
@@ -34,11 +37,15 @@ interface DedicatedAgentsSectionProps {
   locationId: string;
 }
 
+const sessionProbeCache = new Map<string, { available: boolean; timestamp: number }>();
+
 const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locationId }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const dedicatedApi = useDedicatedAgents();
   const { track } = useDedicatedAgentsAnalytics();
+  const { profile, activeDelegation, activeContext } = useUserProfileContext();
+  const { can } = usePermissions();
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +57,8 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [mutating, setMutating] = useState<string | null>(null);
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [featureAvailable, setFeatureAvailable] = useState<boolean | null>(null);
+  const delegationIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const handleOnline = () => setOffline(false);
@@ -61,6 +70,50 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
       window.removeEventListener('offline', handleOffline);
     };
   }, []);
+
+  const hasPermission = useCallback(() => {
+    const isOwner = profile?.business?.user_id === profile?.id;
+    const hasManagePermission = can(DELEGATION_PERMISSIONS.DEDICATED_AGENTS_MANAGE);
+    const isDelegateForLocation = activeDelegation?.locationId === locationId && hasManagePermission;
+    return isOwner || isDelegateForLocation;
+  }, [profile, activeDelegation, locationId, can]);
+
+  const probeFeatureAvailability = useCallback(async () => {
+    const currentDelegationId = activeContext?.kind === 'delegation' ? activeContext.delegationId : null;
+    
+    if (delegationIdRef.current !== currentDelegationId) {
+      sessionProbeCache.delete(locationId);
+      delegationIdRef.current = currentDelegationId;
+    }
+
+    const cached = sessionProbeCache.get(locationId);
+    if (cached) {
+      setFeatureAvailable(cached.available);
+      return cached.available;
+    }
+
+    try {
+      await dedicatedApi.getPickupSlots(locationId);
+      sessionProbeCache.set(locationId, { available: true, timestamp: Date.now() });
+      setFeatureAvailable(true);
+      return true;
+    } catch (err: any) {
+      const isHidden = isDedicatedAgentsFeatureHidden(err);
+      sessionProbeCache.set(locationId, { available: !isHidden, timestamp: Date.now() });
+      setFeatureAvailable(!isHidden);
+      return !isHidden;
+    }
+  }, [locationId, dedicatedApi, activeContext]);
+
+  useEffect(() => {
+    if (!hasPermission()) {
+      setFeatureAvailable(false);
+      setLoading(false);
+      return;
+    }
+
+    void probeFeatureAvailability();
+  }, [hasPermission, probeFeatureAvailability]);
 
   const loadData = useCallback(async () => {
     try {
@@ -111,8 +164,10 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
   }, [locationId, dedicatedApi, t, track]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    if (featureAvailable === true) {
+      loadData();
+    }
+  }, [featureAvailable, loadData]);
 
   const handleSlotToggle = async (slotKey: SlotKey, enabled: boolean) => {
     if (offline) return;
@@ -280,6 +335,10 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
     handleClosePostDialog();
     setSnackbarMessage(t('dedicatedAgents.form.posted', 'Request posted'));
   };
+
+  if (featureAvailable === false) {
+    return null;
+  }
 
   if (loading && slots.length === 0) {
     return (
