@@ -285,7 +285,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
         </Card>
 
         {error && (
-          <Card style={{ marginTop: spacing.md, backgroundColor: colors.errorContainer }}>
+          <Card style={{ marginTop: spacing.md, backgroundColor: colors.error }}>
             <Card.Content>
               <Text variant="bodyMedium" style={{ color: colors.error }}>
                 {error}
