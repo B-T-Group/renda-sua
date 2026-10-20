@@ -7,6 +7,12 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { KeyboardAwareScrollView } from '../../components/layout/KeyboardAwareScrollView';
 import { OperatingHoursEditor } from '../../components/business/OperatingHoursEditor';
 import { useTheme } from '../../contexts/ThemeContext';
+import { usePermissions } from '../../hooks/usePermissions';
+import { useProfileMe } from '../../hooks/useProfileMe';
+import { DELEGATION_PERMISSIONS } from '../../types/delegation';
+import { readStoredContext } from '../../utils/activePersonaStorage';
+import dedicatedAgentsService from '../../services/dedicatedAgentsService';
+import { isDedicatedAgentsFeatureHidden } from '../../utils/dedicatedAgentsErrors';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import { businessApi } from '../../services/businessApi';
 import { spacing } from '../../theme/spacing';
@@ -57,24 +63,45 @@ export default function BusinessLocationHoursScreen({ route, navigation }: Props
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { me } = useProfileMe();
+  const { can } = usePermissions(me);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [ready, setReady] = useState(false);
   const [locationName, setLocationName] = useState('');
   const [rows, setRows] = useState<OperatingHoursEditorRow[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [dedicatedAgentsAvailable, setDedicatedAgentsAvailable] = useState(false);
 
   const hasInvalidWindow = useMemo(
     () => rows.some((row) => row.enabled && !isValidOpenCloseWindow(row.open, row.close)),
     [rows]
   );
 
+  const probeDedicatedAgents = useCallback(async () => {
+    const hasPermission = me?.business?.user_id === me?.id || can(DELEGATION_PERMISSIONS.DEDICATED_AGENTS_MANAGE);
+    if (!hasPermission) {
+      setDedicatedAgentsAvailable(false);
+      return;
+    }
+
+    try {
+      await dedicatedAgentsService.getPickupSlots(locationId);
+      setDedicatedAgentsAvailable(true);
+    } catch (err) {
+      setDedicatedAgentsAvailable(!isDedicatedAgentsFeatureHidden(err));
+    }
+  }, [locationId, me, can]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     setReady(false);
     try {
-      const res = await businessApi.locations.list();
+      const [res] = await Promise.all([
+        businessApi.locations.list(),
+        probeDedicatedAgents(),
+      ]);
       const location = res.data?.business_locations?.find((loc) => loc.id === locationId);
       if (!location) {
         setError(
@@ -95,7 +122,7 @@ export default function BusinessLocationHoursScreen({ route, navigation }: Props
     } finally {
       setLoading(false);
     }
-  }, [locationId, navigation, t]);
+  }, [locationId, navigation, t, probeDedicatedAgents]);
 
   useEffect(() => {
     void load();
@@ -204,6 +231,16 @@ export default function BusinessLocationHoursScreen({ route, navigation }: Props
         >
           {t('common.save', 'Save')}
         </Button>
+        {dedicatedAgentsAvailable ? (
+          <Button
+            mode="text"
+            icon="account-tie"
+            onPress={() => navigation.navigate('BusinessLocationDedicatedAgents', { locationId })}
+            style={{ marginTop: spacing.xs }}
+          >
+            {t('dedicatedAgents.section.title', 'Dedicated agents')}
+          </Button>
+        ) : null}
       </View>
     </View>
   );
