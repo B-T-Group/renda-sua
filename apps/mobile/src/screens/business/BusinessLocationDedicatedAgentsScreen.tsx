@@ -417,15 +417,9 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                     </Text>
                   </View>
                   <Switch
-                    {...({
-                      value: slot.isEnabled,
-                      onValueChange: handleToggleSlot.bind(null, slot.slotKey),
-                      disabled: isMutating || isOffline,
-                      accessibilityLabel: t(
-                        slot.isEnabled ? 'dedicatedAgents.slots.turnOff' : 'dedicatedAgents.slots.turnOn',
-                        slot.isEnabled ? 'Turn off slot' : 'Turn on slot'
-                      ),
-                    } as any)}
+                    value={slot.isEnabled}
+                    onValueChange={(v: boolean) => handleToggleSlot(slot.slotKey, v)}
+                    disabled={isMutating || isOffline}
                   />
                 </View>
 
