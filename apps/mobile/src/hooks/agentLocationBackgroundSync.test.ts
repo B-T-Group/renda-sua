@@ -1,13 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-let platformOS: 'android' | 'ios' = 'android';
+const storageState = vi.hoisted(() => ({
+  memory: new Map<string, string>(),
+}));
+
+let platformOS: 'android' | 'ios' | 'web' = 'android';
 
 vi.mock('react-native', () => ({
   Platform: {
     get OS() {
       return platformOS;
     },
-    set OS(value: 'android' | 'ios') {
+    set OS(value: 'android' | 'ios' | 'web') {
       platformOS = value;
     },
   },
@@ -29,14 +33,30 @@ vi.mock('expo-location', () => ({
 
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
-    getItem: vi.fn(),
-    setItem: vi.fn(),
-    removeItem: vi.fn(),
-    multiRemove: vi.fn(),
+    getItem: vi.fn(async (key: string) => storageState.memory.get(key) ?? null),
+    setItem: vi.fn(async (key: string, value: string) => {
+      storageState.memory.set(key, value);
+    }),
+    removeItem: vi.fn(async (key: string) => {
+      storageState.memory.delete(key);
+    }),
+    multiRemove: vi.fn(async (keys: string[]) => {
+      for (const key of keys) storageState.memory.delete(key);
+    }),
   },
 }));
 
-import { buildLocationTaskOptions } from './agentLocationBackgroundSync';
+import {
+  AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY,
+  AGENT_LOCATION_BG_ACTIVE_KEY,
+  AGENT_LOCATION_TASK_NAME,
+} from '../constants/agentLocationBackground';
+import {
+  buildLocationTaskOptions,
+  markBackgroundTrackingInactive,
+  startBackgroundLocationUpdates,
+  stopBackgroundLocationUpdates,
+} from './agentLocationBackgroundSync';
 import * as Location from 'expo-location';
 
 describe('buildLocationTaskOptions', () => {
@@ -109,5 +129,123 @@ describe('buildLocationTaskOptions', () => {
       expect(options.deferredUpdatesInterval).toBe(60 * 1000);
       expect(options.showsBackgroundLocationIndicator).toBe(true);
     });
+  });
+});
+
+describe('background location start, stop, and mode switch', () => {
+  const title = 'Test Title';
+  const body = 'Test Body';
+
+  beforeEach(async () => {
+    platformOS = 'android';
+    storageState.memory.clear();
+    vi.mocked(Location.hasStartedLocationUpdatesAsync).mockReset();
+    vi.mocked(Location.startLocationUpdatesAsync).mockReset();
+    vi.mocked(Location.stopLocationUpdatesAsync).mockReset();
+    vi.mocked(Location.hasStartedLocationUpdatesAsync).mockResolvedValue(false);
+    vi.mocked(Location.startLocationUpdatesAsync).mockResolvedValue(undefined);
+    vi.mocked(Location.stopLocationUpdatesAsync).mockResolvedValue(undefined);
+    await markBackgroundTrackingInactive();
+    storageState.memory.clear();
+  });
+
+  it('starts idle tracking once and does not restart the same mode', async () => {
+    await startBackgroundLocationUpdates(title, body);
+
+    expect(storageState.memory.get(AGENT_LOCATION_BG_ACTIVE_KEY)).toBe('1');
+    expect(storageState.memory.has(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY)).toBe(false);
+    expect(Location.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    expect(Location.stopLocationUpdatesAsync).not.toHaveBeenCalled();
+
+    vi.mocked(Location.hasStartedLocationUpdatesAsync).mockResolvedValue(true);
+    await startBackgroundLocationUpdates(title, body);
+
+    expect(Location.startLocationUpdatesAsync).toHaveBeenCalledTimes(1);
+    expect(Location.stopLocationUpdatesAsync).not.toHaveBeenCalled();
+  });
+
+  it('restarts with active-delivery options and records the delivery flag', async () => {
+    await startBackgroundLocationUpdates(title, body);
+    vi.mocked(Location.hasStartedLocationUpdatesAsync).mockResolvedValue(true);
+
+    await startBackgroundLocationUpdates(title, body, { activeDelivery: true });
+
+    expect(Location.stopLocationUpdatesAsync).toHaveBeenCalledWith(AGENT_LOCATION_TASK_NAME);
+    const options = vi.mocked(Location.startLocationUpdatesAsync).mock.calls[1][1]!;
+    expect(options.timeInterval).toBe(2_000);
+    expect(options.distanceInterval).toBe(0);
+    expect(options.deferredUpdatesInterval).toBe(60_000);
+    expect(storageState.memory.get(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY)).toBe('1');
+  });
+
+  it('marks tracking inactive when the first start fails', async () => {
+    vi.mocked(Location.startLocationUpdatesAsync).mockRejectedValueOnce(new Error('no gps'));
+
+    await expect(startBackgroundLocationUpdates(title, body)).rejects.toThrow('no gps');
+
+    expect(storageState.memory.has(AGENT_LOCATION_BG_ACTIVE_KEY)).toBe(false);
+    expect(storageState.memory.has(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY)).toBe(false);
+  });
+
+  it('restores the previous cadence when a mode switch fails to restart', async () => {
+    await startBackgroundLocationUpdates(title, body);
+    vi.mocked(Location.hasStartedLocationUpdatesAsync).mockResolvedValue(true);
+    vi.mocked(Location.startLocationUpdatesAsync)
+      .mockRejectedValueOnce(new Error('restart failed'))
+      .mockResolvedValueOnce(undefined);
+
+    await expect(
+      startBackgroundLocationUpdates(title, body, { activeDelivery: true })
+    ).rejects.toThrow('restart failed');
+
+    const restored = vi.mocked(Location.startLocationUpdatesAsync).mock.calls[2][1]!;
+    expect(restored.timeInterval).toBe(10 * 60 * 1000);
+    expect(restored.accuracy).toBe(Location.Accuracy.Balanced);
+    expect(storageState.memory.get(AGENT_LOCATION_BG_ACTIVE_KEY)).toBe('1');
+    expect(storageState.memory.has(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY)).toBe(false);
+  });
+
+  it('clears tracking when the mode switch and the restore both fail', async () => {
+    await startBackgroundLocationUpdates(title, body);
+    vi.mocked(Location.hasStartedLocationUpdatesAsync).mockResolvedValue(true);
+    vi.mocked(Location.startLocationUpdatesAsync)
+      .mockRejectedValueOnce(new Error('switch failed'))
+      .mockRejectedValueOnce(new Error('restore failed'));
+
+    await expect(
+      startBackgroundLocationUpdates(title, body, { activeDelivery: true })
+    ).rejects.toThrow('switch failed');
+
+    expect(storageState.memory.has(AGENT_LOCATION_BG_ACTIVE_KEY)).toBe(false);
+    expect(storageState.memory.has(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY)).toBe(false);
+  });
+
+  it('does not call native location APIs on web', async () => {
+    platformOS = 'web';
+
+    await startBackgroundLocationUpdates(title, body);
+    await stopBackgroundLocationUpdates();
+
+    expect(Location.hasStartedLocationUpdatesAsync).not.toHaveBeenCalled();
+    expect(Location.startLocationUpdatesAsync).not.toHaveBeenCalled();
+    expect(Location.stopLocationUpdatesAsync).not.toHaveBeenCalled();
+  });
+
+  it('stops a running task and clears both flags', async () => {
+    storageState.memory.set(AGENT_LOCATION_BG_ACTIVE_KEY, '1');
+    storageState.memory.set(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY, '1');
+    vi.mocked(Location.hasStartedLocationUpdatesAsync).mockResolvedValue(true);
+
+    await stopBackgroundLocationUpdates();
+
+    expect(Location.stopLocationUpdatesAsync).toHaveBeenCalledWith(AGENT_LOCATION_TASK_NAME);
+    expect(storageState.memory.has(AGENT_LOCATION_BG_ACTIVE_KEY)).toBe(false);
+    expect(storageState.memory.has(AGENT_LOCATION_BG_ACTIVE_DELIVERY_KEY)).toBe(false);
+  });
+
+  it('swallows a native stop failure', async () => {
+    vi.mocked(Location.hasStartedLocationUpdatesAsync).mockRejectedValue(new Error('native'));
+
+    await expect(stopBackgroundLocationUpdates()).resolves.toBeUndefined();
   });
 });
