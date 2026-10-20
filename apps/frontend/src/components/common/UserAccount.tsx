@@ -354,8 +354,8 @@ const UserAccount: React.FC<UserAccountProps> = ({
     paymentMethod: any
   ): Promise<boolean> => {
     try {
-      // Use initiatePayment for Airtel and MOOV, requestTopUp for MTN MoMo
-      if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money') {
+      // Route through /mobile-payments/initiate for supported providers
+      if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money' || paymentMethod === 'fedapay') {
         await initiatePayment({
           amount: parseFloat(amount),
           currency: account.currency,
@@ -364,14 +364,17 @@ const UserAccount: React.FC<UserAccountProps> = ({
           accountId: account.id,
           paymentMethod: 'mobile_money',
           transactionType: 'PAYMENT',
+          provider: paymentMethod,
         });
-      } else {
-        // Use requestTopUp for MTN MoMo
+      } else if (paymentMethod === 'mtn-momo') {
+        // MTN MoMo uses the legacy requestTopUp endpoint
         await requestTopUp({
           amount,
           phoneNumber,
           currency: account.currency,
         });
+      } else {
+        throw new Error(`Unknown payment provider: ${paymentMethod}`);
       }
       setShowTopUpSuccess(true);
       return true;
