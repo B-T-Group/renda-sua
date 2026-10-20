@@ -21,6 +21,17 @@ jest.mock('../../contexts/UserProfileContext', () => ({
   }),
 }));
 
+jest.mock('../../hooks/useUserMessages', () => ({
+  useUserMessages: () => ({
+    messages: [],
+    entityTypes: [],
+    loading: false,
+    error: null,
+    refetch: jest.fn(),
+    markAsRead: jest.fn(),
+  }),
+}));
+
 jest.mock('../../hooks/useDedicatedAgents', () => ({
   useDedicatedAgents: () => ({
     getAdminAssignments: mockGetAdminAssignments,
