@@ -600,6 +600,22 @@ describe('#622: creditHoldRelease goes through release_agent_order_hold', () => 
   it('the function raising (e.g. withheld short) is a failure', async () => {
     const w = world();
     w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'agent_hold_release_withheld_short' } as any);
+    (reportMoneyAnomaly as jest.Mock).mockClear();
     await expect((w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })).resolves.toBe(false);
+    // #622 I1: withheld < net is a money anomaly, not just a log line.
+    expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect.anything(),
+      'agent_hold_withheld_short',
+      expect.stringContaining('withheld balance is below the net held'),
+      expect.objectContaining({ orderId: order.id })
+    );
+  });
+
+  it('#622 I1: any other release failure does not raise the withheld-short alert', async () => {
+    const w = world();
+    w.accounts.registerTransaction.mockResolvedValueOnce({ success: false, error: 'ledger down' } as any);
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    await expect((w.service as any).creditHoldRelease(order, { agent_hold_amount: 700 })).resolves.toBe(false);
+    expect((reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'agent_hold_withheld_short')).toHaveLength(0);
   });
 });

@@ -496,6 +496,24 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
     expect((await w.balance()).w).toBe(500);
   });
 
+  it('#622 I1: withheld < net (real function) -> nothing written and the withheld-short money alert fires', async () => {
+    const w = await setup();
+    await w.claim();
+    await pool.query(`UPDATE accounts SET withheld_balance = 100 WHERE id = $1`, [w.accountId]);
+    const { reportMoneyAnomaly } = jest.requireMock('../common/utils/money-alert.util');
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    const r = await (w.svc as any).releaseNetAgentHold(w.accountId, w.orderId, 'm');
+    expect(r).toMatchObject({ success: false, released: 0, net: 700 });
+    expect(await w.releases()).toHaveLength(0);
+    expect((await w.balance()).w).toBe(100);
+    expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect.anything(),
+      'agent_hold_withheld_short',
+      expect.stringContaining('agent_hold_release_withheld_short'),
+      expect.objectContaining({ accountId: w.accountId, orderId: w.orderId, net: 700 })
+    );
+  });
+
   it("QA #622 F2: two pods reconcile the same strand concurrently -> one credit; another order's hold is untouched", async () => {
     const w = await setup();
     const otherOrder = '9e2b1c33-4d5e-4f60-8a71-0b1c2d3e4f50';

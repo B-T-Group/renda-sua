@@ -8,6 +8,13 @@ import type { HasuraSystemService } from '../hasura/hasura-system.service';
  * one transaction, keyed `agent-hold-release:<order>:<account>:h<n>:r<m>`. So two
  * paths (completion, failed delivery, drop, the stranded-hold reconciler) can never
  * release the same hold twice, and never more than is held for the order.
+ *
+ * ROLLBACK (#622 L1): this mutation, the Hasura metadata that tracks the function
+ * (metadata/databases/Rendasua/functions/public_release_agent_order_hold.yaml + the
+ * functions.yaml entry) and the migration go together. Revert the backend first, then
+ * the metadata, then run the migration's down.sql. Reverting only one of them leaves
+ * the backend calling an untracked or missing function, and every agent hold release
+ * fails (completion, drop, failed delivery, reassignment, reconciler).
  */
 /** Money alert when an agent hold release fails on a path that does not throw. */
 export const AGENT_HOLD_RELEASE_FAILED_MARKER = 'agent_hold_release_failed';
