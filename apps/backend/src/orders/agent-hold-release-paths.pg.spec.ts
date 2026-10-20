@@ -75,7 +75,7 @@ function pgHasura(
              coalesce((SELECT json_agg(json_build_object('amount', amount)) FROM account_transactions
                         WHERE account_id = $1 AND reference_id = $2 AND transaction_type = 'hold'), '[]') AS holds,
              coalesce((SELECT json_agg(json_build_object('amount', amount)) FROM account_transactions
-                        WHERE account_id = $1 AND reference_id = $2 AND transaction_type = 'release'), '[]') AS releases`,
+                        WHERE account_id = $1 AND reference_id = $2 AND transaction_type IN ('release', 'forfeit')), '[]') AS releases`,
           [v.accountId, v.orderId]
         );
         return r.rows[0];
@@ -156,6 +156,13 @@ function pgHasura(
         );
         return { insert_account_transactions_one: r.rows[0] ?? null };
       }
+      case 'ForfeitAgentOrderHold': {
+        const r = await pool.query(
+          `SELECT id, amount::float AS amount FROM public.forfeit_agent_order_hold($1, $2, $3, $4, $5, $6)`,
+          [v.agentAccountId, v.businessAccountId, v.orderId, v.cap, v.forfeitMemo, v.businessMemo]
+        );
+        return { forfeit_agent_order_hold: r.rows };
+      }
       case 'ReleaseAgentOrderHold': {
         // As Hasura runs a tracked VOLATILE function: one statement, one transaction.
         const r = await pool.query(
@@ -212,9 +219,9 @@ suite('atomic agent hold releases on every path (real Postgres ledger)', () => {
       await pool.query(
         `BEGIN;\n${readFileSync(join(MIGRATIONS, '1789840663276_payment_programs', 'up.sql'), 'utf8')}\nCOMMIT;`
       );
-    await pool.query(
-      `BEGIN;\n${readFileSync(join(MIGRATIONS, '20261019230000_release_agent_order_hold', 'up.sql'), 'utf8')}\nCOMMIT;`
-    );
+    for (const m of ['20261019230000_release_agent_order_hold', '20261020010000_forfeit_agent_order_hold']) {
+      await pool.query(`BEGIN;\n${readFileSync(join(MIGRATIONS, m, 'up.sql'), 'utf8')}\nCOMMIT;`);
+    }
   });
   afterAll(async () => {
     await pool?.end();
@@ -322,7 +329,7 @@ suite('atomic agent hold releases on every path (real Postgres ledger)', () => {
       Number((await pool.query(`SELECT available_balance::float AS a FROM accounts WHERE id = $1`, [bizAccountId])).rows[0].a);
     const reconcile = () =>
       (reconciler as any).releaseNetAgentHold(accountId, orderId, 'reconciled', { cap: 700 });
-    return { accountId, orderId, hold, release, balance, released, paths, reconcile, agentFault, bizBalance };
+    return { accountId, orderId, bizAccountId, hold, release, balance, released, paths, reconcile, agentFault, bizBalance };
   }
 
   const PATHS = [
@@ -436,6 +443,144 @@ suite('atomic agent hold releases on every path (real Postgres ledger)', () => {
         expect(b.a + biz).toBe(5_000);
         expect([0, 700]).toContain(biz);
       }
+    });
+  });
+
+  describe('QA F2: forfeit_agent_order_hold (one transaction, withheld -> business, once per order)', () => {
+    const rows = async (orderId: string) =>
+      (
+        await pool.query(
+          `SELECT account_id, transaction_type::text AS t, amount::float AS amount, idempotency_key AS k
+             FROM account_transactions WHERE reference_id = $1 AND transaction_type IN ('forfeit', 'deposit', 'release', 'payment')
+            ORDER BY t`,
+          [orderId]
+        )
+      ).rows;
+    const markers = () => (reportMoneyAnomaly as jest.Mock).mock.calls.map((c) => c[1]);
+
+    it('never through available: the agent\'s available balance does not move; one forfeit + one deposit row', async () => {
+      const w = await setup();
+      await w.hold(700);
+      expect(await w.balance()).toEqual({ a: 4_300, w: 700 });
+      await w.agentFault();
+      expect(await w.balance()).toEqual({ a: 4_300, w: 0 });
+      expect(await w.bizBalance()).toBe(700);
+      expect(await rows(w.orderId)).toEqual([
+        { account_id: w.bizAccountId, t: 'deposit', amount: 700, k: `failed-delivery:agent-fault:business-deposit:${w.orderId}` },
+        { account_id: w.accountId, t: 'forfeit', amount: 700, k: `failed-delivery:agent-fault:agent-forfeit:${w.orderId}` },
+      ]);
+    });
+
+    it('6 concurrent duplicates: business credited once, no false compensation_short (F1)', async () => {
+      for (let round = 0; round < 3; round++) {
+        const w = await setup();
+        await w.hold(700);
+        (reportMoneyAnomaly as jest.Mock).mockClear();
+        await Promise.all(Array.from({ length: 6 }, () => w.agentFault()));
+        expect(await w.balance()).toEqual({ a: 4_300, w: 0 });
+        expect(await w.bizBalance()).toBe(700);
+        expect((await rows(w.orderId)).map((r) => r.t)).toEqual(['deposit', 'forfeit']);
+        expect(markers()).toEqual([]);
+      }
+    });
+
+    it('racing several reconcilers: total conserved, withheld 0, no withheld-short alert', async () => {
+      for (let round = 0; round < 4; round++) {
+        const w = await setup();
+        await w.hold(700);
+        await w.hold(450, '9e2b1c33-4d5e-4f60-8a71-0b1c2d3e4f50');
+        (reportMoneyAnomaly as jest.Mock).mockClear();
+        await Promise.all([w.reconcile(), w.agentFault(), w.reconcile(), w.agentFault()]);
+        const b = await w.balance();
+        const biz = await w.bizBalance();
+        expect(b.w).toBe(450); // the other order's hold is untouched
+        expect(b.a + b.w + biz).toBe(5_000);
+        expect([0, 700]).toContain(biz);
+        expect(markers()).not.toContain('agent_hold_withheld_short');
+        // A late reconciler finds nothing left to release for this order.
+        await w.reconcile();
+        expect((await w.balance()).a + biz).toBe(b.a + biz);
+      }
+    });
+
+    it('after a forfeit, the hold is gone for every release path and the reconciler (net 0, no alert)', async () => {
+      const w = await setup();
+      await w.hold(700);
+      await w.agentFault();
+      (reportMoneyAnomaly as jest.Mock).mockClear();
+      expect(await w.reconcile()).toEqual({ success: true, released: 0, net: 0 });
+      for (const path of PATHS.filter((p) => p !== 'completion')) await w.paths[path]();
+      expect(await w.balance()).toEqual({ a: 4_300, w: 0 });
+      expect(await w.released()).toBe(0);
+      expect(markers()).toEqual([]);
+    });
+
+    it('lock: a forfeit waits for an in-flight release on the same agent account, then moves 0', async () => {
+      const w = await setup();
+      await w.hold(700);
+      const tx = await pool.connect();
+      try {
+        await tx.query('BEGIN');
+        await tx.query(`SELECT * FROM release_agent_order_hold($1, $2, 700, 'reconciled')`, [w.accountId, w.orderId]);
+        const forfeit = pool.query(`SELECT amount::float AS amount FROM forfeit_agent_order_hold($1, $2, $3, 700, 'f', 'b')`, [
+          w.accountId,
+          w.bizAccountId,
+          w.orderId,
+        ]);
+        await new Promise((r) => setTimeout(r, 150)); // forfeit is now blocked (or racing ahead)
+        await tx.query('COMMIT');
+        expect((await forfeit).rows).toEqual([]);
+      } finally {
+        tx.release();
+      }
+      expect(await w.balance()).toEqual({ a: 5_000, w: 0 });
+      expect(await w.bizBalance()).toBe(0);
+    });
+
+    it('cap: more held than agent_hold_amount -> only 700 forfeited, the rest stays held', async () => {
+      const w = await setup();
+      await w.hold(700);
+      await w.hold(300);
+      await w.agentFault();
+      expect(await w.balance()).toEqual({ a: 4_000, w: 300 });
+      expect(await w.bizBalance()).toBe(700);
+    });
+
+    it('old three-step flow crashed after its forfeit debit: the retry pays the business that amount once', async () => {
+      const w = await setup();
+      await w.hold(700);
+      // As #629 left it: release (withheld -> available), then the 'payment' forfeit row, then crash.
+      await w.release(700);
+      await pool.query(`UPDATE accounts SET available_balance = available_balance - 700 WHERE id = $1`, [w.accountId]);
+      await pool.query(
+        `INSERT INTO account_transactions (account_id, amount, transaction_type, memo, reference_id, idempotency_key)
+         VALUES ($1, 700, 'payment', 'old flow', $2, $3)`,
+        [w.accountId, w.orderId, `failed-delivery:agent-fault:agent-forfeit:${w.orderId}`]
+      );
+      (reportMoneyAnomaly as jest.Mock).mockClear();
+      await w.agentFault();
+      await w.agentFault();
+      expect(await w.balance()).toEqual({ a: 4_300, w: 0 });
+      expect(await w.bizBalance()).toBe(700);
+      expect(markers()).toEqual([]);
+    });
+
+    it('withheld short: raises, nothing written (agent and business unchanged)', async () => {
+      const w = await setup();
+      await w.hold(700);
+      await pool.query(`UPDATE accounts SET withheld_balance = 100 WHERE id = $1`, [w.accountId]);
+      await w.agentFault();
+      expect(await w.bizBalance()).toBe(0);
+      expect((await rows(w.orderId)).map((r) => r.t)).toEqual([]);
+      expect(markers()).toEqual(['agent_hold_release_failed', 'agent_fault_compensation_short']);
+    });
+
+    it('same account for agent and business is refused', async () => {
+      const w = await setup();
+      await w.hold(700);
+      await expect(
+        pool.query(`SELECT * FROM forfeit_agent_order_hold($1, $1, $2, 700, 'f', 'b')`, [w.accountId, w.orderId])
+      ).rejects.toThrow(/agent_forfeit_same_account/);
     });
   });
 
