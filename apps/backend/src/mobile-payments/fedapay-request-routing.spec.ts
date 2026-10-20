@@ -1,7 +1,8 @@
 import { MobilePaymentsService } from './mobile-payments.service';
 
 /**
- * Phone prefix selects the Togo operator, and a give-change poll must hit
+ * Phone prefix selects the Togo operator, FedaPay gets the bare 8-digit national
+ * number, and a give-change poll must hit
  * the payout API. A wrong channel or a collection lookup pays the wrong wallet.
  */
 function buildService() {
@@ -54,7 +55,7 @@ describe('FedaPay provider request routing', () => {
     const { service, fedapayService } = buildService();
 
     expect(providerRequest(service, '+22878123456', 'PAYMENT')).toEqual({
-      payer: '22878123456',
+      payer: '78123456',
       amount: 2500,
       externalId: 'ref-1',
       description: 'Order',
@@ -62,15 +63,15 @@ describe('FedaPay provider request routing', () => {
       channel: 'moov_tg',
     });
     expect(providerRequest(service, '+22899123456', 'PAYMENT')).toMatchObject({
-      payer: '22899123456',
+      payer: '99123456',
       channel: 'moov_tg',
     });
     expect(providerRequest(service, '+22890123456', 'PAYMENT')).toMatchObject({
-      payer: '22890123456',
+      payer: '90123456',
       channel: 'togocel',
     });
     expect(providerRequest(service, '+22870123456', 'PAYMENT')).toMatchObject({
-      payer: '22870123456',
+      payer: '70123456',
       channel: 'togocel',
     });
     expect(fedapayService.getCallbackUrl).toHaveBeenCalled();
@@ -80,7 +81,7 @@ describe('FedaPay provider request routing', () => {
     const { service } = buildService();
 
     expect(providerRequest(service, '+22890123456', 'GIVE_CHANGE')).toEqual({
-      payee: '22890123456',
+      payee: '90123456',
       amount: 2500,
       externalId: 'ref-1',
       description: 'Order',
@@ -88,7 +89,7 @@ describe('FedaPay provider request routing', () => {
       channel: 'togocel',
     });
     expect(providerRequest(service, '+22878123456', 'GIVE_CHANGE')).toMatchObject({
-      payee: '22878123456',
+      payee: '78123456',
       channel: 'moov_tg',
     });
   });
@@ -154,7 +155,7 @@ describe('FedaPay live status routing', () => {
     expect(status.reference).toBe('P123');
   });
 
-  it('fails closed when the live currency or amount is missing', async () => {
+  it('leaves a missing live currency or amount empty, never 0 (transient re-check)', async () => {
     const { service, fedapayService } = buildService();
     fedapayService.checkTransactionStatus.mockResolvedValue({
       transactionId: 'tx-1',
@@ -165,7 +166,8 @@ describe('FedaPay live status routing', () => {
     const status = await service.checkTransactionStatus('tx-1', 'fedapay');
 
     expect(status.currency).toBe('');
-    expect(status.amount).toBe(0);
+    // QA #587 A1: a missing amount stays undefined so the strict check retries; never 0.
+    expect(status.amount).toBeUndefined();
     expect(status.status).toBe('success');
   });
 });

@@ -8,8 +8,8 @@ import type { MobilePaymentTransaction } from './mobile-payments-database.servic
 /**
  * FedaPay enters the shared processing-resume path through its own callback.
  * A fresh in-flight row must not move money. FINALIZE_HANDLER_FAILED must
- * resume immediately, and an expired collect must fail the row without
- * crediting or notifying the order.
+ * resume immediately, and an expired order collect must fail the row and the
+ * order (like a decline) without crediting.
  */
 const NOW = Date.parse('2026-10-18T10:00:00.000Z');
 
@@ -159,7 +159,7 @@ describe('FedaPay processing resume', () => {
 });
 
 describe('FedaPay terminal failure side effects', () => {
-  it('fails an expired collect without crediting or notifying the order', async () => {
+  it('fails an expired order collect like a decline, without crediting', async () => {
     const t = build(orderTx('pending'));
 
     await t.processor.processFedaPayCallback(
@@ -180,7 +180,12 @@ describe('FedaPay terminal failure side effects', () => {
       }
     );
     expect(t.accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
-    expect(t.handler.onPaymentFailure).not.toHaveBeenCalled();
+    // #597 N2: expiry fails order/deposit/claim rows exactly like a decline.
+    expect(t.handler.onPaymentFailure).toHaveBeenCalledTimes(1);
+    expect(t.handler.onPaymentFailure).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'tx-order', payment_entity: 'order' }),
+      'expired'
+    );
     expect(t.handler.onPaymentSuccess).not.toHaveBeenCalled();
     expect(t.row.status).toBe('failed');
   });
