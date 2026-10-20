@@ -23,7 +23,7 @@ import type { PickupSlot, SlotKey } from '../../../types/dedicatedAgents';
 
 interface DedicatedSlotRowProps {
   slot: PickupSlot;
-  onToggle: (slotKey: SlotKey, enabled: boolean) => Promise<void>;
+  onToggle: (slotKey: SlotKey, enabled: boolean, confirmPauseAgents?: boolean) => Promise<void>;
   onPickupTimeChange: (slotKey: SlotKey, pickupTime: string) => void;
   disabled?: boolean;
 }
@@ -96,7 +96,7 @@ const DedicatedSlotRow: React.FC<DedicatedSlotRowProps> = ({
     setConfirmDisable(false);
     setToggling(true);
     try {
-      await onToggle(slot.slotKey, false);
+      await onToggle(slot.slotKey, false, true);
     } finally {
       setToggling(false);
     }

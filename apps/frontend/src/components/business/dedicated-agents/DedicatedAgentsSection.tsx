@@ -169,13 +169,14 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
     }
   }, [featureAvailable, loadData]);
 
-  const handleSlotToggle = async (slotKey: SlotKey, enabled: boolean) => {
+  const handleSlotToggle = async (slotKey: SlotKey, enabled: boolean, confirmPauseAgents?: boolean) => {
     if (offline) return;
 
     try {
       setMutating(`slot-${slotKey}`);
       await dedicatedApi.updatePickupSlots(locationId, {
         slots: [{ slotKey, isEnabled: enabled }],
+        confirmPauseAgents,
       });
       
       track('slot_toggled', {
