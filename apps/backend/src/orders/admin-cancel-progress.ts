@@ -81,6 +81,12 @@ export interface AdminCancelProgress {
   acknowledged?: Partial<Record<AdminCancelStepName, AdminCancelStepAcknowledgement>>;
   leaseOwner: string | null;
   leaseUntil: string | null;
+  /**
+   * QA #642 M1: the row is written BEFORE the status flips to cancelled. `false` until
+   * the status CAS is done, so a crash in between is resumable (the retry does the CAS).
+   * Absent on older rows, which were written after the CAS (= true).
+   */
+  statusCancelled?: boolean;
 }
 
 export interface AdminCancelProgressRow {
@@ -143,6 +149,19 @@ export async function casAdminCancelProgress(
     { id: row.id, expect: { version: row.payload.version }, payload }
   );
   return res?.update_order_events?.affected_rows === 1 ? { id: row.id, payload } : null;
+}
+
+/** QA #642 M1: drop our row when the status CAS lost (only if nobody wrote it since). */
+export async function deleteAdminCancelProgress(hasura: Hasura, row: AdminCancelProgressRow): Promise<boolean> {
+  const res = await hasura.executeMutation<{ delete_order_events: { affected_rows: number } }>(
+    `mutation DeleteAdminCancelProgress($id: uuid!, $expect: jsonb!, $type: String!) {
+      delete_order_events(
+        where: { id: { _eq: $id }, event_type: { _eq: $type }, payload: { _contains: $expect } }
+      ) { affected_rows }
+    }`,
+    { id: row.id, expect: { version: row.payload.version }, type: ADMIN_CANCEL_PROGRESS_EVENT }
+  );
+  return res?.delete_order_events?.affected_rows === 1;
 }
 
 export function leaseIsLive(p: AdminCancelProgress, now = Date.now()): boolean {

@@ -67,6 +67,10 @@ suite('admin cancel progress CAS on real Postgres (#627 C7)', () => {
         const r = await pool.query(`UPDATE order_events SET payload = $3 WHERE id = $1 AND payload @> $2`, [v.id, v.expect, v.payload]);
         return { update_order_events: { affected_rows: r.rowCount } };
       }
+      if (op(q) === 'DeleteAdminCancelProgress') {
+        const r = await pool.query(`DELETE FROM order_events WHERE id = $1 AND event_type = $3 AND payload @> $2`, [v.id, v.expect, v.type]);
+        return { delete_order_events: { affected_rows: r.rowCount } };
+      }
       throw new Error(op(q));
     },
   };
@@ -78,7 +82,15 @@ suite('admin cancel progress CAS on real Postgres (#627 C7)', () => {
     svc.hasuraSystemService = hasura;
     svc.hasuraUserService = { getUser: async () => ({ id: null }) };
     svc.getOrderDetails = async () => ({ ...order });
-    svc.orderStatusService = { updateOrderStatus: async () => ((order.current_status = 'cancelled'), { ...order }) };
+    // A compare-and-set like OrderStatusService (expectedFromStatus), with a yield.
+    svc.orderStatusService = {
+      updateOrderStatus: jest.fn(async (_id: string, to: string, o: any) => {
+        await new Promise((r) => setTimeout(r, 5));
+        if (order.current_status !== o.expectedFromStatus) throw new HttpException('Order status already changed', HttpStatus.CONFLICT);
+        order.current_status = to;
+        return { ...order };
+      }),
+    };
     svc.releaseStripeAuthorizationIfNeeded = async () => ({ ok: true });
     svc.persistCancellationMetadata = async () => undefined;
     svc.createStatusHistoryEntry = async () => undefined;
@@ -112,5 +124,34 @@ suite('admin cancel progress CAS on real Postgres (#627 C7)', () => {
       expect(Object.values(row[0].payload.steps).every((s) => s === 'done')).toBe(true);
       expect(row[0].payload.leaseOwner).toBeNull();
     }
+  });
+
+  it('QA #642 M1: 6 concurrent first cancels: one wins, the losers delete their rows; one row, stock once', async () => {
+    const orderId = '7d1e2f30-4a5b-4c6d-8e9f-0a1b2c3d4f01';
+    const w = build(orderId);
+    const res = await Promise.all(
+      Array.from({ length: 6 }, (_, i) => w.svc.cancelOrderAsAdmin(orderId, `c${i}`, 'confirmed').catch((e: unknown) => e))
+    );
+    const ok = res.filter((r: any) => r?.success === true);
+    expect(ok).toHaveLength(1);
+    expect(res.filter((r) => r instanceof HttpException && r.getStatus() === HttpStatus.CONFLICT)).toHaveLength(5);
+    expect(w.svc.updateReservedQuantities).toHaveBeenCalledTimes(1);
+    const rows = (await pool.query(`SELECT payload FROM order_events WHERE order_id = $1`, [orderId])).rows;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].payload).toMatchObject({ statusCancelled: true, leaseOwner: null });
+  });
+
+  it('QA #642 M1: the delete is guarded on the version (a row someone wrote since is kept)', async () => {
+    const { deleteAdminCancelProgress } = await import('./admin-cancel-progress');
+    const orderId = '7d1e2f30-4a5b-4c6d-8e9f-0a1b2c3d4f02';
+    const r = await pool.query(
+      `INSERT INTO order_events (order_id, event_type, actor_type, payload) VALUES ($1, 'admin_cancel_progress', 'support', '{"version":2}') RETURNING id`,
+      [orderId]
+    );
+    const id = r.rows[0].id;
+    await expect(deleteAdminCancelProgress(hasura as any, { id, payload: { version: 1 } } as any)).resolves.toBe(false);
+    expect((await pool.query(`SELECT 1 FROM order_events WHERE id = $1`, [id])).rowCount).toBe(1);
+    await expect(deleteAdminCancelProgress(hasura as any, { id, payload: { version: 2 } } as any)).resolves.toBe(true);
+    expect((await pool.query(`SELECT 1 FROM order_events WHERE id = $1`, [id])).rowCount).toBe(0);
   });
 });

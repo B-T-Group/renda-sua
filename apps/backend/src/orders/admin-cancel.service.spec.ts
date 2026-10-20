@@ -50,6 +50,11 @@ function build(opts: { status?: string; deposit?: boolean } = {}) {
           if (e) e.payload = structuredClone(v.payload);
           return { update_order_events: { affected_rows: e ? 1 : 0 } };
         }
+        case 'DeleteAdminCancelProgress': {
+          const i = events.findIndex((x) => x.id === v.id && x.event_type === v.type && contains(x.payload, v.expect));
+          if (i >= 0) events.splice(i, 1);
+          return { delete_order_events: { affected_rows: i >= 0 ? 1 : 0 } };
+        }
       }
       throw new Error(`unexpected mutation ${op(q)}`);
     }),
@@ -86,6 +91,8 @@ function build(opts: { status?: string; deposit?: boolean } = {}) {
   const steps = () => events.find((e) => e.event_type === ADMIN_CANCEL_PROGRESS_EVENT)?.payload.steps;
   return { svc, m, order, events, hasura, steps };
 }
+
+const KINDS = ['admin_cancel', 'full_refund'] as const;
 
 const failedAlerts = () =>
   (reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'admin_cancel_step_failed').map((c) => c[3].step);
@@ -229,17 +236,111 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
     expect(w.svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
   });
 
-  it('progress row insert fails: alerted, every step still runs once', async () => {
-    const w = build({ deposit: true });
-    const orig = w.hasura.executeMutation.getMockImplementation()!;
-    w.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
-      if (op(q) === 'InsertAdminCancelProgress') throw new Error('db');
-      return orig(q, v);
+  describe('QA #642 M1: the progress row is written before the status flips', () => {
+    it('row (statusCancelled=false, all pending) exists when the status CAS runs; set true after', async () => {
+      const w = build();
+      const seen: any[] = [];
+      w.svc.orderStatusService.updateOrderStatus.mockImplementation(async () => {
+        seen.push(structuredClone(w.events[0]?.payload));
+        w.order.current_status = 'cancelled';
+        return { ...w.order };
+      });
+      await w.svc.cancelOrderAsAdmin('o-1', 'r');
+      expect(seen).toHaveLength(1);
+      expect(seen[0]).toMatchObject({ statusCancelled: false, kind: 'admin_cancel' });
+      expect(Object.values(seen[0].steps)).toEqual(ADMIN_CANCEL_STEPS.map(() => 'pending'));
+      expect(w.events[0].payload.statusCancelled).toBe(true);
     });
-    const res: any = await w.svc.cancelOrderAsAdmin('o-1', 'r');
-    expect(res).toMatchObject({ success: true, partialFailure: false });
-    expect(failedAlerts()).toEqual(['progressMarker']);
-    for (const fn of Object.values(w.m)) expect(fn).toHaveBeenCalledTimes(1);
+
+    it('row insert fails: 503, the order is NOT cancelled, no step runs', async () => {
+      const w = build({ deposit: true });
+      const orig = w.hasura.executeMutation.getMockImplementation()!;
+      w.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+        if (op(q) === 'InsertAdminCancelProgress') throw new Error('db secret');
+        return orig(q, v);
+      });
+      const err: any = await w.svc.cancelOrderAsAdmin('o-1', 'r').catch((e: unknown) => e);
+      expect(err.getStatus()).toBe(HttpStatus.SERVICE_UNAVAILABLE);
+      expect(JSON.stringify(err.getResponse())).not.toMatch(/secret/);
+      expect(w.svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+      for (const fn of Object.values(w.m)) expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('status CAS loses: our row is deleted, the 409 propagates, nothing runs', async () => {
+      const w = build();
+      w.svc.orderStatusService.updateOrderStatus.mockRejectedValueOnce(new HttpException('moved', HttpStatus.CONFLICT));
+      await expect(w.svc.cancelOrderAsAdmin('o-1', 'r')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(w.events).toHaveLength(0);
+      for (const fn of Object.values(w.m)) expect(fn).not.toHaveBeenCalled();
+      expect(failedAlerts()).toEqual([]);
+    });
+
+    it('status CAS loses and the row cannot be removed: alerted (progressMarker)', async () => {
+      const w = build();
+      w.svc.orderStatusService.updateOrderStatus.mockRejectedValueOnce(new HttpException('moved', HttpStatus.CONFLICT));
+      const orig = w.hasura.executeMutation.getMockImplementation()!;
+      w.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+        if (op(q) === 'DeleteAdminCancelProgress') return { delete_order_events: { affected_rows: 0 } };
+        return orig(q, v);
+      });
+      await expect(w.svc.cancelOrderAsAdmin('o-1', 'r')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(failedAlerts()).toEqual(['progressMarker']);
+    });
+
+    /** Simulates a crash right after the row insert (statusCancelled=false, lease expired). */
+    function crashed(w: ReturnType<typeof build>, status: string) {
+      w.events.push({
+        id: 'ev-x', order_id: 'o-1', event_type: ADMIN_CANCEL_PROGRESS_EVENT, created_at: 1,
+        payload: {
+          version: 1, kind: 'admin_cancel', previousStatus: 'confirmed', notes: 'orig', adminUserId: 'admin-1',
+          steps: Object.fromEntries(ADMIN_CANCEL_STEPS.map((n) => [n, 'pending'])),
+          leaseOwner: 'dead', leaseUntil: new Date(Date.now() - 1000).toISOString(), statusCancelled: false,
+        },
+      });
+      w.order.current_status = status;
+    }
+
+    it('crash before the status CAS: the retry does the CAS, then every step once', async () => {
+      const w = build();
+      crashed(w, 'confirmed');
+      const res: any = await w.svc.cancelOrderAsAdmin('o-1', 'retry');
+      expect(res).toMatchObject({ success: true, resumed: true, failedSteps: [] });
+      expect(w.svc.orderStatusService.updateOrderStatus).toHaveBeenCalledWith('o-1', 'cancelled', expect.objectContaining({ expectedFromStatus: 'confirmed' }));
+      for (const fn of Object.values(w.m)) if (fn !== w.m.refund) expect(fn).toHaveBeenCalledTimes(1);
+      expect(w.events[0].payload.statusCancelled).toBe(true);
+      expect(Object.values(w.steps())).toEqual(ADMIN_CANCEL_STEPS.map(() => 'done'));
+    });
+
+    it('crash after the status CAS (order cancelled, flag not set): repeatable steps run, stock / hook are NOT run but alerted (acknowledgeable)', async () => {
+      const w = build();
+      crashed(w, 'cancelled');
+      const res: any = await w.svc.cancelOrderAsAdmin('o-1', 'retry');
+      expect(w.svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+      expect(w.m.stock).not.toHaveBeenCalled();
+      expect(w.m.hook).not.toHaveBeenCalled();
+      expect(w.m.enqueue).toHaveBeenCalledTimes(1);
+      expect(w.m.credits).toHaveBeenCalledTimes(1);
+      expect(res.failedSteps).toEqual(['releaseReservedStock', 'inventoryReleaseHook']);
+      expect(w.events[0].payload.statusCancelled).toBe(true);
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'checked', KINDS)).resolves.toMatchObject({ from: 'running' });
+    });
+
+    it('crash before the CAS, then the status moved on (picked up): row dropped, refused, nothing runs', async () => {
+      const w = build();
+      crashed(w, 'picked_up');
+      await expect(w.svc.cancelOrderAsAdmin('o-1', 'retry')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(w.events).toHaveLength(0);
+      for (const fn of Object.values(w.m)) expect(fn).not.toHaveBeenCalled();
+    });
+
+    it('crash before the CAS, retry CAS loses: row dropped, 409', async () => {
+      const w = build();
+      crashed(w, 'confirmed');
+      w.svc.orderStatusService.updateOrderStatus.mockRejectedValueOnce(new HttpException('moved', HttpStatus.CONFLICT));
+      await expect(w.svc.cancelOrderAsAdmin('o-1', 'retry')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(w.events).toHaveLength(0);
+      expect(w.m.enqueue).not.toHaveBeenCalled();
+    });
   });
 
   it('deposit not paid: no refund call; inventory hook skipped for pending_payment', async () => {
@@ -290,7 +391,7 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
         await w.svc.cancelOrderAsAdmin('o-1', 'retry1');
         await w.svc.cancelOrderAsAdmin('o-1', 'retry2');
         expect(failedAlerts()).toEqual([step, step]);
-        const ack = await w.svc.acknowledgeAdminCancelStep('o-1', step, 'stock recounted by ops');
+        const ack = await w.svc.acknowledgeAdminCancelStep('o-1', step, 'stock recounted by ops', KINDS);
         expect(ack).toMatchObject({ success: true, step, from: 'running', pendingSteps: [] });
         const p = w.events[0].payload;
         expect(p.steps[step]).toBe('done');
@@ -309,7 +410,7 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
       w.m.stock.mockRejectedValueOnce(new Error('db'));
       await w.svc.cancelOrderAsAdmin('o-1', 'orig');
       expect(w.events[0].payload.steps.releaseReservedStock).toBe('failed');
-      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'fixed by hand')).resolves.toMatchObject({ from: 'failed' });
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'fixed by hand', KINDS)).resolves.toMatchObject({ from: 'failed' });
     });
 
     it.each([
@@ -321,7 +422,7 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
       const w = await halfDone('releaseReservedStock');
       w.events[0].payload.steps[step] = state;
       const before = structuredClone(w.events[0].payload);
-      const err: any = await w.svc.acknowledgeAdminCancelStep('o-1', step, 'n').catch((e: unknown) => e);
+      const err: any = await w.svc.acknowledgeAdminCancelStep('o-1', step, 'n', KINDS).catch((e: unknown) => e);
       expect(err.getStatus()).toBe(409);
       expect(err.getResponse()).toMatchObject({ error: 'STEP_NOT_ACKNOWLEDGEABLE' });
       expect(w.events[0].payload).toEqual(before);
@@ -330,7 +431,7 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
     it('refused while a resume holds the lease, and when the row moved meanwhile (CAS)', async () => {
       const w = await halfDone('releaseReservedStock');
       Object.assign(w.events[0].payload, { leaseOwner: 'other', leaseUntil: new Date(Date.now() + 60_000).toISOString() });
-      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n', KINDS)).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
       expect(w.events[0].payload.steps.releaseReservedStock).toBe('running');
       Object.assign(w.events[0].payload, { leaseOwner: null, leaseUntil: null });
       const real = w.hasura.executeQuery.getMockImplementation()!;
@@ -339,13 +440,50 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
         w.events[0].payload.version += 1; // someone wrote after our read
         return r;
       });
-      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n', KINDS)).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
       expect(w.events[0].payload.steps.releaseReservedStock).toBe('running');
+    });
+
+    it('QA #642 Low: a repeat acknowledge is an idempotent 200 with the first acknowledgement, row unchanged', async () => {
+      const w = await halfDone('releaseReservedStock');
+      const first: any = await w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'first', KINDS);
+      expect(first.alreadyAcknowledged).toBe(false);
+      const before = structuredClone(w.events[0].payload);
+      const again: any = await w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'second', KINDS);
+      expect(again).toMatchObject({ success: true, alreadyAcknowledged: true, from: 'running', acknowledged: { note: 'first', by: 'admin-1' } });
+      expect(w.events[0].payload).toEqual(before);
+    });
+
+    it('a done step without an acknowledgement is still refused (409), not reported as acknowledged', async () => {
+      const w = await halfDone('releaseReservedStock');
+      w.events[0].payload.steps.releaseReservedStock = 'done';
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n', KINDS)).rejects.toMatchObject({ status: 409 });
+    });
+
+    it.each([
+      ['a kind the caller did not allow', 'full_refund', ['admin_cancel']],
+      ['an unknown kind', 'something_else', KINDS],
+      ['a legacy row (no kind = admin_cancel) when only full_refund is allowed', undefined, ['full_refund']],
+    ])('QA #642 H1: refuses %s (403 CANCEL_KIND_NOT_ALLOWED), row unchanged', async (_l, kind, allowed) => {
+      const w = await halfDone('releaseReservedStock');
+      if (kind === undefined) delete w.events[0].payload.kind;
+      else w.events[0].payload.kind = kind;
+      const before = structuredClone(w.events[0].payload);
+      const err: any = await w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n', allowed).catch((e: unknown) => e);
+      expect(err.getStatus()).toBe(403);
+      expect(err.getResponse()).toMatchObject({ error: 'CANCEL_KIND_NOT_ALLOWED' });
+      expect(w.events[0].payload).toEqual(before);
+    });
+
+    it('QA #642 H1: a full_refund row is acknowledgeable when allowed', async () => {
+      const w = await halfDone('releaseReservedStock');
+      w.events[0].payload.kind = 'full_refund';
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n', KINDS)).resolves.toMatchObject({ success: true });
     });
 
     it('no progress row: 404', async () => {
       const w = build();
-      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n')).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n', KINDS)).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
     });
   });
 });

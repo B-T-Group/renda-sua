@@ -76,6 +76,11 @@ function service(start: string, opts: { deposit?: boolean; legacy?: { cancelled_
         if (e) e.payload = structuredClone(v.payload);
         return { update_order_events: { affected_rows: e ? 1 : 0 } };
       }
+      if (op(q) === 'DeleteAdminCancelProgress') {
+        const i = events.findIndex((x) => x.id === v.id && x.event_type === v.type && contains(x.payload, v.expect));
+        if (i >= 0) events.splice(i, 1);
+        return { delete_order_events: { affected_rows: i >= 0 ? 1 : 0 } };
+      }
       throw new Error(`unexpected mutation ${op(q)}`);
     }),
   };
@@ -152,13 +157,30 @@ describe('OrdersService.adminFullRefundCancel', () => {
   });
 
   it('two concurrent calls: one wins, the other gets 409 before any side effect (exactly once)', async () => {
-    const { svc, calls } = service('assigned_to_agent');
+    const { svc, calls, events } = service('assigned_to_agent');
     const results = await Promise.allSettled([svc.adminFullRefundCancel('o-1', 'r1'), svc.adminFullRefundCancel('o-1', 'r2')]);
     expect(results.map((r) => r.status).sort()).toEqual(['fulfilled', 'rejected']);
     const lost = results.find((r) => r.status === 'rejected') as PromiseRejectedResult;
     expect((lost.reason as HttpException).getStatus()).toBe(409);
     // No deposit on this order, so the refund service is not called.
     for (const c of Object.values(CALL)) expect(calls.filter((x) => x === c)).toHaveLength(c === 'refundDeposit' ? 0 : 1);
+    // QA #642 M1: the loser's row (written before its CAS) was removed; no alert.
+    expect(events).toHaveLength(1);
+    expect(events[0].payload).toMatchObject({ kind: 'full_refund', statusCancelled: true });
+    expect(alerts('admin_full_refund_cancel_step_failed')).toEqual([]);
+  });
+
+  it('QA #642 M1: the full_refund row exists (statusCancelled=false) before the status flips', async () => {
+    const { svc, events } = service('confirmed');
+    const real = svc.orderStatusService.updateOrderStatus.getMockImplementation();
+    const seen: any[] = [];
+    svc.orderStatusService.updateOrderStatus.mockImplementation(async (...a: any[]) => {
+      seen.push(structuredClone(events[0]?.payload));
+      return real(...a);
+    });
+    await svc.adminFullRefundCancel('o-1', 'r');
+    expect(seen[0]).toMatchObject({ kind: 'full_refund', statusCancelled: false });
+    expect(events[0].payload.statusCancelled).toBe(true);
   });
 
   it('resumable: the enqueue fails, a retry runs ONLY the enqueue (no second CAS, nothing else re-run)', async () => {
@@ -233,6 +255,61 @@ describe('OrdersService.adminFullRefundCancel', () => {
     await expect(svc.adminFullRefundCancel('o-1', 'r')).resolves.toMatchObject({ success: true, resumed: true, previousStatus: 'assigned_to_agent' });
     expect(calls).toEqual(['enqueueAdminFullRefundCancelled']);
     expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  describe('QA #642 M2: a legacy retry also retries the deposit refund (idempotent, real outcome)', () => {
+    const LEGACY = { cancelled_by: 'system', cancellation_notes: 'Admin full refund: old' };
+
+    it('deposit still paid: refunded now, reported refunded; a second retry does not refund again', async () => {
+      const w = service('cancelled', { deposit: true, legacy: LEGACY });
+      w.fn('depositRefund').mockImplementation(async () => {
+        w.calls.push('refundDeposit');
+        w.order.deposit_status = 'refunded';
+        return { success: true };
+      });
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(res).toMatchObject({ partialFailure: false, depositRefund: { status: 'refunded' } });
+      expect(w.svc.depositRefundService.refundDeposit).toHaveBeenCalledWith('o-1', { allowAfterLock: true });
+      const again = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(again).toMatchObject({ partialFailure: false, depositRefund: { status: 'refunded' } });
+      expect(w.calls.filter((c) => c === 'refundDeposit')).toHaveLength(1);
+    });
+
+    it.each([
+      ['refused (success:false)', (m: jest.Mock) => m.mockResolvedValueOnce({ success: false, message: 'ledger secret' })],
+      ['throws', (m: jest.Mock) => m.mockRejectedValueOnce(new Error('ledger secret'))],
+    ])('deposit refund %s: failed + alerted, generic message, partialFailure', async (_l, arrange) => {
+      const w = service('cancelled', { deposit: true, legacy: LEGACY });
+      arrange(w.fn('depositRefund'));
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(res).toMatchObject({
+        partialFailure: true,
+        depositRefund: { status: 'failed', message: 'Deposit refund failed; details are in the logs (alerted)' },
+        failedSteps: [{ step: 'depositRefund', error: expect.any(String) }],
+      });
+      expect(JSON.stringify(res)).not.toMatch(/secret/);
+      expect(alerts('admin_full_refund_cancel_deposit_refund_failed').map((a) => a[3].step)).toEqual(['depositRefund']);
+      expect(w.calls).toContain('enqueueAdminFullRefundCancelled');
+    });
+
+    it.each([
+      ['already refunded', 'refunded', { status: 'refunded' }],
+      ['no deposit', null, { status: 'none' }],
+      ['forfeited', 'forfeited', { status: 'none' }],
+    ])('%s: no refund call, depositRefund %j', async (_l, dep, outcome) => {
+      const w = service('cancelled', { deposit: true, legacy: LEGACY });
+      w.order.deposit_status = dep;
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(res.depositRefund).toEqual(outcome);
+      expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    });
+
+    it('a paid deposit of 0 is not refunded (none)', async () => {
+      const w = service('cancelled', { deposit: true, legacy: LEGACY });
+      w.order.deposit_amount = 0;
+      expect((await w.svc.adminFullRefundCancel('o-1', 'r')).depositRefund).toEqual({ status: 'none' });
+      expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    });
   });
 
   it('a cancelled order that was not a full-refund cancel is still refused', async () => {
