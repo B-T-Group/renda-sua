@@ -16,6 +16,7 @@ import type {
   AdminLocationsResponse,
   CreateAssignmentRequest,
   DedicatedAgentsCapabilityResponse,
+  AdminCapabilityResponse,
 } from '../types/dedicatedAgents';
 
 export const useDedicatedAgents = () => {
@@ -27,6 +28,16 @@ export const useDedicatedAgents = () => {
         ? `/dedicated-agents/capability?country=${country}`
         : `/agents/me/dedicated-agents/capability`;
       const response = await apiClient.get<DedicatedAgentsCapabilityResponse>(url);
+      return response.data;
+    },
+    [apiClient]
+  );
+
+  const getAdminCapability = useCallback(
+    async (): Promise<AdminCapabilityResponse> => {
+      const response = await apiClient.get<AdminCapabilityResponse>(
+        `/admin/dedicated-agents/capability`
+      );
       return response.data;
     },
     [apiClient]
@@ -279,6 +290,7 @@ export const useDedicatedAgents = () => {
 
   return {
     getCapability,
+    getAdminCapability,
     getPickupSlots,
     updatePickupSlots,
     getDedicatedAgents,

@@ -254,6 +254,12 @@ export interface DedicatedAgentsCapabilityResponse {
   reason: 'no_address' | 'no_country' | null;
 }
 
+export interface AdminCapabilityResponse {
+  success: true;
+  enabled: boolean;
+  countries: string[];
+}
+
 export interface UpdatePickupSlotsRequest {
   slots: Array<{
     slotKey: SlotKey;

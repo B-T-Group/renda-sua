@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import AdminManageAgents from './AdminManageAgents';
 
-const mockGetAdminAssignments = jest.fn();
+const mockGetAdminCapability = jest.fn();
 const mockGetPermissions = jest.fn();
 const mockFetchAgents = jest.fn();
 
@@ -34,7 +34,7 @@ jest.mock('../../hooks/useUserMessages', () => ({
 
 jest.mock('../../hooks/useDedicatedAgents', () => ({
   useDedicatedAgents: () => ({
-    getAdminAssignments: mockGetAdminAssignments,
+    getAdminCapability: mockGetAdminCapability,
   }),
 }));
 
@@ -96,12 +96,13 @@ describe('AdminManageAgents', () => {
       isSuperuser: true,
       canManageAgents: true,
     });
-    mockGetAdminAssignments.mockResolvedValue({ assignments: [] });
   });
 
-  it('hides dedicated tab on 404 or 403', async () => {
-    mockGetAdminAssignments.mockRejectedValue({
-      response: { status: 404 },
+  it('hides dedicated tab when capability is disabled', async () => {
+    mockGetAdminCapability.mockResolvedValue({
+      success: true,
+      enabled: false,
+      countries: [],
     });
 
     render(<AdminManageAgents />);
@@ -113,8 +114,12 @@ describe('AdminManageAgents', () => {
     });
   });
 
-  it('shows dedicated tab when getAdminAssignments succeeds', async () => {
-    mockGetAdminAssignments.mockResolvedValue({ assignments: [] });
+  it('shows dedicated tab when capability is enabled', async () => {
+    mockGetAdminCapability.mockResolvedValue({
+      success: true,
+      enabled: true,
+      countries: ['CM'],
+    });
 
     render(<AdminManageAgents />);
 
@@ -122,6 +127,20 @@ describe('AdminManageAgents', () => {
       const tabs = screen.queryAllByRole('tab');
       const dedicatedTab = tabs.find((tab) => tab.textContent?.includes('Dedicated'));
       expect(dedicatedTab).toBeDefined();
+    });
+  });
+
+  it('hides dedicated tab on 403 or 404', async () => {
+    mockGetAdminCapability.mockRejectedValue({
+      response: { status: 404 },
+    });
+
+    render(<AdminManageAgents />);
+
+    await waitFor(() => {
+      const tabs = screen.queryAllByRole('tab');
+      const dedicatedTab = tabs.find((tab) => tab.textContent?.includes('Dedicated'));
+      expect(dedicatedTab).toBeUndefined();
     });
   });
 });

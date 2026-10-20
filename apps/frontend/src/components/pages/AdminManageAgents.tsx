@@ -80,7 +80,7 @@ const AdminManageAgents: React.FC = () => {
     applyReferral,
   } = useAdminAgents();
   const {
-    getAdminAssignments,
+    getAdminCapability,
   } = useDedicatedAgents();
   const { vehicleTypes } = useVehicleTypes();
   const apiClient = useApiClient();
@@ -110,24 +110,30 @@ const AdminManageAgents: React.FC = () => {
   useEffect(() => {
     (async () => {
       try {
-        await getAdminAssignments();
-        setShowDedicatedTab(true);
-        setDedicatedTabError(null);
+        const result = await getAdminCapability();
+        if (result.enabled) {
+          setShowDedicatedTab(true);
+          setDedicatedTabError(null);
+        } else {
+          setShowDedicatedTab(false);
+          if (currentTab === 1) {
+            setCurrentTab(0);
+          }
+        }
       } catch (err: any) {
         const status = err.response?.status;
         if (status === 403 || status === 404) {
           setShowDedicatedTab(false);
-          // Reset tab to 0 if we're currently on the dedicated tab
           if (currentTab === 1) {
             setCurrentTab(0);
           }
         } else {
-          setShowDedicatedTab(true);
+          setShowDedicatedTab(false);
           setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
         }
       }
     })();
-  }, [getAdminAssignments, t, currentTab]);
+  }, [getAdminCapability, t, currentTab]);
 
   const fetchIdDocuments = useCallback(
     async (agentId: string) => {
@@ -763,14 +769,18 @@ const AdminManageAgents: React.FC = () => {
           setDedicatedTabError(null);
           (async () => {
             try {
-              await getAdminAssignments();
-              setShowDedicatedTab(true);
+              const result = await getAdminCapability();
+              if (result.enabled) {
+                setShowDedicatedTab(true);
+              } else {
+                setShowDedicatedTab(false);
+              }
             } catch (err: any) {
               const status = err.response?.status;
               if (status === 403 || status === 404) {
                 setShowDedicatedTab(false);
               } else {
-                setShowDedicatedTab(true);
+                setShowDedicatedTab(false);
                 setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
               }
             }
