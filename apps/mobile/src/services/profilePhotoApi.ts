@@ -1,10 +1,25 @@
+import { gql } from '@apollo/client';
 import { api } from './apiClient';
+import { client } from './apolloClient';
 
 export interface UploadProfilePhotoResponse {
   success: boolean;
   profile_picture_url?: string;
   error?: string;
 }
+
+// Same mutation as apps/frontend/src/contexts/UserProfileContext.tsx:169
+const UPDATE_USER_PROFILE_PICTURE = gql`
+  mutation UpdateUserProfilePicture($id: uuid!, $profile_picture_url: String) {
+    update_users_by_pk(
+      pk_columns: { id: $id }
+      _set: { profile_picture_url: $profile_picture_url }
+    ) {
+      id
+      profile_picture_url
+    }
+  }
+`;
 
 export async function uploadProfilePhoto(uri: string, userId: string): Promise<UploadProfilePhotoResponse> {
   try {
@@ -18,13 +33,13 @@ export async function uploadProfilePhoto(uri: string, userId: string): Promise<U
     };
     const contentType = contentTypeMap[ext] || 'image/jpeg';
 
-    // Get presigned URL from backend
+    // Get presigned URL from backend (apps/backend/src/users/users.controller.ts:1037)
     const presignRes = await api.post<{
       success: boolean;
       presigned_url?: string;
       final_url?: string;
       error?: string;
-    }>('/users/me/profile-picture/presigned-url', {
+    }>('/users/profile-picture/presigned-url', {
       contentType,
       fileName: `profile_picture.${ext}`,
     });
@@ -49,16 +64,17 @@ export async function uploadProfilePhoto(uri: string, userId: string): Promise<U
       return { success: false, error: 'Failed to upload photo to S3' };
     }
 
-    // Update user profile_picture_url via backend endpoint
-    const updateRes = await api.post<{
-      success: boolean;
-      error?: string;
-    }>('/users/me/profile-picture', {
-      profile_picture_url: presignRes.final_url,
+    // Update profile_picture_url via GraphQL mutation (same as frontend: apps/frontend/src/contexts/UserProfileContext.tsx:729-746)
+    const result = await client.mutate({
+      mutation: UPDATE_USER_PROFILE_PICTURE,
+      variables: {
+        id: userId,
+        profile_picture_url: presignRes.final_url,
+      },
     });
 
-    if (!updateRes.success) {
-      return { success: false, error: updateRes.error || 'Failed to update profile' };
+    if (!result.data?.update_users_by_pk) {
+      return { success: false, error: 'Failed to update profile' };
     }
 
     return { success: true, profile_picture_url: presignRes.final_url };

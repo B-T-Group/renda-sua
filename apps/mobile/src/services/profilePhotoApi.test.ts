@@ -1,9 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./apiClient');
+vi.mock('./apolloClient', () => ({
+  client: {
+    mutate: vi.fn(),
+  },
+}));
 
 import { uploadProfilePhoto } from './profilePhotoApi';
 import { api } from './apiClient';
+import { client } from './apolloClient';
 
 global.fetch = vi.fn();
 
@@ -21,7 +27,7 @@ describe('profilePhotoApi', () => {
 
     await uploadProfilePhoto('file://photo.jpg', mockUserId);
 
-    expect(api.post).toHaveBeenCalledWith('/users/me/profile-picture/presigned-url', {
+    expect(api.post).toHaveBeenCalledWith('/users/profile-picture/presigned-url', {
       contentType: 'image/jpeg',
       fileName: 'profile_picture.jpg',
     });
@@ -57,17 +63,16 @@ describe('profilePhotoApi', () => {
     expect(result.error).toBe('Failed to upload photo to S3');
   });
 
-  it('should return error when profile picture update fails', async () => {
-    vi.mocked(api.post)
-      .mockResolvedValueOnce({
-        success: true,
-        presigned_url: 'https://s3.presigned.url',
-        final_url: 'https://s3.final.url/profile_picture.jpg',
-      })
-      .mockResolvedValueOnce({
-        success: false,
-        error: 'Profile update failed',
-      });
+  it('should return error when GraphQL mutation fails', async () => {
+    vi.mocked(api.post).mockResolvedValueOnce({
+      success: true,
+      presigned_url: 'https://s3.presigned.url',
+      final_url: 'https://s3.final.url/profile_picture.jpg',
+    });
+
+    vi.mocked(client.mutate).mockResolvedValueOnce({
+      data: null,
+    } as any);
 
     const mockBlob = new Blob(['fake image data']);
     vi.mocked(fetch)
@@ -77,19 +82,24 @@ describe('profilePhotoApi', () => {
     const result = await uploadProfilePhoto('file://photo.jpg', mockUserId);
 
     expect(result.success).toBe(false);
-    expect(result.error).toBe('Profile update failed');
+    expect(result.error).toBe('Failed to update profile');
   });
 
   it('should succeed with complete flow', async () => {
-    vi.mocked(api.post)
-      .mockResolvedValueOnce({
-        success: true,
-        presigned_url: 'https://s3.presigned.url',
-        final_url: 'https://s3.final.url/profile_picture.jpg',
-      })
-      .mockResolvedValueOnce({
-        success: true,
-      });
+    vi.mocked(api.post).mockResolvedValueOnce({
+      success: true,
+      presigned_url: 'https://s3.presigned.url',
+      final_url: 'https://s3.final.url/profile_picture.jpg',
+    });
+
+    vi.mocked(client.mutate).mockResolvedValueOnce({
+      data: {
+        update_users_by_pk: {
+          id: mockUserId,
+          profile_picture_url: 'https://s3.final.url/profile_picture.jpg',
+        },
+      },
+    } as any);
 
     const mockBlob = new Blob(['fake image data']);
     vi.mocked(fetch)
@@ -100,9 +110,13 @@ describe('profilePhotoApi', () => {
 
     expect(result.success).toBe(true);
     expect(result.profile_picture_url).toBe('https://s3.final.url/profile_picture.jpg');
-    expect(api.post).toHaveBeenCalledTimes(2);
-    expect(api.post).toHaveBeenNthCalledWith(2, '/users/me/profile-picture', {
-      profile_picture_url: 'https://s3.final.url/profile_picture.jpg',
+    expect(api.post).toHaveBeenCalledTimes(1);
+    expect(client.mutate).toHaveBeenCalledWith({
+      mutation: expect.any(Object),
+      variables: {
+        id: mockUserId,
+        profile_picture_url: 'https://s3.final.url/profile_picture.jpg',
+      },
     });
   });
 });
