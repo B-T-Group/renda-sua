@@ -6566,8 +6566,8 @@ export class OrdersService {
    * Client: retry deposit payment for a pending_payment order with unpaid deposit.
    * 
    * CRITICAL PAYMENT GUARD: Returns 409 if a prior deposit payment transaction
-   * is still pending at the provider to prevent double MoMo collect.
-   * 
+   * is still pending or processing, to prevent a second MoMo collect.
+   *
    * Only allows retry when:
    * - Order is pending_payment with deposit_status pending or failed
    * - MoMo XAF deposit path (pay_at_delivery or pay_at_pickup)
@@ -6666,22 +6666,20 @@ export class OrdersService {
         existingTxnId
       );
       if (existingTxn) {
-        if (existingTxn.status === 'pending') {
-          this.logger.warn(
-            `Blocking retry-deposit-payment for order ${order.order_number} — prior deposit transaction ${existingTxnId} is still pending`
-          );
-          throw new HttpException(
-            {
-              success: false,
-              message: 'Prior deposit payment is still pending. Please wait or poll the existing transaction.',
-              code: 'DEPOSIT_PAYMENT_PENDING',
-              existing_transaction_id: existingTxnId,
-              deposit_status: depositStatus,
-            },
-            HttpStatus.CONFLICT
+        if (
+          existingTxn.status === 'pending' ||
+          existingTxn.status === 'processing'
+        ) {
+          this.throwDepositAttemptInFlight(
+            order.order_number,
+            existingTxn,
+            depositStatus
           );
         }
-        if (existingTxn.status === 'success' || (existingTxn.status as any) === 'authorized') {
+        if (
+          existingTxn.status === 'success' ||
+          (existingTxn.status as any) === 'authorized'
+        ) {
           return this.completePaidDepositFromSucceededTxn(
             order.order_number,
             existingTxnId
@@ -11540,6 +11538,29 @@ export class OrdersService {
       );
       throw error;
     }
+  }
+
+  private throwDepositAttemptInFlight(
+    orderNumber: string,
+    existingTxn: Pick<MobilePaymentTransaction, 'id' | 'status'>,
+    depositStatus?: string
+  ): never {
+    this.logger.warn(
+      `Blocking retry-deposit-payment for order ${orderNumber} — prior deposit ${existingTxn.id} is ${existingTxn.status}`
+    );
+    throw new HttpException(
+      {
+        success: false,
+        message:
+          existingTxn.status === 'processing'
+            ? 'Prior deposit payment is still being finalized. Please wait.'
+            : 'Prior deposit payment is still pending. Please wait or poll the existing transaction.',
+        code: 'DEPOSIT_PAYMENT_PENDING',
+        existing_transaction_id: existingTxn.id,
+        deposit_status: depositStatus,
+      },
+      HttpStatus.CONFLICT
+    );
   }
 
   private async completePaidDepositFromSucceededTxn(
