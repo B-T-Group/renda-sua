@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 describe('useDedicatedAgentsCapability logic', () => {
   it('should show dedicated agents when enabled and no blocking reason', () => {
-    const capability = {
+    const capability: any = {
       success: true,
       enabled: true,
       country: 'CM',
@@ -18,7 +18,7 @@ describe('useDedicatedAgentsCapability logic', () => {
   });
 
   it('should hide when enabled is false', () => {
-    const capability = {
+    const capability: any = {
       success: true,
       enabled: false,
       country: 'CM',
