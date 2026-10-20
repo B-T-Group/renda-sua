@@ -281,6 +281,20 @@ function world() {
           held: state.assignments.filter((x) => x.agent_id === vars.agentId && live(x.status)),
         };
       }
+      case 'DedicatedOpportunityById': {
+        const p = state.postings.find((x) => x.id === vars.id);
+        return {
+          dedicated_agent_postings_by_pk: p
+            ? {
+                ...postingView(p),
+                mine: state.apps
+                  .filter((a) => a.posting_id === p.id && a.agent_id === vars.agentId)
+                  .map((a) => ({ id: a.id, status: a.status, created_at: a.created_at, updated_at: a.updated_at })),
+              }
+            : null,
+          held: state.assignments.filter((x) => x.agent_id === vars.agentId && live(x.status)),
+        };
+      }
       case 'DedicatedAgentHeldAssignments':
         return {
           held: state.assignments.filter((x) => x.agent_id === vars.agentId && live(x.status)),
@@ -540,7 +554,8 @@ function world() {
     hasura,
     postings,
     coverage as unknown as DedicatedCoverageService,
-    contractGate as unknown as AgentContractGateService
+    contractGate as unknown as AgentContractGateService,
+    config
   );
   addLocation({ id: LOC });
   const writes = (op: string) => state.mutations.filter((m) => m.op === op);
@@ -1072,10 +1087,32 @@ describe('DedicatedOpportunitiesService.list (AC-A1, A4, E7)', () => {
     expect(byId.get(q.id)).toMatchObject({ application: { status: 'applied' }, termsUpdatedSinceApplied: false });
   });
 
-  it('an agent with no active address gets an empty list (logged)', async () => {
+  it('#594 G6: no active address and the global flag on -> 403 reason no_address (not 200 [])', async () => {
     const w = world();
     w.addAgent('a1', { addresses: [] });
     w.seedPosting();
+    const { err, body } = await rejection(w.opportunities.list('u-a1', NOW));
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(body).toMatchObject({
+      error: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE',
+      code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE',
+      reason: 'no_address',
+      message: 'Add your address to see stores near you',
+    });
+  });
+
+  it('#594 G6: no active address and the global flag off -> 404 even when a country row is on', async () => {
+    const w = world();
+    w.state.flag = false;
+    w.state.flagByCountry = { CM: true };
+    w.addAgent('a1', { addresses: [] });
+    w.seedPosting();
+    await expect(w.opportunities.list('u-a1', NOW)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('#594 G6: an eligible agent with an address and nothing in the city still gets 200 []', async () => {
+    const w = world();
+    w.addAgent('a1');
     expect(await w.opportunities.list('u-a1', NOW)).toEqual({ opportunities: [] });
   });
 
@@ -1093,12 +1130,27 @@ describe('DedicatedOpportunitiesService.list (AC-A1, A4, E7)', () => {
     expect(body).toMatchObject({ code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', reason });
   });
 
-  it('internal agents are eligible without the independent checks; the contract gate off lets unsigned independents in', async () => {
+  it('#594 G2: internal agents (even verified and signed) -> 403 reason internal_agent', async () => {
     const w = world();
-    w.addAgent('a1', { is_internal: true, is_verified: false });
-    w.state.signed.delete('a1');
+    w.addAgent('a1', { is_internal: true });
     w.seedPosting();
-    expect((await w.opportunities.list('u-a1', NOW)).opportunities).toHaveLength(1);
+    const { err, body } = await rejection(w.opportunities.list('u-a1', NOW));
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(body).toMatchObject({
+      code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE',
+      reason: 'internal_agent',
+      message: 'Dedicated opportunities are for independent agents',
+    });
+  });
+
+  it('#594 G2: flag off wins over internal_agent (404 before 403)', async () => {
+    const w = world();
+    w.state.flagByCountry = { CM: false };
+    w.addAgent('a1', { is_internal: true });
+    await expect(w.opportunities.list('u-a1', NOW)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('the contract gate off lets unsigned independents in', async () => {
     const v = world();
     v.addAgent('a2');
     v.state.signed.delete('a2');
@@ -1220,6 +1272,135 @@ describe('DedicatedOpportunitiesService.apply / withdraw (AC-A2, A3, B16)', () =
     await expect(w.opportunities.withdraw('u-a1', p.id, NOW)).resolves.toEqual({ application: { postingId: p.id, status: 'withdrawn' } });
     expect(w.state.apps[0]).toMatchObject({ status: 'withdrawn', withdrawn_at: NOW.toISOString() });
     await expectConflict(w.opportunities.withdraw('u-a1', p.id, NOW), 'application_not_pending');
+  });
+});
+
+describe('#594 G2: internal agents cannot apply', () => {
+  it('apply -> 403 internal_agent, nothing written; withdraw of a legacy application still works', async () => {
+    const w = world();
+    w.addAgent('a1', { is_internal: true });
+    const p = w.seedPosting();
+    const { err, body } = await rejection(w.opportunities.apply('u-a1', p.id, NOW));
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(body).toMatchObject({ code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', reason: 'internal_agent' });
+    expect(w.writes('UpsertDedicatedApplication')).toHaveLength(0);
+    expect(w.state.apps).toHaveLength(0);
+    w.seedApp(p.id, 'a1');
+    await expect(w.opportunities.withdraw('u-a1', p.id, NOW)).resolves.toEqual({ application: { postingId: p.id, status: 'withdrawn' } });
+  });
+});
+
+describe('#594 G1: DedicatedOpportunitiesService.detail', () => {
+  const setup = () => {
+    const w = world();
+    w.addLocation({ id: 'loc-yde', name: 'Yaoundé Shop', state: 'Centre', city: 'Yaoundé' });
+    w.addAgent('a1');
+    return w;
+  };
+
+  it('an open posting in the agent’s city: same shape as a list item', async () => {
+    const w = setup();
+    const p = w.seedPosting({ slotKeys: ['morning'] });
+    const { opportunity } = await w.opportunities.detail('u-a1', p.id, NOW);
+    const [fromList] = (await w.opportunities.list('u-a1', NOW)).opportunities;
+    expect(opportunity).toEqual(fromList);
+    expect(opportunity).toMatchObject({ id: p.id, storeName: 'Chez Mama', pay: 'standard_delivery_pay', application: null, disabledReason: null });
+  });
+
+  it('open posting the agent holds a slot for keeps disabledReason holds_slot', async () => {
+    const w = setup();
+    const p = w.seedPosting({ slotKeys: ['morning'] });
+    w.state.assignments.push({ id: 'as-1', business_location_id: LOC, agent_id: 'a1', slot_key: 'morning', status: 'active', source: 'posting', application_id: null });
+    expect((await w.opportunities.detail('u-a1', p.id, NOW)).opportunity.disabledReason).toBe('holds_slot');
+  });
+
+  it('a filled posting the agent was accepted on is visible (not in the open list), disabledReason null', async () => {
+    const w = setup();
+    const p = w.seedPosting({ status: 'filled', business_location_id: 'loc-yde' });
+    w.seedApp(p.id, 'a1', { status: 'accepted' });
+    w.state.assignments.push({ id: 'as-1', business_location_id: 'loc-yde', agent_id: 'a1', slot_key: 'morning', status: 'active', source: 'posting', application_id: null });
+    const { opportunity } = await w.opportunities.detail('u-a1', p.id, NOW);
+    expect(opportunity).toMatchObject({ id: p.id, status: 'filled', application: { status: 'accepted' }, disabledReason: null });
+    expect((await w.opportunities.list('u-a1', NOW)).opportunities).toHaveLength(0);
+  });
+
+  it.each([
+    ['another city, no application', { business_location_id: 'loc-yde' }],
+    ['closed in my city, no application', { status: 'closed' }],
+    ['expired in my city, no application', { expires_at: '2026-10-20T08:59:00Z' }],
+  ])('404 Posting not found: %s', async (_l, over) => {
+    const w = setup();
+    const p = w.seedPosting(over as Partial<PostingFake>);
+    const { err, body } = await rejection(w.opportunities.detail('u-a1', p.id, NOW));
+    expect(err).toBeInstanceOf(NotFoundException);
+    expect(body).toMatchObject({ message: 'Posting not found' });
+  });
+
+  it('unknown posting -> 404', async () => {
+    const w = setup();
+    await expect(w.opportunities.detail('u-a1', 'po-missing', NOW)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('flag off for the store’s country -> 404 (before eligibility)', async () => {
+    const w = setup();
+    w.state.flagByCountry = { CM: false };
+    const p = w.seedPosting();
+    await expect(w.opportunities.detail('u-a1', p.id, NOW)).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('internal agent -> 403 internal_agent; no address -> 403 no_address', async () => {
+    const w = world();
+    w.addAgent('a1', { is_internal: true });
+    w.addAgent('a2', { addresses: [] });
+    const p = w.seedPosting();
+    expect((await rejection(w.opportunities.detail('u-a1', p.id, NOW))).body).toMatchObject({ reason: 'internal_agent' });
+    const { err, body } = await rejection(w.opportunities.detail('u-a2', p.id, NOW));
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(body).toMatchObject({ code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', reason: 'no_address' });
+  });
+});
+
+describe('#594 G12: capability', () => {
+  it('agent: enabled follows the country row; global off + CM on -> enabled', async () => {
+    const w = world();
+    w.state.flag = false;
+    w.state.flagByCountry = { CM: true };
+    w.addAgent('a1');
+    expect(await w.opportunities.capabilityForAgent('u-a1')).toEqual({ enabled: true, country: 'CM', reason: null });
+  });
+
+  it('agent: flag off -> 200 enabled false (no throw)', async () => {
+    const w = world();
+    w.state.flagByCountry = { CM: false };
+    w.addAgent('a1');
+    expect(await w.opportunities.capabilityForAgent('u-a1')).toEqual({ enabled: false, country: 'CM', reason: null });
+  });
+
+  it('agent with no address, or no agent row -> enabled false, reason no_address', async () => {
+    const w = world();
+    w.addAgent('a1', { addresses: [] });
+    expect(await w.opportunities.capabilityForAgent('u-a1')).toEqual({ enabled: false, country: null, reason: 'no_address' });
+    expect(await w.opportunities.capabilityForAgent('u-nobody')).toEqual({ enabled: false, country: null, reason: 'no_address' });
+  });
+
+  it('internal agents still see the flag (eligibility is not encoded)', async () => {
+    const w = world();
+    w.addAgent('a1', { is_internal: true });
+    expect((await w.opportunities.capabilityForAgent('u-a1')).enabled).toBe(true);
+  });
+
+  it('country variant: case-insensitive code; missing -> no_country; bad -> 400 invalid_country', async () => {
+    const w = world();
+    w.state.flagByCountry = { GA: false };
+    expect(await w.opportunities.capabilityForCountry(' cm ')).toEqual({ enabled: true, country: 'CM', reason: null });
+    expect(await w.opportunities.capabilityForCountry('ga')).toEqual({ enabled: false, country: 'GA', reason: null });
+    expect(await w.opportunities.capabilityForCountry(undefined)).toEqual({ enabled: false, country: null, reason: 'no_country' });
+    expect(await w.opportunities.capabilityForCountry('  ')).toEqual({ enabled: false, country: null, reason: 'no_country' });
+    for (const bad of ['CMR', 'C', '1A']) {
+      const { err, body } = await rejection(w.opportunities.capabilityForCountry(bad));
+      expect(err).toBeInstanceOf(BadRequestException);
+      expect(body).toMatchObject({ code: 'invalid_country' });
+    }
   });
 });
 
