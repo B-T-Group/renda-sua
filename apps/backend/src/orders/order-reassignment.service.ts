@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+import { RELEASE_AGENT_ORDER_HOLD_MUTATION } from './agent-hold-release.util';
 import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
 import type { OfferDeclineReason } from '../dedicated-agents/dedicated-agents.constants';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
@@ -194,17 +195,11 @@ const MARK_STRANDED_HOLD_MUTATION = `
 /** Stranded-hold events older than this are left to finance (they keep their alert). */
 const STRANDED_HOLD_LOOKBACK_DAYS = 30;
 
-/** #622: release min(net, cap) under the account row lock (migration 20261019230000). */
-const RELEASE_AGENT_ORDER_HOLD_MUTATION = `
-  mutation ReleaseAgentOrderHold($accountId: uuid!, $orderId: uuid!, $cap: numeric, $memo: String!) {
-    release_agent_order_hold(
-      args: { p_account_id: $accountId, p_order_id: $orderId, p_cap: $cap, p_memo: $memo }
-    ) {
-      id
-      amount
-    }
-  }
-`;
+/** #622 I1: money alert when release_agent_order_hold refuses because withheld < net. */
+export const AGENT_HOLD_WITHHELD_SHORT_MARKER = 'agent_hold_withheld_short';
+
+// RELEASE_AGENT_ORDER_HOLD_MUTATION lives in ./agent-hold-release.util (shared by every
+// agent hold release); its ROLLBACK note (#622 L1) is there too.
 
 /** #622: the net held for reporting (one statement, so one snapshot). */
 export const AGENT_HOLD_LEDGER_QUERY = `
@@ -1146,6 +1141,16 @@ export class OrderReassignmentService {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       const { net } = await this.agentHoldLedger(accountId, orderId).catch(() => ({ net: NaN }));
+      if (message.includes('agent_hold_release_withheld_short')) {
+        // #622 I1: the ledger says more is held than the account's withheld balance:
+        // the books disagree, so nothing was released and a human must look.
+        reportMoneyAnomaly(
+          this.logger,
+          AGENT_HOLD_WITHHELD_SHORT_MARKER,
+          `Agent hold not released for order ${orderId}: withheld balance is below the net held (${net}): ${message}`,
+          { accountId, orderId, net, cap: opts.cap ?? null }
+        );
+      }
       return { success: false, released: 0, net, error: message };
     }
   }
