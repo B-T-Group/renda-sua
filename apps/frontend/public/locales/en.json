@@ -8931,7 +8931,12 @@
         "agent": "Agent"
       },
       "assigned": "Assigned. The store and agent were notified.",
-      "truncated": "Showing the first results; refine the search"
+      "truncated": "Showing the first results; refine the search",
+      "searchStoreCity": "Search store / city",
+      "noLocationsFound": "No locations found",
+      "selectSlots": "Select one or more slots",
+      "filterAgents": "Filter agents",
+      "noAgentsFound": "No agents found"
     },
     "offline": "Offline · showing last update",
     "generic": "Something went wrong",
@@ -8950,7 +8955,9 @@
       "assignment_removed": "This assignment was removed",
       "agent_not_verified": "This agent is not verified",
       "agent_suspended": "This agent is suspended",
-      "not_found": "Resource not found"
+      "not_found": "Resource not found",
+      "geo_scope": "Outside your admin scope",
+      "invalid_slot_keys": "Invalid slots selected"
     },
     "superuser": {
       "tab": "Dedicated",

@@ -8948,7 +8948,12 @@
         "agent": "Livreur"
       },
       "assigned": "Affecté. La boutique et le livreur ont été prévenus.",
-      "truncated": "Premiers résultats affichés ; affinez la recherche"
+      "truncated": "Premiers résultats affichés ; affinez la recherche",
+      "searchStoreCity": "Rechercher boutique / ville",
+      "noLocationsFound": "Aucune boutique trouvée",
+      "selectSlots": "Sélectionnez un ou plusieurs créneaux",
+      "filterAgents": "Filtrer les livreurs",
+      "noAgentsFound": "Aucun livreur trouvé"
     },
     "offline": "Hors ligne · dernière mise à jour affichée",
     "generic": "Une erreur est survenue",
@@ -8967,7 +8972,9 @@
       "assignment_removed": "Cette affectation a été supprimée",
       "agent_not_verified": "Ce livreur n'est pas vérifié",
       "agent_suspended": "Ce livreur est suspendu",
-      "not_found": "Ressource introuvable"
+      "not_found": "Ressource introuvable",
+      "geo_scope": "Hors de votre périmètre admin",
+      "invalid_slot_keys": "Créneaux sélectionnés invalides"
     },
     "superuser": {
       "tab": "Dédiés",
@@ -8985,7 +8992,7 @@
       "remove": "Retirer",
       "removeConfirm": "Retirer l'affectation ?",
       "removeConfirmDesc": "Le livreur ne sera plus dédié à cette boutique.",
-      "posting": "Candidature",
+      "posting": "Demande",
       "adminAssigned": "Affecté par admin"
     }
   }

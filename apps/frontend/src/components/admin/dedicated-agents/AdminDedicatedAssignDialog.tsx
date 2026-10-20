@@ -62,7 +62,11 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const steps = [t('dedicatedAgents.admin.steps.store', 'Store'), t('dedicatedAgents.admin.steps.slots', 'Slots'), t('dedicatedAgents.admin.steps.agent', 'Agent')];
+  const steps = [
+    t('dedicatedAgents.admin.steps.store', 'Store'),
+    t('dedicatedAgents.admin.steps.slots', 'Slots'),
+    t('dedicatedAgents.admin.steps.agent', 'Agent'),
+  ];
 
   useEffect(() => {
     if (!open) {
@@ -93,11 +97,17 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
 
       try {
         setLoading(true);
+        setError(null);
         const response = await dedicatedApi.getAdminLocations(query);
         setLocations(response.locations);
       } catch (err: any) {
         console.error('Error searching locations:', err);
-        setError(t('dedicatedAgents.generic', 'Something went wrong'));
+        const status = err.response?.status;
+        if (status === 403) {
+          setError(t('dedicatedAgents.errors.geo_scope', 'Outside your admin scope'));
+        } else {
+          setError(t('dedicatedAgents.generic', 'Something went wrong'));
+        }
       } finally {
         setLoading(false);
       }
@@ -126,6 +136,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
 
     try {
       setLoading(true);
+      setError(null);
       const response = await dedicatedApi.getAdminAgentPicker(selectedLocation.id);
       setAgents(response.agents);
       if (response.truncated) {
@@ -136,7 +147,12 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       }
     } catch (err: any) {
       console.error('Error loading agents:', err);
-      setError(t('dedicatedAgents.generic', 'Something went wrong'));
+      const status = err.response?.status;
+      if (status === 403) {
+        setError(t('dedicatedAgents.errors.geo_scope', 'Outside your admin scope'));
+      } else {
+        setError(t('dedicatedAgents.generic', 'Something went wrong'));
+      }
     } finally {
       setLoading(false);
     }
@@ -203,6 +219,18 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
         step: 2
       };
     }
+    if (code === 'invalid_slot_keys') {
+      return {
+        message: t('dedicatedAgents.errors.invalid_slot_keys', 'Invalid slots selected'),
+        step: 1
+      };
+    }
+    if (status === 403) {
+      return {
+        message: t('dedicatedAgents.errors.geo_scope', 'Outside your admin scope'),
+        step: 0
+      };
+    }
     if (status === 404) {
       return {
         message: t('dedicatedAgents.errors.not_found', 'Resource not found'),
@@ -244,6 +272,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
           slots: selectedSlots.length,
           isInternal: selectedAgent.isInternal,
           platform: 'web',
+          role: 'superuser',
         },
       });
       
@@ -263,7 +292,9 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
         metadata: {
           code: err.response?.data?.code,
           step: activeStep,
+          jumpedToStep: step !== null ? step : undefined,
           platform: 'web',
+          role: 'superuser',
         },
       });
     } finally {
@@ -300,7 +331,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
           {activeStep === 0 && (
             <Stack spacing={2}>
               <TextField
-                label="Search store / city"
+                label={t('dedicatedAgents.admin.searchStoreCity', 'Search store / city')}
                 value={locationQuery}
                 onChange={(e) => setLocationQuery(e.target.value)}
                 autoFocus
@@ -310,6 +341,14 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
               {loading && (
                 <Box display="flex" justifyContent="center" py={2}>
                   <CircularProgress size={24} />
+                </Box>
+              )}
+
+              {!loading && locationQuery.length >= 2 && locations.length === 0 && (
+                <Box py={4} textAlign="center">
+                  <Typography variant="body2" color="text.secondary">
+                    {t('dedicatedAgents.admin.noLocationsFound', 'No locations found')}
+                  </Typography>
                 </Box>
               )}
 
@@ -342,7 +381,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
 
           {activeStep === 1 && (
             <Stack spacing={2}>
-              <Typography variant="body2">Select one or more slots</Typography>
+              <Typography variant="body2">{t('dedicatedAgents.admin.selectSlots', 'Select one or more slots')}</Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 {allSlots.map((slot) => (
                   <Chip
@@ -365,7 +404,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
           {activeStep === 2 && (
             <Stack spacing={2}>
               <TextField
-                label="Filter agents"
+                label={t('dedicatedAgents.admin.filterAgents', 'Filter agents')}
                 value={agentFilter}
                 onChange={(e) => setAgentFilter(e.target.value)}
                 size="small"
@@ -378,47 +417,59 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
                 </Box>
               )}
 
+              {!loading && filteredAgents.length === 0 && (
+                <Box py={4} textAlign="center">
+                  <Typography variant="body2" color="text.secondary">
+                    {t('dedicatedAgents.admin.noAgentsFound', 'No agents found')}
+                  </Typography>
+                </Box>
+              )}
+
               <Stack spacing={1} sx={{ maxHeight: 300, overflow: 'auto' }}>
-                {filteredAgents.map((agent) => (
-                  <Box
-                    key={agent.id}
-                    onClick={() => setSelectedAgent(agent)}
-                    sx={{
-                      p: 2,
-                      border: 1,
-                      borderColor: selectedAgent?.id === agent.id ? 'primary.main' : 'divider',
-                      borderRadius: 1,
-                      cursor: 'pointer',
-                      bgcolor: selectedAgent?.id === agent.id ? 'action.selected' : 'background.paper',
-                      '&:hover': { bgcolor: 'action.hover' },
-                      opacity: agent.assignmentCount >= 3 ? 0.5 : 1,
-                    }}
-                  >
-                    <Stack direction="row" spacing={2} alignItems="center">
-                      <Avatar src={agent.photoUrl || undefined}>
-                        {agent.firstName[0]}
-                      </Avatar>
-                      <Stack flex={1}>
-                        <Typography variant="body1" fontWeight={600}>
-                          {agent.firstName} {agent.lastName}
-                        </Typography>
-                        <Stack direction="row" spacing={1} alignItems="center">
-                          <Chip
-                            label={agent.isInternal ? 'Internal' : 'Independent'}
-                            size="small"
-                            variant="outlined"
-                          />
-                          <Typography variant="caption">
-                            📦 {agent.activeOrders} · 🏪 {agent.assignmentCount}/3
-                            {!agent.isInternal && agent.balanceCoversOrders !== null && (
-                              <> · 💰 ~{agent.balanceCoversOrders}</>
-                            )}
+                {filteredAgents.map((agent) => {
+                  const atCapacity = agent.assignmentCount >= 3;
+                  return (
+                    <Box
+                      key={agent.id}
+                      onClick={() => !atCapacity && setSelectedAgent(agent)}
+                      sx={{
+                        p: 2,
+                        border: 1,
+                        borderColor: selectedAgent?.id === agent.id ? 'primary.main' : 'divider',
+                        borderRadius: 1,
+                        cursor: atCapacity ? 'not-allowed' : 'pointer',
+                        bgcolor: selectedAgent?.id === agent.id ? 'action.selected' : 'background.paper',
+                        '&:hover': atCapacity ? {} : { bgcolor: 'action.hover' },
+                        opacity: atCapacity ? 0.5 : 1,
+                      }}
+                      aria-disabled={atCapacity}
+                    >
+                      <Stack direction="row" spacing={2} alignItems="center">
+                        <Avatar src={agent.photoUrl || undefined}>
+                          {agent.firstName[0]}
+                        </Avatar>
+                        <Stack flex={1}>
+                          <Typography variant="body1" fontWeight={600}>
+                            {agent.firstName} {agent.lastName}
                           </Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Chip
+                              label={agent.isInternal ? t('dedicatedAgents.chips.type.internal', 'Internal') : t('dedicatedAgents.chips.type.independent', 'Independent')}
+                              size="small"
+                              variant="outlined"
+                            />
+                            <Typography variant="caption">
+                              📦 {agent.activeOrders} · 🏪 {agent.assignmentCount}/3
+                              {!agent.isInternal && agent.balanceCoversOrders !== null && (
+                                <> · 💰 ~{agent.balanceCoversOrders}</>
+                              )}
+                            </Typography>
+                          </Stack>
                         </Stack>
                       </Stack>
-                    </Stack>
-                  </Box>
-                ))}
+                    </Box>
+                  );
+                })}
               </Stack>
             </Stack>
           )}

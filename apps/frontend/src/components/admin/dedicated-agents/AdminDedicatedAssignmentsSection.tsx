@@ -35,6 +35,7 @@ import {
   WifiOff as WifiOffIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useSnackbar } from 'notistack';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
 import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import {
@@ -50,6 +51,7 @@ import type { AdminAssignmentView, AssignmentStatus } from '../../../types/dedic
 
 export function AdminDedicatedAssignmentsSection() {
   const { t } = useTranslation();
+  const { enqueueSnackbar } = useSnackbar();
   const {
     getAdminAssignments,
     updateAdminAssignment,
@@ -61,6 +63,7 @@ export function AdminDedicatedAssignmentsSection() {
   const [assignments, setAssignments] = useState<AdminAssignmentView[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [cityFilter, setCityFilter] = useState<string>('');
   const [locationFilter, setLocationFilter] = useState<string>('');
   const [slotFilter, setSlotFilter] = useState<string>('all');
@@ -102,6 +105,9 @@ export function AdminDedicatedAssignmentsSection() {
   }, [loadAssignments]);
 
   const handlePauseResume = async (assignmentId: string, status: AssignmentStatus) => {
+    if (busyIds.has(assignmentId)) return;
+    
+    setBusyIds((prev) => new Set(prev).add(assignmentId));
     try {
       const newStatus: AssignmentStatus = status === 'active' ? 'paused' : 'active';
       await updateAdminAssignment(assignmentId, { status: newStatus });
@@ -110,20 +116,37 @@ export function AdminDedicatedAssignmentsSection() {
       // Track action
       void trackSiteEvent({
         eventType: newStatus === 'paused' ? SITE_EVENT_DEDICATED_UI_AGENT_PAUSED : SITE_EVENT_DEDICATED_UI_AGENT_RESUMED,
-        metadata: { platform: 'web', surface: 'admin' },
+        metadata: { platform: 'web', surface: 'admin', role: 'superuser' },
       });
     } catch (err: any) {
       console.error('Error pause/resume:', err);
+      const code = err.response?.data?.code;
       if (err.response?.status === 409) {
+        const message = code && t(`dedicatedAgents.errors.${code}`, null) 
+          ? t(`dedicatedAgents.errors.${code}`) 
+          : t('dedicatedAgents.generic', 'Something went wrong');
+        enqueueSnackbar(message, { variant: 'error' });
+        await loadAssignments();
         void trackSiteEvent({
           eventType: SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT,
-          metadata: { endpoint: 'updateAdminAssignment', code: err.response?.data?.code, platform: 'web' },
+          metadata: { endpoint: 'updateAdminAssignment', code, platform: 'web', role: 'superuser' },
         });
+      } else {
+        enqueueSnackbar(t('dedicatedAgents.generic', 'Something went wrong'), { variant: 'error' });
       }
+    } finally {
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(assignmentId);
+        return next;
+      });
     }
   };
 
   const handleRemove = async (assignmentId: string) => {
+    if (busyIds.has(assignmentId)) return;
+    
+    setBusyIds((prev) => new Set(prev).add(assignmentId));
     try {
       await deleteAdminAssignment(assignmentId);
       await loadAssignments();
@@ -132,16 +155,32 @@ export function AdminDedicatedAssignmentsSection() {
       // Track action
       void trackSiteEvent({
         eventType: SITE_EVENT_DEDICATED_UI_AGENT_REMOVED,
-        metadata: { platform: 'web', surface: 'admin' },
+        metadata: { platform: 'web', surface: 'admin', role: 'superuser' },
       });
     } catch (err: any) {
       console.error('Error removing:', err);
+      const code = err.response?.data?.code;
       if (err.response?.status === 409) {
+        const message = code && t(`dedicatedAgents.errors.${code}`, null)
+          ? t(`dedicatedAgents.errors.${code}`)
+          : t('dedicatedAgents.generic', 'Something went wrong');
+        enqueueSnackbar(message, { variant: 'error' });
+        await loadAssignments();
+        setConfirmRemove(null);
         void trackSiteEvent({
           eventType: SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT,
-          metadata: { endpoint: 'deleteAdminAssignment', code: err.response?.data?.code, platform: 'web' },
+          metadata: { endpoint: 'deleteAdminAssignment', code, platform: 'web', role: 'superuser' },
         });
+      } else {
+        enqueueSnackbar(t('dedicatedAgents.generic', 'Something went wrong'), { variant: 'error' });
+        setConfirmRemove(null);
       }
+    } finally {
+      setBusyIds((prev) => {
+        const next = new Set(prev);
+        next.delete(assignmentId);
+        return next;
+      });
     }
   };
 
@@ -264,9 +303,10 @@ export function AdminDedicatedAssignmentsSection() {
                 {t('dedicatedAgents.superuser.noAssignments', 'No assignments found.')}
               </Typography>
               <Button
-                variant="contained"
+                variant="outlined"
                 startIcon={<AddIcon />}
                 onClick={() => setAssignDialogOpen(true)}
+                disabled={!isOnline}
               >
                 {t('dedicatedAgents.superuser.assign', 'Assign')}
               </Button>
@@ -334,9 +374,15 @@ export function AdminDedicatedAssignmentsSection() {
                           size="small"
                           onClick={() => handlePauseResume(assignment.assignmentId, assignment.status)}
                           aria-label={assignment.status === 'paused' ? t('dedicatedAgents.actions.resume', 'Resume') : t('dedicatedAgents.actions.pause', 'Pause')}
-                          disabled={!isOnline}
+                          disabled={!isOnline || busyIds.has(assignment.assignmentId)}
                         >
-                          {assignment.status === 'paused' ? <ResumeIcon /> : <PauseIcon />}
+                          {busyIds.has(assignment.assignmentId) ? (
+                            <CircularProgress size={20} />
+                          ) : assignment.status === 'paused' ? (
+                            <ResumeIcon />
+                          ) : (
+                            <PauseIcon />
+                          )}
                         </IconButton>
                       </Tooltip>
                       <Tooltip title={t('dedicatedAgents.actions.remove', 'Remove')}>
@@ -345,7 +391,7 @@ export function AdminDedicatedAssignmentsSection() {
                           color="error"
                           onClick={() => setConfirmRemove(assignment.assignmentId)}
                           aria-label={t('dedicatedAgents.actions.remove', 'Remove')}
-                          disabled={!isOnline}
+                          disabled={!isOnline || busyIds.has(assignment.assignmentId)}
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -381,13 +427,15 @@ export function AdminDedicatedAssignmentsSection() {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setConfirmRemove(null)}>
+          <Button onClick={() => setConfirmRemove(null)} disabled={confirmRemove ? busyIds.has(confirmRemove) : false}>
             {t('common.cancel', 'Cancel')}
           </Button>
           <Button
             variant="contained"
             color="error"
             onClick={() => confirmRemove && handleRemove(confirmRemove)}
+            disabled={confirmRemove ? busyIds.has(confirmRemove) : false}
+            startIcon={confirmRemove && busyIds.has(confirmRemove) ? <CircularProgress size={16} /> : null}
           >
             {t('dedicatedAgents.superuser.remove', 'Remove')}
           </Button>

@@ -755,7 +755,23 @@ const AdminManageAgents: React.FC = () => {
       <Button
         variant="outlined"
         startIcon={<RefreshIcon />}
-        onClick={() => window.location.reload()}
+        onClick={() => {
+          setDedicatedTabError(null);
+          (async () => {
+            try {
+              await getAdminAssignments();
+              setShowDedicatedTab(true);
+            } catch (err: any) {
+              const status = err.response?.status;
+              if (status === 403 || status === 404) {
+                setShowDedicatedTab(false);
+              } else {
+                setShowDedicatedTab(true);
+                setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
+              }
+            }
+          })();
+        }}
       >
         {t('dedicatedAgents.retry', 'Retry')}
       </Button>
