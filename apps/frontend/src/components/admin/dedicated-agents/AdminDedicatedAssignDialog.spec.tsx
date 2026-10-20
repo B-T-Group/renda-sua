@@ -10,10 +10,10 @@ const mockCreateAdminAssignment = jest.fn();
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, defaultValue?: string, params?: any) => {
-      if (params && key.includes('{{')) {
-        let result = typeof defaultValue === 'string' ? defaultValue : key;
+      if (params && typeof defaultValue === 'string' && defaultValue.includes('{{')) {
+        let result = defaultValue;
         Object.keys(params).forEach(param => {
-          result = result.replace(`{{${param}}}`, params[param]);
+          result = result.replace(new RegExp(`\\{\\{${param}\\}\\}`, 'g'), params[param]);
         });
         return result;
       }
@@ -24,6 +24,18 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('notistack', () => ({
   useSnackbar: () => ({ enqueueSnackbar: mockEnqueueSnackbar }),
+}));
+
+jest.mock('../../hooks/useOnlineStatus', () => ({
+  useOnlineStatus: () => true,
+}));
+
+jest.mock('../../hooks/useTrackSiteEvent', () => ({
+  useTrackSiteEvent: () => ({ trackSiteEvent: jest.fn() }),
+  SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STARTED: 'dedicated_ui.admin_assign_started',
+  SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STEP: 'dedicated_ui.admin_assign_step',
+  SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_SUCCEEDED: 'dedicated_ui.admin_assign_succeeded',
+  SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_FAILED: 'dedicated_ui.admin_assign_failed',
 }));
 
 jest.mock('../../../hooks/useDedicatedAgents', () => ({

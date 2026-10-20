@@ -23,6 +23,7 @@ import {
   TextField,
   Tooltip,
   Typography,
+  Alert,
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -31,9 +32,19 @@ import {
   Delete as DeleteIcon,
   Warning as WarningIcon,
   Refresh as RefreshIcon,
+  WifiOff as WifiOffIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
+import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
+import {
+  useTrackSiteEvent,
+  SITE_EVENT_DEDICATED_UI_SECTION_VIEWED,
+  SITE_EVENT_DEDICATED_UI_AGENT_PAUSED,
+  SITE_EVENT_DEDICATED_UI_AGENT_RESUMED,
+  SITE_EVENT_DEDICATED_UI_AGENT_REMOVED,
+  SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT,
+} from '../../../hooks/useTrackSiteEvent';
 import AdminDedicatedAssignDialog from './AdminDedicatedAssignDialog';
 import type { AdminAssignmentView, AssignmentStatus } from '../../../types/dedicatedAgents';
 
@@ -44,6 +55,8 @@ export function AdminDedicatedAssignmentsSection() {
     updateAdminAssignment,
     deleteAdminAssignment,
   } = useDedicatedAgents();
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const isOnline = useOnlineStatus();
 
   const [assignments, setAssignments] = useState<AdminAssignmentView[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,6 +68,14 @@ export function AdminDedicatedAssignmentsSection() {
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+  // Track section viewed
+  useEffect(() => {
+    void trackSiteEvent({
+      eventType: SITE_EVENT_DEDICATED_UI_SECTION_VIEWED,
+      metadata: { surface: 'admin', platform: 'web' },
+    });
+  }, [trackSiteEvent]);
 
   const loadAssignments = useCallback(async () => {
     try {
@@ -85,8 +106,20 @@ export function AdminDedicatedAssignmentsSection() {
       const newStatus: AssignmentStatus = status === 'active' ? 'paused' : 'active';
       await updateAdminAssignment(assignmentId, { status: newStatus });
       await loadAssignments();
+      
+      // Track action
+      void trackSiteEvent({
+        eventType: newStatus === 'paused' ? SITE_EVENT_DEDICATED_UI_AGENT_PAUSED : SITE_EVENT_DEDICATED_UI_AGENT_RESUMED,
+        metadata: { platform: 'web', surface: 'admin' },
+      });
     } catch (err: any) {
       console.error('Error pause/resume:', err);
+      if (err.response?.status === 409) {
+        void trackSiteEvent({
+          eventType: SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT,
+          metadata: { endpoint: 'updateAdminAssignment', code: err.response?.data?.code, platform: 'web' },
+        });
+      }
     }
   };
 
@@ -95,21 +128,40 @@ export function AdminDedicatedAssignmentsSection() {
       await deleteAdminAssignment(assignmentId);
       await loadAssignments();
       setConfirmRemove(null);
+      
+      // Track action
+      void trackSiteEvent({
+        eventType: SITE_EVENT_DEDICATED_UI_AGENT_REMOVED,
+        metadata: { platform: 'web', surface: 'admin' },
+      });
     } catch (err: any) {
       console.error('Error removing:', err);
+      if (err.response?.status === 409) {
+        void trackSiteEvent({
+          eventType: SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT,
+          metadata: { endpoint: 'deleteAdminAssignment', code: err.response?.data?.code, platform: 'web' },
+        });
+      }
     }
   };
 
   return (
     <Box>
+      {!isOnline && (
+        <Alert severity="warning" icon={<WifiOffIcon />} sx={{ mb: 2 }}>
+          {t('dedicatedAgents.offline', 'Offline · showing last update')}
+        </Alert>
+      )}
+      
       <Card sx={{ mb: 2 }}>
         <CardContent>
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
             <Button
               variant="contained"
-              startIcon={<AddIcon />}
+              startIcon={!isOnline ? <WifiOffIcon /> : <AddIcon />}
               onClick={() => setAssignDialogOpen(true)}
               aria-label={t('dedicatedAgents.superuser.assign', 'Assign')}
+              disabled={!isOnline}
             >
               {t('dedicatedAgents.superuser.assign', 'Assign')}
             </Button>
@@ -282,6 +334,7 @@ export function AdminDedicatedAssignmentsSection() {
                           size="small"
                           onClick={() => handlePauseResume(assignment.assignmentId, assignment.status)}
                           aria-label={assignment.status === 'paused' ? t('dedicatedAgents.actions.resume', 'Resume') : t('dedicatedAgents.actions.pause', 'Pause')}
+                          disabled={!isOnline}
                         >
                           {assignment.status === 'paused' ? <ResumeIcon /> : <PauseIcon />}
                         </IconButton>
@@ -292,6 +345,7 @@ export function AdminDedicatedAssignmentsSection() {
                           color="error"
                           onClick={() => setConfirmRemove(assignment.assignmentId)}
                           aria-label={t('dedicatedAgents.actions.remove', 'Remove')}
+                          disabled={!isOnline}
                         >
                           <DeleteIcon />
                         </IconButton>

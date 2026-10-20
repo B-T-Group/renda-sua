@@ -71,6 +71,19 @@ jest.mock('../../hooks/useVehicleTypes', () => ({
   }),
 }));
 
+jest.mock('../../hooks/useOnlineStatus', () => ({
+  useOnlineStatus: () => true,
+}));
+
+jest.mock('../../hooks/useTrackSiteEvent', () => ({
+  useTrackSiteEvent: () => ({ trackSiteEvent: jest.fn() }),
+  SITE_EVENT_DEDICATED_UI_SECTION_VIEWED: 'dedicated_ui.section_viewed',
+  SITE_EVENT_DEDICATED_UI_AGENT_PAUSED: 'dedicated_ui.agent_paused',
+  SITE_EVENT_DEDICATED_UI_AGENT_RESUMED: 'dedicated_ui.agent_resumed',
+  SITE_EVENT_DEDICATED_UI_AGENT_REMOVED: 'dedicated_ui.agent_removed',
+  SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT: 'dedicated_ui.action_conflict',
+}));
+
 jest.mock('../admin/dedicated-agents/AdminDedicatedAssignmentsSection', () => ({
   AdminDedicatedAssignmentsSection: () => (
     <div data-testid="dedicated-section">Dedicated Assignments Section</div>
@@ -78,14 +91,22 @@ jest.mock('../admin/dedicated-agents/AdminDedicatedAssignmentsSection', () => ({
 }));
 
 jest.mock('../admin/AdminApplyReferralDialog', () => ({
+  __esModule: true,
   AdminApplyReferralDialog: () => null,
 }));
 
-jest.mock('../common/AdminMessagePost', () => () => null);
+jest.mock('../common/AdminMessagePost', () => ({
+  __esModule: true,
+  default: () => null,
+}));
 
-jest.mock('../common/AdminUserCard', () => () => null);
+jest.mock('../common/AdminUserCard', () => ({
+  __esModule: true,
+  default: () => null,
+}));
 
 jest.mock('../admin/AdminReferralMeta', () => ({
+  __esModule: true,
   AdminReferralMeta: () => null,
 }));
 

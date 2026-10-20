@@ -19,6 +19,14 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
+import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
+import {
+  useTrackSiteEvent,
+  SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STARTED,
+  SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STEP,
+  SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_SUCCEEDED,
+  SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_FAILED,
+} from '../../../hooks/useTrackSiteEvent';
 import type {
   AdminAgentPickerItem,
   AdminLocationSearchItem,
@@ -39,6 +47,8 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const dedicatedApi = useDedicatedAgents();
+  const { trackSiteEvent } = useTrackSiteEvent();
+  const isOnline = useOnlineStatus();
 
   const [activeStep, setActiveStep] = useState(0);
   const [locationQuery, setLocationQuery] = useState('');
@@ -65,8 +75,14 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       setSelectedAgent(null);
       setAgentFilter('');
       setError(null);
+    } else {
+      // Track dialog opened
+      void trackSiteEvent({
+        eventType: SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STARTED,
+        metadata: { platform: 'web' },
+      });
     }
-  }, [open]);
+  }, [open, trackSiteEvent]);
 
   const searchLocations = useCallback(
     async (query: string) => {
@@ -136,7 +152,14 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       setError(t('common.required', 'Required'));
       return;
     }
-    setActiveStep((prev) => prev + 1);
+    const nextStep = activeStep + 1;
+    setActiveStep(nextStep);
+    
+    // Track step progression
+    void trackSiteEvent({
+      eventType: SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STEP,
+      metadata: { step: nextStep, platform: 'web' },
+    });
   };
 
   const handleBack = () => {
@@ -213,6 +236,17 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
         t('dedicatedAgents.admin.assigned', 'Assigned. The store and agent were notified.'),
         { variant: 'success' }
       );
+      
+      // Track success
+      void trackSiteEvent({
+        eventType: SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_SUCCEEDED,
+        metadata: {
+          slots: selectedSlots.length,
+          isInternal: selectedAgent.isInternal,
+          platform: 'web',
+        },
+      });
+      
       onSuccess();
       onClose();
     } catch (err: any) {
@@ -222,6 +256,16 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       if (step !== null && step !== activeStep) {
         setActiveStep(step);
       }
+      
+      // Track failure
+      void trackSiteEvent({
+        eventType: SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_FAILED,
+        metadata: {
+          code: err.response?.data?.code,
+          step: activeStep,
+          platform: 'web',
+        },
+      });
     } finally {
       setSubmitting(false);
     }
@@ -412,7 +456,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
           <Button
             onClick={handleSubmit}
             variant="contained"
-            disabled={!selectedAgent || submitting}
+            disabled={!selectedAgent || submitting || !isOnline}
             startIcon={submitting ? <CircularProgress size={16} /> : null}
             aria-label={t('dedicatedAgents.admin.assign', 'Assign')}
           >
