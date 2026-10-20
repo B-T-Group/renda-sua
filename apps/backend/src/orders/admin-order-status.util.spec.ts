@@ -1,8 +1,11 @@
 import {
+  ADMIN_FULL_REFUND_NOTES_PREFIX,
   ADMIN_STATUS_OVERRIDE_VALUES,
+  adminFullRefundNotes,
   isAdminOperationalStatus,
   isAdminSettlementStatus,
   isAdminTerminalStatus,
+  isResumableAdminFullRefundCancel,
 } from './admin-order-status.util';
 
 describe('admin-order-status.util', () => {
@@ -27,5 +30,37 @@ describe('admin-order-status.util', () => {
     expect(ADMIN_STATUS_OVERRIDE_VALUES).toContain('cancelled');
     expect(ADMIN_STATUS_OVERRIDE_VALUES).not.toContain('delivered');
     expect(ADMIN_STATUS_OVERRIDE_VALUES).not.toContain('picked_up');
+  });
+
+  it('resumes only a system full-refund cancel (not a client cancel)', () => {
+    expect(adminFullRefundNotes('QA leftover')).toBe(`${ADMIN_FULL_REFUND_NOTES_PREFIX} QA leftover`);
+    expect(
+      isResumableAdminFullRefundCancel({
+        current_status: 'cancelled',
+        cancelled_by: 'system',
+        cancellation_notes: adminFullRefundNotes('QA leftover'),
+      })
+    ).toBe(true);
+    expect(
+      isResumableAdminFullRefundCancel({
+        current_status: 'cancelled',
+        cancelled_by: 'client',
+        cancellation_notes: adminFullRefundNotes('QA leftover'),
+      })
+    ).toBe(false);
+    expect(
+      isResumableAdminFullRefundCancel({
+        current_status: 'cancelled',
+        cancelled_by: 'system',
+        cancellation_notes: 'ops cleanup',
+      })
+    ).toBe(false);
+    expect(
+      isResumableAdminFullRefundCancel({
+        current_status: 'confirmed',
+        cancelled_by: 'system',
+        cancellation_notes: adminFullRefundNotes('QA leftover'),
+      })
+    ).toBe(false);
   });
 });
