@@ -35,33 +35,33 @@ export type DedicatedAgentsErrorCode =
 export function mapDedicatedAgentsErrorCode(code: string): string {
   const errorMap: Record<DedicatedAgentsErrorCode, string> = {
     // Posting conflicts
-    posting_filled: 'errors.dedicated.posting_filled',
-    posting_not_open: 'errors.dedicated.posting_not_open',
-    posting_expired: 'errors.dedicated.posting_not_open',
-    posting_already_open: 'errors.dedicated.posting_already_open',
-    application_closed: 'errors.dedicated.posting_not_open',
-    application_not_pending: 'errors.dedicated.application_not_pending',
+    posting_filled: 'dedicatedAgents.errors.posting_filled',
+    posting_not_open: 'dedicatedAgents.errors.posting_not_open',
+    posting_expired: 'dedicatedAgents.errors.posting_not_open',
+    posting_already_open: 'dedicatedAgents.errors.posting_already_open',
+    application_closed: 'dedicatedAgents.errors.posting_not_open',
+    application_not_pending: 'dedicatedAgents.errors.application_not_pending',
     // Agent assignment conflicts
-    agent_holds_slot: 'errors.dedicated.agent_holds_slot',
-    dedicated_agent_assignment_cap_exceeded: 'errors.dedicated.cap_exceeded',
-    dedicated_agent_assignment_duplicate: 'errors.dedicated.duplicate',
-    agent_not_verified: 'errors.dedicated.agent_not_verified',
-    agent_suspended: 'errors.dedicated.agent_suspended',
-    agent_ineligible: 'errors.dedicated.agent_ineligible',
+    agent_holds_slot: 'dedicatedAgents.errors.agent_holds_slot',
+    dedicated_agent_assignment_cap_exceeded: 'dedicatedAgents.errors.cap_exceeded',
+    dedicated_agent_assignment_duplicate: 'dedicatedAgents.errors.duplicate',
+    agent_not_verified: 'dedicatedAgents.errors.agent_not_verified',
+    agent_suspended: 'dedicatedAgents.errors.agent_suspended',
+    agent_ineligible: 'dedicatedAgents.errors.agent_ineligible',
     // Slot/assignment state
-    slot_disabled: 'errors.dedicated.slot_disabled',
-    assignment_removed: 'errors.dedicated.assignment_removed',
-    assignment_changed: 'errors.dedicated.assignment_changed',
-    slot_has_dedicated_agents: 'errors.dedicated.slot_has_dedicated_agents',
+    slot_disabled: 'dedicatedAgents.errors.slot_disabled',
+    assignment_removed: 'dedicatedAgents.errors.assignment_removed',
+    assignment_changed: 'dedicatedAgents.errors.assignment_changed',
+    slot_has_dedicated_agents: 'dedicatedAgents.errors.slot_has_dedicated_agents',
     // Form validation
-    pickup_time_outside_slot: 'errors.dedicated.pickup_time_outside_slot',
-    invalid_headcount: 'errors.dedicated.invalid_headcount',
-    invalid_slot_keys: 'errors.dedicated.invalid_slot_keys',
-    invalid_days_of_week: 'errors.dedicated.invalid_days_of_week',
-    terms_too_long: 'errors.dedicated.terms_too_long',
+    pickup_time_outside_slot: 'dedicatedAgents.errors.pickup_time_outside_slot',
+    invalid_headcount: 'dedicatedAgents.errors.invalid_headcount',
+    invalid_slot_keys: 'dedicatedAgents.errors.invalid_slot_keys',
+    invalid_days_of_week: 'dedicatedAgents.errors.invalid_days_of_week',
+    terms_too_long: 'dedicatedAgents.errors.terms_too_long',
   };
 
-  return errorMap[code as DedicatedAgentsErrorCode] || 'errors.dedicated.generic';
+  return errorMap[code as DedicatedAgentsErrorCode] || 'dedicatedAgents.errors.generic';
 }
 
 /**

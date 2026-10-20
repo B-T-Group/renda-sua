@@ -7,79 +7,79 @@ import {
 describe('dedicatedAgentsErrors', () => {
   describe('mapDedicatedAgentsErrorCode', () => {
     it('maps posting conflict codes', () => {
-      expect(mapDedicatedAgentsErrorCode('posting_filled')).toBe('errors.dedicated.posting_filled');
+      expect(mapDedicatedAgentsErrorCode('posting_filled')).toBe('dedicatedAgents.errors.posting_filled');
       expect(mapDedicatedAgentsErrorCode('posting_not_open')).toBe(
-        'errors.dedicated.posting_not_open'
+        'dedicatedAgents.errors.posting_not_open'
       );
       expect(mapDedicatedAgentsErrorCode('posting_expired')).toBe(
-        'errors.dedicated.posting_not_open'
+        'dedicatedAgents.errors.posting_not_open'
       );
       expect(mapDedicatedAgentsErrorCode('posting_already_open')).toBe(
-        'errors.dedicated.posting_already_open'
+        'dedicatedAgents.errors.posting_already_open'
       );
       expect(mapDedicatedAgentsErrorCode('application_closed')).toBe(
-        'errors.dedicated.posting_not_open'
+        'dedicatedAgents.errors.posting_not_open'
       );
       expect(mapDedicatedAgentsErrorCode('application_not_pending')).toBe(
-        'errors.dedicated.application_not_pending'
+        'dedicatedAgents.errors.application_not_pending'
       );
     });
 
     it('maps agent assignment conflict codes', () => {
       expect(mapDedicatedAgentsErrorCode('agent_holds_slot')).toBe(
-        'errors.dedicated.agent_holds_slot'
+        'dedicatedAgents.errors.agent_holds_slot'
       );
       expect(mapDedicatedAgentsErrorCode('dedicated_agent_assignment_cap_exceeded')).toBe(
-        'errors.dedicated.cap_exceeded'
+        'dedicatedAgents.errors.cap_exceeded'
       );
       expect(mapDedicatedAgentsErrorCode('dedicated_agent_assignment_duplicate')).toBe(
-        'errors.dedicated.duplicate'
+        'dedicatedAgents.errors.duplicate'
       );
       expect(mapDedicatedAgentsErrorCode('agent_not_verified')).toBe(
-        'errors.dedicated.agent_not_verified'
+        'dedicatedAgents.errors.agent_not_verified'
       );
       expect(mapDedicatedAgentsErrorCode('agent_suspended')).toBe(
-        'errors.dedicated.agent_suspended'
+        'dedicatedAgents.errors.agent_suspended'
       );
       expect(mapDedicatedAgentsErrorCode('agent_ineligible')).toBe(
-        'errors.dedicated.agent_ineligible'
+        'dedicatedAgents.errors.agent_ineligible'
       );
     });
 
     it('maps slot/assignment state codes', () => {
-      expect(mapDedicatedAgentsErrorCode('slot_disabled')).toBe('errors.dedicated.slot_disabled');
+      expect(mapDedicatedAgentsErrorCode('slot_disabled')).toBe('dedicatedAgents.errors.slot_disabled');
       expect(mapDedicatedAgentsErrorCode('assignment_removed')).toBe(
-        'errors.dedicated.assignment_removed'
+        'dedicatedAgents.errors.assignment_removed'
       );
       expect(mapDedicatedAgentsErrorCode('assignment_changed')).toBe(
-        'errors.dedicated.assignment_changed'
+        'dedicatedAgents.errors.assignment_changed'
       );
       expect(mapDedicatedAgentsErrorCode('slot_has_dedicated_agents')).toBe(
-        'errors.dedicated.slot_has_dedicated_agents'
+        'dedicatedAgents.errors.slot_has_dedicated_agents'
       );
     });
 
     it('maps form validation codes', () => {
       expect(mapDedicatedAgentsErrorCode('pickup_time_outside_slot')).toBe(
-        'errors.dedicated.pickup_time_outside_slot'
+        'dedicatedAgents.errors.pickup_time_outside_slot'
       );
       expect(mapDedicatedAgentsErrorCode('invalid_headcount')).toBe(
-        'errors.dedicated.invalid_headcount'
+        'dedicatedAgents.errors.invalid_headcount'
       );
       expect(mapDedicatedAgentsErrorCode('invalid_slot_keys')).toBe(
-        'errors.dedicated.invalid_slot_keys'
+        'dedicatedAgents.errors.invalid_slot_keys'
       );
       expect(mapDedicatedAgentsErrorCode('invalid_days_of_week')).toBe(
-        'errors.dedicated.invalid_days_of_week'
+        'dedicatedAgents.errors.invalid_days_of_week'
       );
       expect(mapDedicatedAgentsErrorCode('terms_too_long')).toBe(
-        'errors.dedicated.terms_too_long'
+        'dedicatedAgents.errors.terms_too_long'
       );
     });
 
     it('returns generic error for unknown code', () => {
-      expect(mapDedicatedAgentsErrorCode('unknown_error')).toBe('errors.dedicated.generic');
-      expect(mapDedicatedAgentsErrorCode('')).toBe('errors.dedicated.generic');
+      expect(mapDedicatedAgentsErrorCode('unknown_error')).toBe('dedicatedAgents.errors.generic');
+      expect(mapDedicatedAgentsErrorCode('')).toBe('dedicatedAgents.errors.generic');
     });
   });
 

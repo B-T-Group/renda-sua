@@ -85,7 +85,7 @@ describe('DedicatedSlotRow - Slot Toggle Confirm/Revert', () => {
     expect(onToggleMock).not.toHaveBeenCalled();
   });
 
-  it('calls onToggle with false when confirm is clicked', async () => {
+  it('calls onToggle with false and confirmPauseAgents:true when confirm is clicked', async () => {
     render(
       <DedicatedSlotRow
         slot={mockSlot}
@@ -105,7 +105,7 @@ describe('DedicatedSlotRow - Slot Toggle Confirm/Revert', () => {
     fireEvent.click(confirmButton);
 
     await waitFor(() => {
-      expect(onToggleMock).toHaveBeenCalledWith('morning', false);
+      expect(onToggleMock).toHaveBeenCalledWith('morning', false, true);
     });
   });
 

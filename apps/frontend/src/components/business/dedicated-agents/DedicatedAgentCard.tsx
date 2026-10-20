@@ -207,7 +207,7 @@ const DedicatedAgentCard: React.FC<DedicatedAgentCardProps> = ({
         <DialogTitle>
           {t('dedicatedAgents.removeConfirm', 'Remove {{name}} from {{slot}}?', {
             name: agent.agent.firstName,
-            slot: agent.slotKey,
+            slot: t(`dedicatedAgents.slots.${agent.slotKey}`, agent.slotKey),
           })}
         </DialogTitle>
         <DialogActions>

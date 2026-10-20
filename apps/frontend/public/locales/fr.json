@@ -8873,8 +8873,10 @@
     "removeConfirm": "Retirer {{name}} du créneau {{slot}} ?",
     "form": {
       "agentsNeeded": "Livreurs recherchés",
+      "slots": "Créneaux",
       "days": "Jours",
       "payLine": "Rémunération standard par livraison",
+      "payFixed": "(fixe)",
       "termsField": "Conditions / remarques",
       "termsHelper": "Horaires, tenue, ce qui est attendu. Toute rémunération supplémentaire proposée ici est à votre charge, pas à celle de RendaSua.",
       "termsStrip": "Les liens et numéros de téléphone sont retirés.",
@@ -9030,7 +9032,11 @@
       "removeAgent": "Retirer le livreur {{name}}",
       "editTerms": "Modifier les conditions",
       "moreOptions": "Plus d'options",
-      "closePosting": "Fermer la demande"
+      "closePosting": "Fermer la demande",
+      "decreaseHeadcount": "Diminuer le nombre de livreurs",
+      "increaseHeadcount": "Augmenter le nombre de livreurs",
+      "slotToggle": "Activer/désactiver le créneau {{slot}}",
+      "pickupTimeSelect": "Sélectionner l'heure de collecte pour {{slot}}"
     }
   }
 }

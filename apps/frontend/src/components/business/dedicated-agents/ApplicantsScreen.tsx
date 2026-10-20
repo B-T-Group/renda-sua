@@ -40,7 +40,7 @@ import type {
 } from '../../../types/dedicatedAgents';
 
 const ApplicantsScreen: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { locationId, postingId } = useParams<{ locationId: string; postingId: string }>();
   const dedicatedApi = useDedicatedAgents();
@@ -55,12 +55,16 @@ const ApplicantsScreen: React.FC = () => {
   const [confirmAccept, setConfirmAccept] = useState<{ id: string; name: string } | null>(null);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const [updatingTerms, setUpdatingTerms] = useState(false);
+  const [closing, setClosing] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (isInitialLoad = false) => {
     if (!locationId || !postingId) return;
 
     try {
-      setLoading(true);
+      if (isInitialLoad) {
+        setLoading(true);
+      }
       const response = await dedicatedApi.getApplications(locationId, postingId);
       setPosting(response.posting);
       setApplications(response.applications);
@@ -84,13 +88,15 @@ const ApplicantsScreen: React.FC = () => {
       }
       console.error('Error loading applications:', err);
     } finally {
-      setLoading(false);
+      if (isInitialLoad) {
+        setLoading(false);
+      }
     }
   }, [locationId, postingId, dedicatedApi, track]);
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 30000);
+    loadData(true);
+    const interval = setInterval(() => loadData(false), 30000);
     return () => clearInterval(interval);
   }, [loadData]);
 
@@ -98,16 +104,35 @@ const ApplicantsScreen: React.FC = () => {
     if (!locationId || !postingId) return;
 
     try {
-      await dedicatedApi.acceptApplication(locationId, postingId, applicationId);
-      await loadData();
+      const response = await dedicatedApi.acceptApplication(locationId, postingId, applicationId);
+      
+      // Update local state based on response
+      if (response.posting) {
+        setPosting(response.posting);
+        
+        // If the posting is now filled, mark other pending applications as auto-declined
+        if (response.posting.status === 'filled') {
+          setApplications(prev => prev.map(app => {
+            if (app.applicationId === applicationId) {
+              return { ...app, status: 'accepted' };
+            } else if (app.status === 'applied') {
+              return { ...app, status: 'auto_declined' };
+            }
+            return app;
+          }));
+        }
+      }
+      
+      // Refresh to get the full updated state including phone numbers
+      await loadData(false);
       setConfirmAccept(null);
       
-      const filled = posting && posting.acceptedCount + 1 === posting.headcount;
+      const filled = response.posting?.status === 'filled';
       track('applicant_accepted', {
         role: 'business',
         locationId,
         postingId,
-        filled: !!filled,
+        filled,
       });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
@@ -126,7 +151,7 @@ const ApplicantsScreen: React.FC = () => {
       if (code && errorCodes.includes(code)) {
         const errorKey = mapDedicatedAgentsErrorCode(code);
         setSnackbarMessage(t(errorKey, 'An error occurred'));
-        await loadData();
+        await loadData(false);
       } else {
         setSnackbarMessage(t('dedicatedAgents.generic', 'Something went wrong'));
       }
@@ -147,7 +172,7 @@ const ApplicantsScreen: React.FC = () => {
 
     try {
       await dedicatedApi.declineApplication(locationId, postingId, applicationId);
-      await loadData();
+      await loadData(false);
       
       track('applicant_declined', {
         role: 'business',
@@ -166,10 +191,11 @@ const ApplicantsScreen: React.FC = () => {
     if (!locationId || !postingId) return;
 
     try {
+      setUpdatingTerms(true);
       await dedicatedApi.updatePosting(locationId, postingId, {
         terms: newTerms.trim() || null,
       });
-      await loadData();
+      await loadData(false);
       setEditingTerms(false);
       setSnackbarMessage(t('dedicatedAgents.applicant.termsEdited', 'Applicants were notified'));
       
@@ -183,6 +209,8 @@ const ApplicantsScreen: React.FC = () => {
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
       setSnackbarMessage(t(errorKey, 'Something went wrong'));
       console.error('Error updating terms:', err);
+    } finally {
+      setUpdatingTerms(false);
     }
   };
 
@@ -190,6 +218,7 @@ const ApplicantsScreen: React.FC = () => {
     if (!locationId || !postingId) return;
 
     try {
+      setClosing(true);
       const response = await dedicatedApi.closePosting(locationId, postingId);
       
       track('posting_closed', {
@@ -206,6 +235,8 @@ const ApplicantsScreen: React.FC = () => {
       setSnackbarMessage(t(errorKey, 'Something went wrong'));
       console.error('Error closing posting:', err);
       setConfirmClose(false);
+    } finally {
+      setClosing(false);
     }
   };
 
@@ -271,12 +302,15 @@ const ApplicantsScreen: React.FC = () => {
                   needed: posting.headcount,
                 })}
                 {' · '}
-                {new Date(posting.expiresAt).toLocaleDateString()}
+                {new Date(posting.expiresAt).toLocaleDateString(i18n.language)}
               </Typography>
             </Stack>
 
             {isOpen && (
-              <IconButton onClick={() => setConfirmClose(true)}>
+              <IconButton 
+                onClick={() => setConfirmClose(true)}
+                aria-label={t('dedicatedAgents.ariaLabels.closePosting', 'Close posting')}
+              >
                 <CloseIcon />
               </IconButton>
             )}
@@ -308,10 +342,16 @@ const ApplicantsScreen: React.FC = () => {
                   fullWidth
                 />
                 <Stack direction="row" spacing={1} justifyContent="flex-end">
-                  <Button size="small" onClick={() => setEditingTerms(false)}>
+                  <Button size="small" onClick={() => setEditingTerms(false)} disabled={updatingTerms}>
                     {t('common.cancel', 'Cancel')}
                   </Button>
-                  <Button size="small" variant="contained" onClick={handleUpdateTerms}>
+                  <Button 
+                    size="small" 
+                    variant="contained" 
+                    onClick={handleUpdateTerms}
+                    disabled={updatingTerms}
+                    startIcon={updatingTerms ? <CircularProgress size={16} /> : undefined}
+                  >
                     {t('common.save', 'Save')}
                   </Button>
                 </Stack>
@@ -368,7 +408,7 @@ const ApplicantsScreen: React.FC = () => {
                       {app.agent.firstName}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {t('dedicatedAgents.applicant.joined', 'Joined')} {new Date(app.agent.joinedAt).toLocaleDateString()} · ✓{' '}
+                      {t('dedicatedAgents.applicant.joined', 'Joined')} {new Date(app.agent.joinedAt).toLocaleDateString(i18n.language)} · ✓{' '}
                       {app.deliveriesCompleted} · ✕ {app.missedDeliveries}
                       {app.onTimePickupPct !== null && ` · ${app.onTimePickupPct}% ${t('dedicatedAgents.applicant.onTimeShort', 'on-time')}`}
                       {app.distanceKm !== null && ` · ${app.distanceKm.toFixed(1)} km`}
@@ -478,10 +518,16 @@ const ApplicantsScreen: React.FC = () => {
               )}
         </DialogTitle>
         <DialogActions>
-          <Button onClick={() => setConfirmClose(false)}>
+          <Button onClick={() => setConfirmClose(false)} disabled={closing}>
             {t('common.cancel', 'Cancel')}
           </Button>
-          <Button variant="contained" color="error" onClick={handleClose}>
+          <Button 
+            variant="contained" 
+            color="error" 
+            onClick={handleClose}
+            disabled={closing}
+            startIcon={closing ? <CircularProgress size={16} /> : undefined}
+          >
             {t('common.close', 'Close')}
           </Button>
         </DialogActions>

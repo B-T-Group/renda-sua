@@ -24,7 +24,7 @@ import type { PickupSlot, SlotKey } from '../../../types/dedicatedAgents';
 interface DedicatedSlotRowProps {
   slot: PickupSlot;
   onToggle: (slotKey: SlotKey, enabled: boolean, confirmPauseAgents?: boolean) => Promise<void>;
-  onPickupTimeChange: (slotKey: SlotKey, pickupTime: string) => void;
+  onPickupTimeChange: (slotKey: SlotKey, pickupTime: string) => Promise<{ error?: string }>;
   disabled?: boolean;
 }
 
@@ -49,6 +49,7 @@ const DedicatedSlotRow: React.FC<DedicatedSlotRowProps> = ({
   const [confirmDisable, setConfirmDisable] = useState(false);
   const [agentsToPause, setAgentsToPause] = useState(0);
   const [toggling, setToggling] = useState(false);
+  const [pickupTimeError, setPickupTimeError] = useState<string | null>(null);
 
   const slotLabel = t(`dedicatedAgents.slots.${slot.slotKey}`, slot.slotKey);
 
@@ -126,21 +127,37 @@ const DedicatedSlotRow: React.FC<DedicatedSlotRowProps> = ({
           </Stack>
 
           {slot.isEnabled && (
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              <ScheduleIcon fontSize="small" color="action" />
-              <FormControl size="small" sx={{ minWidth: 80 }}>
-                <Select
-                  value={slot.pickupTime}
-                  onChange={(e) => onPickupTimeChange(slot.slotKey, e.target.value)}
-                  sx={{ fontSize: '0.875rem' }}
-                >
-                  {generateTimeOptions().map((time) => (
-                    <MenuItem key={time} value={time}>
-                      {time}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
+            <Stack direction="column" spacing={0.5}>
+              <Stack direction="row" spacing={0.5} alignItems="center">
+                <ScheduleIcon fontSize="small" color="action" />
+                <FormControl size="small" sx={{ minWidth: 80 }} error={!!pickupTimeError}>
+                  <Select
+                    value={slot.pickupTime}
+                    onChange={async (e) => {
+                      setPickupTimeError(null);
+                      const result = await onPickupTimeChange(slot.slotKey, e.target.value);
+                      if (result.error) {
+                        setPickupTimeError(result.error);
+                      }
+                    }}
+                    sx={{ fontSize: '0.875rem' }}
+                    aria-label={t('dedicatedAgents.ariaLabels.pickupTimeSelect', 'Select pickup time for {{slot}}', {
+                      slot: slotLabel,
+                    })}
+                  >
+                    {generateTimeOptions().map((time) => (
+                      <MenuItem key={time} value={time}>
+                        {time}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </Stack>
+              {pickupTimeError && (
+                <Typography variant="caption" color="error" sx={{ ml: 3 }}>
+                  {pickupTimeError}
+                </Typography>
+              )}
             </Stack>
           )}
         </Stack>
@@ -149,6 +166,11 @@ const DedicatedSlotRow: React.FC<DedicatedSlotRowProps> = ({
           checked={slot.isEnabled}
           onChange={(e) => handleToggle(e.target.checked)}
           disabled={disabled || toggling}
+          inputProps={{
+            'aria-label': t('dedicatedAgents.ariaLabels.slotToggle', 'Toggle {{slot}} slot', {
+              slot: slotLabel,
+            }),
+          }}
         />
       </Box>
 

@@ -179,6 +179,7 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
                 size="small"
                 onClick={() => setHeadcount(Math.max(1, headcount - 1))}
                 disabled={headcount <= 1 || submitting}
+                aria-label={t('dedicatedAgents.ariaLabels.decreaseHeadcount', 'Decrease agent count')}
               >
                 <RemoveIcon />
               </IconButton>
@@ -187,6 +188,7 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
                 size="small"
                 onClick={() => setHeadcount(Math.min(10, headcount + 1))}
                 disabled={headcount >= 10 || submitting}
+                aria-label={t('dedicatedAgents.ariaLabels.increaseHeadcount', 'Increase agent count')}
               >
                 <AddIcon />
               </IconButton>
@@ -198,7 +200,7 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
 
           <Box>
             <Typography variant="body2" gutterBottom>
-              Slots
+              {t('dedicatedAgents.form.slots', 'Slots')}
             </Typography>
             <Stack direction="row" spacing={1} flexWrap="wrap">
               {enabledSlots.map((slot) => (
@@ -261,7 +263,7 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
               {t('dedicatedAgents.form.payLine', 'Standard delivery pay')}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              (fixed)
+              {t('dedicatedAgents.form.payFixed', '(fixed)')}
             </Typography>
           </Box>
 

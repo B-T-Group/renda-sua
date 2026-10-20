@@ -209,8 +209,8 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
     }
   };
 
-  const handlePickupTimeChange = async (slotKey: SlotKey, pickupTime: string) => {
-    if (offline) return;
+  const handlePickupTimeChange = async (slotKey: SlotKey, pickupTime: string): Promise<{ error?: string }> => {
+    if (offline) return { error: t('dedicatedAgents.offline', 'Offline') };
 
     try {
       setMutating(`pickup-${slotKey}`);
@@ -227,9 +227,23 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
 
       setSnackbarMessage(t('common.saved', 'Saved'));
       await loadData();
+      return {};
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
       const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      
+      // If it's a pickup_time_outside_slot error, return it for inline display
+      if (code === 'pickup_time_outside_slot') {
+        const [startHour, startMin] = slots.find(s => s.slotKey === slotKey)?.startTime.split(':') || ['', ''];
+        const [endHour, endMin] = slots.find(s => s.slotKey === slotKey)?.endTime.split(':') || ['', ''];
+        const errorMessage = t(errorKey, 'Choose a time between {{start}} and {{end}}', {
+          start: `${startHour}:${startMin}`,
+          end: `${endHour}:${endMin}`,
+        });
+        await loadData();
+        return { error: errorMessage };
+      }
+      
       setSnackbarMessage(t(errorKey, 'An error occurred'));
 
       track('action_conflict', {
@@ -240,6 +254,7 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
 
       console.error('Error updating pickup time:', err);
       await loadData();
+      return {};
     } finally {
       setMutating(null);
     }
