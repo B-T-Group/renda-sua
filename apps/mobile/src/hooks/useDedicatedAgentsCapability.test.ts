@@ -34,7 +34,7 @@ describe('useDedicatedAgentsCapability logic', () => {
   });
 
   it('should hide on commercial_focus reason', () => {
-    const capability = {
+    const capability: any = {
       success: true,
       enabled: true,
       country: 'CM',
@@ -51,7 +51,7 @@ describe('useDedicatedAgentsCapability logic', () => {
   });
 
   it('should hide on no_agent reason', () => {
-    const capability = {
+    const capability: any = {
       success: true,
       enabled: true,
       country: 'CM',
@@ -68,7 +68,7 @@ describe('useDedicatedAgentsCapability logic', () => {
   });
 
   it('should hide on 404 error', () => {
-    const capability = {
+    const capability: any = {
       success: false,
       enabled: false,
     };
@@ -83,7 +83,7 @@ describe('useDedicatedAgentsCapability logic', () => {
   });
 
   it('should hide on network error', () => {
-    const capability = {
+    const capability: any = {
       success: false,
     };
 

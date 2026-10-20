@@ -252,16 +252,14 @@ function ProfileScreen() {
         }
         
         // Refresh profile
-        if (loadUserProfile) {
-          await loadUserProfile();
-        }
+        await refetchMe();
       }
     } catch {
       Alert.alert(t('common.error'), t('profile.photoError'));
     } finally {
       setPhotoLoading(false);
     }
-  }, [auth, t, loadUserProfile]);
+  }, [auth, t, refetchMe]);
 
   const persistProfile = useCallback(async () => {
     if (!me) return;
