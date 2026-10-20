@@ -421,6 +421,9 @@ export type DelegateRootStackParamList = {
     highlightMessageId?: string;
     draftMessage?: string;
   };
+  BusinessLocationDedicatedAgents: { locationId: string };
+  DedicatedPostingForm: { locationId: string };
+  DedicatedApplicants: { locationId: string; postingId: string };
 };
 
 export type DelegateAppNavScreen =
