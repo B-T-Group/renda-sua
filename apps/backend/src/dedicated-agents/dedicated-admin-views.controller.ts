@@ -57,6 +57,13 @@ export class DedicatedAdminViewsController {
     return { success: true, ...(await this.service.picker(scope, String(locationId ?? ''))) };
   }
 
+  @Get('capability')
+  @ApiOperation({ summary: 'Countries in the caller’s geo scope with dedicated_agents_enabled on: { enabled, countries }' })
+  async capability() {
+    const scope = await this.geo.require(PlatformPermissions.MANAGE_AGENTS);
+    return { success: true, ...(await this.service.capability(scope)) };
+  }
+
   @Get('locations')
   @ApiOperation({ summary: '#594 G10: search locations (store / business name or city) in scope, flag-on countries only' })
   @ApiQuery({ name: 'q', required: true, description: 'At least 2 characters' })
