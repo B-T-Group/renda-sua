@@ -26,6 +26,7 @@ import type { AppNavScreen } from '../../navigation/AppNavigator';
 import { agentDisplayName, agentInitial } from '../../utils/agentProfileDisplay';
 import { useAgentLocationOptional } from '../../contexts/AgentLocationContext';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
+import { useDedicatedAgentsCapability } from '../../hooks/useDedicatedAgentsCapability';
 
 const ROOT_STACK_SCREENS: AppNavScreen[] = [
   'Earnings',
@@ -68,6 +69,7 @@ function MenuTabScreen() {
   const locationCtx = useAgentLocationOptional();
   const { isStripeRail } = useIsStripeRail();
   const { showCommercial } = useAgentFocus(true);
+  const { shouldShowDedicatedAgents } = useDedicatedAgentsCapability();
 
   const logoutSheet = useLogoutAccountSheet();
 
@@ -184,10 +186,10 @@ function MenuTabScreen() {
               onPress={() => goTo('AgentBusinessReferral')}
             />
           ) : null}
-          {showCommercial ? (
+          {shouldShowDedicatedAgents ? (
             <UserMenuRow
               icon="storefront-check"
-              label={t('dedicatedAgents.agent.opportunities', 'Opportunities')}
+              label={t('dedicatedAgents.agent.opportunities', 'Dedicated opportunities')}
               subtitle={t('dedicatedAgents.agent.opportunitiesMenu', 'Find dedicated opportunities')}
               onPress={() => goTo('DedicatedHub')}
             />

@@ -11,11 +11,12 @@ import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import type { DedicatedOpportunity } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 import { useProfilePhotoUpload } from '../../hooks/useProfilePhotoUpload';
+import { mapDedicatedError } from '../../utils/dedicatedAgentsErrors';
+import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedOpportunityDetail'>;
 
-const DAY_LETTERS_EN = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-const DAY_LETTERS_FR = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+// Day letters now come from i18n locale keys: common.dayLetters.M, etc.
 
 const SLOT_ICONS: Record<string, string> = {
   morning: 'weather-sunset-up',
@@ -23,18 +24,18 @@ const SLOT_ICONS: Record<string, string> = {
   evening: 'weather-night',
 };
 
-function mapDedicatedError(code: string, t: any): string {
-  const errorKey = `dedicatedAgents.errors.${code}`;
-  return t(errorKey, t('dedicatedAgents.generic', 'Something went wrong'));
-}
-
 export default function DedicatedOpportunityDetailScreen({ route, navigation }: Props) {
   const { postingId } = route.params;
   const { t, i18n } = useTranslation();
   const { colors, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const { pickAndUploadPhoto, uploading: uploadingPhoto } = useProfilePhotoUpload();
+  const { pickAndUploadPhoto, uploading: uploadingPhoto, error: uploadError } = useProfilePhotoUpload({
+    onSuccess: async () => {
+      await loadData(true);
+      await handleApply();
+    },
+  });
 
   const [loading, setLoading] = useState(true);
   const [opportunity, setOpportunity] = useState<DedicatedOpportunity | null>(null);
@@ -42,32 +43,52 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const [photoGateVisible, setPhotoGateVisible] = useState(false);
   const [snackMessage, setSnackMessage] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
+  const [error, setError] = useState<string | null>(null);
+  
+  const loadData = useCallback(async (isRefresh = false) => {
     try {
-      setLoading(true);
+      if (!isRefresh) {
+        setLoading(true);
+      }
+      setError(null);
       const res = await dedicatedAgentsService.getOpportunity(postingId);
       setOpportunity(res.opportunity);
     } catch (err: any) {
       console.error('Error loading opportunity:', err);
+      const status = err.response?.status;
+      if (status === 404) {
+        setError(t('dedicatedAgents.agent.noLongerAvailable', 'This opportunity is no longer available'));
+      } else {
+        setError(t('dedicatedAgents.generic', 'Something went wrong'));
+      }
     } finally {
-      setLoading(false);
+      if (!isRefresh) {
+        setLoading(false);
+      }
     }
-  }, [postingId]);
+  }, [postingId, t]);
 
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    // Track opportunity opened when component mounts
+    if (postingId) {
+      dedicatedAnalytics.trackDedicatedOpportunityOpened(postingId, route.params.storeName || 'Unknown');
+    }
+  }, [loadData, postingId, route.params.storeName]);
 
   const handleApply = async () => {
     try {
+      dedicatedAnalytics.trackDedicatedApplyTapped(postingId);
       setSubmitting(true);
       await dedicatedAgentsService.applyToOpportunity(postingId);
-      setSnackMessage(t('dedicatedAgents.agent.applied', 'Applied'));
-      await loadData();
+      dedicatedAnalytics.trackDedicatedApplySucceeded(postingId, opportunity?.storeName || 'Unknown');
+      setSnackMessage(t('dedicatedAgents.agent.appliedSnackbar', 'Application submitted'));
+      await loadData(true);
     } catch (err: any) {
       const errorCode = err.response?.data?.code;
       
       if (err.response?.status === 422 && errorCode === 'PROFILE_PHOTO_REQUIRED') {
+        dedicatedAnalytics.trackDedicatedPhotoGateShown('profile_photo_required');
         setPhotoGateVisible(true);
       } else if (errorCode === 'posting_not_open' || errorCode === 'application_closed') {
         const msg = mapDedicatedError(errorCode, t);
@@ -87,11 +108,17 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   };
 
   const handlePhotoSource = async (source: 'camera' | 'gallery') => {
+    if (source === 'camera') {
+      dedicatedAnalytics.trackDedicatedPhotoGateCameraOpened();
+    } else {
+      dedicatedAnalytics.trackDedicatedPhotoGateGalleryOpened();
+    }
     const success = await pickAndUploadPhoto(source);
     if (success) {
-      await handleApply();
+      dedicatedAnalytics.trackDedicatedPhotoGateCompleted();
       setPhotoGateVisible(false);
     }
+    // If failed, keep sheet open for retry (don't close)
   };
 
   const handleWithdraw = () => {
@@ -106,14 +133,15 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
             try {
               setSubmitting(true);
               await dedicatedAgentsService.withdrawApplication(postingId);
-              setSnackMessage(t('dedicatedAgents.agent.withdraw', 'Withdrawn'));
-              await loadData();
+              dedicatedAnalytics.trackDedicatedApplicationWithdrawn(postingId);
+              setSnackMessage(t('dedicatedAgents.agent.withdrawnSnackbar', 'Application withdrawn'));
+              await loadData(true);
             } catch (err: any) {
               const errorCode = err.response?.data?.code;
               if (errorCode === 'application_not_pending') {
                 const msg = mapDedicatedError(errorCode, t);
                 setSnackMessage(msg);
-                await loadData();
+                await loadData(true);
               } else {
                 const msg = errorCode ? mapDedicatedError(errorCode, t) : t('dedicatedAgents.generic', 'Something went wrong');
                 setSnackMessage(msg);
@@ -135,6 +163,31 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
     );
   }
 
+  if (error) {
+    const isNotFound = error === t('dedicatedAgents.agent.noLongerAvailable', 'This opportunity is no longer available');
+    return (
+      <View style={[styles.center, { backgroundColor: colors.background.default }]}>
+        <MaterialCommunityIcons 
+          name={isNotFound ? "alert-circle" : "wifi-off"} 
+          size={48} 
+          color={colors.text.disabled} 
+        />
+        <Text variant="titleMedium" style={{ marginTop: spacing.md, marginBottom: spacing.lg }}>
+          {error}
+        </Text>
+        {!isNotFound ? (
+          <Button mode="outlined" onPress={() => loadData()}>
+            {t('common.retry', 'Retry')}
+          </Button>
+        ) : (
+          <Button mode="outlined" onPress={() => navigation.goBack()}>
+            {t('common.back', 'Back')}
+          </Button>
+        )}
+      </View>
+    );
+  }
+
   if (!opportunity) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background.default }]}>
@@ -152,13 +205,18 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
     );
   }
 
+  const isPostingOpen = opportunity.status === 'open';
+  const isFilled = !isPostingOpen;
+  
   const canApply =
     !opportunity.application &&
-    opportunity.status === 'open' &&
+    isPostingOpen &&
     !opportunity.disabledReason;
 
   const isApplied = opportunity.application?.status === 'applied';
-  const dayLetters = i18n.language === 'fr' ? DAY_LETTERS_FR : DAY_LETTERS_EN;
+  const dayLetters = ['M', 'T', 'W', 'Th', 'F', 'Sa', 'Su'].map((key) =>
+    t(`common.dayLetters.${key}`, key)
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.default }}>
@@ -259,7 +317,20 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
           },
         ]}
       >
-        {canApply && (
+        {isFilled && (
+          <Card style={{ margin: spacing.md, backgroundColor: colors.background.default }}>
+            <Card.Content>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <MaterialCommunityIcons name="storefront-check" size={24} color={colors.text.secondary} />
+                <Text variant="bodyMedium" style={{ marginLeft: spacing.sm, color: colors.text.secondary }}>
+                  {t('dedicatedAgents.agent.filled', 'This spot was filled')}
+                </Text>
+              </View>
+            </Card.Content>
+          </Card>
+        )}
+
+        {!isFilled && canApply && (
           <Button
             mode="contained"
             onPress={handleApply}
@@ -271,11 +342,12 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
           </Button>
         )}
 
-        {isApplied && (
+        {!isFilled && isApplied && (
           <Button
             mode="outlined"
             onPress={handleWithdraw}
             disabled={submitting}
+            loading={submitting}
             style={{ marginHorizontal: spacing.md }}
           >
             {t('dedicatedAgents.agent.withdraw', 'Withdraw')}

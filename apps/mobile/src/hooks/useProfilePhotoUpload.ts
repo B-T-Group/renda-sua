@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../stores/RootStore';
+import { uploadProfilePhoto } from '../services/profilePhotoApi';
 
 const IMAGE_LIBRARY_PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
   mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -17,7 +18,7 @@ export function isSupportedImageAsset(asset: ImagePicker.ImagePickerAsset): bool
   return supported.includes(asset.mimeType.toLowerCase());
 }
 
-export function useProfilePhotoUpload() {
+export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void> }) {
   const { t } = useTranslation();
   const { auth } = useStore();
   const [uploading, setUploading] = useState(false);
@@ -65,7 +66,26 @@ export function useProfilePhotoUpload() {
           return false;
         }
 
+        // Save locally first
         await auth.setLocalProfilePhoto(result.assets[0].uri);
+
+        // Upload to server
+        const uploadResult = await uploadProfilePhoto(result.assets[0].uri);
+        
+        if (!uploadResult.success) {
+          const msg = uploadResult.error || t('profile.photoError', 'Failed to upload photo');
+          setError(msg);
+          return false;
+        }
+
+        // Refresh 'me' profile to get updated photo URL
+        // This is handled by the parent component calling the refetch
+
+        // Call success callback if provided (e.g., to re-apply)
+        if (options?.onSuccess) {
+          await options.onSuccess();
+        }
+
         return true;
       } catch (err: any) {
         const msg = err.message || t('profile.photoError', 'Failed to upload photo');
@@ -75,7 +95,7 @@ export function useProfilePhotoUpload() {
         setUploading(false);
       }
     },
-    [auth, t]
+    [auth, t, options]
   );
 
   return {

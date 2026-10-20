@@ -236,7 +236,7 @@ export function OrderOfferView({
         </View>
 
         {details?.offerKind === 'dedicated' && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.md, paddingHorizontal: spacing.md }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
             <MaterialCommunityIcons
               name="storefront-check"
               size={18}
@@ -259,7 +259,7 @@ export function OrderOfferView({
           </View>
         )}
 
-        <View style={[styles.metricsRow, { marginTop: spacing.lg }]}>
+        <View style={[styles.metricsRow, { marginTop: details?.offerKind === 'dedicated' ? 0 : spacing.lg }]}>
           <Metric
             icon="map-marker-distance"
             label={t('agent.orderOffer.distance', 'Distance')}

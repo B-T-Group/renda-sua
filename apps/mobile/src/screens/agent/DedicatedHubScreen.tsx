@@ -25,6 +25,7 @@ import type {
   OpportunityIneligibleReason,
 } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
+import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedHub'>;
 
@@ -68,6 +69,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
         const res = await dedicatedAgentsService.getOpportunities();
         setOpportunities(res.opportunities);
         setGateReason(null);
+        dedicatedAnalytics.trackDedicatedOpportunitiesViewed(res.opportunities.length);
       } else {
         const res = await dedicatedAgentsService.getMyAssignments();
         setAssignments(res.assignments);
@@ -76,6 +78,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
           initialOffToday[a.assignmentId] = a.offToday;
         });
         setOffTodayOptimistic(initialOffToday);
+        dedicatedAnalytics.trackDedicatedMyStoresViewed(res.assignments.length);
       }
       setError(null);
     } catch (err: any) {
@@ -83,10 +86,12 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
       const errorCode = err.response?.data?.code;
       const reason = err.response?.data?.reason;
 
-      if (status === 403 && errorCode === 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE') {
-        setGateReason(reason || 'not_verified');
+      const { shouldShowGate, shouldHideOnError } = await import('../../utils/dedicatedAgentsErrors');
+      
+      if (shouldShowGate(status, errorCode, reason)) {
+        setGateReason(reason);
         setError(null);
-      } else if (status === 404 || status === 403) {
+      } else if (shouldHideOnError(status, errorCode, reason)) {
         setError(null);
       } else {
         console.error('Error loading dedicated agents data:', err);
@@ -107,6 +112,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       if (gateReason) {
+        dedicatedAnalytics.trackDedicatedAgentGateShown(gateReason);
         loadData();
       }
     }, [gateReason, loadData])
@@ -121,6 +127,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
     const originalValue = assignments.find(a => a.assignmentId === assignmentId)?.offToday ?? false;
     
     setOffTodayOptimistic(prev => ({ ...prev, [assignmentId]: newValue }));
+    dedicatedAnalytics.trackDedicatedOffTodayToggled(assignmentId, newValue);
 
     try {
       await dedicatedAgentsService.updateOffToday(assignmentId, { off: newValue });
@@ -129,9 +136,11 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
 
       const errorCode = err.response?.data?.code;
       if (errorCode === 'assignment_removed') {
+        dedicatedAnalytics.trackDedicatedActionConflict('toggle_off_today', 'assignment_removed');
         setSnackMessage(t('dedicatedAgents.agent.removedByStore', 'This store removed you'));
         await loadData();
       } else if (errorCode === 'assignment_changed') {
+        dedicatedAnalytics.trackDedicatedActionConflict('toggle_off_today', 'assignment_changed');
         const msg = mapDedicatedError(errorCode, t);
         setSnackMessage(msg);
         await loadData();
@@ -202,7 +211,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
             buttons={[
               {
                 value: 'opportunities',
-                label: t('dedicatedAgents.agent.opportunities', 'Opportunities'),
+                label: t('dedicatedAgents.agent.opportunities', 'Dedicated opportunities'),
               },
               {
                 value: 'stores',
@@ -247,6 +256,11 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
               <Text variant="titleMedium" style={{ marginTop: spacing.md, textAlign: 'center' }}>
                 {t('dedicatedAgents.agent.opp.empty', 'No openings near you right now')}
               </Text>
+              {!me?.address && (
+                <Text variant="bodyMedium" style={{ marginTop: spacing.sm, textAlign: 'center', color: colors.text.secondary }}>
+                  {t('dedicatedAgents.agent.opp.addAddress', 'Add your address in settings to see opportunities near you')}
+                </Text>
+              )}
             </View>
           ) : (
             opportunities.map((opp) => {
