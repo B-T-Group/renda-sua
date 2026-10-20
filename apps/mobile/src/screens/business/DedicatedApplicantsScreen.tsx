@@ -101,20 +101,20 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
   const handleAccept = async (applicationId: string) => {
     try {
       setAcceptingApp(applicationId);
-      const response = await dedicatedAgentsService.acceptApplication(locationId, postingId, applicationId);
+      await dedicatedAgentsService.acceptApplication(locationId, postingId, applicationId);
       
-      setApplications(response.applications);
-      setPosting(response.posting);
+      await loadData();
       
       setConfirmAccept(null);
 
+      const updatedPosting = posting;
       dedicatedAgentsAnalytics.applicantAccepted({
         platform: Platform.OS as 'ios' | 'android',
         role: 'business',
         locationId,
         postingId,
         applicationId,
-        filled: response.posting.status === 'filled',
+        filled: updatedPosting?.status === 'filled',
       });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
