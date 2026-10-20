@@ -40,6 +40,7 @@ import { useStripeWithdraw } from '../../hooks/useStripeWithdraw';
 import TopUpModal from '../business/TopUpModal';
 import WithdrawModal from '../business/WithdrawModal';
 import PendingWithdrawalsPanel from './PendingWithdrawalsPanel';
+import { resolveTopUpRequest } from '../../utils/topUpRouting';
 
 // GraphQL query for fetching account transactions
 const GET_ACCOUNT_TRANSACTIONS = `
@@ -354,25 +355,21 @@ const UserAccount: React.FC<UserAccountProps> = ({
     paymentMethod: any
   ): Promise<boolean> => {
     try {
-      // Use initiatePayment for Airtel and MOOV, requestTopUp for MTN MoMo
-      if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money') {
-        await initiatePayment({
-          amount: parseFloat(amount),
-          currency: account.currency,
-          description: 'Account Top Up',
-          customerPhone: phoneNumber,
-          accountId: account.id,
-          paymentMethod: 'mobile_money',
-          transactionType: 'PAYMENT',
-        });
+      const route = resolveTopUpRequest(
+        paymentMethod,
+        phoneNumber,
+        amount,
+        account.currency,
+        account.id
+      );
+
+      if (route.endpoint === 'initiate') {
+        await initiatePayment(route.body);
       } else {
-        // Use requestTopUp for MTN MoMo
-        await requestTopUp({
-          amount,
-          phoneNumber,
-          currency: account.currency,
-        });
+        // TypeScript now knows route.body is LegacyTopUpBody
+        await requestTopUp(route.body);
       }
+
       setShowTopUpSuccess(true);
       return true;
     } catch (error) {

@@ -9,7 +9,7 @@ export interface MobilePaymentRequest {
   customerEmail?: string;
   callbackUrl?: string;
   returnUrl?: string;
-  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn';
+  provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'fedapay';
   paymentMethod?: 'mobile_money' | 'card' | 'bank_transfer';
   accountId?: string; // Account ID for top-up operations
   transactionType?: 'PAYMENT' | 'GIVE_CHANGE'; // Transaction type for mobile payments

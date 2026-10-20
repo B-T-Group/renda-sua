@@ -6,6 +6,7 @@
 const COUNTRY_PHONE_PREFIXES: Record<string, string> = {
   CM: '+237',
   GA: '+241',
+  TG: '+228',
 };
 
 /**
@@ -45,4 +46,24 @@ export function nationalDigitsToE164(
  */
 export function isE164(phone: string): boolean {
   return /^\+[1-9]\d{1,14}$/.test(phone);
+}
+
+/**
+ * Extract the country code from an E.164 phone number.
+ * @param phone - Phone number in E.164 format (e.g., "+237612345678", "+22878123456")
+ * @returns ISO country code (e.g., "CM", "TG") or null if not recognized
+ */
+export function getCountryCodeFromE164(phone: string): 'CM' | 'GA' | 'TG' | null {
+  if (!phone || !phone.startsWith('+')) {
+    return null;
+  }
+
+  // Check each known prefix
+  for (const [countryCode, prefix] of Object.entries(COUNTRY_PHONE_PREFIXES)) {
+    if (phone.startsWith(prefix)) {
+      return countryCode as 'CM' | 'GA' | 'TG';
+    }
+  }
+
+  return null;
 }
