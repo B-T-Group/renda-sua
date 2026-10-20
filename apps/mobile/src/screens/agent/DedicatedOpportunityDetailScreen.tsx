@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
-import type { AgentRootStackParamList } from '../../navigation/types';
+import type { AgentRootStackParamList } from '../../navigation/AgentRootNavigator';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import type { DedicatedOpportunity } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';

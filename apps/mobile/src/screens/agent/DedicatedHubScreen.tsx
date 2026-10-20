@@ -17,7 +17,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useStore } from '../../stores/RootStore';
-import type { AgentRootStackParamList } from '../../navigation/types';
+import type { AgentRootStackParamList } from '../../navigation/AgentRootNavigator';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import type {
   DedicatedOpportunity,
