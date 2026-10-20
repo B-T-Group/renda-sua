@@ -303,7 +303,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
-                        {app.agent.firstName} {app.agent.lastName[0]}.
+                        {app.agent.firstName}
                       </Text>
                       <Chip compact mode="outlined" style={{ alignSelf: 'flex-start' }}>
                         {t('dedicatedAgents.applicant.autoDeclined', 'Auto-declined')}
@@ -324,7 +324,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
-                        {app.agent.firstName} {app.agent.lastName[0]}.
+                        {app.agent.firstName}
                       </Text>
                       <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
                         Joined {new Date(app.agent.joinedAt).toLocaleDateString()} · ✓{' '}
@@ -380,7 +380,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
-                        {app.agent.firstName} {app.agent.lastName[0]}.
+                        {app.agent.firstName}
                       </Text>
                       {app.phone && (
                         <Button

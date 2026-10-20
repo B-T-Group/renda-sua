@@ -347,7 +347,7 @@ const ApplicantsScreen: React.FC = () => {
                   
                   <Stack flex={1} spacing={0.5}>
                     <Typography variant="body1" fontWeight={600}>
-                      {app.agent.firstName} {app.agent.lastName[0]}.
+                      {app.agent.firstName}
                     </Typography>
                     <Chip
                       label={t('dedicatedAgents.applicant.autoDeclined', 'Auto-declined')}
@@ -367,7 +367,7 @@ const ApplicantsScreen: React.FC = () => {
                   
                   <Stack flex={1} spacing={0.5}>
                     <Typography variant="body1" fontWeight={600}>
-                      {app.agent.firstName} {app.agent.lastName[0]}.
+                      {app.agent.firstName}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       Joined {new Date(app.agent.joinedAt).toLocaleDateString()} · ✓{' '}
@@ -424,7 +424,7 @@ const ApplicantsScreen: React.FC = () => {
                   
                   <Stack flex={1} spacing={0.5}>
                     <Typography variant="body1" fontWeight={600}>
-                      {app.agent.firstName} {app.agent.lastName[0]}.
+                      {app.agent.firstName}
                     </Typography>
                     {app.phone && (
                       <Stack direction="row" spacing={0.5} alignItems="center">
