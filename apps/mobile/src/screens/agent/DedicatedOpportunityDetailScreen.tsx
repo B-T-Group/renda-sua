@@ -77,7 +77,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
     if (postingId) {
       dedicatedAnalytics.trackDedicatedOpportunityOpened(postingId, 'hub');
     }
-  }, [loadData, postingId, route.params.storeName]);
+  }, [loadData, postingId]);
 
   const handleApply = async () => {
     if (isOffline) {
@@ -88,7 +88,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       dedicatedAnalytics.trackDedicatedApplyTapped(postingId);
       setSubmitting(true);
       await dedicatedAgentsService.applyToOpportunity(postingId);
-      dedicatedAnalytics.trackDedicatedApplySucceeded(postingId, opportunity?.storeName || 'Unknown');
+      dedicatedAnalytics.trackDedicatedApplySucceeded(postingId, opportunity?.store?.name || 'Unknown');
       setSnackMessage(t('dedicatedAgents.agent.appliedSnackbar', 'Application submitted'));
       await loadData(true);
     } catch (err: any) {
@@ -135,7 +135,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
     try {
       setSubmitting(true);
       await dedicatedAgentsService.applyToOpportunity(postingId);
-      dedicatedAnalytics.trackDedicatedApplySucceeded(postingId, opportunity?.storeName || 'Unknown');
+      dedicatedAnalytics.trackDedicatedApplySucceeded(postingId, opportunity?.store?.name || 'Unknown');
       setSnackMessage(t('dedicatedAgents.agent.appliedSnackbar', 'Application submitted'));
       setPhotoGateVisible(false);
       await loadData(true);

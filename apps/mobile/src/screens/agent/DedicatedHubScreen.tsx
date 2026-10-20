@@ -421,7 +421,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
                       </Text>
                       <Switch
                         value={currentOffToday}
-                        onValueChange={(value) =>
+                        onValueChange={(value: boolean) =>
                           handleToggleOffToday(assignment.assignmentId, value)
                         }
                       />
