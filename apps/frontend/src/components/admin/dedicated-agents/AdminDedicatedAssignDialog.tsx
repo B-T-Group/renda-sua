@@ -133,6 +133,12 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
     }
   }, [selectedLocation, activeStep]);
 
+  useEffect(() => {
+    setSelectedAgent(null);
+    setAgents([]);
+    setSelectedSlots([]);
+  }, [selectedLocation]);
+
   const loadAgents = async () => {
     if (!selectedLocation) return;
 

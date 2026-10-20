@@ -256,7 +256,7 @@ export function AdminDedicatedAssignmentsSection() {
                 onChange={(e) => setSourceFilter(e.target.value)}
               >
                 <MenuItem value="all">{t('common.all', 'All')}</MenuItem>
-                <MenuItem value="posting_accept">{t('dedicatedAgents.superuser.posting', 'Posting')}</MenuItem>
+                <MenuItem value="posting">{t('dedicatedAgents.superuser.posting', 'Posting')}</MenuItem>
                 <MenuItem value="superuser_assign">{t('dedicatedAgents.superuser.adminAssigned', 'Admin assigned')}</MenuItem>
               </Select>
             </FormControl>

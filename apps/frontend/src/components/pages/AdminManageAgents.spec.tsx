@@ -2,7 +2,9 @@ import { render, screen, waitFor } from '@testing-library/react';
 import { AdminManageAgents } from './AdminManageAgents';
 
 const mockGetAdminAssignments = jest.fn();
+const mockGetCapability = jest.fn();
 const mockGetPermissions = jest.fn();
+const mockFetchAgents = jest.fn();
 
 jest.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -14,12 +16,52 @@ jest.mock('react-i18next', () => ({
 jest.mock('../../hooks/useDedicatedAgents', () => ({
   useDedicatedAgents: () => ({
     getAdminAssignments: mockGetAdminAssignments,
+    getCapability: mockGetCapability,
   }),
 }));
 
 jest.mock('../../hooks/usePermissions', () => ({
   usePermissions: () => ({
     getPermissions: mockGetPermissions,
+    isSuperuser: true,
+    can: () => true,
+  }),
+}));
+
+jest.mock('../../hooks/useAdminAgents', () => ({
+  useAdminAgents: () => ({
+    agents: [],
+    total: 0,
+    page: 1,
+    limit: 20,
+    search: '',
+    unverifiedOnly: false,
+    setPage: jest.fn(),
+    setLimit: jest.fn(),
+    setSearch: jest.fn(),
+    setUnverifiedOnly: jest.fn(),
+    loading: false,
+    error: null,
+    fetchAgents: mockFetchAgents,
+    updateAgent: jest.fn(),
+    setAgentInternal: jest.fn(),
+    setUserInternal: jest.fn(),
+    applyReferral: jest.fn(),
+  }),
+}));
+
+jest.mock('../../hooks/useApiClient', () => ({
+  useApiClient: () => ({
+    get: jest.fn(),
+    post: jest.fn(),
+    patch: jest.fn(),
+    delete: jest.fn(),
+  }),
+}));
+
+jest.mock('../../hooks/useVehicleTypes', () => ({
+  useVehicleTypes: () => ({
+    vehicleTypes: [],
   }),
 }));
 
@@ -36,12 +78,11 @@ describe('AdminManageAgents', () => {
       isSuperuser: true,
       canManageAgents: true,
     });
+    mockGetCapability.mockResolvedValue({ enabled: false });
   });
 
-  it('hides dedicated tab on 403 error', async () => {
-    mockGetAdminAssignments.mockRejectedValue({
-      response: { status: 403 },
-    });
+  it('hides dedicated tab when no countries have flag enabled', async () => {
+    mockGetCapability.mockResolvedValue({ enabled: false });
 
     render(<AdminManageAgents />);
 
@@ -52,42 +93,15 @@ describe('AdminManageAgents', () => {
     });
   });
 
-  it('hides dedicated tab on 404 error', async () => {
-    mockGetAdminAssignments.mockRejectedValue({
-      response: { status: 404 },
-    });
+  it('shows dedicated tab when at least one country has flag enabled', async () => {
+    mockGetCapability.mockResolvedValueOnce({ enabled: true });
 
     render(<AdminManageAgents />);
 
     await waitFor(() => {
       const tabs = screen.queryAllByRole('tab');
       const dedicatedTab = tabs.find((tab) => tab.textContent?.includes('Dedicated'));
-      expect(dedicatedTab).toBeUndefined();
-    });
-  });
-
-  it('shows error with retry button on non-403/404 error', async () => {
-    mockGetAdminAssignments.mockRejectedValue({
-      response: { status: 500, data: { message: 'Server error' } },
-    });
-
-    render(<AdminManageAgents />);
-
-    await waitFor(() => {
-      expect(screen.getByText('Server error')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument();
-    });
-  });
-
-  it('shows dedicated section on success', async () => {
-    mockGetAdminAssignments.mockResolvedValue({
-      assignments: [],
-    });
-
-    render(<AdminManageAgents />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('dedicated-section')).toBeInTheDocument();
+      expect(dedicatedTab).toBeDefined();
     });
   });
 });

@@ -8,7 +8,7 @@ export type ApplicationStatus = 'applied' | 'withdrawn' | 'accepted' | 'declined
 
 export type AssignmentStatus = 'active' | 'paused';
 
-export type AssignmentSource = 'posting_accept' | 'superuser_assign';
+export type AssignmentSource = 'posting' | 'superuser_assign';
 
 export type OpportunityIneligibleReason =
   | 'not_verified'

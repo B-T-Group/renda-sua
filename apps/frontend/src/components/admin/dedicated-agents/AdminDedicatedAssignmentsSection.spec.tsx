@@ -94,7 +94,7 @@ describe('AdminDedicatedAssignmentsSection', () => {
 
     fireEvent.click(pauseButton);
 
-    await waitFor(() => expect(pauseButton).toBeDisabled(), { timeout: 1000 });
+    await waitFor(() => expect(pauseButton).toHaveAttribute('disabled'));
 
     resolveUpdate();
 
@@ -176,7 +176,7 @@ describe('AdminDedicatedAssignmentsSection', () => {
 
     expect(removeConfirm).toBeDefined();
     fireEvent.click(removeConfirm!);
-    await waitFor(() => expect(removeConfirm).toBeDisabled());
+    await waitFor(() => expect(removeConfirm).toHaveAttribute('disabled'));
     resolveDelete();
   });
 });

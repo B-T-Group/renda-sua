@@ -89,7 +89,7 @@ describe('AdminDedicatedAssignDialog', () => {
     );
 
     const nextButton = screen.getByRole('button', { name: /next/i });
-    expect(nextButton).toBeDisabled();
+    expect(nextButton).toHaveAttribute('disabled');
   });
 
   it('maps 403 error to step 0 with error message', async () => {
@@ -147,7 +147,7 @@ describe('AdminDedicatedAssignDialog', () => {
     expect(bobBox).toBeTruthy();
 
     const assignButton = screen.getByRole('button', { name: /assign/i });
-    expect(assignButton).toBeDisabled();
+    expect(assignButton).toHaveAttribute('disabled');
   });
 
   it('tracks failure with jumpedToStep metadata', async () => {

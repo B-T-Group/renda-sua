@@ -81,6 +81,7 @@ const AdminManageAgents: React.FC = () => {
   } = useAdminAgents();
   const {
     getAdminAssignments,
+    getCapability,
   } = useDedicatedAgents();
   const { vehicleTypes } = useVehicleTypes();
   const apiClient = useApiClient();
@@ -90,6 +91,7 @@ const AdminManageAgents: React.FC = () => {
   const [currentTab, setCurrentTab] = useState(0);
   const [showDedicatedTab, setShowDedicatedTab] = useState(false);
   const [dedicatedTabError, setDedicatedTabError] = useState<string | null>(null);
+  const [currentTab, setCurrentTab] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [verificationAgentId, setVerificationAgentId] = useState<string | null>(
