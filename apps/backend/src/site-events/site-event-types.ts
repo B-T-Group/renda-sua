@@ -173,6 +173,21 @@ export const SITE_EVENT_TYPES_V1 = [
   'search.empty_rung_clicked',
   'search.filter_removed_from_empty',
   'card.rating_shown',
+  // Dedicated agents UI events (#594)
+  'dedicated_ui.section_viewed',
+  'dedicated_ui.slot_toggled',
+  'dedicated_ui.pickup_time_changed',
+  'dedicated_ui.agent_paused',
+  'dedicated_ui.agent_resumed',
+  'dedicated_ui.agent_removed',
+  'dedicated_ui.posting_form_opened',
+  'dedicated_ui.posting_created',
+  'dedicated_ui.posting_closed',
+  'dedicated_ui.posting_terms_edited',
+  'dedicated_ui.applicants_viewed',
+  'dedicated_ui.applicant_accepted',
+  'dedicated_ui.applicant_declined',
+  'dedicated_ui.action_conflict',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event

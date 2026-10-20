@@ -8,16 +8,10 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
-  FormControl,
   FormHelperText,
   IconButton,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   TextField,
-  ToggleButton,
-  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import { Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
@@ -108,7 +102,7 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
     try {
       setSubmitting(true);
 
-      const response = await dedicatedApi.createPosting(locationId, {
+      await dedicatedApi.createPosting(locationId, {
         headcount,
         slotKeys: selectedSlots,
         daysOfWeek: selectedDays,

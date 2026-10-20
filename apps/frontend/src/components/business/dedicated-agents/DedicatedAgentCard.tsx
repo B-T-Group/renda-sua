@@ -6,8 +6,6 @@ import {
   Chip,
   Dialog,
   DialogActions,
-  DialogContent,
-  DialogContentText,
   DialogTitle,
   IconButton,
   Stack,

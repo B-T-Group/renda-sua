@@ -9,8 +9,6 @@ import {
   Container,
   Dialog,
   DialogActions,
-  DialogContent,
-  DialogContentText,
   DialogTitle,
   IconButton,
   Paper,
@@ -100,7 +98,7 @@ const ApplicantsScreen: React.FC = () => {
     if (!locationId || !postingId) return;
 
     try {
-      const response = await dedicatedApi.acceptApplication(locationId, postingId, applicationId);
+      await dedicatedApi.acceptApplication(locationId, postingId, applicationId);
       await loadData();
       setConfirmAccept(null);
       
