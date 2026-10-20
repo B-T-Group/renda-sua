@@ -84,7 +84,7 @@ export function acceptCheckRefusal(error: unknown): ConflictException | null {
       message: 'The store has turned off one of this posting\'s slots',
     });
   }
-  const m = /dedicated_accept_agent_ineligible: (not_verified|suspended|contract_unsigned)/.exec(text);
+  const m = /dedicated_accept_agent_ineligible: (not_verified|suspended|contract_unsigned|internal_agent)/.exec(text);
   if (m) {
     return new ConflictException({
       code: DEDICATED_POSTING_ERRORS.agentIneligible,

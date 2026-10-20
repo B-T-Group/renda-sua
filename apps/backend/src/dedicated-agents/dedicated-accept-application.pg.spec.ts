@@ -39,6 +39,11 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
       .filter((d) => /^\d{14}_/.test(d) && d.slice(0, 14) >= FIRST_594)
       .sort();
     expect(dirs).toContain('20261018220000_dedicated_postings');
+    // The template predates the payment-programs tables that later migrations build on.
+    const pc = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'purchase_credit_redemptions'`);
+    if (!pc.rowCount) {
+      await db.query(`BEGIN;\n${readFileSync(join(MIGRATIONS, '1789840663276_payment_programs', 'up.sql'), 'utf8')}\nCOMMIT;`);
+    }
     for (const dir of dirs) {
       await db.query(`BEGIN;\n${readFileSync(join(MIGRATIONS, dir, 'up.sql'), 'utf8')}\nCOMMIT;`);
     }
@@ -408,6 +413,16 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
       const p = await posting(loc, 1, ['morning']);
       const x = await apply(p, await agent('Nope', opts));
       await expect(accept(db, x, loc.owner)).rejects.toThrow(new RegExp(`dedicated_accept_agent_ineligible: ${reason}`));
+      await expectNothingWritten(p, x);
+    });
+
+    it('#594 G2: refuses an internal agent (legacy application from before the change), even verified and signed', async () => {
+      const loc = await location();
+      const p = await posting(loc, 1, ['morning']);
+      const a = await agent('Staff');
+      const x = await apply(p, a);
+      await db.query(`UPDATE agents SET is_internal = true WHERE id = $1`, [a]);
+      await expect(accept(db, x, loc.owner)).rejects.toThrow(/dedicated_accept_agent_ineligible: internal_agent/);
       await expectNothingWritten(p, x);
     });
 

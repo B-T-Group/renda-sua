@@ -1,7 +1,8 @@
-import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { ForbiddenException, RequestMethod, UnauthorizedException } from '@nestjs/common';
+import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import type { HasuraUserService } from '../hasura/hasura-user.service';
 import type { DedicatedLocationAccessService } from './dedicated-location-access.service';
-import { DedicatedOpportunitiesController } from './dedicated-opportunities.controller';
+import { DedicatedCapabilityController, DedicatedOpportunitiesController } from './dedicated-opportunities.controller';
 import type { DedicatedOpportunitiesService } from './dedicated-opportunities.service';
 import { DedicatedPostingsBusinessController } from './dedicated-postings-business.controller';
 import type { DedicatedPostingsService } from './dedicated-postings.service';
@@ -65,6 +66,7 @@ describe('DedicatedOpportunitiesController', () => {
       list: jest.fn(async () => ({ opportunities: [] })),
       apply: jest.fn(async () => ({ application: {} })),
       withdraw: jest.fn(async () => ({ application: {} })),
+      detail: jest.fn(async () => ({ opportunity: { id: 'po-1' } })),
     };
     const users = { getUserId: jest.fn(() => userId) };
     const controller = new DedicatedOpportunitiesController(
@@ -82,6 +84,8 @@ describe('DedicatedOpportunitiesController', () => {
     expect(service.list).toHaveBeenCalledWith('u-a1');
     expect(service.apply).toHaveBeenCalledWith('u-a1', 'po-1');
     expect(service.withdraw).toHaveBeenCalledWith('u-a1', 'po-1');
+    await expect(controller.detail('po-1')).resolves.toEqual({ success: true, opportunity: { id: 'po-1' } });
+    expect(service.detail).toHaveBeenCalledWith('u-a1', 'po-1');
   });
 
   it('anonymous -> 401', async () => {
@@ -89,5 +93,51 @@ describe('DedicatedOpportunitiesController', () => {
     await expect(controller.list()).rejects.toBeInstanceOf(UnauthorizedException);
     await expect(controller.apply('po-1')).rejects.toBeInstanceOf(UnauthorizedException);
     expect(service.apply).not.toHaveBeenCalled();
+    await expect(controller.detail('po-1')).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(service.detail).not.toHaveBeenCalled();
+  });
+
+  it('#594 G1: GET :postingId is routed under agents/me/dedicated-opportunities', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, DedicatedOpportunitiesController)).toBe('agents/me/dedicated-opportunities');
+    expect(Reflect.getMetadata(PATH_METADATA, DedicatedOpportunitiesController.prototype.detail)).toBe(':postingId');
+    expect(Reflect.getMetadata(METHOD_METADATA, DedicatedOpportunitiesController.prototype.detail)).toBe(RequestMethod.GET);
+  });
+});
+
+describe('#594 G12: DedicatedCapabilityController', () => {
+  const setup = (userId: string | null) => {
+    const service = {
+      capabilityForAgent: jest.fn(async () => ({ enabled: true, country: 'CM', reason: null })),
+      capabilityForCountry: jest.fn(async () => ({ enabled: false, country: 'GA', reason: null })),
+    };
+    const users = { getUserId: jest.fn(() => userId) };
+    const controller = new DedicatedCapabilityController(
+      service as unknown as DedicatedOpportunitiesService,
+      users as unknown as HasuraUserService
+    );
+    return { controller, service };
+  };
+
+  it('agent variant uses the caller; country variant passes the query; both wrap in success', async () => {
+    const { controller, service } = setup('u-a1');
+    await expect(controller.forAgent()).resolves.toEqual({ success: true, enabled: true, country: 'CM', reason: null });
+    expect(service.capabilityForAgent).toHaveBeenCalledWith('u-a1');
+    await expect(controller.forCountry('ga')).resolves.toEqual({ success: true, enabled: false, country: 'GA', reason: null });
+    expect(service.capabilityForCountry).toHaveBeenCalledWith('ga');
+  });
+
+  it('anonymous -> 401 on both', async () => {
+    const { controller, service } = setup('anonymous');
+    await expect(controller.forAgent()).rejects.toBeInstanceOf(UnauthorizedException);
+    await expect(controller.forCountry('CM')).rejects.toBeInstanceOf(UnauthorizedException);
+    const none = setup(null);
+    await expect(none.controller.forAgent()).rejects.toBeInstanceOf(UnauthorizedException);
+    expect(service.capabilityForAgent).not.toHaveBeenCalled();
+    expect(service.capabilityForCountry).not.toHaveBeenCalled();
+  });
+
+  it('paths are the contract’s', () => {
+    expect(Reflect.getMetadata(PATH_METADATA, DedicatedCapabilityController.prototype.forAgent)).toBe('agents/me/dedicated-agents/capability');
+    expect(Reflect.getMetadata(PATH_METADATA, DedicatedCapabilityController.prototype.forCountry)).toBe('dedicated-agents/capability');
   });
 });

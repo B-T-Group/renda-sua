@@ -2,67 +2,24 @@ import { BadRequestException } from '@nestjs/common';
 import { PurchaseCreditsService } from './purchase-credits.service';
 
 describe('PurchaseCreditsService.restore', () => {
-  it('deletes the redemption first and only then credits the grant', async () => {
+  it('restores each redemption with ONE atomic function call (delete + re-credit together)', async () => {
     const hasura = {
       executeQuery: jest.fn(async () => ({
-        purchase_credit_redemptions: [{ id: 'r1', grant_id: 'g1', amount: 500 }],
-        purchase_credit_grants_by_pk: { revoked_at: null },
+        purchase_credit_redemptions: [
+          { id: 'r1', grant_id: 'g1', amount: 500 },
+          { id: 'r2', grant_id: 'g2', amount: 200 },
+        ],
       })),
-      executeMutation: jest.fn(async () => ({
-        delete_purchase_credit_redemptions_by_pk: { id: 'r1' },
-      })),
+      executeMutation: jest.fn(async () => ({ restore_purchase_credit_redemption: [{ id: 'x' }] })),
     };
     const service = new PurchaseCreditsService(hasura as never, {} as never);
     await service.restore('order-1');
-    expect(hasura.executeMutation).toHaveBeenNthCalledWith(
-      1,
-      expect.stringContaining('delete_purchase_credit_redemptions_by_pk'),
-      { id: 'r1' }
-    );
-    expect(hasura.executeMutation).toHaveBeenNthCalledWith(
-      2,
-      expect.stringContaining('remaining_amount'),
-      { id: 'g1', delta: 500 }
-    );
-  });
-
-  it('does not credit remaining when the grant was revoked after the debit', async () => {
-    const hasura = {
-      executeQuery: jest.fn(async (query: string) => {
-        if (query.includes('RedemptionsForOrder') || query.includes('purchase_credit_redemptions')) {
-          return {
-            purchase_credit_redemptions: [{ id: 'r1', grant_id: 'g1', amount: 500 }],
-          };
-        }
-        return { purchase_credit_grants_by_pk: { revoked_at: '2026-09-20T00:00:00.000Z' } };
-      }),
-      executeMutation: jest.fn(async () => ({
-        delete_purchase_credit_redemptions_by_pk: { id: 'r1' },
-      })),
-    };
-    const service = new PurchaseCreditsService(hasura as never, {} as never);
-    await service.restore('order-1');
-    expect(hasura.executeMutation).toHaveBeenCalledTimes(1);
-    expect(hasura.executeMutation.mock.calls[0][0]).toContain(
-      'delete_purchase_credit_redemptions_by_pk'
-    );
-  });
-
-  it('does not credit the grant when the redemption was already deleted', async () => {
-    const hasura = {
-      executeQuery: jest.fn(async () => ({
-        purchase_credit_redemptions: [{ id: 'r1', grant_id: 'g1', amount: 500 }],
-      })),
-      executeMutation: jest.fn(async () => ({
-        delete_purchase_credit_redemptions_by_pk: null,
-      })),
-    };
-    const service = new PurchaseCreditsService(hasura as never, {} as never);
-    await service.restore('order-1');
-    expect(hasura.executeMutation).toHaveBeenCalledTimes(1);
-    expect(hasura.executeMutation.mock.calls[0][0]).toContain(
-      'delete_purchase_credit_redemptions_by_pk'
-    );
+    expect(hasura.executeMutation.mock.calls.map((c: any[]) => c[1])).toEqual([{ id: 'r1' }, { id: 'r2' }]);
+    for (const [q] of hasura.executeMutation.mock.calls as any[]) {
+      expect(q).toContain('restore_purchase_credit_redemption(args: { p_redemption_id: $id })');
+      expect(q).not.toContain('delete_purchase_credit_redemptions');
+      expect(q).not.toContain('remaining_amount');
+    }
   });
 });
 

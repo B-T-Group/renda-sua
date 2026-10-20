@@ -1,0 +1,3 @@
+function:
+  name: restore_purchase_credit_redemption
+  schema: public

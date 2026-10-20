@@ -516,6 +516,34 @@ describe('FailedDeliveriesService agent fault: one atomic forfeit to the busines
     expect(w.registerTransaction).not.toHaveBeenCalled();
   });
 
+  it('a Hasura numeric string "700.00" is a full forfeit (no short alert)', async () => {
+    const w = world('700.00' as unknown as number);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(shortAlerts()).toHaveLength(0);
+    expect(forfeitCalls(w)[0].cap).toBe(700);
+  });
+
+  it('a Hasura numeric string "300.50" alerts the rounded shortfall, not NaN', async () => {
+    const w = world('300.50' as unknown as number);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(shortAlerts()[0][3]).toMatchObject({ expected: 700, actual: 300.5 });
+  });
+
+  it('a non-Error forfeit rejection is alerted with that text', async () => {
+    const w = createService();
+    w.getAccount.mockImplementation(async (userId: string) => ({ id: `acct-${userId}` }));
+    w.executeMutation.mockImplementation(async (q: string) => {
+      if (q.includes('ForfeitAgentOrderHold')) throw 'db down';
+      return {};
+    });
+    w.executeQuery.mockResolvedValue({ account_transactions: [] });
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    await (w.service as any).resolveAgentFault(order, hold);
+    const calls = (reportMoneyAnomaly as jest.Mock).mock.calls;
+    expect(calls.map((c) => c[1])).toEqual(['agent_hold_release_failed', 'agent_fault_compensation_short']);
+    expect(calls[0][2]).toContain('db down');
+  });
+
   it('no business on the order: nothing is taken from the agent, alert', async () => {
     const w = world(700);
     await (w.service as any).resolveAgentFault({ ...order, business: null }, hold);

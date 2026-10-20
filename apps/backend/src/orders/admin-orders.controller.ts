@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpException,
+  HttpCode,
   HttpStatus,
   Logger,
   Param,
@@ -38,6 +39,7 @@ import type {
 import {
   AcknowledgeRiskIncidentDto,
   AddAdminNoteDto,
+  AcknowledgeAdminCancelStepDto,
   AdminFullRefundCancelDto,
   AdminOrderStatsPeriod,
   GetAdminOrderStatsDto,
@@ -310,10 +312,10 @@ export class AdminOrdersController {
   @ApiOperation({
     summary: 'Cancel with a full refund (ops cleanup)',
     description:
-      'Superuser / financial-refunds admin only. No cancellation fee; the client is refunded to their Rendasua wallet (not to the payment provider) and agent holds are released exactly once. Only before pickup (pending_payment, pending, confirmed, preparing, ready_for_pickup, assigned_to_agent). The response carries depositRefund.status.',
+      'Superuser / financial-refunds admin only. No cancellation fee; the client is refunded to their Rendasua wallet (not to the payment provider) and agent holds are released exactly once. Only before pickup (pending_payment, pending, confirmed, preparing, ready_for_pickup, assigned_to_agent). Retrying after a queued-refund failure re-enqueues order.cancelled. The response carries depositRefund.status.',
   })
-  @ApiResponse({ status: 201, description: 'Cancelled; refund queued (order.cancelled)' })
-  @ApiResponse({ status: 409, description: 'Already cancelled / status moved / goods already picked up' })
+  @ApiResponse({ status: 201, description: 'Cancelled; refund queued (order.cancelled). Retry re-queues if already cancelled by this endpoint.' })
+  @ApiResponse({ status: 409, description: 'Already cancelled by another flow / status moved / goods already picked up' })
   async fullRefundCancel(
     @Param('orderId') orderId: string,
     @Body() dto: AdminFullRefundCancelDto
@@ -324,6 +326,34 @@ export class AdminOrdersController {
     const result = await this.ordersService.adminFullRefundCancel(orderId, reason);
     await this.auditFullRefundCancel(orderId, reason, result.previousStatus, result.depositRefund, result.failedSteps);
     return result;
+  }
+
+  /**
+   * #627 nit: acknowledge a half-done non-repeatable cancel step (releaseReservedStock,
+   * inventoryReleaseHook) after checking / fixing it by hand. The engine never re-runs
+   * those, so without this every retry alerts on them. QA #642 H1: settling stock by
+   * hand is a money-adjacent override, so it is gated like the full-refund cancel:
+   * SUPERUSER + FINANCIAL_REFUNDS, FINANCIAL_REFUNDS country scope. A repeat is a 200.
+   */
+  @Post(':orderId/cancel-steps/:step/acknowledge')
+  @HttpCode(HttpStatus.OK)
+  @RequireRoles(PlatformRoles.SUPERUSER)
+  @RequirePermissions(PlatformPermissions.FINANCIAL_REFUNDS)
+  @ApiOperation({ summary: 'Acknowledge a half-done stock / inventory-hook cancel step (settled by hand)' })
+  @ApiResponse({ status: 200, description: 'Step marked done with the acknowledgement (repeat: alreadyAcknowledged=true)' })
+  @ApiResponse({ status: 403, description: 'Not SUPERUSER + FINANCIAL_REFUNDS, out of country scope, or a cancel kind not allowed' })
+  @ApiResponse({ status: 409, description: 'Step not acknowledgeable (not stock/hook, or not running/failed), or a resume is running' })
+  async acknowledgeCancelStep(
+    @Param('orderId') orderId: string,
+    @Param('step') step: string,
+    @Body() dto: AcknowledgeAdminCancelStepDto
+  ) {
+    const scope = await this.geo.require(PlatformPermissions.FINANCIAL_REFUNDS);
+    await this.geo.assertOrder(scope, orderId);
+    return this.ordersService.acknowledgeAdminCancelStep(orderId, step, maskPersonalData(dto.note.trim()), [
+      'admin_cancel',
+      'full_refund',
+    ]);
   }
 
   /**
@@ -415,11 +445,9 @@ export class AdminOrdersController {
           };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
+      // Raw error text goes to the log only, never to the API (it can carry SQL / PII).
       this.logger.error('Failed to update status', safeErrorMessage(error));
-      throw new HttpException(
-        error.message || 'Failed to update status',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException('Failed to update status', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

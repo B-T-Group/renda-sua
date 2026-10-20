@@ -57,6 +57,26 @@ export class DedicatedAdminViewsController {
     return { success: true, ...(await this.service.picker(scope, String(locationId ?? ''))) };
   }
 
+  @Get('locations')
+  @ApiOperation({ summary: '#594 G10: search locations (store / business name or city) in scope, flag-on countries only' })
+  @ApiQuery({ name: 'q', required: true, description: 'At least 2 characters' })
+  @ApiQuery({ name: 'city', required: false })
+  @ApiQuery({ name: 'limit', required: false, description: 'Default 20, max 50' })
+  @ApiResponse({ status: 400, description: 'query_too_short' })
+  async searchLocations(@Query('q') q?: string, @Query('city') city?: string, @Query('limit') limit?: string) {
+    const scope = await this.geo.require(PlatformPermissions.MANAGE_AGENTS);
+    return { success: true, ...(await this.service.searchLocations(scope, { q, city, limit })) };
+  }
+
+  @Get('locations/:locationId/pickup-slots')
+  @ApiOperation({ summary: '#594 G11: pickup slots of a location (read-only, same payload as the owner endpoint)' })
+  @ApiParam({ name: 'locationId' })
+  @ApiResponse({ status: 404, description: 'Not found, out of scope, or flag off' })
+  async locationPickupSlots(@Param('locationId') locationId: string) {
+    const scope = await this.geo.require(PlatformPermissions.MANAGE_AGENTS);
+    return { success: true, ...(await this.service.locationPickupSlots(scope, locationId)) };
+  }
+
   @Post('assignments/:id/dismiss-relation')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Remove the possible-relation badge (audited)' })

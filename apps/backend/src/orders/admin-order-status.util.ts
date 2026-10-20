@@ -49,7 +49,8 @@ export const ADMIN_STATUS_OVERRIDE_VALUES = [
  * ALLOWLIST of pre-pickup statuses an admin may cancel. Everything else (picked_up,
  * in_transit, out_for_delivery, awaiting_shipment, shipped, in_delivery, delivered,
  * complete, the refund states, cancelled, failed, and any status added later) is
- * refused.
+ * refused — except a #626 full-refund cancel that already wrote cancellation
+ * metadata, which may resume the order.cancelled enqueue (holds / wallet refund).
  * Shared by the PATCH cancel, cancelOrderAsAdmin and the #626 full-refund cancel.
  */
 export const ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES = [
@@ -65,13 +66,46 @@ export function isAdminPrePickupCancellableStatus(status: string): boolean {
   return (ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES as readonly string[]).includes(status);
 }
 
+/** Stored on `orders.cancellation_notes` by the #626 full-refund cancel. */
+export const ADMIN_FULL_REFUND_NOTES_PREFIX = 'Admin full refund:';
+
+export function adminFullRefundNotes(reason: string): string {
+  return `${ADMIN_FULL_REFUND_NOTES_PREFIX} ${reason}`;
+}
+
+/**
+ * A cancelled order that this endpoint already processed: retry may re-enqueue
+ * `order.cancelled` (Lambda keys are per-order) without a second status CAS.
+ */
+export function isResumableAdminFullRefundCancel(order: {
+  current_status?: string | null;
+  cancelled_by?: string | null;
+  cancellation_notes?: string | null;
+}): boolean {
+  const notes = order.cancellation_notes;
+  return (
+    order.current_status === 'cancelled' &&
+    order.cancelled_by === 'system' &&
+    typeof notes === 'string' &&
+    notes.startsWith(ADMIN_FULL_REFUND_NOTES_PREFIX)
+  );
+}
+
 export const ORDER_ALREADY_PICKED_UP = 'ORDER_ALREADY_PICKED_UP';
+export const ORDER_ALREADY_CANCELLED = 'ORDER_ALREADY_CANCELLED';
 
 /**
  * PE (#626/#627): the one refusal for an admin cancel outside the pre-pickup allowlist,
- * on every cancel path: 409 with error ORDER_ALREADY_PICKED_UP.
+ * on every cancel path: 409. The code is ORDER_ALREADY_CANCELLED for an order that is
+ * already cancelled (nothing left to resume), ORDER_ALREADY_PICKED_UP otherwise.
  */
 export function adminPrePickupRefusal(status: string, hint = 'Use the return / refund flow.'): HttpException {
+  if (status === 'cancelled') {
+    return new HttpException(
+      { message: 'The order is already cancelled.', error: ORDER_ALREADY_CANCELLED },
+      HttpStatus.CONFLICT
+    );
+  }
   return new HttpException(
     {
       message: `Cannot cancel an order in ${status} status: only pre-pickup orders can be cancelled here. ${hint}`,

@@ -70,7 +70,7 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
     for (const s of ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES) expect(statuses).toContain(s);
   });
 
-  it('every status: only the pre-pickup allowlist cancels (controller and service); all others 409 ORDER_ALREADY_PICKED_UP with nothing released', async () => {
+  it('every status: only the pre-pickup allowlist cancels (controller and service); all others 409 (ORDER_ALREADY_CANCELLED / ORDER_ALREADY_PICKED_UP) with nothing released', async () => {
     const allowed = ['pending_payment', 'pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned_to_agent'];
     const seen: Array<[string, boolean]> = [];
     for (const status of statuses) {
@@ -94,7 +94,7 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
         }
         expect(s).toBeInstanceOf(HttpException);
         expect((s as HttpException).getStatus()).toBe(409);
-        expect((s as HttpException).getResponse()).toMatchObject({ error: 'ORDER_ALREADY_PICKED_UP' });
+        expect((s as HttpException).getResponse()).toMatchObject({ error: status === 'cancelled' ? 'ORDER_ALREADY_CANCELLED' : 'ORDER_ALREADY_PICKED_UP' });
         expect(svc.releaseStripeAuthorizationIfNeeded).not.toHaveBeenCalled();
         expect(svc.markOrderCancelledAsSystem).not.toHaveBeenCalled();
         expect(svc.updateReservedQuantities).not.toHaveBeenCalled();
