@@ -558,23 +558,55 @@ describe('#594 G10: DedicatedAdminViewsService.searchLocations', () => {
 });
 
 describe('#594 G11: DedicatedAdminViewsService.locationPickupSlots', () => {
-  it('in scope and flag on: the owner payload', async () => {
+  const DLA = '0000b0b0-0000-4000-8000-000000000001';
+  const LBV = '0000b0b0-0000-4000-8000-000000000003';
+  const NF = { statusCode: 404, message: 'Not found', error: 'Not Found' };
+  const setup = () => {
     const w = world();
-    await expect(w.service.locationPickupSlots(CM, 'loc-dla')).resolves.toEqual({
+    w.state.locations.push({ ...w.state.locations[0], id: DLA }, { ...w.state.locations[2], id: LBV });
+    return w;
+  };
+  const body = async (p: Promise<unknown>) => {
+    const err = await p.then(() => null, (e) => e);
+    expect(err).toBeInstanceOf(NotFoundException);
+    return err.getResponse();
+  };
+
+  it('in scope and flag on: the owner payload', async () => {
+    const w = setup();
+    await expect(w.service.locationPickupSlots(CM, DLA)).resolves.toEqual({
       slots: [{ slotKey: 'morning', startTime: '07:00', endTime: '11:00', isEnabled: false, pickupTime: '07:30', liveAgents: 0 }],
     });
     expect(w.geo.assertBusiness).toHaveBeenCalledWith(CM, 'biz-1');
   });
 
   it('out of scope -> 404 before reading slots', async () => {
-    const w = world();
-    await expect(w.service.locationPickupSlots(GA, 'loc-dla')).rejects.toBeInstanceOf(NotFoundException);
+    const w = setup();
+    expect(await body(w.service.locationPickupSlots(GA, DLA))).toEqual(NF);
     expect(w.assignments.getPickupSlots).not.toHaveBeenCalled();
   });
 
-  it('flag off -> 404; unknown location -> 404', async () => {
-    const w = world();
-    await expect(w.service.locationPickupSlots(ALL, 'loc-lbv')).rejects.toBeInstanceOf(NotFoundException);
-    await expect(w.service.locationPickupSlots(ALL, 'loc-nope')).rejects.toBeInstanceOf(NotFoundException);
+  it('#641 QA N1: a non-uuid id -> 404 without any lookup', async () => {
+    const w = setup();
+    for (const bad of ['abc', 'loc-dla', '', '0000b0b0-0000-4000-8000-00000000000']) {
+      expect(await body(w.service.locationPickupSlots(ALL, bad))).toEqual(NF);
+    }
+    expect(w.assignments.locationBusinessId).not.toHaveBeenCalled();
+  });
+
+  it('#641 QA N2: unknown, out of scope and flag off share one body', async () => {
+    const w = setup();
+    const bodies = [
+      await body(w.service.locationPickupSlots(ALL, '0000b0b0-0000-4000-8000-00000000ffff')),
+      await body(w.service.locationPickupSlots(GA, DLA)),
+      await body(w.service.locationPickupSlots(ALL, LBV)),
+    ];
+    for (const b of bodies) expect(b).toEqual(NF);
+  });
+
+  it('non-404 errors pass through', async () => {
+    const w = setup();
+    w.assignments.getPickupSlots.mockRejectedValueOnce(new Error('boom'));
+    await expect(w.service.locationPickupSlots(ALL, DLA)).rejects.toThrow('boom');
   });
 });

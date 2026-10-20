@@ -15,6 +15,7 @@ import type { DedicatedCoverageService } from './dedicated-coverage.service';
 import { DedicatedOpportunitiesService, opportunityDisabledReason } from './dedicated-opportunities.service';
 import { DedicatedPostingsSweeperService } from './dedicated-postings-sweeper.service';
 import { DedicatedPostingsService, distanceKm, POSTING_EXPIRY_BATCH } from './dedicated-postings.service';
+import { DEDICATED_OPPORTUNITY_AGENT_QUERY } from './dedicated-postings.queries';
 
 /** GraphQL variables / rows as the fake receives them (shape varies per operation). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,7 +117,9 @@ function world() {
     mutations: [] as Array<{ op: string; vars: Loose }>,
     nextId: 1,
   };
-  const id = (p: string) => `${p}-${state.nextId++}`;
+  const ID_PREFIX: Record<string, string> = { po: '0000a0a0', app: '0000a4a4', as: '0000a5a5' };
+  /** uuid-shaped fake ids (the agent routes 404 non-uuid ids before Hasura, #641 QA N1). */
+  const id = (p: string) => `${ID_PREFIX[p] ?? '0000ffff'}-0000-4000-8000-${String(state.nextId++).padStart(12, '0')}`;
   const stamp = () => new Date(NOW.getTime() + state.nextId++ * 1000).toISOString();
 
   const locationView = (l: LocationFake) => ({
@@ -1328,17 +1331,17 @@ describe('#594 G1: DedicatedOpportunitiesService.detail', () => {
     ['another city, no application', { business_location_id: 'loc-yde' }],
     ['closed in my city, no application', { status: 'closed' }],
     ['expired in my city, no application', { expires_at: '2026-10-20T08:59:00Z' }],
-  ])('404 Posting not found: %s', async (_l, over) => {
+  ])('404 Not found: %s', async (_l, over) => {
     const w = setup();
     const p = w.seedPosting(over as Partial<PostingFake>);
     const { err, body } = await rejection(w.opportunities.detail('u-a1', p.id, NOW));
     expect(err).toBeInstanceOf(NotFoundException);
-    expect(body).toMatchObject({ message: 'Posting not found' });
+    expect(body).toEqual(NOT_FOUND_BODY);
   });
 
   it('unknown posting -> 404', async () => {
     const w = setup();
-    await expect(w.opportunities.detail('u-a1', 'po-missing', NOW)).rejects.toBeInstanceOf(NotFoundException);
+    await expect(w.opportunities.detail('u-a1', '0000a0a0-0000-4000-8000-999999999999', NOW)).rejects.toBeInstanceOf(NotFoundException);
   });
 
   it('flag off for the store’s country -> 404 (before eligibility)', async () => {
@@ -1357,6 +1360,119 @@ describe('#594 G1: DedicatedOpportunitiesService.detail', () => {
     const { err, body } = await rejection(w.opportunities.detail('u-a2', p.id, NOW));
     expect(err).toBeInstanceOf(ForbiddenException);
     expect(body).toMatchObject({ code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', reason: 'no_address' });
+  });
+});
+
+const NOT_FOUND_BODY = { statusCode: 404, message: 'Not found', error: 'Not Found' };
+const RANDOM_UUID = '0000a0a0-0000-4000-8000-999999999999';
+
+describe('#641 QA N1: non-uuid posting ids -> 404 (never 400 / never reach Hasura)', () => {
+  it.each(['abc', '', ' ', 'po-1', '0000a0a0-0000-4000-8000-99999999999', "1' or 1=1"])('%p on detail, apply and withdraw', async (bad) => {
+    const w = world();
+    w.addAgent('a1');
+    for (const call of [
+      () => w.opportunities.detail('u-a1', bad, NOW),
+      () => w.opportunities.apply('u-a1', bad, NOW),
+      () => w.opportunities.withdraw('u-a1', bad, NOW),
+    ]) {
+      const { err, body } = await rejection(call());
+      expect(err).toBeInstanceOf(NotFoundException);
+      expect(body).toEqual(NOT_FOUND_BODY);
+    }
+    expect(w.state.mutations).toHaveLength(0);
+  });
+
+  it('a non-uuid id never reaches the posting lookup', async () => {
+    const w = world();
+    w.addAgent('a1');
+    const load = jest.spyOn(w.postings, 'loadPosting');
+    await rejection(w.opportunities.detail('u-a1', 'abc', NOW));
+    await rejection(w.opportunities.apply('u-a1', 'abc', NOW));
+    await rejection(w.opportunities.withdraw('u-a1', 'abc', NOW));
+    expect(load).not.toHaveBeenCalled();
+  });
+
+  it('a padded uuid is trimmed and resolves; upper-case hex passes the shape check', async () => {
+    const w = world();
+    w.addAgent('a1');
+    const p = w.seedPosting();
+    await expect(w.opportunities.detail('u-a1', ` ${p.id} `, NOW)).resolves.toMatchObject({ opportunity: { id: p.id } });
+    const load = jest.spyOn(w.postings, 'loadPosting');
+    await rejection(w.opportunities.detail('u-a1', RANDOM_UUID.toUpperCase(), NOW));
+    expect(load).toHaveBeenCalledWith(RANDOM_UUID.toUpperCase());
+  });
+});
+
+describe('#641 QA N2: one 404 body, no existence leak', () => {
+  const bodies = async (w: ReturnType<typeof world>, existing: string) => {
+    const out: Loose[] = [];
+    for (const id of [existing, RANDOM_UUID]) {
+      out.push((await rejection(w.opportunities.detail('u-a1', id, NOW))).body);
+      out.push((await rejection(w.opportunities.apply('u-a1', id, NOW))).body);
+      out.push((await rejection(w.opportunities.withdraw('u-a1', id, NOW))).body);
+    }
+    return out;
+  };
+
+  it('flag off: an existing posting and a random id give identical 404 bodies on detail, apply and withdraw', async () => {
+    const w = world();
+    w.state.flagByCountry = { CM: false };
+    w.addAgent('a1');
+    const p = w.seedPosting();
+    const all = await bodies(w, p.id);
+    expect(all).toHaveLength(6);
+    for (const b of all) expect(b).toEqual(NOT_FOUND_BODY);
+  });
+
+  it('flag on: a posting hidden from the agent (other city) and a random id give the same body', async () => {
+    const w = world();
+    w.addLocation({ id: 'loc-yde', name: 'Yaoundé Shop', state: 'Centre', city: 'Yaoundé' });
+    w.addAgent('a1');
+    const hidden = w.seedPosting({ business_location_id: 'loc-yde' });
+    expect((await rejection(w.opportunities.detail('u-a1', hidden.id, NOW))).body).toEqual(NOT_FOUND_BODY);
+    expect((await rejection(w.opportunities.detail('u-a1', RANDOM_UUID, NOW))).body).toEqual(NOT_FOUND_BODY);
+  });
+
+  it('withdraw by a user with no agent row (flag on) -> the same body', async () => {
+    const w = world();
+    const p = w.seedPosting();
+    expect((await rejection(w.opportunities.withdraw('u-nobody', p.id, NOW))).body).toEqual(NOT_FOUND_BODY);
+  });
+
+  it('other errors from loading the posting are not swallowed', async () => {
+    const w = world();
+    w.addAgent('a1');
+    jest.spyOn(w.postings, 'loadPosting').mockRejectedValueOnce(new Error('hasura down'));
+    await expect(w.opportunities.detail('u-a1', RANDOM_UUID, NOW)).rejects.toThrow('hasura down');
+  });
+});
+
+describe('#641 QA N3: no address follows the account country flag, else global', () => {
+  it('the agent query reads users.country', () => {
+    const user = /user \{([^}]*)\}/.exec(DEDICATED_OPPORTUNITY_AGENT_QUERY)?.[1] ?? '';
+    expect(user.split(/\s+/)).toContain('country');
+  });
+
+  it.each([
+    ['global off, account CM on -> 403 no_address', false, { CM: true }, 'CM', 403],
+    ['global on, account CM off -> 404', true, { CM: false }, 'CM', 404],
+    ['global off, account in lower case cm on -> 403', false, { CM: true }, ' cm ', 403],
+    ['global on, account GA (no row) -> global -> 403', true, { CM: false }, 'GA', 403],
+    ['no account country, global on (CM off) -> 403', true, { CM: false }, null, 403],
+    ['no account country, global off (CM on) -> 404', false, { CM: true }, null, 404],
+  ] as const)('%s', async (_l, global, rows, country, status) => {
+    const w = world();
+    w.state.flag = global;
+    w.state.flagByCountry = { ...rows };
+    w.addAgent('a1', { addresses: [] }, { country } as Partial<AgentFake['user']>);
+    const { err, body } = await rejection(w.opportunities.list('u-a1', NOW));
+    if (status === 404) {
+      expect(err).toBeInstanceOf(NotFoundException);
+      expect(body).toEqual(NOT_FOUND_BODY);
+    } else {
+      expect(err).toBeInstanceOf(ForbiddenException);
+      expect(body).toMatchObject({ code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', reason: 'no_address' });
+    }
   });
 });
 

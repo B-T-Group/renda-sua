@@ -27,6 +27,7 @@ import {
   DISMISS_DEDICATED_RELATION_MUTATION,
 } from './dedicated-admin-views.queries';
 import { DedicatedAssignmentsService } from './dedicated-assignments.service';
+import { DEDICATED_NOT_FOUND_MESSAGE, isUuidLike } from './dedicated-not-found.util';
 import { DedicatedPostingsService } from './dedicated-postings.service';
 import { relationBadge, type RelationSignal } from './relation-signals.util';
 
@@ -435,9 +436,16 @@ export class DedicatedAdminViewsService {
 
   /** #594 G11: read-only pickup slots of a location in the caller's scope (owner payload reused); 404 out of scope / flag off. */
   async locationPickupSlots(scope: GeoScope, locationId: string) {
-    const businessId = await this.assignments.locationBusinessId(locationId);
-    await this.geo.assertBusiness(scope, businessId);
-    return this.assignments.getPickupSlots(locationId);
+    // #641 QA N1/N2: non-uuid, unknown, out of scope and flag off share one 404 body.
+    if (!isUuidLike(locationId)) throw new NotFoundException(DEDICATED_NOT_FOUND_MESSAGE);
+    try {
+      const businessId = await this.assignments.locationBusinessId(locationId.trim());
+      await this.geo.assertBusiness(scope, businessId);
+      return await this.assignments.getPickupSlots(locationId.trim());
+    } catch (error) {
+      if (error instanceof NotFoundException) throw new NotFoundException(DEDICATED_NOT_FOUND_MESSAGE);
+      throw error;
+    }
   }
 
   private async pages<T>(query: string, where: BoolExp, root: string, extra: Record<string, unknown> = {}) {

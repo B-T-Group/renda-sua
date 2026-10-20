@@ -11,6 +11,7 @@ import { AgentContractGateService } from '../agent-contracts/agent-contract-gate
 import { showsDeliveryChrome } from '../agents/agent-focus.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { DedicatedAgentsConfigService } from './dedicated-agents-config.service';
+import { DEDICATED_NOT_FOUND_MESSAGE, isUuidLike } from './dedicated-not-found.util';
 import type { DedicatedSlotKey } from './dedicated-agents.constants';
 import { DEDICATED_LOCATION_PICKUP_SLOTS_QUERY } from './dedicated-assignments.queries';
 import { DedicatedCoverageService } from './dedicated-coverage.service';
@@ -35,6 +36,8 @@ import {
 import { defaultPickupTime, shortTime } from './dedicated-slot.util';
 
 const OPPORTUNITIES_LIMIT = 100;
+
+const notFound = () => new NotFoundException(DEDICATED_NOT_FOUND_MESSAGE);
 
 export const DEDICATED_OPPORTUNITY_ERRORS = {
   notEligible: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', // 403
@@ -76,7 +79,7 @@ interface OpportunityAgent {
   is_internal: boolean | null;
   status: string | null;
   focus: string | null;
-  user: { first_name: string | null; profile_picture_url: string | null; preferred_language: string | null } | null;
+  user: { first_name: string | null; profile_picture_url: string | null; preferred_language: string | null; country?: string | null } | null;
   agent_addresses: AgentAddressRow[];
 }
 
@@ -137,7 +140,7 @@ export class DedicatedOpportunitiesService {
     if (agent && !address?.country?.trim()) {
       // No active address: no city to match and no country to read the flag for.
       this.logger.log(JSON.stringify({ event: 'dedicated.opportunities_city_match', agentId: agent.id, skipped: 'no_agent_address' }));
-      await this.requireNoAddressFlag();
+      await this.requireNoAddressFlag(agent.user?.country);
     }
     const { config } = await this.postings.requireEnabled(address?.country);
     await this.assertEligible(agent);
@@ -212,7 +215,7 @@ export class DedicatedOpportunitiesService {
    */
   async detail(userId: string, postingId: string, now = new Date()): Promise<{ opportunity: DedicatedOpportunity }> {
     const agent = await this.loadAgent(userId);
-    const posting = await this.postings.loadPosting(postingId);
+    const posting = await this.loadPostingOr404(postingId);
     const { config } = await this.postings.requireEnabled(posting.business_location?.address?.country);
     await this.assertEligible(agent);
     const eligible = agent as OpportunityAgent;
@@ -223,10 +226,10 @@ export class DedicatedOpportunitiesService {
       held: Array<{ business_location_id: string; slot_key: string }>;
     }>(DEDICATED_OPPORTUNITY_BY_ID_QUERY, { id: posting.id, agentId: eligible.id });
     const row = res?.dedicated_agent_postings_by_pk;
-    if (!row) throw new NotFoundException('Posting not found');
+    if (!row) throw notFound();
     const isOpen = row.status === 'open' && new Date(row.expires_at).getTime() > now.getTime();
     const inCity = matchPostingCity(address ?? {}, row.business_location?.address ?? {}).match;
-    if ((row.mine?.length ?? 0) === 0 && !(isOpen && inCity)) throw new NotFoundException('Posting not found');
+    if ((row.mine?.length ?? 0) === 0 && !(isOpen && inCity)) throw notFound();
     const opportunity = await this.toOpportunity(row, address, res?.held ?? [], config.maxAssignmentsPerAgent);
     if (!isOpen) opportunity.disabledReason = null;
     return { opportunity };
@@ -235,7 +238,7 @@ export class DedicatedOpportunitiesService {
   /** AC-A2: one tap; 422 PROFILE_PHOTO_REQUIRED sends the app to the photo step first. Idempotent while applied. */
   async apply(userId: string, postingId: string, now = new Date()) {
     const agent = await this.loadAgent(userId);
-    const posting = await this.postings.loadPosting(postingId);
+    const posting = await this.loadPostingOr404(postingId);
     const { config } = await this.postings.requireEnabled(posting.business_location?.address?.country);
     await this.assertEligible(agent);
     const eligible = agent as OpportunityAgent;
@@ -298,9 +301,9 @@ export class DedicatedOpportunitiesService {
 
   async withdraw(userId: string, postingId: string, now = new Date()) {
     const agent = await this.loadAgent(userId);
-    const posting = await this.postings.loadPosting(postingId);
+    const posting = await this.loadPostingOr404(postingId);
     await this.postings.requireEnabled(posting.business_location?.address?.country);
-    if (!agent) throw new NotFoundException('Application not found');
+    if (!agent) throw notFound();
     const res = await this.hasuraSystemService.executeMutation<{ update_dedicated_agent_applications: { affected_rows: number } }>(
       WITHDRAW_DEDICATED_APPLICATION_MUTATION,
       { postingId: posting.id, agentId: agent.id, at: now.toISOString() }
@@ -347,10 +350,27 @@ export class DedicatedOpportunitiesService {
     });
   }
 
-  /** #594 G6: no country to read the flag for, so the global row decides: off -> 404, on -> 403 no_address. */
-  private async requireNoAddressFlag(): Promise<never> {
-    if (!(await this.configService.isEnabled(null))) throw new NotFoundException('Not found');
+  /**
+   * #594 G6 / #641 QA N3: no active address, so no city to match. The flag still
+   * follows a country when one is known: the account's market (`users.country`,
+   * ISO-2, set at signup and the canonical market source), resolved country row
+   * over global row. Without it, the global row decides. Off -> 404, on -> 403 no_address.
+   */
+  private async requireNoAddressFlag(userCountry: string | null | undefined): Promise<never> {
+    // The resolver trims / upper-cases; a blank country reads the global row.
+    if (!(await this.configService.isEnabled(userCountry ?? null))) throw notFound();
     this.throwIneligible('no_address');
+  }
+
+  /** #641 QA N1/N2: non-uuid or unknown posting -> the one 404 body. */
+  private async loadPostingOr404(postingId: string) {
+    if (!isUuidLike(postingId)) throw notFound();
+    try {
+      return await this.postings.loadPosting(postingId.trim());
+    } catch (error) {
+      if (error instanceof NotFoundException) throw notFound();
+      throw error;
+    }
   }
 
   private async toOpportunity(
