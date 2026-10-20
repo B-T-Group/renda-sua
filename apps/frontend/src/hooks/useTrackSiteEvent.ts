@@ -157,6 +157,21 @@ export const SITE_EVENT_DEDICATED_UI_AGENT_PAUSED = 'dedicated_ui.agent_paused' 
 export const SITE_EVENT_DEDICATED_UI_AGENT_RESUMED = 'dedicated_ui.agent_resumed' as const;
 export const SITE_EVENT_DEDICATED_UI_AGENT_REMOVED = 'dedicated_ui.agent_removed' as const;
 export const SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT = 'dedicated_ui.action_conflict' as const;
+// Dedicated agents UI events
+export const SITE_EVENT_DEDICATED_SECTION_OPENED = 'dedicated_ui.section_opened' as const;
+export const SITE_EVENT_DEDICATED_SLOT_TOGGLED = 'dedicated_ui.slot_toggled' as const;
+export const SITE_EVENT_DEDICATED_PICKUP_TIME_CHANGED = 'dedicated_ui.pickup_time_changed' as const;
+export const SITE_EVENT_DEDICATED_ASSIGNMENT_PAUSED = 'dedicated_ui.assignment_paused' as const;
+export const SITE_EVENT_DEDICATED_ASSIGNMENT_RESUMED = 'dedicated_ui.assignment_resumed' as const;
+export const SITE_EVENT_DEDICATED_ASSIGNMENT_REMOVED = 'dedicated_ui.assignment_removed' as const;
+export const SITE_EVENT_DEDICATED_POSTING_FORM_OPENED = 'dedicated_ui.posting_form_opened' as const;
+export const SITE_EVENT_DEDICATED_POSTING_CREATED = 'dedicated_ui.posting_created' as const;
+export const SITE_EVENT_DEDICATED_APPLICANTS_VIEWED = 'dedicated_ui.applicants_viewed' as const;
+export const SITE_EVENT_DEDICATED_APPLICANT_ACCEPTED = 'dedicated_ui.applicant_accepted' as const;
+export const SITE_EVENT_DEDICATED_APPLICANT_DECLINED = 'dedicated_ui.applicant_declined' as const;
+export const SITE_EVENT_DEDICATED_POSTING_CLOSED = 'dedicated_ui.posting_closed' as const;
+export const SITE_EVENT_DEDICATED_POSTING_TERMS_EDITED = 'dedicated_ui.posting_terms_edited' as const;
+export const SITE_EVENT_DEDICATED_ACTION_CONFLICT = 'dedicated_ui.action_conflict' as const;
 
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
@@ -229,21 +244,21 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_DEDICATED_UI_AGENT_PAUSED
   | typeof SITE_EVENT_DEDICATED_UI_AGENT_RESUMED
   | typeof SITE_EVENT_DEDICATED_UI_AGENT_REMOVED
-  | typeof SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT;
-  | 'dedicated_ui.section_viewed'
-  | 'dedicated_ui.slot_toggled'
-  | 'dedicated_ui.pickup_time_changed'
-  | 'dedicated_ui.agent_paused'
-  | 'dedicated_ui.agent_resumed'
-  | 'dedicated_ui.agent_removed'
-  | 'dedicated_ui.posting_form_opened'
-  | 'dedicated_ui.posting_created'
-  | 'dedicated_ui.posting_closed'
-  | 'dedicated_ui.posting_terms_edited'
-  | 'dedicated_ui.applicants_viewed'
-  | 'dedicated_ui.applicant_accepted'
-  | 'dedicated_ui.applicant_declined'
-  | 'dedicated_ui.action_conflict';
+  | typeof SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT
+  | typeof SITE_EVENT_DEDICATED_SECTION_OPENED
+  | typeof SITE_EVENT_DEDICATED_SLOT_TOGGLED
+  | typeof SITE_EVENT_DEDICATED_PICKUP_TIME_CHANGED
+  | typeof SITE_EVENT_DEDICATED_ASSIGNMENT_PAUSED
+  | typeof SITE_EVENT_DEDICATED_ASSIGNMENT_RESUMED
+  | typeof SITE_EVENT_DEDICATED_ASSIGNMENT_REMOVED
+  | typeof SITE_EVENT_DEDICATED_POSTING_FORM_OPENED
+  | typeof SITE_EVENT_DEDICATED_POSTING_CREATED
+  | typeof SITE_EVENT_DEDICATED_APPLICANTS_VIEWED
+  | typeof SITE_EVENT_DEDICATED_APPLICANT_ACCEPTED
+  | typeof SITE_EVENT_DEDICATED_APPLICANT_DECLINED
+  | typeof SITE_EVENT_DEDICATED_POSTING_CLOSED
+  | typeof SITE_EVENT_DEDICATED_POSTING_TERMS_EDITED
+  | typeof SITE_EVENT_DEDICATED_ACTION_CONFLICT;
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;
