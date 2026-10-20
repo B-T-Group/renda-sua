@@ -676,6 +676,8 @@ export interface DeclineOrderOfferRequest {
  * QA #626 A1: an ALLOWLIST of pre-pickup statuses. Anything else (picked_up, in_transit,
  * out_for_delivery, awaiting_shipment, shipped, in_delivery, delivered, complete, the
  * refund states, cancelled, failed, and any status added later) is refused.
+ * TODO(#627): reuse ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES from admin-order-status.util
+ * once #627 is on main (same list).
  */
 export const ADMIN_FULL_REFUND_ALLOWED_STATUSES: ReadonlySet<string> = new Set([
   'pending_payment',
@@ -687,6 +689,7 @@ export const ADMIN_FULL_REFUND_ALLOWED_STATUSES: ReadonlySet<string> = new Set([
 ]);
 
 export const ADMIN_FULL_REFUND_DEPOSIT_FAILED_MARKER = 'admin_full_refund_cancel_deposit_refund_failed';
+export const ADMIN_FULL_REFUND_STEP_FAILED_MARKER = 'admin_full_refund_cancel_step_failed';
 
 /** What happened to a paid deposit on cancel. */
 export type DepositCancelOutcome =
@@ -8532,20 +8535,42 @@ export class OrdersService {
       viaSystem: true,
       expectedFromStatus: previousStatus,
     });
-    // Only the compare-and-set winner reaches here.
-    await this.releaseStripeAuthorizationIfNeeded(order);
-    await this.supersedePendingOrderTxsOnCancel(order);
+    // Only the compare-and-set winner reaches here. The order IS cancelled now, so a
+    // failing step below must not turn into a bare 500: each is caught, alerted
+    // (admin_full_refund_cancel_step_failed) and listed in `failedSteps`.
+    const failedSteps: Array<{ step: string; error: string }> = [];
+    const step = async <T>(name: string, fn: () => Promise<T>): Promise<T | undefined> => {
+      try {
+        return await fn();
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        failedSteps.push({ step: name, error: message });
+        reportMoneyAnomaly(
+          this.logger,
+          ADMIN_FULL_REFUND_STEP_FAILED_MARKER,
+          `Step ${name} failed after the admin full-refund cancel of order ${order.order_number ?? orderId} (the order is cancelled): ${message}`,
+          { orderId, previousStatus, adminUserId, step: name }
+        );
+        return undefined;
+      }
+    };
     const notes = `Admin full refund: ${reason}`;
-    await this.persistCancellationMetadata(order.id, 'system', notes);
-    await this.createStatusHistoryEntry(
-      order.id,
-      'cancelled',
-      'Order cancelled by admin with a full refund (no cancellation fee)',
-      'system',
-      adminUserId,
-      notes
+    await step('releaseStripeAuthorization', () => this.releaseStripeAuthorizationIfNeeded(order));
+    await step('supersedePendingOrderTxs', () => this.supersedePendingOrderTxsOnCancel(order));
+    await step('persistCancellationMetadata', () => this.persistCancellationMetadata(order.id, 'system', notes));
+    await step('createStatusHistoryEntry', () =>
+      this.createStatusHistoryEntry(
+        order.id,
+        'cancelled',
+        'Order cancelled by admin with a full refund (no cancellation fee)',
+        'system',
+        adminUserId,
+        notes
+      )
     );
-    const deposit = await this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes);
+    const deposit: DepositCancelOutcome = (await step('cancellationSideEffects', () =>
+      this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes)
+    )) ?? { status: 'failed', message: 'Cancellation side effects failed before the deposit was handled' };
     // Refunds go to the client's Rendasua wallet, never back to the payment provider.
     const depositFailed = deposit.status === 'failed';
     if (depositFailed) {
@@ -8556,13 +8581,18 @@ export class OrdersService {
         { orderId, previousStatus, adminUserId, errorCode: deposit.errorCode }
       );
     }
+    const partial = failedSteps.length > 0;
     return {
       success: true,
+      partialFailure: partial,
+      failedSteps,
       order: updatedOrder,
       previousStatus,
       cancellationFee: 0,
       depositRefund: deposit,
-      message: depositFailed
+      message: partial
+        ? `Order cancelled, but ${failedSteps.map((f) => f.step).join(', ')} FAILED and needs manual follow-up (alerted)`
+        : depositFailed
         ? 'Order cancelled with no fee and the wallet releases queued, but the DEPOSIT REFUND FAILED and needs manual follow-up'
         : 'Order cancelled with a full refund to the client wallet; the refund and hold releases are queued',
     };
@@ -12534,15 +12564,21 @@ export class OrdersService {
             this.logger.error(
               `Deposit refund failed for client cancel (before lock) of order ${orderId}: ${refundResult.message}`
             );
-          } else {
-            this.logger.log(
-              `Deposit refunded for client cancel (before lock) of order ${orderId}`
-            );
+            return {
+              status: 'failed',
+              message: refundResult.message || 'Deposit refund refused',
+              errorCode: refundResult.errorCode,
+            };
           }
+          this.logger.log(
+            `Deposit refunded for client cancel (before lock) of order ${orderId}`
+          );
+          return { status: 'refunded' };
         } catch (error: any) {
           this.logger.error(
             `Failed to process deposit refund for client cancel (before lock): ${error.message}`
           );
+          return { status: 'failed', message: error?.message || 'Deposit refund threw' };
         }
       } else {
         await this.applyDepositForfeit(orderId, 'customer_cancel_after_lock');

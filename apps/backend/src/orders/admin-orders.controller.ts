@@ -54,7 +54,7 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderRiskIncidentsService } from './order-risk-incidents.service';
 import type { OrderRiskIncident } from './order-risk.types';
 import { OrderRiskMonitorService } from './order-risk-monitor.service';
-import { OrdersService } from './orders.service';
+import { OrdersService, type DepositCancelOutcome } from './orders.service';
 import { CreditsService } from '../credits/credits.service';
 import type {
   CreditContactChannel,
@@ -317,7 +317,7 @@ export class AdminOrdersController {
     await this.geo.assertOrder(scope, orderId);
     const reason = maskPersonalData(dto.reason);
     const result = await this.ordersService.adminFullRefundCancel(orderId, reason);
-    await this.auditFullRefundCancel(orderId, reason, result.previousStatus);
+    await this.auditFullRefundCancel(orderId, reason, result.previousStatus, result.depositRefund, result.failedSteps);
     return result;
   }
 
@@ -328,7 +328,13 @@ export class AdminOrdersController {
    * marker) with who/what/why so the trail can be restored by hand. Written with
    * OrderEventsService.recordEventStrict (recordEvent swallows insert errors).
    */
-  private async auditFullRefundCancel(orderId: string, reason: string, previousStatus: string): Promise<void> {
+  private async auditFullRefundCancel(
+    orderId: string,
+    reason: string,
+    previousStatus: string,
+    depositRefund: DepositCancelOutcome,
+    failedSteps: Array<{ step: string; error: string }>
+  ): Promise<void> {
     let actorId: string | null = null;
     try {
       actorId = (await this.hasuraUserService.getUser())?.id ?? null;
@@ -337,7 +343,7 @@ export class AdminOrdersController {
         eventType: 'admin_intervention',
         actorType: 'support',
         actorId,
-        payload: { action: 'full_refund_cancel', reason, previousStatus, cancellationFee: 0 },
+        payload: { action: 'full_refund_cancel', reason, previousStatus, cancellationFee: 0, depositRefund, failedSteps },
       });
     } catch (error: unknown) {
       reportMoneyAnomaly(

@@ -130,6 +130,29 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect(reportMoneyAnomaly).not.toHaveBeenCalled();
   });
 
+  it.each(['releaseStripeAuthorizationIfNeeded', 'supersedePendingOrderTxsOnCancel', 'persistCancellationMetadata', 'createStatusHistoryEntry', 'runOrderCancellationSideEffects'])(
+    'a post-cancel failure in %s alerts and returns a clear partial-failure response (no 500); later steps still run',
+    async (m) => {
+      (reportMoneyAnomaly as jest.Mock).mockClear();
+      const { svc, db } = service('confirmed');
+      svc[m].mockRejectedValueOnce(new Error('boom'));
+      const res = await svc.adminFullRefundCancel('o-1', 'r');
+      expect(db.status).toBe('cancelled');
+      expect(res).toMatchObject({ success: true, partialFailure: true });
+      expect(res.failedSteps).toHaveLength(1);
+      expect(res.failedSteps[0].error).toBe('boom');
+      expect(res.message).toMatch(/FAILED and needs manual follow-up/);
+      expect(reportMoneyAnomaly).toHaveBeenCalledWith(expect.anything(), 'admin_full_refund_cancel_step_failed', expect.stringContaining('boom'), expect.objectContaining({ orderId: 'o-1' }));
+      expect(svc.runOrderCancellationSideEffects).toHaveBeenCalledTimes(1);
+      if (m === 'runOrderCancellationSideEffects') expect(res.depositRefund.status).toBe('failed');
+    }
+  );
+
+  it('no failure -> partialFailure false, failedSteps empty', async () => {
+    const { svc } = service('confirmed');
+    await expect(svc.adminFullRefundCancel('o-1', 'r')).resolves.toMatchObject({ partialFailure: false, failedSteps: [] });
+  });
+
   it.each(['picked_up', 'in_transit', 'out_for_delivery'])('refused once the agent holds the goods (%s): 409, nothing written', async (status) => {
     const { svc, calls } = service(status);
     const err = await svc.adminFullRefundCancel('o-1', 'r').catch((e: unknown) => e);
@@ -190,7 +213,7 @@ describe('POST /admin/orders/:orderId/full-refund-cancel', () => {
   };
 
   it('geo-scopes on the refunds permission and audit-logs the intervention (actor, reason, previous status) after success', async () => {
-    const ctrl = controller(jest.fn(async () => ({ success: true, previousStatus: 'ready_for_pickup', cancellationFee: 0 })));
+    const ctrl = controller(jest.fn(async () => ({ success: true, previousStatus: 'ready_for_pickup', cancellationFee: 0, depositRefund: { status: 'failed', message: 'consumed' }, failedSteps: [] })));
     await ctrl.fullRefundCancel('o-1', { reason: 'QA leftover' });
     expect(ctrl.geo.require).toHaveBeenCalledWith('platform.financial.refunds');
     expect(ctrl.geo.assertOrder).toHaveBeenCalledWith({ all: true }, 'o-1');
@@ -199,8 +222,10 @@ describe('POST /admin/orders/:orderId/full-refund-cancel', () => {
       eventType: 'admin_intervention',
       actorType: 'support',
       actorId: 'admin-1',
-      payload: { action: 'full_refund_cancel', reason: 'QA leftover', previousStatus: 'ready_for_pickup', cancellationFee: 0 },
+      payload: { action: 'full_refund_cancel', reason: 'QA leftover', previousStatus: 'ready_for_pickup', cancellationFee: 0, depositRefund: { status: 'failed', message: 'consumed' }, failedSteps: [] },
     });
+    // #626 B1: the deposit outcome is on the audit event itself.
+    expect(ctrl.orderEventsService.recordEventStrict.mock.calls[0][0].payload).toHaveProperty('depositRefund', { status: 'failed', message: 'consumed' });
     expect(ctrl.orderEventsService.recordEvent).not.toHaveBeenCalled();
   });
 
@@ -256,6 +281,15 @@ describe('handleDepositOnCancellation outcome (QA A2)', () => {
     svc = svcWith(jest.fn(async () => ({ success: true })));
     await expect(svc.handleDepositOnCancellation(paid, 'o-1', 'confirmed', 'system')).resolves.toEqual({ status: 'refunded' });
     await expect(svc.handleDepositOnCancellation({ ...paid, deposit_status: 'none' }, 'o-1', 'confirmed', 'system')).resolves.toEqual({ status: 'none' });
+  });
+
+  it('client cancel before lock reports accurately: refunded / failed (refused or threw)', async () => {
+    let svc = svcWith(jest.fn(async () => ({ success: true })));
+    await expect(svc.handleDepositOnCancellation(paid, 'o-1', 'confirmed', 'client')).resolves.toEqual({ status: 'refunded' });
+    svc = svcWith(jest.fn(async () => ({ success: false, message: 'nope', errorCode: 'X' })));
+    await expect(svc.handleDepositOnCancellation(paid, 'o-1', 'confirmed', 'client')).resolves.toEqual({ status: 'failed', message: 'nope', errorCode: 'X' });
+    svc = svcWith(jest.fn(async () => { throw new Error('t'); }));
+    await expect(svc.handleDepositOnCancellation(paid, 'o-1', 'confirmed', 'client')).resolves.toEqual({ status: 'failed', message: 't' });
   });
 });
 
