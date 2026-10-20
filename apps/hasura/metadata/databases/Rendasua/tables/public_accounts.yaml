@@ -27,20 +27,6 @@ array_relationships:
         remote_table:
           name: mobile_payment_transactions
           schema: public
-insert_permissions:
-  - role: user
-    permission:
-      check:
-        user:
-          id:
-            _eq: X-Hasura-User-Id
-      columns:
-        - user_id
-        - currency
-        - available_balance
-        - withheld_balance
-        - is_active
-        - business_location_id
 select_permissions:
   - role: agent
     permission:

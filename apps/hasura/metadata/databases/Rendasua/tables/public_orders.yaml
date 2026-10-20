@@ -148,56 +148,6 @@ array_relationships:
         remote_table:
           name: stripe_refunds
           schema: public
-insert_permissions:
-  - role: client
-    permission:
-      check:
-        client:
-          user:
-            id:
-              _eq: X-Hasura-User-Id
-      columns:
-        - id
-        - currency
-        - order_number
-        - payment_method
-        - payment_status
-        - payment_source
-        - payment_timing
-        - reconciliation_status
-        - cash_exception_reported_by_agent_id
-        - cash_exception_reported_at
-        - reconciled_by_business_id
-        - reconciled_at
-        - reconciliation_reference
-        - reconciliation_notes
-        - base_delivery_fee
-        - per_km_delivery_fee
-        - subtotal
-        - tax_amount
-        - service_fee
-        - tax_status
-        - tax_jurisdiction
-        - tax_breakdown
-        - stripe_tax_calculation_id
-        - stripe_tax_transaction_id
-        - pre_tax_total
-        - total_amount
-        - special_instructions
-        - actual_delivery_time
-        - created_at
-        - estimated_delivery_time
-        - preferred_delivery_time
-        - updated_at
-        - current_status
-        - assigned_agent_id
-        - business_id
-        - business_location_id
-        - client_id
-        - delivery_address_id
-        - fulfillment_method
-        - requires_fast_delivery
-        - verified_agent_delivery
 select_permissions:
   - role: agent
     permission:
@@ -523,18 +473,8 @@ update_permissions:
   - role: agent
     permission:
       columns:
-        - current_status
         - actual_delivery_time
         - updated_at
-        - verified_agent_delivery
-        - payment_timing
-        - reconciliation_status
-        - cash_exception_reported_by_agent_id
-        - cash_exception_reported_at
-        - reconciled_by_business_id
-        - reconciled_at
-        - reconciliation_reference
-        - reconciliation_notes
       filter:
         assigned_agent:
           user:
@@ -544,19 +484,8 @@ update_permissions:
   - role: business
     permission:
       columns:
-        - current_status
-        - assigned_agent_id
         - estimated_delivery_time
         - updated_at
-        - verified_agent_delivery
-        - payment_timing
-        - reconciliation_status
-        - cash_exception_reported_by_agent_id
-        - cash_exception_reported_at
-        - reconciled_by_business_id
-        - reconciled_at
-        - reconciliation_reference
-        - reconciliation_notes
       filter:
         business:
           user:
@@ -568,11 +497,7 @@ update_permissions:
       columns:
         - special_instructions
         - preferred_delivery_time
-        - requires_fast_delivery
-        - per_km_delivery_fee
         - updated_at
-        - verified_agent_delivery
-        - payment_timing
       filter:
         client:
           user:

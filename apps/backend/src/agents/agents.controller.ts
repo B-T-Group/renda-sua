@@ -977,7 +977,9 @@ export class AgentsController {
         }
       `;
 
-      const result = await this.hasuraUserService.executeMutation(mutation, {
+      // #631 H1: user roles can no longer write auto_withdraw_commissions (payout setting).
+      // System write, scoped to the caller's own agent row (agentId comes from their session).
+      const result = await this.hasuraSystemService.executeMutation(mutation, {
         id: agentId,
         auto: body.auto_withdraw_commissions,
       });
