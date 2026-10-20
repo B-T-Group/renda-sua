@@ -435,3 +435,87 @@ describe('FailedDeliveriesService client-fault fee', () => {
     expect(types.indexOf('release')).toBeLessThan(types.indexOf('withdrawal'));
   });
 });
+
+describe('FailedDeliveriesService agent fault: forfeit, business paid only what was taken (PE #629)', () => {
+  const order = {
+    id: 'order-1',
+    order_number: 'RS-1',
+    currency: 'XAF',
+    client: { user: { id: 'client-user' } },
+    assigned_agent: { user: { id: 'agent-user' } },
+    business: { user_id: 'biz-user' },
+  };
+  const hold = { client_hold_amount: 0, agent_hold_amount: 700, delivery_fees: 0 };
+  function world(released: number, existingForfeit: number | null = null, debitOk = true) {
+    const w = createService();
+    w.getAccount.mockImplementation(async (userId: string) => ({ id: `acct-${userId}` }));
+    w.executeMutation.mockImplementation(async (q: string) =>
+      q.includes('ReleaseAgentOrderHold')
+        ? { release_agent_order_hold: released > 0 ? [{ id: 'tx', amount: released }] : [] }
+        : {}
+    );
+    w.executeQuery.mockImplementation(async (q: string) =>
+      q.includes('FindTransactionByIdempotencyKey')
+        ? { account_transactions: existingForfeit === null ? [] : [{ amount: existingForfeit }] }
+        : {}
+    );
+    w.registerTransaction.mockImplementation(async (r: any) =>
+      r.transactionType === 'payment' && !debitOk ? { success: false, error: 'insufficient' } : { success: true }
+    );
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    return w;
+  }
+  const deposits = (w: ReturnType<typeof world>) =>
+    w.registerTransaction.mock.calls.map(([r]: any) => r).filter((r: any) => r.transactionType === 'deposit');
+  const debits = (w: ReturnType<typeof world>) =>
+    w.registerTransaction.mock.calls.map(([r]: any) => r).filter((r: any) => r.transactionType === 'payment');
+  const shortAlerts = () =>
+    (reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'agent_fault_compensation_short');
+
+  it('full: debits the agent the moved 700 and deposits exactly 700 to the business (keyed once per order)', async () => {
+    const w = world(700);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(debits(w)).toEqual([
+      expect.objectContaining({ accountId: 'acct-agent-user', amount: 700, idempotencyKey: 'failed-delivery:agent-fault:agent-forfeit:order-1' }),
+    ]);
+    expect(deposits(w)).toEqual([
+      expect.objectContaining({ accountId: 'acct-biz-user', amount: 700, idempotencyKey: 'failed-delivery:agent-fault:business-deposit:order-1' }),
+    ]);
+    expect(shortAlerts()).toHaveLength(0);
+  });
+
+  it('partial: 300 of 700 moved -> business gets 300 and an alert with expected 700 / actual 300', async () => {
+    const w = world(300);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(debits(w).map((r: any) => r.amount)).toEqual([300]);
+    expect(deposits(w).map((r: any) => r.amount)).toEqual([300]);
+    expect(shortAlerts()).toEqual([
+      [expect.anything(), 'agent_fault_compensation_short', expect.stringContaining('expected=700 actual=300'), expect.objectContaining({ expected: 700, actual: 300 })],
+    ]);
+  });
+
+  it('zero moved -> no debit, nothing paid, alert (expected 700 / actual 0)', async () => {
+    const w = world(0);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(debits(w)).toEqual([]);
+    expect(deposits(w)).toEqual([]);
+    expect(shortAlerts()[0][3]).toMatchObject({ expected: 700, actual: 0 });
+  });
+
+  it('agent debit refused -> business gets nothing, alert', async () => {
+    const w = world(700, null, false);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(deposits(w)).toEqual([]);
+    expect(shortAlerts()[0][3]).toMatchObject({ expected: 700, actual: 0 });
+  });
+
+  it('retry after a full first run: release moves 0, the existing forfeit row gives 700, deposit reuses its key (no double pay), no alert', async () => {
+    const w = world(0, 700);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(debits(w)).toEqual([]);
+    expect(deposits(w)).toEqual([
+      expect.objectContaining({ amount: 700, idempotencyKey: 'failed-delivery:agent-fault:business-deposit:order-1' }),
+    ]);
+    expect(shortAlerts()).toHaveLength(0);
+  });
+});

@@ -306,19 +306,28 @@ suite('atomic agent hold releases on every path (real Postgres ledger)', () => {
     const paths: Record<string, () => Promise<unknown>> = {
       completion: () => orders.moveDeliveryLedger(order, agentHold, { skipClientLedgerMovements: true }),
       drop: () => orders.releaseDroppedAgentHold(order, accountId, 700),
-      'failed-delivery agent fault': () => failed['resolveAgentFault']({ ...order, business: null }, agentHold),
       'failed-delivery item fault': () => failed['resolveItemFault'](order, agentHold, false),
       'failed-delivery client fault (agent leg)': () => failed['releaseAgentHold'](order, accountId, 700, 'client-fault'),
     };
+    const biz = await pool.query(
+      `INSERT INTO users (user_type_id, first_name, last_name, email) VALUES ('business', 'B', 'T', $1) RETURNING id`,
+      [`biz-ahr-${process.pid}-${seq}@example.test`]
+    );
+    const bizUserId = biz.rows[0].id as string;
+    const bizAccountId = (
+      await pool.query(`INSERT INTO accounts (user_id, currency, available_balance) VALUES ($1, 'XAF', 0) RETURNING id`, [bizUserId])
+    ).rows[0].id as string;
+    const agentFault = () => failed['resolveAgentFault']({ ...order, business: { user_id: bizUserId } }, agentHold);
+    const bizBalance = async () =>
+      Number((await pool.query(`SELECT available_balance::float AS a FROM accounts WHERE id = $1`, [bizAccountId])).rows[0].a);
     const reconcile = () =>
       (reconciler as any).releaseNetAgentHold(accountId, orderId, 'reconciled', { cap: 700 });
-    return { accountId, orderId, hold, release, balance, released, paths, reconcile };
+    return { accountId, orderId, hold, release, balance, released, paths, reconcile, agentFault, bizBalance };
   }
 
   const PATHS = [
     'completion',
     'drop',
-    'failed-delivery agent fault',
     'failed-delivery item fault',
     'failed-delivery client fault (agent leg)',
   ];
@@ -371,6 +380,63 @@ suite('atomic agent hold releases on every path (real Postgres ledger)', () => {
       expect(await w.released()).toBe(700);
       expect(await w.balance()).toEqual({ a: 4_550, w: 450 });
     }
+  });
+
+  describe('agent fault: the hold is forfeited, the business gets only what was taken from the agent (PE #629)', () => {
+    const short = () => (reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'agent_fault_compensation_short');
+
+    it('full: agent 5000 -> hold 700 -> forfeited; business +700; conservation holds', async () => {
+      const w = await setup();
+      await w.hold(700);
+      await w.agentFault();
+      expect(await w.balance()).toEqual({ a: 4_300, w: 0 });
+      expect(await w.bizBalance()).toBe(700);
+      expect(short()).toHaveLength(0);
+    });
+
+    it('partial: only 300 of 700 still held -> business +300, alert expected 700 / actual 300', async () => {
+      const w = await setup();
+      await w.hold(700);
+      await w.release(400);
+      await w.agentFault();
+      expect(await w.balance()).toEqual({ a: 4_700, w: 0 });
+      expect(await w.bizBalance()).toBe(300);
+      expect(short().map((c) => c[3])).toEqual([expect.objectContaining({ expected: 700, actual: 300 })]);
+    });
+
+    it('zero: nothing still held -> no debit, business paid nothing, alert', async () => {
+      const w = await setup();
+      await w.hold(700);
+      await w.release(700);
+      await w.agentFault();
+      expect(await w.balance()).toEqual({ a: 5_000, w: 0 });
+      expect(await w.bizBalance()).toBe(0);
+      expect(short().map((c) => c[3])).toEqual([expect.objectContaining({ expected: 700, actual: 0 })]);
+    });
+
+    it('retry (sequential and concurrent): the business is paid 700 once and the agent debited once', async () => {
+      const w = await setup();
+      await w.hold(700);
+      await w.agentFault();
+      await w.agentFault();
+      await Promise.all([w.agentFault(), w.agentFault()]);
+      expect(await w.balance()).toEqual({ a: 4_300, w: 0 });
+      expect(await w.bizBalance()).toBe(700);
+      expect(short()).toHaveLength(0);
+    });
+
+    it('racing the reconciler: money is conserved (agent + business = 5000) and the business never exceeds what was taken', async () => {
+      for (let round = 0; round < 4; round++) {
+        const w = await setup();
+        await w.hold(700);
+        await Promise.all([w.agentFault(), w.reconcile()]);
+        const b = await w.balance();
+        const biz = await w.bizBalance();
+        expect(b.w).toBe(0);
+        expect(b.a + biz).toBe(5_000);
+        expect([0, 700]).toContain(biz);
+      }
+    });
   });
 
   it('a path whose release fails (withheld short) alerts and writes nothing', async () => {

@@ -10,6 +10,7 @@ import {
 } from './fee-percent.util';
 import { OrdersService } from './orders.service';
 import {
+  AGENT_FAULT_COMPENSATION_SHORT_MARKER,
   AGENT_HOLD_RELEASE_FAILED_MARKER,
   releaseAgentOrderHold,
 } from './agent-hold-release.util';
@@ -471,6 +472,89 @@ export class FailedDeliveriesService {
   }
 
   /**
+   * Agent fault: the agent's hold for this order is FORFEITED to the business.
+   *
+   * Ledger flow (before PE #629): the hold was released back to the agent's available
+   * balance and the business was then credited the full agent_hold_amount by a plain
+   * deposit, with nothing taken from the agent: the business was paid money the agent
+   * kept. Now:
+   *   1. release_agent_order_hold moves min(net held, agent_hold_amount) out of the hold
+   *      (withheld -> available, atomic, once);
+   *   2. that moved amount is debited from the agent (`payment`, key
+   *      failed-delivery:agent-fault:agent-forfeit:<order>, so once per order);
+   *   3. the caller deposits exactly the debited amount to the business (key
+   *      failed-delivery:agent-fault:business-deposit:<order>, once per order).
+   * Returns the amount actually taken from the agent (what the business may receive).
+   * On a retry the release credits 0, and the existing forfeit row gives the amount, so
+   * the business deposit (same key) is a no-op. Less than agent_hold_amount, or 0, is
+   * a money alert (agent_fault_compensation_short) with expected and actual figures.
+   */
+  private async forfeitAgentHold(
+    order: any,
+    accountId: string,
+    expected: number
+  ): Promise<number> {
+    const forfeitKey = this.failedDeliveryKey('agent-fault', 'agent-forfeit', order.id);
+    const release = await releaseAgentOrderHold(this.hasuraSystemService, {
+      accountId,
+      orderId: order.id,
+      cap: Number(expected || 0),
+      memo: `Hold released for failed delivery - order ${order.order_number}`,
+    });
+    if (!release.success) {
+      reportMoneyAnomaly(
+        this.logger,
+        AGENT_HOLD_RELEASE_FAILED_MARKER,
+        `order=${order.order_number} orderId=${order.id} agent hold release failed (agent-fault): ${release.error}`,
+        { orderId: order.id, accountId, amount: expected, path: 'failed-delivery:agent-fault' }
+      );
+    }
+    let moved = await this.existingTransactionAmount(forfeitKey);
+    if (moved === null) {
+      moved = 0;
+      if (release.released > 0) {
+        const debit = await this.accountsService.registerTransaction({
+          accountId,
+          amount: release.released,
+          transactionType: 'payment',
+          memo: `Agent hold forfeited for failed delivery - order ${order.order_number} (agent fault)`,
+          referenceId: order.id,
+          idempotencyKey: forfeitKey,
+        });
+        if (debit?.success) moved = release.released;
+      }
+    }
+    moved = roundMoney(moved);
+    if (moved < roundMoney(Number(expected || 0))) {
+      reportMoneyAnomaly(
+        this.logger,
+        AGENT_FAULT_COMPENSATION_SHORT_MARKER,
+        `order=${order.order_number} orderId=${order.id} agent-fault compensation short: ` +
+          `expected=${expected} actual=${moved} ${order.currency} (only what was taken from the agent is paid to the business)`,
+        { orderId: order.id, accountId, expected, actual: moved }
+      );
+    }
+    return moved;
+  }
+
+  private async existingTransactionAmount(key: string): Promise<number | null> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      account_transactions: Array<{ amount: number | string }>;
+    }>(
+      `query FindTransactionByIdempotencyKey($keys: [String!]!) {
+        account_transactions(where: { idempotency_key: { _in: $keys } }, limit: 1) {
+          id
+          amount
+          idempotency_key
+        }
+      }`,
+      { keys: [key] }
+    );
+    const row = res?.account_transactions?.[0];
+    return row ? Number(row.amount) : null;
+  }
+
+  /**
    * Atomic agent hold release (release_agent_order_hold): min(net held for this agent
    * and order, agent_hold_amount) under the account row lock, so a retried resolution,
    * a second fault path or the stranded-hold reconciler cannot release it twice. A
@@ -526,12 +610,11 @@ export class FailedDeliveriesService {
         order.currency
       );
 
-      await this.releaseAgentHold(order, agentAccount.id, orderHold.agent_hold_amount, 'agent-fault');
+      const moved = await this.forfeitAgentHold(order, agentAccount.id, Number(orderHold.agent_hold_amount));
 
-      // Deposit agent hold amount to business account
-      // Get business user_id from order
+      // Compensate the business with what was actually taken from the agent, never more.
       const businessUserId = order.business?.user_id;
-      if (businessUserId) {
+      if (businessUserId && moved > 0) {
         const businessUserAccount = await this.hasuraSystemService.getAccount(
           businessUserId,
           order.currency
@@ -539,10 +622,11 @@ export class FailedDeliveriesService {
 
         await this.accountsService.registerTransaction({
           accountId: businessUserAccount.id,
-          amount: orderHold.agent_hold_amount,
+          amount: moved,
           transactionType: 'deposit',
           memo: `Agent hold retained for failed delivery - order ${order.order_number} (agent fault)`,
           referenceId: order.id,
+          // Once per order: a retried resolution cannot pay the business twice.
           idempotencyKey: this.failedDeliveryKey('agent-fault', 'business-deposit', order.id),
         });
       }

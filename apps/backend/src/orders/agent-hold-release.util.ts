@@ -19,6 +19,9 @@ import type { HasuraSystemService } from '../hasura/hasura-system.service';
 /** Money alert when an agent hold release fails on a path that does not throw. */
 export const AGENT_HOLD_RELEASE_FAILED_MARKER = 'agent_hold_release_failed';
 
+/** Agent fault: less than agent_hold_amount was taken from the agent (expected vs actual). */
+export const AGENT_FAULT_COMPENSATION_SHORT_MARKER = 'agent_fault_compensation_short';
+
 export const RELEASE_AGENT_ORDER_HOLD_MUTATION = `
   mutation ReleaseAgentOrderHold($accountId: uuid!, $orderId: uuid!, $cap: numeric, $memo: String!) {
     release_agent_order_hold(
