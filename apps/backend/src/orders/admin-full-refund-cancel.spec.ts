@@ -22,6 +22,10 @@ function service(start: string) {
   const order: Order = { id: 'o-1', current_status: start, order_items: [] };
   svc.getOrderDetails = jest.fn(async () => ({ ...order, current_status: db.status }));
   svc.hasuraUserService = { getUser: jest.fn(async () => ({ id: 'admin-1' })) };
+  svc.hasuraSystemService = {
+    executeQuery: jest.fn(async () => ({ orders_by_pk: null, order_status_history: [] })),
+  };
+  svc.orderQueueService = { sendOrderCancelledMessage: jest.fn(async () => undefined) };
   // Mirrors OrderStatusService: the cancel is a compare-and-set on expectedFromStatus.
   svc.orderStatusService = {
     updateOrderStatus: jest.fn(async (_id: string, to: string, opts: any) => {
@@ -52,7 +56,13 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect(svc.persistCancellationMetadata).toHaveBeenCalledWith('o-1', 'system', 'Admin full refund: QA leftover');
     expect(svc.createStatusHistoryEntry).toHaveBeenCalledWith('o-1', 'cancelled', expect.stringContaining('full refund'), 'system', 'admin-1', 'Admin full refund: QA leftover');
     // cancelled_by=system: the Lambda never charges a fee for it and releases client + agent holds by key.
-    expect(svc.runOrderCancellationSideEffects).toHaveBeenCalledWith(expect.objectContaining({ id: 'o-1' }), 'o-1', 'ready_for_pickup', 'system', 'Admin full refund: QA leftover');
+    expect(svc.runOrderCancellationSideEffects).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'o-1' }), 'o-1', 'ready_for_pickup', 'system', 'Admin full refund: QA leftover',
+      undefined, undefined, { skipEnqueue: true }
+    );
+    expect(svc.orderQueueService.sendOrderCancelledMessage).toHaveBeenCalledWith(
+      'o-1', 'system', 'Admin full refund: QA leftover', 'ready_for_pickup', 'order.cancelled:o-1', { strict: true }
+    );
     expect(svc.releaseStripeAuthorizationIfNeeded).toHaveBeenCalledTimes(1);
   });
 
@@ -64,6 +74,60 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect((lost.reason as HttpException).getStatus()).toBe(409);
     expect(calls.filter((c) => c === 'runOrderCancellationSideEffects')).toHaveLength(1);
     expect(calls.filter((c) => c === 'releaseStripeAuthorizationIfNeeded')).toHaveLength(1);
+  });
+
+  it('SQS failure is a failed step and does not claim the wallet release was queued', async () => {
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    const { svc } = service('confirmed');
+    svc.orderQueueService.sendOrderCancelledMessage.mockRejectedValueOnce(new Error('sqs down'));
+    const res = await svc.adminFullRefundCancel('o-1', 'r');
+    expect(res.partialFailure).toBe(true);
+    expect(res.failedSteps).toEqual([{ step: 'enqueueOrderCancelled', error: 'Step failed; details are in the logs (alerted)' }]);
+    expect(res.depositRefund).toEqual({ status: 'refunded' });
+    expect(res.message).toMatch(/enqueueOrderCancelled FAILED/);
+    expect(JSON.stringify(res)).not.toContain('sqs down');
+    expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect.anything(), 'admin_full_refund_cancel_step_failed', expect.stringContaining('sqs down'),
+      expect.objectContaining({ step: 'enqueueOrderCancelled' })
+    );
+  });
+
+  it('a later call on the same full-refund re-queues order.cancelled and does not repeat side effects', async () => {
+    const { svc, calls } = service('confirmed');
+    await svc.adminFullRefundCancel('o-1', 'leftover');
+    calls.length = 0;
+    svc.orderQueueService.sendOrderCancelledMessage.mockClear();
+    svc.getOrderDetails = jest.fn(async () => ({ id: 'o-1', current_status: 'cancelled', order_items: [] }));
+    svc.hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (String(query).includes('FullRefundCancelMarker')) {
+        return { orders_by_pk: { cancelled_by: 'system', cancellation_notes: 'Admin full refund: leftover' } };
+      }
+      return { order_status_history: [{ status: 'confirmed' }] };
+    });
+    const res = await svc.adminFullRefundCancel('o-1', 'leftover');
+    expect(res).toMatchObject({ success: true, resumed: true, previousStatus: 'confirmed', partialFailure: false });
+    expect(calls).toEqual([]);
+    expect(svc.orderStatusService.updateOrderStatus).toHaveBeenCalledTimes(1);
+    expect(svc.orderQueueService.sendOrderCancelledMessage).toHaveBeenCalledWith(
+      'o-1', 'system', 'Admin full refund: leftover', 'confirmed', 'order.cancelled:o-1', { strict: true }
+    );
+  });
+
+  it('a retry whose queue send fails is 502 and does not claim success', async () => {
+    const { svc } = service('cancelled');
+    svc.getOrderDetails = jest.fn(async () => ({ id: 'o-1', current_status: 'cancelled', order_items: [] }));
+    svc.hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+      if (String(query).includes('FullRefundCancelMarker')) {
+        return { orders_by_pk: { cancelled_by: 'system', cancellation_notes: 'Admin full refund: leftover' } };
+      }
+      return { order_status_history: [{ status: 'ready_for_pickup' }] };
+    });
+    svc.orderQueueService.sendOrderCancelledMessage.mockRejectedValueOnce(new Error('sqs down'));
+    const err = await svc.adminFullRefundCancel('o-1', 'leftover').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(HttpException);
+    expect((err as HttpException).getStatus()).toBe(502);
+    expect(JSON.stringify((err as HttpException).getResponse())).not.toContain('sqs down');
+    expect(svc.runOrderCancellationSideEffects).not.toHaveBeenCalled();
   });
 
   it('a second call after the cancel is refused (terminal status) with nothing re-run', async () => {
@@ -270,6 +334,15 @@ describe('POST /admin/orders/:orderId/full-refund-cancel', () => {
     // #626 B1: the deposit outcome is on the audit event itself.
     expect(ctrl.orderEventsService.recordEventStrict.mock.calls[0][0].payload).toHaveProperty('depositRefund', { status: 'failed', message: 'consumed' });
     expect(ctrl.orderEventsService.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('a resume that only re-queues the wallet release does not write a second audit event', async () => {
+    const ctrl = controller(jest.fn(async () => ({
+      success: true, resumed: true, previousStatus: 'confirmed', cancellationFee: 0,
+      depositRefund: { status: 'none' }, failedSteps: [],
+    })));
+    await ctrl.fullRefundCancel('o-1', { reason: 'again' });
+    expect(ctrl.orderEventsService.recordEventStrict).not.toHaveBeenCalled();
   });
 
   it('QA A4: PII in the reason is masked before it is stored (service) or audited', async () => {

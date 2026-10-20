@@ -322,7 +322,9 @@ export class AdminOrdersController {
     await this.geo.assertOrder(scope, orderId);
     const reason = maskPersonalData(dto.reason);
     const result = await this.ordersService.adminFullRefundCancel(orderId, reason);
-    await this.auditFullRefundCancel(orderId, reason, result.previousStatus, result.depositRefund, result.failedSteps);
+    if (!result.resumed) {
+      await this.auditFullRefundCancel(orderId, reason, result.previousStatus, result.depositRefund, result.failedSteps);
+    }
     return result;
   }
 

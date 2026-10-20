@@ -704,6 +704,9 @@ export const ADMIN_FULL_REFUND_STEP_FAILED_MESSAGE = 'Step failed; details are i
 /** #626 D2: the API's depositRefund.message on failure; the raw text is only logged / alerted. */
 export const ADMIN_FULL_REFUND_DEPOSIT_FAILED_MESSAGE = 'Deposit refund failed; details are in the logs (alerted)';
 
+/** Stored on cancellation_notes so a retry can re-queue the wallet release. */
+export const ADMIN_FULL_REFUND_NOTE_PREFIX = 'Admin full refund:';
+
 /** What happened to a paid deposit on cancel. */
 export type DepositCancelOutcome =
   | { status: 'none' }
@@ -8751,6 +8754,8 @@ export class OrdersService {
    * effect; the caller audit-logs only after this returns.
    */
   async adminFullRefundCancel(orderId: string, reason: string) {
+    const resumed = await this.tryResumeAdminFullRefund(orderId);
+    if (resumed) return resumed;
     // C3: requireCancellableAdminOrder applies the shared #627 pre-pickup allowlist
     // (ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES); anything else is 409 ORDER_ALREADY_PICKED_UP.
     const order = await this.requireCancellableAdminOrder(orderId);
@@ -8785,7 +8790,7 @@ export class OrdersService {
         return undefined;
       }
     };
-    const notes = `Admin full refund: ${reason}`;
+    const notes = `${ADMIN_FULL_REFUND_NOTE_PREFIX} ${reason}`;
     // D1: a void that fails WITHOUT throwing ({ ok: false }) is a failed step too.
     await step('releaseStripeAuthorization', async () => {
       const result = await this.releaseStripeAuthorizationIfNeeded(order);
@@ -8806,8 +8811,15 @@ export class OrdersService {
       )
     );
     const deposit: DepositCancelOutcome = (await step('cancellationSideEffects', () =>
-      this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes)
+      this.runOrderCancellationSideEffects(
+        order, order.id, previousStatus, 'system', notes, undefined, undefined, { skipEnqueue: true }
+      )
     )) ?? { status: 'failed', message: 'Cancellation side effects failed before the deposit was handled' };
+    // The shared helper swallows an SQS failure. This cancel must not report the
+    // wallet release as queued when order.cancelled never left the process.
+    await step('enqueueOrderCancelled', () =>
+      this.sendAdminFullRefundCancelled(order.id, previousStatus, notes)
+    );
     // Refunds go to the client's Rendasua wallet, never back to the payment provider.
     const depositFailed = deposit.status === 'failed';
     if (depositFailed) {
@@ -8821,6 +8833,7 @@ export class OrdersService {
     const partial = failedSteps.length > 0;
     return {
       success: true,
+      resumed: false,
       partialFailure: partial,
       failedSteps,
       order: updatedOrder,
@@ -8836,6 +8849,92 @@ export class OrdersService {
         ? 'Order cancelled with no fee and the wallet releases queued, but the DEPOSIT REFUND FAILED and needs manual follow-up'
         : 'Order cancelled with a full refund to the client wallet; the refund and hold releases are queued',
     };
+  }
+
+  /** A cancelled full-refund can re-queue order.cancelled. The Lambda keys make a second run a no-op. */
+  private async tryResumeAdminFullRefund(orderId: string) {
+    const order = await this.getOrderDetails(orderId);
+    if (!order || order.current_status !== 'cancelled') return null;
+    const row = await this.loadFullRefundCancelRow(orderId);
+    if (!this.isResumableFullRefund(row)) return null;
+    return this.resumeAdminFullRefundEnqueue(orderId, row?.cancellation_notes ?? undefined);
+  }
+
+  private isResumableFullRefund(row: {
+    cancelled_by: string | null;
+    cancellation_notes: string | null;
+  } | null): boolean {
+    return row?.cancelled_by === 'system' && this.isAdminFullRefundNote(row.cancellation_notes);
+  }
+
+  private isAdminFullRefundNote(notes: string | null | undefined): boolean {
+    return typeof notes === 'string' && notes.startsWith(ADMIN_FULL_REFUND_NOTE_PREFIX);
+  }
+
+  private async loadFullRefundCancelRow(orderId: string) {
+    const result = await this.hasuraSystemService.executeQuery<{
+      orders_by_pk: {
+        cancelled_by: string | null;
+        cancellation_notes: string | null;
+      } | null;
+    }>(
+      `query FullRefundCancelMarker($orderId: uuid!) {
+        orders_by_pk(id: $orderId) { cancelled_by cancellation_notes }
+      }`,
+      { orderId }
+    );
+    return result?.orders_by_pk ?? null;
+  }
+
+  private async resumeAdminFullRefundEnqueue(orderId: string, notes?: string) {
+    const previousStatus = (await this.getPreviousStatusBeforeCancelled(orderId)) ?? 'confirmed';
+    try {
+      await this.sendAdminFullRefundCancelled(orderId, previousStatus, notes);
+    } catch (error: any) {
+      this.alertFullRefundEnqueueRetry(orderId, previousStatus, error);
+      throw new HttpException(
+        'Wallet release could not be queued. Retry this request.',
+        HttpStatus.BAD_GATEWAY
+      );
+    }
+    return this.resumedFullRefundResult(previousStatus);
+  }
+
+  private alertFullRefundEnqueueRetry(orderId: string, previousStatus: string, error: any): void {
+    reportMoneyAnomaly(
+      this.logger,
+      ADMIN_FULL_REFUND_STEP_FAILED_MARKER,
+      `Retry of the admin full-refund cancel could not queue order.cancelled for ${orderId}: ${error?.message}`,
+      { orderId, previousStatus, step: 'enqueueOrderCancelled' }
+    );
+  }
+
+  private resumedFullRefundResult(previousStatus: string) {
+    return {
+      success: true as const,
+      resumed: true as const,
+      partialFailure: false,
+      failedSteps: [] as Array<{ step: string; error: string }>,
+      previousStatus,
+      cancellationFee: 0,
+      depositRefund: { status: 'none' as const },
+      message: 'Order was already cancelled; the wallet release was queued again',
+    };
+  }
+
+  private async sendAdminFullRefundCancelled(
+    orderId: string,
+    previousStatus: string,
+    notes?: string
+  ): Promise<void> {
+    await this.orderQueueService.sendOrderCancelledMessage(
+      orderId,
+      'system',
+      notes,
+      previousStatus,
+      `order.cancelled:${orderId}`,
+      { strict: true }
+    );
   }
 
   private async requireCancellableAdminOrder(orderId: string): Promise<Orders> {
@@ -12480,7 +12579,8 @@ export class OrdersService {
     cancelledBy: 'client' | 'business' | 'system',
     notes?: string,
     sqsReason?: string,
-    actorUserId?: string
+    actorUserId?: string,
+    options?: { skipEnqueue?: boolean }
   ): Promise<DepositCancelOutcome> {
     try {
       await this.purchaseCreditsService?.restore(orderId);
@@ -12539,12 +12639,14 @@ export class OrdersService {
       actorUserId
     );
 
-    await this.enqueueOrderCancelled(
-      orderId,
-      cancelledBy,
-      previousStatus,
-      sqsReason ?? notes
-    );
+    if (!options?.skipEnqueue) {
+      await this.enqueueOrderCancelled(
+        orderId,
+        cancelledBy,
+        previousStatus,
+        sqsReason ?? notes
+      );
+    }
     return deposit;
   }
 
