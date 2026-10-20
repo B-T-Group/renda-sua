@@ -196,7 +196,9 @@
       "cancelled": "Cancelled"
     },
     "agent": "Agent",
-    "business": "Business"
+    "business": "Business",
+    "saved": "Saved",
+    "removed": "Removed"
   },
   "cart": {
     "title": "Cart",
@@ -7656,7 +7658,9 @@
       "evening": "Evening",
       "pickup": "Pickup time",
       "offConfirm": "Turn off {{slot}}? {{n}} dedicated agents will be paused.",
-      "pausedGroup": "{{n}} paused agents"
+      "pausedGroup": "{{n}} paused agents",
+      "turnOff": "Turn off slot",
+      "turnOn": "Turn on slot"
     },
     "empty": "No dedicated agent",
     "post": "Post a request",
@@ -7691,7 +7695,10 @@
       "termsStrip": "Links and phone numbers are removed.",
       "publish": "Publish",
       "posted": "Request posted",
-      "alreadyPosted": "Already posted"
+      "alreadyPosted": "Already posted",
+      "slots": "Slots",
+      "payFixed": "(not editable)",
+      "noSlotsAvailable": "No slots available. Enable a slot or close an existing posting first."
     },
     "posting": {
       "row": "Posting open · {{accepted}}/{{needed}} accepted · {{n}} new",
@@ -7712,7 +7719,9 @@
       "decline": "Decline",
       "autoDeclined": "Auto-declined",
       "closeConfirm": "Close this request? Pending applicants will be declined.",
-      "termsEdited": "Applicants were notified"
+      "termsEdited": "Applicants were notified",
+      "title": "Pending",
+      "accepted": "Accepted"
     },
     "agent": {
       "opportunities": "Dedicated opportunities",
@@ -7824,7 +7833,10 @@
       "removeAgent": "Remove agent {{name}}",
       "editTerms": "Edit terms",
       "moreOptions": "More options",
-      "closePosting": "Close posting"
+      "closePosting": "Close posting",
+      "pickupTime": "Select pickup time",
+      "decreaseCount": "Decrease count",
+      "increaseCount": "Increase count"
     }
   }
 }

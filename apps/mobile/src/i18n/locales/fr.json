@@ -191,7 +191,9 @@
       "cancelled": "Annulé"
     },
     "agent": "Agent",
-    "business": "Commerce"
+    "business": "Commerce",
+    "saved": "Enregistré",
+    "removed": "Retiré"
   },
   "cart": {
     "title": "Panier",
@@ -7578,7 +7580,9 @@
       "evening": "Soir",
       "pickup": "Heure de collecte",
       "offConfirm": "Désactiver le créneau {{slot}} ? {{n}} livreurs dédiés seront mis en pause.",
-      "pausedGroup": "{{n}} livreurs en pause"
+      "pausedGroup": "{{n}} livreurs en pause",
+      "turnOff": "Désactiver le créneau",
+      "turnOn": "Activer le créneau"
     },
     "empty": "Aucun livreur dédié",
     "post": "Publier une demande",
@@ -7613,7 +7617,10 @@
       "termsStrip": "Les liens et numéros de téléphone sont retirés.",
       "publish": "Publier",
       "posted": "Demande publiée",
-      "alreadyPosted": "Déjà publiée"
+      "alreadyPosted": "Déjà publiée",
+      "slots": "Créneaux",
+      "payFixed": "(non modifiable)",
+      "noSlotsAvailable": "Aucun créneau disponible. Activez un créneau ou fermez une demande existante d'abord."
     },
     "posting": {
       "row": "Demande ouverte · {{accepted}}/{{needed}} acceptés · {{n}} nouvelles",
@@ -7634,7 +7641,9 @@
       "decline": "Refuser",
       "autoDeclined": "Refusée automatiquement",
       "closeConfirm": "Fermer cette demande ? Les candidatures en attente seront refusées.",
-      "termsEdited": "Les candidats ont été prévenus"
+      "termsEdited": "Les candidats ont été prévenus",
+      "title": "En attente",
+      "accepted": "Acceptés"
     },
     "agent": {
       "opportunities": "Opportunités dédiées",
@@ -7737,7 +7746,10 @@
       "removeAgent": "Retirer le livreur {{name}}",
       "editTerms": "Modifier les conditions",
       "moreOptions": "Plus d'options",
-      "closePosting": "Fermer la demande"
+      "closePosting": "Fermer la demande",
+      "pickupTime": "Sélectionner l'heure de collecte",
+      "decreaseCount": "Diminuer le nombre",
+      "increaseCount": "Augmenter le nombre"
     }
   }
 }
