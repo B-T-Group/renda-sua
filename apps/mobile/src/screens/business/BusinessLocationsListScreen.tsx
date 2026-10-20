@@ -22,6 +22,11 @@ import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { useLocationTransfers } from '../../hooks/business/useLocationTransfers';
 import { useProfileMe } from '../../hooks/useProfileMe';
+import { usePermissions } from '../../hooks/usePermissions';
+import { DELEGATION_PERMISSIONS } from '../../types/delegation';
+import { readStoredContext } from '../../utils/activePersonaStorage';
+import dedicatedAgentsService from '../../services/dedicatedAgentsService';
+import { isDedicatedAgentsFeatureHidden } from '../../utils/dedicatedAgentsErrors';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import { navigateBusinessCatalogTab } from '../../utils/navigateBusinessTabs';
 import { agentApi } from '../../services/agentApi';
@@ -55,6 +60,8 @@ function accountForLocation(
   };
 }
 
+const dedicatedAgentsProbeCache = new Map<string, { available: boolean; timestamp: number; delegationId: string | null }>();
+
 export default function BusinessLocationsListScreen() {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -62,12 +69,14 @@ export default function BusinessLocationsListScreen() {
   const route = useRoute<Route>();
   const { me, loading: profileLoading } = useProfileMe();
   const businessId = me?.business?.id;
+  const { can } = usePermissions(me);
   const { isStripeRail, loading: stripeRailLoading } = useIsStripeRail();
   const { phones, fetchPhones, verificationMethod } = useMobilePaymentPhones(!isStripeRail);
   const [locations, setLocations] = useState<BusinessLocation[]>([]);
   const [accounts, setAccounts] = useState<AccountInfoRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+  const [dedicatedAgentsAvailable, setDedicatedAgentsAvailable] = useState<Set<string>>(new Set());
   const dependenciesReady = !profileLoading && !stripeRailLoading;
   const contentReady = hasLoadedOnce && dependenciesReady;
   const [toggleTarget, setToggleTarget] = useState<BusinessLocation | null>(null);
@@ -105,6 +114,29 @@ export default function BusinessLocationsListScreen() {
     navigation.setParams({ hoursUpdated: undefined });
   }, [route.params?.hoursUpdated, navigation, t]);
 
+  const probeDedicatedAgents = useCallback(async (locationId: string) => {
+    const hasPermission = me?.business?.user_id === me?.id || can(DELEGATION_PERMISSIONS.DEDICATED_AGENTS_MANAGE);
+    if (!hasPermission) return false;
+
+    const storedContext = await readStoredContext();
+    const currentDelegationId = storedContext?.kind === 'delegation' ? storedContext.delegationId : null;
+
+    const cached = dedicatedAgentsProbeCache.get(locationId);
+    if (cached && cached.delegationId === currentDelegationId) {
+      return cached.available;
+    }
+
+    try {
+      await dedicatedAgentsService.getPickupSlots(locationId);
+      dedicatedAgentsProbeCache.set(locationId, { available: true, timestamp: Date.now(), delegationId: currentDelegationId });
+      return true;
+    } catch (err) {
+      const isHidden = isDedicatedAgentsFeatureHidden(err);
+      dedicatedAgentsProbeCache.set(locationId, { available: !isHidden, timestamp: Date.now(), delegationId: currentDelegationId });
+      return !isHidden;
+    }
+  }, [me, can]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -113,7 +145,15 @@ export default function BusinessLocationsListScreen() {
         agentApi.accounts.getInfo(),
         fetchPending(),
       ]);
-      if (locRes.success) setLocations(locRes.data.business_locations ?? []);
+      if (locRes.success) {
+        const locs = locRes.data.business_locations ?? [];
+        setLocations(locs);
+        
+        const probeResults = await Promise.all(
+          locs.map(async (loc) => ({ id: loc.id, available: await probeDedicatedAgents(loc.id) }))
+        );
+        setDedicatedAgentsAvailable(new Set(probeResults.filter(r => r.available).map(r => r.id)));
+      }
       if (accRes.success && accRes.data?.accounts) setAccounts(accRes.data.accounts);
       setTransferRefresh((n) => n + 1);
     } catch {
@@ -121,7 +161,7 @@ export default function BusinessLocationsListScreen() {
     } finally {
       setLoading(false);
     }
-  }, [fetchPending]);
+  }, [fetchPending, probeDedicatedAgents]);
 
   useEffect(() => {
     if (!loading && dependenciesReady) {
@@ -337,9 +377,9 @@ export default function BusinessLocationsListScreen() {
               onHours={() =>
                 navigation.navigate('BusinessLocationHours', { locationId: item.id })
               }
-              onDedicatedAgents={() =>
+              onDedicatedAgents={dedicatedAgentsAvailable.has(item.id) ? () =>
                 navigation.navigate('BusinessLocationDedicatedAgents', { locationId: item.id })
-              }
+              : undefined}
               onViewItems={() =>
                 navigateBusinessCatalogTab(navigation, { locationId: item.id })
               }
