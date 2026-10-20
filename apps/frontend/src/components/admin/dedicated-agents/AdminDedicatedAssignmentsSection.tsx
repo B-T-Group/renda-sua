@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Box,
   Button,
@@ -34,15 +34,14 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
 import AdminDedicatedAssignDialog from './AdminDedicatedAssignDialog';
-import type { AdminAssignmentView } from '../../../types/dedicatedAgents';
+import type { AdminAssignmentView, AssignmentStatus } from '../../../types/dedicatedAgents';
 
 export function AdminDedicatedAssignmentsSection() {
   const { t } = useTranslation();
   const {
     getAdminAssignments,
-    pauseAssignment,
-    resumeAssignment,
-    removeAssignment,
+    updateAdminAssignment,
+    deleteAdminAssignment,
   } = useDedicatedAgents();
 
   const [assignments, setAssignments] = useState<AdminAssignmentView[]>([]);
@@ -71,13 +70,10 @@ export function AdminDedicatedAssignmentsSection() {
     loadAssignments();
   }, [loadAssignments]);
 
-  const handlePauseResume = async (assignmentId: string, isPaused: boolean) => {
+  const handlePauseResume = async (assignmentId: string, status: AssignmentStatus) => {
     try {
-      if (isPaused) {
-        await resumeAssignment(assignmentId);
-      } else {
-        await pauseAssignment(assignmentId);
-      }
+      const newStatus: AssignmentStatus = status === 'active' ? 'paused' : 'active';
+      await updateAdminAssignment(assignmentId, { status: newStatus });
       await loadAssignments();
     } catch (err: any) {
       console.error('Error pause/resume:', err);
@@ -86,7 +82,7 @@ export function AdminDedicatedAssignmentsSection() {
 
   const handleRemove = async (assignmentId: string) => {
     try {
-      await removeAssignment(assignmentId);
+      await deleteAdminAssignment(assignmentId);
       await loadAssignments();
       setConfirmRemove(null);
     } catch (err: any) {
@@ -171,19 +167,16 @@ export function AdminDedicatedAssignmentsSection() {
             </TableHead>
             <TableBody>
               {assignments.map((assignment) => (
-                <TableRow key={assignment.id}>
+                <TableRow key={assignment.assignmentId}>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Box>
                         <Typography variant="body2" fontWeight={600}>
                           {assignment.agent.firstName} {assignment.agent.lastName}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {assignment.agent.phone}
-                        </Typography>
                       </Box>
-                      {assignment.isRelated && (
-                        <Tooltip title={t('dedicatedAgents.superuser.relationWarning', 'Agent is related to this business')}>
+                      {assignment.possible_relation && !assignment.relation_dismissed && (
+                        <Tooltip title={t('dedicatedAgents.superuser.relationWarning', 'Agent may be related to this business')}>
                           <WarningIcon color="warning" fontSize="small" />
                         </Tooltip>
                       )}
@@ -192,45 +185,37 @@ export function AdminDedicatedAssignmentsSection() {
                   <TableCell>
                     <Typography variant="body2">{assignment.location.businessName}</Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {assignment.location.locationName}
-                    </Typography>
-                  </TableCell>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
-                      {assignment.slotKeys.map((slot) => (
-                        <Chip
-                          key={slot}
-                          label={t(`dedicatedAgents.slots.${slot}`, slot)}
-                          size="small"
-                        />
-                      ))}
-                    </Box>
-                    <Typography variant="caption" color="text.secondary">
-                      {assignment.daysOfWeek.join(', ')}
+                      {assignment.location.name}
                     </Typography>
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={assignment.isPaused ? t('dedicatedAgents.superuser.paused', 'Paused') : t('dedicatedAgents.superuser.active', 'Active')}
-                      color={assignment.isPaused ? 'default' : 'success'}
+                      label={t(`dedicatedAgents.slots.${assignment.slotKey}`, assignment.slotKey)}
+                      size="small"
+                    />
+                  </TableCell>
+                  <TableCell>
+                    <Chip
+                      label={assignment.status === 'paused' ? t('dedicatedAgents.superuser.paused', 'Paused') : t('dedicatedAgents.superuser.active', 'Active')}
+                      color={assignment.status === 'paused' ? 'default' : 'success'}
                       size="small"
                     />
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title={assignment.isPaused ? t('dedicatedAgents.superuser.resume', 'Resume') : t('dedicatedAgents.superuser.pause', 'Pause')}>
+                      <Tooltip title={assignment.status === 'paused' ? t('dedicatedAgents.superuser.resume', 'Resume') : t('dedicatedAgents.superuser.pause', 'Pause')}>
                         <IconButton
                           size="small"
-                          onClick={() => handlePauseResume(assignment.id, assignment.isPaused)}
+                          onClick={() => handlePauseResume(assignment.assignmentId, assignment.status)}
                         >
-                          {assignment.isPaused ? <ResumeIcon /> : <PauseIcon />}
+                          {assignment.status === 'paused' ? <ResumeIcon /> : <PauseIcon />}
                         </IconButton>
                       </Tooltip>
                       <Tooltip title={t('dedicatedAgents.superuser.remove', 'Remove')}>
                         <IconButton
                           size="small"
                           color="error"
-                          onClick={() => setConfirmRemove(assignment.id)}
+                          onClick={() => setConfirmRemove(assignment.assignmentId)}
                         >
                           <DeleteIcon />
                         </IconButton>
