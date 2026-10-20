@@ -876,6 +876,22 @@ function App() {
               }
             />
             <Route
+              path="/business/locations/:locationId/dedicated-agents"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.BusinessLocationSettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/business/locations/:locationId/dedicated-agents/postings/:postingId"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.ApplicantsScreen />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/business/team"
               element={
                 <ProtectedRoute>

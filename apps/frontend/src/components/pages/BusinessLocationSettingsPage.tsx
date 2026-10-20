@@ -27,6 +27,7 @@ import MoreOptionsSection from '../business/location-settings/MoreOptionsSection
 import OpenClosedSection from '../business/location-settings/OpenClosedSection';
 import OrderAlertsSection from '../business/location-settings/OrderAlertsSection';
 import { LocationSectionActions } from '../business/location-settings/sectionTypes';
+import DedicatedAgentsSection from '../business/dedicated-agents/DedicatedAgentsSection';
 import SEOHead from '../seo/SEOHead';
 
 const BusinessLocationSettingsPage: React.FC = () => {
@@ -153,6 +154,7 @@ const BusinessLocationSettingsPage: React.FC = () => {
         <GettingPaidSection {...actions} updateLocation={update} />
         <HowCustomersPaySection {...actions} updateLocation={update} />
         <OrderAlertsSection {...actions} updateLocation={update} />
+        <DedicatedAgentsSection locationId={location.id} />
         <BasicsSection {...actions} updateLocation={update} />
         <MoreOptionsSection {...actions} updateLocation={update} />
         <ForAllLocationsPanel />
