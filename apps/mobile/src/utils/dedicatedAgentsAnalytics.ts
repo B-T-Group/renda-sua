@@ -1,4 +1,56 @@
+/**
+ * Dedicated agents analytics events (§7 in the spec).
+ * Fire-and-forget — errors are silently swallowed so they never affect UX.
+ */
+
+import { Platform } from 'react-native';
 import { AppEventsService } from '../services/analytics/AppEventsService';
+
+export type DedicatedAgentsEventName =
+  | 'section_viewed'
+  | 'slot_toggled'
+  | 'pickup_time_changed'
+  | 'agent_paused'
+  | 'agent_resumed'
+  | 'agent_removed'
+  | 'posting_form_opened'
+  | 'posting_created'
+  | 'posting_closed'
+  | 'posting_terms_edited'
+  | 'applicants_viewed'
+  | 'applicant_accepted'
+  | 'applicant_declined'
+  | 'action_conflict';
+
+const EVENT_TYPE_MAP: Record<DedicatedAgentsEventName, string> = {
+  section_viewed: 'dedicated_ui.section_viewed',
+  slot_toggled: 'dedicated_ui.slot_toggled',
+  pickup_time_changed: 'dedicated_ui.pickup_time_changed',
+  agent_paused: 'dedicated_ui.agent_paused',
+  agent_resumed: 'dedicated_ui.agent_resumed',
+  agent_removed: 'dedicated_ui.agent_removed',
+  posting_form_opened: 'dedicated_ui.posting_form_opened',
+  posting_created: 'dedicated_ui.posting_created',
+  posting_closed: 'dedicated_ui.posting_closed',
+  posting_terms_edited: 'dedicated_ui.posting_terms_edited',
+  applicants_viewed: 'dedicated_ui.applicants_viewed',
+  applicant_accepted: 'dedicated_ui.applicant_accepted',
+  applicant_declined: 'dedicated_ui.applicant_declined',
+  action_conflict: 'dedicated_ui.action_conflict',
+};
+
+export function trackDedicatedAgentsEvent(
+  event: DedicatedAgentsEventName,
+  properties?: Record<string, unknown>
+): void {
+  AppEventsService.track({
+    eventType: EVENT_TYPE_MAP[event],
+    metadata: {
+      ...properties,
+      platform: Platform.OS,
+    },
+  });
+}
 
 export function trackDedicatedOpportunitiesViewed(count: number) {
   AppEventsService.track({

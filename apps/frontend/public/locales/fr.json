@@ -8978,7 +8978,12 @@
       "agent_suspended": "Ce livreur est suspendu",
       "not_found": "Ressource introuvable",
       "geo_scope": "Hors de votre périmètre admin",
-      "invalid_slot_keys": "Créneaux sélectionnés invalides"
+      "invalid_slot_keys": "Créneaux sélectionnés invalides",
+      "posting_already_open": "Vous avez déjà une demande ouverte pour ce créneau",
+      "slot_has_dedicated_agents": "Ce créneau a des livreurs dédiés qui seront mis en pause",
+      "invalid_headcount": "Le nombre doit être entre 1 et 10",
+      "invalid_days_of_week": "Veuillez sélectionner au moins un jour",
+      "terms_too_long": "Les conditions doivent faire 1000 caractères maximum"
     },
     "superuser": {
       "tab": "Dédiés",
@@ -8998,6 +9003,30 @@
       "removeConfirmDesc": "Le livreur ne sera plus dédié à cette boutique.",
       "posting": "Demande",
       "adminAssigned": "Affecté par admin"
+    },
+    "metrics": {
+      "deliveries": "livraisons",
+      "missed": "manquées",
+      "onTimePercent": "{{pct}} % à l'heure"
+    },
+    "dayLetters": {
+      "monday": "L",
+      "tuesday": "M",
+      "wednesday": "M",
+      "thursday": "J",
+      "friday": "V",
+      "saturday": "S",
+      "sunday": "D"
+    },
+    "closeWithCount": "Fermer la demande ({{count}} seront automatiquement refusées)",
+    "noLongerAvailable": "Cette demande n'est plus disponible",
+    "ariaLabels": {
+      "pauseAgent": "Mettre en pause le livreur {{name}}",
+      "resumeAgent": "Reprendre le livreur {{name}}",
+      "removeAgent": "Retirer le livreur {{name}}",
+      "editTerms": "Modifier les conditions",
+      "moreOptions": "Plus d'options",
+      "closePosting": "Fermer la demande"
     }
   }
 }
