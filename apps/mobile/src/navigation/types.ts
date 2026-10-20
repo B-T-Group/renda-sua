@@ -307,6 +307,9 @@ export type BusinessRootStackParamList = {
   BusinessTeam: undefined;
   BusinessLocationForm: { locationId?: string };
   BusinessLocationHours: { locationId: string };
+  BusinessLocationDedicatedAgents: { locationId: string };
+  DedicatedPostingForm: { locationId: string };
+  DedicatedApplicants: { locationId: string; postingId: string };
   BusinessItemsList:
     | { locationId?: string; moderationStatus?: 'rejected' | 'proposal_pending' }
     | undefined;
