@@ -1,5 +1,5 @@
-import { Controller, Get, HttpCode, Param, Post, UnauthorizedException } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, HttpCode, Param, Post, Query, UnauthorizedException } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { DedicatedOpportunitiesService } from './dedicated-opportunities.service';
 
@@ -15,9 +15,22 @@ export class DedicatedOpportunitiesController {
 
   @Get()
   @ApiOperation({ summary: 'Open postings in the agent’s city (normalised city + state + country)' })
-  @ApiResponse({ status: 403, description: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE (reason: not_verified | contract_unsigned | suspended | ...)' })
+  @ApiResponse({
+    status: 403,
+    description: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE (reason: not_verified | contract_unsigned | suspended | internal_agent | no_address | ...)',
+  })
+  @ApiResponse({ status: 404, description: 'Flag off (no address: the global flag is off)' })
   async list() {
     return { success: true, ...(await this.service.list(this.requireUserId())) };
+  }
+
+  @Get(':postingId')
+  @ApiOperation({ summary: '#594 G1: one posting (open in the agent’s city, or one the agent applied to)' })
+  @ApiParam({ name: 'postingId' })
+  @ApiResponse({ status: 403, description: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE (reason incl. internal_agent | no_address)' })
+  @ApiResponse({ status: 404, description: 'Posting not found, not visible, or flag off' })
+  async detail(@Param('postingId') postingId: string) {
+    return { success: true, ...(await this.service.detail(this.requireUserId(), postingId)) };
   }
 
   @Post(':postingId/apply')
@@ -38,8 +51,39 @@ export class DedicatedOpportunitiesController {
   }
 
   private requireUserId(): string {
-    const userId = this.hasuraUserService.getUserId();
-    if (!userId || userId === 'anonymous') throw new UnauthorizedException('User not authenticated');
-    return userId;
+    return requireAuthedUserId(this.hasuraUserService);
   }
 }
+
+function requireAuthedUserId(hasuraUserService: HasuraUserService): string {
+  const userId = hasuraUserService.getUserId();
+  if (!userId || userId === 'anonymous') throw new UnauthorizedException('User not authenticated');
+  return userId;
+}
+
+/** #594 G12: is dedicated agents on for the caller's country? Always 200 (never 404). */
+@ApiTags('dedicated-agents')
+@Controller()
+@ApiBearerAuth()
+export class DedicatedCapabilityController {
+  constructor(
+    private readonly service: DedicatedOpportunitiesService,
+    private readonly hasuraUserService: HasuraUserService
+  ) {}
+
+  @Get('agents/me/dedicated-agents/capability')
+  @ApiOperation({ summary: 'Flag for the agent’s address country: { enabled, country, reason: null | no_address }' })
+  async forAgent() {
+    return { success: true, ...(await this.service.capabilityForAgent(requireAuthedUserId(this.hasuraUserService))) };
+  }
+
+  @Get('dedicated-agents/capability')
+  @ApiOperation({ summary: 'Flag for a country: { enabled, country, reason: null | no_country }' })
+  @ApiQuery({ name: 'country', required: false })
+  @ApiResponse({ status: 400, description: 'invalid_country' })
+  async forCountry(@Query('country') country?: string) {
+    requireAuthedUserId(this.hasuraUserService);
+    return { success: true, ...(await this.service.capabilityForCountry(country)) };
+  }
+}
+

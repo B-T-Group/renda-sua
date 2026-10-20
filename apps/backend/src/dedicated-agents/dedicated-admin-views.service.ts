@@ -19,6 +19,8 @@ import {
   DEDICATED_ADMIN_ASSIGNMENT_BY_ID_QUERY,
   DEDICATED_ADMIN_ASSIGNMENTS_QUERY,
   DEDICATED_ADMIN_COVERAGE_QUERY,
+  DEDICATED_ADMIN_LOCATION_SEARCH_QUERY,
+  LOCATION_SEARCH_FETCH_LIMIT,
   DEDICATED_ADMIN_POSTING_SCOPE_QUERY,
   DEDICATED_ADMIN_POSTINGS_QUERY,
   DEDICATED_PICKER_AGENTS_QUERY,
@@ -72,6 +74,26 @@ function pick<T extends string>(value: unknown, allowed: readonly T[], name: str
     throw new BadRequestException({ code: `invalid_${name}`, message: `${name} must be one of ${allowed.join(', ')}` });
   }
   return v as T;
+}
+
+/** #594 G10 search bounds. */
+export const LOCATION_SEARCH_DEFAULT_LIMIT = 20;
+export const LOCATION_SEARCH_MAX_LIMIT = 50;
+export const LOCATION_SEARCH_MIN_QUERY = 2;
+
+export interface AdminLocationSearchItem {
+  id: string;
+  name: string;
+  businessId: string;
+  businessName: string;
+  address: { line1: string | null; city: string | null; state: string | null; country: string | null };
+  enabledSlotKeys: DedicatedSlotKey[];
+  liveAgents: number;
+}
+
+/** ilike pattern with the user's % _ \\ escaped. */
+export function ilikeContains(q: string): string {
+  return `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 }
 
 function and(parts: Array<BoolExp | null | undefined>): BoolExp {
@@ -365,6 +387,59 @@ export class DedicatedAdminViewsService {
     };
   }
 
+  /**
+   * #594 G10: admin location search by store / business name or city, limited to
+   * the caller's geo scope and to countries with the flag on (filtered, never 404).
+   * `enabledSlotKeys` lets the assign step skip disabled slots (G11 light).
+   */
+  async searchLocations(scope: GeoScope, filters: { q?: string; city?: string; limit?: string | number }) {
+    const q = String(filters.q ?? '').trim();
+    if (q.length < LOCATION_SEARCH_MIN_QUERY) {
+      throw new BadRequestException({ code: 'query_too_short', message: `q must be at least ${LOCATION_SEARCH_MIN_QUERY} characters` });
+    }
+    const rawLimit = Number(filters.limit);
+    const limit =
+      Number.isInteger(rawLimit) && rawLimit > 0 ? Math.min(rawLimit, LOCATION_SEARCH_MAX_LIMIT) : LOCATION_SEARCH_DEFAULT_LIMIT;
+    const geoAddress = await this.geo.addressWhere(scope);
+    const pattern = ilikeContains(q);
+    const where = and([
+      { is_active: { _eq: true } },
+      geoAddress ? { address: geoAddress } : null,
+      { _or: [{ name: { _ilike: pattern } }, { business: { name: { _ilike: pattern } } }, { address: { city: { _ilike: pattern } } }] },
+    ]);
+    const res = await this.hasura.executeQuery<{ business_locations: LocationSearchRow[] }>(DEDICATED_ADMIN_LOCATION_SEARCH_QUERY, {
+      where,
+      limit: LOCATION_SEARCH_FETCH_LIMIT,
+    });
+    const fetched = res?.business_locations ?? [];
+    const city = normalizeCity(filters.city);
+    const visible = (await this.enabledOnly(fetched, (r) => r.address?.country)).filter(
+      (r) => !city || normalizeCity(r.address?.city) === city
+    );
+    const locations: AdminLocationSearchItem[] = visible.slice(0, limit).map((r) => ({
+      id: r.id,
+      name: r.name ?? '',
+      businessId: r.business_id,
+      businessName: r.business?.name ?? '',
+      address: {
+        line1: r.address?.address_line_1 ?? null,
+        city: r.address?.city ?? null,
+        state: r.address?.state ?? null,
+        country: r.address?.country?.trim().toUpperCase() ?? null,
+      },
+      enabledSlotKeys: slotCoverage(r.pickup_slots ?? [], []).enabledSlots,
+      liveAgents: (r.dedicated_agent_assignments ?? []).length,
+    }));
+    return { locations, truncated: visible.length > limit || fetched.length >= LOCATION_SEARCH_FETCH_LIMIT };
+  }
+
+  /** #594 G11: read-only pickup slots of a location in the caller's scope (owner payload reused); 404 out of scope / flag off. */
+  async locationPickupSlots(scope: GeoScope, locationId: string) {
+    const businessId = await this.assignments.locationBusinessId(locationId);
+    await this.geo.assertBusiness(scope, businessId);
+    return this.assignments.getPickupSlots(locationId);
+  }
+
   private async pages<T>(query: string, where: BoolExp, root: string, extra: Record<string, unknown> = {}) {
     const rows: T[] = [];
     for (let page = 0; page < ADMIN_VIEW_MAX_PAGES; page++) {
@@ -408,6 +483,16 @@ export class DedicatedAdminViewsService {
     if (!country) throw new NotFoundException('Not found');
     return country;
   }
+}
+
+interface LocationSearchRow {
+  id: string;
+  name: string | null;
+  business_id: string;
+  business: { name: string | null } | null;
+  address: { address_line_1: string | null; city: string | null; state: string | null; country: string | null } | null;
+  pickup_slots: Array<{ slot_key: string; is_enabled: boolean }> | null;
+  dedicated_agent_assignments: Array<{ id: string }> | null;
 }
 
 interface AssignmentListRow {

@@ -29,6 +29,8 @@ const routes: Array<[Ctl, string]> = [
   [DedicatedAdminViewsController, 'coverage'],
   [DedicatedAdminViewsController, 'picker'],
   [DedicatedAdminViewsController, 'dismissRelation'],
+  [DedicatedAdminViewsController, 'searchLocations'],
+  [DedicatedAdminViewsController, 'locationPickupSlots'],
   [DedicatedAdminPostingsController, 'list'],
   [DedicatedAdminPostingsController, 'close'],
 ];
@@ -59,6 +61,8 @@ describe('PR 8 admin view controllers', () => {
       dismissRelation: jest.fn(async () => ({ changed: true })),
       listPostings: jest.fn(async () => ({ postings: [] })),
       closePosting: jest.fn(async () => ({ autoDeclined: 0 })),
+      searchLocations: jest.fn(async () => ({ locations: [], truncated: false })),
+      locationPickupSlots: jest.fn(async () => ({ slots: [] })),
     };
     const views = new DedicatedAdminViewsController(service as unknown as DedicatedAdminViewsService, geo as unknown as GeoScopeService);
     const posts = new DedicatedAdminPostingsController(service as unknown as DedicatedAdminViewsService, geo as unknown as GeoScopeService);
@@ -69,7 +73,11 @@ describe('PR 8 admin view controllers', () => {
     await expect(views.dismissRelation('as-1', req)).resolves.toEqual({ success: true, changed: true });
     await posts.list('Douala', 'open');
     await posts.close('p-1', { reason: 'policy' }, req);
-    expect(geo.require).toHaveBeenCalledTimes(6);
+    await expect(views.searchLocations('mama', 'Douala', '10')).resolves.toEqual({ success: true, locations: [], truncated: false });
+    await expect(views.locationPickupSlots('loc-1')).resolves.toEqual({ success: true, slots: [] });
+    expect(geo.require).toHaveBeenCalledTimes(8);
+    expect(service.searchLocations).toHaveBeenCalledWith(scope, { q: 'mama', city: 'Douala', limit: '10' });
+    expect(service.locationPickupSlots).toHaveBeenCalledWith(scope, 'loc-1');
     expect(geo.require.mock.calls.every((c) => (c as unknown[])[0] === PlatformPermissions.MANAGE_AGENTS)).toBe(true);
     expect(service.listAssignments).toHaveBeenCalledWith(scope, { city: 'Douala', locationId: 'loc-1', slotKey: 'morning', status: 'active', source: 'posting' });
     expect(service.coverage).toHaveBeenCalledWith(scope, { city: 'Douala' });

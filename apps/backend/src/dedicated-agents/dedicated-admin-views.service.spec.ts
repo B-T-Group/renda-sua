@@ -107,6 +107,27 @@ function world() {
           }));
         return { business_locations: page(rows, vars) };
       }
+      case 'DedicatedAdminLocationSearch': {
+        const w = vars.where as Loose;
+        const parts: Loose[] = w._and ?? [w];
+        const or = parts.find((x) => x._or)?._or as Loose[];
+        const needle = String(or[0].name._ilike).slice(1, -1).replace(/\\(.)/g, '$1').toLowerCase();
+        const hit = (v: unknown) => String(v ?? '').toLowerCase().includes(needle);
+        const activeOnly = parts.some((x) => x.is_active?._eq === true);
+        const rows = state.locations
+          .filter((l) => !activeOnly || l.is_active !== false)
+          .filter((l) => inGeo(w, l.address))
+          .filter((l) => hit(l.name) || hit(l.business?.name) || hit(l.address?.city))
+          .slice(0, vars.limit)
+          .map((l) => ({
+            ...l,
+            pickup_slots: l.pickup_slots ?? [],
+            dedicated_agent_assignments: state.assignments
+              .filter((a) => a.business_location_id === l.id && ['active', 'paused'].includes(a.status))
+              .map((a) => ({ id: a.id })),
+          }));
+        return { business_locations: rows };
+      }
       case 'DedicatedPickerLocation':
         return { business_locations_by_pk: { address: loc(vars.id)?.address ?? null } };
       case 'DedicatedPickerAgents':
@@ -139,7 +160,15 @@ function world() {
     }),
   };
   const assignments = {
-    locationBusinessId: jest.fn(async (id: string) => loc(id).business_id),
+    locationBusinessId: jest.fn(async (id: string) => {
+      const l = state.locations.find((x) => x.id === id);
+      if (!l) throw new NotFoundException('Location not found');
+      return l.business_id;
+    }),
+    getPickupSlots: jest.fn(async (id: string) => {
+      if (state.flags.get(loc(id).address.country) !== true) throw new NotFoundException('Not found');
+      return { slots: [{ slotKey: 'morning', startTime: '07:00', endTime: '11:00', isEnabled: false, pickupTime: '07:30', liveAgents: 0 }] };
+    }),
     pickerStats: jest.fn(async (_l: string, _c: string, agents: Array<{ id: string; isInternal: boolean }>) =>
       new Map(agents.map((a) => [a.id, { activeOrders: 2, outstandingDedicatedOffers: 1, balanceCoversOrders: a.isInternal ? null : 3 }]))
     ),
@@ -439,5 +468,113 @@ describe('DedicatedAdminViewsService.picker (AC-S2)', () => {
     await expect(w.service.picker(GA, 'loc-dla')).rejects.toBeInstanceOf(NotFoundException);
     await expect(w.service.picker(ALL, 'loc-lbv')).rejects.toBeInstanceOf(NotFoundException);
     expect(w.assignments.pickerStats).not.toHaveBeenCalled();
+  });
+});
+
+describe('#594 G10: DedicatedAdminViewsService.searchLocations', () => {
+  it('matches store name, business name or city (case-insensitive) in flag-on countries, with enabled slots and live agents', async () => {
+    const w = world();
+    w.state.locations[0].pickup_slots = [{ slot_key: 'afternoon', is_enabled: false }];
+    w.addAssignment({ status: 'active' });
+    w.addAssignment({ status: 'paused', slot_key: 'evening' });
+    w.addAssignment({ status: 'removed', slot_key: 'afternoon' });
+    const res = await w.service.searchLocations(ALL, { q: 'mama' });
+    expect(res).toEqual({
+      locations: [
+        {
+          id: 'loc-dla',
+          name: 'Chez Mama',
+          businessId: 'biz-1',
+          businessName: 'Mama',
+          address: { line1: null, city: 'Douala', state: 'Littoral', country: 'CM' },
+          enabledSlotKeys: ['morning', 'evening'],
+          liveAgents: 2,
+        },
+      ],
+      truncated: false,
+    });
+    expect((await w.service.searchLocations(ALL, { q: 'YAOUN' })).locations.map((l) => l.id)).toEqual(['loc-yde']);
+    expect((await w.service.searchLocations(ALL, { q: ' Yaoundé  ' })).locations.map((l) => l.id)).toEqual(['loc-yde']);
+  });
+
+  it('flag off -> filtered out (200 []), not 404', async () => {
+    const w = world();
+    await expect(w.service.searchLocations(ALL, { q: 'Libreville' })).resolves.toEqual({ locations: [], truncated: false });
+    const again = world();
+    again.state.flags.set('GA', true);
+    expect((await again.service.searchLocations(ALL, { q: 'Libreville' })).locations.map((l) => l.id)).toEqual(['loc-lbv']);
+  });
+
+  it('geo scope: a GA-only admin never sees CM stores; the scope goes into the where', async () => {
+    const w = world();
+    w.state.flags.set('GA', true);
+    expect((await w.service.searchLocations(GA, { q: 'am' })).locations).toEqual([]);
+    expect((await w.service.searchLocations(GA, { q: 'Libre' })).locations.map((l) => l.id)).toEqual(['loc-lbv']);
+    expect((await w.service.searchLocations(CM, { q: 'Libre' })).locations).toEqual([]);
+    expect(w.geo.addressWhere).toHaveBeenCalledWith(GA);
+    const where = (w.executeQuery.mock.calls.find(([q]) => op(q) === 'DedicatedAdminLocationSearch') as [string, Loose])[1].where;
+    expect(JSON.stringify(where)).toContain('"address":{"country":{"_in":["GA"]}}');
+    expect(JSON.stringify(where)).toContain('"is_active":{"_eq":true}');
+  });
+
+  it('inactive locations are excluded', async () => {
+    const w = world();
+    w.state.locations[0].is_active = false;
+    expect((await w.service.searchLocations(ALL, { q: 'mama' })).locations).toEqual([]);
+  });
+
+  it('city filter is normalised; ilike wildcards in q are escaped', async () => {
+    const w = world();
+    expect((await w.service.searchLocations(ALL, { q: 'shop', city: ' yaoundé ' })).locations.map((l) => l.id)).toEqual(['loc-yde']);
+    expect((await w.service.searchLocations(ALL, { q: 'shop', city: 'Douala' })).locations).toEqual([]);
+    await w.service.searchLocations(ALL, { q: '50%_off\\' });
+    const calls = w.executeQuery.mock.calls.filter(([q]) => op(q) === 'DedicatedAdminLocationSearch');
+    const last = (calls[calls.length - 1] as [string, Loose])[1].where;
+    expect(JSON.stringify(last)).toContain(JSON.stringify('%50\\%\\_off\\\\%'));
+  });
+
+  it.each([[undefined], [''], [' a ']])('q %p -> 400 query_too_short', async (q) => {
+    const w = world();
+    const err = await w.service.searchLocations(ALL, { q }).catch((e) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect(err.getResponse()).toMatchObject({ code: 'query_too_short' });
+    expect(w.executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('limit: default 20, capped at 50, truncated when more match', async () => {
+    const w = world();
+    for (let i = 0; i < 60; i++) {
+      w.state.locations.push({ id: `loc-x${i}`, name: `Kiosk ${i}`, business_id: `biz-x${i}`, address: { city: 'Douala', state: 'Littoral', country: 'CM' }, business: { name: 'K' } });
+    }
+    const def = await w.service.searchLocations(ALL, { q: 'kiosk' });
+    expect(def.locations).toHaveLength(20);
+    expect(def.truncated).toBe(true);
+    expect((await w.service.searchLocations(ALL, { q: 'kiosk', limit: '500' })).locations).toHaveLength(50);
+    expect((await w.service.searchLocations(ALL, { q: 'kiosk', limit: 'abc' })).locations).toHaveLength(20);
+    const exact = await w.service.searchLocations(ALL, { q: 'kiosk 5', limit: 50 });
+    expect(exact.locations.map((l) => l.id).sort()).toEqual(['loc-x5', 'loc-x50', 'loc-x51', 'loc-x52', 'loc-x53', 'loc-x54', 'loc-x55', 'loc-x56', 'loc-x57', 'loc-x58', 'loc-x59'].sort());
+    expect(exact.truncated).toBe(false);
+  });
+});
+
+describe('#594 G11: DedicatedAdminViewsService.locationPickupSlots', () => {
+  it('in scope and flag on: the owner payload', async () => {
+    const w = world();
+    await expect(w.service.locationPickupSlots(CM, 'loc-dla')).resolves.toEqual({
+      slots: [{ slotKey: 'morning', startTime: '07:00', endTime: '11:00', isEnabled: false, pickupTime: '07:30', liveAgents: 0 }],
+    });
+    expect(w.geo.assertBusiness).toHaveBeenCalledWith(CM, 'biz-1');
+  });
+
+  it('out of scope -> 404 before reading slots', async () => {
+    const w = world();
+    await expect(w.service.locationPickupSlots(GA, 'loc-dla')).rejects.toBeInstanceOf(NotFoundException);
+    expect(w.assignments.getPickupSlots).not.toHaveBeenCalled();
+  });
+
+  it('flag off -> 404; unknown location -> 404', async () => {
+    const w = world();
+    await expect(w.service.locationPickupSlots(ALL, 'loc-lbv')).rejects.toBeInstanceOf(NotFoundException);
+    await expect(w.service.locationPickupSlots(ALL, 'loc-nope')).rejects.toBeInstanceOf(NotFoundException);
   });
 });

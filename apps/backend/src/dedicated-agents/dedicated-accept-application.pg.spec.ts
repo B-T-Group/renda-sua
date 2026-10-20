@@ -416,6 +416,16 @@ suite('dedicated_accept_application (real Postgres, AC-E8)', () => {
       await expectNothingWritten(p, x);
     });
 
+    it('#594 G2: refuses an internal agent (legacy application from before the change), even verified and signed', async () => {
+      const loc = await location();
+      const p = await posting(loc, 1, ['morning']);
+      const a = await agent('Staff');
+      const x = await apply(p, a);
+      await db.query(`UPDATE agents SET is_internal = true WHERE id = $1`, [a]);
+      await expect(accept(db, x, loc.owner)).rejects.toThrow(/dedicated_accept_agent_ineligible: internal_agent/);
+      await expectNothingWritten(p, x);
+    });
+
     it('refuses an applicant suspended after applying', async () => {
       const loc = await location();
       const p = await posting(loc, 1, ['morning']);

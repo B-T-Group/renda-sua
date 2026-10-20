@@ -278,8 +278,10 @@ describe('OrderOffersService', () => {
           estimatedEarnings: 42.6,
           currency: 'XAF',
           estimatedDeliveryMinutes: expect.any(Number),
+          offerKind: 'standard',
           pickup: {
             businessName: 'Downtown Pickup',
+            locationName: 'Downtown Pickup',
             city: 'Douala',
             state: 'Littoral',
           },
@@ -300,6 +302,46 @@ describe('OrderOffersService', () => {
 
       expect(result.active).toBe(false);
       expect(result.offer?.orderId).toBe('order-1');
+    });
+  });
+
+  describe('#594 G3: offerKind and pickup.locationName', () => {
+    const queryOf = () => hasuraSystemService.executeQuery.mock.calls[0][0] as string;
+
+    it.each([
+      ['dedicated', 'dedicated'],
+      ['standard', 'standard'],
+      [null, 'standard'],
+      [undefined, 'standard'],
+      ['weird', 'standard'],
+    ])('offer_kind %p -> offerKind %p on the offer payload (selected in the query)', async (kind, expected) => {
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        order_offers: [{ ...buildOfferDetailsRow('2026-01-01T00:01:00.000Z'), offer_kind: kind }],
+      });
+      const result = await service.getOfferDetailsForAgent('order-1', 'agent-near');
+      expect(result.offer?.offerKind).toBe(expected);
+      expect(queryOf()).toMatch(/\boffer_kind\b/);
+    });
+
+    it('pending offer carries offerKind too; locationName is the store, businessName unchanged', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        order_offers: [{ ...buildOfferDetailsRow('2026-01-01T00:01:00.000Z'), offer_kind: 'dedicated' }],
+      });
+      const result = await service.getPendingOfferForAgent('agent-near');
+      expect(queryOf()).toContain('query PendingOffer');
+      expect(queryOf()).toMatch(/\boffer_kind\b/);
+      expect(result.offer).toMatchObject({
+        offerKind: 'dedicated',
+        pickup: { businessName: 'Downtown Pickup', locationName: 'Downtown Pickup' },
+      });
+    });
+
+    it('no location name: businessName falls back to the business, locationName is null', async () => {
+      const row = buildOfferDetailsRow('2026-01-01T00:01:00.000Z');
+      row.order.business_location.name = '';
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({ order_offers: [row] });
+      const result = await service.getOfferDetailsForAgent('order-1', 'agent-near');
+      expect(result.offer?.pickup).toMatchObject({ businessName: 'Fallback Store', locationName: null });
     });
   });
 
