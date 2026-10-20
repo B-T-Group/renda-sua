@@ -1,6 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+import { RELEASE_AGENT_ORDER_HOLD_MUTATION } from './agent-hold-release.util';
 import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
 import type { OfferDeclineReason } from '../dedicated-agents/dedicated-agents.constants';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
@@ -197,27 +198,8 @@ const STRANDED_HOLD_LOOKBACK_DAYS = 30;
 /** #622 I1: money alert when release_agent_order_hold refuses because withheld < net. */
 export const AGENT_HOLD_WITHHELD_SHORT_MARKER = 'agent_hold_withheld_short';
 
-/**
- * #622: release min(net, cap) under the account row lock (migration 20261019230000).
- *
- * ROLLBACK (#622 L1): this mutation, the Hasura metadata that tracks the function
- * (metadata/databases/Rendasua/functions/public_release_agent_order_hold.yaml + the
- * functions.yaml entry) and the migration go together. To roll back, revert the
- * backend AND the metadata AND run the migration's down.sql, in that order (backend
- * first, so nothing calls the function after it is dropped). Reverting only one of
- * them leaves the backend calling an untracked or missing function, and every hold
- * release fails.
- */
-const RELEASE_AGENT_ORDER_HOLD_MUTATION = `
-  mutation ReleaseAgentOrderHold($accountId: uuid!, $orderId: uuid!, $cap: numeric, $memo: String!) {
-    release_agent_order_hold(
-      args: { p_account_id: $accountId, p_order_id: $orderId, p_cap: $cap, p_memo: $memo }
-    ) {
-      id
-      amount
-    }
-  }
-`;
+// RELEASE_AGENT_ORDER_HOLD_MUTATION lives in ./agent-hold-release.util (shared by every
+// agent hold release); its ROLLBACK note (#622 L1) is there too.
 
 /** #622: the net held for reporting (one statement, so one snapshot). */
 export const AGENT_HOLD_LEDGER_QUERY = `
