@@ -413,4 +413,45 @@ describe('StripeCaptureService', () => {
       error_message: 'Checkout session expired on order cancellation',
     });
   });
+
+  describe('#627: Stripe says the PaymentIntent is already canceled', () => {
+    const alreadyCanceled = (shape: 'object' | 'raw' | 'message') => {
+      const e: any = new Error(
+        'You cannot cancel this PaymentIntent because it has a status of canceled.'
+      );
+      if (shape === 'object') {
+        e.code = 'payment_intent_unexpected_state';
+        e.payment_intent = { status: 'canceled' };
+      } else if (shape === 'raw') {
+        e.raw = { code: 'payment_intent_unexpected_state', payment_intent: { status: 'canceled' } };
+      } else {
+        e.code = 'payment_intent_unexpected_state';
+      }
+      return e;
+    };
+
+    it.each(['object', 'raw', 'message'] as const)('treated as success (%s), row stays cancelled', async (shape) => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction({ status: 'authorized' }));
+      databaseService.updateTransaction.mockClear();
+      stripeService.cancelPaymentIntent.mockRejectedValue(alreadyCanceled(shape));
+      await expect(
+        service.cancelOrderPaymentIntent({ orderId: 'order-id-123', orderNumber: 'ORDER-1001' })
+      ).resolves.toEqual({ success: true, skipped: true, message: 'Already canceled' });
+      expect(databaseService.updateTransaction).toHaveBeenCalledTimes(1);
+      expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-123', expect.objectContaining({ status: 'cancelled' }));
+    });
+
+    it.each([
+      ['another unexpected state', { code: 'payment_intent_unexpected_state', payment_intent: { status: 'succeeded' } }],
+      ['another error code', { code: 'card_declined', payment_intent: { status: 'canceled' } }],
+      ['a network error', { message: 'socket hang up' }],
+    ])('%s is still a failure and restores the row', async (_n, fields) => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction({ status: 'authorized' }));
+      databaseService.updateTransaction.mockClear();
+      stripeService.cancelPaymentIntent.mockRejectedValue(Object.assign(new Error((fields as any).message ?? 'x'), fields));
+      const res = await service.cancelOrderPaymentIntent({ orderId: 'order-id-123', orderNumber: 'ORDER-1001' });
+      expect(res.success).toBe(false);
+      expect(databaseService.updateTransaction).toHaveBeenLastCalledWith('tx-123', expect.objectContaining({ status: 'authorized' }));
+    });
+  });
 });

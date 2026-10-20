@@ -413,6 +413,7 @@ describe('OrdersService', () => {
           useValue: {
             listForOrder: jest.fn().mockResolvedValue([]),
             recordEvent: jest.fn(),
+            recordEventStrict: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -5566,53 +5567,7 @@ describe('OrdersService', () => {
       order_items: [],
     };
 
-    it('releases payment and runs cancel side effects instead of a status-only write', async () => {
-      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(openOrder);
-      hasuraUserService.getUser.mockResolvedValue({ id: 'admin-1' } as any);
-      const releaseStripe = jest
-        .spyOn(service as any, 'releaseStripeAuthorizationIfNeeded')
-        .mockResolvedValue(undefined);
-      orderStatusService.updateOrderStatus.mockResolvedValue({
-        ...openOrder,
-        current_status: 'cancelled',
-      });
-      const persistMeta = jest
-        .spyOn(service as any, 'persistCancellationMetadata')
-        .mockResolvedValue(undefined);
-      const history = jest
-        .spyOn(service as any, 'createStatusHistoryEntry')
-        .mockResolvedValue(undefined);
-      const sideEffects = jest
-        .spyOn(service as any, 'runOrderCancellationSideEffects')
-        .mockResolvedValue(undefined);
-
-      const result = await service.cancelOrderAsAdmin(
-        'order-123',
-        'Admin cancel'
-      );
-
-      expect(result.success).toBe(true);
-      expect(releaseStripe).toHaveBeenCalledWith(openOrder);
-      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
-        'order-123',
-        'cancelled',
-        { viaCancelEndpoint: true, viaSystem: true }
-      );
-      expect(persistMeta).toHaveBeenCalledWith(
-        'order-123',
-        'system',
-        'Admin cancel'
-      );
-      expect(history).toHaveBeenCalled();
-      expect(sideEffects).toHaveBeenCalledWith(
-        openOrder,
-        'order-123',
-        'assigned_to_agent',
-        'system',
-        'Admin cancel'
-      );
-    });
-
+    // The step engine (#627 C4/C7/C8/I2) is covered in admin-cancel.service.spec.ts.
     it('rejects cancel of an already terminal order', async () => {
       jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({
         ...openOrder,
@@ -5620,10 +5575,38 @@ describe('OrdersService', () => {
       });
 
       await expect(service.cancelOrderAsAdmin('order-123')).rejects.toMatchObject(
-        { status: HttpStatus.BAD_REQUEST }
+        { status: HttpStatus.CONFLICT, response: expect.objectContaining({ error: 'ORDER_ALREADY_PICKED_UP' }) }
       );
       expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });
+
+    it('#627 C2: a lost CAS (409) releases nothing and runs no side effects', async () => {
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(openOrder);
+      hasuraUserService.getUser.mockResolvedValue({ id: 'admin-1' } as any);
+      const releaseStripe = jest.spyOn(service as any, 'releaseStripeAuthorizationIfNeeded').mockResolvedValue(undefined);
+      const sideEffects = jest.spyOn(service as any, 'runOrderCancellationSideEffects').mockResolvedValue(undefined);
+      const persistMeta = jest.spyOn(service as any, 'persistCancellationMetadata').mockResolvedValue(undefined);
+      orderStatusService.updateOrderStatus.mockRejectedValueOnce(new HttpException('moved', HttpStatus.CONFLICT));
+      await expect(service.cancelOrderAsAdmin('order-123', 'r', 'confirmed')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith('order-123', 'cancelled', expect.objectContaining({ expectedFromStatus: 'confirmed' }));
+      expect(releaseStripe).not.toHaveBeenCalled();
+      expect(sideEffects).not.toHaveBeenCalled();
+      expect(persistMeta).not.toHaveBeenCalled();
+    });
+
+    it.each(['picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'complete'])(
+      'refuses a %s order (after pickup) with nothing released',
+      async (status) => {
+        jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({ ...openOrder, current_status: status });
+        const releaseStripe = jest.spyOn(service as any, 'releaseStripeAuthorizationIfNeeded').mockResolvedValue(undefined);
+        await expect(service.cancelOrderAsAdmin('order-123', 'r')).rejects.toMatchObject({
+          status: HttpStatus.CONFLICT,
+          response: expect.objectContaining({ error: 'ORDER_ALREADY_PICKED_UP' }),
+        });
+        expect(releaseStripe).not.toHaveBeenCalled();
+        expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+      }
+    );
   });
 
   describe('finalizeDepositAfterCallback', () => {

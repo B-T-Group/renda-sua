@@ -92,7 +92,8 @@ describe('OrdersService.adminFullRefundCancel', () => {
       expect(db.status).toBe('cancelled');
     } else {
       expect(res).toBeInstanceOf(HttpException);
-      expect([400, 409]).toContain((res as HttpException).getStatus());
+      expect((res as HttpException).getStatus()).toBe(409);
+      expect((res as HttpException).getResponse()).toMatchObject({ error: 'ORDER_ALREADY_PICKED_UP' });
       expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
       expect(calls).toEqual([]);
     }
@@ -109,7 +110,13 @@ describe('OrdersService.adminFullRefundCancel', () => {
     const { svc } = service('confirmed');
     svc.runOrderCancellationSideEffects.mockResolvedValueOnce({ status: 'failed', message: 'Deposit already consumed', errorCode: 'DEPOSIT_CONSUMED' });
     const res = await svc.adminFullRefundCancel('o-1', 'r');
-    expect(res.depositRefund).toEqual({ status: 'failed', message: 'Deposit already consumed', errorCode: 'DEPOSIT_CONSUMED' });
+    // #626 D2: the API gets a generic message; the raw text is only in the alert below.
+    expect(res.depositRefund).toEqual({
+      status: 'failed',
+      message: 'Deposit refund failed; details are in the logs (alerted)',
+      errorCode: 'DEPOSIT_CONSUMED',
+    });
+    expect(JSON.stringify(res)).not.toContain('Deposit already consumed');
     expect(res.message).toMatch(/DEPOSIT REFUND FAILED/);
     expect(res.message).not.toMatch(/with a full refund/);
     expect(reportMoneyAnomaly).toHaveBeenCalledWith(
@@ -197,11 +204,12 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect(calls).toEqual([]);
   });
 
-  it.each(['delivered', 'complete', 'cancelled', 'refunded'])('a %s order is refused (400) with nothing written', async (status) => {
+  it.each(['delivered', 'complete', 'cancelled', 'refunded'])('a %s order is refused (409 ORDER_ALREADY_PICKED_UP) with nothing written', async (status) => {
     const { svc, calls } = service(status);
     const err = await svc.adminFullRefundCancel('o-1', 'r').catch((e: unknown) => e);
     expect(err).toBeInstanceOf(HttpException);
-    expect((err as HttpException).getStatus()).toBe(400);
+    expect((err as HttpException).getStatus()).toBe(409);
+    expect((err as HttpException).getResponse()).toMatchObject({ error: 'ORDER_ALREADY_PICKED_UP' });
     expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     expect(calls).toEqual([]);
   });
