@@ -1,14 +1,11 @@
 /**
- * Dedicated Agents Screens Tests
+ * Dedicated Agents Locale Tests
  *
- * Tests for BusinessLocationDedicatedAgentsScreen, DedicatedPostingFormScreen,
- * and DedicatedApplicantsScreen. Renders real screens and asserts error keys exist
- * in both EN and FR locales.
+ * Tests that all dedicated agents locale keys exist in both EN and FR locales.
+ * Ensures error codes, UI strings, accessibility labels, and other keys are
+ * properly defined for internationalization.
  */
 
-import React from 'react';
-import { render } from '@testing-library/react-native';
-import i18n from '../../../i18n';
 import enLocale from '../../../i18n/locales/en.json';
 import frLocale from '../../../i18n/locales/fr.json';
 
