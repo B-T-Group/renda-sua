@@ -92,6 +92,24 @@ describe('AdminMobilePaymentsController', () => {
       expect(result.data.providerStatus.status).toBe('pending');
     });
 
+    it('polls a give-change row as a payout', async () => {
+      databaseService.getTransactionById.mockResolvedValue(
+        baseTx({ transaction_type: 'GIVE_CHANGE' })
+      );
+      mobilePaymentsService.checkTransactionStatus.mockResolvedValue(
+        liveStatus({ status: 'pending' })
+      );
+
+      await controller.getProviderStatus('tx-1');
+
+      expect(mobilePaymentsService.checkTransactionStatus).toHaveBeenCalledWith(
+        'PAYTEST001',
+        'mypvit',
+        '+24166123456',
+        true
+      );
+    });
+
     it('returns an ambiguous snapshot when the provider check throws', async () => {
       databaseService.getTransactionById.mockResolvedValue(baseTx());
       mobilePaymentsService.checkTransactionStatus.mockRejectedValue(

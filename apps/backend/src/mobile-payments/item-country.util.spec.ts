@@ -28,9 +28,16 @@ describe('mapCountryToMobileMoneyProvider', () => {
     expect(mapCountryToMobileMoneyProvider('Cameroun')).toBe('freemopay');
   });
 
+  it('maps Togo to FedaPay', () => {
+    expect(mapCountryToMobileMoneyProvider('tg')).toBe('fedapay');
+    expect(mapCountryToMobileMoneyProvider('TG')).toBe('fedapay');
+    expect(mapCountryToMobileMoneyProvider(' Togo ')).toBe('fedapay');
+  });
+
   it('maps Gabon and unknown markets to MyPVit', () => {
     expect(mapCountryToMobileMoneyProvider('GA')).toBe('mypvit');
     expect(mapCountryToMobileMoneyProvider('CA')).toBe('mypvit');
+    expect(mapCountryToMobileMoneyProvider('Benin')).toBe('mypvit');
     expect(mapCountryToMobileMoneyProvider(undefined)).toBe('mypvit');
   });
 });
