@@ -879,21 +879,26 @@ export class OrderOffersService {
   }
 
   /**
-   * Mark the caller's offer as expired (e.g. when they tried to accept but the
-   * order was already taken).
+   * The caller's accept lost (ALREADY_ASSIGNED). #594 DEV QA F1: only when the order is
+   * now another agent's does the offer close, as `cancelled` (the same state
+   * cancelSiblingOffers gives a sibling, "Taken by another agent"), never `expired`.
+   * When the order is the caller's own (a duplicate accept racing its winning one), the
+   * offer is left for handleOrderAssigned to mark `accepted`; expiring it here first
+   * made the winner's row end up `expired`.
    */
-  async markOfferExpired(orderId: string, agentId: string): Promise<void> {
+  async markOfferLost(orderId: string, agentId: string): Promise<void> {
     const mutation = `
-      mutation ExpireOffer($orderId: uuid!, $agentId: uuid!) {
+      mutation LoseOffer($orderId: uuid!, $agentId: uuid!) {
         update_order_offers(
           where: {
             _and: [
               { order_id: { _eq: $orderId } }
               { agent_id: { _eq: $agentId } }
               { status: { _eq: "offered" } }
+              { order: { assigned_agent_id: { _is_null: false, _neq: $agentId } } }
             ]
           }
-          _set: { status: "expired", responded_at: "now()" }
+          _set: { status: "cancelled", responded_at: "now()" }
         ) {
           affected_rows
         }

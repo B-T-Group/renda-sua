@@ -2916,6 +2916,17 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
+    // #594 DEV QA N1: the agent's own open-pool claim while it holds a live dedicated
+    // offer on this order goes through the dedicated re-check (AC-E2) and the cap, and
+    // is stamped, like the offer accept. Only a refusal AT THE CAP blocks the claim
+    // (QA #607 R1: no uncapped way around the cap). Any other refusal (off today,
+    // assignment paused / removed, slot disabled, ...) falls back to a plain,
+    // unstamped open-pool claim, as the top-up completion path does.
+    const assignment =
+      params.assignment ??
+      (fundsCheckSource === 'claim'
+        ? await this.ownClaimDedicatedAssignment(order.id, agent.id)
+        : undefined);
     const { rail, holdPercentage, holdAmount } =
       await this.resolveOrderHoldAmount(order, agent.id);
     const agentAccount = await this.hasuraSystemService.getAccount(
@@ -2986,7 +2997,7 @@ export class OrdersService {
       request.orderId,
       agent.id,
       'assigned_to_agent',
-      params.assignment
+      assignment
     );
 
     try {
@@ -3012,7 +3023,7 @@ export class OrdersService {
       throw error;
     }
 
-    const autoAssigned = params.assignment?.source === 'dedicated_auto';
+    const autoAssigned = assignment?.source === 'dedicated_auto';
     await this.createStatusHistoryEntry(
       request.orderId,
       'assigned_to_agent',
@@ -3109,7 +3120,7 @@ export class OrdersService {
           ? (error.getResponse() as any)?.error
           : undefined;
       if (responseError === 'ALREADY_ASSIGNED') {
-        await this.orderOffersService.markOfferExpired(
+        await this.orderOffersService.markOfferLost(
           request.orderId,
           agent.id
         );
@@ -17074,6 +17085,19 @@ export class OrdersService {
       );
     }
     return result.update_orders.returning[0];
+  }
+
+  /** #594 DEV QA N1: dedicatedClaimAssignment for an open-pool claim; only the cap refusal is final. */
+  private async ownClaimDedicatedAssignment(orderId: string, agentId: string): Promise<ClaimAssignment | undefined> {
+    try {
+      return await this.dedicatedClaimAssignment(orderId, agentId);
+    } catch (error) {
+      if (this.isClaimAtCapacity(error)) throw error;
+      this.logger.warn(
+        `dedicated re-check refused an open-pool claim for order ${orderId} agent ${agentId}; plain claim: ${(error as Error)?.message ?? error}`
+      );
+      return undefined;
+    }
   }
 
   /** The dedicated stamp when the agent holds a live dedicated offer on this order (re-checks AC-E2; may throw the refusal). */
