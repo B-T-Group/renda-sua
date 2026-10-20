@@ -40,6 +40,7 @@ import { useStripeWithdraw } from '../../hooks/useStripeWithdraw';
 import TopUpModal from '../business/TopUpModal';
 import WithdrawModal from '../business/WithdrawModal';
 import PendingWithdrawalsPanel from './PendingWithdrawalsPanel';
+import { resolveTopUpRequest } from '../../utils/topUpRouting';
 
 // GraphQL query for fetching account transactions
 const GET_ACCOUNT_TRANSACTIONS = `
@@ -354,28 +355,21 @@ const UserAccount: React.FC<UserAccountProps> = ({
     paymentMethod: any
   ): Promise<boolean> => {
     try {
-      // Route through /mobile-payments/initiate for supported providers
-      if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money' || paymentMethod === 'fedapay') {
-        await initiatePayment({
-          amount: parseFloat(amount),
-          currency: account.currency,
-          description: 'Account Top Up',
-          customerPhone: phoneNumber,
-          accountId: account.id,
-          paymentMethod: 'mobile_money',
-          transactionType: 'PAYMENT',
-          provider: paymentMethod,
-        });
-      } else if (paymentMethod === 'mtn-momo') {
-        // MTN MoMo uses the legacy requestTopUp endpoint
-        await requestTopUp({
-          amount,
-          phoneNumber,
-          currency: account.currency,
-        });
+      const route = resolveTopUpRequest(
+        paymentMethod,
+        phoneNumber,
+        amount,
+        account.currency,
+        account.id
+      );
+
+      if (route.endpoint === 'initiate') {
+        await initiatePayment(route.body as any);
       } else {
-        throw new Error(`Unknown payment provider: ${paymentMethod}`);
+        // route.endpoint === 'mtn-legacy'
+        await requestTopUp(route.body as any);
       }
+
       setShowTopUpSuccess(true);
       return true;
     } catch (error) {
