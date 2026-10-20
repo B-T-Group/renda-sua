@@ -523,7 +523,6 @@ update_permissions:
   - role: agent
     permission:
       columns:
-        - current_status
         - actual_delivery_time
         - updated_at
         - verified_agent_delivery
@@ -544,7 +543,6 @@ update_permissions:
   - role: business
     permission:
       columns:
-        - current_status
         - assigned_agent_id
         - estimated_delivery_time
         - updated_at
