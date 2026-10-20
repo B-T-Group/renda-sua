@@ -5,6 +5,10 @@ import {
   Refresh as RefreshIcon,
   VerifiedUser as VerifiedUserIcon,
   Visibility as VisibilityIcon,
+  Pause as PauseIcon,
+  PlayArrow as ResumeIcon,
+  Delete as DeleteIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import {
   Alert,
@@ -12,12 +16,14 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
+  IconButton,
   InputLabel,
   List,
   ListItem,
@@ -26,24 +32,36 @@ import {
   MenuItem,
   Select,
   Switch,
+  Tab,
+  Tabs,
   TextField,
   Typography,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableRow,
+  Tooltip,
 } from '@mui/material';
 import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useDedicatedAgents } from '../../hooks/useDedicatedAgents';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 import { AdminApplyReferralDialog } from '../admin/AdminApplyReferralDialog';
 import { AdminReferralMeta } from '../admin/AdminReferralMeta';
+import { AdminDedicatedAssignDialog } from '../admin/dedicated-agents/AdminDedicatedAssignDialog';
 import {
   displayIdRejectionNote,
   isIdRejectionNote,
 } from '../../utils/idRejectionNote';
 import { AdminMessagePost } from '../common/AdminMessagePost';
 import AdminUserCard from '../common/AdminUserCard';
+import { AdminDedicatedAssignmentsSection } from '../admin/dedicated-agents/AdminDedicatedAssignmentsSection';
+import type { AdminAssignmentView } from '../../types/dedicatedAgents';
 
 export interface AgentIdDocument {
   id: string;
@@ -75,11 +93,19 @@ const AdminManageAgents: React.FC = () => {
     setUserInternal,
     applyReferral,
   } = useAdminAgents();
+  const {
+    getAdminAssignments,
+    pauseAssignment,
+    resumeAssignment,
+    removeAssignment,
+  } = useDedicatedAgents();
   const { vehicleTypes } = useVehicleTypes();
   const apiClient = useApiClient();
   const { t } = useTranslation();
   const { isSuperuser, can } = usePermissions();
   const canManage = can(PlatformPermissions.MANAGE_AGENTS);
+  const [currentTab, setCurrentTab] = useState(0);
+  const [showDedicatedTab, setShowDedicatedTab] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [verificationAgentId, setVerificationAgentId] = useState<string | null>(
@@ -93,8 +119,72 @@ const AdminManageAgents: React.FC = () => {
   const [rejectMessage, setRejectMessage] = useState('');
   const [rejectLoading, setRejectLoading] = useState(false);
   const [applyAgentId, setApplyAgentId] = useState<string | null>(null);
+  
+  // Dedicated agents state
+  const [assignments, setAssignments] = useState<AdminAssignmentView[]>([]);
+  const [assignmentsLoading, setAssignmentsLoading] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [relationFilter, setRelationFilter] = useState<string>('all');
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const verificationAgent = agents.find((a) => a.id === verificationAgentId);
+
+  // Check dedicated capability on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        await getAdminAssignments();
+        setShowDedicatedTab(true);
+      } catch {
+        setShowDedicatedTab(false);
+      }
+    })();
+  }, [getAdminAssignments]);
+
+  const loadAssignments = useCallback(async () => {
+    try {
+      setAssignmentsLoading(true);
+      const filters: any = {};
+      if (statusFilter !== 'all') filters.status = statusFilter;
+      if (relationFilter !== 'all') filters.hasRelation = relationFilter === 'yes';
+      const result = await getAdminAssignments(filters);
+      setAssignments(result.assignments);
+    } catch (err: any) {
+      console.error('Error loading assignments:', err);
+    } finally {
+      setAssignmentsLoading(false);
+    }
+  }, [getAdminAssignments, statusFilter, relationFilter]);
+
+  useEffect(() => {
+    if (currentTab === 1) {
+      loadAssignments();
+    }
+  }, [currentTab, loadAssignments]);
+
+  const handlePauseResume = async (assignmentId: string, isPaused: boolean) => {
+    try {
+      if (isPaused) {
+        await resumeAssignment(assignmentId);
+      } else {
+        await pauseAssignment(assignmentId);
+      }
+      await loadAssignments();
+    } catch (err: any) {
+      console.error('Error pause/resume:', err);
+    }
+  };
+
+  const handleRemove = async (assignmentId: string) => {
+    try {
+      await removeAssignment(assignmentId);
+      await loadAssignments();
+      setConfirmRemove(null);
+    } catch (err: any) {
+      console.error('Error removing:', err);
+    }
+  };
 
   const fetchIdDocuments = useCallback(
     async (agentId: string) => {
@@ -253,19 +343,30 @@ const AdminManageAgents: React.FC = () => {
   };
 
   return (
-    <Box>
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 2,
-          mb: 2,
-        }}
+    <Box sx={{ p: 3 }}>
+      <Tabs
+        value={currentTab}
+        onChange={(_, v) => setCurrentTab(v)}
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
       >
-        <Typography variant="h5">
-          {t('admin.manageAgents', 'Manage Agents')}
-        </Typography>
+        <Tab label={t('admin.agents.allAgents', 'All Agents')} />
+        {showDedicatedTab && <Tab label={t('dedicatedAgents.superuser.tab', 'Dedicated')} />}
+      </Tabs>
+
+      {currentTab === 0 ? (
+        <Box>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 2,
+              mb: 2,
+            }}
+          >
+            <Typography variant="h5">
+              {t('admin.manageAgents', 'Manage Agents')}
+            </Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <AdminMessagePost />
           <TextField
@@ -706,6 +807,10 @@ const AdminManageAgents: React.FC = () => {
           await applyReferral(applyAgentId, code);
         }}
       />
+    </Box>
+  ) : (
+    <AdminDedicatedAssignmentsSection />
+  )}
     </Box>
   );
 };
