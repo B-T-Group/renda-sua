@@ -322,6 +322,7 @@ export const DEDICATED_OPPORTUNITY_AGENT_QUERY = `
         first_name
         profile_picture_url
         preferred_language
+        country
       }
       agent_addresses(where: { address: { status: { _eq: active } } }, order_by: { address: { created_at: asc } }) {
         address {
