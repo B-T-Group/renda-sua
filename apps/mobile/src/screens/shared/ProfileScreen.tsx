@@ -236,35 +236,14 @@ function ProfileScreen() {
           );
           return;
         }
-        const uri = result.assets[0].uri;
-        await auth.setLocalProfilePhoto(uri);
-        
-        // Upload to server
-        if (!me?.id) {
-          Alert.alert(t('common.error'), t('profile.photoError', 'Failed to upload photo'));
-          return;
-        }
-
-        const { uploadProfilePhoto } = await import('../../services/profilePhotoApi');
-        const uploadResult = await uploadProfilePhoto(uri, me.id);
-        
-        if (!uploadResult.success) {
-          Alert.alert(
-            t('common.error'),
-            uploadResult.error || t('profile.photoError', 'Failed to upload photo')
-          );
-          return;
-        }
-        
-        // Refresh profile
-        await refetchMe();
+        await auth.setLocalProfilePhoto(result.assets[0].uri);
       }
     } catch {
       Alert.alert(t('common.error'), t('profile.photoError'));
     } finally {
       setPhotoLoading(false);
     }
-  }, [auth, t, refetchMe, me]);
+  }, [auth, t]);
 
   const persistProfile = useCallback(async () => {
     if (!me) return;

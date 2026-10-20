@@ -1,113 +1,105 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { renderHook, waitFor } from '@testing-library/react-native';
+import { useDedicatedAgentsCapability } from './useDedicatedAgentsCapability';
+import * as apiRequest from '../services/apiRequest';
 
-describe('useDedicatedAgentsCapability logic', () => {
-  it('should show dedicated agents when enabled and no blocking reason', () => {
-    const capability: any = {
+vi.mock('../services/apiRequest');
+
+describe('useDedicatedAgentsCapability', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should return enabled true when capability is enabled', async () => {
+    vi.spyOn(apiRequest, 'apiRequest').mockResolvedValue({
       success: true,
       enabled: true,
       country: 'CM',
-    };
+      reason: null,
+    });
 
-    const shouldShow = 
-      capability.success === true && 
-      capability.enabled === true &&
-      capability.reason !== 'commercial_focus' &&
-      capability.reason !== 'no_agent';
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
 
-    expect(shouldShow).toBe(true);
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(true);
+    });
+
+    expect(result.current.capability).toEqual({
+      success: true,
+      enabled: true,
+      country: 'CM',
+      reason: null,
+    });
   });
 
-  it('should hide when enabled is false', () => {
-    const capability: any = {
+  it('should return enabled false when capability is disabled', async () => {
+    vi.spyOn(apiRequest, 'apiRequest').mockResolvedValue({
       success: true,
       enabled: false,
-      country: 'CM',
-    };
+      country: null,
+      reason: null,
+    });
 
-    const shouldShow = 
-      capability.success === true && 
-      capability.enabled === true &&
-      capability.reason !== 'commercial_focus' &&
-      capability.reason !== 'no_agent';
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
 
-    expect(shouldShow).toBe(false);
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(false);
+    });
   });
 
-  it('should hide on commercial_focus reason', () => {
-    const capability: any = {
+  it('should show dedicated agents when enabled with no_address reason', async () => {
+    vi.spyOn(apiRequest, 'apiRequest').mockResolvedValue({
       success: true,
       enabled: true,
       country: 'CM',
-      reason: 'commercial_focus' as const,
-    };
+      reason: 'no_address',
+    });
 
-    const shouldShow = 
-      capability.success === true && 
-      capability.enabled === true &&
-      capability.reason !== 'commercial_focus' &&
-      capability.reason !== 'no_agent';
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
 
-    expect(shouldShow).toBe(false);
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(true);
+      expect(result.current.capability?.reason).toBe('no_address');
+    });
   });
 
-  it('should hide on no_agent reason', () => {
-    const capability: any = {
-      success: true,
-      enabled: true,
-      country: 'CM',
-      reason: 'no_agent' as const,
-    };
-
-    const shouldShow = 
-      capability.success === true && 
-      capability.enabled === true &&
-      capability.reason !== 'commercial_focus' &&
-      capability.reason !== 'no_agent';
-
-    expect(shouldShow).toBe(false);
-  });
-
-  it('should show when enabled is true with no_address reason', () => {
-    const capability: any = {
+  it('should show dedicated agents when enabled with no_country reason', async () => {
+    vi.spyOn(apiRequest, 'apiRequest').mockResolvedValue({
       success: true,
       enabled: true,
       country: null,
-      reason: 'no_address' as const,
-    };
+      reason: 'no_country',
+    });
 
-    const shouldShow = 
-      capability.success === true && 
-      capability.enabled === true &&
-      capability.reason !== 'commercial_focus' &&
-      capability.reason !== 'no_agent';
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
 
-    expect(shouldShow).toBe(true);
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(true);
+      expect(result.current.capability?.reason).toBe('no_country');
+    });
   });
 
-  it('should hide on 404 error', () => {
-    const capability: any = {
-      success: false,
-      enabled: false,
-    };
+  it('should handle 404 as feature disabled', async () => {
+    vi.spyOn(apiRequest, 'apiRequest').mockRejectedValue({
+      response: { status: 404 },
+    });
 
-    const shouldShow = 
-      capability.success === true && 
-      capability.enabled === true &&
-      capability.reason !== 'commercial_focus' &&
-      capability.reason !== 'no_agent';
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
 
-    expect(shouldShow).toBe(false);
+    await waitFor(() => {
+      expect(result.current.shouldShowDedicatedAgents).toBe(false);
+      expect(result.current.featureUnavailable).toBe(true);
+    });
   });
 
-  it('should hide on network error', () => {
-    const capability: any = {
-      success: false,
-    };
+  it('should handle network errors', async () => {
+    vi.spyOn(apiRequest, 'apiRequest').mockRejectedValue(new Error('Network error'));
 
-    const shouldShow = 
-      capability.success === true && 
-      capability.enabled === true;
+    const { result } = renderHook(() => useDedicatedAgentsCapability());
 
-    expect(shouldShow).toBe(false);
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false);
+      expect(result.current.error).toBeTruthy();
+    });
   });
 });

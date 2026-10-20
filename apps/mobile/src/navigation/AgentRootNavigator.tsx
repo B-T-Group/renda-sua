@@ -19,8 +19,6 @@ import AgentOrderDetailScreen from '../screens/agent/AgentOrderDetailScreen';
 import UserOrderMessagesScreen from '../screens/shared/UserOrderMessagesScreen';
 import EarningsScreen from '../screens/agent/EarningsScreen';
 import AgentBusinessReferralScreen from '../screens/agent/AgentBusinessReferralScreen';
-import DedicatedHubScreen from '../screens/agent/DedicatedHubScreen';
-import DedicatedOpportunityDetailScreen from '../screens/agent/DedicatedOpportunityDetailScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
@@ -84,15 +82,13 @@ export type MainTabParamList = {
   Menu: undefined;
 };
 
-const RootStack = createNativeStackNavigator<AgentRootStackParamList>();
+const RootStack = createNativeStackNavigator<RootStackParamList>();
 
-export type AgentRootStackParamList = {
+export type RootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   ClaimAwaitingPayment: ClaimAwaitingPaymentParams;
   NotificationsCenter: undefined;
   NotificationPermission: undefined;
-  DedicatedHub: { segment?: 'opportunities' | 'stores' } | undefined;
-  DedicatedOpportunityDetail: { postingId: string };
   Earnings: undefined;
   AgentAccounts: undefined;
   UserPurchaseCredits: undefined;
@@ -123,12 +119,7 @@ export type AgentRootStackParamList = {
   EnrollPersonaSuccess: EnrollPersonaParams;
 };
 
-/** @deprecated Use AgentRootStackParamList instead */
-export type RootStackParamList = AgentRootStackParamList;
-
-export type AgentMainTabParamList = MainTabParamList;
-
-export type AgentAppNavScreen = keyof AgentRootStackParamList | keyof MainTabParamList;
+export type AgentAppNavScreen = keyof RootStackParamList | keyof MainTabParamList;
 
 function OrdersStackScreen() {
   const { colors, typography } = useTheme();
@@ -310,20 +301,6 @@ function AgentNavigatorChrome() {
             }}
           />
           <RootStack.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Gains' }} />
-          <RootStack.Screen
-            name="DedicatedHub"
-            component={DedicatedHubScreen}
-            options={{
-              title: t('dedicatedAgents.agent.opportunities', 'Opportunities'),
-            }}
-          />
-          <RootStack.Screen
-            name="DedicatedOpportunityDetail"
-            component={DedicatedOpportunityDetailScreen}
-            options={{
-              title: t('dedicatedAgents.agent.opportunities', 'Opportunity'),
-            }}
-          />
           <RootStack.Screen
             name="AgentAccounts"
             component={UserAccountsScreen}

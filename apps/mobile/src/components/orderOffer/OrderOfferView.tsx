@@ -235,31 +235,7 @@ export function OrderOfferView({
           </View>
         </View>
 
-        {details?.offerKind === 'dedicated' && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
-            <MaterialCommunityIcons
-              name="storefront-check"
-              size={18}
-              color={colors.secondary.main}
-            />
-            <Text
-              style={[
-                styles.subValue,
-                {
-                  marginLeft: spacing.xs,
-                  color: colors.secondary.main,
-                  fontWeight: '600',
-                },
-              ]}
-            >
-              {t('dedicatedAgents.agent.offerBadge', 'Dedicated · {{store}}', {
-                store: details.pickup.locationName ?? details.pickup.businessName ?? t('agent.orderOffer.aStore', 'A store'),
-              })}
-            </Text>
-          </View>
-        )}
-
-        <View style={[styles.metricsRow, { marginTop: details?.offerKind === 'dedicated' ? 0 : spacing.lg }]}>
+        <View style={[styles.metricsRow, { marginTop: spacing.lg }]}>
           <Metric
             icon="map-marker-distance"
             label={t('agent.orderOffer.distance', 'Distance')}

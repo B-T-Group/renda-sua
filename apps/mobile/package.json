@@ -77,7 +77,6 @@
     "expo-local-authentication": "~55.0.8",
     "expo-localization": "~55.0.15",
     "expo-location": "~55.1.10",
-    "expo-network": "^58.0.3",
     "expo-notifications": "~55.0.23",
     "expo-secure-store": "~55.0.8",
     "expo-task-manager": "~55.0.16",

@@ -32,7 +32,6 @@ export function targetPersonaForDeepLinkPath(path: string): PersonaSlug | null {
   if (head === 'admin' || head === 'items') return 'business';
   if (head === 'rentals' && segments[1] === 'requests') return 'business';
   if (head === 'deliveries') return 'agent';
-  if (head === 'agent' && segments[1]?.startsWith('dedicated-')) return 'agent';
   if (head === 'restock') return 'client';
   return null;
 }
@@ -50,8 +49,6 @@ export type DeepLinkTarget =
   | { type: 'store'; id: string }
   | { type: 'restockItem'; itemId: string }
   | { type: 'restockLikes'; filter: 'all' | 'back_in_stock' }
-  | { type: 'dedicatedAssignments' }
-  | { type: 'dedicatedOpportunity'; postingId: string }
   | { type: 'dashboard' };
 
 export function resolveDeepLinkTarget(path: string): DeepLinkTarget {
@@ -95,11 +92,5 @@ function matchDeepLinkRest(
   if (head === 'rentals' && id) return { type: 'rental', id };
   if (head === 'foods') return { type: 'food', id };
   if (head === 'store' && id) return { type: 'store', id };
-  if (head === 'agent' && segments[1] === 'dedicated-assignments') {
-    return { type: 'dedicatedAssignments' };
-  }
-  if (head === 'agent' && segments[1] === 'dedicated-opportunities' && segments[2]) {
-    return { type: 'dedicatedOpportunity', postingId: segments[2] };
-  }
   return null;
 }

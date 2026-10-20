@@ -5,7 +5,6 @@
 
 export interface OrderOfferPickup {
   businessName: string | null;
-  locationName?: string | null;
   city: string | null;
   state: string | null;
 }
@@ -18,7 +17,6 @@ export interface OrderOfferDropoff {
 export interface OrderOfferDetails {
   orderId: string;
   orderNumber: string;
-  offerKind?: 'standard' | 'dedicated';
   expiresAt: string;
   /** Full offer window in seconds. Remaining time is derived from expiresAt. */
   ttlSeconds?: number;
