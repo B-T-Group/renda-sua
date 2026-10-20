@@ -8956,6 +8956,7 @@
       "pickup_time_outside_slot": "Choose a time between {{start}} and {{end}}",
       "assignment_removed": "This assignment was removed",
       "assignment_changed": "This assignment has changed",
+      "query_too_short": "Search query is too short",
       "agent_not_verified": "This agent is not verified",
       "agent_suspended": "This agent is suspended",
       "not_found": "Resource not found",

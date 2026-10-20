@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import {
   Box,
   Button,
@@ -53,7 +53,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
 
   const [activeStep, setActiveStep] = useState(0);
   const [locationQuery, setLocationQuery] = useState('');
-  const [locationSearchId, setLocationSearchId] = useState(0);
+  const locationSearchIdRef = useRef(0);
   const [locations, setLocations] = useState<AdminLocationSearchItem[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<AdminLocationSearchItem | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<SlotKey[]>([]);
@@ -98,8 +98,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
         return;
       }
 
-      const searchId = Date.now();
-      setLocationSearchId(searchId);
+      const searchId = ++locationSearchIdRef.current;
 
       try {
         setLoading(true);
@@ -107,31 +106,31 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
         const response = await dedicatedApi.getAdminLocations(query);
         
         // Ignore stale responses
-        setLocations((prevLocations) => {
-          if (locationSearchId > searchId) {
-            return prevLocations;
-          }
-          return response.locations;
-        });
+        if (locationSearchIdRef.current !== searchId) {
+          return;
+        }
+        setLocations(response.locations);
       } catch (err: any) {
         console.error('Error searching locations:', err);
-        const status = err.response?.status;
         
         // Ignore errors from stale requests
-        if (locationSearchId <= searchId) {
-          if (status === 403) {
-            setError(t('dedicatedAgents.errors.geo_scope', 'Outside your admin scope'));
-          } else if (status === 400 && err.response?.data?.code === 'query_too_short') {
-            setError(t('dedicatedAgents.errors.query_too_short', 'Search query is too short'));
-          } else {
-            setError(t('dedicatedAgents.generic', 'Something went wrong'));
-          }
+        if (locationSearchIdRef.current !== searchId) {
+          return;
+        }
+        
+        const status = err.response?.status;
+        if (status === 403) {
+          setError(t('dedicatedAgents.errors.geo_scope', 'Outside your admin scope'));
+        } else if (status === 400 && err.response?.data?.code === 'query_too_short') {
+          setError(t('dedicatedAgents.errors.query_too_short', 'Search query is too short'));
+        } else {
+          setError(t('dedicatedAgents.generic', 'Something went wrong'));
         }
       } finally {
         setLoading(false);
       }
     },
-    [dedicatedApi, t, locationSearchId]
+    [dedicatedApi, t]
   );
 
   useEffect(() => {
@@ -499,7 +498,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
                               variant="outlined"
                             />
                             <Typography variant="caption">
-                              📦 {agent.activeOrders}/{agent.activeOrders + Math.max(0, 10 - agent.activeOrders - agent.outstandingDedicatedOffers)} · 🏪 {agent.assignmentCount}/3
+                              📦 {agent.activeOrders} · 🏪 {agent.assignmentCount}/3
                               {!agent.isInternal && agent.balanceCoversOrders !== null && (
                                 <> · 💰 ~{agent.balanceCoversOrders}</>
                               )}

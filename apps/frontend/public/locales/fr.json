@@ -8973,6 +8973,7 @@
       "pickup_time_outside_slot": "Choisissez une heure entre {{start}} et {{end}}",
       "assignment_removed": "Cette affectation a été supprimée",
       "assignment_changed": "Cette affectation a changé",
+      "query_too_short": "La requête de recherche est trop courte",
       "agent_not_verified": "Ce livreur n'est pas vérifié",
       "agent_suspended": "Ce livreur est suspendu",
       "not_found": "Ressource introuvable",

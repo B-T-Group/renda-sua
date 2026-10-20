@@ -46,6 +46,8 @@ describe('AdminDedicatedAssignDialog', () => {
     businessName: 'Shop',
     name: 'Akwa',
     address: { city: 'Douala', state: 'Littoral' },
+    enabledSlotKeys: ['morning', 'evening'] as const,
+    liveAgents: 2,
   };
 
   const mockAgent = {

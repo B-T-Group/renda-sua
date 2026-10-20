@@ -22,7 +22,7 @@ expect.extend({
     }
     const pass =
       received.hasAttribute('disabled') ||
-      received.hasAttribute('aria-disabled') ||
+      received.getAttribute('aria-disabled') === 'true' ||
       (received as HTMLButtonElement | HTMLInputElement).disabled === true;
     return {
       pass,
@@ -49,6 +49,33 @@ expect.extend({
         pass
           ? 'expected element not to be enabled'
           : 'expected element to be enabled',
+    };
+  },
+  toHaveAttribute(received: Element | null, attr: string, value?: string) {
+    if (!received) {
+      return {
+        pass: false,
+        message: () => 'expected element to have attribute but element was not found',
+      };
+    }
+    const hasAttr = received.hasAttribute(attr);
+    if (value === undefined) {
+      return {
+        pass: hasAttr,
+        message: () =>
+          hasAttr
+            ? `expected element not to have attribute "${attr}"`
+            : `expected element to have attribute "${attr}"`,
+      };
+    }
+    const actualValue = received.getAttribute(attr);
+    const pass = hasAttr && actualValue === value;
+    return {
+      pass,
+      message: () =>
+        pass
+          ? `expected element not to have attribute "${attr}" with value "${value}"`
+          : `expected element to have attribute "${attr}" with value "${value}", but got "${actualValue}"`,
     };
   },
 });

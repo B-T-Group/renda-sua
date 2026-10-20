@@ -1,15 +1,21 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import AdminManageAgents from './AdminManageAgents';
+import { useMemo } from 'react';
 
 const mockGetAdminCapability = jest.fn();
 const mockGetPermissions = jest.fn();
 const mockFetchAgents = jest.fn();
 
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, defaultValue?: string) =>
-      typeof defaultValue === 'string' ? defaultValue : key,
-  }),
+  useTranslation: () => {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const t = useMemo(
+      () => (key: string, defaultValue?: string) =>
+        typeof defaultValue === 'string' ? defaultValue : key,
+      []
+    );
+    return { t };
+  },
 }));
 
 jest.mock('../../contexts/UserProfileContext', () => ({

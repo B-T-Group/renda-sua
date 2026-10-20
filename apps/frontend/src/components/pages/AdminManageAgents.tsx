@@ -116,24 +116,19 @@ const AdminManageAgents: React.FC = () => {
           setDedicatedTabError(null);
         } else {
           setShowDedicatedTab(false);
-          if (currentTab === 1) {
-            setCurrentTab(0);
-          }
+          setCurrentTab(0);
         }
       } catch (err: any) {
         const status = err.response?.status;
-        if (status === 403 || status === 404) {
-          setShowDedicatedTab(false);
-          if (currentTab === 1) {
-            setCurrentTab(0);
-          }
-        } else {
-          setShowDedicatedTab(false);
+        setShowDedicatedTab(false);
+        setCurrentTab(0);
+        if (status !== 403 && status !== 404) {
           setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
         }
       }
     })();
-  }, [getAdminCapability, t, currentTab]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [getAdminCapability]);
 
   const fetchIdDocuments = useCallback(
     async (agentId: string) => {
@@ -292,7 +287,7 @@ const AdminManageAgents: React.FC = () => {
   };
 
   return (
-    <Box sx={{ p: 3 }}>
+    <Box>
       <Tabs
         value={currentTab}
         onChange={(_, v) => setCurrentTab(v)}
@@ -774,13 +769,13 @@ const AdminManageAgents: React.FC = () => {
                 setShowDedicatedTab(true);
               } else {
                 setShowDedicatedTab(false);
+                setCurrentTab(0);
               }
             } catch (err: any) {
+              setShowDedicatedTab(false);
+              setCurrentTab(0);
               const status = err.response?.status;
-              if (status === 403 || status === 404) {
-                setShowDedicatedTab(false);
-              } else {
-                setShowDedicatedTab(false);
+              if (status !== 403 && status !== 404) {
                 setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
               }
             }
@@ -790,9 +785,9 @@ const AdminManageAgents: React.FC = () => {
         {t('dedicatedAgents.retry', 'Retry')}
       </Button>
     </Box>
-  ) : (
+  ) : showDedicatedTab && currentTab === 1 ? (
     <AdminDedicatedAssignmentsSection />
-  )}
+  ) : null}
     </Box>
   );
 };

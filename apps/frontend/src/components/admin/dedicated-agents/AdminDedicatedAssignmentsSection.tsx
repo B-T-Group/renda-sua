@@ -65,7 +65,6 @@ export function AdminDedicatedAssignmentsSection() {
   const [error, setError] = useState<string | null>(null);
   const [busyIds, setBusyIds] = useState<Set<string>>(new Set());
   const [cityFilter, setCityFilter] = useState<string>('');
-  const [locationFilter, setLocationFilter] = useState<string>('');
   const [slotFilter, setSlotFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
@@ -86,7 +85,6 @@ export function AdminDedicatedAssignmentsSection() {
       setError(null);
       const filters: any = {};
       if (cityFilter) filters.city = cityFilter;
-      if (locationFilter) filters.locationId = locationFilter;
       if (slotFilter !== 'all') filters.slotKey = slotFilter;
       if (statusFilter !== 'all') filters.status = statusFilter;
       if (sourceFilter !== 'all') filters.source = sourceFilter;
@@ -98,7 +96,7 @@ export function AdminDedicatedAssignmentsSection() {
     } finally {
       setLoading(false);
     }
-  }, [getAdminAssignments, cityFilter, locationFilter, slotFilter, statusFilter, sourceFilter, t]);
+  }, [getAdminAssignments, cityFilter, slotFilter, statusFilter, sourceFilter, t]);
 
   useEffect(() => {
     loadAssignments();
@@ -210,14 +208,6 @@ export function AdminDedicatedAssignmentsSection() {
               label={t('common.city', 'City')}
               value={cityFilter}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCityFilter(e.target.value)}
-              sx={{ minWidth: 150 }}
-            />
-
-            <TextField
-              size="small"
-              label={t('dedicatedAgents.superuser.location', 'Location')}
-              value={locationFilter}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocationFilter(e.target.value)}
               sx={{ minWidth: 150 }}
             />
 
