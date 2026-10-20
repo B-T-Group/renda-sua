@@ -171,6 +171,18 @@ describe('OrdersService.adminFullRefundCancel', () => {
     await expect(svc.adminFullRefundCancel('o-1', 'r')).resolves.toMatchObject({ partialFailure: false, failedSteps: [] });
   });
 
+  it('#626 D1: releaseStripeAuthorizationIfNeeded reports a non-throwing Stripe failure as { ok: false }', async () => {
+    const real = (OrdersService.prototype as any).releaseStripeAuthorizationIfNeeded;
+    const self: any = { logger: { warn: jest.fn() }, stripeCaptureService: { cancelOrderPaymentIntent: jest.fn() } };
+    const order = { id: 'o-1', order_number: 'N', payment_source: 'credit_card', payment_status: 'authorized' };
+    self.stripeCaptureService.cancelOrderPaymentIntent.mockResolvedValueOnce({ success: false, message: 'x' });
+    await expect(real.call(self, order)).resolves.toEqual({ ok: false, message: 'x' });
+    self.stripeCaptureService.cancelOrderPaymentIntent.mockResolvedValueOnce({ success: false, skipped: true });
+    await expect(real.call(self, order)).resolves.toEqual({ ok: true });
+    self.stripeCaptureService.cancelOrderPaymentIntent.mockResolvedValueOnce({ success: true });
+    await expect(real.call(self, order)).resolves.toEqual({ ok: true });
+  });
+
   it('no failure -> partialFailure false, failedSteps empty', async () => {
     const { svc } = service('confirmed');
     await expect(svc.adminFullRefundCancel('o-1', 'r')).resolves.toMatchObject({ partialFailure: false, failedSteps: [] });
