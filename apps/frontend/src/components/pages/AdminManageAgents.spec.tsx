@@ -12,6 +12,15 @@ jest.mock('react-i18next', () => ({
   }),
 }));
 
+jest.mock('../../contexts/UserProfileContext', () => ({
+  useUserProfileContext: () => ({
+    profile: null,
+    loading: false,
+    refetch: jest.fn(),
+    addAddress: jest.fn(),
+  }),
+}));
+
 jest.mock('../../hooks/useDedicatedAgents', () => ({
   useDedicatedAgents: () => ({
     getAdminAssignments: mockGetAdminAssignments,

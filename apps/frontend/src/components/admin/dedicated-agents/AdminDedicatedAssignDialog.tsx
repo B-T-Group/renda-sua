@@ -408,7 +408,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
               <Typography variant="body2">{t('dedicatedAgents.admin.selectSlots', 'Select one or more slots')}</Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap">
                 {allSlots.map((slot) => {
-                  const isDisabled = selectedLocation && !selectedLocation.enabledSlotKeys.includes(slot);
+                  const isDisabled = selectedLocation ? !selectedLocation.enabledSlotKeys.includes(slot) : false;
                   return (
                     <Chip
                       key={slot}
