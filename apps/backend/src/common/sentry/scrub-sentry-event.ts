@@ -14,17 +14,37 @@ const SENSITIVE_FIELD =
   /^(new_)?secret([-_]?key)?$|^client[-_]?secret$|^x[-_]secret$|^api[-_]?key$|^app[-_]?key$|^secretkey$|^password$|^pass$|^token$|^access[-_]?token$|^refresh[-_]?token$|^authorization$|^cookie$|signature/i;
 /**
  * Query parameters that carry credentials in inbound URLs (QA #589 D2): feed access tokens
- * (?token=), OAuth callbacks (?code=, ?state=), signatures. Only `?name=` / `&name=` forms, so
- * free text such as "code: 500" is untouched. Linear: no nested quantifiers.
+ * (?token=), OAuth callbacks (?code=, ?state=), signatures. Only `?name=` / `&name=` forms, or
+ * `name=` at the very start of the string (#589 QA D2b: Sentry's request.query_string has no
+ * leading '?', so its first parameter would otherwise slip through). Free text such as
+ * "code: 500" or "zipcode=1" is untouched. Linear: no nested quantifiers.
  */
 const SENSITIVE_QUERY_PARAM =
-  /([?&](?:code|state|token|access_token|refresh_token|id_token|secret|client_secret|password|signature|sig|key|api_key|apikey)=)[^&#\s"'<>]*/gi;
+  /((?:^|[?&])(?:code|state|token|access_token|refresh_token|id_token|secret|client_secret|password|signature|sig|key|api_key|apikey)=)[^&#\s"'<>]*/gi;
 const REDACTED = '[REDACTED]';
 const MAX_DEPTH = 6;
 
 /** redactSecrets plus credential query parameters, for anything that may hold a URL. */
+/**
+ * #588 QA S1: personal data in error text (Hasura `Key (phone_number)=(+228…)`, provider
+ * bodies). Emails; E.164 numbers (`+` and 8–15 digits, optional single space/dot/dash
+ * separators); and any standalone run of 8+ digits (local phone numbers; runs inside hex ids/UUIDs are left alone). Linear patterns only.
+ */
+const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/g;
+const E164_PHONE = /\+\d(?:[ .-]?\d){7,14}(?!\d)/g;
+const LOCAL_DIGIT_RUN = /(?<![A-Za-z0-9])\d{8,}(?![A-Za-z0-9])/g;
+export const REDACTED_EMAIL = '[REDACTED_EMAIL]';
+export const REDACTED_PHONE = '[REDACTED_PHONE]';
+
+export function maskPersonalData(value: string): string {
+  return value
+    .replace(EMAIL, REDACTED_EMAIL)
+    .replace(E164_PHONE, REDACTED_PHONE)
+    .replace(LOCAL_DIGIT_RUN, REDACTED_PHONE);
+}
+
 export function redactSentryString(value: string): string {
-  return redactSecrets(value).replace(SENSITIVE_QUERY_PARAM, `$1${REDACTED}`);
+  return maskPersonalData(redactSecrets(value).replace(SENSITIVE_QUERY_PARAM, `$1${REDACTED}`));
 }
 
 /**

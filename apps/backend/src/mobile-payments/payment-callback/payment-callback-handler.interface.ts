@@ -10,7 +10,8 @@ export interface PaymentCallbackHandler {
   onPaymentSuccess(transaction: MobilePaymentTransaction): Promise<void>;
   onPaymentAuthorized?(transaction: MobilePaymentTransaction): Promise<void>;
   /**
-   * Provider SUCCESS arrived for an attempt we had cancelled as superseded (#545).
+   * Provider SUCCESS arrived for an attempt we had cancelled as superseded (#545), or
+   * for a plain attempt we had marked failed (F3 declined-then-approved, M1).
    * The amount is already credited to the payer wallet. Returns whether the payment
    * was applied to the entity (first success wins) or kept as a wallet credit.
    */

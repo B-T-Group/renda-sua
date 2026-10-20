@@ -14,34 +14,6 @@ object_relationships:
   - name: order
     using:
       foreign_key_constraint_on: order_id
-insert_permissions:
-  - role: client
-    permission:
-      check:
-        order:
-          client:
-            user:
-              id:
-                _eq: X-Hasura-User-Id
-      columns:
-        - id
-        - item_name
-        - quantity
-        - total_price
-        - unit_price
-        - item_description
-        - special_instructions
-        - created_at
-        - updated_at
-        - business_inventory_id
-        - item_id
-        - item_variant_id
-        - variant_name
-        - variant_snapshot
-        - is_cooked_food
-        - initial_deposit_percent
-        - initial_deposit_amount
-        - order_id
 select_permissions:
   - role: agent
     permission:

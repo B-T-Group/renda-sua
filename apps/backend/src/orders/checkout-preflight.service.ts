@@ -19,7 +19,15 @@ import { ConfigService } from '@nestjs/config';
 import { createHash } from 'node:crypto';
 import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
-import { toPublicDeliveryAvailability } from '../delivery-availability/delivery-availability.types';
+import {
+  DeliveryAvailabilityResult,
+  DeliveryUnavailableReason,
+  toPublicDeliveryAvailability,
+} from '../delivery-availability/delivery-availability.types';
+import {
+  DedicatedCheckoutCoverageService,
+  type DedicatedCoveredSlot,
+} from '../dedicated-agents/dedicated-checkout-coverage.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { LoyaltyService } from '../loyalty/loyalty.service';
@@ -130,6 +138,7 @@ const BUSINESS_INVENTORY_PREFLIGHT_QUERY = `
         preparation_minutes
         pay_on_delivery_enabled
         export_available
+        moderation_status
         pay_at_pickup_enabled
         shipping_enabled
         shipping_price
@@ -191,7 +200,9 @@ export class CheckoutPreflightService {
     private readonly serviceFeeService: ServiceFeeService,
     private readonly variantInventory: VariantInventoryService,
     @Optional()
-    private readonly purchaseCreditsService?: PurchaseCreditsService
+    private readonly purchaseCreditsService?: PurchaseCreditsService,
+    @Optional()
+    private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService
   ) {}
 
   private async safeUserId(): Promise<string | null> {
@@ -326,6 +337,12 @@ export class CheckoutPreflightService {
           message: `Item ${line.business_inventory_id} was not found or is unavailable.`,
         });
       } else if (!inv.is_active) {
+        blockers.push({
+          code: 'ITEM_UNAVAILABLE',
+          message: `${inv.item?.name ?? 'An item'} is not currently available.`,
+        });
+      } else if (inv.item?.moderation_status !== 'approved') {
+        // F-M7: draft/pending/rejected items are hidden from browse; never sellable
         blockers.push({
           code: 'ITEM_UNAVAILABLE',
           message: `${inv.item?.name ?? 'An item'} is not currently available.`,
@@ -905,7 +922,18 @@ export class CheckoutPreflightService {
           ? momoPayNowDeliveryEnabled 
           : undefined,
         mobile_money_provider: mobileMoneyProvider,
-        delivery_availability: availabilityByBusiness.get(businessId) ?? null,
+        delivery_availability: await this.groupDeliveryAvailability(
+          availabilityByBusiness.get(businessId),
+          {
+            group,
+            rail,
+            subtotal,
+            currency,
+            // Cooked food and pay-after-confirm groups are ASAP only.
+            scheduleAllowed: !groupHasCookedFood && !groupIsCookedFoodPayAfter,
+            verifiedAgentDelivery: dto.verified_agent_delivery === true,
+          }
+        ),
         pickup_eligible: allPayAtPickup,
         shipping_eligible: allShippingEnabled,
         items: itemLines,
@@ -1335,27 +1363,80 @@ export class CheckoutPreflightService {
     dto: CheckoutPreflightDto,
     deliveryCoords: { lat: number; lon: number } | null,
     deliveryCountry: string | null
-  ): Promise<Map<string, DeliveryAvailabilityDto>> {
-    const map = new Map<string, DeliveryAvailabilityDto>();
+  ): Promise<Map<string, DeliveryAvailabilityResult>> {
+    const map = new Map<string, DeliveryAvailabilityResult>();
     await Promise.all(
       [...businessMap.entries()].map(async ([businessId, group]) => {
         map.set(
           businessId,
-          toPublicDeliveryAvailability(
-            await this.deliveryAvailabilityService.evaluate(
-              this.groupAvailabilityContext(
-                businessId,
-                group,
-                dto,
-                deliveryCoords,
-                deliveryCountry
-              )
+          await this.deliveryAvailabilityService.evaluate(
+            this.groupAvailabilityContext(
+              businessId,
+              group,
+              dto,
+              deliveryCoords,
+              deliveryCountry
             )
           )
         );
       })
     );
     return map;
+  }
+
+  /**
+   * Client-safe availability for one seller group. With #594 dedicated agents
+   * on for the seller country it adds `delivery_asap_available` (today's
+   * rules, unchanged) and `dedicated_covered_slots`: the scheduled slots a
+   * dedicated agent covers when the only failure is "no agent nearby". Flag
+   * off -> exactly the previous shape.
+   */
+  private async groupDeliveryAvailability(
+    result: DeliveryAvailabilityResult | undefined,
+    params: {
+      group: {
+        inventoryRows: Array<{
+          business_location?: { id?: string; address?: { state?: string | null } | null } | null;
+        }>;
+        sellerCountry?: string;
+        businessLocationId?: string;
+      };
+      rail: 'stripe' | 'mobile_money';
+      subtotal: number;
+      currency: string;
+      scheduleAllowed: boolean;
+      verifiedAgentDelivery: boolean;
+    }
+  ): Promise<DeliveryAvailabilityDto | null> {
+    if (!result) return null;
+    const base: DeliveryAvailabilityDto = toPublicDeliveryAvailability(result);
+    const coverage = this.dedicatedCheckoutCoverage;
+    const country = params.group.sellerCountry ?? '';
+    if (!coverage || !(await coverage.isEnabled(country))) return base;
+
+    const location = params.group.inventoryRows[0]?.business_location;
+    const locationId: string | undefined =
+      location?.id ?? params.group.businessLocationId;
+    const onlyNoNearbyAgent =
+      !result.available &&
+      result.reason === DeliveryUnavailableReason.NO_ELIGIBLE_AGENT;
+    let covered: DedicatedCoveredSlot[] = [];
+    if (onlyNoNearbyAgent && params.scheduleAllowed && locationId) {
+      covered = await coverage.coveredSlots({
+        locationId,
+        country,
+        state: (location?.address?.state ?? '').trim(),
+        rail: params.rail,
+        subtotal: params.subtotal,
+        currency: params.currency,
+        verifiedAgentDelivery: params.verifiedAgentDelivery,
+      });
+    }
+    return {
+      ...base,
+      delivery_asap_available: result.available,
+      dedicated_covered_slots: covered,
+    };
   }
 
   private groupAvailabilityContext(
@@ -1396,11 +1477,38 @@ export class CheckoutPreflightService {
     const estimates = perGroup
       .map((a) => a?.estimated_delivery_minutes)
       .filter((v): v is number => v != null);
-    return {
+    const aggregate: DeliveryAvailabilityDto = {
       available,
       estimated_delivery_minutes:
         available && estimates.length > 0 ? Math.max(...estimates) : null,
     };
+    // #594: only when some group carries the dedicated fields (flag on).
+    if (!perGroup.some((a) => a?.delivery_asap_available !== undefined)) {
+      return aggregate;
+    }
+    return {
+      ...aggregate,
+      delivery_asap_available: available,
+      dedicated_covered_slots: this.sharedCoveredSlots(perGroup),
+    };
+  }
+
+  /**
+   * Slots (date + slot key) the whole cart can be delivered in when ASAP is
+   * unavailable: every group that can't deliver ASAP must list it as covered.
+   * Groups that can deliver ASAP don't constrain the slot. Empty when ASAP is
+   * available everywhere or any group has no dedicated answer.
+   */
+  private sharedCoveredSlots(
+    perGroup: Array<DeliveryAvailabilityDto | null | undefined>
+  ): DedicatedCoveredSlot[] {
+    const needing = perGroup.filter((a) => a?.available !== true);
+    if (needing.length === 0) return [];
+    // A group without the field (flag off there) contributes [] -> no shared slot.
+    const key = (s: { date: string; slot_key: string }) => `${s.date}|${s.slot_key}`;
+    const [first, ...rest] = needing.map((a) => a?.dedicated_covered_slots ?? []);
+    const others = rest.map((list) => new Set(list.map(key)));
+    return first.filter((slot) => others.every((set) => set.has(key(slot))));
   }
 
   private earlyExit(

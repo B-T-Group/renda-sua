@@ -37,9 +37,6 @@ update_permissions:
     permission:
       columns:
         - company_name
-        - base_delivery_fee_commission
-        - per_km_delivery_fee_commission
-        - item_commission
         - updated_at
       filter:
         user:

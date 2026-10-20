@@ -24,7 +24,6 @@ insert_permissions:
         - order_id
         - failure_reason_id
         - notes
-        - status
 select_permissions:
   - role: agent
     permission:
@@ -117,24 +116,3 @@ select_permissions:
                 user:
                   id:
                     _eq: X-Hasura-User-Id
-update_permissions:
-  - role: business
-    permission:
-      columns:
-        - status
-        - resolution_type
-        - outcome
-        - resolved_by
-        - resolved_at
-      filter:
-        order:
-          business:
-            user:
-              id:
-                _eq: X-Hasura-User-Id
-      check:
-        order:
-          business:
-            user:
-              id:
-                _eq: X-Hasura-User-Id

@@ -19,6 +19,7 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
+import { HasuraUserService } from '../hasura/hasura-user.service';
 import { DeliverySlotsService } from './delivery-slots.service';
 import type {
   CreateDeliveryWindowDto,
@@ -31,7 +32,8 @@ import { DeliveryWindowsService } from './delivery-windows.service';
 export class DeliveryWindowsController {
   constructor(
     private readonly deliverySlotsService: DeliverySlotsService,
-    private readonly deliveryWindowsService: DeliveryWindowsService
+    private readonly deliveryWindowsService: DeliveryWindowsService,
+    private readonly hasuraUserService: HasuraUserService
   ) {}
 
   @Public()
@@ -472,13 +474,14 @@ export class DeliveryWindowsController {
   })
   async confirmDeliveryWindow(@Param('orderId') orderId: string) {
     try {
-      // TODO: Get confirmed_by from authenticated user
-      const confirmedBy = 'system'; // Placeholder - should come from auth context
-
+      // #594 DEV QA N3: confirmed_by is a uuid FK to users; the old 'system'
+      // placeholder made every call a 500 ("Invalid identifier"). It is now the
+      // caller, who must own the order's business (it was also unchecked).
+      const user = await this.hasuraUserService.getUser();
       const deliveryWindow =
-        await this.deliveryWindowsService.confirmDeliveryWindow(
+        await this.deliveryWindowsService.confirmDeliveryWindowAsBusiness(
           orderId,
-          confirmedBy
+          user.id
         );
 
       return {
@@ -487,6 +490,7 @@ export class DeliveryWindowsController {
         message: 'Delivery window confirmed successfully',
       };
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       const errorMessage = error.message || 'Failed to confirm delivery window';
       throw new HttpException(
         {

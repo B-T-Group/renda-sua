@@ -435,3 +435,91 @@ describe('FailedDeliveriesService client-fault fee', () => {
     expect(types.indexOf('release')).toBeLessThan(types.indexOf('withdrawal'));
   });
 });
+
+describe('FailedDeliveriesService agent fault: one atomic forfeit to the business (QA F2/F1)', () => {
+  const order = {
+    id: 'order-1',
+    order_number: 'RS-1',
+    currency: 'XAF',
+    client: { user: { id: 'client-user' } },
+    assigned_agent: { user: { id: 'agent-user' } },
+    business: { user_id: 'biz-user' },
+  };
+  const hold = { client_hold_amount: 0, agent_hold_amount: 700, delivery_fees: 0 };
+  function world(forfeited: number | Error, existingForfeit: number | null = null) {
+    const w = createService();
+    w.getAccount.mockImplementation(async (userId: string) => ({ id: `acct-${userId}` }));
+    w.executeMutation.mockImplementation(async (q: string) => {
+      if (!q.includes('ForfeitAgentOrderHold')) return {};
+      if (forfeited instanceof Error) throw forfeited;
+      return { forfeit_agent_order_hold: forfeited > 0 ? [{ id: 'tx', amount: forfeited }] : [] };
+    });
+    w.executeQuery.mockImplementation(async (q: string) =>
+      q.includes('FindTransactionByIdempotencyKey')
+        ? { account_transactions: existingForfeit === null ? [] : [{ amount: existingForfeit }] }
+        : {}
+    );
+    w.registerTransaction.mockResolvedValue({ success: true });
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    return w;
+  }
+  const forfeitCalls = (w: ReturnType<typeof world>) =>
+    w.executeMutation.mock.calls.filter(([q]: any) => q.includes('ForfeitAgentOrderHold')).map(([, v]: any) => v);
+  const shortAlerts = () =>
+    (reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'agent_fault_compensation_short');
+
+  it('full: ONE forfeit call (agent account -> business account, cap 700); no separate debit or deposit', async () => {
+    const w = world(700);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(forfeitCalls(w)).toEqual([
+      expect.objectContaining({ agentAccountId: 'acct-agent-user', businessAccountId: 'acct-biz-user', orderId: 'order-1', cap: 700 }),
+    ]);
+    expect(w.registerTransaction).not.toHaveBeenCalled();
+    expect(shortAlerts()).toHaveLength(0);
+  });
+
+  it('partial: 300 forfeited -> alert expected 700 / actual 300 (after the F1 re-check)', async () => {
+    const w = world(300, 300);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(shortAlerts()).toEqual([
+      [expect.anything(), 'agent_fault_compensation_short', expect.stringContaining('expected=700 actual=300'), expect.objectContaining({ expected: 700, actual: 300 })],
+    ]);
+  });
+
+  it('zero: nothing forfeited -> alert (expected 700 / actual 0)', async () => {
+    const w = world(0);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(shortAlerts()[0][3]).toMatchObject({ expected: 700, actual: 0 });
+  });
+
+  it('F1: the call saw 0 but the forfeit row (by key) holds 700 (a concurrent duplicate won) -> no false alert', async () => {
+    const w = world(0, 700);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(shortAlerts()).toHaveLength(0);
+    expect(w.executeQuery).toHaveBeenCalledWith(
+      expect.stringContaining('FindTransactionByIdempotencyKey'),
+      { keys: ['failed-delivery:agent-fault:agent-forfeit:order-1'] }
+    );
+  });
+
+  it('F1: no re-check when the forfeit already covered the full amount', async () => {
+    const w = world(700);
+    await (w.service as any).resolveAgentFault(order, hold);
+    expect(w.executeQuery).not.toHaveBeenCalledWith(expect.stringContaining('FindTransactionByIdempotencyKey'), expect.anything());
+  });
+
+  it('the function fails -> hold-release-failed alert and a short alert, nothing else written', async () => {
+    const w = world(new Error('agent_hold_release_withheld_short: x'));
+    await (w.service as any).resolveAgentFault(order, hold);
+    const markers = (reportMoneyAnomaly as jest.Mock).mock.calls.map((c) => c[1]);
+    expect(markers).toEqual(['agent_hold_release_failed', 'agent_fault_compensation_short']);
+    expect(w.registerTransaction).not.toHaveBeenCalled();
+  });
+
+  it('no business on the order: nothing is taken from the agent, alert', async () => {
+    const w = world(700);
+    await (w.service as any).resolveAgentFault({ ...order, business: null }, hold);
+    expect(forfeitCalls(w)).toEqual([]);
+    expect(shortAlerts()[0][2]).toContain('no business account');
+  });
+});

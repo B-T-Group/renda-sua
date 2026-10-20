@@ -62,12 +62,13 @@ describe('order_items.is_cooked_food snapshot', () => {
     expect(fields).toContain('item');
   });
 
-  it('exposes is_cooked_food on Hasura order_items insert and select', () => {
+  it('exposes is_cooked_food on Hasura order_items select (no user-role insert: #630, the backend inserts with the admin secret)', () => {
     const yaml = loadRepoFile(
       'apps/hasura/metadata/databases/Rendasua/tables/public_order_items.yaml'
     );
     const occurrences = yaml.split('is_cooked_food').length - 1;
-    expect(occurrences).toBe(4);
+    expect(occurrences).toBe(3);
+    expect(yaml).not.toContain('insert_permissions:');
   });
 
   it('snapshots cooked-food on create and reads it on order detail queries', () => {

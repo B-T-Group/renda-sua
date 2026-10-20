@@ -250,7 +250,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
   // Matches backend determineTransactionType logic
   const getTransactionTypeColor = (type: string, amount: number) => {
     // Hold and release affect withheld balance only - show gray (neutral)
-    if (type === 'hold' || type === 'release') return 'default';
+    if (type === 'hold' || type === 'release' || type === 'forfeit') return 'default';
     
     // Credits (affect available balance): deposit, refund, exchange
     if (type === 'deposit' || type === 'refund' || type === 'exchange') return 'success';
@@ -271,7 +271,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
   // Matches backend determineTransactionType logic
   const getTransactionAmountColor = (type: string, amount: number) => {
     // Hold and release affect withheld balance only - show gray (neutral)
-    if (type === 'hold' || type === 'release') return 'text.secondary';
+    if (type === 'hold' || type === 'release' || type === 'forfeit') return 'text.secondary';
     
     // Credits (affect available balance): deposit, refund, exchange
     if (type === 'deposit' || type === 'refund' || type === 'exchange') return 'success.main';
@@ -292,7 +292,7 @@ const UserAccount: React.FC<UserAccountProps> = ({
   // Matches backend determineTransactionType logic
   const formatTransactionAmount = (type: string, amount: number, currency: string) => {
     // Hold and release affect withheld balance only - show amount without sign (neutral)
-    if (type === 'hold' || type === 'release') {
+    if (type === 'hold' || type === 'release' || type === 'forfeit') {
       return formatCurrency(Math.abs(amount), currency);
     }
     

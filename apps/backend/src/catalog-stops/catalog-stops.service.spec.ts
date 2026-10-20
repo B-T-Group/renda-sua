@@ -607,4 +607,40 @@ describe('CatalogStopsService', () => {
       expect(result.items[0].reason_label).toBeDefined();
     });
   });
+
+  describe('F-M7: only approved (moderated) items surface', () => {
+    const APPROVED = /moderation_status:\s*\{\s*_eq:\s*"approved"\s*\}/;
+
+    it.each([undefined, 'Electronics'])(
+      'getTopInCategory itemWhere requires moderation_status approved (category=%s)',
+      async (category) => {
+        hasuraSystemService.executeQuery.mockResolvedValue({ business_inventory: [] });
+        await service.getTopInCategory({ category, country_code: 'TG' });
+        const [, variables] = hasuraSystemService.executeQuery.mock.calls[0];
+        expect(variables.itemWhere.moderation_status).toEqual({ _eq: 'approved' });
+      }
+    );
+
+    it('getDeals filters the deal inventory item by moderation_status approved', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ item_deals: [] });
+      await service.getDeals({ country_code: 'TG' });
+      expect(hasuraSystemService.executeQuery.mock.calls[0][0]).toMatch(APPROVED);
+    });
+
+    it('getFeaturedStore counts only approved listings', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ business_locations: [] });
+      await service.getFeaturedStore({ country_code: 'TG' });
+      expect(hasuraSystemService.executeQuery.mock.calls[0][0]).toMatch(APPROVED);
+    });
+
+    it('getBagComplements only suggests approved items', async () => {
+      hasuraSystemService.executeQuery
+        .mockResolvedValueOnce({
+          business_inventory: [{ item: { item_sub_category: { item_category_id: 1 } } }],
+        })
+        .mockResolvedValueOnce({ business_inventory: [] });
+      await service.getBagComplements({ inventory_item_ids: ['inv-1'], country_code: 'TG' });
+      expect(hasuraSystemService.executeQuery.mock.calls[1][0]).toMatch(APPROVED);
+    });
+  });
 });
