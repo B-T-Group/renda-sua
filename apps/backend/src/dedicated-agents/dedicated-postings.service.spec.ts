@@ -1492,11 +1492,48 @@ describe('#594 G12: capability', () => {
     expect(await w.opportunities.capabilityForAgent('u-a1')).toEqual({ enabled: false, country: 'CM', reason: null });
   });
 
-  it('agent with no address, or no agent row -> enabled false, reason no_address', async () => {
+  it.each([
+    ['global off, account CM on -> enabled, country CM', false, { CM: true }, 'CM', { enabled: true, country: 'CM' }],
+    ['global on, account CM off -> disabled, country CM', true, { CM: false }, 'CM', { enabled: false, country: 'CM' }],
+    ['account " cm " is normalised', false, { CM: true }, ' cm ', { enabled: true, country: 'CM' }],
+    ['account GA (no row) -> global on', true, { CM: false }, 'GA', { enabled: true, country: 'GA' }],
+    ['no account country -> global on, country null', true, { CM: false }, null, { enabled: true, country: null }],
+    ['no account country -> global off, country null', false, { CM: true }, null, { enabled: false, country: null }],
+    ['blank account country -> global', false, { CM: true }, '  ', { enabled: false, country: null }],
+  ] as const)('#648 no address: %s, reason stays no_address', async (_l, global, rows, country, expected) => {
     const w = world();
-    w.addAgent('a1', { addresses: [] });
-    expect(await w.opportunities.capabilityForAgent('u-a1')).toEqual({ enabled: false, country: null, reason: 'no_address' });
-    expect(await w.opportunities.capabilityForAgent('u-nobody')).toEqual({ enabled: false, country: null, reason: 'no_address' });
+    w.state.flag = global;
+    w.state.flagByCountry = { ...rows };
+    w.addAgent('a1', { addresses: [] }, { country } as Partial<AgentFake['user']>);
+    expect(await w.opportunities.capabilityForAgent('u-a1')).toEqual({ ...expected, reason: 'no_address' });
+  });
+
+  it('#648 no agent row -> global flag, country null, reason no_address', async () => {
+    const w = world();
+    expect(await w.opportunities.capabilityForAgent('u-nobody')).toEqual({ enabled: true, country: null, reason: 'no_address' });
+    const off = world();
+    off.state.flag = false;
+    off.state.flagByCountry = { CM: true };
+    expect(await off.opportunities.capabilityForAgent('u-nobody')).toEqual({ enabled: false, country: null, reason: 'no_address' });
+  });
+
+  it('#648 an address country wins over the account country (reason null)', async () => {
+    const w = world();
+    w.state.flagByCountry = { GA: false };
+    w.addAgent('a1', {}, { country: 'GA' } as Partial<AgentFake['user']>);
+    expect(await w.opportunities.capabilityForAgent('u-a1')).toEqual({ enabled: true, country: 'CM', reason: null });
+  });
+
+  it('#648 capability and the no-address list agree', async () => {
+    for (const [global, cm] of [[true, true], [true, false], [false, true], [false, false]]) {
+      const w = world();
+      w.state.flag = global;
+      w.state.flagByCountry = { CM: cm };
+      w.addAgent('a1', { addresses: [] }, { country: 'CM' } as Partial<AgentFake['user']>);
+      const cap = await w.opportunities.capabilityForAgent('u-a1');
+      const err = await w.opportunities.list('u-a1', NOW).then(() => null, (e) => e);
+      expect(err).toBeInstanceOf(cap.enabled ? ForbiddenException : NotFoundException);
+    }
   });
 
   it('internal agents still see the flag (eligibility is not encoded)', async () => {

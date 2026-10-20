@@ -193,7 +193,12 @@ export class DedicatedOpportunitiesService {
   async capabilityForAgent(userId: string): Promise<DedicatedCapability> {
     const agent = await this.loadAgent(userId);
     const country = pickAgentAddress(agent?.agent_addresses)?.country?.trim().toUpperCase() || null;
-    if (!country) return { enabled: false, country: null, reason: 'no_address' };
+    if (!country) {
+      // #648 (PE): same rule as the no-address list (#641 QA N3): the account's market
+      // (users.country) when known, else the global row; `country` is the one used.
+      const market = agent?.user?.country?.trim().toUpperCase() || null;
+      return { enabled: await this.configService.isEnabled(market), country: market, reason: 'no_address' };
+    }
     return { enabled: await this.configService.isEnabled(country), country, reason: null };
   }
 
