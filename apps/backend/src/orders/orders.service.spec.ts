@@ -5222,6 +5222,7 @@ describe('OrdersService', () => {
         ],
         ['window_closed', 409, 'DEDICATED_RELEASE_WINDOW_CLOSED', 'Les 2 minutes pour libérer cette commande sont écoulées.'],
         ['release_failed', 500, 'DEDICATED_RELEASE_FAILED', "Nous n'avons pas pu libérer cette commande. Veuillez réessayer."],
+        ['release_lost', 409, 'DEDICATED_RELEASE_LOST', 'Cette commande a été libérée et un autre livreur l’a prise.'],
       ])('refusal %s -> %i %s, code plus a message in the default language', async (refusal, status, error, message) => {
         reassign().releaseDedicatedAutoAssignment.mockResolvedValue({ success: false, refusal, message: 'internal' });
         await expect(service.releaseDedicatedAutoAssignment('order-1', null)).rejects.toMatchObject({
