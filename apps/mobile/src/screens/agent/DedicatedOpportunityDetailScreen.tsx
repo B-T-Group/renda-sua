@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import { ActivityIndicator, Button, Card, Chip, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, Card, Chip, Text, Portal, Modal } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { AgentRootStackParamList } from '../../navigation/types';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
@@ -21,6 +22,8 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const [loading, setLoading] = useState(true);
   const [opportunity, setOpportunity] = useState<DedicatedOpportunity | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [photoGateVisible, setPhotoGateVisible] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -44,9 +47,27 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       await dedicatedAgentsService.applyToOpportunity(postingId);
       await loadData();
     } catch (err: any) {
-      console.error('Error applying:', err);
+      if (err.response?.status === 422 && err.response?.data?.code === 'PROFILE_PHOTO_REQUIRED') {
+        setPhotoGateVisible(true);
+      } else {
+        console.error('Error applying:', err);
+      }
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handlePhotoUpload = async (uri: string) => {
+    try {
+      setUploadingPhoto(true);
+      // TODO: Upload photo logic using existing profile photo upload service
+      // After upload success, retry apply
+      await handleApply();
+      setPhotoGateVisible(false);
+    } catch (err: any) {
+      console.error('Error uploading photo:', err);
+    } finally {
+      setUploadingPhoto(false);
     }
   };
 
@@ -229,6 +250,57 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
           </Card>
         )}
       </View>
+
+      <Portal>
+        <Modal
+          visible={photoGateVisible}
+          onDismiss={() => setPhotoGateVisible(false)}
+          contentContainerStyle={{
+            backgroundColor: colors.background.paper,
+            margin: spacing.lg,
+            padding: spacing.lg,
+            borderRadius: 12,
+          }}
+        >
+          <Text variant="titleMedium" style={{ marginBottom: spacing.sm }}>
+            {t('dedicatedAgents.agent.photoRequired', 'Profile photo required')}
+          </Text>
+          <Text variant="bodyMedium" style={{ marginBottom: spacing.lg }}>
+            {t(
+              'dedicatedAgents.agent.photoRequiredDesc',
+              'A clear profile photo helps businesses recognize you at pickup.'
+            )}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+            <Button
+              mode="outlined"
+              onPress={() => setPhotoGateVisible(false)}
+              style={{ flex: 1 }}
+            >
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={async () => {
+                const result = await ImagePicker.launchImageLibraryAsync({
+                  mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                  allowsEditing: true,
+                  aspect: [1, 1],
+                  quality: 0.8,
+                });
+                if (!result.canceled && result.assets[0]) {
+                  await handlePhotoUpload(result.assets[0].uri);
+                }
+              }}
+              loading={uploadingPhoto}
+              disabled={uploadingPhoto}
+              style={{ flex: 1 }}
+            >
+              {t('dedicatedAgents.agent.uploadPhoto', 'Upload')}
+            </Button>
+          </View>
+        </Modal>
+      </Portal>
     </View>
   );
 }

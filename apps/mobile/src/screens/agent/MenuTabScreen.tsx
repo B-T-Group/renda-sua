@@ -184,6 +184,12 @@ function MenuTabScreen() {
               onPress={() => goTo('AgentBusinessReferral')}
             />
           ) : null}
+          <UserMenuRow
+            icon="storefront-check"
+            label={t('dedicatedAgents.agent.opportunities', 'Opportunities')}
+            subtitle={t('dedicatedAgents.agent.opportunitiesMenu', 'Find dedicated shifts')}
+            onPress={() => goTo('DedicatedHub')}
+          />
           {isStripeRail ? (
             <UserMenuRow
               icon="credit-card-outline"

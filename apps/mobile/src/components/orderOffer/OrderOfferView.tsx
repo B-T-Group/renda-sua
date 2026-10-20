@@ -194,6 +194,27 @@ export function OrderOfferView({
                 {details?.pickup.businessName ??
                   t('agent.orderOffer.aStore', 'A store')}
               </Text>
+              {details?.offerKind === 'dedicated' && details?.pickup.locationName && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs }}>
+                  <MaterialCommunityIcons
+                    name="account-tie"
+                    size={14}
+                    color={colors.secondary.main}
+                  />
+                  <Text
+                    style={[
+                      styles.subValue,
+                      {
+                        marginLeft: spacing.xs,
+                        color: colors.secondary.main,
+                        fontWeight: '600',
+                      },
+                    ]}
+                  >
+                    {t('dedicatedAgents.agent.dedicatedOffer', 'Dedicated')} · {details.pickup.locationName}
+                  </Text>
+                </View>
+              )}
               {formatRegion(details?.pickup.city ?? null, details?.pickup.state ?? null) ? (
                 <Text
                   style={[styles.subValue, { color: colors.text.secondary }]}

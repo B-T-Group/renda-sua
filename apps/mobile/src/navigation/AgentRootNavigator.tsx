@@ -19,6 +19,8 @@ import AgentOrderDetailScreen from '../screens/agent/AgentOrderDetailScreen';
 import UserOrderMessagesScreen from '../screens/shared/UserOrderMessagesScreen';
 import EarningsScreen from '../screens/agent/EarningsScreen';
 import AgentBusinessReferralScreen from '../screens/agent/AgentBusinessReferralScreen';
+import DedicatedHubScreen from '../screens/agent/DedicatedHubScreen';
+import DedicatedOpportunityDetailScreen from '../screens/agent/DedicatedOpportunityDetailScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
@@ -303,6 +305,20 @@ function AgentNavigatorChrome() {
             }}
           />
           <RootStack.Screen name="Earnings" component={EarningsScreen} options={{ title: 'Gains' }} />
+          <RootStack.Screen
+            name="DedicatedHub"
+            component={DedicatedHubScreen}
+            options={{
+              title: t('dedicatedAgents.agent.opportunities', 'Opportunities'),
+            }}
+          />
+          <RootStack.Screen
+            name="DedicatedOpportunityDetail"
+            component={DedicatedOpportunityDetailScreen}
+            options={{
+              title: t('dedicatedAgents.agent.opportunities', 'Opportunity'),
+            }}
+          />
           <RootStack.Screen
             name="AgentAccounts"
             component={UserAccountsScreen}
