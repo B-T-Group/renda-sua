@@ -67,6 +67,23 @@ describe('useDedicatedAgentsCapability logic', () => {
     expect(shouldShow).toBe(false);
   });
 
+  it('should show when enabled is true with no_address reason', () => {
+    const capability: any = {
+      success: true,
+      enabled: true,
+      country: null,
+      reason: 'no_address' as const,
+    };
+
+    const shouldShow = 
+      capability.success === true && 
+      capability.enabled === true &&
+      capability.reason !== 'commercial_focus' &&
+      capability.reason !== 'no_agent';
+
+    expect(shouldShow).toBe(true);
+  });
+
   it('should hide on 404 error', () => {
     const capability: any = {
       success: false,

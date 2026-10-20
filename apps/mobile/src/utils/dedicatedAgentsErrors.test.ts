@@ -58,6 +58,10 @@ describe('dedicatedAgentsErrors', () => {
       expect(shouldHideOnError(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'no_agent')).toBe(true);
     });
 
+    it('should not hide on 403 with DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE and no_address', () => {
+      expect(shouldHideOnError(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'no_address')).toBe(false);
+    });
+
     it('should not hide on other status codes', () => {
       expect(shouldHideOnError(200)).toBe(false);
       expect(shouldHideOnError(400)).toBe(false);
@@ -105,6 +109,10 @@ describe('dedicatedAgentsErrors', () => {
     it('should not show gate for no_agent reason', () => {
       expect(shouldShowGate(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'no_agent')).toBe(false);
     });
+
+    it('should not show gate for no_address reason', () => {
+      expect(shouldShowGate(403, 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', 'no_address')).toBe(false);
+    });
   });
 
   describe('getGateIcon', () => {
@@ -126,6 +134,10 @@ describe('dedicatedAgentsErrors', () => {
 
     it('should return correct icon for no_agent', () => {
       expect(getGateIcon('no_agent')).toBe('account-off');
+    });
+
+    it('should return correct icon for no_address', () => {
+      expect(getGateIcon('no_address')).toBe('map-marker-plus');
     });
 
     it('should return default icon for unknown reason', () => {

@@ -4,8 +4,8 @@ import { apiRequest } from '../services/apiClient';
 export interface DedicatedAgentsCapability {
   success: boolean;
   enabled?: boolean;
-  country?: string;
-  reason?: 'not_verified' | 'commercial_focus' | 'no_agent' | 'not_eligible';
+  country?: string | null;
+  reason?: 'not_verified' | 'commercial_focus' | 'no_agent' | 'no_address' | 'not_eligible';
 }
 
 export function useDedicatedAgentsCapability() {
@@ -27,7 +27,7 @@ export function useDedicatedAgentsCapability() {
         }
       } catch (error: any) {
         if (mounted) {
-          // On 404, enabled:false, commercial_focus, or no_agent, hide the feature
+          // On 404, the feature is off
           if (error.status === 404) {
             setCapability({ success: false, enabled: false });
           } else {
@@ -48,6 +48,8 @@ export function useDedicatedAgentsCapability() {
     };
   }, []);
 
+  // Show when enabled is true, regardless of reason
+  // Hide only when enabled is false or on commercial_focus/no_agent
   const shouldShowDedicatedAgents = 
     capability?.success === true && 
     capability?.enabled === true &&
