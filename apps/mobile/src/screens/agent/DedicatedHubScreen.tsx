@@ -64,6 +64,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
   const [gateReason, setGateReason] = useState<OpportunityIneligibleReason | null>(null);
   const [snackMessage, setSnackMessage] = useState<string | null>(null);
   const [offTodayOptimistic, setOffTodayOptimistic] = useState<Record<string, boolean>>({});
+  const [showNoAddressPrompt, setShowNoAddressPrompt] = useState(false);
   const { isOffline } = useNetworkStatus();
 
   const loadData = useCallback(async () => {
@@ -72,6 +73,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
         const res = await dedicatedAgentsService.getOpportunities();
         setOpportunities(res.opportunities);
         setGateReason(null);
+        setShowNoAddressPrompt(false);
         dedicatedAnalytics.trackDedicatedOpportunitiesViewed(res.opportunities.length);
       } else {
         const res = await dedicatedAgentsService.getMyAssignments();
@@ -91,7 +93,13 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
 
       const { shouldShowGate, shouldHideOnError } = await import('../../utils/dedicatedAgentsErrors');
       
-      if (shouldShowGate(status, errorCode, reason)) {
+      // Handle 403 no_address as address prompt state, not an error
+      if (status === 403 && reason === 'no_address') {
+        setOpportunities([]);
+        setShowNoAddressPrompt(true);
+        setGateReason(null);
+        setError(null);
+      } else if (shouldShowGate(status, errorCode, reason)) {
         setGateReason(reason);
         setError(null);
       } else if (shouldHideOnError(status, errorCode, reason)) {
@@ -271,7 +279,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
               <Text variant="titleMedium" style={{ marginTop: spacing.md, textAlign: 'center' }}>
                 {t('dedicatedAgents.agent.opp.empty', 'No openings near you right now')}
               </Text>
-              {!me?.address && (
+              {showNoAddressPrompt && (
                 <Text variant="bodyMedium" style={{ marginTop: spacing.sm, textAlign: 'center', color: colors.text.secondary }}>
                   {t('dedicatedAgents.agent.opp.addAddress', 'Add your address in settings to see opportunities near you')}
                 </Text>
