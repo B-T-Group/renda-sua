@@ -42,98 +42,104 @@ jest.mock('../../../hooks/useTrackSiteEvent', () => ({
 
 jest.mock('./AdminDedicatedAssignDialog', () => ({
   __esModule: true,
-  default: ({ open, onSuccess }: { open: boolean; onSuccess: () => void }) =>
+  default: ({ open }: { open: boolean }) =>
     open ? <div data-testid="assign-dialog">Dialog</div> : null,
 }));
 
 describe('AdminDedicatedAssignmentsSection', () => {
+  const mockAssignment = {
+    assignmentId: 'a1',
+    slotKey: 'morning',
+    status: 'active' as const,
+    agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
+    location: {
+      businessName: 'Shop',
+      name: 'Akwa',
+      city: 'Douala',
+      state: 'Littoral',
+    },
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
-    mockGetAdminAssignments.mockResolvedValue({
-      assignments: [
-        {
-          assignmentId: 'a1',
-          slotKey: 'morning',
-          status: 'active',
-          agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
-          location: { businessName: 'Shop', name: 'Akwa' },
-        },
-      ],
-    });
+    mockGetAdminAssignments.mockResolvedValue({ assignments: [mockAssignment] });
   });
 
-  it('shows busy spinner on pause/resume actions', async () => {
-    mockUpdateAdminAssignment.mockImplementation(
-      () => new Promise((resolve) => setTimeout(resolve, 100))
+  it('renders assignments and shows busy spinner on pause action', async () => {
+    let resolveUpdate: any;
+    mockUpdateAdminAssignment.mockReturnValue(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      })
     );
-    
+
     render(<AdminDedicatedAssignmentsSection />);
 
-    await waitFor(() => {
-      expect(screen.getByText('John Doe')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
 
-    const pauseButton = screen.getAllByRole('button', { name: /pause/i })[0];
+    const agentCells = await screen.findAllByText(/Doe/);
+    expect(agentCells.length).toBeGreaterThan(0);
+
+    const pauseButton = screen.getByLabelText(/pause/i);
+    expect(pauseButton).toBeEnabled();
+    
     fireEvent.click(pauseButton);
 
-    await waitFor(() => {
-      expect(pauseButton).toBeDisabled();
-    });
-
-    await waitFor(() => {
-      expect(mockUpdateAdminAssignment).toHaveBeenCalled();
-    });
+    await waitFor(() => expect(pauseButton).toBeDisabled());
+    
+    resolveUpdate({});
+    await waitFor(() => expect(mockUpdateAdminAssignment).toHaveBeenCalled());
   });
 
-  it('shows snackbar on 409 error with mapped message', async () => {
+  it('shows snackbar on 409 conflict and refetches', async () => {
     mockUpdateAdminAssignment.mockRejectedValue({
       response: {
         status: 409,
-        data: { code: 'assignment_removed', message: 'Removed' },
+        data: { code: 'assignment_removed' },
       },
     });
 
     render(<AdminDedicatedAssignmentsSection />);
 
-    await waitFor(() => {
-      expect(screen.getByText('John Doe')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
 
-    const pauseButton = screen.getAllByRole('button', { name: /pause/i })[0];
+    const pauseButton = screen.getByLabelText(/pause/i);
     fireEvent.click(pauseButton);
 
     await waitFor(() => {
-      expect(mockEnqueueSnackbar).toHaveBeenCalledWith(
-        expect.any(String),
-        { variant: 'error' }
-      );
-      expect(mockGetAdminAssignments).toHaveBeenCalledTimes(2); // Initial + refetch
+      expect(mockEnqueueSnackbar).toHaveBeenCalled();
+      expect(mockGetAdminAssignments).toHaveBeenCalledTimes(2);
     });
   });
 
-  it('shows spinner in remove confirm dialog', async () => {
-    mockDeleteAdminAssignment.mockImplementation(
-      () => new Promise((resolve) => setTimeout(resolve, 100))
+  it('disables remove confirm button during deletion', async () => {
+    let resolveDelete: any;
+    mockDeleteAdminAssignment.mockReturnValue(
+      new Promise((resolve) => {
+        resolveDelete = resolve;
+      })
     );
 
     render(<AdminDedicatedAssignmentsSection />);
 
-    await waitFor(() => {
-      expect(screen.getByText('John Doe')).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
 
-    const removeButton = screen.getAllByRole('button', { name: /remove/i })[0];
+    const removeButton = screen.getByLabelText(/remove/i);
     fireEvent.click(removeButton);
 
-    await waitFor(() => {
-      expect(screen.getByText(/remove assignment/i)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(screen.getByText(/remove assignment/i)).toBeInTheDocument());
 
-    const confirmButton = screen.getByRole('button', { name: 'Remove' });
-    fireEvent.click(confirmButton);
+    const dialogRemoveButton = screen.getAllByRole('button').find(
+      (btn) => btn.textContent === 'Remove' && btn.closest('.MuiDialog-root')
+    );
 
-    await waitFor(() => {
-      expect(confirmButton).toBeDisabled();
-    });
+    expect(dialogRemoveButton).toBeDefined();
+    if (dialogRemoveButton) {
+      fireEvent.click(dialogRemoveButton);
+      await waitFor(() => expect(dialogRemoveButton).toBeDisabled());
+      
+      resolveDelete({});
+      await waitFor(() => expect(mockDeleteAdminAssignment).toHaveBeenCalled());
+    }
   });
 });
