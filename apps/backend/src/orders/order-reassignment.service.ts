@@ -201,7 +201,7 @@ export const AGENT_HOLD_WITHHELD_SHORT_MARKER = 'agent_hold_withheld_short';
 // RELEASE_AGENT_ORDER_HOLD_MUTATION lives in ./agent-hold-release.util (shared by every
 // agent hold release); its ROLLBACK note (#622 L1) is there too.
 
-/** #622: the net held for reporting (one statement, so one snapshot). */
+/** #622: the net held for reporting (one statement, so one snapshot). A forfeited hold (QA F2) is no longer held. */
 export const AGENT_HOLD_LEDGER_QUERY = `
   query AgentHoldLedger($accountId: uuid!, $orderId: uuid!) {
     holds: account_transactions(
@@ -210,7 +210,7 @@ export const AGENT_HOLD_LEDGER_QUERY = `
       amount
     }
     releases: account_transactions(
-      where: { account_id: { _eq: $accountId }, reference_id: { _eq: $orderId }, transaction_type: { _eq: release } }
+      where: { account_id: { _eq: $accountId }, reference_id: { _eq: $orderId }, transaction_type: { _in: [release, forfeit] } }
     ) {
       amount
     }

@@ -1,5 +1,11 @@
 import type { HasuraSystemService } from '../hasura/hasura-system.service';
 
+/** Money alert when an agent hold release fails on a path that does not throw. */
+export const AGENT_HOLD_RELEASE_FAILED_MARKER = 'agent_hold_release_failed';
+
+/** Agent fault: less than agent_hold_amount was taken from the agent (expected vs actual). */
+export const AGENT_FAULT_COMPENSATION_SHORT_MARKER = 'agent_fault_compensation_short';
+
 /**
  * #622 / atomic agent hold releases: every agent hold release goes through the
  * `release_agent_order_hold` SQL function (migration 20261019230000). Under the agent
@@ -16,12 +22,6 @@ import type { HasuraSystemService } from '../hasura/hasura-system.service';
  * the backend calling an untracked or missing function, and every agent hold release
  * fails (completion, drop, failed delivery, reassignment, reconciler).
  */
-/** Money alert when an agent hold release fails on a path that does not throw. */
-export const AGENT_HOLD_RELEASE_FAILED_MARKER = 'agent_hold_release_failed';
-
-/** Agent fault: less than agent_hold_amount was taken from the agent (expected vs actual). */
-export const AGENT_FAULT_COMPENSATION_SHORT_MARKER = 'agent_fault_compensation_short';
-
 export const RELEASE_AGENT_ORDER_HOLD_MUTATION = `
   mutation ReleaseAgentOrderHold($accountId: uuid!, $orderId: uuid!, $cap: numeric, $memo: String!) {
     release_agent_order_hold(
@@ -62,6 +62,79 @@ export async function releaseAgentOrderHold(
     return {
       success: false,
       released: 0,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * QA F2: agent fault. `forfeit_agent_order_hold` (migration 20261020010000) moves
+ * min(net held, cap) for this agent and order straight from the agent's withheld
+ * balance to the business (a `forfeit` row on the agent, a `deposit` row on the
+ * business), in one transaction under the agent -> business account row locks, keyed
+ * once per order (failed-delivery:agent-fault:agent-forfeit:<order> and
+ * :business-deposit:<order>). A retry returns the existing forfeit row. The money never
+ * passes through the agent's available balance.
+ *
+ * ROLLBACK: backend first, then functions/public_forfeit_agent_order_hold.yaml and its
+ * functions.yaml entry, then the migration's down.sql (see its header).
+ */
+export const FORFEIT_AGENT_ORDER_HOLD_MUTATION = `
+  mutation ForfeitAgentOrderHold(
+    $agentAccountId: uuid!
+    $businessAccountId: uuid!
+    $orderId: uuid!
+    $cap: numeric
+    $forfeitMemo: String!
+    $businessMemo: String!
+  ) {
+    forfeit_agent_order_hold(
+      args: {
+        p_agent_account_id: $agentAccountId
+        p_business_account_id: $businessAccountId
+        p_order_id: $orderId
+        p_cap: $cap
+        p_forfeit_memo: $forfeitMemo
+        p_business_memo: $businessMemo
+      }
+    ) {
+      id
+      amount
+    }
+  }
+`;
+
+export interface AgentHoldForfeitResult {
+  success: boolean;
+  /** What was moved agent -> business for this order (this call or an earlier one). */
+  forfeited: number;
+  error?: string;
+}
+
+/** Forfeit up to `cap` of the agent's hold on `orderId` to the business. Never throws. */
+export async function forfeitAgentOrderHold(
+  hasura: Pick<HasuraSystemService, 'executeMutation'>,
+  params: {
+    agentAccountId: string;
+    businessAccountId: string;
+    orderId: string;
+    cap?: number | null;
+    forfeitMemo: string;
+    businessMemo: string;
+  }
+): Promise<AgentHoldForfeitResult> {
+  try {
+    const res = await hasura.executeMutation<{
+      forfeit_agent_order_hold: Array<{ id: string; amount: number | string }>;
+    }>(FORFEIT_AGENT_ORDER_HOLD_MUTATION, { ...params, cap: params.cap ?? null });
+    return {
+      success: true,
+      forfeited: Number(res?.forfeit_agent_order_hold?.[0]?.amount ?? 0),
+    };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      forfeited: 0,
       error: error instanceof Error ? error.message : String(error),
     };
   }
