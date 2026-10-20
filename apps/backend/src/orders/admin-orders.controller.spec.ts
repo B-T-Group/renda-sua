@@ -97,6 +97,22 @@ describe('AdminOrdersController.updateStatus', () => {
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
   });
 
+  it('#627 nit: acknowledge a cancel step is geo-scoped, PII-masks the note and delegates', async () => {
+    const { controller, ordersService } = buildController({ status: 'cancelled' });
+    (ordersService as any).acknowledgeAdminCancelStep = jest.fn(async () => ({ success: true }));
+    await controller.acknowledgeCancelStep('order-1', 'releaseReservedStock', { note: ' recounted, call jane@example.com ' } as any);
+    const [id, step, note] = (ordersService as any).acknowledgeAdminCancelStep.mock.calls[0];
+    expect([id, step]).toEqual(['order-1', 'releaseReservedStock']);
+    expect(note).not.toContain('jane@example.com');
+    expect(note).toMatch(/^recounted/);
+    const denied = buildController({ status: 'cancelled', deny: true });
+    (denied.ordersService as any).acknowledgeAdminCancelStep = jest.fn();
+    await expect(
+      denied.controller.acknowledgeCancelStep('order-1', 'releaseReservedStock', { note: 'n' } as any)
+    ).rejects.toBeInstanceOf(Error);
+    expect((denied.ordersService as any).acknowledgeAdminCancelStep).not.toHaveBeenCalled();
+  });
+
   it('an unexpected error is a generic 500: the raw text goes to the log only', async () => {
     const raw = 'duplicate key value violates unique constraint "orders_pkey" (client@example.com)';
     const { controller } = buildController({ status: 'confirmed', cancelError: new Error(raw) });

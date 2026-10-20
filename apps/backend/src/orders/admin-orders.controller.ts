@@ -38,6 +38,7 @@ import type {
 import {
   AcknowledgeRiskIncidentDto,
   AddAdminNoteDto,
+  AcknowledgeAdminCancelStepDto,
   AdminFullRefundCancelDto,
   AdminOrderStatsPeriod,
   GetAdminOrderStatsDto,
@@ -324,6 +325,24 @@ export class AdminOrdersController {
     const result = await this.ordersService.adminFullRefundCancel(orderId, reason);
     await this.auditFullRefundCancel(orderId, reason, result.previousStatus, result.depositRefund, result.failedSteps);
     return result;
+  }
+
+  /**
+   * #627 nit: acknowledge a half-done non-repeatable cancel step (releaseReservedStock,
+   * inventoryReleaseHook) after checking / fixing it by hand. The engine never re-runs
+   * those, so without this every retry alerts on them. Geo-scoped like PATCH status.
+   */
+  @Post(':orderId/cancel-steps/:step/acknowledge')
+  @ApiOperation({ summary: 'Acknowledge a half-done stock / inventory-hook cancel step (settled by hand)' })
+  @ApiResponse({ status: 201, description: 'Step marked done with the acknowledgement' })
+  @ApiResponse({ status: 409, description: 'Step not acknowledgeable (not stock/hook, or not running/failed), or a resume is running' })
+  async acknowledgeCancelStep(
+    @Param('orderId') orderId: string,
+    @Param('step') step: string,
+    @Body() dto: AcknowledgeAdminCancelStepDto
+  ) {
+    await this.requireOrder(orderId);
+    return this.ordersService.acknowledgeAdminCancelStep(orderId, step, maskPersonalData(dto.note.trim()));
   }
 
   /**

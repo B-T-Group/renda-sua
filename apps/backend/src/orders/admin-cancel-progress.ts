@@ -30,7 +30,28 @@ export const ADMIN_CANCEL_STEPS = [
   'depositRefund',
   'enqueueOrderCancelled',
 ] as const;
-export type AdminCancelStepName = (typeof ADMIN_CANCEL_STEPS)[number];
+
+/**
+ * Follow-up: the admin full-refund cancel (#626) runs on the same engine, with one
+ * extra step (supersede the pending order payment rows) and its own history message.
+ * Its progress row is the same event type with `kind: 'full_refund'`.
+ */
+export const ADMIN_FULL_REFUND_CANCEL_STEPS = [
+  'voidStripeAuthorization',
+  'supersedePendingOrderTxs',
+  'persistCancellationMetadata',
+  'createStatusHistoryEntry',
+  'restorePurchaseCredits',
+  'releaseReservedStock',
+  'inventoryReleaseHook',
+  'depositRefund',
+  'enqueueOrderCancelled',
+] as const;
+
+export type AdminCancelStepName =
+  | (typeof ADMIN_CANCEL_STEPS)[number]
+  | (typeof ADMIN_FULL_REFUND_CANCEL_STEPS)[number];
+export type AdminCancelKind = 'admin_cancel' | 'full_refund';
 
 /** Steps that are NOT idempotent on their own: never re-run after an unknown outcome. */
 export const ADMIN_CANCEL_NON_REPEATABLE: readonly AdminCancelStepName[] = [
@@ -40,12 +61,24 @@ export const ADMIN_CANCEL_NON_REPEATABLE: readonly AdminCancelStepName[] = [
 
 export type AdminCancelStepState = 'pending' | 'running' | 'done' | 'failed';
 
+/** An admin's explicit sign-off that a half-done non-repeatable step was settled by hand. */
+export interface AdminCancelStepAcknowledgement {
+  by: string | null;
+  at: string;
+  note: string;
+  /** The state the step was in when it was acknowledged (running = unknown outcome). */
+  from: AdminCancelStepState;
+}
+
 export interface AdminCancelProgress {
   version: number;
+  /** Absent on rows written before the full-refund cancel used the engine. */
+  kind?: AdminCancelKind;
   previousStatus: string;
   notes: string | null;
   adminUserId: string | null;
-  steps: Record<AdminCancelStepName, AdminCancelStepState>;
+  steps: Partial<Record<AdminCancelStepName, AdminCancelStepState>>;
+  acknowledged?: Partial<Record<AdminCancelStepName, AdminCancelStepAcknowledgement>>;
   leaseOwner: string | null;
   leaseUntil: string | null;
 }
@@ -116,6 +149,26 @@ export function leaseIsLive(p: AdminCancelProgress, now = Date.now()): boolean {
   return !!p.leaseOwner && !!p.leaseUntil && Date.parse(p.leaseUntil) > now;
 }
 
+export function progressKind(p: AdminCancelProgress): AdminCancelKind {
+  return p.kind ?? 'admin_cancel';
+}
+
+export function stepsForKind(kind: AdminCancelKind): readonly AdminCancelStepName[] {
+  return kind === 'full_refund' ? ADMIN_FULL_REFUND_CANCEL_STEPS : ADMIN_CANCEL_STEPS;
+}
+
 export function pendingSteps(p: AdminCancelProgress): AdminCancelStepName[] {
-  return ADMIN_CANCEL_STEPS.filter((s) => (p.steps?.[s] ?? 'pending') !== 'done');
+  return stepsForKind(progressKind(p)).filter((s) => (p.steps?.[s] ?? 'pending') !== 'done');
+}
+
+/**
+ * #627 nit: steps an admin may acknowledge. Only the non-repeatable ones (the engine
+ * never re-runs them, so without a sign-off they alert on every retry), and only once
+ * they are `running` (unknown outcome) or `failed`.
+ */
+export function canAcknowledgeStep(p: AdminCancelProgress, step: string): step is AdminCancelStepName {
+  if (!(ADMIN_CANCEL_NON_REPEATABLE as readonly string[]).includes(step)) return false;
+  if (!(stepsForKind(progressKind(p)) as readonly string[]).includes(step)) return false;
+  const state = p.steps?.[step as AdminCancelStepName];
+  return state === 'running' || state === 'failed';
 }

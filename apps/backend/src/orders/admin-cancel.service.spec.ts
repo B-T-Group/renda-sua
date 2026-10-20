@@ -269,4 +269,83 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
     expect(w.m.stock).not.toHaveBeenCalled();
     expect(w.m.enqueue).not.toHaveBeenCalled();
   });
+
+  describe('#627 nit: admin acknowledgement of a half-done stock / hook step', () => {
+    async function halfDone(step: 'releaseReservedStock' | 'inventoryReleaseHook') {
+      const w = build();
+      w.m.enqueue.mockRejectedValueOnce(new Error('sqs'));
+      await w.svc.cancelOrderAsAdmin('o-1', 'orig');
+      const p = w.events[0].payload;
+      p.steps[step] = 'running';
+      p.leaseOwner = 'dead';
+      p.leaseUntil = new Date(Date.now() - 1000).toISOString();
+      return w;
+    }
+
+    it.each(['releaseReservedStock', 'inventoryReleaseHook'] as const)(
+      'without it, every retry alerts on %s; after it, retries skip the step silently and finish',
+      async (step) => {
+        const w = await halfDone(step);
+        (reportMoneyAnomaly as jest.Mock).mockClear();
+        await w.svc.cancelOrderAsAdmin('o-1', 'retry1');
+        await w.svc.cancelOrderAsAdmin('o-1', 'retry2');
+        expect(failedAlerts()).toEqual([step, step]);
+        const ack = await w.svc.acknowledgeAdminCancelStep('o-1', step, 'stock recounted by ops');
+        expect(ack).toMatchObject({ success: true, step, from: 'running', pendingSteps: [] });
+        const p = w.events[0].payload;
+        expect(p.steps[step]).toBe('done');
+        expect(p.acknowledged[step]).toMatchObject({ by: 'admin-1', note: 'stock recounted by ops', from: 'running' });
+        (reportMoneyAnomaly as jest.Mock).mockClear();
+        const before = [w.m.stock.mock.calls.length, w.m.hook.mock.calls.length];
+        // Nothing left: the cancel is complete, a retry is refused and nothing runs or alerts.
+        await expect(w.svc.cancelOrderAsAdmin('o-1', 'retry3')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+        expect(failedAlerts()).toEqual([]);
+        expect([w.m.stock.mock.calls.length, w.m.hook.mock.calls.length]).toEqual(before);
+      }
+    );
+
+    it('a failed (not just running) stock step can be acknowledged too', async () => {
+      const w = build();
+      w.m.stock.mockRejectedValueOnce(new Error('db'));
+      await w.svc.cancelOrderAsAdmin('o-1', 'orig');
+      expect(w.events[0].payload.steps.releaseReservedStock).toBe('failed');
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'fixed by hand')).resolves.toMatchObject({ from: 'failed' });
+    });
+
+    it.each([
+      ['a repeatable step', 'enqueueOrderCancelled', 'running'],
+      ['an unknown step', 'dropTables', 'running'],
+      ['a stock step that is done', 'releaseReservedStock', 'done'],
+      ['a stock step still pending', 'releaseReservedStock', 'pending'],
+    ])('refuses %s (409 STEP_NOT_ACKNOWLEDGEABLE), the row is unchanged', async (_l, step, state) => {
+      const w = await halfDone('releaseReservedStock');
+      w.events[0].payload.steps[step] = state;
+      const before = structuredClone(w.events[0].payload);
+      const err: any = await w.svc.acknowledgeAdminCancelStep('o-1', step, 'n').catch((e: unknown) => e);
+      expect(err.getStatus()).toBe(409);
+      expect(err.getResponse()).toMatchObject({ error: 'STEP_NOT_ACKNOWLEDGEABLE' });
+      expect(w.events[0].payload).toEqual(before);
+    });
+
+    it('refused while a resume holds the lease, and when the row moved meanwhile (CAS)', async () => {
+      const w = await halfDone('releaseReservedStock');
+      Object.assign(w.events[0].payload, { leaseOwner: 'other', leaseUntil: new Date(Date.now() + 60_000).toISOString() });
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(w.events[0].payload.steps.releaseReservedStock).toBe('running');
+      Object.assign(w.events[0].payload, { leaseOwner: null, leaseUntil: null });
+      const real = w.hasura.executeQuery.getMockImplementation()!;
+      w.hasura.executeQuery.mockImplementationOnce(async (q: string, v: any) => {
+        const r = await real(q, v);
+        w.events[0].payload.version += 1; // someone wrote after our read
+        return r;
+      });
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(w.events[0].payload.steps.releaseReservedStock).toBe('running');
+    });
+
+    it('no progress row: 404', async () => {
+      const w = build();
+      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'n')).rejects.toMatchObject({ status: HttpStatus.NOT_FOUND });
+    });
+  });
 });
