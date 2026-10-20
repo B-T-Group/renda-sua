@@ -29,6 +29,7 @@ function build(opts: { status?: string; deposit?: boolean } = {}) {
   };
   const hasura = {
     executeQuery: jest.fn(async (q: string, v: any) => {
+      if (op(q) === 'AdminCancelToken') return { orders_by_pk: { admin_cancel_token: order.admin_cancel_token ?? null } };
       if (op(q) === 'AdminCancelProgress') {
         // C8: by order + type, no window over the newest events.
         const rows = events
@@ -41,6 +42,10 @@ function build(opts: { status?: string; deposit?: boolean } = {}) {
     executeMutation: jest.fn(async (q: string, v: any) => {
       switch (op(q)) {
         case 'InsertAdminCancelProgress': {
+          // Mirrors the partial unique index order_events_admin_cancel_progress_uniq.
+          if (events.some((e) => e.order_id === v.orderId && e.event_type === v.type)) {
+            throw new Error('Uniqueness violation. duplicate key value violates unique constraint "order_events_admin_cancel_progress_uniq"');
+          }
           const id = `ev-${++seq}`;
           events.push({ id, order_id: v.orderId, event_type: v.type, payload: structuredClone(v.payload), created_at: seq });
           return { insert_order_events_one: { id } };
@@ -65,8 +70,10 @@ function build(opts: { status?: string; deposit?: boolean } = {}) {
   svc.hasuraUserService = { getUser: jest.fn(async () => ({ id: 'admin-1' })) };
   svc.getOrderDetails = jest.fn(async () => ({ ...order }));
   svc.orderStatusService = {
-    updateOrderStatus: jest.fn(async () => {
+    updateOrderStatus: jest.fn(async (_id: string, _to: string, o: any) => {
+      if (order.current_status !== o.expectedFromStatus) throw new HttpException('moved', HttpStatus.CONFLICT);
       order.current_status = 'cancelled';
+      order.admin_cancel_token = o.adminCancelToken ?? null;
       return { ...order };
     }),
   };
@@ -237,6 +244,87 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
   });
 
   describe('QA #642 M1: the progress row is written before the status flips', () => {
+    it('the status CAS stamps this row id as the ownership token (r2 N2)', async () => {
+      const w = build();
+      await w.svc.cancelOrderAsAdmin('o-1', 'r');
+      expect(w.svc.orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
+        'o-1', 'cancelled', expect.objectContaining({ adminCancelToken: w.events[0].id, expectedFromStatus: 'confirmed' })
+      );
+      expect(w.order.admin_cancel_token).toBe(w.events[0].id);
+    });
+
+    it('QA r2 N1: a second progress row (unique violation) is 409 "held by another request"; nothing deleted, no CAS', async () => {
+      const w = build();
+      w.events.push({ id: 'ev-held', order_id: 'o-1', event_type: ADMIN_CANCEL_PROGRESS_EVENT, created_at: 0, payload: { version: 3 } });
+      // The load misses it (the other request inserted after our read).
+      w.hasura.executeQuery.mockImplementationOnce(async () => ({ order_events: [] }));
+      const err: any = await w.svc.cancelOrderAsAdmin('o-1', 'r').catch((e: unknown) => e);
+      expect(err.getStatus()).toBe(HttpStatus.CONFLICT);
+      expect(String(err.getResponse())).toMatch(/another request/);
+      expect(w.events.map((e) => e.id)).toEqual(['ev-held']);
+      expect(w.svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+      for (const fn of Object.values(w.m)) expect(fn).not.toHaveBeenCalled();
+    });
+
+    describe('QA r2 N3: the statusCancelled update fails after a successful status CAS', () => {
+      function failMarker(w: ReturnType<typeof build>, times: number, how: 'throw' | 'lose') {
+        const orig = w.hasura.executeMutation.getMockImplementation()!;
+        let n = 0;
+        w.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+          if (op(q) === 'CasAdminCancelProgress' && v.payload?.statusCancelled === true && n < times) {
+            n++;
+            if (how === 'throw') throw new Error('db secret');
+            return { update_order_events: { affected_rows: 0 } };
+          }
+          return orig(q, v);
+        });
+      }
+
+      it.each(['throw', 'lose'] as const)('fails once (%s): retried, then every step runs', async (how) => {
+        const w = build();
+        failMarker(w, 1, how);
+        const res: any = await w.svc.cancelOrderAsAdmin('o-1', 'r');
+        expect(res).toMatchObject({ success: true, partialFailure: false, failedSteps: [], stepsNotStarted: false });
+        for (const fn of Object.values(w.m)) if (fn !== w.m.refund) expect(fn).toHaveBeenCalledTimes(1);
+      });
+
+      it('fails once because another request took the row over: NOT retried over it; not started, alerted', async () => {
+        const w = build();
+        const orig = w.hasura.executeMutation.getMockImplementation()!;
+        let done = false;
+        w.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+          if (!done && op(q) === 'CasAdminCancelProgress' && v.payload?.statusCancelled === true) {
+            done = true;
+            Object.assign(w.events[0].payload, { version: 9, leaseOwner: 'other' });
+            return { update_order_events: { affected_rows: 0 } };
+          }
+          return orig(q, v);
+        });
+        const res: any = await w.svc.cancelOrderAsAdmin('o-1', 'r');
+        expect(res).toMatchObject({ stepsNotStarted: true, partialFailure: true });
+        expect(w.events[0].payload).toMatchObject({ statusCancelled: false, leaseOwner: 'other', version: 9 });
+        for (const fn of Object.values(w.m)) expect(fn).not.toHaveBeenCalled();
+      });
+
+      it('fails twice: alerted, accurate partialFailure (no step ran, cancelled), NOT a 409; a retry runs them', async () => {
+        const w = build();
+        failMarker(w, 2, 'throw');
+        const res: any = await w.svc.cancelOrderAsAdmin('o-1', 'r');
+        expect(res).toMatchObject({ success: true, partialFailure: true, stepsNotStarted: true, failedSteps: [...ADMIN_CANCEL_STEPS] });
+        expect(res.message).toMatch(/did not start/);
+        expect(res.order.current_status).toBe('cancelled');
+        expect(JSON.stringify(res)).not.toMatch(/secret/);
+        expect(failedAlerts()).toEqual(['progressMarker']);
+        expect((reportMoneyAnomaly as jest.Mock).mock.calls[0][2]).toMatch(/^Admin cancel of order ORD-1: the order is cancelled but its progress row .* no follow-up step ran/);
+        for (const fn of Object.values(w.m)) expect(fn).not.toHaveBeenCalled();
+        // Lease expires; the token proves ownership, so the retry runs every step once.
+        w.events[0].payload.leaseUntil = new Date(Date.now() - 1000).toISOString();
+        const again: any = await w.svc.cancelOrderAsAdmin('o-1', 'retry');
+        expect(again).toMatchObject({ partialFailure: false, failedSteps: [] });
+        for (const fn of Object.values(w.m)) if (fn !== w.m.refund) expect(fn).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('row (statusCancelled=false, all pending) exists when the status CAS runs; set true after', async () => {
       const w = build();
       const seen: any[] = [];
@@ -305,24 +393,44 @@ describe('admin cancel step engine (#627 C4/C7/C8/I2)', () => {
       crashed(w, 'confirmed');
       const res: any = await w.svc.cancelOrderAsAdmin('o-1', 'retry');
       expect(res).toMatchObject({ success: true, resumed: true, failedSteps: [] });
-      expect(w.svc.orderStatusService.updateOrderStatus).toHaveBeenCalledWith('o-1', 'cancelled', expect.objectContaining({ expectedFromStatus: 'confirmed' }));
+      expect(w.svc.orderStatusService.updateOrderStatus).toHaveBeenCalledWith('o-1', 'cancelled', expect.objectContaining({ expectedFromStatus: 'confirmed', adminCancelToken: 'ev-x' }));
+      expect(w.order.admin_cancel_token).toBe('ev-x');
       for (const fn of Object.values(w.m)) if (fn !== w.m.refund) expect(fn).toHaveBeenCalledTimes(1);
       expect(w.events[0].payload.statusCancelled).toBe(true);
       expect(Object.values(w.steps())).toEqual(ADMIN_CANCEL_STEPS.map(() => 'done'));
     });
 
-    it('crash after the status CAS (order cancelled, flag not set): repeatable steps run, stock / hook are NOT run but alerted (acknowledgeable)', async () => {
+    it('QA r2 N2: crash after OUR status CAS (token = this row): every step runs once (none had run)', async () => {
       const w = build();
       crashed(w, 'cancelled');
+      w.order.admin_cancel_token = 'ev-x';
       const res: any = await w.svc.cancelOrderAsAdmin('o-1', 'retry');
+      expect(res).toMatchObject({ success: true, resumed: true, failedSteps: [], partialFailure: false });
       expect(w.svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
-      expect(w.m.stock).not.toHaveBeenCalled();
-      expect(w.m.hook).not.toHaveBeenCalled();
-      expect(w.m.enqueue).toHaveBeenCalledTimes(1);
-      expect(w.m.credits).toHaveBeenCalledTimes(1);
-      expect(res.failedSteps).toEqual(['releaseReservedStock', 'inventoryReleaseHook']);
+      for (const fn of Object.values(w.m)) if (fn !== w.m.refund) expect(fn).toHaveBeenCalledTimes(1);
       expect(w.events[0].payload.statusCancelled).toBe(true);
-      await expect(w.svc.acknowledgeAdminCancelStep('o-1', 'releaseReservedStock', 'checked', KINDS)).resolves.toMatchObject({ from: 'running' });
+    });
+
+    it.each([
+      ['a client / other-flow cancel (no token)', null],
+      ['another admin cancel (other token)', 'ev-other'],
+    ])('QA r2 N2: pre-CAS crash, then %s: alert, 409, row abandoned, NOTHING touched', async (_l, token) => {
+      const w = build({ deposit: true });
+      crashed(w, 'cancelled');
+      w.order.admin_cancel_token = token;
+      await expect(w.svc.cancelOrderAsAdmin('o-1', 'retry')).rejects.toMatchObject({
+        status: HttpStatus.CONFLICT,
+        response: expect.objectContaining({ error: 'ORDER_ALREADY_CANCELLED' }),
+      });
+      for (const fn of Object.values(w.m)) expect(fn).not.toHaveBeenCalled();
+      expect(w.svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+      expect(failedAlerts()).toEqual(['ownership']);
+      expect(w.events[0].payload).toMatchObject({ abandoned: true, leaseOwner: null, statusCancelled: false });
+      // A later retry is refused without running or alerting again.
+      (reportMoneyAnomaly as jest.Mock).mockClear();
+      await expect(w.svc.cancelOrderAsAdmin('o-1', 'again')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      for (const fn of Object.values(w.m)) expect(fn).not.toHaveBeenCalled();
+      expect(failedAlerts()).toEqual([]);
     });
 
     it('crash before the CAS, then the status moved on (picked up): row dropped, refused, nothing runs', async () => {

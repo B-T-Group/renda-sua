@@ -87,6 +87,11 @@ export interface AdminCancelProgress {
    * Absent on older rows, which were written after the CAS (= true).
    */
   statusCancelled?: boolean;
+  /**
+   * #642 r2 N2: set when a resume proved another flow cancelled the order (token
+   * mismatch). Never resumed; kept for the audit trail.
+   */
+  abandoned?: boolean;
 }
 
 export interface AdminCancelProgressRow {

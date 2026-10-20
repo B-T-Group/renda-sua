@@ -44,7 +44,7 @@ const CALL = {
 
 /** OrdersService with an in-memory order_events table whose CAS behaves like Postgres. */
 function service(start: string, opts: { deposit?: boolean; legacy?: { cancelled_by: string; cancellation_notes: string } } = {}) {
-  const db = { status: start };
+  const db: { status: string; token: string | null } = { status: start, token: null };
   const events: Array<{ id: string; order_id: string; event_type: string; payload: any; created_at: number }> = [];
   let seq = 0;
   const calls: string[] = [];
@@ -61,6 +61,7 @@ function service(start: string, opts: { deposit?: boolean; legacy?: { cancelled_
   const svc = Object.create(OrdersService.prototype) as any;
   svc.hasuraSystemService = {
     executeQuery: jest.fn(async (q: string, v: any) => {
+      if (op(q) === 'AdminCancelToken') return { orders_by_pk: { admin_cancel_token: db.token } };
       if (op(q) !== 'AdminCancelProgress') throw new Error(`unexpected query ${op(q)}`);
       const rows = events.filter((e) => e.order_id === v.orderId && e.event_type === v.type);
       return { order_events: rows.slice(0, 1).map((e) => ({ id: e.id, payload: structuredClone(e.payload) })) };
@@ -94,6 +95,7 @@ function service(start: string, opts: { deposit?: boolean; legacy?: { cancelled_
         throw new HttpException('Order status already changed. Please refresh and try again.', 409);
       }
       db.status = to;
+      db.token = o.adminCancelToken ?? null;
       return { id: 'o-1', current_status: to };
     }),
   };
@@ -133,7 +135,7 @@ describe('OrdersService.adminFullRefundCancel', () => {
   beforeEach(() => (reportMoneyAnomaly as jest.Mock).mockClear());
 
   it('cancels as system (no fee), reason on the metadata and history, every step once in order, progress row kind full_refund', async () => {
-    const { svc, db, calls, progress } = service('ready_for_pickup', { deposit: true });
+    const { svc, db, calls, progress, events } = service('ready_for_pickup', { deposit: true });
     await expect(svc.adminFullRefundCancel('o-1', 'QA leftover')).resolves.toMatchObject({
       success: true,
       resumed: false,
@@ -144,7 +146,8 @@ describe('OrdersService.adminFullRefundCancel', () => {
       depositRefund: { status: 'refunded' },
     });
     expect(db.status).toBe('cancelled');
-    expect(svc.orderStatusService.updateOrderStatus).toHaveBeenCalledWith('o-1', 'cancelled', { viaCancelEndpoint: true, viaSystem: true, expectedFromStatus: 'ready_for_pickup' });
+    expect(svc.orderStatusService.updateOrderStatus).toHaveBeenCalledWith('o-1', 'cancelled', { viaCancelEndpoint: true, viaSystem: true, expectedFromStatus: 'ready_for_pickup', adminCancelToken: events[0].id });
+    expect(db.token).toBe(events[0].id);
     expect(svc.persistCancellationMetadata).toHaveBeenCalledWith('o-1', 'system', 'Admin full refund: QA leftover');
     expect(svc.createStatusHistoryEntry).toHaveBeenCalledWith('o-1', 'cancelled', expect.stringContaining('full refund'), 'system', 'admin-1', 'Admin full refund: QA leftover');
     expect(svc.depositRefundService.refundDeposit).toHaveBeenCalledWith('o-1', { allowAfterLock: true });
@@ -257,6 +260,51 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['the client cancelled (no token)', null, false],
+    ['another cancel stamped its token', 'ev-other', false],
+    ['our CAS stamped it (crash after the CAS)', 'ev-x', true],
+  ])('QA r2 N2: pre-CAS crash on a full-refund cancel, then %s', async (_l, token, owned) => {
+    const w = service('cancelled', { deposit: true });
+    w.db.token = token;
+    w.events.push({
+      id: 'ev-x', order_id: 'o-1', event_type: 'admin_cancel_progress', created_at: 0,
+      payload: {
+        version: 1, kind: 'full_refund', previousStatus: 'confirmed', notes: 'Admin full refund: r', adminUserId: 'admin-1',
+        steps: Object.fromEntries(FULL_STEPS.map((n) => [n, 'pending'])),
+        leaseOwner: 'dead', leaseUntil: new Date(Date.now() - 1000).toISOString(), statusCancelled: false,
+      },
+    });
+    if (!owned) {
+      const err: any = await w.svc.adminFullRefundCancel('o-1', 'r').catch((e: unknown) => e);
+      expect(err.getStatus()).toBe(409);
+      expect(err.getResponse()).toMatchObject({ error: 'ORDER_ALREADY_CANCELLED' });
+      // No cancelled_by / notes, no history, no deposit refund, no enqueue.
+      expect(w.calls).toEqual([]);
+      expect(alerts('admin_full_refund_cancel_step_failed').map((a) => a[3].step)).toEqual(['ownership']);
+      expect(w.events[0].payload.abandoned).toBe(true);
+    } else {
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(res).toMatchObject({ partialFailure: false, depositRefund: { status: 'refunded' } });
+      expect(w.calls).toContain('refundDeposit');
+      expect(w.calls).toContain('persistCancellationMetadata');
+    }
+    expect(w.svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('QA r2 N3 (full refund): marker update fails twice -> accurate partialFailure, deposit pending (not attempted), not 409', async () => {
+    const w = service('confirmed', { deposit: true });
+    const orig = w.svc.hasuraSystemService.executeMutation.getMockImplementation();
+    w.svc.hasuraSystemService.executeMutation.mockImplementation(async (q: string, v: any) => {
+      if (op(q) === 'CasAdminCancelProgress' && v.payload?.statusCancelled === true) throw new Error('db');
+      return orig(q, v);
+    });
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(res).toMatchObject({ success: true, partialFailure: true, stepsNotStarted: true, depositRefund: { status: 'pending' } });
+    expect(w.db.status).toBe('cancelled');
+    expect(w.calls).toEqual([]);
+  });
+
   describe('QA #642 M2: a legacy retry also retries the deposit refund (idempotent, real outcome)', () => {
     const LEGACY = { cancelled_by: 'system', cancellation_notes: 'Admin full refund: old' };
 
@@ -295,12 +343,55 @@ describe('OrdersService.adminFullRefundCancel', () => {
     it.each([
       ['already refunded', 'refunded', { status: 'refunded' }],
       ['no deposit', null, { status: 'none' }],
-      ['forfeited', 'forfeited', { status: 'none' }],
+      ['forfeited', 'forfeited', { status: 'forfeited' }],
+      ['applied to the order payment', 'applied', { status: 'applied' }],
+      ['a failed deposit payment (no money)', 'failed', { status: 'none' }],
     ])('%s: no refund call, depositRefund %j', async (_l, dep, outcome) => {
       const w = service('cancelled', { deposit: true, legacy: LEGACY });
       w.order.deposit_status = dep;
+      w.order.deposit_refund_status = dep === 'refunded' ? 'refunded' : 'none';
       const res = await w.svc.adminFullRefundCancel('o-1', 'r');
       expect(res.depositRefund).toEqual(outcome);
+      expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    });
+
+    it('QA r2 N4: deposit payment still unconfirmed (pending): pending + alerted, no refund call', async () => {
+      const w = service('cancelled', { deposit: true, legacy: LEGACY });
+      w.order.deposit_status = 'pending';
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(res.depositRefund).toEqual({ status: 'pending', message: expect.stringMatching(/not confirmed/) });
+      expect(alerts('admin_full_refund_cancel_deposit_refund_failed')).toHaveLength(1);
+      expect(alerts('admin_full_refund_cancel_deposit_refund_failed')[0][2]).toMatch(/still unconfirmed/);
+      expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    });
+
+    it('QA r2 N4: refund in flight (refunded + refund pending): resumed through refundDeposit -> refunded', async () => {
+      const w = service('cancelled', { deposit: true, legacy: LEGACY });
+      Object.assign(w.order, { deposit_status: 'refunded', deposit_refund_status: 'pending' });
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(res).toMatchObject({ partialFailure: false, depositRefund: { status: 'refunded' } });
+      expect(w.svc.depositRefundService.refundDeposit).toHaveBeenCalledWith('o-1', { allowAfterLock: true });
+    });
+
+    it.each([
+      ['the resume is refused', (m: jest.Mock) => m.mockResolvedValueOnce({ success: false, message: 'ledger secret' })],
+      ['the resume throws', (m: jest.Mock) => m.mockRejectedValueOnce(new Error('ledger secret'))],
+    ])('QA r2 N4: refund in flight and %s: failed + alerted, generic', async (_l, arrange) => {
+      const w = service('cancelled', { deposit: true, legacy: LEGACY });
+      Object.assign(w.order, { deposit_status: 'refunded', deposit_refund_status: 'pending' });
+      arrange(w.fn('depositRefund'));
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(res).toMatchObject({ partialFailure: true, depositRefund: { status: 'failed' } });
+      expect(JSON.stringify(res)).not.toMatch(/secret/);
+      expect(alerts('admin_full_refund_cancel_deposit_refund_failed')).toHaveLength(1);
+    });
+
+    it('QA r2 N4: refund marked failed (refunded + refund failed): failed + alerted, no blind retry', async () => {
+      const w = service('cancelled', { deposit: true, legacy: LEGACY });
+      Object.assign(w.order, { deposit_status: 'refunded', deposit_refund_status: 'failed' });
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(res).toMatchObject({ partialFailure: true, depositRefund: { status: 'failed' }, failedSteps: [{ step: 'depositRefund' }] });
+      expect(alerts('admin_full_refund_cancel_deposit_refund_failed')).toHaveLength(1);
       expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
     });
 
