@@ -11,7 +11,7 @@ vi.mock('react-native', () => ({
     get OS() {
       return platformOS;
     },
-    set OS(value: 'android' | 'ios') {
+    set OS(value: 'android' | 'ios' | 'web') {
       platformOS = value;
     },
   },
@@ -171,7 +171,7 @@ describe('background location start, stop, and mode switch', () => {
     await startBackgroundLocationUpdates(title, body, { activeDelivery: true });
 
     expect(Location.stopLocationUpdatesAsync).toHaveBeenCalledWith(AGENT_LOCATION_TASK_NAME);
-    const options = vi.mocked(Location.startLocationUpdatesAsync).mock.calls[1][1];
+    const options = vi.mocked(Location.startLocationUpdatesAsync).mock.calls[1][1]!;
     expect(options.timeInterval).toBe(2_000);
     expect(options.distanceInterval).toBe(0);
     expect(options.deferredUpdatesInterval).toBe(60_000);
@@ -198,7 +198,7 @@ describe('background location start, stop, and mode switch', () => {
       startBackgroundLocationUpdates(title, body, { activeDelivery: true })
     ).rejects.toThrow('restart failed');
 
-    const restored = vi.mocked(Location.startLocationUpdatesAsync).mock.calls[2][1];
+    const restored = vi.mocked(Location.startLocationUpdatesAsync).mock.calls[2][1]!;
     expect(restored.timeInterval).toBe(10 * 60 * 1000);
     expect(restored.accuracy).toBe(Location.Accuracy.Balanced);
     expect(storageState.memory.get(AGENT_LOCATION_BG_ACTIVE_KEY)).toBe('1');
