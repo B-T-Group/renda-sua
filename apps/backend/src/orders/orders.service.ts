@@ -17,6 +17,10 @@ import type { CreditAllocation, CreditLine } from '../payment-programs/purchase-
 import { CommissionsService } from '../commissions/commissions.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import {
+  AGENT_HOLD_RELEASE_FAILED_MARKER,
+  releaseAgentOrderHold,
+} from './agent-hold-release.util';
+import {
   RETRY_SETTLEABLE_STATUSES,
   SETTLEMENT_CLAIM_LEASE_MINUTES,
   SettlementStage,
@@ -10423,13 +10427,7 @@ export class OrdersService {
       status: 'cancelled',
     });
 
-    await this.accountsService.registerTransaction({
-      accountId: agentAccount.id,
-      amount: orderHold.agent_hold_amount,
-      transactionType: 'release',
-      memo: `Hold released for order ${order.order_number}. Order dropped by agent and made available for other agents.`,
-      referenceId: order.id,
-    });
+    await this.releaseDroppedAgentHold(order, agentAccount.id, orderHold.agent_hold_amount);
     await this.orderPickupMonitorService.clearMonitoring(request.orderId);
     return {
       success: true,
@@ -17628,14 +17626,15 @@ export class OrdersService {
       );
       const agentHoldAmt = Number(orderHold.agent_hold_amount);
       if (agentAccount && agentHoldAmt > 0) {
+        // Atomic: min(net held, agent_hold_amount) under the account row lock; a
+        // settlement retry (or a racing reconciler) finds the net at 0 and credits
+        // nothing. Replaces the settlement-keyed full-amount release.
         this.assertLedgerMove(
-          await this.accountsService.registerTransaction({
+          await releaseAgentOrderHold(this.hasuraSystemService, {
             accountId: agentAccount.id,
-            amount: agentHoldAmt,
-            transactionType: 'release',
+            orderId,
+            cap: agentHoldAmt,
             memo: `Hold released for order ${order.order_number}`,
-            referenceId: orderId,
-            idempotencyKey: this.settlementKey('delivery', 'agent-release', orderId),
           }),
           'agent hold release',
           order
@@ -17698,6 +17697,34 @@ export class OrdersService {
   }
 
   /** A ledger move that did not succeed must stop settlement (never pay the merchant on top of it). */
+  /**
+   * Agent drop: release the agent's hold for this order through release_agent_order_hold
+   * (min(net held, agent_hold_amount), atomic under the account row lock). The old write
+   * had no idempotency key and released the full agent_hold_amount, so it could
+   * double-release against the reconciler or a retried drop. A failure is a money alert;
+   * the drop itself still succeeds, as before.
+   */
+  private async releaseDroppedAgentHold(
+    order: { id: string; order_number: string },
+    accountId: string,
+    amount: number
+  ): Promise<void> {
+    const dropRelease = await releaseAgentOrderHold(this.hasuraSystemService, {
+      accountId,
+      orderId: order.id,
+      cap: Number(amount || 0),
+      memo: `Hold released for order ${order.order_number}. Order dropped by agent and made available for other agents.`,
+    });
+    if (!dropRelease.success) {
+      reportMoneyAnomaly(
+        this.logger,
+        AGENT_HOLD_RELEASE_FAILED_MARKER,
+        `Agent hold not released on drop of order ${order.order_number}: ${dropRelease.error}`,
+        { orderId: order.id, accountId, path: 'drop' }
+      );
+    }
+  }
+
   private assertLedgerMove(
     result: { success?: boolean; error?: string } | undefined,
     label: string,
