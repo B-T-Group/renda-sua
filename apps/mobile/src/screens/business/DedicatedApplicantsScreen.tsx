@@ -299,7 +299,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     <Avatar.Text
                       size={40}
                       label={app.agent.firstName[0]}
-                      style={{ backgroundColor: colors.primary }}
+                      style={{ backgroundColor: colors.primary.main }}
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
@@ -320,7 +320,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     <Avatar.Text
                       size={40}
                       label={app.agent.firstName[0]}
-                      style={{ backgroundColor: colors.primary }}
+                      style={{ backgroundColor: colors.primary.main }}
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
@@ -376,7 +376,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     <Avatar.Text
                       size={40}
                       label={app.agent.firstName[0]}
-                      style={{ backgroundColor: colors.primary }}
+                      style={{ backgroundColor: colors.primary.main }}
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
