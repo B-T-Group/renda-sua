@@ -4768,6 +4768,8 @@
     "retry": "Réessayer",
     "rowsPerPage": "Lignes par page",
     "save": "Enregistrer",
+    "saved": "Enregistré",
+    "removed": "Retiré",
     "share": {
       "ariaLabel": "Partager cette page",
       "openMenu": "Partager",

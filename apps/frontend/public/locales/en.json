@@ -5046,6 +5046,8 @@
     "retry": "Retry",
     "rowsPerPage": "Rows per page",
     "save": "Save",
+    "saved": "Saved",
+    "removed": "Removed",
     "share": {
       "ariaLabel": "Share this page",
       "openMenu": "Share",

@@ -57,6 +57,7 @@ const ApplicantsScreen: React.FC = () => {
   const [notFound, setNotFound] = useState(false);
   const [updatingTerms, setUpdatingTerms] = useState(false);
   const [closing, setClosing] = useState(false);
+  const hasTrackedViewRef = React.useRef(false);
 
   const loadData = useCallback(async (isInitialLoad = false) => {
     if (!locationId || !postingId) return;
@@ -67,11 +68,42 @@ const ApplicantsScreen: React.FC = () => {
       }
       const response = await dedicatedApi.getApplications(locationId, postingId);
       setPosting(response.posting);
-      setApplications(response.applications);
+      
+      // Merge with local state to preserve auto_declined rows added after accept
+      setApplications(prev => {
+        // Build a map of local auto_declined apps by applicationId
+        const localAutoDeclinedMap = new Map(
+          prev
+            .filter(app => app.status === 'auto_declined')
+            .map(app => [app.applicationId, app])
+        );
+        
+        // Get fresh data from server
+        const serverApps = response.applications;
+        
+        // Merge: prefer local auto_declined status over server status, then add any local auto_declined not in server
+        const serverAppIds = new Set(serverApps.map(app => app.applicationId));
+        const mergedApps = serverApps.map(serverApp => {
+          // If this app was locally auto_declined, preserve that status
+          if (localAutoDeclinedMap.has(serverApp.applicationId)) {
+            return { ...serverApp, status: 'auto_declined' as const };
+          }
+          return serverApp;
+        });
+        
+        // Add any local auto_declined apps that aren't in the server response at all
+        const preservedAutoDeclined = Array.from(localAutoDeclinedMap.values()).filter(
+          app => !serverAppIds.has(app.applicationId)
+        );
+        
+        return [...mergedApps, ...preservedAutoDeclined];
+      });
+      
       setNewTerms(response.posting.terms || '');
       setNotFound(false);
       
-      if (response.applications.length > 0) {
+      // Track applicants_viewed only once per visit (component mount)
+      if (!hasTrackedViewRef.current && response.applications.length > 0) {
         const pending = response.applications.filter((a) => a.status === 'applied').length;
         const accepted = response.applications.filter((a) => a.status === 'accepted').length;
         track('applicants_viewed', {
@@ -81,6 +113,7 @@ const ApplicantsScreen: React.FC = () => {
           pending,
           accepted,
         });
+        hasTrackedViewRef.current = true;
       }
     } catch (err: any) {
       if (isDedicatedAgentsFeatureHidden(err)) {
