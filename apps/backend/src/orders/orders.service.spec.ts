@@ -7205,8 +7205,12 @@ describe('OrdersService', () => {
       const keys = accountsService.registerTransaction.mock.calls.map(
         ([r]: [any]) => r.idempotencyKey
       );
+      // The agent leg goes through release_agent_order_hold (key derived under its lock).
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('ReleaseAgentOrderHold'),
+        expect.objectContaining({ orderId: 'order-123' })
+      );
       expect(keys).toEqual([
-        'settle:delivery:agent-release:order-123',
         'settle:delivery:client-release:order-123',
         'settle:delivery:client-payment:order-123',
       ]);
