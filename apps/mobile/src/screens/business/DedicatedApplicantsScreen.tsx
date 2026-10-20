@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshControl, ScrollView, StyleSheet, View, Linking } from 'react-native';
+import { RefreshControl, ScrollView, StyleSheet, View, Linking, Alert } from 'react-native';
 import {
   ActivityIndicator,
   Avatar,
@@ -10,6 +10,7 @@ import {
   IconButton,
   Menu,
   Portal,
+  Snackbar,
   Text,
   TextInput,
 } from 'react-native-paper';
@@ -20,6 +21,11 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
+import {
+  extractDedicatedAgentsError,
+  mapDedicatedAgentsErrorCode,
+  isDedicatedAgentsFeatureHidden,
+} from '../../utils/dedicatedAgentsErrors';
 import type {
   ApplicantCard,
   DedicatedPostingView,
@@ -43,6 +49,8 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
   const [menuVisible, setMenuVisible] = useState(false);
   const [confirmClose, setConfirmClose] = useState(false);
   const [confirmAccept, setConfirmAccept] = useState<{ id: string; name: string } | null>(null);
+  const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -50,7 +58,11 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       setPosting(response.posting);
       setApplications(response.applications);
       setNewTerms(response.posting.terms || '');
+      setNotFound(false);
     } catch (err: any) {
+      if (isDedicatedAgentsFeatureHidden(err)) {
+        setNotFound(true);
+      }
       console.error('Error loading applications:', err);
     } finally {
       setLoading(false);
@@ -75,7 +87,32 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       await loadData();
       setConfirmAccept(null);
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+
+      const errorCodes = [
+        'posting_filled',
+        'posting_not_open',
+        'posting_expired',
+        'application_not_pending',
+        'agent_holds_slot',
+        'dedicated_agent_assignment_cap_exceeded',
+        'slot_disabled',
+        'agent_ineligible',
+      ];
+
+      if (code && errorCodes.includes(code)) {
+        const errorKey = mapDedicatedAgentsErrorCode(code);
+        Alert.alert(t('common.error', 'Error'), t(errorKey, 'An error occurred'));
+        await loadData();
+      } else {
+        Alert.alert(
+          t('common.error', 'Error'),
+          t('dedicatedAgents.generic', 'Something went wrong')
+        );
+      }
+
       console.error('Error accepting application:', err);
+      setConfirmAccept(null);
     }
   };
 
@@ -84,6 +121,9 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       await dedicatedAgentsService.declineApplication(locationId, postingId, applicationId);
       await loadData();
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
       console.error('Error declining application:', err);
     }
   };
@@ -95,7 +135,11 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       });
       await loadData();
       setEditingTerms(false);
+      setSnackbarMessage(t('dedicatedAgents.applicant.termsEdited', 'Applicants were notified'));
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
       console.error('Error updating terms:', err);
     }
   };
@@ -106,7 +150,11 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       setConfirmClose(false);
       navigation.goBack();
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+      Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
       console.error('Error closing posting:', err);
+      setConfirmClose(false);
     }
   };
 
@@ -118,16 +166,19 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
     );
   }
 
-  if (!posting) {
+  if (!posting || notFound) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background.default }]}>
-        <Text variant="titleMedium">Posting not found</Text>
+        <Text variant="titleMedium" style={{ color: colors.text.secondary }}>
+          {t('dedicatedAgents.noLongerAvailable', 'This posting is no longer available')}
+        </Text>
       </View>
     );
   }
 
   const pending = applications.filter((a) => a.status === 'applied');
   const accepted = applications.filter((a) => a.status === 'accepted');
+  const autoDeclined = applications.filter((a) => a.status === 'auto_declined');
   const isOpen = posting.status === 'open';
   const isLastAccept = isOpen && posting.acceptedCount + 1 === posting.headcount;
 
@@ -183,55 +234,85 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
               )}
             </View>
 
-            {posting.terms && (
-              <View style={{ marginTop: spacing.md }}>
-                <View style={styles.termsHeader}>
-                  <Text variant="titleSmall">
-                    {t('dedicatedAgents.form.termsField', 'Terms / notes')}
-                  </Text>
-                  {isOpen && !editingTerms && (
-                    <IconButton
-                      icon="pencil"
-                      size={16}
-                      onPress={() => setEditingTerms(true)}
-                    />
-                  )}
-                </View>
-
-                {editingTerms ? (
-                  <View>
-                    <TextInput
-                      value={newTerms}
-                      onChangeText={(text) => setNewTerms(text.slice(0, 1000))}
-                      multiline
-                      numberOfLines={3}
-                      mode="outlined"
-                      style={{ marginBottom: spacing.sm }}
-                    />
-                    <View style={styles.termsActions}>
-                      <Button mode="text" onPress={() => setEditingTerms(false)}>
-                        {t('common.cancel', 'Cancel')}
-                      </Button>
-                      <Button mode="contained" onPress={handleUpdateTerms}>
-                        {t('common.save', 'Save')}
-                      </Button>
-                    </View>
-                  </View>
-                ) : (
-                  <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
-                    {posting.terms}
-                  </Text>
+            <View style={{ marginTop: spacing.md }}>
+              <View style={styles.termsHeader}>
+                <Text variant="titleSmall">
+                  {t('dedicatedAgents.form.termsField', 'Terms / notes')}
+                </Text>
+                {isOpen && !editingTerms && (
+                  <IconButton
+                    icon="pencil"
+                    size={16}
+                    onPress={() => setEditingTerms(true)}
+                  />
                 )}
               </View>
-            )}
+
+              {editingTerms ? (
+                <View>
+                  <TextInput
+                    value={newTerms}
+                    onChangeText={(text) => setNewTerms(text.slice(0, 1000))}
+                    multiline
+                    numberOfLines={3}
+                    mode="outlined"
+                    style={{ marginBottom: spacing.sm }}
+                  />
+                  <View style={styles.termsActions}>
+                    <Button mode="text" onPress={() => setEditingTerms(false)}>
+                      {t('common.cancel', 'Cancel')}
+                    </Button>
+                    <Button mode="contained" onPress={handleUpdateTerms}>
+                      {t('common.save', 'Save')}
+                    </Button>
+                  </View>
+                </View>
+              ) : posting.terms ? (
+                <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
+                  {posting.terms}
+                </Text>
+              ) : (
+                <Text
+                  variant="bodyMedium"
+                  style={{ color: colors.text.secondary, fontStyle: 'italic' }}
+                >
+                  {t('dedicatedAgents.agent.noTerms', 'No extra terms')}
+                </Text>
+              )}
+            </View>
           </Card.Content>
         </Card>
 
-        {pending.length > 0 && (
+        {(pending.length > 0 || autoDeclined.length > 0) && (
           <View style={{ marginBottom: spacing.md }}>
             <Text variant="titleMedium" style={{ marginBottom: spacing.sm, marginLeft: spacing.xs }}>
               Pending ({pending.length})
+              {autoDeclined.length > 0 && ` · ${autoDeclined.length} auto-declined`}
             </Text>
+            {autoDeclined.map((app) => (
+              <Card
+                key={app.applicationId}
+                style={{ marginBottom: spacing.sm, opacity: 0.6 }}
+              >
+                <Card.Content>
+                  <View style={styles.applicantRow}>
+                    <Avatar.Text
+                      size={40}
+                      label={app.agent.firstName[0]}
+                      style={{ backgroundColor: colors.primaryContainer }}
+                    />
+                    <View style={{ flex: 1, marginLeft: spacing.md }}>
+                      <Text variant="titleSmall" style={{ fontWeight: '600' }}>
+                        {app.agent.firstName} {app.agent.lastName[0]}.
+                      </Text>
+                      <Chip compact mode="outlined" style={{ alignSelf: 'flex-start' }}>
+                        {t('dedicatedAgents.applicant.autoDeclined', 'Auto-declined')}
+                      </Chip>
+                    </View>
+                  </View>
+                </Card.Content>
+              </Card>
+            ))}
             {pending.map((app) => (
               <Card key={app.applicationId} style={{ marginBottom: spacing.sm }}>
                 <Card.Content>
@@ -347,10 +428,14 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
 
         <Dialog visible={confirmClose} onDismiss={() => setConfirmClose(false)}>
           <Dialog.Title>
-            {t(
-              'dedicatedAgents.applicant.closeConfirm',
-              'Close this request? Pending applicants will be declined.'
-            )}
+            {pending.length > 0
+              ? t('dedicatedAgents.closeWithCount', 'Close posting ({{count}} will be auto-declined)', {
+                  count: pending.length,
+                })
+              : t(
+                  'dedicatedAgents.applicant.closeConfirm',
+                  'Close this request? Pending applicants will be declined.'
+                )}
           </Dialog.Title>
           <Dialog.Actions>
             <Button onPress={() => setConfirmClose(false)}>
@@ -360,6 +445,14 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
           </Dialog.Actions>
         </Dialog>
       </Portal>
+
+      <Snackbar
+        visible={!!snackbarMessage}
+        onDismiss={() => setSnackbarMessage(null)}
+        duration={3000}
+      >
+        {snackbarMessage}
+      </Snackbar>
     </View>
   );
 }
