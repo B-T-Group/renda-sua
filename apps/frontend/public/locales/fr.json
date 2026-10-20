@@ -8823,7 +8823,17 @@
       "label": "Opérateur Mobile Money",
       "moov": "Moov Money",
       "mixx": "Mixx by Yas",
-      "mismatch": "L'opérateur sélectionné ne correspond pas au préfixe du numéro de téléphone. Veuillez sélectionner le bon opérateur ou mettre à jour le numéro de téléphone."
+      "mismatch": "L'opérateur sélectionné ne correspond pas au préfixe du numéro de téléphone. Veuillez sélectionner le bon opérateur ou mettre à jour le numéro de téléphone.",
+      "unavailable": "Le paiement mobile FedaPay n'est actuellement pas disponible pour le Togo. Veuillez réessayer plus tard ou contacter le support."
+    }
+  },
+  "accounts": {
+    "paymentMessages": {
+      "topUpInfoTG": "Rechargez avec Moov Money ou Mixx by Yas (Togocel).",
+      "topUpInfoCM": "Rechargez avec MTN Mobile Money ou Orange Money.",
+      "topUpInfoGA": "Rechargez avec Airtel Money ou Moov Money.",
+      "fedapaySuccess": "Demande de paiement envoyée avec succès via FedaPay.",
+      "airtelMoneySuccess": "Demande de paiement envoyée avec succès."
     }
   }
 }

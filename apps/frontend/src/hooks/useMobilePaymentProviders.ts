@@ -39,10 +39,11 @@ export const useMobilePaymentProviders = (country?: string) => {
           `/mobile-payments/providers?${params.toString()}`
         );
 
-        if (response.success && response.data) {
-          setProviders(response.data);
+        if (response.data?.success && response.data?.data) {
+          setProviders(response.data.data);
         } else {
           setProviders([]);
+          setError('Failed to load payment providers');
         }
       } catch (err: any) {
         setError(err.message || 'Failed to fetch payment providers');

@@ -73,7 +73,7 @@ export const TogoOperatorPicker: React.FC<TogoOperatorPickerProps> = ({
           fullWidth
           disabled={disabled}
         >
-          <ToggleButton value="moov" aria-label="Moov Money">
+          <ToggleButton value="moov" aria-label={t('payment.togoOperator.moov', 'Moov Money')}>
             <Box sx={{ textAlign: 'center', py: 0.5 }}>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 {t('payment.togoOperator.moov', 'Moov Money')}
@@ -83,7 +83,7 @@ export const TogoOperatorPicker: React.FC<TogoOperatorPickerProps> = ({
               </Typography>
             </Box>
           </ToggleButton>
-          <ToggleButton value="togocel" aria-label="Mixx by Yas">
+          <ToggleButton value="togocel" aria-label={t('payment.togoOperator.mixx', 'Mixx by Yas')}>
             <Box sx={{ textAlign: 'center', py: 0.5 }}>
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 {t('payment.togoOperator.mixx', 'Mixx by Yas')}
