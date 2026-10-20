@@ -13,7 +13,11 @@
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { Client } from 'pg';
-import { INSERT_DEDICATED_ASSIGNMENTS_MUTATION, savePickupSlotsMutation } from './dedicated-assignments.queries';
+import {
+  INSERT_DEDICATED_ASSIGNMENTS_MUTATION,
+  RESUME_DEDICATED_ASSIGNMENT_MUTATION,
+  savePickupSlotsMutation,
+} from './dedicated-assignments.queries';
 
 const TEMPLATE = process.env.DEDICATED_PG_TEMPLATE?.trim();
 const MIGRATIONS = join(__dirname, '../../../hasura/migrations/Rendasua');
@@ -32,6 +36,7 @@ describe('location lock field order', () => {
     ['super-user assign', INSERT_DEDICATED_ASSIGNMENTS_MUTATION, 'insert_dedicated_agent_assignments'],
     ['slot toggle with pauses', savePickupSlotsMutation(true), 'insert_business_location_pickup_slots'],
     ['slot toggle without pauses', savePickupSlotsMutation(false), 'insert_business_location_pickup_slots'],
+    ['resume (QA #603 R3)', RESUME_DEDICATED_ASSIGNMENT_MUTATION, 'update_dedicated_agent_assignments'],
   ])('%s locks business_locations before its writes', (_k, doc, firstWrite) => {
     const lock = doc.indexOf('update_business_locations_by_pk(pk_columns: { id: $locationId }, _set: { updated_at: "now()" })');
     expect(lock).toBeGreaterThan(0);
@@ -153,6 +158,113 @@ suite('business_locations FOR NO KEY UPDATE lock (real Postgres)', () => {
     const c2 = await connect(dbName);
     try {
       await assignTx(c1, loc.id, a, true);
+      const pid2 = (await c2.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      const toggle = toggleOffTx(c2, loc.id, true);
+      expect(await waitingOnLock(pid2)).toBe(true);
+      await c1.query('COMMIT');
+      expect(await toggle).toBe(1);
+      expect(await status(loc.id)).toEqual(['paused']);
+    } finally {
+      await c1.end();
+      await c2.end();
+    }
+  });
+
+  // QA #603 R3: resume. SQL equivalent of RESUME_DEDICATED_ASSIGNMENT_MUTATION: the lock,
+  // then one guarded UPDATE (still paused AND the slot is not switched off).
+  const RESUME_GUARDED = `UPDATE dedicated_agent_assignments a SET status = 'active', paused_at = NULL, paused_by_user_id = NULL
+     WHERE a.id = $1 AND a.business_location_id = $2 AND a.slot_key = 'morning' AND a.status = 'paused'
+       AND NOT EXISTS (SELECT 1 FROM business_location_pickup_slots s
+                        WHERE s.business_location_id = a.business_location_id AND s.slot_key = 'morning' AND s.is_enabled = false)
+     RETURNING id`;
+  const RESUME_OLD = `UPDATE dedicated_agent_assignments SET status = 'active', paused_at = NULL WHERE id = $1 AND status IN ('paused') RETURNING id`;
+  const slotOff = async (c: Client, locId: string) =>
+    (await c.query(`SELECT 1 FROM business_location_pickup_slots WHERE business_location_id = $1 AND slot_key = 'morning' AND is_enabled = false`, [locId])).rowCount! > 0;
+  const pausedRow = async (locId: string, agentId: string) =>
+    (
+      await db.query(
+        `INSERT INTO dedicated_agent_assignments (business_location_id, agent_id, slot_key, source, status, paused_at) VALUES ($1, $2, 'morning', 'superuser_assign', 'paused', now()) RETURNING id`,
+        [locId, agentId]
+      )
+    ).rows[0].id as string;
+
+  it('R3 control: the old check-then-act resume, racing a slot toggle, leaves an active row on an off slot', async () => {
+    const loc = await location();
+    const id = await pausedRow(loc.id, await agent());
+    const c1 = await connect(dbName);
+    const c2 = await connect(dbName);
+    try {
+      expect(await slotOff(c1, loc.id)).toBe(false); // resume's read: slot on
+      await toggleOffTx(c2, loc.id, true); // the toggle commits (pauses nothing: the row is paused)
+      await c1.query('BEGIN');
+      expect((await c1.query(RESUME_OLD, [id])).rowCount).toBe(1);
+      await c1.query('COMMIT');
+      expect(await status(loc.id)).toEqual(['active']);
+      expect(await slotOff(db, loc.id)).toBe(true);
+    } finally {
+      await c1.end();
+      await c2.end();
+    }
+  });
+
+  it('R3: toggle first, then the locked guarded resume: refused, the row stays paused', async () => {
+    const loc = await location();
+    const id = await pausedRow(loc.id, await agent());
+    const c1 = await connect(dbName);
+    const c2 = await connect(dbName);
+    try {
+      expect(await slotOff(c1, loc.id)).toBe(false); // the stale pre-check passes
+      await toggleOffTx(c2, loc.id, true);
+      await c1.query('BEGIN');
+      await c1.query(LOCK, [loc.id]);
+      expect((await c1.query(RESUME_GUARDED, [id, loc.id])).rowCount).toBe(0);
+      await c1.query('COMMIT');
+      expect(await status(loc.id)).toEqual(['paused']);
+    } finally {
+      await c1.end();
+      await c2.end();
+    }
+  });
+
+  it('R3: an uncommitted toggle makes the resume wait on the lock; after it commits the resume sees the slot off', async () => {
+    const loc = await location();
+    const id = await pausedRow(loc.id, await agent());
+    const c1 = await connect(dbName);
+    const c2 = await connect(dbName);
+    try {
+      await c2.query('BEGIN');
+      await c2.query(LOCK, [loc.id]);
+      await c2.query(
+        `INSERT INTO business_location_pickup_slots (business_location_id, slot_key, is_enabled) VALUES ($1, 'morning', false)`,
+        [loc.id]
+      );
+      const pid1 = (await c1.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
+      const resume = (async () => {
+        await c1.query('BEGIN');
+        await c1.query(LOCK, [loc.id]);
+        const r = await c1.query(RESUME_GUARDED, [id, loc.id]);
+        await c1.query('COMMIT');
+        return r.rowCount;
+      })();
+      expect(await waitingOnLock(pid1)).toBe(true);
+      await c2.query('COMMIT');
+      expect(await resume).toBe(0);
+      expect(await status(loc.id)).toEqual(['paused']);
+    } finally {
+      await c1.end();
+      await c2.end();
+    }
+  });
+
+  it('R3: resume first, then the toggle: the toggle waits and its predicate pause catches the resumed row', async () => {
+    const loc = await location();
+    const id = await pausedRow(loc.id, await agent());
+    const c1 = await connect(dbName);
+    const c2 = await connect(dbName);
+    try {
+      await c1.query('BEGIN');
+      await c1.query(LOCK, [loc.id]);
+      expect((await c1.query(RESUME_GUARDED, [id, loc.id])).rowCount).toBe(1);
       const pid2 = (await c2.query('SELECT pg_backend_pid() AS pid')).rows[0].pid;
       const toggle = toggleOffTx(c2, loc.id, true);
       expect(await waitingOnLock(pid2)).toBe(true);

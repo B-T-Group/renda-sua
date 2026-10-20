@@ -92,6 +92,7 @@ function world() {
     accounts: [] as Array<{ user_id: string; currency: string; available_balance: number }>,
     deadlocksLeft: 0,
     onSave: undefined as undefined | (() => void),
+    onResume: undefined as undefined | (() => void),
     offAfterInsert: undefined as undefined | string,
     mutations: [] as Array<{ op: string; vars: Loose }>,
     nextId: 1,
@@ -256,6 +257,20 @@ function world() {
       case 'UpdateDedicatedAssignment': {
         const changed = applyUpdate({ id: vars.id, from: vars.from }, vars.set);
         return { update_dedicated_agent_assignments: { affected_rows: changed.length, returning: changed.map((r) => ({ ...r })) } };
+      }
+      case 'ResumeDedicatedAssignment': {
+        // QA #603 R3: the location lock is the first root field; the update applies only
+        // while the row is paused and its slot is not switched off (one statement).
+        expect(mutation.indexOf('lockLocation: update_business_locations_by_pk')).toBeGreaterThan(0);
+        expect(mutation.indexOf('lockLocation:')).toBeLessThan(mutation.indexOf('update_dedicated_agent_assignments('));
+        state.onResume?.();
+        const guarded = /_not: \{ business_location: \{ pickup_slots: \{ slot_key: \{ _eq: \$slotKey \}, is_enabled: \{ _eq: false \} \} \} \}/.test(mutation);
+        const slotOff = state.pickup.some((p) => p.business_location_id === vars.locationId && p.slot_key === vars.slotKey && p.is_enabled === false);
+        const hit = state.rows.filter(
+          (r) => r.id === vars.id && r.business_location_id === vars.locationId && r.slot_key === vars.slotKey && r.status === 'paused' && !(guarded && slotOff)
+        );
+        for (const r of hit) Object.assign(r, vars.set);
+        return { lockLocation: { id: vars.locationId }, update_dedicated_agent_assignments: { affected_rows: hit.length, returning: hit.map((r) => ({ ...r })) } };
       }
       case 'SaveDedicatedPickupSlots': {
         for (const s of vars.slots) {
@@ -534,6 +549,37 @@ describe('DedicatedAssignmentsService — business pause / resume / remove', () 
     w.state.pickup.push({ business_location_id: LOC, slot_key: 'evening', is_enabled: false, pickup_time: null });
     await expectConflict(w.service.setPaused({ userId: OWNER, locationId: LOC }, other.id, false), 'slot_disabled');
     expect(other.status).toBe('paused');
+  });
+
+  it('QA #603 R3: resume is one locked, guarded mutation (location lock first, slot check in the update)', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const row = w.seedRow({ agent_id: A1, slot_key: 'morning', status: 'paused', paused_at: 'x' });
+    await w.service.setPaused({ userId: OWNER, locationId: LOC }, row.id, false);
+    expect(w.writes('UpdateDedicatedAssignment')).toHaveLength(0);
+    expect(w.writes('ResumeDedicatedAssignment')[0].vars).toMatchObject({ locationId: LOC, id: row.id, slotKey: 'morning', set: { status: 'active', paused_at: null } });
+    expect(row.status).toBe('active');
+  });
+
+  it('QA #603 R3: a slot turned off between the check and the write is refused (slot_disabled); the row stays paused, no notice', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const row = w.seedRow({ agent_id: A1, slot_key: 'morning', status: 'paused', paused_at: 'x' });
+    // The toggle commits after resume's read but before its locked update runs.
+    w.state.onResume = () => w.state.pickup.push({ business_location_id: LOC, slot_key: 'morning', is_enabled: false, pickup_time: null });
+    await expectConflict(w.service.setPaused({ userId: OWNER, locationId: LOC }, row.id, false), 'slot_disabled');
+    expect(row.status).toBe('paused');
+    expect(w.notices).toHaveLength(0);
+  });
+
+  it('QA #603 R3: a row that changed (removed) meanwhile is assignment_changed, not resumed', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const row = w.seedRow({ agent_id: A1, slot_key: 'morning', status: 'paused', paused_at: 'x' });
+    w.state.onResume = () => Object.assign(row, { status: 'removed' });
+    await expectConflict(w.service.setPaused({ userId: OWNER, locationId: LOC }, row.id, false), 'assignment_changed');
+    expect(row.status).toBe('removed');
+    expect(w.notices).toHaveLength(0);
   });
 
   it('is idempotent: pausing a paused row writes nothing and sends nothing', async () => {

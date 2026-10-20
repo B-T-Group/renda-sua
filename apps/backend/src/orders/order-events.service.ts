@@ -1,9 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import type {
-  OrderEventActorType,
-  OrderEventType,
-} from './order-pickup.types';
+import type { OrderEventActorType, OrderEventType } from './order-pickup.types';
 
 export interface OrderEventRow {
   id: string;
@@ -15,22 +12,19 @@ export interface OrderEventRow {
   created_at: string;
 }
 
-export interface RecordOrderEventParams {
-  orderId: string;
-  eventType: OrderEventType;
-  actorType: OrderEventActorType;
-  actorId?: string | null;
-  payload?: Record<string, unknown>;
-}
-
 @Injectable()
 export class OrderEventsService {
   private readonly logger = new Logger(OrderEventsService.name);
 
   constructor(private readonly hasura: HasuraSystemService) {}
 
-  /** Best effort: an insert failure is logged, never thrown. */
-  async recordEvent(params: RecordOrderEventParams): Promise<void> {
+  async recordEvent(params: {
+    orderId: string;
+    eventType: OrderEventType;
+    actorType: OrderEventActorType;
+    actorId?: string | null;
+    payload?: Record<string, unknown>;
+  }): Promise<void> {
     try {
       await this.recordEventStrict(params);
     } catch (error: any) {
@@ -40,11 +34,16 @@ export class OrderEventsService {
     }
   }
 
-  /** Same insert, but a failure is thrown so the caller can alert on it. */
-  async recordEventStrict(params: RecordOrderEventParams): Promise<void> {
-    {
-      await this.hasura.executeMutation(
-        `mutation InsertOrderEvent(
+  /** As recordEvent, but a failed insert throws (for callers that must know, e.g. #622 stranded holds). */
+  async recordEventStrict(params: {
+    orderId: string;
+    eventType: OrderEventType;
+    actorType: OrderEventActorType;
+    actorId?: string | null;
+    payload?: Record<string, unknown>;
+  }): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation InsertOrderEvent(
           $orderId: uuid!
           $eventType: String!
           $actorType: String!
@@ -59,15 +58,14 @@ export class OrderEventsService {
             payload: $payload
           }) { id }
         }`,
-        {
-          orderId: params.orderId,
-          eventType: params.eventType,
-          actorType: params.actorType,
-          actorId: params.actorId ?? null,
-          payload: params.payload ?? {},
-        }
-      );
-    }
+      {
+        orderId: params.orderId,
+        eventType: params.eventType,
+        actorType: params.actorType,
+        actorId: params.actorId ?? null,
+        payload: params.payload ?? {},
+      }
+    );
   }
 
   async listForOrder(orderId: string, limit = 100): Promise<OrderEventRow[]> {

@@ -12875,6 +12875,13 @@ export class OrdersService {
     // marked accepted (handleOrderAssigned only accepts stamped dedicated claims).
     // QA #607 R1: a refusal at the cap is final (like a lost race): the agent must not
     // get the order through an uncapped plain claim.
+    // QA #607 R4: the cap is only enforced when the refusal IS a cap refusal. Any other
+    // refusal (off today, assignment not active, slot unavailable, flag off, offer no
+    // longer live) falls through to the plain claim below, which has no cap check, even
+    // if the agent is also at the cap (dedicatedProfileIneligibleReason checks capacity
+    // last). This is deliberate: plain claims were never capped (R2) and the agent has
+    // already paid. To cap every claim that started as dedicated, check capacity first
+    // or carry maxActiveOrders into the plain path.
     let atCapacity = false;
     const assignment = await this.dedicatedClaimAssignment(order.id, agentId).catch((error) => {
       atCapacity = this.isClaimAtCapacity(error);

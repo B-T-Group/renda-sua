@@ -31,6 +31,23 @@ describe('OrderPickupMonitorService', () => {
     });
   });
 
+  describe('#608 follow-up: the minute cron also runs the stranded-hold reconciler', () => {
+    it('calls reconcileStrandedAgentHolds even when the pickup steps fail', async () => {
+      const reassignment = { reconcileStrandedAgentHolds: jest.fn().mockResolvedValue({ released: 0, skipped: 0, failed: 0 }) };
+      const service = new OrderPickupMonitorService(
+        { executeQuery: jest.fn().mockRejectedValue(new Error('hasura down')) } as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        reassignment as any,
+        {} as any
+      );
+      jest.spyOn((service as any).logger, 'error').mockImplementation(() => undefined);
+      await service.reconcilePickupMonitoring();
+      expect(reassignment.reconcileStrandedAgentHolds).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('computePickupDueAt', () => {
     it('uses assignment SLA when pickup_by is null', () => {
       const service = makeService();
