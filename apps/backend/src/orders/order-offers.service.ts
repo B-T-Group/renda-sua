@@ -12,7 +12,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import { WaitAndExecuteScheduleService } from './wait-and-execute-schedule.service';
-import type { OfferDeclineReason } from '../dedicated-agents/dedicated-agents.constants';
+import type { OfferDeclineReason, OrderOfferKind } from '../dedicated-agents/dedicated-agents.constants';
 import {
   DedicatedDispatchService,
   type DedicatedFallbackOutcome,
@@ -62,6 +62,7 @@ interface OfferAddress {
 
 interface OfferRow {
   status: string;
+  offer_kind?: string | null;
   distance_km: number | string | null;
   estimated_earnings: number | string | null;
   currency: string | null;
@@ -99,8 +100,12 @@ export interface OfferDetailsResponse {
     estimatedEarnings: number | null;
     currency: string | null;
     estimatedDeliveryMinutes: number | null;
+    /** #594 G3: dedicated offers show the "Dedicated · {store}" badge. */
+    offerKind: OrderOfferKind;
     pickup: {
       businessName: string | null;
+      /** #594 G3: business_location.name (the store), additive. */
+      locationName: string | null;
       city: string | null;
       state: string | null;
     };
@@ -607,6 +612,7 @@ export class OrderOffersService {
           currency
           expires_at
           created_at
+          offer_kind
           order {
             id
             order_number
@@ -670,6 +676,7 @@ export class OrderOffersService {
           currency
           expires_at
           created_at
+          offer_kind
           order {
             id
             order_number
@@ -789,9 +796,11 @@ export class OrderOffersService {
             : null,
         currency: row.currency ?? null,
         estimatedDeliveryMinutes,
+        offerKind: row.offer_kind === 'dedicated' ? 'dedicated' : 'standard',
         pickup: {
           businessName:
             order.business_location?.name || order.business?.name || null,
+          locationName: order.business_location?.name || null,
           city: pickupAddr?.city ?? null,
           state: pickupAddr?.state ?? null,
         },

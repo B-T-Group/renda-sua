@@ -208,3 +208,32 @@ export const DEDICATED_PICKER_AGENTS_QUERY = `
     }
   }
 `;
+
+/** #594 G10: admin location search cap (one page; flag + city filters run in Nest). */
+export const LOCATION_SEARCH_FETCH_LIMIT = 500;
+
+export const DEDICATED_ADMIN_LOCATION_SEARCH_QUERY = `
+  query DedicatedAdminLocationSearch($where: business_locations_bool_exp!, $limit: Int!) {
+    business_locations(where: $where, order_by: [{ name: asc }, { id: asc }], limit: $limit) {
+      id
+      name
+      business_id
+      business {
+        name
+      }
+      address {
+        address_line_1
+        city
+        state
+        country
+      }
+      pickup_slots {
+        slot_key
+        is_enabled
+      }
+      dedicated_agent_assignments(where: { status: { _in: ["active", "paused"] } }) {
+        id
+      }
+    }
+  }
+`;

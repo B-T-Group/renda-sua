@@ -17,7 +17,7 @@ import { DedicatedAgentsConfigModule } from './dedicated-agents-config.module';
 import { DedicatedAssignmentsService } from './dedicated-assignments.service';
 import { DedicatedCoverageModule } from './dedicated-coverage.module';
 import { DedicatedLocationAccessService } from './dedicated-location-access.service';
-import { DedicatedOpportunitiesController } from './dedicated-opportunities.controller';
+import { DedicatedCapabilityController, DedicatedOpportunitiesController } from './dedicated-opportunities.controller';
 import { DedicatedOpportunitiesService } from './dedicated-opportunities.service';
 import { DedicatedPostingsBusinessController } from './dedicated-postings-business.controller';
 import { DedicatedPostingsSweeperService } from './dedicated-postings-sweeper.service';
@@ -55,6 +55,7 @@ import { DedicatedPostingsService } from './dedicated-postings.service';
     DedicatedAgentsAgentController,
     DedicatedPostingsBusinessController,
     DedicatedOpportunitiesController,
+    DedicatedCapabilityController,
   ],
   providers: [
     DedicatedAssignmentsService,

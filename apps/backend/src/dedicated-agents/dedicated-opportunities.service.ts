@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -9,6 +10,7 @@ import {
 import { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import { showsDeliveryChrome } from '../agents/agent-focus.util';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
+import { DedicatedAgentsConfigService } from './dedicated-agents-config.service';
 import type { DedicatedSlotKey } from './dedicated-agents.constants';
 import { DEDICATED_LOCATION_PICKUP_SLOTS_QUERY } from './dedicated-assignments.queries';
 import { DedicatedCoverageService } from './dedicated-coverage.service';
@@ -18,6 +20,7 @@ import {
   DEDICATED_AGENT_HELD_ASSIGNMENTS_QUERY,
   DEDICATED_OPPORTUNITIES_QUERY,
   DEDICATED_OPPORTUNITY_AGENT_QUERY,
+  DEDICATED_OPPORTUNITY_BY_ID_QUERY,
   UPSERT_DEDICATED_APPLICATION_MUTATION,
   WITHDRAW_DEDICATED_APPLICATION_MUTATION,
 } from './dedicated-postings.queries';
@@ -38,11 +41,33 @@ export const DEDICATED_OPPORTUNITY_ERRORS = {
   photoRequired: 'PROFILE_PHOTO_REQUIRED', // 422
   applicationClosed: 'application_closed', // 409
   notApplied: 'application_not_pending', // 409
+  invalidCountry: 'invalid_country', // 400 (#594 G12)
 } as const;
+
+/** #594 G12 capability payload. */
+export interface DedicatedCapability {
+  enabled: boolean;
+  country: string | null;
+  reason: 'no_address' | 'no_country' | null;
+}
 
 /** AC-A4 disabled reasons. */
 export type OpportunityDisabledReason = 'holds_slot' | 'max_assignments';
-export type OpportunityIneligibleReason = 'no_agent' | 'not_verified' | 'contract_unsigned' | 'suspended' | 'commercial_focus';
+export type OpportunityIneligibleReason =
+  | 'no_agent'
+  | 'not_verified'
+  | 'contract_unsigned'
+  | 'suspended'
+  | 'commercial_focus'
+  /** #594 G2: postings are for independent agents only. */
+  | 'internal_agent'
+  /** #594 G6: no active address, so no city to match (only while the global flag is on). */
+  | 'no_address';
+
+const INELIGIBLE_MESSAGES: Partial<Record<OpportunityIneligibleReason, string>> = {
+  internal_agent: 'Dedicated opportunities are for independent agents',
+  no_address: 'Add your address to see stores near you',
+};
 
 interface OpportunityAgent {
   id: string;
@@ -88,9 +113,11 @@ export function opportunityDisabledReason(
 
 /**
  * #594 PR 7 agent side: Opportunities (AC-A1..A4, E7), one-tap apply with a
- * profile photo, withdraw. Internal agents and verified, contract-signed
- * independents only (else 403). Behind `dedicated_agents_enabled` for the
- * agent's (list) or the store's (apply / withdraw) country: off -> 404.
+ * profile photo, withdraw, single posting (G1). Verified, contract-signed
+ * independents only (else 403; internal agents -> reason internal_agent, #594 G2).
+ * Behind `dedicated_agents_enabled` for the agent's (list) or the store's
+ * (detail / apply / withdraw) country: off -> 404. No address: the global flag
+ * decides between 404 (off) and 403 reason no_address (on), #594 G6.
  */
 @Injectable()
 export class DedicatedOpportunitiesService {
@@ -100,7 +127,8 @@ export class DedicatedOpportunitiesService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly postings: DedicatedPostingsService,
     private readonly coverage: DedicatedCoverageService,
-    private readonly contractGate: AgentContractGateService
+    private readonly contractGate: AgentContractGateService,
+    private readonly configService: DedicatedAgentsConfigService
   ) {}
 
   async list(userId: string, now = new Date()): Promise<{ opportunities: DedicatedOpportunity[] }> {
@@ -109,7 +137,7 @@ export class DedicatedOpportunitiesService {
     if (agent && !address?.country?.trim()) {
       // No active address: no city to match and no country to read the flag for.
       this.logger.log(JSON.stringify({ event: 'dedicated.opportunities_city_match', agentId: agent.id, skipped: 'no_agent_address' }));
-      return { opportunities: [] };
+      await this.requireNoAddressFlag();
     }
     const { config } = await this.postings.requireEnabled(address?.country);
     await this.assertEligible(agent);
@@ -153,6 +181,55 @@ export class DedicatedOpportunitiesService {
       opportunities.push(await this.toOpportunity(row, address, held, config.maxAssignmentsPerAgent));
     }
     return { opportunities };
+  }
+
+  /**
+   * #594 G12: is the feature on for the agent's country? Never 404s, so clients
+   * stop probing. Eligibility is not encoded here.
+   */
+  async capabilityForAgent(userId: string): Promise<DedicatedCapability> {
+    const agent = await this.loadAgent(userId);
+    const country = pickAgentAddress(agent?.agent_addresses)?.country?.trim().toUpperCase() || null;
+    if (!country) return { enabled: false, country: null, reason: 'no_address' };
+    return { enabled: await this.configService.isEnabled(country), country, reason: null };
+  }
+
+  /** #594 G12 generic variant (business / admin clients that know the location's country). */
+  async capabilityForCountry(raw: string | null | undefined): Promise<DedicatedCapability> {
+    const value = raw?.trim() ?? '';
+    if (!value) return { enabled: false, country: null, reason: 'no_country' };
+    if (!/^[A-Za-z]{2}$/.test(value)) {
+      throw new BadRequestException({ code: DEDICATED_OPPORTUNITY_ERRORS.invalidCountry, message: 'country must be a 2-letter ISO code' });
+    }
+    const country = value.toUpperCase();
+    return { enabled: await this.configService.isEnabled(country), country, reason: null };
+  }
+
+  /**
+   * #594 G1: one posting, same shape as a list item. Visible when it is open (not
+   * expired) in the agent's city, or when the agent has an application on it in
+   * any status (accepted / closed / expired postings drop out of the list).
+   */
+  async detail(userId: string, postingId: string, now = new Date()): Promise<{ opportunity: DedicatedOpportunity }> {
+    const agent = await this.loadAgent(userId);
+    const posting = await this.postings.loadPosting(postingId);
+    const { config } = await this.postings.requireEnabled(posting.business_location?.address?.country);
+    await this.assertEligible(agent);
+    const eligible = agent as OpportunityAgent;
+    const address = pickAgentAddress(eligible.agent_addresses);
+    if (!address?.country?.trim()) this.throwIneligible('no_address');
+    const res = await this.hasuraSystemService.executeQuery<{
+      dedicated_agent_postings_by_pk: OpportunityRow | null;
+      held: Array<{ business_location_id: string; slot_key: string }>;
+    }>(DEDICATED_OPPORTUNITY_BY_ID_QUERY, { id: posting.id, agentId: eligible.id });
+    const row = res?.dedicated_agent_postings_by_pk;
+    if (!row) throw new NotFoundException('Posting not found');
+    const isOpen = row.status === 'open' && new Date(row.expires_at).getTime() > now.getTime();
+    const inCity = matchPostingCity(address ?? {}, row.business_location?.address ?? {}).match;
+    if ((row.mine?.length ?? 0) === 0 && !(isOpen && inCity)) throw new NotFoundException('Posting not found');
+    const opportunity = await this.toOpportunity(row, address, res?.held ?? [], config.maxAssignmentsPerAgent);
+    if (!isOpen) opportunity.disabledReason = null;
+    return { opportunity };
   }
 
   /** AC-A2: one tap; 422 PROFILE_PHOTO_REQUIRED sends the app to the photo step first. Idempotent while applied. */
@@ -249,7 +326,7 @@ export class DedicatedOpportunitiesService {
     if (!agent) return 'no_agent';
     if (agent.status === 'suspended') return 'suspended';
     if (!showsDeliveryChrome(agent.focus)) return 'commercial_focus';
-    if (agent.is_internal === true) return null;
+    if (agent.is_internal === true) return 'internal_agent';
     if (agent.is_verified !== true) return 'not_verified';
     if (!(await this.contractGate.canOperate(agent.id))) return 'contract_unsigned';
     return null;
@@ -258,12 +335,22 @@ export class DedicatedOpportunitiesService {
   private async assertEligible(agent: OpportunityAgent | null): Promise<void> {
     const reason = await this.ineligibleReason(agent);
     if (!reason) return;
+    this.throwIneligible(reason);
+  }
+
+  private throwIneligible(reason: OpportunityIneligibleReason): never {
     throw new ForbiddenException({
       error: DEDICATED_OPPORTUNITY_ERRORS.notEligible,
       code: DEDICATED_OPPORTUNITY_ERRORS.notEligible,
       reason,
-      message: 'Dedicated opportunities are for internal agents and verified agents with a signed agreement',
+      message: INELIGIBLE_MESSAGES[reason] ?? 'Dedicated opportunities are for verified agents with a signed agreement',
     });
+  }
+
+  /** #594 G6: no country to read the flag for, so the global row decides: off -> 404, on -> 403 no_address. */
+  private async requireNoAddressFlag(): Promise<never> {
+    if (!(await this.configService.isEnabled(null))) throw new NotFoundException('Not found');
+    this.throwIneligible('no_address');
   }
 
   private async toOpportunity(

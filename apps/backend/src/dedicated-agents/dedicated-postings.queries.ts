@@ -365,6 +365,26 @@ export const DEDICATED_OPPORTUNITIES_QUERY = `
   }
 `;
 
+/** #594 G1: one posting with the agent's own application (any status) and held slots. */
+export const DEDICATED_OPPORTUNITY_BY_ID_QUERY = `
+  query DedicatedOpportunityById($id: uuid!, $agentId: uuid!) {
+    dedicated_agent_postings_by_pk(id: $id) {
+      ${POSTING_FIELDS}
+      ${POSTING_LOCATION_FIELDS}
+      mine: applications(where: { agent_id: { _eq: $agentId } }) {
+        id
+        status
+        created_at
+        updated_at
+      }
+    }
+    held: dedicated_agent_assignments(where: { agent_id: { _eq: $agentId }, status: { _in: ["active", "paused"] } }) {
+      business_location_id
+      slot_key
+    }
+  }
+`;
+
 export const DEDICATED_AGENT_HELD_ASSIGNMENTS_QUERY = `
   query DedicatedAgentHeldAssignments($agentId: uuid!) {
     held: dedicated_agent_assignments(where: { agent_id: { _eq: $agentId }, status: { _in: ["active", "paused"] } }) {
