@@ -76,6 +76,7 @@ describe('BusinessItemsService.updateBusinessLocation allow-list (UAT S-9)', () 
       executeQuery: jest.fn().mockResolvedValue({
         business_locations_by_pk: { id: LOCATION_ID, business_id: BUSINESS_ID },
       }),
+      executeMutation: jest.fn(),
     };
     const hasuraSystemService = {
       executeMutation: jest.fn().mockResolvedValue({
@@ -162,6 +163,22 @@ describe('BusinessItemsService.updateBusinessLocation allow-list (UAT S-9)', () 
     ).resolves.toEqual({ id: LOCATION_ID });
     await Promise.resolve();
     expect(catalogCache.incrementGeneration).toHaveBeenCalledWith('global');
+  });
+
+  it('#631: explicit false payout and pay-at-confirm go through the system client only', async () => {
+    const { service, hasuraSystemService, hasuraUserService } = setup();
+    await service.updateBusinessLocation(BUSINESS_ID, LOCATION_ID, {
+      auto_withdraw_commissions: false,
+      pay_at_confirm: false,
+      rendasua_item_commission_percentage: 0,
+    } as any);
+    expect(hasuraUserService.executeMutation).not.toHaveBeenCalled();
+    const [, vars] = hasuraSystemService.executeMutation.mock.calls[0];
+    expect(vars.id).toBe(LOCATION_ID);
+    expect(vars.data).toEqual({
+      auto_withdraw_commissions: false,
+      pay_at_confirm: false,
+    });
   });
 
   it('refuses a location of another business and writes nothing', async () => {
