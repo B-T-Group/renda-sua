@@ -391,6 +391,14 @@ export class StripeCaptureService {
       );
       return { success: true };
     } catch (error: any) {
+      if (isPaymentIntentAlreadyCanceled(error)) {
+        // #627: Stripe says the PaymentIntent is already canceled: the authorization is
+        // released, which is what we wanted. Keep the row 'cancelled'; not a failure.
+        this.logger.log(
+          `stripe_authorization_already_cancelled order=${params.orderNumber} tx=${tx.id}`
+        );
+        return { success: true, skipped: true, message: 'Already canceled' };
+      }
       await this.databaseService.updateTransaction(tx.id, {
         status: tx.status,
         error_message: error?.message || 'Cancel failed',
@@ -427,4 +435,23 @@ export class StripeCaptureService {
     });
     return { success: true };
   }
+}
+
+/**
+ * #627: Stripe's answer to cancelling a PaymentIntent that is already canceled
+ * (`payment_intent_unexpected_state` with the intent's status `canceled`).
+ */
+export function isPaymentIntentAlreadyCanceled(error: unknown): boolean {
+  const e = error as {
+    code?: string;
+    raw?: { code?: string; payment_intent?: { status?: string } };
+    payment_intent?: { status?: string };
+    message?: string;
+  } | null;
+  if (!e) return false;
+  const code = e.code ?? e.raw?.code;
+  if (code !== 'payment_intent_unexpected_state') return false;
+  const status = e.payment_intent?.status ?? e.raw?.payment_intent?.status;
+  if (status) return status === 'canceled';
+  return /status of canceled/i.test(e.message ?? '');
 }

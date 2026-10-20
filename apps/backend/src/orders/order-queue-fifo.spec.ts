@@ -59,4 +59,17 @@ describe('OrderQueueService FIFO grouping', () => {
       })
     );
   });
+
+  it('#627: order.cancelled send failure is swallowed by default, rethrown when strict', async () => {
+    const service = createService();
+    mockSend.mockRejectedValueOnce(new Error('sqs down'));
+    await expect(service.sendOrderCancelledMessage('o-1', 'system', 'r', 'confirmed', 'd-1')).resolves.toBeUndefined();
+    mockSend.mockRejectedValueOnce(new Error('sqs down'));
+    await expect(
+      service.sendOrderCancelledMessage('o-1', 'system', 'r', 'confirmed', 'd-1', { strict: true })
+    ).rejects.toThrow('sqs down');
+    await expect(
+      service.sendOrderCancelledMessage('o-1', 'system', 'r', 'confirmed', 'd-1', { strict: true })
+    ).resolves.toBeUndefined();
+  });
 });
