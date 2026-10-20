@@ -100,11 +100,7 @@ insert_permissions:
         - email
         - phone
         - order_alert_phone
-        - mobile_payment_phone_id
         - operating_hours
-        - rendasua_item_commission_percentage
-        - auto_withdraw_commissions
-        - pay_at_confirm
         - logo_url
         - created_at
         - updated_at
@@ -230,11 +226,7 @@ update_permissions:
         - email
         - phone
         - order_alert_phone
-        - mobile_payment_phone_id
         - operating_hours
-        - rendasua_item_commission_percentage
-        - auto_withdraw_commissions
-        - pay_at_confirm
         - logo_url
         - updated_at
       filter:

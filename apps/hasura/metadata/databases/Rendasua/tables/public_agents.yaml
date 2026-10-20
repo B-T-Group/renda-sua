@@ -240,8 +240,6 @@ update_permissions:
         - updated_at
         - is_verified
         - onboarding_complete
-        - auto_withdraw_commissions
-        - mobile_payment_phone_id
         - location_tracking_consent_ios
         - location_tracking_consent_android
         - location_tracking_consent_web
