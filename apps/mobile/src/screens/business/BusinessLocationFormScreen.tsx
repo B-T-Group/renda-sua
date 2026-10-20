@@ -101,9 +101,8 @@ export default function BusinessLocationFormScreen({ route, navigation }: Props)
           <TextInput
             label={t('business.locations.phone', 'Phone')}
             value={form.phone}
-            onChangeText={form.setPhone}
+            onChangeText={(text: string) => form.setPhone(text)}
             mode="outlined"
-            keyboardType="phone-pad"
             style={styles.field}
           />
         )}

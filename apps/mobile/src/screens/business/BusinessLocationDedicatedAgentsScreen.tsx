@@ -14,6 +14,7 @@ import {
   Divider,
   IconButton,
 } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -69,9 +70,11 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const [actionsMenuAgent, setActionsMenuAgent] = useState<string | null>(null);
   const [retryError, setRetryError] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
     try {
-      setLoading(true);
+      if (!opts?.silent) {
+        setLoading(true);
+      }
       setRetryError(false);
       const [slotsRes, agentsRes, postingsRes] = await Promise.all([
         dedicatedAgentsService.getPickupSlots(locationId).catch((e) => {
@@ -98,7 +101,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
       }
       if (postingsRes) setPostings(postingsRes.postings);
 
-      if (!loading) {
+      if (!opts?.silent) {
         dedicatedAgentsAnalytics.sectionViewed({
           platform: Platform.OS as 'ios' | 'android',
           role: 'business',
@@ -114,9 +117,11 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
         setRetryError(true);
       }
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
     }
-  }, [locationId, loading]);
+  }, [locationId]);
 
   useEffect(() => {
     loadData();
@@ -151,7 +156,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
         .updatePickupSlots(locationId, {
           slots: [{ slotKey, isEnabled: enabled }],
         })
-        .then(() => loadData())
+        .then(() => loadData({ silent: true }))
         .then(() => {
           dedicatedAgentsAnalytics.slotToggled({
             platform: Platform.OS as 'ios' | 'android',
@@ -168,7 +173,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
               slotKey,
               agentsToPause: err.response.data.agentsToPause,
             });
-            void loadData();
+            void loadData({ silent: true });
             return;
           }
           const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
@@ -190,7 +195,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
         confirmPauseAgents: true,
       });
       setConfirmPause(null);
-      await loadData();
+      await loadData({ silent: true });
 
       dedicatedAgentsAnalytics.slotToggled({
         platform: Platform.OS as 'ios' | 'android',
@@ -215,7 +220,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
       await dedicatedAgentsService.updatePickupSlots(locationId, {
         slots: [{ slotKey, pickupTime }],
       });
-      await loadData();
+      await loadData({ silent: true });
       setPickupMenuSlot(null);
 
       dedicatedAgentsAnalytics.pickupTimeChanged({
@@ -253,7 +258,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
       await dedicatedAgentsService.updateAssignment(locationId, assignmentId, {
         status: 'paused',
       });
-      await loadData();
+      await loadData({ silent: true });
       setActionsMenuAgent(null);
 
       const agent = agents.find((a) => a.assignmentId === assignmentId);
@@ -280,7 +285,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
       await dedicatedAgentsService.updateAssignment(locationId, assignmentId, {
         status: 'active',
       });
-      await loadData();
+      await loadData({ silent: true });
       setActionsMenuAgent(null);
 
       const agent = agents.find((a) => a.assignmentId === assignmentId);
@@ -305,7 +310,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
     try {
       setMutating(assignmentId);
       await dedicatedAgentsService.deleteAssignment(locationId, assignmentId);
-      await loadData();
+      await loadData({ silent: true });
       setConfirmRemove(null);
       setActionsMenuAgent(null);
 
@@ -354,7 +359,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
         <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginBottom: spacing.md }}>
           {t('dedicatedAgents.generic', 'Something went wrong')}
         </Text>
-        <Button mode="contained" onPress={loadData}>
+        <Button mode="contained" onPress={() => loadData()}>
           {t('dedicatedAgents.retry', 'Retry')}
         </Button>
       </View>
@@ -407,7 +412,16 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
           return (
             <Card key={slot.slotKey} style={{ marginBottom: spacing.md }}>
               <Card.Content>
-                <View style={styles.slotHeader}>
+                <View
+                  style={styles.slotHeader}
+                  accessible
+                  accessibilityRole="switch"
+                  accessibilityState={{ checked: slot.isEnabled, disabled: isMutating || isOffline }}
+                  accessibilityLabel={t('dedicatedAgents.accessibilityLabels.slotToggle', 'Toggle {{slot}} slot', {
+                    slot: t(`dedicatedAgents.slots.${slot.slotKey}`, slot.slotKey),
+                  })}
+                  onAccessibilityTap={() => handleToggleSlot(slot.slotKey, !slot.isEnabled)}
+                >
                   <View style={{ flex: 1 }}>
                     <Text variant="titleMedium">
                       {t(`dedicatedAgents.slots.${slot.slotKey}`, slot.slotKey)}
@@ -518,10 +532,13 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                                     </Chip>
                                   )}
                                 </View>
-                                <Text variant="bodySmall" style={{ marginTop: spacing.xs }}>
-                                  📦 {agent.activeOrders}/{agent.maxActiveOrders} · ✓{' '}
-                                  {agent.deliveries} · ✕ {agent.missedDeliveries}
-                                </Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.xs }}>
+                                  <MaterialCommunityIcons name="package-variant" size={14} color={colors.text.secondary} />
+                                  <Text variant="bodySmall" style={{ marginLeft: 4 }}>
+                                    {agent.activeOrders}/{agent.maxActiveOrders} · ✓{' '}
+                                    {agent.deliveries} · ✕ {agent.missedDeliveries}
+                                  </Text>
+                                </View>
                               </View>
                               <Menu
                                 visible={actionsMenuAgent === agent.assignmentId}

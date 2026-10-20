@@ -79,8 +79,7 @@ export default function BusinessLocationHoursScreen({ route, navigation }: Props
   );
 
   const probeDedicatedAgents = useCallback(async () => {
-    const hasPermission = me?.business?.user_id === me?.id || can(DELEGATION_PERMISSIONS.DEDICATED_AGENTS_MANAGE);
-    if (!hasPermission) {
+    if (!can(DELEGATION_PERMISSIONS.DEDICATED_AGENTS_MANAGE) && !me?.business?.id) {
       setDedicatedAgentsAvailable(false);
       return;
     }

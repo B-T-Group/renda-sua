@@ -198,7 +198,8 @@
     "agent": "Agent",
     "business": "Business",
     "saved": "Saved",
-    "removed": "Removed"
+    "removed": "Removed",
+    "notAvailable": "Not available"
   },
   "cart": {
     "title": "Cart",
@@ -7827,7 +7828,8 @@
       "closePosting": "Close posting",
       "pickupTime": "Select pickup time",
       "decreaseCount": "Decrease count",
-      "increaseCount": "Increase count"
+      "increaseCount": "Increase count",
+      "slotToggle": "Toggle {{slot}} slot"
     }
   }
 }

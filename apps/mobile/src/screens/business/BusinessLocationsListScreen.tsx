@@ -115,8 +115,7 @@ export default function BusinessLocationsListScreen() {
   }, [route.params?.hoursUpdated, navigation, t]);
 
   const probeDedicatedAgents = useCallback(async (locationId: string) => {
-    const hasPermission = me?.business?.user_id === me?.id || can(DELEGATION_PERMISSIONS.DEDICATED_AGENTS_MANAGE);
-    if (!hasPermission) return false;
+    if (!can(DELEGATION_PERMISSIONS.DEDICATED_AGENTS_MANAGE) && !me?.business?.id) return false;
 
     const storedContext = await readStoredContext();
     const currentDelegationId = storedContext?.kind === 'delegation' ? storedContext.delegationId : null;

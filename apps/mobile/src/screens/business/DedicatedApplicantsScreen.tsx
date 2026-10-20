@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, RefreshControl, ScrollView, StyleSheet, View, Linking, Alert } from 'react-native';
 import {
   ActivityIndicator,
@@ -58,16 +58,36 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
   const [acceptingApp, setAcceptingApp] = useState<string | null>(null);
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
+  const analyticsTracked = useRef(false);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) {
+      setLoading(true);
+    }
     try {
       const response = await dedicatedAgentsService.getApplications(locationId, postingId);
       setPosting(response.posting);
-      setApplications(response.applications);
+      
+      // Keep local auto_declined rows when merging poll result (the API doesn't return them)
+      setApplications((prev) => {
+        const localAutoDeclined = prev.filter((app) => app.status === 'auto_declined');
+        const serverApps = response.applications;
+        
+        // Merge: keep server apps + local auto_declined not in server
+        const merged = [...serverApps];
+        localAutoDeclined.forEach((autoApp) => {
+          if (!serverApps.some((sApp) => sApp.applicationId === autoApp.applicationId)) {
+            merged.push(autoApp);
+          }
+        });
+        return merged;
+      });
+      
       setNewTerms(response.posting.terms || '');
       setNotFound(false);
 
-      if (!loading && !refreshing) {
+      // Fire analytics once per visit
+      if (!analyticsTracked.current) {
         const pending = response.applications.filter((a) => a.status === 'applied');
         const accepted = response.applications.filter((a) => a.status === 'accepted');
         dedicatedAgentsAnalytics.applicantsViewed({
@@ -78,6 +98,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
           pending: pending.length,
           accepted: accepted.length,
         });
+        analyticsTracked.current = true;
       }
     } catch (err: any) {
       if (isDedicatedAgentsFeatureHidden(err)) {
@@ -85,14 +106,16 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       }
       console.error('Error loading applications:', err);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) {
+        setLoading(false);
+      }
       setRefreshing(false);
     }
-  }, [locationId, postingId, loading, refreshing]);
+  }, [locationId, postingId]);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 30000);
+    const interval = setInterval(() => loadData({ silent: true }), 30000);
     return () => clearInterval(interval);
   }, [loadData]);
 
@@ -160,7 +183,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       if (code && errorCodes.includes(code)) {
         const errorKey = mapDedicatedAgentsErrorCode(code);
         Alert.alert(t('common.error', 'Error'), t(errorKey, 'An error occurred'));
-        await loadData();
+        await loadData({ silent: true });
 
         dedicatedAgentsAnalytics.actionConflict({
           platform: Platform.OS as 'ios' | 'android',
@@ -185,7 +208,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
   const handleDecline = async (applicationId: string) => {
     try {
       await dedicatedAgentsService.declineApplication(locationId, postingId, applicationId);
-      await loadData();
+      await loadData({ silent: true });
 
       dedicatedAgentsAnalytics.applicantDeclined({
         platform: Platform.OS as 'ios' | 'android',
@@ -208,7 +231,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
       await dedicatedAgentsService.updatePosting(locationId, postingId, {
         terms: newTerms.trim() || null,
       });
-      await loadData();
+      await loadData({ silent: true });
       setEditingTerms(false);
       setSnackbarMessage(t('dedicatedAgents.applicant.termsEdited', 'Applicants were notified'));
 

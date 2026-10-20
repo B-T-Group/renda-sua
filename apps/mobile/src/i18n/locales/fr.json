@@ -193,7 +193,8 @@
     "agent": "Agent",
     "business": "Commerce",
     "saved": "Enregistré",
-    "removed": "Retiré"
+    "removed": "Retiré",
+    "notAvailable": "Non disponible"
   },
   "cart": {
     "title": "Panier",
@@ -7749,7 +7750,8 @@
       "closePosting": "Fermer la demande",
       "pickupTime": "Sélectionner l'heure de collecte",
       "decreaseCount": "Diminuer le nombre",
-      "increaseCount": "Augmenter le nombre"
+      "increaseCount": "Augmenter le nombre",
+      "slotToggle": "Activer/désactiver le créneau {{slot}}"
     }
   }
 }
