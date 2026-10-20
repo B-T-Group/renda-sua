@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
@@ -17,6 +18,10 @@ import type { CreditAllocation, CreditLine } from '../payment-programs/purchase-
 import { CommissionsService } from '../commissions/commissions.service';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import {
+  AGENT_HOLD_RELEASE_FAILED_MARKER,
+  releaseAgentOrderHold,
+} from './agent-hold-release.util';
+import {
   RETRY_SETTLEABLE_STATUSES,
   SETTLEMENT_CLAIM_LEASE_MINUTES,
   SettlementStage,
@@ -28,6 +33,26 @@ import { canRecipientCompletePickup } from './recipient-pickup-complete.util';
 import type { Configuration } from '../config/configuration';
 import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
+import {
+  DedicatedDeliveryRequest,
+  DeliveryAvailabilityResult,
+  DeliveryUnavailableReason,
+} from '../delivery-availability/delivery-availability.types';
+import { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
+import {
+  OFFER_DECLINE_REASONS,
+  type OfferDeclineReason,
+} from '../dedicated-agents/dedicated-agents.constants';
+import type { ClaimAssignment } from './dedicated-claim.port';
+import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
+import { dedicatedReleaseRefusalMessage } from './dedicated-accept-refusal.messages';
+import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
+import {
+  buildDedicatedClaimAtCapacityMessage,
+  buildDedicatedConfirmReminderMessage,
+  DEDICATED_ORDER_MESSAGE_TYPES,
+} from '../notifications/dedicated-order-push.messages';
+import { DedicatedCheckoutCoverageService } from '../dedicated-agents/dedicated-checkout-coverage.service';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { DeliveryWindowsService } from '../delivery/delivery-windows.service';
 import {
@@ -166,7 +191,11 @@ import {
   ShopperVariantResolveException,
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
-import { isAdminTerminalStatus } from './admin-order-status.util';
+import {
+  adminPrePickupRefusal,
+  isAdminPrePickupCancellableStatus,
+  isAdminTerminalStatus,
+} from './admin-order-status.util';
 import { GET_ORDERS } from './orders.queries';
 import {
   withDeliveryContact,
@@ -198,6 +227,7 @@ import { checkFoodOrderable } from '../food/food-order-guard.util';
 import { collectCookedFoodSlots } from '../food/cooked-food-closed-message.util';
 import { FoodOrdersService } from '../food/food-orders.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 import {
   anyLocationPayAtConfirm,
   PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY,
@@ -227,8 +257,23 @@ import {
   DepositRefundService,
   RESOLVED_DEPOSIT_STATUSES,
 } from './deposit-refund.service';
-import { buildShortReferenceForMyPVit } from '../mobile-payments/providers/mypvit.service';
 import { insertOrderStatusHistory as writeOrderStatusHistory } from './order-status-history.util';
+import {
+  ADMIN_CANCEL_LEASE_MS,
+  ADMIN_CANCEL_NON_REPEATABLE,
+  ADMIN_CANCEL_STEPS,
+  type AdminCancelProgress,
+  type AdminCancelProgressRow,
+  type AdminCancelStepName,
+  type AdminCancelStepState,
+  casAdminCancelProgress,
+  insertAdminCancelProgress,
+  leaseIsLive,
+  loadAdminCancelProgress,
+  pendingSteps,
+} from './admin-cancel-progress';
+export { ADMIN_CANCEL_STEPS, type AdminCancelStepName } from './admin-cancel-progress';
+
 
 export interface OrderStatusChangeRequest {
   orderId: string;
@@ -629,6 +674,63 @@ const MARK_DEPOSIT_CAPTURED_ONLY = `
  * (optional explicit RequestContext on HasuraUserService methods).
  * Must remain usable from HTTP and payment callbacks without Nest Scope.REQUEST.
  */
+/** The agent side of a claim: `users` row fields the claim core reads. */
+export interface ClaimingAgentUser {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+}
+
+/** The `agents` row fields the claim core reads. */
+export interface ClaimingAgent {
+  id: string;
+  is_verified?: boolean | null;
+  is_internal?: boolean | null;
+}
+
+export type { ClaimAssignment } from './dedicated-claim.port';
+
+/** Optional body field on POST /orders/offers/decline (#594). */
+export interface DeclineOrderOfferRequest {
+  orderId: string;
+  reason?: string | null;
+}
+
+export const ADMIN_FULL_REFUND_DEPOSIT_FAILED_MARKER = 'admin_full_refund_cancel_deposit_refund_failed';
+export const ADMIN_FULL_REFUND_STEP_FAILED_MARKER = 'admin_full_refund_cancel_step_failed';
+/** #626 D2: what the API says about a failed step (the detail is only logged / alerted). */
+export const ADMIN_FULL_REFUND_STEP_FAILED_MESSAGE = 'Step failed; details are in the logs (alerted)';
+
+/** #626 D2: the API's depositRefund.message on failure; the raw text is only logged / alerted. */
+export const ADMIN_FULL_REFUND_DEPOSIT_FAILED_MESSAGE = 'Deposit refund failed; details are in the logs (alerted)';
+
+/** What happened to a paid deposit on cancel. */
+export type DepositCancelOutcome =
+  | { status: 'none' }
+  | { status: 'refunded' }
+  | { status: 'forfeited' }
+  | { status: 'failed'; message: string; errorCode?: string };
+
+export const ADMIN_CANCEL_STEP_FAILED_MARKER = 'admin_cancel_step_failed';
+/** Statuses after which the commerce inventory hook must release committed stock. */
+const INVENTORY_COMMITTED_STATUSES = new Set([
+  'pending',
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned_to_agent',
+  'picked_up',
+  'in_transit',
+  'out_for_delivery',
+  'delivered',
+]);
+interface AdminCancelContext {
+  order: Orders;
+  previousStatus: string;
+  adminUserId: string | null;
+  notes?: string;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -698,7 +800,13 @@ export class OrdersService {
     @Optional()
     private readonly moduleRef?: ModuleRef,
     @Optional()
-    private readonly agentContractGate?: AgentContractGateService
+    private readonly agentContractGate?: AgentContractGateService,
+    @Optional()
+    private readonly dedicatedAgentsConfig?: DedicatedAgentsConfigService,
+    @Optional()
+    private readonly dedicatedSlotReminder?: DedicatedSlotReminderService,
+    @Optional()
+    private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -1065,7 +1173,7 @@ export class OrdersService {
 
       return result;
     } catch (error) {
-      this.logger.error('Failed to fetch item deals for order pricing:', error);
+      this.logger.error('Failed to fetch item deals for order pricing:', safeErrorMessage(error));
       return {};
     }
   }
@@ -2154,6 +2262,72 @@ export class OrdersService {
   }
 
   /**
+   * #594 PR 5 (PE): an order placed on dedicated coverage (`coverage_slot_key`)
+   * gets the dedicated fallback only once the business confirms its window, so
+   * remind the business when the order reaches it. No-op for every other order,
+   * when the flag is off, or once the window is confirmed. Never throws.
+   */
+  async remindBusinessToConfirmCoveredOrder(orderId: string): Promise<void> {
+    if (!this.dedicatedAgentsConfig) return;
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        orders_by_pk: {
+          id: string;
+          order_number: string;
+          coverage_slot_key: string | null;
+          business?: { user_id?: string | null; user?: { preferred_language?: string | null } | null } | null;
+          business_location?: { address?: { country?: string | null } | null } | null;
+          delivery_time_windows?: Array<{ preferred_date: string | null; is_confirmed: boolean | null }>;
+        } | null;
+      }>(
+        `query DedicatedConfirmReminder($id: uuid!) {
+          orders_by_pk(id: $id) {
+            id
+            order_number
+            coverage_slot_key
+            business { user_id user { preferred_language } }
+            business_location { address { country } }
+            delivery_time_windows(order_by: { created_at: desc }, limit: 1) {
+              preferred_date
+              is_confirmed
+            }
+          }
+        }`,
+        { id: orderId }
+      );
+      const order = res?.orders_by_pk;
+      const window = order?.delivery_time_windows?.[0];
+      const businessUserId = order?.business?.user_id;
+      if (!order?.coverage_slot_key || !window || window.is_confirmed === true || !businessUserId) {
+        return;
+      }
+      const country = isoCountryCode(order.business_location?.address?.country);
+      if (!(await this.dedicatedAgentsConfig.isEnabled(country))) return;
+      const msg = buildDedicatedConfirmReminderMessage({
+        orderNumber: order.order_number,
+        slotKey: order.coverage_slot_key,
+        date: window.preferred_date ?? '',
+        preferredLanguage: order.business?.user?.preferred_language,
+      });
+      await this.notificationsService.sendDedicatedOrderNotice({
+        userId: businessUserId,
+        title: msg.title,
+        body: msg.body,
+        messageType: DEDICATED_ORDER_MESSAGE_TYPES.confirmReminder,
+        orderId: order.id,
+        event: 'dedicated.confirm_window_reminder',
+        persona: 'business',
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Dedicated confirm-window reminder failed for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
+  }
+
+  /**
    * Resolve the confirmed delivery window (if any) into UTC dispatch/pickup
    * timestamps. Falls back to "dispatch now" when there is no future window.
    */
@@ -2706,7 +2880,8 @@ export class OrdersService {
   async claimOrder(
     request: GetOrderRequest,
     platformHeader?: string,
-    fundsCheckSource?: 'claim' | 'offer_accept'
+    fundsCheckSource?: 'claim' | 'offer_accept',
+    assignment?: ClaimAssignment
   ) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(
@@ -2715,13 +2890,43 @@ export class OrdersService {
       'Only agent users can get orders'
     );
     const agent = this.requireAgentRecord(user);
+    return this.claimOrderForAgent({
+      orderId: request.orderId,
+      user,
+      agent,
+      fundsCheckSource: fundsCheckSource || 'claim',
+      locationConsent: { platformHeader },
+      assignment,
+    });
+  }
+
+  /**
+   * The claim core shared by the agent's own claim / offer accept and the
+   * system (dedicated dispatch, #594 PR 5): verification, contract gate,
+   * suspension, order checks, funds check, atomic assignment, hold (reverted
+   * on failure), status history and the post-assignment hooks. The mobile
+   * location-consent check runs only for a request the agent made
+   * (`locationConsent` set), at the same point as before the split.
+   */
+  async claimOrderForAgent(params: {
+    orderId: string;
+    user: ClaimingAgentUser;
+    agent: ClaimingAgent;
+    fundsCheckSource: 'claim' | 'offer_accept';
+    locationConsent?: { platformHeader?: string };
+    assignment?: ClaimAssignment;
+  }) {
+    const { user, agent, fundsCheckSource } = params;
+    const request = { orderId: params.orderId };
     this.assertAgentVerifiedForClaim(agent);
     await this.agentContractGate?.assertCanOperate(agent.id);
-    await assertMobileLocationConsentAccepted(
-      this.hasuraSystemService,
-      agent.id,
-      platformHeader
-    );
+    if (params.locationConsent) {
+      await assertMobileLocationConsentAccepted(
+        this.hasuraSystemService,
+        agent.id,
+        params.locationConsent.platformHeader
+      );
+    }
     const agentStatus = await this.getAgentStatus(agent.id);
     if (agentStatus === 'suspended') {
       throw new HttpException(
@@ -2747,6 +2952,17 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
+    // #594 DEV QA N1: the agent's own open-pool claim while it holds a live dedicated
+    // offer on this order goes through the dedicated re-check (AC-E2) and the cap, and
+    // is stamped, like the offer accept. Only a refusal AT THE CAP blocks the claim
+    // (QA #607 R1: no uncapped way around the cap). Any other refusal (off today,
+    // assignment paused / removed, slot disabled, ...) falls back to a plain,
+    // unstamped open-pool claim, as the top-up completion path does.
+    const assignment =
+      params.assignment ??
+      (fundsCheckSource === 'claim'
+        ? await this.ownClaimDedicatedAssignment(order.id, agent.id)
+        : undefined);
     const { rail, holdPercentage, holdAmount } =
       await this.resolveOrderHoldAmount(order, agent.id);
     const agentAccount = await this.hasuraSystemService.getAccount(
@@ -2778,7 +2994,7 @@ export class OrdersService {
         needsTopUp: availableBalance < holdAmount,
         hasEnoughFunds: availableBalance >= holdAmount,
         rail,
-        source: fundsCheckSource || 'claim',
+        source: fundsCheckSource,
       });
 
       if (availableBalance < 0) {
@@ -2816,7 +3032,8 @@ export class OrdersService {
     const updatedOrder = await this.assignOrderToAgent(
       request.orderId,
       agent.id,
-      'assigned_to_agent'
+      'assigned_to_agent',
+      assignment
     );
 
     try {
@@ -2842,12 +3059,15 @@ export class OrdersService {
       throw error;
     }
 
+    const autoAssigned = assignment?.source === 'dedicated_auto';
     await this.createStatusHistoryEntry(
       request.orderId,
       'assigned_to_agent',
-      `Order assigned to agent ${user.first_name} ${user.last_name}`,
-      'agent',
-      user.id
+      autoAssigned
+        ? `Order auto-assigned to dedicated agent ${user.first_name} ${user.last_name}`
+        : `Order assigned to agent ${user.first_name} ${user.last_name}`,
+      autoAssigned ? 'system' : 'agent',
+      autoAssigned ? null : user.id
     );
     await this.onOrderAssignedToAgent(request.orderId, agent.id);
     return {
@@ -2915,15 +3135,28 @@ export class OrdersService {
       );
     }
 
+    // #594: a dedicated offer re-checks AC-E2 and stamps the dedicated assignment.
+    const assignment =
+      activeOffer.offer_kind === 'dedicated'
+        ? await this.orderOffersService.dedicatedAcceptAssignment(
+            request.orderId,
+            agent.id
+          )
+        : undefined;
     try {
-      return await this.claimOrder(request, platformHeader, 'offer_accept');
+      return await this.claimOrder(
+        request,
+        platformHeader,
+        'offer_accept',
+        assignment
+      );
     } catch (error: any) {
       const responseError =
         error instanceof HttpException
           ? (error.getResponse() as any)?.error
           : undefined;
       if (responseError === 'ALREADY_ASSIGNED') {
-        await this.orderOffersService.markOfferExpired(
+        await this.orderOffersService.markOfferLost(
           request.orderId,
           agent.id
         );
@@ -2935,12 +3168,17 @@ export class OrdersService {
   /**
    * Decline a delivery offer for the authenticated agent.
    */
-  async declineOrderOffer(request: GetOrderRequest) {
+  async declineOrderOffer(request: DeclineOrderOfferRequest) {
     const user = await this.hasuraUserService.getUser();
     if (!user.agent?.id) {
       return { success: true, message: 'Offer declined' };
     }
-    await this.orderOffersService.declineOffer(request.orderId, user.agent.id);
+    const reason = parseOfferDeclineReason(request.reason);
+    await this.orderOffersService.declineOffer(
+      request.orderId,
+      user.agent.id,
+      reason
+    );
     return { success: true, message: 'Offer declined' };
   }
 
@@ -3011,13 +3249,18 @@ export class OrdersService {
     const { rail, holdPercentage, holdAmount } =
       await this.resolveOrderHoldAmount(order, agent.id);
 
+    // QA #607 N2 (AC-A6): an agent holding a live dedicated offer goes through
+    // the dedicated re-check (AC-E2) before any charge, and the claim is stamped.
+    const dedicatedAssignment = await this.dedicatedClaimAssignment(request.orderId, agent.id);
+
     // When hold is 0 (e.g. internal agent or Stripe-enabled order), skip
     // payment and assign directly
     if (holdAmount === 0) {
       const updatedOrder = await this.assignOrderToAgent(
         request.orderId,
         agent.id,
-        'assigned_to_agent'
+        'assigned_to_agent',
+        dedicatedAssignment
       );
       try {
         const orderHold = await this.getOrCreateOrderHold(order.id);
@@ -3105,6 +3348,29 @@ export class OrdersService {
     const momo = await this.orderMomoContext(order);
     const provider = momo.provider;
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: holdAmount,
+      },
+      user.id
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     // Create transaction record before initiating payment
     let paymentTransaction = null;
     let transaction = null;
@@ -3189,6 +3455,14 @@ export class OrdersService {
             transaction_id: paymentTransaction.transactionId,
           }
         );
+        
+        // G2: Schedule mock callback AFTER persisting the transaction_id
+        if (paymentTransaction.transactionId.startsWith('mock-')) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentTransaction.transactionId,
+            reference
+          );
+        }
       }
 
       this.logger.log(
@@ -3237,8 +3511,7 @@ export class OrdersService {
 
       // Log the error and throw a generic error
       this.logger.error(
-        `Failed to claim order with topup: ${error.message}`,
-        error.stack
+        `Failed to claim order with topup: ${safeErrorMessage(error)}`
       );
 
       throw new HttpException(
@@ -4198,6 +4471,29 @@ export class OrdersService {
       };
     }
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4249,6 +4545,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     return {
@@ -4411,6 +4715,29 @@ export class OrdersService {
       };
     }
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4462,6 +4789,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     // Clear a prior failed payment_status so clients polling after a new push
@@ -4610,6 +4945,29 @@ export class OrdersService {
     );
     const chargeAmount = Number(order.total_amount) || 0;
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider: momo.provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -4657,6 +5015,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
     await this.resetOrderPaymentFailure(orderId);
   }
@@ -5575,6 +5941,29 @@ export class OrdersService {
     const reference = this.buildOrderPaymentAttemptReference(order.order_number);
     const chargeAmount = Number(order.total_amount) || 0;
 
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: params.phone,
+        provider: momo.provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     let tx: MobilePaymentTransaction;
     try {
       tx = await this.mobilePaymentsDatabaseService.createTransaction({
@@ -5679,6 +6068,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: sent.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (sent.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          sent.transactionId,
+          reference
+        );
+      }
     }
     // D3: persist the new number only after the provider accepted the request.
     if (params.phoneChanged) {
@@ -5736,8 +6133,9 @@ export class OrdersService {
   }
 
   /**
-   * Provider SUCCESS for an order attempt we cancelled as superseded (called by the
-   * callback processor after it verified the provider status and credited the wallet).
+   * Provider SUCCESS for an order attempt we cancelled as superseded, or for a plain
+   * attempt we had marked failed (F3 declined-then-approved, M1). Called by the
+   * callback processor after it verified the provider status and credited the wallet.
    * First success wins: an unpaid live order is finalized with this attempt and any
    * newer pending attempt is cancelled. A paid or cancelled order keeps the money in
    * the client's wallet (D5) and raises an alert.
@@ -6044,6 +6442,30 @@ export class OrdersService {
     const paymentAttemptReference = this.buildOrderPaymentAttemptReference(
       order.order_number
     );
+    
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: Number(order.total_amount),
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: Number(order.total_amount),
@@ -6095,6 +6517,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     await this.resetOrderPaymentFailure(orderId);
@@ -6140,7 +6570,7 @@ export class OrdersService {
    * - Order is pending_payment with deposit_status pending or failed
    * - MoMo XAF deposit path (pay_at_delivery or pay_at_pickup)
    * - Order not cancelled
-   * - Prior deposit transaction is missing, or provider-confirmed failed/cancelled
+   * - Prior deposit transaction is missing, failed, expired, or cancelled
    */
   async retryDepositPayment(
     orderId: string,
@@ -6253,11 +6683,6 @@ export class OrdersService {
             existingTxnId
           );
         }
-        const recovered = await this.recoverPaidDepositIfProviderSucceeded(
-          order.order_number,
-          existingTxn
-        );
-        if (recovered) return recovered;
       }
     }
 
@@ -6283,7 +6708,29 @@ export class OrdersService {
     const provider = momo.provider;
 
     const depositLongReference = `${order.order_number}-DEP-${Date.now()}-retry`;
-    const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
+
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phoneNumber,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: depositAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
 
     // Step 1: Create pending mobile_payment_transactions row FIRST (real FK target)
     const depositTransaction =
@@ -6413,7 +6860,7 @@ export class OrdersService {
 
     const depositResult = await this.mobilePaymentsService.initiatePayment(
       depositPaymentRequest,
-      depositShortReference,
+      depositLongReference,
       user.id
     );
 
@@ -6505,6 +6952,14 @@ export class OrdersService {
           transaction_id: depositResult.transactionId,
         }
       );
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (depositResult.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          depositResult.transactionId,
+          depositLongReference
+        );
+      }
     }
 
     try {
@@ -6815,6 +7270,30 @@ export class OrdersService {
     const chargeAmount = this.depositCalculationService.remainderPaymentAmount(
       order as any
     );
+
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: phone,
+        provider,
+        itemCountry: momo.itemCountry ?? undefined,
+        currency: order.currency,
+        amount: chargeAmount,
+      },
+      momo.payerUserId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference: paymentAttemptReference,
       amount: chargeAmount,
@@ -6864,6 +7343,14 @@ export class OrdersService {
       await this.mobilePaymentsDatabaseService.updateTransaction(tx.id, {
         transaction_id: paymentTransaction.transactionId,
       });
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          paymentAttemptReference
+        );
+      }
     }
 
     return {
@@ -8036,16 +8523,316 @@ export class OrdersService {
     };
   }
 
-  async cancelOrderAsAdmin(orderId: string, notes?: string) {
+  /**
+   * #627 C2: the cancel write is a compare-and-set on `expectedFromStatus` (the status
+   * the caller validated; defaults to the one read here), so a concurrent change gets
+   * 409 before the card authorisation is released or anything else runs.
+   *
+   * #627 C4/C7: after the status CAS, every step runs on its own, keyed by a durable
+   * per-step marker (admin-cancel-progress.ts). A failed step never stops the others;
+   * it is alerted and listed in failedSteps (names only). A retry of this endpoint on
+   * the cancelled order resumes only the steps not yet done, one resume at a time.
+   */
+  async cancelOrderAsAdmin(orderId: string, notes?: string, expectedFromStatus?: string) {
+    const existing = await loadAdminCancelProgress(this.hasuraSystemService, orderId);
+    if (existing) return this.resumeAdminCancel(orderId, existing);
     const order = await this.requireCancellableAdminOrder(orderId);
     const adminUserId = await this.resolveOptionalUserId();
-    await this.releaseStripeAuthorizationIfNeeded(order);
-    const updatedOrder = await this.markOrderCancelledAsSystem(orderId);
-    await this.finishAdminCancellation(order, adminUserId, notes);
+    await this.markOrderCancelledAsSystem(orderId, expectedFromStatus ?? order.current_status);
+    // The order IS cancelled now, and only this caller won the status CAS.
+    const ctx: AdminCancelContext = { order, previousStatus: order.current_status, adminUserId, notes };
+    const owner = randomUUID();
+    let row: AdminCancelProgressRow | null = null;
+    try {
+      row = await insertAdminCancelProgress(this.hasuraSystemService, orderId, adminUserId, {
+        version: 1,
+        previousStatus: ctx.previousStatus,
+        notes: notes ?? null,
+        adminUserId,
+        steps: Object.fromEntries(ADMIN_CANCEL_STEPS.map((n) => [n, 'pending'])) as AdminCancelProgress['steps'],
+        leaseOwner: owner,
+        leaseUntil: new Date(Date.now() + ADMIN_CANCEL_LEASE_MS).toISOString(),
+      });
+    } catch (error: unknown) {
+      // No durable markers: still run every step once now, but a retry cannot resume.
+      reportMoneyAnomaly(
+        this.logger,
+        ADMIN_CANCEL_STEP_FAILED_MARKER,
+        `Admin cancel of order ${order.order_number}: progress marker not written: ${safeErrorMessage(error)}`,
+        { orderId, step: 'progressMarker' }
+      );
+    }
+    const failedSteps = await this.runAdminCancelSteps(ctx, row, owner);
+    return this.adminCancelResult(orderId, failedSteps, false);
+  }
+
+  /** A retry on an order that already has a progress row: resume what is not done. */
+  private async resumeAdminCancel(orderId: string, row: AdminCancelProgressRow) {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    if (pendingSteps(row.payload).length === 0) {
+      // Completed cancel: the same shared refusal as any non-pre-pickup status.
+      throw adminPrePickupRefusal(order.current_status);
+    }
+    if (leaseIsLive(row.payload)) {
+      throw new HttpException('This cancellation is already being resumed', HttpStatus.CONFLICT);
+    }
+    const owner = randomUUID();
+    const claimed = await casAdminCancelProgress(this.hasuraSystemService, row, {
+      ...row.payload,
+      leaseOwner: owner,
+      leaseUntil: new Date(Date.now() + ADMIN_CANCEL_LEASE_MS).toISOString(),
+    });
+    if (!claimed) {
+      throw new HttpException('This cancellation is already being resumed', HttpStatus.CONFLICT);
+    }
+    const ctx: AdminCancelContext = {
+      order,
+      previousStatus: row.payload.previousStatus,
+      adminUserId: (await this.resolveOptionalUserId()) ?? row.payload.adminUserId,
+      notes: row.payload.notes ?? undefined,
+    };
+    const failedSteps = await this.runAdminCancelSteps(ctx, claimed, owner);
+    return this.adminCancelResult(orderId, failedSteps, true);
+  }
+
+  /** One admin-cancel step. Repeatable ones are idempotent on their own keys. */
+  private async adminCancelStep(name: AdminCancelStepName, ctx: AdminCancelContext): Promise<void> {
+    const { order } = ctx;
+    switch (name) {
+      case 'voidStripeAuthorization':
+        return this.voidStripeAuthorizationOrThrow(order);
+      case 'persistCancellationMetadata':
+        return this.persistCancellationMetadata(order.id, 'system', ctx.notes);
+      case 'createStatusHistoryEntry':
+        if (!ctx.adminUserId) return;
+        return this.createStatusHistoryEntry(
+          order.id,
+          'cancelled',
+          'Order cancelled by admin',
+          'system',
+          ctx.adminUserId,
+          ctx.notes
+        );
+      case 'restorePurchaseCredits':
+        await this.purchaseCreditsService?.restore(order.id);
+        return;
+      case 'releaseReservedStock':
+        return this.updateReservedQuantities(order.order_items || [], 'decrement');
+      case 'inventoryReleaseHook':
+        if (!this.commerceOrderInventoryHook || !INVENTORY_COMMITTED_STATUSES.has(ctx.previousStatus)) return;
+        return this.commerceOrderInventoryHook.onOrderCancelledAfterCommit({
+          orderId: order.id,
+          items: (order.order_items || []).map((oi: any) => ({
+            id: oi.id,
+            business_inventory_id: oi.business_inventory_id,
+            quantity: oi.quantity,
+          })),
+        });
+      case 'depositRefund':
+        return this.refundDepositForAdminCancel(order);
+      case 'enqueueOrderCancelled':
+        return this.orderQueueService.sendOrderCancelledMessage(
+          order.id,
+          'system',
+          ctx.notes,
+          ctx.previousStatus,
+          `order.cancelled:${order.id}`,
+          { strict: true }
+        );
+    }
+  }
+
+  /** System cancel: a captured deposit is refunded (even after lock); a failure throws. */
+  private async refundDepositForAdminCancel(order: Orders): Promise<void> {
+    const depositStatus = (order as any).deposit_status;
+    const depositAmount = Number((order as any).deposit_amount) || 0;
+    if (depositStatus !== 'paid' || depositAmount <= 0) return;
+    const result = await this.depositRefundService.refundDeposit(order.id, { allowAfterLock: true });
+    if (!result.success) {
+      throw new Error(`Deposit refund failed: ${result.message ?? 'unknown'}`);
+    }
+  }
+
+  private async runAdminCancelSteps(
+    ctx: AdminCancelContext,
+    start: AdminCancelProgressRow | null,
+    owner: string
+  ): Promise<AdminCancelStepName[]> {
+    let row = start;
+    const failed: AdminCancelStepName[] = [];
+    const lost = () => {
+      throw new HttpException('This cancellation is being resumed by another request', HttpStatus.CONFLICT);
+    };
+    const setStep = async (name: AdminCancelStepName, state: AdminCancelStepState) => {
+      if (!row) return;
+      const next = await casAdminCancelProgress(this.hasuraSystemService, row, {
+        ...row.payload,
+        steps: { ...row.payload.steps, [name]: state },
+        leaseUntil: new Date(Date.now() + ADMIN_CANCEL_LEASE_MS).toISOString(),
+      });
+      if (!next) lost();
+      row = next;
+    };
+    const alert = (name: AdminCancelStepName, detail: string) =>
+      reportMoneyAnomaly(
+        this.logger,
+        ADMIN_CANCEL_STEP_FAILED_MARKER,
+        `Admin cancel of order ${ctx.order.order_number}: step ${name} ${detail} (the order is cancelled)`,
+        { orderId: ctx.order.id, step: name, previousStatus: ctx.previousStatus }
+      );
+    const steps = row ? pendingSteps(row.payload) : [...ADMIN_CANCEL_STEPS];
+    for (const name of steps) {
+      const state = row?.payload.steps?.[name] ?? 'pending';
+      if (state === 'running' && ADMIN_CANCEL_NON_REPEATABLE.includes(name)) {
+        // Outcome unknown (an earlier run died mid-step): never run it twice.
+        failed.push(name);
+        alert(name, 'has an unknown outcome and is not re-run; check it by hand');
+        continue;
+      }
+      await setStep(name, 'running');
+      try {
+        await this.adminCancelStep(name, ctx);
+      } catch (error: unknown) {
+        failed.push(name);
+        // The detail goes to the log / alert only, never to the API response.
+        alert(name, `failed: ${safeErrorMessage(error)}`);
+        await setStep(name, 'failed');
+        continue;
+      }
+      await setStep(name, 'done');
+    }
+    if (row && row.payload.leaseOwner === owner) {
+      const released = await casAdminCancelProgress(this.hasuraSystemService, row, {
+        ...row.payload,
+        leaseOwner: null,
+        leaseUntil: null,
+      }).catch(() => null);
+      if (!released) this.logger.warn(`Admin cancel lease of ${ctx.order.id} not released (expires on its own)`);
+    }
+    return failed;
+  }
+
+  /** Stripe void whose non-throwing failure result counts as a failed step. */
+  private async voidStripeAuthorizationOrThrow(order: Orders): Promise<void> {
+    const result = await this.releaseStripeAuthorizationIfNeeded(order);
+    if (result && !result.ok) {
+      throw new Error(`Stripe authorization void failed: ${result.message ?? 'unknown'}`);
+    }
+  }
+
+  /** I2: the response carries the order as it is now (re-read after the steps). */
+  private async adminCancelResult(orderId: string, failedSteps: AdminCancelStepName[], resumed: boolean) {
+    const order = await this.getOrderDetails(orderId).catch(() => null);
+    const partial = failedSteps.length > 0;
     return {
       success: true,
+      partialFailure: partial,
+      failedSteps,
+      resumed,
+      order,
+      message: partial
+        ? `Order cancelled, but ${failedSteps.join(', ')} failed and needs follow-up (alerted). Retry this request to resume.`
+        : resumed
+        ? 'Order cancellation completed (resumed)'
+        : 'Order cancelled successfully',
+    };
+  }
+
+  /**
+   * Ops cleanup (admin full-refund cancel): cancel as `system`, so the order.cancelled
+   * Lambda charges no cancellation fee, releases the client's hold (or refunds the
+   * payment) and any agent hold under its per-order idempotency keys, and a paid
+   * deposit is refunded. Refused after pickup (the goods are with the agent: use the
+   * return / refund flow). The status write is a compare-and-set on the status read
+   * here (expectedFromStatus), so a concurrent second call gets 409 before any side
+   * effect; the caller audit-logs only after this returns.
+   */
+  async adminFullRefundCancel(orderId: string, reason: string) {
+    // C3: requireCancellableAdminOrder applies the shared #627 pre-pickup allowlist
+    // (ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES); anything else is 409 ORDER_ALREADY_PICKED_UP.
+    const order = await this.requireCancellableAdminOrder(orderId);
+    const previousStatus = order.current_status;
+    const adminUserId = await this.resolveOptionalUserId();
+    if (!adminUserId) {
+      throw new HttpException('Admin user required', HttpStatus.UNAUTHORIZED);
+    }
+    const updatedOrder = await this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
+      viaCancelEndpoint: true,
+      viaSystem: true,
+      expectedFromStatus: previousStatus,
+    });
+    // Only the compare-and-set winner reaches here. The order IS cancelled now, so a
+    // failing step below must not turn into a bare 500: each is caught, alerted
+    // (admin_full_refund_cancel_step_failed) and listed in `failedSteps`.
+    // D2: the response carries a generic message per failed step; the detail goes to
+    // the log / alert only (no raw internal error text to the API caller).
+    const failedSteps: Array<{ step: string; error: string }> = [];
+    const step = async <T>(name: string, fn: () => Promise<T>): Promise<T | undefined> => {
+      try {
+        return await fn();
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
+        failedSteps.push({ step: name, error: ADMIN_FULL_REFUND_STEP_FAILED_MESSAGE });
+        reportMoneyAnomaly(
+          this.logger,
+          ADMIN_FULL_REFUND_STEP_FAILED_MARKER,
+          `Step ${name} failed after the admin full-refund cancel of order ${order.order_number ?? orderId} (the order is cancelled): ${message}`,
+          { orderId, previousStatus, adminUserId, step: name }
+        );
+        return undefined;
+      }
+    };
+    const notes = `Admin full refund: ${reason}`;
+    // D1: a void that fails WITHOUT throwing ({ ok: false }) is a failed step too.
+    await step('releaseStripeAuthorization', async () => {
+      const result = await this.releaseStripeAuthorizationIfNeeded(order);
+      if (result && !result.ok) {
+        throw new Error(`Stripe authorization void failed: ${result.message ?? 'unknown'}`);
+      }
+    });
+    await step('supersedePendingOrderTxs', () => this.supersedePendingOrderTxsOnCancel(order));
+    await step('persistCancellationMetadata', () => this.persistCancellationMetadata(order.id, 'system', notes));
+    await step('createStatusHistoryEntry', () =>
+      this.createStatusHistoryEntry(
+        order.id,
+        'cancelled',
+        'Order cancelled by admin with a full refund (no cancellation fee)',
+        'system',
+        adminUserId,
+        notes
+      )
+    );
+    const deposit: DepositCancelOutcome = (await step('cancellationSideEffects', () =>
+      this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes)
+    )) ?? { status: 'failed', message: 'Cancellation side effects failed before the deposit was handled' };
+    // Refunds go to the client's Rendasua wallet, never back to the payment provider.
+    const depositFailed = deposit.status === 'failed';
+    if (depositFailed) {
+      reportMoneyAnomaly(
+        this.logger,
+        ADMIN_FULL_REFUND_DEPOSIT_FAILED_MARKER,
+        `Deposit not refunded on the admin full-refund cancel of order ${order.order_number ?? orderId}: ${deposit.message}`,
+        { orderId, previousStatus, adminUserId, errorCode: deposit.errorCode }
+      );
+    }
+    const partial = failedSteps.length > 0;
+    return {
+      success: true,
+      partialFailure: partial,
+      failedSteps,
       order: updatedOrder,
-      message: 'Order cancelled successfully',
+      previousStatus,
+      cancellationFee: 0,
+      // D2: never return the raw refund error; it went to the log and the alert above.
+      depositRefund: depositFailed
+        ? { status: 'failed' as const, message: ADMIN_FULL_REFUND_DEPOSIT_FAILED_MESSAGE, errorCode: deposit.errorCode }
+        : deposit,
+      message: partial
+        ? `Order cancelled, but ${failedSteps.map((f) => f.step).join(', ')} FAILED and needs manual follow-up (alerted)`
+        : depositFailed
+        ? 'Order cancelled with no fee and the wallet releases queued, but the DEPOSIT REFUND FAILED and needs manual follow-up'
+        : 'Order cancelled with a full refund to the client wallet; the refund and hold releases are queued',
     };
   }
 
@@ -8054,11 +8841,11 @@ export class OrdersService {
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (isAdminTerminalStatus(order.current_status)) {
-      throw new HttpException(
-        `Cannot cancel order in ${order.current_status} status`,
-        HttpStatus.BAD_REQUEST
-      );
+    if (
+      isAdminTerminalStatus(order.current_status) ||
+      !isAdminPrePickupCancellableStatus(order.current_status)
+    ) {
+      throw adminPrePickupRefusal(order.current_status);
     }
     return order;
   }
@@ -8072,36 +8859,12 @@ export class OrdersService {
     }
   }
 
-  private async markOrderCancelledAsSystem(orderId: string) {
+  private async markOrderCancelledAsSystem(orderId: string, expectedFromStatus: string) {
     return this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
       viaCancelEndpoint: true,
       viaSystem: true,
+      expectedFromStatus,
     });
-  }
-
-  private async finishAdminCancellation(
-    order: Orders,
-    adminUserId: string | null,
-    notes?: string
-  ): Promise<void> {
-    await this.persistCancellationMetadata(order.id, 'system', notes);
-    if (adminUserId) {
-      await this.createStatusHistoryEntry(
-        order.id,
-        'cancelled',
-        'Order cancelled by admin',
-        'system',
-        adminUserId,
-        notes
-      );
-    }
-    await this.runOrderCancellationSideEffects(
-      order,
-      order.id,
-      order.current_status,
-      'system',
-      notes
-    );
   }
 
   private async persistCancellationMetadata(
@@ -9864,13 +10627,7 @@ export class OrdersService {
       status: 'cancelled',
     });
 
-    await this.accountsService.registerTransaction({
-      accountId: agentAccount.id,
-      amount: orderHold.agent_hold_amount,
-      transactionType: 'release',
-      memo: `Hold released for order ${order.order_number}. Order dropped by agent and made available for other agents.`,
-      referenceId: order.id,
-    });
+    await this.releaseDroppedAgentHold(order, agentAccount.id, orderHold.agent_hold_amount);
     await this.orderPickupMonitorService.clearMonitoring(request.orderId);
     return {
       success: true,
@@ -10442,6 +11199,7 @@ export class OrdersService {
           `Failed to start acceptance SLA after authorization for ${order.id}: ${slaError?.message}`
         );
       }
+      void this.remindBusinessToConfirmCoveredOrder(order.id);
       await this.sendOrderPlacedNotifications(orderWithDetails, 'pending');
     } catch (error) {
       this.logger.error(
@@ -10582,6 +11340,7 @@ export class OrdersService {
           `Failed to start acceptance SLA after deposit for ${order.id}: ${error?.message}`
         );
       }
+      void this.remindBusinessToConfirmCoveredOrder(order.id);
 
       // Send order.created message to SQS queue after deposit success
       try {
@@ -10692,7 +11451,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to finalize deposit for order ${orderNumber}:`,
-        error
+        safeErrorMessage(error)
       );
       throw error;
     }
@@ -10719,43 +11478,6 @@ export class OrdersService {
       },
       HttpStatus.CONFLICT
     );
-  }
-
-  private async pollDepositProviderStatus(
-    existingTxn: MobilePaymentTransaction
-  ): Promise<MobileTransactionStatus | null> {
-    const lookup = existingTxn.transaction_id || existingTxn.reference;
-    if (!lookup) return null;
-    try {
-      return await this.mobilePaymentsService.checkTransactionStatus(
-        lookup,
-        existingTxn.provider,
-        existingTxn.customer_phone ?? undefined
-      );
-    } catch (error: any) {
-      this.logger.warn(
-        `Provider status check failed for deposit ${existingTxn.id}: ${error?.message ?? error}`
-      );
-      throw this.paymentStateUncertain();
-    }
-  }
-
-  private async recoverPaidDepositIfProviderSucceeded(
-    orderNumber: string,
-    existingTxn: MobilePaymentTransaction
-  ) {
-    const live = await this.pollDepositProviderStatus(existingTxn);
-    if (!live) return null;
-    if (live.status === 'success') {
-      return this.completePaidDepositFromSucceededTxn(orderNumber, existingTxn.id);
-    }
-    if (live.status === 'pending') {
-      this.throwDepositAttemptInFlight(orderNumber, {
-        id: existingTxn.id,
-        status: 'pending',
-      });
-    }
-    return null;
   }
 
   private async completePaidDepositFromSucceededTxn(
@@ -11780,7 +12502,7 @@ export class OrdersService {
     notes?: string,
     sqsReason?: string,
     actorUserId?: string
-  ): Promise<void> {
+  ): Promise<DepositCancelOutcome> {
     try {
       await this.purchaseCreditsService?.restore(orderId);
     } catch (error: any) {
@@ -11828,7 +12550,7 @@ export class OrdersService {
     }
 
     // MUST-FIX 3: Handle deposit refund/forfeit on cancellation
-    await this.handleDepositOnCancellation(
+    const deposit = await this.handleDepositOnCancellation(
       order,
       orderId,
       previousStatus,
@@ -11844,6 +12566,7 @@ export class OrdersService {
       previousStatus,
       sqsReason ?? notes
     );
+    return deposit;
   }
 
   /**
@@ -11999,13 +12722,13 @@ export class OrdersService {
     notes?: string,
     reason?: string,
     actorUserId?: string
-  ): Promise<void> {
+  ): Promise<DepositCancelOutcome> {
     const depositStatus = (order as any).deposit_status;
     const depositAmount = (order as any).deposit_amount;
     
     // Only process if deposit was captured
     if (depositStatus !== 'paid' || !depositAmount || depositAmount <= 0) {
-      return;
+      return { status: 'none' };
     }
 
     const fulfillmentMethod = (order as any).fulfillment_method as
@@ -12028,7 +12751,7 @@ export class OrdersService {
         'customer_no_show_pickup',
         actorUserId
       );
-      return;
+      return { status: 'forfeited' };
     }
 
     // Business/system cancel → always refund (even after lock)
@@ -12042,17 +12765,22 @@ export class OrdersService {
           this.logger.error(
             `Deposit refund failed for ${cancelledBy} cancel of order ${orderId}: ${refundResult.message}`
           );
-        } else {
-          this.logger.log(
-            `Deposit refund initiated for ${cancelledBy} cancel of order ${orderId}`
-          );
+          return {
+            status: 'failed',
+            message: refundResult.message || 'Deposit refund refused',
+            errorCode: refundResult.errorCode,
+          };
         }
+        this.logger.log(
+          `Deposit refund initiated for ${cancelledBy} cancel of order ${orderId}`
+        );
+        return { status: 'refunded' };
       } catch (error: any) {
         this.logger.error(
           `Failed to process deposit refund for ${cancelledBy} cancel: ${error.message}`
         );
+        return { status: 'failed', message: error?.message || 'Deposit refund threw' };
       }
-      return;
     }
 
     // Customer cancel
@@ -12067,20 +12795,28 @@ export class OrdersService {
             this.logger.error(
               `Deposit refund failed for client cancel (before lock) of order ${orderId}: ${refundResult.message}`
             );
-          } else {
-            this.logger.log(
-              `Deposit refunded for client cancel (before lock) of order ${orderId}`
-            );
+            return {
+              status: 'failed',
+              message: refundResult.message || 'Deposit refund refused',
+              errorCode: refundResult.errorCode,
+            };
           }
+          this.logger.log(
+            `Deposit refunded for client cancel (before lock) of order ${orderId}`
+          );
+          return { status: 'refunded' };
         } catch (error: any) {
           this.logger.error(
             `Failed to process deposit refund for client cancel (before lock): ${error.message}`
           );
+          return { status: 'failed', message: error?.message || 'Deposit refund threw' };
         }
       } else {
         await this.applyDepositForfeit(orderId, 'customer_cancel_after_lock');
+        return { status: 'forfeited' };
       }
     }
+    return { status: 'none' };
   }
 
   private async handleNoshowDeposit(
@@ -12165,7 +12901,9 @@ export class OrdersService {
     );
   }
 
-  private async releaseStripeAuthorizationIfNeeded(order: Orders): Promise<void> {
+  private async releaseStripeAuthorizationIfNeeded(
+    order: Orders
+  ): Promise<{ ok: boolean; message?: string } | void> {
     if ((order as any).payment_source !== 'credit_card') return;
     const ps = (order as any).payment_status;
     if (ps !== 'authorized' && ps !== 'pending') return;
@@ -12180,7 +12918,9 @@ export class OrdersService {
       this.logger.warn(
         `Stripe authorization cancel failed for order ${order.order_number}: ${cancelResult.message}`
       );
+      return { ok: false, message: cancelResult.message };
     }
+    return { ok: true };
   }
 
   private isTerminalOrderStatus(status: string): boolean {
@@ -12261,6 +13001,27 @@ export class OrdersService {
   private async finishClaimOrderPayment(transaction: any): Promise<void> {
     const ctx = await this.loadClaimPaymentContext(transaction);
     const slot = await this.assignClaimIfOpen(ctx.order, ctx.agentId);
+    if (slot === 'at_capacity') {
+      // QA #607 R1: the capped dedicated claim refused (active-order cap). Same as a
+      // lost race: no assignment, no hold, the top-up stays in the wallet; never retry
+      // as an uncapped plain claim.
+      await this.markClaimAtCapacity(transaction.id);
+      this.logger.warn(
+        `Claim top-up for ${ctx.order.order_number} stayed in the wallet; agent ${ctx.agentId} is at the dedicated active-order cap`
+      );
+      emitServerSiteEvent(this.siteEventsService, 'agent.claim_topup_failed', {
+        orderId: ctx.order.id,
+        orderNumber: ctx.order.order_number,
+        agentId: ctx.agentId,
+        holdAmount: transaction.amount,
+        transactionId: transaction.transaction_id,
+        provider: transaction.provider,
+        currency: transaction.currency,
+        reason: 'dedicated_at_capacity',
+      });
+      await this.notifyClaimAtCapacity(ctx);
+      return;
+    }
     if (slot === 'lost') {
       await this.markClaimOrderTaken(transaction.id);
       this.logger.warn(
@@ -12338,21 +13099,89 @@ export class OrdersService {
     };
   }
 
+  private async markClaimAtCapacity(transactionId?: string): Promise<void> {
+    if (!transactionId) return;
+    try {
+      await this.mobilePaymentsDatabaseService.updateTransaction(transactionId, {
+        error_code: 'DEDICATED_AT_CAPACITY',
+        error_message: 'You already have the maximum number of active deliveries; the top-up stays in your wallet',
+      });
+    } catch (error: any) {
+      this.logger.warn(`Could not mark claim ${transactionId} as at capacity: ${error?.message}`);
+    }
+  }
+
+  private async notifyClaimAtCapacity(ctx: { order: Orders; userId: string }): Promise<void> {
+    try {
+      const user = await this.hasuraSystemService.getUserById(ctx.userId);
+      const msg = buildDedicatedClaimAtCapacityMessage({
+        orderNumber: ctx.order.order_number,
+        preferredLanguage: (user as { preferred_language?: string | null } | null)?.preferred_language,
+      });
+      await this.notificationsService.sendDedicatedOrderNotice({
+        userId: ctx.userId,
+        title: msg.title,
+        body: msg.body,
+        messageType: DEDICATED_ORDER_MESSAGE_TYPES.claimAtCapacity,
+        orderId: ctx.order.id,
+        event: 'dedicated.claim_at_capacity',
+        persona: 'agent',
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Claim at-capacity notice failed for ${ctx.order.id}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
   private async assignClaimIfOpen(
     order: Orders,
     agentId: string
-  ): Promise<'assigned' | 'already-mine' | 'lost'> {
+  ): Promise<'assigned' | 'already-mine' | 'lost' | 'at_capacity'> {
     if (order.assigned_agent_id && order.assigned_agent_id !== agentId) return 'lost';
     if (order.assigned_agent_id === agentId) return 'already-mine';
+    // QA #607 N2: a top-up claim on a dedicated offer is stamped (and re-checked)
+    // when the payment completes. A refusal now (offer gone, no longer eligible)
+    // assigns as a plain claim: the agent has paid, and the offer is then not
+    // marked accepted (handleOrderAssigned only accepts stamped dedicated claims).
+    // QA #607 R1: a refusal at the cap is final (like a lost race): the agent must not
+    // get the order through an uncapped plain claim.
+    // QA #607 R4: the cap is only enforced when the refusal IS a cap refusal. Any other
+    // refusal (off today, assignment not active, slot unavailable, flag off, offer no
+    // longer live) falls through to the plain claim below, which has no cap check, even
+    // if the agent is also at the cap (dedicatedProfileIneligibleReason checks capacity
+    // last). This is deliberate: plain claims were never capped (R2) and the agent has
+    // already paid. To cap every claim that started as dedicated, check capacity first
+    // or carry maxActiveOrders into the plain path.
+    let atCapacity = false;
+    const assignment = await this.dedicatedClaimAssignment(order.id, agentId).catch((error) => {
+      atCapacity = this.isClaimAtCapacity(error);
+      this.logger.warn(
+        `dedicated re-check at top-up completion refused for order ${order.id} agent ${agentId}: ${error?.message ?? error}`
+      );
+      return undefined;
+    });
+    if (atCapacity) return 'at_capacity';
     try {
-      await this.assignOrderToAgent(order.id, agentId, 'assigned_to_agent');
+      await this.assignOrderToAgent(order.id, agentId, 'assigned_to_agent', assignment);
       return 'assigned';
     } catch (error) {
+      if (this.isClaimAtCapacity(error)) return 'at_capacity';
       if (!this.isClaimAssignConflict(error)) throw error;
       return (await this.claimStillMine(order.order_number, agentId))
         ? 'already-mine'
         : 'lost';
     }
+  }
+
+  /** QA #607 R1: dedicated_claim_order refused at the cap (409 DEDICATED_AT_CAPACITY). */
+  private isClaimAtCapacity(error: unknown): boolean {
+    if (!(error instanceof HttpException)) return false;
+    const body = error.getResponse();
+    if (typeof body !== 'object' || body === null) return false;
+    const b = body as { error?: string; reason?: string };
+    // dedicated_claim_order over the cap, or the accept re-check refusing at the cap.
+    return b.error === 'DEDICATED_AT_CAPACITY' || (b.error === 'DEDICATED_OFFER_INELIGIBLE' && b.reason === 'at_capacity');
   }
 
   private isClaimAssignConflict(error: unknown): boolean {
@@ -12527,7 +13356,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to mark deposit_status=failed for order ${orderId}:`,
-        error
+        safeErrorMessage(error)
       );
     }
     await this.orderSystemJobsService.onOrderPaymentFailed(
@@ -12600,7 +13429,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to read market flag ${configKey} for ${countryCode}:`,
-        error
+        safeErrorMessage(error)
       );
       return false; // Default to false on error
     }
@@ -12654,6 +13483,7 @@ export class OrdersService {
           `Failed to start acceptance SLA for ${orderId}: ${error?.message}`
         );
       }
+      void this.remindBusinessToConfirmCoveredOrder(orderId);
       return true;
     }
     const updated = await this.updateOrderPaymentStatusOnly(orderId, 'paid', {
@@ -13270,24 +14100,76 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to get fast delivery fee for country ${country}:`,
-        error
+        safeErrorMessage(error)
       );
       return { fee: 0, enabled: false };
     }
   }
 
   /**
+   * #594 AC-E1: the chosen window when this delivery order may use dedicated
+   * coverage: scheduled (slot + date) and the flag on for the seller country.
+   */
+  private async dedicatedCoverageWindow(
+    deliveryWindow: { slot_id?: string; preferred_date?: string } | null | undefined,
+    sellerCountry: string | null | undefined
+  ): Promise<Pick<DedicatedDeliveryRequest, 'slotId' | 'preferredDate'> | null> {
+    const slotId = deliveryWindow?.slot_id?.trim();
+    const preferredDate = deliveryWindow?.preferred_date?.trim();
+    if (!slotId || !preferredDate || !this.dedicatedAgentsConfig) return null;
+    const country = isoCountryCode(sellerCountry) ?? sellerCountry;
+    if (!(await this.dedicatedAgentsConfig.isEnabled(country))) return null;
+    return { slotId, preferredDate };
+  }
+
+  /** QA #605 N1: the window is one of the dedicated_covered_slots preflight lists for this cart. */
+  private async isPreflightOfferedWindow(
+    window: Pick<DedicatedDeliveryRequest, 'slotId' | 'preferredDate'>,
+    params: {
+      location: { id?: string; address?: { country?: string | null; state?: string | null } | null } | null | undefined;
+      rail: DedicatedDeliveryRequest['rail'];
+      subtotal: number;
+      currency: string;
+      verifiedAgentDelivery: boolean;
+    }
+  ): Promise<boolean> {
+    const locationId = params.location?.id;
+    if (!this.dedicatedCheckoutCoverage || !locationId) return false;
+    const country = isoCountryCode(params.location?.address?.country) ?? params.location?.address?.country ?? '';
+    const offered = await this.dedicatedCheckoutCoverage.coveredSlots({
+      locationId,
+      country,
+      state: (params.location?.address?.state ?? '').trim(),
+      rail: params.rail,
+      subtotal: params.subtotal,
+      currency: params.currency,
+      verifiedAgentDelivery: params.verifiedAgentDelivery,
+    });
+    const ok = offered.some((s) => s.slot_id === window.slotId && s.date === window.preferredDate);
+    if (!ok) {
+      this.logger.warn(
+        `dedicated window not offered at preflight location=${locationId} slot=${window.slotId} date=${window.preferredDate}`
+      );
+    }
+    return ok;
+  }
+
+  /**
    * Rejects delivery orders when the availability rules fail (unless
    * DELIVERY_AVAILABILITY_ENFORCE=false). The public error message never
-   * exposes the internal reason.
+   * exposes the internal reason. `deferNoNearbyAgent` (#594 scheduled
+   * windows) returns `deferred` instead of rejecting when the only failure is
+   * "no agent nearby", so the caller can re-check with `dedicated` once the
+   * rail and subtotal are known.
    */
   private async assertDeliveryAvailable(
     inventories: any[],
     deliveryAddress: any,
     clientId: string,
     requiresFastDelivery: boolean,
-    verifiedAgentDelivery: boolean
-  ): Promise<void> {
+    verifiedAgentDelivery: boolean,
+    options: { deferNoNearbyAgent?: boolean; dedicated?: DedicatedDeliveryRequest } = {}
+  ): Promise<{ result: DeliveryAvailabilityResult; deferred: boolean }> {
     const inventory = inventories[0];
     const address = inventory?.business_location?.address;
     const result = await this.deliveryAvailabilityService.evaluate(
@@ -13310,15 +14192,26 @@ export class OrdersService {
         verifiedAgentDelivery,
         clientId,
         stage: 'place_order',
-      })
+        dedicated: options.dedicated,
+      }),
+      // A deferred NO_ELIGIBLE_AGENT is re-evaluated (and logged) by the dedicated re-check.
+      options.deferNoNearbyAgent
+        ? { deferLogFor: DeliveryUnavailableReason.NO_ELIGIBLE_AGENT }
+        : {}
     );
-    if (result.available) return;
+    if (result.available) return { result, deferred: false };
+    if (
+      options.deferNoNearbyAgent &&
+      result.reason === DeliveryUnavailableReason.NO_ELIGIBLE_AGENT
+    ) {
+      return { result, deferred: true };
+    }
 
     const enforce =
       this.configService.get<Configuration['deliveryAvailability']>(
         'deliveryAvailability'
       )?.enforceEnabled !== false;
-    if (!enforce) return;
+    if (!enforce) return { result, deferred: false };
 
     throw new HttpException(
       {
@@ -13573,6 +14466,7 @@ export class OrdersService {
             description
             pay_on_delivery_enabled
             export_available
+            moderation_status
             pay_at_pickup_enabled
             shipping_enabled
             shipping_price
@@ -13770,6 +14664,18 @@ export class OrdersService {
         );
       }
 
+      // F-M7: unmoderated (draft/pending/rejected) items cannot be ordered
+      if (businessInventory.item?.moderation_status !== 'approved') {
+        throw new HttpException(
+          {
+            success: false,
+            error: 'ITEM_UNAVAILABLE',
+            message: `Item ${businessInventory.item?.name ?? ''} is not currently available`,
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
       if (businessInventory.item?.export_available === true) {
         throw new HttpException(
           {
@@ -13921,15 +14827,93 @@ export class OrdersService {
     // Hard delivery availability gate — clients must not be able to place a
     // delivery order the platform cannot currently fulfill. The public error
     // intentionally carries no internal reason.
+    // #594: a scheduled window may still be served by a dedicated agent when
+    // nobody is nearby; that check needs the rail and subtotal, so it runs
+    // further down. ASAP orders and flag-off countries are unchanged.
+    const coverageWindow =
+      fulfillmentMethod === 'delivery'
+        ? await this.dedicatedCoverageWindow(
+            orderData.delivery_window,
+            businessInventories[0]?.business_location?.address?.country
+          )
+        : null;
+    let dedicatedGatePending = false;
     if (fulfillmentMethod === 'delivery') {
-      await this.assertDeliveryAvailable(
+      const gate = await this.assertDeliveryAvailable(
         businessInventories,
         address,
         client.id,
         orderData.requires_fast_delivery === true,
-        orderData.verified_agent_delivery === true
+        orderData.verified_agent_delivery === true,
+        { deferNoNearbyAgent: coverageWindow != null }
       );
+      // Existing specs stub this gate to resolve undefined.
+      dedicatedGatePending = gate?.deferred === true;
     }
+
+    // Calculate order amounts for all items
+    const totalAmount = lineContexts.reduce((sum, ctx, idx) => {
+      const deal = dealsMap[ctx.inventory.id];
+      const unitPrice = this.computeUnitPriceFromVariantOrInventory(
+        ctx.inventory,
+        ctx.variant,
+        deal
+      );
+      return sum + unitPrice * orderData.items[idx].quantity;
+    }, 0);
+    const sellerCountry = resolveItemCountry(
+      businessInventories[0]?.business_location?.address?.country,
+      businessInventories[0]?.business_location?.business?.user?.country
+    );
+    // Payer and rail are read-only lookups, resolved before anything below
+    // writes (wallet account, phone registry) or calls a provider (distance
+    // matrix), so the #594 dedicated re-check can refuse first.
+    const trustedPayer = await this.resolveTrustedOrderPayer(
+      user,
+      orderData.payer_country
+    );
+    // The seller country decides the rail as it always has. A payer billing
+    // from a Stripe country may additionally fund a mobile-money merchant —
+    // that is the diaspora path, and the card still charges the platform.
+    const railResolution = await this.paymentRoutingService.resolveOrderRail({
+      sellerCountry: sellerCountry ?? undefined,
+      payerCountry: trustedPayer.payer_country,
+    });
+
+    // #594 AC-E1: nobody nearby, so delivery stands only if a dedicated agent
+    // covers the chosen slot for this cart (AgentInRegionRule dedicated pass).
+    let coverageSlotKey: string | null = null;
+    if (dedicatedGatePending && coverageWindow) {
+      // QA #605 N1: only a window preflight offered (dedicated_covered_slots:
+      // bookable today, inside the 3-day horizon, covered for this cart).
+      // Anything else gets no dedicated pass, so the gate below refuses it.
+      const offered = await this.isPreflightOfferedWindow(coverageWindow, {
+        location: businessInventories[0]?.business_location,
+        rail: railResolution.rail,
+        subtotal: totalAmount,
+        currency,
+        verifiedAgentDelivery: orderData.verified_agent_delivery === true,
+      });
+      const gate = await this.assertDeliveryAvailable(
+        businessInventories,
+        address,
+        client.id,
+        orderData.requires_fast_delivery === true,
+        orderData.verified_agent_delivery === true,
+        offered
+          ? {
+              dedicated: {
+                ...coverageWindow,
+                rail: railResolution.rail,
+                subtotal: totalAmount,
+                currency,
+              },
+            }
+          : {}
+      );
+      coverageSlotKey = offered ? dedicatedCoverageSlotKey(gate?.result) : null;
+    }
+
 
     // Calculate total weight for delivery fee calculation (variant weight overrides item weight)
     const totalWeight = lineContexts.reduce((sum, ctx, idx) => {
@@ -13982,17 +14966,6 @@ export class OrdersService {
     );
 
     const orderNumber = this.createOrderNumber();
-
-    // Calculate order amounts for all items
-    const totalAmount = lineContexts.reduce((sum, ctx, idx) => {
-      const deal = dealsMap[ctx.inventory.id];
-      const unitPrice = this.computeUnitPriceFromVariantOrInventory(
-        ctx.inventory,
-        ctx.variant,
-        deal
-      );
-      return sum + unitPrice * orderData.items[idx].quantity;
-    }, 0);
 
     if (fulfillmentMethod === 'delivery') {
       const sellerBusinessId =
@@ -14056,10 +15029,6 @@ export class OrdersService {
       }
     }
 
-    const sellerCountry = resolveItemCountry(
-      businessInventories[0]?.business_location?.address?.country,
-      businessInventories[0]?.business_location?.business?.user?.country
-    );
     const serviceFee = await this.serviceFeeService.resolve(sellerCountry, currency);
     total_amount = Number((total_amount + serviceFee).toFixed(2));
 
@@ -14085,10 +15054,7 @@ export class OrdersService {
           : address?.country
       ) ?? isoCountryCode(itemCountry);
 
-    const payer = this.applyCheckoutPaymentPhone(
-      await this.resolveTrustedOrderPayer(user, orderData.payer_country),
-      phoneNumber
-    );
+    const payer = this.applyCheckoutPaymentPhone(trustedPayer, phoneNumber);
     
     // If recipient_id is provided, fetch the saved recipient and use it
     // Fail the order if recipient is not found (no soft-fallback after inventory reserve)
@@ -14112,13 +15078,6 @@ export class OrdersService {
       fulfillmentCountry,
     });
 
-    // The seller country decides the rail as it always has. A payer billing
-    // from a Stripe country may additionally fund a mobile-money merchant —
-    // that is the diaspora path, and the card still charges the platform.
-    const railResolution = await this.paymentRoutingService.resolveOrderRail({
-      sellerCountry: itemCountry ?? undefined,
-      payerCountry: payer.payer_country,
-    });
     // Checked before the phone and wallet rules below, which all assume a
     // payer who is standing in the fulfillment market.
     assertDiasporaPaymentTiming({
@@ -14454,7 +15413,8 @@ export class OrdersService {
         $isCookedFoodPickup: Boolean!,
         $payAfterMerchantConfirm: Boolean!,
         $eatIn: Boolean!,
-        $serviceFee: numeric!
+        $serviceFee: numeric!,
+        $coverageSlotKey: String
       ) {
         insert_orders_one(object: {
           client_id: $clientId,
@@ -14510,6 +15470,7 @@ export class OrdersService {
           is_cooked_food_pickup: $isCookedFoodPickup,
           pay_after_merchant_confirm: $payAfterMerchantConfirm,
           eat_in: $eatIn,
+          coverage_slot_key: $coverageSlotKey,
           order_items: {
             data: $orderItems
           }
@@ -14688,6 +15649,7 @@ export class OrdersService {
         isCookedFoodPickup,
         payAfterMerchantConfirm,
         eatIn,
+        coverageSlotKey,
       }
     );
 
@@ -14742,9 +15704,29 @@ export class OrdersService {
           }
         );
       } catch (error) {
-        this.logger.error('Failed to create delivery window:', error);
+        this.logger.error('Failed to create delivery window:', safeErrorMessage(error));
+        if (coverageSlotKey) {
+          // QA #605 N2: this order was admitted only through dedicated coverage of
+          // this window. Without the window row it must not exist (AC-E1), so the
+          // create fails and the unpaid order is compensated.
+          await this.compensateUnpaidCreate(order.id, 'Create failed: dedicated coverage window', {
+            allowPendingUnpaid: true,
+          });
+          throw new HttpException(
+            {
+              success: false,
+              code: 'dedicated_window_failed',
+              error: 'We could not save your delivery time. Please try again.',
+            },
+            HttpStatus.SERVICE_UNAVAILABLE
+          );
+        }
         await this.markOrderTimingScheduled(order.id);
       }
+    }
+    // #594 PR 6 (AC-A8): day-of reminder to the slot's dedicated agents (never throws).
+    if (coverageSlotKey && deliveryWindow) {
+      void this.dedicatedSlotReminder?.scheduleForOrder(order.id);
     }
 
     if (current_status === 'pending') {
@@ -14754,6 +15736,9 @@ export class OrdersService {
         this.logger.warn(
           `Failed to start acceptance SLA for ${order.id}: ${error?.message}`
         );
+      }
+      if (coverageSlotKey && deliveryWindow) {
+        void this.remindBusinessToConfirmCoveredOrder(order.id);
       }
     }
 
@@ -14782,9 +15767,10 @@ export class OrdersService {
       try {
         const depositCalc = depositQuote;
 
-          // Generate references: long for DB, short for MyPVIT (≤15 chars)
+          // Long reference is stored on the row and sent to the provider.
+          // MyPVit shortens internally (≤15 chars); FedaPay/Freemopay keep it so
+          // webhook live-recheck matches custom_metadata.externalId.
           const depositLongReference = `${order.order_number}-DEP-${Date.now()}`;
-          const depositShortReference = buildShortReferenceForMyPVit(depositLongReference);
 
           const depositPaymentRequest = {
             amount: depositCalc.depositAmount,
@@ -14795,10 +15781,9 @@ export class OrdersService {
             transactionType: 'PAYMENT' as const,
           };
 
-          // Initiate MoMo payment (short reference ≤15 chars for MyPVIT)
           const depositResult = await this.mobilePaymentsService.initiatePayment(
             depositPaymentRequest,
-            depositShortReference,
+            depositLongReference,
             user.id
           );
 
@@ -14835,6 +15820,14 @@ export class OrdersService {
               entity_id: order.order_number,
               transaction_id: depositResult.transactionId,
             });
+          
+          // G2: Schedule mock callback AFTER persisting the transaction_id
+          if (depositResult.transactionId?.startsWith('mock-')) {
+            await this.mobilePaymentsService.scheduleMockCallback(
+              depositResult.transactionId,
+              depositLongReference
+            );
+          }
 
           // Update order with deposit info (keep status pending_payment until callback)
           const updateDepositMutation = `
@@ -14910,7 +15903,7 @@ export class OrdersService {
         } catch (error: any) {
           this.logger.error(
             `Deposit collection failed for order ${order.order_number}:`,
-            error
+            safeErrorMessage(error)
           );
           await this.compensateUnpaidCreate(
             order.id,
@@ -15460,6 +16453,29 @@ export class OrdersService {
     itemCountry?: string;
     userId?: string;
   }): Promise<{ transaction: any; paymentTransaction: any }> {
+    // F-M6: Validate payment BEFORE creating transaction row
+    const validationError = await this.mobilePaymentsService.validatePaymentRequest(
+      {
+        customerPhone: params.phoneNumber,
+        provider: params.provider,
+        itemCountry: params.itemCountry,
+        currency: params.currency,
+        amount: params.totalAmount,
+      },
+      params.userId
+    );
+    if (validationError) {
+      // L3: keep the errorCode (PHONE_COUNTRY_MISMATCH, INVALID_PHONE_NUMBER, ...)
+      throw new HttpException(
+        {
+          success: false,
+          message: validationError.message,
+          error: validationError.errorCode,
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const transaction =
       await this.mobilePaymentsDatabaseService.createTransaction({
         reference: params.orderNumber,
@@ -15521,6 +16537,14 @@ export class OrdersService {
         transaction.id,
         { transaction_id: paymentTransaction.transactionId }
       );
+      
+      // G2: Schedule mock callback AFTER persisting the transaction_id
+      if (paymentTransaction.transactionId.startsWith('mock-')) {
+        await this.mobilePaymentsService.scheduleMockCallback(
+          paymentTransaction.transactionId,
+          params.orderNumber
+        );
+      }
     }
 
     this.logger.log(
@@ -16084,6 +17108,40 @@ export class OrdersService {
     }
   }
 
+  /**
+   * #594 PR 6 (AC-A6b) "Can't take this": the auto-assigned internal agent
+   * releases the order inside the stored window (no strike); dispatch restarts
+   * without them. `reason` is optional, one of OFFER_DECLINE_REASONS.
+   */
+  async releaseDedicatedAutoAssignment(orderId: string, rawReason?: unknown) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can release an assignment');
+    const agent = this.requireAgentRecord(user);
+    const reason = parseOfferDeclineReason(rawReason);
+    const result = await this.orderReassignmentService.releaseDedicatedAutoAssignment(
+      orderId,
+      agent.id,
+      reason
+    );
+    if (result.success) return result;
+    const status =
+      result.refusal === 'release_failed'
+        ? HttpStatus.INTERNAL_SERVER_ERROR
+        : result.refusal === 'unavailable'
+          ? HttpStatus.NOT_FOUND
+          : HttpStatus.CONFLICT;
+    const code = DEDICATED_RELEASE_ERRORS[result.refusal];
+    throw new HttpException(
+      {
+        message: dedicatedReleaseRefusalMessage(result.refusal, user?.preferred_language),
+        error: code,
+        code,
+        reason: result.refusal,
+      },
+      status
+    );
+  }
+
   async reportPickupIssue(orderId: string, reason: string) {
     const user = await this.hasuraUserService.getUser();
     this.requireActivePersona(user, 'agent', 'Only agents can report issues');
@@ -16234,10 +17292,24 @@ export class OrdersService {
   private async assignOrderToAgent(
     orderId: string,
     agentId: string,
-    status: string
+    status: string,
+    assignment?: ClaimAssignment
   ): Promise<any> {
+    if (assignment && assignment.maxActiveOrders != null) {
+      return this.claimDedicatedOrder(orderId, agentId, status, assignment, assignment.maxActiveOrders);
+    }
+    // #594: a dedicated claim stamps its source in the same atomic update.
+    const dedicatedVars = assignment
+      ? ', $assignmentSource: String!, $dedicatedAssignmentId: uuid, $dedicatedReleaseUntil: timestamptz'
+      : '';
+    const dedicatedSet = assignment
+      ? `,
+            assignment_source: $assignmentSource,
+            dedicated_assignment_id: $dedicatedAssignmentId,
+            dedicated_release_until: $dedicatedReleaseUntil`
+      : '';
     const mutation = `
-      mutation AssignOrderToAgent($orderId: uuid!, $agentId: uuid!, $status: order_status!) {
+      mutation AssignOrderToAgent($orderId: uuid!, $agentId: uuid!, $status: order_status!${dedicatedVars}) {
         update_orders(
           where: {
             _and: [
@@ -16250,7 +17322,7 @@ export class OrdersService {
             current_status: $status,
             assigned_agent_id: $agentId,
             assigned_at: "now()",
-            updated_at: "now()"
+            updated_at: "now()"${dedicatedSet}
           }
         ) {
           affected_rows
@@ -16264,11 +17336,21 @@ export class OrdersService {
         }
       }
     `;
-    const result = await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      agentId,
-      status,
-    });
+    const variables = assignment
+      ? {
+          orderId,
+          agentId,
+          status,
+          assignmentSource: assignment.source,
+          dedicatedAssignmentId: assignment.dedicatedAssignmentId,
+          dedicatedReleaseUntil: assignment.releaseUntil ?? null,
+        }
+      : { orderId, agentId, status };
+    const run = () =>
+      this.hasuraSystemService.executeMutation(mutation, variables);
+    // The FK to dedicated_agent_assignments can meet the cap trigger's agent-row
+    // locks: retry a 40P01 abort (a single-statement, guarded update).
+    const result = assignment ? await runAssignmentWrite(run) : await run();
     const affectedRows = result?.update_orders?.affected_rows ?? 0;
     if (affectedRows !== 1) {
       throw new HttpException(
@@ -16281,6 +17363,97 @@ export class OrdersService {
       );
     }
     return result.update_orders.returning[0];
+  }
+
+  /** #594 DEV QA N1: dedicatedClaimAssignment for an open-pool claim; only the cap refusal is final. */
+  private async ownClaimDedicatedAssignment(orderId: string, agentId: string): Promise<ClaimAssignment | undefined> {
+    try {
+      return await this.dedicatedClaimAssignment(orderId, agentId);
+    } catch (error) {
+      if (this.isClaimAtCapacity(error)) throw error;
+      this.logger.warn(
+        `dedicated re-check refused an open-pool claim for order ${orderId} agent ${agentId}; plain claim: ${(error as Error)?.message ?? error}`
+      );
+      return undefined;
+    }
+  }
+
+  /** The dedicated stamp when the agent holds a live dedicated offer on this order (re-checks AC-E2; may throw the refusal). */
+  private async dedicatedClaimAssignment(orderId: string, agentId: string): Promise<ClaimAssignment | undefined> {
+    const offer = await this.orderOffersService?.getActiveOfferForAgent(orderId, agentId);
+    if (offer?.offer_kind !== 'dedicated') return undefined;
+    return this.orderOffersService.dedicatedAcceptAssignment(orderId, agentId);
+  }
+
+  /**
+   * QA #607 N1: dedicated claim through `dedicated_claim_order`: the agent row
+   * lock, the cap count and the guarded assign are one transaction, so two
+   * concurrent claims can't both pass the cap. Over the cap -> 409
+   * DEDICATED_AT_CAPACITY; no longer claimable -> 409 ALREADY_ASSIGNED.
+   */
+  private async claimDedicatedOrder(
+    orderId: string,
+    agentId: string,
+    status: string,
+    assignment: ClaimAssignment,
+    maxActiveOrders: number
+  ): Promise<any> {
+    const mutation = `
+      mutation DedicatedClaimOrder(
+        $orderId: uuid!, $agentId: uuid!, $status: String!, $source: String!,
+        $assignmentId: uuid, $releaseUntil: timestamptz, $max: Int!, $countOffers: Boolean!
+      ) {
+        dedicated_claim_order(args: {
+          p_order_id: $orderId, p_agent_id: $agentId, p_status: $status,
+          p_assignment_source: $source, p_dedicated_assignment_id: $assignmentId,
+          p_release_until: $releaseUntil, p_max_active: $max, p_count_offers: $countOffers
+        }) {
+          id
+          order_number
+          current_status
+          assigned_agent_id
+          updated_at
+        }
+      }
+    `;
+    const variables = {
+      orderId,
+      agentId,
+      status,
+      source: assignment.source,
+      assignmentId: assignment.dedicatedAssignmentId,
+      releaseUntil: assignment.releaseUntil ?? null,
+      max: maxActiveOrders,
+      countOffers: assignment.countOffers === true,
+    };
+    let result: { dedicated_claim_order?: any[] } | null;
+    try {
+      result = await runAssignmentWrite(() => this.hasuraSystemService.executeMutation(mutation, variables));
+    } catch (error: any) {
+      const text = `${error?.message ?? ''} ${JSON.stringify(error?.response?.errors ?? '')}`;
+      if (text.includes('dedicated_order_cap_exceeded')) {
+        throw new HttpException(
+          {
+            message: 'You already have the maximum number of active orders.',
+            error: 'DEDICATED_AT_CAPACITY',
+          },
+          HttpStatus.CONFLICT
+        );
+      }
+      throw error;
+    }
+    const row = result?.dedicated_claim_order?.[0];
+    if (!row) {
+      throw new HttpException(
+        {
+          message:
+            'This order has already been assigned to another agent. Please choose another order.',
+          error: 'ALREADY_ASSIGNED',
+        },
+        HttpStatus.CONFLICT
+      );
+    }
+    return row;
   }
 
   /**
@@ -16676,14 +17849,15 @@ export class OrdersService {
       );
       const agentHoldAmt = Number(orderHold.agent_hold_amount);
       if (agentAccount && agentHoldAmt > 0) {
+        // Atomic: min(net held, agent_hold_amount) under the account row lock; a
+        // settlement retry (or a racing reconciler) finds the net at 0 and credits
+        // nothing. Replaces the settlement-keyed full-amount release.
         this.assertLedgerMove(
-          await this.accountsService.registerTransaction({
+          await releaseAgentOrderHold(this.hasuraSystemService, {
             accountId: agentAccount.id,
-            amount: agentHoldAmt,
-            transactionType: 'release',
+            orderId,
+            cap: agentHoldAmt,
             memo: `Hold released for order ${order.order_number}`,
-            referenceId: orderId,
-            idempotencyKey: this.settlementKey('delivery', 'agent-release', orderId),
           }),
           'agent hold release',
           order
@@ -16743,6 +17917,34 @@ export class OrdersService {
     orderId: string
   ): string {
     return `settle:${stage}:${step}:${orderId}`;
+  }
+
+  /**
+   * Agent drop: release the agent's hold for this order through release_agent_order_hold
+   * (min(net held, agent_hold_amount), atomic under the account row lock). The old write
+   * had no idempotency key and released the full agent_hold_amount, so it could
+   * double-release against the reconciler or a retried drop. A failure is a money alert;
+   * the drop itself still succeeds, as before.
+   */
+  private async releaseDroppedAgentHold(
+    order: { id: string; order_number: string },
+    accountId: string,
+    amount: number
+  ): Promise<void> {
+    const dropRelease = await releaseAgentOrderHold(this.hasuraSystemService, {
+      accountId,
+      orderId: order.id,
+      cap: Number(amount || 0),
+      memo: `Hold released for order ${order.order_number}. Order dropped by agent and made available for other agents.`,
+    });
+    if (!dropRelease.success) {
+      reportMoneyAnomaly(
+        this.logger,
+        AGENT_HOLD_RELEASE_FAILED_MARKER,
+        `Agent hold not released on drop of order ${order.order_number}: ${dropRelease.error}`,
+        { orderId: order.id, accountId, path: 'drop' }
+      );
+    }
   }
 
   /** A ledger move that did not succeed must stop settlement (never pay the merchant on top of it). */
@@ -17796,7 +18998,7 @@ export class OrdersService {
     } catch (error: any) {
       this.logger.error(
         `Failed to calculate tiered delivery fee for country ${country}:`,
-        error
+        safeErrorMessage(error)
       );
 
       return calculateDeliveryFeeFallback({
@@ -18434,4 +19636,44 @@ export class OrdersService {
       );
     }
   }
+}
+
+/**
+ * #594: `reason` on an offer decline. Absent or blank -> null (unchanged
+ * behaviour); anything else must be one of OFFER_DECLINE_REASONS (400).
+ */
+/** Error codes of a refused dedicated release (AC-A6b). */
+export const DEDICATED_RELEASE_ERRORS = {
+  unavailable: 'DEDICATED_RELEASE_UNAVAILABLE',
+  dedicated_disabled: 'DEDICATED_DISABLED',
+  not_assigned: 'DEDICATED_RELEASE_NOT_ASSIGNED',
+  not_auto_assigned: 'DEDICATED_RELEASE_NOT_AUTO_ASSIGNED',
+  window_closed: 'DEDICATED_RELEASE_WINDOW_CLOSED',
+  release_failed: 'DEDICATED_RELEASE_FAILED',
+  release_lost: 'DEDICATED_RELEASE_LOST',
+} as const;
+
+export function parseOfferDeclineReason(raw: unknown): OfferDeclineReason | null {
+  if (raw == null || (typeof raw === 'string' && raw.trim() === '')) return null;
+  const value = typeof raw === 'string' ? raw.trim() : '';
+  if ((OFFER_DECLINE_REASONS as readonly string[]).includes(value)) {
+    return value as OfferDeclineReason;
+  }
+  throw new HttpException(
+    {
+      success: false,
+      error: 'INVALID_DECLINE_REASON',
+      message: `reason must be one of: ${OFFER_DECLINE_REASONS.join(', ')}`,
+    },
+    HttpStatus.BAD_REQUEST
+  );
+}
+
+/** Slot key the dedicated pass covered, stored as `orders.coverage_slot_key` (#594 AC-E1). */
+function dedicatedCoverageSlotKey(
+  result: DeliveryAvailabilityResult | undefined
+): string | null {
+  if (result?.metadata?.coverage !== 'dedicated') return null;
+  const key = result.metadata.coverageSlotKey;
+  return typeof key === 'string' && key ? key : null;
 }

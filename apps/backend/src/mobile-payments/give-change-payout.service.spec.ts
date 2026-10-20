@@ -69,12 +69,86 @@ describe('GiveChangePayoutService', () => {
       amount: 5000,
       referenceId: 'mobile-tx-1',
       memo: expect.stringContaining('GIVE_CHANGE hold'),
+      idempotencyKey: expect.stringContaining('give-change-hold:'),
     });
     expect(databaseService.updateTransaction).toHaveBeenCalledWith('mobile-tx-1', {
       transaction_id: 'provider-ref-1',
       status: 'pending',
     });
     expect(accountsService.registerTransaction).not.toHaveBeenCalled();
+  });
+
+  describe('F-L5 & F-L6: Idempotency key on give-change hold', () => {
+    it('should include idempotency key in hold to prevent duplicates', async () => {
+      const params = {
+        amount: 5000,
+        currency: 'XOF',
+        description: 'Test withdrawal',
+        customerPhone: '+22890123456',
+        provider: 'fedapay' as const,
+        accountId: 'acct-1',
+        transactionType: 'GIVE_CHANGE' as const,
+        accountOwnerId: 'user-1',
+      };
+
+      databaseService.createTransaction.mockResolvedValue({
+        id: 'tx-123',
+        reference: 'REF-456',
+        status: 'pending',
+      } as any);
+      accountsService.registerHoldIfNotExists.mockResolvedValue({
+        success: true,
+        transactionId: 'hold-tx-1',
+      });
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: true,
+        transactionId: 'provider-789',
+      });
+
+      await service.executeGiveChangePayout(params, { throwOnWithdrawalFailure: false });
+
+      // Verify idempotency key is passed with proper format
+      expect(accountsService.registerHoldIfNotExists).toHaveBeenCalledWith(
+        expect.objectContaining({
+          idempotencyKey: expect.stringMatching(/^give-change-hold:P[0-9a-z]+$/),
+        })
+      );
+    });
+
+    it('should handle idempotent hold success (alreadyExists: true)', async () => {
+      const params = {
+        amount: 5000,
+        currency: 'XOF',
+        description: 'Retry withdrawal',
+        customerPhone: '+22890123456',
+        provider: 'fedapay' as const,
+        accountId: 'acct-1',
+        transactionType: 'GIVE_CHANGE' as const,
+        accountOwnerId: 'user-1',
+      };
+
+      databaseService.createTransaction.mockResolvedValue({
+        id: 'tx-retry',
+        reference: 'REF-RETRY',
+        status: 'pending',
+      } as any);
+      // Second call with same key returns alreadyExists: true
+      accountsService.registerHoldIfNotExists.mockResolvedValue({
+        success: true,
+        alreadyExists: true,
+        transactionId: 'hold-existing',
+      });
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: true,
+        transactionId: 'provider-retry',
+      });
+
+      const result = await service.executeGiveChangePayout(params, { throwOnWithdrawalFailure: false });
+
+      // Should proceed normally even when hold already exists
+      expect(result.success).toBe(true);
+      expect(mobilePaymentsService.initiatePayment).toHaveBeenCalled();
+    });
   });
 
   describe('N3: keep provider id on failed withdrawal rows', () => {
@@ -108,6 +182,34 @@ describe('GiveChangePayoutService', () => {
         transaction_id: 'fedapay-payout-9',
       });
       expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the hold when FedaPay reports an ambiguous payout', async () => {
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: true,
+        transactionId: 'fedapay-payout-amb',
+        provider: 'fedapay',
+        status: 'pending',
+        reason: 'provider_ambiguous',
+        message: 'Payout send timed out',
+      });
+
+      const result = await service.executeGiveChangePayout(params, {
+        throwOnWithdrawalFailure: false,
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.data).toMatchObject({
+        providerTransactionId: 'fedapay-payout-amb',
+        status: 'pending',
+        reason: 'provider_ambiguous',
+      });
+      expect(databaseService.updateTransaction).toHaveBeenCalledWith('mobile-tx-1', {
+        transaction_id: 'fedapay-payout-amb',
+        status: 'pending',
+      });
+      expect(accountsService.registerReleaseIfNotExists).not.toHaveBeenCalled();
+      expect(accountsService.registerHoldIfNotExists).toHaveBeenCalledTimes(1);
     });
 
     it('does not write transaction_id when the provider returned none', async () => {

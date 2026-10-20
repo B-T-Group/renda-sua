@@ -49,6 +49,10 @@ export class DepositLedgerService {
       referenceId: params.depositTransactionId,
       memo: `Deposit captured for order ${params.orderNumber}`,
       skipCashAdvanceRepayment: true,
+      // #618: deterministic key, same style as the wallet top-up credit (momo-deposit:<tx id>).
+      // The processor skips its own credit for order_deposit, so the two never collide;
+      // dedupe of older rows without a key still goes through the reference id.
+      idempotencyKey: `momo-deposit:${params.depositTransactionId}`,
     });
     if (!credit?.success) {
       throw new Error(

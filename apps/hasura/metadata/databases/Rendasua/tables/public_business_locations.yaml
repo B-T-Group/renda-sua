@@ -12,6 +12,27 @@ object_relationships:
     using:
       foreign_key_constraint_on: mobile_payment_phone_id
 array_relationships:
+  - name: pickup_slots
+    using:
+      foreign_key_constraint_on:
+        column: business_location_id
+        table:
+          name: business_location_pickup_slots
+          schema: public
+  - name: dedicated_agent_assignments
+    using:
+      foreign_key_constraint_on:
+        column: business_location_id
+        table:
+          name: dedicated_agent_assignments
+          schema: public
+  - name: dedicated_agent_postings
+    using:
+      foreign_key_constraint_on:
+        column: business_location_id
+        table:
+          name: dedicated_agent_postings
+          schema: public
   - name: business_inventory
     using:
       manual_configuration:
@@ -79,11 +100,7 @@ insert_permissions:
         - email
         - phone
         - order_alert_phone
-        - mobile_payment_phone_id
         - operating_hours
-        - rendasua_item_commission_percentage
-        - auto_withdraw_commissions
-        - pay_at_confirm
         - logo_url
         - created_at
         - updated_at
@@ -209,11 +226,7 @@ update_permissions:
         - email
         - phone
         - order_alert_phone
-        - mobile_payment_phone_id
         - operating_hours
-        - rendasua_item_commission_percentage
-        - auto_withdraw_commissions
-        - pay_at_confirm
         - logo_url
         - updated_at
       filter:

@@ -1,3 +1,4 @@
+import type { DedicatedAgentsConfigService } from '../dedicated-agents/dedicated-agents-config.service';
 import { DeliveryConfigService } from '../delivery-configs/delivery-configs.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
@@ -36,15 +37,18 @@ describe('DeliverySlotsService', () => {
   };
 
   let hasura: { executeQuery: jest.Mock };
+  let dedicatedConfig: { isEnabled: jest.Mock };
   let service: DeliverySlotsService;
 
   beforeEach(() => {
     hasura = { executeQuery: jest.fn() };
+    dedicatedConfig = { isEnabled: jest.fn().mockResolvedValue(false) };
     service = new DeliverySlotsService(
       hasura as unknown as HasuraSystemService,
       {
         getTimezone: jest.fn().mockResolvedValue('Africa/Douala'),
-      } as unknown as DeliveryConfigService
+      } as unknown as DeliveryConfigService,
+      dedicatedConfig as unknown as DedicatedAgentsConfigService
     );
   });
 
@@ -116,5 +120,67 @@ describe('DeliverySlotsService', () => {
     );
 
     expect(slots).toEqual([]);
+  });
+
+  describe('#594 AC-B5: only enabled pickup slots, behind dedicated_agents_enabled', () => {
+    const slot = (id: string, name: string, start: string, end: string, type: 'standard' | 'fast' = 'standard'): DeliveryTimeSlot => ({
+      ...stateSlot,
+      id,
+      slot_name: name,
+      slot_type: type,
+      start_time: start,
+      end_time: end,
+    });
+    const standard = [
+      slot('m', 'Morning', '08:00:00', '12:00:00'),
+      slot('a', 'Afternoon', '12:00:00', '16:00:00'),
+      slot('e', 'Evening', '16:00:00', '20:00:00'),
+    ];
+    // Named like a standard slot on purpose: only the slot type keeps it out of the filter.
+    const fast = [slot('mf', 'Morning', '08:00:00', '12:00:00', 'fast')];
+
+    function stubWithPickup(disabled: string[]) {
+      hasura.executeQuery.mockImplementation(async (query: string, vars: { slot_ids?: string[]; slot_type?: string; id?: string }) => {
+        if (vars?.slot_ids) {
+          return {
+            delivery_time_slots: (vars.slot_ids as string[]).map((id) => ({ id, max_orders_per_slot: 10 })),
+            delivery_time_windows: [],
+          };
+        }
+        if (query.includes('BusinessLocationHours')) return { business_locations_by_pk: { operating_hours: null } };
+        if (query.includes('BusinessLocationDisabledPickupSlots')) {
+          expect(vars).toEqual({ id: 'loc-1' });
+          return { business_location_pickup_slots: disabled.map((slot_key) => ({ slot_key, is_enabled: false })) };
+        }
+        return { delivery_time_slots: vars?.slot_type === 'fast' ? fast : standard };
+      });
+    }
+    const pickupQueried = () =>
+      hasura.executeQuery.mock.calls.some(([q]) => String(q).includes('BusinessLocationDisabledPickupSlots'));
+
+    it('flag on: a slot the business turned off is not offered to clients', async () => {
+      dedicatedConfig.isEnabled.mockResolvedValue(true);
+      stubWithPickup(['evening']);
+      const slots = await service.getAvailableSlots('CM', 'Littoral', futureDate, false, 'Africa/Douala', 'loc-1');
+      expect(slots.map((s) => s.id)).toEqual(['m', 'a']);
+      expect(dedicatedConfig.isEnabled).toHaveBeenCalledWith('CM');
+    });
+
+    it('flag off: the list is unchanged and pickup slots are not even read', async () => {
+      stubWithPickup(['evening']);
+      const slots = await service.getAvailableSlots('CM', 'Littoral', futureDate, false, 'Africa/Douala', 'loc-1');
+      expect(slots.map((s) => s.id)).toEqual(['m', 'a', 'e']);
+      expect(pickupQueried()).toBe(false);
+    });
+
+    it('fast slots and calls without a location are never filtered', async () => {
+      dedicatedConfig.isEnabled.mockResolvedValue(true);
+      stubWithPickup(['morning']);
+      const fastSlots = await service.getAvailableSlots('CM', 'Littoral', futureDate, true, 'Africa/Douala', 'loc-1');
+      expect(fastSlots.map((s) => s.id)).toEqual(['mf']);
+      const noLocation = await service.getAvailableSlots('CM', 'Littoral', futureDate, false, 'Africa/Douala');
+      expect(noLocation.map((s) => s.id)).toEqual(['m', 'a', 'e']);
+      expect(pickupQueried()).toBe(false);
+    });
   });
 });

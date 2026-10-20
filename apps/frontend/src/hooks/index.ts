@@ -17,7 +17,6 @@ export { useBatchOrderActions } from './useBatchOrderActions';
 export { useShippingLabels } from './useShippingLabels';
 export { useCancellationFee } from './useCancellationFee';
 export { useClients } from './useClients';
-export { useCreateOrder } from './useCreateOrder';
 export { useDeliveryFees } from './useDeliveryFees';
 export { useDiscountCode } from './useDiscountCode';
 export { useInventoryItems } from './useInventoryItems';

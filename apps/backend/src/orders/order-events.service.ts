@@ -1,9 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
-import type {
-  OrderEventActorType,
-  OrderEventType,
-} from './order-pickup.types';
+import type { OrderEventActorType, OrderEventType } from './order-pickup.types';
 
 export interface OrderEventRow {
   id: string;
@@ -29,8 +26,24 @@ export class OrderEventsService {
     payload?: Record<string, unknown>;
   }): Promise<void> {
     try {
-      await this.hasura.executeMutation(
-        `mutation InsertOrderEvent(
+      await this.recordEventStrict(params);
+    } catch (error: any) {
+      this.logger.error(
+        `recordEvent ${params.eventType} failed for ${params.orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  /** As recordEvent, but a failed insert throws (for callers that must know, e.g. #622 stranded holds). */
+  async recordEventStrict(params: {
+    orderId: string;
+    eventType: OrderEventType;
+    actorType: OrderEventActorType;
+    actorId?: string | null;
+    payload?: Record<string, unknown>;
+  }): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation InsertOrderEvent(
           $orderId: uuid!
           $eventType: String!
           $actorType: String!
@@ -45,19 +58,14 @@ export class OrderEventsService {
             payload: $payload
           }) { id }
         }`,
-        {
-          orderId: params.orderId,
-          eventType: params.eventType,
-          actorType: params.actorType,
-          actorId: params.actorId ?? null,
-          payload: params.payload ?? {},
-        }
-      );
-    } catch (error: any) {
-      this.logger.error(
-        `recordEvent ${params.eventType} failed for ${params.orderId}: ${error?.message}`
-      );
-    }
+      {
+        orderId: params.orderId,
+        eventType: params.eventType,
+        actorType: params.actorType,
+        actorId: params.actorId ?? null,
+        payload: params.payload ?? {},
+      }
+    );
   }
 
   async listForOrder(orderId: string, limit = 100): Promise<OrderEventRow[]> {

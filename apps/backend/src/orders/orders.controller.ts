@@ -50,11 +50,13 @@ import type {
   BatchOrderStatusChangeResult,
   CompleteDeliveryRequest,
   ConfirmOrderRequest,
+  DeclineOrderOfferRequest,
   GetOrderRequest,
   OrderStatusChangeRequest,
 } from './orders.service';
 import { toCreateOrderHttpException } from './create-order-http-error';
 import { OrdersService } from './orders.service';
+import { OFFER_DECLINE_REASONS } from '../dedicated-agents/dedicated-agents.constants';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { isActivePersona } from '../users/persona.util';
@@ -1673,7 +1675,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Retry deposit payment (client only)',
     description:
-      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. If the prior MoMo transaction already succeeded (locally or at the provider), replays deposit finalize. Returns 409 if a prior deposit payment is still pending or processing (client should wait) or if the provider status cannot be confirmed.',
+      'Re-initiates deposit payment for a pending_payment order with pending deposit. Only allowed for MoMo pay-at-delivery/pay-at-pickup orders where the deposit has not been paid. If the prior MoMo transaction already succeeded, replays deposit finalize. Returns 409 if a prior deposit payment is still pending or processing (client should wait).',
   })
   @ApiParam({ name: 'id', description: 'Order ID', type: String })
   @ApiBody({
@@ -1754,6 +1756,37 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: 'Extension unavailable' })
   async requestPickupDelay(@Param('id') orderId: string) {
     return this.ordersService.requestPickupDelay(orderId);
+  }
+
+  @Post(':id/dedicated-release')
+  @ApiOperation({
+    summary:
+      "#594 AC-A6b: an auto-assigned dedicated agent releases the order (\"Can't take this\") inside the release window; no strike, dispatch restarts without them",
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({
+    required: false,
+    schema: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', enum: [...OFFER_DECLINE_REASONS] },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Released; dispatch restarted without this agent' })
+  @ApiResponse({ status: 400, description: 'INVALID_DECLINE_REASON' })
+  @ApiResponse({ status: 404, description: 'DEDICATED_RELEASE_UNAVAILABLE (unknown order)' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'DEDICATED_RELEASE_NOT_ASSIGNED, DEDICATED_RELEASE_NOT_AUTO_ASSIGNED, DEDICATED_RELEASE_WINDOW_CLOSED or DEDICATED_RELEASE_LOST (could not finish and another agent took the order). The flag being off does not block a release. Body: { error, code, reason, message } with message in the agent\'s language',
+  })
+  @ApiResponse({ status: 500, description: 'DEDICATED_RELEASE_FAILED (nothing changed; retry)' })
+  async releaseDedicatedAutoAssignment(
+    @Param('id') orderId: string,
+    @Body() body: { reason?: string } = {}
+  ) {
+    return this.ordersService.releaseDedicatedAutoAssignment(orderId, body?.reason);
   }
 
   @Post(':id/report-pickup-issue')
@@ -2033,12 +2066,18 @@ export class OrdersController {
       required: ['orderId'],
       properties: {
         orderId: { type: 'string', format: 'uuid' },
+        reason: {
+          type: 'string',
+          enum: [...OFFER_DECLINE_REASONS],
+          description: 'Optional (#594). Recorded on dedicated offers.',
+        },
       },
     },
   })
   @ApiResponse({ status: 200, description: 'Offer declined' })
+  @ApiResponse({ status: 400, description: 'Unknown decline reason (INVALID_DECLINE_REASON)' })
   @ApiResponse({ status: 403, description: 'Only agents can decline offers' })
-  async declineOrderOffer(@Body() request: GetOrderRequest) {
+  async declineOrderOffer(@Body() request: DeclineOrderOfferRequest) {
     return this.ordersService.declineOrderOffer(request);
   }
 

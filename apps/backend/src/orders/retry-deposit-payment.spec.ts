@@ -52,7 +52,9 @@ describe('OrdersService - retryDepositPayment', () => {
     mobilePaymentsService = {
       resolveProvider: jest.fn().mockReturnValue('mypvit'),
       initiatePayment: jest.fn(),
-      checkTransactionStatus: jest.fn().mockResolvedValue({ status: 'failed' }),
+      validatePaymentRequest: jest.fn().mockResolvedValue(null),
+      scheduleMockCallback: jest.fn(),
+      checkTransactionStatus: jest.fn(),
     } as any;
 
     hasuraSystemService = {
@@ -91,11 +93,6 @@ describe('OrdersService - retryDepositPayment', () => {
         OrdersService.prototype.completePaidDepositFromSucceededTxn,
       throwDepositAttemptInFlight:
         OrdersService.prototype.throwDepositAttemptInFlight,
-      pollDepositProviderStatus:
-        OrdersService.prototype.pollDepositProviderStatus,
-      recoverPaidDepositIfProviderSucceeded:
-        OrdersService.prototype.recoverPaidDepositIfProviderSucceeded,
-      paymentStateUncertain: OrdersService.prototype.paymentStateUncertain,
       retryDepositPayment: OrdersService.prototype.retryDepositPayment,
     } as any;
   });
@@ -331,6 +328,7 @@ describe('OrdersService - retryDepositPayment', () => {
       expect(result.success).toBe(true);
       expect(result.deposit_amount).toBe(2000);
       expect(mobilePaymentsService.initiatePayment).toHaveBeenCalled();
+      expect(mobilePaymentsService.checkTransactionStatus).not.toHaveBeenCalled();
 
       expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
         expect.stringContaining('ClaimDepositRetry'),
@@ -370,107 +368,6 @@ describe('OrdersService - retryDepositPayment', () => {
       );
       expect(mobilePaymentsService.initiatePayment).not.toHaveBeenCalled();
       expect(mobilePaymentsService.checkTransactionStatus).not.toHaveBeenCalled();
-    });
-
-    it('should replay deposit finalize if a failed local row is still paid at the provider', async () => {
-      const order = {
-        ...mockOrder,
-        deposit_mobile_payment_transaction_id: 'txn-old-123',
-      };
-      jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
-      (service as any).finalizeDepositAfterCallback.mockResolvedValue(undefined);
-
-      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
-        id: 'txn-old-123',
-        status: 'failed',
-        transaction_id: 'provider-tx-1',
-        reference: 'ORD-123-DEP-12345',
-        provider: 'fedapay',
-        amount: 2000,
-        currency: 'XOF',
-      } as any);
-      mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
-        status: 'success',
-        transactionId: 'provider-tx-1',
-      });
-
-      const result = await service.retryDepositPayment('order-123');
-
-      expect((service as any).finalizeDepositAfterCallback).toHaveBeenCalledWith(
-        'ORD-123',
-        'txn-old-123'
-      );
-      expect(mobilePaymentsService.initiatePayment).not.toHaveBeenCalled();
-      expect(result).toEqual({
-        success: true,
-        message: 'Deposit payment completed',
-        current_status: 'pending',
-        deposit_status: 'paid',
-      });
-    });
-
-    it('should return 409 if a failed local row is still pending at the provider', async () => {
-      const order = {
-        ...mockOrder,
-        deposit_mobile_payment_transaction_id: 'txn-old-123',
-      };
-      jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
-
-      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
-        id: 'txn-old-123',
-        status: 'failed',
-        transaction_id: 'provider-tx-1',
-        reference: 'ORD-123-DEP-12345',
-        provider: 'fedapay',
-      } as any);
-      mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
-        status: 'pending',
-        transactionId: 'provider-tx-1',
-      });
-
-      await expect(
-        service.retryDepositPayment('order-123')
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            code: 'DEPOSIT_PAYMENT_PENDING',
-            existing_transaction_id: 'txn-old-123',
-          }),
-          status: HttpStatus.CONFLICT,
-        })
-      );
-      expect(mobilePaymentsService.initiatePayment).not.toHaveBeenCalled();
-    });
-
-    it('should return 409 PAYMENT_STATE_UNCERTAIN if the provider cannot confirm a failed deposit row', async () => {
-      const order = {
-        ...mockOrder,
-        deposit_mobile_payment_transaction_id: 'txn-old-123',
-      };
-      jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
-
-      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
-        id: 'txn-old-123',
-        status: 'failed',
-        transaction_id: 'provider-tx-1',
-        reference: 'ORD-123-DEP-12345',
-        provider: 'fedapay',
-      } as any);
-      mobilePaymentsService.checkTransactionStatus.mockRejectedValue(
-        new Error('provider timeout')
-      );
-
-      await expect(
-        service.retryDepositPayment('order-123')
-      ).rejects.toThrow(
-        expect.objectContaining({
-          response: expect.objectContaining({
-            code: 'PAYMENT_STATE_UNCERTAIN',
-          }),
-          status: HttpStatus.CONFLICT,
-        })
-      );
-      expect(mobilePaymentsService.initiatePayment).not.toHaveBeenCalled();
     });
 
     it('should allow retry if prior deposit transaction is cancelled', async () => {
@@ -515,6 +412,7 @@ describe('OrdersService - retryDepositPayment', () => {
 
       expect(result.success).toBe(true);
       expect(mobilePaymentsService.initiatePayment).toHaveBeenCalled();
+      expect(mobilePaymentsService.checkTransactionStatus).not.toHaveBeenCalled();
     });
   });
 
@@ -553,6 +451,16 @@ describe('OrdersService - retryDepositPayment', () => {
       expect(result.deposit_amount).toBe(2000);
       expect(result.amount_due).toBe(8000);
       expect(result.payment_transaction.transaction_id).toBe('provider-tx-new');
+
+      const createdRef =
+        mobilePaymentsDatabaseService.createTransaction.mock.calls[0][0]
+          .reference;
+      expect(createdRef).toMatch(/^ORD-123-DEP-\d+-retry$/);
+      expect(mobilePaymentsService.initiatePayment).toHaveBeenCalledWith(
+        expect.any(Object),
+        createdRef,
+        'user-123'
+      );
 
       expect(
         mobilePaymentsDatabaseService.createTransaction.mock

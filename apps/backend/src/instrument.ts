@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nestjs';
+import { redactSensitivePathsDeep } from './common/redact-sensitive-path.util';
 import { scrubSentryEvent } from './common/sentry/scrub-sentry-event';
 
 /**
@@ -27,13 +28,16 @@ export function initSentry(): void {
 }
 
 /**
- * Fail closed (QA #589 D3): an event we could not fully scrub is never sent. Returning null
- * from the hook drops it; letting the hook throw would make the SDK send its own
- * "Event processing pipeline threw" event instead.
+ * Both scrubbers, fail closed (QA #589 D3, #593 merged-result spec):
+ * - scrubSentryEvent (#589): request bodies/cookies, credentials and provider secrets;
+ * - redactSensitivePathsDeep (#593): path tokens such as /secret-refresh/<token>.
+ * An event we could not fully scrub is never sent. Returning null from the hook drops it;
+ * letting the hook throw would make the SDK send its own "Event processing pipeline threw"
+ * event instead.
  */
 export function scrubAll<E>(event: E): E | null {
   try {
-    return scrubSentryEvent(event);
+    return redactSensitivePathsDeep(scrubSentryEvent(event) as unknown as object) as unknown as E;
   } catch {
     return null;
   }

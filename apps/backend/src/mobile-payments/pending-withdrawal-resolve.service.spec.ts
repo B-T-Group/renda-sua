@@ -36,6 +36,7 @@ describe('PendingWithdrawalResolveService', () => {
   const callbackProcessor = {
     processMypvitCallback: jest.fn(),
     processFreemopayCallback: jest.fn(),
+    processFedaPayCallback: jest.fn(),
   };
   const accountsService = {
     registerReleaseIfNotExists: jest.fn(),
@@ -306,6 +307,96 @@ describe('PendingWithdrawalResolveService', () => {
     await expect(service.resolveForUser('tx-1', 'user-1')).rejects.toBeInstanceOf(
       HttpException
     );
+  });
+
+  it('settles a FedaPay give-change from the payout poll, not the collection webhook', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({
+        transaction_id: 'payout-9',
+        provider: 'fedapay',
+        currency: 'XOF',
+        customer_phone: '+22890123456',
+      })
+    );
+    mobilePaymentsService.resolveAdminIntegrationProvider.mockResolvedValue(
+      'fedapay'
+    );
+    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
+      transactionId: 'payout-9',
+      status: 'success',
+      amount: 1000,
+      currency: 'XOF',
+      reference: 'P123',
+    });
+
+    const result = await service.resolveForUser('tx-1', 'user-1');
+
+    expect(result.outcome).toBe('paid');
+    expect(mobilePaymentsService.checkTransactionStatus).toHaveBeenCalledWith(
+      'payout-9',
+      'fedapay',
+      '+22890123456',
+      true
+    );
+    expect(callbackProcessor.processFedaPayCallback).not.toHaveBeenCalled();
+    expect(callbackProcessor.processFreemopayCallback).not.toHaveBeenCalled();
+    expect(callbackProcessor.processMypvitCallback).not.toHaveBeenCalled();
+    expect(accountsService.registerReleaseIfNotExists).toHaveBeenCalledWith({
+      accountId: 'acct-1',
+      amount: 1000,
+      referenceId: 'tx-1',
+      memo: 'GIVE_CHANGE release - P123',
+    });
+    expect(accountsService.registerWithdrawalIfNotExists).toHaveBeenCalledWith({
+      accountId: 'acct-1',
+      amount: 1000,
+      referenceId: 'tx-1',
+      memo: 'Mobile payment give change - P123',
+    });
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-1', {
+      status: 'success',
+      transaction_id: 'payout-9',
+    });
+  });
+
+  it('releases a FedaPay give-change when the payout poll reports failure', async () => {
+    databaseService.getTransactionById.mockResolvedValue(
+      baseTx({
+        transaction_id: 'payout-9',
+        provider: 'fedapay',
+        currency: 'XOF',
+        customer_phone: '+22890123456',
+      })
+    );
+    mobilePaymentsService.resolveAdminIntegrationProvider.mockResolvedValue(
+      'fedapay'
+    );
+    mobilePaymentsService.checkTransactionStatus.mockResolvedValue({
+      transactionId: 'payout-9',
+      status: 'failed',
+      amount: 1000,
+      currency: 'XOF',
+      reference: 'P123',
+      message: 'Payout declined',
+    });
+
+    const result = await service.resolveForUser('tx-1', 'user-1');
+
+    expect(result.outcome).toBe('failed');
+    expect(mobilePaymentsService.checkTransactionStatus).toHaveBeenCalledWith(
+      'payout-9',
+      'fedapay',
+      '+22890123456',
+      true
+    );
+    expect(accountsService.registerWithdrawalIfNotExists).not.toHaveBeenCalled();
+    expect(callbackProcessor.processFedaPayCallback).not.toHaveBeenCalled();
+    expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-1', {
+      status: 'failed',
+      transaction_id: 'payout-9',
+      error_message: 'Payout declined',
+      error_code: 'PROVIDER_FAILED',
+    });
   });
 
   it('records WITHDRAWAL_FAILED when MTN debit fails after provider success', async () => {

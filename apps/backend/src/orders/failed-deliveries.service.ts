@@ -9,6 +9,12 @@ import {
   resolveFeePercent,
 } from './fee-percent.util';
 import { OrdersService } from './orders.service';
+import {
+  AGENT_FAULT_COMPENSATION_SHORT_MARKER,
+  forfeitAgentOrderHold,
+  AGENT_HOLD_RELEASE_FAILED_MARKER,
+  releaseAgentOrderHold,
+} from './agent-hold-release.util';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import { isActivePersona } from '../users/persona.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
@@ -467,7 +473,118 @@ export class FailedDeliveriesService {
   }
 
   /**
-   * Resolve agent fault: Refund client, release agent hold, deposit agent hold to business
+   * Agent fault: the agent's hold for this order is FORFEITED to the business.
+   *
+   * QA F2: one SQL function, forfeit_agent_order_hold, moves min(net held,
+   * agent_hold_amount) from the agent's withheld balance straight to the business
+   * (forfeit + deposit rows, one transaction, once per order; see the migration
+   * 20261020010000 header). The old three steps (release -> payment -> deposit) could
+   * crash half-way and passed the money through the agent's available balance.
+   * Returns the amount the business received for this order.
+   *
+   * Less than agent_hold_amount, or 0, is a money alert (agent_fault_compensation_short)
+   * with expected and actual figures. QA F1: before alerting, the forfeit row is read
+   * again by its key, so a concurrent duplicate resolution (which found the row already
+   * written, or lost a race) does not raise a false alert.
+   */
+  private async forfeitAgentHold(
+    order: any,
+    agentAccountId: string,
+    businessAccountId: string | null,
+    expected: number
+  ): Promise<number> {
+    const forfeitKey = this.failedDeliveryKey('agent-fault', 'agent-forfeit', order.id);
+    let moved = 0;
+    let reason = '';
+    if (!businessAccountId) {
+      // Nothing to forfeit to: leave the hold in place (withheld) for a human or the
+      // stranded-hold reconciler rather than take money from the agent for nobody.
+      reason = ' (no business account: hold left in place)';
+    } else {
+      const result = await forfeitAgentOrderHold(this.hasuraSystemService, {
+        agentAccountId,
+        businessAccountId,
+        orderId: order.id,
+        cap: Number(expected || 0),
+        forfeitMemo: `Agent hold forfeited for failed delivery - order ${order.order_number} (agent fault)`,
+        businessMemo: `Agent hold retained for failed delivery - order ${order.order_number} (agent fault)`,
+      });
+      if (!result.success) {
+        reportMoneyAnomaly(
+          this.logger,
+          AGENT_HOLD_RELEASE_FAILED_MARKER,
+          `order=${order.order_number} orderId=${order.id} agent hold forfeit failed (agent-fault): ${result.error}`,
+          { orderId: order.id, accountId: agentAccountId, amount: expected, path: 'failed-delivery:agent-fault' }
+        );
+      }
+      moved = roundMoney(result.forfeited);
+    }
+    const target = roundMoney(Number(expected || 0));
+    if (moved < target && businessAccountId) {
+      // QA F1: re-check the once-per-order forfeit row before alerting.
+      const existing = await this.existingTransactionAmount(forfeitKey).catch(() => null);
+      if (existing !== null) moved = Math.max(moved, roundMoney(existing));
+    }
+    if (moved < target) {
+      reportMoneyAnomaly(
+        this.logger,
+        AGENT_FAULT_COMPENSATION_SHORT_MARKER,
+        `order=${order.order_number} orderId=${order.id} agent-fault compensation short: ` +
+          `expected=${expected} actual=${moved} ${order.currency}${reason} (only what was taken from the agent is paid to the business)`,
+        { orderId: order.id, accountId: agentAccountId, expected, actual: moved }
+      );
+    }
+    return moved;
+  }
+
+  private async existingTransactionAmount(key: string): Promise<number | null> {
+    const res = await this.hasuraSystemService.executeQuery<{
+      account_transactions: Array<{ amount: number | string }>;
+    }>(
+      `query FindTransactionByIdempotencyKey($keys: [String!]!) {
+        account_transactions(where: { idempotency_key: { _in: $keys } }, limit: 1) {
+          id
+          amount
+          idempotency_key
+        }
+      }`,
+      { keys: [key] }
+    );
+    const row = res?.account_transactions?.[0];
+    return row ? Number(row.amount) : null;
+  }
+
+  /**
+   * Atomic agent hold release (release_agent_order_hold): min(net held for this agent
+   * and order, agent_hold_amount) under the account row lock, so a retried resolution,
+   * a second fault path or the stranded-hold reconciler cannot release it twice. A
+   * failure is a money alert (the old write's result was not checked at all).
+   */
+  private async releaseAgentHold(
+    order: any,
+    accountId: string,
+    amount: number,
+    fault: string
+  ): Promise<void> {
+    const result = await releaseAgentOrderHold(this.hasuraSystemService, {
+      accountId,
+      orderId: order.id,
+      cap: Number(amount || 0),
+      memo: `Hold released for failed delivery - order ${order.order_number}`,
+    });
+    if (!result.success) {
+      reportMoneyAnomaly(
+        this.logger,
+        AGENT_HOLD_RELEASE_FAILED_MARKER,
+        `order=${order.order_number} orderId=${order.id} agent hold release failed (${fault}): ${result.error}`,
+        { orderId: order.id, accountId, amount, path: `failed-delivery:${fault}` }
+      );
+    }
+  }
+
+  /**
+   * Resolve agent fault: release the client's hold, forfeit the agent's hold to the
+   * business (forfeitAgentHold), release the client's delivery-fee hold.
    */
   private async resolveAgentFault(order: any, orderHold: any) {
     // Release client hold
@@ -487,40 +604,22 @@ export class FailedDeliveriesService {
       });
     }
 
-    // Release agent hold
+    // Forfeit the agent hold to the business (QA F2: one atomic SQL function).
     if (orderHold.agent_hold_amount > 0 && order.assigned_agent) {
       const agentAccount = await this.hasuraSystemService.getAccount(
         order.assigned_agent.user.id,
         order.currency
       );
-
-      await this.accountsService.registerTransaction({
-        accountId: agentAccount.id,
-        amount: orderHold.agent_hold_amount,
-        transactionType: 'release',
-        memo: `Hold released for failed delivery - order ${order.order_number}`,
-        referenceId: order.id,
-        idempotencyKey: this.failedDeliveryKey('agent-fault', 'agent-release', order.id),
-      });
-
-      // Deposit agent hold amount to business account
-      // Get business user_id from order
       const businessUserId = order.business?.user_id;
-      if (businessUserId) {
-        const businessUserAccount = await this.hasuraSystemService.getAccount(
-          businessUserId,
-          order.currency
-        );
-
-        await this.accountsService.registerTransaction({
-          accountId: businessUserAccount.id,
-          amount: orderHold.agent_hold_amount,
-          transactionType: 'deposit',
-          memo: `Agent hold retained for failed delivery - order ${order.order_number} (agent fault)`,
-          referenceId: order.id,
-          idempotencyKey: this.failedDeliveryKey('agent-fault', 'business-deposit', order.id),
-        });
-      }
+      const businessAccount = businessUserId
+        ? await this.hasuraSystemService.getAccount(businessUserId, order.currency)
+        : null;
+      await this.forfeitAgentHold(
+        order,
+        agentAccount.id,
+        businessAccount?.id ?? null,
+        Number(orderHold.agent_hold_amount)
+      );
     }
 
     // Release delivery fees if any
@@ -573,14 +672,7 @@ export class FailedDeliveriesService {
         order.currency
       );
 
-      await this.accountsService.registerTransaction({
-        accountId: agentAccount.id,
-        amount: orderHold.agent_hold_amount,
-        transactionType: 'release',
-        memo: `Hold released for failed delivery - order ${order.order_number}`,
-        referenceId: order.id,
-        idempotencyKey: this.failedDeliveryKey('item-fault', 'agent-release', order.id),
-      });
+      await this.releaseAgentHold(order, agentAccount.id, orderHold.agent_hold_amount, 'item-fault');
     }
 
     // Release delivery fees if any
@@ -697,14 +789,7 @@ export class FailedDeliveriesService {
         order.currency
       );
 
-      await this.accountsService.registerTransaction({
-        accountId: agentAccount.id,
-        amount: orderHold.agent_hold_amount,
-        transactionType: 'release',
-        memo: `Hold released for failed delivery - order ${order.order_number}`,
-        referenceId: order.id,
-        idempotencyKey: this.failedDeliveryKey('client-fault', 'agent-release', order.id),
-      });
+      await this.releaseAgentHold(order, agentAccount.id, orderHold.agent_hold_amount, 'client-fault');
     }
 
     // Invariant: the fee must be covered by what was held for this order.

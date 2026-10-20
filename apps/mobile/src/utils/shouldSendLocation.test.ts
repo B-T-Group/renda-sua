@@ -168,6 +168,24 @@ describe('shouldSendLocation', () => {
     expect(result).toBe(true);
   });
 
+  it('should return false when distance is one meter under the threshold', () => {
+    const nowMs = 1000000;
+    const prev = { lat: 0, lng: 0, timestampMs: nowMs - 60000 };
+    const lat2 = 0.0009;
+    const distance = mockHaversineDistance(0, 0, lat2, 0);
+    const result = shouldSendLocation(
+      prev,
+      lat2,
+      0,
+      nowMs,
+      distance + 1,
+      heartbeatMs,
+      slackMs,
+      mockHaversineDistance
+    );
+    expect(result).toBe(false);
+  });
+
   it('should return true when elapsed time is negative (clock moved backwards)', () => {
     const nowMs = 1000000;
     const prev = { lat: 0, lng: 0, timestampMs: nowMs + 60000 };
