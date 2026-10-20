@@ -33,7 +33,7 @@ import {
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
-import { AdminDedicatedAssignDialog } from './AdminDedicatedAssignDialog';
+import AdminDedicatedAssignDialog from './AdminDedicatedAssignDialog';
 import type { AdminAssignmentView } from '../../../types/dedicatedAgents';
 
 export function AdminDedicatedAssignmentsSection() {
