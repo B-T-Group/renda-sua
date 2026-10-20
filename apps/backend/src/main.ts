@@ -29,7 +29,10 @@ import {
   isCorsOriginAllowed,
   parseCorsOrigins,
 } from './config/cors-origin';
-import { resolveTrustProxy } from './common/utils/resolve-trust-proxy';
+import {
+  assertProductionTrustProxy,
+  resolveTrustProxy,
+} from './common/utils/resolve-trust-proxy';
 import { initSentry } from './instrument';
 
 /** Load apps/backend .env files before Secrets Manager so local overrides can win. */
@@ -154,7 +157,10 @@ async function bootstrap() {
   });
   // Lightsail container HTTPS endpoint (1 hop): honor X-Forwarded-For for
   // client IP (e.g. Meta CAPI Event Match Quality). Override via TRUST_PROXY.
-  app.set('trust proxy', resolveTrustProxy(process.env.TRUST_PROXY));
+  const trustProxy = resolveTrustProxy(process.env.TRUST_PROXY);
+  // Prod must trust exactly the Lightsail LB hop (IP allowlists depend on req.ip).
+  assertProductionTrustProxy(trustProxy);
+  app.set('trust proxy', trustProxy);
   // Stripe webhooks require the raw, unparsed request body for signature
   // verification, so they must be registered BEFORE the global JSON parser.
   app.use('/api/stripe-payments/webhook', raw({ type: '*/*' }));
@@ -162,6 +168,7 @@ async function bootstrap() {
   app.use('/api/business-contracts/webhook', raw({ type: '*/*' }));
   app.use('/api/commerce-integrations/webhooks/shopify', raw({ type: '*/*' }));
   app.use('/api/whatsapp/webhook', raw({ type: '*/*' }));
+  app.use('/api/mobile-payments/callback/fedapay', raw({ type: '*/*' }));
   app.use(json({ limit: JSON_BODY_LIMIT }));
   app.use(urlencoded({ extended: true, limit: JSON_BODY_LIMIT }));
   app.use(cookieParser());

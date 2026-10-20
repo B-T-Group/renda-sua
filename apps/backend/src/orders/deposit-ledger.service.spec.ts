@@ -70,6 +70,8 @@ describe('DepositLedgerService', () => {
         referenceId: txnId,
         memo: 'Deposit captured for order 123',
         skipCashAdvanceRepayment: true,
+        // #618: the order_deposit credit leg carries a deterministic key.
+        idempotencyKey: `momo-deposit:${txnId}`,
       });
       expect(accountsService.registerHoldIfNotExists).toHaveBeenCalledWith({
         accountId: 'acct-1',

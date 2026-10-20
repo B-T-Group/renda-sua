@@ -30,4 +30,19 @@ describe('buildDeliveryAvailabilityContext', () => {
 
     expect(context.sellerCountry).toBe('');
   });
+
+  it('#594: passes the scheduled-window request through, and omits it otherwise', () => {
+    const dedicated = {
+      slotId: 'slot-a',
+      preferredDate: '2026-10-20',
+      rail: 'stripe' as const,
+      subtotal: 120,
+      currency: 'CAD',
+    };
+    expect(
+      buildDeliveryAvailabilityContext({ businessId: 'biz-1', dedicated }).dedicated
+    ).toEqual(dedicated);
+    expect(buildDeliveryAvailabilityContext({ businessId: 'biz-1', dedicated: null })).not.toHaveProperty('dedicated');
+    expect(buildDeliveryAvailabilityContext({ businessId: 'biz-1' })).not.toHaveProperty('dedicated');
+  });
 });

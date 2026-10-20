@@ -22,6 +22,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
+import { DedicatedCheckoutCoverageService } from '../dedicated-agents/dedicated-checkout-coverage.service';
 import { VariantInventoryService } from '../item-variants/variant-inventory.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
@@ -61,6 +62,7 @@ function makeInventoryRow(overrides: {
   canAcceptOrders?: boolean;
   phoneVerified?: boolean;
   exportAvailable?: boolean;
+  moderationStatus?: string;
 } = {}) {
   const sellerCountry = overrides.sellerCountry ?? 'CM';
   const isStripeCountry = sellerCountry === 'CA';
@@ -93,6 +95,7 @@ function makeInventoryRow(overrides: {
       weight: 0,
       max_order_quantity: null as number | null,
       export_available: overrides.exportAvailable ?? false,
+      moderation_status: overrides.moderationStatus ?? 'approved',
       pay_on_delivery_enabled: overrides.payOnDelivery ?? false,
       pay_at_pickup_enabled: overrides.payAtPickup ?? false,
       initial_deposit_enabled: overrides.initialDepositEnabled ?? false,
@@ -161,11 +164,18 @@ describe('CheckoutPreflightService', () => {
   let loyaltyService: jest.Mocked<LoyaltyService>;
   let deliveryAvailabilityService: jest.Mocked<DeliveryAvailabilityService>;
   let fxEstimateService: jest.Mocked<FxEstimateService>;
+  let dedicatedCoverage: { isEnabled: jest.Mock; coveredSlots: jest.Mock };
 
   beforeEach(async () => {
+    // #594: flag off by default, so every other test sees today's response.
+    dedicatedCoverage = {
+      isEnabled: jest.fn().mockResolvedValue(false),
+      coveredSlots: jest.fn().mockResolvedValue([]),
+    };
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CheckoutPreflightService,
+        { provide: DedicatedCheckoutCoverageService, useValue: dedicatedCoverage },
         {
           provide: HasuraSystemService,
           useValue: {
@@ -743,6 +753,236 @@ describe('CheckoutPreflightService', () => {
     expect(result.delivery_availability?.available).toBe(false);
   });
 
+  // -------------------------------------------------------------------------
+  // #594 PR 4: dedicated coverage fields (flag on per seller country)
+  // -------------------------------------------------------------------------
+  describe('#594 dedicated covered slots', () => {
+    const NO_AGENT = {
+      available: false,
+      estimatedDeliveryMinutes: null,
+      reason: 'NO_ELIGIBLE_AGENT',
+      ruleId: 'agent-in-region',
+    };
+    const AVAILABLE = { available: true, estimatedDeliveryMinutes: 40, reason: null, ruleId: null };
+    const slotEntry = (date: string, key: string, id = `slot-${key}`) => ({
+      date,
+      slot_id: id,
+      slot_key: key,
+      start: key === 'afternoon' ? '12:00' : '16:00',
+      end: key === 'afternoon' ? '16:00' : '20:00',
+      pickup_time: key === 'afternoon' ? '12:30' : '16:30',
+    });
+
+    function locatedRow(over: Parameters<typeof makeInventoryRow>[0] & { locationId?: string } = {}) {
+      const row = makeInventoryRow({ payAtPickup: true, price: 2500, ...over });
+      return {
+        ...row,
+        business_location: {
+          ...row.business_location,
+          id: over.locationId ?? 'loc-1',
+          address: { country: over.sellerCountry ?? 'CM', state: ' Littoral ' },
+        },
+      };
+    }
+
+    const deliveryDto = (items: Array<[string, number]>): CheckoutPreflightDto => ({
+      items: items.map(([id, quantity]) => ({ business_inventory_id: id, quantity })),
+      fulfillment_method: 'delivery',
+      provisional_country: 'CM',
+    });
+
+    function availability(byBusiness: Record<string, unknown>) {
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockImplementation(
+        (ctx: { businessId: string }) => Promise.resolve(byBusiness[ctx.businessId] ?? AVAILABLE)
+      );
+    }
+
+    it('no nearby agent + a dedicated agent covers Afternoon -> ASAP unavailable, covered slots listed', async () => {
+      mockInventory([locatedRow()]);
+      availability({ 'biz-1': NO_AGENT });
+      dedicatedCoverage.isEnabled.mockResolvedValue(true);
+      dedicatedCoverage.coveredSlots.mockResolvedValue([slotEntry('2026-10-19', 'afternoon')]);
+
+      const result = await service.resolve(deliveryDto([['inv-1', 2]]), false);
+
+      expect(result.groups[0]?.delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: [slotEntry('2026-10-19', 'afternoon')],
+      });
+      expect(dedicatedCoverage.isEnabled).toHaveBeenCalledWith('CM');
+      expect(dedicatedCoverage.coveredSlots).toHaveBeenCalledWith({
+        locationId: 'loc-1',
+        country: 'CM',
+        state: 'Littoral',
+        rail: 'mobile_money',
+        subtotal: 5000,
+        currency: 'XAF',
+        verifiedAgentDelivery: false,
+      });
+      expect(result.delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: [slotEntry('2026-10-19', 'afternoon')],
+      });
+      // Store-hours ASAP flag is a different thing and stays as it was.
+      expect(result.asap_available).toBe(true);
+    });
+
+    it('passes the Stripe rail and verified_agent_delivery through', async () => {
+      paymentRoutingService.resolveRailForCountry.mockResolvedValue('stripe');
+      mockInventory([locatedRow({ sellerCountry: 'CA', currency: 'CAD' })], { stripeCountries: ['CA'] });
+      availability({ 'biz-1': NO_AGENT });
+      dedicatedCoverage.isEnabled.mockResolvedValue(true);
+
+      await service.resolve(
+        { ...deliveryDto([['inv-1', 1]]), provisional_country: 'CA', verified_agent_delivery: true },
+        false
+      );
+
+      expect(dedicatedCoverage.coveredSlots).toHaveBeenCalledWith(
+        expect.objectContaining({ rail: 'stripe', currency: 'CAD', country: 'CA', verifiedAgentDelivery: true })
+      );
+    });
+
+    it('flag off -> exactly the previous delivery_availability shape, no coverage lookup', async () => {
+      mockInventory([locatedRow()]);
+      availability({ 'biz-1': NO_AGENT });
+
+      const result = await service.resolve(deliveryDto([['inv-1', 1]]), false);
+
+      expect(result.groups[0]?.delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+      });
+      expect(result.delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+      });
+      expect(dedicatedCoverage.coveredSlots).not.toHaveBeenCalled();
+    });
+
+    it('flag on and an agent nearby -> delivery_asap_available true, no covered-slot lookup', async () => {
+      mockInventory([locatedRow()]);
+      availability({ 'biz-1': AVAILABLE });
+      dedicatedCoverage.isEnabled.mockResolvedValue(true);
+
+      const result = await service.resolve(deliveryDto([['inv-1', 1]]), false);
+
+      expect(result.groups[0]?.delivery_availability).toEqual({
+        available: true,
+        estimated_delivery_minutes: 40,
+        delivery_asap_available: true,
+        dedicated_covered_slots: [],
+      });
+      expect(result.delivery_availability?.dedicated_covered_slots).toEqual([]);
+      expect(dedicatedCoverage.coveredSlots).not.toHaveBeenCalled();
+    });
+
+    it('blocked for another reason (service area off) -> no covered slots', async () => {
+      mockInventory([locatedRow()]);
+      availability({
+        'biz-1': { available: false, estimatedDeliveryMinutes: null, reason: 'SERVICE_AREA_DISABLED', ruleId: 'service-area-enabled' },
+      });
+      dedicatedCoverage.isEnabled.mockResolvedValue(true);
+
+      const result = await service.resolve(deliveryDto([['inv-1', 1]]), false);
+
+      expect(result.groups[0]?.delivery_availability?.dedicated_covered_slots).toEqual([]);
+      expect(dedicatedCoverage.coveredSlots).not.toHaveBeenCalled();
+    });
+
+    it('cooked-food group (ASAP only) -> no covered slots', async () => {
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-08-24T13:00:00.000Z'));
+      try {
+        const food = makeFoodInventoryRow();
+        mockInventory([
+          { ...food, business_location: { ...food.business_location, id: 'loc-1', address: { country: 'CM', state: 'Littoral' } } },
+        ]);
+        availability({ 'biz-1': NO_AGENT });
+        dedicatedCoverage.isEnabled.mockResolvedValue(true);
+
+        const result = await service.resolve(deliveryDto([['inv-1', 1]]), false);
+
+        expect(result.groups[0]?.schedule_allowed).toBe(false);
+        expect(result.groups[0]?.delivery_availability?.dedicated_covered_slots).toEqual([]);
+        expect(dedicatedCoverage.coveredSlots).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    describe('multi-seller cart', () => {
+      const rowA = () => locatedRow({ id: 'inv-a', businessId: 'biz-a', ownerUserId: 'o-a', locationId: 'loc-a' });
+      const rowB = () => locatedRow({ id: 'inv-b', businessId: 'biz-b', ownerUserId: 'o-b', locationId: 'loc-b' });
+      const cart = () => deliveryDto([['inv-a', 1], ['inv-b', 1]]);
+
+      beforeEach(() => {
+        dedicatedCoverage.isEnabled.mockResolvedValue(true);
+      });
+
+      it('a slot only one of two uncovered groups has is absent from the cart list', async () => {
+        mockInventory([rowA(), rowB()]);
+        availability({ 'biz-a': NO_AGENT, 'biz-b': NO_AGENT });
+        dedicatedCoverage.coveredSlots.mockImplementation(async ({ locationId }: { locationId: string }) =>
+          locationId === 'loc-a'
+            ? [slotEntry('2026-10-19', 'afternoon'), slotEntry('2026-10-19', 'evening')]
+            : [slotEntry('2026-10-19', 'afternoon', 'other-state-afternoon')]
+        );
+
+        const result = await service.resolve(cart(), false);
+
+        expect(result.delivery_availability?.dedicated_covered_slots).toEqual([slotEntry('2026-10-19', 'afternoon')]);
+        expect(result.delivery_availability?.delivery_asap_available).toBe(false);
+      });
+
+      it('one group with no coverage at all -> no cart slot', async () => {
+        mockInventory([rowA(), rowB()]);
+        availability({ 'biz-a': NO_AGENT, 'biz-b': NO_AGENT });
+        dedicatedCoverage.coveredSlots.mockImplementation(async ({ locationId }: { locationId: string }) =>
+          locationId === 'loc-a' ? [slotEntry('2026-10-19', 'afternoon')] : []
+        );
+
+        const result = await service.resolve(cart(), false);
+
+        const groupB = result.groups.find((g) => g.business_id === 'biz-b');
+        expect(groupB?.delivery_availability?.dedicated_covered_slots).toEqual([]);
+        expect(result.delivery_availability?.dedicated_covered_slots).toEqual([]);
+      });
+
+      it('a group that can deliver ASAP does not constrain the slot', async () => {
+        mockInventory([rowA(), rowB()]);
+        availability({ 'biz-a': AVAILABLE, 'biz-b': NO_AGENT });
+        dedicatedCoverage.coveredSlots.mockResolvedValue([slotEntry('2026-10-20', 'evening')]);
+
+        const result = await service.resolve(cart(), false);
+
+        expect(result.delivery_availability).toMatchObject({
+          available: false,
+          delivery_asap_available: false,
+          dedicated_covered_slots: [slotEntry('2026-10-20', 'evening')],
+        });
+        expect(dedicatedCoverage.coveredSlots).toHaveBeenCalledTimes(1);
+      });
+
+      it('a group in a flag-off country has no answer -> no cart slot', async () => {
+        dedicatedCoverage.isEnabled.mockImplementation(async () => false);
+        dedicatedCoverage.isEnabled.mockResolvedValueOnce(true);
+        mockInventory([rowA(), rowB()]);
+        availability({ 'biz-a': NO_AGENT, 'biz-b': NO_AGENT });
+        dedicatedCoverage.coveredSlots.mockResolvedValue([slotEntry('2026-10-19', 'afternoon')]);
+
+        const result = await service.resolve(cart(), false);
+
+        expect(result.groups.filter((g) => g.delivery_availability?.dedicated_covered_slots)).toHaveLength(1);
+        expect(result.delivery_availability?.dedicated_covered_slots).toEqual([]);
+      });
+    });
+  });
+
   it('evaluates delivery availability for pickup carts so the option can be decided first', async () => {
     mockInventory([makeInventoryRow({ payAtPickup: true })]);
 
@@ -1234,6 +1474,34 @@ describe('CheckoutPreflightService', () => {
           (error) => error.code === 'COOKED_FOOD_STORE_CLOSED'
         )
       ).toBe(false);
+    });
+  });
+
+  describe('F-M7: moderation gate', () => {
+    it.each(['draft', 'pending', 'rejected'])(
+      'blocks checkout when the item moderation_status is %s',
+      async (moderationStatus) => {
+        mockInventory([makeInventoryRow({ itemName: 'Draft item', moderationStatus })]);
+
+        const result = await service.resolve(
+          { items: [{ business_inventory_id: 'inv-1', quantity: 1 }], provisional_country: 'CM' },
+          false
+        );
+
+        expect(result.can_proceed).toBe(false);
+        expect(result.blocking_errors.map((error) => error.code)).toContain('ITEM_UNAVAILABLE');
+      }
+    );
+
+    it('selects item.moderation_status in the inventory query', async () => {
+      mockInventory([makeInventoryRow()]);
+      await service.resolve(
+        { items: [{ business_inventory_id: 'inv-1', quantity: 1 }], provisional_country: 'CM' },
+        false
+      );
+      const queries = (hasuraSystemService.executeQuery as jest.Mock).mock.calls.map((c) => String(c[0]));
+      const preflightQuery = queries.find((q) => q.includes('GetInventoryForPreflight'));
+      expect(preflightQuery).toContain('moderation_status');
     });
   });
 

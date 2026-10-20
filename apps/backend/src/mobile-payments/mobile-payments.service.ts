@@ -1,4 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
+import {
+  CallbackLiveMismatchError,
+  CallbackLiveMismatchReason,
+  LiveRecordIncompleteError,
+} from './callback-live-mismatch.error';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MtnMomoDatabaseService } from '../mtn-momo/mtn-momo-database.service';
 import { CollectionRequest, MtnMomoService } from '../mtn-momo/mtn-momo.service';
@@ -14,6 +19,12 @@ import {
   resolveWalletPhoneRegion,
   validatePhoneNumber,
 } from './phone-validation.util';
+import {
+  sanitizeProviderError,
+  maskPhoneNumber,
+  toSanitizedError,
+} from './sanitize-provider-error.util';
+import { maskAccountRefForLog } from '../common/utils/safe-error-log.util';
 import {
   FreemopayPaymentRequest,
   FreemopayPaymentResponse,
@@ -73,13 +84,68 @@ export interface MobilePaymentResponse {
   message?: string;
   errorCode?: string;
   provider?: string;
+  /** Returned when success:true but outcome is ambiguous (e.g., FedaPay send failure after create) */
+  status?: 'pending';
+  /** Reason for ambiguous/pending status */
+  reason?: 'provider_ambiguous';
+}
+
+const STRICT_DECIMAL_AMOUNT = /^\d+(\.\d+)?$/;
+
+/** #591 QA L2: a finite number, or a plain decimal string; anything else is undefined. */
+export function parseStrictAmount(value: unknown): number | undefined {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : undefined;
+  if (typeof value === 'string' && STRICT_DECIMAL_AMOUNT.test(value)) {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * #592 QA L2: rows created before this cutoff may carry a FedaPay externalId that is the
+ * MyPVit short hash of the stored reference. FEDAPAY_LEGACY_SHORT_REF_CUTOFF (ISO time, set per
+ * environment to #592's deploy time) enables it. Unset or unparseable: legacy matching is
+ * disabled (fail closed).
+ */
+export function fedapayLegacyShortRefCutoffMs(
+  env: Record<string, string | undefined> = process.env
+): number | undefined {
+  const configured = env.FEDAPAY_LEGACY_SHORT_REF_CUTOFF?.trim();
+  const parsed = configured ? Date.parse(configured) : NaN;
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+export function isLegacyFedaPayShortRefRow(
+  tx: { payment_entity?: string | null; created_at?: string | null },
+  cutoffMs: number | undefined = fedapayLegacyShortRefCutoffMs()
+): boolean {
+  if (cutoffMs === undefined) return false;
+  if (tx.payment_entity !== 'order_deposit') return false;
+  const createdMs = tx.created_at ? Date.parse(tx.created_at) : NaN;
+  return Number.isFinite(createdMs) && createdMs < cutoffMs;
+}
+
+/** FedaPay live amount: a finite number (or numeric string), else undefined (QA #587 A1). */
+export function liveFedaPayAmount(value: unknown): number | undefined {
+  const n = typeof value === 'string' && value.trim() !== '' ? Number(value) : value;
+  return typeof n === 'number' && Number.isFinite(n) ? n : undefined;
 }
 
 export interface MobileTransactionStatus {
   transactionId: string;
-  /** Normalized provider status; `ambiguous` maps MyPVit AMBIGUOUS (uncertain, recheck later). */
-  status: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous';
-  amount: number;
+  /**
+   * Normalized provider status; `ambiguous` maps MyPVit AMBIGUOUS (uncertain, recheck later).
+   * `refunded` (FedaPay only): the collect was approved and then returned to the payer. We
+   * hold no funds, so it is never credited, and it is not a plain decline either; callers
+   * leave the row alone and flag it for manual review.
+   */
+  status: 'pending' | 'success' | 'failed' | 'cancelled' | 'ambiguous' | 'refunded';
+  /**
+   * Live amount. FedaPay leaves it undefined when the live record has none (QA #587 A1:
+   * missing is transient, not 0, so it can't turn into a definite amount mismatch).
+   */
+  amount?: number;
   currency: string;
   reference: string;
   message?: string;
@@ -100,6 +166,24 @@ export type MobilePaymentIntegrationProvider =
   | 'mtn'
   | 'orange'
   | 'fedapay';
+
+/** F-M5: supported_payment_systems names -> provider. GA's airtel/moov rows are MyPVit. */
+const SUPPORTED_SYSTEM_PROVIDER_ALIASES: Record<string, string> = {
+  airtel: 'mypvit',
+  moov: 'mypvit',
+};
+
+function normalizeSupportedSystemName(name: string): string {
+  const lower = (name || '').trim().toLowerCase();
+  return SUPPORTED_SYSTEM_PROVIDER_ALIASES[lower] ?? lower;
+}
+
+/** #618: Togo payments are FedaPay-only; while TG is off they get this 400. */
+const TOGO_NOT_SUPPORTED = {
+  success: false as const,
+  message: 'Mobile money payments are not available in Togo yet',
+  errorCode: 'TG_NOT_SUPPORTED',
+};
 
 @Injectable()
 export class MobilePaymentsService {
@@ -126,6 +210,8 @@ export class MobilePaymentsService {
     if (isCameroonCountryCode(phoneNumber) || detectCameroonPhone(phoneNumber)) {
       return 'freemopay';
     }
+    // Note: +228 routing to fedapay is handled in providerFromHintOrPhone (B7)
+    // to allow async flag check
     return 'mypvit';
   }
 
@@ -135,7 +221,8 @@ export class MobilePaymentsService {
     
     // Check if provider is active in supported_payment_systems
     if (provider === 'fedapay') {
-      const iso = country?.trim().toUpperCase();
+      // Use normalized ISO code (B7)
+      const iso = isoCountryCode(country);
       if (iso === 'TG') {
         const isActive = await this.isFedaPayActiveForTogo();
         if (!isActive) {
@@ -146,6 +233,12 @@ export class MobilePaymentsService {
     }
     
     return provider;
+  }
+
+  /** #618: a +228 payer or a Togo item. */
+  private isTogoPayment(req: { customerPhone?: string; itemCountry?: string | null }, phoneRegion?: string): boolean {
+    if (isoCountryCode(req.itemCountry) === 'TG') return true;
+    return !!req.customerPhone?.trim() && validatePhoneNumber(req.customerPhone, phoneRegion).regionCode === 'TG';
   }
 
   private async isFedaPayActiveForTogo(): Promise<boolean> {
@@ -166,7 +259,8 @@ export class MobilePaymentsService {
       
       return result.supported_payment_systems[0]?.active ?? false;
     } catch (error: any) {
-      this.logger.error('Failed to check FedaPay active status:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check FedaPay active status: ${sanitized.message}`);
       return false;
     }
   }
@@ -183,9 +277,14 @@ export class MobilePaymentsService {
     customerPhone: string | undefined | null,
     storedProvider: string
   ): Promise<MobilePaymentIntegrationProvider> {
+    // For stored transactions, honor fedapay unconditionally (B4)
+    const known = this.knownProvider(storedProvider);
+    if (known === 'fedapay') {
+      return 'fedapay';
+    }
     return await this.resolveProviderFromRequest({
       customerPhone: customerPhone ?? undefined,
-      provider: this.knownProvider(storedProvider),
+      provider: known,
     });
   }
 
@@ -217,54 +316,194 @@ export class MobilePaymentsService {
       transaction_id?: string | null;
       customer_phone?: string | null;
       provider: string;
+      amount?: number;
+      currency?: string | null;
+      reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
+      transaction_type?: string | null;
     },
     claimed: 'SUCCESS' | 'FAILED'
   ): Promise<void> {
     const providerTxId = tx.transaction_id?.trim();
+    if (!providerTxId && tx.provider?.toLowerCase() === 'fedapay') {
+      // Nothing to re-check against, and a retry can't add an id: definite, acknowledge.
+      throw new CallbackLiveMismatchError(
+        'missing_transaction_id',
+        tx.id,
+        claimed,
+        'stored row has no provider transaction_id and the webhook gave none'
+      );
+    }
     if (!providerTxId) {
       throw new Error(
         `Cannot verify callback for ${tx.id}: missing provider transaction_id`
       );
     }
-    const provider = await this.resolveAdminIntegrationProvider(
-      tx.customer_phone,
-      tx.provider
-    );
+    // For status checks, honor the stored provider unconditionally (B4)
+    // Don't gate fedapay on the active flag for existing transactions
+    const storedProvider = tx.provider?.toLowerCase();
+    let provider: MobilePaymentIntegrationProvider;
+    if (storedProvider === 'fedapay') {
+      provider = 'fedapay';
+    } else {
+      provider = await this.resolveAdminIntegrationProvider(
+        tx.customer_phone,
+        tx.provider
+      );
+    }
+    const isGiveChange = tx.transaction_type === 'GIVE_CHANGE';
     const live = await this.checkTransactionStatus(
       providerTxId,
       provider,
-      tx.customer_phone ?? undefined
+      tx.customer_phone ?? undefined,
+      isGiveChange
     );
-    this.assertLiveMatchesClaim(tx.id, claimed, live.status);
+    this.assertLiveMatchesClaim(tx, claimed, live);
   }
 
   private assertLiveMatchesClaim(
-    txId: string,
+    tx: {
+      id: string;
+      provider: string;
+      amount?: number;
+      currency?: string | null;
+      reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
+    },
     claimed: 'SUCCESS' | 'FAILED',
-    liveStatus: MobileTransactionStatus['status']
+    live: MobileTransactionStatus
   ): void {
+    const isFedaPay = tx.provider?.toLowerCase() === 'fedapay';
+    const mismatch = (reason: CallbackLiveMismatchReason, detail: string) =>
+      new CallbackLiveMismatchError(reason, tx.id, claimed, detail);
+
+    // Transient: stays 5xx so the provider retries (FedaPay included).
+    if (live.status === 'pending' || live.status === 'ambiguous') {
+      throw new Error(
+        `Rejecting ${claimed} callback for ${tx.id}: provider status is ${live.status} (transient, will retry)`
+      );
+    }
+    // Refunded is terminal at FedaPay and never creditable, whatever the event claims.
+    if (live.status === 'refunded') {
+      if (isFedaPay) {
+        throw mismatch('live_refunded', `claimed ${claimed}, live status refunded`);
+      }
+      throw new Error(`Rejecting ${claimed} callback for ${tx.id}: provider status is refunded`);
+    }
+
     if (claimed === 'SUCCESS') {
-      if (liveStatus !== 'success') {
+      if (live.status !== 'success') {
+        if (isFedaPay) {
+          throw mismatch('live_status_mismatch', `claimed SUCCESS, live status ${live.status}`);
+        }
         throw new Error(
-          `Rejecting SUCCESS callback for ${txId}: provider status is ${liveStatus}`
+          `Rejecting SUCCESS callback for ${tx.id}: provider status is ${live.status} (non-FedaPay, will retry)`
         );
+      }
+      if (isFedaPay) {
+        if (tx.currency && tx.currency !== 'XOF') {
+          throw mismatch('stored_currency_not_xof', `stored currency ${tx.currency}`);
+        }
+        // QA #587 A1: an incomplete live record (no currency or no amount) is not a definite
+        // mismatch: FedaPay may fill it in on a later read. Plain error -> 5xx -> FedaPay
+        // retries, and nothing is credited meanwhile. No values in the message.
+        if (!live.currency) {
+          throw new LiveRecordIncompleteError(tx.id, 'currency');
+        }
+        if (live.currency !== 'XOF') {
+          throw mismatch('live_currency_not_xof', `live currency ${live.currency}`);
+        }
+        if (live.amount === undefined || !Number.isFinite(live.amount)) {
+          throw new LiveRecordIncompleteError(tx.id, 'amount');
+        }
+        // #591: Hasura can return numeric as a string ("1000.00") while FedaPay sends 1000.
+        // Strict parse (QA L2); a missing or unparseable stored amount is a mismatch (QA L1).
+        if (!this.fedapayAmountsEqual(tx.amount, live.amount)) {
+          throw mismatch('amount_mismatch', `expected ${tx.amount}, live ${live.amount}`);
+        }
+        // live.reference = custom_metadata.externalId || FedaPay id; must equal ours exactly.
+        if (!tx.reference?.trim()) {
+          throw mismatch('missing_stored_reference', 'stored row has no reference (fail closed)');
+        }
+        if (!live.reference) {
+          throw mismatch('missing_live_reference', 'live record has no reference (fail closed)');
+        }
+        // #592: also accepts the MyPVit short hash of the stored reference (in-flight deposits).
+        if (!this.fedapayReferenceMatches(tx, live.reference)) {
+          throw mismatch('reference_mismatch', `expected ${tx.reference}, live ${live.reference}`);
+        }
       }
       return;
     }
-    if (liveStatus === 'success') {
+
+    // claimed FAILED
+    if (live.status === 'success') {
+      if (isFedaPay) {
+        throw mismatch('live_status_mismatch', 'claimed FAILED, live status success');
+      }
       throw new Error(
-        `Rejecting FAILED callback for ${txId}: provider reports success`
+        `Rejecting FAILED callback for ${tx.id}: provider reports success (non-FedaPay, will retry)`
       );
     }
-    if (liveStatus === 'pending' || liveStatus === 'ambiguous') {
-      throw new Error(
-        `Rejecting FAILED callback for ${txId}: provider still ${liveStatus}`
-      );
+    // N6: a FedaPay decline is confirmed by reference too (fail closed).
+    if (isFedaPay) {
+      if (!tx.reference?.trim()) {
+        throw mismatch('missing_stored_reference', 'stored row has no reference (fail closed)');
+      }
+      if (!this.fedapayReferenceMatches(tx, live.reference)) {
+        throw mismatch(
+          'reference_mismatch',
+          `expected ${tx.reference}, live ${live.reference || '<missing>'}`
+        );
+      }
     }
   }
 
+  /**
+   * Strict numeric equality for the FedaPay amount check (#591, QA L1/L2). Only finite numbers
+   * or plain decimal strings (`^\d+(\.\d+)?$`, e.g. Hasura numeric "1000.00") are accepted;
+   * null, undefined, "", "1e3", "0x3E8", booleans and arrays never compare equal.
+   */
+  private fedapayAmountsEqual(expected: unknown, actual: unknown): boolean {
+    const left = parseStrictAmount(expected);
+    const right = parseStrictAmount(actual);
+    return left !== undefined && right !== undefined && left === right;
+  }
+
+  /**
+   * FedaPay custom_metadata.externalId must equal this row's stored reference.
+   *
+   * Legacy (#592 QA L2): before #592, deposit create/retry stored the long reference but sent
+   * MyPVit's short hash to FedaPay. The short-hash match is accepted only for `order_deposit`
+   * rows created before FEDAPAY_LEGACY_SHORT_REF_CUTOFF (disabled when unset), and every use logs `fedapay_legacy_short_ref_matched` so
+   * the fallback can be removed once no such rows remain in flight (FedaPay expires
+   * collections after ~24h). Empty stored or live references never match (QA L1).
+   */
+  private fedapayReferenceMatches(
+    tx: {
+      id: string;
+      reference?: string | null;
+      payment_entity?: string | null;
+      created_at?: string | null;
+    },
+    live: string | null | undefined
+  ): boolean {
+    const stored = tx.reference?.trim();
+    if (!stored) return false;
+    if (!live) return false;
+    if (live === stored) return true;
+    if (!isLegacyFedaPayShortRefRow(tx)) return false;
+    if (live !== buildShortReferenceForMyPVit(stored)) return false;
+    this.logger.warn(
+      `fedapay_legacy_short_ref_matched tx=${tx.id} payment_entity=${tx.payment_entity}`
+    );
+    return true;
+  }
+
   /** Account withdrawals (GIVE_CHANGE): valid CM, GA, or TG MSISDN. */
-  isWithdrawalDestinationCmOrGa(customerPhone?: string): boolean {
+  async isWithdrawalDestinationCmOrGa(customerPhone?: string): Promise<boolean> {
     if (!customerPhone?.trim()) {
       return false;
     }
@@ -272,7 +511,13 @@ export class MobilePaymentsService {
     if (!v.isValid) {
       return false;
     }
-    return v.regionCode === 'CM' || v.regionCode === 'GA' || v.regionCode === 'TG';
+    if (v.regionCode === 'CM' || v.regionCode === 'GA') {
+      return true;
+    }
+    if (v.regionCode === 'TG') {
+      return await this.isFedaPayActiveForTogo();
+    }
+    return false;
   }
 
   /**
@@ -321,9 +566,9 @@ export class MobilePaymentsService {
     
     // Query supported_payment_systems for active providers in this country
     const query = `
-      query GetSupportedPaymentSystems($country: String!) {
+      query GetSupportedPaymentSystems($country: bpchar!) {
         supported_payment_systems(where: {country: {_eq: $country}, active: {_eq: true}}) {
-          provider
+          name
           country
           active
         }
@@ -333,22 +578,38 @@ export class MobilePaymentsService {
     try {
       const result = await this.hasuraSystemService.executeQuery<{
         supported_payment_systems: Array<{
-          provider: string;
+          name: string;
           country: string;
           active: boolean;
         }>;
       }>(query, { country: upperCountry });
       
-      const activeProviders = new Set(
-        result.supported_payment_systems.map((p: { provider: string }) => p.provider.toLowerCase())
+      // L8: names only, at debug (this runs on every provider lookup).
+      this.logger.debug(
+        `Found ${result.supported_payment_systems.length} active providers for ${upperCountry}: ${result.supported_payment_systems
+          .map((p) => p.name)
+          .join(', ')}`
+      );
+      
+      // F-M5: GA rows are stored as airtel/moov but are served by MyPVit, so
+      // normalize the DB names before matching (mapProviderName only maps
+      // display names, which never say airtel/moov).
+      const activeProviderNames = new Set(
+        result.supported_payment_systems.map((p) =>
+          normalizeSupportedSystemName(p.name)
+        )
       );
       
       // Filter providers to only those active for this country
-      return allProviders.filter((p: PaymentProvider) => 
-        activeProviders.has(p.name.toLowerCase()) || activeProviders.has(this.mapProviderName(p.name))
-      );
+      return allProviders.filter((p: PaymentProvider) => {
+        const dbName = this.mapProviderName(p.name);
+        return activeProviderNames.has(dbName);
+      });
     } catch (error: any) {
-      this.logger.error(`Failed to get active providers for ${upperCountry}: ${error.message}`);
+      this.logger.error(
+        `Failed to get active providers for ${upperCountry}: ${error.message}`,
+        error.stack
+      );
       // Return empty array on error to be safe
       return [];
     }
@@ -356,6 +617,7 @@ export class MobilePaymentsService {
 
   /**
    * Map provider display name to database provider value
+   * F-M5: Map GA's airtel/moov rows to MyPVit
    */
   private mapProviderName(displayName: string): string {
     const mapping: Record<string, string> = {
@@ -385,50 +647,192 @@ export class MobilePaymentsService {
   /**
    * Initiate a mobile payment
    */
-  async initiatePayment(
-    paymentRequest: MobilePaymentRequest,
-    reference?: string,
+  /**
+   * F-M6: Validate payment request before creating ANY database row.
+   * Returns null if valid, or an error response if invalid.
+   */
+  async validatePaymentRequest(
+    paymentRequest: { 
+      customerPhone?: string; 
+      itemCountry?: string; 
+      provider?: string;
+      currency?: string;
+      amount?: number;
+    },
     userId?: string
-  ): Promise<MobilePaymentResponse> {
-    try {
-      const phoneRegion = await this.resolvePhoneDefaultRegion(
-        userId,
-        paymentRequest.customerPhone,
-        paymentRequest.itemCountry
-      );
+  ): Promise<{ success: false; message: string; errorCode: string } | null> {
+    const phoneRegion = await this.resolvePhoneDefaultRegion(
+      userId,
+      paymentRequest.customerPhone,
+      paymentRequest.itemCountry
+    );
 
-      // Validate phone number if provided
-      if (paymentRequest.customerPhone) {
-        const phoneValidation = validatePhoneNumber(
-          paymentRequest.customerPhone,
-          phoneRegion
-        );
+    // Validate phone number if provided
+    if (paymentRequest.customerPhone) {
+      // F-M3: Enforce that payer phone country matches the market/item country FIRST
+      const phoneValidation = validatePhoneNumber(
+        paymentRequest.customerPhone,
+        phoneRegion
+      );
+      
+      if (paymentRequest.itemCountry) {
+        const normalizedItemCountry = isoCountryCode(paymentRequest.itemCountry);
+        if (normalizedItemCountry && phoneValidation.regionCode !== normalizedItemCountry) {
+          return {
+            success: false,
+            message: `Payment phone number must match the item's country (${normalizedItemCountry})`,
+            errorCode: 'PHONE_COUNTRY_MISMATCH',
+          };
+        }
+      }
+
+      // Provider-specific validation
+      if (paymentRequest.provider === 'fedapay') {
+        // FedaPay custom validation: region, length, prefix checks BEFORE isValid
+        if (phoneValidation.regionCode !== 'TG') {
+          return {
+            success: false,
+            message: 'FedaPay requires a Togo (+228) phone number',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        
+        const cleaned = paymentRequest.customerPhone.replace(/\D/g, '');
+        const hasTogoPrefix = cleaned.startsWith('228');
+        const national = hasTogoPrefix ? cleaned.slice(3) : cleaned;
+        
+        if (national.length !== 8) {
+          return {
+            success: false,
+            message: 'Invalid Togo phone number. Must be 8 digits after +228.',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        
+        const prefix = national.slice(0, 2);
+        const validPrefixes = ['70', '71', '72', '73', '78', '79', '90', '91', '92', '93', '96', '97', '98', '99'];
+        if (!validPrefixes.includes(prefix)) {
+          return {
+            success: false,
+            message: 'Invalid Togo phone number. Must use valid Moov or Mixx prefix.',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        
+        // FedaPay: custom validation sufficient, skip isValid check
+      } else {
         if (!phoneValidation.isValid) {
-          this.logger.warn(
-            `Invalid phone number provided: ${paymentRequest.customerPhone} (region=${phoneRegion})`
-          );
           return {
             success: false,
             message: 'Invalid phone number format',
             errorCode: 'INVALID_PHONE_NUMBER',
           };
         }
+      }
+    }
 
+    // #618: Togo is FedaPay-only. When TG is off the resolver falls back to another
+    // provider (MyPVit), which cannot charge a +228 payer: refuse cleanly instead.
+    if (
+      paymentRequest.provider &&
+      paymentRequest.provider !== 'fedapay' &&
+      this.isTogoPayment(paymentRequest, phoneRegion)
+    ) {
+      return TOGO_NOT_SUPPORTED;
+    }
+
+    // FedaPay currency validation
+    if (paymentRequest.provider === 'fedapay') {
+      if (paymentRequest.currency && paymentRequest.currency !== 'XOF') {
+        return {
+          success: false,
+          message: 'FedaPay (Togo) only supports XOF currency',
+          errorCode: 'UNSUPPORTED_CURRENCY',
+        };
+      }
+      if (paymentRequest.amount && !Number.isInteger(paymentRequest.amount)) {
+        return {
+          success: false,
+          message: 'FedaPay amounts must be integers (XOF has no decimals)',
+          errorCode: 'INVALID_AMOUNT',
+        };
+      }
+    }
+
+    return null;
+  }
+
+  async initiatePayment(
+    paymentRequest: MobilePaymentRequest,
+    reference?: string,
+    userId?: string
+  ): Promise<MobilePaymentResponse> {
+    try {
+      // F-M6: Validate before any processing
+      const validationError = await this.validatePaymentRequest(paymentRequest, userId);
+      if (validationError) {
+        return validationError;
+      }
+
+      const phoneRegion = await this.resolvePhoneDefaultRegion(
+        userId,
+        paymentRequest.customerPhone,
+        paymentRequest.itemCountry
+      );
+
+      // Phone logging (validation already done by validatePaymentRequest)
+      if (paymentRequest.customerPhone) {
+        const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone, phoneRegion);
         this.logger.log(
-          `Phone number validated: ${paymentRequest.customerPhone} -> Country: ${phoneValidation.regionCode}, National: ${phoneValidation.nationalNumber}, callback URL: ${paymentRequest.callbackUrl || 'none'}`
+          `Phone number validated: ${maskPhoneNumber(paymentRequest.customerPhone)} -> Country: ${phoneValidation.regionCode}, National: ${maskPhoneNumber(phoneValidation.nationalNumber)}, callback URL: ${paymentRequest.callbackUrl || 'none'}`
         );
       }
 
       this.logger.log(
         `Initiating mobile payment for account: ${
           paymentRequest.customerPhone
-            ? removeCountryCode(paymentRequest.customerPhone, phoneRegion)
-            : paymentRequest.accountId || 'unknown'
+            ? maskPhoneNumber(paymentRequest.customerPhone)
+            : maskAccountRefForLog(paymentRequest.accountId)
         }`
       );
 
       // Determine the best provider based on request
       const provider = await this.selectProvider(paymentRequest);
+      if (provider !== 'fedapay' && this.isTogoPayment(paymentRequest, phoneRegion)) {
+        return TOGO_NOT_SUPPORTED;
+      }
+      
+      // B5: Validate against the RESOLVED provider (critical for requests without explicit provider)
+      if (provider === 'fedapay') {
+        const phoneValidation = validatePhoneNumber(paymentRequest.customerPhone || '', phoneRegion);
+        
+        // Restore isValid check for FedaPay
+        if (paymentRequest.customerPhone && !phoneValidation.isValid) {
+          return {
+            success: false,
+            message: 'Invalid phone number format',
+            errorCode: 'INVALID_PHONE_NUMBER',
+          };
+        }
+        
+        // Currency validation
+        if (paymentRequest.currency && paymentRequest.currency !== 'XOF') {
+          return {
+            success: false,
+            message: 'FedaPay (Togo) only supports XOF currency',
+            errorCode: 'UNSUPPORTED_CURRENCY',
+          };
+        }
+        
+        // Integer amount validation
+        if (paymentRequest.amount && !Number.isInteger(paymentRequest.amount)) {
+          return {
+            success: false,
+            message: 'FedaPay amounts must be integers (XOF has no decimals)',
+            errorCode: 'INVALID_AMOUNT',
+          };
+        }
+      }
 
       // Convert to provider-specific request
       const providerRequest = this.convertToProviderRequest(
@@ -502,6 +906,14 @@ export class MobilePaymentsService {
                 providerRequest as FedaPayPaymentRequest,
                 reference
               );
+          
+          // N5: Surface ambiguous payout/push outcome
+          if (fedapayResponse.ambiguous && fedapayResponse.transactionId) {
+            this.logger.warn(
+              `FedaPay ambiguous outcome: tx_id=${fedapayResponse.transactionId} status=${fedapayResponse.status || 'pending'}`
+            );
+          }
+          
           response = {
             success: fedapayResponse.success,
             transactionId: fedapayResponse.transactionId,
@@ -510,6 +922,10 @@ export class MobilePaymentsService {
             message: fedapayResponse.message,
             errorCode: fedapayResponse.errorCode,
             provider: 'fedapay',
+            ...(fedapayResponse.ambiguous ? { 
+              status: 'pending',
+              reason: 'provider_ambiguous' 
+            } : {}),
           };
           break;
         }
@@ -555,8 +971,9 @@ export class MobilePaymentsService {
       await this.logPaymentInitiation(paymentRequest, response);
 
       return response;
-    } catch (error) {
-      this.logger.error('Failed to initiate mobile payment:', error);
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate mobile payment: ${sanitized.message}`);
       return {
         success: false,
         message: 'Failed to initiate payment',
@@ -568,11 +985,13 @@ export class MobilePaymentsService {
   /**
    * Check transaction status.
    * Optional phoneNumber selects the MyPVit operator secret (Airtel vs MOOV).
+   * Optional isGiveChange indicates if this is a payout (for FedaPay Payout API).
    */
   async checkTransactionStatus(
     transactionId: string,
     provider?: string,
-    phoneNumber?: string
+    phoneNumber?: string,
+    isGiveChange?: boolean
   ): Promise<MobileTransactionStatus> {
     try {
       this.logger.log(`Checking transaction status for: ${transactionId}`);
@@ -620,21 +1039,27 @@ export class MobilePaymentsService {
           break;
         }
         case 'fedapay': {
-          const fedapayStatus =
-            await this.fedapayService.checkTransactionStatus(transactionId);
+          const fedapayStatus = isGiveChange
+            ? await this.fedapayService.checkPayoutStatus(transactionId)
+            : await this.fedapayService.checkTransactionStatus(transactionId);
           const statusMap: Record<string, MobileTransactionStatus['status']> = {
             approved: 'success',
             declined: 'failed',
             canceled: 'cancelled',
             pending: 'pending',
             transferred: 'success',
+            expired: 'failed', // FedaPay docs: unpaid collections expire after 24h
+            // Approved, then returned to the payer: explicit so it is never 'pending' (5xx
+            // retry loop) nor 'failed' (failure side effects on money that moved twice).
+            refunded: 'refunded',
           };
           status = {
             transactionId: fedapayStatus.transactionId,
             status: statusMap[fedapayStatus.status] || 'pending',
-            amount: fedapayStatus.amount || 0,
-            currency: 'XOF',
-            reference: fedapayStatus.reference || '',
+            // QA #587 A1: a missing amount stays undefined (transient re-check), never 0.
+            amount: liveFedaPayAmount(fedapayStatus.amount),
+            currency: fedapayStatus.currency || '', // Pass through real currency; missing is transient
+            reference: fedapayStatus.merchantRef || fedapayStatus.reference || '',
             message: fedapayStatus.reason || fedapayStatus.message,
             provider: 'fedapay',
           };
@@ -684,9 +1109,11 @@ export class MobilePaymentsService {
       await this.logStatusCheck(transactionId, status);
 
       return status;
-    } catch (error) {
-      this.logger.error('Failed to check transaction status:', error);
-      throw error;
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      // Provider errors can carry Authorization / X-Secret headers: never log or rethrow them raw.
+      this.logger.error(`Failed to check transaction status: ${sanitized.message}`);
+      throw toSanitizedError(error);
     }
   }
 
@@ -774,8 +1201,9 @@ export class MobilePaymentsService {
       await this.logTransactionCancellation(transactionId, success);
 
       return success;
-    } catch (error) {
-      this.logger.error('Failed to cancel transaction:', error);
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to cancel transaction: ${sanitized.message}`);
       return false;
     }
   }
@@ -809,8 +1237,9 @@ export class MobilePaymentsService {
           );
           return false;
       }
-    } catch (error) {
-      this.logger.error('Failed to verify callback:', error);
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to verify callback: ${sanitized.message}`);
       return false;
     }
   }
@@ -840,8 +1269,9 @@ export class MobilePaymentsService {
           );
           return [];
       }
-    } catch (error) {
-      this.logger.error('Failed to get transaction history:', error);
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get transaction history: ${sanitized.message}`);
       return [];
     }
   }
@@ -865,9 +1295,10 @@ export class MobilePaymentsService {
             `Unsupported provider for balance check: ${provider}`
           );
       }
-    } catch (error) {
-      this.logger.error('Failed to check balance:', error);
-      throw error;
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check balance: ${sanitized.message}`);
+      throw toSanitizedError(error);
     }
   }
 
@@ -890,9 +1321,10 @@ export class MobilePaymentsService {
         default:
           throw new Error(`Unsupported provider for KYC: ${provider}`);
       }
-    } catch (error) {
-      this.logger.error('Failed to perform KYC:', error);
-      throw error;
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to perform KYC: ${sanitized.message}`);
+      throw toSanitizedError(error);
     }
   }
 
@@ -906,6 +1338,7 @@ export class MobilePaymentsService {
     metadata?: Record<string, unknown>
   ): Promise<{ success: boolean; message?: string }> {
     try {
+      // Log the key NAME only, never the value or the merged secret blob.
       this.logger.log(`Updating secret ${secretName} with key ${key}`);
 
       // Get current secret value
@@ -937,9 +1370,12 @@ export class MobilePaymentsService {
         success: true,
         message: 'Secret updated successfully',
       };
-    } catch (error) {
-      this.logger.error(`Failed to update secret ${secretName}:`, error);
-      throw error;
+    } catch (error: any) {
+      // No error.message or object: a JSON.parse SyntaxError quotes the stored secret,
+      // and an AWS SDK error can echo the request. Name and AWS code only.
+      const label = describeSecretError(error);
+      this.logger.error(`Failed to update secret ${secretName} (key ${key}): ${label}`);
+      throw new Error(`Failed to update secret ${key} (${label})`);
     }
   }
 
@@ -998,9 +1434,9 @@ export class MobilePaymentsService {
     return this.providerFromHintOrPhone(request);
   }
 
-  private providerFromHintOrPhone(
+  private async providerFromHintOrPhone(
     request: Pick<MobilePaymentRequest, 'customerPhone' | 'provider'>
-  ): MobilePaymentIntegrationProvider {
+  ): Promise<MobilePaymentIntegrationProvider> {
     if (request.provider === 'freemopay') return 'freemopay';
     if (
       request.provider === 'mypvit' ||
@@ -1008,6 +1444,16 @@ export class MobilePaymentsService {
       request.provider === 'moov'
     ) {
       return 'mypvit';
+    }
+    const isTogoPhone =
+      !!request.customerPhone?.trim() &&
+      validatePhoneNumber(request.customerPhone).regionCode === 'TG';
+    // FedaPay only serves Togo (+228) numbers, and only once TG is active.
+    if (isTogoPhone && (await this.isFedaPayActiveForTogo())) return 'fedapay';
+    if (request.provider === 'fedapay') {
+      this.logger.warn(
+        'FedaPay hint ignored: payer is not +228 or TG is not active, falling back'
+      );
     }
     if (request.customerPhone?.trim()) {
       return this.getProvider(request.customerPhone);
@@ -1079,16 +1525,17 @@ export class MobilePaymentsService {
       }
       case 'fedapay': {
         const phone = phoneNumber || '';
-        const formatted = phone.startsWith('228') ? phone : phone ? `228${phone}` : '';
+        // FedaPay expects bare 8-digit national number with country 'TG' (not 228+national)
+        const nationalNumber = phone.startsWith('228') ? phone.slice(3) : phone;
         const isGiveChange = request.transactionType === 'GIVE_CHANGE';
-        const channel: 'moov_tg' | 'togocel' = phone.startsWith('78') || phone.startsWith('79') || 
-                                                 phone.startsWith('96') || phone.startsWith('97') || 
-                                                 phone.startsWith('98') || phone.startsWith('99')
+        const channel: 'moov_tg' | 'togocel' = nationalNumber.startsWith('78') || nationalNumber.startsWith('79') || 
+                                                 nationalNumber.startsWith('96') || nationalNumber.startsWith('97') || 
+                                                 nationalNumber.startsWith('98') || nationalNumber.startsWith('99')
           ? 'moov_tg'
           : 'togocel';
         return isGiveChange
           ? ({
-              payee: formatted,
+              payee: nationalNumber,
               amount,
               externalId: reference || '',
               description: request.description || 'Payout',
@@ -1096,7 +1543,7 @@ export class MobilePaymentsService {
               channel,
             } as FedaPayWithdrawalRequest)
           : ({
-              payer: formatted,
+              payer: nationalNumber,
               amount,
               externalId: reference || '',
               description: request.description || 'Payment',
@@ -1272,6 +1719,16 @@ export class MobilePaymentsService {
   }
 
   /**
+   * Schedule mock callback for FedaPay mock transactions.
+   * Must be called AFTER persisting the transaction_id to avoid G2 race.
+   */
+  async scheduleMockCallback(transactionId: string, reference: string): Promise<void> {
+    if (transactionId.startsWith('mock-')) {
+      this.fedapayService.scheduleMockCallback(transactionId, reference);
+    }
+  }
+
+  /**
    * Log status check
    */
   private async logStatusCheck(
@@ -1296,4 +1753,12 @@ export class MobilePaymentsService {
       }`
     );
   }
+}
+
+/** Error name plus AWS error code, never the message (it can quote secret values). */
+function describeSecretError(error: unknown): string {
+  const e = error as { name?: string; Code?: string; code?: string } | null;
+  const name = e?.name || 'Error';
+  const code = e?.Code || e?.code;
+  return code && code !== name ? `${name} (${code})` : name;
 }

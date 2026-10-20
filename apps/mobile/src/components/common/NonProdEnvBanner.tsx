@@ -25,7 +25,11 @@ export const NonProdEnvBanner = observer(function NonProdEnvBanner() {
   const label =
     env === 'local'
       ? t('about.developer.bannerLocal', 'LOCAL API')
-      : t('about.developer.bannerDev', 'DEVELOPMENT');
+      : t('about.developer.bannerDev', 'D');
+  const accessibilityLabel =
+    env === 'local'
+      ? t('about.developer.bannerLocalA11y', 'Local API')
+      : t('about.developer.bannerDevA11y', 'Development');
 
   const agentChromeVisible =
     auth.isAuthenticated &&
@@ -39,7 +43,7 @@ export const NonProdEnvBanner = observer(function NonProdEnvBanner() {
       pointerEvents="none"
       style={[styles.wrap, { top, left: 0, right: 0 }]}
       accessibilityRole="text"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel}
     >
       <View
         style={[
@@ -64,14 +68,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pill: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderWidth: StyleSheet.hairlineWidth,
+    minWidth: 18,
+    alignItems: 'center',
   },
   label: {
     fontSize: 9,
     lineHeight: 12,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0,
   },
 });

@@ -140,6 +140,30 @@ export const SERVER_SITE_EVENT_TYPES = [
   'agent.claim_topup_failed',
   'agent.claim_topup_cancelled',
   'checkout.delivery_availability',
+  // #594 dedicated agents: delivery allowed only because a dedicated agent covers the slot
+  'dedicated.coverage_used_at_checkout',
+  // #594 PR 5: dedicated fallback at the scheduled dispatch gate
+  'dedicated.offer_sent',
+  'dedicated.offer_accepted',
+  'dedicated.offer_declined',
+  'dedicated.offer_expired',
+  'dedicated.auto_assigned',
+  'dedicated.coverage_unconfirmed_at_dispatch',
+  // #594 PR 6: auto-assign release (A6b), day-of slot reminder (A8)
+  'dedicated.auto_assign_released',
+  'dedicated.slot_reminder_sent',
+  // #594 PR 8: AC section 5 events not emitted by earlier PRs
+  'dedicated.assignment_status_changed',
+  'dedicated.off_today_toggled',
+  'dedicated.posting_created',
+  'dedicated.posting_filled',
+  'dedicated.posting_expired',
+  'dedicated.application_submitted',
+  'dedicated.application_withdrawn',
+  'dedicated.application_accepted',
+  'dedicated.application_auto_declined',
+  'dedicated.photo_gate_shown',
+  'dedicated.slot_full',
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',

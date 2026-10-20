@@ -30,8 +30,14 @@ export class DeliveryAvailabilityService {
     this.rules = [...(rules ?? [])].sort((a, b) => a.order - b.order);
   }
 
+  /**
+   * `deferLogFor`: a caller that re-evaluates on this failure reason (order
+   * create's #594 dedicated re-check) skips the log/site event here, so one
+   * order create emits one `checkout.delivery_availability` event.
+   */
   async evaluate(
-    ctx: DeliveryAvailabilityContext
+    ctx: DeliveryAvailabilityContext,
+    options: { deferLogFor?: DeliveryUnavailableReason } = {}
   ): Promise<DeliveryAvailabilityResult> {
     const startedAt = Date.now();
     try {
@@ -48,7 +54,9 @@ export class DeliveryAvailabilityService {
             ruleId: rule.id,
             metadata: { ...passMetadata, ...outcome.metadata },
           };
-          this.logEvaluation(ctx, result, Date.now() - startedAt);
+          if (options.deferLogFor !== outcome.reason) {
+            this.logEvaluation(ctx, result, Date.now() - startedAt);
+          }
           return result;
         }
         if (outcome.metadata) {

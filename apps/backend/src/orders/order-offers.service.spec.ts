@@ -16,6 +16,8 @@ describe('OrderOffersService', () => {
   let notificationsService: jest.Mocked<NotificationsService>;
   let paymentRoutingService: any;
   let agentHoldService: any;
+  let offersConfig: Record<string, unknown>;
+  let deliveryAvailabilityConfig: Record<string, unknown>;
 
   const now = new Date('2026-01-01T00:00:00.000Z');
 
@@ -35,9 +37,15 @@ describe('OrderOffersService', () => {
       sendOrderOfferCancelledPush: jest.fn(),
     } as unknown as jest.Mocked<NotificationsService>;
 
+    offersConfig = { ttlSeconds: 45, maxAgents: 2 };
+    deliveryAvailabilityConfig = { enforceEnabled: true };
     const configService = {
       get: jest.fn((key: string) =>
-        key === 'orderOffers' ? { ttlSeconds: 45, maxAgents: 2 } : undefined
+        key === 'orderOffers'
+          ? offersConfig
+          : key === 'deliveryAvailability'
+            ? deliveryAvailabilityConfig
+            : undefined
       ),
     } as unknown as jest.Mocked<ConfigService<Configuration>>;
 
@@ -46,7 +54,9 @@ describe('OrderOffersService', () => {
     const eligibleAgentsQueryService = new EligibleAgentsQueryService(
       hasuraSystemService,
       // Fixtures always carry region addresses, so reverse-geocode is unused.
-      {} as unknown as GoogleDistanceService
+      {} as unknown as GoogleDistanceService,
+      undefined,
+      configService
     );
 
     const waitAndExecuteScheduleService = {
@@ -268,8 +278,10 @@ describe('OrderOffersService', () => {
           estimatedEarnings: 42.6,
           currency: 'XAF',
           estimatedDeliveryMinutes: expect.any(Number),
+          offerKind: 'standard',
           pickup: {
             businessName: 'Downtown Pickup',
+            locationName: 'Downtown Pickup',
             city: 'Douala',
             state: 'Littoral',
           },
@@ -290,6 +302,60 @@ describe('OrderOffersService', () => {
 
       expect(result.active).toBe(false);
       expect(result.offer?.orderId).toBe('order-1');
+    });
+  });
+
+  describe('#594 G3: offerKind and pickup.locationName', () => {
+    const queryOf = () => hasuraSystemService.executeQuery.mock.calls[0][0] as string;
+
+    it.each([
+      ['dedicated', 'dedicated'],
+      ['standard', 'standard'],
+      [null, 'standard'],
+      [undefined, 'standard'],
+      ['weird', 'standard'],
+    ])('offer_kind %p -> offerKind %p on the offer payload (selected in the query)', async (kind, expected) => {
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        order_offers: [{ ...buildOfferDetailsRow('2026-01-01T00:01:00.000Z'), offer_kind: kind }],
+      });
+      const result = await service.getOfferDetailsForAgent('order-1', 'agent-near');
+      expect(result.offer?.offerKind).toBe(expected);
+      expect(queryOf()).toMatch(/\boffer_kind\b/);
+    });
+
+    it('pending offer carries offerKind too; locationName is the store, businessName unchanged', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({
+        order_offers: [{ ...buildOfferDetailsRow('2026-01-01T00:01:00.000Z'), offer_kind: 'dedicated' }],
+      });
+      const result = await service.getPendingOfferForAgent('agent-near');
+      expect(queryOf()).toContain('query PendingOffer');
+      expect(queryOf()).toMatch(/\boffer_kind\b/);
+      expect(result.offer).toMatchObject({
+        offerKind: 'dedicated',
+        pickup: { businessName: 'Downtown Pickup', locationName: 'Downtown Pickup' },
+      });
+    });
+
+    it('no location name: businessName falls back to the business, locationName is null', async () => {
+      const row = buildOfferDetailsRow('2026-01-01T00:01:00.000Z');
+      row.order.business_location.name = '';
+      hasuraSystemService.executeQuery.mockResolvedValueOnce({ order_offers: [row] });
+      const result = await service.getOfferDetailsForAgent('order-1', 'agent-near');
+      expect(result.offer?.pickup).toMatchObject({ businessName: 'Fallback Store', locationName: null });
+    });
+  });
+
+  describe('#594 DEV QA F1: markOfferLost', () => {
+    it('cancels (not expires) the caller\'s open offer, only when the order is another agent\'s', async () => {
+      hasuraSystemService.executeMutation.mockResolvedValueOnce({ update_order_offers: { affected_rows: 1 } });
+      await service.markOfferLost('order-1', 'agent-1');
+      const [mutation, vars] = hasuraSystemService.executeMutation.mock.calls[0] as [string, Record<string, unknown>];
+      expect(vars).toEqual({ orderId: 'order-1', agentId: 'agent-1' });
+      expect(mutation).toContain('_set: { status: "cancelled"');
+      expect(mutation).not.toContain('"expired"');
+      // A duplicate accept by the winner itself leaves its offer for handleOrderAssigned.
+      expect(mutation.replace(/\s+/g, ' ')).toContain('{ order: { assigned_agent_id: { _is_null: false, _neq: $agentId } } }');
+      expect(mutation).toContain('{ status: { _eq: "offered" } }');
     });
   });
 
@@ -385,6 +451,143 @@ describe('OrderOffersService', () => {
     });
   });
 
+  describe('round radius (round1RadiusKm / round2RadiusKm)', () => {
+    // Pickup at lat 4, lon 9. 0.01 deg lat ~= 1.11 km.
+    function mockDispatch(
+      agents: ReturnType<typeof buildAgentLocation>[],
+      orderOverrides: Record<string, unknown> = {}
+    ) {
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string) => {
+          if (query.includes('orders_by_pk')) {
+            return { orders_by_pk: { ...buildOfferOrder(), ...orderOverrides } };
+          }
+          if (query.includes('agent_locations')) {
+            return { agent_locations: agents };
+          }
+          if (query.includes('mobile_push_tokens')) {
+            return {
+              mobile_push_tokens: agents.map((a) => ({ user_id: a.agent.user.id })),
+            };
+          }
+          if (query.includes('pickup_reliability_score')) {
+            return {
+              agents: agents.map((a) => ({
+                id: a.agent.id,
+                pickup_reliability_score: 100,
+              })),
+            };
+          }
+          return {};
+        }
+      );
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        insert_order_offers: { affected_rows: 1 },
+        update_orders_by_pk: { id: 'order-1' },
+      });
+      commissionsService.calculateAgentEarnings.mockResolvedValue({
+        totalEarnings: 400,
+        currency: 'XAF',
+      } as any);
+      notificationsService.sendOrderOfferPush.mockResolvedValue(undefined);
+    }
+
+    const agents = () => [
+      buildAgentLocation('agent-3km', 'user-3km', 4.027),
+      buildAgentLocation('agent-7km', 'user-7km', 4.063),
+      buildAgentLocation('agent-15km', 'user-15km', 4.135),
+      buildAgentLocation('agent-30km', 'user-30km', 4.27),
+    ];
+
+    beforeEach(() => {
+      offersConfig = { ttlSeconds: 45, maxAgents: 10 };
+    });
+
+    it('round 1 defaults to the country checkout radius when round1RadiusKm is unset', async () => {
+      mockDispatch(agents());
+
+      await service.runDispatchRound('order-1', 1);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-3km',
+      ]);
+    });
+
+    it('round 1 reads round1RadiusKm when configured', async () => {
+      offersConfig = { ...offersConfig, round1RadiusKm: 8 };
+      mockDispatch(agents());
+
+      await service.runDispatchRound('order-1', 1);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-3km',
+        'agent-7km',
+      ]);
+    });
+
+    it('round 2 keeps the round 1 radius when round2RadiusKm is unset (no silent widening)', async () => {
+      mockDispatch(agents(), { dispatch_round: 1 });
+
+      await service.runDispatchRound('order-1', 2);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-3km',
+      ]);
+    });
+
+    it('round 2 widens to round2RadiusKm when configured', async () => {
+      offersConfig = { ...offersConfig, round2RadiusKm: 20 };
+      mockDispatch(agents(), { dispatch_round: 1 });
+
+      await service.runDispatchRound('order-1', 2);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-3km',
+        'agent-7km',
+        'agent-15km',
+      ]);
+    });
+
+    it('does not offer agents whose last GPS update is older than the configured 30 minutes', async () => {
+      deliveryAvailabilityConfig = {
+        enforceEnabled: true,
+        agentLocationMaxAgeMinutes: 30,
+      };
+      const stale = new Date(now.getTime() - 31 * 60 * 1000).toISOString();
+      mockDispatch([
+        buildAgentLocation('agent-stale', 'user-stale', 4.005, {
+          updated_at: stale,
+        }),
+        buildAgentLocation('agent-fresh', 'user-fresh', 4.02),
+      ]);
+
+      await service.runDispatchRound('order-1', 1);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-fresh',
+      ]);
+      expect(notificationsService.sendOrderOfferPush).toHaveBeenCalledTimes(1);
+      expect(notificationsService.sendOrderOfferPush).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: 'user-fresh' })
+      );
+    });
+
+    it('still offers a stale-GPS agent when the cutoff is off (default)', async () => {
+      const stale = new Date(now.getTime() - 31 * 60 * 1000).toISOString();
+      mockDispatch([
+        buildAgentLocation('agent-stale', 'user-stale', 4.005, {
+          updated_at: stale,
+        }),
+      ]);
+
+      await service.runDispatchRound('order-1', 1);
+
+      expect(getInsertedOffers().map((o: any) => o.agent_id)).toEqual([
+        'agent-stale',
+      ]);
+    });
+  });
+
   function getInsertedOffers() {
     const call = hasuraSystemService.executeMutation.mock.calls.find(
       (c) =>
@@ -450,6 +653,8 @@ describe('OrderOffersService', () => {
     return {
       latitude,
       longitude: 9,
+      updated_at:
+        (overrides.updated_at as string | undefined) ?? now.toISOString(),
       agent: {
         id: agentId,
         is_available: overrides.is_available ?? true,

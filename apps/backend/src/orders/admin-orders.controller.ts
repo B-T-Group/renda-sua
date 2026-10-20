@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpException,
+  HttpCode,
   HttpStatus,
   Logger,
   Param,
@@ -25,8 +26,8 @@ import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { RequirePermissions } from '../rbac/permissions.decorator';
-import { PlatformPermissions } from '../rbac/platform-permissions';
+import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
+import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
 import { GeoScopeService } from '../rbac/geo-scope.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { AdminOrdersService } from './admin-orders.service';
@@ -38,6 +39,8 @@ import type {
 import {
   AcknowledgeRiskIncidentDto,
   AddAdminNoteDto,
+  AcknowledgeAdminCancelStepDto,
+  AdminFullRefundCancelDto,
   AdminOrderStatsPeriod,
   GetAdminOrderStatsDto,
   GetAdminOrdersDto,
@@ -46,6 +49,7 @@ import {
   SendOrderContactSmsDto,
   UnassignRedispatchDto,
   UpdateOrderStatusDto,
+  ADMIN_CANCEL_REASON_MAX_LENGTH,
   type OrderContactRecipientType,
 } from './dto/admin-orders.dto';
 import { OrderEventsService } from './order-events.service';
@@ -53,13 +57,23 @@ import { OrderReassignmentService } from './order-reassignment.service';
 import { OrderRiskIncidentsService } from './order-risk-incidents.service';
 import type { OrderRiskIncident } from './order-risk.types';
 import { OrderRiskMonitorService } from './order-risk-monitor.service';
-import { OrdersService } from './orders.service';
+import { OrdersService, type DepositCancelOutcome } from './orders.service';
 import { CreditsService } from '../credits/credits.service';
 import type {
   CreditContactChannel,
   CreditOrderResult,
 } from '../credits/credit.types';
-import { isAdminOperationalStatus } from './admin-order-status.util';
+import { maskPersonalData } from '../common/sentry/scrub-sentry-event';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+import {
+  isAdminOperationalStatus,
+  isAdminOverrideTransitionAllowed,
+  assertAdminPrePickupCancellable,
+} from './admin-order-status.util';
+import { safeErrorMessage } from '../common/utils/safe-error-log.util';
+
+/** The full-refund cancel succeeded but its audit event could not be written. */
+export const FULL_REFUND_CANCEL_AUDIT_FAILED_MARKER = 'admin_full_refund_cancel_audit_failed';
 
 @ApiTags('admin/orders')
 @Controller('admin/orders')
@@ -120,7 +134,7 @@ export class AdminOrdersController {
     try {
       return await this.adminOrdersService.list(query);
     } catch (error: any) {
-      this.logger.error('Failed to fetch admin orders', error);
+      this.logger.error('Failed to fetch admin orders', safeErrorMessage(error));
       throw new HttpException(
         error.message || 'Failed to fetch orders',
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -188,7 +202,7 @@ export class AdminOrdersController {
     try {
       return await this.adminOrdersService.getStats(query);
     } catch (error: any) {
-      this.logger.error('Failed to fetch admin order stats', error);
+      this.logger.error('Failed to fetch admin order stats', safeErrorMessage(error));
       throw new HttpException(
         error.message || 'Failed to fetch order statistics',
         HttpStatus.INTERNAL_SERVER_ERROR
@@ -265,6 +279,117 @@ export class AdminOrdersController {
     };
   }
 
+  /**
+   * Ops cleanup: cancel an order with a FULL refund to the client and release any
+   * agent hold. Superuser, or an admin holding platform.financial.refunds (in geo
+   * scope); the class-level ORDERS_CROSS_BUSINESS alone is not enough.
+   *
+   * Money: the cancel is recorded as cancelled_by=system, which the order.cancelled
+   * Lambda never charges a cancellation fee for, and whose client and agent releases
+   * use the per-order `cancel_release_key_prefix` idempotency keys (exactly once,
+   * even when the message is redelivered). A business or system cancel also refunds
+   * a paid deposit, after the lock point too. The status write is a compare-and-set
+   * on the status read, so of two concurrent calls one wins and the other gets 409
+   * before any side effect.
+   *
+   * Where the money goes (QA A5): the refund is to the client's Rendasua WALLET, not
+   * back to the payment provider. Funds held on the wallet are released to its
+   * available balance and a paid deposit is credited back to the wallet; no MoMo /
+   * provider payout is made (the client withdraws as usual). A card authorisation is
+   * voided rather than captured.
+   *
+   * The deposit refund result is returned as `depositRefund` (QA A2): when it failed
+   * or was refused the response says so and a money alert is raised; it never claims
+   * a full refund that did not happen.
+   *
+   * Audit: an `admin_intervention` order event (action full_refund_cancel, actor,
+   * reason, previous status) plus a status-history entry. The free-text reason is
+   * PII-masked (emails, phone numbers) before it is stored or logged (QA A4).
+   */
+  @Post(':orderId/full-refund-cancel')
+  @RequireRoles(PlatformRoles.SUPERUSER)
+  @RequirePermissions(PlatformPermissions.FINANCIAL_REFUNDS)
+  @ApiOperation({
+    summary: 'Cancel with a full refund (ops cleanup)',
+    description:
+      'Superuser / financial-refunds admin only. No cancellation fee; the client is refunded to their Rendasua wallet (not to the payment provider) and agent holds are released exactly once. Only before pickup (pending_payment, pending, confirmed, preparing, ready_for_pickup, assigned_to_agent). Retrying after a queued-refund failure re-enqueues order.cancelled. The response carries depositRefund.status.',
+  })
+  @ApiResponse({ status: 201, description: 'Cancelled; refund queued (order.cancelled). Retry re-queues if already cancelled by this endpoint.' })
+  @ApiResponse({ status: 409, description: 'Already cancelled by another flow / status moved / goods already picked up' })
+  async fullRefundCancel(
+    @Param('orderId') orderId: string,
+    @Body() dto: AdminFullRefundCancelDto
+  ) {
+    const scope = await this.geo.require(PlatformPermissions.FINANCIAL_REFUNDS);
+    await this.geo.assertOrder(scope, orderId);
+    const reason = maskPersonalData(dto.reason);
+    const result = await this.ordersService.adminFullRefundCancel(orderId, reason);
+    await this.auditFullRefundCancel(orderId, reason, result.previousStatus, result.depositRefund, result.failedSteps);
+    return result;
+  }
+
+  /**
+   * #627 nit: acknowledge a half-done non-repeatable cancel step (releaseReservedStock,
+   * inventoryReleaseHook) after checking / fixing it by hand. The engine never re-runs
+   * those, so without this every retry alerts on them. QA #642 H1: settling stock by
+   * hand is a money-adjacent override, so it is gated like the full-refund cancel:
+   * SUPERUSER + FINANCIAL_REFUNDS, FINANCIAL_REFUNDS country scope. A repeat is a 200.
+   */
+  @Post(':orderId/cancel-steps/:step/acknowledge')
+  @HttpCode(HttpStatus.OK)
+  @RequireRoles(PlatformRoles.SUPERUSER)
+  @RequirePermissions(PlatformPermissions.FINANCIAL_REFUNDS)
+  @ApiOperation({ summary: 'Acknowledge a half-done stock / inventory-hook cancel step (settled by hand)' })
+  @ApiResponse({ status: 200, description: 'Step marked done with the acknowledgement (repeat: alreadyAcknowledged=true)' })
+  @ApiResponse({ status: 403, description: 'Not SUPERUSER + FINANCIAL_REFUNDS, out of country scope, or a cancel kind not allowed' })
+  @ApiResponse({ status: 409, description: 'Step not acknowledgeable (not stock/hook, or not running/failed), or a resume is running' })
+  async acknowledgeCancelStep(
+    @Param('orderId') orderId: string,
+    @Param('step') step: string,
+    @Body() dto: AcknowledgeAdminCancelStepDto
+  ) {
+    const scope = await this.geo.require(PlatformPermissions.FINANCIAL_REFUNDS);
+    await this.geo.assertOrder(scope, orderId);
+    return this.ordersService.acknowledgeAdminCancelStep(orderId, step, maskPersonalData(dto.note.trim()), [
+      'admin_cancel',
+      'full_refund',
+    ]);
+  }
+
+  /**
+   * The audit event after a successful full-refund cancel. The cancel (and its refund)
+   * has already happened, so a failure here must not turn it into an error: it is
+   * raised as an alert (`admin_full_refund_cancel_audit_failed`, Sentry + CloudWatch
+   * marker) with who/what/why so the trail can be restored by hand. Written with
+   * OrderEventsService.recordEventStrict (recordEvent swallows insert errors).
+   */
+  private async auditFullRefundCancel(
+    orderId: string,
+    reason: string,
+    previousStatus: string,
+    depositRefund: DepositCancelOutcome,
+    failedSteps: Array<{ step: string; error: string }>
+  ): Promise<void> {
+    let actorId: string | null = null;
+    try {
+      actorId = (await this.hasuraUserService.getUser())?.id ?? null;
+      await this.orderEventsService.recordEventStrict({
+        orderId,
+        eventType: 'admin_intervention',
+        actorType: 'support',
+        actorId,
+        payload: { action: 'full_refund_cancel', reason, previousStatus, cancellationFee: 0, depositRefund, failedSteps },
+      });
+    } catch (error: unknown) {
+      reportMoneyAnomaly(
+        this.logger,
+        FULL_REFUND_CANCEL_AUDIT_FAILED_MARKER,
+        `Audit event not written for the full-refund cancel of order ${orderId} (the cancel succeeded): ${safeErrorMessage(error)}`,
+        { orderId, actorId, previousStatus, reason }
+      );
+    }
+  }
+
   @Patch(':orderId/status')
   @ApiOperation({
     summary: 'Override order status',
@@ -285,22 +410,90 @@ export class AdminOrdersController {
       // never cancel an order outside their grants).
       const order = await this.requireOrder(orderId);
       if (dto.status === 'cancelled') {
-        return await this.ordersService.cancelOrderAsAdmin(orderId, dto.notes);
+        const reason = this.requireCancelReason(dto);
+        // 'cancelled' passes through so a retry can resume a half-done cancel (C4);
+        // the service refuses it unless an incomplete-cancel marker exists.
+        if (order.current_status !== 'cancelled') {
+          this.assertPrePickupCancellable(order.current_status);
+        }
+        return await this.ordersService.cancelOrderAsAdmin(
+          orderId,
+          reason,
+          order.current_status,
+        );
       }
       this.assertOperationalAdminStatus(dto.status);
-      await this.writeOperationalAdminStatus(order, dto);
-      return {
-        success: true,
-        message: 'Status updated successfully',
-      };
+      this.assertOverrideTransition(
+        order.current_status,
+        dto.status,
+        Boolean(order.assigned_agent_id),
+      );
+      const notes = this.overrideNotes(dto);
+      const historyWritten = await this.writeOperationalAdminStatus(
+        order,
+        dto.status,
+        notes,
+      );
+      return historyWritten
+        ? { success: true, message: 'Status updated successfully' }
+        : {
+            success: true,
+            partialFailure: true,
+            failedSteps: ['statusHistory'],
+            message:
+              'Status updated, but the history entry was not written (alerted)',
+          };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
-      this.logger.error('Failed to update status', error);
+      // Raw error text goes to the log only, never to the API (it can carry SQL / PII).
+      this.logger.error('Failed to update status', safeErrorMessage(error));
+      throw new HttpException('Failed to update status', HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  private requireCancelReason(dto: UpdateOrderStatusDto): string {
+    const raw = (dto.reason ?? dto.notes ?? '').trim();
+    if (raw.length > ADMIN_CANCEL_REASON_MAX_LENGTH) {
       throw new HttpException(
-        error.message || 'Failed to update status',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        `The reason must be at most ${ADMIN_CANCEL_REASON_MAX_LENGTH} characters`,
+        HttpStatus.BAD_REQUEST,
       );
     }
+    // PII (emails, phone numbers) is masked before the reason is stored or logged.
+    const reason = maskPersonalData(raw);
+    if (reason) return reason;
+    throw new HttpException(
+      'A reason is required to cancel an order',
+      HttpStatus.BAD_REQUEST,
+    );
+  }
+
+  private assertPrePickupCancellable(status: string): void {
+    assertAdminPrePickupCancellable(status);
+  }
+
+  /** C6: override notes are capped and PII-masked like the cancel reason. */
+  private overrideNotes(dto: UpdateOrderStatusDto): string {
+    const raw = (dto.notes ?? '').trim();
+    if (raw.length > ADMIN_CANCEL_REASON_MAX_LENGTH) {
+      throw new HttpException(
+        `The notes must be at most ${ADMIN_CANCEL_REASON_MAX_LENGTH} characters`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return maskPersonalData(raw) || 'Admin status override';
+  }
+
+  private assertOverrideTransition(
+    from: string,
+    to: string,
+    hasAgent: boolean,
+  ): void {
+    if (isAdminOverrideTransitionAllowed(from, to, hasAgent)) return;
+    throw new HttpException(
+      `Cannot move an order from ${from} to ${to} via status override`,
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   private assertOperationalAdminStatus(status: string): void {
@@ -311,50 +504,96 @@ export class AdminOrdersController {
     );
   }
 
+  /**
+   * CAS status write, then the history row. C6: one mutation is not feasible here: a
+   * Hasura multi-field mutation is one transaction, but the history insert would still
+   * run when the CAS matched 0 rows (no conditional insert without a SQL function). So
+   * the CAS goes first; a failed history insert is alerted and reported as a partial
+   * failure, never a 500 after the status already changed. Returns false then.
+   */
   private async writeOperationalAdminStatus(
     order: { id: string; current_status: string },
-    dto: UpdateOrderStatusDto,
-  ): Promise<void> {
-    await this.hasuraSystemService.executeMutation(
+    status: string,
+    notes: string,
+  ): Promise<boolean> {
+    const updated = await this.hasuraSystemService.executeMutation<{
+      update_orders: { affected_rows: number };
+    }>(
       `
       mutation AdminOperationalStatus(
         $orderId: uuid!
         $status: order_status!
         $previousStatus: order_status!
-        $notes: String
       ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
+        update_orders(
+          where: { id: { _eq: $orderId }, current_status: { _eq: $previousStatus } }
           _set: { current_status: $status }
-        ) { id current_status }
-        insert_order_status_history_one(
-          object: {
-            order_id: $orderId
-            status: $status
-            previous_status: $previousStatus
-            changed_by_type: "system"
-            notes: $notes
-          }
-        ) { id }
+        ) { affected_rows }
       }
       `,
       {
         orderId: order.id,
-        status: dto.status,
+        status,
         previousStatus: order.current_status,
-        notes: dto.notes || 'Admin status override',
       },
     );
+    // #627 C2: compare-and-set on the status checked above; a concurrent change -> 409.
+    if (!(updated?.update_orders?.affected_rows > 0)) {
+      throw new HttpException(
+        'Order status already changed. Please refresh and try again.',
+        HttpStatus.CONFLICT,
+      );
+    }
+    let historyWritten = true;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation AdminOperationalStatusHistory(
+          $orderId: uuid!
+          $status: order_status!
+          $previousStatus: order_status!
+          $notes: String
+        ) {
+          insert_order_status_history_one(
+            object: {
+              order_id: $orderId
+              status: $status
+              previous_status: $previousStatus
+              changed_by_type: "system"
+              notes: $notes
+            }
+          ) { id }
+        }
+        `,
+        {
+          orderId: order.id,
+          status,
+          previousStatus: order.current_status,
+          notes,
+        },
+      );
+    } catch (error: unknown) {
+      historyWritten = false;
+      reportMoneyAnomaly(
+        this.logger,
+        'admin_status_override_history_failed',
+        `Status override of order ${order.id} (${order.current_status} -> ${status}) applied, history not written: ${safeErrorMessage(error)}`,
+        { orderId: order.id, from: order.current_status, to: status },
+      );
+    }
     await this.orderEventsService.recordEvent({
       orderId: order.id,
-      eventType: 'gps_unavailable',
+      // #627 I2: was mislabelled gps_unavailable.
+      eventType: 'admin_intervention',
       actorType: 'support',
       payload: {
+        action: 'status_override',
         old_status: order.current_status,
-        new_status: dto.status,
-        notes: dto.notes,
+        new_status: status,
+        notes,
       },
     });
+    return historyWritten;
   }
 
   @Post(':orderId/notes')

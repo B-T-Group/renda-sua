@@ -73,6 +73,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
 import { ItemViewsModule } from '../item-views/item-views.module';
 import { ItemLikesModule } from '../item-likes/item-likes.module';
 import { RestockAlertsModule } from '../restock-alerts/restock-alerts.module';
+import { DedicatedAgentsModule } from '../dedicated-agents/dedicated-agents.module';
 import { BusinessFollowsModule } from '../business-follows/business-follows.module';
 import { ProductInterestModule } from '../product-interest/product-interest.module';
 import { MarketplacePublicModule } from '../marketplace-public/marketplace-public.module';
@@ -198,6 +199,7 @@ import { AppService } from './app.service';
     ItemViewsModule,
     ItemLikesModule,
     RestockAlertsModule,
+    DedicatedAgentsModule,
     BusinessFollowsModule,
     ProductInterestModule,
     MetaConversionsModule,

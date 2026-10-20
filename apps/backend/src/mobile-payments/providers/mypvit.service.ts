@@ -7,6 +7,13 @@ import { ConfigService } from '@nestjs/config';
 import axios, { AxiosInstance } from 'axios';
 import { MyPVitConfig } from '../../config/configuration';
 import {
+  maskPhoneNumber,
+  redactProviderPayload,
+  redactSecrets,
+  sanitizeProviderError,
+  toSanitizedError,
+} from '../sanitize-provider-error.util';
+import {
   MYP_VIT_STATUS_OPERATIONS,
   buildMypvitStatusPath,
   isNotFoundHttpError,
@@ -14,6 +21,41 @@ import {
   unindexedMypvitStatusBody,
   type MypvitStatusOperation,
 } from './mypvit-status.util';
+import { mypvitSecretName } from '../secret-refresh-auth';
+import { isProductionEnv } from '../../common/utils/resolve-trust-proxy';
+
+/**
+ * QA #593 S3: the Airtel/Moov operation account codes have no hard-coded fallback (missing
+ * codes used to fall back to ACC_68A722C33473B). Missing or blank codes throw here, so Nest
+ * fails at boot instead of paying through an account nobody configured.
+ *
+ * QA #593 R1: identical codes mean one MyPVit account with one secret (DEV's repo config uses
+ * ACC_68A722C33473B for both). Outside production that is allowed and reported via
+ * `identical`; the secret-refresh webhook then stores the delivered key under both
+ * AIRTEL_MYPVIT_SECRET_KEY and MOOV_MYPVIT_SECRET_KEY. In production (isProductionEnv) the
+ * operators have distinct accounts, so identical codes are a misconfiguration and fail boot.
+ */
+export function requireOperationAccountCodes(
+  config: Partial<Pick<MyPVitConfig, 'airtelMerchantOperationAccountCode' | 'moovMerchantOperationAccountCode'>> | undefined,
+  env: Record<string, string | undefined> = process.env
+): { airtel: string; moov: string; identical: boolean } {
+  const airtel = config?.airtelMerchantOperationAccountCode?.trim() ?? '';
+  const moov = config?.moovMerchantOperationAccountCode?.trim() ?? '';
+  if (!airtel || !moov) {
+    throw new Error(
+      'MyPVit misconfigured: MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE and ' +
+        'MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE must both be set'
+    );
+  }
+  const identical = airtel === moov;
+  if (identical && isProductionEnv(env)) {
+    throw new Error(
+      'MyPVit misconfigured: MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE and ' +
+        'MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE must differ in production'
+    );
+  }
+  return { airtel, moov, identical };
+}
 
 export interface MyPVitPaymentRequest {
   amount: number;
@@ -135,11 +177,15 @@ export class MyPVitService {
     // Get the MyPVit configuration from the configuration service
     const mypvitConfig = this.configService.get<MyPVitConfig>('mypvit');
 
-    this.logger.log(
-      'Raw MyPVit config from ConfigService:',
-      JSON.stringify(mypvitConfig, null, 2)
-    );
+    // Fails boot when the codes are missing (no hard-coded fallback).
+    const accountCodes = requireOperationAccountCodes(mypvitConfig);
+    if (accountCodes.identical) {
+      this.logger.warn(
+        'MyPVit Airtel and Moov operation account codes are identical (single account, non-production); secret refresh stores the key under both names'
+      );
+    }
 
+    // Never dump the raw config: it can carry the Airtel/Moov secret keys.
     this.config = {
       baseUrl: mypvitConfig?.baseUrl || 'https://api.mypvit.pro',
       merchantSlug: mypvitConfig?.merchantSlug || 'MR_1755783875',
@@ -148,10 +194,8 @@ export class MyPVitService {
       environment: mypvitConfig?.environment || 'test',
       callbackUrlCode: mypvitConfig?.callbackUrlCode || 'FJXSU',
       secretRefreshUrlCode: mypvitConfig?.secretRefreshUrlCode || 'TRUVU',
-      airtelMerchantOperationAccountCode:
-        mypvitConfig?.airtelMerchantOperationAccountCode || 'ACC_68A722C33473B',
-      moovMerchantOperationAccountCode:
-        mypvitConfig?.moovMerchantOperationAccountCode || 'ACC_68F90896204C1',
+      airtelMerchantOperationAccountCode: accountCodes.airtel,
+      moovMerchantOperationAccountCode: accountCodes.moov,
       paymentEndpointCode:
         mypvitConfig?.paymentEndpointCode || 'X5T3RIBYQUDFBZSH',
       statusEndpointCode:
@@ -192,9 +236,10 @@ export class MyPVitService {
     // Add response interceptor for logging
     this.httpClient.interceptors.response.use(
       (response) => {
+        // L2: status + path only. Bodies carry phones (KYC/status) and, for
+        // renew-secret, the new secret key.
         this.logger.debug(
-          `MyPVit API Response: ${response.status}`,
-          response.data
+          `MyPVit API Response: ${response.status} ${response.config?.url ?? ''}`.trim()
         );
         return response;
       },
@@ -211,10 +256,14 @@ export class MyPVitService {
   }): void {
     const payload = error.response?.data ?? error.message;
     if (isNotFoundHttpError(error)) {
-      this.logger.debug('MyPVit resource not found (expected miss):', payload);
+      this.logger.debug(
+        `MyPVit resource not found (expected miss): ${error.response?.status ?? ''}`.trim()
+      );
       return;
     }
-    this.logger.error('MyPVit API Error:', payload);
+    this.logger.error(
+      `MyPVit API Error: ${error.response?.status ?? ''} ${redactProviderPayload(payload)}`
+    );
   }
 
   /**
@@ -234,7 +283,7 @@ export class MyPVitService {
       }
 
       this.logger.log(
-        `Initiating payment for account: ${paymentRequest.customer_account_number}`
+        `Initiating payment for account: ${maskPhoneNumber(paymentRequest.customer_account_number)}`
       );
 
       const freeInfo = sanitizeFreeInfo(paymentRequest.free_info);
@@ -300,8 +349,11 @@ export class MyPVitService {
       }
     } catch (error: any) {
       this.logger.error(
-        'Failed to initiate payment:',
-        error.response?.data?.message
+        `Failed to initiate payment: ${
+          error.response?.data?.message
+            ? redactSecrets(String(error.response.data.message))
+            : sanitizeProviderError(error).message
+        }`
       );
       return {
         success: false,
@@ -347,8 +399,10 @@ export class MyPVitService {
       return response.data;
     } catch (error: any) {
       if (!isNotFoundHttpError(error)) {
-        this.logger.error('Failed to check transaction status:', error);
-        throw error;
+        // Never log or rethrow the raw axios error: config.headers carry X-Secret (sk_live_...).
+        const sanitized = sanitizeProviderError(error);
+        this.logger.error(`Failed to check transaction status: ${sanitized.message}`);
+        throw toSanitizedError(error);
       }
       return this.fetchStatusAfterPathMiss(
         transactionId,
@@ -396,7 +450,7 @@ export class MyPVitService {
       if (isNotFoundHttpError(error)) {
         return null;
       }
-      throw error;
+      throw toSanitizedError(error);
     }
   }
 
@@ -451,7 +505,8 @@ export class MyPVitService {
       // MyPVit supports these payment methods based on their documentation
       return ['mobile_money', 'card', 'bank_transfer'];
     } catch (error) {
-      this.logger.error('Failed to get supported payment methods:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get supported payment methods: ${sanitized.message}`);
       return [];
     }
   }
@@ -483,7 +538,8 @@ export class MyPVitService {
 
       return response.data.success || false;
     } catch (error) {
-      this.logger.error('Failed to cancel transaction:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to cancel transaction: ${sanitized.message}`);
       return false;
     }
   }
@@ -517,7 +573,8 @@ export class MyPVitService {
         return [];
       }
     } catch (error) {
-      this.logger.error('Failed to get transaction history:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to get transaction history: ${sanitized.message}`);
       return [];
     }
   }
@@ -551,8 +608,9 @@ export class MyPVitService {
         throw new Error(response.data.message || 'Failed to check balance');
       }
     } catch (error) {
-      this.logger.error('Failed to check balance:', error);
-      throw error;
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to check balance: ${sanitized.message}`);
+      throw toSanitizedError(error);
     }
   }
 
@@ -584,7 +642,8 @@ export class MyPVitService {
         };
       }
     } catch (error) {
-      this.logger.error('Failed to renew secret key:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to renew secret key: ${sanitized.message}`);
       return {
         success: false,
         message: 'Failed to renew secret key',
@@ -602,7 +661,7 @@ export class MyPVitService {
     customerEmail?: string;
   }): Promise<{ success: boolean; kycStatus: string; message?: string }> {
     try {
-      this.logger.log(`Performing KYC for customer: ${kycData.customerPhone}`);
+      this.logger.log(`Performing KYC for customer: ${maskPhoneNumber(kycData.customerPhone)}`);
 
       const response = await this.httpClient.post(
         '/W2OZPE4QDSWH3Z5R/kyc',
@@ -623,7 +682,8 @@ export class MyPVitService {
         };
       }
     } catch (error) {
-      this.logger.error('Failed to perform KYC:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to perform KYC: ${sanitized.message}`);
       return {
         success: false,
         kycStatus: 'failed',
@@ -641,7 +701,8 @@ export class MyPVitService {
       await this.checkBalance();
       return true;
     } catch (error) {
-      this.logger.error('MyPVit connection test failed:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`MyPVit connection test failed: ${sanitized.message}`);
       return false;
     }
   }
@@ -681,9 +742,8 @@ export class MyPVitService {
    */
   private async getCurrentSecretKey(phoneNumber?: string): Promise<string> {
     try {
-      const environment =
-        this.configService.get<string>('NODE_ENV') || 'development';
-      const secretName = `${environment}-rendasua-backend-secrets`;
+      // Same name the secret-refresh webhook writes to (MYPVIT_SECRET_NAME override).
+      const secretName = mypvitSecretName();
 
       this.logger.log(`Fetching current secret key from: ${secretName}`);
 
@@ -703,7 +763,10 @@ export class MyPVitService {
       }
       return secretValue.AIRTEL_MYPVIT_SECRET_KEY || '';
     } catch (error: any) {
-      this.logger.error(`Failed to fetch current secret key: ${error.message}`);
+      // No error.message: a JSON.parse SyntaxError quotes the start of the stored secret.
+      this.logger.error(
+        `Failed to fetch current secret key (${error?.name ?? 'Error'}); using the cached key`
+      );
       // Fallback to cached secret key
       return phoneNumber
         ? this.getSecretKeyForProvider(phoneNumber)

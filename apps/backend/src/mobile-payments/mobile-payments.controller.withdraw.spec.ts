@@ -184,4 +184,28 @@ describe('MobilePaymentsController GIVE_CHANGE withdraw gates', () => {
       expect.objectContaining({ initiatorUserId: 'user-1' })
     );
   });
+
+  it('surfaces ambiguous provider outcome with status and reason in withdrawal response', async () => {
+    giveChangePayoutService.executeGiveChangePayout.mockResolvedValue({
+      success: true,
+      data: {
+        transactionId: 'tx-ambig',
+        providerTransactionId: 'fedapay-ambig-123',
+        status: 'pending',
+        reason: 'provider_ambiguous',
+      },
+    });
+
+    await expect(
+      controller.initiatePayment(ctx, withdrawRequest)
+    ).resolves.toEqual({
+      success: true,
+      data: expect.objectContaining({
+        transactionId: 'tx-ambig',
+        providerTransactionId: 'fedapay-ambig-123',
+        status: 'pending',
+        reason: 'provider_ambiguous',
+      }),
+    });
+  });
 });

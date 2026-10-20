@@ -11,6 +11,23 @@ import type { FedaPayConfig } from '../../config/configuration';
 import { normalizeProviderMessage } from '../normalize-provider-message';
 import type { MobilePaymentCallbackProcessor } from '../mobile-payment-callback.processor';
 import type { FedaPayCallbackDto } from '../mobile-payment-callback.dto';
+import {
+  sanitizeProviderError,
+  maskPhoneNumber,
+  toSanitizedError,
+} from '../sanitize-provider-error.util';
+
+/** #615 QA L1: bound on one live FedaPay retrieve (the SDK has no timeout). */
+export const FEDAPAY_LIVE_LOOKUP_TIMEOUT_MS = 10_000;
+/** QA #621 I3: log marker for a live lookup that hit the timeout (metric filter / alarm). */
+export const FEDAPAY_LIVE_LOOKUP_TIMEOUT_MARKER = 'fedapay_live_lookup_timeout';
+
+export class FedaPayLiveLookupTimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'FedaPayLiveLookupTimeoutError';
+  }
+}
 
 export interface FedaPayPaymentRequest {
   payer: string;
@@ -41,6 +58,12 @@ export interface FedaPayPaymentResponse {
   message?: string;
   errorCode?: string;
   status?: string;
+  /**
+   * True when the FedaPay object was created but the follow-up push/send
+   * failed or timed out. The outcome is unknown: callers must keep the row
+   * pending with this transactionId and let the webhook / polling decide.
+   */
+  ambiguous?: boolean;
 }
 
 export interface FedaPayWithdrawalResponse {
@@ -50,16 +73,45 @@ export interface FedaPayWithdrawalResponse {
   message?: string;
   errorCode?: string;
   status?: string;
+  /** See FedaPayPaymentResponse.ambiguous. */
+  ambiguous?: boolean;
 }
 
 export interface FedaPayTransactionStatus {
   transactionId: string;
   status: 'pending' | 'approved' | 'declined' | 'canceled' | 'transferred' | string;
   amount?: number;
+  currency?: string;
   reference?: string;
   merchantRef?: string;
   reason?: string;
   message?: string;
+}
+
+/**
+ * GET /transactions/:id returns `currency_id`, not `currency.iso`.
+ * Official FedaPay examples use id 1 for XOF (the only collect currency).
+ */
+const FEDAPAY_CURRENCY_ID_TO_ISO: Record<string, string> = { '1': 'XOF' };
+
+function readFedaPayCurrencyIso(data: {
+  currency?: { iso?: string | null } | null;
+  currency_id?: number | string | null;
+} | null | undefined): string {
+  const iso = data?.currency?.iso?.trim();
+  if (iso) return iso.toUpperCase();
+  const id = data?.currency_id;
+  if (id === undefined || id === null || id === '') return '';
+  return FEDAPAY_CURRENCY_ID_TO_ISO[String(id)] ?? '';
+}
+
+function readFedaPayMerchantRef(data: {
+  custom_metadata?: { externalId?: string | null } | null;
+  merchant_reference?: string | null;
+} | null | undefined): string {
+  return data?.custom_metadata?.externalId?.trim()
+    || data?.merchant_reference?.trim()
+    || '';
 }
 
 @Injectable()
@@ -93,6 +145,21 @@ export class FedaPayService implements OnModuleInit {
       mockPendingPhones: fedapayConfig?.mockPendingPhones ?? [],
     };
 
+    const deploymentEnv = process.env.DEPLOYMENT_ENV?.toLowerCase();
+    
+    if (this.config.mockEnabled) {
+      if (!deploymentEnv || !['development', 'test'].includes(deploymentEnv)) {
+        throw new Error(
+          `FedaPay mock can only be enabled when DEPLOYMENT_ENV is 'development' or 'test', got: ${deploymentEnv || '(unset)'}`
+        );
+      }
+      if (this.config.secretKey?.startsWith('sk_live_')) {
+        throw new Error(
+          'FedaPay mock cannot be enabled with a live secret key (sk_live_*)'
+        );
+      }
+    }
+    
     this.mockEnabled = this.config.mockEnabled;
     this.mockPendingPhones = this.mockEnabled ? this.config.mockPendingPhones : [];
 
@@ -134,6 +201,7 @@ export class FedaPayService implements OnModuleInit {
   private isMockedTransaction(reference: string): boolean {
     return reference?.startsWith('mock-') ?? false;
   }
+
 
   private generateMockReference(): string {
     return `mock-${randomUUID()}`;
@@ -208,10 +276,9 @@ export class FedaPayService implements OnModuleInit {
 
         await this.callbackProcessor!.processFedaPayCallback(callbackData);
       } catch (error: any) {
+        const sanitized = sanitizeProviderError(error);
         this.logger.error(
-          `Failed to process auto-callback for ${mockReference}: ${
-            error?.message || error
-          }`
+          `Failed to process auto-callback for ${mockReference}: ${sanitized.message}`
         );
       }
     }, this.mockCallbackDelayMs);
@@ -235,7 +302,7 @@ export class FedaPayService implements OnModuleInit {
     if (this.isMockPendingPayer(paymentRequest.payer)) {
       this.mockOutcomes.set(mockRef, { outcome: 'pending', amount: paymentRequest.amount });
       this.logger.log(
-        `🔨 MOCK FedaPay payment: payer=${paymentRequest.payer} is on FEDAPAY_MOCK_PENDING_PHONES, reference=${externalId}, mock_ref=${mockRef}: stays pending (no auto-callback)`
+        `🔨 MOCK FedaPay payment: payer=${maskPhoneNumber(paymentRequest.payer)} is on FEDAPAY_MOCK_PENDING_PHONES, reference=${externalId}, mock_ref=${mockRef}: stays pending (no auto-callback)`
       );
       return {
         success: true,
@@ -250,10 +317,11 @@ export class FedaPayService implements OnModuleInit {
     this.mockOutcomes.set(mockRef, { outcome, amount: paymentRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FedaPay payment: amount=${paymentRequest.amount} XOF, payer=${paymentRequest.payer}, channel=${paymentRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
+      `🔨 MOCK FedaPay payment: amount=${paymentRequest.amount} XOF, payer=${maskPhoneNumber(paymentRequest.payer)}, channel=${paymentRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (callback will be scheduled after DB persist)`
     );
 
-    this.scheduleAutoCallback(mockRef, externalId, outcome);
+    // G2: DO NOT schedule here - caller must schedule AFTER persisting mock id
+    // this.scheduleAutoCallback(mockRef, externalId, outcome);
 
     return {
       success: true,
@@ -275,10 +343,10 @@ export class FedaPayService implements OnModuleInit {
     this.mockOutcomes.set(mockRef, { outcome, amount: withdrawalRequest.amount });
 
     this.logger.log(
-      `🔨 MOCK FedaPay payout: amount=${withdrawalRequest.amount} XOF, payee=${withdrawalRequest.payee}, channel=${withdrawalRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback in ${this.mockCallbackDelayMs}ms)`
+      `🔨 MOCK FedaPay payout: amount=${withdrawalRequest.amount} XOF, payee=${maskPhoneNumber(withdrawalRequest.payee)}, channel=${withdrawalRequest.channel}, reference=${externalId}, mock_ref=${mockRef}, outcome=${outcome} (auto-callback will be scheduled after DB persist)`
     );
 
-    this.scheduleAutoCallback(mockRef, externalId, outcome);
+    // G2: DO NOT schedule auto-callback here - caller must schedule after persisting mock id
 
     return {
       success: true,
@@ -287,6 +355,28 @@ export class FedaPayService implements OnModuleInit {
       status: 'pending',
       message: normalizeProviderMessage(null, 'Mock payout initiated'),
     };
+  }
+
+  /**
+   * G2: Schedule auto-callback for mock payment/payout AFTER the mock id has been persisted.
+   * Must be called by controller/service after updateTransaction completes.
+   */
+  scheduleMockCallback(mockRef: string, externalId: string): void {
+    if (!this.mockEnabled || !mockRef.startsWith('mock-')) {
+      return;
+    }
+    const stored = this.mockOutcomes.get(mockRef);
+    if (!stored) {
+      this.logger.warn(`Cannot schedule callback for ${mockRef}: not found in mockOutcomes`);
+      return;
+    }
+    if (stored.outcome === 'pending') {
+      // M2: FEDAPAY_MOCK_PENDING_PHONES payers stay pending with no callback (DEV
+      // pending-path QA: N2/N5/reconciler/supersede). Never auto-approve them.
+      this.logger.log(`Mock ${mockRef} is on the pending list: no auto-callback`);
+      return;
+    }
+    this.scheduleAutoCallback(mockRef, externalId, stored.outcome);
   }
 
   async initiatePayment(
@@ -311,7 +401,7 @@ export class FedaPayService implements OnModuleInit {
     try {
       const externalId = reference || paymentRequest.externalId;
       this.logger.log(
-        `Initiating FedaPay payment for payer: ${paymentRequest.payer}, channel: ${paymentRequest.channel}, externalId: ${externalId}`
+        `Initiating FedaPay payment: channel=${paymentRequest.channel}, externalId=${externalId}`
       );
 
       const transaction = await Transaction.create({
@@ -333,13 +423,45 @@ export class FedaPayService implements OnModuleInit {
 
       if (transaction && transaction.id) {
         const txData: any = transaction;
-        await txData.generateToken();
-        
+        let token: any;
+        try {
+          const tokenResponse = await txData.generateToken();
+          token = tokenResponse?.token || tokenResponse;
+
+          await txData.sendNowWithToken(paymentRequest.channel, token, {
+            phone_number: {
+              number: paymentRequest.payer,
+              country: 'TG',
+            },
+          });
+        } catch (pushError: any) {
+          // N2: the FedaPay transaction exists, so the push may still reach the
+          // customer. Never report failure here: hand back the FedaPay id so the
+          // caller stores it on the row (pending). The approved/declined webhook,
+          // FedaPay's own expiry (-> canceled) or polling then resolves it.
+          const sanitized = sanitizeProviderError(pushError);
+          this.logger.warn(
+            `FedaPay push failed after transaction ${transaction.id} was created ` +
+              `(externalId=${externalId}); keeping it pending: ${sanitized.message}`
+          );
+          return {
+            success: true,
+            ambiguous: true,
+            transactionId: String(transaction.id),
+            reference: String(transaction.id),
+            status: 'pending',
+            message: normalizeProviderMessage(
+              null,
+              'Payment created; awaiting confirmation'
+            ),
+          };
+        }
+
         return {
           success: true,
           transactionId: String(transaction.id),
           reference: String(transaction.id),
-          token: txData.token,
+          token,
           status: txData.status || 'pending',
           message: normalizeProviderMessage(null, 'Payment initiated'),
         };
@@ -352,11 +474,13 @@ export class FedaPayService implements OnModuleInit {
         status: 'failed',
       };
     } catch (error: any) {
-      this.logger.error('Failed to initiate FedaPay payment:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate FedaPay payment: ${sanitized.message}`);
       return {
         success: false,
+        // Redacted: the SDK error text can echo the API key or bearer token.
         message: normalizeProviderMessage(
-          error.message,
+          sanitized.message,
           'Failed to initiate payment'
         ),
         errorCode: error.code || 'INITIATION_FAILED',
@@ -387,8 +511,30 @@ export class FedaPayService implements OnModuleInit {
     try {
       const externalId = reference || withdrawalRequest.externalId;
       this.logger.log(
-        `Initiating FedaPay payout for payee: ${withdrawalRequest.payee}, channel: ${withdrawalRequest.channel}, externalId: ${externalId}`
+        `Initiating FedaPay payout: channel=${withdrawalRequest.channel}, externalId=${externalId}`
       );
+
+      // Check for existing payout with same externalId (B6 idempotency)
+      // Note: FedaPay API may not filter by custom_metadata server-side,
+      // so we fetch all and filter client-side
+      try {
+        const existingPayouts = await Payout.all({
+          'custom_metadata.externalId': externalId,
+        });
+        const payouts = (existingPayouts as any)?.payouts || [];
+        const matching = payouts.find((p: any) => p.custom_metadata?.externalId === externalId);
+        if (matching) {
+          this.logger.log(
+            `Found existing FedaPay payout for ${externalId}: ${matching.id} (status=${matching.status})`
+          );
+          return this.resumeExistingPayout(matching, externalId);
+        }
+      } catch (lookupError: any) {
+        // Fail closed: don't create if lookup fails, let it retry
+        const sanitized = sanitizeProviderError(lookupError);
+        this.logger.error(`Payout lookup failed for ${externalId}: ${sanitized.message}`);
+        throw new Error(`Failed to check existing payout: ${sanitized.message}`);
+      }
 
       const payout = await Payout.create({
         amount: withdrawalRequest.amount,
@@ -401,19 +547,15 @@ export class FedaPayService implements OnModuleInit {
             country: 'TG',
           },
         },
+        custom_metadata: {
+          externalId,
+        },
       });
 
       if (payout && payout.id) {
-        const payoutData: any = payout;
-        await payoutData.sendNow();
-        
-        return {
-          success: true,
-          transactionId: String(payout.id),
-          reference: String(payout.id),
-          status: payoutData.status || 'pending',
-          message: normalizeProviderMessage(null, 'Payout initiated'),
-        };
+        // N1: from here on a FedaPay payout exists. Nothing below may report a
+        // plain failure (that would release the hold while money may go out).
+        return this.sendCreatedPayout(payout, externalId);
       }
 
       return {
@@ -423,11 +565,13 @@ export class FedaPayService implements OnModuleInit {
         status: 'failed',
       };
     } catch (error: any) {
-      this.logger.error('Failed to initiate FedaPay payout:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Failed to initiate FedaPay payout: ${sanitized.message}`);
       return {
         success: false,
+        // Redacted: the SDK error text can echo the API key or bearer token.
         message: normalizeProviderMessage(
-          error.message,
+          sanitized.message,
           'Failed to initiate payout'
         ),
         errorCode: error.code || 'WITHDRAWAL_FAILED',
@@ -436,31 +580,234 @@ export class FedaPayService implements OnModuleInit {
     }
   }
 
+  /**
+   * Send a payout that already exists at FedaPay. Any error is treated as
+   * ambiguous (pending) unless a Payout.retrieve confirms it failed.
+   */
+  private async sendCreatedPayout(
+    payout: any,
+    externalId: string | undefined
+  ): Promise<FedaPayWithdrawalResponse> {
+    const payoutId = String(payout.id);
+    try {
+      await payout.sendNow();
+      return {
+        success: true,
+        transactionId: payoutId,
+        reference: externalId,
+        status: payout.status || 'pending',
+        message: normalizeProviderMessage(null, 'Payout initiated'),
+      };
+    } catch (sendError: any) {
+      const sanitized = sanitizeProviderError(sendError);
+      this.logger.warn(
+        `FedaPay payout ${payoutId} created but sendNow failed (externalId=${externalId}): ${sanitized.message}; reconciling via Payout.retrieve`
+      );
+      return this.reconcileAmbiguousPayout(payoutId, externalId);
+    }
+  }
+
+  /**
+   * After an ambiguous send, ask FedaPay what actually happened. Only a
+   * confirmed `failed` is reported as failure; anything else (including a
+   * retrieve error) stays pending with the payout id so polling decides.
+   */
+  private async reconcileAmbiguousPayout(
+    payoutId: string,
+    externalId: string | undefined
+  ): Promise<FedaPayWithdrawalResponse> {
+    let liveStatus: string | undefined;
+    try {
+      const live: any = await this.liveLookup('payout', () => Payout.retrieve(parseInt(payoutId, 10)));
+      liveStatus = live?.status;
+    } catch (retrieveError: any) {
+      const sanitized = sanitizeProviderError(retrieveError);
+      this.logger.warn(
+        `FedaPay payout ${payoutId} retrieve after failed send also failed: ${sanitized.message}`
+      );
+    }
+    if (liveStatus === 'failed') {
+      return {
+        success: false,
+        transactionId: payoutId,
+        reference: externalId,
+        status: 'failed',
+        errorCode: 'PAYOUT_FAILED',
+        message: normalizeProviderMessage(null, 'Payout failed'),
+      };
+    }
+    return {
+      success: true,
+      ambiguous: true,
+      transactionId: payoutId,
+      reference: externalId,
+      status: liveStatus || 'pending',
+      message: normalizeProviderMessage(
+        null,
+        'Payout created; awaiting confirmation'
+      ),
+    };
+  }
+
+  /**
+   * Dedupe hit: an existing payout for this externalId. Pass through terminal
+   * states; (re)send one that was created but never sent.
+   */
+  private async resumeExistingPayout(
+    matching: any,
+    externalId: string | undefined
+  ): Promise<FedaPayWithdrawalResponse> {
+    const payoutId = String(matching.id);
+    const status = String(matching.status || 'pending');
+    if (status === 'failed') {
+      return {
+        success: false,
+        transactionId: payoutId,
+        reference: externalId,
+        status: 'failed',
+        errorCode: 'PAYOUT_FAILED',
+        message: normalizeProviderMessage(null, 'Existing payout failed'),
+      };
+    }
+    if (status === 'pending') {
+      // Created but never sent (e.g. an earlier sendNow failed): resend it.
+      let existing: any;
+      try {
+        existing = await this.liveLookup('payout', () => Payout.retrieve(parseInt(payoutId, 10)));
+      } catch (retrieveError: any) {
+        const sanitized = sanitizeProviderError(retrieveError);
+        this.logger.warn(
+          `FedaPay payout ${payoutId} retrieve for resend failed: ${sanitized.message}`
+        );
+      }
+      if (existing && typeof existing.sendNow === 'function') {
+        return this.sendCreatedPayout(existing, externalId);
+      }
+      return {
+        success: true,
+        ambiguous: true,
+        transactionId: payoutId,
+        reference: externalId,
+        status: 'pending',
+        message: normalizeProviderMessage(
+          null,
+          'Payout exists; awaiting confirmation'
+        ),
+      };
+    }
+    // sent / started / processing / scheduled: already on its way.
+    return {
+      success: true,
+      transactionId: payoutId,
+      reference: externalId,
+      status,
+      message: normalizeProviderMessage(null, 'Payout already exists'),
+    };
+  }
+
+  /**
+   * #615 QA L1: the FedaPay SDK sets no request timeout, so a lookup that never
+   * settles would hang the webhook (and the payout flows) indefinitely. Every live
+   * retrieve is bounded; on timeout it rejects like any other lookup error, so the
+   * callers' existing handling applies (pending path: 5xx so FedaPay retries;
+   * after-credit path: alert; ambiguous payout: stays pending for polling).
+   */
+  static liveLookupTimeoutMs = FEDAPAY_LIVE_LOOKUP_TIMEOUT_MS;
+
+  private async liveLookup<T>(kind: 'transaction' | 'payout', lookup: () => Promise<T>): Promise<T> {
+    const ms = FedaPayService.liveLookupTimeoutMs;
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // QA #621 I3: stable CloudWatch marker (one line per timed-out lookup).
+        this.logger.error(`${FEDAPAY_LIVE_LOOKUP_TIMEOUT_MARKER} kind=${kind} timeout_ms=${ms}`);
+        reject(new FedaPayLiveLookupTimeoutError(`FedaPay ${kind} lookup timed out after ${ms}ms`));
+      }, ms);
+    });
+    try {
+      return await Promise.race([lookup(), timeout]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  async checkPayoutStatus(
+    payoutId: string
+  ): Promise<FedaPayTransactionStatus> {
+    if (this.mockEnabled && this.isMockedTransaction(payoutId)) {
+      return this.getMockTransactionStatus(payoutId);
+    }
+
+    try {
+      this.logger.log(`Checking FedaPay payout status: ${payoutId}`);
+
+      const payout = await this.liveLookup('payout', () => Payout.retrieve(parseInt(payoutId, 10), { include: 'currency' }));
+
+      if (!payout) {
+        throw new Error(`Payout ${payoutId} not found`);
+      }
+
+      const payoutData: any = payout;
+      const currency = readFedaPayCurrencyIso(payoutData);
+
+      const statusMap: Record<string, string> = {
+        sent: 'approved',
+        failed: 'declined',
+        pending: 'pending',
+      };
+
+      const mappedStatus = statusMap[payoutData.status] || payoutData.status;
+
+      return {
+        transactionId: String(payout.id),
+        status: mappedStatus,
+        amount: payoutData.amount,
+        currency,
+        reference: String(payout.id),
+        merchantRef: readFedaPayMerchantRef(payoutData),
+        reason: payoutData.reason || '',
+        message: normalizeProviderMessage(
+          payoutData.reason || payoutData.message,
+          'Payout status check completed'
+        ),
+      };
+    } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(
+        `Failed to check FedaPay payout status: ${sanitized.message}`
+      );
+      throw toSanitizedError(error);
+    }
+  }
+
   async checkTransactionStatus(
     reference: string
   ): Promise<FedaPayTransactionStatus> {
-    if (this.isMockedTransaction(reference)) {
+    if (this.mockEnabled && this.isMockedTransaction(reference)) {
       return this.getMockTransactionStatus(reference);
     }
 
     try {
       this.logger.log(`Checking FedaPay transaction status: ${reference}`);
 
-      const transaction = await Transaction.retrieve(parseInt(reference, 10));
+      const transaction = await this.liveLookup('transaction', () =>
+        Transaction.retrieve(parseInt(reference, 10), { include: 'currency' })
+      );
 
       if (!transaction) {
         throw new Error(`Transaction ${reference} not found`);
       }
 
       const txData: any = transaction;
-      const customMeta = txData.custom_metadata || {};
+      const currency = readFedaPayCurrencyIso(txData);
 
       return {
         transactionId: String(transaction.id),
         status: txData.status || 'pending',
         amount: txData.amount,
+        currency,
         reference: String(transaction.id),
-        merchantRef: customMeta.externalId || '',
+        merchantRef: readFedaPayMerchantRef(txData),
         reason: txData.reason || '',
         message: normalizeProviderMessage(
           txData.reason || txData.message,
@@ -468,11 +815,13 @@ export class FedaPayService implements OnModuleInit {
         ),
       };
     } catch (error: any) {
+      const sanitized = sanitizeProviderError(error);
       this.logger.error(
-        'Failed to check FedaPay transaction status:',
-        error
+        `Failed to check FedaPay transaction status: ${sanitized.message}`,
+        sanitized.status ? `Status: ${sanitized.status}` : undefined,
+        sanitized.code ? `Code: ${sanitized.code}` : undefined
       );
-      throw error;
+      throw toSanitizedError(error);
     }
   }
 
@@ -507,72 +856,6 @@ export class FedaPayService implements OnModuleInit {
     };
   }
 
-  verifyWebhookSignature(
-    payload: string | Buffer,
-    signatureHeader: string,
-    webhookSecret?: string
-  ): boolean {
-    try {
-      const secret = webhookSecret || this.config.webhookSecret;
-      if (!secret) {
-        this.logger.warn('Webhook secret not configured, skipping signature verification');
-        return false;
-      }
-
-      const payloadString = typeof payload === 'string' ? payload : payload.toString();
-      
-      // Parse header: t=timestamp,v1=signature
-      const parts = signatureHeader.split(',');
-      let timestamp: string | null = null;
-      let signature: string | null = null;
-      
-      for (const part of parts) {
-        const [key, value] = part.split('=');
-        if (key === 't') timestamp = value;
-        if (key === 'v1') signature = value;
-      }
-      
-      if (!timestamp || !signature) {
-        this.logger.warn('Invalid webhook signature header format');
-        return false;
-      }
-      
-      // Check timestamp staleness (5 minute tolerance)
-      const currentTime = Math.floor(Date.now() / 1000);
-      const timestampNum = parseInt(timestamp, 10);
-      if (currentTime - timestampNum > 300) {
-        this.logger.warn('Webhook timestamp too old');
-        return false;
-      }
-      
-      // Verify signature
-      const crypto = require('crypto');
-      const signedPayload = `${timestamp}.${payloadString}`;
-      const expectedSignature = crypto
-        .createHmac('sha256', secret)
-        .update(signedPayload)
-        .digest('hex');
-      
-      return signature === expectedSignature;
-    } catch (error: any) {
-      this.logger.error('Webhook signature verification failed:', error);
-      return false;
-    }
-  }
-
-  verifyCallback(
-    payload: unknown,
-    signature?: string,
-    _timestamp?: string
-  ): boolean {
-    if (!payload || typeof payload !== 'object') return false;
-    if (!signature) return false;
-    
-    return this.verifyWebhookSignature(
-      JSON.stringify(payload),
-      signature
-    );
-  }
 
   async getSupportedPaymentMethods(): Promise<string[]> {
     return ['mobile_money'];

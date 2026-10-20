@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
   HttpException,
   HttpStatus,
   Logger,
@@ -22,7 +23,13 @@ import {
 } from 'class-validator';
 import type { Request } from 'express';
 import { Throttle } from '@nestjs/throttler';
+import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
+import { BadRequestException } from '@nestjs/common';
+import { isoCountryCode } from '../orders/delivery-pricing.util';
+import { validatePhoneNumber } from './phone-validation.util';
+import { sanitizeProviderError } from './sanitize-provider-error.util';
+import { redactSentryString } from '../common/sentry/scrub-sentry-event';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { WithdrawalPinService } from '../admin/withdrawal-pin.service';
@@ -47,6 +54,14 @@ import { MobileTransactionAccessService } from './mobile-transaction-access.serv
 import { PendingWithdrawalResolveService } from './pending-withdrawal-resolve.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+import {
+  MIN_SECRET_REFRESH_TOKEN_LENGTH,
+  allowedSecretRefreshIps,
+  firstNonEmptyString,
+  mypvitSecretName,
+  normalizeIp,
+  secretRefreshTokenMatches,
+} from './secret-refresh-auth';
 
 export const INITIATE_TRANSACTION_TYPES = ['PAYMENT', 'GIVE_CHANGE'] as const;
 
@@ -118,6 +133,19 @@ export interface PaymentCallbackDto {
   timestamp?: string;
 }
 
+/**
+ * #588 QA S1: the cause attached to the FedaPay 500 goes to Sentry (LinkedErrors). Never the
+ * raw error: a new Error with the sanitized message, secrets and personal data masked, capped,
+ * and no further cause chain. Only the error's type name is kept.
+ */
+const MAX_CAUSE_MESSAGE = 300;
+export function sanitizedFedaPayCause(error: unknown, sanitizedMessage: string): Error {
+  const cause = new Error(redactSentryString(sanitizedMessage).slice(0, MAX_CAUSE_MESSAGE));
+  const name = (error as { name?: unknown } | null)?.name;
+  cause.name = typeof name === 'string' && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(name) ? name : 'Error';
+  return cause;
+}
+
 @Controller('mobile-payments')
 @Throttle({ short: { limit: 20, ttl: 60000 } })
 export class MobilePaymentsController {
@@ -132,7 +160,8 @@ export class MobilePaymentsController {
     private readonly callbackProcessor: MobilePaymentCallbackProcessor,
     private readonly withdrawalPinService: WithdrawalPinService,
     private readonly pendingWithdrawalResolveService: PendingWithdrawalResolveService,
-    private readonly transactionAccessService: MobileTransactionAccessService
+    private readonly transactionAccessService: MobileTransactionAccessService,
+    private readonly configService: ConfigService
   ) {}
 
   /**
@@ -273,8 +302,28 @@ export class MobilePaymentsController {
         }
       }
 
-      const resolvedProvider =
-        this.mobilePaymentsService.resolveProviderFromRequest(paymentRequest);
+      const resolvedProvider = await this.mobilePaymentsService.resolveProviderFromRequest(paymentRequest);
+
+      // Check account currency for FedaPay (B5)
+      if (paymentRequest.accountId && resolvedProvider === 'fedapay') {
+        const accountBalance = await this.accountsService.getAccountBalance(
+          paymentRequest.accountId
+        );
+        if (accountBalance && accountBalance.currency !== 'XOF') {
+          throw new HttpException(
+            {
+              success: false,
+              message: 'FedaPay (Togo) requires account currency to be XOF',
+              error: 'ACCOUNT_CURRENCY_MISMATCH',
+              data: {
+                accountCurrency: accountBalance.currency,
+                requiredCurrency: 'XOF',
+              },
+            },
+            HttpStatus.BAD_REQUEST
+          );
+        }
+      }
 
       if (paymentRequest.accountId && paymentRequest.amount < 150) {
         throw new HttpException(
@@ -288,7 +337,17 @@ export class MobilePaymentsController {
         );
       }
 
-      this.assertMobileMoneyCurrency(paymentRequest, await resolvedProvider);
+      this.assertMobileMoneyCurrency(paymentRequest, resolvedProvider);
+
+      // F-L2, F-M3, F-M6: Validate phone before ANY row creation
+      if (paymentRequest.customerPhone) {
+        const itemCountry = (paymentRequest as any).itemCountry;
+        await this.validatePhoneForPayment(
+          paymentRequest.customerPhone,
+          resolvedProvider,
+          itemCountry
+        );
+      }
 
       // Set default callback URL for MyPVIT if not provided
       const callbackUrl =
@@ -342,6 +401,14 @@ export class MobilePaymentsController {
         await this.databaseService.updateTransaction(transaction.id, {
           transaction_id: paymentResponse.transactionId,
         });
+        
+        // G2: Schedule mock callback AFTER persisting the transaction_id
+        if (paymentResponse.transactionId.startsWith('mock-')) {
+          await this.mobilePaymentsService.scheduleMockCallback(
+            paymentResponse.transactionId,
+            reference
+          );
+        }
       } else {
         await this.databaseService.updateTransaction(transaction.id, {
           status: 'failed',
@@ -358,6 +425,7 @@ export class MobilePaymentsController {
           paymentUrl: paymentResponse.paymentUrl,
           message: paymentResponse.message,
           provider: paymentResponse.provider,
+          ...(paymentResponse.reason ? { status: paymentResponse.status, reason: paymentResponse.reason } : {}),
         },
       };
     } catch (error: any) {
@@ -632,12 +700,13 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error('MyPVIT callback processing error:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`MyPVIT callback processing error: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,
           message: 'Failed to process callback',
-          error: error.message,
+          error: sanitized.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -680,12 +749,13 @@ export class MobilePaymentsController {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error('Freemopay callback processing error:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`Freemopay callback processing error: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,
           message: 'Failed to process callback',
-          error: error.message,
+          error: sanitized.message,
         },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
@@ -695,15 +765,14 @@ export class MobilePaymentsController {
   @Public()
   @Post('callback/fedapay')
   async fedapayCallback(
-    @Body() callbackData: any,
     @Req() req: Request
   ) {
-    this.logger.log('fedapayCallback', callbackData);
     try {
       const signature = req.headers['x-fedapay-signature'] as string;
+      const rawBody = (req as unknown as { body: Buffer }).body;
       
       if (!signature) {
-        this.logger.error('Missing X-FEDAPAY-SIGNATURE header');
+        this.logger.warn('FedaPay webhook rejected: missing signature header');
         throw new HttpException(
           {
             success: false,
@@ -713,8 +782,21 @@ export class MobilePaymentsController {
         );
       }
 
+      if (!rawBody || !Buffer.isBuffer(rawBody)) {
+        this.logger.warn('FedaPay webhook rejected: raw body unavailable');
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Invalid request body',
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+
+      const callbackData = this.verifyAndParseFedaPayWebhook(rawBody, signature);
+
       if (!callbackData.entity || !callbackData.name) {
-        this.logger.error('Missing required callback data (entity, name)');
+        this.logger.warn('FedaPay webhook rejected: missing entity or name');
         throw new HttpException(
           {
             success: false,
@@ -724,23 +806,140 @@ export class MobilePaymentsController {
         );
       }
 
-      return await this.callbackProcessor.processFedaPayCallback(
+      this.logger.log(`FedaPay webhook: event=${callbackData.name} entity_id=${callbackData.entity.id}`);
+
+      const result = await this.callbackProcessor.processFedaPayCallback(
         callbackData,
         req
       );
+      
+      // B2: Record replay cache only after successful processing
+      const eventId = callbackData.entity?.id ? String(callbackData.entity.id) : null;
+      const timestamp = (callbackData as any).webhookTimestamp || Math.floor(Date.now() / 1000);
+      if (eventId) {
+        this.recordFedaPayEvent(String(callbackData.name), eventId, String(timestamp));
+      }
+      
+      return result;
     } catch (error: any) {
       if (error instanceof HttpException) {
         throw error;
       }
-      this.logger.error('FedaPay callback processing error:', error);
+      const sanitized = sanitizeProviderError(error);
+      this.logger.error(`FedaPay callback processing error: ${sanitized.message}`);
       throw new HttpException(
         {
           success: false,
           message: 'Failed to process FedaPay callback',
-          error: error.message,
         },
-        HttpStatus.INTERNAL_SERVER_ERROR
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        { cause: sanitizedFedaPayCause(error, sanitized.message) }
       );
+    }
+  }
+
+  private verifyAndParseFedaPayWebhook(rawBody: Buffer, signatureHeader: string): any {
+    const webhookSecret = this.configService.get<string>('fedapay.webhookSecret');
+    
+    if (!webhookSecret) {
+      this.logger.error('FedaPay webhook secret not configured');
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Webhook verification not configured',
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+
+    let event: any;
+    let timestamp: number;
+    try {
+      const { Webhook } = require('fedapay');
+      event = Webhook.constructEvent(
+        rawBody.toString('utf8'),
+        signatureHeader,
+        webhookSecret
+      );
+      
+      const parts = signatureHeader.split(',');
+      let timestampStr: string | null = null;
+      for (const part of parts) {
+        const [key, value] = part.trim().split('=');
+        if (key === 't') timestampStr = value;
+      }
+      timestamp = timestampStr ? parseInt(timestampStr, 10) : Math.floor(Date.now() / 1000);
+    } catch (error: any) {
+      this.logger.warn(`FedaPay webhook rejected: ${error.message}`);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Invalid webhook signature',
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+    
+    const currentTime = Math.floor(Date.now() / 1000);
+    const timeDiff = Math.abs(currentTime - timestamp);
+    
+    if (timeDiff > 300) {
+      this.logger.warn(`FedaPay webhook rejected: stale timestamp (diff=${timeDiff}s)`);
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Webhook timestamp too old or in future',
+        },
+        HttpStatus.UNAUTHORIZED
+      );
+    }
+    
+    const eventId = event.entity?.id ? String(event.entity.id) : null;
+    const timestampStr = String(timestamp);
+    if (eventId && this.hasSeenFedaPayEvent(String(event.name), eventId, timestampStr)) {
+      this.logger.log(`FedaPay webhook: duplicate event=${event.name} event_id=${eventId}, returning 200`);
+      throw new HttpException(
+        {
+          success: true,
+          message: 'Duplicate event',
+        },
+        HttpStatus.OK
+      );
+    }
+    
+    // B2: Do NOT record yet - must wait for processing to succeed
+    // Recording happens after processFedaPayCallback succeeds
+    // Attach timestamp to event for later use
+    (event as any).webhookTimestamp = timestamp;
+    
+    return event;
+  }
+
+  private fedapayEventCache = new Map<string, number>();
+
+  /**
+   * N4: the replay key is `name:entity.id:t`. With `entity.id:t` only, two different events
+   * for one transaction signed in the same second (e.g. transaction.declined then
+   * transaction.approved) collided, and the second was dropped as a "duplicate".
+   */
+  private fedapayReplayKey(name: string, eventId: string, timestamp: string): string {
+    return `${name}:${eventId}:${timestamp}`;
+  }
+
+  private hasSeenFedaPayEvent(name: string, eventId: string, timestamp: string): boolean {
+    return this.fedapayEventCache.has(this.fedapayReplayKey(name, eventId, timestamp));
+  }
+
+  private recordFedaPayEvent(name: string, eventId: string, timestamp: string): void {
+    const key = this.fedapayReplayKey(name, eventId, timestamp);
+    const timestampNum = parseInt(timestamp, 10);
+    this.fedapayEventCache.set(key, timestampNum);
+    
+    const cutoff = Math.floor(Date.now() / 1000) - 600;
+    for (const [cachedKey, cachedTime] of this.fedapayEventCache.entries()) {
+      if (cachedTime < cutoff) {
+        this.fedapayEventCache.delete(cachedKey);
+      }
     }
   }
 
@@ -768,85 +967,154 @@ export class MobilePaymentsController {
   }
 
   /**
-   * Handle secret refresh webhook callback
+   * MyPVit secret reception webhook ("URL de réception de clé secrète").
+   *
+   * Overwrites the live MyPVit operation-account secret, so it fails closed:
+   * - the URL must carry MYPVIT_SECRET_REFRESH_TOKEN as its last path segment (MyPVit
+   *   documents no signature or custom header for this call); constant-time compare;
+   * - the caller must be one of MyPVit's documented IPs (MYPVIT_SECRET_REFRESH_ALLOWED_IPS
+   *   overrides the list);
+   * - the Airtel/Moov operation account codes must be configured (no hard-coded fallback);
+   * - the response echoes nothing about the secret store.
+   * Validation failures are 4xx; secret values are never logged.
    */
   @Public()
-  @Post('secret-refresh')
+  @Post('secret-refresh/:token')
+  @HttpCode(HttpStatus.OK)
   async handleSecretRefreshCallback(
+    @Param('token') token: string,
     @Body()
     webhookData: {
-      merchant_operation_account_code: string;
-      secret_key: string;
-      expires_in: number;
+      merchant_operation_account_code?: string;
+      operation_account_code?: string;
+      secret_key?: string;
+      secret?: string;
+      expires_in?: number;
     },
-    @Query('provider') provider?: string
+    @Req() req: Request
   ) {
-    try {
-      console.log('Received secret refresh webhook:', {
-        ...(webhookData as object),
-        provider,
-      });
+    this.assertSecretRefreshAuthorized(token, req);
 
-      if (!webhookData.secret_key) {
-        throw new Error('Missing required webhook data: secret_key');
-      }
-
-      const environment = process.env.NODE_ENV || 'development';
-      const secretName = `${environment}-rendasua-backend-secrets`;
-
-      // Determine which secret key to update based on operation account code
-      const airtelAccountCode =
-        process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B';
-      const moovAccountCode =
-        process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE ||
-        'ACC_68A722C33473B';
-
-      let secretKeyName: string;
-      if (webhookData.merchant_operation_account_code === airtelAccountCode) {
-        secretKeyName = 'AIRTEL_MYPVIT_SECRET_KEY'; // RENAMED
-        console.log('Updating Airtel secret key');
-      } else if (
-        webhookData.merchant_operation_account_code === moovAccountCode
-      ) {
-        secretKeyName = 'MOOV_MYPVIT_SECRET_KEY';
-        console.log('Updating MOOV secret key');
-      } else {
-        throw new Error('Invalid merchant operation account code');
-      }
-
-      console.log(
-        `Updating ${secretKeyName} in AWS Secrets Manager:`,
-        secretName
-      );
-
-      await this.mobilePaymentsService.updateSecretInSecretsManager(
-        secretName,
-        secretKeyName,
-        webhookData.secret_key
-      );
-
-      return {
-        success: true,
-        data: {
-          message: `${secretKeyName} updated successfully`,
-          secretName,
-          operation_account_code: webhookData.merchant_operation_account_code,
-          expires_in: webhookData.expires_in,
-          updated_at: new Date().toISOString(),
-        },
-      };
-    } catch (error: any) {
-      console.error('Error handling secret refresh webhook:', error);
+    // docs.mypvit.pro documents `secret` / `operation_account_code` (SyncSecretKeyResponse);
+    // the long-standing handler read `secret_key` / `merchant_operation_account_code`. The
+    // first non-empty string of each pair wins, so either shape (or both) is accepted.
+    const secret = firstNonEmptyString(webhookData?.secret, webhookData?.secret_key);
+    const accountCode = firstNonEmptyString(
+      webhookData?.operation_account_code,
+      webhookData?.merchant_operation_account_code
+    );
+    if (secret === undefined || secret.length > 512) {
       throw new HttpException(
-        {
-          success: false,
-          message: 'Failed to handle secret refresh webhook',
-          error: error.message,
-        },
+        { success: false, message: 'Invalid secret refresh payload' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (accountCode === undefined) {
+      throw new HttpException(
+        { success: false, message: 'Invalid secret refresh payload' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const airtelAccountCode =
+      process.env.MYPVIT_AIRTEL_MERCHANT_OPERATION_ACCOUNT_CODE?.trim();
+    const moovAccountCode = process.env.MYPVIT_MOOV_MERCHANT_OPERATION_ACCOUNT_CODE?.trim();
+    if (!airtelAccountCode || !moovAccountCode) {
+      this.logger.error(
+        'MyPVit secret refresh rejected: Airtel/Moov operation account codes are not configured'
+      );
+      throw new HttpException(
+        { success: false, message: 'Secret refresh is not available' },
+        HttpStatus.SERVICE_UNAVAILABLE
+      );
+    }
+
+    // QA #593 R1: identical codes = one account, one secret: store it under both names
+    // (one atomic Secrets Manager write). Production refuses to boot with identical codes.
+    let secretKeyNames: Array<'AIRTEL_MYPVIT_SECRET_KEY' | 'MOOV_MYPVIT_SECRET_KEY'>;
+    if (accountCode === airtelAccountCode && accountCode === moovAccountCode) {
+      secretKeyNames = ['AIRTEL_MYPVIT_SECRET_KEY', 'MOOV_MYPVIT_SECRET_KEY'];
+    } else if (accountCode === airtelAccountCode) {
+      secretKeyNames = ['AIRTEL_MYPVIT_SECRET_KEY'];
+    } else if (accountCode === moovAccountCode) {
+      secretKeyNames = ['MOOV_MYPVIT_SECRET_KEY'];
+    } else {
+      this.logger.warn('MyPVit secret refresh rejected: unknown operation account code');
+      throw new HttpException(
+        { success: false, message: 'Invalid secret refresh payload' },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
+    const [primaryKey, ...alsoKeys] = secretKeyNames;
+    const keysLabel = secretKeyNames.join(' and ');
+    try {
+      if (alsoKeys.length > 0) {
+        // One write: the extra names ride in the same merged SecretString.
+        await this.mobilePaymentsService.updateSecretInSecretsManager(
+          mypvitSecretName(),
+          primaryKey,
+          secret,
+          Object.fromEntries(alsoKeys.map((k) => [k, secret]))
+        );
+      } else {
+        await this.mobilePaymentsService.updateSecretInSecretsManager(mypvitSecretName(), primaryKey, secret);
+      }
+    } catch (error: unknown) {
+      // Name only: the message can quote the secret store (JSON.parse) or the request.
+      const name = (error as { name?: string } | null)?.name || 'Error';
+      this.logger.error(`MyPVit secret refresh failed to store ${keysLabel}: ${name}`);
+      throw new HttpException(
+        { success: false, message: 'Failed to handle secret refresh webhook' },
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
+
+    this.logger.log(`MyPVit secret refresh stored ${keysLabel}`);
+    return { success: true, data: { updated_at: new Date().toISOString() } };
+  }
+
+  /** Old unauthenticated URL: always refused, so a stale registration fails closed. */
+  @Public()
+  @Post('secret-refresh')
+  rejectUnauthenticatedSecretRefresh(@Req() req: Request): never {
+    this.logger.warn(
+      `MyPVit secret refresh rejected: no token in URL (ip=${normalizeIp(req?.ip)})`
+    );
+    throw new HttpException({ success: false, message: 'Unauthorized' }, HttpStatus.UNAUTHORIZED);
+  }
+
+  /**
+   * QA #593 S4: one response for every authentication failure, decided in a constant order.
+   * The IP check and the token compare both always run (no short-circuit), and an
+   * unconfigured token, a non-allow-listed IP and a wrong token all get the same 401 body, so
+   * a caller learns nothing about which check failed (or whether the endpoint is configured).
+   * The reason goes to the log only.
+   */
+  private assertSecretRefreshAuthorized(token: string | undefined, req: Request): void {
+    const expected = process.env.MYPVIT_SECRET_REFRESH_TOKEN?.trim() ?? '';
+    const configured = expected.length >= MIN_SECRET_REFRESH_TOKEN_LENGTH;
+    const ip = normalizeIp(req?.ip);
+    const allowed = allowedSecretRefreshIps(process.env.MYPVIT_SECRET_REFRESH_ALLOWED_IPS);
+    const ipAllowed = allowed.includes(ip);
+    // Always compare (against a dummy when unconfigured) so timing doesn't reveal the state.
+    const tokenOk = secretRefreshTokenMatches(
+      token,
+      configured ? expected : 'x'.repeat(MIN_SECRET_REFRESH_TOKEN_LENGTH)
+    );
+    if (configured && ipAllowed && tokenOk) return;
+
+    if (!configured) {
+      this.logger.error(
+        'MyPVit secret refresh rejected: MYPVIT_SECRET_REFRESH_TOKEN is not configured'
+      );
+    } else {
+      const reasons = [!ipAllowed ? 'ip not allow-listed' : '', !tokenOk ? 'bad token' : '']
+        .filter(Boolean)
+        .join(', ');
+      this.logger.warn(`MyPVit secret refresh rejected: ${reasons} (ip=${ip})`);
+    }
+    throw new HttpException({ success: false, message: 'Unauthorized' }, HttpStatus.UNAUTHORIZED);
   }
 
   /**
@@ -967,13 +1235,32 @@ export class MobilePaymentsController {
       accountId
     );
     await this.assertGiveChangePrechecks(request, accountId);
-    const resolvedProvider =
-      this.mobilePaymentsService.resolveProviderFromRequest(request);
-    this.assertMobileMoneyCurrency(request, await resolvedProvider);
+    const resolvedProvider = await this.mobilePaymentsService.resolveProviderFromRequest(request);
+    
+    // Check account currency for FedaPay withdrawals (B5)
+    if (resolvedProvider === 'fedapay') {
+      const accountBalance = await this.accountsService.getAccountBalance(accountId);
+      if (accountBalance && accountBalance.currency !== 'XOF') {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'FedaPay (Togo) withdrawals require account currency to be XOF',
+            error: 'ACCOUNT_CURRENCY_MISMATCH',
+            data: {
+              accountCurrency: accountBalance.currency,
+              requiredCurrency: 'XOF',
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+    }
+    
+    this.assertMobileMoneyCurrency(request, resolvedProvider);
     return this.executeOwnedGiveChangePayout(
       request,
       accountId,
-      await resolvedProvider,
+      resolvedProvider,
       initiatorUserId
     );
   }
@@ -1028,12 +1315,12 @@ export class MobilePaymentsController {
     request: InitiatePaymentDto,
     accountId: string
   ): Promise<void> {
-    this.assertGiveChangeAmountAndPhone(request);
+    await this.assertGiveChangeAmountAndPhone(request);
     await this.assertGiveChangeFunds(request, accountId);
     await this.assertGiveChangePin(request, accountId);
   }
 
-  private assertGiveChangeAmountAndPhone(request: InitiatePaymentDto): void {
+  private async assertGiveChangeAmountAndPhone(request: InitiatePaymentDto): Promise<void> {
     if (request.amount < 150) {
       throw new HttpException(
         {
@@ -1045,16 +1332,15 @@ export class MobilePaymentsController {
         HttpStatus.BAD_REQUEST
       );
     }
-    if (
-      !this.mobilePaymentsService.isWithdrawalDestinationCmOrGa(
-        request.customerPhone
-      )
-    ) {
+    const isValidDestination = await this.mobilePaymentsService.isWithdrawalDestinationCmOrGa(
+      request.customerPhone
+    );
+    if (!isValidDestination) {
       throw new HttpException(
         {
           success: false,
           message:
-            'Withdrawals are only supported to Cameroon (+237) or Gabon (+241) mobile numbers',
+            'Withdrawals are only supported to Cameroon (+237), Gabon (+241), or Togo (+228) mobile numbers (when active)',
           error: 'WITHDRAW_PHONE_REGION_NOT_ALLOWED',
         },
         HttpStatus.BAD_REQUEST
@@ -1149,14 +1435,147 @@ export class MobilePaymentsController {
     }
   }
 
+  /**
+   * F-L2, F-M3, F-M6: Validate phone number against provider and market BEFORE creating any row.
+   * Returns 400 BadRequestException on validation failure.
+   */
+  private async validatePhoneForPayment(
+    customerPhone: string,
+    provider: string,
+    itemCountry?: string
+  ): Promise<void> {
+    // Derive region from resolved provider for accurate phone parsing
+    const providerRegionMap: Record<string, string> = {
+      fedapay: 'TG',
+      freemopay: 'CM',
+      mypvit: 'GA',
+      airtel: 'GA',
+      moov: 'GA',
+    };
+    const region = providerRegionMap[provider] || 'GA';
+    const phoneValidation = validatePhoneNumber(customerPhone, region);
+    
+    if (!phoneValidation.isValid) {
+      throw new BadRequestException({
+        success: false,
+        message: 'Invalid phone number format',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
+    const phoneCountry = phoneValidation.regionCode;
+
+    // F-M3 & F-M6: Phone country must match item/market country (bidirectional)
+    // This check MUST run before provider-specific checks so that country mismatches
+    // are reported as PHONE_COUNTRY_MISMATCH rather than generic INVALID_PHONE_NUMBER
+    if (itemCountry) {
+      // Normalize item country to ISO (handles "Togo", "TOGO", "TG", etc.)
+      const normalizedItemCountry = isoCountryCode(itemCountry);
+      if (normalizedItemCountry && phoneCountry !== normalizedItemCountry) {
+        throw new BadRequestException({
+          success: false,
+          message: `Payment phone number must match the item's country (${normalizedItemCountry})`,
+          error: 'PHONE_COUNTRY_MISMATCH',
+          data: {
+            phoneCountry,
+            itemCountry: normalizedItemCountry,
+          },
+        });
+      }
+    }
+
+    // F-L2: FedaPay requires Togo phone
+    if (provider === 'fedapay' && phoneCountry !== 'TG') {
+      throw new BadRequestException({
+        success: false,
+        message: 'FedaPay requires a Togo (+228) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+
+    // F-M6: Provider-specific country validation
+    // Freemopay -> CM only
+    if (provider === 'freemopay' && phoneCountry !== 'CM') {
+      throw new BadRequestException({
+        success: false,
+        message: 'Freemopay requires a Cameroon (+237) phone number',
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+    // MyPVit/Airtel/Moov -> GA only
+    if (['mypvit', 'airtel', 'moov'].includes(provider) && phoneCountry !== 'GA') {
+      throw new BadRequestException({
+        success: false,
+        message: `${provider} requires a Gabon (+241) phone number`,
+        error: 'INVALID_PHONE_NUMBER',
+      });
+    }
+  }
+
   private assertMobileMoneyCurrency(
     request: InitiatePaymentDto,
     resolvedProvider: string
   ): void {
+    // FedaPay checks apply regardless of paymentMethod (B5)
+    if (resolvedProvider === 'fedapay') {
+      // Reject non-mobile_money for fedapay
+      const isMobileMoney = !request.paymentMethod || request.paymentMethod === 'mobile_money';
+      if (!isMobileMoney) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'FedaPay only supports mobile_money payment method',
+            error: 'UNSUPPORTED_PAYMENT_METHOD',
+            data: {
+              provider: resolvedProvider,
+              paymentMethod: request.paymentMethod,
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      
+      if (request.currency !== 'XOF') {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'FedaPay payments are only supported for XOF currency',
+            error: 'UNSUPPORTED_CURRENCY',
+            data: {
+              provider: resolvedProvider,
+              currency: request.currency,
+              supportedCurrency: 'XOF',
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      if (!Number.isInteger(request.amount)) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'FedaPay amounts must be integers (XOF has no decimals)',
+            error: 'INVALID_AMOUNT',
+            data: {
+              provider: resolvedProvider,
+              amount: request.amount,
+            },
+          },
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      return;
+    }
+    
+    // Other providers only for mobile_money
     const isMobileMoney =
       !request.paymentMethod || request.paymentMethod === 'mobile_money';
+    
+    if (!isMobileMoney) {
+      return;
+    }
+
     if (
-      !isMobileMoney ||
       request.currency === 'XAF' ||
       (resolvedProvider !== 'mypvit' &&
         resolvedProvider !== 'freemopay' &&
@@ -1165,6 +1584,7 @@ export class MobilePaymentsController {
     ) {
       return;
     }
+    
     throw new HttpException(
       {
         success: false,
@@ -1208,6 +1628,8 @@ export class MobilePaymentsController {
         paymentUrl: result.data?.paymentUrl,
         message: result.data?.message,
         provider: result.data?.provider,
+        ...(result.data?.reason ? { status: result.data.status, reason: result.data.reason } : {}),
+        ...(result.data?.error ? { error: result.data.error } : {}),
       },
     };
   }
@@ -1216,8 +1638,9 @@ export class MobilePaymentsController {
     transactionId: string,
     status: Pick<MobileTransactionStatus, 'status' | 'message'>
   ): Promise<void> {
+    // ambiguous / refunded never change the row from a poll (refunded needs manual review).
     const persistedStatus =
-      status.status === 'ambiguous' ? 'pending' : status.status;
+      status.status === 'ambiguous' || status.status === 'refunded' ? 'pending' : status.status;
     await this.databaseService.updateTransaction(transactionId, {
       status: persistedStatus,
       error_message: status.message,

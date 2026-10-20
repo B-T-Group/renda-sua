@@ -13994,7 +13994,7 @@ fecha@^4.2.0:
   resolved "https://registry.npmjs.org/fecha/-/fecha-4.2.3.tgz"
   integrity sha512-OP2IUU6HeYKJi3i0z4A19kHMQoLVs4Hc+DPqqxI2h/DPZHTm/vjsfC6P0b4jCMy14XizLBqvndQ+UilD7707Jw==
 
-fedapay@1.2.5:
+fedapay@1.2.5, fedapay@^1.2.5:
   version "1.2.5"
   resolved "https://registry.yarnpkg.com/fedapay/-/fedapay-1.2.5.tgz#4901b70255845360cb6bcf1d19a74b60000483c9"
   integrity sha512-KwbUbjCrG1R9/691uz+bbZ3xMiOTQlTT8hFgxOkVv7/ZuZ7LVKSBqcTv2ZW2pzcugCagjtkblvY+wD2msMcJ2A==

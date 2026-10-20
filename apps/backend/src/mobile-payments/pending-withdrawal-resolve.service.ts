@@ -300,10 +300,12 @@ export class PendingWithdrawalResolveService {
 
     let live: MobileTransactionStatus;
     try {
+      const isGiveChange = tx.transaction_type === 'GIVE_CHANGE';
       live = await this.mobilePaymentsService.checkTransactionStatus(
         providerTxId,
         provider,
-        tx.customer_phone ?? undefined
+        tx.customer_phone ?? undefined,
+        isGiveChange
       );
     } catch (error: any) {
       throw new HttpException(
@@ -371,6 +373,8 @@ export class PendingWithdrawalResolveService {
     status: MobileTransactionStatus['status'] | string
   ): MobileTransactionStatus['status'] {
     const value = String(status || '').toLowerCase();
+    // refunded: money went back at the provider; don't auto-resolve (no balance return).
+    if (value === 'refunded') return 'ambiguous';
     if (
       value === 'pending' ||
       value === 'created' ||

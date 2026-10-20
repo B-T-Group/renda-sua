@@ -33,6 +33,12 @@ export type OrderStatusUpdateOptions = {
    * concurrent cancel wins.
    */
   expectedFromStatus?: string;
+  /**
+   * #642 QA r2 N2: admin cancel only. Stamped into orders.admin_cancel_token by the
+   * SAME conditional UPDATE that sets current_status = 'cancelled' (the progress row
+   * id), so a resume can prove this cancel flipped the status.
+   */
+  adminCancelToken?: string;
   /** Invoked when current_status already equals the requested status. */
   onSameStatusReplay?: () => void;
 };
@@ -213,7 +219,8 @@ export class OrderStatusService {
         previousStatus,
         newStatus,
         assignToAgent,
-        agentIdForAssign
+        agentIdForAssign,
+        newStatus === 'cancelled' ? options?.adminCancelToken : undefined
       );
 
     const updateResult = await this.hasuraSystemService.executeMutation<{
@@ -340,7 +347,8 @@ export class OrderStatusService {
     previousStatus: string,
     newStatus: string,
     assignToAgent: boolean,
-    agentId?: string
+    agentId?: string,
+    adminCancelToken?: string
   ): { mutation: string; variables: Record<string, string> } {
     const isCompletionStatus = newStatus === 'complete' || newStatus === 'delivered';
     // delivered → complete: the order may already carry completed_at from the
@@ -401,6 +409,7 @@ export class OrderStatusService {
           $orderId: uuid!
           $previousStatus: order_status!
           $newStatus: order_status!
+          ${adminCancelToken ? '$adminCancelToken: uuid!' : ''}
         ) {
           update_orders(
             where: {
@@ -410,6 +419,7 @@ export class OrderStatusService {
             }
             _set: {
               current_status: $newStatus
+              ${adminCancelToken ? 'admin_cancel_token: $adminCancelToken' : ''}
               ${guardCompletedAt ? 'completed_at: "now()"' : ''}
               updated_at: "now()"
             }
@@ -429,6 +439,7 @@ export class OrderStatusService {
         orderId,
         previousStatus,
         newStatus,
+        ...(adminCancelToken ? { adminCancelToken } : {}),
       },
     };
   }

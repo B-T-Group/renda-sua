@@ -1,2 +1,7 @@
+- "!include public_dedicated_accept_application.yaml"
 - "!include public_try_reserve_business_inventory.yaml"
 - "!include public_try_release_business_inventory.yaml"
+- "!include public_dedicated_claim_order.yaml"
+- "!include public_release_agent_order_hold.yaml"
+- "!include public_forfeit_agent_order_hold.yaml"
+- "!include public_restore_purchase_credit_redemption.yaml"

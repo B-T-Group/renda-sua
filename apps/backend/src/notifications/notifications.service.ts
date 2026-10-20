@@ -151,6 +151,7 @@ import type {
   NotifyRequest,
 } from './orchestration/notification.types';
 import type { RatingType } from '../ratings/dto/create-rating.dto';
+import { maskEmailForLog, maskPhoneForLog } from '../common/utils/safe-error-log.util';
 
 export type {
   AgentOrderPaymentFailedEmailPayload,
@@ -2437,6 +2438,128 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * #594 dedicated-agent assignment notice: in-app row (user_messages) plus
+   * push, same shape as the payment-programme notices. Push needs push.enabled;
+   * the in-app row is always written. Never throws.
+   */
+  async sendDedicatedAgentNotice(params: {
+    userId: string;
+    title: string;
+    body: string;
+    messageType: string;
+    /** Assignment notices (PR 3, PR 6). */
+    assignmentId?: string;
+    /** #594 PR 7 posting notices hang off the posting instead (entity_type dedicated_agent_posting). */
+    postingId?: string;
+    path: string;
+    event: string;
+    persona: 'agent' | 'business';
+    locationId: string;
+  }): Promise<boolean> {
+    // Returns whether the in-app row was written (QA #608 N2: the slot reminder
+    // unclaims its send when it wasn't). Never throws.
+    const userId = params.userId?.trim();
+    if (!userId) return false;
+    let inApp = false;
+    const posting = params.postingId?.trim();
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+          mutation InsertDedicatedAgentNotice($object: user_messages_insert_input!) {
+            insert_user_messages_one(object: $object) { id }
+          }
+        `,
+        {
+          object: {
+            user_id: userId,
+            entity_type: posting ? 'dedicated_agent_posting' : 'dedicated_agent_assignment',
+            entity_id: posting || params.assignmentId,
+            message_type: params.messageType,
+            message: params.body,
+            message_payload: {
+              path: params.path,
+              event: params.event,
+              persona: params.persona,
+              locationId: params.locationId,
+            },
+          },
+        }
+      );
+      inApp = true;
+    } catch (error: any) {
+      this.logger.warn(`sendDedicatedAgentNotice in-app failed for ${userId}: ${error?.message ?? error}`);
+    }
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return inApp;
+    try {
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        url: params.path,
+        event: params.event,
+        persona: params.persona,
+        ...(posting ? { postingId: posting } : { assignmentId: params.assignmentId }),
+        locationId: params.locationId,
+      });
+    } catch (error: any) {
+      this.logger.warn(`sendDedicatedAgentNotice push failed for ${userId}: ${error?.message ?? error}`);
+    }
+    return inApp;
+  }
+
+  /**
+   * #594 PR 5 order-level dedicated notice (auto-assignment to the agent,
+   * confirm-the-window reminder to the business): in-app row on the order plus
+   * push. Push needs push.enabled; the in-app row is always written. Never throws.
+   */
+  async sendDedicatedOrderNotice(params: {
+    userId: string;
+    title: string;
+    body: string;
+    messageType: string;
+    orderId: string;
+    event: string;
+    persona: 'agent' | 'business';
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId) return;
+    const path = `/orders/${params.orderId}`;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+          mutation InsertDedicatedOrderNotice($object: user_messages_insert_input!) {
+            insert_user_messages_one(object: $object) { id }
+          }
+        `,
+        {
+          object: {
+            user_id: userId,
+            entity_type: 'order',
+            entity_id: params.orderId,
+            message_type: params.messageType,
+            message: params.body,
+            message_payload: { path, event: params.event, persona: params.persona, orderId: params.orderId },
+          },
+        }
+      );
+    } catch (error: unknown) {
+      this.logger.warn(
+        `sendDedicatedOrderNotice in-app failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        url: path,
+        event: params.event,
+        persona: params.persona,
+        orderId: params.orderId,
+      });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `sendDedicatedOrderNotice push failed for ${userId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+  }
+
   async notifySuperusersPaymentScheduleDecision(params: {
     assignmentId: string;
     scheduleName: string;
@@ -2704,7 +2827,7 @@ export class NotificationsService {
     if (error) {
       throw new Error(JSON.stringify(error));
     }
-    this.logger.log(`Agent business referred email sent to ${to} (HTML fallback)`);
+    this.logger.log(`Agent business referred email sent to ${maskEmailForLog(to)} (HTML fallback)`);
   }
 
   private renderNotificationHtmlTemplate(
@@ -3813,7 +3936,7 @@ export class NotificationsService {
           });
         } catch (error: unknown) {
           this.logger.warn(
-            `Failed to send order status email to ${recipient.email}: ${error instanceof Error ? error.message : String(error)}`
+            `Failed to send order status email to ${maskEmailForLog(recipient.email)}: ${error instanceof Error ? error.message : String(error)}`
           );
         }
       }
@@ -5130,10 +5253,10 @@ export class NotificationsService {
       if (error) {
         throw new Error(JSON.stringify(error));
       }
-      this.logger.log(`Email sent to ${to} (template ${templateKey})`);
+      this.logger.log(`Email sent to ${maskEmailForLog(to)} (template ${templateKey})`);
     } catch (error: any) {
       this.logger.error(
-        `Failed to send email to ${to}: ${
+        `Failed to send email to ${maskEmailForLog(to)}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
@@ -6284,7 +6407,7 @@ export class NotificationsService {
     try {
       const result = await this.smsService.sendSms({ to, message: body });
       if (result.success) {
-        this.logger.log(`Order SMS sent via Orange to ${to}`);
+        this.logger.log(`Order SMS sent via Orange to ${maskPhoneForLog(to)}`);
       } else {
         this.logger.warn(`Order SMS failed: ${result.error ?? 'unknown'}`);
       }
@@ -6359,11 +6482,11 @@ export class NotificationsService {
       });
 
       this.logger.log(
-        `Proximity notification sent to agent ${agentEmail} for order ${orderData.orderNumber}`
+        `Proximity notification sent to agent ${maskEmailForLog(agentEmail)} for order ${orderData.orderNumber}`
       );
     } catch (error: any) {
       this.logger.error(
-        `Failed to send proximity notification to ${agentEmail}: ${
+        `Failed to send proximity notification to ${maskEmailForLog(agentEmail)}: ${
           error instanceof Error ? error.message : String(error)
         }`
       );
