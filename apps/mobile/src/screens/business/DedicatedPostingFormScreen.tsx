@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Platform, ScrollView, StyleSheet, View, Alert } from 'react-native';
 import {
   ActivityIndicator,
+  Banner,
   Button,
   Card,
   Chip,
@@ -15,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessRootStackParamList } from '../../navigation/types';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import {
   extractDedicatedAgentsError,
@@ -31,6 +33,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { isOffline } = useNetworkStatus();
 
   const [loading, setLoading] = useState(true);
   const [availableSlots, setAvailableSlots] = useState<SlotKey[]>([]);
@@ -43,25 +46,15 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [snackbarMessage, setSnackbarMessage] = useState<string | null>(null);
 
-  const dayLetters = i18n.language === 'fr'
-    ? [
-        t('dedicatedAgents.dayLettersFR.monday', 'L'),
-        t('dedicatedAgents.dayLettersFR.tuesday', 'M'),
-        t('dedicatedAgents.dayLettersFR.wednesday', 'M'),
-        t('dedicatedAgents.dayLettersFR.thursday', 'J'),
-        t('dedicatedAgents.dayLettersFR.friday', 'V'),
-        t('dedicatedAgents.dayLettersFR.saturday', 'S'),
-        t('dedicatedAgents.dayLettersFR.sunday', 'D'),
-      ]
-    : [
-        t('dedicatedAgents.dayLetters.monday', 'M'),
-        t('dedicatedAgents.dayLetters.tuesday', 'T'),
-        t('dedicatedAgents.dayLetters.wednesday', 'W'),
-        t('dedicatedAgents.dayLetters.thursday', 'T'),
-        t('dedicatedAgents.dayLetters.friday', 'F'),
-        t('dedicatedAgents.dayLetters.saturday', 'S'),
-        t('dedicatedAgents.dayLetters.sunday', 'S'),
-      ];
+  const dayLetters = [
+    t('dedicatedAgents.dayLetters.monday', 'M'),
+    t('dedicatedAgents.dayLetters.tuesday', 'T'),
+    t('dedicatedAgents.dayLetters.wednesday', 'W'),
+    t('dedicatedAgents.dayLetters.thursday', 'T'),
+    t('dedicatedAgents.dayLetters.friday', 'F'),
+    t('dedicatedAgents.dayLetters.saturday', 'S'),
+    t('dedicatedAgents.dayLetters.sunday', 'S'),
+  ];
 
   const loadAvailableSlots = useCallback(async () => {
     try {
@@ -227,6 +220,15 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.default }}>
+      {isOffline && (
+        <Banner
+          visible
+          icon="wifi-off"
+          style={{ backgroundColor: colors.warningTint }}
+        >
+          {t('dedicatedAgents.offline', 'Offline · showing last update')}
+        </Banner>
+      )}
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -242,7 +244,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
               <Button
                 mode="outlined"
                 onPress={() => setHeadcount(Math.max(1, headcount - 1))}
-                disabled={headcount <= 1 || submitting}
+                disabled={headcount <= 1 || submitting || isOffline}
                 accessibilityLabel={t('dedicatedAgents.accessibilityLabels.decreaseCount', 'Decrease count')}
               >
                 −
@@ -253,7 +255,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
               <Button
                 mode="outlined"
                 onPress={() => setHeadcount(Math.min(10, headcount + 1))}
-                disabled={headcount >= 10 || submitting}
+                disabled={headcount >= 10 || submitting || isOffline}
                 accessibilityLabel={t('dedicatedAgents.accessibilityLabels.increaseCount', 'Increase count')}
               >
                 +
@@ -344,7 +346,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
             <TextInput
               label={t('dedicatedAgents.form.termsField', 'Terms / notes')}
               value={terms}
-              onChangeText={(text) => setTerms(text.slice(0, 1000))}
+              onChangeText={(text: string) => setTerms(text.slice(0, 1000))}
               multiline
               numberOfLines={4}
               mode="outlined"
@@ -391,7 +393,7 @@ export default function DedicatedPostingFormScreen({ route, navigation }: Props)
         <Button
           mode="contained"
           onPress={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || isOffline}
           loading={submitting}
           style={{ marginHorizontal: spacing.md }}
         >

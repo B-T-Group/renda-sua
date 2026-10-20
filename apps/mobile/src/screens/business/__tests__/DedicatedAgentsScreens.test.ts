@@ -35,7 +35,6 @@ describe('Dedicated Agents Locale Keys', () => {
 
   it('should have all error keys in EN locale', () => {
     errorCodes.forEach((code) => {
-      const key = `dedicatedAgents.errors.${code}`;
       expect(enLocale.dedicatedAgents.errors).toHaveProperty(code);
       expect(typeof (enLocale.dedicatedAgents.errors as any)[code]).toBe('string');
       expect((enLocale.dedicatedAgents.errors as any)[code].length).toBeGreaterThan(0);
@@ -44,7 +43,6 @@ describe('Dedicated Agents Locale Keys', () => {
 
   it('should have all error keys in FR locale', () => {
     errorCodes.forEach((code) => {
-      const key = `dedicatedAgents.errors.${code}`;
       expect(frLocale.dedicatedAgents.errors).toHaveProperty(code);
       expect(typeof (frLocale.dedicatedAgents.errors as any)[code]).toBe('string');
       expect((frLocale.dedicatedAgents.errors as any)[code].length).toBeGreaterThan(0);
@@ -85,6 +83,7 @@ describe('Dedicated Agents Locale Keys', () => {
     expect(enLocale.dedicatedAgents.slots.evening).toBe('Evening');
     expect(enLocale.dedicatedAgents.slots.pickup).toBeDefined();
     expect(enLocale.dedicatedAgents.slots.offConfirm).toBeDefined();
+    expect(enLocale.dedicatedAgents.slots.pausedGroup).toBeDefined();
   });
 
   it('should have slot keys in FR locale', () => {
@@ -93,6 +92,7 @@ describe('Dedicated Agents Locale Keys', () => {
     expect(frLocale.dedicatedAgents.slots.evening).toBe('Soir');
     expect(frLocale.dedicatedAgents.slots.pickup).toBeDefined();
     expect(frLocale.dedicatedAgents.slots.offConfirm).toBeDefined();
+    expect(frLocale.dedicatedAgents.slots.pausedGroup).toBeDefined();
   });
 
   it('should have chip keys in EN locale', () => {
@@ -183,7 +183,7 @@ describe('Dedicated Agents Locale Keys', () => {
     expect(frLocale.dedicatedAgents.accessibilityLabels.increaseCount).toBe('Augmenter le nombre');
   });
 
-  it('should have day letters in EN locale', () => {
+  it('should have day letters in single key for EN locale', () => {
     expect(enLocale.dedicatedAgents.dayLetters.monday).toBe('M');
     expect(enLocale.dedicatedAgents.dayLetters.tuesday).toBe('T');
     expect(enLocale.dedicatedAgents.dayLetters.wednesday).toBe('W');
@@ -193,14 +193,19 @@ describe('Dedicated Agents Locale Keys', () => {
     expect(enLocale.dedicatedAgents.dayLetters.sunday).toBe('S');
   });
 
-  it('should have day letters in FR locale', () => {
-    expect(frLocale.dedicatedAgents.dayLettersFR.monday).toBe('L');
-    expect(frLocale.dedicatedAgents.dayLettersFR.tuesday).toBe('M');
-    expect(frLocale.dedicatedAgents.dayLettersFR.wednesday).toBe('M');
-    expect(frLocale.dedicatedAgents.dayLettersFR.thursday).toBe('J');
-    expect(frLocale.dedicatedAgents.dayLettersFR.friday).toBe('V');
-    expect(frLocale.dedicatedAgents.dayLettersFR.saturday).toBe('S');
-    expect(frLocale.dedicatedAgents.dayLettersFR.sunday).toBe('D');
+  it('should have day letters in single key for FR locale', () => {
+    expect(frLocale.dedicatedAgents.dayLetters.monday).toBe('L');
+    expect(frLocale.dedicatedAgents.dayLetters.tuesday).toBe('M');
+    expect(frLocale.dedicatedAgents.dayLetters.wednesday).toBe('M');
+    expect(frLocale.dedicatedAgents.dayLetters.thursday).toBe('J');
+    expect(frLocale.dedicatedAgents.dayLetters.friday).toBe('V');
+    expect(frLocale.dedicatedAgents.dayLetters.saturday).toBe('S');
+    expect(frLocale.dedicatedAgents.dayLetters.sunday).toBe('D');
+  });
+
+  it('should not have dayLettersFR key in either locale', () => {
+    expect((enLocale.dedicatedAgents as any).dayLettersFR).toBeUndefined();
+    expect((frLocale.dedicatedAgents as any).dayLettersFR).toBeUndefined();
   });
 
   it('should have closeWithCount key in EN locale', () => {
@@ -222,5 +227,12 @@ describe('Dedicated Agents Locale Keys', () => {
     expect(frLocale.dedicatedAgents.generic).toBeDefined();
     expect(frLocale.dedicatedAgents.retry).toBeDefined();
     expect(frLocale.dedicatedAgents.offline).toBeDefined();
+  });
+
+  it('should have fullWarning key for capacity banner in both locales', () => {
+    expect(enLocale.dedicatedAgents.fullWarning).toBe(
+      'No dedicated agent can take orders right now. Delivery follows normal rules.'
+    );
+    expect(frLocale.dedicatedAgents.fullWarning).toBeDefined();
   });
 });

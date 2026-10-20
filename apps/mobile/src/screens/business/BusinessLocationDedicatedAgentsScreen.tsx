@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessRootStackParamList } from '../../navigation/types';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import {
   extractDedicatedAgentsError,
@@ -44,6 +45,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { isOffline } = useNetworkStatus();
 
   const [loading, setLoading] = useState(true);
   const [slots, setSlots] = useState<PickupSlot[]>([]);
@@ -358,6 +360,15 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.default }}>
+      {isOffline && (
+        <Banner
+          visible
+          icon="wifi-off"
+          style={{ backgroundColor: colors.warningTint }}
+        >
+          {t('dedicatedAgents.offline', 'Offline · showing last update')}
+        </Banner>
+      )}
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -402,14 +413,20 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                   </View>
                   <Switch
                     value={slot.isEnabled}
-                    onValueChange={(enabled) => handleToggleSlot(slot.slotKey, enabled)}
-                    disabled={isMutating}
+                    onValueChange={(enabled: any) => void handleToggleSlot(slot.slotKey, enabled)}
+                    disabled={isMutating || isOffline}
                     accessibilityLabel={t(
                       slot.isEnabled ? 'dedicatedAgents.slots.turnOff' : 'dedicatedAgents.slots.turnOn',
                       slot.isEnabled ? 'Turn off slot' : 'Turn on slot'
                     )}
                   />
                 </View>
+
+                {!slot.isEnabled && slotAgents.length > 0 && (
+                  <Text variant="bodySmall" style={{ marginTop: spacing.sm, color: colors.text.secondary }}>
+                    {t('dedicatedAgents.slots.pausedGroup', '{{n}} paused agents', { n: slotAgents.length })}
+                  </Text>
+                )}
 
                 {slot.isEnabled && (
                   <View style={{ marginTop: spacing.md }}>
@@ -425,7 +442,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                             mode="text"
                             compact
                             onPress={() => setPickupMenuSlot(slot.slotKey)}
-                            disabled={isMutating}
+                            disabled={isMutating || isOffline}
                             loading={isMutating}
                             accessibilityLabel={t('dedicatedAgents.accessibilityLabels.pickupTime', 'Select pickup time')}
                           >
@@ -512,7 +529,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                                   <IconButton
                                     icon="dots-vertical"
                                     onPress={() => setActionsMenuAgent(agent.assignmentId)}
-                                    disabled={mutating === agent.assignmentId}
+                                    disabled={mutating === agent.assignmentId || isOffline}
                                     accessibilityLabel={t('dedicatedAgents.accessibilityLabels.moreOptions', 'More options')}
                                   />
                                 }

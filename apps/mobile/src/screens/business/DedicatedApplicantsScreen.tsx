@@ -3,6 +3,7 @@ import { Platform, RefreshControl, ScrollView, StyleSheet, View, Linking, Alert 
 import {
   ActivityIndicator,
   Avatar,
+  Banner,
   Button,
   Card,
   Chip,
@@ -20,6 +21,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { BusinessRootStackParamList } from '../../navigation/types';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import {
   extractDedicatedAgentsError,
@@ -37,9 +39,10 @@ type Props = NativeStackScreenProps<BusinessRootStackParamList, 'DedicatedApplic
 
 export default function DedicatedApplicantsScreen({ route, navigation }: Props) {
   const { locationId, postingId } = route.params;
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { isOffline } = useNetworkStatus();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -101,20 +104,44 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
   const handleAccept = async (applicationId: string) => {
     try {
       setAcceptingApp(applicationId);
-      await dedicatedAgentsService.acceptApplication(locationId, postingId, applicationId);
+      const response = await dedicatedAgentsService.acceptApplication(locationId, postingId, applicationId);
       
-      await loadData();
+      // Immediately update posting status from response (spec item 2)
+      setPosting(response.posting);
+      
+      // Update applications list: if filled, mark remaining pending as auto_declined
+      if (response.posting.status === 'filled') {
+        setApplications((prev) =>
+          prev.map((app) => {
+            if (app.applicationId === applicationId) {
+              return { ...app, status: 'accepted', phone: response.application.phone };
+            }
+            if (app.status === 'applied') {
+              return { ...app, status: 'auto_declined' };
+            }
+            return app;
+          })
+        );
+      } else {
+        // Just update the accepted application
+        setApplications((prev) =>
+          prev.map((app) =>
+            app.applicationId === applicationId
+              ? { ...app, status: 'accepted', phone: response.application.phone }
+              : app
+          )
+        );
+      }
       
       setConfirmAccept(null);
 
-      const updatedPosting = posting;
       dedicatedAgentsAnalytics.applicantAccepted({
         platform: Platform.OS as 'ios' | 'android',
         role: 'business',
         locationId,
         postingId,
         applicationId,
-        filled: updatedPosting?.status === 'filled',
+        filled: response.posting.status === 'filled',
       });
     } catch (err: any) {
       const { code } = extractDedicatedAgentsError(err);
@@ -252,6 +279,15 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background.default }}>
+      {isOffline && (
+        <Banner
+          visible
+          icon="wifi-off"
+          style={{ backgroundColor: colors.warningTint }}
+        >
+          {t('dedicatedAgents.offline', 'Offline · showing last update')}
+        </Banner>
+      )}
       <ScrollView
         contentContainerStyle={[
           styles.content,
@@ -290,6 +326,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     <IconButton
                       icon="dots-vertical"
                       onPress={() => setMenuVisible(true)}
+                      disabled={isOffline}
                       accessibilityLabel={t('dedicatedAgents.accessibilityLabels.moreOptions', 'More options')}
                     />
                   }
@@ -316,6 +353,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                     icon="pencil"
                     size={16}
                     onPress={() => setEditingTerms(true)}
+                    disabled={isOffline}
                     accessibilityLabel={t('dedicatedAgents.accessibilityLabels.editTerms', 'Edit terms')}
                   />
                 )}
@@ -325,7 +363,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                 <View>
                   <TextInput
                     value={newTerms}
-                    onChangeText={(text) => setNewTerms(text.slice(0, 1000))}
+                    onChangeText={(text: string) => setNewTerms(text.slice(0, 1000))}
                     multiline
                     numberOfLines={3}
                     mode="outlined"
@@ -402,7 +440,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                       </Text>
                       <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
                         {t('dedicatedAgents.applicant.stats', 'Joined {{date}} · {{n}} deliveries · {{m}} missed', {
-                          date: new Date(app.agent.joinedAt).toLocaleDateString(),
+                          date: new Date(app.agent.joinedAt).toLocaleDateString(i18n.language),
                           n: app.deliveriesCompleted,
                           m: app.missedDeliveries,
                         })}
@@ -418,7 +456,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                         mode="outlined"
                         onPress={() => handleDecline(app.applicationId)}
                         style={{ flex: 1, marginRight: spacing.xs }}
-                        disabled={acceptingApp !== null}
+                        disabled={acceptingApp !== null || isOffline}
                       >
                         {t('dedicatedAgents.applicant.decline', 'Decline')}
                       </Button>
@@ -432,7 +470,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                         }
                         style={{ flex: 1, marginLeft: spacing.xs }}
                         loading={acceptingApp === app.applicationId}
-                        disabled={acceptingApp !== null}
+                        disabled={acceptingApp !== null || isOffline}
                       >
                         {t('dedicatedAgents.applicant.accept', 'Accept')}
                       </Button>

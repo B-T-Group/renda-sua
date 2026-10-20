@@ -7816,15 +7816,6 @@
       "saturday": "S",
       "sunday": "S"
     },
-    "dayLettersFR": {
-      "monday": "L",
-      "tuesday": "M",
-      "wednesday": "M",
-      "thursday": "J",
-      "friday": "V",
-      "saturday": "S",
-      "sunday": "D"
-    },
     "closeWithCount": "Close posting ({{count}} will be auto-declined)",
     "noLongerAvailable": "This posting is no longer available",
     "accessibilityLabels": {
