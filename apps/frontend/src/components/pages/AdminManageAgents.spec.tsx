@@ -81,15 +81,9 @@ jest.mock('../admin/AdminApplyReferralDialog', () => ({
   AdminApplyReferralDialog: () => null,
 }));
 
-jest.mock('../common/AdminMessagePost', () => ({
-  __esModule: true,
-  default: () => null,
-}));
+jest.mock('../common/AdminMessagePost', () => () => null);
 
-jest.mock('../common/AdminUserCard', () => ({
-  __esModule: true,
-  default: () => null,
-}));
+jest.mock('../common/AdminUserCard', () => () => null);
 
 jest.mock('../admin/AdminReferralMeta', () => ({
   AdminReferralMeta: () => null,
