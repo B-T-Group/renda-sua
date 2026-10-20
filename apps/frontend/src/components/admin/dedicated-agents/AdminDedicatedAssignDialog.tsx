@@ -348,6 +348,8 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       </DialogActions>
     </Dialog>
   );
-};
+}
+
+export default AdminDedicatedAssignDialog;;
 
 export default AdminDedicatedAssignDialog;
