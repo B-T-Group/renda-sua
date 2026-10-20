@@ -404,11 +404,12 @@ export class DedicatedCoverageService {
     };
   }
 
-  /** Standard slots for the state, else the country `__DEFAULT__` rows (same rule as DeliverySlotsService). */
+  /** Public read of the dedicated slot bounds for a market (used by the assignment / posting flows). */
   async slotBoundsFor(country: string, state: string): Promise<DedicatedSlotBounds[]> {
     return this.loadSlotBounds(country, state);
   }
 
+  /** Standard slots for the state, else the country `__DEFAULT__` rows (same rule as DeliverySlotsService). */
   private async loadSlotBounds(country: string, state: string) {
     const states = state ? [state, DEFAULT_DELIVERY_SLOT_STATE] : [DEFAULT_DELIVERY_SLOT_STATE];
     const res = await this.hasuraSystemService.executeQuery<{

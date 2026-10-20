@@ -234,6 +234,44 @@ export const UPDATE_DEDICATED_ASSIGNMENT_MUTATION = `
   }
 `;
 
+/**
+ * Resume (QA #603 R3): one transaction. The location row lock comes first, so a
+ * concurrent slot toggle either commits before (and this update then sees its slot
+ * off) or waits for this one (and its predicate pause then sees the row active).
+ * The update applies only while the row is still paused and its slot is not
+ * switched off: the slot check and the status change are one statement, not a
+ * read followed by a write.
+ */
+export const RESUME_DEDICATED_ASSIGNMENT_MUTATION = `
+  mutation ResumeDedicatedAssignment(
+    $locationId: uuid!
+    $id: uuid!
+    $slotKey: String!
+    $set: dedicated_agent_assignments_set_input!
+  ) {
+    ${LOCK_LOCATION_FIELD}
+    update_dedicated_agent_assignments(
+      where: {
+        id: { _eq: $id }
+        business_location_id: { _eq: $locationId }
+        slot_key: { _eq: $slotKey }
+        status: { _eq: "paused" }
+        _not: { business_location: { pickup_slots: { slot_key: { _eq: $slotKey }, is_enabled: { _eq: false } } } }
+      }
+      _set: $set
+    ) {
+      affected_rows
+      returning {
+        id
+        status
+        off_today_date
+        paused_at
+        removed_at
+      }
+    }
+  }
+`;
+
 /** One transaction: upsert the slot settings, then pause (agent_id order) agents of slots turned off. */
 /**
  * Saves the slot switches and, when any slot is turned off, pauses that slot's
