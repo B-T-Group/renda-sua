@@ -274,4 +274,15 @@ describe('AdminOrdersController.updateStatus', () => {
       expect(b.ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
     }
   });
+
+  it('#627 I2: the override event is admin_intervention/status_override, not gps_unavailable', async () => {
+    const { controller, orderEventsService } = buildController();
+    await controller.updateStatus('order-1', { status: 'preparing', notes: 'n' });
+    expect(orderEventsService.recordEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        eventType: 'admin_intervention',
+        payload: expect.objectContaining({ action: 'status_override', old_status: 'confirmed', new_status: 'preparing' }),
+      })
+    );
+  });
 });

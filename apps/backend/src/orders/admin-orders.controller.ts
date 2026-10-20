@@ -472,9 +472,11 @@ export class AdminOrdersController {
     }
     await this.orderEventsService.recordEvent({
       orderId: order.id,
-      eventType: 'gps_unavailable',
+      // #627 I2: was mislabelled gps_unavailable.
+      eventType: 'admin_intervention',
       actorType: 'support',
       payload: {
+        action: 'status_override',
         old_status: order.current_status,
         new_status: status,
         notes,

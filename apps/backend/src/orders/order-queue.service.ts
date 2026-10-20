@@ -117,7 +117,8 @@ export class OrderQueueService {
     cancelledBy: 'client' | 'business' | 'system',
     cancellationReason?: string,
     previousStatus?: string,
-    dedupId?: string
+    dedupId?: string,
+    opts: { strict?: boolean } = {}
   ): Promise<void> {
     if (!this.queueUrl) {
       this.logger.debug('Skipping SQS message - queue URL not configured');
@@ -134,13 +135,18 @@ export class OrderQueueService {
       orderStatus: 'cancelled',
     };
 
-    await this.sendMessage(message, dedupId);
+    await this.sendMessage(message, dedupId, opts.strict === true);
   }
 
   /**
    * Send message to SQS FIFO queue
    */
-  private async sendMessage(message: Record<string, unknown>, dedupId?: string): Promise<void> {
+  /** `strict`: rethrow a send failure (#627: the admin cancel lists it in failedSteps). */
+  private async sendMessage(
+    message: Record<string, unknown>,
+    dedupId?: string,
+    strict = false
+  ): Promise<void> {
     if (!this.queueUrl) {
       return;
     }
@@ -180,6 +186,7 @@ export class OrderQueueService {
         `Failed to send ${message.eventType} message to SQS for order ${message.orderId}: ${errorMessage}`,
         errorStack
       );
+      if (strict) throw error;
     }
   }
 }

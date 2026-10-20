@@ -54,9 +54,13 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
     svc.markOrderCancelledAsSystem = jest.fn(async () => ({ id: 'o-1', current_status: 'cancelled' }));
     svc.persistCancellationMetadata = jest.fn(async () => undefined);
     svc.createStatusHistoryEntry = jest.fn(async () => undefined);
-    svc.runOrderCancellationSideEffects = jest.fn(async () => undefined);
-    // No incomplete-cancel marker: a 'cancelled' order must be refused.
-    svc.orderEventsService = { listForOrder: jest.fn(async () => []), recordEventStrict: jest.fn(async () => undefined) };
+    svc.updateReservedQuantities = jest.fn(async () => undefined);
+    svc.orderQueueService = { sendOrderCancelledMessage: jest.fn(async () => undefined) };
+    // No progress row: a 'cancelled' order must be refused.
+    svc.hasuraSystemService = {
+      executeQuery: jest.fn(async () => ({ order_events: [] })),
+      executeMutation: jest.fn(async () => ({ insert_order_events_one: { id: 'ev-1' }, update_order_events: { affected_rows: 1 } })),
+    };
     return svc;
   };
 
@@ -91,6 +95,7 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
         expect((s as HttpException).getStatus()).toBe(400);
         expect(svc.releaseStripeAuthorizationIfNeeded).not.toHaveBeenCalled();
         expect(svc.markOrderCancelledAsSystem).not.toHaveBeenCalled();
+        expect(svc.updateReservedQuantities).not.toHaveBeenCalled();
       }
       seen.push([status, ok]);
     }
