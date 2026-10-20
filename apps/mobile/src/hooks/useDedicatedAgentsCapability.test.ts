@@ -22,8 +22,6 @@ describe('useDedicatedAgentsCapability logic', () => {
       const capability: DedicatedAgentsCapability = {
         success: true,
         enabled: false,
-        country: null,
-        reason: null,
       };
       
       const shouldShow = capability.success === true && capability.enabled === true;
