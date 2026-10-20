@@ -185,6 +185,28 @@ const AGED_OUT_STRANDED_HOLDS_QUERY = `
   }
 `;
 
+/**
+ * #633 nit: CAS the withheld-short stamp. Only the run that sets it (key absent before)
+ * alerts, so concurrent reconcilers raise one alert per strand.
+ */
+const CLAIM_WITHHELD_SHORT_ALERT_MUTATION = `
+  mutation ClaimWithheldShortAlert($id: uuid!, $patch: jsonb!) {
+    update_order_events(
+      where: { id: { _eq: $id }, _not: { payload: { _has_key: "withheldShortAlertedAt" } } }
+      _append: { payload: $patch }
+    ) { affected_rows }
+  }
+`;
+
+/** #633 nit: the shortfall is gone, so a recurrence on this strand alerts again. */
+const CLEAR_WITHHELD_SHORT_ALERT_MUTATION = `
+  mutation ClearWithheldShortAlert($id: uuid!) {
+    update_order_events(where: { id: { _eq: $id } }, _delete_key: { payload: "withheldShortAlertedAt" }) {
+      affected_rows
+    }
+  }
+`;
+
 /** Marks a strand (resolved / aged-out alerted) on the stranded event itself, so the queries above can filter it. */
 const MARK_STRANDED_HOLD_MUTATION = `
   mutation MarkStrandedAgentHold($id: uuid!, $patch: jsonb!) {
@@ -1143,11 +1165,14 @@ export class OrderReassignmentService {
       });
       const released = Number(res?.release_agent_order_hold?.[0]?.amount ?? 0);
       const { net } = await this.agentHoldLedger(accountId, orderId);
+      await this.clearWithheldShortAlert(opts.strand);
       return { success: true, released, net };
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
       const { net } = await this.agentHoldLedger(accountId, orderId).catch(() => ({ net: NaN }));
-      if (message.includes('agent_hold_release_withheld_short') && !opts.strand?.withheldShortAlertedAt) {
+      const short = message.includes('agent_hold_release_withheld_short');
+      // #633 nit: once per strand via a CAS on the stamp (no strand: a live path, every time).
+      if (short && !opts.strand?.withheldShortAlertedAt && (await this.claimWithheldShortAlert(opts.strand))) {
         // #622 I1: the ledger says more is held than the account's withheld balance:
         // the books disagree, so nothing was released and a human must look.
         reportMoneyAnomaly(
@@ -1156,22 +1181,45 @@ export class OrderReassignmentService {
           `Agent hold not released for order ${orderId}: withheld balance is below the net held (${net}): ${message}`,
           { accountId, orderId, net, cap: opts.cap ?? null }
         );
-        if (opts.strand) await this.stampWithheldShortAlert(opts.strand.eventId);
       }
+      // Another error (e.g. a transient one) says nothing about the shortfall: keep the stamp.
       return { success: false, released: 0, net, error: message };
     }
   }
 
-  /** #628 E1: once per strand. A failed stamp only means the alert may repeat next run. */
-  private async stampWithheldShortAlert(eventId: string): Promise<void> {
+  /**
+   * #628 E1 / #633 nit: true when this run should alert. With no strand, always. With a
+   * strand, only the run whose CAS sets the stamp (a concurrent run gets 0 rows). A failed
+   * stamp write alerts anyway: a repeat is better than a lost alert.
+   */
+  private async claimWithheldShortAlert(strand?: { eventId: string }): Promise<boolean> {
+    if (!strand) return true;
     try {
-      await this.hasura.executeMutation(MARK_STRANDED_HOLD_MUTATION, {
-        id: eventId,
-        patch: { withheldShortAlertedAt: new Date().toISOString() },
-      });
+      const r = await this.hasura.executeMutation<{ update_order_events: { affected_rows: number } }>(
+        CLAIM_WITHHELD_SHORT_ALERT_MUTATION,
+        { id: strand.eventId, patch: { withheldShortAlertedAt: new Date().toISOString() } }
+      );
+      return (r?.update_order_events?.affected_rows ?? 0) === 1;
     } catch (error: unknown) {
       this.logger.warn(
-        `Could not stamp withheldShortAlertedAt on strand ${eventId}: ${error instanceof Error ? error.message : String(error)}`
+        `Could not stamp withheldShortAlertedAt on strand ${strand.eventId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return true;
+    }
+  }
+
+  /**
+   * #633 nit: the release went through, so the shortfall resolved: drop the stamp. If
+   * the strand is not marked resolved (that write failed) and the books break again,
+   * the next withheld-short alerts again instead of staying silent.
+   */
+  private async clearWithheldShortAlert(strand?: { eventId: string; withheldShortAlertedAt?: string }): Promise<void> {
+    if (!strand?.withheldShortAlertedAt) return;
+    try {
+      await this.hasura.executeMutation(CLEAR_WITHHELD_SHORT_ALERT_MUTATION, { id: strand.eventId });
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Could not clear withheldShortAlertedAt on strand ${strand.eventId}: ${error instanceof Error ? error.message : String(error)}`
       );
     }
   }

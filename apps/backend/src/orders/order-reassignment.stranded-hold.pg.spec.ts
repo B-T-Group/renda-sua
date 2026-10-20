@@ -163,6 +163,20 @@ function pgHasura(
         );
         return { release_agent_order_hold: r.rows };
       }
+      case 'ClaimWithheldShortAlert': {
+        // As Postgres: the row only matches while the key is absent (one winner).
+        const e = mem.events.find((x) => x.id === v.id && !('withheldShortAlertedAt' in (x.payload ?? {})));
+        if (e) e.payload = { ...e.payload, ...v.patch };
+        return { update_order_events: { affected_rows: e ? 1 : 0 } };
+      }
+      case 'ClearWithheldShortAlert': {
+        const e = mem.events.find((x) => x.id === v.id);
+        if (e) {
+          const { withheldShortAlertedAt: _drop, ...rest } = e.payload ?? {};
+          e.payload = rest;
+        }
+        return { update_order_events: { affected_rows: e ? 1 : 0 } };
+      }
       case 'MarkStrandedAgentHold': {
         const e = mem.events.find((x) => x.id === v.id);
         if (e) e.payload = { ...e.payload, ...v.patch };
@@ -534,6 +548,48 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
     // Once the books are fixed, the same strand still reconciles.
     await pool.query(`UPDATE accounts SET withheld_balance = 700 WHERE id = $1`, [w.accountId]);
     await expect(w.svc.reconcileStrandedAgentHolds()).resolves.toEqual({ released: 1, skipped: 0, failed: 0 });
+  });
+
+  it('#633 nit: concurrent reconcilers on a short strand raise ONE alert (CAS on the stamp)', async () => {
+    const w = await setup();
+    await w.claim();
+    await w.strand();
+    await pool.query(`UPDATE accounts SET withheld_balance = 100 WHERE id = $1`, [w.accountId]);
+    const { reportMoneyAnomaly } = jest.requireMock('../common/utils/money-alert.util');
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    await Promise.all([
+      w.svc.reconcileStrandedAgentHolds(),
+      w.svc2.reconcileStrandedAgentHolds(),
+      w.svc.reconcileStrandedAgentHolds(),
+      w.svc2.reconcileStrandedAgentHolds(),
+    ]);
+    expect((reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'agent_hold_withheld_short')).toHaveLength(1);
+  });
+
+  it('#633 nit: once the shortfall resolves (a release goes through) the stamp is cleared, so a recurrence alerts again', async () => {
+    const w = await setup();
+    await w.claim();
+    await w.strand();
+    const ev = () => w.mem.events.find((e: any) => e.event_type === 'agent_hold_stranded');
+    await pool.query(`UPDATE accounts SET withheld_balance = 100 WHERE id = $1`, [w.accountId]);
+    const { reportMoneyAnomaly } = jest.requireMock('../common/utils/money-alert.util');
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    const strand = () => ({ eventId: ev().id, withheldShortAlertedAt: ev().payload.withheldShortAlertedAt });
+    const short = () => (reportMoneyAnomaly as jest.Mock).mock.calls.filter((c) => c[1] === 'agent_hold_withheld_short').length;
+    await (w.svc as any).releaseNetAgentHold(w.accountId, w.orderId, 'm', { cap: 300, strand: strand() });
+    await (w.svc as any).releaseNetAgentHold(w.accountId, w.orderId, 'm', { cap: 300, strand: strand() });
+    expect(short()).toBe(1);
+    expect(ev().payload.withheldShortAlertedAt).toEqual(expect.any(String));
+    // Books fixed: a capped release goes through and clears the stamp.
+    await pool.query(`UPDATE accounts SET withheld_balance = 700 WHERE id = $1`, [w.accountId]);
+    const ok = await (w.svc as any).releaseNetAgentHold(w.accountId, w.orderId, 'm', { cap: 300, strand: strand() });
+    expect(ok).toMatchObject({ success: true, released: 300 });
+    expect('withheldShortAlertedAt' in ev().payload).toBe(false);
+    // The books break again: the same strand alerts again (once).
+    await pool.query(`UPDATE accounts SET withheld_balance = 50 WHERE id = $1`, [w.accountId]);
+    await (w.svc as any).releaseNetAgentHold(w.accountId, w.orderId, 'm', { cap: 300, strand: strand() });
+    await (w.svc as any).releaseNetAgentHold(w.accountId, w.orderId, 'm', { cap: 300, strand: strand() });
+    expect(short()).toBe(2);
   });
 
   it('#628 E1: a second strand (different event) gets its own alert; a live release (no strand) alerts every time', async () => {
