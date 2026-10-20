@@ -136,45 +136,50 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
     return capacity;
   };
 
-  const handleToggleSlot = async (slotKey: SlotKey, enabled: boolean) => {
-    if (!enabled) {
-      const slotAgents = agents.filter((a) => a.slotKey === slotKey && a.status === 'active' && !a.offToday);
-      if (slotAgents.length > 0) {
-        setConfirmPause({ slotKey, agentsToPause: slotAgents.length });
-        return;
+  const handleToggleSlot = useCallback(
+    (slotKey: SlotKey, enabled: boolean) => {
+      if (!enabled) {
+        const slotAgents = agents.filter((a) => a.slotKey === slotKey && a.status === 'active' && !a.offToday);
+        if (slotAgents.length > 0) {
+          setConfirmPause({ slotKey, agentsToPause: slotAgents.length });
+          return;
+        }
       }
-    }
 
-    try {
       setMutating(`slot-${slotKey}`);
-      await dedicatedAgentsService.updatePickupSlots(locationId, {
-        slots: [{ slotKey, isEnabled: enabled }],
-      });
-      await loadData();
-
-      dedicatedAgentsAnalytics.slotToggled({
-        platform: Platform.OS as 'ios' | 'android',
-        role: 'business',
-        locationId,
-        slotKey,
-        enabled,
-      });
-    } catch (err: any) {
-      const { code } = extractDedicatedAgentsError(err);
-      if (code === 'slot_has_dedicated_agents' && err.response?.data?.agentsToPause) {
-        setConfirmPause({
-          slotKey,
-          agentsToPause: err.response.data.agentsToPause,
+      dedicatedAgentsService
+        .updatePickupSlots(locationId, {
+          slots: [{ slotKey, isEnabled: enabled }],
+        })
+        .then(() => loadData())
+        .then(() => {
+          dedicatedAgentsAnalytics.slotToggled({
+            platform: Platform.OS as 'ios' | 'android',
+            role: 'business',
+            locationId,
+            slotKey,
+            enabled,
+          });
+        })
+        .catch((err: any) => {
+          const { code } = extractDedicatedAgentsError(err);
+          if (code === 'slot_has_dedicated_agents' && err.response?.data?.agentsToPause) {
+            setConfirmPause({
+              slotKey,
+              agentsToPause: err.response.data.agentsToPause,
+            });
+            void loadData();
+            return;
+          }
+          const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+          Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
+        })
+        .finally(() => {
+          setMutating(null);
         });
-        await loadData();
-        return;
-      }
-      const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
-      Alert.alert(t('common.error', 'Error'), t(errorKey, 'Something went wrong'));
-    } finally {
-      setMutating(null);
-    }
-  };
+    },
+    [agents, locationId, loadData, t]
+  );
 
   const handleConfirmPause = async () => {
     if (!confirmPause) return;
@@ -412,13 +417,15 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                     </Text>
                   </View>
                   <Switch
-                    value={slot.isEnabled}
-                    onValueChange={(enabled: any) => void handleToggleSlot(slot.slotKey, enabled)}
-                    disabled={isMutating || isOffline}
-                    accessibilityLabel={t(
-                      slot.isEnabled ? 'dedicatedAgents.slots.turnOff' : 'dedicatedAgents.slots.turnOn',
-                      slot.isEnabled ? 'Turn off slot' : 'Turn on slot'
-                    )}
+                    {...({
+                      value: slot.isEnabled,
+                      onValueChange: handleToggleSlot.bind(null, slot.slotKey),
+                      disabled: isMutating || isOffline,
+                      accessibilityLabel: t(
+                        slot.isEnabled ? 'dedicatedAgents.slots.turnOff' : 'dedicatedAgents.slots.turnOn',
+                        slot.isEnabled ? 'Turn off slot' : 'Turn on slot'
+                      ),
+                    } as any)}
                   />
                 </View>
 
