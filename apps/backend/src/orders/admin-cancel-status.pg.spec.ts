@@ -31,10 +31,13 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
     }
   });
 
-  const controller = (status: string) => {
+  const controller = (status: string, agentId: string | null = null) => {
     const cancel = jest.fn(async () => ({ success: true }));
     const ctrl = Object.create(AdminOrdersController.prototype) as any;
-    ctrl.ordersService = { getOrderById: jest.fn(async () => ({ id: 'o-1', current_status: status })), cancelOrderAsAdmin: cancel };
+    ctrl.ordersService = {
+      getOrderById: jest.fn(async () => ({ id: 'o-1', current_status: status, assigned_agent_id: agentId })),
+      cancelOrderAsAdmin: cancel,
+    };
     ctrl.geo = { require: jest.fn(async () => ({ all: true })), assertOrder: jest.fn(async () => undefined) };
     ctrl.logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn() };
     ctrl.hasuraSystemService = { executeMutation: jest.fn(async () => ({ update_orders: { affected_rows: 1 } })) };
@@ -46,9 +49,14 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
     const svc = Object.create(OrdersService.prototype) as any;
     svc.getOrderDetails = jest.fn(async () => ({ id: 'o-1', current_status: status, order_items: [] }));
     svc.hasuraUserService = { getUser: jest.fn(async () => ({ id: 'admin-1' })) };
+    svc.logger = { error: jest.fn(), warn: jest.fn(), log: jest.fn() };
     svc.releaseStripeAuthorizationIfNeeded = jest.fn(async () => undefined);
     svc.markOrderCancelledAsSystem = jest.fn(async () => ({ id: 'o-1', current_status: 'cancelled' }));
-    svc.finishAdminCancellation = jest.fn(async () => undefined);
+    svc.persistCancellationMetadata = jest.fn(async () => undefined);
+    svc.createStatusHistoryEntry = jest.fn(async () => undefined);
+    svc.runOrderCancellationSideEffects = jest.fn(async () => undefined);
+    // No incomplete-cancel marker: a 'cancelled' order must be refused.
+    svc.orderEventsService = { listForOrder: jest.fn(async () => []), recordEventStrict: jest.fn(async () => undefined) };
     return svc;
   };
 
@@ -69,11 +77,16 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
       const s = await svc.cancelOrderAsAdmin('o-1', 'r').catch((e: unknown) => e);
       if (ok) {
         expect(cancel).toHaveBeenCalledWith('o-1', 'r', status);
-        expect(s).toMatchObject({ success: true });
+        expect(s).toMatchObject({ success: true, partialFailure: false });
       } else {
-        expect(c).toBeInstanceOf(HttpException);
-        expect((c as HttpException).getStatus()).toBe(400);
-        expect(cancel).not.toHaveBeenCalled();
+        if (status === 'cancelled') {
+          // C4: the controller lets a retry through; the service (no incomplete marker) refuses it.
+          expect(cancel).toHaveBeenCalledWith('o-1', 'r', 'cancelled');
+        } else {
+          expect(c).toBeInstanceOf(HttpException);
+          expect((c as HttpException).getStatus()).toBe(400);
+          expect(cancel).not.toHaveBeenCalled();
+        }
         expect(s).toBeInstanceOf(HttpException);
         expect((s as HttpException).getStatus()).toBe(400);
         expect(svc.releaseStripeAuthorizationIfNeeded).not.toHaveBeenCalled();
@@ -90,18 +103,23 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
     const prePickup = ['pending', 'confirmed', 'preparing', 'ready_for_pickup', 'assigned_to_agent'];
     const enRoute = ['in_transit', 'out_for_delivery'];
     const targets = (ADMIN_STATUS_OVERRIDE_VALUES as readonly string[]).filter((t) => t !== 'cancelled');
-    const oracle = (from: string, to: string) =>
-      from !== to && targets.includes(to) && (prePickup.includes(from) || (enRoute.includes(from) && enRoute.includes(to)));
+    // I1: in_transit / out_for_delivery only with an assigned agent.
+    const oracle = (from: string, to: string, agent: boolean) =>
+      from !== to &&
+      targets.includes(to) &&
+      (agent || !enRoute.includes(to)) &&
+      (prePickup.includes(from) || (enRoute.includes(from) && enRoute.includes(to)));
     let allowedPairs = 0;
+    for (const agent of [true, false])
     for (const from of statuses) {
       for (const to of [...targets, ...statuses.filter((s) => !targets.includes(s) && s !== 'cancelled')]) {
-        const { ctrl } = controller(from);
+        const { ctrl } = controller(from, agent ? 'agent-1' : null);
         const res = await ctrl.updateStatus('o-1', { status: to, notes: 'n' }).catch((e: unknown) => e);
-        if (oracle(from, to)) {
+        if (oracle(from, to, agent)) {
           allowedPairs++;
-          expect([from, to, res]).toEqual([from, to, expect.objectContaining({ success: true })]);
+          expect([agent, from, to, res]).toEqual([agent, from, to, expect.objectContaining({ success: true })]);
         } else {
-          expect([from, to, res instanceof HttpException && (res as HttpException).getStatus()]).toEqual([from, to, 400]);
+          expect([agent, from, to, res instanceof HttpException && (res as HttpException).getStatus()]).toEqual([agent, from, to, 400]);
           expect(ctrl.hasuraSystemService.executeMutation).not.toHaveBeenCalled();
         }
       }
@@ -113,6 +131,7 @@ suite('admin cancel allowlist vs the real order_status enum (#627)', () => {
         await expect(ctrl.updateStatus('o-1', { status: to, notes: 'n' })).rejects.toBeInstanceOf(HttpException);
       }
     }
-    expect(allowedPairs).toBe(5 * 6 + 2);
+    // with agent: 5 pre-pickup x 6 targets + 2 en-route swaps; without: 5 x 4, no swaps.
+    expect(allowedPairs).toBe(5 * 6 + 2 + 5 * 4);
   });
 });

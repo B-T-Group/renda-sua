@@ -671,6 +671,24 @@ export interface DeclineOrderOfferRequest {
   reason?: string | null;
 }
 
+/** #627 C4: post-CAS steps of an admin cancel, in order. */
+export const ADMIN_CANCEL_STEPS = [
+  'voidStripeAuthorization',
+  'persistCancellationMetadata',
+  'createStatusHistoryEntry',
+  'cancellationSideEffects',
+] as const;
+export type AdminCancelStepName = (typeof ADMIN_CANCEL_STEPS)[number];
+export const ADMIN_CANCEL_STEP_FAILED_MARKER = 'admin_cancel_step_failed';
+export const ADMIN_CANCEL_INCOMPLETE_ACTION = 'admin_cancel_incomplete';
+export const ADMIN_CANCEL_COMPLETE_ACTION = 'admin_cancel_complete';
+interface AdminCancelContext {
+  order: Orders;
+  previousStatus: string;
+  adminUserId: string | null;
+  notes?: string;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -8471,18 +8489,170 @@ export class OrdersService {
    * 409 before the card authorisation is released or anything else runs.
    */
   async cancelOrderAsAdmin(orderId: string, notes?: string, expectedFromStatus?: string) {
+    const resumed = await this.resumeIncompleteAdminCancel(orderId);
+    if (resumed) return resumed;
     const order = await this.requireCancellableAdminOrder(orderId);
     const adminUserId = await this.resolveOptionalUserId();
     const updatedOrder = await this.markOrderCancelledAsSystem(
       orderId,
       expectedFromStatus ?? order.current_status
     );
-    await this.releaseStripeAuthorizationIfNeeded(order);
-    await this.finishAdminCancellation(order, adminUserId, notes);
+    // #627 C4: the order IS cancelled now. Every remaining step runs even when an
+    // earlier one fails (each is caught, alerted and listed), and the failed ones are
+    // recorded so a retry of this endpoint resumes them instead of being refused.
+    const ctx: AdminCancelContext = {
+      order,
+      previousStatus: order.current_status,
+      adminUserId,
+      notes,
+    };
+    const failedSteps = await this.runAdminCancelSteps(ctx, ADMIN_CANCEL_STEPS);
+    return this.adminCancelResult(updatedOrder, ctx, failedSteps);
+  }
+
+  /** Post-CAS steps of an admin cancel; each must be safe to re-run alone. */
+  private adminCancelStep(name: AdminCancelStepName, ctx: AdminCancelContext): Promise<void> {
+    switch (name) {
+      case 'voidStripeAuthorization':
+        return this.voidStripeAuthorizationOrThrow(ctx.order);
+      case 'persistCancellationMetadata':
+        return this.persistCancellationMetadata(ctx.order.id, 'system', ctx.notes);
+      case 'createStatusHistoryEntry':
+        if (!ctx.adminUserId) return Promise.resolve();
+        return this.createStatusHistoryEntry(
+          ctx.order.id,
+          'cancelled',
+          'Order cancelled by admin',
+          'system',
+          ctx.adminUserId,
+          ctx.notes
+        );
+      case 'cancellationSideEffects':
+        return this.runOrderCancellationSideEffects(
+          ctx.order,
+          ctx.order.id,
+          ctx.previousStatus,
+          'system',
+          ctx.notes
+        );
+    }
+  }
+
+  private async runAdminCancelSteps(
+    ctx: AdminCancelContext,
+    steps: readonly AdminCancelStepName[]
+  ): Promise<AdminCancelStepName[]> {
+    const failed: AdminCancelStepName[] = [];
+    for (const name of steps) {
+      try {
+        await this.adminCancelStep(name, ctx);
+      } catch (error: unknown) {
+        failed.push(name);
+        // The detail goes to the log / alert only, never to the API response.
+        reportMoneyAnomaly(
+          this.logger,
+          ADMIN_CANCEL_STEP_FAILED_MARKER,
+          `Admin cancel of order ${ctx.order.order_number}: step ${name} failed (the order is cancelled): ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+          { orderId: ctx.order.id, step: name, previousStatus: ctx.previousStatus }
+        );
+      }
+    }
+    await this.recordAdminCancelProgress(ctx, failed);
+    return failed;
+  }
+
+  /** Stripe void whose non-throwing failure result counts as a failed step. */
+  private async voidStripeAuthorizationOrThrow(order: Orders): Promise<void> {
+    const result = await this.releaseStripeAuthorizationIfNeeded(order);
+    if (result && !result.ok) {
+      throw new Error(`Stripe authorization void failed: ${result.message ?? 'unknown'}`);
+    }
+  }
+
+  private async recordAdminCancelProgress(
+    ctx: AdminCancelContext,
+    failed: AdminCancelStepName[]
+  ): Promise<void> {
+    try {
+      await this.orderEventsService.recordEventStrict({
+        orderId: ctx.order.id,
+        eventType: 'admin_intervention',
+        actorType: 'support',
+        actorId: ctx.adminUserId,
+        payload: failed.length
+          ? {
+              action: ADMIN_CANCEL_INCOMPLETE_ACTION,
+              failedSteps: failed,
+              previousStatus: ctx.previousStatus,
+              notes: ctx.notes ?? null,
+            }
+          : { action: ADMIN_CANCEL_COMPLETE_ACTION, previousStatus: ctx.previousStatus },
+      });
+    } catch (error: unknown) {
+      reportMoneyAnomaly(
+        this.logger,
+        ADMIN_CANCEL_STEP_FAILED_MARKER,
+        `Admin cancel of order ${ctx.order.order_number}: progress marker not written (failed: ${
+          failed.join(', ') || 'none'
+        }): ${error instanceof Error ? error.message : String(error)}`,
+        { orderId: ctx.order.id, failedSteps: failed.join(',') }
+      );
+    }
+  }
+
+  /**
+   * A retry after a half-done admin cancel: the order is already cancelled and its latest
+   * admin-cancel marker lists failed steps. Re-run only those, instead of refusing.
+   */
+  private async resumeIncompleteAdminCancel(orderId: string) {
+    const order = await this.getOrderDetails(orderId);
+    if (!order || order.current_status !== 'cancelled') return null;
+    const events = await this.orderEventsService.listForOrder(orderId);
+    const marker = events.find(
+      (e) =>
+        e.event_type === 'admin_intervention' &&
+        [ADMIN_CANCEL_INCOMPLETE_ACTION, ADMIN_CANCEL_COMPLETE_ACTION].includes(
+          String((e.payload as any)?.action)
+        )
+    );
+    const payload = (marker?.payload ?? {}) as {
+      action?: string;
+      failedSteps?: AdminCancelStepName[];
+      previousStatus?: string;
+      notes?: string | null;
+    };
+    if (payload.action !== ADMIN_CANCEL_INCOMPLETE_ACTION) return null;
+    const steps = (payload.failedSteps ?? []).filter((s) => ADMIN_CANCEL_STEPS.includes(s));
+    const ctx: AdminCancelContext = {
+      order,
+      previousStatus: payload.previousStatus ?? 'cancelled',
+      adminUserId: await this.resolveOptionalUserId(),
+      notes: payload.notes ?? undefined,
+    };
+    const failedSteps = await this.runAdminCancelSteps(ctx, steps);
+    return this.adminCancelResult(order, ctx, failedSteps, true);
+  }
+
+  private adminCancelResult(
+    updatedOrder: unknown,
+    _ctx: AdminCancelContext,
+    failedSteps: AdminCancelStepName[],
+    resumed = false
+  ) {
+    const partial = failedSteps.length > 0;
     return {
       success: true,
+      partialFailure: partial,
+      failedSteps,
+      resumed,
       order: updatedOrder,
-      message: 'Order cancelled successfully',
+      message: partial
+        ? `Order cancelled, but ${failedSteps.join(', ')} failed and needs follow-up (alerted). Retry this request to resume.`
+        : resumed
+        ? 'Order cancellation completed (resumed)'
+        : 'Order cancelled successfully',
     };
   }
 
@@ -8518,31 +8688,6 @@ export class OrdersService {
       viaSystem: true,
       expectedFromStatus,
     });
-  }
-
-  private async finishAdminCancellation(
-    order: Orders,
-    adminUserId: string | null,
-    notes?: string
-  ): Promise<void> {
-    await this.persistCancellationMetadata(order.id, 'system', notes);
-    if (adminUserId) {
-      await this.createStatusHistoryEntry(
-        order.id,
-        'cancelled',
-        'Order cancelled by admin',
-        'system',
-        adminUserId,
-        notes
-      );
-    }
-    await this.runOrderCancellationSideEffects(
-      order,
-      order.id,
-      order.current_status,
-      'system',
-      notes
-    );
   }
 
   private async persistCancellationMetadata(
@@ -12548,7 +12693,9 @@ export class OrdersService {
     );
   }
 
-  private async releaseStripeAuthorizationIfNeeded(order: Orders): Promise<void> {
+  private async releaseStripeAuthorizationIfNeeded(
+    order: Orders
+  ): Promise<{ ok: boolean; message?: string } | void> {
     if ((order as any).payment_source !== 'credit_card') return;
     const ps = (order as any).payment_status;
     if (ps !== 'authorized' && ps !== 'pending') return;
@@ -12563,7 +12710,9 @@ export class OrdersService {
       this.logger.warn(
         `Stripe authorization cancel failed for order ${order.order_number}: ${cancelResult.message}`
       );
+      return { ok: false, message: cancelResult.message };
     }
+    return { ok: true };
   }
 
   private isTerminalOrderStatus(status: string): boolean {

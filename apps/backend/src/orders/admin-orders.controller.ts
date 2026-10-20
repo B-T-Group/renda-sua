@@ -61,6 +61,7 @@ import type {
   CreditOrderResult,
 } from '../credits/credit.types';
 import { maskPersonalData } from '../common/sentry/scrub-sentry-event';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 import {
   isAdminOperationalStatus,
   isAdminOverrideTransitionAllowed,
@@ -293,7 +294,11 @@ export class AdminOrdersController {
       const order = await this.requireOrder(orderId);
       if (dto.status === 'cancelled') {
         const reason = this.requireCancelReason(dto);
-        this.assertPrePickupCancellable(order.current_status);
+        // 'cancelled' passes through so a retry can resume a half-done cancel (C4);
+        // the service refuses it unless an incomplete-cancel marker exists.
+        if (order.current_status !== 'cancelled') {
+          this.assertPrePickupCancellable(order.current_status);
+        }
         return await this.ordersService.cancelOrderAsAdmin(
           orderId,
           reason,
@@ -301,12 +306,26 @@ export class AdminOrdersController {
         );
       }
       this.assertOperationalAdminStatus(dto.status);
-      this.assertOverrideTransition(order.current_status, dto.status);
-      await this.writeOperationalAdminStatus(order, dto);
-      return {
-        success: true,
-        message: 'Status updated successfully',
-      };
+      this.assertOverrideTransition(
+        order.current_status,
+        dto.status,
+        Boolean(order.assigned_agent_id),
+      );
+      const notes = this.overrideNotes(dto);
+      const historyWritten = await this.writeOperationalAdminStatus(
+        order,
+        dto.status,
+        notes,
+      );
+      return historyWritten
+        ? { success: true, message: 'Status updated successfully' }
+        : {
+            success: true,
+            partialFailure: true,
+            failedSteps: ['statusHistory'],
+            message:
+              'Status updated, but the history entry was not written (alerted)',
+          };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
       this.logger.error('Failed to update status', safeErrorMessage(error));
@@ -342,8 +361,24 @@ export class AdminOrdersController {
     );
   }
 
-  private assertOverrideTransition(from: string, to: string): void {
-    if (isAdminOverrideTransitionAllowed(from, to)) return;
+  /** C6: override notes are capped and PII-masked like the cancel reason. */
+  private overrideNotes(dto: UpdateOrderStatusDto): string {
+    const raw = (dto.notes ?? '').trim();
+    if (raw.length > ADMIN_CANCEL_REASON_MAX_LENGTH) {
+      throw new HttpException(
+        `The notes must be at most ${ADMIN_CANCEL_REASON_MAX_LENGTH} characters`,
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    return maskPersonalData(raw) || 'Admin status override';
+  }
+
+  private assertOverrideTransition(
+    from: string,
+    to: string,
+    hasAgent: boolean,
+  ): void {
+    if (isAdminOverrideTransitionAllowed(from, to, hasAgent)) return;
     throw new HttpException(
       `Cannot move an order from ${from} to ${to} via status override`,
       HttpStatus.BAD_REQUEST,
@@ -358,10 +393,18 @@ export class AdminOrdersController {
     );
   }
 
+  /**
+   * CAS status write, then the history row. C6: one mutation is not feasible here: a
+   * Hasura multi-field mutation is one transaction, but the history insert would still
+   * run when the CAS matched 0 rows (no conditional insert without a SQL function). So
+   * the CAS goes first; a failed history insert is alerted and reported as a partial
+   * failure, never a 500 after the status already changed. Returns false then.
+   */
   private async writeOperationalAdminStatus(
     order: { id: string; current_status: string },
-    dto: UpdateOrderStatusDto,
-  ): Promise<void> {
+    status: string,
+    notes: string,
+  ): Promise<boolean> {
     const updated = await this.hasuraSystemService.executeMutation<{
       update_orders: { affected_rows: number };
     }>(
@@ -379,7 +422,7 @@ export class AdminOrdersController {
       `,
       {
         orderId: order.id,
-        status: dto.status,
+        status,
         previousStatus: order.current_status,
       },
     );
@@ -390,42 +433,54 @@ export class AdminOrdersController {
         HttpStatus.CONFLICT,
       );
     }
-    await this.hasuraSystemService.executeMutation(
-      `
-      mutation AdminOperationalStatusHistory(
-        $orderId: uuid!
-        $status: order_status!
-        $previousStatus: order_status!
-        $notes: String
-      ) {
-        insert_order_status_history_one(
-          object: {
-            order_id: $orderId
-            status: $status
-            previous_status: $previousStatus
-            changed_by_type: "system"
-            notes: $notes
-          }
-        ) { id }
-      }
-      `,
-      {
-        orderId: order.id,
-        status: dto.status,
-        previousStatus: order.current_status,
-        notes: dto.notes || 'Admin status override',
-      },
-    );
+    let historyWritten = true;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+        mutation AdminOperationalStatusHistory(
+          $orderId: uuid!
+          $status: order_status!
+          $previousStatus: order_status!
+          $notes: String
+        ) {
+          insert_order_status_history_one(
+            object: {
+              order_id: $orderId
+              status: $status
+              previous_status: $previousStatus
+              changed_by_type: "system"
+              notes: $notes
+            }
+          ) { id }
+        }
+        `,
+        {
+          orderId: order.id,
+          status,
+          previousStatus: order.current_status,
+          notes,
+        },
+      );
+    } catch (error: unknown) {
+      historyWritten = false;
+      reportMoneyAnomaly(
+        this.logger,
+        'admin_status_override_history_failed',
+        `Status override of order ${order.id} (${order.current_status} -> ${status}) applied, history not written: ${safeErrorMessage(error)}`,
+        { orderId: order.id, from: order.current_status, to: status },
+      );
+    }
     await this.orderEventsService.recordEvent({
       orderId: order.id,
       eventType: 'gps_unavailable',
       actorType: 'support',
       payload: {
         old_status: order.current_status,
-        new_status: dto.status,
-        notes: dto.notes,
+        new_status: status,
+        notes,
       },
     });
+    return historyWritten;
   }
 
   @Post(':orderId/notes')

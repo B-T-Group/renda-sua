@@ -89,10 +89,17 @@ const ADMIN_OVERRIDE_POST_PICKUP_STATUSES: readonly string[] = ['in_transit', 'o
  *   back to a pre-pickup status, which would let a cancel or full refund follow);
  * - from anything else (pending_payment, picked_up, shipping statuses, delivered,
  *   complete, refund states, cancelled, failed, or a status added later): nothing;
- * - a move to the same status is not a transition.
+ * - a move to the same status is not a transition;
+ * - in_transit / out_for_delivery only when an agent is assigned (I1).
  */
-export function isAdminOverrideTransitionAllowed(from: string, to: string): boolean {
+export function isAdminOverrideTransitionAllowed(
+  from: string,
+  to: string,
+  hasAssignedAgent = false
+): boolean {
   if (from === to || !isAdminOperationalStatus(to)) return false;
+  // #627 I1: en route needs an agent; no jump to in_transit/out_for_delivery without one.
+  if (ADMIN_OVERRIDE_POST_PICKUP_STATUSES.includes(to) && !hasAssignedAgent) return false;
   if (from !== 'pending_payment' && isAdminPrePickupCancellableStatus(from)) return true;
   return (
     ADMIN_OVERRIDE_POST_PICKUP_STATUSES.includes(from) &&

@@ -1,5 +1,7 @@
+jest.mock('../common/utils/money-alert.util', () => ({ reportMoneyAnomaly: jest.fn() }));
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { AdminOrdersController } from './admin-orders.controller';
+import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
 
 describe('AdminOrdersController.updateStatus', () => {
   const order = {
@@ -12,9 +14,14 @@ describe('AdminOrdersController.updateStatus', () => {
     status?: string;
     cancelResult?: { success: boolean; message: string };
     cancelError?: Error;
+    agentId?: string | null;
   }) {
     const ordersService = {
-      getOrderById: jest.fn().mockResolvedValue({ ...order, current_status: opts?.status ?? order.current_status }),
+      getOrderById: jest.fn().mockResolvedValue({
+        ...order,
+        current_status: opts?.status ?? order.current_status,
+        assigned_agent_id: opts?.agentId ?? null,
+      }),
       cancelOrderAsAdmin: jest.fn().mockImplementation(async () => {
         if (opts?.cancelError) throw opts.cancelError;
         return (
@@ -203,6 +210,68 @@ describe('AdminOrdersController.updateStatus', () => {
         status: HttpStatus.BAD_REQUEST,
       });
       expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    }
+  });
+
+  it('#627 C6: override notes are PII-masked and capped (400 over 1000, nothing written)', async () => {
+    const { controller, hasuraSystemService, orderEventsService } = buildController();
+    await expect(controller.updateStatus('order-1', { status: 'preparing', notes: 'x'.repeat(1001) })).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+    });
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    await controller.updateStatus('order-1', { status: 'preparing', notes: ' call jo@x.com on +237 670 123 456 ' });
+    expect(hasuraSystemService.executeMutation.mock.calls[1][1].notes).toBe('call [REDACTED_EMAIL] on [REDACTED_PHONE]');
+    expect(orderEventsService.recordEvent.mock.calls[0][0].payload.notes).toBe('call [REDACTED_EMAIL] on [REDACTED_PHONE]');
+    expect(JSON.stringify(hasuraSystemService.executeMutation.mock.calls)).not.toContain('jo@x.com');
+    await controller.updateStatus('order-1', { status: 'preparing', notes: 'x'.repeat(1000) });
+    const r = await buildController().controller.updateStatus('order-1', { status: 'preparing' });
+    expect(r.success).toBe(true);
+  });
+
+  it('#627 C6: a failed history insert after the CAS is alerted and a partial result, not a 500', async () => {
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    const { controller, hasuraSystemService, orderEventsService } = buildController();
+    hasuraSystemService.executeMutation
+      .mockResolvedValueOnce({ update_orders: { affected_rows: 1 } })
+      .mockRejectedValueOnce(new Error('pg: secret detail'));
+    const r: any = await controller.updateStatus('order-1', { status: 'preparing', notes: 'n' });
+    expect(r).toMatchObject({ success: true, partialFailure: true, failedSteps: ['statusHistory'] });
+    expect(JSON.stringify(r)).not.toContain('secret detail');
+    expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect.anything(), 'admin_status_override_history_failed', expect.any(String),
+      expect.objectContaining({ orderId: 'order-1', from: 'confirmed', to: 'preparing' })
+    );
+    expect(orderEventsService.recordEvent).toHaveBeenCalled();
+    const ok: any = await buildController().controller.updateStatus('order-1', { status: 'preparing', notes: 'n' });
+    expect(ok.partialFailure).toBeUndefined();
+  });
+
+  it('#627 I1: in_transit / out_for_delivery only when an agent is assigned', async () => {
+    for (const to of ['in_transit', 'out_for_delivery']) {
+      const none = buildController({ status: 'ready_for_pickup' });
+      await expect(none.controller.updateStatus('order-1', { status: to, notes: 'x' })).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+      });
+      expect(none.hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      const withAgent = buildController({ status: 'ready_for_pickup', agentId: 'agent-1' });
+      await expect(withAgent.controller.updateStatus('order-1', { status: to, notes: 'x' })).resolves.toMatchObject({ success: true });
+    }
+    const swap = buildController({ status: 'in_transit' });
+    await expect(swap.controller.updateStatus('order-1', { status: 'out_for_delivery', notes: 'x' })).rejects.toMatchObject({
+      status: HttpStatus.BAD_REQUEST,
+    });
+  });
+
+  it('#627 C4: a retry on a cancelled order reaches the service (which resumes or refuses)', async () => {
+    const { controller, ordersService } = buildController({ status: 'cancelled' });
+    await controller.updateStatus('order-1', { status: 'cancelled', reason: 'retry' } as any);
+    expect(ordersService.cancelOrderAsAdmin).toHaveBeenCalledWith('order-1', 'retry', 'cancelled');
+    for (const status of ['picked_up', 'delivered', 'failed']) {
+      const b = buildController({ status });
+      await expect(b.controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any)).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+      });
+      expect(b.ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
     }
   });
 });

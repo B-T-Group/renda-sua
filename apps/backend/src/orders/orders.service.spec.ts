@@ -413,6 +413,7 @@ describe('OrdersService', () => {
           useValue: {
             listForOrder: jest.fn().mockResolvedValue([]),
             recordEvent: jest.fn(),
+            recordEventStrict: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -5633,12 +5634,114 @@ describe('OrdersService', () => {
       jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(openOrder);
       hasuraUserService.getUser.mockResolvedValue({ id: 'admin-1' } as any);
       const releaseStripe = jest.spyOn(service as any, 'releaseStripeAuthorizationIfNeeded').mockResolvedValue(undefined);
-      const finish = jest.spyOn(service as any, 'finishAdminCancellation').mockResolvedValue(undefined);
+      const sideEffects = jest.spyOn(service as any, 'runOrderCancellationSideEffects').mockResolvedValue(undefined);
+      const persistMeta = jest.spyOn(service as any, 'persistCancellationMetadata').mockResolvedValue(undefined);
       orderStatusService.updateOrderStatus.mockRejectedValueOnce(new HttpException('moved', HttpStatus.CONFLICT));
       await expect(service.cancelOrderAsAdmin('order-123', 'r', 'confirmed')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
       expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith('order-123', 'cancelled', expect.objectContaining({ expectedFromStatus: 'confirmed' }));
       expect(releaseStripe).not.toHaveBeenCalled();
-      expect(finish).not.toHaveBeenCalled();
+      expect(sideEffects).not.toHaveBeenCalled();
+      expect(persistMeta).not.toHaveBeenCalled();
+    });
+
+    describe('#627 C4: a failed step never aborts the rest of the cancel', () => {
+      const events = () => (service as any).orderEventsService;
+      const setup = () => {
+        jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(openOrder);
+        hasuraUserService.getUser.mockResolvedValue({ id: 'admin-1' } as any);
+        orderStatusService.updateOrderStatus.mockResolvedValue({ ...openOrder, current_status: 'cancelled' });
+        (reportMoneyAnomaly as jest.Mock).mockClear();
+        events().recordEventStrict.mockClear().mockResolvedValue(undefined);
+        return {
+          stripe: jest.spyOn(service as any, 'releaseStripeAuthorizationIfNeeded'),
+          meta: jest.spyOn(service as any, 'persistCancellationMetadata').mockResolvedValue(undefined),
+          history: jest.spyOn(service as any, 'createStatusHistoryEntry').mockResolvedValue(undefined),
+          side: jest.spyOn(service as any, 'runOrderCancellationSideEffects').mockResolvedValue(undefined),
+        };
+      };
+
+      it.each([
+        ['throws', () => Promise.reject(new Error('stripe down: sk_live_secret'))],
+        ['returns ok:false', () => Promise.resolve({ ok: false, message: 'card_declined internal' })],
+      ])('Stripe void %s: inventory/hold/deposit/history still run; partialFailure, alert, marker', async (_n, impl) => {
+        const m = setup();
+        m.stripe.mockImplementation(impl as any);
+        const res: any = await service.cancelOrderAsAdmin('order-123', 'Admin cancel');
+        expect(m.meta).toHaveBeenCalled();
+        expect(m.history).toHaveBeenCalled();
+        expect(m.side).toHaveBeenCalledWith(openOrder, 'order-123', 'assigned_to_agent', 'system', 'Admin cancel');
+        expect(res).toMatchObject({ success: true, partialFailure: true, failedSteps: ['voidStripeAuthorization'], resumed: false });
+        // No raw internal error text in the response.
+        expect(JSON.stringify(res)).not.toMatch(/sk_live|card_declined|stripe down/);
+        expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+          expect.anything(), 'admin_cancel_step_failed', expect.any(String),
+          expect.objectContaining({ orderId: openOrder.id, step: 'voidStripeAuthorization' })
+        );
+        expect(events().recordEventStrict).toHaveBeenCalledWith(expect.objectContaining({
+          eventType: 'admin_intervention',
+          payload: expect.objectContaining({ action: 'admin_cancel_incomplete', failedSteps: ['voidStripeAuthorization'], previousStatus: 'assigned_to_agent', notes: 'Admin cancel' }),
+        }));
+      });
+
+      it('every step failing: all four attempted and listed', async () => {
+        const m = setup();
+        m.stripe.mockRejectedValue(new Error('x'));
+        m.meta.mockRejectedValue(new Error('x'));
+        m.history.mockRejectedValue(new Error('x'));
+        m.side.mockRejectedValue(new Error('x'));
+        const res: any = await service.cancelOrderAsAdmin('order-123', 'r');
+        expect(res.failedSteps).toEqual(['voidStripeAuthorization', 'persistCancellationMetadata', 'createStatusHistoryEntry', 'cancellationSideEffects']);
+        expect(reportMoneyAnomaly).toHaveBeenCalledTimes(4);
+      });
+
+      it('all steps ok: success, no partialFailure, complete marker', async () => {
+        const m = setup();
+        m.stripe.mockResolvedValue({ ok: true });
+        const res: any = await service.cancelOrderAsAdmin('order-123', 'r');
+        expect(res).toMatchObject({ success: true, partialFailure: false, failedSteps: [] });
+        expect(events().recordEventStrict).toHaveBeenCalledWith(expect.objectContaining({
+          payload: expect.objectContaining({ action: 'admin_cancel_complete' }),
+        }));
+        expect(reportMoneyAnomaly).not.toHaveBeenCalled();
+      });
+
+      it('a marker write failure is alerted, not thrown', async () => {
+        const m = setup();
+        m.stripe.mockRejectedValue(new Error('x'));
+        events().recordEventStrict.mockRejectedValue(new Error('db'));
+        const res: any = await service.cancelOrderAsAdmin('order-123', 'r');
+        expect(res.partialFailure).toBe(true);
+        expect(reportMoneyAnomaly).toHaveBeenCalledTimes(2);
+      });
+
+      it('retry of a half-done cancel resumes ONLY the failed steps (no second CAS, not refused)', async () => {
+        const m = setup();
+        jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({ ...openOrder, current_status: 'cancelled' });
+        events().listForOrder.mockResolvedValueOnce([
+          { event_type: 'admin_intervention', payload: { action: 'admin_cancel_incomplete', failedSteps: ['voidStripeAuthorization', 'cancellationSideEffects'], previousStatus: 'confirmed', notes: 'orig' } },
+          { event_type: 'admin_intervention', payload: { action: 'admin_cancel_complete' } },
+        ]);
+        m.stripe.mockResolvedValue({ ok: true });
+        const res: any = await service.cancelOrderAsAdmin('order-123', 'retry');
+        expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+        expect(m.stripe).toHaveBeenCalledTimes(1);
+        expect(m.side).toHaveBeenCalledWith(expect.anything(), 'order-123', 'confirmed', 'system', 'orig');
+        expect(m.meta).not.toHaveBeenCalled();
+        expect(m.history).not.toHaveBeenCalled();
+        expect(res).toMatchObject({ success: true, partialFailure: false, resumed: true });
+        expect(events().recordEventStrict).toHaveBeenCalledWith(expect.objectContaining({ payload: expect.objectContaining({ action: 'admin_cancel_complete' }) }));
+      });
+
+      it('a cancelled order whose latest marker is complete (or none) is still refused', async () => {
+        setup();
+        jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue({ ...openOrder, current_status: 'cancelled' });
+        events().listForOrder.mockResolvedValueOnce([
+          { event_type: 'admin_intervention', payload: { action: 'admin_cancel_complete' } },
+          { event_type: 'admin_intervention', payload: { action: 'admin_cancel_incomplete', failedSteps: ['voidStripeAuthorization'] } },
+        ]);
+        await expect(service.cancelOrderAsAdmin('order-123', 'r')).rejects.toMatchObject({ status: HttpStatus.BAD_REQUEST });
+        expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+      });
     });
 
     it.each(['picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'complete'])(
