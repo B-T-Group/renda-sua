@@ -690,6 +690,8 @@ export const ADMIN_FULL_REFUND_ALLOWED_STATUSES: ReadonlySet<string> = new Set([
 
 export const ADMIN_FULL_REFUND_DEPOSIT_FAILED_MARKER = 'admin_full_refund_cancel_deposit_refund_failed';
 export const ADMIN_FULL_REFUND_STEP_FAILED_MARKER = 'admin_full_refund_cancel_step_failed';
+/** #626 D2: what the API says about a failed step (the detail is only logged / alerted). */
+export const ADMIN_FULL_REFUND_STEP_FAILED_MESSAGE = 'Step failed; details are in the logs (alerted)';
 
 /** What happened to a paid deposit on cancel. */
 export type DepositCancelOutcome =
@@ -8538,13 +8540,15 @@ export class OrdersService {
     // Only the compare-and-set winner reaches here. The order IS cancelled now, so a
     // failing step below must not turn into a bare 500: each is caught, alerted
     // (admin_full_refund_cancel_step_failed) and listed in `failedSteps`.
+    // D2: the response carries a generic message per failed step; the detail goes to
+    // the log / alert only (no raw internal error text to the API caller).
     const failedSteps: Array<{ step: string; error: string }> = [];
     const step = async <T>(name: string, fn: () => Promise<T>): Promise<T | undefined> => {
       try {
         return await fn();
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : String(error);
-        failedSteps.push({ step: name, error: message });
+        failedSteps.push({ step: name, error: ADMIN_FULL_REFUND_STEP_FAILED_MESSAGE });
         reportMoneyAnomaly(
           this.logger,
           ADMIN_FULL_REFUND_STEP_FAILED_MARKER,
@@ -8555,7 +8559,13 @@ export class OrdersService {
       }
     };
     const notes = `Admin full refund: ${reason}`;
-    await step('releaseStripeAuthorization', () => this.releaseStripeAuthorizationIfNeeded(order));
+    // D1: a void that fails WITHOUT throwing ({ ok: false }) is a failed step too.
+    await step('releaseStripeAuthorization', async () => {
+      const result = await this.releaseStripeAuthorizationIfNeeded(order);
+      if (result && !result.ok) {
+        throw new Error(`Stripe authorization void failed: ${result.message ?? 'unknown'}`);
+      }
+    });
     await step('supersedePendingOrderTxs', () => this.supersedePendingOrderTxsOnCancel(order));
     await step('persistCancellationMetadata', () => this.persistCancellationMetadata(order.id, 'system', notes));
     await step('createStatusHistoryEntry', () =>
@@ -12670,7 +12680,9 @@ export class OrdersService {
     );
   }
 
-  private async releaseStripeAuthorizationIfNeeded(order: Orders): Promise<void> {
+  private async releaseStripeAuthorizationIfNeeded(
+    order: Orders
+  ): Promise<{ ok: boolean; message?: string } | void> {
     if ((order as any).payment_source !== 'credit_card') return;
     const ps = (order as any).payment_status;
     if (ps !== 'authorized' && ps !== 'pending') return;
@@ -12685,7 +12697,9 @@ export class OrdersService {
       this.logger.warn(
         `Stripe authorization cancel failed for order ${order.order_number}: ${cancelResult.message}`
       );
+      return { ok: false, message: cancelResult.message };
     }
+    return { ok: true };
   }
 
   private isTerminalOrderStatus(status: string): boolean {

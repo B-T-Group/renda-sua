@@ -140,13 +140,36 @@ describe('OrdersService.adminFullRefundCancel', () => {
       expect(db.status).toBe('cancelled');
       expect(res).toMatchObject({ success: true, partialFailure: true });
       expect(res.failedSteps).toHaveLength(1);
-      expect(res.failedSteps[0].error).toBe('boom');
+      // D2: no raw internal error text in the response; the detail is in the alert.
+      expect(res.failedSteps[0].error).toBe('Step failed; details are in the logs (alerted)');
+      expect(JSON.stringify(res)).not.toContain('boom');
       expect(res.message).toMatch(/FAILED and needs manual follow-up/);
       expect(reportMoneyAnomaly).toHaveBeenCalledWith(expect.anything(), 'admin_full_refund_cancel_step_failed', expect.stringContaining('boom'), expect.objectContaining({ orderId: 'o-1' }));
       expect(svc.runOrderCancellationSideEffects).toHaveBeenCalledTimes(1);
       if (m === 'runOrderCancellationSideEffects') expect(res.depositRefund.status).toBe('failed');
     }
   );
+
+  it('#626 D1: a Stripe void that fails WITHOUT throwing ({ ok: false }) is a failed step, alerted, the rest still runs', async () => {
+    (reportMoneyAnomaly as jest.Mock).mockClear();
+    const { svc } = service('confirmed');
+    svc.releaseStripeAuthorizationIfNeeded.mockResolvedValueOnce({ ok: false, message: 'pi secret detail' });
+    const res = await svc.adminFullRefundCancel('o-1', 'r');
+    expect(res).toMatchObject({ success: true, partialFailure: true });
+    expect(res.failedSteps).toEqual([{ step: 'releaseStripeAuthorization', error: 'Step failed; details are in the logs (alerted)' }]);
+    expect(JSON.stringify(res)).not.toContain('pi secret detail');
+    expect(reportMoneyAnomaly).toHaveBeenCalledWith(
+      expect.anything(), 'admin_full_refund_cancel_step_failed', expect.stringContaining('pi secret detail'),
+      expect.objectContaining({ step: 'releaseStripeAuthorization' })
+    );
+    expect(svc.runOrderCancellationSideEffects).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([[{ ok: true }], [undefined]])('#626 D1: a void result %o is not a failure', async (r) => {
+    const { svc } = service('confirmed');
+    svc.releaseStripeAuthorizationIfNeeded.mockResolvedValueOnce(r);
+    await expect(svc.adminFullRefundCancel('o-1', 'r')).resolves.toMatchObject({ partialFailure: false, failedSteps: [] });
+  });
 
   it('no failure -> partialFailure false, failedSteps empty', async () => {
     const { svc } = service('confirmed');
