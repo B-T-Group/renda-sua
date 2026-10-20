@@ -164,6 +164,10 @@ function pgHasura(
         return { release_agent_order_hold: r.rows };
       }
       case 'ClaimWithheldShortAlert': {
+        // The fake emulates the WHERE below; pin that the real mutation carries it.
+        if (!q.includes('_not: { payload: { _has_key: "withheldShortAlertedAt" } }')) {
+          throw new Error('ClaimWithheldShortAlert is not a CAS on the stamp key');
+        }
         // As Postgres: the row only matches while the key is absent (one winner).
         const e = mem.events.find((x) => x.id === v.id && !('withheldShortAlertedAt' in (x.payload ?? {})));
         if (e) e.payload = { ...e.payload, ...v.patch };
