@@ -332,8 +332,8 @@ const ApplicantsScreen: React.FC = () => {
       {(pending.length > 0 || autoDeclined.length > 0) && (
         <Box mb={3}>
           <Typography variant="subtitle1" fontWeight={600} mb={2}>
-            Pending ({pending.length})
-            {autoDeclined.length > 0 && ` · ${autoDeclined.length} auto-declined`}
+            {t('dedicatedAgents.applicant.pending', 'Pending')} ({pending.length})
+            {autoDeclined.length > 0 && ` · ${autoDeclined.length} ${t('dedicatedAgents.applicant.autoDeclined', 'auto-declined')}`}
           </Typography>
           <Stack spacing={1.5}>
             {autoDeclined.map((app) => (
@@ -368,9 +368,9 @@ const ApplicantsScreen: React.FC = () => {
                       {app.agent.firstName}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Joined {new Date(app.agent.joinedAt).toLocaleDateString()} · ✓{' '}
+                      {t('dedicatedAgents.applicant.joined', 'Joined')} {new Date(app.agent.joinedAt).toLocaleDateString()} · ✓{' '}
                       {app.deliveriesCompleted} · ✕ {app.missedDeliveries}
-                      {app.onTimePickupPct !== null && ` · ${app.onTimePickupPct}% on-time`}
+                      {app.onTimePickupPct !== null && ` · ${app.onTimePickupPct}% ${t('dedicatedAgents.applicant.onTimeShort', 'on-time')}`}
                       {app.distanceKm !== null && ` · ${app.distanceKm.toFixed(1)} km`}
                     </Typography>
                   </Stack>
@@ -410,7 +410,7 @@ const ApplicantsScreen: React.FC = () => {
       {accepted.length > 0 && (
         <Box>
           <Typography variant="subtitle1" fontWeight={600} mb={2}>
-            Accepted ({accepted.length})
+            {t('dedicatedAgents.applicant.accepted', 'Accepted')} ({accepted.length})
           </Typography>
           <Stack spacing={1.5}>
             {accepted.map((app) => (
@@ -482,7 +482,7 @@ const ApplicantsScreen: React.FC = () => {
             {t('common.cancel', 'Cancel')}
           </Button>
           <Button variant="contained" color="error" onClick={handleClose}>
-            Close
+            {t('common.close', 'Close')}
           </Button>
         </DialogActions>
       </Dialog>

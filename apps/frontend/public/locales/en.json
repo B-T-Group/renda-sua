@@ -8876,6 +8876,10 @@
       }
     },
     "applicant": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "joined": "Joined",
+      "onTimeShort": "on-time",
       "stats": "Joined {{date}} · {{n}} deliveries · {{m}} missed",
       "onTime": "{{pct}}% on-time pickups",
       "acceptConfirm": "Accept {{name}}?",

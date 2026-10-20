@@ -8893,6 +8893,10 @@
       }
     },
     "applicant": {
+      "pending": "En attente",
+      "accepted": "Acceptés",
+      "joined": "Inscrit le",
+      "onTimeShort": "à l'heure",
       "stats": "Inscrit le {{date}} · {{n}} livraisons · {{m}} manquées",
       "onTime": "{{pct}} % de collectes à l'heure",
       "acceptConfirm": "Accepter {{name}} ?",
