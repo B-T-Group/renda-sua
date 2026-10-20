@@ -25,7 +25,9 @@ jest.mock('../../hooks/usePermissions', () => ({
 }));
 
 jest.mock('../admin/dedicated-agents/AdminDedicatedAssignmentsSection', () => ({
-  AdminDedicatedAssignmentsSection: () => <div data-testid="dedicated-section">Dedicated Section</div>,
+  AdminDedicatedAssignmentsSection: () => (
+    <div data-testid="dedicated-section">Dedicated Section</div>
+  ),
 }));
 
 describe('AdminManageAgents', () => {
@@ -45,7 +47,9 @@ describe('AdminManageAgents', () => {
     render(<AdminManageAgents />);
 
     await waitFor(() => {
-      expect(screen.queryByText('Dedicated')).not.toBeInTheDocument();
+      const tabs = screen.queryAllByRole('tab');
+      const dedicatedTab = tabs.find((tab) => tab.textContent?.includes('Dedicated'));
+      expect(dedicatedTab).toBeUndefined();
     });
   });
 
@@ -57,11 +61,13 @@ describe('AdminManageAgents', () => {
     render(<AdminManageAgents />);
 
     await waitFor(() => {
-      expect(screen.queryByText('Dedicated')).not.toBeInTheDocument();
+      const tabs = screen.queryAllByRole('tab');
+      const dedicatedTab = tabs.find((tab) => tab.textContent?.includes('Dedicated'));
+      expect(dedicatedTab).toBeUndefined();
     });
   });
 
-  it('shows error message with retry button on non-403/404 error', async () => {
+  it('shows error with retry button on non-403/404 error', async () => {
     mockGetAdminAssignments.mockRejectedValue({
       response: { status: 500, data: { message: 'Server error' } },
     });
