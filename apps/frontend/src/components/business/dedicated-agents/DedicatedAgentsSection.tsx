@@ -275,11 +275,10 @@ const DedicatedAgentsSection: React.FC<DedicatedAgentsSectionProps> = ({ locatio
     setSelectedSlotForPost(null);
   };
 
-  const handlePostSuccess = async (postingId: string) => {
+  const handlePostSuccess = async () => {
     await loadData();
     handleClosePostDialog();
     setSnackbarMessage(t('dedicatedAgents.form.posted', 'Request posted'));
-    navigate(`/business/locations/${locationId}/dedicated-agents/postings/${postingId}`);
   };
 
   if (loading && slots.length === 0) {

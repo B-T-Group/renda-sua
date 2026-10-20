@@ -1,13 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
   Button,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   FormControl,
+  FormHelperText,
   IconButton,
   InputLabel,
   MenuItem,
@@ -20,7 +22,13 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Remove as RemoveIcon } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
+import { useDedicatedAgentsAnalytics } from '../../../hooks/useDedicatedAgentsAnalytics';
+import {
+  extractDedicatedAgentsError,
+  mapDedicatedAgentsErrorCode,
+} from '../../../utils/dedicatedAgentsErrors';
 import type {
   DayOfWeek,
   DedicatedPostingView,
@@ -35,7 +43,7 @@ interface PostRequestDialogProps {
   existingPostings: DedicatedPostingView[];
   selectedSlot: SlotKey | null;
   onClose: () => void;
-  onSuccess: (postingId: string) => void;
+  onSuccess: () => void;
 }
 
 const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
@@ -47,8 +55,10 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
   onClose,
   onSuccess,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const dedicatedApi = useDedicatedAgents();
+  const { track } = useDedicatedAgentsAnalytics();
 
   const [headcount, setHeadcount] = useState(1);
   const [selectedSlots, setSelectedSlots] = useState<SlotKey[]>(
@@ -58,16 +68,45 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
   const [terms, setTerms] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (open) {
+      setHeadcount(1);
+      setSelectedSlots(selectedSlot ? [selectedSlot] : []);
+      setSelectedDays([1, 2, 3, 4, 5, 6, 7]);
+      setTerms('');
+      setError(null);
+      setFieldErrors({});
+      
+      track('posting_form_opened', {
+        role: 'business',
+        locationId,
+      });
+    }
+  }, [open, selectedSlot, locationId, track]);
 
   const handleSubmit = async () => {
-    if (selectedSlots.length === 0 || selectedDays.length === 0) {
-      setError(t('common.required', 'Required'));
+    setFieldErrors({});
+    setError(null);
+
+    if (selectedSlots.length === 0) {
+      setFieldErrors({ slots: t('dedicatedAgents.errors.invalid_slot_keys', 'Please select at least one slot') });
+      return;
+    }
+
+    if (selectedDays.length === 0) {
+      setFieldErrors({ days: t('dedicatedAgents.errors.invalid_days_of_week', 'Please select at least one day') });
+      return;
+    }
+
+    if (headcount < 1 || headcount > 10) {
+      setFieldErrors({ headcount: t('dedicatedAgents.errors.invalid_headcount', 'Headcount must be between 1 and 10') });
       return;
     }
 
     try {
       setSubmitting(true);
-      setError(null);
 
       const response = await dedicatedApi.createPosting(locationId, {
         headcount,
@@ -76,10 +115,50 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
         terms: terms.trim() || null,
       });
 
-      onSuccess(response.posting.id);
+      track('posting_created', {
+        role: 'business',
+        locationId,
+        headcount,
+        slots: selectedSlots.length,
+        days: selectedDays.length,
+        termsLength: terms.trim().length,
+      });
+
+      onSuccess();
     } catch (err: any) {
+      const { code } = extractDedicatedAgentsError(err);
+
+      if (code === 'posting_already_open') {
+        const existingPostingId = err.response?.data?.posting?.id;
+        if (existingPostingId) {
+          navigate(`/business/locations/${locationId}/dedicated-agents/postings/${existingPostingId}`);
+          onClose();
+          return;
+        }
+      }
+
+      if (code === 'invalid_headcount') {
+        setFieldErrors({ headcount: t(mapDedicatedAgentsErrorCode(code), 'Headcount must be between 1 and 10') });
+      } else if (code === 'invalid_slot_keys') {
+        setFieldErrors({ slots: t(mapDedicatedAgentsErrorCode(code), 'Please select at least one slot') });
+      } else if (code === 'invalid_days_of_week') {
+        setFieldErrors({ days: t(mapDedicatedAgentsErrorCode(code), 'Please select at least one day') });
+      } else if (code === 'terms_too_long') {
+        setFieldErrors({ terms: t(mapDedicatedAgentsErrorCode(code), 'Terms must be 1000 characters or less') });
+      } else if (code === 'slot_disabled') {
+        setFieldErrors({ slots: t(mapDedicatedAgentsErrorCode(code), 'Turn slot back on first') });
+      } else {
+        const errorKey = code ? mapDedicatedAgentsErrorCode(code) : 'dedicatedAgents.generic';
+        setError(t(errorKey, 'Something went wrong'));
+      }
+
+      track('action_conflict', {
+        role: 'business',
+        endpoint: 'createPosting',
+        code: code || 'unknown',
+      });
+
       console.error('Error creating posting:', err);
-      setError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
     } finally {
       setSubmitting(false);
     }
@@ -88,7 +167,9 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
   const isSlotDisabled = (slotKey: SlotKey) =>
     existingPostings.some((p) => p.slotKeys.includes(slotKey));
 
-  const dayLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+  const dayLabels = i18n.language === 'fr' 
+    ? ['L', 'M', 'M', 'J', 'V', 'S', 'D']
+    : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
@@ -103,7 +184,7 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
               <IconButton
                 size="small"
                 onClick={() => setHeadcount(Math.max(1, headcount - 1))}
-                disabled={headcount <= 1}
+                disabled={headcount <= 1 || submitting}
               >
                 <RemoveIcon />
               </IconButton>
@@ -111,11 +192,14 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
               <IconButton
                 size="small"
                 onClick={() => setHeadcount(Math.min(10, headcount + 1))}
-                disabled={headcount >= 10}
+                disabled={headcount >= 10 || submitting}
               >
                 <AddIcon />
               </IconButton>
             </Stack>
+            {fieldErrors.headcount && (
+              <FormHelperText error>{fieldErrors.headcount}</FormHelperText>
+            )}
           </Box>
 
           <Box>
@@ -128,7 +212,7 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
                   key={slot.slotKey}
                   label={t(`dedicatedAgents.slots.${slot.slotKey}`, slot.slotKey)}
                   onClick={() => {
-                    if (!isSlotDisabled(slot.slotKey)) {
+                    if (!isSlotDisabled(slot.slotKey) && !submitting) {
                       setSelectedSlots((prev) =>
                         prev.includes(slot.slotKey)
                           ? prev.filter((s) => s !== slot.slotKey)
@@ -137,7 +221,7 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
                     }
                   }}
                   color={selectedSlots.includes(slot.slotKey) ? 'primary' : 'default'}
-                  disabled={isSlotDisabled(slot.slotKey)}
+                  disabled={isSlotDisabled(slot.slotKey) || submitting}
                 />
               ))}
             </Stack>
@@ -145,6 +229,9 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
               <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
                 {t('dedicatedAgents.form.alreadyPosted', 'Already posted')}
               </Typography>
+            )}
+            {fieldErrors.slots && (
+              <FormHelperText error>{fieldErrors.slots}</FormHelperText>
             )}
           </Box>
 
@@ -159,14 +246,20 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
                   label={dayLabels[idx]}
                   size="small"
                   onClick={() => {
-                    setSelectedDays((prev) =>
-                      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
-                    );
+                    if (!submitting) {
+                      setSelectedDays((prev) =>
+                        prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+                      );
+                    }
                   }}
                   color={selectedDays.includes(day) ? 'primary' : 'default'}
+                  disabled={submitting}
                 />
               ))}
             </Stack>
+            {fieldErrors.days && (
+              <FormHelperText error>{fieldErrors.days}</FormHelperText>
+            )}
           </Box>
 
           <Box>
@@ -184,10 +277,12 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
             rows={4}
             value={terms}
             onChange={(e) => setTerms(e.target.value.slice(0, 1000))}
-            helperText={`${terms.length}/1000 · ${t(
+            helperText={fieldErrors.terms || `${terms.length}/1000 · ${t(
               'dedicatedAgents.form.termsHelper',
               'Hours, dress code, what to expect.'
             )}`}
+            error={!!fieldErrors.terms}
+            disabled={submitting}
             fullWidth
           />
 
@@ -206,7 +301,12 @@ const PostRequestDialog: React.FC<PostRequestDialogProps> = ({
         <Button onClick={onClose} disabled={submitting}>
           {t('common.cancel', 'Cancel')}
         </Button>
-        <Button variant="contained" onClick={handleSubmit} disabled={submitting}>
+        <Button
+          variant="contained"
+          onClick={handleSubmit}
+          disabled={submitting}
+          startIcon={submitting ? <CircularProgress size={16} /> : undefined}
+        >
           {t('dedicatedAgents.form.publish', 'Publish')}
         </Button>
       </DialogActions>
