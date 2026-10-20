@@ -169,7 +169,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     type: string,
     amount: number
   ): 'default' | 'success' | 'error' => {
-    if (type === 'hold' || type === 'release') return 'default';
+    if (type === 'hold' || type === 'release' || type === 'forfeit') return 'default';
     if (['deposit', 'refund', 'exchange'].includes(type)) return 'success';
     if (['withdrawal', 'payment', 'fee', 'transfer'].includes(type))
       return 'error';
@@ -178,7 +178,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
   };
 
   const getTransactionAmountColor = (type: string, amount: number): string => {
-    if (type === 'hold' || type === 'release') return 'text.secondary';
+    if (type === 'hold' || type === 'release' || type === 'forfeit') return 'text.secondary';
     if (['deposit', 'refund', 'exchange'].includes(type)) return 'success.main';
     if (['withdrawal', 'payment', 'fee', 'transfer'].includes(type))
       return 'error.main';
@@ -191,7 +191,7 @@ const MobileBalanceChip: React.FC<MobileBalanceChipProps> = ({ inverted }) => {
     amount: number,
     currency: string
   ): string => {
-    if (type === 'hold' || type === 'release')
+    if (type === 'hold' || type === 'release' || type === 'forfeit')
       return formatCurrency(Math.abs(amount), currency);
     if (['deposit', 'refund', 'exchange'].includes(type))
       return '+' + formatCurrency(Math.abs(amount), currency);

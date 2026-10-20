@@ -17770,7 +17770,6 @@ export class OrdersService {
     return `settle:${stage}:${step}:${orderId}`;
   }
 
-  /** A ledger move that did not succeed must stop settlement (never pay the merchant on top of it). */
   /**
    * Agent drop: release the agent's hold for this order through release_agent_order_hold
    * (min(net held, agent_hold_amount), atomic under the account row lock). The old write
@@ -17799,6 +17798,7 @@ export class OrdersService {
     }
   }
 
+  /** A ledger move that did not succeed must stop settlement (never pay the merchant on top of it). */
   private assertLedgerMove(
     result: { success?: boolean; error?: string } | undefined,
     label: string,
