@@ -103,8 +103,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
     try {
       setMutating(`slot-${slotKey}`);
       await dedicatedAgentsService.updatePickupSlots(locationId, {
-        slotKey,
-        isEnabled: enabled,
+        slots: [{ slotKey, isEnabled: enabled }],
       });
       await loadData();
     } catch (err: any) {
@@ -129,8 +128,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
 
     try {
       await dedicatedAgentsService.updatePickupSlots(locationId, {
-        slotKey: confirmPause.slotKey,
-        isEnabled: false,
+        slots: [{ slotKey: confirmPause.slotKey, isEnabled: false }],
         confirmPauseAgents: true,
       });
       setConfirmPause(null);
@@ -147,8 +145,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
     try {
       setMutating(`slot-${slotKey}`);
       await dedicatedAgentsService.updatePickupSlots(locationId, {
-        slotKey,
-        pickupTime,
+        slots: [{ slotKey, pickupTime }],
       });
       await loadData();
       setPickupMenuSlot(null);
