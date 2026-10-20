@@ -5576,7 +5576,7 @@ describe('OrdersService', () => {
       });
 
       await expect(service.cancelOrderAsAdmin('order-123')).rejects.toMatchObject(
-        { status: HttpStatus.CONFLICT, response: expect.objectContaining({ error: 'ORDER_ALREADY_PICKED_UP' }) }
+        { status: HttpStatus.CONFLICT, response: expect.objectContaining({ error: 'ORDER_ALREADY_CANCELLED' }) }
       );
       expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });
@@ -5587,8 +5587,22 @@ describe('OrdersService', () => {
       const releaseStripe = jest.spyOn(service as any, 'releaseStripeAuthorizationIfNeeded').mockResolvedValue(undefined);
       const sideEffects = jest.spyOn(service as any, 'runOrderCancellationSideEffects').mockResolvedValue(undefined);
       const persistMeta = jest.spyOn(service as any, 'persistCancellationMetadata').mockResolvedValue(undefined);
+      // QA #642 M1: the progress row is written before the CAS and removed when the CAS loses.
+      const ops: string[] = [];
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(async (q: string) => {
+        ops.push(/(?:query|mutation) (\w+)/.exec(q)?.[1] ?? '?');
+        return { order_events: [] };
+      });
+      (hasuraSystemService.executeMutation as jest.Mock).mockImplementation(async (q: string) => {
+        const op = /(?:query|mutation) (\w+)/.exec(q)?.[1] ?? '?';
+        ops.push(op);
+        if (op === 'InsertAdminCancelProgress') return { insert_order_events_one: { id: 'ev-1' } };
+        if (op === 'DeleteAdminCancelProgress') return { delete_order_events: { affected_rows: 1 } };
+        throw new Error(`unexpected ${op}`);
+      });
       orderStatusService.updateOrderStatus.mockRejectedValueOnce(new HttpException('moved', HttpStatus.CONFLICT));
       await expect(service.cancelOrderAsAdmin('order-123', 'r', 'confirmed')).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+      expect(ops).toEqual(['AdminCancelProgress', 'InsertAdminCancelProgress', 'DeleteAdminCancelProgress']);
       expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith('order-123', 'cancelled', expect.objectContaining({ expectedFromStatus: 'confirmed' }));
       expect(releaseStripe).not.toHaveBeenCalled();
       expect(sideEffects).not.toHaveBeenCalled();

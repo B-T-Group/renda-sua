@@ -1,6 +1,7 @@
+import { BadRequestException, ValidationPipe } from '@nestjs/common';
 import { validate } from 'class-validator';
 import { TrackSiteEventDto } from './track-site-event.dto';
-import { SITE_EVENT_TYPES_V1 } from '../site-event-types';
+import { DEDICATED_UI_SITE_EVENT_TYPES, SERVER_SITE_EVENT_TYPES, SITE_EVENT_TYPES_V1 } from '../site-event-types';
 
 describe('TrackSiteEventDto', () => {
   it('accepts valid public event types', async () => {
@@ -79,5 +80,62 @@ describe('TrackSiteEventDto', () => {
     );
     // 3 reorder + 15 assistant = 18 new public types
     expect(reorderEvents.length + assistantEvents.length).toBe(18);
+  });
+
+  describe('#594 dedicated agents UI events (#644, #645, #646)', () => {
+    const FROM_646 = [
+      'dedicated_ui.section_viewed',
+      'dedicated_ui.admin_assign_started',
+      'dedicated_ui.admin_assign_step',
+      'dedicated_ui.admin_assign_succeeded',
+      'dedicated_ui.admin_assign_failed',
+      'dedicated_ui.agent_paused',
+      'dedicated_ui.agent_resumed',
+      'dedicated_ui.agent_removed',
+      'dedicated_ui.action_conflict',
+    ];
+
+    it.each(FROM_646)('accepts %s (admin #646)', async (eventType) => {
+      const dto = new TrackSiteEventDto();
+      dto.eventType = eventType as any;
+      dto.metadata = { locationId: '550e8400-e29b-41d4-a716-446655440000' };
+      expect(await validate(dto)).toHaveLength(0);
+    });
+
+    it.each([...DEDICATED_UI_SITE_EVENT_TYPES])('accepts %s', async (eventType) => {
+      const dto = new TrackSiteEventDto();
+      dto.eventType = eventType as any;
+      expect(await validate(dto)).toHaveLength(0);
+    });
+
+    it('lists 31 unique client events, all public, none server-only', () => {
+      expect(new Set(DEDICATED_UI_SITE_EVENT_TYPES).size).toBe(31);
+      expect(DEDICATED_UI_SITE_EVENT_TYPES).toEqual(expect.arrayContaining(FROM_646));
+      for (const t of DEDICATED_UI_SITE_EVENT_TYPES) {
+        expect(SITE_EVENT_TYPES_V1 as readonly string[]).toContain(t);
+        expect(SERVER_SITE_EVENT_TYPES as readonly string[]).not.toContain(t);
+      }
+    });
+
+    it('through the controller ValidationPipe: a #646 event passes, an unknown one is a 400', async () => {
+      const pipe = new ValidationPipe({ transform: true, whitelist: true });
+      const meta = { type: 'body' as const, metatype: TrackSiteEventDto };
+      await expect(pipe.transform({ eventType: 'dedicated_ui.admin_assign_step' }, meta)).resolves.toMatchObject({
+        eventType: 'dedicated_ui.admin_assign_step',
+      });
+      await expect(pipe.transform({ eventType: 'dedicated_ui.nope' }, meta)).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it.each(['dedicated_ui.unknown_event', 'dedicated_ui.section_opened', 'dedicated_ui.', 'dedicated.posting_created'])(
+      'still rejects %s (isIn -> 400)',
+      async (eventType) => {
+        const dto = new TrackSiteEventDto();
+        dto.eventType = eventType as any;
+        const errors = await validate(dto);
+        expect(errors).toHaveLength(1);
+        expect(errors[0].property).toBe('eventType');
+        expect(errors[0].constraints?.isIn).toBeDefined();
+      }
+    );
   });
 });

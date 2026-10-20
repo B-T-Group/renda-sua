@@ -38,6 +38,11 @@ suite('dedicated_claim_order (real Postgres, QA #607 N1/N4)', () => {
       .filter((d) => /^\d{14}_/.test(d) && d.slice(0, 14) >= FIRST_594)
       .sort();
     expect(dirs).toContain('20261018200001_dedicated_claim_order');
+    // The template predates the payment-programs tables that later migrations build on.
+    const pc = await db.query(`SELECT 1 FROM information_schema.tables WHERE table_name = 'purchase_credit_redemptions'`);
+    if (!pc.rowCount) {
+      await db.query(`BEGIN;\n${readFileSync(join(MIGRATIONS, '1789840663276_payment_programs', 'up.sql'), 'utf8')}\nCOMMIT;`);
+    }
     for (const dir of dirs) {
       await db.query(`BEGIN;\n${readFileSync(join(MIGRATIONS, dir, 'up.sql'), 'utf8')}\nCOMMIT;`);
     }

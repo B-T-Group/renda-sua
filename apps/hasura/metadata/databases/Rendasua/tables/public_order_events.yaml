@@ -17,11 +17,15 @@ select_permissions:
         - payload
         - created_at
       filter:
-        order:
-          assigned_agent:
-            user:
-              id:
-                _eq: X-Hasura-User-Id
+        _and:
+          - order:
+              assigned_agent:
+                user:
+                  id:
+                    _eq: X-Hasura-User-Id
+          - event_type:
+              _nin:
+                - admin_cancel_progress
   - role: business
     permission:
       columns:
@@ -33,11 +37,15 @@ select_permissions:
         - payload
         - created_at
       filter:
-        order:
-          business:
-            user:
-              id:
-                _eq: X-Hasura-User-Id
+        _and:
+          - order:
+              business:
+                user:
+                  id:
+                    _eq: X-Hasura-User-Id
+          - event_type:
+              _nin:
+                - admin_cancel_progress
   - role: client
     permission:
       columns:
@@ -49,8 +57,12 @@ select_permissions:
         - payload
         - created_at
       filter:
-        order:
-          client:
-            user:
-              id:
-                _eq: X-Hasura-User-Id
+        _and:
+          - order:
+              client:
+                user:
+                  id:
+                    _eq: X-Hasura-User-Id
+          - event_type:
+              _nin:
+                - admin_cancel_progress

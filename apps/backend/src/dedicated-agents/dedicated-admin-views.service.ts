@@ -389,6 +389,21 @@ export class DedicatedAdminViewsService {
   }
 
   /**
+   * Admin capability: the countries in the caller's platform.manage.agents geo
+   * scope where `dedicated_agents_enabled` is on (country row over the global row).
+   * Global scope: every supported market. Never 404s.
+   */
+  async capability(scope: GeoScope): Promise<{ enabled: boolean; countries: string[] }> {
+    const candidates = scope.all
+      ? (await this.geo.markets()).map((m) => m.countryCode)
+      : [...scope.countries, ...scope.states.map((s) => s.countryCode)];
+    const unique = [...new Set(candidates.map((c) => c?.trim().toUpperCase()).filter((c): c is string => !!c))].sort();
+    const flags = await Promise.all(unique.map((c) => this.config.isEnabled(c)));
+    const countries = unique.filter((_, i) => flags[i]);
+    return { enabled: countries.length > 0, countries };
+  }
+
+  /**
    * #594 G10: admin location search by store / business name or city, limited to
    * the caller's geo scope and to countries with the flag on (filtered, never 404).
    * `enabledSlotKeys` lets the assign step skip disabled slots (G11 light).

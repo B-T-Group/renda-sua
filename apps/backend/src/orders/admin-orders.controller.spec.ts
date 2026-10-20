@@ -2,6 +2,12 @@ jest.mock('../common/utils/money-alert.util', () => ({ reportMoneyAnomaly: jest.
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { AdminOrdersController } from './admin-orders.controller';
 import { reportMoneyAnomaly } from '../common/utils/money-alert.util';
+import { HTTP_CODE_METADATA } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
+import { GeoScopeService } from '../rbac/geo-scope.service';
+import { PermissionsGuard } from '../rbac/permissions.guard';
+import { PERMISSIONS_KEY, ROLES_KEY } from '../rbac/permissions.decorator';
+import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
 
 describe('AdminOrdersController.updateStatus', () => {
   const order = {
@@ -95,6 +101,27 @@ describe('AdminOrdersController.updateStatus', () => {
     });
     expect(ordersService.cancelOrderAsAdmin).not.toHaveBeenCalled();
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('an unexpected error is a generic 500: the raw text goes to the log only', async () => {
+    const raw = 'duplicate key value violates unique constraint "orders_pkey" (client@example.com)';
+    const { controller } = buildController({ status: 'confirmed', cancelError: new Error(raw) });
+    const log = jest.spyOn((controller as any).logger, 'error').mockImplementation(() => undefined);
+    const err: any = await controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any).catch((e) => e);
+    expect(err.getStatus()).toBe(HttpStatus.INTERNAL_SERVER_ERROR);
+    expect(err.getResponse()).toBe('Failed to update status');
+    expect(JSON.stringify(err.getResponse())).not.toContain('orders_pkey');
+    expect(JSON.stringify(log.mock.calls)).toContain('orders_pkey');
+  });
+
+  it('PATCH cancel of an already-cancelled order surfaces the service 409 ORDER_ALREADY_CANCELLED', async () => {
+    const { HttpException } = jest.requireActual('@nestjs/common');
+    const { adminPrePickupRefusal } = jest.requireActual('./admin-order-status.util');
+    const refusal: InstanceType<typeof HttpException> = adminPrePickupRefusal('cancelled');
+    const { controller } = buildController({ status: 'cancelled', cancelError: refusal });
+    const err: any = await controller.updateStatus('order-1', { status: 'cancelled', reason: 'r' } as any).catch((e) => e);
+    expect(err.getStatus()).toBe(409);
+    expect(err.getResponse()).toMatchObject({ error: 'ORDER_ALREADY_CANCELLED' });
   });
 
   it.each(['picked_up', 'in_transit', 'out_for_delivery'])('refuses to cancel a %s order (after pickup)', async (status) => {
@@ -287,5 +314,88 @@ describe('AdminOrdersController.updateStatus', () => {
         payload: expect.objectContaining({ action: 'status_override', old_status: 'confirmed', new_status: 'preparing' }),
       })
     );
+  });
+});
+
+
+/**
+ * QA #642 H1: acknowledging a cancel step settles stock by hand, so it is gated like
+ * the full-refund cancel: SUPERUSER + FINANCIAL_REFUNDS, FINANCIAL_REFUNDS country scope.
+ * Real Reflector / PermissionsGuard / GeoScopeService; only their data sources are fakes.
+ */
+describe('AdminOrdersController.acknowledgeCancelStep (QA #642 H1)', () => {
+  const handler = AdminOrdersController.prototype.acknowledgeCancelStep;
+  const CAMEROON_ORDER = {
+    business_location: { address: { country: 'Cameroon', state: 'Littoral' } },
+    delivery_address: { country: 'Cameroon', state: 'Littoral' },
+  };
+
+  function build(scopes: Record<string, unknown>) {
+    const executeQuery = jest.fn(async (q: string) => {
+      if (q.includes('GeoMarkets')) {
+        return { supported_country_states: [
+          { id: 's1', country_code: 'cm', country_name: 'Cameroon', state_name: 'Littoral', state_key: 'littoral' },
+          { id: 's2', country_code: 'ga', country_name: 'Gabon', state_name: 'Estuaire', state_key: 'estuaire' },
+        ] };
+      }
+      if (q.includes('OrderGeo')) return { orders_by_pk: CAMEROON_ORDER };
+      return {};
+    });
+    const getScope = jest.fn(async (_u: string, key: string) => scopes[key] ?? null);
+    const geo = new GeoScopeService({ executeQuery } as any, { getUser: async () => ({ id: 'admin-1' }) } as any, { getScope } as any);
+    const ordersService = { acknowledgeAdminCancelStep: jest.fn(async () => ({ success: true })) };
+    const none = {} as any;
+    const controller = new AdminOrdersController(
+      ordersService as any, none, none, none, none, none, none, none, none, none, none, geo
+    );
+    return { controller, ordersService, getScope };
+  }
+
+  it('pins the decorators: SUPERUSER role, FINANCIAL_REFUNDS permission, 200', () => {
+    const r = new Reflector();
+    expect(r.get(ROLES_KEY, handler)).toEqual([PlatformRoles.SUPERUSER]);
+    expect(r.get(PERMISSIONS_KEY, handler)).toEqual([PlatformPermissions.FINANCIAL_REFUNDS]);
+    expect(Reflect.getMetadata(HTTP_CODE_METADATA, handler)).toBe(200);
+  });
+
+  it.each([
+    ['an orders-only admin (ORDERS_CROSS_BUSINESS)', { roles: ['ops'], permissions: [PlatformPermissions.ORDERS_CROSS_BUSINESS] }, false],
+    ['a FINANCIAL_REFUNDS admin', { roles: [], permissions: [PlatformPermissions.FINANCIAL_REFUNDS] }, true],
+    ['a superuser', { roles: [], permissions: [], isSuperuser: true }, true],
+  ])('the real PermissionsGuard: %s -> allowed=%s', async (_l, access, allowed) => {
+    const guard = new PermissionsGuard(
+      new Reflector(),
+      { getUser: async () => ({ id: 'u' }) } as any,
+      { getEffectiveAccess: async () => ({ isSuperuser: false, ...access }) } as any
+    );
+    const ctx: any = {
+      getHandler: () => handler,
+      getClass: () => AdminOrdersController,
+      switchToHttp: () => ({ getRequest: () => ({}) }),
+    };
+    const res = await guard.canActivate(ctx).then((v) => v, () => false);
+    expect(res).toBe(allowed);
+  });
+
+  it('uses the FINANCIAL_REFUNDS scope (an ORDERS_CROSS_BUSINESS scope alone is not enough)', async () => {
+    const w = build({ [PlatformPermissions.ORDERS_CROSS_BUSINESS]: { all: true } });
+    await expect(w.controller.acknowledgeCancelStep('o-1', 'releaseReservedStock', { note: 'n' } as any)).rejects.toMatchObject({ status: 403 });
+    expect(w.getScope).toHaveBeenCalledWith('admin-1', PlatformPermissions.FINANCIAL_REFUNDS);
+    expect(w.ordersService.acknowledgeAdminCancelStep).not.toHaveBeenCalled();
+  });
+
+  it("a Gabon refunds admin on a Cameroon order: 404, nothing acknowledged", async () => {
+    const w = build({ [PlatformPermissions.FINANCIAL_REFUNDS]: { all: false, countries: ['GA'], states: [] } });
+    await expect(w.controller.acknowledgeCancelStep('o-1', 'releaseReservedStock', { note: 'n' } as any)).rejects.toMatchObject({ status: 404 });
+    expect(w.ordersService.acknowledgeAdminCancelStep).not.toHaveBeenCalled();
+  });
+
+  it('a Cameroon refunds admin on a Cameroon order: delegates with a PII-masked note and both cancel kinds', async () => {
+    const w = build({ [PlatformPermissions.FINANCIAL_REFUNDS]: { all: false, countries: ['CM'], states: [] } });
+    await w.controller.acknowledgeCancelStep('o-1', 'releaseReservedStock', { note: ' recounted, call jane@example.com ' } as any);
+    const [id, step, note, kinds] = (w.ordersService.acknowledgeAdminCancelStep.mock.calls[0] as unknown) as any[];
+    expect([id, step, kinds]).toEqual(['o-1', 'releaseReservedStock', ['admin_cancel', 'full_refund']]);
+    expect(note).not.toContain('jane@example.com');
+    expect(note).toMatch(/^recounted/);
   });
 });
