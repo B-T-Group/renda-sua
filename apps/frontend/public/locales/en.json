@@ -8805,7 +8805,8 @@
     "togoOperator": {
       "label": "Mobile Money Operator",
       "moov": "Moov Money",
-      "mixx": "Mixx by Yas"
+      "mixx": "Mixx by Yas",
+      "mismatch": "The selected operator does not match the phone number prefix. Please select the correct operator or update the phone number."
     }
   }
 }

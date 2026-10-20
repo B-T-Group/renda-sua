@@ -66,6 +66,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
   const [showResult, setShowResult] = useState(false);
   const [phoneCountry, setPhoneCountry] = useState<'CM' | 'GA' | 'TG'>('CM');
   const [togoOperator, setTogoOperator] = useState<TogoOperator>('togocel');
+  const [operatorMismatch, setOperatorMismatch] = useState(false);
 
   // Check if FedaPay is available for Togo
   const { isFedaPayAvailable } = useMobilePaymentProviders(
@@ -74,6 +75,17 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
 
   // Lock payment method to Airtel Money only
   const [paymentMethod] = useState<PaymentMethod>('airtel-money');
+
+  // Auto-detect operator from phone number and check for mismatch
+  useEffect(() => {
+    if (phoneNumber && phoneCountry === 'TG') {
+      const detected = detectTogoOperator(phoneNumber);
+      const mismatch = togoOperator !== detected;
+      setOperatorMismatch(mismatch);
+    } else {
+      setOperatorMismatch(false);
+    }
+  }, [phoneNumber, phoneCountry, togoOperator]);
 
   // Update phone number when userPhoneNumber prop changes
   useEffect(() => {
@@ -106,6 +118,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
     const digits = userPhoneNumber.replace(/\D/g, '');
     if (digits.startsWith('228')) {
       setPhoneCountry('TG');
+      // Auto-set operator to match phone number
       setTogoOperator(detectTogoOperator(userPhoneNumber));
     } else if (digits.startsWith('241')) {
       setPhoneCountry('GA');
@@ -192,6 +205,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
     parsedTopUpAmount >= MIN_TOP_UP_AMOUNT;
 
   const topUpMarketCountry = resolveTopUpCountry(phoneNumber, phoneCountry);
+  const canSubmit = !operatorMismatch && topUpAmountOk && !!phoneNumber.trim() && !!amount.trim();
   const topUpInfoMessage =
     topUpMarketCountry === 'TG'
       ? t(
@@ -274,7 +288,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                 value={phoneNumber}
                 onChange={(value) => {
                   setPhoneNumber(value || '');
-                  // Auto-detect operator when phone changes
+                  // Auto-update operator to match phone prefix
                   if (value?.includes('+228')) {
                     setTogoOperator(detectTogoOperator(value));
                   }
@@ -298,12 +312,24 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
 
               {/* Show Togo operator picker only when country is TG and FedaPay is active */}
               {phoneCountry === 'TG' && isFedaPayAvailable && (
-                <TogoOperatorPicker
-                  value={togoOperator}
-                  onChange={setTogoOperator}
-                  phoneNumber={phoneNumber}
-                  disabled={false}
-                />
+                <>
+                  <TogoOperatorPicker
+                    value={togoOperator}
+                    onChange={setTogoOperator}
+                    phoneNumber={phoneNumber}
+                    disabled={false}
+                  />
+                  {operatorMismatch && phoneNumber.trim() && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        {t(
+                          'payment.togoOperator.mismatch',
+                          'The selected operator does not match the phone number prefix. Please select the correct operator or update the phone number.'
+                        )}
+                      </Typography>
+                    </Alert>
+                  )}
+                </>
               )}
 
               <TextField
@@ -349,9 +375,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
             onClick={handleConfirm}
             variant="contained"
             color="cta"
-            disabled={
-              loading || !phoneNumber.trim() || !amount.trim() || !topUpAmountOk
-            }
+            disabled={loading || !canSubmit}
             startIcon={loading ? <CircularProgress size={16} /> : null}
           >
             {loading ? 'Processing...' : 'Send Payment Request'}

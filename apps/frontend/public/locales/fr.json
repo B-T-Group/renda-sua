@@ -8822,7 +8822,8 @@
     "togoOperator": {
       "label": "Opérateur Mobile Money",
       "moov": "Moov Money",
-      "mixx": "Mixx by Yas"
+      "mixx": "Mixx by Yas",
+      "mismatch": "L'opérateur sélectionné ne correspond pas au préfixe du numéro de téléphone. Veuillez sélectionner le bon opérateur ou mettre à jour le numéro de téléphone."
     }
   }
 }
