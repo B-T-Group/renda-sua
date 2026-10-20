@@ -37,7 +37,9 @@ export type OrderEventType =
   | 'admin_intervention'
   | 'acceptance_reminder_sent'
   | 'agent_hold_stranded'
-  | 'agent_hold_stranded_released';
+  | 'agent_hold_stranded_released'
+  /** #627 C7: one row per admin cancel; per-step done markers + a CAS-claimed lease. */
+  | 'admin_cancel_progress';
 
 export type OrderEventActorType =
   | 'client'

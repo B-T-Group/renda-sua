@@ -8,6 +8,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  MaxLength,
 } from 'class-validator';
 import {
   ORDER_RISK_TYPES,
@@ -126,6 +127,8 @@ export class UnassignRedispatchDto {
   reason?: string;
 }
 
+export const ADMIN_CANCEL_REASON_MAX_LENGTH = 1000;
+
 export class UpdateOrderStatusDto {
   @ApiProperty({
     description:
@@ -139,6 +142,15 @@ export class UpdateOrderStatusDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Reason for the change (sent by the admin UI). Required, with notes as a fallback, when status is cancelled.',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(ADMIN_CANCEL_REASON_MAX_LENGTH)
+  reason?: string;
 }
 
 export class AddAdminNoteDto {
