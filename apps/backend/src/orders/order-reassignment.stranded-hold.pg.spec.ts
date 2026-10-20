@@ -201,6 +201,7 @@ suite('#622 net agent hold release (real Postgres ledger)', () => {
     await admin.connect();
     await admin.query(`CREATE DATABASE ${dbName} TEMPLATE ${TEMPLATE}`);
     pool = new Pool({ database: dbName, max: 8 });
+    pool.on('error', () => undefined); // clients killed by the DROP ... WITH (FORCE) in afterAll
     // The template predates the cash-advance column the ledger writes.
     const ca = (
       await pool.query(
