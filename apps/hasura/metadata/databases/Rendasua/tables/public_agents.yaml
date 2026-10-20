@@ -112,7 +112,6 @@ insert_permissions:
       columns:
         - user_id
         - vehicle_type_id
-        - is_verified
   - role: business
     permission:
       check: {}
@@ -122,7 +121,6 @@ insert_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
-        - is_verified
   - role: client
     permission:
       check: {}
@@ -132,7 +130,6 @@ insert_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
-        - is_verified
   - role: user
     permission:
       check: {}
@@ -142,7 +139,6 @@ insert_permissions:
         - vehicle_type_id
         - created_at
         - updated_at
-        - is_verified
 select_permissions:
   - role: agent
     permission:
@@ -238,7 +234,6 @@ update_permissions:
       columns:
         - vehicle_type_id
         - updated_at
-        - is_verified
         - onboarding_complete
         - location_tracking_consent_ios
         - location_tracking_consent_android

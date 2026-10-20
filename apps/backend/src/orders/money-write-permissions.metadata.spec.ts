@@ -57,6 +57,8 @@ const PINNED: Record<string, Partial<Record<Kind, Record<string, string[]>>>> = 
   mtn_momo_payment_requests: { insert: {}, update: {}, delete: {} },
   orange_momo_payment_requests: { insert: {}, update: {}, delete: {} },
   mobile_payment_transactions: { insert: {}, update: {}, delete: {} },
+  // Audit trail: written only by Nest (HasuraSystemService) and the Lambdas (admin secret).
+  order_status_history: { insert: {}, update: {}, delete: {} },
   failed_deliveries: {
     insert: { agent: ['failure_reason_id', 'notes', 'order_id'] },
     update: {},
@@ -66,7 +68,8 @@ const PINNED: Record<string, Partial<Record<Kind, Record<string, string[]>>>> = 
 
 /** Money-affecting columns no user role may write on these tables. */
 const NEVER: Record<string, string[]> = {
-  agents: ['auto_withdraw_commissions', 'mobile_payment_phone_id'],
+  // is_verified gates the hold ceiling and claims: only admin verification may set it.
+  agents: ['auto_withdraw_commissions', 'is_verified', 'mobile_payment_phone_id'],
   business_locations: [
     'auto_withdraw_commissions',
     'mobile_payment_phone_id',
@@ -83,6 +86,8 @@ describe('user-role write permissions on orders and money tables (#630)', () => 
     expect(writePermissions('business_locations', 'update').business).toContain('name');
     expect(writePermissions('business_locations', 'delete').business).toEqual(['<all>']);
     expect(writePermissions('partners', 'update').partner).toContain('company_name');
+    expect(writePermissions('agents', 'insert').agent).toContain('vehicle_type_id');
+    expect(writePermissions('agents', 'update').agent).toContain('onboarding_complete');
   });
 
   for (const [table, kinds] of Object.entries(PINNED)) {
