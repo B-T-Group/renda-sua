@@ -2,19 +2,26 @@
  * Routing logic for top-up payment methods
  */
 
+export interface InitiatePaymentBody {
+  amount: number;
+  currency: string;
+  description: string;
+  customerPhone: string;
+  accountId: string;
+  paymentMethod: string;
+  transactionType: string;
+  provider: string;
+}
+
+export interface LegacyTopUpBody {
+  amount: string;
+  phoneNumber: string;
+  currency: string;
+}
+
 export interface TopUpRoute {
   endpoint: 'initiate' | 'mtn-legacy';
-  body: {
-    amount?: number;
-    currency?: string;
-    description?: string;
-    customerPhone?: string;
-    accountId?: string;
-    paymentMethod?: string;
-    transactionType?: string;
-    provider?: string;
-    phoneNumber?: string;
-  };
+  body: InitiatePaymentBody | LegacyTopUpBody;
 }
 
 export function resolveTopUpRequest(
@@ -24,12 +31,8 @@ export function resolveTopUpRequest(
   currency: string,
   accountId: string
 ): TopUpRoute {
-  // Route fedapay, airtel-money, and moov-money through /mobile-payments/initiate
-  if (
-    paymentMethod === 'fedapay' ||
-    paymentMethod === 'airtel-money' ||
-    paymentMethod === 'moov-money'
-  ) {
+  // Route fedapay through /mobile-payments/initiate with provider field
+  if (paymentMethod === 'fedapay') {
     return {
       endpoint: 'initiate',
       body: {
@@ -40,7 +43,25 @@ export function resolveTopUpRequest(
         accountId,
         paymentMethod: 'mobile_money',
         transactionType: 'PAYMENT',
-        provider: paymentMethod,
+        provider: 'fedapay',
+      },
+    };
+  }
+
+  // Route airtel-money and moov-money through /mobile-payments/initiate WITHOUT provider
+  // (backend resolves provider automatically from phone number)
+  if (paymentMethod === 'airtel-money' || paymentMethod === 'moov-money') {
+    return {
+      endpoint: 'initiate',
+      body: {
+        amount: parseFloat(amount),
+        currency,
+        description: 'Account Top Up',
+        customerPhone: phoneNumber,
+        accountId,
+        paymentMethod: 'mobile_money',
+        transactionType: 'PAYMENT',
+        // No provider field - backend auto-resolves
       },
     };
   }

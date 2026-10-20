@@ -22,22 +22,39 @@ describe('resolveTopUpRequest', () => {
     });
   });
 
-  test('airtel-money routes to /mobile-payments/initiate with provider airtel-money', () => {
+  test('airtel-money routes to /mobile-payments/initiate WITHOUT provider field', () => {
     const result = resolveTopUpRequest('airtel-money', '+237671234567', amount, 'XAF', accountId);
 
     expect(result.endpoint).toBe('initiate');
-    expect(result.body.provider).toBe('airtel-money');
-    expect(result.body.customerPhone).toBe('+237671234567');
-    expect(result.body.amount).toBe(1000);
+    expect(result.body).toEqual({
+      amount: 1000,
+      currency: 'XAF',
+      description: 'Account Top Up',
+      customerPhone: '+237671234567',
+      accountId: 'account-123',
+      paymentMethod: 'mobile_money',
+      transactionType: 'PAYMENT',
+      // No provider field - backend auto-resolves from phone number
+    });
+    // Explicitly verify provider is NOT present
+    expect('provider' in result.body).toBe(false);
   });
 
-  test('moov-money routes to /mobile-payments/initiate with provider moov-money', () => {
+  test('moov-money routes to /mobile-payments/initiate WITHOUT provider field', () => {
     const result = resolveTopUpRequest('moov-money', phoneNumber, amount, currency, accountId);
 
     expect(result.endpoint).toBe('initiate');
-    expect(result.body.provider).toBe('moov-money');
-    expect(result.body.paymentMethod).toBe('mobile_money');
-    expect(result.body.transactionType).toBe('PAYMENT');
+    expect(result.body).toEqual({
+      amount: 1000,
+      currency: 'XOF',
+      description: 'Account Top Up',
+      customerPhone: '+22878123456',
+      accountId: 'account-123',
+      paymentMethod: 'mobile_money',
+      transactionType: 'PAYMENT',
+    });
+    // Explicitly verify provider is NOT present
+    expect('provider' in result.body).toBe(false);
   });
 
   test('mtn-momo routes to legacy endpoint', () => {
