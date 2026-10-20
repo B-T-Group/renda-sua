@@ -17,6 +17,7 @@ import {
   Avatar,
 } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { useSnackbar } from 'notistack';
 import { useDedicatedAgents } from '../../../hooks/useDedicatedAgents';
 import type {
   AdminAgentPickerItem,
@@ -36,6 +37,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
   onSuccess,
 }) => {
   const { t } = useTranslation();
+  const { enqueueSnackbar } = useSnackbar();
   const dedicatedApi = useDedicatedAgents();
 
   const [activeStep, setActiveStep] = useState(0);
@@ -50,7 +52,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const steps = ['Store', 'Slots', 'Agent'];
+  const steps = [t('dedicatedAgents.admin.steps.store', 'Store'), t('dedicatedAgents.admin.steps.slots', 'Slots'), t('dedicatedAgents.admin.steps.agent', 'Agent')];
 
   useEffect(() => {
     if (!open) {
@@ -110,6 +112,12 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       setLoading(true);
       const response = await dedicatedApi.getAdminAgentPicker(selectedLocation.id);
       setAgents(response.agents);
+      if (response.truncated) {
+        enqueueSnackbar(
+          t('dedicatedAgents.admin.truncated', 'Showing the first results; refine the search'),
+          { variant: 'info' }
+        );
+      }
     } catch (err: any) {
       console.error('Error loading agents:', err);
       setError(t('dedicatedAgents.generic', 'Something went wrong'));
@@ -136,6 +144,55 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
     setActiveStep((prev) => prev - 1);
   };
 
+  const mapErrorToMessage = (err: any): { message: string; step: number | null } => {
+    const code = err.response?.data?.code;
+    const status = err.response?.status;
+    
+    // Map error codes from the backend
+    if (code === 'slot_disabled') {
+      const slotNames = selectedSlots.map(slot => t(`dedicatedAgents.slots.${slot}`, slot)).join(', ');
+      return {
+        message: t('dedicatedAgents.errors.slot_disabled', 'Turn {{slot}} back on first').replace('{{slot}}', slotNames),
+        step: 1
+      };
+    }
+    if (code === 'dedicated_agent_assignment_cap_exceeded' || code === 'cap_exceeded') {
+      return {
+        message: t('dedicatedAgents.errors.cap_exceeded', 'This agent already has the maximum number of stores'),
+        step: 2
+      };
+    }
+    if (code === 'dedicated_agent_assignment_duplicate' || code === 'duplicate') {
+      return {
+        message: t('dedicatedAgents.errors.duplicate', 'This agent is already assigned to this slot'),
+        step: 2
+      };
+    }
+    if (code === 'agent_not_verified') {
+      return {
+        message: t('dedicatedAgents.errors.agent_not_verified', 'This agent is not verified'),
+        step: 2
+      };
+    }
+    if (code === 'agent_suspended') {
+      return {
+        message: t('dedicatedAgents.errors.agent_suspended', 'This agent is suspended'),
+        step: 2
+      };
+    }
+    if (status === 404) {
+      return {
+        message: t('dedicatedAgents.errors.not_found', 'Resource not found'),
+        step: 0
+      };
+    }
+    
+    return {
+      message: err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'),
+      step: null
+    };
+  };
+
   const handleSubmit = async () => {
     if (!selectedLocation || !selectedAgent || selectedSlots.length === 0) {
       setError(t('common.required', 'Required'));
@@ -152,11 +209,19 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
         slotKeys: selectedSlots,
       });
 
+      enqueueSnackbar(
+        t('dedicatedAgents.admin.assigned', 'Assigned. The store and agent were notified.'),
+        { variant: 'success' }
+      );
       onSuccess();
       onClose();
     } catch (err: any) {
       console.error('Error creating assignment:', err);
-      setError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
+      const { message, step } = mapErrorToMessage(err);
+      setError(message);
+      if (step !== null && step !== activeStep) {
+        setActiveStep(step);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -323,7 +388,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       </DialogContent>
 
       <DialogActions>
-        <Button onClick={onClose} disabled={submitting}>
+        <Button onClick={onClose} disabled={submitting} aria-label={t('common.cancel', 'Cancel')}>
           {t('common.cancel', 'Cancel')}
         </Button>
         {activeStep > 0 && (
@@ -332,7 +397,15 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
           </Button>
         )}
         {activeStep < steps.length - 1 ? (
-          <Button onClick={handleNext} variant="contained">
+          <Button 
+            onClick={handleNext} 
+            variant="contained"
+            disabled={
+              (activeStep === 0 && !selectedLocation) ||
+              (activeStep === 1 && selectedSlots.length === 0)
+            }
+            aria-label={t('common.next', 'Next')}
+          >
             {t('common.next', 'Next')}
           </Button>
         ) : (
@@ -341,6 +414,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
             variant="contained"
             disabled={!selectedAgent || submitting}
             startIcon={submitting ? <CircularProgress size={16} /> : null}
+            aria-label={t('dedicatedAgents.admin.assign', 'Assign')}
           >
             {t('dedicatedAgents.admin.assign', 'Assign')}
           </Button>

@@ -5099,7 +5099,9 @@
         "saturday": "Sat",
         "sunday": "Sun"
       }
-    }
+    },
+    "source": "Source",
+    "city": "City"
   },
   "dashboard": {
     "client": {
@@ -8945,7 +8947,29 @@
       "slot_disabled": "Turn {{slot}} back on first",
       "agent_ineligible": "This agent can't be accepted right now",
       "pickup_time_outside_slot": "Choose a time between {{start}} and {{end}}",
-      "assignment_removed": "This assignment was removed"
+      "assignment_removed": "This assignment was removed",
+      "agent_not_verified": "This agent is not verified",
+      "agent_suspended": "This agent is suspended",
+      "not_found": "Resource not found"
+    },
+    "superuser": {
+      "tab": "Dedicated",
+      "assign": "Assign",
+      "status": "Status",
+      "active": "Active",
+      "paused": "Paused",
+      "noAssignments": "No assignments found.",
+      "agent": "Agent",
+      "location": "Location",
+      "slots": "Slots",
+      "relationWarning": "Agent may be related to this business",
+      "pause": "Pause",
+      "resume": "Resume",
+      "remove": "Remove",
+      "removeConfirm": "Remove assignment?",
+      "removeConfirmDesc": "The agent will no longer be dedicated to this location.",
+      "posting": "Posting",
+      "adminAssigned": "Admin assigned"
     }
   }
 }

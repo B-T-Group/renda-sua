@@ -89,6 +89,7 @@ const AdminManageAgents: React.FC = () => {
   const canManage = can(PlatformPermissions.MANAGE_AGENTS);
   const [currentTab, setCurrentTab] = useState(0);
   const [showDedicatedTab, setShowDedicatedTab] = useState(false);
+  const [dedicatedTabError, setDedicatedTabError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [verificationAgentId, setVerificationAgentId] = useState<string | null>(
@@ -111,11 +112,18 @@ const AdminManageAgents: React.FC = () => {
       try {
         await getAdminAssignments();
         setShowDedicatedTab(true);
-      } catch {
-        setShowDedicatedTab(false);
+        setDedicatedTabError(null);
+      } catch (err: any) {
+        const status = err.response?.status;
+        if (status === 403 || status === 404) {
+          setShowDedicatedTab(false);
+        } else {
+          setShowDedicatedTab(true);
+          setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
+        }
       }
     })();
-  }, [getAdminAssignments]);
+  }, [getAdminAssignments, t]);
 
   const fetchIdDocuments = useCallback(
     async (agentId: string) => {
@@ -280,8 +288,8 @@ const AdminManageAgents: React.FC = () => {
         onChange={(_, v) => setCurrentTab(v)}
         sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
       >
-        <Tab label={t('admin.agents.allAgents', 'All Agents')} />
-        {showDedicatedTab && <Tab label={t('dedicatedAgents.superuser.tab', 'Dedicated')} />}
+        <Tab label={t('admin.agents.allAgents', 'All Agents')} aria-label={t('admin.agents.allAgents', 'All Agents')} />
+        {showDedicatedTab && <Tab label={t('dedicatedAgents.superuser.tab', 'Dedicated')} aria-label={t('dedicatedAgents.superuser.tab', 'Dedicated')} />}
       </Tabs>
 
       {currentTab === 0 ? (
@@ -738,6 +746,19 @@ const AdminManageAgents: React.FC = () => {
           await applyReferral(applyAgentId, code);
         }}
       />
+    </Box>
+  ) : dedicatedTabError ? (
+    <Box>
+      <Alert severity="error" sx={{ mb: 2 }}>
+        {dedicatedTabError}
+      </Alert>
+      <Button
+        variant="outlined"
+        startIcon={<RefreshIcon />}
+        onClick={() => window.location.reload()}
+      >
+        {t('dedicatedAgents.retry', 'Retry')}
+      </Button>
     </Box>
   ) : (
     <AdminDedicatedAssignmentsSection />

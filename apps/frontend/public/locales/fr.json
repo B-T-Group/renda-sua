@@ -4822,7 +4822,9 @@
         "saturday": "Sam",
         "sunday": "Dim"
       }
-    }
+    },
+    "source": "Source",
+    "city": "Ville"
   },
   "dashboard": {
     "client": {
@@ -8962,7 +8964,29 @@
       "slot_disabled": "Réactivez d'abord le créneau {{slot}}",
       "agent_ineligible": "Ce livreur ne peut pas être accepté pour le moment",
       "pickup_time_outside_slot": "Choisissez une heure entre {{start}} et {{end}}",
-      "assignment_removed": "Cette affectation a été supprimée"
+      "assignment_removed": "Cette affectation a été supprimée",
+      "agent_not_verified": "Ce livreur n'est pas vérifié",
+      "agent_suspended": "Ce livreur est suspendu",
+      "not_found": "Ressource introuvable"
+    },
+    "superuser": {
+      "tab": "Dédiés",
+      "assign": "Affecter",
+      "status": "Statut",
+      "active": "Actif",
+      "paused": "En pause",
+      "noAssignments": "Aucune affectation trouvée.",
+      "agent": "Livreur",
+      "location": "Boutique",
+      "slots": "Créneaux",
+      "relationWarning": "Le livreur pourrait être lié à cette boutique",
+      "pause": "Mettre en pause",
+      "resume": "Reprendre",
+      "remove": "Retirer",
+      "removeConfirm": "Retirer l'affectation ?",
+      "removeConfirmDesc": "Le livreur ne sera plus dédié à cette boutique.",
+      "posting": "Candidature",
+      "adminAssigned": "Affecté par admin"
     }
   }
 }

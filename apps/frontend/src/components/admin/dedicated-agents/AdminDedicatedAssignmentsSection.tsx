@@ -20,6 +20,7 @@ import {
   TableCell,
   TableHead,
   TableRow,
+  TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
@@ -46,25 +47,34 @@ export function AdminDedicatedAssignmentsSection() {
 
   const [assignments, setAssignments] = useState<AdminAssignmentView[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [cityFilter, setCityFilter] = useState<string>('');
+  const [locationFilter, setLocationFilter] = useState<string>('');
+  const [slotFilter, setSlotFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [relationFilter, setRelationFilter] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
   const loadAssignments = useCallback(async () => {
     try {
       setLoading(true);
+      setError(null);
       const filters: any = {};
+      if (cityFilter) filters.city = cityFilter;
+      if (locationFilter) filters.locationId = locationFilter;
+      if (slotFilter !== 'all') filters.slotKey = slotFilter;
       if (statusFilter !== 'all') filters.status = statusFilter;
-      if (relationFilter !== 'all') filters.hasRelation = relationFilter === 'yes';
+      if (sourceFilter !== 'all') filters.source = sourceFilter;
       const result = await getAdminAssignments(filters);
       setAssignments(result.assignments);
     } catch (err: any) {
       console.error('Error loading assignments:', err);
+      setError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
     } finally {
       setLoading(false);
     }
-  }, [getAdminAssignments, statusFilter, relationFilter]);
+  }, [getAdminAssignments, cityFilter, locationFilter, slotFilter, statusFilter, sourceFilter, t]);
 
   useEffect(() => {
     loadAssignments();
@@ -99,9 +109,40 @@ export function AdminDedicatedAssignmentsSection() {
               variant="contained"
               startIcon={<AddIcon />}
               onClick={() => setAssignDialogOpen(true)}
+              aria-label={t('dedicatedAgents.superuser.assign', 'Assign')}
             >
               {t('dedicatedAgents.superuser.assign', 'Assign')}
             </Button>
+
+            <TextField
+              size="small"
+              label={t('common.city', 'City')}
+              value={cityFilter}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCityFilter(e.target.value)}
+              sx={{ minWidth: 150 }}
+            />
+
+            <TextField
+              size="small"
+              label={t('dedicatedAgents.superuser.location', 'Location')}
+              value={locationFilter}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocationFilter(e.target.value)}
+              sx={{ minWidth: 150 }}
+            />
+
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel>{t('dedicatedAgents.superuser.slots', 'Slots')}</InputLabel>
+              <Select
+                value={slotFilter}
+                label={t('dedicatedAgents.superuser.slots', 'Slots')}
+                onChange={(e) => setSlotFilter(e.target.value)}
+              >
+                <MenuItem value="all">{t('common.all', 'All')}</MenuItem>
+                <MenuItem value="morning">{t('dedicatedAgents.slots.morning', 'Morning')}</MenuItem>
+                <MenuItem value="afternoon">{t('dedicatedAgents.slots.afternoon', 'Afternoon')}</MenuItem>
+                <MenuItem value="evening">{t('dedicatedAgents.slots.evening', 'Evening')}</MenuItem>
+              </Select>
+            </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 150 }}>
               <InputLabel>{t('dedicatedAgents.superuser.status', 'Status')}</InputLabel>
@@ -117,15 +158,15 @@ export function AdminDedicatedAssignmentsSection() {
             </FormControl>
 
             <FormControl size="small" sx={{ minWidth: 180 }}>
-              <InputLabel>{t('dedicatedAgents.superuser.relation', 'Relation')}</InputLabel>
+              <InputLabel>{t('common.source', 'Source')}</InputLabel>
               <Select
-                value={relationFilter}
-                label={t('dedicatedAgents.superuser.relation', 'Relation')}
-                onChange={(e) => setRelationFilter(e.target.value)}
+                value={sourceFilter}
+                label={t('common.source', 'Source')}
+                onChange={(e) => setSourceFilter(e.target.value)}
               >
                 <MenuItem value="all">{t('common.all', 'All')}</MenuItem>
-                <MenuItem value="yes">{t('dedicatedAgents.superuser.hasRelation', 'Has relation')}</MenuItem>
-                <MenuItem value="no">{t('dedicatedAgents.superuser.noRelation', 'No relation')}</MenuItem>
+                <MenuItem value="posting_accept">{t('dedicatedAgents.superuser.posting', 'Posting')}</MenuItem>
+                <MenuItem value="superuser_assign">{t('dedicatedAgents.superuser.adminAssigned', 'Admin assigned')}</MenuItem>
               </Select>
             </FormControl>
 
@@ -134,6 +175,7 @@ export function AdminDedicatedAssignmentsSection() {
               startIcon={<RefreshIcon />}
               onClick={loadAssignments}
               disabled={loading}
+              aria-label={t('common.refresh', 'Refresh')}
             >
               {t('common.refresh', 'Refresh')}
             </Button>
@@ -141,16 +183,42 @@ export function AdminDedicatedAssignmentsSection() {
         </CardContent>
       </Card>
 
-      {loading ? (
+      {error ? (
+        <Card>
+          <CardContent>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+              <Typography variant="body2" color="error">
+                {error}
+              </Typography>
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={loadAssignments}
+              >
+                {t('dedicatedAgents.retry', 'Retry')}
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+      ) : loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
           <CircularProgress />
         </Box>
       ) : assignments.length === 0 ? (
         <Card>
           <CardContent>
-            <Typography variant="body2" color="text.secondary">
-              {t('dedicatedAgents.superuser.noAssignments', 'No assignments found.')}
-            </Typography>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center', py: 4 }}>
+              <Typography variant="body1" color="text.secondary">
+                {t('dedicatedAgents.superuser.noAssignments', 'No assignments found.')}
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => setAssignDialogOpen(true)}
+              >
+                {t('dedicatedAgents.superuser.assign', 'Assign')}
+              </Button>
+            </Box>
           </CardContent>
         </Card>
       ) : (
@@ -174,6 +242,12 @@ export function AdminDedicatedAssignmentsSection() {
                         <Typography variant="body2" fontWeight={600}>
                           {assignment.agent.firstName} {assignment.agent.lastName}
                         </Typography>
+                        <Chip
+                          label={assignment.agent.isInternal ? t('dedicatedAgents.chips.type.internal', 'Internal') : t('dedicatedAgents.chips.type.independent', 'Independent')}
+                          size="small"
+                          variant="outlined"
+                          sx={{ mt: 0.5 }}
+                        />
                       </Box>
                       {assignment.possible_relation && !assignment.relation_dismissed && (
                         <Tooltip title={t('dedicatedAgents.superuser.relationWarning', 'Agent may be related to this business')}>
@@ -196,26 +270,28 @@ export function AdminDedicatedAssignmentsSection() {
                   </TableCell>
                   <TableCell>
                     <Chip
-                      label={assignment.status === 'paused' ? t('dedicatedAgents.superuser.paused', 'Paused') : t('dedicatedAgents.superuser.active', 'Active')}
+                      label={t(`dedicatedAgents.chips.status.${assignment.status}`, assignment.status === 'paused' ? 'Paused' : 'Active')}
                       color={assignment.status === 'paused' ? 'default' : 'success'}
                       size="small"
                     />
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
-                      <Tooltip title={assignment.status === 'paused' ? t('dedicatedAgents.superuser.resume', 'Resume') : t('dedicatedAgents.superuser.pause', 'Pause')}>
+                      <Tooltip title={assignment.status === 'paused' ? t('dedicatedAgents.actions.resume', 'Resume') : t('dedicatedAgents.actions.pause', 'Pause')}>
                         <IconButton
                           size="small"
                           onClick={() => handlePauseResume(assignment.assignmentId, assignment.status)}
+                          aria-label={assignment.status === 'paused' ? t('dedicatedAgents.actions.resume', 'Resume') : t('dedicatedAgents.actions.pause', 'Pause')}
                         >
                           {assignment.status === 'paused' ? <ResumeIcon /> : <PauseIcon />}
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title={t('dedicatedAgents.superuser.remove', 'Remove')}>
+                      <Tooltip title={t('dedicatedAgents.actions.remove', 'Remove')}>
                         <IconButton
                           size="small"
                           color="error"
                           onClick={() => setConfirmRemove(assignment.assignmentId)}
+                          aria-label={t('dedicatedAgents.actions.remove', 'Remove')}
                         >
                           <DeleteIcon />
                         </IconButton>
