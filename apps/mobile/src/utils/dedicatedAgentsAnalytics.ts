@@ -7,10 +7,10 @@ export function trackDedicatedOpportunitiesViewed(count: number) {
   });
 }
 
-export function trackDedicatedOpportunityOpened(postingId: string, storeName: string) {
+export function trackDedicatedOpportunityOpened(postingId: string, source: 'hub' | 'deeplink' | 'push') {
   AppEventsService.track({
     eventType: 'dedicated_ui.opportunity_opened',
-    metadata: { postingId, storeName },
+    metadata: { postingId, source },
   });
 }
 

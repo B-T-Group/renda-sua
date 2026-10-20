@@ -49,9 +49,9 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
   const { colors } = useTheme();
   const { auth } = useStore();
   const insets = useSafeAreaInsets();
-  const { me } = auth;
+  const me = auth.user;
 
-  const isInternal = auth.user?.agent?.is_internal === true;
+  const isInternal = false; // Hide internal-only segment for now
 
   const [segment, setSegment] = useState<'opportunities' | 'stores'>(
     isInternal ? 'stores' : (route.params?.segment || 'opportunities')
@@ -136,7 +136,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
 
   const handleToggleOffToday = async (assignmentId: string, newValue: boolean) => {
     if (isOffline) {
-      setSnackMessage(t('common.offline', 'You are offline'));
+      setSnackMessage(t('dedicatedAgents.offline', 'Offline · showing last update'));
       return;
     }
 
@@ -222,7 +222,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
       {isOffline && (
         <View style={{ backgroundColor: colors.warning.main, padding: spacing.sm }}>
           <Text variant="bodyMedium" style={{ color: '#fff', textAlign: 'center', fontWeight: '600' }}>
-            {t('common.offline', 'You are offline')}
+            {t('dedicatedAgents.offline', 'Offline · showing last update')}
           </Text>
         </View>
       )}
@@ -280,9 +280,18 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
                 {t('dedicatedAgents.agent.opp.empty', 'No openings near you right now')}
               </Text>
               {showNoAddressPrompt && (
-                <Text variant="bodyMedium" style={{ marginTop: spacing.sm, textAlign: 'center', color: colors.text.secondary }}>
-                  {t('dedicatedAgents.agent.opp.addAddress', 'Add your address in settings to see opportunities near you')}
-                </Text>
+                <>
+                  <Text variant="bodyMedium" style={{ marginTop: spacing.sm, textAlign: 'center', color: colors.text.secondary }}>
+                    {t('dedicatedAgents.agent.opp.noAddress', 'Add your address to see stores near you')}
+                  </Text>
+                  <Button
+                    mode="contained"
+                    onPress={() => navigation.navigate('Profile')}
+                    style={{ marginTop: spacing.md }}
+                  >
+                    {t('dedicatedAgents.agent.opp.addAddress', 'Add address')}
+                  </Button>
+                </>
               )}
             </View>
           ) : (

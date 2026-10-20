@@ -7726,6 +7726,10 @@
       "noLongerAvailable": "This opportunity is no longer available",
       "apply": "Apply",
       "photoGate": "Add a profile photo to apply",
+      "photoError": "Failed to upload photo",
+      "unsupportedFormat": "Unsupported image format. Please use JPEG, PNG, or WebP.",
+      "cameraPermissionDenied": "Camera permission is required",
+      "photoPermissionDenied": "Photo library permission is required",
       "applied": "Applied",
       "withdraw": "Withdraw",
       "withdrawConfirm": "Withdraw your application?",
@@ -7740,6 +7744,7 @@
       "opp": {
         "empty": "No openings near you right now",
         "noAddress": "Add your address to see stores near you",
+        "addAddress": "Add address",
         "gone": "This opportunity is no longer available"
       },
       "gate": {

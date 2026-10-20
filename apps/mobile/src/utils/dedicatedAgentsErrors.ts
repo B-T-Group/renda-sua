@@ -8,18 +8,11 @@ export function mapDedicatedError(code: string, t: TFunction): string {
 export function shouldHideOnError(status: number, code?: string, reason?: string): boolean {
   // 404 means feature is off
   if (status === 404) return true;
-  if (status === 403) {
-    if (!code) return true;
-    if (code !== 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE') return false;
-    // Hide only on commercial_focus and no_agent
-    if (reason === 'commercial_focus' || reason === 'no_agent') return true;
-    // Don't hide on no_address - show the "Add your address" prompt instead
-    return false;
-  }
+  // 403 should be handled elsewhere (gate or no_address prompt)
   return false;
 }
 
-export type GateReason = 'not_verified' | 'contract_unsigned' | 'suspended' | 'commercial_focus' | 'no_agent' | 'no_address';
+export type GateReason = 'not_verified' | 'contract_unsigned' | 'suspended';
 
 export function shouldShowGate(status: number, code: string, reason: string | null): boolean {
   if (status !== 403) return false;
@@ -39,12 +32,6 @@ export function getGateIcon(reason: GateReason): string {
       return 'file-document-edit';
     case 'suspended':
       return 'alert-circle';
-    case 'commercial_focus':
-      return 'storefront';
-    case 'no_agent':
-      return 'account-off';
-    case 'no_address':
-      return 'map-marker-plus';
     default:
       return 'alert-circle';
   }

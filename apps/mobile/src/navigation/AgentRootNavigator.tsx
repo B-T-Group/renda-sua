@@ -84,9 +84,9 @@ export type MainTabParamList = {
   Menu: undefined;
 };
 
-const RootStack = createNativeStackNavigator<RootStackParamList>();
+const RootStack = createNativeStackNavigator<AgentRootStackParamList>();
 
-export type RootStackParamList = {
+export type AgentRootStackParamList = {
   MainTabs: NavigatorScreenParams<MainTabParamList> | undefined;
   ClaimAwaitingPayment: ClaimAwaitingPaymentParams;
   NotificationsCenter: undefined;
@@ -123,7 +123,12 @@ export type RootStackParamList = {
   EnrollPersonaSuccess: EnrollPersonaParams;
 };
 
-export type AgentAppNavScreen = keyof RootStackParamList | keyof MainTabParamList;
+/** @deprecated Use AgentRootStackParamList instead */
+export type RootStackParamList = AgentRootStackParamList;
+
+export type AgentMainTabParamList = MainTabParamList;
+
+export type AgentAppNavScreen = keyof AgentRootStackParamList | keyof MainTabParamList;
 
 function OrdersStackScreen() {
   const { colors, typography } = useTheme();

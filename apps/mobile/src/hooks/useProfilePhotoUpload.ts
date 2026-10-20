@@ -35,7 +35,7 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
         if (source === 'camera') {
           const { status } = await ImagePicker.requestCameraPermissionsAsync();
           if (status !== 'granted') {
-            const msg = t('profile.cameraPermissionDenied', 'Camera permission is required');
+            const msg = t('dedicatedAgents.agent.cameraPermissionDenied', 'Camera permission is required');
             setError(msg);
             Alert.alert(t('common.error', 'Error'), msg);
             return false;
@@ -44,7 +44,7 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
         } else {
           const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
           if (status !== 'granted') {
-            const msg = t('profile.photoPermissionDenied', 'Photo library permission is required');
+            const msg = t('dedicatedAgents.agent.photoPermissionDenied', 'Photo library permission is required');
             setError(msg);
             Alert.alert(t('common.error', 'Error'), msg);
             return false;
@@ -58,7 +58,7 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
 
         if (!isSupportedImageAsset(result.assets[0])) {
           const msg = t(
-            'business.images.upload.unsupportedFormat',
+            'dedicatedAgents.agent.unsupportedFormat',
             'Unsupported image format. Please use JPEG, PNG, or WebP.'
           );
           setError(msg);
@@ -71,7 +71,7 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
 
         // Upload to server - need user ID
         if (!auth.user?.id) {
-          const msg = t('profile.photoError', 'Failed to upload photo');
+          const msg = t('dedicatedAgents.agent.photoError', 'Failed to upload photo');
           setError(msg);
           return false;
         }
@@ -79,7 +79,7 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
         const uploadResult = await uploadProfilePhoto(result.assets[0].uri, auth.user.id);
         
         if (!uploadResult.success) {
-          const msg = uploadResult.error || t('profile.photoError', 'Failed to upload photo');
+          const msg = uploadResult.error || t('dedicatedAgents.agent.photoError', 'Failed to upload photo');
           setError(msg);
           return false;
         }
@@ -94,7 +94,7 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
 
         return true;
       } catch (err: any) {
-        const msg = err.message || t('profile.photoError', 'Failed to upload photo');
+        const msg = err.message || t('dedicatedAgents.agent.photoError', 'Failed to upload photo');
         setError(msg);
         return false;
       } finally {

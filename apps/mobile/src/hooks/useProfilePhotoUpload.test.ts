@@ -33,7 +33,7 @@ describe('useProfilePhotoUpload image validation', () => {
   });
 
   it('should accept images without mimeType', () => {
-    const asset = { uri: 'file://photo.jpg' };
+    const asset = { uri: 'file://photo.jpg', mimeType: undefined };
     expect(isSupportedImageAsset(asset)).toBe(true);
   });
 });

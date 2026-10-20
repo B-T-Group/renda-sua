@@ -74,13 +74,13 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
     loadData();
     // Track opportunity opened when component mounts
     if (postingId) {
-      dedicatedAnalytics.trackDedicatedOpportunityOpened(postingId, route.params.storeName || 'Unknown');
+      dedicatedAnalytics.trackDedicatedOpportunityOpened(postingId, 'hub');
     }
   }, [loadData, postingId, route.params.storeName]);
 
   const handleApply = async () => {
     if (isOffline) {
-      setSnackMessage(t('common.offline', 'You are offline'));
+      setSnackMessage(t('dedicatedAgents.offline', 'Offline · showing last update'));
       return;
     }
     try {
@@ -129,7 +129,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
 
   const handleWithdraw = () => {
     if (isOffline) {
-      setSnackMessage(t('common.offline', 'You are offline'));
+      setSnackMessage(t('dedicatedAgents.offline', 'Offline · showing last update'));
       return;
     }
     Alert.alert(
@@ -233,7 +233,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       {isOffline && (
         <View style={{ backgroundColor: colors.warning.main, padding: spacing.sm }}>
           <Text style={{ color: '#fff', textAlign: 'center', fontWeight: '600' }}>
-            {t('common.offline', 'You are offline')}
+            {t('dedicatedAgents.offline', 'Offline · showing last update')}
           </Text>
         </View>
       )}

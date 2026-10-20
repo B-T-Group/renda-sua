@@ -5,7 +5,7 @@ export interface DedicatedAgentsCapability {
   success: boolean;
   enabled?: boolean;
   country?: string | null;
-  reason?: 'not_verified' | 'commercial_focus' | 'no_agent' | 'no_address' | 'not_eligible';
+  reason?: 'not_verified' | 'no_address' | 'no_country' | 'contract_unsigned' | 'suspended';
 }
 
 export function useDedicatedAgentsCapability() {
@@ -48,13 +48,11 @@ export function useDedicatedAgentsCapability() {
     };
   }, []);
 
-  // Show when enabled is true, regardless of reason
-  // Hide only when enabled is false or on commercial_focus/no_agent
+  // Show when enabled is true
+  // Backend only returns null, no_address or no_country as reasons
   const shouldShowDedicatedAgents = 
     capability?.success === true && 
-    capability?.enabled === true &&
-    capability?.reason !== 'commercial_focus' &&
-    capability?.reason !== 'no_agent';
+    capability?.enabled === true;
 
   return {
     capability,

@@ -7648,6 +7648,10 @@
       "noLongerAvailable": "Cette opportunité n'est plus disponible",
       "apply": "Postuler",
       "photoGate": "Ajoutez une photo de profil pour postuler",
+      "photoError": "Échec du téléchargement de la photo",
+      "unsupportedFormat": "Format d'image non supporté. Veuillez utiliser JPEG, PNG ou WebP.",
+      "cameraPermissionDenied": "L'autorisation de la caméra est requise",
+      "photoPermissionDenied": "L'autorisation de la bibliothèque photo est requise",
       "applied": "Candidature envoyée",
       "withdraw": "Retirer",
       "withdrawConfirm": "Retirer votre candidature ?",
@@ -7662,6 +7666,7 @@
       "opp": {
         "empty": "Aucune offre près de chez vous pour le moment",
         "noAddress": "Ajoutez votre adresse pour voir les boutiques proches",
+        "addAddress": "Ajouter une adresse",
         "gone": "Cette opportunité n'est plus disponible"
       },
       "gate": {
