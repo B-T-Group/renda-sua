@@ -19,7 +19,7 @@ export type TopUpRoute =
         accountId?: string;
         paymentMethod?: string;
         transactionType?: string;
-        provider?: 'mypvit' | 'airtel' | 'moov' | 'mtn' | 'fedapay';
+        provider?: 'fedapay'; // Only present for FedaPay, omitted for airtel/moov
       };
     }
   | { endpoint: 'mtn-legacy'; body: LegacyTopUpBody };

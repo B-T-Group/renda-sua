@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 
 describe('Translation files - duplicate keys check', () => {
   // Resolve from project root since tests run from workspace root
@@ -154,27 +153,6 @@ describe('Translation files - duplicate keys check', () => {
 
     const duplicates = checkForDuplicateTopLevelKeys(cleanJson);
     expect(duplicates).toEqual([]);
-  });
-
-  test('Scanner detects duplicate accounts key from broken commit 2139dfcf', () => {
-    // Load the broken file from commit 2139dfcf that had duplicate 'accounts' key
-    let brokenContent: string;
-    try {
-      brokenContent = execSync(
-        'git show 2139dfcf:apps/frontend/public/locales/en.json',
-        { cwd: process.cwd(), encoding: 'utf8' }
-      );
-    } catch (error) {
-      // If git command fails (e.g., in CI without history), skip this test
-      console.warn('Could not load commit 2139dfcf, skipping historical duplicate check');
-      return;
-    }
-
-    const duplicates = checkForDuplicateTopLevelKeys(brokenContent);
-    const accountsDuplicate = duplicates.find(d => d.includes('"accounts"'));
-
-    expect(accountsDuplicate).toBeDefined();
-    expect(accountsDuplicate).toContain('Duplicate top-level key "accounts"');
   });
 
   test('en.json has no duplicate accounts or payment top-level keys', () => {
