@@ -4,3 +4,4 @@
 - "!include public_dedicated_claim_order.yaml"
 - "!include public_release_agent_order_hold.yaml"
 - "!include public_forfeit_agent_order_hold.yaml"
+- "!include public_restore_purchase_credit_redemption.yaml"

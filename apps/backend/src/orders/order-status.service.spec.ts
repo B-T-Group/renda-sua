@@ -231,6 +231,40 @@ describe('OrderStatusService', () => {
     });
   });
 
+  describe('#642 r2 N2: the admin-cancel ownership token rides the status CAS', () => {
+    function arrange() {
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: { ...baseOrder, current_status: 'confirmed' } });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1, returning: [{ id: 'order-123', current_status: 'cancelled' }] },
+      } as any);
+    }
+
+    it('stamps admin_cancel_token in the SAME conditional update that sets cancelled', async () => {
+      arrange();
+      await service.updateOrderStatus('order-123', 'cancelled', {
+        viaCancelEndpoint: true,
+        viaSystem: true,
+        expectedFromStatus: 'confirmed',
+        adminCancelToken: '11111111-2222-4333-8444-555555555555',
+      });
+      const updates = hasuraSystemService.executeMutation.mock.calls.filter(([q]) => /UpdateOrderStatusConditional/.test(q as string));
+      expect(updates).toHaveLength(1);
+      const [q, v] = updates[0] as [string, any];
+      expect(q).toMatch(/current_status: \{ _eq: \$previousStatus \}/);
+      expect(q).toMatch(/_set: \{\s*current_status: \$newStatus\s*admin_cancel_token: \$adminCancelToken/);
+      expect(q).toContain('$adminCancelToken: uuid!');
+      expect(v).toMatchObject({ previousStatus: 'confirmed', newStatus: 'cancelled', adminCancelToken: '11111111-2222-4333-8444-555555555555' });
+    });
+
+    it('no token -> the column is not touched (other cancels / transitions)', async () => {
+      arrange();
+      await service.updateOrderStatus('order-123', 'cancelled', { viaCancelEndpoint: true, viaSystem: true, expectedFromStatus: 'confirmed' });
+      const [q, v] = hasuraSystemService.executeMutation.mock.calls.find(([x]) => /UpdateOrderStatusConditional/.test(x as string)) as [string, any];
+      expect(q).not.toContain('admin_cancel_token');
+      expect(v).not.toHaveProperty('adminCancelToken');
+    });
+  });
+
   describe('updateOrderStatus shipping backdoor', () => {
     it('rejects business confirmed → shipped on the generic status endpoint', async () => {
       hasuraUserService.getUser.mockResolvedValue(businessUser as any);

@@ -139,6 +139,15 @@ export class AdminFullRefundCancelDto {
   reason!: string;
 }
 
+/** #627 nit: an admin's sign-off that a half-done stock / inventory-hook step was settled by hand. */
+export class AcknowledgeAdminCancelStepDto {
+  @ApiProperty({ description: 'What was checked / fixed by hand (kept on the cancel progress row)', minLength: 3, maxLength: ADMIN_CANCEL_REASON_MAX_LENGTH })
+  @IsString()
+  @MinLength(3)
+  @MaxLength(ADMIN_CANCEL_REASON_MAX_LENGTH)
+  note!: string;
+}
+
 export class UpdateOrderStatusDto {
   @ApiProperty({
     description:

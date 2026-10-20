@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   HttpException,
+  HttpCode,
   HttpStatus,
   Logger,
   Param,
@@ -38,6 +39,7 @@ import type {
 import {
   AcknowledgeRiskIncidentDto,
   AddAdminNoteDto,
+  AcknowledgeAdminCancelStepDto,
   AdminFullRefundCancelDto,
   AdminOrderStatsPeriod,
   GetAdminOrderStatsDto,
@@ -327,6 +329,34 @@ export class AdminOrdersController {
   }
 
   /**
+   * #627 nit: acknowledge a half-done non-repeatable cancel step (releaseReservedStock,
+   * inventoryReleaseHook) after checking / fixing it by hand. The engine never re-runs
+   * those, so without this every retry alerts on them. QA #642 H1: settling stock by
+   * hand is a money-adjacent override, so it is gated like the full-refund cancel:
+   * SUPERUSER + FINANCIAL_REFUNDS, FINANCIAL_REFUNDS country scope. A repeat is a 200.
+   */
+  @Post(':orderId/cancel-steps/:step/acknowledge')
+  @HttpCode(HttpStatus.OK)
+  @RequireRoles(PlatformRoles.SUPERUSER)
+  @RequirePermissions(PlatformPermissions.FINANCIAL_REFUNDS)
+  @ApiOperation({ summary: 'Acknowledge a half-done stock / inventory-hook cancel step (settled by hand)' })
+  @ApiResponse({ status: 200, description: 'Step marked done with the acknowledgement (repeat: alreadyAcknowledged=true)' })
+  @ApiResponse({ status: 403, description: 'Not SUPERUSER + FINANCIAL_REFUNDS, out of country scope, or a cancel kind not allowed' })
+  @ApiResponse({ status: 409, description: 'Step not acknowledgeable (not stock/hook, or not running/failed), or a resume is running' })
+  async acknowledgeCancelStep(
+    @Param('orderId') orderId: string,
+    @Param('step') step: string,
+    @Body() dto: AcknowledgeAdminCancelStepDto
+  ) {
+    const scope = await this.geo.require(PlatformPermissions.FINANCIAL_REFUNDS);
+    await this.geo.assertOrder(scope, orderId);
+    return this.ordersService.acknowledgeAdminCancelStep(orderId, step, maskPersonalData(dto.note.trim()), [
+      'admin_cancel',
+      'full_refund',
+    ]);
+  }
+
+  /**
    * The audit event after a successful full-refund cancel. The cancel (and its refund)
    * has already happened, so a failure here must not turn it into an error: it is
    * raised as an alert (`admin_full_refund_cancel_audit_failed`, Sentry + CloudWatch
@@ -415,11 +445,9 @@ export class AdminOrdersController {
           };
     } catch (error: any) {
       if (error instanceof HttpException) throw error;
+      // Raw error text goes to the log only, never to the API (it can carry SQL / PII).
       this.logger.error('Failed to update status', safeErrorMessage(error));
-      throw new HttpException(
-        error.message || 'Failed to update status',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException('Failed to update status', HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 

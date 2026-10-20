@@ -92,12 +92,20 @@ export function isResumableAdminFullRefundCancel(order: {
 }
 
 export const ORDER_ALREADY_PICKED_UP = 'ORDER_ALREADY_PICKED_UP';
+export const ORDER_ALREADY_CANCELLED = 'ORDER_ALREADY_CANCELLED';
 
 /**
  * PE (#626/#627): the one refusal for an admin cancel outside the pre-pickup allowlist,
- * on every cancel path: 409 with error ORDER_ALREADY_PICKED_UP.
+ * on every cancel path: 409. The code is ORDER_ALREADY_CANCELLED for an order that is
+ * already cancelled (nothing left to resume), ORDER_ALREADY_PICKED_UP otherwise.
  */
 export function adminPrePickupRefusal(status: string, hint = 'Use the return / refund flow.'): HttpException {
+  if (status === 'cancelled') {
+    return new HttpException(
+      { message: 'The order is already cancelled.', error: ORDER_ALREADY_CANCELLED },
+      HttpStatus.CONFLICT
+    );
+  }
   return new HttpException(
     {
       message: `Cannot cancel an order in ${status} status: only pre-pickup orders can be cancelled here. ${hint}`,
