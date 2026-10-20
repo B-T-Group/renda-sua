@@ -192,9 +192,11 @@ import {
 } from './resolve-shopper-variant.util';
 import type { AuthorizedBusinessActor } from './authorized-business-actor';
 import {
+  adminFullRefundNotes,
   adminPrePickupRefusal,
   isAdminPrePickupCancellableStatus,
   isAdminTerminalStatus,
+  isResumableAdminFullRefundCancel,
 } from './admin-order-status.util';
 import { GET_ORDERS } from './orders.queries';
 import {
@@ -8749,26 +8751,101 @@ export class OrdersService {
    * return / refund flow). The status write is a compare-and-set on the status read
    * here (expectedFromStatus), so a concurrent second call gets 409 before any side
    * effect; the caller audit-logs only after this returns.
+   *
+   * `enqueueOrderCancelled` swallows SQS failures, so this path also sends
+   * `order.cancelled` with `{ strict: true }`. A retry on the same full-refund
+   * cancel re-enqueues (Lambda keys are per-order) instead of 409ing.
    */
   async adminFullRefundCancel(orderId: string, reason: string) {
-    // C3: requireCancellableAdminOrder applies the shared #627 pre-pickup allowlist
-    // (ADMIN_PRE_PICKUP_CANCELLABLE_STATUSES); anything else is 409 ORDER_ALREADY_PICKED_UP.
-    const order = await this.requireCancellableAdminOrder(orderId);
-    const previousStatus = order.current_status;
+    const order = await this.getOrderDetails(orderId);
+    if (!order) throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     const adminUserId = await this.resolveOptionalUserId();
     if (!adminUserId) {
       throw new HttpException('Admin user required', HttpStatus.UNAUTHORIZED);
     }
+    if (isResumableAdminFullRefundCancel(this.adminFullRefundCancelFields(order))) {
+      return this.resumeAdminFullRefundCancel(order, reason, adminUserId);
+    }
+    if (
+      isAdminTerminalStatus(order.current_status) ||
+      !isAdminPrePickupCancellableStatus(order.current_status)
+    ) {
+      throw adminPrePickupRefusal(order.current_status);
+    }
+    return this.executeAdminFullRefundCancel(order, reason, adminUserId);
+  }
+
+  private adminFullRefundCancelFields(order: Orders) {
+    const row = order as Orders & {
+      cancelled_by?: string | null;
+      cancellation_notes?: string | null;
+    };
+    return {
+      current_status: order.current_status,
+      cancelled_by: row.cancelled_by,
+      cancellation_notes: row.cancellation_notes,
+    };
+  }
+
+  private async enqueueAdminFullRefundCancelled(
+    orderId: string,
+    previousStatus: string,
+    notes: string
+  ): Promise<void> {
+    await this.orderQueueService.sendOrderCancelledMessage(
+      orderId,
+      'system',
+      notes,
+      previousStatus,
+      `order.cancelled:${orderId}`,
+      { strict: true }
+    );
+  }
+
+  private async resumeAdminFullRefundCancel(order: Orders, reason: string, adminUserId: string) {
+    const previousStatus =
+      (await this.getPreviousStatusBeforeCancelled(order.id)) ?? 'ready_for_pickup';
+    const failedSteps: Array<{ step: string; error: string }> = [];
+    try {
+      await this.enqueueAdminFullRefundCancelled(
+        order.id,
+        previousStatus,
+        adminFullRefundNotes(reason)
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      failedSteps.push({ step: 'enqueueOrderCancelled', error: ADMIN_FULL_REFUND_STEP_FAILED_MESSAGE });
+      reportMoneyAnomaly(
+        this.logger,
+        ADMIN_FULL_REFUND_STEP_FAILED_MARKER,
+        `Step enqueueOrderCancelled failed after the admin full-refund cancel of order ${order.order_number ?? order.id} (the order is cancelled): ${message}`,
+        { orderId: order.id, previousStatus, adminUserId, step: 'enqueueOrderCancelled' }
+      );
+    }
+    const partial = failedSteps.length > 0;
+    return {
+      success: true,
+      resumed: true,
+      partialFailure: partial,
+      failedSteps,
+      order,
+      previousStatus,
+      cancellationFee: 0,
+      depositRefund: { status: 'none' as const },
+      message: partial
+        ? `Order already cancelled; enqueueOrderCancelled FAILED and needs manual follow-up (alerted)`
+        : 'Order already cancelled; the refund and hold releases were re-queued',
+    };
+  }
+
+  private async executeAdminFullRefundCancel(order: Orders, reason: string, adminUserId: string) {
+    const orderId = order.id;
+    const previousStatus = order.current_status;
     const updatedOrder = await this.orderStatusService.updateOrderStatus(orderId, 'cancelled', {
       viaCancelEndpoint: true,
       viaSystem: true,
       expectedFromStatus: previousStatus,
     });
-    // Only the compare-and-set winner reaches here. The order IS cancelled now, so a
-    // failing step below must not turn into a bare 500: each is caught, alerted
-    // (admin_full_refund_cancel_step_failed) and listed in `failedSteps`.
-    // D2: the response carries a generic message per failed step; the detail goes to
-    // the log / alert only (no raw internal error text to the API caller).
     const failedSteps: Array<{ step: string; error: string }> = [];
     const step = async <T>(name: string, fn: () => Promise<T>): Promise<T | undefined> => {
       try {
@@ -8785,8 +8862,7 @@ export class OrdersService {
         return undefined;
       }
     };
-    const notes = `Admin full refund: ${reason}`;
-    // D1: a void that fails WITHOUT throwing ({ ok: false }) is a failed step too.
+    const notes = adminFullRefundNotes(reason);
     await step('releaseStripeAuthorization', async () => {
       const result = await this.releaseStripeAuthorizationIfNeeded(order);
       if (result && !result.ok) {
@@ -8794,7 +8870,9 @@ export class OrdersService {
       }
     });
     await step('supersedePendingOrderTxs', () => this.supersedePendingOrderTxsOnCancel(order));
-    await step('persistCancellationMetadata', () => this.persistCancellationMetadata(order.id, 'system', notes));
+    await step('persistCancellationMetadata', () =>
+      this.persistCancellationMetadata(order.id, 'system', notes)
+    );
     await step('createStatusHistoryEntry', () =>
       this.createStatusHistoryEntry(
         order.id,
@@ -8805,10 +8883,13 @@ export class OrdersService {
         notes
       )
     );
-    const deposit: DepositCancelOutcome = (await step('cancellationSideEffects', () =>
-      this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes)
-    )) ?? { status: 'failed', message: 'Cancellation side effects failed before the deposit was handled' };
-    // Refunds go to the client's Rendasua wallet, never back to the payment provider.
+    const deposit: DepositCancelOutcome =
+      (await step('cancellationSideEffects', () =>
+        this.runOrderCancellationSideEffects(order, order.id, previousStatus, 'system', notes)
+      )) ?? { status: 'failed', message: 'Cancellation side effects failed before the deposit was handled' };
+    await step('enqueueOrderCancelled', () =>
+      this.enqueueAdminFullRefundCancelled(order.id, previousStatus, notes)
+    );
     const depositFailed = deposit.status === 'failed';
     if (depositFailed) {
       reportMoneyAnomaly(
@@ -8821,12 +8902,12 @@ export class OrdersService {
     const partial = failedSteps.length > 0;
     return {
       success: true,
+      resumed: false,
       partialFailure: partial,
       failedSteps,
       order: updatedOrder,
       previousStatus,
       cancellationFee: 0,
-      // D2: never return the raw refund error; it went to the log and the alert above.
       depositRefund: depositFailed
         ? { status: 'failed' as const, message: ADMIN_FULL_REFUND_DEPOSIT_FAILED_MESSAGE, errorCode: deposit.errorCode }
         : deposit,
@@ -10766,6 +10847,8 @@ export class OrdersService {
           deposit_forfeited_at
           deposit_forfeited_by_user_id
           deposit_refunded_at
+          cancelled_by
+          cancellation_notes
           completed_at
           business_id
           client_id

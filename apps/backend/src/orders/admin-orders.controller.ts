@@ -310,10 +310,10 @@ export class AdminOrdersController {
   @ApiOperation({
     summary: 'Cancel with a full refund (ops cleanup)',
     description:
-      'Superuser / financial-refunds admin only. No cancellation fee; the client is refunded to their Rendasua wallet (not to the payment provider) and agent holds are released exactly once. Only before pickup (pending_payment, pending, confirmed, preparing, ready_for_pickup, assigned_to_agent). The response carries depositRefund.status.',
+      'Superuser / financial-refunds admin only. No cancellation fee; the client is refunded to their Rendasua wallet (not to the payment provider) and agent holds are released exactly once. Only before pickup (pending_payment, pending, confirmed, preparing, ready_for_pickup, assigned_to_agent). Retrying after a queued-refund failure re-enqueues order.cancelled. The response carries depositRefund.status.',
   })
-  @ApiResponse({ status: 201, description: 'Cancelled; refund queued (order.cancelled)' })
-  @ApiResponse({ status: 409, description: 'Already cancelled / status moved / goods already picked up' })
+  @ApiResponse({ status: 201, description: 'Cancelled; refund queued (order.cancelled). Retry re-queues if already cancelled by this endpoint.' })
+  @ApiResponse({ status: 409, description: 'Already cancelled by another flow / status moved / goods already picked up' })
   async fullRefundCancel(
     @Param('orderId') orderId: string,
     @Body() dto: AdminFullRefundCancelDto
