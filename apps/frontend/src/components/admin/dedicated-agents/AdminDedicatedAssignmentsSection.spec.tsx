@@ -75,9 +75,8 @@ describe('AdminDedicatedAssignmentsSection', () => {
 
     render(<AdminDedicatedAssignmentsSection />);
 
-    await waitFor(() => expect(screen.findByText(/Doe/)).resolves.toBeInTheDocument(), {
-      timeout: 3000,
-    });
+    const agentCell = await screen.findByText(/Doe/, {}, { timeout: 3000 });
+    expect(agentCell).toBeInTheDocument();
 
     const pauseButton = screen.getByLabelText(/pause/i);
     fireEvent.click(pauseButton);
@@ -95,9 +94,7 @@ describe('AdminDedicatedAssignmentsSection', () => {
 
     render(<AdminDedicatedAssignmentsSection />);
 
-    await waitFor(() => expect(screen.findByText(/Doe/)).resolves.toBeInTheDocument(), {
-      timeout: 3000,
-    });
+    await screen.findByText(/Doe/, {}, { timeout: 3000 });
 
     const pauseButton = screen.getByLabelText(/pause/i);
     fireEvent.click(pauseButton);
@@ -116,9 +113,7 @@ describe('AdminDedicatedAssignmentsSection', () => {
 
     render(<AdminDedicatedAssignmentsSection />);
 
-    await waitFor(() => expect(screen.findByText(/Doe/)).resolves.toBeInTheDocument(), {
-      timeout: 3000,
-    });
+    await screen.findByText(/Doe/, {}, { timeout: 3000 });
 
     const removeButton = screen.getByLabelText(/remove/i);
     fireEvent.click(removeButton);
