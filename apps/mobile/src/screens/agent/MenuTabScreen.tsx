@@ -184,12 +184,14 @@ function MenuTabScreen() {
               onPress={() => goTo('AgentBusinessReferral')}
             />
           ) : null}
-          <UserMenuRow
-            icon="storefront-check"
-            label={t('dedicatedAgents.agent.opportunities', 'Opportunities')}
-            subtitle={t('dedicatedAgents.agent.opportunitiesMenu', 'Find dedicated shifts')}
-            onPress={() => goTo('DedicatedHub')}
-          />
+          {showCommercial ? (
+            <UserMenuRow
+              icon="storefront-check"
+              label={t('dedicatedAgents.agent.opportunities', 'Opportunities')}
+              subtitle={t('dedicatedAgents.agent.opportunitiesMenu', 'Find dedicated opportunities')}
+              onPress={() => goTo('DedicatedHub')}
+            />
+          ) : null}
           {isStripeRail ? (
             <UserMenuRow
               icon="credit-card-outline"

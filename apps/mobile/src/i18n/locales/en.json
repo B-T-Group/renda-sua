@@ -7704,6 +7704,7 @@
     },
     "agent": {
       "opportunities": "Opportunities",
+      "opportunitiesMenu": "Find dedicated opportunities",
       "myStores": "My stores",
       "spots": "{{accepted}}/{{needed}} spots filled",
       "apply": "Apply",
@@ -7739,7 +7740,10 @@
         "seeOpportunities": "See opportunities",
         "emptyInternal": "RendaSua will assign you to stores"
       },
-      "removedByStore": "This store removed you"
+      "removedByStore": "This store removed you",
+      "offerBadge": "Dedicated · {{store}}",
+      "payChip": "Standard pay",
+      "daysLabel": "Days"
     },
     "offline": "Offline · showing last update",
     "generic": "Something went wrong",
@@ -7748,14 +7752,18 @@
       "posting_filled": "This request is already full",
       "posting_not_open": "This request is no longer open",
       "posting_expired": "This request is no longer open",
+      "application_closed": "This opportunity is no longer open",
       "application_not_pending": "This applicant is no longer pending",
       "agent_holds_slot": "This agent already covers this slot",
+      "holds_slot": "You already cover this slot at this store",
+      "max_assignments": "You've reached the maximum number of stores",
       "cap_exceeded": "This agent already has the maximum number of stores",
       "duplicate": "This agent is already assigned to this slot",
       "slot_disabled": "Turn {{slot}} back on first",
       "agent_ineligible": "This agent can't be accepted right now",
       "pickup_time_outside_slot": "Choose a time between {{start}} and {{end}}",
-      "assignment_removed": "This assignment was removed"
+      "assignment_removed": "This assignment was removed",
+      "assignment_changed": "This assignment has changed"
     }
   }
 }

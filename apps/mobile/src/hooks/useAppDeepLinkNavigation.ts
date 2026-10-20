@@ -167,6 +167,12 @@ function dispatchDeepLinkRest(
   if (target.type === 'store') {
     return navigateNamedRoute('StoreDetail', { businessId: target.id });
   }
+  if (target.type === 'dedicatedAssignments') {
+    return navigateNamedRoute('DedicatedHub', { segment: 'stores' });
+  }
+  if (target.type === 'dedicatedOpportunity') {
+    return navigateNamedRoute('DedicatedOpportunityDetail', { postingId: target.postingId });
+  }
   resetToPersonaDashboard(persona);
   return true;
 }
