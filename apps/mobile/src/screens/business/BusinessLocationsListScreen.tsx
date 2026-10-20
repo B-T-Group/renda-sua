@@ -337,6 +337,9 @@ export default function BusinessLocationsListScreen() {
               onHours={() =>
                 navigation.navigate('BusinessLocationHours', { locationId: item.id })
               }
+              onDedicatedAgents={() =>
+                navigation.navigate('BusinessLocationDedicatedAgents', { locationId: item.id })
+              }
               onViewItems={() =>
                 navigateBusinessCatalogTab(navigation, { locationId: item.id })
               }

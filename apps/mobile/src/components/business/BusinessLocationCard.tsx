@@ -18,6 +18,7 @@ type Props = {
   onEdit: () => void;
   onHours: () => void;
   onViewItems?: () => void;
+  onDedicatedAgents?: () => void;
 };
 
 export function BusinessLocationCard({
@@ -27,6 +28,7 @@ export function BusinessLocationCard({
   onEdit,
   onHours,
   onViewItems,
+  onDedicatedAgents,
 }: Props) {
   const { t } = useTranslation();
   const { colors, borderRadius, shadows } = useTheme();
@@ -81,6 +83,11 @@ export function BusinessLocationCard({
         <Button mode="outlined" onPress={onHours}>
           {t('business.locations.hours.setNow', 'Set hours')}
         </Button>
+        {onDedicatedAgents ? (
+          <Button mode="text" onPress={onDedicatedAgents} icon="account-tie">
+            {t('dedicatedAgents.section.title', 'Dedicated agents')}
+          </Button>
+        ) : null}
         {onViewItems ? (
           <Button mode="text" onPress={onViewItems}>
             {t('business.locations.manageItems', 'Manage items')}
