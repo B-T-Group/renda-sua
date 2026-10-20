@@ -45,6 +45,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const [snackMessage, setSnackMessage] = useState<string | null>(null);
 
   const [error, setError] = useState<string | null>(null);
+  const [notFound, setNotFound] = useState(false);
   const { isOffline } = useNetworkStatus();
   
   const loadData = useCallback(async (isRefresh = false) => {
