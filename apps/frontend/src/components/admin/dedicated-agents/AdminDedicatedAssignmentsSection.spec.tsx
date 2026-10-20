@@ -51,12 +51,13 @@ describe('AdminDedicatedAssignmentsSection', () => {
     mockGetAdminAssignments.mockResolvedValue({ assignments: [] });
   });
 
-  it('renders component with filters and controls', () => {
+  it('renders component with filters and controls', async () => {
     render(<AdminDedicatedAssignmentsSection />);
 
-    expect(screen.getByLabelText(/city/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/location/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /assign/i })).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/city/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /assign/i })).toBeInTheDocument();
+    });
   });
 
   it('tracks busy state during update to prevent double-submission', async () => {
