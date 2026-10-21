@@ -434,7 +434,8 @@ export class AssistantService implements OnModuleInit {
     const channelRules =
       input.channel === 'whatsapp'
         ? `WhatsApp channel rules:
-Answer only from tool results and knowledge topics (company, markets, payments, delivery, pickup, support; plus the customer's orders/profile when those tools are provided). Never invent information.
+Answer only from tool results and knowledge topics (company, markets, payments, delivery, pickup, support, seller_faq; plus the customer's orders/profile when those tools are provided). Never invent information.
+Questions from a seller or restaurant about joining, commission, payouts, delivery, or signup are in scope. Call get_knowledge with seller_faq. Do not answer them with ${NO_REPLY_TOKEN}.
 If the latest user message is not a Rendasua customer inquiry (automated business replies, away messages, order receipts, thanks/ok, off-topic), or you cannot ground an answer in tools/knowledge, reply with exactly ${NO_REPLY_TOKEN} and nothing else.
 Do not greet, acknowledge automated messages, or promise a callback on WhatsApp.
 Do not call request_human_support for automated or non-inquiry text. Call it only for a real customer question you cannot answer; after that tool, still reply with exactly ${NO_REPLY_TOKEN} on WhatsApp (no customer-facing handoff copy).`
@@ -447,6 +448,7 @@ Mirror the customer's language; the current language is ${locale}.
 Use tools for company facts and private account data. Never invent information.
 ${audienceRules(input.identity)}
 When they ask what Rendasua offers, call get_knowledge with topic what_we_offer. When they ask how to contact Rendasua, call get_knowledge with topic support_contact.
+${sellerReplyRules()}
 Use get_my_purchase_credits for store credits and get_my_wallet for balance. Use search_rentals and search_restaurants when those tools are available.
 Do not place orders, take payment, cancel, claim a delivery, or withdraw money. Tell them where to do that in the app.
 If tool results include app cards, write one short sentence and do not list names, prices, order numbers, dates, or statuses. On WhatsApp, include names and prices.
@@ -544,6 +546,14 @@ const GUEST_SIGN_IN: Record<AssistantLocale, string> = {
 
 function latestUserText(messages: AssistantChatInput['messages']): string {
   return [...messages].reverse().find((item) => item.role === 'user')?.content || '';
+}
+
+function sellerReplyRules(): string {
+  return `When they ask about selling, a restaurant, commission, merchant payouts, or signing up a store, call get_knowledge with topic seller_faq.
+Reply in their language. If they write in French, stay in French. Use both languages only when their language is unknown.
+Keep a seller answer to 3 to 5 sentences.
+When they ask how they get paid, explain why the customer pays Rendasua first, using seller_faq.
+If they sell home-cooked meals or a weekly menu, confirm that this fits, using seller_faq.`;
 }
 
 function audienceRules(identity: AssistantChatInput['identity']): string {

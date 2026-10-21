@@ -87,4 +87,5 @@ export type KnowledgeTopic =
   | 'pickup'
   | 'support_contact'
   | 'reels'
-  | 'what_we_offer';
+  | 'what_we_offer'
+  | 'seller_faq';

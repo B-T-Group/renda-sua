@@ -9,7 +9,7 @@ The conversational assistant (WhatsApp + `/assistant` + mobile chat) answers fro
 
 `apps/backend/src/assistant/knowledge/`
 
-Topics: `company_locations`, `markets`, `payments`, `delivery`, `pickup`, `support_contact` (see `knowledge/index.ts` and `assistant.types.ts`).
+Topics: `company_locations`, `markets`, `payments`, `delivery`, `pickup`, `support_contact`, `reels`, `what_we_offer`, `seller_faq` (see `knowledge/index.ts` and `assistant.types.ts`).
 
 ## When to update (same PR / same change)
 
@@ -24,6 +24,7 @@ Update the matching knowledge file(s) in **both `en` and `fr`** whenever you cha
 | Offices, company story, Groupe BT presence | `company.ts` |
 | Support phone, email, hours, escalation copy | `support.ts` |
 | About Us / Support / FAQ public copy that the assistant should reflect | matching topic above |
+| Seller or restaurant onboarding: commission, payouts, signup, offices | `sellers.ts` (`seller_faq`), often `company.ts` |
 
 Also update if you change related **config or product behavior** that customers ask about (e.g. `STRIPE_ENABLED_COUNTRIES`, checkout payment-timing rules, country delivery configs) so the assistant does not contradict the app.
 

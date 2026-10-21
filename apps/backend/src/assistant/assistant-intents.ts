@@ -8,7 +8,8 @@ export function guestAsksForPersonalData(text: string): boolean {
 
 export function staticKnowledgeTopic(
   text: string
-): 'what_we_offer' | 'support_contact' | null {
+): 'what_we_offer' | 'support_contact' | 'seller_faq' | null {
+  if (SELLER.test(text)) return 'seller_faq';
   if (OFFER.test(text)) return 'what_we_offer';
   if (CONTACT.test(text)) return 'support_contact';
   return null;
@@ -21,6 +22,9 @@ const POSSESSIVE = /\b(my|mes|mon|ma)\b/i;
 
 const PERSONAL_NOUN =
   /\b(order|orders|commande|commandes|credit|credits|crédit|crédits|address|addresses|adresse|adresses|profile|profil|wallet|portefeuille|earning|earnings|gain|gains|deliveries|livraisons|boutique|catalog|catalogue|booking|bookings|réservation|réservations)\b/i;
+
+const SELLER =
+  /\b(commission|15 premi[eè]res ventes|first 15 sales|devenir (un )?(vendeur|restaurant|marchand|partenaire)|m['’]inscrire|se d[eé]sabonner|qu['’]est-ce que (je gagne|vous y gagnez)|frais mensuels?|how much do you (take|charge)|your commission|votre (commission|pourcentage)|join as a (seller|restaurant|merchant)|sign up (my |a )?(store|restaurant|business))\b/i;
 
 const OFFER =
   /\b(what does rendasua offer|what do you offer|what is rendasua|what are you|que propose rendasua|qu['’]est-ce que rendasua|c['’]est quoi rendasua)\b/i;
