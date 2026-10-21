@@ -8871,15 +8871,65 @@ export class OrdersService {
     }
   }
 
-  /** System cancel: a captured deposit is refunded (even after lock); a failure throws. */
+  /**
+   * System cancel: release a captured deposit (even after lock). Re-reads the row.
+   * refunded + pending is an unfinished claim and is resumed. refunded + failed
+   * throws so a retry cannot mark the step done while the hold is still withheld.
+   */
   private async refundDepositForAdminCancel(order: Orders): Promise<void> {
-    const depositStatus = (order as any).deposit_status;
-    const depositAmount = Number((order as any).deposit_amount) || 0;
-    if (depositStatus !== 'paid' || depositAmount <= 0) return;
-    const result = await this.depositRefundService.refundDeposit(order.id, { allowAfterLock: true });
+    const fresh = (await this.getOrderDetails(order.id).catch(() => null)) ?? order;
+    const view = this.depositRefundView(fresh);
+    if (this.depositRefundIsSettled(view)) return;
+    if (view.status === 'refunded' && view.refundStatus === 'failed') {
+      throw new Error('Deposit refund is marked failed');
+    }
+    if (!this.depositRefundShouldRelease(view)) return;
+    const result = await this.depositRefundService.refundDeposit(order.id, {
+      allowAfterLock: true,
+    });
     if (!result.success) {
       throw new Error(`Deposit refund failed: ${result.message ?? 'unknown'}`);
     }
+  }
+
+  private depositRefundView(order: Orders): {
+    status: string | null;
+    refundStatus: string | null;
+    amount: number;
+  } {
+    const row = order as Orders & {
+      deposit_status?: string | null;
+      deposit_refund_status?: string | null;
+      deposit_amount?: number | string | null;
+    };
+    return {
+      status: row.deposit_status ?? null,
+      refundStatus: row.deposit_refund_status ?? null,
+      amount: Number(row.deposit_amount) || 0,
+    };
+  }
+
+  /** refunded and not an unfinished or failed release. */
+  private depositRefundIsSettled(view: {
+    status: string | null;
+    refundStatus: string | null;
+  }): boolean {
+    return (
+      view.status === 'refunded' &&
+      view.refundStatus !== 'pending' &&
+      view.refundStatus !== 'failed'
+    );
+  }
+
+  /** paid, or a claim whose wallet release has not finished. */
+  private depositRefundShouldRelease(view: {
+    status: string | null;
+    refundStatus: string | null;
+    amount: number;
+  }): boolean {
+    if (view.amount <= 0) return false;
+    if (view.status === 'paid') return true;
+    return view.status === 'refunded' && view.refundStatus === 'pending';
   }
 
   private async runAdminCancelSteps(
@@ -9029,8 +9079,7 @@ export class OrdersService {
     notStarted = false
   ) {
     const order = await this.getOrderDetails(ctx.order.id).catch(() => null);
-    const hadDeposit =
-      (ctx.order as any).deposit_status === 'paid' && (Number((ctx.order as any).deposit_amount) || 0) > 0;
+    const hadDeposit = this.fullRefundTrackedDeposit(ctx.order);
     const depositFailed = failed.includes('depositRefund');
     if (notStarted) {
       return {
@@ -9072,6 +9121,19 @@ export class OrdersService {
         ? 'Full-refund cancel completed (resumed)'
         : 'Order cancelled with a full refund to the client wallet; the refund and hold releases are queued',
     };
+  }
+
+  /** A deposit this cancel must show as refunded, failed, or still in flight. */
+  private fullRefundTrackedDeposit(order: Orders | null | undefined): boolean {
+    const view = this.depositRefundView(order ?? ({} as Orders));
+    if (view.amount <= 0) return false;
+    if (view.status === 'paid') return true;
+    if (view.status !== 'refunded') return false;
+    return (
+      view.refundStatus === 'pending' ||
+      view.refundStatus === 'failed' ||
+      view.refundStatus === 'refunded'
+    );
   }
 
   private adminFullRefundCancelFields(order: Orders) {
