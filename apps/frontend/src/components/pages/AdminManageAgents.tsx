@@ -108,9 +108,11 @@ const AdminManageAgents: React.FC = () => {
 
   // Check dedicated capability on mount
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       try {
         const result = await getAdminCapability();
+        if (cancelled) return;
         if (result.enabled) {
           setShowDedicatedTab(true);
           setDedicatedTabError(null);
@@ -119,6 +121,7 @@ const AdminManageAgents: React.FC = () => {
           setCurrentTab(0);
         }
       } catch (err: any) {
+        if (cancelled) return;
         const status = err.response?.status;
         setShowDedicatedTab(false);
         setCurrentTab(0);
@@ -127,8 +130,10 @@ const AdminManageAgents: React.FC = () => {
         }
       }
     })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [getAdminCapability]);
+    return () => {
+      cancelled = true;
+    };
+  }, [getAdminCapability, t]);
 
   const fetchIdDocuments = useCallback(
     async (agentId: string) => {

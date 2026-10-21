@@ -30,6 +30,7 @@ import AppRedirect from '../components/pages/AppRedirect';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useAgentOnboarding } from '../hooks/useAgentOnboarding';
 
+import LoadingPage from '../components/common/LoadingPage';
 import StickyDownloadBar from '../components/common/StickyDownloadBar';
 import IncomingOrderOverlay from '../components/incoming-order/IncomingOrderOverlay';
 import StorePickupReminderOverlay from '../components/orders/StorePickupReminderOverlay';

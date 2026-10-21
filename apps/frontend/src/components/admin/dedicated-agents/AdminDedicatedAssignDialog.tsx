@@ -61,6 +61,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
   const [selectedAgent, setSelectedAgent] = useState<AdminAgentPickerItem | null>(null);
   const [agentFilter, setAgentFilter] = useState('');
   const [agentsTruncated, setAgentsTruncated] = useState(false);
+  const [locationsTruncated, setLocationsTruncated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -76,6 +77,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       setActiveStep(0);
       setLocationQuery('');
       setLocations([]);
+      setLocationsTruncated(false);
       setSelectedLocation(null);
       setSelectedSlots([]);
       setAgents([]);
@@ -95,6 +97,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
     async (query: string) => {
       if (query.length < 2) {
         setLocations([]);
+        setLocationsTruncated(false);
         return;
       }
 
@@ -110,6 +113,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
           return;
         }
         setLocations(response.locations);
+        setLocationsTruncated(response.truncated);
       } catch (err: any) {
         console.error('Error searching locations:', err);
         
@@ -360,6 +364,12 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
                 autoFocus
                 fullWidth
               />
+
+              {locationsTruncated && (
+                <Alert severity="info">
+                  {t('dedicatedAgents.admin.truncated', 'Showing the first results; refine the search')}
+                </Alert>
+              )}
 
               {loading && (
                 <Box display="flex" justifyContent="center" py={2}>

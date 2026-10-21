@@ -7,12 +7,31 @@ const mockDeleteAdminAssignment = jest.fn();
 const mockEnqueueSnackbar = jest.fn();
 const mockTrackSiteEvent = jest.fn();
 
+// Stable `t` so hooks depending on it do not refetch on every render.
+const mockT = (key: string, defaultValue?: string) =>
+  typeof defaultValue === 'string' ? defaultValue : key;
+
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, defaultValue?: string) =>
-      typeof defaultValue === 'string' ? defaultValue : key,
-  }),
+  useTranslation: () => ({ t: mockT }),
 }));
+
+const mockAssignment = {
+  assignmentId: 'a1',
+  slotKey: 'morning' as const,
+  status: 'active' as const,
+  source: 'superuser_assign' as const,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  possible_relation: false,
+  relation_dismissed: false,
+  agent: { id: 'agent-1', firstName: 'John', lastName: 'Doe', isInternal: false },
+  location: {
+    id: 'loc-1',
+    businessName: 'Shop',
+    name: 'Akwa',
+    city: 'Douala',
+    state: 'Littoral',
+  },
+};
 
 jest.mock('notistack', () => ({
   useSnackbar: () => ({ enqueueSnackbar: mockEnqueueSnackbar }),
@@ -61,19 +80,6 @@ describe('AdminDedicatedAssignmentsSection', () => {
   });
 
   it('tracks busy state during update to prevent double-submission', async () => {
-    const mockAssignment = {
-      assignmentId: 'a1',
-      slotKey: 'morning',
-      status: 'active' as const,
-      agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
-      location: {
-        businessName: 'Shop',
-        name: 'Akwa',
-        city: 'Douala',
-        state: 'Littoral',
-      },
-    };
-
     mockGetAdminAssignments.mockResolvedValue({ assignments: [mockAssignment] });
     
     let resolveUpdate!: () => void;
@@ -105,19 +111,6 @@ describe('AdminDedicatedAssignmentsSection', () => {
   });
 
   it('shows snackbar on 409 conflict and refetches', async () => {
-    const mockAssignment = {
-      assignmentId: 'a1',
-      slotKey: 'morning',
-      status: 'active' as const,
-      agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
-      location: {
-        businessName: 'Shop',
-        name: 'Akwa',
-        city: 'Douala',
-        state: 'Littoral',
-      },
-    };
-
     mockGetAdminAssignments.mockResolvedValue({ assignments: [mockAssignment] });
     mockUpdateAdminAssignment.mockRejectedValue({
       response: { status: 409, data: { code: 'assignment_removed' } },
@@ -137,19 +130,6 @@ describe('AdminDedicatedAssignmentsSection', () => {
   });
 
   it('disables remove button during deletion', async () => {
-    const mockAssignment = {
-      assignmentId: 'a1',
-      slotKey: 'morning',
-      status: 'active' as const,
-      agent: { firstName: 'John', lastName: 'Doe', isInternal: false },
-      location: {
-        businessName: 'Shop',
-        name: 'Akwa',
-        city: 'Douala',
-        state: 'Littoral',
-      },
-    };
-
     mockGetAdminAssignments.mockResolvedValue({ assignments: [mockAssignment] });
     let resolveDelete!: () => void;
     mockDeleteAdminAssignment.mockImplementation(
