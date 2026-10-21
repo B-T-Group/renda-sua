@@ -121,9 +121,9 @@ export default [
     },
   },
   
-  // Test files: add vitest globals
+  // Test files: add vitest + jest globals (render tests run under jest-expo)
   {
-    files: ['**/*.test.{js,jsx,ts,tsx}', '**/__tests__/**/*.{js,jsx,ts,tsx}'],
+    files: ['**/*.test.{js,jsx,ts,tsx}', '**/__tests__/**/*.{js,jsx,ts,tsx}', '**/__mocks__/**/*.{js,jsx,ts,tsx}'],
     languageOptions: {
       globals: {
         describe: 'readonly',
@@ -135,6 +135,7 @@ export default [
         beforeAll: 'readonly',
         afterAll: 'readonly',
         vi: 'readonly',
+        jest: 'readonly',
       },
     },
   },

@@ -38,5 +38,8 @@ jobs:
       - name: Run lint
         run: yarn lint
 
-      - name: Run tests
+      - name: Run unit tests (vitest)
         run: yarn test
+
+      - name: Run render tests (jest)
+        run: yarn test:render
