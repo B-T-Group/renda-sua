@@ -2,7 +2,7 @@ import { BadRequestException, Logger, NotFoundException } from '@nestjs/common';
 import type { HasuraSystemService } from '../hasura/hasura-system.service';
 import type { GeoScopeService } from '../rbac/geo-scope.service';
 import type { GeoScope } from '../rbac/platform-permissions';
-import type { DedicatedAgentsConfigService } from './dedicated-agents-config.service';
+import { DedicatedAgentsConfigService } from './dedicated-agents-config.service';
 import {
   ADMIN_VIEW_MAX_PAGES,
   DedicatedAdminViewsService,
@@ -152,6 +152,12 @@ function world() {
   const hasura = { executeQuery, executeMutation } as unknown as HasuraSystemService;
   const config = { isEnabled: jest.fn(async (c: string) => state.flags.get(c) === true) };
   const geo = {
+    markets: jest.fn(async () => [
+      { countryCode: 'CM', countryName: 'Cameroon', stateKey: 'littoral' },
+      { countryCode: 'CM', countryName: 'Cameroon', stateKey: 'centre' },
+      { countryCode: 'GA', countryName: 'Gabon', stateKey: 'estuaire' },
+      { countryCode: 'TG', countryName: 'Togo', stateKey: 'maritime' },
+    ]),
     addressWhere: jest.fn(async (scope: GeoScope) => (scope.all ? null : { country: { _in: scope.countries } })),
     assertBusiness: jest.fn(async (scope: GeoScope, businessId: string) => {
       if (scope.all) return;
@@ -558,23 +564,115 @@ describe('#594 G10: DedicatedAdminViewsService.searchLocations', () => {
 });
 
 describe('#594 G11: DedicatedAdminViewsService.locationPickupSlots', () => {
-  it('in scope and flag on: the owner payload', async () => {
+  const DLA = '0000b0b0-0000-4000-8000-000000000001';
+  const LBV = '0000b0b0-0000-4000-8000-000000000003';
+  const NF = { statusCode: 404, message: 'Not found', error: 'Not Found' };
+  const setup = () => {
     const w = world();
-    await expect(w.service.locationPickupSlots(CM, 'loc-dla')).resolves.toEqual({
+    w.state.locations.push({ ...w.state.locations[0], id: DLA }, { ...w.state.locations[2], id: LBV });
+    return w;
+  };
+  const body = async (p: Promise<unknown>) => {
+    const err = await p.then(() => null, (e) => e);
+    expect(err).toBeInstanceOf(NotFoundException);
+    return err.getResponse();
+  };
+
+  it('in scope and flag on: the owner payload', async () => {
+    const w = setup();
+    await expect(w.service.locationPickupSlots(CM, DLA)).resolves.toEqual({
       slots: [{ slotKey: 'morning', startTime: '07:00', endTime: '11:00', isEnabled: false, pickupTime: '07:30', liveAgents: 0 }],
     });
     expect(w.geo.assertBusiness).toHaveBeenCalledWith(CM, 'biz-1');
   });
 
   it('out of scope -> 404 before reading slots', async () => {
-    const w = world();
-    await expect(w.service.locationPickupSlots(GA, 'loc-dla')).rejects.toBeInstanceOf(NotFoundException);
+    const w = setup();
+    expect(await body(w.service.locationPickupSlots(GA, DLA))).toEqual(NF);
     expect(w.assignments.getPickupSlots).not.toHaveBeenCalled();
   });
 
-  it('flag off -> 404; unknown location -> 404', async () => {
+  it('#641 QA N1: a non-uuid id -> 404 without any lookup', async () => {
+    const w = setup();
+    for (const bad of ['abc', 'loc-dla', '', '0000b0b0-0000-4000-8000-00000000000']) {
+      expect(await body(w.service.locationPickupSlots(ALL, bad))).toEqual(NF);
+    }
+    expect(w.assignments.locationBusinessId).not.toHaveBeenCalled();
+  });
+
+  it('#641 QA N2: unknown, out of scope and flag off share one body', async () => {
+    const w = setup();
+    const bodies = [
+      await body(w.service.locationPickupSlots(ALL, '0000b0b0-0000-4000-8000-00000000ffff')),
+      await body(w.service.locationPickupSlots(GA, DLA)),
+      await body(w.service.locationPickupSlots(ALL, LBV)),
+    ];
+    for (const b of bodies) expect(b).toEqual(NF);
+  });
+
+  it('non-404 errors pass through', async () => {
+    const w = setup();
+    w.assignments.getPickupSlots.mockRejectedValueOnce(new Error('boom'));
+    await expect(w.service.locationPickupSlots(ALL, DLA)).rejects.toThrow('boom');
+  });
+});
+
+describe('#594 admin capability', () => {
+  it('global scope: every supported market with the flag on, sorted, deduped', async () => {
     const w = world();
-    await expect(w.service.locationPickupSlots(ALL, 'loc-lbv')).rejects.toBeInstanceOf(NotFoundException);
-    await expect(w.service.locationPickupSlots(ALL, 'loc-nope')).rejects.toBeInstanceOf(NotFoundException);
+    w.state.flags.set('TG', true);
+    await expect(w.service.capability(ALL)).resolves.toEqual({ enabled: true, countries: ['CM', 'TG'] });
+    expect(w.config.isEnabled.mock.calls.map((c) => c[0]).sort()).toEqual(['CM', 'GA', 'TG']);
+  });
+
+  it('country scope: only the admin’s countries (no markets lookup)', async () => {
+    const w = world();
+    w.state.flags.set('TG', true);
+    await expect(w.service.capability(CM)).resolves.toEqual({ enabled: true, countries: ['CM'] });
+    expect(w.geo.markets).not.toHaveBeenCalled();
+  });
+
+  it('flag off in every scoped country -> enabled false, countries []', async () => {
+    const w = world();
+    await expect(w.service.capability(GA)).resolves.toEqual({ enabled: false, countries: [] });
+    w.state.flags.set('CM', false);
+    await expect(w.service.capability(ALL)).resolves.toEqual({ enabled: false, countries: [] });
+  });
+
+  it('state-scoped admin: the state’s country counts; codes are normalised', async () => {
+    const w = world();
+    const scope: GeoScope = { all: false, countries: [' ga'], states: [{ countryCode: 'cm', stateKey: 'littoral' }] };
+    w.state.flags.set('GA', true);
+    await expect(w.service.capability(scope)).resolves.toEqual({ enabled: true, countries: ['CM', 'GA'] });
+  });
+});
+
+describe('#594 admin capability with the real config resolver', () => {
+  const build = (rows: Loose[]) => {
+    const hasura = { executeQuery: jest.fn(async () => ({ application_configurations: rows })) } as unknown as HasuraSystemService;
+    const geo = { markets: jest.fn(async () => [{ countryCode: 'CM' }, { countryCode: 'GA' }, { countryCode: 'TG' }]) };
+    return new DedicatedAdminViewsService(
+      hasura,
+      new DedicatedAgentsConfigService(hasura),
+      geo as unknown as GeoScopeService,
+      {} as DedicatedAssignmentsService,
+      {} as DedicatedPostingsService,
+      {} as AgentContractGateService
+    );
+  };
+  const row = (v: boolean, c: string | null) => ({ config_key: 'dedicated_agents_enabled', boolean_value: v, country_code: c });
+
+  it('global on, GA row off: the country row wins', async () => {
+    await expect(build([row(true, null), row(false, 'GA')]).capability(ALL)).resolves.toEqual({ enabled: true, countries: ['CM', 'TG'] });
+  });
+
+  it('global off, CM row on: only CM; a GA-only admin sees nothing', async () => {
+    const svc = build([row(false, null), row(true, 'CM')]);
+    await expect(svc.capability(ALL)).resolves.toEqual({ enabled: true, countries: ['CM'] });
+    await expect(svc.capability(GA)).resolves.toEqual({ enabled: false, countries: [] });
+  });
+
+  it('no rows: off everywhere', async () => {
+    await expect(build([]).capability(ALL)).resolves.toEqual({ enabled: false, countries: [] });
   });
 });

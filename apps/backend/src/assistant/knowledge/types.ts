@@ -13,4 +13,5 @@ export const KNOWLEDGE_TOPICS: readonly KnowledgeTopic[] = [
   'support_contact',
   'reels',
   'what_we_offer',
+  'seller_faq',
 ] as const;

@@ -30,6 +30,7 @@ const routes: Array<[Ctl, string]> = [
   [DedicatedAdminViewsController, 'picker'],
   [DedicatedAdminViewsController, 'dismissRelation'],
   [DedicatedAdminViewsController, 'searchLocations'],
+  [DedicatedAdminViewsController, 'capability'],
   [DedicatedAdminViewsController, 'locationPickupSlots'],
   [DedicatedAdminPostingsController, 'list'],
   [DedicatedAdminPostingsController, 'close'],
@@ -61,6 +62,7 @@ describe('PR 8 admin view controllers', () => {
       dismissRelation: jest.fn(async () => ({ changed: true })),
       listPostings: jest.fn(async () => ({ postings: [] })),
       closePosting: jest.fn(async () => ({ autoDeclined: 0 })),
+      capability: jest.fn(async () => ({ enabled: true, countries: ['CM'] })),
       searchLocations: jest.fn(async () => ({ locations: [], truncated: false })),
       locationPickupSlots: jest.fn(async () => ({ slots: [] })),
     };
@@ -75,7 +77,9 @@ describe('PR 8 admin view controllers', () => {
     await posts.close('p-1', { reason: 'policy' }, req);
     await expect(views.searchLocations('mama', 'Douala', '10')).resolves.toEqual({ success: true, locations: [], truncated: false });
     await expect(views.locationPickupSlots('loc-1')).resolves.toEqual({ success: true, slots: [] });
-    expect(geo.require).toHaveBeenCalledTimes(8);
+    await expect(views.capability()).resolves.toEqual({ success: true, enabled: true, countries: ['CM'] });
+    expect(service.capability).toHaveBeenCalledWith(scope);
+    expect(geo.require).toHaveBeenCalledTimes(9);
     expect(service.searchLocations).toHaveBeenCalledWith(scope, { q: 'mama', city: 'Douala', limit: '10' });
     expect(service.locationPickupSlots).toHaveBeenCalledWith(scope, 'loc-1');
     expect(geo.require.mock.calls.every((c) => (c as unknown[])[0] === PlatformPermissions.MANAGE_AGENTS)).toBe(true);

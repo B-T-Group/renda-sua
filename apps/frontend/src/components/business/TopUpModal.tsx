@@ -15,19 +15,24 @@ import {
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import PhoneInput from '../common/PhoneInput';
+import {
+  TogoOperatorPicker,
+  TogoOperator,
+  detectTogoOperator,
+} from '../common/TogoOperatorPicker';
+import { useMobilePaymentProviders } from '../../hooks/useMobilePaymentProviders';
+import { getCountryCodeFromE164 } from '../../utils/phoneUtils';
 
-type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card';
+type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'fedapay' | 'credit-card';
 
 const MIN_TOP_UP_AMOUNT = 150;
 
 function resolveTopUpCountry(
   phoneE164: string,
-  countryFromSelector: 'CM' | 'GA'
-): 'CM' | 'GA' {
-  const digits = phoneE164.replace(/\D/g, '');
-  if (digits.startsWith('241')) return 'GA';
-  if (digits.startsWith('237')) return 'CM';
-  return countryFromSelector;
+  countryFromSelector: 'CM' | 'GA' | 'TG'
+): 'CM' | 'GA' | 'TG' {
+  const detected = getCountryCodeFromE164(phoneE164);
+  return detected || countryFromSelector;
 }
 
 interface TopUpModalProps {
@@ -57,15 +62,38 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [showResult, setShowResult] = useState(false);
-  const [phoneCountry, setPhoneCountry] = useState<'CM' | 'GA'>('CM');
+  const [phoneCountry, setPhoneCountry] = useState<'CM' | 'GA' | 'TG'>('CM');
+  const [togoOperator, setTogoOperator] = useState<TogoOperator>('togocel');
+  const [operatorMismatch, setOperatorMismatch] = useState(false);
 
-  // Lock payment method to Airtel Money only
+  // Check if FedaPay is available for Togo
+  const { isFedaPayAvailable, loading: providersLoading, error: providersError } = useMobilePaymentProviders(
+    phoneCountry === 'TG' ? 'TG' : undefined
+  );
+
+  // Determine payment method based on country
   const [paymentMethod] = useState<PaymentMethod>('airtel-money');
+
+  // Auto-detect operator from phone number and check for mismatch
+  useEffect(() => {
+    if (phoneNumber && phoneCountry === 'TG') {
+      const detected = detectTogoOperator(phoneNumber);
+      const mismatch = togoOperator !== detected;
+      setOperatorMismatch(mismatch);
+    } else {
+      setOperatorMismatch(false);
+    }
+  }, [phoneNumber, phoneCountry, togoOperator]);
 
   // Update phone number when userPhoneNumber prop changes
   useEffect(() => {
     if (userPhoneNumber) {
       setPhoneNumber(userPhoneNumber);
+      // Auto-detect operator for Togo numbers
+      const country = getCountryCodeFromE164(userPhoneNumber);
+      if (country === 'TG') {
+        setTogoOperator(detectTogoOperator(userPhoneNumber));
+      }
     }
   }, [userPhoneNumber]);
 
@@ -86,9 +114,16 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
       setPhoneCountry('CM');
       return;
     }
-    const digits = userPhoneNumber.replace(/\D/g, '');
-    if (digits.startsWith('241')) setPhoneCountry('GA');
-    else if (digits.startsWith('237')) setPhoneCountry('CM');
+    const country = getCountryCodeFromE164(userPhoneNumber);
+    if (country) {
+      setPhoneCountry(country);
+      if (country === 'TG') {
+        // Auto-set operator to match phone number
+        setTogoOperator(detectTogoOperator(userPhoneNumber));
+      }
+    } else {
+      setPhoneCountry('CM');
+    }
   }, [open, userPhoneNumber]);
 
   // Get phone number hint for Airtel Money
@@ -131,10 +166,17 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
     setShowResult(false);
 
     try {
-      const success = await onConfirm(phoneNumber, amount, paymentMethod);
+      // Determine actual payment method based on country
+      const topUpCountry = resolveTopUpCountry(phoneNumber, phoneCountry);
+      const actualPaymentMethod = topUpCountry === 'TG' ? 'fedapay' : paymentMethod;
+      
+      const success = await onConfirm(phoneNumber, amount, actualPaymentMethod);
 
       if (success) {
-        setSuccess(t('accounts.paymentMessages.airtelMoneySuccess'));
+        const successMessage = topUpCountry === 'TG'
+          ? t('accounts.paymentMessages.fedapaySuccess', 'Payment request sent successfully via FedaPay.')
+          : t('accounts.paymentMessages.airtelMoneySuccess');
+        setSuccess(successMessage);
         setShowResult(true);
         setAmount('');
       } else {
@@ -169,8 +211,18 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
     parsedTopUpAmount >= MIN_TOP_UP_AMOUNT;
 
   const topUpMarketCountry = resolveTopUpCountry(phoneNumber, phoneCountry);
+  
+  // Check if FedaPay is unavailable for Togo
+  const isFedaPayUnavailable = topUpMarketCountry === 'TG' && (!isFedaPayAvailable || !!providersError);
+  
+  const canSubmit = !operatorMismatch && topUpAmountOk && !!phoneNumber.trim() && !!amount.trim() && !isFedaPayUnavailable;
   const topUpInfoMessage =
-    topUpMarketCountry === 'CM'
+    topUpMarketCountry === 'TG'
+      ? t(
+          'accounts.paymentMessages.topUpInfoTG',
+          'Top up using Moov Money or Mixx by Yas (Togocel).'
+        )
+      : topUpMarketCountry === 'CM'
       ? t(
           'accounts.paymentMessages.topUpInfoCM',
           'Top up using MTN Mobile Money or Orange Money.'
@@ -244,9 +296,18 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
               <PhoneInput
                 value={phoneNumber}
-                onChange={(value) => setPhoneNumber(value || '')}
+                onChange={(value) => {
+                  setPhoneNumber(value || '');
+                  // Auto-update operator to match phone prefix
+                  const country = getCountryCodeFromE164(value || '');
+                  if (country === 'TG') {
+                    setTogoOperator(detectTogoOperator(value || ''));
+                  }
+                }}
                 onCountryChange={(c) => {
-                  if (c === 'CM' || c === 'GA') setPhoneCountry(c);
+                  if (c === 'CM' || c === 'GA' || c === 'TG') {
+                    setPhoneCountry(c);
+                  }
                 }}
                 label={t('accounts.phoneNumber', 'Phone Number')}
                 placeholder={getPhoneNumberHint()}
@@ -257,8 +318,42 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
                 }
                 disabled={false}
                 defaultCountry="CM"
-                onlyCountries={['CM', 'GA']}
+                onlyCountries={['CM', 'GA', 'TG']}
               />
+
+              {/* Show unavailable state when FedaPay is not available for Togo */}
+              {phoneCountry === 'TG' && isFedaPayUnavailable && !providersLoading && (
+                <Alert severity="error" sx={{ mt: 1 }}>
+                  <Typography variant="body2">
+                    {t(
+                      'payment.togoOperator.unavailable',
+                      'FedaPay mobile money is not currently available for Togo. Please try again later or contact support.'
+                    )}
+                  </Typography>
+                </Alert>
+              )}
+
+              {/* Show Togo operator picker only when country is TG and FedaPay is active */}
+              {phoneCountry === 'TG' && isFedaPayAvailable && !providersError && (
+                <>
+                  <TogoOperatorPicker
+                    value={togoOperator}
+                    onChange={setTogoOperator}
+                    phoneNumber={phoneNumber}
+                    disabled={false}
+                  />
+                  {operatorMismatch && phoneNumber.trim() && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      <Typography variant="body2">
+                        {t(
+                          'payment.togoOperator.mismatch',
+                          'The selected operator does not match the phone number prefix. Please select the correct operator or update the phone number.'
+                        )}
+                      </Typography>
+                    </Alert>
+                  )}
+                </>
+              )}
 
               <TextField
                 fullWidth
@@ -303,9 +398,7 @@ const TopUpModal: React.FC<TopUpModalProps> = ({
             onClick={handleConfirm}
             variant="contained"
             color="cta"
-            disabled={
-              loading || !phoneNumber.trim() || !amount.trim() || !topUpAmountOk
-            }
+            disabled={loading || !canSubmit}
             startIcon={loading ? <CircularProgress size={16} /> : null}
           >
             {loading ? 'Processing...' : 'Send Payment Request'}

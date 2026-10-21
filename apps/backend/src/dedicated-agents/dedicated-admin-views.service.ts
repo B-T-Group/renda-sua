@@ -27,6 +27,7 @@ import {
   DISMISS_DEDICATED_RELATION_MUTATION,
 } from './dedicated-admin-views.queries';
 import { DedicatedAssignmentsService } from './dedicated-assignments.service';
+import { DEDICATED_NOT_FOUND_MESSAGE, isUuidLike } from './dedicated-not-found.util';
 import { DedicatedPostingsService } from './dedicated-postings.service';
 import { relationBadge, type RelationSignal } from './relation-signals.util';
 
@@ -388,6 +389,21 @@ export class DedicatedAdminViewsService {
   }
 
   /**
+   * Admin capability: the countries in the caller's platform.manage.agents geo
+   * scope where `dedicated_agents_enabled` is on (country row over the global row).
+   * Global scope: every supported market. Never 404s.
+   */
+  async capability(scope: GeoScope): Promise<{ enabled: boolean; countries: string[] }> {
+    const candidates = scope.all
+      ? (await this.geo.markets()).map((m) => m.countryCode)
+      : [...scope.countries, ...scope.states.map((s) => s.countryCode)];
+    const unique = [...new Set(candidates.map((c) => c?.trim().toUpperCase()).filter((c): c is string => !!c))].sort();
+    const flags = await Promise.all(unique.map((c) => this.config.isEnabled(c)));
+    const countries = unique.filter((_, i) => flags[i]);
+    return { enabled: countries.length > 0, countries };
+  }
+
+  /**
    * #594 G10: admin location search by store / business name or city, limited to
    * the caller's geo scope and to countries with the flag on (filtered, never 404).
    * `enabledSlotKeys` lets the assign step skip disabled slots (G11 light).
@@ -435,9 +451,16 @@ export class DedicatedAdminViewsService {
 
   /** #594 G11: read-only pickup slots of a location in the caller's scope (owner payload reused); 404 out of scope / flag off. */
   async locationPickupSlots(scope: GeoScope, locationId: string) {
-    const businessId = await this.assignments.locationBusinessId(locationId);
-    await this.geo.assertBusiness(scope, businessId);
-    return this.assignments.getPickupSlots(locationId);
+    // #641 QA N1/N2: non-uuid, unknown, out of scope and flag off share one 404 body.
+    if (!isUuidLike(locationId)) throw new NotFoundException(DEDICATED_NOT_FOUND_MESSAGE);
+    try {
+      const businessId = await this.assignments.locationBusinessId(locationId.trim());
+      await this.geo.assertBusiness(scope, businessId);
+      return await this.assignments.getPickupSlots(locationId.trim());
+    } catch (error) {
+      if (error instanceof NotFoundException) throw new NotFoundException(DEDICATED_NOT_FOUND_MESSAGE);
+      throw error;
+    }
   }
 
   private async pages<T>(query: string, where: BoolExp, root: string, extra: Record<string, unknown> = {}) {

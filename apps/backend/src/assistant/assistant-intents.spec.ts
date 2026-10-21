@@ -23,6 +23,21 @@ describe('assistant intents', () => {
     expect(staticKnowledgeTopic('What does Rendasua offer?')).toBe('what_we_offer');
     expect(staticKnowledgeTopic('How can I contact you?')).toBe('support_contact');
     expect(staticKnowledgeTopic('Do you support payment at delivery?')).toBeNull();
+    expect(staticKnowledgeTopic('Quelle est votre commission ?')).toBe('seller_faq');
+    expect(staticKnowledgeTopic('How much do you take after the first 15 sales?')).toBe(
+      'seller_faq'
+    );
+  });
+
+  it('returns the seller faq in English and French', () => {
+    const en = getKnowledgeSection({ topic: 'seller_faq', locale: 'en' });
+    const fr = getKnowledgeSection({ topic: 'seller_faq', locale: 'fr' });
+    expect(en).toMatch(/7%/);
+    expect(en).toMatch(/first 15 sales/);
+    expect(en).toMatch(/Mobile Money/);
+    expect(fr).toMatch(/7 %/);
+    expect(fr).toMatch(/15 premières ventes/);
+    expect(fr).not.toEqual(en);
   });
 
   it('returns what we offer in English and French', () => {

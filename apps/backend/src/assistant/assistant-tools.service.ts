@@ -313,7 +313,7 @@ export class AssistantToolsService {
       toolSpec: {
         name: 'get_knowledge',
         description:
-          'Get curated copy. Use what_we_offer for what Rendasua is, support_contact for how to reach us, and the other topics for payments, delivery, pickup, and reels. For live country lists and payment rails, prefer list_supported_country_states and list_supported_payment_systems.',
+          'Get curated copy. Use what_we_offer for what Rendasua is, support_contact for how to reach us, seller_faq for restaurants and sellers (commission, payouts, signup, offices), and the other topics for payments, delivery, pickup, and reels. For live country lists and payment rails, prefer list_supported_country_states and list_supported_payment_systems.',
         inputSchema: {
           json: {
             type: 'object',

@@ -183,7 +183,9 @@
       "airtelMoneyInfo": "Rechargez votre compte en utilisant Airtel Money",
       "topUpInfoCM": "Rechargez avec MTN Mobile Money ou Orange Money.",
       "topUpInfoGA": "Rechargez avec Airtel Money ou Moov Money.",
-      "airtelMoneySuccess": "Demande de recharge envoyée avec succès."
+      "topUpInfoTG": "Rechargez avec Moov Money ou Mixx by Yas (Togocel).",
+      "airtelMoneySuccess": "Demande de recharge envoyée avec succès.",
+      "fedapaySuccess": "Demande de paiement envoyée avec succès via FedaPay."
     },
     "paymentMethod": "Méthode de Paiement",
     "paymentMethods": {
@@ -8816,6 +8818,15 @@
       "cancelled": "Annulé",
       "failed": "Échec de l'envoi",
       "unknown": "Inconnu"
+    }
+  },
+  "payment": {
+    "togoOperator": {
+      "label": "Opérateur Mobile Money",
+      "moov": "Moov Money",
+      "mixx": "Mixx by Yas",
+      "mismatch": "L'opérateur sélectionné ne correspond pas au préfixe du numéro de téléphone. Veuillez sélectionner le bon opérateur ou mettre à jour le numéro de téléphone.",
+      "unavailable": "Le paiement mobile FedaPay n'est actuellement pas disponible pour le Togo. Veuillez réessayer plus tard ou contacter le support."
     }
   }
 }

@@ -440,7 +440,9 @@
       "airtelMoneyInfo": "Top up your account using Airtel Money",
       "topUpInfoCM": "Top up using MTN Mobile Money or Orange Money.",
       "topUpInfoGA": "Top up using Airtel Money or Moov Money.",
-      "airtelMoneySuccess": "Topup request successfully sent."
+      "topUpInfoTG": "Top up using Moov Money or Mixx by Yas (Togocel).",
+      "airtelMoneySuccess": "Topup request successfully sent.",
+      "fedapaySuccess": "Payment request sent successfully via FedaPay."
     },
     "paymentMethod": "Payment Method",
     "paymentMethods": {
@@ -8799,6 +8801,15 @@
       "cancelled": "Cancelled",
       "failed": "Could not be sent",
       "unknown": "Unknown"
+    }
+  },
+  "payment": {
+    "togoOperator": {
+      "label": "Mobile Money Operator",
+      "moov": "Moov Money",
+      "mixx": "Mixx by Yas",
+      "mismatch": "The selected operator does not match the phone number prefix. Please select the correct operator or update the phone number.",
+      "unavailable": "FedaPay mobile money is not currently available for Togo. Please try again later or contact support."
     }
   }
 }
