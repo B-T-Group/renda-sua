@@ -462,6 +462,54 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect(calls).toEqual(['refundDeposit']);
   });
 
+  function seedResume(w: ReturnType<typeof service>, depositStep: 'failed' | 'running', deposit: Record<string, unknown>) {
+    Object.assign(w.order, deposit);
+    w.db.status = 'cancelled';
+    w.db.token = 'ev-x';
+    w.events.push({
+      id: 'ev-x',
+      order_id: 'o-1',
+      event_type: 'admin_cancel_progress',
+      created_at: 0,
+      payload: {
+        version: 1,
+        kind: 'full_refund',
+        previousStatus: 'confirmed',
+        notes: 'Admin full refund: r',
+        adminUserId: 'admin-1',
+        steps: Object.fromEntries(FULL_STEPS.map((n) => [n, n === 'depositRefund' ? depositStep : 'done'])),
+        leaseOwner: depositStep === 'running' ? 'dead' : null,
+        leaseUntil: depositStep === 'running' ? new Date(Date.now() - 1000).toISOString() : null,
+        statusCancelled: true,
+      },
+    });
+  }
+
+  it.each(['failed', 'running'] as const)(
+    'resume releases a claimed deposit (refunded + pending) left %s; it is not marked done first',
+    async (depositStep) => {
+      const w = service('cancelled', { deposit: true });
+      seedResume(w, depositStep, { deposit_status: 'refunded', deposit_refund_status: 'pending', deposit_amount: 500 });
+      const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+      expect(w.svc.depositRefundService.refundDeposit).toHaveBeenCalledWith('o-1', { allowAfterLock: true });
+      expect(res).toMatchObject({ partialFailure: false, depositRefund: { status: 'refunded' } });
+      expect(w.progress().steps.depositRefund).toBe('done');
+    }
+  );
+
+  it('resume keeps a failed deposit release failed (refunded + failed) and does not mark it done', async () => {
+    const w = service('cancelled', { deposit: true });
+    seedResume(w, 'failed', { deposit_status: 'refunded', deposit_refund_status: 'failed', deposit_amount: 500 });
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    expect(res).toMatchObject({
+      partialFailure: true,
+      depositRefund: { status: 'failed', message: 'Deposit refund failed; details are in the logs (alerted)' },
+    });
+    expect(w.progress().steps.depositRefund).toBe('failed');
+    expect(alerts('admin_full_refund_cancel_deposit_refund_failed')).toHaveLength(1);
+  });
+
   it('no deposit -> depositRefund none, the refund service is not called, full refund message', async () => {
     const { svc } = service('confirmed');
     const res = await svc.adminFullRefundCancel('o-1', 'r');
