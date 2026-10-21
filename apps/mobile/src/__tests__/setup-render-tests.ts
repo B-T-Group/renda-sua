@@ -1,15 +1,49 @@
 import 'react-native-gesture-handler/jestSetup';
 
-// Mock react-native Animated
-jest.mock('react-native/Libraries/Animated/Animated', () =>
-  require('../__mocks__/Animated')
-);
+// RN 0.83 + jest-expo: TurboModuleRegistry loads the real NativeModules
+// (which throws without a bridge) unless this mock is registered first.
+jest.mock('react-native/Libraries/BatchedBridge/NativeModules', () => {
+  const actual = jest.requireActual('react-native/jest/mocks/NativeModules');
+  const base = actual.default ?? actual;
+  const platformConstants = {
+    reactNativeVersion: { major: 0, minor: 83, patch: 6, prerelease: null },
+    osVersion: '17.0',
+    systemName: 'iOS',
+    interfaceIdiom: 'phone',
+    isTesting: true,
+    forceTouchAvailable: false,
+  };
+  base.PlatformConstants = { getConstants: () => platformConstants };
+  base.UIManager = {
+    getConstants: () => ({ ViewManagerNames: [], BubblingEventTypes: {}, DirectEventTypes: {} }),
+    getConstantsForViewManager: () => ({}),
+    lazilyLoadView: () => null,
+    createView: jest.fn(),
+    updateView: jest.fn(),
+    manageChildren: jest.fn(),
+    dispatchViewManagerCommand: jest.fn(),
+    measure: jest.fn(),
+    getViewManagerConfig: jest.fn(() => ({})),
+    hasViewManagerConfig: jest.fn(() => false),
+  };
+  return { __esModule: true, default: base };
+});
+jest.mock('react-native/Libraries/Utilities/NativePlatformConstantsIOS', () => {
+  const constants = {
+    reactNativeVersion: { major: 0, minor: 83, patch: 6, prerelease: null },
+    osVersion: '17.0',
+    systemName: 'iOS',
+    interfaceIdiom: 'phone',
+    isTesting: true,
+    forceTouchAvailable: false,
+  };
+  return { __esModule: true, default: { getConstants: () => constants } };
+});
+
+// Animated is provided by the jest-expo / React Native jest preset (AnimatedMock).
 
 // Mock react-native-reanimated
 jest.mock('react-native-reanimated', () => {
-  const React = require('react');
-  const { View, Text, Image } = require('react-native');
-
   return {
     default: {
       createAnimatedComponent: (Component: any) => Component,
@@ -33,12 +67,24 @@ jest.mock('react-native-reanimated', () => {
 // Mock react-native-safe-area-context
 jest.mock('react-native-safe-area-context', () => {
   const React = require('react');
-  const inset = { top: 0, right: 0, bottom: 0, left: 0 };
+  const insets = { top: 0, right: 0, bottom: 0, left: 0 };
+  const frame = { x: 0, y: 0, width: 390, height: 844 };
+  const SafeAreaInsetsContext = React.createContext(insets);
+  const SafeAreaFrameContext = React.createContext(frame);
   return {
-    SafeAreaProvider: ({ children }: { children: React.ReactNode }) => children,
-    SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-    useSafeAreaInsets: () => inset,
-    useSafeAreaFrame: () => ({ x: 0, y: 0, width: 390, height: 844 }),
+    SafeAreaProvider: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(
+        SafeAreaInsetsContext.Provider,
+        { value: insets },
+        React.createElement(SafeAreaFrameContext.Provider, { value: frame }, children),
+      ),
+    SafeAreaView: ({ children }: { children: React.ReactNode }) =>
+      React.createElement(React.Fragment, null, children),
+    SafeAreaInsetsContext,
+    SafeAreaFrameContext,
+    initialWindowMetrics: { insets, frame },
+    useSafeAreaInsets: () => insets,
+    useSafeAreaFrame: () => frame,
   };
 });
 

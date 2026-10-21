@@ -15,7 +15,7 @@ const mockAnimated = {
   parallel: jest.fn(),
   stagger: jest.fn(),
   event: jest.fn(),
-  createAnimatedComponent: (Component: any) => Component,
+  createAnimatedComponent: (Component) => Component,
   View: require('react-native').View,
   Text: require('react-native').Text,
   Image: require('react-native').Image,

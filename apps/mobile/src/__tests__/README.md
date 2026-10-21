@@ -1,15 +1,15 @@
 # React Native Render Tests
 
-This directory contains the setup for React Native component render testing using Jest and @testing-library/react-native.
+This directory contains the setup for React Native component render testing using Jest (jest-expo) and @testing-library/react-native.
 
 ## Current Status
 
-The render test infrastructure is set up but currently blocked by a React 19 compatibility issue with `react-test-renderer`. React Native 0.83 uses React 19.2.0, which changed the test renderer API and removed `createRoot`.
+Render tests are enabled. The app uses React 19.2.0 with `react-test-renderer` pinned to `19.2.0` (the same version as `react`), `@testing-library/react-native` v14, and the `jest-expo` preset (SDK 55).
 
 ### What's Configured
 
-- Jest configuration (`jest.config.js`) scoped to `**/*.render.test.tsx` files
-- Test utilities (`test-utils.tsx`) with `renderWithProviders` helper
+- Jest configuration (`jest.config.js`) using the `jest-expo` preset, scoped to `**/*.render.test.tsx` files
+- Test utilities (`test-utils.tsx`) with `renderWithProviders` helper wrapping i18n and `PaperProvider`
 - Comprehensive mocks for:
   - expo-modules-core
   - expo-localization
@@ -20,19 +20,11 @@ The render test infrastructure is set up but currently blocked by a React 19 com
   - react-native-safe-area-context
   - @react-native-async-storage/async-storage
 
-### Known Issue
-
-@testing-library/react-native v14.1.0 depends on `react-test-renderer` which uses `createRoot()`, but React 19's test-renderer changed this API. This is a known ecosystem compatibility gap as testing libraries catch up to React 19.
-
-### Next Steps
-
-When @testing-library/react-native releases a React 19-compatible version (or once react-test-renderer@19.x stabilizes the testing API), uncomment and use the render tests.
-
 ### Running Tests
 
 ```bash
-yarn test          # Run vitest unit tests (working)
-yarn test:render   # Run Jest render tests (blocked by React 19 issue)
+yarn test          # Run vitest unit tests
+yarn test:render   # Run Jest render tests
 yarn test:all      # Run both test suites
 ```
 
@@ -55,5 +47,5 @@ describe('MyComponent', () => {
 ```
 
 The `renderWithProviders` wrapper includes:
+- `PaperProvider` (app `paperTheme`)
 - I18nextProvider for translations
-- (Future: PaperProvider and NavigationContainer when React 19 support is ready)
