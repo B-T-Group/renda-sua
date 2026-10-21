@@ -220,6 +220,8 @@ describe('OrdersService - retryDepositPayment', () => {
         expect.objectContaining({
           response: expect.objectContaining({
             success: false,
+            message:
+              'Prior deposit payment is still pending. Please wait or poll the existing transaction.',
             code: 'DEPOSIT_PAYMENT_PENDING',
             existing_transaction_id: 'txn-old-123',
             deposit_status: 'pending',
@@ -227,6 +229,7 @@ describe('OrdersService - retryDepositPayment', () => {
           status: HttpStatus.CONFLICT,
         })
       );
+      expect(mobilePaymentsService.initiatePayment).not.toHaveBeenCalled();
     });
 
     it('should replay deposit finalize if prior deposit transaction succeeded but deposit_status still pending', async () => {
@@ -360,14 +363,55 @@ describe('OrdersService - retryDepositPayment', () => {
         expect.objectContaining({
           response: expect.objectContaining({
             success: false,
+            message: 'Prior deposit payment is still being finalized. Please wait.',
             code: 'DEPOSIT_PAYMENT_PENDING',
             existing_transaction_id: 'txn-old-123',
+            deposit_status: 'pending',
           }),
           status: HttpStatus.CONFLICT,
         })
       );
       expect(mobilePaymentsService.initiatePayment).not.toHaveBeenCalled();
       expect(mobilePaymentsService.checkTransactionStatus).not.toHaveBeenCalled();
+    });
+
+    it('starts a new collect when the prior deposit id no longer has a row', async () => {
+      const order = {
+        ...mockOrder,
+        deposit_mobile_payment_transaction_id: 'txn-old-123',
+      };
+      jest.spyOn(service, 'getOrderDetails').mockResolvedValue(order as any);
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue(null as any);
+      hasuraSystemService.getAccount.mockResolvedValue({
+        id: 'account-123',
+        currency: 'XAF',
+      } as any);
+      mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({
+        id: 'txn-new-456',
+        reference: 'ORD-123-DEP-67890-retry',
+        status: 'pending',
+      } as any);
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders: { affected_rows: 1, returning: [{ id: 'order-123' }] },
+      });
+      mobilePaymentsService.initiatePayment.mockResolvedValue({
+        success: true,
+        transactionId: 'provider-tx-new',
+        message: 'Payment initiated',
+      });
+      mobilePaymentsDatabaseService.updateTransaction.mockResolvedValue({} as any);
+
+      const result = await service.retryDepositPayment('order-123');
+
+      expect(result.success).toBe(true);
+      expect(mobilePaymentsService.initiatePayment).toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('ClaimDepositRetry'),
+        expect.objectContaining({
+          expectedPriorTxnId: 'txn-old-123',
+          claimValue: 'txn-new-456',
+        })
+      );
     });
 
     it('should allow retry if prior deposit transaction is cancelled', async () => {
