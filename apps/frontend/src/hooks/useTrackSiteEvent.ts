@@ -229,7 +229,17 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_DEDICATED_UI_AGENT_PAUSED
   | typeof SITE_EVENT_DEDICATED_UI_AGENT_RESUMED
   | typeof SITE_EVENT_DEDICATED_UI_AGENT_REMOVED
-  | typeof SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT;
+  | typeof SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT
+  // Dedicated agents business UI events (from backend registry, PR #647)
+  | 'dedicated_ui.slot_toggled'
+  | 'dedicated_ui.pickup_time_changed'
+  | 'dedicated_ui.posting_form_opened'
+  | 'dedicated_ui.posting_created'
+  | 'dedicated_ui.posting_closed'
+  | 'dedicated_ui.posting_terms_edited'
+  | 'dedicated_ui.applicants_viewed'
+  | 'dedicated_ui.applicant_accepted'
+  | 'dedicated_ui.applicant_declined';
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;

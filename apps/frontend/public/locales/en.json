@@ -5046,6 +5046,8 @@
     "retry": "Retry",
     "rowsPerPage": "Rows per page",
     "save": "Save",
+    "saved": "Saved",
+    "removed": "Removed",
     "share": {
       "ariaLabel": "Share this page",
       "openMenu": "Share",
@@ -8856,8 +8858,10 @@
     "removeConfirm": "Remove {{name}} from {{slot}}?",
     "form": {
       "agentsNeeded": "Agents needed",
+      "slots": "Slots",
       "days": "Days",
       "payLine": "Standard delivery pay",
+      "payFixed": "(fixed)",
       "termsField": "Terms / notes",
       "termsHelper": "Hours, dress code, what to expect. Extra pay you offer here is paid by you, not RendaSua.",
       "termsStrip": "Links and phone numbers are removed.",
@@ -8876,6 +8880,10 @@
       }
     },
     "applicant": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "joined": "Joined",
+      "onTimeShort": "on-time",
       "stats": "Joined {{date}} · {{n}} deliveries · {{m}} missed",
       "onTime": "{{pct}}% on-time pickups",
       "acceptConfirm": "Accept {{name}}?",
@@ -8961,7 +8969,13 @@
       "agent_suspended": "This agent is suspended",
       "not_found": "Resource not found",
       "geo_scope": "Outside your admin scope",
-      "invalid_slot_keys": "Invalid slots selected"
+      "invalid_slot_keys": "Invalid slots selected",
+      "posting_already_open": "You already have an open request for this slot",
+      "slot_has_dedicated_agents": "This slot has dedicated agents that will be paused",
+      "invalid_headcount": "Headcount must be between 1 and 10",
+      "invalid_days_of_week": "Please select at least one day",
+      "terms_too_long": "Terms must be 1000 characters or less",
+      "generic": "Something went wrong"
     },
     "superuser": {
       "tab": "Dedicated",
@@ -8981,6 +8995,43 @@
       "removeConfirmDesc": "The agent will no longer be dedicated to this location.",
       "posting": "Posting",
       "adminAssigned": "Admin assigned"
+    },
+    "metrics": {
+      "deliveries": "deliveries",
+      "missed": "missed",
+      "onTimePercent": "{{pct}}% on-time"
+    },
+    "dayLetters": {
+      "monday": "M",
+      "tuesday": "T",
+      "wednesday": "W",
+      "thursday": "T",
+      "friday": "F",
+      "saturday": "S",
+      "sunday": "S"
+    },
+    "dayLettersFR": {
+      "monday": "L",
+      "tuesday": "M",
+      "wednesday": "M",
+      "thursday": "J",
+      "friday": "V",
+      "saturday": "S",
+      "sunday": "D"
+    },
+    "closeWithCount": "Close posting ({{count}} will be auto-declined)",
+    "noLongerAvailable": "This posting is no longer available",
+    "ariaLabels": {
+      "pauseAgent": "Pause agent {{name}}",
+      "resumeAgent": "Resume agent {{name}}",
+      "removeAgent": "Remove agent {{name}}",
+      "editTerms": "Edit terms",
+      "moreOptions": "More options",
+      "closePosting": "Close posting",
+      "decreaseHeadcount": "Decrease agent count",
+      "increaseHeadcount": "Increase agent count",
+      "slotToggle": "Toggle {{slot}} slot",
+      "pickupTimeSelect": "Select pickup time for {{slot}}"
     }
   }
 }

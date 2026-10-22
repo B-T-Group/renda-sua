@@ -113,7 +113,6 @@
     "address": "Address",
     "email": "Email",
     "phone": "Phone",
-    "confirm": "Confirm",
     "edit": "Edit",
     "more": "More",
     "less": "Less",
@@ -197,7 +196,10 @@
       "cancelled": "Cancelled"
     },
     "agent": "Agent",
-    "business": "Business"
+    "business": "Business",
+    "saved": "Saved",
+    "removed": "Removed",
+    "notAvailable": "Not available"
   },
   "cart": {
     "title": "Cart",
@@ -7657,7 +7659,9 @@
       "evening": "Evening",
       "pickup": "Pickup time",
       "offConfirm": "Turn off {{slot}}? {{n}} dedicated agents will be paused.",
-      "pausedGroup": "{{n}} paused agents"
+      "pausedGroup": "{{n}} paused agents",
+      "turnOff": "Turn off slot",
+      "turnOn": "Turn on slot"
     },
     "empty": "No dedicated agent",
     "post": "Post a request",
@@ -7692,7 +7696,10 @@
       "termsStrip": "Links and phone numbers are removed.",
       "publish": "Publish",
       "posted": "Request posted",
-      "alreadyPosted": "Already posted"
+      "alreadyPosted": "Already posted",
+      "slots": "Slots",
+      "payFixed": "(not editable)",
+      "noSlotsAvailable": "No slots available. Enable a slot or close an existing posting first."
     },
     "posting": {
       "row": "Posting open · {{accepted}}/{{needed}} accepted · {{n}} new",
@@ -7713,7 +7720,9 @@
       "decline": "Decline",
       "autoDeclined": "Auto-declined",
       "closeConfirm": "Close this request? Pending applicants will be declined.",
-      "termsEdited": "Applicants were notified"
+      "termsEdited": "Applicants were notified",
+      "title": "Pending",
+      "accepted": "Accepted"
     },
     "agent": {
       "opportunities": "Dedicated opportunities",
@@ -7733,7 +7742,6 @@
       "applied": "Applied",
       "withdraw": "Withdraw",
       "withdrawConfirm": "Withdraw your application?",
-      "filled": "This spot was filled",
       "accepted": "You're now dedicated to {{store}} ({{slot}})",
       "updatedChip": "Updated",
       "noTerms": "No extra terms",
@@ -7785,7 +7793,43 @@
       "agent_ineligible": "This agent can't be accepted right now",
       "pickup_time_outside_slot": "Choose a time between {{start}} and {{end}}",
       "assignment_removed": "This assignment was removed",
-      "assignment_changed": "This assignment has changed"
+      "assignment_changed": "This assignment has changed",
+      "posting_already_open": "You already have an open request for this slot",
+      "agent_not_verified": "This agent is not verified",
+      "agent_suspended": "This agent is suspended",
+      "slot_has_dedicated_agents": "This slot has dedicated agents that will be paused",
+      "invalid_headcount": "Headcount must be between 1 and 10",
+      "invalid_slot_keys": "Please select at least one slot",
+      "invalid_days_of_week": "Please select at least one day",
+      "terms_too_long": "Terms must be 1000 characters or less"
+    },
+    "metrics": {
+      "deliveries": "deliveries",
+      "missed": "missed",
+      "onTimePercent": "{{pct}}% on-time"
+    },
+    "dayLetters": {
+      "monday": "M",
+      "tuesday": "T",
+      "wednesday": "W",
+      "thursday": "T",
+      "friday": "F",
+      "saturday": "S",
+      "sunday": "S"
+    },
+    "closeWithCount": "Close posting ({{count}} will be auto-declined)",
+    "noLongerAvailable": "This posting is no longer available",
+    "accessibilityLabels": {
+      "pauseAgent": "Pause agent {{name}}",
+      "resumeAgent": "Resume agent {{name}}",
+      "removeAgent": "Remove agent {{name}}",
+      "editTerms": "Edit terms",
+      "moreOptions": "More options",
+      "closePosting": "Close posting",
+      "pickupTime": "Select pickup time",
+      "decreaseCount": "Decrease count",
+      "increaseCount": "Increase count",
+      "slotToggle": "Toggle {{slot}} slot"
     }
   }
 }

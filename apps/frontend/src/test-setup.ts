@@ -13,6 +13,16 @@ expect.extend({
           : 'expected element to be in the document',
     };
   },
+  toBeChecked(received: Element | null) {
+    const pass = received != null && (received as HTMLInputElement).checked === true;
+    return {
+      pass,
+      message: () =>
+        pass
+          ? 'expected element not to be checked'
+          : 'expected element to be checked',
+    };
+  },
   toBeDisabled(received: Element | null) {
     if (!received) {
       return {

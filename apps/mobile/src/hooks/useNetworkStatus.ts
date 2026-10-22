@@ -1,38 +1,27 @@
-import { useState, useEffect } from 'react';
-import * as Network from 'expo-network';
+/**
+ * useNetworkStatus hook
+ *
+ * Provides network connectivity status using @react-native-community/netinfo.
+ * Returns isOffline boolean to disable mutations and show offline indicators.
+ */
+
+import { useEffect, useState } from 'react';
+import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
 
 export function useNetworkStatus() {
-  const [isOnline, setIsOnline] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
-    let mounted = true;
-
-    const checkNetwork = async () => {
-      try {
-        const state = await Network.getNetworkStateAsync();
-        if (mounted) {
-          setIsOnline(state.isConnected ?? true);
-        }
-      } catch {
-        if (mounted) {
-          setIsOnline(true);
-        }
-      }
-    };
-
-    checkNetwork();
-
-    // Poll network status every 5 seconds
-    const interval = setInterval(checkNetwork, 5000);
+    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
+      setIsOffline(!state.isConnected || !state.isInternetReachable);
+    });
 
     return () => {
-      mounted = false;
-      clearInterval(interval);
+      unsubscribe();
     };
   }, []);
 
-  return {
-    isOnline,
-    isOffline: !isOnline,
-  };
+  return { isOffline, isOnline: !isOffline };
 }
+
+export default useNetworkStatus;

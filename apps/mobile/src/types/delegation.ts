@@ -53,4 +53,5 @@ export const DELEGATION_PERMISSIONS = {
   ORDERS_MANAGE: 'delegation.orders.manage',
   ITEMS_READ: 'delegation.items.read',
   ITEMS_MANAGE: 'delegation.items.manage',
+  DEDICATED_AGENTS_MANAGE: 'delegation.dedicated_agents.manage',
 } as const;

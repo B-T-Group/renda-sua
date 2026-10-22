@@ -21,6 +21,9 @@ import BusinessLocationsListScreen from '../screens/business/BusinessLocationsLi
 import BusinessTeamScreen from '../screens/business/BusinessTeamScreen';
 import BusinessLocationFormScreen from '../screens/business/BusinessLocationFormScreen';
 import BusinessLocationHoursScreen from '../screens/business/BusinessLocationHoursScreen';
+import BusinessLocationDedicatedAgentsScreen from '../screens/business/BusinessLocationDedicatedAgentsScreen';
+import DedicatedPostingFormScreen from '../screens/business/DedicatedPostingFormScreen';
+import DedicatedApplicantsScreen from '../screens/business/DedicatedApplicantsScreen';
 import BusinessItemsListScreen from '../screens/business/BusinessItemsListScreen';
 import BusinessAddItemFromImageScreen from '../screens/business/BusinessAddItemFromImageScreen';
 import BusinessMerchantAgreementScreen from '../screens/business/BusinessMerchantAgreementScreen';
@@ -384,6 +387,30 @@ export function BusinessRootNavigator() {
           options={{
             title: t('business.locations.operatingHours.title', 'Operating hours'),
             headerBackTitle: t('business.locations.title', 'Locations'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessLocationDedicatedAgents"
+          component={BusinessLocationDedicatedAgentsScreen}
+          options={{
+            title: t('dedicatedAgents.section.title', 'Dedicated agents'),
+            headerBackTitle: t('business.locations.title', 'Locations'),
+          }}
+        />
+        <RootStack.Screen
+          name="DedicatedPostingForm"
+          component={DedicatedPostingFormScreen}
+          options={{
+            title: t('dedicatedAgents.post', 'Post a request'),
+            headerBackTitle: t('dedicatedAgents.section.title', 'Dedicated agents'),
+          }}
+        />
+        <RootStack.Screen
+          name="DedicatedApplicants"
+          component={DedicatedApplicantsScreen}
+          options={{
+            title: t('dedicatedAgents.applicant.accept', 'Applicants'),
+            headerBackTitle: t('dedicatedAgents.section.title', 'Dedicated agents'),
           }}
         />
         <RootStack.Screen

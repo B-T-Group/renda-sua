@@ -168,6 +168,9 @@ export const BusinessLocationsPage = lazy(() =>
 export const BusinessLocationSettingsPage = lazy(() =>
   import('../components/pages/BusinessLocationSettingsPage')
 );
+export const ApplicantsScreen = lazy(() =>
+  import('../components/business/dedicated-agents/ApplicantsScreen')
+);
 export const BusinessIntegrationsPage = lazy(() =>
   import('../components/pages/BusinessIntegrationsPage')
 );

@@ -55,6 +55,7 @@
     "@gorhom/bottom-sheet": "^5.2.14",
     "@lottiefiles/dotlottie-react": "^0.19.5",
     "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "11.5.2",
     "@react-navigation/bottom-tabs": "^7.0.0",
     "@react-navigation/native": "^7.0.0",
     "@react-navigation/native-stack": "^7.0.0",
@@ -108,6 +109,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@react-native/jest-preset": "^0.88.0",
+    "@testing-library/jest-native": "^5.4.3",
     "@testing-library/react-native": "^14.1.0",
     "@types/jest": "^30.0.0",
     "@types/react": "^19.1.1",

@@ -4768,6 +4768,8 @@
     "retry": "Réessayer",
     "rowsPerPage": "Lignes par page",
     "save": "Enregistrer",
+    "saved": "Enregistré",
+    "removed": "Retiré",
     "share": {
       "ariaLabel": "Partager cette page",
       "openMenu": "Partager",
@@ -8873,8 +8875,10 @@
     "removeConfirm": "Retirer {{name}} du créneau {{slot}} ?",
     "form": {
       "agentsNeeded": "Livreurs recherchés",
+      "slots": "Créneaux",
       "days": "Jours",
       "payLine": "Rémunération standard par livraison",
+      "payFixed": "(fixe)",
       "termsField": "Conditions / remarques",
       "termsHelper": "Horaires, tenue, ce qui est attendu. Toute rémunération supplémentaire proposée ici est à votre charge, pas à celle de RendaSua.",
       "termsStrip": "Les liens et numéros de téléphone sont retirés.",
@@ -8893,6 +8897,10 @@
       }
     },
     "applicant": {
+      "pending": "En attente",
+      "accepted": "Acceptés",
+      "joined": "Inscrit le",
+      "onTimeShort": "à l'heure",
       "stats": "Inscrit le {{date}} · {{n}} livraisons · {{m}} manquées",
       "onTime": "{{pct}} % de collectes à l'heure",
       "acceptConfirm": "Accepter {{name}} ?",
@@ -8978,7 +8986,13 @@
       "agent_suspended": "Ce livreur est suspendu",
       "not_found": "Ressource introuvable",
       "geo_scope": "Hors de votre périmètre admin",
-      "invalid_slot_keys": "Créneaux sélectionnés invalides"
+      "invalid_slot_keys": "Créneaux sélectionnés invalides",
+      "posting_already_open": "Vous avez déjà une demande ouverte pour ce créneau",
+      "slot_has_dedicated_agents": "Ce créneau a des livreurs dédiés qui seront mis en pause",
+      "invalid_headcount": "Le nombre doit être entre 1 et 10",
+      "invalid_days_of_week": "Veuillez sélectionner au moins un jour",
+      "terms_too_long": "Les conditions doivent faire 1000 caractères maximum",
+      "generic": "Une erreur est survenue"
     },
     "superuser": {
       "tab": "Dédiés",
@@ -8998,6 +9012,34 @@
       "removeConfirmDesc": "Le livreur ne sera plus dédié à cette boutique.",
       "posting": "Demande",
       "adminAssigned": "Affecté par admin"
+    },
+    "metrics": {
+      "deliveries": "livraisons",
+      "missed": "manquées",
+      "onTimePercent": "{{pct}} % à l'heure"
+    },
+    "dayLetters": {
+      "monday": "L",
+      "tuesday": "M",
+      "wednesday": "M",
+      "thursday": "J",
+      "friday": "V",
+      "saturday": "S",
+      "sunday": "D"
+    },
+    "closeWithCount": "Fermer la demande ({{count}} seront automatiquement refusées)",
+    "noLongerAvailable": "Cette demande n'est plus disponible",
+    "ariaLabels": {
+      "pauseAgent": "Mettre en pause le livreur {{name}}",
+      "resumeAgent": "Reprendre le livreur {{name}}",
+      "removeAgent": "Retirer le livreur {{name}}",
+      "editTerms": "Modifier les conditions",
+      "moreOptions": "Plus d'options",
+      "closePosting": "Fermer la demande",
+      "decreaseHeadcount": "Diminuer le nombre de livreurs",
+      "increaseHeadcount": "Augmenter le nombre de livreurs",
+      "slotToggle": "Activer/désactiver le créneau {{slot}}",
+      "pickupTimeSelect": "Sélectionner l'heure de collecte pour {{slot}}"
     }
   }
 }
