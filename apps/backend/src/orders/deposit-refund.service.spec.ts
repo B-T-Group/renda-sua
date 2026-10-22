@@ -170,9 +170,24 @@ describe('DepositRefundService', () => {
     );
     // The claim is handed back so a retry / forfeit / settlement can still act.
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('RevertDepositRefundClaim'),
+      expect.stringContaining('deposit_status: paid, deposit_refund_status: none'),
       { orderId }
     );
+  });
+
+  it('retries a paid deposit left pending when the failure stamp did not land', async () => {
+    mockPaidOrder({ deposit_refund_status: 'pending' });
+
+    const result = await service.refundDeposit(orderId, { allowAfterLock: true });
+
+    expect(result.success).toBe(true);
+    expect(result.errorCode).toBeUndefined();
+    expect(depositLedgerService.releaseDepositToAvailable).toHaveBeenCalledWith({
+      clientAccountId: 'acct-1',
+      amount: 500,
+      orderNumber: '12345',
+      depositTransactionId: txnId,
+    });
   });
 
   it('claims paid -> refunded before releasing, and only then marks it complete', async () => {
