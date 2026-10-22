@@ -13,7 +13,11 @@ import { Button, Text, TextInput } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '../../contexts/ThemeContext';
 import { AppModal } from '../common/AppModal';
-import { getDeviceDefaultCountryCode } from '../../utils/deviceDefaultCountry';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
+import {
+  isMobileMoneyCountry,
+  pickMobileMoneyDefaultCountry,
+} from '../../utils/placeOrderPhoneValidation';
 import { e164ToCountryAndNational } from '../../utils/phoneLoginUsername';
 import {
   MIN_WITHDRAW_AMOUNT_XAF,
@@ -50,24 +54,19 @@ export interface AgentWithdrawDialogProps {
   ) => Promise<{ success: boolean; message?: string }>;
 }
 
-function pickDefaultMobileMoneyCountry(preferred?: CountryCode): CountryCode {
-  if (preferred === 'CM' || preferred === 'GA') return preferred;
-  const d = getDeviceDefaultCountryCode();
-  return d === 'CM' || d === 'GA' ? d : 'CM';
-}
-
 function initialWithdrawPhone(
-  defaultPhone: string
+  defaultPhone: string,
+  allowed: readonly CountryCode[]
 ): { countryIso: CountryCode; nationalDigits: string } {
   const raw = defaultPhone.trim();
   if (!raw) {
-    return { countryIso: pickDefaultMobileMoneyCountry(), nationalDigits: '' };
+    return { countryIso: pickMobileMoneyDefaultCountry(null, allowed), nationalDigits: '' };
   }
   const parsed = e164ToCountryAndNational(raw);
-  if (parsed && (parsed.countryIso === 'CM' || parsed.countryIso === 'GA')) {
+  if (parsed && isMobileMoneyCountry(parsed.countryIso, allowed)) {
     return parsed;
   }
-  return { countryIso: pickDefaultMobileMoneyCountry(), nationalDigits: '' };
+  return { countryIso: pickMobileMoneyDefaultCountry(null, allowed), nationalDigits: '' };
 }
 
 export function AgentWithdrawDialog({
@@ -89,7 +88,8 @@ export function AgentWithdrawDialog({
   const isStripe = mode === 'stripe';
   const safeCurrency = (currency?.trim().toUpperCase() || 'XAF').slice(0, 3);
 
-  const [countryIso, setCountryIso] = useState<CountryCode>('CM');
+  const { isos: momoIsos } = useMobileMoneyCountries();
+  const [countryIso, setCountryIso] = useState<CountryCode>(() => pickMobileMoneyDefaultCountry());
   const [nationalDigits, setNationalDigits] = useState('');
   const [amount, setAmount] = useState('');
   const [pin, setPin] = useState('');
@@ -116,11 +116,11 @@ export function AgentWithdrawDialog({
 
   useEffect(() => {
     if (!visible || phoneTouchedRef.current) return;
-    const init = initialWithdrawPhone(defaultPhone);
+    const init = initialWithdrawPhone(defaultPhone, momoIsos);
     setCountryIso(init.countryIso);
     setNationalDigits(init.nationalDigits);
     setPhoneLocked(init.nationalDigits.length > 0);
-  }, [visible, defaultPhone]);
+  }, [visible, defaultPhone, momoIsos]);
 
   useEffect(() => {
     if (!visible || !accountId || isStripe) {
@@ -164,7 +164,7 @@ export function AgentWithdrawDialog({
     parsedAmount <= availableBalance;
 
   const balanceOk = availableBalance >= minAmount;
-  const phoneOk = isStripe || isWithdrawPhoneFormValid(countryIso, nationalDigits);
+  const phoneOk = isStripe || isWithdrawPhoneFormValid(countryIso, nationalDigits, momoIsos);
   const hasDigits = nationalDigits.replace(/\D/g, '').length > 0;
   const pinOk = !requirePin || /^\d{4}$/.test(pin.trim());
   const canSubmit =
@@ -185,12 +185,12 @@ export function AgentWithdrawDialog({
       else setError(res.message ?? t('accounts.withdrawFailed', 'Withdrawal could not be started.'));
       return;
     }
-    const e164 = withdrawPhoneFormToE164(countryIso, nationalDigits);
+    const e164 = withdrawPhoneFormToE164(countryIso, nationalDigits, momoIsos);
     if (!e164) {
       setError(
         t(
           'accounts.withdrawPhoneCmGaOnly',
-          'Only Cameroon (+237) or Gabon (+241) phone numbers are supported.'
+          'Only Cameroon (+237), Gabon (+241) or Togo (+228) phone numbers are supported.'
         )
       );
       return;
@@ -213,6 +213,7 @@ export function AgentWithdrawDialog({
     isStripe,
     countryIso,
     nationalDigits,
+    momoIsos,
     parsedAmount,
     requirePin,
     pin,
@@ -222,7 +223,7 @@ export function AgentWithdrawDialog({
   ]);
 
   const mmHint = useMemo(
-    () => t('accounts.withdrawPhoneCmGaHint', 'Use a Cameroon (+237) or Gabon (+241) mobile number.'),
+    () => t('accounts.withdrawPhoneCmGaHint', 'Use a Cameroon (+237), Gabon (+241) or Togo (+228) mobile number.'),
     [t]
   );
 
@@ -316,6 +317,7 @@ export function AgentWithdrawDialog({
                   ) : null}
                 </View>
                 <PhoneNumberInput
+                  allowedIsos={momoIsos}
                   countryIso={countryIso}
                   nationalDigits={nationalDigits}
                   onCountryIsoChange={(iso) => {

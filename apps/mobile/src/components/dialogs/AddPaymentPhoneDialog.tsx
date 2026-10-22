@@ -8,45 +8,51 @@ import { Portal, Dialog, Button, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import PhoneNumberInput from '../PhoneNumberInput';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getDeviceDefaultCountryCode } from '../../utils/deviceDefaultCountry';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
 import { nationalDigitsToE164 } from '../../utils/phoneLoginUsername';
-import { validateOrderPaymentPhone } from '../../utils/placeOrderPhoneValidation';
+import {
+  pickMobileMoneyDefaultCountry,
+  validateOrderPaymentPhone,
+} from '../../utils/placeOrderPhoneValidation';
 
 export interface AddPaymentPhoneDialogProps {
   visible: boolean;
   saving: boolean;
   onDismiss: () => void;
   onSave: (phoneE164: string) => Promise<void>;
-  /** If CM or GA, used as initial country (e.g. inventory item’s business location). */
+  /** If a Mobile Money country, used as initial country (e.g. inventory item’s business location). */
   defaultCountryIso?: CountryCode;
   /** When true: backdrop dismiss disabled; Cancel calls onWizardCancel (e.g. go back). */
   mandatoryWizard?: boolean;
   onWizardCancel?: () => void;
 }
 
-function pickDefaultMobileMoneyCountry(preferred?: CountryCode): CountryCode {
-  if (preferred === 'CM' || preferred === 'GA') return preferred;
-  const d = getDeviceDefaultCountryCode();
-  return d === 'CM' || d === 'GA' ? d : 'CM';
-}
-
-function isValidOrderPaymentPhone(countryIso: CountryCode, nationalDigits: string): boolean {
+function isValidOrderPaymentPhone(
+  countryIso: CountryCode,
+  nationalDigits: string,
+  allowed: readonly string[]
+): boolean {
   const e164 = nationalDigitsToE164(countryIso, nationalDigits);
   if (!e164) return false;
-  return validateOrderPaymentPhone(e164).ok;
+  return validateOrderPaymentPhone(e164, allowed).ok;
 }
 
-function resolveValidationMessage(countryIso: CountryCode, nationalDigits: string, t: TFunction): string | null {
+function resolveValidationMessage(
+  countryIso: CountryCode,
+  nationalDigits: string,
+  t: TFunction,
+  allowed: readonly string[]
+): string | null {
   const e164 = nationalDigitsToE164(countryIso, nationalDigits);
   if (!e164) {
     return t('client.placeOrder.payment.invalidPhone', 'Invalid phone number format.');
   }
-  const v = validateOrderPaymentPhone(e164);
+  const v = validateOrderPaymentPhone(e164, allowed);
   if (v.ok) return null;
   if (v.reason === 'unsupported') {
     return t(
       'client.placeOrder.payment.addPhoneModal.unsupportedCountry',
-      'Select Cameroon or Gabon as the country and enter a valid Mobile Money number.'
+      'Select Cameroon, Gabon or Togo as the country and enter a valid Mobile Money number.'
     );
   }
   return t('client.placeOrder.payment.invalidPhone', 'Invalid phone number format.');
@@ -67,24 +73,28 @@ export function AddPaymentPhoneDialog({
   const insets = useSafeAreaInsets();
   const fullScreen = width < 560;
 
-  const [countryIso, setCountryIso] = useState<CountryCode>(() => pickDefaultMobileMoneyCountry(defaultCountryIso));
+  const { isos: momoIsos } = useMobileMoneyCountries();
+  const [countryIso, setCountryIso] = useState<CountryCode>(() =>
+    pickMobileMoneyDefaultCountry(defaultCountryIso, momoIsos)
+  );
   const [nationalDigits, setNationalDigits] = useState('');
 
   useEffect(() => {
     if (!visible) return;
-    setCountryIso(pickDefaultMobileMoneyCountry(defaultCountryIso));
+    setCountryIso(pickMobileMoneyDefaultCountry(defaultCountryIso, momoIsos));
     setNationalDigits('');
+    // momoIsos intentionally omitted: re-seeding on load would clear input.
   }, [visible, defaultCountryIso]);
 
   const hasDigits = nationalDigits.replace(/\D/g, '').length > 0;
   const canSave = useMemo(
-    () => isValidOrderPaymentPhone(countryIso, nationalDigits),
-    [countryIso, nationalDigits]
+    () => isValidOrderPaymentPhone(countryIso, nationalDigits, momoIsos),
+    [countryIso, nationalDigits, momoIsos]
   );
   const validationHint = useMemo(() => {
     if (!nationalDigits.replace(/\D/g, '').length) return null;
-    return resolveValidationMessage(countryIso, nationalDigits, t);
-  }, [countryIso, nationalDigits, t]);
+    return resolveValidationMessage(countryIso, nationalDigits, t, momoIsos);
+  }, [countryIso, nationalDigits, t, momoIsos]);
 
   const surfaceStyle = fullScreen
     ? {
@@ -103,7 +113,7 @@ export function AddPaymentPhoneDialog({
     : {};
 
   const onSavePress = useCallback(async () => {
-    if (!isValidOrderPaymentPhone(countryIso, nationalDigits)) return;
+    if (!isValidOrderPaymentPhone(countryIso, nationalDigits, momoIsos)) return;
     const e164 = nationalDigitsToE164(countryIso, nationalDigits);
     if (!e164) return;
     try {
@@ -111,7 +121,7 @@ export function AddPaymentPhoneDialog({
     } catch {
       /* Error message shown via parent Snackbar */
     }
-  }, [countryIso, nationalDigits, onSave]);
+  }, [countryIso, nationalDigits, momoIsos, onSave]);
 
   const onCancelPress = useCallback(() => {
     if (mandatoryWizard) {
@@ -170,6 +180,7 @@ export function AddPaymentPhoneDialog({
               {t('client.placeOrder.payment.addPhoneModal.phoneLabel', 'Phone number')}
             </Text>
             <PhoneNumberInput
+              allowedIsos={momoIsos}
               countryIso={countryIso}
               nationalDigits={nationalDigits}
               onCountryIsoChange={setCountryIso}
@@ -180,7 +191,7 @@ export function AddPaymentPhoneDialog({
             <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 8 }}>
               {t(
                 'client.placeOrder.payment.addPhoneModal.supportedHint',
-                'Cameroon (+237) and Gabon (+241) numbers are supported.'
+                'Cameroon (+237), Gabon (+241) and Togo (+228) numbers are supported.'
               )}
             </Text>
             {validationHint ? (

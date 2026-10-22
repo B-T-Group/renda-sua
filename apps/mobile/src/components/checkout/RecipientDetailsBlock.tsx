@@ -5,6 +5,7 @@ import type { CountryCode } from 'libphonenumber-js';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
 import PhoneNumberInput from '../PhoneNumberInput';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
 import { validateRecipientContact } from '../../utils/diasporaCheckout';
 import {
   nationalDigitsToE164,
@@ -12,7 +13,6 @@ import {
 } from '../../utils/phoneLoginUsername';
 import type { RecipientContact } from '../../types/clientOrder';
 
-const RECIPIENT_PHONE_ISOS: CountryCode[] = ['CM', 'GA'];
 
 export interface RecipientDetailsBlockProps {
   /** Current recipient data (name, phone, notify_whatsapp). */
@@ -26,14 +26,22 @@ export interface RecipientDetailsBlockProps {
   style?: StyleProp<ViewStyle>;
 }
 
-function resolvePhoneCountry(
+/** Historic default for diaspora recipients; used when allowed. */
+const FALLBACK_RECIPIENT_ISO: CountryCode = 'GA';
+
+function fallbackIso(allowed: readonly CountryCode[]): CountryCode {
+  return allowed.includes(FALLBACK_RECIPIENT_ISO) ? FALLBACK_RECIPIENT_ISO : allowed[0] ?? FALLBACK_RECIPIENT_ISO;
+}
+
+export function resolveRecipientPhoneCountry(
   defaultCountryCode: CountryCode | undefined,
-  seededIso: CountryCode
+  seededIso: CountryCode,
+  allowed: readonly CountryCode[]
 ): CountryCode {
-  if (defaultCountryCode && RECIPIENT_PHONE_ISOS.includes(defaultCountryCode)) {
+  if (defaultCountryCode && allowed.includes(defaultCountryCode)) {
     return defaultCountryCode;
   }
-  return RECIPIENT_PHONE_ISOS.includes(seededIso) ? seededIso : 'GA';
+  return allowed.includes(seededIso) ? seededIso : fallbackIso(allowed);
 }
 
 /**
@@ -49,15 +57,16 @@ export function RecipientDetailsBlock({
 }: RecipientDetailsBlockProps) {
   const { t } = useTranslation();
   const { colors, borderRadius, spacing, shadows } = useTheme();
-  const [countryIso, setCountryIso] = useState<CountryCode>(
-    defaultCountryCode && RECIPIENT_PHONE_ISOS.includes(defaultCountryCode)
+  const { isos: momoIsos } = useMobileMoneyCountries();
+  const [countryIso, setCountryIso] = useState<CountryCode>(() =>
+    defaultCountryCode && momoIsos.includes(defaultCountryCode)
       ? defaultCountryCode
-      : 'GA'
+      : fallbackIso(momoIsos)
   );
   const [nationalDigits, setNationalDigits] = useState('');
 
   useEffect(() => {
-    if (defaultCountryCode && RECIPIENT_PHONE_ISOS.includes(defaultCountryCode)) {
+    if (defaultCountryCode && momoIsos.includes(defaultCountryCode)) {
       setCountryIso(defaultCountryCode);
     }
     const phone = recipient.phone?.trim() ?? '';
@@ -69,9 +78,9 @@ export function RecipientDetailsBlock({
     const seeded = seedPhoneInputFromE164(phone, defaultCountryCode ?? 'GA');
     setNationalDigits(seeded.nationalDigits);
     if (!defaultCountryCode) {
-      setCountryIso(resolvePhoneCountry(undefined, seeded.countryIso));
+      setCountryIso(resolveRecipientPhoneCountry(undefined, seeded.countryIso, momoIsos));
     }
-  }, [recipient.phone, defaultCountryCode]);
+  }, [recipient.phone, defaultCountryCode, momoIsos]);
 
   const validation = useMemo(
     () => validateRecipientContact(recipient),
@@ -162,7 +171,7 @@ export function RecipientDetailsBlock({
           hasError={phoneError}
           disabled={disabled}
           disableCountryPicker={lockCountry}
-          allowedIsos={RECIPIENT_PHONE_ISOS}
+          allowedIsos={momoIsos}
         />
         {phoneError ? (
           <Text variant="bodySmall" style={{ color: colors.error.main, marginTop: spacing.xs }}>
