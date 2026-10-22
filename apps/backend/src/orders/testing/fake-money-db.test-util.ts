@@ -252,6 +252,7 @@ export class FakeMoneyDb {
       const order = this.orders.get(v.orderId);
       if (order?.deposit_status === 'refunded' && order.deposit_refund_status === 'pending') {
         order.deposit_status = 'paid';
+        order.deposit_refund_status = 'none';
         return { update_orders: { affected_rows: 1 } };
       }
       return { update_orders: { affected_rows: 0 } };
