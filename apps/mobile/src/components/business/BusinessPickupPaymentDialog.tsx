@@ -7,7 +7,11 @@ import type { BusinessOrder } from '../../types/business/orders';
 import PhoneNumberInput from '../PhoneNumberInput';
 import { getDeviceDefaultCountryCode } from '../../utils/deviceDefaultCountry';
 import { e164ToCountryAndNational, nationalDigitsToE164 } from '../../utils/phoneLoginUsername';
-import { pickMobileMoneyDefaultCountry } from '../../utils/placeOrderPhoneValidation';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
+import {
+  isMobileMoneyCountry,
+  pickMobileMoneyDefaultCountry,
+} from '../../utils/placeOrderPhoneValidation';
 
 interface Props {
   visible: boolean;
@@ -20,11 +24,12 @@ interface Props {
 
 export function BusinessPickupPaymentDialog({ visible, order, onDismiss, onSubmit, onSuccess, loading }: Props) {
   const { t } = useTranslation();
+  const { isos: momoIsos } = useMobileMoneyCountries();
   const clientPhone = order?.client?.user?.phone_number?.trim() ?? '';
   const itemCountry = order?.business_location?.address?.country;
   const [useDifferent, setUseDifferent] = useState(false);
   const [countryIso, setCountryIso] = useState<CountryCode>(() =>
-    pickMobileMoneyDefaultCountry(itemCountry)
+    pickMobileMoneyDefaultCountry(itemCountry, momoIsos)
   );
   const [nationalDigits, setNationalDigits] = useState('');
 
@@ -32,17 +37,18 @@ export function BusinessPickupPaymentDialog({ visible, order, onDismiss, onSubmi
     if (!visible) {
       setUseDifferent(false);
       setNationalDigits('');
-      setCountryIso(pickMobileMoneyDefaultCountry(itemCountry));
+      setCountryIso(pickMobileMoneyDefaultCountry(itemCountry, momoIsos));
       return;
     }
     const noPhone = !clientPhone;
     setUseDifferent(noPhone);
     const fallback = pickMobileMoneyDefaultCountry(
-      itemCountry ?? getDeviceDefaultCountryCode()
+      itemCountry ?? getDeviceDefaultCountryCode(),
+      momoIsos
     );
     if (clientPhone) {
       const parsed = e164ToCountryAndNational(clientPhone);
-      if (parsed && (parsed.countryIso === 'CM' || parsed.countryIso === 'GA')) {
+      if (parsed && isMobileMoneyCountry(parsed.countryIso, momoIsos)) {
         setCountryIso(parsed.countryIso);
         setNationalDigits(parsed.nationalDigits);
         return;
@@ -98,7 +104,7 @@ export function BusinessPickupPaymentDialog({ visible, order, onDismiss, onSubmi
               nationalDigits={nationalDigits}
               onCountryIsoChange={setCountryIso}
               onNationalDigitsChange={setNationalDigits}
-              allowedIsos={['CM', 'GA']}
+              allowedIsos={momoIsos}
               hasError={nationalDigits.length > 0 && overrideE164 === null}
               disabled={loading}
             />

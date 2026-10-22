@@ -4,7 +4,11 @@ import { useTranslation } from 'react-i18next';
 import type { CountryCode } from 'libphonenumber-js';
 import { Portal, Dialog, Button, Text, TextInput } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
-import { getDeviceDefaultCountryCode } from '../../utils/deviceDefaultCountry';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
+import {
+  isMobileMoneyCountry,
+  pickMobileMoneyDefaultCountry,
+} from '../../utils/placeOrderPhoneValidation';
 import { e164ToCountryAndNational } from '../../utils/phoneLoginUsername';
 import {
   MIN_WITHDRAW_AMOUNT_XAF,
@@ -22,22 +26,19 @@ export interface ClientTopUpDialogProps {
   onConfirm: (phoneE164: string, amount: number) => Promise<{ success: boolean; message?: string }>;
 }
 
-function pickDefaultMobileMoneyCountry(preferred?: CountryCode): CountryCode {
-  if (preferred === 'CM' || preferred === 'GA') return preferred;
-  const d = getDeviceDefaultCountryCode();
-  return d === 'CM' || d === 'GA' ? d : 'CM';
-}
-
-function initialTopUpPhone(defaultPhone: string): { countryIso: CountryCode; nationalDigits: string } {
+function initialTopUpPhone(
+  defaultPhone: string,
+  allowed: readonly CountryCode[]
+): { countryIso: CountryCode; nationalDigits: string } {
   const raw = defaultPhone.trim();
   if (!raw) {
-    return { countryIso: pickDefaultMobileMoneyCountry(), nationalDigits: '' };
+    return { countryIso: pickMobileMoneyDefaultCountry(null, allowed), nationalDigits: '' };
   }
   const parsed = e164ToCountryAndNational(raw);
-  if (parsed && (parsed.countryIso === 'CM' || parsed.countryIso === 'GA')) {
+  if (parsed && isMobileMoneyCountry(parsed.countryIso, allowed)) {
     return parsed;
   }
-  return { countryIso: pickDefaultMobileMoneyCountry(), nationalDigits: '' };
+  return { countryIso: pickMobileMoneyDefaultCountry(null, allowed), nationalDigits: '' };
 }
 
 export function ClientTopUpDialog({
@@ -50,7 +51,8 @@ export function ClientTopUpDialog({
 }: ClientTopUpDialogProps) {
   const { t } = useTranslation();
   const { colors, typography } = useTheme();
-  const [countryIso, setCountryIso] = useState<CountryCode>('CM');
+  const { isos: momoIsos } = useMobileMoneyCountries();
+  const [countryIso, setCountryIso] = useState<CountryCode>(() => pickMobileMoneyDefaultCountry());
   const [nationalDigits, setNationalDigits] = useState('');
   const [amount, setAmount] = useState('');
   const [error, setError] = useState('');
@@ -67,28 +69,28 @@ export function ClientTopUpDialog({
 
   useEffect(() => {
     if (!visible || phoneTouchedRef.current) return;
-    const init = initialTopUpPhone(defaultPhone);
+    const init = initialTopUpPhone(defaultPhone, momoIsos);
     setCountryIso(init.countryIso);
     setNationalDigits(init.nationalDigits);
-  }, [visible, defaultPhone]);
+  }, [visible, defaultPhone, momoIsos]);
 
   const parsedAmount = parseFloat(amount);
   const amountOk =
     amount.trim().length > 0 &&
     Number.isFinite(parsedAmount) &&
     parsedAmount >= MIN_WITHDRAW_AMOUNT_XAF;
-  const phoneOk = isWithdrawPhoneFormValid(countryIso, nationalDigits);
+  const phoneOk = isWithdrawPhoneFormValid(countryIso, nationalDigits, momoIsos);
   const hasDigits = nationalDigits.replace(/\D/g, '').length > 0;
   const canSubmit = phoneOk && amountOk && !submitting;
 
   const handleSubmit = useCallback(async () => {
     if (!canSubmit || submitting) return;
-    const e164 = withdrawPhoneFormToE164(countryIso, nationalDigits);
+    const e164 = withdrawPhoneFormToE164(countryIso, nationalDigits, momoIsos);
     if (!e164) {
       setError(
         t(
           'accounts.withdrawPhoneCmGaOnly',
-          'Only Cameroon (+237) or Gabon (+241) phone numbers are supported.'
+          'Only Cameroon (+237), Gabon (+241) or Togo (+228) phone numbers are supported.'
         )
       );
       return;
@@ -97,13 +99,13 @@ export function ClientTopUpDialog({
     const res = await onConfirm(e164, parsedAmount);
     if (res.success) onDismiss();
     else setError(res.message ?? t('accounts.topUpFailed', 'Top-up could not be started.'));
-  }, [canSubmit, submitting, countryIso, nationalDigits, parsedAmount, onConfirm, onDismiss, t]);
+  }, [canSubmit, submitting, countryIso, nationalDigits, momoIsos, parsedAmount, onConfirm, onDismiss, t]);
 
   const hint = useMemo(
     () =>
       t(
         'accounts.withdrawPhoneCmGaHint',
-        'Use a Cameroon (+237) or Gabon (+241) mobile number.'
+        'Use a Cameroon (+237), Gabon (+241) or Togo (+228) mobile number.'
       ),
     [t]
   );
@@ -126,6 +128,7 @@ export function ClientTopUpDialog({
               {t('accounts.mobileMoneyPhone', 'Mobile Money phone')}
             </Text>
             <PhoneNumberInput
+              allowedIsos={momoIsos}
               countryIso={countryIso}
               nationalDigits={nationalDigits}
               onCountryIsoChange={(iso) => {

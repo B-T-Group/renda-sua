@@ -15,6 +15,12 @@ import PhoneNumberInput from '../PhoneNumberInput';
 import { MobileMoneyConfirmIllustration } from '../illustrations/MobileMoneyConfirmIllustration';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
+import {
+  mobileMoneyCallingCode,
+  mobileMoneyIsoFromCallingCode,
+  pickMobileMoneyDefaultCountry,
+} from '../../utils/placeOrderPhoneValidation';
 import {
   mobilePaymentPhonesApi,
   parseE164Parts,
@@ -60,7 +66,8 @@ export function MobilePaymentPhoneVerifyModal({
   const methodReady = verificationMethod !== null;
   const isQuestion = verificationMethod === 'question';
 
-  const [countryIso, setCountryIso] = useState<CountryCode>('CM');
+  const { isos: momoIsos } = useMobileMoneyCountries();
+  const [countryIso, setCountryIso] = useState<CountryCode>(() => pickMobileMoneyDefaultCountry());
   const [nationalDigits, setNationalDigits] = useState('');
   const [activePhone, setActivePhone] = useState<MobilePaymentPhoneSummary | null>(
     initialPhone ?? null
@@ -76,13 +83,17 @@ export function MobilePaymentPhoneVerifyModal({
     setActivePhone(initialPhone ?? null);
     if (initialPhone) {
       const parts = parseE164Parts(initialPhone.phone_e164);
-      setCountryIso(parts.countryCode === '241' ? 'GA' : 'CM');
+      setCountryIso(
+        mobileMoneyIsoFromCallingCode(parts.countryCode) ?? pickMobileMoneyDefaultCountry(null, momoIsos)
+      );
       setNationalDigits(parts.phoneNumber);
     } else {
-      setCountryIso('CM');
+      setCountryIso(pickMobileMoneyDefaultCountry(null, momoIsos));
       setNationalDigits('');
     }
     setStep(mode === 'verify' && isQuestion ? 'question' : 'form');
+    // momoIsos is intentionally not a dep: it only seeds the default, and
+    // re-running when the country list loads would wipe what the user typed.
   }, [visible, initialPhone, mode, isQuestion, methodReady]);
 
   const title =
@@ -106,7 +117,7 @@ export function MobilePaymentPhoneVerifyModal({
   };
 
   const resolvePhoneForForm = async (): Promise<MobilePaymentPhoneSummary> => {
-    const cc = countryIso === 'GA' ? '241' : '237';
+    const cc = mobileMoneyCallingCode(countryIso);
     if (mode === 'edit' && initialPhone) {
       return (await mobilePaymentPhonesApi.update(initialPhone.id, cc, nationalDigits))
         .data.phone;
@@ -277,6 +288,7 @@ export function MobilePaymentPhoneVerifyModal({
                 nationalDigits={nationalDigits}
                 setCountryIso={setCountryIso}
                 setNationalDigits={setNationalDigits}
+                allowedIsos={momoIsos}
               />
             ) : null}
 
@@ -411,7 +423,9 @@ function FormStep({
   nationalDigits,
   setCountryIso,
   setNationalDigits,
+  allowedIsos,
 }: {
+  allowedIsos: CountryCode[];
   isQuestion: boolean;
   mode: MobilePaymentPhoneModalMode;
   initialPhone?: MobilePaymentPhoneSummary | null;
@@ -463,7 +477,7 @@ function FormStep({
           nationalDigits={nationalDigits}
           onCountryIsoChange={setCountryIso}
           onNationalDigitsChange={setNationalDigits}
-          allowedIsos={['CM', 'GA']}
+          allowedIsos={allowedIsos}
         />
       ) : null}
       {mode === 'verify' && initialPhone ? (

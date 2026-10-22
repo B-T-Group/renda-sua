@@ -18,12 +18,15 @@ import {
   e164ToCountryAndNational,
   nationalDigitsToE164,
 } from '../../utils/phoneLoginUsername';
-import { pickMobileMoneyDefaultCountry } from '../../utils/placeOrderPhoneValidation';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
+import {
+  isMobileMoneyCountry,
+  pickMobileMoneyDefaultCountry,
+} from '../../utils/placeOrderPhoneValidation';
 import { remainingAfterDeposit } from '../../utils/depositResume';
 
-function isPickupMomoPhone(phone: string): boolean {
-  const parsed = e164ToCountryAndNational(phone);
-  return parsed?.countryIso === 'CM' || parsed?.countryIso === 'GA';
+function isPickupMomoPhone(phone: string, allowed: readonly string[]): boolean {
+  return isMobileMoneyCountry(e164ToCountryAndNational(phone)?.countryIso, allowed);
 }
 
 type Props = {
@@ -42,15 +45,16 @@ export function ClientPickupPaymentSheet({
   onSubmit,
 }: Props) {
   const { t } = useTranslation();
+  const { isos: momoIsos } = useMobileMoneyCountries();
   const { colors, spacing, borderRadius, shadows, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const clientPhone = order.client?.user?.phone_number?.trim() ?? '';
-  const profilePhoneOk = isPickupMomoPhone(clientPhone);
+  const profilePhoneOk = isPickupMomoPhone(clientPhone, momoIsos);
   const itemCountry = order.business_location?.address?.country;
   const [useDifferent, setUseDifferent] = useState(false);
   const [countryIso, setCountryIso] = useState<CountryCode>(() =>
-    pickMobileMoneyDefaultCountry(itemCountry)
+    pickMobileMoneyDefaultCountry(itemCountry, momoIsos)
   );
   const [nationalDigits, setNationalDigits] = useState('');
 
@@ -58,11 +62,12 @@ export function ClientPickupPaymentSheet({
     if (!visible) {
       setUseDifferent(false);
       setNationalDigits('');
-      setCountryIso(pickMobileMoneyDefaultCountry(itemCountry));
+      setCountryIso(pickMobileMoneyDefaultCountry(itemCountry, momoIsos));
       return;
     }
     const fallback = pickMobileMoneyDefaultCountry(
-      itemCountry ?? getDeviceDefaultCountryCode()
+      itemCountry ?? getDeviceDefaultCountryCode(),
+      momoIsos
     );
     setUseDifferent(!profilePhoneOk);
     if (profilePhoneOk) {
@@ -177,7 +182,7 @@ export function ClientPickupPaymentSheet({
               nationalDigits={nationalDigits}
               onCountryIsoChange={setCountryIso}
               onNationalDigitsChange={setNationalDigits}
-              allowedIsos={['CM', 'GA']}
+              allowedIsos={momoIsos}
               hasError={nationalDigits.length > 0 && overrideE164 === null}
               disabled={loading}
             />
