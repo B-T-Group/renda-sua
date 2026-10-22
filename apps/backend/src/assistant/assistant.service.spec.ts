@@ -158,6 +158,88 @@ describe('AssistantService', () => {
     expect(result.reply).toMatch(/livraison/i);
   });
 
+  it('grounds a seller commission question before a WhatsApp no-reply can drop it', async () => {
+    bedrock.converseWithTools
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: '[[NO_REPLY]]',
+        toolUses: [],
+        assistantContent: [{ text: '[[NO_REPLY]]' }],
+      })
+      .mockResolvedValueOnce({
+        stopReason: 'end_turn',
+        text: '0% on the first 15 sales, then 7%.',
+        toolUses: [],
+        assistantContent: [{ text: '0% on the first 15 sales, then 7%.' }],
+      });
+    tools.executeTool.mockResolvedValue({
+      content: 'Commission: 0% on the first 15 sales, then 7%.',
+    });
+
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [
+        {
+          role: 'user',
+          content:
+            'Je veux devenir un restaurant. Quelle est la commission après les 15 premières ventes ?',
+        },
+      ],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: 'fr',
+        market: null,
+        country: null,
+        phoneE164: null,
+        accountType: null,
+        clientId: null,
+      },
+    });
+
+    expect(tools.executeTool).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'get_knowledge',
+        input: { topic: 'seller_faq' },
+        locale: 'fr',
+      })
+    );
+    const grounded = bedrock.converseWithTools.mock.calls[1][0].messages.at(-1);
+    expect(grounded.content[0].text).toContain('Authoritative Rendasua copy (seller_faq):');
+    expect(grounded.content[0].text).toContain('first 15 sales, then 7%');
+    const system = bedrock.converseWithTools.mock.calls[0][0].system as string;
+    expect(system).toContain('Do not answer them with [[NO_REPLY]]');
+    expect(system).toContain('topic seller_faq');
+    expect(result.silent).toBe(false);
+    expect(result.locale).toBe('fr');
+    expect(result.reply).toBe('0% on the first 15 sales, then 7%.');
+  });
+
+  it('sends a guest asking about commission on their orders to sign in', async () => {
+    const result = await service.runTurn({
+      channel: 'whatsapp',
+      messages: [
+        { role: 'user', content: 'Quelle est la commission sur mes commandes récentes ?' },
+      ],
+      identity: {
+        isVerified: false,
+        userId: null,
+        firstName: null,
+        preferredLanguage: null,
+        market: null,
+        country: null,
+        phoneE164: null,
+        accountType: null,
+        clientId: null,
+      },
+    });
+    expect(result.reply).toMatch(/Connectez-vous/);
+    expect(result.silent).toBe(false);
+    expect(bedrock.converseWithTools).not.toHaveBeenCalled();
+    expect(tools.executeTool).not.toHaveBeenCalled();
+  });
+
   it('grounds market questions when the model skips get_knowledge', async () => {
     bedrock.converseWithTools
       .mockResolvedValueOnce({

@@ -15,6 +15,9 @@ import { DelegateOrdersApiProvider } from '@/contexts/OrdersApiContext';
 import { BusinessOrdersListView } from '@/screens/business/BusinessOrdersListScreen';
 import OrderDetailBusinessView from '@/screens/business/OrderDetailBusinessView';
 import UserOrderMessagesScreen from '@/screens/shared/UserOrderMessagesScreen';
+import BusinessLocationDedicatedAgentsScreen from '@/screens/business/BusinessLocationDedicatedAgentsScreen';
+import DedicatedPostingFormScreen from '@/screens/business/DedicatedPostingFormScreen';
+import DedicatedApplicantsScreen from '@/screens/business/DedicatedApplicantsScreen';
 import { PersonaQuickSwitch } from '@/components/persona/PersonaQuickSwitch';
 import { LogoutAccountSheet } from '@/components/auth/LogoutAccountSheet';
 import { useLogoutAccountSheet } from '@/hooks/useLogoutAccountSheet';
@@ -258,6 +261,30 @@ function DelegateRootNavigatorInner() {
         options={{
           title: t('messages.orderMessages', 'Order messages'),
           headerBackTitle: t('business.orders.detailTitle', 'Order'),
+        }}
+      />
+      <RootStack.Screen
+        name="BusinessLocationDedicatedAgents"
+        component={BusinessLocationDedicatedAgentsScreen}
+        options={{
+          title: t('dedicatedAgents.section.title', 'Dedicated agents'),
+          headerBackTitle: t('business.orders.title', 'Orders'),
+        }}
+      />
+      <RootStack.Screen
+        name="DedicatedPostingForm"
+        component={DedicatedPostingFormScreen}
+        options={{
+          title: t('dedicatedAgents.post', 'Post a request'),
+          headerBackTitle: t('dedicatedAgents.section.title', 'Dedicated agents'),
+        }}
+      />
+      <RootStack.Screen
+        name="DedicatedApplicants"
+        component={DedicatedApplicantsScreen}
+        options={{
+          title: t('dedicatedAgents.applicant.title', 'Applicants'),
+          headerBackTitle: t('dedicatedAgents.section.title', 'Dedicated agents'),
         }}
       />
     </RootStack.Navigator>

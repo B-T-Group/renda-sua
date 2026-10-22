@@ -86,6 +86,19 @@
     "retry": "Retry",
     "refresh": "Refresh",
     "dismiss": "Dismiss",
+    "camera": "Camera",
+    "gallery": "Gallery",
+    "confirm": "Confirm",
+    "offline": "You are offline",
+    "dayLetters": {
+      "M": "M",
+      "T": "T",
+      "W": "W",
+      "Th": "Th",
+      "F": "F",
+      "Sa": "Sa",
+      "Su": "Su"
+    },
     "listLoadError": "Unable to load the list. Please try again in a moment.",
     "retryHint": "Tap to retry",
     "save": "Save",
@@ -100,7 +113,6 @@
     "address": "Address",
     "email": "Email",
     "phone": "Phone",
-    "confirm": "Confirm",
     "edit": "Edit",
     "more": "More",
     "less": "Less",
@@ -184,7 +196,10 @@
       "cancelled": "Cancelled"
     },
     "agent": "Agent",
-    "business": "Business"
+    "business": "Business",
+    "saved": "Saved",
+    "removed": "Removed",
+    "notAvailable": "Not available"
   },
   "cart": {
     "title": "Cart",
@@ -7630,6 +7645,191 @@
       "cancelled": "Cancelled",
       "failed": "Could not be sent",
       "unknown": "Unknown"
+    }
+  },
+  "dedicatedAgents": {
+    "section": {
+      "title": "Dedicated agents",
+      "explainer": "Dedicated agents get orders when no nearby agent takes them.",
+      "scheduledOnly": "Scheduled orders only."
+    },
+    "slots": {
+      "morning": "Morning",
+      "afternoon": "Afternoon",
+      "evening": "Evening",
+      "pickup": "Pickup time",
+      "offConfirm": "Turn off {{slot}}? {{n}} dedicated agents will be paused.",
+      "pausedGroup": "{{n}} paused agents",
+      "turnOff": "Turn off slot",
+      "turnOn": "Turn on slot"
+    },
+    "empty": "No dedicated agent",
+    "post": "Post a request",
+    "slotHeader": "{{n}} agents · up to {{max}} orders",
+    "load": "{{active}}/{{max}} orders",
+    "balanceShort": "~{{n}} more",
+    "fullWarning": "No dedicated agent can take orders right now. Delivery follows normal rules.",
+    "chips": {
+      "type": {
+        "internal": "Internal",
+        "independent": "Independent"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "offToday": "Off today"
+      }
+    },
+    "assignedChip": "Assigned by RendaSua",
+    "actions": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "remove": "Remove"
+    },
+    "removeConfirm": "Remove {{name}} from {{slot}}?",
+    "form": {
+      "agentsNeeded": "Agents needed",
+      "days": "Days",
+      "payLine": "Standard delivery pay",
+      "termsField": "Terms / notes",
+      "termsHelper": "Hours, dress code, what to expect. Extra pay you offer here is paid by you, not RendaSua.",
+      "termsStrip": "Links and phone numbers are removed.",
+      "publish": "Publish",
+      "posted": "Request posted",
+      "alreadyPosted": "Already posted",
+      "slots": "Slots",
+      "payFixed": "(not editable)",
+      "noSlotsAvailable": "No slots available. Enable a slot or close an existing posting first."
+    },
+    "posting": {
+      "row": "Posting open · {{accepted}}/{{needed}} accepted · {{n}} new",
+      "progress": "{{accepted}}/{{needed}} accepted",
+      "status": {
+        "open": "Open",
+        "filled": "Filled",
+        "closed": "Closed",
+        "expired": "Expired"
+      }
+    },
+    "applicant": {
+      "stats": "Joined {{date}} · {{n}} deliveries · {{m}} missed",
+      "onTime": "{{pct}}% on-time pickups",
+      "acceptConfirm": "Accept {{name}}?",
+      "acceptLastConfirm": "Accept {{name}}? This fills the request and declines the other applicants.",
+      "accept": "Accept",
+      "decline": "Decline",
+      "autoDeclined": "Auto-declined",
+      "closeConfirm": "Close this request? Pending applicants will be declined.",
+      "termsEdited": "Applicants were notified",
+      "title": "Pending",
+      "accepted": "Accepted"
+    },
+    "agent": {
+      "opportunities": "Dedicated opportunities",
+      "opportunitiesMenu": "Find dedicated opportunities",
+      "myStores": "My stores",
+      "appliedSnackbar": "Application submitted",
+      "withdrawnSnackbar": "Application withdrawn",
+      "spots": "{{accepted}}/{{needed}} spots filled",
+      "filled": "This spot was filled",
+      "noLongerAvailable": "This opportunity is no longer available",
+      "apply": "Apply",
+      "photoGate": "Add a profile photo to apply",
+      "photoError": "Failed to upload photo",
+      "unsupportedFormat": "Unsupported image format. Please use JPEG, PNG, or WebP.",
+      "cameraPermissionDenied": "Camera permission is required",
+      "photoPermissionDenied": "Photo library permission is required",
+      "applied": "Applied",
+      "withdraw": "Withdraw",
+      "withdrawConfirm": "Withdraw your application?",
+      "accepted": "You're now dedicated to {{store}} ({{slot}})",
+      "updatedChip": "Updated",
+      "noTerms": "No extra terms",
+      "disabled": {
+        "holds_slot": "You already cover this slot at this store",
+        "max_assignments": "You've reached {{max}} stores"
+      },
+      "opp": {
+        "empty": "No openings near you right now",
+        "noAddress": "Add your address to see stores near you",
+        "addAddress": "Add address",
+        "gone": "This opportunity is no longer available"
+      },
+      "gate": {
+        "not_verified": "Get verified to see store opportunities",
+        "verifyAccount": "Verify my account",
+        "contract_unsigned": "Sign your agent agreement to continue",
+        "sign": "Sign",
+        "suspended": "Your account is suspended",
+        "contactSupport": "Contact support"
+      },
+      "offToday": "Off today",
+      "pausedByStore": "Paused by the store",
+      "stores": {
+        "empty": "No stores yet",
+        "seeOpportunities": "See opportunities",
+        "emptyInternal": "RendaSua will assign you to stores"
+      },
+      "removedByStore": "This store removed you",
+      "offerBadge": "Dedicated · {{store}}",
+      "payChip": "Standard pay",
+      "daysLabel": "Days"
+    },
+    "offline": "Offline · showing last update",
+    "generic": "Something went wrong",
+    "retry": "Retry",
+    "errors": {
+      "posting_filled": "This request is already full",
+      "posting_not_open": "This request is no longer open",
+      "posting_expired": "This request is no longer open",
+      "application_closed": "This opportunity is no longer open",
+      "application_not_pending": "This applicant is no longer pending",
+      "agent_holds_slot": "This agent already covers this slot",
+      "holds_slot": "You already cover this slot at this store",
+      "max_assignments": "You've reached the maximum number of stores",
+      "cap_exceeded": "This agent already has the maximum number of stores",
+      "duplicate": "This agent is already assigned to this slot",
+      "slot_disabled": "Turn {{slot}} back on first",
+      "agent_ineligible": "This agent can't be accepted right now",
+      "pickup_time_outside_slot": "Choose a time between {{start}} and {{end}}",
+      "assignment_removed": "This assignment was removed",
+      "assignment_changed": "This assignment has changed",
+      "posting_already_open": "You already have an open request for this slot",
+      "agent_not_verified": "This agent is not verified",
+      "agent_suspended": "This agent is suspended",
+      "slot_has_dedicated_agents": "This slot has dedicated agents that will be paused",
+      "invalid_headcount": "Headcount must be between 1 and 10",
+      "invalid_slot_keys": "Please select at least one slot",
+      "invalid_days_of_week": "Please select at least one day",
+      "terms_too_long": "Terms must be 1000 characters or less"
+    },
+    "metrics": {
+      "deliveries": "deliveries",
+      "missed": "missed",
+      "onTimePercent": "{{pct}}% on-time"
+    },
+    "dayLetters": {
+      "monday": "M",
+      "tuesday": "T",
+      "wednesday": "W",
+      "thursday": "T",
+      "friday": "F",
+      "saturday": "S",
+      "sunday": "S"
+    },
+    "closeWithCount": "Close posting ({{count}} will be auto-declined)",
+    "noLongerAvailable": "This posting is no longer available",
+    "accessibilityLabels": {
+      "pauseAgent": "Pause agent {{name}}",
+      "resumeAgent": "Resume agent {{name}}",
+      "removeAgent": "Remove agent {{name}}",
+      "editTerms": "Edit terms",
+      "moreOptions": "More options",
+      "closePosting": "Close posting",
+      "pickupTime": "Select pickup time",
+      "decreaseCount": "Decrease count",
+      "increaseCount": "Increase count",
+      "slotToggle": "Toggle {{slot}} slot"
     }
   }
 }

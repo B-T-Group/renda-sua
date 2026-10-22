@@ -147,6 +147,17 @@ export const SITE_EVENT_ASSISTANT_DEEPLINK_TAP = 'assistant.deeplink.tap' as con
 export const SITE_EVENT_ASSISTANT_HANDOFF_REQUESTED = 'assistant.handoff.requested' as const;
 export const SITE_EVENT_ASSISTANT_ERROR_SHOWN = 'assistant.error.shown' as const;
 
+// Dedicated agents admin UI (#594, UX blockers)
+export const SITE_EVENT_DEDICATED_UI_SECTION_VIEWED = 'dedicated_ui.section_viewed' as const;
+export const SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STARTED = 'dedicated_ui.admin_assign_started' as const;
+export const SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STEP = 'dedicated_ui.admin_assign_step' as const;
+export const SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_SUCCEEDED = 'dedicated_ui.admin_assign_succeeded' as const;
+export const SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_FAILED = 'dedicated_ui.admin_assign_failed' as const;
+export const SITE_EVENT_DEDICATED_UI_AGENT_PAUSED = 'dedicated_ui.agent_paused' as const;
+export const SITE_EVENT_DEDICATED_UI_AGENT_RESUMED = 'dedicated_ui.agent_resumed' as const;
+export const SITE_EVENT_DEDICATED_UI_AGENT_REMOVED = 'dedicated_ui.agent_removed' as const;
+export const SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT = 'dedicated_ui.action_conflict' as const;
+
 export type SiteEventTypeV1 =
   | typeof SITE_EVENT_INVENTORY_BUY_NOW_CLICK
   | typeof SITE_EVENT_INVENTORY_ORDER_NOW_CLICK
@@ -209,7 +220,26 @@ export type SiteEventTypeV1 =
   | typeof SITE_EVENT_ASSISTANT_ERROR_SHOWN
   | typeof SITE_EVENT_RESTOCK_ALERT_OPENED
   | typeof SITE_EVENT_RESTOCK_ADD_TO_CART_FROM_ALERT
-  | typeof SITE_EVENT_RESTOCK_OPT_OUT;
+  | typeof SITE_EVENT_RESTOCK_OPT_OUT
+  | typeof SITE_EVENT_DEDICATED_UI_SECTION_VIEWED
+  | typeof SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STARTED
+  | typeof SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_STEP
+  | typeof SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_SUCCEEDED
+  | typeof SITE_EVENT_DEDICATED_UI_ADMIN_ASSIGN_FAILED
+  | typeof SITE_EVENT_DEDICATED_UI_AGENT_PAUSED
+  | typeof SITE_EVENT_DEDICATED_UI_AGENT_RESUMED
+  | typeof SITE_EVENT_DEDICATED_UI_AGENT_REMOVED
+  | typeof SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT
+  // Dedicated agents business UI events (from backend registry, PR #647)
+  | 'dedicated_ui.slot_toggled'
+  | 'dedicated_ui.pickup_time_changed'
+  | 'dedicated_ui.posting_form_opened'
+  | 'dedicated_ui.posting_created'
+  | 'dedicated_ui.posting_closed'
+  | 'dedicated_ui.posting_terms_edited'
+  | 'dedicated_ui.applicants_viewed'
+  | 'dedicated_ui.applicant_accepted'
+  | 'dedicated_ui.applicant_declined';
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;
