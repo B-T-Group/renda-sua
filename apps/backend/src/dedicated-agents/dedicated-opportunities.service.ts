@@ -247,6 +247,7 @@ export class DedicatedOpportunitiesService {
     const { config } = await this.postings.requireEnabled(posting.business_location?.address?.country);
     await this.assertEligible(agent);
     const eligible = agent as OpportunityAgent;
+    await this.assertApplyCity(eligible, posting);
     if (!eligible.user?.profile_picture_url?.trim()) {
       this.postings.track('dedicated.photo_gate_shown', { postingId: posting.id, agentId: eligible.id });
       throw new UnprocessableEntityException({
@@ -353,6 +354,18 @@ export class DedicatedOpportunitiesService {
       reason,
       message: INELIGIBLE_MESSAGES[reason] ?? 'Dedicated opportunities are for verified agents with a signed agreement',
     });
+  }
+
+  /**
+   * AC-E7 / #594 G6: apply uses the same city and no-address rules as list/detail.
+   * A leaked posting UUID must not create a pending application the business can accept.
+   */
+  private async assertApplyCity(agent: OpportunityAgent, posting: PostingRow): Promise<void> {
+    const address = pickAgentAddress(agent.agent_addresses);
+    if (!address?.country?.trim()) await this.requireNoAddressFlag(agent.user?.country);
+    if (!matchPostingCity(address ?? {}, posting.business_location?.address ?? {}).match) {
+      throw notFound();
+    }
   }
 
   /**
