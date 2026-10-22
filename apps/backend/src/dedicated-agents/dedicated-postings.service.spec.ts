@@ -1253,6 +1253,45 @@ describe('DedicatedOpportunitiesService.apply / withdraw (AC-A2, A3, B16)', () =
     expect(w.notices).toEqual([]);
   });
 
+  it('#594 AC-E7: apply to another city is the same 404 as detail and writes nothing', async () => {
+    const w = world();
+    w.addLocation({ id: 'loc-yde', name: 'Yaoundé Shop', state: 'Centre', city: 'Yaoundé' });
+    w.addAgent('a1');
+    const p = w.seedPosting({ business_location_id: 'loc-yde' });
+    const { err, body } = await rejection(w.opportunities.apply('u-a1', p.id, NOW));
+    expect(err).toBeInstanceOf(NotFoundException);
+    expect(body).toEqual(NOT_FOUND_BODY);
+    expect(w.state.apps).toEqual([]);
+    expect(w.writes('UpsertDedicatedApplication')).toHaveLength(0);
+  });
+
+  it('#594 G6: apply with no address and the flag on -> 403 no_address, nothing written', async () => {
+    const w = world();
+    w.addAgent('a1', { addresses: [] }, { country: 'CM' } as Partial<AgentFake['user']>);
+    const p = w.seedPosting();
+    const { err, body } = await rejection(w.opportunities.apply('u-a1', p.id, NOW));
+    expect(err).toBeInstanceOf(ForbiddenException);
+    expect(body).toMatchObject({
+      code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE',
+      reason: 'no_address',
+    });
+    expect(w.state.apps).toEqual([]);
+    expect(w.writes('UpsertDedicatedApplication')).toHaveLength(0);
+  });
+
+  it('#594 G6: apply with no address, store on, global off -> 404, nothing written', async () => {
+    const w = world();
+    w.state.flag = false;
+    w.state.flagByCountry = { CM: true };
+    w.addAgent('a1', { addresses: [] });
+    const p = w.seedPosting();
+    const { err, body } = await rejection(w.opportunities.apply('u-a1', p.id, NOW));
+    expect(err).toBeInstanceOf(NotFoundException);
+    expect(body).toEqual(NOT_FOUND_BODY);
+    expect(w.state.apps).toEqual([]);
+    expect(w.writes('UpsertDedicatedApplication')).toHaveLength(0);
+  });
+
   it('403 for an unverified independent; 404 when the flag is off for the store', async () => {
     const w = world();
     w.addAgent('a1', { is_verified: false });
