@@ -48,6 +48,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
   const dedicatedApi = useDedicatedAgents();
+  const { getAdminLocations } = dedicatedApi;
   const { trackSiteEvent } = useTrackSiteEvent();
   const isOnline = useOnlineStatus();
 
@@ -106,7 +107,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
       try {
         setLoading(true);
         setError(null);
-        const response = await dedicatedApi.getAdminLocations(query);
+        const response = await getAdminLocations(query);
         
         // Ignore stale responses
         if (locationSearchIdRef.current !== searchId) {
@@ -134,7 +135,7 @@ const AdminDedicatedAssignDialog: React.FC<AdminDedicatedAssignDialogProps> = ({
         setLoading(false);
       }
     },
-    [dedicatedApi, t]
+    [getAdminLocations, t]
   );
 
   useEffect(() => {

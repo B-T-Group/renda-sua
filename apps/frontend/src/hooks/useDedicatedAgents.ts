@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useApiClient } from './useApiClient';
 import type {
   PickupSlotsResponse,
@@ -288,27 +288,52 @@ export const useDedicatedAgents = () => {
     [apiClient]
   );
 
-  return {
-    getCapability,
-    getAdminCapability,
-    getPickupSlots,
-    updatePickupSlots,
-    getDedicatedAgents,
-    updateAssignment,
-    deleteAssignment,
-    getPostings,
-    createPosting,
-    updatePosting,
-    closePosting,
-    getApplications,
-    acceptApplication,
-    declineApplication,
-    getAdminAssignments,
-    getAdminAgentPicker,
-    getAdminLocations,
-    getAdminLocationSlots,
-    createAdminAssignment,
-    updateAdminAssignment,
-    deleteAdminAssignment,
-  };
+  return useMemo(
+    () => ({
+        getCapability,
+        getAdminCapability,
+        getPickupSlots,
+        updatePickupSlots,
+        getDedicatedAgents,
+        updateAssignment,
+        deleteAssignment,
+        getPostings,
+        createPosting,
+        updatePosting,
+        closePosting,
+        getApplications,
+        acceptApplication,
+        declineApplication,
+        getAdminAssignments,
+        getAdminAgentPicker,
+        getAdminLocations,
+        getAdminLocationSlots,
+        createAdminAssignment,
+        updateAdminAssignment,
+        deleteAdminAssignment,
+    }),
+    [
+      getCapability,
+      getAdminCapability,
+      getPickupSlots,
+      updatePickupSlots,
+      getDedicatedAgents,
+      updateAssignment,
+      deleteAssignment,
+      getPostings,
+      createPosting,
+      updatePosting,
+      closePosting,
+      getApplications,
+      acceptApplication,
+      declineApplication,
+      getAdminAssignments,
+      getAdminAgentPicker,
+      getAdminLocations,
+      getAdminLocationSlots,
+      createAdminAssignment,
+      updateAdminAssignment,
+      deleteAdminAssignment,
+    ]
+  );
 };
