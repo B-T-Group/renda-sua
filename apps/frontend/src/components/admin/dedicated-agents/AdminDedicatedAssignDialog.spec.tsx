@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import AdminDedicatedAssignDialog from './AdminDedicatedAssignDialog';
 
 const mockGetAdminLocations = jest.fn();
@@ -7,11 +7,11 @@ const mockCreateAdminAssignment = jest.fn();
 const mockEnqueueSnackbar = jest.fn();
 const mockTrackSiteEvent = jest.fn();
 
+// Stable `t`, like the real i18next instance, so effect deps behave as in prod.
+const mockT = (key: string, defaultValue?: string) =>
+  typeof defaultValue === 'string' ? defaultValue : key;
 jest.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, defaultValue?: string) =>
-      typeof defaultValue === 'string' ? defaultValue : key,
-  }),
+  useTranslation: () => ({ t: mockT }),
 }));
 
 jest.mock('notistack', () => ({
@@ -92,6 +92,42 @@ describe('AdminDedicatedAssignDialog', () => {
 
     const nextButton = screen.getByRole('button', { name: /next/i });
     expect(nextButton).toHaveAttribute('disabled');
+  });
+
+  it('sends exactly one location request per debounced query', async () => {
+    // The mocked hook returns a fresh object on every render (as the
+    // unmemoized hook did), so this guards against the re-fire loop.
+    jest.useFakeTimers();
+    try {
+      render(
+        <AdminDedicatedAssignDialog
+          open={true}
+          onClose={onClose}
+          onSuccess={onSuccess}
+        />
+      );
+      const input = screen.getByLabelText(/search store/i);
+      fireEvent.change(input, { target: { value: 'Do' } });
+      fireEvent.change(input, { target: { value: 'Douala' } });
+
+      await act(async () => {
+        jest.advanceTimersByTime(300);
+      });
+      await act(async () => {
+        await Promise.resolve();
+      });
+      // Let several more debounce windows elapse; no further requests.
+      for (let i = 0; i < 5; i++) {
+        await act(async () => {
+          jest.advanceTimersByTime(300);
+        });
+      }
+
+      expect(mockGetAdminLocations).toHaveBeenCalledTimes(1);
+      expect(mockGetAdminLocations).toHaveBeenCalledWith('Douala');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('maps 403 error to step 0 with error message', async () => {

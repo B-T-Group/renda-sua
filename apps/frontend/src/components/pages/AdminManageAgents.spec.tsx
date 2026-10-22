@@ -69,13 +69,15 @@ jest.mock('../../hooks/useAdminAgents', () => ({
   }),
 }));
 
+// Stable client, like the memoized real hook.
+const mockApiClient = {
+  get: jest.fn(),
+  post: jest.fn(),
+  patch: jest.fn(),
+  delete: jest.fn(),
+};
 jest.mock('../../hooks/useApiClient', () => ({
-  useApiClient: () => ({
-    get: jest.fn(),
-    post: jest.fn(),
-    patch: jest.fn(),
-    delete: jest.fn(),
-  }),
+  useApiClient: () => mockApiClient,
 }));
 
 jest.mock('../../hooks/useVehicleTypes', () => ({

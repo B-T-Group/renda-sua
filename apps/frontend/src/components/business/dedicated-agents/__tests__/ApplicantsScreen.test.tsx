@@ -1,4 +1,4 @@
-import { render, waitFor, screen, fireEvent, act } from '@testing-library/react';
+import { render, waitFor, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import ApplicantsScreen from '../ApplicantsScreen';
 

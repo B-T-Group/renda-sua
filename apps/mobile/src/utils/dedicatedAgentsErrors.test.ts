@@ -50,8 +50,8 @@ describe('dedicatedAgentsErrors', () => {
     });
 
     it('should not show gate for non-403 status', () => {
-      expect(shouldShowGate(404, undefined, undefined)).toBe(false);
-      expect(shouldShowGate(500, undefined, undefined)).toBe(false);
+      expect(shouldShowGate(404, '', null)).toBe(false);
+      expect(shouldShowGate(500, '', null)).toBe(false);
     });
   });
 

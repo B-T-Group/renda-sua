@@ -158,7 +158,9 @@ const AdminManageAgents: React.FC = () => {
     if (verificationAgentId) {
       fetchIdDocuments(verificationAgentId);
     } else {
-      setIdDocuments([]);
+      // Keep the same reference when already empty so this effect can't
+      // feed a render loop if fetchIdDocuments' identity changes.
+      setIdDocuments((prev) => (prev.length === 0 ? prev : []));
     }
   }, [verificationAgentId, fetchIdDocuments]);
 

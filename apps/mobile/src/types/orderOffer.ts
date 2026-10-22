@@ -3,8 +3,12 @@
  * /orders/offer/accept|decline). Mirrors the backend OfferDetailsResponse.
  */
 
+export type OrderOfferKind = 'standard' | 'dedicated';
+
 export interface OrderOfferPickup {
   businessName: string | null;
+  /** #594 G3: business location name; null when the location has none. */
+  locationName?: string | null;
   city: string | null;
   state: string | null;
 }
@@ -26,6 +30,8 @@ export interface OrderOfferDetails {
   estimatedDeliveryMinutes: number | null;
   pickup: OrderOfferPickup;
   dropoff: OrderOfferDropoff;
+  /** #594 G3: 'dedicated' when offered to a store's dedicated agent. */
+  offerKind?: OrderOfferKind;
 }
 
 export interface OrderOfferResponse {
