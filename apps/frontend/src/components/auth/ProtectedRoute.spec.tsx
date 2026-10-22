@@ -128,4 +128,12 @@ describe('app.tsx admin routes', () => {
     expect(group).toContain('path="/admin/*"');
     expect(group).toContain('<Navigate to={ADMIN_HOME_PATH} replace />');
   });
+
+  it('imports LoadingPage for the lazy-route fallback', () => {
+    const src = readFileSync(join(__dirname, '../../app/app.tsx'), 'utf8');
+    expect(src).toContain("import LoadingPage from '../components/common/LoadingPage'");
+    const start = src.indexOf('function RouteSuspenseFallback');
+    const body = src.slice(start, src.indexOf('function App(', start));
+    expect(body).toContain('<LoadingPage');
+  });
 });
