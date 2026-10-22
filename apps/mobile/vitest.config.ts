@@ -17,8 +17,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts'],
-    exclude: ['src/**/*.render.test.tsx'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    exclude: ['**/node_modules/**', '**/dist/**', '**/*.render.test.tsx'],
     globals: true,
     setupFiles: ['src/__mocks__/setup.ts'],
   },
