@@ -831,7 +831,10 @@ export class MobilePaymentPhonesService {
       phoneE164
     );
     if (existingRefund) return;
-    const { provider, currency } = await this.verificationRoute(phoneE164);
+    const { provider, currency } = await this.refundRoute(
+      phoneE164,
+      verificationTxId
+    );
     const hqAccount = await this.resolveHqAccount(currency);
     await this.giveChangePayoutService.executeGiveChangePayout(
       {
@@ -1118,6 +1121,24 @@ export class MobilePaymentPhonesService {
     const iso = parseE164Phone(phoneE164)?.iso ?? null;
     const provider = await this.mobilePaymentsService.getProviderForCountry(iso);
     return { provider, currency: provider === 'fedapay' ? XOF : XAF, iso };
+  }
+
+  /**
+   * Refund through the rail that took the charge (stored row), so a TG flag flip
+   * between charge and refund can't send an XOF FedaPay refund to MyPVit in XAF.
+   */
+  private async refundRoute(
+    phoneE164: string,
+    verificationTxId: string
+  ): Promise<{ provider: string; currency: string }> {
+    const charge =
+      await this.mobilePaymentsDatabaseService.getTransactionById(
+        verificationTxId
+      );
+    if (charge?.provider && charge?.currency) {
+      return { provider: charge.provider, currency: charge.currency };
+    }
+    return this.verificationRoute(phoneE164);
   }
 
   private generateReference(): string {

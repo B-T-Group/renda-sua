@@ -429,6 +429,7 @@ describe('MobilePaymentPhonesService', () => {
       ['+237600000001', 'freemopay', 'XAF'],
       ['+24162000000', 'mypvit', 'XAF'],
     ])('refunds %s via %s in %s from the HQ account in that currency', async (phone, provider, currency) => {
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue(null);
       await (service as any).refundVerificationTransaction(phone, 'tx-1');
 
       expect(giveChangePayoutService.executeGiveChangePayout).toHaveBeenCalledWith(
@@ -439,6 +440,22 @@ describe('MobilePaymentPhonesService', () => {
           accountId: `hq-${currency}`,
           entityId: 'tx-1',
         }),
+        { throwOnWithdrawalFailure: false }
+      );
+    });
+
+    it('refunds through the stored charge rail even if TG was switched off since', async () => {
+      mobilePaymentsService.getProviderForCountry.mockResolvedValue('mypvit');
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
+        id: 'tx-1',
+        provider: 'fedapay',
+        currency: 'XOF',
+      });
+
+      await (service as any).refundVerificationTransaction('+22896000000', 'tx-1');
+
+      expect(giveChangePayoutService.executeGiveChangePayout).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'fedapay', currency: 'XOF', accountId: 'hq-XOF' }),
         { throwOnWithdrawalFailure: false }
       );
     });
