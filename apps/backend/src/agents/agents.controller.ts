@@ -19,7 +19,10 @@ import {
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
 import { Throttle } from '@nestjs/throttler';
-import { maskPersonName } from '../common/utils/mask-name.util';
+import {
+  maskPersonName,
+  PUBLIC_REFERRAL_LOOKUP_THROTTLE,
+} from '../common/utils/mask-name.util';
 import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -176,7 +179,7 @@ export class AgentsController {
   }
 
   @Public()
-  @Throttle({ short: { limit: 20, ttl: 60000 } })
+  @Throttle(PUBLIC_REFERRAL_LOOKUP_THROTTLE)
   @Get('public/by-code/:agentCode')
   @ApiOperation({
     summary: 'Get agent name by referral code (public)',

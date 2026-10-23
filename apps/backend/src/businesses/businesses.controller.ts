@@ -13,6 +13,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
+import { Throttle } from '@nestjs/throttler';
+import { PUBLIC_REFERRAL_LOOKUP_THROTTLE } from '../common/utils/mask-name.util';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
 import { BusinessReferralsService } from '../business-referrals/business-referrals.service';
@@ -29,6 +31,7 @@ export class BusinessesController {
   ) {}
 
   @Public()
+  @Throttle(PUBLIC_REFERRAL_LOOKUP_THROTTLE)
   @Get('public/by-code/:businessCode')
   @ApiOperation({
     summary: 'Get business name by referral code (public)',

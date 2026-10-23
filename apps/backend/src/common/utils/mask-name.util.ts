@@ -25,3 +25,8 @@ export function businessDisplayWithMaskedOwner(
   if (!name) return owner;
   return owner ? `${name} (${owner})` : name;
 }
+
+/** Shared rate limit for unauthenticated referral-code lookups (per IP). */
+export const PUBLIC_REFERRAL_LOOKUP_THROTTLE = {
+  short: { limit: 20, ttl: 60000 },
+} as const;

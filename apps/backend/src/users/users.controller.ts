@@ -30,6 +30,7 @@ import { Throttle } from '@nestjs/throttler';
 import {
   businessDisplayWithMaskedOwner,
   maskPersonName,
+  PUBLIC_REFERRAL_LOOKUP_THROTTLE,
 } from '../common/utils/mask-name.util';
 import { Configuration } from '../config/configuration';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
@@ -281,7 +282,7 @@ export class UsersController {
   }
 
   @Public()
-  @Throttle({ short: { limit: 20, ttl: 60000 } })
+  @Throttle(PUBLIC_REFERRAL_LOOKUP_THROTTLE)
   @Get('public/by-referral-code/:code')
   @ApiOperation({
     summary: 'Look up a user by referral code (public)',
