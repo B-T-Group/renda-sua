@@ -9,12 +9,14 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import type { MobilePaymentTransaction } from '../mobile-payments/mobile-payments-database.service';
 import { MobilePaymentsService } from '../mobile-payments/mobile-payments.service';
+import type { MobilePaymentIntegrationProvider } from '../mobile-payments/mobile-payments.service';
 import { GiveChangePayoutService } from '../mobile-payments/give-change-payout.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
 import { PaymentRoutingService } from '../stripe-payments/payment-routing.service';
 import {
   isSupportedMobileMoneyE164,
   normalizeToE164,
+  parseE164Phone,
 } from './phone-e164.util';
 import type {
   MobileMoneyVerificationMethod,
@@ -25,6 +27,7 @@ import type {
 import { MobilePaymentPhoneSeedService } from './mobile-payment-phone-seed.service';
 
 const XAF = 'XAF';
+const XOF = 'XOF';
 const VERIFICATION_AMOUNT = 150;
 const VERIFICATION_PENDING_REUSE_MS = 15 * 60 * 1000;
 const ID_DOC_NAMES = ['id_card', 'passport', 'driver_license'];
@@ -443,17 +446,24 @@ export class MobilePaymentPhonesService {
       }
     }
     await this.assertMobileMoneyRail(userId);
-    const hqAccount = await this.resolveHqAccount();
+    const { provider, currency, iso } = await this.verificationRoute(
+      phone.phone_e164
+    );
+    if (iso === 'TG' && provider !== 'fedapay') {
+      throw new BadRequestException(
+        'Mobile money verification is not available in Togo yet'
+      );
+    }
+    const hqAccount = await this.resolveHqAccount(currency);
     const reference = this.generateReference();
-    const provider = this.mobilePaymentsService.getProvider(phone.phone_e164);
     const callbackBase = process.env.API_BASE_URL || 'http://localhost:3000';
-    const callbackUrl = `${callbackBase}/mobile-payments/callback/${
-      provider === 'freemopay' ? 'freemopay' : 'mypvit'
-    }`;
+    const callbackUrl = `${callbackBase}/mobile-payments/callback/${callbackPath(
+      provider
+    )}`;
     const tx = await this.mobilePaymentsDatabaseService.createTransaction({
       reference,
       amount: VERIFICATION_AMOUNT,
-      currency: XAF,
+      currency,
       description: `Phone verification ${phone.phone_e164}`,
       provider,
       payment_method: 'mobile_money',
@@ -466,7 +476,7 @@ export class MobilePaymentPhonesService {
     const paymentResponse = await this.mobilePaymentsService.initiatePayment(
       {
         amount: VERIFICATION_AMOUNT,
-        currency: XAF,
+        currency,
         description: `Verify ${phone.phone_e164}`,
         customerPhone: phone.phone_e164,
         provider,
@@ -821,17 +831,16 @@ export class MobilePaymentPhonesService {
       phoneE164
     );
     if (existingRefund) return;
-    const hqAccount = await this.resolveHqAccount();
+    const { provider, currency } = await this.verificationRoute(phoneE164);
+    const hqAccount = await this.resolveHqAccount(currency);
     await this.giveChangePayoutService.executeGiveChangePayout(
       {
         amount: VERIFICATION_AMOUNT,
-        currency: XAF,
+        currency,
         description: `Phone verification refund ${phoneE164}`,
         customerPhone: phoneE164,
         accountId: hqAccount.id,
-        provider: this.mobilePaymentsService.getProvider(phoneE164) as
-          | 'mypvit'
-          | 'freemopay',
+        provider: provider as 'mypvit' | 'freemopay' | 'fedapay',
         entityId: verificationTxId,
       },
       { throwOnWithdrawalFailure: false }
@@ -1067,7 +1076,7 @@ export class MobilePaymentPhonesService {
     const e164 = normalizeToE164(countryCode, phoneNumber);
     if (!e164 || !isSupportedMobileMoneyE164(e164)) {
       throw new BadRequestException(
-        'Unsupported phone number. Mobile money verification is available for Cameroon (+237) and Gabon (+241).'
+        'Unsupported phone number. Mobile money verification is available for Cameroon (+237), Gabon (+241) and Togo (+228).'
       );
     }
     return e164;
@@ -1090,10 +1099,25 @@ export class MobilePaymentPhonesService {
     }
   }
 
-  private async resolveHqAccount() {
+  private async resolveHqAccount(currency: string = XAF) {
     const hqUser = await this.hasuraSystemService.getRendasuaHQUser();
     if (!hqUser) throw new BadRequestException('HQ account not configured');
-    return this.hasuraSystemService.getAccount(hqUser.id, XAF);
+    return this.hasuraSystemService.getAccount(hqUser.id, currency);
+  }
+
+  /**
+   * Verification charge/refund route from the phone's country, same as payments
+   * (getProviderForCountry): CM -> freemopay, TG -> fedapay (XOF) when active,
+   * otherwise MyPVit (XAF).
+   */
+  private async verificationRoute(phoneE164: string): Promise<{
+    provider: MobilePaymentIntegrationProvider;
+    currency: string;
+    iso: string | null;
+  }> {
+    const iso = parseE164Phone(phoneE164)?.iso ?? null;
+    const provider = await this.mobilePaymentsService.getProviderForCountry(iso);
+    return { provider, currency: provider === 'fedapay' ? XOF : XAF, iso };
   }
 
   private generateReference(): string {
@@ -1101,4 +1125,9 @@ export class MobilePaymentPhonesService {
     const random = Math.random().toString(36).substr(2, 4);
     return `PHV${timestamp}${random}`;
   }
+}
+
+function callbackPath(provider: MobilePaymentIntegrationProvider): string {
+  if (provider === 'freemopay' || provider === 'fedapay') return provider;
+  return 'mypvit';
 }
