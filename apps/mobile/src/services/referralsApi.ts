@@ -28,7 +28,10 @@ export const referralsApi = {
     api.get<{
       success: boolean;
       referralCode: string;
+      /** Masked display name ("Samuel B." / "Shop (Samuel B.)"); never a full last name. */
       fullName: string;
+      businessName?: string;
+      ownerName?: string;
       firstName?: string;
       kind?: 'user' | 'agent' | 'business';
     }>(`/users/public/by-referral-code/${encodeURIComponent(code)}`),

@@ -18,6 +18,8 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Public } from '../auth/public.decorator';
+import { Throttle } from '@nestjs/throttler';
+import { maskPersonName } from '../common/utils/mask-name.util';
 import { CommissionsService } from '../commissions/commissions.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
@@ -174,6 +176,7 @@ export class AgentsController {
   }
 
   @Public()
+  @Throttle({ short: { limit: 20, ttl: 60000 } })
   @Get('public/by-code/:agentCode')
   @ApiOperation({
     summary: 'Get agent name by referral code (public)',
@@ -193,7 +196,7 @@ export class AgentsController {
       properties: {
         success: { type: 'boolean', example: true },
         agentCode: { type: 'string', example: 'AB12CD' },
-        fullName: { type: 'string', example: 'Jane Doe' },
+        fullName: { type: 'string', example: 'Jane D.' },
         firstName: { type: 'string', example: 'Jane' },
       },
     },
@@ -220,7 +223,7 @@ export class AgentsController {
       );
     }
 
-    const fullName = `${lookup.userFirstName} ${lookup.userLastName}`.trim();
+    const fullName = maskPersonName(lookup.userFirstName, lookup.userLastName);
     return {
       success: true,
       agentCode: normalized,
