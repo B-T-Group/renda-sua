@@ -1513,7 +1513,7 @@ export class CheckoutPreflightService {
     return first.filter((slot) => others.every((set) => set.has(key(slot))));
   }
 
-  /** Defense in depth: HTTP ValidationPipe should reject this first (NODE-NESTJS-4F). */
+  /** NODE-NESTJS-4F: the public route has no body ValidationPipe, so guard a missing items array here. */
   private rejectMissingItems(
     dto: CheckoutPreflightDto,
     blockers: CheckoutBlockerDto[]
