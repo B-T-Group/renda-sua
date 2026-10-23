@@ -77,9 +77,26 @@ export interface CheckoutItemLine {
  * `available` is false, show the generic "Delivery is currently unavailable."
  * copy and steer the user to store pickup — no internal reason is exposed.
  */
+/** #594: a scheduled slot a dedicated agent covers when ASAP delivery is unavailable. */
+export interface DedicatedCoveredSlot {
+  /** Local date (YYYY-MM-DD) in the seller timezone. */
+  date: string;
+  /** delivery_time_slots.id, sent as delivery_window.slot_id. */
+  slot_id: string;
+  slot_key?: 'morning' | 'afternoon' | 'evening' | string;
+  /** Local HH:MM. */
+  start: string;
+  end: string;
+  pickup_time?: string | null;
+}
+
 export interface CheckoutDeliveryAvailability {
   available: boolean;
   estimated_delivery_minutes: number | null;
+  /** #594 (flag on only): ASAP delivery passes today's rules; same value as `available`. */
+  delivery_asap_available?: boolean;
+  /** #594 (flag on only): scheduled slots a dedicated agent covers when ASAP is unavailable. */
+  dedicated_covered_slots?: DedicatedCoveredSlot[];
 }
 
 export interface CheckoutGroup {

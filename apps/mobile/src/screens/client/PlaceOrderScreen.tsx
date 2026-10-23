@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { payAfterCopyVariantForPreflight, resolveCreatedPayAfter } from '../../utils/payAfterConfirm';
+import { resolveDeliveryCoverage } from '../../utils/checkoutPresentation';
 import type { CountryCode } from 'libphonenumber-js';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { AppModal } from '../../components/common/AppModal';
@@ -247,7 +248,11 @@ export default function PlaceOrderScreen() {
     return { ...basePreflightRequest, payment_timing: payTiming };
   }, [basePreflightRequest, payTiming]);
 
-  const { config: preflightConfig, loading: preflightLoading } = useResolvedCheckout({
+  const {
+    config: preflightConfig,
+    loading: preflightLoading,
+    refetch: refetchPreflight,
+  } = useResolvedCheckout({
     request: preflightRequest,
     enabled: Boolean(item),
   });
@@ -274,12 +279,20 @@ export default function PlaceOrderScreen() {
   const linkedMoMo = useCheckoutLinkedMoMoPhone(needsLinkedMoMoPhone);
 
   // Delivery is offered only after the shared check returns available.
+  // #594 (flag on only): ASAP out but a dedicated agent covers some slots, so
+  // delivery is offered scheduled-only for those slots (cart-level list).
+  const deliveryCoverage = useMemo(
+    () => resolveDeliveryCoverage(preflightConfig?.delivery_availability),
+    [preflightConfig?.delivery_availability]
+  );
   const deliveryOffered =
-    preflightConfig?.delivery_availability?.available === true;
+    preflightConfig?.delivery_availability?.available === true ||
+    deliveryCoverage.scheduledOnly;
   const deliveryKnownUnavailable =
     !preflightLoading &&
     Boolean(preflightConfig) &&
-    preflightConfig?.delivery_availability?.available !== true;
+    preflightConfig?.delivery_availability?.available !== true &&
+    !deliveryCoverage.scheduledOnly;
 
   // Funnel analytics: track the first time the unavailable notice is shown.
   const unavailableTrackedRef = useRef(false);
@@ -1250,6 +1263,12 @@ export default function PlaceOrderScreen() {
       return;
     }
     if (outcome.type === 'error') {
+      // #594: coverage can vanish between preflight and create; refresh so the
+      // screen shows the current options (usually the unavailable copy).
+      if (outcome.code === 'DELIVERY_UNAVAILABLE') {
+        setDeliveryWindow(null);
+        void refetchPreflight();
+      }
       if (
         outcome.code === 'MERCHANT_CLOSED' ||
         /merchant is (currently )?closed/i.test(outcome.message || '')
@@ -1350,6 +1369,7 @@ export default function PlaceOrderScreen() {
       ],
     });
   }, [
+    refetchPreflight,
     deliveryAddressId,
     canSubmit,
     submitting,
@@ -1753,6 +1773,7 @@ export default function PlaceOrderScreen() {
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
+            coveredSlots={deliveryCoverage.coveredSlots}
             onReadyChange={onDwReadyChange}
             onCommit={onDwCommit}
           />

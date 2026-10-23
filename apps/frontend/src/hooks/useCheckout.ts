@@ -3,6 +3,10 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { CartItem, useCart } from '../contexts/CartContext';
+import {
+  isCoveredDeliveryWindow,
+  resolveDeliveryCoverage,
+} from '../utils/checkoutPresentation';
 import { getMetaBrowserContext } from '../utils/metaBrowserIds';
 import { toOrderItemVariantId } from '../utils/shopperVariantSelection';
 import { useApiClient } from './useApiClient';
@@ -288,9 +292,16 @@ export const useCheckout = () => {
           { eventID: checkoutEventId }
         );
 
+        // #594: with ASAP out but dedicated-covered slots, delivery is still
+        // allowed for one of those slots only (the server re-checks at create).
+        const coverage = resolveDeliveryCoverage(preflight?.delivery_availability);
         if (
           fulfillmentMethod === 'delivery' &&
-          preflight?.delivery_availability?.available === false
+          preflight?.delivery_availability?.available === false &&
+          !(
+            coverage.scheduledOnly &&
+            isCoveredDeliveryWindow(deliveryWindow, coverage.coveredSlots)
+          )
         ) {
           const message = t(
             'orders.deliveryAvailability.unavailable',

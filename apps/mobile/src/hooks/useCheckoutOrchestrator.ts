@@ -100,7 +100,9 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
         outcome = await work();
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Failed to place order.';
-        outcome = { type: 'error', message: msg };
+        // Keep the API error code (e.g. DELIVERY_UNAVAILABLE) so screens can react.
+        const code = (e as { code?: unknown } | null)?.code;
+        outcome = { type: 'error', message: msg, ...(typeof code === 'string' ? { code } : {}) };
       }
       settleSubmit(outcome);
       return outcome;

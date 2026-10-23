@@ -6130,7 +6130,14 @@
       "slotName": "Slot",
       "confirmedAt": "Confirmed at",
       "confirmedBy": "Confirmed by",
-      "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation."
+      "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation.",
+      "dedicatedScheduledOnly": "Scheduled delivery only for this store right now. Choose one of the times below.",
+      "dedicatedPickupAt": "Picked up from the store at {{time}}",
+      "slotKey": {
+        "morning": "Morning",
+        "afternoon": "Afternoon",
+        "evening": "Evening"
+      }
     },
     "failDelivery": {
       "title": "Mark Delivery as Failed",

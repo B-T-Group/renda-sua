@@ -4159,7 +4159,15 @@
         "scrollDaysHint": "Faites défiler horizontalement pour voir plus de dates.",
         "pickSlot": "Sélectionner un créneau horaire",
         "unavailable": "Indisponible",
-        "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer. Toute votre commande est payée après confirmation."
+        "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer. Toute votre commande est payée après confirmation.",
+        "dedicatedScheduledOnly": "Livraison programmée uniquement pour ce magasin en ce moment",
+        "dedicatedScheduledOnlyHint": "Choisissez l’un des créneaux ci-dessous.",
+        "dedicatedPickupAt": "Récupérée au magasin à {{time}}",
+        "slotKey": {
+          "morning": "Matin",
+          "afternoon": "Après-midi",
+          "evening": "Soir"
+        }
       },
       "payment": {
         "title": "Informations de paiement",

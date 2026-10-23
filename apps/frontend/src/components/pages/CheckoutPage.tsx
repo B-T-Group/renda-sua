@@ -42,6 +42,11 @@ import { useCheckoutPreflight } from '../../hooks/useCheckoutPreflight';
 import { useDiscountCode } from '../../hooks/useDiscountCode';
 import { useFastDeliveryConfig } from '../../hooks/useFastDeliveryConfig';
 import { useUpdateRecipient } from '../../hooks/useRecipients';
+import {
+  isCoveredDeliveryWindow,
+  isDeliveryUnavailableError,
+  resolveDeliveryCoverage,
+} from '../../utils/checkoutPresentation';
 import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
 import {
   SITE_EVENT_CHECKOUT_DELIVERY_UNAVAILABLE_SHOWN,
@@ -50,6 +55,7 @@ import {
   useTrackSiteEvent,
 } from '../../hooks/useTrackSiteEvent';
 import { ClientMobileMoneyPhoneSection } from '../common/ClientMobileMoneyPhoneSection';
+import CoveredDeliverySlotPicker from '../common/CoveredDeliverySlotPicker';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -777,9 +783,16 @@ const CheckoutPage: React.FC = () => {
     recipientPayload,
   ]);
 
+  const [preflightRefreshKey, setPreflightRefreshKey] = useState(0);
   const checkoutPreflight = useCheckoutPreflight(
     checkoutPreflightRequest,
-    cartItems.length > 0
+    cartItems.length > 0,
+    preflightRefreshKey
+  );
+  // #594: cart-level coverage (every non-ASAP seller covers these slots).
+  const deliveryCoverage = useMemo(
+    () => resolveDeliveryCoverage(checkoutPreflight?.delivery_availability),
+    [checkoutPreflight?.delivery_availability]
   );
 
   const diaspora = checkoutPreflight?.diaspora ?? null;
@@ -911,16 +924,31 @@ const CheckoutPage: React.FC = () => {
   // Reason-blind delivery availability (aggregated + per seller group).
   const deliveryUnavailable =
     fulfillment === 'delivery' &&
-    checkoutPreflight?.delivery_availability?.available === false;
+    checkoutPreflight?.delivery_availability?.available === false &&
+    !deliveryCoverage.scheduledOnly;
+  // #594: ASAP is out but a dedicated agent covers some slots: schedule only.
+  const deliveryScheduledOnly =
+    fulfillment === 'delivery' && deliveryCoverage.scheduledOnly;
+  const coveredWindowSelected = isCoveredDeliveryWindow(
+    deliveryWindow,
+    deliveryCoverage.coveredSlots
+  );
   const unavailableBusinessIds = useMemo(
     () =>
-      new Set(
-        preflightGroups
-          .filter((g) => g.delivery_availability?.available === false)
-          .map((g) => g.business_id)
-      ),
-    [preflightGroups]
+      deliveryCoverage.scheduledOnly
+        ? new Set<string>()
+        : new Set(
+            preflightGroups
+              .filter((g) => g.delivery_availability?.available === false)
+              .map((g) => g.business_id)
+          ),
+    [preflightGroups, deliveryCoverage.scheduledOnly]
   );
+
+  // Fast delivery is an ASAP upgrade; it does not apply to scheduled-only delivery.
+  useEffect(() => {
+    if (deliveryScheduledOnly) setRequiresFastDelivery(false);
+  }, [deliveryScheduledOnly]);
 
   // MoMo cooked food: pay after kitchen confirm (flag). Delivery stores
   // pay_now so agents get Complete+PIN once paid; pickup stays PAP.
@@ -1203,6 +1231,7 @@ const CheckoutPage: React.FC = () => {
     const isPickup = fulfillment === 'pickup';
     if (!isPickup && !selectedAddressId) return;
     if (!isPickup && deliveryUnavailable) return;
+    if (!isPickup && deliveryScheduledOnly && !coveredWindowSelected) return;
 
     if (
       checkoutPreflight?.checkout_method === 'MOBILE_MONEY' &&
@@ -1322,6 +1351,12 @@ const CheckoutPage: React.FC = () => {
       });
     } catch (error) {
       console.error('Checkout error:', error);
+      // #594: coverage can vanish between preflight and create; refresh so the
+      // page shows the current options (usually the unavailable copy).
+      if (isDeliveryUnavailableError(error)) {
+        setDeliveryWindow(null);
+        setPreflightRefreshKey((key) => key + 1);
+      }
       placingOrderRef.current = false;
       setIsCheckoutInProgress(false); // Reset flag on error
     }
@@ -1700,7 +1735,8 @@ const CheckoutPage: React.FC = () => {
                   </Box>
 
                   {/* Fast Delivery Option */}
-                  {isEnabledForLocation(userCountry, userState) &&
+                  {!deliveryScheduledOnly &&
+                    isEnabledForLocation(userCountry, userState) &&
                     fastDeliveryConfig && (
                       <FastDeliveryOption
                         config={fastDeliveryConfig}
@@ -1729,6 +1765,13 @@ const CheckoutPage: React.FC = () => {
                             : 'The store will confirm your order first. We’ll then ask you to pay.'
                           : 'We’ll start preparing when the kitchen confirms.'
                       )}
+                    />
+                  ) : deliveryScheduledOnly ? (
+                    <CoveredDeliverySlotPicker
+                      slots={deliveryCoverage.coveredSlots}
+                      value={deliveryWindow}
+                      onChange={handleDeliveryWindowChange}
+                      disabled={checkoutLoading}
                     />
                   ) : (
                     <DeliveryTimeWindowSelector
@@ -1954,7 +1997,9 @@ const CheckoutPage: React.FC = () => {
                 !linkedPaymentPhoneId &&
                 !checkoutPreflight?.suggested_payment_phone_id) ||
               (fulfillment === 'delivery' &&
-                (!selectedAddressId || deliveryUnavailable))
+                (!selectedAddressId ||
+                  deliveryUnavailable ||
+                  (deliveryScheduledOnly && !coveredWindowSelected)))
             }
             sx={{
               mt: 3,
