@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  ArrayMinSize,
   IsArray,
   IsBoolean,
   IsIn,
@@ -63,8 +64,9 @@ export class CheckoutRecipientDto {
 }
 
 export class CheckoutPreflightDto {
-  @ApiProperty({ type: [CheckoutPreflightItemDto] })
+  @ApiProperty({ type: [CheckoutPreflightItemDto], minItems: 1 })
   @IsArray()
+  @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => CheckoutPreflightItemDto)
   items!: CheckoutPreflightItemDto[];

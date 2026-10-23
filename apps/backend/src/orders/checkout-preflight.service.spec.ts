@@ -377,6 +377,19 @@ describe('CheckoutPreflightService', () => {
     );
   }
 
+  it('returns ITEMS_REQUIRED without querying inventory when items is missing', async () => {
+    const result = await service.resolve({} as CheckoutPreflightDto, false);
+
+    expect(result.can_proceed).toBe(false);
+    expect(result.blocking_errors).toEqual([
+      {
+        code: 'ITEMS_REQUIRED',
+        message: 'Add at least one item to continue checkout.',
+      },
+    ]);
+    expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+  });
+
   // -------------------------------------------------------------------------
   // 1. Returns EMAIL + STRIPE for Stripe seller/order groups
   // -------------------------------------------------------------------------

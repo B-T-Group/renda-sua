@@ -280,6 +280,8 @@ export class CheckoutPreflightService {
     }
   ): Promise<CheckoutPreflightResponseDto> {
     const blockers: CheckoutBlockerDto[] = [];
+    const missingItems = this.rejectMissingItems(dto, blockers);
+    if (missingItems) return missingItems;
 
     const fulfillment: 'delivery' | 'pickup' | 'shipping' =
       dto.fulfillment_method === 'shipping'
@@ -1509,6 +1511,19 @@ export class CheckoutPreflightService {
     const [first, ...rest] = needing.map((a) => a?.dedicated_covered_slots ?? []);
     const others = rest.map((list) => new Set(list.map(key)));
     return first.filter((slot) => others.every((set) => set.has(key(slot))));
+  }
+
+  /** Defense in depth: HTTP ValidationPipe should reject this first (NODE-NESTJS-4F). */
+  private rejectMissingItems(
+    dto: CheckoutPreflightDto,
+    blockers: CheckoutBlockerDto[]
+  ): CheckoutPreflightResponseDto | null {
+    if (Array.isArray(dto?.items)) return null;
+    blockers.push({
+      code: 'ITEMS_REQUIRED',
+      message: 'Add at least one item to continue checkout.',
+    });
+    return this.earlyExit(blockers, dto);
   }
 
   private earlyExit(
