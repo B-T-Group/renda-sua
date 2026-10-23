@@ -115,6 +115,26 @@ describe('resolveMobileMoneyCountries', () => {
       ])
     ).toEqual(['TG']);
   });
+
+  it('treats a missing status as active and ignores a stripe-only method', () => {
+    expect(
+      resolveMobileMoneyCountries([
+        { code: ' cm ', supportedPaymentMethods: ['stripe'] },
+        { code: 'GA', serviceStatus: 'PAUSED', supportedPaymentMethods: ['stripe'] },
+        { code: 'TG', serviceStatus: 'paused', supportedPaymentMethods: ['stripe', 'fedapay'] },
+        { code: null },
+      ])
+    ).toEqual(['CM', 'TG']);
+  });
+
+  it('does not restore CM/GA/TG when the backend list names no MoMo country', () => {
+    expect(
+      resolveMobileMoneyCountries([
+        { code: 'CA', serviceStatus: 'active', supportedPaymentMethods: ['stripe'] },
+        { code: 'BJ', serviceStatus: 'active', supportedPaymentMethods: ['fedapay'] },
+      ])
+    ).toEqual([]);
+  });
 });
 
 describe('calling-code helpers', () => {
@@ -122,8 +142,11 @@ describe('calling-code helpers', () => {
     expect(mobileMoneyCallingCode('TG')).toBe('228');
     expect(mobileMoneyCallingCode('GA')).toBe('241');
     expect(mobileMoneyIsoFromCallingCode('228')).toBe('TG');
+    expect(mobileMoneyIsoFromCallingCode('+228')).toBe('TG');
     expect(mobileMoneyIsoFromCallingCode('+237')).toBe('CM');
     expect(mobileMoneyIsoFromCallingCode('33')).toBeNull();
+    expect(mobileMoneyIsoFromCallingCode(null)).toBeNull();
+    expect(mobileMoneyIsoFromCallingCode('')).toBeNull();
   });
 
   it('isMobileMoneyCountry respects the allowed list', () => {

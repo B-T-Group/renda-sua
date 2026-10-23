@@ -1,4 +1,8 @@
-import apiService from './apiService';
+/**
+ * Dedicated-agent REST calls. Uses the shared Nest client so every request
+ * follows the active environment and sends the persona or delegation header.
+ */
+import { api, apiRequest } from './apiClient';
 import type {
   PickupSlotsResponse,
   DedicatedAgentsResponse,
@@ -20,32 +24,27 @@ import type {
 export class DedicatedAgentsService {
   async getCapability(country?: string): Promise<DedicatedAgentsCapabilityResponse> {
     const url = country
-      ? `/dedicated-agents/capability?country=${country}`
+      ? `/dedicated-agents/capability?${new URLSearchParams({ country }).toString()}`
       : `/agents/me/dedicated-agents/capability`;
-    return apiService.get<DedicatedAgentsCapabilityResponse>(url);
+    return api.get<DedicatedAgentsCapabilityResponse>(url);
   }
 
   async getPickupSlots(locationId: string): Promise<PickupSlotsResponse> {
-    return apiService.get<PickupSlotsResponse>(
-      `/business-locations/${locationId}/pickup-slots`
-    );
+    return api.get<PickupSlotsResponse>(`/business-locations/${locationId}/pickup-slots`);
   }
 
   async updatePickupSlots(
     locationId: string,
     data: UpdatePickupSlotsRequest
   ): Promise<PickupSlotsResponse> {
-    return apiService.request<PickupSlotsResponse>(
+    return api.patch<PickupSlotsResponse>(
       `/business-locations/${locationId}/pickup-slots`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      }
+      data
     );
   }
 
   async getDedicatedAgents(locationId: string): Promise<DedicatedAgentsResponse> {
-    return apiService.get<DedicatedAgentsResponse>(
+    return api.get<DedicatedAgentsResponse>(
       `/business-locations/${locationId}/dedicated-agents`
     );
   }
@@ -55,12 +54,9 @@ export class DedicatedAgentsService {
     assignmentId: string,
     data: UpdateAssignmentRequest
   ): Promise<{ success: true }> {
-    return apiService.request<{ success: true }>(
+    return api.patch<{ success: true }>(
       `/business-locations/${locationId}/dedicated-agents/${assignmentId}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      }
+      data
     );
   }
 
@@ -69,17 +65,16 @@ export class DedicatedAgentsService {
     assignmentId: string,
     data?: DeleteAssignmentRequest
   ): Promise<{ success: true }> {
-    return apiService.request<{ success: true }>(
-      `/business-locations/${locationId}/dedicated-agents/${assignmentId}`,
-      {
-        method: 'DELETE',
-        body: data ? JSON.stringify(data) : undefined,
-      }
-    );
+    const url = `/business-locations/${locationId}/dedicated-agents/${assignmentId}`;
+    if (!data) return api.delete<{ success: true }>(url);
+    return apiRequest<{ success: true }>(url, {
+      method: 'DELETE',
+      body: JSON.stringify(data),
+    });
   }
 
   async getPostings(locationId: string): Promise<DedicatedPostingsResponse> {
-    return apiService.get<DedicatedPostingsResponse>(
+    return api.get<DedicatedPostingsResponse>(
       `/business-locations/${locationId}/dedicated-postings`
     );
   }
@@ -88,7 +83,7 @@ export class DedicatedAgentsService {
     locationId: string,
     data: CreatePostingRequest
   ): Promise<{ success: true; posting: any }> {
-    return apiService.post<{ success: true; posting: any }>(
+    return api.post<{ success: true; posting: any }>(
       `/business-locations/${locationId}/dedicated-postings`,
       data
     );
@@ -99,12 +94,9 @@ export class DedicatedAgentsService {
     postingId: string,
     data: UpdatePostingRequest
   ): Promise<{ success: true }> {
-    return apiService.request<{ success: true }>(
+    return api.patch<{ success: true }>(
       `/business-locations/${locationId}/dedicated-postings/${postingId}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      }
+      data
     );
   }
 
@@ -113,7 +105,7 @@ export class DedicatedAgentsService {
     postingId: string,
     data?: ClosePostingRequest
   ): Promise<{ success: true; posting: any; autoDeclined: number }> {
-    return apiService.post<{ success: true; posting: any; autoDeclined: number }>(
+    return api.post<{ success: true; posting: any; autoDeclined: number }>(
       `/business-locations/${locationId}/dedicated-postings/${postingId}/close`,
       data
     );
@@ -123,7 +115,7 @@ export class DedicatedAgentsService {
     locationId: string,
     postingId: string
   ): Promise<DedicatedApplicationsResponse> {
-    return apiService.get<DedicatedApplicationsResponse>(
+    return api.get<DedicatedApplicationsResponse>(
       `/business-locations/${locationId}/dedicated-postings/${postingId}/applications`
     );
   }
@@ -133,7 +125,7 @@ export class DedicatedAgentsService {
     postingId: string,
     applicationId: string
   ): Promise<{ success: true; application: any; posting: any }> {
-    return apiService.post<{ success: true; application: any; posting: any }>(
+    return api.post<{ success: true; application: any; posting: any }>(
       `/business-locations/${locationId}/dedicated-postings/${postingId}/applications/${applicationId}/accept`
     );
   }
@@ -143,51 +135,44 @@ export class DedicatedAgentsService {
     postingId: string,
     applicationId: string
   ): Promise<{ success: true }> {
-    return apiService.post<{ success: true }>(
+    return api.post<{ success: true }>(
       `/business-locations/${locationId}/dedicated-postings/${postingId}/applications/${applicationId}/decline`
     );
   }
 
   async getOpportunities(): Promise<DedicatedOpportunitiesResponse> {
-    return apiService.get<DedicatedOpportunitiesResponse>(
-      `/agents/me/dedicated-opportunities`
-    );
+    return api.get<DedicatedOpportunitiesResponse>(`/agents/me/dedicated-opportunities`);
   }
 
   async getOpportunity(postingId: string): Promise<DedicatedOpportunityResponse> {
-    return apiService.get<DedicatedOpportunityResponse>(
+    return api.get<DedicatedOpportunityResponse>(
       `/agents/me/dedicated-opportunities/${postingId}`
     );
   }
 
   async applyToOpportunity(postingId: string): Promise<{ success: true; application: any }> {
-    return apiService.post<{ success: true; application: any }>(
+    return api.post<{ success: true; application: any }>(
       `/agents/me/dedicated-opportunities/${postingId}/apply`
     );
   }
 
   async withdrawApplication(postingId: string): Promise<{ success: true }> {
-    return apiService.post<{ success: true }>(
+    return api.post<{ success: true }>(
       `/agents/me/dedicated-opportunities/${postingId}/withdraw`
     );
   }
 
   async getMyAssignments(): Promise<MyDedicatedAssignmentsResponse> {
-    return apiService.get<MyDedicatedAssignmentsResponse>(
-      `/agents/me/dedicated-assignments`
-    );
+    return api.get<MyDedicatedAssignmentsResponse>(`/agents/me/dedicated-assignments`);
   }
 
   async updateOffToday(
     assignmentId: string,
     data: UpdateOffTodayRequest
   ): Promise<{ success: true }> {
-    return apiService.request<{ success: true }>(
+    return api.patch<{ success: true }>(
       `/agents/me/dedicated-assignments/${assignmentId}/off-today`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify(data),
-      }
+      data
     );
   }
 }

@@ -1,5 +1,6 @@
 export const SUPPORTED_COUNTRIES_CACHE_KEY = 'supported-countries';
-export const SUPPORTED_COUNTRIES_TTL_SECONDS = 3600;
+/** Short TTL: supported_payment_systems is edited out-of-band (SQL/console), so no write path can invalidate it. */
+export const SUPPORTED_COUNTRIES_TTL_SECONDS = 300;
 export const ESSENTIALS_TTL_SECONDS = 180;
 export const STORES_TTL_SECONDS = 180;
 
