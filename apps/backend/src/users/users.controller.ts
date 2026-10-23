@@ -26,6 +26,12 @@ import { AwsService } from '../aws/aws.service';
 import { Auth0Service } from '../auth/auth0.service';
 import { CurrentUser } from '../auth/user.decorator';
 import { Public } from '../auth/public.decorator';
+import { Throttle } from '@nestjs/throttler';
+import {
+  businessDisplayWithMaskedOwner,
+  maskPersonName,
+  PUBLIC_REFERRAL_LOOKUP_THROTTLE,
+} from '../common/utils/mask-name.util';
 import { Configuration } from '../config/configuration';
 import { AgentReferralsService } from '../agents/agent-referrals.service';
 import {
@@ -276,11 +282,12 @@ export class UsersController {
   }
 
   @Public()
+  @Throttle(PUBLIC_REFERRAL_LOOKUP_THROTTLE)
   @Get('public/by-referral-code/:code')
   @ApiOperation({
     summary: 'Look up a user by referral code (public)',
     description:
-      'Returns the display name for a user-level referral code. Falls back to legacy agent/business codes.',
+      'Returns a masked display name (first name + last initial, e.g. "Samuel B.") for a user-level referral code. Falls back to legacy agent/business codes; business codes return the business name with a masked owner. Never returns a full last name. Rate limited.',
   })
   @ApiParam({
     name: 'code',
@@ -306,9 +313,7 @@ export class UsersController {
         user.userId
       );
       if (canRefer) {
-        const fullName =
-          `${user.userFirstName} ${user.userLastName}`.trim() ||
-          user.userFirstName;
+        const fullName = maskPersonName(user.userFirstName, user.userLastName);
         return {
           success: true,
           referralCode: normalized,
@@ -322,8 +327,7 @@ export class UsersController {
     const agent =
       await this.agentReferralsService.findAgentByCode(normalized);
     if (agent?.status === 'active') {
-      const fullName =
-        `${agent.userFirstName} ${agent.userLastName}`.trim();
+      const fullName = maskPersonName(agent.userFirstName, agent.userLastName);
       return {
         success: true,
         referralCode: normalized,
@@ -339,7 +343,16 @@ export class UsersController {
       return {
         success: true,
         referralCode: normalized,
-        fullName: business.businessName,
+        fullName: businessDisplayWithMaskedOwner(
+          business.businessName,
+          business.userFirstName,
+          business.userLastName
+        ),
+        businessName: business.businessName,
+        ownerName: maskPersonName(
+          business.userFirstName,
+          business.userLastName
+        ),
         firstName: business.userFirstName,
         kind: 'business' as const,
       };

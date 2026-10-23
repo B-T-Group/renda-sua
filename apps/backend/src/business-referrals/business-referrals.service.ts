@@ -61,6 +61,7 @@ export interface BusinessCodeLookup {
   userId: string;
   userEmail: string;
   userFirstName: string;
+  userLastName?: string;
   preferredLanguage: string;
   lifecycleStatus: string;
 }
@@ -341,6 +342,7 @@ export class BusinessReferralsService {
           user {
             id
             first_name
+            last_name
             email
             preferred_language
           }
@@ -360,6 +362,7 @@ export class BusinessReferralsService {
         userId: row.user.id,
         userEmail: row.user.email ?? '',
         userFirstName: row.user.first_name ?? '',
+        userLastName: row.user.last_name ?? '',
         preferredLanguage: row.user.preferred_language ?? 'en',
         lifecycleStatus: row.lifecycle_status ?? 'created',
       };

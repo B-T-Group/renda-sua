@@ -3,6 +3,7 @@ import { publicApiGet } from '@/services/publicApiClient';
 
 export interface AgentReferralLookupResult {
   agentCode: string;
+  /** Masked by the API (e.g. "Samuel B."); never a full last name. */
   fullName: string;
   firstName?: string;
   kind?: 'user' | 'agent' | 'business';
@@ -91,6 +92,7 @@ export function useAgentReferralLookup(
         const userLookup = await lookupPublic<{
           success: boolean;
           referralCode: string;
+          /** Masked display name; never a full last name. */
           fullName: string;
           firstName?: string;
           kind?: 'user' | 'agent' | 'business';
