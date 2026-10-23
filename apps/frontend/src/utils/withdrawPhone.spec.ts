@@ -11,9 +11,15 @@ describe('isCmOrGaPhone', () => {
     expect(isCmOrGaPhone('241 06 12 34 56')).toBe(true);
   });
 
+  it('accepts Togo numbers with country code and at least 8 national digits', () => {
+    expect(isCmOrGaPhone('+22890123456')).toBe(true);
+    expect(isCmOrGaPhone('228 90 12 34 56')).toBe(true);
+  });
+
   it('rejects short, foreign, and empty numbers', () => {
     expect(isCmOrGaPhone('+23767000000')).toBe(false);
     expect(isCmOrGaPhone('+2410612345')).toBe(false);
+    expect(isCmOrGaPhone('+2289012345')).toBe(false);
     expect(isCmOrGaPhone('+15551234567')).toBe(false);
     expect(isCmOrGaPhone('670000000')).toBe(false);
     expect(isCmOrGaPhone('')).toBe(false);

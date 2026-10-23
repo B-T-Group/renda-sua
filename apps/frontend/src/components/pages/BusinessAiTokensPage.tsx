@@ -134,7 +134,10 @@ const BusinessAiTokensPage: React.FC = () => {
             value={phoneNumber}
             onChange={(value) => setPhoneNumber(value || '')}
             label={t('business.tokens.phoneNumber', 'Mobile money phone number')}
-            defaultCountry={pickMobileMoneyDefaultCountry(profile?.country)}
+            defaultCountry={pickMobileMoneyDefaultCountry(profile?.country, [
+              'CM',
+              'GA',
+            ])}
             onlyCountries={['CM', 'GA']}
             fullWidth
           />

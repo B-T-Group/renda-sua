@@ -18,7 +18,10 @@ import { useTranslation } from 'react-i18next';
 import type { OrderData } from '../../hooks/useOrderById';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import PhoneInput from '../common/PhoneInput';
-import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import {
+  MOBILE_MONEY_COUNTRY_CODES,
+  pickMobileMoneyDefaultCountry,
+} from '../../utils/mobileMoneyCountry';
 import {
   isDepositPaid,
   remainingAfterDeposit,
@@ -219,7 +222,7 @@ export default function RequestPayAtDeliveryPaymentDialog({
               defaultCountry={pickMobileMoneyDefaultCountry(
                 order.business_location?.address?.country
               )}
-              onlyCountries={['CM', 'GA']}
+              onlyCountries={[...MOBILE_MONEY_COUNTRY_CODES]}
               disabled={loading}
             />
           ) : null}

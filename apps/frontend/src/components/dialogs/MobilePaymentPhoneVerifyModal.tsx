@@ -25,6 +25,10 @@ import {
   nationalDigitsForMobilePayment,
   resolveMobilePaymentPhoneFormAction,
 } from '../../utils/resolveMobilePaymentPhoneFormAction';
+import {
+  MOBILE_MONEY_COUNTRY_CODES,
+  mobileMoneyCallingCode,
+} from '../../utils/mobileMoneyCountry';
 
 export type MobilePaymentPhoneModalMode = 'add' | 'edit' | 'verify';
 
@@ -281,8 +285,8 @@ export function MobilePaymentPhoneVerifyModal({
                 canGoBackToChoose={mode === 'add' && phones.length > 0}
                 onPhoneChange={setPhoneValue}
                 onCountryIso={(iso2) => {
-                  if (iso2 === 'CM') setCountryCode('237');
-                  if (iso2 === 'GA') setCountryCode('241');
+                  const calling = mobileMoneyCallingCode(iso2);
+                  if (calling) setCountryCode(calling);
                 }}
                 onBackToChoose={() => {
                   setPreferNew(false);
@@ -462,7 +466,7 @@ function PhoneFormStep({
           value={phoneValue}
           onChange={(v) => onPhoneChange(v ?? '')}
           onCountryChange={onCountryIso}
-          onlyCountries={['CM', 'GA']}
+          onlyCountries={[...MOBILE_MONEY_COUNTRY_CODES]}
           defaultCountry="CM"
           label={t('mobilePaymentPhone.phoneLabel', 'Mobile money number')}
           required
@@ -485,7 +489,7 @@ function QuestionStep({ displayNumber }: { displayNumber: string }) {
       <Typography variant="body1" textAlign="center">
         {t(
           'mobilePaymentPhone.questionPrompt',
-          'Can this number receive Mobile Money payments (MTN MoMo / Orange Money)?'
+          'Can this number receive Mobile Money payments (MTN MoMo, Orange Money, Moov, or Mixx)?'
         )}
       </Typography>
       <Typography variant="body2" color="text.secondary" textAlign="center">
