@@ -5,6 +5,7 @@ export const ACTIVE_PHONE_COUNTRY_ISO_CODES = [
   'BJ',
   'CI',
   'CG',
+  'CD',
   'CA',
   'US',
   'PH',

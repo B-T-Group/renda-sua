@@ -8,6 +8,7 @@ export function timezoneFromAddressCountryCode(countryCode: string): string {
   if (c === 'CM') return 'Africa/Douala';
   if (c === 'GA') return 'Africa/Libreville';
   if (c === 'CA') return 'America/Toronto';
+  if (c === 'CD') return 'Africa/Kinshasa';
   return DEFAULT_USER_TIMEZONE;
 }
 

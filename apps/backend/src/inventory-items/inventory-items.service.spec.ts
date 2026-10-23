@@ -15,10 +15,18 @@ import { PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY } from '../food/pay-after-confirm.u
 describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
   function createService(options?: {
     validateLocationSupport?: boolean;
+    exportMarket?: boolean;
     supportedCountries?: string[];
   }) {
     const hasuraSystemService = {
       executeQuery: jest.fn().mockImplementation(async (query: string) => {
+        if (query.includes('ValidateExportMarket')) {
+          const allowed =
+            options?.exportMarket ?? options?.validateLocationSupport !== false;
+          return {
+            supported_country_states: allowed ? [{ id: '1' }] : [],
+          };
+        }
         if (query.includes('ValidateLocationSupport')) {
           return {
             supported_country_states: options?.validateLocationSupport === false ? [] : [{ id: '1' }],
@@ -158,6 +166,38 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     await expect(
       buildWhere({ export_only: true, country_code: 'XX' })
     ).resolves.toEqual({ unsupported: true });
+  });
+
+  it('lists exports for an active country whose local delivery is off', async () => {
+    const { buildWhere, whereJson } = createService({
+      validateLocationSupport: false,
+      exportMarket: true,
+    });
+    const built = await buildWhere({
+      export_only: true,
+      country_code: 'cd',
+    });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"export_markets":{"country_code":{"_eq":"CD"}}');
+  });
+
+  it('searches export listings when the viewer market has no local delivery', async () => {
+    const { buildWhere, whereJson } = createService({
+      validateLocationSupport: false,
+      exportMarket: true,
+    });
+    const built = await buildWhere({
+      includeExportInSearch: true,
+      country_code: 'CD',
+      searchTextQuery: 'phone',
+    });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"export_markets":{"country_code":{"_eq":"CD"}}');
+    expect(json).not.toContain('"export_available":{"_eq":false}');
   });
 
   it('scopes export-only listings to export_available items for the viewer market', async () => {

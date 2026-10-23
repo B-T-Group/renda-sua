@@ -47,6 +47,12 @@ describe('getCommissionForBusinessAccountType', () => {
     expect(
       getCommissionForBusinessAccountType(BusinessAccountType.STANDARD, 'CG')
     ).toBe(7);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.STANDARD, 'CD')
+    ).toBe(7);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.STANDARD, 'RDC')
+    ).toBe(7);
   });
 
   it('maps CFA country names to African commission rates', () => {

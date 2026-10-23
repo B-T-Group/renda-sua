@@ -128,6 +128,7 @@ const COUNTRY_LABELS: Record<string, { en: string; fr: string }> = {
   CM: { en: 'Cameroon', fr: 'Cameroun' },
   GA: { en: 'Gabon', fr: 'Gabon' },
   CG: { en: 'Congo', fr: 'Congo' },
+  CD: { en: 'DR Congo', fr: 'RDC' },
   TD: { en: 'Chad', fr: 'Tchad' },
   CF: { en: 'Central African Republic', fr: 'République centrafricaine' },
   GQ: { en: 'Equatorial Guinea', fr: 'Guinée équatoriale' },

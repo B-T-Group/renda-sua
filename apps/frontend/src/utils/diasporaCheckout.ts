@@ -104,6 +104,12 @@ const COUNTRY_NAMES: Record<string, string> = {
   "COTE D'IVOIRE": 'CI',
   'IVORY COAST': 'CI',
   CONGO: 'CG',
+  'DEMOCRATIC REPUBLIC OF THE CONGO': 'CD',
+  'DEMOCRATIC REPUBLIC OF CONGO': 'CD',
+  'DR CONGO': 'CD',
+  DRC: 'CD',
+  RDC: 'CD',
+  'RDC CONGO': 'CD',
   PHILIPPINES: 'PH',
 };
 

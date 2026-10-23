@@ -17,6 +17,8 @@ describe('lookupCommonGeocodeCountry', () => {
       'CD'
     );
     expect(lookupCommonGeocodeCountry('DRC')).toBe('CD');
+    expect(lookupCommonGeocodeCountry('RDC')).toBe('CD');
+    expect(lookupCommonGeocodeCountry('RDC Congo')).toBe('CD');
     expect(lookupCommonGeocodeCountry('congo brazzaville')).toBe('CG');
   });
 

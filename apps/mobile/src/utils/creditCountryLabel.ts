@@ -5,6 +5,7 @@ const COUNTRY_LABELS: Record<string, readonly [string, string]> = {
   BJ: ['admin.credits.countries.BJ', 'Benin'],
   CI: ['admin.credits.countries.CI', "Côte d'Ivoire"],
   CG: ['admin.credits.countries.CG', 'Congo'],
+  CD: ['admin.credits.countries.CD', 'DR Congo'],
   CA: ['admin.credits.countries.CA', 'Canada'],
   US: ['admin.credits.countries.US', 'United States'],
   PH: ['admin.credits.countries.PH', 'Philippines'],
