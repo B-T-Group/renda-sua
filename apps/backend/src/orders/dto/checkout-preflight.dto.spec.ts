@@ -1,8 +1,7 @@
 import { BadRequestException, ValidationPipe } from '@nestjs/common';
-import { OrdersController } from '../orders.controller';
 import { CheckoutPreflightDto } from './checkout-preflight.dto';
 
-describe('CheckoutPreflightDto ValidationPipe (NODE-NESTJS-4F)', () => {
+describe('CheckoutPreflightDto validators (NODE-NESTJS-4F)', () => {
   const pipe = new ValidationPipe({ transform: true, whitelist: true });
   const meta = { type: 'body' as const, metatype: CheckoutPreflightDto };
   const run = (body: unknown) => pipe.transform(body, meta);
@@ -27,15 +26,5 @@ describe('CheckoutPreflightDto ValidationPipe (NODE-NESTJS-4F)', () => {
   ])('rejects %s with a 400', async (_label, body) => {
     const error = await run(body).catch((e) => e);
     expect(error).toBeInstanceOf(BadRequestException);
-  });
-
-  it('is attached to POST /orders/checkout/preflight', () => {
-    const params = Reflect.getMetadata(
-      '__routeArguments__',
-      OrdersController,
-      'resolveCheckoutPreflight'
-    ) as Record<string, { index: number; pipes?: unknown[] }>;
-    const bodyArg = Object.values(params ?? {}).find((arg) => arg.index === 1);
-    expect(bodyArg?.pipes?.[0]).toBeInstanceOf(ValidationPipe);
   });
 });

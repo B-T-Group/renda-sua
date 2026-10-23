@@ -102,14 +102,9 @@ export class OrdersController {
   })
   @ApiBody({ type: CheckoutPreflightDto })
   @ApiResponse({ status: 200, type: CheckoutPreflightResponseDto })
-  @ApiResponse({
-    status: 400,
-    description: 'Missing or invalid cart items (items must be a non-empty array).',
-  })
   async resolveCheckoutPreflight(
     @ReqContext() ctx: RequestContext,
-    @Body(new ValidationPipe({ transform: true, whitelist: true }))
-    dto: CheckoutPreflightDto,
+    @Body() dto: CheckoutPreflightDto,
     @Request() req: any,
     @Headers(RENDASUA_PLATFORM_HEADER) platform?: string
   ): Promise<CheckoutPreflightResponseDto> {

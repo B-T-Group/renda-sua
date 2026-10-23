@@ -58,10 +58,10 @@ const ASSISTANT_ENUM_VALUES = {
   persona: new Set(['guest', 'client', 'agent', 'business', 'delegate', 'admin']),
   channel: new Set(['app', 'whatsapp']),
   // ISO-2 country codes for market (common markets from the repo)
-  market: new Set(['CM', 'GA', 'CA', 'US', 'TG', 'BJ', 'CI', 'CG', 'PH']),
+  market: new Set(['CM', 'GA', 'CA', 'US', 'TG', 'BJ', 'CI', 'CG', 'CD', 'PH']),
   locale: new Set(['en', 'fr']),
   // Feedback fields (plan §4 AC13)
-  currency: new Set(['XAF', 'XOF', 'FCFA', 'CAD', 'USD', 'PHP']),
+  currency: new Set(['XAF', 'XOF', 'FCFA', 'CAD', 'USD', 'PHP', 'CDF']),
   shown_stock_bucket: new Set(['in', 'low', 'out']),
 };
 

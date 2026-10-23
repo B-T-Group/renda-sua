@@ -4252,7 +4252,15 @@
         "scrollDaysHint": "Swipe sideways for more dates.",
         "pickSlot": "Select a time slot",
         "unavailable": "Unavailable",
-        "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation."
+        "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation.",
+        "dedicatedScheduledOnly": "Scheduled delivery only for this store right now",
+        "dedicatedScheduledOnlyHint": "Choose one of the times below.",
+        "dedicatedPickupAt": "Picked up from the store at {{time}}",
+        "slotKey": {
+          "morning": "Morning",
+          "afternoon": "Afternoon",
+          "evening": "Evening"
+        }
       },
       "payment": {
         "title": "Payment information",
@@ -6849,6 +6857,7 @@
         "BJ": "Benin",
         "CI": "Côte d'Ivoire",
         "CG": "Congo",
+        "CD": "DR Congo",
         "CA": "Canada",
         "US": "United States",
         "PH": "Philippines"

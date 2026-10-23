@@ -34,6 +34,13 @@ describe('CountryOnboardingService fallbacks', () => {
       verificationFlow: 'national_id',
       defaultCurrency: 'XAF',
     });
+    expect(byCode.CD).toEqual({
+      countryCode: 'CD',
+      signupEnabled: true,
+      postalCodeRequired: false,
+      verificationFlow: 'national_id',
+      defaultCurrency: 'CDF',
+    });
     expect(byCode.CM.defaultCurrency).toBe('XAF');
     expect(byCode.CA.verificationFlow).toBe('stripe_connect');
     expect(byCode.PH).toEqual({
@@ -52,7 +59,7 @@ describe('CountryOnboardingService fallbacks', () => {
 
     expectSeededCfaMarkets(configs);
     await expect(service.getSignupEnabledCodes()).resolves.toEqual(
-      expect.arrayContaining(['TG', 'BJ', 'CI', 'CG', 'CM', 'GA', 'US', 'CA', 'PH'])
+      expect.arrayContaining(['TG', 'BJ', 'CI', 'CG', 'CD', 'CM', 'GA', 'US', 'CA', 'PH'])
     );
   });
 

@@ -1,4 +1,5 @@
 import type {
+  DedicatedCoveredSlot,
   FulfillmentMethod,
   PaymentTiming,
   ResolvedCheckoutConfig,
@@ -18,6 +19,8 @@ export interface CheckoutPresentation {
   fulfillment: FulfillmentMethod[];
   payments: PaymentChoiceId[];
   showSchedule: boolean;
+  /** #594: delivery is offered only for the dedicated-covered slots (no ASAP). */
+  deliveryScheduledOnly: boolean;
 }
 
 type PreflightSlice = Pick<
@@ -38,11 +41,15 @@ export function buildCheckoutPresentation(
   preflight: PreflightSlice | null | undefined,
   fulfillment: FulfillmentMethod
 ): CheckoutPresentation {
-  if (!preflight) return { fulfillment: [], payments: [], showSchedule: false };
+  if (!preflight) return { fulfillment: [], payments: [], showSchedule: false, deliveryScheduledOnly: false };
+  const { scheduledOnly } = resolveDeliveryCoverage(preflight.delivery_availability);
   return {
     fulfillment: fulfillmentChoices(preflight),
     payments: paymentChoices(preflight, fulfillment),
-    showSchedule: preflight.schedule_allowed === true && fulfillment !== 'pickup',
+    showSchedule:
+      fulfillment !== 'pickup' &&
+      (preflight.schedule_allowed === true || scheduledOnly),
+    deliveryScheduledOnly: scheduledOnly && fulfillment === 'delivery',
   };
 }
 
@@ -50,7 +57,12 @@ function fulfillmentChoices(preflight: PreflightSlice): FulfillmentMethod[] {
   const groups = preflight.groups ?? [];
   const choices: FulfillmentMethod[] = [];
   if (groups.length > 0 && groups.every((group) => group.pickup_eligible)) choices.push('pickup');
-  if (preflight.delivery_availability?.available !== false) choices.push('delivery');
+  if (
+    preflight.delivery_availability?.available !== false ||
+    resolveDeliveryCoverage(preflight.delivery_availability).scheduledOnly
+  ) {
+    choices.push('delivery');
+  }
   if (groups.length > 0 && groups.every((group) => group.shipping_eligible)) choices.push('shipping');
   return choices;
 }
@@ -88,4 +100,53 @@ function canPayNow(
     return preflight.momo_pay_now_delivery_enabled === true;
   }
   return true;
+}
+
+export type { DedicatedCoveredSlot };
+
+export interface DeliveryCoverageInput {
+  available?: boolean;
+  delivery_asap_available?: boolean;
+  dedicated_covered_slots?: DedicatedCoveredSlot[] | null;
+}
+
+export interface DeliveryCoverage {
+  /** ASAP delivery is out, but a dedicated agent covers these scheduled slots. */
+  scheduledOnly: boolean;
+  /** Only the covered slots, sorted by date then start; empty unless scheduledOnly. */
+  coveredSlots: DedicatedCoveredSlot[];
+}
+
+/**
+ * Reads the dedicated-agent coverage fields. They are only sent when
+ * `dedicated_agents_enabled` is on, so with the flag off this always returns
+ * `{ scheduledOnly: false, coveredSlots: [] }` and checkout is unchanged.
+ */
+export function resolveDeliveryCoverage(
+  availability: DeliveryCoverageInput | null | undefined
+): DeliveryCoverage {
+  const slots = Array.isArray(availability?.dedicated_covered_slots)
+    ? availability.dedicated_covered_slots.filter(
+        (slot) => Boolean(slot?.slot_id && slot?.date)
+      )
+    : [];
+  const asap = availability?.delivery_asap_available ?? availability?.available;
+  if (asap !== false || slots.length === 0) {
+    return { scheduledOnly: false, coveredSlots: [] };
+  }
+  const coveredSlots = [...slots].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.start.localeCompare(b.start)
+  );
+  return { scheduledOnly: true, coveredSlots };
+}
+
+/** True when the chosen window is one of the covered (date, slot_id) pairs. */
+export function isCoveredDeliveryWindow(
+  window: { slot_id: string; preferred_date: string } | null | undefined,
+  coveredSlots: DedicatedCoveredSlot[]
+): boolean {
+  if (!window) return false;
+  return coveredSlots.some(
+    (slot) => slot.slot_id === window.slot_id && slot.date === window.preferred_date
+  );
 }

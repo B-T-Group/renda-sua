@@ -1,4 +1,8 @@
-import { buildCheckoutPresentation } from './checkoutPresentation';
+import {
+  buildCheckoutPresentation,
+  isCoveredDeliveryWindow,
+  resolveDeliveryCoverage,
+} from './checkoutPresentation';
 import type { ResolvedCheckoutConfig } from '../types/checkout';
 
 function preflight(overrides: Partial<ResolvedCheckoutConfig> = {}): ResolvedCheckoutConfig {
@@ -67,5 +71,76 @@ describe('buildCheckoutPresentation', () => {
   it('shows scheduling only when the order allows it and is not pickup', () => {
     expect(buildCheckoutPresentation(preflight({ schedule_allowed: true }), 'delivery').showSchedule).toBe(true);
     expect(buildCheckoutPresentation(preflight({ schedule_allowed: true }), 'pickup').showSchedule).toBe(false);
+  });
+});
+
+describe('#594 dedicated-covered delivery slots', () => {
+  const afternoon = {
+    date: '2026-10-21',
+    slot_id: 'slot-pm',
+    slot_key: 'afternoon',
+    start: '12:00',
+    end: '16:00',
+    pickup_time: '12:30',
+  };
+  const tomorrowMorning = { ...afternoon, date: '2026-10-22', slot_id: 'slot-am', slot_key: 'morning', start: '08:00', end: '12:00' };
+
+  it('flag off (fields absent): unchanged, unavailable delivery is dropped', () => {
+    const view = buildCheckoutPresentation(
+      preflight({ delivery_availability: { available: false, estimated_delivery_minutes: null } }),
+      'delivery'
+    );
+    expect(view.fulfillment).toEqual(['pickup']);
+    expect(view.deliveryScheduledOnly).toBe(false);
+  });
+
+  it('flag on, ASAP available: covered slots are ignored', () => {
+    const availability = {
+      available: true,
+      estimated_delivery_minutes: 30,
+      delivery_asap_available: true,
+      dedicated_covered_slots: [afternoon],
+    };
+    expect(resolveDeliveryCoverage(availability)).toEqual({ scheduledOnly: false, coveredSlots: [] });
+    expect(buildCheckoutPresentation(preflight({ delivery_availability: availability }), 'delivery').deliveryScheduledOnly).toBe(false);
+  });
+
+  it('flag on, no nearby agent, Afternoon covered: delivery shown, scheduled-only, covered slots only', () => {
+    const availability = {
+      available: false,
+      estimated_delivery_minutes: null,
+      delivery_asap_available: false,
+      dedicated_covered_slots: [tomorrowMorning, afternoon],
+    };
+    const view = buildCheckoutPresentation(
+      preflight({ delivery_availability: availability, schedule_allowed: true }),
+      'delivery'
+    );
+    expect(view.fulfillment).toEqual(['pickup', 'delivery']);
+    expect(view.deliveryScheduledOnly).toBe(true);
+    expect(view.showSchedule).toBe(true);
+    expect(resolveDeliveryCoverage(availability).coveredSlots.map((s) => s.slot_id)).toEqual(['slot-pm', 'slot-am']);
+  });
+
+  it('flag on, nothing covered: delivery stays unavailable', () => {
+    const view = buildCheckoutPresentation(
+      preflight({
+        delivery_availability: {
+          available: false,
+          estimated_delivery_minutes: null,
+          delivery_asap_available: false,
+          dedicated_covered_slots: [],
+        },
+      }),
+      'delivery'
+    );
+    expect(view.fulfillment).toEqual(['pickup']);
+    expect(view.deliveryScheduledOnly).toBe(false);
+  });
+
+  it('only a covered (date, slot_id) pair counts as a valid window', () => {
+    expect(isCoveredDeliveryWindow({ slot_id: 'slot-pm', preferred_date: '2026-10-21' }, [afternoon])).toBe(true);
+    expect(isCoveredDeliveryWindow({ slot_id: 'slot-pm', preferred_date: '2026-10-22' }, [afternoon])).toBe(false);
+    expect(isCoveredDeliveryWindow(null, [afternoon])).toBe(false);
   });
 });

@@ -220,8 +220,6 @@ select_permissions:
         - is_storefront_visible
         - accepting_orders
         - reliability_tier
-        - ai_tokens
-        - ai_reel_tokens
         - account_type
         - account_type_locked_until
       filter: {}

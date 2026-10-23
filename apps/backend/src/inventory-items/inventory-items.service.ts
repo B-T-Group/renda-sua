@@ -984,26 +984,22 @@ export class InventoryItemsService {
     if (!skipCallerGeo && !export_only && (country_code || state)) {
       const ok = await this.validateLocationSupport(country_code, state);
       if (!ok) {
-        return { unsupported: true };
+        const exportSearch = await this.exportSearchWhenLocalUnsupported(
+          includeExportInSearch,
+          country_code
+        );
+        if (!exportSearch) return { unsupported: true };
+        whereConditions.push(exportSearch);
+        return { where: { _and: whereConditions } };
       }
     }
 
     if (export_only) {
-      if (!country_code?.trim()) {
+      const code = country_code?.trim().toUpperCase();
+      if (!code || !(await this.validateExportMarket(code))) {
         return { unsupported: true };
       }
-      const ok = await this.validateLocationSupport(country_code, undefined);
-      if (!ok) {
-        return { unsupported: true };
-      }
-      whereConditions.push({
-        item: {
-          export_available: { _eq: true },
-          export_markets: {
-            country_code: { _eq: country_code.trim().toUpperCase() },
-          },
-        },
-      });
+      whereConditions.push(this.exportMarketItemFilter(code));
     } else if (includeExportInSearch && country_code?.trim()) {
       const code = country_code.trim().toUpperCase();
       const localAnd: Record<string, unknown>[] = [
@@ -3307,37 +3303,66 @@ export class InventoryItemsService {
     }
   }
 
-  /**
-   * Validate if a location (country/state) is supported for delivery
-   */
+  /** Export destinations are active countries even when local delivery is off. */
+  private exportMarketItemFilter(code: string): Record<string, unknown> {
+    return {
+      item: {
+        export_available: { _eq: true },
+        export_markets: { country_code: { _eq: code } },
+      },
+    };
+  }
+
+  private async exportSearchWhenLocalUnsupported(
+    includeExportInSearch: boolean,
+    countryCode?: string
+  ): Promise<Record<string, unknown> | null> {
+    const code = countryCode?.trim().toUpperCase();
+    if (!includeExportInSearch || !code) return null;
+    if (!(await this.validateExportMarket(code))) return null;
+    return this.exportMarketItemFilter(code);
+  }
+
+  private async validateExportMarket(countryCode: string): Promise<boolean> {
+    return this.countryStateExists(
+      {
+        service_status: { _eq: 'active' },
+        country_code: { _eq: countryCode },
+      },
+      'ValidateExportMarket'
+    );
+  }
+
+  /** Active country with delivery on. Export-only markets fail this check. */
   private async validateLocationSupport(
     countryCode?: string,
     state?: string
   ): Promise<boolean> {
-    try {
-      const whereClause: any = {
+    return this.countryStateExists(
+      {
         service_status: { _eq: 'active' },
         delivery_enabled: { _eq: true },
         ...(countryCode && { country_code: { _eq: countryCode } }),
         ...(state && { state_name: { _eq: state } }),
-      };
+      },
+      'ValidateLocationSupport'
+    );
+  }
 
-      const query = `
-        query ValidateLocationSupport($where: supported_country_states_bool_exp!) {
-          supported_country_states(where: $where, limit: 1) {
-            id
-          }
-        }
-      `;
-
-      const response = await this.hasuraSystemService.executeQuery(query, {
-        where: whereClause,
-      });
-      const locations = response.supported_country_states || [];
-
-      return locations.length > 0;
+  private async countryStateExists(
+    where: Record<string, unknown>,
+    queryName: string
+  ): Promise<boolean> {
+    try {
+      const response = await this.hasuraSystemService.executeQuery(
+        `query ${queryName}($where: supported_country_states_bool_exp!) {
+          supported_country_states(where: $where, limit: 1) { id }
+        }`,
+        { where }
+      );
+      return (response.supported_country_states || []).length > 0;
     } catch (error) {
-      this.logger.error('Failed to validate location support:', error);
+      this.logger.error(`Failed ${queryName}:`, error);
       return false;
     }
   }

@@ -15,6 +15,9 @@ describe('comparableCountry', () => {
     expect(comparableCountry('  gabon ')).toBe('GA');
     expect(comparableCountry('CANADA')).toBe('CA');
     expect(comparableCountry('Congo')).toBe('CG');
+    expect(comparableCountry('RDC')).toBe('CD');
+    expect(comparableCountry('Democratic Republic of the Congo')).toBe('CD');
+    expect(normalizeDeliveryCountryCode('RDC')).toBe('CD');
     expect(comparableCountry("Cote d'Ivoire")).toBe('CI');
   });
 

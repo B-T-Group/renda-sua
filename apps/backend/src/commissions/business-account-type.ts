@@ -6,7 +6,7 @@
  *   PREMIUM  → 15 %
  *   ELITE    → 20 %
  *
- * CM / GA / TG / BJ / CI / CG commissions:
+ * CM / GA / TG / BJ / CI / CG / CD commissions:
  *   STANDARD → 7 %
  *   PREMIUM  → 12 %
  *   ELITE    → 15 %
@@ -53,6 +53,7 @@ const COUNTRY_COMMISSION_MAPS: Record<
   BJ: AFRICA_COMMISSION_MAP,
   CI: AFRICA_COMMISSION_MAP,
   CG: AFRICA_COMMISSION_MAP,
+  CD: AFRICA_COMMISSION_MAP,
 };
 
 function normalizeCountry(
@@ -79,6 +80,16 @@ function normalizeCountry(
     raw === 'CONGO-BRAZZAVILLE'
   ) {
     return 'CG';
+  }
+  if (
+    raw === 'DEMOCRATIC REPUBLIC OF THE CONGO' ||
+    raw === 'DEMOCRATIC REPUBLIC OF CONGO' ||
+    raw === 'DR CONGO' ||
+    raw === 'DRC' ||
+    raw === 'RDC' ||
+    raw === 'RDC CONGO'
+  ) {
+    return 'CD';
   }
   if (raw === 'CANADA') return 'CA';
   return raw;
