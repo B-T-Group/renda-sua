@@ -16,6 +16,10 @@ import { alpha } from '@mui/material/styles';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { isCmOrGaPhone } from '../../utils/withdrawPhone';
+import {
+  MOBILE_MONEY_COUNTRY_CODES,
+  pickMobileMoneyDefaultCountry,
+} from '../../utils/mobileMoneyCountry';
 import PhoneInput from '../common/PhoneInput';
 
 type PaymentMethod = 'mtn-momo' | 'airtel-money' | 'moov-money' | 'credit-card';
@@ -92,7 +96,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
   const note = withdrawalPhoneNote ?? '';
   const cmGaHint = t(
     'accounts.withdrawPhoneCmGaHint',
-    'Use a Cameroon (+237) or Gabon (+241) mobile number.'
+    'Use a Cameroon (+237), Gabon (+241), or Togo (+228) mobile number.'
   );
   const getPhoneNumberHint = () =>
     [note, cmGaHint].filter(Boolean).join(' ') || cmGaHint;
@@ -108,7 +112,7 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
         setError(
           t(
             'accounts.withdrawPhoneCmGaOnly',
-            'Only Cameroon (+237) or Gabon (+241) phone numbers are supported.'
+            'Only Cameroon (+237), Gabon (+241), or Togo (+228) phone numbers are supported.'
           )
         );
         return;
@@ -291,8 +295,8 @@ const WithdrawModal: React.FC<WithdrawModalProps> = ({
                   placeholder={t('accounts.phoneNumberPlaceholder')}
                   helperText={getPhoneNumberHint()}
                   disabled={loading || !balanceAllowsWithdraw || phoneLocked}
-                  defaultCountry="CM"
-                  onlyCountries={['CM', 'GA']}
+                  defaultCountry={pickMobileMoneyDefaultCountry()}
+                  onlyCountries={[...MOBILE_MONEY_COUNTRY_CODES]}
                 />
               </Box>
             )}

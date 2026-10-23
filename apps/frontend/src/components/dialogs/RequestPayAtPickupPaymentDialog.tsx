@@ -19,7 +19,11 @@ import { parsePhoneNumber } from 'libphonenumber-js';
 import type { OrderData } from '../../hooks/useOrderById';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import PhoneInput from '../common/PhoneInput';
-import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
+import {
+  isMobileMoneyCountry,
+  MOBILE_MONEY_COUNTRY_CODES,
+  pickMobileMoneyDefaultCountry,
+} from '../../utils/mobileMoneyCountry';
 import {
   buildMomoAwaitingPaymentTo,
   type MobileMoneyAwaitingPaymentState,
@@ -35,7 +39,7 @@ function isPickupMomoPhone(phone: string): boolean {
   try {
     const parsed = parsePhoneNumber(phone);
     const iso = parsed?.country;
-    return parsed.isValid() && (iso === 'CM' || iso === 'GA');
+    return parsed.isValid() && isMobileMoneyCountry(iso);
   } catch {
     return false;
   }
@@ -272,7 +276,7 @@ export default function RequestPayAtPickupPaymentDialog({
               defaultCountry={pickMobileMoneyDefaultCountry(
                 order.business_location?.address?.country
               )}
-              onlyCountries={['CM', 'GA']}
+              onlyCountries={[...MOBILE_MONEY_COUNTRY_CODES]}
               disabled={loading}
             />
           ) : null}

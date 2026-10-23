@@ -102,6 +102,19 @@ describe('WithdrawModal phone lock', () => {
     ).toBe(false);
   });
 
+  it('enables submit for a locked Togo number and valid amount', () => {
+    renderModal({ userPhoneNumber: '+22890123456' });
+
+    fireEvent.change(screen.getByLabelText('accounts.amount'), {
+      target: { value: '200' },
+    });
+
+    expect(
+      (screen.getByRole('button', { name: 'accounts.withdraw' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(false);
+  });
+
   it('hides the phone lock in Stripe mode', () => {
     renderModal({ mode: 'stripe', userPhoneNumber: '+237670000000' });
 
