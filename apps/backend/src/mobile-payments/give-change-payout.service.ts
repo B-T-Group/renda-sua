@@ -16,7 +16,8 @@ export type GiveChangeProvider =
   | 'airtel'
   | 'moov'
   | 'mtn'
-  | 'freemopay';
+  | 'freemopay'
+  | 'fedapay';
 
 export interface GiveChangePayoutParams {
   amount: number;

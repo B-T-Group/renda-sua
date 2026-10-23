@@ -5,6 +5,8 @@ describe('MobilePaymentPhonesService', () => {
   const hasuraSystemService = {
     executeQuery: jest.fn(),
     executeMutation: jest.fn(),
+    getRendasuaHQUser: jest.fn(),
+    getAccount: jest.fn(),
   };
   const mobilePaymentsDatabaseService = {
     createTransaction: jest.fn(),
@@ -13,6 +15,7 @@ describe('MobilePaymentPhonesService', () => {
   };
   const mobilePaymentsService = {
     getProvider: jest.fn(),
+    getProviderForCountry: jest.fn(),
     initiatePayment: jest.fn(),
   };
   const giveChangePayoutService = {
@@ -338,6 +341,123 @@ describe('MobilePaymentPhonesService', () => {
       await expect(
         service.initiateVerification('user-1', 'phone-1')
       ).rejects.toThrow(/Transaction-based verification is not enabled/);
+    });
+    describe('transaction mode routing by phone country', () => {
+      const countryProvider = (tgActive: boolean) => async (iso: string | null) => {
+        if (iso === 'CM') return 'freemopay';
+        if (iso === 'TG') return tgActive ? 'fedapay' : 'mypvit';
+        return 'mypvit';
+      };
+
+      const arrange = (phoneE164: string, tgActive = true) => {
+        jest.spyOn(service, 'getVerificationMethod').mockResolvedValue('transaction');
+        jest.spyOn(service as any, 'getByIdForUser').mockResolvedValue({
+          ...phoneRow,
+          phone_e164: phoneE164,
+          last_verification_transaction_id: null,
+        });
+        mobilePaymentsService.getProviderForCountry.mockImplementation(
+          countryProvider(tgActive)
+        );
+        hasuraSystemService.getRendasuaHQUser.mockResolvedValue({ id: 'hq-user' });
+        hasuraSystemService.getAccount.mockImplementation(
+          async (_id: string, currency: string) => ({ id: `hq-${currency}` })
+        );
+        hasuraSystemService.executeMutation.mockResolvedValue({});
+        mobilePaymentsDatabaseService.createTransaction.mockResolvedValue({ id: 'tx-v' });
+        mobilePaymentsService.initiatePayment.mockResolvedValue({
+          success: true,
+          transactionId: 'ptx-1',
+        });
+      };
+
+      it.each([
+        ['+22896000000', 'TG', 'fedapay', 'XOF'],
+        ['+237600000001', 'CM', 'freemopay', 'XAF'],
+        ['+24162000000', 'GA', 'mypvit', 'XAF'],
+      ])('%s -> %s routes to %s in %s', async (phone, iso, provider, currency) => {
+        arrange(phone);
+
+        await service.initiateVerification('user-1', 'phone-1');
+
+        expect(mobilePaymentsService.getProviderForCountry).toHaveBeenCalledWith(iso);
+        expect(mobilePaymentsService.getProvider).not.toHaveBeenCalled();
+        expect(hasuraSystemService.getAccount).toHaveBeenCalledWith('hq-user', currency);
+        expect(mobilePaymentsDatabaseService.createTransaction).toHaveBeenCalledWith(
+          expect.objectContaining({ provider, currency, account_id: `hq-${currency}` })
+        );
+        expect(mobilePaymentsService.initiatePayment).toHaveBeenCalledWith(
+          expect.objectContaining({
+            provider,
+            currency,
+            customerPhone: phone,
+            callbackUrl: expect.stringMatching(
+              new RegExp(`/mobile-payments/callback/${provider}$`)
+            ),
+          }),
+          expect.any(String)
+        );
+      });
+
+      it('refuses a +228 number while FedaPay TG is off, before any charge row', async () => {
+        arrange('+22896000000', false);
+
+        await expect(
+          service.initiateVerification('user-1', 'phone-1')
+        ).rejects.toThrow(/not available in Togo/);
+        expect(mobilePaymentsDatabaseService.createTransaction).not.toHaveBeenCalled();
+        expect(mobilePaymentsService.initiatePayment).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('refundVerificationTransaction', () => {
+    beforeEach(() => {
+      jest.spyOn(service as any, 'findRefundForVerification').mockResolvedValue(null);
+      hasuraSystemService.getRendasuaHQUser.mockResolvedValue({ id: 'hq-user' });
+      hasuraSystemService.getAccount.mockImplementation(
+        async (_id: string, currency: string) => ({ id: `hq-${currency}` })
+      );
+      mobilePaymentsService.getProviderForCountry.mockImplementation(
+        async (iso: string | null) =>
+          iso === 'TG' ? 'fedapay' : iso === 'CM' ? 'freemopay' : 'mypvit'
+      );
+    });
+
+    it.each([
+      ['+22896000000', 'fedapay', 'XOF'],
+      ['+237600000001', 'freemopay', 'XAF'],
+      ['+24162000000', 'mypvit', 'XAF'],
+    ])('refunds %s via %s in %s from the HQ account in that currency', async (phone, provider, currency) => {
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue(null);
+      await (service as any).refundVerificationTransaction(phone, 'tx-1');
+
+      expect(giveChangePayoutService.executeGiveChangePayout).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider,
+          currency,
+          customerPhone: phone,
+          accountId: `hq-${currency}`,
+          entityId: 'tx-1',
+        }),
+        { throwOnWithdrawalFailure: false }
+      );
+    });
+
+    it('refunds through the stored charge rail even if TG was switched off since', async () => {
+      mobilePaymentsService.getProviderForCountry.mockResolvedValue('mypvit');
+      mobilePaymentsDatabaseService.getTransactionById.mockResolvedValue({
+        id: 'tx-1',
+        provider: 'fedapay',
+        currency: 'XOF',
+      });
+
+      await (service as any).refundVerificationTransaction('+22896000000', 'tx-1');
+
+      expect(giveChangePayoutService.executeGiveChangePayout).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: 'fedapay', currency: 'XOF', accountId: 'hq-XOF' }),
+        { throwOnWithdrawalFailure: false }
+      );
     });
   });
 
