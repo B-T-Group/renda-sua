@@ -1045,9 +1045,9 @@ export default observer(function CartCheckoutScreen() {
     }
     if (outcome.type === 'error') {
       // #594: coverage can vanish between preflight and create; refresh so the
-      // screen shows the current options (usually the unavailable copy).
+      // screen shows the current options (usually the unavailable copy). The
+      // covered-slot block reconciles its own selection against the new slots.
       if (outcome.code === 'DELIVERY_UNAVAILABLE') {
-        setDeliveryWindow(null);
         void refetchPreflight();
       }
       if (
