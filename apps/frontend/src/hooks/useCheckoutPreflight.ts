@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { DedicatedCoveredSlot } from '../utils/checkoutPresentation';
 import type { CheckoutDiaspora } from '../utils/diasporaCheckout';
 import { useApiClient } from './useApiClient';
 
@@ -29,6 +30,10 @@ export interface CheckoutPreflightRequest {
 export interface CheckoutDeliveryAvailability {
   available: boolean;
   estimated_delivery_minutes: number | null;
+  /** #594 (flag on only): ASAP delivery passes today's rules; same value as `available`. */
+  delivery_asap_available?: boolean;
+  /** #594 (flag on only): scheduled slots a dedicated agent covers when ASAP is unavailable. */
+  dedicated_covered_slots?: DedicatedCoveredSlot[];
 }
 
 export interface CheckoutPreflightGroup {
@@ -118,7 +123,9 @@ export interface CheckoutPreflightResult {
 
 export function useCheckoutPreflightState(
   request: CheckoutPreflightRequest | null,
-  enabled = true
+  enabled = true,
+  /** Bump to re-run the same preflight (e.g. after DELIVERY_UNAVAILABLE on create). */
+  refreshKey = 0
 ): { config: CheckoutPreflightResult | null; loading: boolean } {
   const apiClient = useApiClient();
   const [config, setConfig] = useState<CheckoutPreflightResult | null>(null);
@@ -132,7 +139,7 @@ export function useCheckoutPreflightState(
       return;
     }
 
-    const requestId = JSON.stringify(request);
+    const requestId = `${refreshKey}:${JSON.stringify(request)}`;
     requestIdRef.current = requestId;
     let cancelled = false;
     setLoading(true);
@@ -155,14 +162,15 @@ export function useCheckoutPreflightState(
     return () => {
       cancelled = true;
     };
-  }, [apiClient, enabled, request]);
+  }, [apiClient, enabled, request, refreshKey]);
 
   return { config, loading };
 }
 
 export function useCheckoutPreflight(
   request: CheckoutPreflightRequest | null,
-  enabled = true
+  enabled = true,
+  refreshKey = 0
 ): CheckoutPreflightResult | null {
-  return useCheckoutPreflightState(request, enabled).config;
+  return useCheckoutPreflightState(request, enabled, refreshKey).config;
 }

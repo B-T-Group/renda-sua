@@ -21,6 +21,7 @@
  * - Deposit fields remain optional/defensive for backward compatibility
  */
 import { useCallback, useRef, useState } from 'react';
+import { errorOutcomeFromThrown } from './checkoutErrorOutcome';
 import type { ResolvedCheckoutConfig } from '../types/checkout';
 import type { CreateOrderPayload, CreatedOrder, CreateOrderResponse } from '../types/clientOrder';
 import { agentApi } from '../services/agentApi';
@@ -99,8 +100,7 @@ export function useCheckoutOrchestrator(): UseCheckoutOrchestratorResult {
       try {
         outcome = await work();
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : 'Failed to place order.';
-        outcome = { type: 'error', message: msg };
+        outcome = errorOutcomeFromThrown(e);
       }
       settleSubmit(outcome);
       return outcome;

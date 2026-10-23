@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Button, Text } from 'react-native-paper';
+import { CoveredDeliverySlotPicker } from '../common/CoveredDeliverySlotPicker';
 import { DeliveryWindowPicker } from '../common/DeliveryWindowPicker';
 import { useTheme } from '../../contexts/ThemeContext';
+import type { DedicatedCoveredSlot } from '../../types/checkout';
 import type { ClientDeliveryWindowPayload } from '../../types/deliveryWindow';
 
 export interface PlaceOrderDeliveryWindowBlockProps {
@@ -25,6 +27,11 @@ export interface PlaceOrderDeliveryWindowBlockProps {
   estimatedReadyAt?: string | null;
   estimatedFulfillBy?: string | null;
   opensAt?: string | null;
+  /**
+   * #594 (dedicated_agents_enabled only): ASAP delivery is out but a dedicated
+   * agent covers these slots. Non-empty → scheduled-only, these slots only.
+   */
+  coveredSlots?: DedicatedCoveredSlot[];
   onReadyChange: (ok: boolean) => void;
   onCommit: (window: ClientDeliveryWindowPayload | null) => void;
 }
@@ -42,9 +49,112 @@ export function PlaceOrderDeliveryWindowBlock({
   estimatedReadyAt,
   estimatedFulfillBy,
   opensAt,
+  coveredSlots,
   onReadyChange,
   onCommit,
 }: PlaceOrderDeliveryWindowBlockProps) {
+  if (fulfillment !== 'pickup' && coveredSlots && coveredSlots.length > 0) {
+    return (
+      <CoveredOnlyBlock
+        enabled={enabled}
+        slots={coveredSlots}
+        onReadyChange={onReadyChange}
+        onCommit={onCommit}
+      />
+    );
+  }
+  return (
+    <StandardDeliveryWindowBlock
+      countryCode={countryCode}
+      stateCode={stateCode}
+      enabled={enabled}
+      fulfillment={fulfillment}
+      businessLocationId={businessLocationId}
+      scheduleRequired={scheduleRequired}
+      allowSchedule={allowSchedule}
+      payAfterConfirm={payAfterConfirm}
+      payAfterCopyVariant={payAfterCopyVariant}
+      estimatedReadyAt={estimatedReadyAt}
+      estimatedFulfillBy={estimatedFulfillBy}
+      opensAt={opensAt}
+      onReadyChange={onReadyChange}
+      onCommit={onCommit}
+    />
+  );
+}
+
+/** #594: scheduled-only delivery for the dedicated-covered slots (no ASAP). */
+function CoveredOnlyBlock({
+  enabled,
+  slots,
+  onReadyChange,
+  onCommit,
+}: {
+  enabled: boolean;
+  slots: DedicatedCoveredSlot[];
+  onReadyChange: (ok: boolean) => void;
+  onCommit: (window: ClientDeliveryWindowPayload | null) => void;
+}) {
+  const { t } = useTranslation();
+  const { colors, spacing, borderRadius } = useTheme();
+  const [selected, setSelected] = useState<ClientDeliveryWindowPayload | null>(null);
+
+  const handleChange = useCallback(
+    (window: ClientDeliveryWindowPayload | null) => {
+      setSelected(window);
+      onCommit(window);
+      onReadyChange(window != null);
+    },
+    [onCommit, onReadyChange]
+  );
+
+  if (!enabled) return null;
+
+  return (
+    <View
+      style={[
+        styles.card,
+        {
+          borderRadius: borderRadius.lg,
+          borderColor: colors.border,
+          backgroundColor: colors.pageBackground,
+          padding: spacing.md,
+        },
+      ]}
+    >
+      <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '600' }}>
+        {t(
+          'client.placeOrder.deliveryWindow.dedicatedScheduledOnly',
+          'Scheduled delivery only for this store right now'
+        )}
+      </Text>
+      <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs, lineHeight: 20 }}>
+        {t(
+          'client.placeOrder.deliveryWindow.dedicatedScheduledOnlyHint',
+          'Choose one of the times below.'
+        )}
+      </Text>
+      <CoveredDeliverySlotPicker slots={slots} value={selected} onChange={handleChange} />
+    </View>
+  );
+}
+
+function StandardDeliveryWindowBlock({
+  countryCode,
+  stateCode,
+  enabled,
+  fulfillment = 'delivery',
+  businessLocationId,
+  scheduleRequired = false,
+  allowSchedule = true,
+  payAfterConfirm = false,
+  payAfterCopyVariant = 'cooked',
+  estimatedReadyAt,
+  estimatedFulfillBy,
+  opensAt,
+  onReadyChange,
+  onCommit,
+}: Omit<PlaceOrderDeliveryWindowBlockProps, 'coveredSlots'>) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const isPickup = fulfillment === 'pickup';
