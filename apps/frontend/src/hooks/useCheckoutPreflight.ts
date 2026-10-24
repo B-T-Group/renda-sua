@@ -106,6 +106,8 @@ export interface CheckoutPreflightResult {
   schedule_required?: boolean;
   /** True when every group is MoMo pay-after (cooked food or flagged location; no deposit). */
   pay_after_merchant_confirm_eligible?: boolean;
+  /** False (or omitted) when MoMo pay-now + delivery is blocked in this market. */
+  momo_pay_now_delivery_enabled?: boolean | null;
   requires_payment_phone?: boolean;
   suggested_payment_phone?: string | null;
   suggested_payment_phone_id?: string | null;

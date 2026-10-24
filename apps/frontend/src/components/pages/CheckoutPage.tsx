@@ -45,6 +45,7 @@ import { useUpdateRecipient } from '../../hooks/useRecipients';
 import {
   isCoveredDeliveryWindow,
   isDeliveryUnavailableError,
+  resolveCheckoutPaymentTiming,
   resolveDeliveryCoverage,
 } from '../../utils/checkoutPresentation';
 import { toOrderItemVariantId } from '../../utils/shopperVariantSelection';
@@ -771,7 +772,7 @@ const CheckoutPage: React.FC = () => {
       ...(fulfillment === 'delivery' && selectedAddressId
         ? { delivery_address_id: selectedAddressId }
         : {}),
-      payment_timing: 'pay_now' as const,
+      // Omit timing so the server infers PAD when MoMo pay-now delivery is off.
       ...(sendingToSomeoneElse ? { sending_to_someone_else: true } : {}),
       ...(recipientPayload ? { recipient: recipientPayload } : {}),
     };
@@ -950,17 +951,16 @@ const CheckoutPage: React.FC = () => {
     if (deliveryScheduledOnly) setRequiresFastDelivery(false);
   }, [deliveryScheduledOnly]);
 
-  // MoMo cooked food: pay after kitchen confirm (flag). Delivery stores
-  // pay_now so agents get Complete+PIN once paid; pickup stays PAP.
-  const paymentTiming: 'pay_now' | 'pay_at_delivery' | 'pay_at_pickup' =
-    cookedFoodMoMoPayAfterConfirm
-      ? fulfillment === 'pickup'
-        ? 'pay_at_pickup'
-        : 'pay_now'
-      : fulfillment === 'pickup' &&
-          checkoutPreflight?.checkout_method === 'MOBILE_MONEY'
-        ? 'pay_at_pickup'
-        : 'pay_now';
+  // MoMo delivery with the market flag off must be PAD — createOrder rejects pay_now.
+  const paymentTiming = resolveCheckoutPaymentTiming({
+    fulfillment,
+    checkoutMethod: checkoutPreflight?.checkout_method,
+    isDiaspora: checkoutPreflight?.diaspora?.is_diaspora === true,
+    payAfterConfirm: cookedFoodMoMoPayAfterConfirm,
+    momoPayNowDeliveryEnabled:
+      checkoutPreflight?.momo_pay_now_delivery_enabled ??
+      checkoutPreflight?.groups?.[0]?.momo_pay_now_delivery_enabled,
+  });
 
   // Only query fast delivery config when we have a real address selection.
   // Avoid defaulting to an arbitrary country/state which can incorrectly surface the UI.
