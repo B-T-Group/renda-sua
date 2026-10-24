@@ -647,10 +647,21 @@ export class CheckoutPreflightService {
       // card rail, MoMo pay-now (market flag or flagged location), or pay at delivery.
       // When false the only thing a shopper could pay with is pay_at_pickup, which
       // createOrder rejects for delivery, so delivery must not be offered at all.
+      // locationPayAfter is false for a shipping request, so evaluate the location
+      // rule again here without the shipping exclusion.
+      const deliveryLocationPayAfter =
+        locationPayAfter ||
+        (rail === 'mobile_money' &&
+          !isDiaspora &&
+          anyLocationPayAtConfirm(group.inventoryRows) &&
+          (await this.isMarketFlagEnabled(
+            PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY,
+            null
+          )));
       const deliveryPayable =
         rail === 'stripe' ||
         momoPayNowDeliveryEnabled ||
-        locationPayAfter ||
+        deliveryLocationPayAfter ||
         allPayOnDelivery;
 
       // Safety: If no payment timings available (shouldn't happen in valid config), block checkout

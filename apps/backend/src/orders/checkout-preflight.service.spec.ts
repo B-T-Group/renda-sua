@@ -2135,6 +2135,37 @@ describe('CheckoutPreflightService', () => {
       });
     });
 
+    it('shipping-requested preflight: a pay-after-confirm (flagged) location keeps delivery offered', async () => {
+      const row = blueRow({ shippingEnabled: true, shippingPrice: 1000 });
+      (row.business_location as any).pay_at_confirm = true;
+      mockFlags({ [KILL]: true, momo_pay_now_delivery_enabled: false }, [row]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(
+        { ...deliveryDto(), fulfillment_method: 'shipping' } as any,
+        false
+      );
+
+      expect(result.groups[0].delivery_availability).toEqual({
+        available: true,
+        estimated_delivery_minutes: 40,
+      });
+    });
+
+    it('shipping-requested preflight: an unflagged location still hides delivery', async () => {
+      const row = blueRow({ shippingEnabled: true, shippingPrice: 1000 });
+      (row.business_location as any).pay_at_confirm = false;
+      mockFlags({ [KILL]: true, momo_pay_now_delivery_enabled: false }, [row]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(
+        { ...deliveryDto(), fulfillment_method: 'shipping' } as any,
+        false
+      );
+
+      expect(result.groups[0].delivery_availability?.available).toBe(false);
+    });
+
     it('pay on delivery enabled on the item (flag off): delivery stays offered', async () => {
       mockFlags({ momo_pay_now_delivery_enabled: false }, [blueRow({ payOnDelivery: true })]);
       (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(NO_AGENT);
