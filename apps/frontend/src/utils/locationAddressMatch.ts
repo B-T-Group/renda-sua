@@ -33,7 +33,10 @@ export function findBestOptionLabel(
   return partialMatch || raw;
 }
 
-/** Last-resort aliases when country-state-city does not recognize a geocoder label. */
+/**
+ * Explicit geocoder aliases. Checked before fuzzy library matching so a
+ * shorter name (Congo) cannot swallow the Democratic Republic of the Congo.
+ */
 const COMMON_GEOCODE_COUNTRY_NAMES: Record<string, string> = {
   'united states': 'US',
   usa: 'US',
@@ -128,6 +131,8 @@ export async function findCountryCodeFromGeocodeName(
   countryName: string
 ): Promise<string> {
   if (!countryName) return '';
+  const aliased = lookupCommonGeocodeCountry(countryName);
+  if (aliased) return aliased;
   const { Country } = await getCountryStateCity();
 
   const exactMatch = Country.getAllCountries().find(

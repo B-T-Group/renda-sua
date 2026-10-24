@@ -206,4 +206,22 @@ describe('dropOffAddressesForFulfillment', () => {
       { id: 'libreville', country: 'Gabon' },
     ]);
   });
+
+  it('keeps DRC drop-off addresses and drops Congo-Brazzaville', () => {
+    const book = [
+      { id: 'kin', country: 'Democratic Republic of the Congo' },
+      { id: 'dr', country: 'DR Congo' },
+      { id: 'rdc', country: 'RDC Congo' },
+      { id: 'bzv', country: 'Congo' },
+      { id: 'ca', country: 'CA' },
+    ];
+    expect(dropOffAddressesForFulfillment(book, 'CD', true).map((row) => row.id)).toEqual([
+      'kin',
+      'dr',
+      'rdc',
+    ]);
+    expect(dropOffAddressesForFulfillment(book, 'CG', true).map((row) => row.id)).toEqual([
+      'bzv',
+    ]);
+  });
 });

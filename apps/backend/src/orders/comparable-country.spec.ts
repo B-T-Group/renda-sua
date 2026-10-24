@@ -21,6 +21,24 @@ describe('comparableCountry', () => {
     expect(comparableCountry("Cote d'Ivoire")).toBe('CI');
   });
 
+  it('keeps the DRC distinct from Congo, including the names delivery config slices', () => {
+    expect(comparableCountry('Congo')).toBe('CG');
+    expect(normalizeDeliveryCountryCode('Congo')).toBe('CG');
+    for (const name of [
+      'DR Congo',
+      'RDC Congo',
+      'Democratic Republic of the Congo',
+      'Democratic Republic of Congo',
+      'République démocratique du Congo',
+      'Republique democratique du Congo',
+    ]) {
+      expect(comparableCountry(name)).toBe('CD');
+      expect(normalizeDeliveryCountryCode(name)).toBe('CD');
+    }
+    expect(normalizeDeliveryCountryCode('Democratic Republic of the Congo')).not.toBe('DE');
+    expect(normalizeDeliveryCountryCode('République démocratique du Congo')).not.toBe('RE');
+  });
+
   it('maps French Cameroon to CM, never to Canada', () => {
     expect(comparableCountry('Cameroun')).toBe('CM');
     expect(comparableCountry('  cameroun ')).toBe('CM');

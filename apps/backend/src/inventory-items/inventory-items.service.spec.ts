@@ -16,11 +16,15 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
   function createService(options?: {
     validateLocationSupport?: boolean;
     exportMarket?: boolean;
+    exportMarketThrows?: boolean;
     supportedCountries?: string[];
   }) {
     const hasuraSystemService = {
       executeQuery: jest.fn().mockImplementation(async (query: string) => {
         if (query.includes('ValidateExportMarket')) {
+          if (options?.exportMarketThrows) {
+            throw new Error('export market down');
+          }
           const allowed =
             options?.exportMarket ?? options?.validateLocationSupport !== false;
           return {
@@ -59,6 +63,7 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
 
     return {
       service,
+      hasura: hasuraSystemService,
       buildWhere: (params: Record<string, unknown>) =>
         (service as any).buildInventoryCatalogWhere({
           is_active: true,
@@ -198,6 +203,59 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     const json = whereJson(built as { where: Record<string, unknown> });
     expect(json).toContain('"export_markets":{"country_code":{"_eq":"CD"}}');
     expect(json).not.toContain('"export_available":{"_eq":false}');
+  });
+
+  it('stays unsupported when local delivery is off and export search was not requested', async () => {
+    const { buildWhere, hasura } = createService({
+      validateLocationSupport: false,
+      exportMarket: true,
+    });
+
+    await expect(buildWhere({ country_code: 'CD', state: 'Kinshasa' })).resolves.toEqual({
+      unsupported: true,
+    });
+    const queries = hasura.executeQuery.mock.calls.map((call) => String(call[0]));
+    expect(queries.some((query) => query.includes('ValidateExportMarket'))).toBe(false);
+  });
+
+  it('stays unsupported when the export destination itself is not active', async () => {
+    const { buildWhere } = createService({
+      validateLocationSupport: false,
+      exportMarket: false,
+    });
+
+    await expect(
+      buildWhere({
+        includeExportInSearch: true,
+        country_code: 'CD',
+        searchTextQuery: 'phone',
+      })
+    ).resolves.toEqual({ unsupported: true });
+  });
+
+  it('fails closed when the export-market lookup throws', async () => {
+    const { buildWhere } = createService({
+      validateLocationSupport: false,
+      exportMarketThrows: true,
+    });
+
+    await expect(
+      buildWhere({ export_only: true, country_code: 'CD' })
+    ).resolves.toEqual({ unsupported: true });
+  });
+
+  it('does not open an export search for a blank country', async () => {
+    const { buildWhere } = createService({
+      validateLocationSupport: false,
+      exportMarket: true,
+    });
+
+    await expect(
+      buildWhere({ includeExportInSearch: true, country_code: '   ' })
+    ).resolves.toEqual({ unsupported: true });
+    await expect(
+      buildWhere({ export_only: true, country_code: '  ' })
+    ).resolves.toEqual({ unsupported: true });
   });
 
   it('scopes export-only listings to export_available items for the viewer market', async () => {
