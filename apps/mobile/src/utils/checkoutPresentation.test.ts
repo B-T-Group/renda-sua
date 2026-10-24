@@ -138,6 +138,55 @@ describe('#594 dedicated-covered delivery slots', () => {
     expect(view.deliveryScheduledOnly).toBe(false);
   });
 
+  describe('pay at pickup is the only allowed timing', () => {
+    const groupWith = (timings: ResolvedCheckoutConfig['groups'][number]['allowed_payment_timings']) => [
+      { ...preflight().groups[0], allowed_payment_timings: timings },
+    ];
+    const covered = {
+      available: false,
+      estimated_delivery_minutes: null,
+      delivery_asap_available: false,
+      dedicated_covered_slots: [afternoon],
+    };
+
+    it('does not offer delivery, ASAP or covered slots; pickup stays', () => {
+      const view = buildCheckoutPresentation(
+        preflight({ groups: groupWith(['pay_at_pickup']), delivery_availability: covered }),
+        'delivery'
+      );
+      expect(view.fulfillment).toEqual(['pickup']);
+      expect(view.deliveryScheduledOnly).toBe(false);
+      expect(
+        buildCheckoutPresentation(
+          preflight({ groups: groupWith(['pay_at_pickup']), delivery_availability: { available: true, estimated_delivery_minutes: 30 } }),
+          'pickup'
+        ).fulfillment
+      ).toEqual(['pickup']);
+    });
+
+    it('a payable timing keeps covered slots offered', () => {
+      for (const timings of [['pay_now', 'pay_at_pickup'], ['pay_at_delivery', 'pay_at_pickup']] as const) {
+        const view = buildCheckoutPresentation(
+          preflight({ groups: groupWith([...timings]), delivery_availability: covered }),
+          'delivery'
+        );
+        expect(view.fulfillment).toEqual(['pickup', 'delivery']);
+        expect(view.deliveryScheduledOnly).toBe(true);
+      }
+    });
+
+    it('pay-after-confirm keeps delivery', () => {
+      const view = buildCheckoutPresentation(
+        preflight({
+          groups: groupWith(['pay_at_pickup']),
+          pay_after_merchant_confirm_eligible: true,
+        }),
+        'delivery'
+      );
+      expect(view.fulfillment).toContain('delivery');
+    });
+  });
+
   it('only a covered (date, slot_id) pair counts as a valid window', () => {
     expect(isCoveredDeliveryWindow({ slot_id: 'slot-pm', preferred_date: '2026-10-21' }, [afternoon])).toBe(true);
     expect(isCoveredDeliveryWindow({ slot_id: 'slot-pm', preferred_date: '2026-10-22' }, [afternoon])).toBe(false);

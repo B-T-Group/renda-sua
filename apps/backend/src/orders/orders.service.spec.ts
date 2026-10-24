@@ -678,6 +678,66 @@ describe('OrdersService', () => {
       );
     });
 
+    describe('pay_at_pickup is pickup-only', () => {
+      function asClient() {
+        hasuraUserService.getUser.mockResolvedValue(mockClientUser);
+        hasuraUserService.sessionPersonaContext.mockReturnValue({
+          jwtDefaultRole: 'client',
+          jwtAllowedRoles: ['client'],
+        });
+      }
+
+      it.each(['delivery', 'shipping'] as const)(
+        'rejects fulfillment_method %s with pay_at_pickup instead of silently making it a pickup order',
+        async (fulfillmentMethod) => {
+          asClient();
+
+          await expect(
+            service.createOrder({
+              delivery_address_id: 'address-123',
+              fulfillment_method: fulfillmentMethod,
+              payment_timing: 'pay_at_pickup',
+              delivery_window: {
+                slot_id: 'slot-1',
+                preferred_date: '2026-10-26',
+              },
+              phone_number: '+237652350000',
+              items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
+            })
+          ).rejects.toMatchObject({
+            status: 400,
+            response: expect.objectContaining({
+              error: 'PAY_AT_PICKUP_REQUIRES_PICKUP',
+            }),
+          });
+          // Rejected before any lookup, hold or insert.
+          expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+          expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+        }
+      );
+
+      it('still infers pickup for legacy payloads that omit fulfillment_method', async () => {
+        asClient();
+        hasuraSystemService.executeQuery.mockResolvedValueOnce({
+          business_inventory: [],
+        });
+
+        await expect(
+          service.createOrder({
+            payment_timing: 'pay_at_pickup',
+            phone_number: '+237652350000',
+            items: [{ business_inventory_id: 'inventory-123', quantity: 1 }],
+          })
+        ).rejects.not.toMatchObject({
+          response: expect.objectContaining({
+            error: 'PAY_AT_PICKUP_REQUIRES_PICKUP',
+          }),
+        });
+        // It got past the new guard and went on to load the inventory.
+        expect(hasuraSystemService.executeQuery).toHaveBeenCalled();
+      });
+    });
+
     async function placePickup(items: Array<{ business_inventory_id: string; quantity: number }>, inventories: any[]) {
       hasuraUserService.getUser.mockResolvedValue(mockClientUser);
       hasuraUserService.sessionPersonaContext.mockReturnValue({
