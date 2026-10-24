@@ -14775,6 +14775,27 @@ export class OrdersService {
     this.requireActivePersona(user, 'client', 'Only clients can create orders');
     const client = this.requireClientRecord(user);
 
+    // pay_at_pickup is a pickup-only timing. An explicit delivery/shipping request
+    // with it used to be silently turned into a pickup order (even with a delivery
+    // window); refuse it so the shopper never gets an order they did not choose.
+    // Payloads that omit fulfillment_method keep the legacy pickup inference.
+    if (
+      orderData.payment_timing === 'pay_at_pickup' &&
+      (orderData.fulfillment_method === 'delivery' ||
+        orderData.fulfillment_method === 'shipping')
+    ) {
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.BAD_REQUEST,
+          success: false,
+          error: 'PAY_AT_PICKUP_REQUIRES_PICKUP',
+          message:
+            'Pay at pickup is only available for store pickup. Delivery needs another payment method; choose store pickup or a different payment option.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
+
     const fulfillmentMethod: 'delivery' | 'pickup' | 'shipping' =
       orderData.fulfillment_method === 'shipping'
         ? 'shipping'

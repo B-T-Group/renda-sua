@@ -63,13 +63,6 @@ const FALLBACK_CONFIGS: CountryOnboardingConfig[] = [
     defaultCurrency: 'CDF',
   },
   {
-    countryCode: 'CD',
-    signupEnabled: true,
-    postalCodeRequired: false,
-    verificationFlow: 'national_id',
-    defaultCurrency: 'CDF',
-  },
-  {
     countryCode: 'US',
     signupEnabled: true,
     postalCodeRequired: true,

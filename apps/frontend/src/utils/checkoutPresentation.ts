@@ -42,7 +42,10 @@ export function buildCheckoutPresentation(
   fulfillment: FulfillmentMethod
 ): CheckoutPresentation {
   if (!preflight) return { fulfillment: [], payments: [], showSchedule: false, deliveryScheduledOnly: false };
-  const { scheduledOnly } = resolveDeliveryCoverage(preflight.delivery_availability);
+  // Covered slots only matter while delivery itself is offered (it needs a payable method).
+  const scheduledOnly =
+    resolveDeliveryCoverage(preflight.delivery_availability).scheduledOnly &&
+    deliveryHasPayableTiming(preflight);
   return {
     fulfillment: fulfillmentChoices(preflight),
     payments: paymentChoices(preflight, fulfillment),
@@ -58,13 +61,28 @@ function fulfillmentChoices(preflight: CheckoutPresentationInput): FulfillmentMe
   const choices: FulfillmentMethod[] = [];
   if (groups.length > 0 && groups.every((group) => group.pickup_eligible)) choices.push('pickup');
   if (
-    preflight.delivery_availability?.available !== false ||
-    resolveDeliveryCoverage(preflight.delivery_availability).scheduledOnly
+    deliveryHasPayableTiming(preflight) &&
+    (preflight.delivery_availability?.available !== false ||
+      resolveDeliveryCoverage(preflight.delivery_availability).scheduledOnly)
   ) {
     choices.push('delivery');
   }
   if (groups.length > 0 && groups.every((group) => group.shipping_eligible)) choices.push('shipping');
   return choices;
+}
+
+/**
+ * Delivery needs a method the shopper can pay with: pay now or pay at delivery.
+ * When pay at pickup is the only allowed timing, delivery (ASAP or a covered slot)
+ * can never be paid for, so it is not offered. Unknown or empty timings, pay-after
+ * and diaspora checkouts keep today's behaviour.
+ */
+export function deliveryHasPayableTiming(preflight: CheckoutPresentationInput): boolean {
+  if (preflight.diaspora?.is_diaspora) return true;
+  if (preflight.pay_after_merchant_confirm_eligible) return true;
+  const timings = sharedTimings(preflight);
+  if (timings.length === 0) return true;
+  return timings.includes('pay_now') || timings.includes('pay_at_delivery');
 }
 
 function paymentChoices(
@@ -103,6 +121,27 @@ function canPayNow(
     return preflight.momo_pay_now_delivery_enabled === true;
   }
   return true;
+}
+
+/**
+ * Timing `POST /orders` must send. Web cart used to hardcode `pay_now` on
+ * delivery; createOrder rejects that on MoMo when the market flag is off
+ * (`MOMO_PAY_NOW_DELIVERY_NOT_ENABLED`). Same default as mobile cart.
+ */
+export function resolveCheckoutPaymentTiming(input: {
+  fulfillment: FulfillmentMethod;
+  checkoutMethod?: 'STRIPE' | 'MOBILE_MONEY' | null;
+  isDiaspora?: boolean;
+  payAfterConfirm?: boolean;
+  momoPayNowDeliveryEnabled?: boolean | null;
+}): PaymentTiming {
+  if (input.isDiaspora) return 'pay_now';
+  if (input.fulfillment === 'pickup') {
+    return input.checkoutMethod === 'MOBILE_MONEY' ? 'pay_at_pickup' : 'pay_now';
+  }
+  if (input.fulfillment === 'shipping' || input.payAfterConfirm) return 'pay_now';
+  if (input.checkoutMethod !== 'MOBILE_MONEY') return 'pay_now';
+  return input.momoPayNowDeliveryEnabled === true ? 'pay_now' : 'pay_at_delivery';
 }
 
 /** #594: a scheduled slot a dedicated agent covers when ASAP delivery is unavailable. */

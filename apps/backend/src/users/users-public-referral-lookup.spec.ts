@@ -70,11 +70,90 @@ describe('UsersController.getPublicByReferralCode (masked)', () => {
   });
 
   it('404s when nothing matches and 400s on bad format', async () => {
-    await expect(build({}).getPublicByReferralCode('AB12CD')).rejects.toBeInstanceOf(
-      HttpException
+    const missing = await build({}).getPublicByReferralCode('AB12CD').catch((error) => error);
+    expect(missing).toBeInstanceOf(HttpException);
+    expect(missing.getStatus()).toBe(404);
+    expect(missing.getResponse()).toMatchObject({
+      error: 'No referrer found for this referral code',
+    });
+
+    const bad = await build({}).getPublicByReferralCode('bad').catch((error) => error);
+    expect(bad.getStatus()).toBe(400);
+    expect(bad.getResponse()).toMatchObject({ error: 'Invalid referral code format' });
+  });
+
+  it('does not reveal a user who cannot refer, and falls through to the agent', async () => {
+    const controller = build({
+      user: {
+        userId: 'u1',
+        userFirstName: 'Samuel',
+        userLastName: 'Besong',
+        userEmail: 'samuel.besong@example.com',
+      },
+      canRefer: false,
+      agent: {
+        status: 'active',
+        userFirstName: 'Jane',
+        userLastName: 'Doe',
+        userEmail: 'jane.doe@example.com',
+      },
+    }) as any;
+    const res = await controller.getPublicByReferralCode('AB12CD');
+
+    expect(res).toMatchObject({ success: true, fullName: 'Jane D.', kind: 'agent' });
+    expect(JSON.stringify(res)).not.toMatch(/Besong|Doe|samuel\.besong|jane\.doe|u1/);
+    expect(controller.businessReferralsService.findBusinessByCode).not.toHaveBeenCalled();
+  });
+
+  it('skips an inactive agent and still masks the business owner', async () => {
+    const res: any = await build({
+      user: {
+        userId: 'u-hidden',
+        userFirstName: 'Hidden',
+        userLastName: 'Person',
+        userEmail: 'hidden.person@example.com',
+      },
+      canRefer: false,
+      agent: {
+        status: 'suspended',
+        userFirstName: 'Jane',
+        userLastName: 'Doe',
+        userEmail: 'jane.doe@example.com',
+      },
+      business: {
+        businessName: 'Renda Shop',
+        userFirstName: 'Samuel',
+        userLastName: 'Besong',
+        lifecycleStatus: 'active',
+        userEmail: 'owner.besong@example.com',
+        userId: 'owner-1',
+      },
+    }).getPublicByReferralCode('AB12CD');
+
+    expect(res).toMatchObject({
+      fullName: 'Renda Shop (Samuel B.)',
+      ownerName: 'Samuel B.',
+      kind: 'business',
+    });
+    expect(JSON.stringify(res)).not.toMatch(
+      /Person|Doe|Besong|hidden\.person|jane\.doe|owner\.besong|owner-1|u-hidden/
     );
-    await expect(build({}).getPublicByReferralCode('bad')).rejects.toBeInstanceOf(
-      HttpException
-    );
+  });
+
+  it('404s a suspended business without echoing its name or owner', async () => {
+    const error = await build({
+      business: {
+        businessName: 'Secret Shop',
+        userFirstName: 'Samuel',
+        userLastName: 'Besong',
+        lifecycleStatus: 'suspended',
+        userEmail: 'owner.besong@example.com',
+      },
+    })
+      .getPublicByReferralCode('AB12CD')
+      .catch((caught) => caught);
+
+    expect(error.getStatus()).toBe(404);
+    expect(JSON.stringify(error.getResponse())).not.toMatch(/Secret Shop|Besong|owner\.besong/);
   });
 });

@@ -280,6 +280,8 @@ export class CheckoutPreflightService {
     }
   ): Promise<CheckoutPreflightResponseDto> {
     const blockers: CheckoutBlockerDto[] = [];
+    const missingItems = this.rejectMissingItems(dto, blockers);
+    if (missingItems) return missingItems;
 
     const fulfillment: 'delivery' | 'pickup' | 'shipping' =
       dto.fulfillment_method === 'shipping'
@@ -640,6 +642,28 @@ export class CheckoutPreflightService {
       if (allPayOnDelivery && rail !== 'stripe') allowedPaymentTimings.push('pay_at_delivery');
       if (allPayAtPickup && rail !== 'stripe') allowedPaymentTimings.push('pay_at_pickup');
 
+      // Does delivery have ANY payable method for this group? Independent of the
+      // requested fulfillment (the allowed list above is built for the requested one):
+      // card rail, MoMo pay-now (market flag or flagged location), or pay at delivery.
+      // When false the only thing a shopper could pay with is pay_at_pickup, which
+      // createOrder rejects for delivery, so delivery must not be offered at all.
+      // locationPayAfter is false for a shipping request, so evaluate the location
+      // rule again here without the shipping exclusion.
+      const deliveryLocationPayAfter =
+        locationPayAfter ||
+        (rail === 'mobile_money' &&
+          !isDiaspora &&
+          anyLocationPayAtConfirm(group.inventoryRows) &&
+          (await this.isMarketFlagEnabled(
+            PAY_AFTER_CONFIRM_LOCATION_FLAG_KEY,
+            null
+          )));
+      const deliveryPayable =
+        rail === 'stripe' ||
+        momoPayNowDeliveryEnabled ||
+        deliveryLocationPayAfter ||
+        allPayOnDelivery;
+
       // Safety: If no payment timings available (shouldn't happen in valid config), block checkout
       if (allowedPaymentTimings.length === 0) {
         blockers.push({
@@ -932,6 +956,13 @@ export class CheckoutPreflightService {
             // Cooked food and pay-after-confirm groups are ASAP only.
             scheduleAllowed: !groupHasCookedFood && !groupIsCookedFoodPayAfter,
             verifiedAgentDelivery: dto.verified_agent_delivery === true,
+            // Cooked-food groups keep their own pay-after path (createOrder lets
+            // them pay_now for delivery without the market flag): never suppress.
+            deliveryPayable:
+              deliveryPayable ||
+              groupHasCookedFood ||
+              groupIsCookedFood ||
+              groupIsCookedFoodPayAfter,
           }
         ),
         pickup_eligible: allPayAtPickup,
@@ -1406,13 +1437,35 @@ export class CheckoutPreflightService {
       currency: string;
       scheduleAllowed: boolean;
       verifiedAgentDelivery: boolean;
+      /** False when pay_at_pickup is the only allowed method: delivery cannot be paid for. */
+      deliveryPayable: boolean;
     }
   ): Promise<DeliveryAvailabilityDto | null> {
     if (!result) return null;
-    const base: DeliveryAvailabilityDto = toPublicDeliveryAvailability(result);
+    const publicResult: DeliveryAvailabilityDto =
+      toPublicDeliveryAvailability(result);
     const coverage = this.dedicatedCheckoutCoverage;
     const country = params.group.sellerCountry ?? '';
-    if (!coverage || !(await coverage.isEnabled(country))) return base;
+    const coverageEnabled =
+      !!coverage && (await coverage.isEnabled(country));
+    if (!params.deliveryPayable) {
+      // No payable method for delivery: offer neither ASAP nor covered slots.
+      // Same reason-blind shape as any other "delivery unavailable".
+      const unavailable: DeliveryAvailabilityDto = {
+        ...publicResult,
+        available: false,
+        estimated_delivery_minutes: null,
+      };
+      return coverageEnabled
+        ? {
+            ...unavailable,
+            delivery_asap_available: false,
+            dedicated_covered_slots: [],
+          }
+        : unavailable;
+    }
+    const base = publicResult;
+    if (!coverage || !coverageEnabled) return base;
 
     const location = params.group.inventoryRows[0]?.business_location;
     const locationId: string | undefined =
@@ -1509,6 +1562,19 @@ export class CheckoutPreflightService {
     const [first, ...rest] = needing.map((a) => a?.dedicated_covered_slots ?? []);
     const others = rest.map((list) => new Set(list.map(key)));
     return first.filter((slot) => others.every((set) => set.has(key(slot))));
+  }
+
+  /** NODE-NESTJS-4F: the public route has no body ValidationPipe, so guard a missing items array here. */
+  private rejectMissingItems(
+    dto: CheckoutPreflightDto,
+    blockers: CheckoutBlockerDto[]
+  ): CheckoutPreflightResponseDto | null {
+    if (Array.isArray(dto?.items)) return null;
+    blockers.push({
+      code: 'ITEMS_REQUIRED',
+      message: 'Add at least one item to continue checkout.',
+    });
+    return this.earlyExit(blockers, dto);
   }
 
   private earlyExit(

@@ -377,6 +377,19 @@ describe('CheckoutPreflightService', () => {
     );
   }
 
+  it('returns ITEMS_REQUIRED without querying inventory when items is missing', async () => {
+    const result = await service.resolve({} as CheckoutPreflightDto, false);
+
+    expect(result.can_proceed).toBe(false);
+    expect(result.blocking_errors).toEqual([
+      {
+        code: 'ITEMS_REQUIRED',
+        message: 'Add at least one item to continue checkout.',
+      },
+    ]);
+    expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+  });
+
   // -------------------------------------------------------------------------
   // 1. Returns EMAIL + STRIPE for Stripe seller/order groups
   // -------------------------------------------------------------------------
@@ -1951,6 +1964,297 @@ describe('CheckoutPreflightService', () => {
       expect(group.pay_after_merchant_confirm_eligible).toBe(true);
       expect(group.deposit_required).toBeUndefined();
       expect(group.schedule_allowed).toBe(false);
+    });
+  });
+
+  describe('delivery is not offered when pay_at_pickup is the only payable method', () => {
+    const NO_AGENT = {
+      available: false,
+      estimatedDeliveryMinutes: null,
+      reason: 'NO_ELIGIBLE_AGENT',
+      ruleId: 'agent-in-region',
+    };
+    const AVAILABLE = { available: true, estimatedDeliveryMinutes: 40, reason: null, ruleId: null };
+    const COVERED = [
+      {
+        date: '2026-10-26',
+        slot_id: 'slot-morning',
+        slot_key: 'morning',
+        start: '08:00',
+        end: '12:00',
+        pickup_time: '08:30',
+      },
+    ];
+    const KILL = 'pay_after_confirm_location_flag_enabled';
+
+    /** Blue-like row: pickup on, pay on delivery off. */
+    function blueRow(over: Parameters<typeof makeInventoryRow>[0] = {}) {
+      const row = makeInventoryRow({ payAtPickup: true, payOnDelivery: false, ...over });
+      return {
+        ...row,
+        business_location: {
+          ...row.business_location,
+          id: `loc-${over.businessId ?? 'biz-1'}`,
+          address: { country: over.sellerCountry ?? 'CM', state: 'Centre' },
+        },
+      };
+    }
+
+    function mockFlags(flags: Record<string, boolean>, rows: any[]) {
+      (hasuraSystemService.executeQuery as jest.Mock).mockImplementation(
+        (query: string, vars: any) => {
+          if (query.includes('GetInventoryForPreflight')) {
+            return Promise.resolve({ business_inventory: rows });
+          }
+          if (query.includes('GetMarketFlag')) {
+            return Promise.resolve({
+              application_configurations: [
+                { boolean_value: flags[vars.configKey] === true },
+              ],
+            });
+          }
+          if (query.includes('StripeCountries')) {
+            return Promise.resolve({ supported_payment_systems: [{ country: 'CA' }] });
+          }
+          return Promise.resolve({});
+        }
+      );
+    }
+
+    const deliveryDto = (
+      items: Array<[string, number]> = [['inv-1', 1]]
+    ): CheckoutPreflightDto => ({
+      items: items.map(([id, quantity]) => ({ business_inventory_id: id, quantity })),
+      fulfillment_method: 'delivery',
+      provisional_country: 'CM',
+    });
+
+    function dedicatedOn() {
+      dedicatedCoverage.isEnabled.mockResolvedValue(true);
+      dedicatedCoverage.coveredSlots.mockResolvedValue(COVERED);
+    }
+
+    it('Blue case (MoMo pay-now delivery off, no pay on delivery): no ASAP, no covered slots, pickup still offered', async () => {
+      mockFlags({ momo_pay_now_delivery_enabled: false }, [blueRow()]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(NO_AGENT);
+      dedicatedOn();
+
+      const result = await service.resolve(deliveryDto(), false);
+
+      const group = result.groups[0];
+      expect(group.allowed_payment_timings).toEqual(['pay_at_pickup']);
+      expect(group.pickup_eligible).toBe(true);
+      expect(group.delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: [],
+      });
+      expect(dedicatedCoverage.coveredSlots).not.toHaveBeenCalled();
+      expect(result.delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: [],
+      });
+    });
+
+    it('also hides ASAP delivery when an agent is nearby (the shopper still cannot pay for it)', async () => {
+      mockFlags({ momo_pay_now_delivery_enabled: false }, [blueRow()]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+      dedicatedOn();
+
+      const result = await service.resolve(deliveryDto(), false);
+
+      expect(result.groups[0].delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: [],
+      });
+      expect(result.delivery_availability?.available).toBe(false);
+    });
+
+    it('dedicated agents off: plain unavailable shape without the #594 fields', async () => {
+      mockFlags({ momo_pay_now_delivery_enabled: false }, [blueRow()]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(deliveryDto(), false);
+
+      expect(result.groups[0].delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+      });
+      expect(dedicatedCoverage.coveredSlots).not.toHaveBeenCalled();
+    });
+
+    it('a pickup-first preflight (pay_at_pickup requested) hides delivery too', async () => {
+      mockFlags({ momo_pay_now_delivery_enabled: false }, [blueRow()]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(
+        {
+          ...deliveryDto(),
+          fulfillment_method: 'pickup',
+          payment_timing: 'pay_at_pickup',
+        },
+        false
+      );
+
+      expect(result.groups[0].pickup_eligible).toBe(true);
+      expect(result.groups[0].delivery_availability?.available).toBe(false);
+      expect(result.delivery_availability?.available).toBe(false);
+    });
+
+    it('MoMo pay-now delivery ON: unchanged, covered slots still listed', async () => {
+      mockFlags({ momo_pay_now_delivery_enabled: true }, [blueRow()]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(NO_AGENT);
+      dedicatedOn();
+
+      const result = await service.resolve(deliveryDto(), false);
+
+      expect(result.groups[0].allowed_payment_timings).toEqual(['pay_now', 'pay_at_pickup']);
+      expect(result.groups[0].delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: COVERED,
+      });
+      expect(dedicatedCoverage.coveredSlots).toHaveBeenCalledTimes(1);
+    });
+
+    it('MoMo pay-now delivery ON and an agent nearby: ASAP delivery stays available', async () => {
+      mockFlags({ momo_pay_now_delivery_enabled: true }, [blueRow()]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(deliveryDto(), false);
+
+      expect(result.groups[0].delivery_availability).toEqual({
+        available: true,
+        estimated_delivery_minutes: 40,
+      });
+    });
+
+    it('shipping-requested preflight: a pay-after-confirm (flagged) location keeps delivery offered', async () => {
+      const row = blueRow({ shippingEnabled: true, shippingPrice: 1000 });
+      (row.business_location as any).pay_at_confirm = true;
+      mockFlags({ [KILL]: true, momo_pay_now_delivery_enabled: false }, [row]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(
+        { ...deliveryDto(), fulfillment_method: 'shipping' } as any,
+        false
+      );
+
+      expect(result.groups[0].delivery_availability).toEqual({
+        available: true,
+        estimated_delivery_minutes: 40,
+      });
+    });
+
+    it('shipping-requested preflight: an unflagged location still hides delivery', async () => {
+      const row = blueRow({ shippingEnabled: true, shippingPrice: 1000 });
+      (row.business_location as any).pay_at_confirm = false;
+      mockFlags({ [KILL]: true, momo_pay_now_delivery_enabled: false }, [row]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(
+        { ...deliveryDto(), fulfillment_method: 'shipping' } as any,
+        false
+      );
+
+      expect(result.groups[0].delivery_availability?.available).toBe(false);
+    });
+
+    it('pay on delivery enabled on the item (flag off): delivery stays offered', async () => {
+      mockFlags({ momo_pay_now_delivery_enabled: false }, [blueRow({ payOnDelivery: true })]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(NO_AGENT);
+      dedicatedOn();
+
+      const result = await service.resolve(deliveryDto(), false);
+
+      expect(result.groups[0].allowed_payment_timings).toEqual(['pay_at_delivery', 'pay_at_pickup']);
+      expect(result.groups[0].delivery_availability?.dedicated_covered_slots).toEqual(COVERED);
+    });
+
+    it('flagged pay-at-confirm location (flag off): delivery stays offered', async () => {
+      const row = blueRow();
+      (row.business_location as any).pay_at_confirm = true;
+      mockFlags({ momo_pay_now_delivery_enabled: false, [KILL]: true }, [row]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(deliveryDto(), false);
+
+      expect(result.groups[0].delivery_availability).toEqual({
+        available: true,
+        estimated_delivery_minutes: 40,
+      });
+    });
+
+    it('card (Stripe) rail: unchanged', async () => {
+      paymentRoutingService.resolveRailForCountry.mockResolvedValue('stripe');
+      mockFlags({ momo_pay_now_delivery_enabled: false }, [
+        blueRow({ sellerCountry: 'CA', currency: 'CAD', payAtPickup: false }),
+      ]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+      const result = await service.resolve(
+        { ...deliveryDto(), provisional_country: 'CA' },
+        false
+      );
+
+      expect(result.groups[0].allowed_payment_timings).toEqual(['pay_now']);
+      expect(result.groups[0].delivery_availability?.available).toBe(true);
+    });
+
+    it('cooked food keeps its own pay-after path and is never suppressed', async () => {
+      // Monday 13:00 UTC: inside the kitchen's Monday lunch slot.
+      jest.useFakeTimers();
+      jest.setSystemTime(new Date('2026-08-24T13:00:00.000Z'));
+      try {
+        const food = makeFoodInventoryRow();
+        mockFlags({ momo_pay_now_delivery_enabled: false }, [food]);
+        (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(AVAILABLE);
+
+        const result = await service.resolve(deliveryDto(), false);
+
+        expect(result.groups[0].delivery_availability?.available).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('two sellers: one cannot be paid for delivery, so the cart has no delivery and no shared slots', async () => {
+      const payable = blueRow({ businessId: 'biz-1', id: 'inv-1', payOnDelivery: true });
+      const unpayable = blueRow({ businessId: 'biz-2', id: 'inv-2', payOnDelivery: false });
+      mockFlags({ momo_pay_now_delivery_enabled: false }, [payable, unpayable]);
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue(NO_AGENT);
+      dedicatedOn();
+
+      const result = await service.resolve(
+        deliveryDto([
+          ['inv-1', 1],
+          ['inv-2', 1],
+        ]),
+        false
+      );
+
+      const byBiz = Object.fromEntries(
+        result.groups.map((g) => [g.business_id, g.delivery_availability])
+      );
+      expect(byBiz['biz-1']?.dedicated_covered_slots).toEqual(COVERED);
+      expect(byBiz['biz-2']).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: [],
+      });
+      expect(result.delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: [],
+      });
     });
   });
 

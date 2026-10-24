@@ -2,6 +2,7 @@ import {
   buildCheckoutPresentation,
   isCoveredDeliveryWindow,
   isDeliveryUnavailableError,
+  resolveCheckoutPaymentTiming,
   resolveDeliveryCoverage,
 } from './checkoutPresentation';
 
@@ -95,6 +96,75 @@ describe('buildCheckoutPresentation', () => {
   });
 });
 
+describe('resolveCheckoutPaymentTiming', () => {
+  it('sends pay_at_delivery for MoMo delivery when the market flag is off', () => {
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'MOBILE_MONEY',
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe('pay_at_delivery');
+  });
+
+  it('keeps pay_now when MoMo pay-now delivery is enabled', () => {
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'MOBILE_MONEY',
+        momoPayNowDeliveryEnabled: true,
+      })
+    ).toBe('pay_now');
+  });
+
+  it('keeps pay_now for Stripe, diaspora, shipping, and pay-after delivery', () => {
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'STRIPE',
+      })
+    ).toBe('pay_now');
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'MOBILE_MONEY',
+        isDiaspora: true,
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe('pay_now');
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'shipping',
+        checkoutMethod: 'MOBILE_MONEY',
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe('pay_now');
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'MOBILE_MONEY',
+        payAfterConfirm: true,
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe('pay_now');
+  });
+
+  it('uses pay_at_pickup only for MoMo store pickup', () => {
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'pickup',
+        checkoutMethod: 'MOBILE_MONEY',
+      })
+    ).toBe('pay_at_pickup');
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'pickup',
+        checkoutMethod: 'STRIPE',
+      })
+    ).toBe('pay_now');
+  });
+});
+
 describe('#594 dedicated-covered delivery slots', () => {
   const afternoon = {
     date: '2026-10-21',
@@ -172,6 +242,61 @@ describe('#594 dedicated-covered delivery slots', () => {
     );
     expect(view.fulfillment).toEqual(['pickup']);
     expect(view.deliveryScheduledOnly).toBe(false);
+  });
+
+  describe('pay at pickup is the only allowed timing', () => {
+    const pickupOnly = {
+      ...base,
+      groups: [{ ...group, allowed_payment_timings: ['pay_at_pickup' as const] }],
+    };
+    const coveredAvailability = {
+      available: false,
+      delivery_asap_available: false,
+      dedicated_covered_slots: [afternoon],
+    };
+
+    it('does not offer delivery, ASAP or covered slots; pickup stays', () => {
+      const view = buildCheckoutPresentation(
+        { ...pickupOnly, delivery_availability: coveredAvailability },
+        'delivery'
+      );
+      expect(view.fulfillment).toEqual(['pickup']);
+      expect(view.deliveryScheduledOnly).toBe(false);
+      expect(
+        buildCheckoutPresentation(
+          { ...pickupOnly, delivery_availability: { available: true } },
+          'pickup'
+        ).fulfillment
+      ).toEqual(['pickup']);
+    });
+
+    it('a payable timing keeps covered slots offered', () => {
+      for (const timings of [['pay_now', 'pay_at_pickup'], ['pay_at_delivery', 'pay_at_pickup']] as const) {
+        const view = buildCheckoutPresentation(
+          {
+            ...base,
+            groups: [{ ...group, allowed_payment_timings: [...timings] }],
+            delivery_availability: coveredAvailability,
+          },
+          'delivery'
+        );
+        expect(view.fulfillment).toEqual(['pickup', 'delivery']);
+        expect(view.deliveryScheduledOnly).toBe(true);
+      }
+    });
+
+    it('pay-after-confirm and empty timings are unchanged', () => {
+      expect(
+        buildCheckoutPresentation(
+          {
+            ...pickupOnly,
+            pay_after_merchant_confirm_eligible: true,
+            delivery_availability: { available: true },
+          },
+          'delivery'
+        ).fulfillment
+      ).toContain('delivery');
+    });
   });
 
   it('only accepts a covered (date, slot_id) pair as the delivery window', () => {

@@ -106,6 +106,8 @@ const COMMON_COUNTRY_NAMES: Record<string, string> = {
 export async function findCountryCode(countryName: string): Promise<string> {
   const trimmed = countryName.trim();
   if (!trimmed) return '';
+  const aliased = COMMON_COUNTRY_NAMES[trimmed.toLowerCase()];
+  if (aliased) return aliased;
   if (trimmed.length === 2 && trimmed === trimmed.toUpperCase()) {
     const { Country } = await getCountryStateCity();
     if (Country.getAllCountries().some((c) => c.isoCode === trimmed)) return trimmed;

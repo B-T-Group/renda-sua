@@ -58,9 +58,13 @@ describe('CountryOnboardingService fallbacks', () => {
     const configs = await service.getAllConfigs();
 
     expectSeededCfaMarkets(configs);
-    await expect(service.getSignupEnabledCodes()).resolves.toEqual(
+    const codes = await service.getSignupEnabledCodes();
+    expect(codes).toEqual(
       expect.arrayContaining(['TG', 'BJ', 'CI', 'CG', 'CD', 'CM', 'GA', 'US', 'CA', 'PH'])
     );
+    expect(new Set(codes).size).toBe(codes.length);
+    expect(codes.filter((code) => code === 'CD')).toEqual(['CD']);
+    expect(codes.filter((code) => code === 'CG')).toEqual(['CG']);
   });
 
   it('uses the same seed when Hasura is unavailable', async () => {
