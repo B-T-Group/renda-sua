@@ -123,6 +123,27 @@ function canPayNow(
   return true;
 }
 
+/**
+ * Timing `POST /orders` must send. Web cart used to hardcode `pay_now` on
+ * delivery; createOrder rejects that on MoMo when the market flag is off
+ * (`MOMO_PAY_NOW_DELIVERY_NOT_ENABLED`). Same default as mobile cart.
+ */
+export function resolveCheckoutPaymentTiming(input: {
+  fulfillment: FulfillmentMethod;
+  checkoutMethod?: 'STRIPE' | 'MOBILE_MONEY' | null;
+  isDiaspora?: boolean;
+  payAfterConfirm?: boolean;
+  momoPayNowDeliveryEnabled?: boolean | null;
+}): PaymentTiming {
+  if (input.isDiaspora) return 'pay_now';
+  if (input.fulfillment === 'pickup') {
+    return input.checkoutMethod === 'MOBILE_MONEY' ? 'pay_at_pickup' : 'pay_now';
+  }
+  if (input.fulfillment === 'shipping' || input.payAfterConfirm) return 'pay_now';
+  if (input.checkoutMethod !== 'MOBILE_MONEY') return 'pay_now';
+  return input.momoPayNowDeliveryEnabled === true ? 'pay_now' : 'pay_at_delivery';
+}
+
 /** #594: a scheduled slot a dedicated agent covers when ASAP delivery is unavailable. */
 export interface DedicatedCoveredSlot {
   /** Local date (YYYY-MM-DD) in the seller timezone. */

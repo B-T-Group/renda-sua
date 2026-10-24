@@ -2,6 +2,7 @@ import {
   buildCheckoutPresentation,
   isCoveredDeliveryWindow,
   isDeliveryUnavailableError,
+  resolveCheckoutPaymentTiming,
   resolveDeliveryCoverage,
 } from './checkoutPresentation';
 
@@ -92,6 +93,75 @@ describe('buildCheckoutPresentation', () => {
     );
     expect(view.payments).toEqual(['diaspora']);
     expect(view.showSchedule).toBe(true);
+  });
+});
+
+describe('resolveCheckoutPaymentTiming', () => {
+  it('sends pay_at_delivery for MoMo delivery when the market flag is off', () => {
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'MOBILE_MONEY',
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe('pay_at_delivery');
+  });
+
+  it('keeps pay_now when MoMo pay-now delivery is enabled', () => {
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'MOBILE_MONEY',
+        momoPayNowDeliveryEnabled: true,
+      })
+    ).toBe('pay_now');
+  });
+
+  it('keeps pay_now for Stripe, diaspora, shipping, and pay-after delivery', () => {
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'STRIPE',
+      })
+    ).toBe('pay_now');
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'MOBILE_MONEY',
+        isDiaspora: true,
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe('pay_now');
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'shipping',
+        checkoutMethod: 'MOBILE_MONEY',
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe('pay_now');
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'delivery',
+        checkoutMethod: 'MOBILE_MONEY',
+        payAfterConfirm: true,
+        momoPayNowDeliveryEnabled: false,
+      })
+    ).toBe('pay_now');
+  });
+
+  it('uses pay_at_pickup only for MoMo store pickup', () => {
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'pickup',
+        checkoutMethod: 'MOBILE_MONEY',
+      })
+    ).toBe('pay_at_pickup');
+    expect(
+      resolveCheckoutPaymentTiming({
+        fulfillment: 'pickup',
+        checkoutMethod: 'STRIPE',
+      })
+    ).toBe('pay_now');
   });
 });
 
