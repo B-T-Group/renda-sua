@@ -3,6 +3,7 @@ import { useApiClient } from './useApiClient';
 
 export interface AgentReferralLookupResult {
   agentCode: string;
+  /** Masked by the API (e.g. "Samuel B."); never a full last name. */
   fullName: string;
   firstName?: string;
   kind?: 'agent' | 'business';
@@ -16,7 +17,7 @@ interface UseAgentReferralLookupState {
 
 export const useAgentReferralLookup = (
   code: string,
-  debounceMs: number = 400
+  debounceMs = 400
 ): UseAgentReferralLookupState => {
   const apiClient = useApiClient();
   const [result, setResult] = useState<AgentReferralLookupResult | null>(null);
@@ -55,6 +56,7 @@ export const useAgentReferralLookup = (
           .get<{
             success: boolean;
             referralCode: string;
+            /** Masked display name; never a full last name. */
             fullName: string;
             firstName?: string;
             kind?: 'user' | 'agent' | 'business';

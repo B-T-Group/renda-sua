@@ -26,6 +26,8 @@ import {
   MenuItem,
   Select,
   Switch,
+  Tab,
+  Tabs,
   TextField,
   Typography,
 } from '@mui/material';
@@ -34,6 +36,7 @@ import { useTranslation } from 'react-i18next';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useAdminAgents } from '../../hooks/useAdminAgents';
 import { usePermissions } from '../../hooks/usePermissions';
+import { useDedicatedAgents } from '../../hooks/useDedicatedAgents';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useVehicleTypes } from '../../hooks/useVehicleTypes';
 import { AdminApplyReferralDialog } from '../admin/AdminApplyReferralDialog';
@@ -44,6 +47,7 @@ import {
 } from '../../utils/idRejectionNote';
 import { AdminMessagePost } from '../common/AdminMessagePost';
 import AdminUserCard from '../common/AdminUserCard';
+import { AdminDedicatedAssignmentsSection } from '../admin/dedicated-agents/AdminDedicatedAssignmentsSection';
 
 export interface AgentIdDocument {
   id: string;
@@ -75,11 +79,17 @@ const AdminManageAgents: React.FC = () => {
     setUserInternal,
     applyReferral,
   } = useAdminAgents();
+  const {
+    getAdminCapability,
+  } = useDedicatedAgents();
   const { vehicleTypes } = useVehicleTypes();
   const apiClient = useApiClient();
   const { t } = useTranslation();
   const { isSuperuser, can } = usePermissions();
   const canManage = can(PlatformPermissions.MANAGE_AGENTS);
+  const [currentTab, setCurrentTab] = useState(0);
+  const [showDedicatedTab, setShowDedicatedTab] = useState(false);
+  const [dedicatedTabError, setDedicatedTabError] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<any>({});
   const [verificationAgentId, setVerificationAgentId] = useState<string | null>(
@@ -95,6 +105,35 @@ const AdminManageAgents: React.FC = () => {
   const [applyAgentId, setApplyAgentId] = useState<string | null>(null);
 
   const verificationAgent = agents.find((a) => a.id === verificationAgentId);
+
+  // Check dedicated capability on mount
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const result = await getAdminCapability();
+        if (cancelled) return;
+        if (result.enabled) {
+          setShowDedicatedTab(true);
+          setDedicatedTabError(null);
+        } else {
+          setShowDedicatedTab(false);
+          setCurrentTab(0);
+        }
+      } catch (err: any) {
+        if (cancelled) return;
+        const status = err.response?.status;
+        setShowDedicatedTab(false);
+        setCurrentTab(0);
+        if (status !== 403 && status !== 404) {
+          setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [getAdminCapability, t]);
 
   const fetchIdDocuments = useCallback(
     async (agentId: string) => {
@@ -119,7 +158,9 @@ const AdminManageAgents: React.FC = () => {
     if (verificationAgentId) {
       fetchIdDocuments(verificationAgentId);
     } else {
-      setIdDocuments([]);
+      // Keep the same reference when already empty so this effect can't
+      // feed a render loop if fetchIdDocuments' identity changes.
+      setIdDocuments((prev) => (prev.length === 0 ? prev : []));
     }
   }, [verificationAgentId, fetchIdDocuments]);
 
@@ -254,18 +295,29 @@ const AdminManageAgents: React.FC = () => {
 
   return (
     <Box>
-      <Box
-        sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          flexWrap: 'wrap',
-          gap: 2,
-          mb: 2,
-        }}
+      <Tabs
+        value={currentTab}
+        onChange={(_, v) => setCurrentTab(v)}
+        sx={{ mb: 3, borderBottom: 1, borderColor: 'divider' }}
       >
-        <Typography variant="h5">
-          {t('admin.manageAgents', 'Manage Agents')}
-        </Typography>
+        <Tab label={t('admin.agents.allAgents', 'All Agents')} aria-label={t('admin.agents.allAgents', 'All Agents')} />
+        {showDedicatedTab && <Tab label={t('dedicatedAgents.superuser.tab', 'Dedicated')} aria-label={t('dedicatedAgents.superuser.tab', 'Dedicated')} />}
+      </Tabs>
+
+      {currentTab === 0 ? (
+        <Box>
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 2,
+              mb: 2,
+            }}
+          >
+            <Typography variant="h5">
+              {t('admin.manageAgents', 'Manage Agents')}
+            </Typography>
         <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
           <AdminMessagePost />
           <TextField
@@ -706,6 +758,43 @@ const AdminManageAgents: React.FC = () => {
           await applyReferral(applyAgentId, code);
         }}
       />
+    </Box>
+  ) : dedicatedTabError ? (
+    <Box>
+      <Alert severity="error" sx={{ mb: 2 }}>
+        {dedicatedTabError}
+      </Alert>
+      <Button
+        variant="outlined"
+        startIcon={<RefreshIcon />}
+        onClick={() => {
+          setDedicatedTabError(null);
+          (async () => {
+            try {
+              const result = await getAdminCapability();
+              if (result.enabled) {
+                setShowDedicatedTab(true);
+              } else {
+                setShowDedicatedTab(false);
+                setCurrentTab(0);
+              }
+            } catch (err: any) {
+              setShowDedicatedTab(false);
+              setCurrentTab(0);
+              const status = err.response?.status;
+              if (status !== 403 && status !== 404) {
+                setDedicatedTabError(err.response?.data?.message || t('dedicatedAgents.generic', 'Something went wrong'));
+              }
+            }
+          })();
+        }}
+      >
+        {t('dedicatedAgents.retry', 'Retry')}
+      </Button>
+    </Box>
+  ) : showDedicatedTab && currentTab === 1 ? (
+    <AdminDedicatedAssignmentsSection />
+  ) : null}
     </Box>
   );
 };

@@ -296,6 +296,32 @@ describe('AssistantToolsService', () => {
     expect(inventoryItems.getInventorySearchSuggestions).not.toHaveBeenCalled();
   });
 
+  it('offers seller_faq and returns it in the caller language', async () => {
+    const config = await service.buildToolConfig(anonymous);
+    const knowledge = config.tools.find((tool) => tool.toolSpec?.name === 'get_knowledge');
+    const schema = knowledge?.toolSpec?.inputSchema as {
+      json?: { properties?: { topic?: { enum?: string[] } } };
+    };
+    expect(schema?.json?.properties?.topic?.enum).toContain('seller_faq');
+
+    const en = await service.executeTool({
+      name: 'get_knowledge',
+      input: { topic: 'seller_faq' },
+      identity: anonymous,
+      locale: 'en',
+    });
+    const fr = await service.executeTool({
+      name: 'get_knowledge',
+      input: { topic: 'seller_faq' },
+      identity: anonymous,
+      locale: 'fr',
+    });
+    expect(en.handoff).toBeFalsy();
+    expect(en.content).toMatch(/0% item commission on the first 15 sales, then 7%/);
+    expect(fr.content).toMatch(/0 % de commission sur les 15 premières ventes, puis 7 %/);
+    expect(fr.content).not.toEqual(en.content);
+  });
+
   it('returns curated knowledge for payments', async () => {
     const result = await service.executeTool({
       name: 'get_knowledge',

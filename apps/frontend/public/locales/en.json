@@ -330,9 +330,9 @@
     "minWithdrawAmount": "Withdrawal amount must be greater than or equal to {{min}} {{currency}}",
     "withdrawAmountHelper": "Minimum withdrawal: {{min}} {{currency}}",
     "withdrawBalanceBelowMin": "You need at least {{min}} {{currency}} available to withdraw.",
-    "withdrawPhoneCmGaHint": "Use a Cameroon (+237) or Gabon (+241) mobile number.",
+    "withdrawPhoneCmGaHint": "Use a Cameroon (+237), Gabon (+241), or Togo (+228) mobile number.",
     "updatePhone": "Update",
-    "withdrawPhoneCmGaOnly": "Only Cameroon (+237) or Gabon (+241) phone numbers are supported.",
+    "withdrawPhoneCmGaOnly": "Only Cameroon (+237), Gabon (+241), or Togo (+228) phone numbers are supported.",
     "available": "Available",
     "availableBalance": "Available Balance",
     "cashAdvance": {
@@ -1861,6 +1861,7 @@
       "withheldBalance": "Withheld Balance"
     },
     "agents": {
+      "allAgents": "All Agents",
       "filterAll": "All agents",
       "filterUnverified": "Unverified only",
       "idDocumentsList": "ID documents (view and verify, then set as verified below)",
@@ -2010,6 +2011,7 @@
         "BJ": "Benin",
         "CI": "Côte d'Ivoire",
         "CG": "Congo",
+        "CD": "DR Congo",
         "CA": "Canada",
         "US": "United States",
         "PH": "Philippines"
@@ -5045,6 +5047,8 @@
     "retry": "Retry",
     "rowsPerPage": "Rows per page",
     "save": "Save",
+    "saved": "Saved",
+    "removed": "Removed",
     "share": {
       "ariaLabel": "Share this page",
       "openMenu": "Share",
@@ -5099,7 +5103,10 @@
         "saturday": "Sat",
         "sunday": "Sun"
       }
-    }
+    },
+    "source": "Source",
+    "city": "City",
+    "required": "Required"
   },
   "dashboard": {
     "client": {
@@ -6124,7 +6131,14 @@
       "slotName": "Slot",
       "confirmedAt": "Confirmed at",
       "confirmedBy": "Confirmed by",
-      "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation."
+      "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation.",
+      "dedicatedScheduledOnly": "Scheduled delivery only for this store right now. Choose one of the times below.",
+      "dedicatedPickupAt": "Picked up from the store at {{time}}",
+      "slotKey": {
+        "morning": "Morning",
+        "afternoon": "Afternoon",
+        "evening": "Evening"
+      }
     },
     "failDelivery": {
       "title": "Mark Delivery as Failed",
@@ -8075,7 +8089,7 @@
     "businessDashboardCta": "Verify your mobile money number so locations can accept customer payments.",
     "businessDashboardCtaWithItems": "You have products listed. Verify your mobile money number so customers can pay and you can receive payouts.",
     "questionWhy": "Confirm that this number is registered to receive Mobile Money so we can send your payouts there.",
-    "questionPrompt": "Can this number receive Mobile Money payments (MTN MoMo / Orange Money)?",
+    "questionPrompt": "Can this number receive Mobile Money payments (MTN MoMo, Orange Money, Moov, or Mixx)?",
     "questionHint": "Only confirm if this wallet is yours and can accept transfers.",
     "questionYes": "Yes, it receives Mobile Money",
     "questionNoDifferent": "No, use a different number",
@@ -8810,6 +8824,222 @@
       "mixx": "Mixx by Yas",
       "mismatch": "The selected operator does not match the phone number prefix. Please select the correct operator or update the phone number.",
       "unavailable": "FedaPay mobile money is not currently available for Togo. Please try again later or contact support."
+    }
+  },
+  "dedicatedAgents": {
+    "section": {
+      "title": "Dedicated agents",
+      "explainer": "Dedicated agents get orders when no nearby agent takes them.",
+      "scheduledOnly": "Scheduled orders only."
+    },
+    "slots": {
+      "morning": "Morning",
+      "afternoon": "Afternoon",
+      "evening": "Evening",
+      "pickup": "Pickup time",
+      "offConfirm": "Turn off {{slot}}? {{n}} dedicated agents will be paused.",
+      "pausedGroup": "{{n}} paused agents"
+    },
+    "empty": "No dedicated agent",
+    "post": "Post a request",
+    "slotHeader": "{{n}} agents · up to {{max}} orders",
+    "load": "{{active}}/{{max}} orders",
+    "balanceShort": "~{{n}} more",
+    "fullWarning": "No dedicated agent can take orders right now. Delivery follows normal rules.",
+    "chips": {
+      "type": {
+        "internal": "Internal",
+        "independent": "Independent"
+      },
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "offToday": "Off today"
+      }
+    },
+    "assignedChip": "Assigned by RendaSua",
+    "actions": {
+      "pause": "Pause",
+      "resume": "Resume",
+      "remove": "Remove"
+    },
+    "removeConfirm": "Remove {{name}} from {{slot}}?",
+    "form": {
+      "agentsNeeded": "Agents needed",
+      "slots": "Slots",
+      "days": "Days",
+      "payLine": "Standard delivery pay",
+      "payFixed": "(fixed)",
+      "termsField": "Terms / notes",
+      "termsHelper": "Hours, dress code, what to expect. Extra pay you offer here is paid by you, not RendaSua.",
+      "termsStrip": "Links and phone numbers are removed.",
+      "publish": "Publish",
+      "posted": "Request posted",
+      "alreadyPosted": "Already posted"
+    },
+    "posting": {
+      "row": "Posting open · {{accepted}}/{{needed}} accepted · {{n}} new",
+      "progress": "{{accepted}}/{{needed}} accepted",
+      "status": {
+        "open": "Open",
+        "filled": "Filled",
+        "closed": "Closed",
+        "expired": "Expired"
+      }
+    },
+    "applicant": {
+      "pending": "Pending",
+      "accepted": "Accepted",
+      "joined": "Joined",
+      "onTimeShort": "on-time",
+      "stats": "Joined {{date}} · {{n}} deliveries · {{m}} missed",
+      "onTime": "{{pct}}% on-time pickups",
+      "acceptConfirm": "Accept {{name}}?",
+      "acceptLastConfirm": "Accept {{name}}? This fills the request and declines the other applicants.",
+      "accept": "Accept",
+      "decline": "Decline",
+      "autoDeclined": "Auto-declined",
+      "closeConfirm": "Close this request? Pending applicants will be declined.",
+      "termsEdited": "Applicants were notified"
+    },
+    "agent": {
+      "opportunities": "Opportunities",
+      "myStores": "My stores",
+      "spots": "{{accepted}}/{{needed}} spots filled",
+      "apply": "Apply",
+      "photoGate": "Add a profile photo to apply",
+      "applied": "Applied",
+      "withdraw": "Withdraw",
+      "withdrawConfirm": "Withdraw your application?",
+      "filled": "This spot was filled",
+      "accepted": "You're now dedicated to {{store}} ({{slot}})",
+      "updatedChip": "Updated",
+      "noTerms": "No extra terms",
+      "disabled": {
+        "holds_slot": "You already cover this slot at this store",
+        "max_assignments": "You've reached {{max}} stores"
+      },
+      "opp": {
+        "empty": "No openings near you right now",
+        "noAddress": "Add your address to see stores near you",
+        "gone": "This opportunity is no longer available"
+      },
+      "gate": {
+        "not_verified": "Get verified to see store opportunities",
+        "verifyAccount": "Verify my account",
+        "contract_unsigned": "Sign your agent agreement to continue",
+        "sign": "Sign",
+        "suspended": "Your account is suspended",
+        "contactSupport": "Contact support"
+      },
+      "offToday": "Off today",
+      "pausedByStore": "Paused by the store",
+      "stores": {
+        "empty": "No stores yet",
+        "seeOpportunities": "See opportunities",
+        "emptyInternal": "RendaSua will assign you to stores"
+      },
+      "removedByStore": "This store removed you"
+    },
+    "admin": {
+      "assign": "Assign",
+      "steps": {
+        "store": "Store",
+        "slots": "Slots",
+        "agent": "Agent"
+      },
+      "assigned": "Assigned. The store and agent were notified.",
+      "truncated": "Showing the first results; refine the search",
+      "searchStoreCity": "Search store / city",
+      "noLocationsFound": "No locations found",
+      "selectSlots": "Select one or more slots",
+      "filterAgents": "Filter agents",
+      "noAgentsFound": "No agents found"
+    },
+    "offline": "Offline · showing last update",
+    "generic": "Something went wrong",
+    "retry": "Retry",
+    "errors": {
+      "posting_filled": "This request is already full",
+      "posting_not_open": "This request is no longer open",
+      "posting_expired": "This request is no longer open",
+      "application_not_pending": "This applicant is no longer pending",
+      "agent_holds_slot": "This agent already covers this slot",
+      "cap_exceeded": "This agent already has the maximum number of stores",
+      "duplicate": "This agent is already assigned to this slot",
+      "slot_disabled": "Turn {{slot}} back on first",
+      "agent_ineligible": "This agent can't be accepted right now",
+      "pickup_time_outside_slot": "Choose a time between {{start}} and {{end}}",
+      "assignment_removed": "This assignment was removed",
+      "assignment_changed": "This assignment has changed",
+      "query_too_short": "Search query is too short",
+      "agent_not_verified": "This agent is not verified",
+      "agent_suspended": "This agent is suspended",
+      "not_found": "Resource not found",
+      "geo_scope": "Outside your admin scope",
+      "invalid_slot_keys": "Invalid slots selected",
+      "posting_already_open": "You already have an open request for this slot",
+      "slot_has_dedicated_agents": "This slot has dedicated agents that will be paused",
+      "invalid_headcount": "Headcount must be between 1 and 10",
+      "invalid_days_of_week": "Please select at least one day",
+      "terms_too_long": "Terms must be 1000 characters or less",
+      "generic": "Something went wrong"
+    },
+    "superuser": {
+      "tab": "Dedicated",
+      "assign": "Assign",
+      "status": "Status",
+      "active": "Active",
+      "paused": "Paused",
+      "noAssignments": "No assignments found.",
+      "agent": "Agent",
+      "location": "Location",
+      "slots": "Slots",
+      "relationWarning": "Agent may be related to this business",
+      "pause": "Pause",
+      "resume": "Resume",
+      "remove": "Remove",
+      "removeConfirm": "Remove assignment?",
+      "removeConfirmDesc": "The agent will no longer be dedicated to this location.",
+      "posting": "Posting",
+      "adminAssigned": "Admin assigned"
+    },
+    "metrics": {
+      "deliveries": "deliveries",
+      "missed": "missed",
+      "onTimePercent": "{{pct}}% on-time"
+    },
+    "dayLetters": {
+      "monday": "M",
+      "tuesday": "T",
+      "wednesday": "W",
+      "thursday": "T",
+      "friday": "F",
+      "saturday": "S",
+      "sunday": "S"
+    },
+    "dayLettersFR": {
+      "monday": "L",
+      "tuesday": "M",
+      "wednesday": "M",
+      "thursday": "J",
+      "friday": "V",
+      "saturday": "S",
+      "sunday": "D"
+    },
+    "closeWithCount": "Close posting ({{count}} will be auto-declined)",
+    "noLongerAvailable": "This posting is no longer available",
+    "ariaLabels": {
+      "pauseAgent": "Pause agent {{name}}",
+      "resumeAgent": "Resume agent {{name}}",
+      "removeAgent": "Remove agent {{name}}",
+      "editTerms": "Edit terms",
+      "moreOptions": "More options",
+      "closePosting": "Close posting",
+      "decreaseHeadcount": "Decrease agent count",
+      "increaseHeadcount": "Increase agent count",
+      "slotToggle": "Toggle {{slot}} slot",
+      "pickupTimeSelect": "Select pickup time for {{slot}}"
     }
   }
 }

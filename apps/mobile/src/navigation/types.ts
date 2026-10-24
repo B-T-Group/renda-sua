@@ -2,6 +2,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { PersonaSlug } from '../types/persona';
 import type { AssistantContext } from '../utils/assistantChips';
+import type { SlotKey } from '../types/dedicatedAgents';
 
 export type EnrollPersonaParams = { targetPersona: PersonaSlug };
 
@@ -307,6 +308,9 @@ export type BusinessRootStackParamList = {
   BusinessTeam: undefined;
   BusinessLocationForm: { locationId?: string };
   BusinessLocationHours: { locationId: string };
+  BusinessLocationDedicatedAgents: { locationId: string };
+  DedicatedPostingForm: { locationId: string; slotKey?: SlotKey };
+  DedicatedApplicants: { locationId: string; postingId: string };
   BusinessItemsList:
     | { locationId?: string; moderationStatus?: 'rejected' | 'proposal_pending' }
     | undefined;
@@ -418,6 +422,9 @@ export type DelegateRootStackParamList = {
     highlightMessageId?: string;
     draftMessage?: string;
   };
+  BusinessLocationDedicatedAgents: { locationId: string };
+  DedicatedPostingForm: { locationId: string; slotKey?: SlotKey };
+  DedicatedApplicants: { locationId: string; postingId: string };
 };
 
 export type DelegateAppNavScreen =
@@ -428,3 +435,5 @@ export type AccountManagementScreenProps = NativeStackScreenProps<
   ClientRootStackParamList,
   'AccountManagement'
 >;
+
+export type { AgentRootStackParamList, AgentMainTabParamList } from './AgentRootNavigator';

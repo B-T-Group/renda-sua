@@ -9,6 +9,7 @@ describe('isActivePhoneCountry', () => {
     expect(isActivePhoneCountry(' bj ')).toBe(true);
     expect(isActivePhoneCountry('ci')).toBe(true);
     expect(isActivePhoneCountry('CG')).toBe(true);
+    expect(isActivePhoneCountry('CD')).toBe(true);
     expect(isActivePhoneCountry('CM')).toBe(true);
     expect(isActivePhoneCountry('CA')).toBe(true);
     expect(isActivePhoneCountry('FR')).toBe(false);
@@ -22,6 +23,7 @@ describe('getDialCodeForActiveCountry', () => {
     expect(getDialCodeForActiveCountry('BJ')).toBe('229');
     expect(getDialCodeForActiveCountry('CI')).toBe('225');
     expect(getDialCodeForActiveCountry('CG')).toBe('242');
+    expect(getDialCodeForActiveCountry('CD')).toBe('243');
   });
 
   it('returns null when the country is not an active phone market', () => {

@@ -139,7 +139,7 @@ export class DepositRefundService {
         });
       } catch (error: any) {
         // Nothing moved (release is the only leg): hand the deposit back to
-        // 'paid' so a retry, forfeit or settlement can still act on it.
+        // 'paid' and clear the pending flag in the same write.
         await this.revertRefundClaim(orderId);
         throw error;
       }
@@ -580,7 +580,7 @@ export class DepositRefundService {
               deposit_status: { _eq: refunded }
               deposit_refund_status: { _eq: pending }
             }
-            _set: { deposit_status: paid }
+            _set: { deposit_status: paid, deposit_refund_status: none }
           ) { affected_rows }
         }
         `,
@@ -650,13 +650,12 @@ export class DepositRefundService {
       };
     }
 
-    if (
-      order.deposit_refund_status === 'pending' ||
-      order.deposit_refund_status === 'refunded'
-    ) {
+    // pending is only written together with status refunded. paid + pending
+    // means the claim was reverted and the failure stamp did not land.
+    if (order.deposit_refund_status === 'refunded') {
       return {
         eligible: false,
-        reason: 'Refund already in progress or completed',
+        reason: 'Refund already completed',
         code: 'REFUND_IN_PROGRESS',
       };
     }

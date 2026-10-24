@@ -5,6 +5,7 @@ const AFRICAN_MARKET_COUNTRY_CODES = [
   'BJ',
   'CI',
   'CG',
+  'CD',
 ] as const;
 
 export type SignupOtpChannel = 'email' | 'sms';

@@ -13,11 +13,13 @@ describe('isAfricanMarketCountry', () => {
       'BJ',
       'CI',
       'CG',
+      'CD',
     ]);
     expect(isAfricanMarketCountry(' tg ')).toBe(true);
     expect(isAfricanMarketCountry('bj')).toBe(true);
     expect(isAfricanMarketCountry('CI')).toBe(true);
     expect(isAfricanMarketCountry('CG')).toBe(true);
+    expect(isAfricanMarketCountry('CD')).toBe(true);
   });
 
   it('excludes Stripe rails and blank codes', () => {
@@ -35,6 +37,7 @@ describe('isSignupCountryCode', () => {
     expect(isSignupCountryCode('BJ')).toBe(true);
     expect(isSignupCountryCode('CI')).toBe(true);
     expect(isSignupCountryCode('CG')).toBe(true);
+    expect(isSignupCountryCode('CD')).toBe(true);
     expect(isSignupCountryCode(' us ')).toBe(true);
     expect(isSignupCountryCode('CA')).toBe(true);
     expect(isSignupCountryCode('FR')).toBe(false);

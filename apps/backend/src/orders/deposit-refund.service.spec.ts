@@ -170,9 +170,123 @@ describe('DepositRefundService', () => {
     );
     // The claim is handed back so a retry / forfeit / settlement can still act.
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('RevertDepositRefundClaim'),
+      expect.stringContaining('deposit_status: paid, deposit_refund_status: none'),
       { orderId }
     );
+  });
+
+  it('retries a paid deposit left pending when the failure stamp did not land', async () => {
+    mockPaidOrder({ deposit_refund_status: 'pending' });
+
+    const result = await service.refundDeposit(orderId, { allowAfterLock: true });
+
+    expect(result.success).toBe(true);
+    expect(result.errorCode).toBeUndefined();
+    // paid + pending is not in-flight: claim again before any release.
+    expect(claimCalls()).toHaveLength(1);
+    expect(claimCalls()[0][1]).toEqual({
+      orderId,
+      set: { deposit_status: 'refunded', deposit_refund_status: 'pending' },
+    });
+    expect(depositLedgerService.releaseDepositToAvailable).toHaveBeenCalledWith({
+      clientAccountId: 'acct-1',
+      amount: 500,
+      orderNumber: '12345',
+      depositTransactionId: txnId,
+    });
+  });
+
+  it('resumes refunded + pending after the lock point without a new claim', async () => {
+    mockPaidOrder({
+      deposit_status: 'refunded',
+      deposit_refund_status: 'pending',
+      current_status: 'out_for_delivery',
+    });
+    depositCalculationService.isAfterRefundLockPoint.mockReturnValue(true);
+
+    const result = await service.refundDeposit(orderId);
+
+    expect(result).toEqual({ success: true, message: 'Deposit refund completed' });
+    expect(claimCalls()).toHaveLength(0);
+    expect(depositCalculationService.isAfterRefundLockPoint).not.toHaveBeenCalled();
+    expect(depositLedgerService.releaseDepositToAvailable).toHaveBeenCalledTimes(1);
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('mutation CompleteDepositRefund'),
+      expect.objectContaining({ orderId })
+    );
+  });
+
+  it('does not release a paid deposit whose refund flag is already refunded', async () => {
+    mockPaidOrder({ deposit_refund_status: 'refunded' });
+
+    const result = await service.refundDeposit(orderId, { allowAfterLock: true });
+
+    expect(result).toMatchObject({
+      success: false,
+      errorCode: 'REFUND_IN_PROGRESS',
+      message: 'Refund already completed',
+    });
+    expect(claimCalls()).toHaveLength(0);
+    expect(depositLedgerService.releaseDepositToAvailable).not.toHaveBeenCalled();
+  });
+
+  it('retries a paid deposit whose failure stamp landed', async () => {
+    mockPaidOrder({ deposit_refund_status: 'failed' });
+
+    const result = await service.refundDeposit(orderId);
+
+    expect(result.success).toBe(true);
+    expect(claimCalls()).toHaveLength(1);
+    expect(depositLedgerService.releaseDepositToAvailable).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not release or mark failed when a resume has no account or transaction', async () => {
+    mockPaidOrder({
+      deposit_status: 'refunded',
+      deposit_refund_status: 'pending',
+    });
+    hasuraSystemService.getAccount.mockResolvedValue(null as any);
+
+    const noAccount = await service.refundDeposit(orderId);
+    expect(noAccount).toMatchObject({
+      success: false,
+      errorCode: 'REFUND_IN_PROGRESS',
+      message: 'Cannot resume deposit refund',
+    });
+
+    mockPaidOrder({
+      deposit_status: 'refunded',
+      deposit_refund_status: 'pending',
+      deposit_mobile_payment_transaction_id: null,
+    });
+    const noTx = await service.refundDeposit(orderId);
+    expect(noTx).toMatchObject({
+      success: false,
+      errorCode: 'REFUND_IN_PROGRESS',
+      message: 'Cannot resume deposit refund',
+    });
+    expect(depositLedgerService.releaseDepositToAvailable).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('keeps refunded + pending when the resume release throws', async () => {
+    mockPaidOrder({
+      deposit_status: 'refunded',
+      deposit_refund_status: 'pending',
+    });
+    depositLedgerService.releaseDepositToAvailable.mockRejectedValue(new Error('hold missing'));
+
+    const result = await service.refundDeposit(orderId);
+
+    expect(result).toMatchObject({
+      success: false,
+      errorCode: 'REFUND_IN_PROGRESS',
+      message: 'hold missing',
+    });
+    const mutations = hasuraSystemService.executeMutation.mock.calls.map(([q]) => String(q));
+    expect(mutations.some((q) => q.includes('CompleteDepositRefund'))).toBe(false);
+    expect(mutations.some((q) => q.includes('MarkDepositRefundFailed'))).toBe(false);
+    expect(mutations.some((q) => q.includes('RevertDepositRefundClaim'))).toBe(false);
   });
 
   it('claims paid -> refunded before releasing, and only then marks it complete', async () => {

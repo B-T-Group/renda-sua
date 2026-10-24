@@ -49,6 +49,8 @@ export type DeepLinkTarget =
   | { type: 'store'; id: string }
   | { type: 'restockItem'; itemId: string }
   | { type: 'restockLikes'; filter: 'all' | 'back_in_stock' }
+  | { type: 'dedicatedAgents'; locationId: string }
+  | { type: 'dedicatedApplicants'; locationId: string; postingId: string }
   | { type: 'dashboard' };
 
 export function resolveDeepLinkTarget(path: string): DeepLinkTarget {
@@ -92,5 +94,12 @@ function matchDeepLinkRest(
   if (head === 'rentals' && id) return { type: 'rental', id };
   if (head === 'foods') return { type: 'food', id };
   if (head === 'store' && id) return { type: 'store', id };
+  if (head === 'business' && segments[1] === 'locations' && segments[3] === 'dedicated-agents') {
+    const locationId = segments[2];
+    if (segments[4] === 'postings' && segments[5]) {
+      return { type: 'dedicatedApplicants', locationId, postingId: segments[5] };
+    }
+    return { type: 'dedicatedAgents', locationId };
+  }
   return null;
 }

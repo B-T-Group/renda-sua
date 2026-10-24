@@ -257,7 +257,7 @@ function SwitchRow({
   return (
     <View style={styles.switchRow}>
       <Text style={styles.switchLabel}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} accessibilityLabel={label} />
+      <Switch value={value} onValueChange={onChange} />
     </View>
   );
 }

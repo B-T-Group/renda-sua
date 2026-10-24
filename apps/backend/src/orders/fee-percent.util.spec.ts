@@ -120,6 +120,8 @@ describe('fee-percent.util', () => {
       ['Bénin', 'BJ'],
       ['Togo', 'TG'],
       ['Congo', 'CG'],
+      ['RDC', 'CD'],
+      ['Democratic Republic of the Congo', 'CD'],
       ['Philippines', 'PH'],
       ['USA', 'US'],
       ['United States', 'US'],

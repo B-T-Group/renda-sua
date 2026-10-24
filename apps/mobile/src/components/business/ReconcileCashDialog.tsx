@@ -7,6 +7,7 @@ import type { CountryCode } from 'libphonenumber-js';
 import { useTheme } from '../../contexts/ThemeContext';
 import PhoneNumberInput from '../PhoneNumberInput';
 import { nationalDigitsToE164 } from '../../utils/phoneLoginUsername';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
 import { pickMobileMoneyDefaultCountry } from '../../utils/placeOrderPhoneValidation';
 
 interface Props {
@@ -25,11 +26,12 @@ export function ReconcileCashDialog({
   loading,
 }: Props) {
   const { t } = useTranslation();
+  const { isos: momoIsos } = useMobileMoneyCountries();
   const { colors, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
   const [countryIso, setCountryIso] = useState<CountryCode>(() =>
-    pickMobileMoneyDefaultCountry(itemCountry)
+    pickMobileMoneyDefaultCountry(itemCountry, momoIsos)
   );
   const [nationalDigits, setNationalDigits] = useState('');
   const [reference, setReference] = useState('');
@@ -37,7 +39,7 @@ export function ReconcileCashDialog({
 
   useEffect(() => {
     if (!visible) return;
-    setCountryIso(pickMobileMoneyDefaultCountry(itemCountry));
+    setCountryIso(pickMobileMoneyDefaultCountry(itemCountry, momoIsos));
     setNationalDigits('');
     setReference('');
     setNotes('');
@@ -95,7 +97,7 @@ export function ReconcileCashDialog({
               nationalDigits={nationalDigits}
               onCountryIsoChange={setCountryIso}
               onNationalDigitsChange={setNationalDigits}
-              allowedIsos={['CM', 'GA']}
+              allowedIsos={momoIsos}
               hasError={nationalDigits.length > 0 && !e164}
               disabled={loading}
             />

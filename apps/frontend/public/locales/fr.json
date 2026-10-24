@@ -73,9 +73,9 @@
     "minWithdrawAmount": "Le montant du retrait doit être supérieur ou égal à {{min}} {{currency}}",
     "withdrawAmountHelper": "Retrait minimum : {{min}} {{currency}}",
     "withdrawBalanceBelowMin": "Il vous faut au moins {{min}} {{currency}} de solde disponible pour retirer.",
-    "withdrawPhoneCmGaHint": "Utilisez un numéro mobile du Cameroun (+237) ou du Gabon (+241).",
+    "withdrawPhoneCmGaHint": "Utilisez un numéro mobile du Cameroun (+237), du Gabon (+241) ou du Togo (+228).",
     "updatePhone": "Modifier",
-    "withdrawPhoneCmGaOnly": "Seuls les numéros du Cameroun (+237) ou du Gabon (+241) sont acceptés.",
+    "withdrawPhoneCmGaOnly": "Seuls les numéros du Cameroun (+237), du Gabon (+241) ou du Togo (+228) sont acceptés.",
     "available": "Disponible",
     "availableBalance": "Solde disponible",
     "cashAdvance": {
@@ -1594,6 +1594,7 @@
       "withheldBalance": "Solde Retenu"
     },
     "agents": {
+      "allAgents": "Tous les agents",
       "filterAll": "Tous les agents",
       "filterUnverified": "Non vérifiés uniquement",
       "idDocumentsList": "Documents d'identité (consulter et vérifier, puis marquer comme vérifié ci-dessous)",
@@ -1743,6 +1744,7 @@
         "BJ": "Bénin",
         "CI": "Côte d'Ivoire",
         "CG": "Congo",
+        "CD": "RDC",
         "CA": "Canada",
         "US": "États-Unis",
         "PH": "Philippines"
@@ -4767,6 +4769,8 @@
     "retry": "Réessayer",
     "rowsPerPage": "Lignes par page",
     "save": "Enregistrer",
+    "saved": "Enregistré",
+    "removed": "Retiré",
     "share": {
       "ariaLabel": "Partager cette page",
       "openMenu": "Partager",
@@ -4822,7 +4826,10 @@
         "saturday": "Sam",
         "sunday": "Dim"
       }
-    }
+    },
+    "source": "Source",
+    "city": "Ville",
+    "required": "Requis"
   },
   "dashboard": {
     "client": {
@@ -5850,7 +5857,14 @@
       "slotName": "Créneau",
       "confirmedAt": "Confirmé à",
       "confirmedBy": "Confirmé par",
-      "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer. Toute votre commande est payée après confirmation."
+      "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer. Toute votre commande est payée après confirmation.",
+      "dedicatedScheduledOnly": "Livraison programmée uniquement pour ce magasin en ce moment. Choisissez l’un des créneaux ci-dessous.",
+      "dedicatedPickupAt": "Récupérée au magasin à {{time}}",
+      "slotKey": {
+        "morning": "Matin",
+        "afternoon": "Après-midi",
+        "evening": "Soir"
+      }
     },
     "failDelivery": {
       "title": "Marquer la livraison comme échouée",
@@ -8367,7 +8381,7 @@
     "businessDashboardCta": "Vérifiez votre numéro Mobile Money pour que vos emplacements puissent accepter les paiements clients.",
     "businessDashboardCtaWithItems": "Vous avez des produits en catalogue. Vérifiez votre numéro Mobile Money pour que les clients puissent payer et que vous receviez les versements.",
     "questionWhy": "Confirmez que ce numéro est enregistré pour recevoir du Mobile Money afin que nous puissions y envoyer vos paiements.",
-    "questionPrompt": "Ce numéro peut-il recevoir des paiements Mobile Money (MTN MoMo / Orange Money) ?",
+    "questionPrompt": "Ce numéro peut-il recevoir des paiements Mobile Money (MTN MoMo, Orange Money, Moov ou Mixx) ?",
     "questionHint": "Confirmez uniquement si ce portefeuille est le vôtre et peut accepter des transferts.",
     "questionYes": "Oui, il reçoit du Mobile Money",
     "questionNoDifferent": "Non, utiliser un autre numéro",
@@ -8827,6 +8841,213 @@
       "mixx": "Mixx by Yas",
       "mismatch": "L'opérateur sélectionné ne correspond pas au préfixe du numéro de téléphone. Veuillez sélectionner le bon opérateur ou mettre à jour le numéro de téléphone.",
       "unavailable": "Le paiement mobile FedaPay n'est actuellement pas disponible pour le Togo. Veuillez réessayer plus tard ou contacter le support."
+    }
+  },
+  "dedicatedAgents": {
+    "section": {
+      "title": "Livreurs dédiés",
+      "explainer": "Les livreurs dédiés reçoivent les commandes quand aucun livreur proche ne les prend.",
+      "scheduledOnly": "Commandes programmées uniquement."
+    },
+    "slots": {
+      "morning": "Matin",
+      "afternoon": "Après-midi",
+      "evening": "Soir",
+      "pickup": "Heure de collecte",
+      "offConfirm": "Désactiver le créneau {{slot}} ? {{n}} livreurs dédiés seront mis en pause.",
+      "pausedGroup": "{{n}} livreurs en pause"
+    },
+    "empty": "Aucun livreur dédié",
+    "post": "Publier une demande",
+    "slotHeader": "{{n}} livreurs · jusqu'à {{max}} commandes",
+    "load": "{{active}}/{{max}} commandes",
+    "balanceShort": "~{{n}} de plus",
+    "fullWarning": "Aucun livreur dédié disponible pour le moment. La livraison suit les règles habituelles.",
+    "chips": {
+      "type": {
+        "internal": "Interne",
+        "independent": "Indépendant"
+      },
+      "status": {
+        "active": "Actif",
+        "paused": "En pause",
+        "offToday": "Absent aujourd'hui"
+      }
+    },
+    "assignedChip": "Affecté par RendaSua",
+    "actions": {
+      "pause": "Mettre en pause",
+      "resume": "Reprendre",
+      "remove": "Retirer"
+    },
+    "removeConfirm": "Retirer {{name}} du créneau {{slot}} ?",
+    "form": {
+      "agentsNeeded": "Livreurs recherchés",
+      "slots": "Créneaux",
+      "days": "Jours",
+      "payLine": "Rémunération standard par livraison",
+      "payFixed": "(fixe)",
+      "termsField": "Conditions / remarques",
+      "termsHelper": "Horaires, tenue, ce qui est attendu. Toute rémunération supplémentaire proposée ici est à votre charge, pas à celle de RendaSua.",
+      "termsStrip": "Les liens et numéros de téléphone sont retirés.",
+      "publish": "Publier",
+      "posted": "Demande publiée",
+      "alreadyPosted": "Déjà publiée"
+    },
+    "posting": {
+      "row": "Demande ouverte · {{accepted}}/{{needed}} acceptés · {{n}} nouvelles",
+      "progress": "{{accepted}}/{{needed}} acceptés",
+      "status": {
+        "open": "Ouverte",
+        "filled": "Complète",
+        "closed": "Fermée",
+        "expired": "Expirée"
+      }
+    },
+    "applicant": {
+      "pending": "En attente",
+      "accepted": "Acceptés",
+      "joined": "Inscrit le",
+      "onTimeShort": "à l'heure",
+      "stats": "Inscrit le {{date}} · {{n}} livraisons · {{m}} manquées",
+      "onTime": "{{pct}} % de collectes à l'heure",
+      "acceptConfirm": "Accepter {{name}} ?",
+      "acceptLastConfirm": "Accepter {{name}} ? La demande sera complète et les autres candidatures refusées.",
+      "accept": "Accepter",
+      "decline": "Refuser",
+      "autoDeclined": "Refusée automatiquement",
+      "closeConfirm": "Fermer cette demande ? Les candidatures en attente seront refusées.",
+      "termsEdited": "Les candidats ont été prévenus"
+    },
+    "agent": {
+      "opportunities": "Opportunités",
+      "myStores": "Mes boutiques",
+      "spots": "{{accepted}}/{{needed}} places pourvues",
+      "apply": "Postuler",
+      "photoGate": "Ajoutez une photo de profil pour postuler",
+      "applied": "Candidature envoyée",
+      "withdraw": "Retirer",
+      "withdrawConfirm": "Retirer votre candidature ?",
+      "filled": "Ce poste a été pourvu",
+      "accepted": "Vous êtes désormais livreur dédié de {{store}} ({{slot}})",
+      "updatedChip": "Mis à jour",
+      "noTerms": "Aucune condition particulière",
+      "disabled": {
+        "holds_slot": "Vous couvrez déjà ce créneau dans cette boutique",
+        "max_assignments": "Vous avez atteint {{max}} boutiques"
+      },
+      "opp": {
+        "empty": "Aucune offre près de chez vous pour le moment",
+        "noAddress": "Ajoutez votre adresse pour voir les boutiques proches",
+        "gone": "Cette opportunité n'est plus disponible"
+      },
+      "gate": {
+        "not_verified": "Faites vérifier votre compte pour voir les opportunités",
+        "verifyAccount": "Vérifier mon compte",
+        "contract_unsigned": "Signez votre contrat de livreur pour continuer",
+        "sign": "Signer",
+        "suspended": "Votre compte est suspendu",
+        "contactSupport": "Contacter le support"
+      },
+      "offToday": "Absent aujourd'hui",
+      "pausedByStore": "Mis en pause par la boutique",
+      "stores": {
+        "empty": "Aucune boutique pour l'instant",
+        "seeOpportunities": "Voir les opportunités",
+        "emptyInternal": "RendaSua vous affectera à des boutiques"
+      },
+      "removedByStore": "Cette boutique vous a retiré"
+    },
+    "admin": {
+      "assign": "Affecter",
+      "steps": {
+        "store": "Boutique",
+        "slots": "Créneaux",
+        "agent": "Livreur"
+      },
+      "assigned": "Affecté. La boutique et le livreur ont été prévenus.",
+      "truncated": "Premiers résultats affichés ; affinez la recherche",
+      "searchStoreCity": "Rechercher boutique / ville",
+      "noLocationsFound": "Aucune boutique trouvée",
+      "selectSlots": "Sélectionnez un ou plusieurs créneaux",
+      "filterAgents": "Filtrer les livreurs",
+      "noAgentsFound": "Aucun livreur trouvé"
+    },
+    "offline": "Hors ligne · dernière mise à jour affichée",
+    "generic": "Une erreur est survenue",
+    "retry": "Réessayer",
+    "errors": {
+      "posting_filled": "Cette demande est déjà complète",
+      "posting_not_open": "Cette demande n'est plus ouverte",
+      "posting_expired": "Cette demande n'est plus ouverte",
+      "application_not_pending": "Cette candidature n'est plus en attente",
+      "agent_holds_slot": "Ce livreur couvre déjà ce créneau",
+      "cap_exceeded": "Ce livreur a déjà le nombre maximum de boutiques",
+      "duplicate": "Ce livreur est déjà affecté à ce créneau",
+      "slot_disabled": "Réactivez d'abord le créneau {{slot}}",
+      "agent_ineligible": "Ce livreur ne peut pas être accepté pour le moment",
+      "pickup_time_outside_slot": "Choisissez une heure entre {{start}} et {{end}}",
+      "assignment_removed": "Cette affectation a été supprimée",
+      "assignment_changed": "Cette affectation a changé",
+      "query_too_short": "La requête de recherche est trop courte",
+      "agent_not_verified": "Ce livreur n'est pas vérifié",
+      "agent_suspended": "Ce livreur est suspendu",
+      "not_found": "Ressource introuvable",
+      "geo_scope": "Hors de votre périmètre admin",
+      "invalid_slot_keys": "Créneaux sélectionnés invalides",
+      "posting_already_open": "Vous avez déjà une demande ouverte pour ce créneau",
+      "slot_has_dedicated_agents": "Ce créneau a des livreurs dédiés qui seront mis en pause",
+      "invalid_headcount": "Le nombre doit être entre 1 et 10",
+      "invalid_days_of_week": "Veuillez sélectionner au moins un jour",
+      "terms_too_long": "Les conditions doivent faire 1000 caractères maximum",
+      "generic": "Une erreur est survenue"
+    },
+    "superuser": {
+      "tab": "Dédiés",
+      "assign": "Affecter",
+      "status": "Statut",
+      "active": "Actif",
+      "paused": "En pause",
+      "noAssignments": "Aucune affectation trouvée.",
+      "agent": "Livreur",
+      "location": "Boutique",
+      "slots": "Créneaux",
+      "relationWarning": "Le livreur pourrait être lié à cette boutique",
+      "pause": "Mettre en pause",
+      "resume": "Reprendre",
+      "remove": "Retirer",
+      "removeConfirm": "Retirer l'affectation ?",
+      "removeConfirmDesc": "Le livreur ne sera plus dédié à cette boutique.",
+      "posting": "Demande",
+      "adminAssigned": "Affecté par admin"
+    },
+    "metrics": {
+      "deliveries": "livraisons",
+      "missed": "manquées",
+      "onTimePercent": "{{pct}} % à l'heure"
+    },
+    "dayLetters": {
+      "monday": "L",
+      "tuesday": "M",
+      "wednesday": "M",
+      "thursday": "J",
+      "friday": "V",
+      "saturday": "S",
+      "sunday": "D"
+    },
+    "closeWithCount": "Fermer la demande ({{count}} seront automatiquement refusées)",
+    "noLongerAvailable": "Cette demande n'est plus disponible",
+    "ariaLabels": {
+      "pauseAgent": "Mettre en pause le livreur {{name}}",
+      "resumeAgent": "Reprendre le livreur {{name}}",
+      "removeAgent": "Retirer le livreur {{name}}",
+      "editTerms": "Modifier les conditions",
+      "moreOptions": "Plus d'options",
+      "closePosting": "Fermer la demande",
+      "decreaseHeadcount": "Diminuer le nombre de livreurs",
+      "increaseHeadcount": "Augmenter le nombre de livreurs",
+      "slotToggle": "Activer/désactiver le créneau {{slot}}",
+      "pickupTimeSelect": "Sélectionner l'heure de collecte pour {{slot}}"
     }
   }
 }

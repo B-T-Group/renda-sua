@@ -7,6 +7,7 @@ describe('resolveCurrencyForCountry', () => {
     expect(resolveCurrencyForCountry('bj', [])).toBe('XOF');
     expect(resolveCurrencyForCountry('CI', [])).toBe('XOF');
     expect(resolveCurrencyForCountry('CG', [])).toBe('XAF');
+    expect(resolveCurrencyForCountry('CD', [])).toBe('CDF');
     expect(resolveCurrencyForCountry('CM', [])).toBe('XAF');
     expect(CURRENCIES).toContain('XOF');
   });

@@ -5,14 +5,12 @@ import { ActivityIndicator, Button, Text } from 'react-native-paper';
 import { StatusPill } from '../common/StatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
+import { useMobileMoneyCountries } from '../../hooks/useMobileMoneyCountries';
+import { isMobileMoneyCountry } from '../../utils/placeOrderPhoneValidation';
 import { MobilePaymentPhoneChooserSheet } from '../dialogs/MobilePaymentPhoneChooserSheet';
 import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 import type { MobilePaymentPhone, MobilePaymentPhoneModalMode } from '../../types/mobilePaymentPhone';
 
-function isMoMoMarket(country?: string | null): boolean {
-  const c = (country ?? '').trim().toUpperCase();
-  return c === 'CM' || c === 'GA';
-}
 
 type Props = {
   profilePhone?: string | null;
@@ -21,6 +19,7 @@ type Props = {
 
 export function ProfileMobileMoneySection({ profilePhone, profileCountry }: Props) {
   const { t } = useTranslation();
+  const { isos: momoIsos } = useMobileMoneyCountries();
   const { colors, spacing, borderRadius, shadows } = useTheme();
   const { phones, loading, fetchPhones, verificationMethod, api } = useMobilePaymentPhones(true);
   const [busy, setBusy] = useState(false);
@@ -36,7 +35,7 @@ export function ProfileMobileMoneySection({ profilePhone, profileCountry }: Prop
   );
 
   const showSection =
-    phones.length > 0 || isMoMoMarket(profileCountry) || Boolean(profilePhone?.trim());
+    phones.length > 0 || isMobileMoneyCountry(profileCountry, momoIsos) || Boolean(profilePhone?.trim());
 
   const selectDefault = useCallback(
     async (phone: MobilePaymentPhone) => {

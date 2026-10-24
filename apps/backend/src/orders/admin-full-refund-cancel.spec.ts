@@ -510,6 +510,114 @@ describe('OrdersService.adminFullRefundCancel', () => {
     expect(alerts('admin_full_refund_cancel_deposit_refund_failed')).toHaveLength(1);
   });
 
+  /** The deposit step re-reads. Call 1 is the resume snapshot; call 2 is that re-read. */
+  function onDepositReread(w: ReturnType<typeof service>, fresh: () => Record<string, unknown>) {
+    let reads = 0;
+    const orig = w.svc.getOrderDetails.getMockImplementation();
+    w.svc.getOrderDetails.mockImplementation(async () => {
+      reads += 1;
+      if (reads === 2) return fresh();
+      return orig();
+    });
+  }
+
+  it('re-read releases a paid deposit the cancel snapshot stored as zero (Hasura numeric string)', async () => {
+    const w = service('cancelled', { deposit: true });
+    seedResume(w, 'failed', { deposit_status: 'paid', deposit_amount: 0, deposit_refund_status: null });
+    onDepositReread(w, () => ({
+      ...w.order,
+      current_status: w.db.status,
+      deposit_status: 'paid',
+      deposit_amount: '500.00',
+      deposit_refund_status: null,
+    }));
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(w.svc.depositRefundService.refundDeposit).toHaveBeenCalledWith('o-1', { allowAfterLock: true });
+    expect(w.progress().steps.depositRefund).toBe('done');
+    expect(res.partialFailure).toBe(false);
+  });
+
+  it('re-read does not release again when the row is already refunded, even if the snapshot is still paid', async () => {
+    const w = service('cancelled', { deposit: true });
+    seedResume(w, 'failed', { deposit_status: 'paid', deposit_amount: 500 });
+    onDepositReread(w, () => ({
+      ...w.order,
+      current_status: w.db.status,
+      deposit_status: 'refunded',
+      deposit_refund_status: 'refunded',
+      deposit_amount: '500.00',
+    }));
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    expect(w.progress().steps.depositRefund).toBe('done');
+    expect(res).toMatchObject({ partialFailure: false, depositRefund: { status: 'refunded' } });
+    expect(alerts('admin_full_refund_cancel_deposit_refund_failed')).toHaveLength(0);
+  });
+
+  it('re-read keeps a failed release failed when the snapshot is still paid', async () => {
+    const w = service('cancelled', { deposit: true });
+    seedResume(w, 'failed', { deposit_status: 'paid', deposit_amount: 500 });
+    onDepositReread(w, () => ({
+      ...w.order,
+      current_status: w.db.status,
+      deposit_status: 'refunded',
+      deposit_refund_status: 'failed',
+      deposit_amount: '500.00',
+    }));
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    expect(w.progress().steps.depositRefund).toBe('failed');
+    expect(res).toMatchObject({
+      partialFailure: true,
+      depositRefund: { status: 'failed', message: 'Deposit refund failed; details are in the logs (alerted)' },
+    });
+    expect(JSON.stringify(res)).not.toMatch(/marked failed/);
+    expect(alerts('admin_full_refund_cancel_deposit_refund_failed')).toHaveLength(1);
+  });
+
+  it('a failed deposit re-read falls back to the paid snapshot and still releases', async () => {
+    const w = service('cancelled', { deposit: true });
+    seedResume(w, 'failed', { deposit_status: 'paid', deposit_amount: '500.00' });
+    onDepositReread(w, () => {
+      throw new Error('db down');
+    });
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(w.svc.depositRefundService.refundDeposit).toHaveBeenCalledWith('o-1', { allowAfterLock: true });
+    expect(w.progress().steps.depositRefund).toBe('done');
+    expect(res).toMatchObject({ partialFailure: false, depositRefund: { status: 'refunded' } });
+    expect(JSON.stringify(res)).not.toMatch(/db down/);
+  });
+
+  it('resume releases a claimed deposit whose amount is the Hasura numeric string', async () => {
+    const w = service('cancelled', { deposit: true });
+    seedResume(w, 'failed', {
+      deposit_status: 'refunded',
+      deposit_refund_status: 'pending',
+      deposit_amount: '500.00',
+    });
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(w.svc.depositRefundService.refundDeposit).toHaveBeenCalledWith('o-1', { allowAfterLock: true });
+    expect(w.progress().steps.depositRefund).toBe('done');
+    expect(res).toMatchObject({ partialFailure: false, depositRefund: { status: 'refunded' } });
+  });
+
+  it.each(['500.00', '500'])('a paid deposit amount %s is released', async (amount) => {
+    const w = service('confirmed', { deposit: true });
+    w.order.deposit_amount = amount;
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(w.svc.depositRefundService.refundDeposit).toHaveBeenCalledWith('o-1', { allowAfterLock: true });
+    expect(res.depositRefund).toEqual({ status: 'refunded' });
+  });
+
+  it.each(['0.00', '0'])('a paid deposit amount %s is not released', async (amount) => {
+    const w = service('confirmed', { deposit: true });
+    w.order.deposit_amount = amount;
+    const res = await w.svc.adminFullRefundCancel('o-1', 'r');
+    expect(w.svc.depositRefundService.refundDeposit).not.toHaveBeenCalled();
+    expect(res.depositRefund).toEqual({ status: 'none' });
+    expect(alerts('admin_full_refund_cancel_deposit_refund_failed')).toHaveLength(0);
+  });
+
   it('no deposit -> depositRefund none, the refund service is not called, full refund message', async () => {
     const { svc } = service('confirmed');
     const res = await svc.adminFullRefundCancel('o-1', 'r');

@@ -68,6 +68,11 @@ import { useAddressManager } from '../../hooks/useAddressManager';
 import { useCurrentLocationAddress } from '../../hooks/useCurrentLocationAddress';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useCheckoutPreflightState } from '../../hooks/useCheckoutPreflight';
+import {
+  isCoveredDeliveryWindow,
+  isDeliveryUnavailableError,
+  resolveDeliveryCoverage,
+} from '../../utils/checkoutPresentation';
 import { useCountryStateCity } from '../../hooks/useCountryStateCity';
 import { useDeliveryFee } from '../../hooks/useDeliveryFee';
 import { useDeliveryTimeSlots } from '../../hooks/useDeliveryTimeSlots';
@@ -107,6 +112,7 @@ import { ClientMobileMoneyPhoneSection } from '../common/ClientMobileMoneyPhoneS
 import PhoneInput from '../common/PhoneInput';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
+import CoveredDeliverySlotPicker from '../common/CoveredDeliverySlotPicker';
 import DeliveryTimeWindowSelector, {
   DeliveryWindowData,
 } from '../common/DeliveryTimeWindowSelector';
@@ -1294,16 +1300,25 @@ const PlaceOrderPage: React.FC = () => {
     selectedVariantId,
   ]);
 
+  const [preflightRefreshKey, setPreflightRefreshKey] = useState(0);
   const { config: checkoutPreflight, loading: deliveryCheckLoading } =
     useCheckoutPreflightState(
       checkoutPreflightRequest,
-      Boolean(checkoutPreflightRequest)
+      Boolean(checkoutPreflightRequest),
+      preflightRefreshKey
     );
 
+  // #594: ASAP out but a dedicated agent covers some slots → scheduled-only delivery.
+  const deliveryCoverage = useMemo(
+    () => resolveDeliveryCoverage(checkoutPreflight?.delivery_availability),
+    [checkoutPreflight?.delivery_availability]
+  );
   const deliveryOffered =
-    checkoutPreflight?.delivery_availability?.available === true;
+    checkoutPreflight?.delivery_availability?.available === true ||
+    deliveryCoverage.scheduledOnly;
   const deliveryRuledOut =
-    checkoutPreflight?.delivery_availability?.available === false;
+    checkoutPreflight?.delivery_availability?.available === false &&
+    !deliveryCoverage.scheduledOnly;
 
   useEffect(() => {
     if (!selectedItem || deliveryCheckLoading || !checkoutPreflightRequest) return;
@@ -1787,6 +1802,11 @@ const PlaceOrderPage: React.FC = () => {
       }
 
       setError(errorMessage);
+      // #594: coverage can vanish between preflight and create; refresh it.
+      if (isDeliveryUnavailableError(error)) {
+        setDeliveryWindow(null);
+        setPreflightRefreshKey((key) => key + 1);
+      }
       placingOrderRef.current = false;
       setLoading(false);
     }
@@ -2149,6 +2169,16 @@ const PlaceOrderPage: React.FC = () => {
   // When the item's country supports Stripe, payment is by card and the
   // customer's phone number country is irrelevant, so we skip the mobile-money
   // "supported phone country" restriction.
+  const deliveryScheduledOnly = !isPickupOrder && deliveryCoverage.scheduledOnly;
+  const coveredWindowSelected = isCoveredDeliveryWindow(
+    deliveryWindow,
+    deliveryCoverage.coveredSlots
+  );
+  // Fast delivery is an ASAP upgrade; it does not apply to scheduled-only delivery.
+  useEffect(() => {
+    if (deliveryScheduledOnly) setRequiresFastDelivery(false);
+  }, [deliveryScheduledOnly]);
+
   const cookedFoodClosedBlocker =
     checkoutPreflight?.blocking_errors?.find(
       (b) => b.code === 'COOKED_FOOD_STORE_CLOSED'
@@ -2158,7 +2188,14 @@ const PlaceOrderPage: React.FC = () => {
   const renderTimingSelector = (
     props: React.ComponentProps<typeof DeliveryTimeWindowSelector>
   ) =>
-    asapOnlyCheckout ? (
+    deliveryScheduledOnly && props.fulfillment !== 'pickup' ? (
+      <CoveredDeliverySlotPicker
+        slots={deliveryCoverage.coveredSlots}
+        value={deliveryWindow}
+        onChange={props.onChange}
+        disabled={props.loading}
+      />
+    ) : asapOnlyCheckout ? (
       <CookedFoodClosedAlert
         message={cookedFoodClosedMessage}
         details={cookedFoodClosedBlocker?.details}
@@ -2192,7 +2229,10 @@ const PlaceOrderPage: React.FC = () => {
   const deliveryKnownUnavailable = deliveryRuledOut;
   const showDeliveryUnavailable = deliveryRuledOut && !isPickupOrder;
   const deliveryBlocked =
-    !isPickupOrder && (deliveryCheckLoading || !deliveryOffered);
+    !isPickupOrder &&
+    (deliveryCheckLoading ||
+      !deliveryOffered ||
+      (deliveryScheduledOnly && !coveredWindowSelected));
 
   const preflightDeposit = useMemo(() => {
     const empty = {
@@ -2452,6 +2492,7 @@ const PlaceOrderPage: React.FC = () => {
           {/* Delivery Options: fast delivery + time slot (merged from former step 1) */}
           {!isPickupOrder &&
             !showDeliveryUnavailable &&
+            !deliveryScheduledOnly &&
             fastDeliveryConfig &&
             isEnabledForLocation(userCountry, userState) && (
               <Card>
@@ -4050,6 +4091,7 @@ const PlaceOrderPage: React.FC = () => {
               {/* Fast Delivery Option Card */}
               {!isPickupOrder &&
                 !showDeliveryUnavailable &&
+                !deliveryScheduledOnly &&
                 fastDeliveryConfig &&
                 isEnabledForLocation(userCountry, userState) && (
                   <Card>

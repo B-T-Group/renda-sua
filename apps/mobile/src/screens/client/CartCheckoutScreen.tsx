@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { payAfterCopyVariantForPreflight, resolveCreatedPayAfter } from '../../utils/payAfterConfirm';
+import { resolveDeliveryCoverage } from '../../utils/checkoutPresentation';
 import type { CountryCode } from 'libphonenumber-js';
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
 import { AppModal } from '../../components/common/AppModal';
@@ -206,7 +207,11 @@ export default observer(function CartCheckoutScreen() {
     }
     return null;
   }, [cartItemsForPreflight, deliveryAddressId, fulfillment, provisionalCountry]);
-  const { config: preflightConfig, loading: preflightLoading } = useResolvedCheckout({
+  const {
+    config: preflightConfig,
+    loading: preflightLoading,
+    refetch: refetchPreflight,
+  } = useResolvedCheckout({
     request: preflightRequest,
     enabled: cartItemsForPreflight.length > 0,
   });
@@ -309,12 +314,20 @@ export default observer(function CartCheckoutScreen() {
     return t('diaspora.recipientAddressTitle', 'Recipient delivery address');
   }, [recipient.name, t]);
 
+  // #594 (flag on only): ASAP out but a dedicated agent covers some slots, so
+  // delivery is offered scheduled-only for those slots (cart-level list).
+  const deliveryCoverage = useMemo(
+    () => resolveDeliveryCoverage(preflightConfig?.delivery_availability),
+    [preflightConfig?.delivery_availability]
+  );
   const deliveryOffered =
-    preflightConfig?.delivery_availability?.available === true;
+    preflightConfig?.delivery_availability?.available === true ||
+    deliveryCoverage.scheduledOnly;
   const deliveryKnownUnavailable =
     !preflightLoading &&
     Boolean(preflightConfig) &&
-    preflightConfig?.delivery_availability?.available !== true;
+    preflightConfig?.delivery_availability?.available !== true &&
+    !deliveryCoverage.scheduledOnly;
 
   // Funnel analytics: track the first time the unavailable notice is shown.
   const unavailableTrackedRef = useRef(false);
@@ -368,10 +381,13 @@ export default observer(function CartCheckoutScreen() {
     () =>
       new Set(
         (preflightConfig?.groups ?? [])
-          .filter((g) => g.delivery_availability?.available === false)
+          .filter(
+            (g) =>
+              !deliveryCoverage.scheduledOnly && g.delivery_availability?.available === false
+          )
           .map((g) => g.business_id)
       ),
-    [preflightConfig]
+    [preflightConfig, deliveryCoverage.scheduledOnly]
   );
 
   // Pickup timing follows the rail: card orders authorize now, MoMo pays at pickup.
@@ -1028,6 +1044,12 @@ export default observer(function CartCheckoutScreen() {
       return;
     }
     if (outcome.type === 'error') {
+      // #594: coverage can vanish between preflight and create; refresh so the
+      // screen shows the current options (usually the unavailable copy). The
+      // covered-slot block reconciles its own selection against the new slots.
+      if (outcome.code === 'DELIVERY_UNAVAILABLE') {
+        void refetchPreflight();
+      }
       if (
         outcome.code === 'MERCHANT_CLOSED' ||
         /merchant is (currently )?closed/i.test(outcome.message || '')
@@ -1116,6 +1138,7 @@ export default observer(function CartCheckoutScreen() {
       ],
     });
   }, [
+    refetchPreflight,
     deliveryAddressId,
     businessGroups,
     canSubmit,
@@ -1460,6 +1483,7 @@ export default observer(function CartCheckoutScreen() {
             estimatedReadyAt={preflightConfig?.estimated_ready_at}
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
+            coveredSlots={deliveryCoverage.coveredSlots}
             onReadyChange={onDwReadyChange}
             onCommit={onDwCommit}
           />

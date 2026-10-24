@@ -152,6 +152,11 @@ describe('LocationsController', () => {
       );
     });
 
+    it('caches supported countries for at most 5 minutes', () => {
+      // supported_payment_systems is edited out-of-band; a flag flip must show up quickly.
+      expect(SUPPORTED_COUNTRIES_TTL_SECONDS).toBeLessThanOrEqual(300);
+    });
+
     it('returns a stable 500 payload when Hasura country lookup fails', async () => {
       hasuraService.executeQuery.mockRejectedValueOnce(new Error('hasura down'));
 

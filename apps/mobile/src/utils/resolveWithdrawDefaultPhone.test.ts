@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('./deviceDefaultCountry', () => ({
+  getDeviceDefaultCountryCode: () => 'CM',
+}));
+
 import { resolveWithdrawDefaultPhone } from './resolveWithdrawDefaultPhone';
 
 describe('resolveWithdrawDefaultPhone', () => {
@@ -42,12 +47,29 @@ describe('resolveWithdrawDefaultPhone', () => {
     ).toBe('+237600000002');
   });
 
-  it('skips non-CM/GA profile phones so Auth0 can fill', () => {
+  it('skips non-MoMo profile phones so Auth0 can fill', () => {
     expect(
       resolveWithdrawDefaultPhone({
         isLocationAccount: false,
         userPhone: '+33612345678',
         authPhone: '+237670000000',
+      })
+    ).toBe('+237670000000');
+  });
+
+  it('accepts a Togo (+228) profile phone', () => {
+    expect(
+      resolveWithdrawDefaultPhone({ isLocationAccount: false, userPhone: '+22890112233' })
+    ).toBe('+22890112233');
+  });
+
+  it('honours an allowed list from the backend', () => {
+    expect(
+      resolveWithdrawDefaultPhone({
+        isLocationAccount: false,
+        userPhone: '+22890112233',
+        authPhone: '+237670000000',
+        allowedIsos: ['CM', 'GA'],
       })
     ).toBe('+237670000000');
   });

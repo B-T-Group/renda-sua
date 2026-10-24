@@ -37,6 +37,9 @@ export function parseE164Parts(phoneE164: string): {
   if (digits.startsWith('241')) {
     return { countryCode: '241', phoneNumber: digits.slice(3) };
   }
+  if (digits.startsWith('228')) {
+    return { countryCode: '228', phoneNumber: digits.slice(3) };
+  }
   return { countryCode: '237', phoneNumber: digits };
 }
 
