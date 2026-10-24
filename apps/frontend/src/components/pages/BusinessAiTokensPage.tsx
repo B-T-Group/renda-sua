@@ -1,15 +1,18 @@
 import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import CardGiftcardIcon from '@mui/icons-material/CardGiftcard';
 import {
   Alert,
   Box,
   Button,
   CircularProgress,
   Container,
+  IconButton,
   Stack,
+  Tooltip,
   Typography,
 } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -17,8 +20,10 @@ import {
   TokenPackId,
   useBusinessTokens,
 } from '../../hooks/useBusinessTokens';
+import { useBusinessTokenGifts } from '../../hooks/useBusinessTokenGifts';
 import SEOHead from '../seo/SEOHead';
 import PhoneInput from '../common/PhoneInput';
+import GiftAiTokensDialog from '../business/GiftAiTokensDialog';
 import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 
 const BusinessAiTokensPage: React.FC = () => {
@@ -27,10 +32,18 @@ const BusinessAiTokensPage: React.FC = () => {
   const { profile, refetch } = useUserProfileContext();
   const { packs, balance, loading, error, purchasePack, refreshBalance } =
     useBusinessTokens();
+  const { giftable, nongiftable, history, refreshBalanceDetails, loadHistory } =
+    useBusinessTokenGifts();
   const [purchasingId, setPurchasingId] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState(profile?.phone_number || '');
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
   const [purchaseInfo, setPurchaseInfo] = useState<string | null>(null);
+  const [giftOpen, setGiftOpen] = useState(false);
+
+  useEffect(() => {
+    void refreshBalanceDetails();
+    void loadHistory();
+  }, [refreshBalanceDetails, loadHistory]);
 
   const currency = (profile?.currency || 'XAF').toUpperCase();
   const packCurrency = currency === 'CAD' ? 'CAD' : currency === 'XAF' ? 'XAF' : null;
@@ -89,14 +102,32 @@ const BusinessAiTokensPage: React.FC = () => {
         {t('common.back', 'Back')}
       </Button>
 
-      <Typography
-        variant="h4"
-        gutterBottom
-        sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+      <Box
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 1,
+          mb: 1,
+        }}
       >
-        <AutoAwesomeIcon color="primary" />
-        {t('business.tokens.title', 'AI tokens')}
-      </Typography>
+        <Typography
+          variant="h4"
+          sx={{ display: 'flex', alignItems: 'center', gap: 1 }}
+        >
+          <AutoAwesomeIcon color="primary" />
+          {t('business.tokens.title', 'AI tokens')}
+        </Typography>
+        <Tooltip title={t('business.tokens.gift.tooltip', 'Gift tokens')}>
+          <IconButton
+            color="primary"
+            aria-label={t('business.tokens.gift.tooltip', 'Gift tokens')}
+            onClick={() => setGiftOpen(true)}
+          >
+            <CardGiftcardIcon />
+          </IconButton>
+        </Tooltip>
+      </Box>
       <Typography variant="body1" color="text.secondary" sx={{ mb: 2 }}>
         {t(
           'business.tokens.subtitle',
@@ -104,11 +135,24 @@ const BusinessAiTokensPage: React.FC = () => {
         )}
       </Typography>
 
-      <Alert severity="info" sx={{ mb: 3 }}>
+      <Alert severity="info" sx={{ mb: 1 }}>
         {t('business.tokens.balanceLabel', 'You have {{count}} AI tokens', {
           count: displayBalance,
         })}
       </Alert>
+      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+        {t(
+          'business.tokens.gift.transferable',
+          'Transferable: {{n}} tokens',
+          { n: giftable }
+        )}
+        {nongiftable > 0
+          ? ` · ${t(
+              'business.tokens.gift.free_info',
+              "Free and promo tokens can't be gifted."
+            )}`
+          : ''}
+      </Typography>
 
       {loading && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 3 }}>
@@ -197,6 +241,43 @@ const BusinessAiTokensPage: React.FC = () => {
           );
         })}
       </Stack>
+
+      {history.length > 0 && (
+        <Box sx={{ mt: 4 }}>
+          <Typography variant="h6" gutterBottom>
+            {t('business.tokens.gift.history', 'Gift history')}
+          </Typography>
+          <Stack spacing={1}>
+            {history.slice(0, 20).map((row) => (
+              <Typography key={row.id} variant="body2" color="text.secondary">
+                {row.direction === 'sent'
+                  ? t(
+                      'business.tokens.gift.hist_sent',
+                      'Gift sent to {{name}}',
+                      { name: row.maskedName }
+                    )
+                  : t(
+                      'business.tokens.gift.hist_received',
+                      'Gift from {{name}}',
+                      { name: row.maskedName }
+                    )}
+                {` · ${row.amount > 0 ? (row.direction === 'sent' ? '-' : '+') : ''}${row.amount}`}
+              </Typography>
+            ))}
+          </Stack>
+        </Box>
+      )}
+
+      <GiftAiTokensDialog
+        open={giftOpen}
+        onClose={() => setGiftOpen(false)}
+        onSent={async () => {
+          await refreshBalance();
+          await refreshBalanceDetails();
+          await loadHistory();
+          await refetch();
+        }}
+      />
     </Container>
   );
 };

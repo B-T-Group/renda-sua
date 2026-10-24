@@ -318,12 +318,23 @@ export class AgentReferralsService {
   }
 
   private async hasCompletedDelivery(agentId: string): Promise<boolean> {
+    const agent = await this.hasuraSystemService.executeQuery(
+      `query AgentReferralAppliedAt($id: uuid!) {
+        agents_by_pk(id: $id) { referral_applied_at created_at }
+      }`,
+      { id: agentId }
+    );
+    const appliedAt =
+      agent?.agents_by_pk?.referral_applied_at ||
+      agent?.agents_by_pk?.created_at ||
+      null;
     const query = `
-      query AgentCompletedDeliveries($agentId: uuid!) {
+      query AgentCompletedDeliveries($agentId: uuid!, $since: timestamptz) {
         orders_aggregate(
           where: {
             assigned_agent_id: { _eq: $agentId }
             current_status: { _in: ["complete", "delivered"] }
+            updated_at: { _gte: $since }
           }
         ) {
           aggregate { count }
@@ -332,6 +343,7 @@ export class AgentReferralsService {
     `;
     const result = await this.hasuraSystemService.executeQuery(query, {
       agentId,
+      since: appliedAt,
     });
     return (result?.orders_aggregate?.aggregate?.count ?? 0) > 0;
   }

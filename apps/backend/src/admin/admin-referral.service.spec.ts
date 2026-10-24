@@ -63,7 +63,7 @@ describe('AdminReferralService', () => {
           user: { first_name: 'Bob', last_name: 'Lee' },
         },
       })
-      .mockResolvedValueOnce({ update_agents_by_pk: { id: 'ag1' } });
+      .mockResolvedValueOnce({ update_agents: { affected_rows: 1 } });
 
     await expect(service.applyToAgent('ag1', 'ABC123')).resolves.toEqual({
       success: true,
@@ -102,7 +102,7 @@ describe('AdminReferralService', () => {
           user: { first_name: 'Pat', last_name: 'Kim' },
         },
       })
-      .mockResolvedValueOnce({ update_businesses_by_pk: { id: 'b1' } });
+      .mockResolvedValueOnce({ update_businesses: { affected_rows: 1 } });
 
     await expect(service.applyToBusiness('b1', 'ABC123')).resolves.toEqual({
       success: true,
@@ -205,13 +205,16 @@ describe('AdminReferralService', () => {
           user: { first_name: 'Bob', last_name: 'Lee' },
         },
       })
-      .mockResolvedValueOnce({ update_agents_by_pk: { id: 'ag1' } });
+      .mockResolvedValueOnce({ update_agents: { affected_rows: 1 } });
 
     await expect(service.applyToAgent('ag1', 'ABC123')).resolves.toEqual({
       success: true,
     });
     expect(hasura.executeQuery.mock.calls[1][0]).toContain(
       'AdminApplyAgentReferral'
+    );
+    expect(hasura.executeQuery.mock.calls[1][0]).toContain(
+      'referral_applied_at'
     );
     expect(agentReferrals.creditAfterFirstDelivery).toHaveBeenCalledWith(
       'ag1',

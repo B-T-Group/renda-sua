@@ -78,19 +78,25 @@ function buildAgentFragment(
   if (ctx.agent_referral_agent_id && ctx.agent_referral_code_used) {
     varDecls.push('$agent_referred_by_agent_id: uuid!');
     varDecls.push('$agent_referral_code_used: String!');
+    varDecls.push('$agent_referral_applied_at: timestamptz!');
     vars.agent_referred_by_agent_id = ctx.agent_referral_agent_id;
     vars.agent_referral_code_used = ctx.agent_referral_code_used;
+    vars.agent_referral_applied_at = new Date().toISOString();
     agentDataFields.push('referred_by_agent_id: $agent_referred_by_agent_id');
     agentDataFields.push('referral_code_used: $agent_referral_code_used');
+    agentDataFields.push('referral_applied_at: $agent_referral_applied_at');
   } else if (ctx.agent_referral_business_id && ctx.agent_referral_code_used) {
     varDecls.push('$agent_referred_by_business_id: uuid!');
     varDecls.push('$agent_referral_code_used: String!');
+    varDecls.push('$agent_referral_applied_at: timestamptz!');
     vars.agent_referred_by_business_id = ctx.agent_referral_business_id;
     vars.agent_referral_code_used = ctx.agent_referral_code_used;
+    vars.agent_referral_applied_at = new Date().toISOString();
     agentDataFields.push(
       'referred_by_business_id: $agent_referred_by_business_id'
     );
     agentDataFields.push('referral_code_used: $agent_referral_code_used');
+    agentDataFields.push('referral_applied_at: $agent_referral_applied_at');
   }
 
   return {
@@ -121,38 +127,47 @@ function buildBusinessFragment(
     '$business_name: String!',
     '$main_interest: business_main_interest_enum!',
     '$ai_tokens: Int!',
+    '$ai_tokens_nongiftable: Int!',
     '$ai_reel_tokens: Int!',
   ];
   const vars: Record<string, unknown> = {
     business_name: ctx.business_name ?? '',
     main_interest: ctx.main_interest ?? 'sell_items',
     ai_tokens: 20,
+    ai_tokens_nongiftable: 20,
     ai_reel_tokens: 1,
   };
   const businessDataFields = [
     'name: $business_name',
     'main_interest: $main_interest',
     'ai_tokens: $ai_tokens',
+    'ai_tokens_nongiftable: $ai_tokens_nongiftable',
     'ai_reel_tokens: $ai_reel_tokens',
   ];
 
   if (ctx.business_referral_agent_id && ctx.business_referral_code_used) {
     varDecls.push('$referred_by_agent_id: uuid!');
     varDecls.push('$referral_code_used: String!');
+    varDecls.push('$referral_applied_at: timestamptz!');
     vars.referred_by_agent_id = ctx.business_referral_agent_id;
     vars.referral_code_used = ctx.business_referral_code_used;
+    vars.referral_applied_at = new Date().toISOString();
     businessDataFields.push('referred_by_agent_id: $referred_by_agent_id');
     businessDataFields.push('referral_code_used: $referral_code_used');
+    businessDataFields.push('referral_applied_at: $referral_applied_at');
   } else if (
     ctx.business_referral_business_id &&
     ctx.business_referral_code_used
   ) {
     varDecls.push('$referred_by_business_id: uuid!');
     varDecls.push('$referral_code_used: String!');
+    varDecls.push('$referral_applied_at: timestamptz!');
     vars.referred_by_business_id = ctx.business_referral_business_id;
     vars.referral_code_used = ctx.business_referral_code_used;
+    vars.referral_applied_at = new Date().toISOString();
     businessDataFields.push('referred_by_business_id: $referred_by_business_id');
     businessDataFields.push('referral_code_used: $referral_code_used');
+    businessDataFields.push('referral_applied_at: $referral_applied_at');
   }
 
   let returnSel =

@@ -68,6 +68,27 @@ export class BusinessTokensService {
     return result.businesses_by_pk?.ai_tokens ?? 0;
   }
 
+  async getBalanceDetails(businessId: string): Promise<{
+    ai_tokens: number;
+    ai_tokens_nongiftable: number;
+    giftable: number;
+  }> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query GetBusinessAiTokenDetails($id: uuid!) {
+        businesses_by_pk(id: $id) { ai_tokens ai_tokens_nongiftable }
+      }`,
+      { id: businessId }
+    );
+    const ai_tokens = result.businesses_by_pk?.ai_tokens ?? 0;
+    const ai_tokens_nongiftable =
+      result.businesses_by_pk?.ai_tokens_nongiftable ?? 0;
+    return {
+      ai_tokens,
+      ai_tokens_nongiftable,
+      giftable: Math.max(0, ai_tokens - ai_tokens_nongiftable),
+    };
+  }
+
   async ensureSuperUserTokens(businessId: string): Promise<void> {
     await this.hasuraSystemService.executeMutation(
       `mutation EnsureSuperUserTokens($id: uuid!, $min: Int!) {
@@ -84,13 +105,22 @@ export class BusinessTokensService {
     if (!Number.isInteger(aiTokens) || aiTokens < 0) {
       throw new BadRequestException('ai_tokens must be a non-negative integer');
     }
+    const details = await this.getBalanceDetails(businessId);
+    const nongiftable = Math.min(details.ai_tokens_nongiftable, aiTokens);
     const result = await this.hasuraSystemService.executeMutation(
-      `mutation SetBusinessAiTokens($id: uuid!, $ai_tokens: Int!) {
-        update_businesses_by_pk(pk_columns: { id: $id }, _set: { ai_tokens: $ai_tokens }) {
+      `mutation SetBusinessAiTokens(
+        $id: uuid!
+        $ai_tokens: Int!
+        $nongiftable: Int!
+      ) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _set: { ai_tokens: $ai_tokens, ai_tokens_nongiftable: $nongiftable }
+        ) {
           ai_tokens
         }
       }`,
-      { id: businessId, ai_tokens: aiTokens }
+      { id: businessId, ai_tokens: aiTokens, nongiftable }
     );
     return result.update_businesses_by_pk.ai_tokens;
   }
@@ -99,8 +129,8 @@ export class BusinessTokensService {
     params: ConsumeTokenParams,
     cleanupFn: () => Promise<T>
   ): Promise<{ result: T; balanceAfter: number }> {
-    const balanceAfter = await this.tryDecrement(params.businessId);
-    if (balanceAfter === null) {
+    const debit = await this.tryDecrement(params.businessId);
+    if (debit === null) {
       throw new HttpException(
         {
           success: false,
@@ -115,9 +145,10 @@ export class BusinessTokensService {
     try {
       result = await cleanupFn();
     } catch (error: any) {
-      await this.refundToken(params.businessId);
+      await this.refundToken(params.businessId, debit.spentFree);
       throw error;
     }
+    const balanceAfter = debit.balanceAfter;
     try {
       await this.insertUsage({
         ...params,
@@ -133,19 +164,27 @@ export class BusinessTokensService {
     return { result, balanceAfter };
   }
 
-  async refundToken(businessId: string): Promise<void> {
-    await this.refundTokens(businessId, CLEANUP_TOKEN_COST);
+  async refundToken(businessId: string, spentFree = false): Promise<void> {
+    await this.refundTokens(businessId, CLEANUP_TOKEN_COST, spentFree);
   }
 
-  async refundTokens(businessId: string, amount: number): Promise<void> {
+  async refundTokens(
+    businessId: string,
+    amount: number,
+    restoreNongiftable = false
+  ): Promise<void> {
     if (!Number.isInteger(amount) || amount <= 0) return;
+    const nongiftableInc = restoreNongiftable ? amount : 0;
     await this.hasuraSystemService.executeMutation(
-      `mutation RefundAiTokens($id: uuid!, $amount: Int!) {
-        update_businesses_by_pk(pk_columns: { id: $id }, _inc: { ai_tokens: $amount }) {
+      `mutation RefundAiTokens($id: uuid!, $amount: Int!, $nongiftable: Int!) {
+        update_businesses_by_pk(
+          pk_columns: { id: $id }
+          _inc: { ai_tokens: $amount, ai_tokens_nongiftable: $nongiftable }
+        ) {
           ai_tokens
         }
       }`,
-      { id: businessId, amount }
+      { id: businessId, amount, nongiftable: nongiftableInc }
     );
   }
 
@@ -356,12 +395,29 @@ export class BusinessTokensService {
     return result.business_ai_token_usage ?? [];
   }
 
-  private async tryDecrement(businessId: string): Promise<number | null> {
+  private async tryDecrement(
+    businessId: string
+  ): Promise<{ balanceAfter: number; spentFree: boolean } | null> {
+    const before = await this.hasuraSystemService.executeQuery(
+      `query AiTokenNongiftable($id: uuid!) {
+        businesses_by_pk(id: $id) { ai_tokens_nongiftable }
+      }`,
+      { id: businessId }
+    );
+    const nongiftableBefore =
+      before.businesses_by_pk?.ai_tokens_nongiftable ?? 0;
+    const spentFree = nongiftableBefore > 0;
+    const nongiftableDelta = spentFree ? -CLEANUP_TOKEN_COST : 0;
     const result = await this.hasuraSystemService.executeMutation(
-      `mutation ConsumeAiToken($id: uuid!, $cost: Int!, $delta: Int!) {
+      `mutation ConsumeAiToken(
+        $id: uuid!
+        $cost: Int!
+        $delta: Int!
+        $nongiftableDelta: Int!
+      ) {
         update_businesses(
           where: { id: { _eq: $id }, ai_tokens: { _gte: $cost } }
-          _inc: { ai_tokens: $delta }
+          _inc: { ai_tokens: $delta, ai_tokens_nongiftable: $nongiftableDelta }
         ) {
           returning { ai_tokens }
         }
@@ -370,10 +426,11 @@ export class BusinessTokensService {
         id: businessId,
         cost: CLEANUP_TOKEN_COST,
         delta: -CLEANUP_TOKEN_COST,
+        nongiftableDelta,
       }
     );
     const row = result.update_businesses?.returning?.[0];
-    return row ? row.ai_tokens : null;
+    return row ? { balanceAfter: row.ai_tokens, spentFree } : null;
   }
 
   private async insertUsage(

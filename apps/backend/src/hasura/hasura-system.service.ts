@@ -1083,33 +1083,42 @@ export class HasuraSystemService {
       varDecls.push('$business_name: String!');
       varDecls.push('$main_interest: business_main_interest_enum!');
       varDecls.push('$ai_tokens: Int!');
+      varDecls.push('$ai_tokens_nongiftable: Int!');
       vars.business_name = params.business_name ?? '';
       vars.main_interest = params.main_interest ?? 'sell_items';
       vars.ai_tokens = 20;
+      vars.ai_tokens_nongiftable = 20;
       const businessDataFields = [
         'name: $business_name',
         'main_interest: $main_interest',
         'ai_tokens: $ai_tokens',
+        'ai_tokens_nongiftable: $ai_tokens_nongiftable',
       ];
       if (params.business_referral_agent_id && params.business_referral_code_used) {
         varDecls.push('$referred_by_agent_id: uuid!');
         varDecls.push('$referral_code_used: String!');
+        varDecls.push('$referral_applied_at: timestamptz!');
         vars.referred_by_agent_id = params.business_referral_agent_id;
         vars.referral_code_used = params.business_referral_code_used;
+        vars.referral_applied_at = new Date().toISOString();
         businessDataFields.push('referred_by_agent_id: $referred_by_agent_id');
         businessDataFields.push('referral_code_used: $referral_code_used');
+        businessDataFields.push('referral_applied_at: $referral_applied_at');
       } else if (
         params.business_referral_business_id &&
         params.business_referral_code_used
       ) {
         varDecls.push('$referred_by_business_id: uuid!');
         varDecls.push('$referral_code_used: String!');
+        varDecls.push('$referral_applied_at: timestamptz!');
         vars.referred_by_business_id = params.business_referral_business_id;
         vars.referral_code_used = params.business_referral_code_used;
+        vars.referral_applied_at = new Date().toISOString();
         businessDataFields.push(
           'referred_by_business_id: $referred_by_business_id'
         );
         businessDataFields.push('referral_code_used: $referral_code_used');
+        businessDataFields.push('referral_applied_at: $referral_applied_at');
       }
       objectFields.push(
         `business: { data: { ${businessDataFields.join(', ')} } }`

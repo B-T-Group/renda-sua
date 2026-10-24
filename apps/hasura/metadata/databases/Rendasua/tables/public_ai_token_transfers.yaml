@@ -1,0 +1,39 @@
+table:
+  name: ai_token_transfers
+  schema: public
+object_relationships:
+  - name: sender_business
+    using:
+      foreign_key_constraint_on: sender_business_id
+  - name: recipient_business
+    using:
+      foreign_key_constraint_on: recipient_business_id
+  - name: sender_user
+    using:
+      foreign_key_constraint_on: sender_user_id
+  - name: recipient_user
+    using:
+      foreign_key_constraint_on: recipient_user_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - idempotency_key
+        - sender_business_id
+        - sender_user_id
+        - recipient_business_id
+        - recipient_user_id
+        - amount
+        - status
+        - created_at
+      filter:
+        _or:
+          - sender_business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id
+          - recipient_business:
+              user:
+                id:
+                  _eq: X-Hasura-User-Id

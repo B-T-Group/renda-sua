@@ -58,6 +58,7 @@ import AccountManager, { AccountManagerRef } from '../common/AccountManager';
 import { BusinessAccountCard } from '../business/BusinessAccountCard';
 import AddressManager from '../common/AddressManager';
 import AgentReferralCodeCard from '../common/AgentReferralCodeCard';
+import LateReferralCodeCard from '../common/LateReferralCodeCard';
 import { AgentFocusSettings } from '../profile/AgentFocusSettings';
 import { showsCommercialChrome } from '../../utils/agentFocus';
 import type { AgentFocus } from '../../utils/agentFocus';
@@ -904,6 +905,9 @@ const Profile: React.FC = () => {
             {showsCommercialChrome(profile?.agent?.focus) && agentCode ? (
               <AgentReferralCodeCard agentCode={agentCode} />
             ) : null}
+            {(profile?.agent?.id || profile?.business?.id) && (
+              <LateReferralCodeCard />
+            )}
             <Card
               component={RouterLink}
               to="/settings/notifications"

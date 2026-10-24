@@ -1092,9 +1092,14 @@ export const businessApi = {
       }>('/business-tokens/packs'),
 
     balance: () =>
-      api.get<{ success: boolean; data: { ai_tokens: number } }>(
-        '/business-tokens/balance'
-      ),
+      api.get<{
+        success: boolean;
+        data: {
+          ai_tokens: number;
+          ai_tokens_nongiftable?: number;
+          giftable?: number;
+        };
+      }>('/business-tokens/balance'),
 
     purchase: (body: {
       packId: 'pack_100' | 'pack_1000' | 'pack_5000';
@@ -1113,5 +1118,43 @@ export const businessApi = {
           currency: string;
         };
       }>('/business-tokens/purchase', body),
+
+    giftLookup: (code: string) =>
+      api.get<{
+        success: boolean;
+        data: { maskedName: string; referralCode: string };
+      }>(`/business-tokens/gift-lookup/${encodeURIComponent(code)}`),
+
+    sendGift: (body: {
+      code: string;
+      amount: number;
+      idempotencyKey: string;
+    }) =>
+      api.post<{
+        success: boolean;
+        data: {
+          recipientMaskedName: string;
+          balance: { ai_tokens: number; giftable: number };
+        };
+      }>('/business-tokens/gifts', body),
+
+    gifts: () =>
+      api.get<{
+        success: boolean;
+        data: {
+          sent: Array<{
+            id: string;
+            amount: number;
+            maskedName: string;
+            created_at: string;
+          }>;
+          received: Array<{
+            id: string;
+            amount: number;
+            maskedName: string;
+            created_at: string;
+          }>;
+        };
+      }>('/business-tokens/gifts'),
   },
 };

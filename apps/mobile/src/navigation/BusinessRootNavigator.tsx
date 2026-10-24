@@ -69,6 +69,7 @@ import BusinessStockAvailabilityConfirmScreen from '../screens/business/Business
 import BusinessClientCitiesScreen from '../screens/business/BusinessClientCitiesScreen';
 import BusinessInsightsScreen from '../screens/business/BusinessInsightsScreen';
 import BusinessAiTokensScreen from '../screens/business/BusinessAiTokensScreen';
+import BusinessGiftAiTokensScreen from '../screens/business/BusinessGiftAiTokensScreen';
 import BusinessReelAiTokensScreen from '../screens/business/BusinessReelAiTokensScreen';
 import BusinessAddReelScreen from '../screens/business/BusinessAddReelScreen';
 import BusinessMyReelsScreen from '../screens/business/BusinessMyReelsScreen';
@@ -832,6 +833,14 @@ export function BusinessRootNavigator() {
           options={{
             title: t('business.tokens.navTitle', 'AI tokens'),
             headerBackTitle: t('business.tabs.dashboard', 'Dashboard'),
+          }}
+        />
+        <RootStack.Screen
+          name="BusinessGiftAiTokens"
+          component={BusinessGiftAiTokensScreen}
+          options={{
+            title: t('business.tokens.gift.title', 'Gift AI tokens'),
+            headerBackTitle: t('business.tokens.navTitle', 'AI tokens'),
           }}
         />
         <RootStack.Screen

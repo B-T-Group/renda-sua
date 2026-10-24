@@ -5,6 +5,8 @@ import { HasuraModule } from '../hasura/hasura.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { ConfigurationsService } from '../admin/configurations.service';
+import { LateReferralController } from '../referrals/late-referral.controller';
+import { LateReferralService } from '../referrals/late-referral.service';
 import { BusinessReferralsService } from './business-referrals.service';
 
 @Module({
@@ -15,7 +17,12 @@ import { BusinessReferralsService } from './business-referrals.service';
     NotificationsModule,
     StripePaymentsModule,
   ],
-  providers: [BusinessReferralsService, ConfigurationsService],
-  exports: [BusinessReferralsService],
+  controllers: [LateReferralController],
+  providers: [
+    BusinessReferralsService,
+    ConfigurationsService,
+    LateReferralService,
+  ],
+  exports: [BusinessReferralsService, LateReferralService],
 })
 export class BusinessReferralsModule {}

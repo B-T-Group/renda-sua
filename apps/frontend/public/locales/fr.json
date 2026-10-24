@@ -1825,6 +1825,19 @@
     "enterCodeTitle": "Code de parrainage",
     "referralCodeLabel": "Code de parrainage (optionnel)",
     "referralCodeHelp": "Entrez le code à 6 caractères de l'agent Rendasua qui vous a recommandé.",
+    "late": {
+      "menu": "Code de parrainage",
+      "title": "Qui vous a parrainé ?",
+      "hint": "Saisissez le code de la personne qui vous a invité.",
+      "found": "Parrainé par {{name}}",
+      "not_found": "Aucun utilisateur trouvé avec ce code.",
+      "confirm_title": "Confirmer votre parrain ?",
+      "confirm_body": "{{name}} sera enregistré comme votre parrain. Cette action est définitive.",
+      "confirm": "Confirmer",
+      "success": "Code de parrainage enregistré.",
+      "locked": "Parrainé par {{name}} · verrouillé",
+      "error": "Impossible d'enregistrer le code de parrainage."
+    },
     "followUp": {
       "listTitle": "Commerces parrainés",
       "contractPending": "Contrat en attente",
@@ -2541,7 +2554,30 @@
       "buyToCleanup": "Acheter des jetons pour nettoyer",
       "purchaseError": "Échec du démarrage de l'achat",
       "mobilePending": "Demande de paiement envoyée. Les jetons seront ajoutés après le succès du paiement.",
-      "unsupportedCurrency": "Les packs de jetons ne sont disponibles qu'en CAD ou XAF pour le pays de votre entreprise."
+      "unsupportedCurrency": "Les packs de jetons ne sont disponibles qu'en CAD ou XAF pour le pays de votre entreprise.",
+      "gift": {
+        "title": "Offrir des jetons IA",
+        "tooltip": "Offrir des jetons",
+        "code_label": "Code de parrainage du destinataire",
+        "code_found": "Envoi à {{name}}",
+        "code_not_found": "Aucun utilisateur trouvé avec ce code.",
+        "amount_label": "Montant",
+        "transferable": "Transférables : {{n}} jetons",
+        "free_info": "Les jetons gratuits et promotionnels ne peuvent pas être offerts.",
+        "min": "Minimum {{min}} jetons.",
+        "max": "Maximum {{max}} jetons par transfert.",
+        "maxChip": "Max",
+        "insufficient": "Vous n'avez pas assez de jetons transférables.",
+        "confirm_title": "Envoyer {{n}} jetons à {{name}} ?",
+        "confirm_body": "Les transferts sont définitifs et ne peuvent pas être annulés.",
+        "send": "Envoyer",
+        "cancel": "Annuler",
+        "success": "{{n}} jetons envoyés à {{name}}.",
+        "generic_error": "Le transfert a échoué. Aucun jeton n'a été débité.",
+        "history": "Historique des cadeaux",
+        "hist_sent": "Cadeau envoyé à {{name}}",
+        "hist_received": "Cadeau de {{name}}"
+      }
     },
     "csvUpload": {
       "downloadTemplate": "Télécharger le Modèle",

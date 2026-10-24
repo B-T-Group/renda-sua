@@ -41,6 +41,9 @@ describe('BusinessTokensService', () => {
   });
 
   it('debits one token and records usage after successful cleanup', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 2 },
+    });
     hasuraSystemService.executeMutation.mockImplementation((query: string) => {
       if (query.includes('ConsumeAiToken')) {
         return Promise.resolve({ update_businesses: { returning: [{ ai_tokens: 4 }] } });
@@ -59,7 +62,7 @@ describe('BusinessTokensService', () => {
     expect(result).toEqual({ result: 'clean-image-url', balanceAfter: 4 });
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('ConsumeAiToken'),
-      { id: 'business-1', cost: 1, delta: -1 }
+      { id: 'business-1', cost: 1, delta: -1, nongiftableDelta: -1 }
     );
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('InsertAiTokenUsage'),
@@ -76,6 +79,9 @@ describe('BusinessTokensService', () => {
   });
 
   it('rejects cleanup when the conditional debit finds no available token', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 0 },
+    });
     hasuraSystemService.executeMutation.mockResolvedValue({
       update_businesses: { returning: [] },
     });
@@ -97,6 +103,9 @@ describe('BusinessTokensService', () => {
   });
 
   it('refunds the token when cleanup fails after a successful debit', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 0 },
+    });
     hasuraSystemService.executeMutation.mockImplementation((query: string) => {
       if (query.includes('ConsumeAiToken')) {
         return Promise.resolve({ update_businesses: { returning: [{ ai_tokens: 2 }] } });
@@ -116,7 +125,7 @@ describe('BusinessTokensService', () => {
 
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('RefundAiToken'),
-      { id: 'business-1', amount: 1 }
+      { id: 'business-1', amount: 1, nongiftable: 0 }
     );
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
       expect.stringContaining('InsertAiTokenUsage'),

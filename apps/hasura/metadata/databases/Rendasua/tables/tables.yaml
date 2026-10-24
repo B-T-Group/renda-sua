@@ -16,6 +16,7 @@
 - "!include public_application_configurations.yaml"
 - "!include public_brands.yaml"
 - "!include public_business_addresses.yaml"
+- "!include public_ai_token_transfers.yaml"
 - "!include public_business_ai_token_usage.yaml"
 - "!include public_business_account_types.yaml"
 - "!include public_business_account_type_history.yaml"
