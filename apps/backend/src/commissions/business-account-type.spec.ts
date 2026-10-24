@@ -95,6 +95,27 @@ describe('getCommissionForBusinessAccountType', () => {
     expect(
       getCommissionForBusinessAccountType(BusinessAccountType.ELITE, 'Congo')
     ).toBe(15);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.ELITE, 'DR Congo')
+    ).toBe(15);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.PREMIUM, 'CD')
+    ).toBe(12);
+    expect(
+      getCommissionForBusinessAccountType(
+        BusinessAccountType.STANDARD,
+        'RDC Congo'
+      )
+    ).toBe(7);
+    expect(
+      getCommissionForBusinessAccountType(
+        BusinessAccountType.STANDARD,
+        'Democratic Republic of Congo'
+      )
+    ).toBe(7);
+    expect(
+      getCommissionForBusinessAccountType(BusinessAccountType.ELITE, 'Canada')
+    ).toBe(20);
   });
 
   it('falls back to STANDARD commission for missing or unknown types', () => {

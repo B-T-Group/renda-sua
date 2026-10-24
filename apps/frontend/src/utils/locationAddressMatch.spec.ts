@@ -1,4 +1,7 @@
-import { lookupCommonGeocodeCountry } from './locationAddressMatch';
+import {
+  findCountryCodeFromGeocodeName,
+  lookupCommonGeocodeCountry,
+} from './locationAddressMatch';
 
 describe('lookupCommonGeocodeCountry', () => {
   it('maps new CFA market aliases to ISO codes', () => {
@@ -19,7 +22,18 @@ describe('lookupCommonGeocodeCountry', () => {
     expect(lookupCommonGeocodeCountry('DRC')).toBe('CD');
     expect(lookupCommonGeocodeCountry('RDC')).toBe('CD');
     expect(lookupCommonGeocodeCountry('RDC Congo')).toBe('CD');
+    expect(lookupCommonGeocodeCountry('DR Congo')).toBe('CD');
+    expect(lookupCommonGeocodeCountry('République démocratique du Congo')).toBe('CD');
     expect(lookupCommonGeocodeCountry('congo brazzaville')).toBe('CG');
+  });
+
+  it('resolves DRC geocoder labels to CD before a Congo substring match', async () => {
+    await expect(findCountryCodeFromGeocodeName('DR Congo')).resolves.toBe('CD');
+    await expect(findCountryCodeFromGeocodeName('République démocratique du Congo')).resolves.toBe(
+      'CD'
+    );
+    await expect(findCountryCodeFromGeocodeName('Congo')).resolves.toBe('CG');
+    await expect(findCountryCodeFromGeocodeName('Congo-Brazzaville')).resolves.toBe('CG');
   });
 
   it('returns empty for blank or unknown labels', () => {

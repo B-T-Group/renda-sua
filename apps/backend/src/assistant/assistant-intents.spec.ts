@@ -84,6 +84,46 @@ describe('assistant intents', () => {
     expect(fr).toMatch(/bureaux de Yaoundé et de Douala/);
   });
 
+  it('keeps RDC export-only and distinct from Congo-Brazzaville', () => {
+    const en = getKnowledgeSection({ topic: 'markets', locale: 'en' });
+    const fr = getKnowledgeSection({ topic: 'markets', locale: 'fr' });
+    expect(en).toMatch(/Democratic Republic of the Congo \(RDC, CD\)/);
+    expect(en).toMatch(/export interest only/);
+    expect(en).toMatch(/Local shopping, delivery, pickup, and local payment are not available/);
+    expect(en).toMatch(/not the Republic of the Congo \(Congo-Brazzaville, CG\)/);
+    expect(fr).toMatch(/République démocratique du Congo \(RDC, CD\)/);
+    expect(fr).toMatch(/uniquement pour cet intérêt à l'export/);
+    expect(fr).toMatch(/n'est pas la République du Congo \(Congo-Brazzaville, CG\)/);
+    expect(fr).not.toEqual(en);
+  });
+
+  it('tells CD shoppers there is no local payment, and does not say that for CG', () => {
+    const en = getKnowledgeSection({ topic: 'payments', locale: 'en', country: 'CD' });
+    const fr = getKnowledgeSection({ topic: 'payments', locale: 'fr', country: 'cd' });
+    const cg = getKnowledgeSection({ topic: 'payments', locale: 'en', country: 'CG' });
+    expect(en).toMatch(/no local payment/);
+    expect(en).toMatch(/not Congo-Brazzaville/);
+    expect(en).not.toMatch(/MTN Mobile Money and Orange Money/);
+    expect(fr).toMatch(/pas de paiement local/);
+    expect(fr).toMatch(/Ce n'est pas le Congo-Brazzaville/);
+    expect(fr).not.toEqual(en);
+    expect(cg).not.toMatch(/no local payment/);
+    expect(cg).not.toMatch(/Democratic Republic of the Congo/);
+  });
+
+  it('says delivery is not available in the DRC', () => {
+    const en = getKnowledgeSection({ topic: 'delivery', locale: 'en' });
+    const fr = getKnowledgeSection({ topic: 'delivery', locale: 'fr' });
+    expect(en).toMatch(
+      /Delivery is not available in the Democratic Republic of the Congo \(RDC, CD\)/
+    );
+    expect(en).toMatch(/export interest only/);
+    expect(fr).toMatch(
+      /La livraison n'est pas disponible en République démocratique du Congo \(RDC, CD\)/
+    );
+    expect(fr).toMatch(/intérêt à l'export/);
+  });
+
   it('returns what we offer in English and French', () => {
     const en = getKnowledgeSection({ topic: 'what_we_offer', locale: 'en' });
     const fr = getKnowledgeSection({ topic: 'what_we_offer', locale: 'fr' });
