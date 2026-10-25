@@ -385,6 +385,7 @@ export class AiImageCleanupService implements OnModuleInit {
         ? aiCount * CLEANUP_TOKEN_COST
         : 0;
     let balanceAfter = await this.tokens.getBalance(businessId);
+    let spentNongiftable = 0;
     if (tokenCost > 0) {
       const reserved = await this.tokens.tryReserveTokens(
         businessId,
@@ -401,7 +402,8 @@ export class AiImageCleanupService implements OnModuleInit {
           HttpStatus.PAYMENT_REQUIRED
         );
       }
-      balanceAfter = reserved;
+      balanceAfter = reserved.balanceAfter;
+      spentNongiftable = reserved.spentNongiftable;
     }
     let job: AiImageCleanupJobRow | null = null;
     /** Only cancel on rollback when this request created the job (not an append). */
@@ -485,10 +487,15 @@ export class AiImageCleanupService implements OnModuleInit {
       return { job, ai_tokens_remaining: balanceAfter };
     } catch (error: any) {
       if (createdNewJob) {
-        await this.rollbackFailedRequest(businessId, tokenCost, job?.id);
+        await this.rollbackFailedRequest(
+          businessId,
+          tokenCost,
+          spentNongiftable,
+          job?.id
+        );
       } else if (!appendCompleted) {
         // Append cleaned up its own partial inserts; refund reservation only.
-        await this.rollbackFailedRequest(businessId, tokenCost);
+        await this.rollbackFailedRequest(businessId, tokenCost, spentNongiftable);
       }
       // Append succeeded then a later step failed: keep results + tokens.
       throw error;
@@ -763,10 +770,11 @@ export class AiImageCleanupService implements OnModuleInit {
   private async rollbackFailedRequest(
     businessId: string,
     tokenCost: number,
+    spentNongiftable = 0,
     jobId?: string
   ): Promise<void> {
     try {
-      await this.tokens.refundTokens(businessId, tokenCost);
+      await this.tokens.refundTokens(businessId, tokenCost, spentNongiftable);
       if (jobId) {
         await this.setJobStatus(jobId, 'cancelled');
         await this.maybeResumeModeration(await this.loadJob(jobId));
@@ -1116,7 +1124,7 @@ export class AiImageCleanupService implements OnModuleInit {
           HttpStatus.PAYMENT_REQUIRED
         );
       }
-      balanceAfter = reserved;
+      balanceAfter = reserved.balanceAfter;
     }
     const inserted = await this.insertRetryResult(result);
     if (result.status === 'failed' || result.status === 'rejected') {
