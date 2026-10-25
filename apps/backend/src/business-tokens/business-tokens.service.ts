@@ -29,6 +29,32 @@ export type TokenUsageSubjectType =
   | 'preview'
   | 'ai_image_cleanup';
 
+export type TokenDebit = {
+  balanceAfter: number;
+  spentNongiftable: number;
+};
+
+const DEBIT_AI_TOKENS_MUTATION = `
+  mutation DebitAiTokens(
+    $id: uuid!
+    $cost: Int!
+    $delta: Int!
+    $nongiftableDelta: Int!
+    $nongiftableMin: Int!
+  ) {
+    update_businesses(
+      where: {
+        id: { _eq: $id }
+        ai_tokens: { _gte: $cost }
+        ai_tokens_nongiftable: { _gte: $nongiftableMin }
+      }
+      _inc: { ai_tokens: $delta, ai_tokens_nongiftable: $nongiftableDelta }
+    ) {
+      returning { ai_tokens }
+    }
+  }
+`;
+
 export interface ConsumeTokenParams {
   businessId: string;
   userId: string;
@@ -165,16 +191,20 @@ export class BusinessTokensService {
   }
 
   async refundToken(businessId: string, spentFree = false): Promise<void> {
-    await this.refundTokens(businessId, CLEANUP_TOKEN_COST, spentFree);
+    await this.refundTokens(
+      businessId,
+      CLEANUP_TOKEN_COST,
+      spentFree ? CLEANUP_TOKEN_COST : 0
+    );
   }
 
   async refundTokens(
     businessId: string,
     amount: number,
-    restoreNongiftable = false
+    restoreNongiftable = 0
   ): Promise<void> {
     if (!Number.isInteger(amount) || amount <= 0) return;
-    const nongiftableInc = restoreNongiftable ? amount : 0;
+    const nongiftableInc = Math.max(0, restoreNongiftable);
     await this.hasuraSystemService.executeMutation(
       `mutation RefundAiTokens($id: uuid!, $amount: Int!, $nongiftable: Int!) {
         update_businesses_by_pk(
@@ -188,27 +218,15 @@ export class BusinessTokensService {
     );
   }
 
-  /** Atomically reserve `amount` tokens. Returns balance after, or null if insufficient. */
+  /** Atomically reserve `amount` tokens. Spends the free allotment first. */
   async tryReserveTokens(
     businessId: string,
     amount: number
-  ): Promise<number | null> {
+  ): Promise<TokenDebit | null> {
     if (!Number.isInteger(amount) || amount <= 0) {
       throw new BadRequestException('Token amount must be a positive integer');
     }
-    const result = await this.hasuraSystemService.executeMutation(
-      `mutation ReserveAiTokens($id: uuid!, $cost: Int!, $delta: Int!) {
-        update_businesses(
-          where: { id: { _eq: $id }, ai_tokens: { _gte: $cost } }
-          _inc: { ai_tokens: $delta }
-        ) {
-          returning { ai_tokens }
-        }
-      }`,
-      { id: businessId, cost: amount, delta: -amount }
-    );
-    const row = result.update_businesses?.returning?.[0];
-    return row ? row.ai_tokens : null;
+    return this.debitTokens(businessId, amount);
   }
 
   async recordCleanupUsage(params: ConsumeTokenParams & { tokensConsumed: number }) {
@@ -398,39 +416,61 @@ export class BusinessTokensService {
   private async tryDecrement(
     businessId: string
   ): Promise<{ balanceAfter: number; spentFree: boolean } | null> {
+    const debit = await this.debitTokens(businessId, CLEANUP_TOKEN_COST);
+    if (!debit) return null;
+    return {
+      balanceAfter: debit.balanceAfter,
+      spentFree: debit.spentNongiftable > 0,
+    };
+  }
+
+  private async debitTokens(
+    businessId: string,
+    amount: number
+  ): Promise<TokenDebit | null> {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const spentNongiftable = await this.nongiftableToSpend(businessId, amount);
+      const balanceAfter = await this.applyTokenDebit(
+        businessId,
+        amount,
+        spentNongiftable
+      );
+      if (balanceAfter !== null) return { balanceAfter, spentNongiftable };
+    }
+    return null;
+  }
+
+  private async nongiftableToSpend(
+    businessId: string,
+    amount: number
+  ): Promise<number> {
     const before = await this.hasuraSystemService.executeQuery(
       `query AiTokenNongiftable($id: uuid!) {
         businesses_by_pk(id: $id) { ai_tokens_nongiftable }
       }`,
       { id: businessId }
     );
-    const nongiftableBefore =
-      before.businesses_by_pk?.ai_tokens_nongiftable ?? 0;
-    const spentFree = nongiftableBefore > 0;
-    const nongiftableDelta = spentFree ? -CLEANUP_TOKEN_COST : 0;
+    const nongiftable = before.businesses_by_pk?.ai_tokens_nongiftable ?? 0;
+    return Math.min(Math.max(0, nongiftable), amount);
+  }
+
+  private async applyTokenDebit(
+    businessId: string,
+    amount: number,
+    spentNongiftable: number
+  ): Promise<number | null> {
     const result = await this.hasuraSystemService.executeMutation(
-      `mutation ConsumeAiToken(
-        $id: uuid!
-        $cost: Int!
-        $delta: Int!
-        $nongiftableDelta: Int!
-      ) {
-        update_businesses(
-          where: { id: { _eq: $id }, ai_tokens: { _gte: $cost } }
-          _inc: { ai_tokens: $delta, ai_tokens_nongiftable: $nongiftableDelta }
-        ) {
-          returning { ai_tokens }
-        }
-      }`,
+      DEBIT_AI_TOKENS_MUTATION,
       {
         id: businessId,
-        cost: CLEANUP_TOKEN_COST,
-        delta: -CLEANUP_TOKEN_COST,
-        nongiftableDelta,
+        cost: amount,
+        delta: -amount,
+        nongiftableDelta: spentNongiftable ? -spentNongiftable : 0,
+        nongiftableMin: spentNongiftable,
       }
     );
     const row = result.update_businesses?.returning?.[0];
-    return row ? { balanceAfter: row.ai_tokens, spentFree } : null;
+    return row ? row.ai_tokens : null;
   }
 
   private async insertUsage(
