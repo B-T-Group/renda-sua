@@ -171,10 +171,10 @@ export class BusinessTokensService {
   async refundTokens(
     businessId: string,
     amount: number,
-    restoreNongiftable = false
+    restoreNongiftable: boolean | number = false
   ): Promise<void> {
     if (!Number.isInteger(amount) || amount <= 0) return;
-    const nongiftableInc = restoreNongiftable ? amount : 0;
+    const nongiftableInc = this.freeTokensToRestore(amount, restoreNongiftable);
     await this.hasuraSystemService.executeMutation(
       `mutation RefundAiTokens($id: uuid!, $amount: Int!, $nongiftable: Int!) {
         update_businesses_by_pk(
@@ -188,27 +188,69 @@ export class BusinessTokensService {
     );
   }
 
-  /** Atomically reserve `amount` tokens. Returns balance after, or null if insufficient. */
+  /**
+   * Atomically reserve `amount` tokens, spending the free allotment first.
+   * Null means the balance cannot cover `amount` (no row changed).
+   */
   async tryReserveTokens(
     businessId: string,
     amount: number
-  ): Promise<number | null> {
+  ): Promise<{ balanceAfter: number; spentFree: number } | null> {
     if (!Number.isInteger(amount) || amount <= 0) {
       throw new BadRequestException('Token amount must be a positive integer');
     }
     const result = await this.hasuraSystemService.executeMutation(
-      `mutation ReserveAiTokens($id: uuid!, $cost: Int!, $delta: Int!) {
-        update_businesses(
-          where: { id: { _eq: $id }, ai_tokens: { _gte: $cost } }
-          _inc: { ai_tokens: $delta }
-        ) {
-          returning { ai_tokens }
+      `mutation ReserveAiTokens($businessId: uuid!, $amount: Int!) {
+        reserve_ai_tokens(args: {
+          p_business_id: $businessId
+          p_amount: $amount
+        }) {
+          balance_after
+          spent_free
         }
       }`,
-      { id: businessId, cost: amount, delta: -amount }
+      { businessId, amount }
     );
-    const row = result.update_businesses?.returning?.[0];
-    return row ? row.ai_tokens : null;
+    const row = result?.reserve_ai_tokens?.[0];
+    if (!row) return null;
+    return { balanceAfter: row.balance_after, spentFree: row.spent_free };
+  }
+
+  /** Close part of a cleanup hold. Refunds restore paid tokens, then free ones. */
+  async settleCleanupHold(
+    jobId: string,
+    businessId: string,
+    amount: number,
+    outcome: 'consume' | 'refund'
+  ): Promise<void> {
+    if (!Number.isInteger(amount) || amount <= 0) return;
+    await this.hasuraSystemService.executeMutation(
+      `mutation SettleAiCleanupTokens(
+        $jobId: uuid!
+        $businessId: uuid!
+        $amount: Int!
+        $outcome: String!
+      ) {
+        settle_ai_cleanup_tokens(args: {
+          p_job_id: $jobId
+          p_business_id: $businessId
+          p_amount: $amount
+          p_outcome: $outcome
+        }) { spent_free }
+      }`,
+      { jobId, businessId, amount, outcome }
+    );
+  }
+
+  private freeTokensToRestore(
+    amount: number,
+    restore: boolean | number
+  ): number {
+    if (typeof restore === 'number') {
+      if (!Number.isInteger(restore) || restore <= 0) return 0;
+      return Math.min(restore, amount);
+    }
+    return restore ? amount : 0;
   }
 
   async recordCleanupUsage(params: ConsumeTokenParams & { tokensConsumed: number }) {

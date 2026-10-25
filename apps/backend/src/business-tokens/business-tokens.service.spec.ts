@@ -430,6 +430,60 @@ describe('BusinessTokensService', () => {
     });
   });
 
+  it('reserves the free allotment in the same write as the balance', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      reserve_ai_tokens: [{ balance_after: 19, spent_free: 1 }],
+    });
+
+    await expect(service.tryReserveTokens('business-1', 1)).resolves.toEqual({
+      balanceAfter: 19,
+      spentFree: 1,
+    });
+    const [query, vars] = hasuraSystemService.executeMutation.mock.calls[0];
+    expect(query).toContain('reserve_ai_tokens');
+    expect(query).not.toContain('_inc: { ai_tokens: $delta }');
+    expect(vars).toEqual({ businessId: 'business-1', amount: 1 });
+  });
+
+  it('returns null when the reserve leaves the balance unchanged', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      reserve_ai_tokens: [],
+    });
+
+    await expect(service.tryReserveTokens('business-1', 3)).resolves.toBeNull();
+  });
+
+  it('restores only the free tokens a failed reservation spent', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses_by_pk: { ai_tokens: 25 },
+    });
+
+    await service.refundTokens('business-1', 6, 4);
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('RefundAiToken'),
+      { id: 'business-1', amount: 6, nongiftable: 4 }
+    );
+  });
+
+  it('settles a cleanup hold through the ledger function', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      settle_ai_cleanup_tokens: [{ spent_free: 1 }],
+    });
+
+    await service.settleCleanupHold('job-1', 'business-1', 1, 'refund');
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('settle_ai_cleanup_tokens'),
+      {
+        jobId: 'job-1',
+        businessId: 'business-1',
+        amount: 1,
+        outcome: 'refund',
+      }
+    );
+  });
+
   it('grants purchased packs onto the giftable balance only', async () => {
     hasuraSystemService.executeMutation.mockResolvedValue({
       update_businesses_by_pk: { ai_tokens: 1020 },

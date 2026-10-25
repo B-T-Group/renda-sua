@@ -3,6 +3,8 @@
 - "!include public_try_release_business_inventory.yaml"
 - "!include public_dedicated_claim_order.yaml"
 - "!include public_transfer_ai_tokens.yaml"
+- "!include public_reserve_ai_tokens.yaml"
+- "!include public_settle_ai_cleanup_tokens.yaml"
 - "!include public_release_agent_order_hold.yaml"
 - "!include public_forfeit_agent_order_hold.yaml"
 - "!include public_restore_purchase_credit_redemption.yaml"

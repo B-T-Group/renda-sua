@@ -385,23 +385,11 @@ export class AiImageCleanupService implements OnModuleInit {
         ? aiCount * CLEANUP_TOKEN_COST
         : 0;
     let balanceAfter = await this.tokens.getBalance(businessId);
+    let spentFree = 0;
     if (tokenCost > 0) {
-      const reserved = await this.tokens.tryReserveTokens(
-        businessId,
-        tokenCost
-      );
-      if (reserved === null) {
-        throw new HttpException(
-          {
-            success: false,
-            error:
-              'No AI tokens remaining. Purchase more tokens to use image cleanup.',
-            code: 'INSUFFICIENT_AI_TOKENS',
-          },
-          HttpStatus.PAYMENT_REQUIRED
-        );
-      }
-      balanceAfter = reserved;
+      const reserved = await this.reserveImageTokens(businessId, tokenCost);
+      balanceAfter = reserved.balanceAfter;
+      spentFree = reserved.spentFree;
     }
     let job: AiImageCleanupJobRow | null = null;
     /** Only cancel on rollback when this request created the job (not an append). */
@@ -417,6 +405,7 @@ export class AiImageCleanupService implements OnModuleInit {
           images: needingEdit,
           skippedIneligible,
           tokenCost,
+          spentFree,
           businessId,
           userId,
           chargeTokens: tokenCost > 0,
@@ -431,6 +420,7 @@ export class AiImageCleanupService implements OnModuleInit {
             images: needingEdit,
             skippedIneligible,
             tokenCost,
+            spentFree,
             businessId,
             userId,
             chargeTokens: tokenCost > 0,
@@ -443,6 +433,7 @@ export class AiImageCleanupService implements OnModuleInit {
             itemId,
             userId,
             tokensReserved: tokenCost,
+            nongiftableReserved: spentFree,
             itemVariantId,
             mode,
             source,
@@ -485,10 +476,15 @@ export class AiImageCleanupService implements OnModuleInit {
       return { job, ai_tokens_remaining: balanceAfter };
     } catch (error: any) {
       if (createdNewJob) {
-        await this.rollbackFailedRequest(businessId, tokenCost, job?.id);
+        await this.rollbackFailedRequest(
+          businessId,
+          tokenCost,
+          spentFree,
+          job?.id
+        );
       } else if (!appendCompleted) {
         // Append cleaned up its own partial inserts; refund reservation only.
-        await this.rollbackFailedRequest(businessId, tokenCost);
+        await this.rollbackFailedRequest(businessId, tokenCost, spentFree);
       }
       // Append succeeded then a later step failed: keep results + tokens.
       throw error;
@@ -516,6 +512,7 @@ export class AiImageCleanupService implements OnModuleInit {
     images: CleanupEligibleImage[];
     skippedIneligible: CleanupEligibleImage[];
     tokenCost: number;
+    spentFree: number;
     businessId: string;
     userId: string;
     chargeTokens: boolean;
@@ -532,7 +529,11 @@ export class AiImageCleanupService implements OnModuleInit {
         createdIds = createdIds.concat(ineligibleIds);
       }
       if (args.chargeTokens && args.tokenCost > 0) {
-        await this.bumpJobTokens(args.openJob.id, args.tokenCost);
+        await this.bumpJobTokens(
+          args.openJob.id,
+          args.tokenCost,
+          args.spentFree
+        );
         tokensBumped = true;
         await this.tokens.recordCleanupUsage({
           businessId: args.businessId,
@@ -561,9 +562,11 @@ export class AiImageCleanupService implements OnModuleInit {
           .catch(() => undefined);
       }
       if (tokensBumped) {
-        await this.bumpJobTokens(args.openJob.id, -args.tokenCost).catch(
-          () => undefined
-        );
+        await this.bumpJobTokens(
+          args.openJob.id,
+          -args.tokenCost,
+          -args.spentFree
+        ).catch(() => undefined);
       }
       throw error;
     }
@@ -763,10 +766,20 @@ export class AiImageCleanupService implements OnModuleInit {
   private async rollbackFailedRequest(
     businessId: string,
     tokenCost: number,
+    spentFree: number,
     jobId?: string
   ): Promise<void> {
     try {
-      await this.tokens.refundTokens(businessId, tokenCost);
+      if (jobId && tokenCost > 0) {
+        await this.tokens.settleCleanupHold(
+          jobId,
+          businessId,
+          tokenCost,
+          'refund'
+        );
+      } else if (tokenCost > 0) {
+        await this.tokens.refundTokens(businessId, tokenCost, spentFree);
+      }
       if (jobId) {
         await this.setJobStatus(jobId, 'cancelled');
         await this.maybeResumeModeration(await this.loadJob(jobId));
@@ -1101,41 +1114,51 @@ export class AiImageCleanupService implements OnModuleInit {
     const kind = result.kind ?? 'ai';
     const tokenCost = kind === 'ai' ? CLEANUP_TOKEN_COST : 0;
     let balanceAfter = await this.tokens.getBalance(businessId);
+    let spentFree = 0;
     if (tokenCost > 0) {
-      const reserved = await this.tokens.tryReserveTokens(
-        businessId,
-        tokenCost
-      );
-      if (reserved === null) {
-        throw new HttpException(
-          {
-            success: false,
-            error: 'No AI tokens remaining.',
-            code: 'INSUFFICIENT_AI_TOKENS',
-          },
-          HttpStatus.PAYMENT_REQUIRED
-        );
+      const reserved = await this.reserveImageTokens(businessId, tokenCost);
+      balanceAfter = reserved.balanceAfter;
+      spentFree = reserved.spentFree;
+    }
+    let bumped = false;
+    try {
+      const inserted = await this.insertRetryResult(result);
+      if (result.status === 'failed' || result.status === 'rejected') {
+        await this.markResult(result.id, 'rejected');
       }
-      balanceAfter = reserved;
-    }
-    const inserted = await this.insertRetryResult(result);
-    if (result.status === 'failed' || result.status === 'rejected') {
-      await this.markResult(result.id, 'rejected');
-    }
-    if (tokenCost > 0) {
-      await this.tokens.recordCleanupUsage({
+      if (tokenCost > 0) {
+        await this.tokens.recordCleanupUsage({
+          businessId,
+          userId,
+          subjectType: 'ai_image_cleanup',
+          subjectId: inserted.id,
+          tokensConsumed: tokenCost,
+          imageUrl: result.original_image_url,
+        });
+        await this.bumpJobTokens(result.job_id, tokenCost, spentFree);
+        bumped = true;
+      }
+      await this.setJobStatus(result.job_id, 'queued');
+      await this.queue.enqueueJob(result.job_id);
+      return {
+        success: true,
+        result: inserted,
+        ai_tokens_remaining: balanceAfter,
+      };
+    } catch (error: any) {
+      await this.refundRetryHold(
+        result.job_id,
         businessId,
-        userId,
-        subjectType: 'ai_image_cleanup',
-        subjectId: inserted.id,
-        tokensConsumed: tokenCost,
-        imageUrl: result.original_image_url,
+        tokenCost,
+        spentFree,
+        bumped
+      ).catch((refundError: any) => {
+        this.logger.error(
+          `Retry token refund failed for ${result.job_id}: ${refundError?.message}`
+        );
       });
-      await this.bumpJobTokens(result.job_id, tokenCost);
+      throw error;
     }
-    await this.setJobStatus(result.job_id, 'queued');
-    await this.queue.enqueueJob(result.job_id);
-    return { success: true, result: inserted, ai_tokens_remaining: balanceAfter };
   }
 
   async processJob(jobId: string): Promise<{ success: boolean }> {
@@ -1150,15 +1173,12 @@ export class AiImageCleanupService implements OnModuleInit {
     const pending = (job.results ?? []).filter((r) =>
       this.isClaimableResultStatus(r.status, r.updated_at)
     );
-    let consumed = 0;
-    let refunded = 0;
     for (const result of pending) {
       const tokenUnit = this.tokenUnitForResult(job, result);
-      const outcome = await this.processOneResult(job, result, tokenUnit);
-      if (outcome === 'ready') consumed += tokenUnit;
-      if (outcome === 'failed') refunded += tokenUnit;
+      const outcome = await this.processOneResult(job, result);
+      await this.settleProcessedResult(job, tokenUnit, outcome);
     }
-    await this.finalizeJobAfterProcess(job, consumed, refunded);
+    await this.finalizeJobAfterProcess(job);
     return { success: true };
   }
 
@@ -1182,8 +1202,8 @@ export class AiImageCleanupService implements OnModuleInit {
         HttpStatus.CONFLICT
       );
     }
-    const refunded = await this.failPendingResults(job);
-    await this.finalizeJobAfterProcess(job, 0, refunded);
+    await this.failPendingResults(job);
+    await this.finalizeJobAfterProcess(job);
     return { success: true };
   }
 
@@ -1273,7 +1293,12 @@ export class AiImageCleanupService implements OnModuleInit {
     const aiFailed = justFailed.filter((r) => (r.kind ?? 'ai') === 'ai').length;
     const refunded = aiFailed * CLEANUP_TOKEN_COST;
     if (refunded <= 0) return 0;
-    await this.tokens.refundTokens(job.business_id, refunded);
+    await this.tokens.settleCleanupHold(
+      job.id,
+      job.business_id,
+      refunded,
+      'refund'
+    );
     return refunded;
   }
 
@@ -1314,8 +1339,7 @@ export class AiImageCleanupService implements OnModuleInit {
 
   private async processOneResult(
     job: AiImageCleanupJobRow,
-    result: AiImageCleanupResultRow,
-    tokenUnit: number
+    result: AiImageCleanupResultRow
   ): Promise<'ready' | 'failed' | 'skipped'> {
     const claimed = await this.claimResult(result.id);
     if (!claimed) return 'skipped';
@@ -1411,9 +1435,6 @@ export class AiImageCleanupService implements OnModuleInit {
           updated_at: new Date().toISOString(),
         },
       });
-      if (tokenUnit > 0) {
-        await this.tokens.refundTokens(job.business_id, tokenUnit);
-      }
       await this.trackEvent('enhancement_failed', result.id, {
         job_id: job.id,
         error: error?.message,
@@ -1477,6 +1498,55 @@ export class AiImageCleanupService implements OnModuleInit {
     return { ...uploaded, provider: 'openai', model };
   }
 
+  private async reserveImageTokens(
+    businessId: string,
+    tokenCost: number
+  ): Promise<{ balanceAfter: number; spentFree: number }> {
+    const reserved = await this.tokens.tryReserveTokens(businessId, tokenCost);
+    if (!reserved) {
+      throw new HttpException(
+        {
+          success: false,
+          error:
+            'No AI tokens remaining. Purchase more tokens to use image cleanup.',
+          code: 'INSUFFICIENT_AI_TOKENS',
+        },
+        HttpStatus.PAYMENT_REQUIRED
+      );
+    }
+    return reserved;
+  }
+
+  private async settleProcessedResult(
+    job: AiImageCleanupJobRow,
+    tokenUnit: number,
+    outcome: 'ready' | 'failed' | 'skipped'
+  ): Promise<void> {
+    if (tokenUnit <= 0 || outcome === 'skipped') return;
+    await this.tokens.settleCleanupHold(
+      job.id,
+      job.business_id,
+      tokenUnit,
+      outcome === 'ready' ? 'consume' : 'refund'
+    );
+  }
+
+  private async refundRetryHold(
+    jobId: string,
+    businessId: string,
+    tokenCost: number,
+    spentFree: number,
+    bumped: boolean
+  ): Promise<void> {
+    if (tokenCost <= 0) return;
+    if (bumped) {
+      await this.bumpJobTokens(jobId, -tokenCost, -spentFree).catch(
+        () => undefined
+      );
+    }
+    await this.tokens.refundTokens(businessId, tokenCost, spentFree);
+  }
+
   /** Per-result token accounting; rembg and uncharged admin jobs are 0. */
   private tokenUnitForResult(
     job: AiImageCleanupJobRow,
@@ -1488,17 +1558,13 @@ export class AiImageCleanupService implements OnModuleInit {
   }
 
   private async finalizeJobAfterProcess(
-    job: AiImageCleanupJobRow,
-    consumed: number,
-    refunded: number
+    job: AiImageCleanupJobRow
   ): Promise<void> {
     const refreshed = await this.loadJob(job.id);
     const stillPending = (refreshed.results ?? []).some((r) =>
       this.isClaimableResultStatus(r.status, r.updated_at)
     );
     const tokenPatch = {
-      tokens_consumed: (job.tokens_consumed ?? 0) + consumed,
-      tokens_refunded: (job.tokens_refunded ?? 0) + refunded,
       updated_at: new Date().toISOString(),
     };
     // Results appended while this run was in-flight — re-queue instead of closing.
@@ -2080,6 +2146,7 @@ export class AiImageCleanupService implements OnModuleInit {
     itemId: string | null;
     userId: string;
     tokensReserved: number;
+    nongiftableReserved?: number;
     itemVariantId: string | null;
     mode: AiImageCleanupJobMode;
     source: AiImageCleanupJobSource;
@@ -2094,6 +2161,7 @@ export class AiImageCleanupService implements OnModuleInit {
         requested_by_user_id: args.userId,
         status: 'queued',
         tokens_reserved: args.tokensReserved,
+        nongiftable_reserved: args.nongiftableReserved ?? 0,
         mode: args.mode,
         source: args.source,
       },
@@ -2261,15 +2329,20 @@ export class AiImageCleanupService implements OnModuleInit {
     return data.insert_ai_image_cleanup_results.returning[0];
   }
 
-  private async bumpJobTokens(jobId: string, amount: number): Promise<void> {
-    const job = await this.loadJob(jobId);
-    await this.hasura.executeMutation(Q.UPDATE_JOB, {
-      id: jobId,
-      _set: {
-        tokens_reserved: job.tokens_reserved + amount,
-        updated_at: new Date().toISOString(),
-      },
-    });
+  private async bumpJobTokens(
+    jobId: string,
+    amount: number,
+    nongiftable: number
+  ): Promise<void> {
+    await this.hasura.executeMutation(
+      `mutation BumpCleanupJobTokens($id: uuid!, $amount: Int!, $free: Int!) {
+        update_ai_image_cleanup_jobs_by_pk(
+          pk_columns: { id: $id }
+          _inc: { tokens_reserved: $amount, nongiftable_reserved: $free }
+        ) { id }
+      }`,
+      { id: jobId, amount, free: nongiftable }
+    );
   }
 
   private async loadItemImageRow(

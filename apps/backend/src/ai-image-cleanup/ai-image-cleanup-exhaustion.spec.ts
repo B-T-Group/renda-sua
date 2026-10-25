@@ -175,6 +175,6 @@ describe('AiImageCleanupService.failJobAfterQueueExhaustion', () => {
       service.failJobAfterQueueExhaustion('job-1')
     ).resolves.toEqual({ success: true });
     expect(failPending).toHaveBeenCalled();
-    expect(finalize).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-1' }), 0, 1);
+    expect(finalize).toHaveBeenCalledWith(expect.objectContaining({ id: 'job-1' }));
   });
 });
