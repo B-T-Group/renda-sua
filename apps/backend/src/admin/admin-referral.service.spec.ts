@@ -222,4 +222,57 @@ describe('AdminReferralService', () => {
     );
     expect(hasura.executeQuery).toHaveBeenCalledTimes(2);
   });
+
+  it('does not credit an agent when the conditional update loses the race', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        agents_by_pk: {
+          id: 'ag1',
+          user_id: 'u1',
+          referred_by_agent_id: null,
+          referred_by_business_id: null,
+          user: { first_name: 'Bob', last_name: 'Lee' },
+        },
+      })
+      .mockResolvedValueOnce({ update_agents: { affected_rows: 0 } });
+
+    try {
+      await service.applyToAgent('ag1', 'ABC123');
+      fail('expected conflict');
+    } catch (error: any) {
+      expect(error).toBeInstanceOf(HttpException);
+      expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+      expect(error.getResponse()).toEqual(
+        expect.objectContaining({ error: 'Referral already applied' })
+      );
+    }
+    expect(agentReferrals.creditAfterFirstDelivery).not.toHaveBeenCalled();
+    expect(credits.awardAgentReferred).not.toHaveBeenCalled();
+  });
+
+  it('does not notify a business when the conditional update loses the race', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        businesses_by_pk: {
+          id: 'b1',
+          user_id: 'u2',
+          name: 'Shop',
+          referred_by_agent_id: null,
+          referred_by_business_id: null,
+          user: { first_name: 'Pat', last_name: 'Kim' },
+        },
+      })
+      .mockResolvedValueOnce({ update_businesses: { affected_rows: 0 } });
+
+    try {
+      await service.applyToBusiness('b1', 'ABC123');
+      fail('expected conflict');
+    } catch (error: any) {
+      expect(error.getStatus()).toBe(HttpStatus.CONFLICT);
+    }
+    expect(credits.awardBusinessReferred).not.toHaveBeenCalled();
+    expect(
+      businessReferrals.notifyReferrerOfBusinessReferral
+    ).not.toHaveBeenCalled();
+  });
 });
