@@ -113,7 +113,10 @@ export interface CheckoutGroup {
   /** Business location id for this group, used to filter slots by operating hours. */
   business_location_id?: string;
   subtotal: number;
+  /** Delivery or shipping fee the order will charge. Null for pickup or when it could not be quoted. */
   delivery_fee?: number | null;
+  /** True when delivery_fee is the flat fallback because distance lookup failed. */
+  delivery_fee_estimated?: boolean;
   is_first_order_client?: boolean;
   /** Flat service fee included in total. 0 when this seller country has no fee. */
   service_fee?: number;
