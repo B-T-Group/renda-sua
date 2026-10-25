@@ -68,6 +68,7 @@ describe('BusinessTokensService', () => {
         delta: -1,
         nongiftableDelta: -1,
         nongiftableMin: 1,
+        nongiftableMax: 2147483647,
       }
     );
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
@@ -185,6 +186,7 @@ describe('BusinessTokensService', () => {
         delta: -1,
         nongiftableDelta: -1,
         nongiftableMin: 1,
+        nongiftableMax: 2147483647,
       }
     );
   });
@@ -209,6 +211,47 @@ describe('BusinessTokensService', () => {
         delta: -1,
         nongiftableDelta: 0,
         nongiftableMin: 0,
+        nongiftableMax: 0,
+      }
+    );
+  });
+
+  it('pins the free count on a partial free spend and retries after a race', async () => {
+    hasuraSystemService.executeQuery
+      .mockResolvedValueOnce({ businesses_by_pk: { ai_tokens_nongiftable: 3 } })
+      .mockResolvedValueOnce({ businesses_by_pk: { ai_tokens_nongiftable: 4 } });
+    hasuraSystemService.executeMutation
+      .mockResolvedValueOnce({ update_businesses: { returning: [] } })
+      .mockResolvedValueOnce({
+        update_businesses: { returning: [{ ai_tokens: 10 }] },
+      });
+
+    await expect(service.tryReserveTokens('business-1', 5)).resolves.toEqual({
+      balanceAfter: 10,
+      spentNongiftable: 4,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 5,
+        delta: -5,
+        nongiftableDelta: -3,
+        nongiftableMin: 3,
+        nongiftableMax: 3,
+      }
+    );
+    expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 5,
+        delta: -5,
+        nongiftableDelta: -4,
+        nongiftableMin: 4,
+        nongiftableMax: 4,
       }
     );
   });

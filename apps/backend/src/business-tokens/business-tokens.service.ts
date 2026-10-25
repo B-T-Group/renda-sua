@@ -34,6 +34,8 @@ export type TokenDebit = {
   spentNongiftable: number;
 };
 
+const MAX_PG_INT = 2147483647;
+
 const DEBIT_AI_TOKENS_MUTATION = `
   mutation DebitAiTokens(
     $id: uuid!
@@ -41,12 +43,13 @@ const DEBIT_AI_TOKENS_MUTATION = `
     $delta: Int!
     $nongiftableDelta: Int!
     $nongiftableMin: Int!
+    $nongiftableMax: Int!
   ) {
     update_businesses(
       where: {
         id: { _eq: $id }
         ai_tokens: { _gte: $cost }
-        ai_tokens_nongiftable: { _gte: $nongiftableMin }
+        ai_tokens_nongiftable: { _gte: $nongiftableMin, _lte: $nongiftableMax }
       }
       _inc: { ai_tokens: $delta, ai_tokens_nongiftable: $nongiftableDelta }
     ) {
@@ -467,6 +470,10 @@ export class BusinessTokensService {
         delta: -amount,
         nongiftableDelta: spentNongiftable ? -spentNongiftable : 0,
         nongiftableMin: spentNongiftable,
+        // A partial free spend is only safe if the free count is unchanged;
+        // a concurrent restore would otherwise break nongiftable <= ai_tokens.
+        nongiftableMax:
+          spentNongiftable < amount ? spentNongiftable : MAX_PG_INT,
       }
     );
     const row = result.update_businesses?.returning?.[0];
