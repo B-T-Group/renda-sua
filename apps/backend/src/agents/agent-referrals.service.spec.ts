@@ -112,6 +112,66 @@ describe('AgentReferralsService.creditAfterFirstDelivery', () => {
     );
   });
 
+  it('ignores deliveries completed before the referral was applied', async () => {
+    mockQueries({
+      AgentReferralByReferred: { agent_referrals: [] },
+      AgentReferralAppliedAt: {
+        agents_by_pk: {
+          referral_applied_at: '2026-10-20T00:00:00.000Z',
+          created_at: '2026-08-01T00:00:00.000Z',
+        },
+      },
+      AgentCompletedDeliveries: {
+        orders_aggregate: { aggregate: { count: 0 } },
+      },
+    });
+
+    await service.creditAfterFirstDelivery('new-agent', 'CM');
+
+    expect(creditSpy).not.toHaveBeenCalled();
+    const deliveryCall = hasura.executeQuery.mock.calls.find((call) =>
+      String(call[0]).includes('AgentCompletedDeliveries')
+    );
+    expect(deliveryCall?.[1]).toEqual({
+      agentId: 'new-agent',
+      since: '2026-10-20T00:00:00.000Z',
+    });
+    expect(String(deliveryCall?.[0])).toContain('updated_at: { _gte: $since }');
+  });
+
+  it('counts deliveries from account creation when attribution time is missing', async () => {
+    mockQueries({
+      AgentReferralByReferred: { agent_referrals: [] },
+      AgentReferralAppliedAt: {
+        agents_by_pk: {
+          referral_applied_at: null,
+          created_at: '2026-08-01T00:00:00.000Z',
+        },
+      },
+      AgentCompletedDeliveries: {
+        orders_aggregate: { aggregate: { count: 1 } },
+      },
+      ReferredAgentForCredit: {
+        agents_by_pk: {
+          referral_code_used: 'ABC123',
+          user: { first_name: 'Bob', last_name: 'Lee' },
+          referring_agent: referringAgent,
+        },
+      },
+    });
+
+    await service.creditAfterFirstDelivery('new-agent', 'CM');
+
+    const deliveryCall = hasura.executeQuery.mock.calls.find((call) =>
+      String(call[0]).includes('AgentCompletedDeliveries')
+    );
+    expect(deliveryCall?.[1]).toEqual({
+      agentId: 'new-agent',
+      since: '2026-08-01T00:00:00.000Z',
+    });
+    expect(creditSpy).toHaveBeenCalled();
+  });
+
   it('skips when the agent has no stored referrer', async () => {
     mockQueries({
       AgentReferralByReferred: { agent_referrals: [] },
