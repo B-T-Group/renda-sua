@@ -75,6 +75,18 @@ describe('assistant intents', () => {
     expect(fr).not.toEqual(en);
   });
 
+  it('tells sellers free tokens cannot be gifted and late codes last 30 days', () => {
+    const en = getKnowledgeSection({ topic: 'seller_faq', locale: 'en' });
+    const fr = getKnowledgeSection({ topic: 'seller_faq', locale: 'fr' });
+    expect(en).toMatch(/20 free image AI tokens/);
+    expect(en).toMatch(/those free tokens cannot be gifted/);
+    expect(en).toMatch(/within 30 days of signup/);
+    expect(fr).toMatch(/20 jetons IA image gratuits/);
+    expect(fr).toMatch(/ces jetons gratuits ne peuvent pas être offerts/);
+    expect(fr).toMatch(/dans les 30 jours suivant l'inscription/);
+    expect(fr).not.toEqual(en);
+  });
+
   it('keeps the seller office address aligned in English and French', () => {
     const en = getKnowledgeSection({ topic: 'company_locations', locale: 'en' });
     const fr = getKnowledgeSection({ topic: 'company_locations', locale: 'fr' });

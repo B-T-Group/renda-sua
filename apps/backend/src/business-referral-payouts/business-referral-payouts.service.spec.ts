@@ -112,4 +112,80 @@ describe('BusinessReferralPayoutsService', () => {
     });
     expect(referralPyramidService.distributeReferralBonus).not.toHaveBeenCalled();
   });
+
+  it('counts only catalog items created after referral attribution', async () => {
+    const appliedAt = '2026-10-01T00:00:00.000Z';
+    const agentBase = {
+      name: 'Late Shop',
+      referred_by_agent_id: 'agent-1',
+      agent: business.agent,
+      items_aggregate: { aggregate: { count: 40 } },
+    };
+    hasuraSystemService.executeQuery.mockImplementation(async (query: string, vars?: { businessId?: string }) => {
+      if (query.includes('EligibleAgentReferredBusinesses')) {
+        expect(query).toContain('referral_applied_at: { _is_null: false }');
+        return {
+          businesses: [
+            { ...agentBase, id: 'biz-ready', referral_applied_at: appliedAt },
+            { ...agentBase, id: 'biz-unstamped', referral_applied_at: null },
+            { ...agentBase, id: 'biz-thin', referral_applied_at: appliedAt },
+          ],
+        };
+      }
+      if (query.includes('EligibleBusinessReferredBusinesses')) {
+        expect(query).toContain('referral_applied_at: { _is_null: false }');
+        return {
+          businesses: [
+            {
+              id: 'biz-b2b',
+              name: 'B2B Shop',
+              referred_by_business_id: 'biz-ref',
+              referral_applied_at: appliedAt,
+              referring_business: {
+                id: 'biz-ref',
+                name: 'Referrer',
+                user_id: 'user-2',
+                user: { id: 'user-2', preferred_language: 'fr' },
+              },
+              items_aggregate: { aggregate: { count: 12 } },
+            },
+          ],
+        };
+      }
+      if (query.includes('CountItemsSinceReferral')) {
+        const counts: Record<string, number> = {
+          'biz-ready': 10,
+          'biz-thin': 9,
+          'biz-b2b': 10,
+        };
+        return {
+          items_aggregate: {
+            aggregate: { count: counts[vars?.businessId ?? ''] ?? 0 },
+          },
+        };
+      }
+      return {};
+    });
+
+    const rows = await service.listEligibleForPreview();
+
+    expect(rows.map((row) => row.id)).toEqual(['biz-ready', 'biz-b2b']);
+    expect(rows.map((row) => row.itemCount)).toEqual([10, 10]);
+    const sinceCalls = hasuraSystemService.executeQuery.mock.calls
+      .filter((call) => String(call[0]).includes('CountItemsSinceReferral'))
+      .map((call) => call[1]);
+    expect(sinceCalls).toHaveLength(3);
+    expect(sinceCalls).toEqual(
+      expect.arrayContaining([
+        { businessId: 'biz-ready', since: appliedAt },
+        { businessId: 'biz-thin', since: appliedAt },
+        { businessId: 'biz-b2b', since: appliedAt },
+      ])
+    );
+    expect(sinceCalls).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ businessId: 'biz-unstamped' }),
+      ])
+    );
+  });
 });

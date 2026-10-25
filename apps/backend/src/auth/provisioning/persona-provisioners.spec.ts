@@ -52,8 +52,17 @@ describe('buildPersonaFragments', () => {
       business_referral_business_id: 'biz-ref-1',
       business_referral_code_used: 'BIZCODE',
     });
+    expect(frags[0].vars.ai_tokens).toBe(20);
+    expect(frags[0].vars.ai_tokens_nongiftable).toBe(20);
+    expect(frags[0].objectField).toContain(
+      'ai_tokens_nongiftable: $ai_tokens_nongiftable'
+    );
     expect(frags[0].vars.referred_by_business_id).toBe('biz-ref-1');
     expect(frags[0].vars.referral_code_used).toBe('BIZCODE');
+    expect(frags[0].vars.referral_applied_at).toEqual(expect.any(String));
+    expect(frags[0].objectField).toContain(
+      'referral_applied_at: $referral_applied_at'
+    );
     expect(frags[0].objectField).toContain(
       'referred_by_business_id: $referred_by_business_id'
     );
@@ -79,8 +88,11 @@ describe('buildPersonaFragments', () => {
       business_name: 'Acme',
       business_referral_business_id: 'biz-ref-1',
     });
+    expect(frags[0].vars.ai_tokens_nongiftable).toBe(20);
     expect(frags[0].vars.referred_by_business_id).toBeUndefined();
+    expect(frags[0].vars.referral_applied_at).toBeUndefined();
     expect(frags[0].objectField).not.toContain('referred_by_business_id');
+    expect(frags[0].objectField).not.toContain('referral_applied_at');
   });
 
   it('writes agent B2B referral fields onto the agent insert', () => {
@@ -91,8 +103,12 @@ describe('buildPersonaFragments', () => {
       agent_referral_code_used: 'BIZCODE',
     });
     expect(frags[0].vars.agent_referred_by_business_id).toBe('biz-ref-1');
+    expect(frags[0].vars.agent_referral_applied_at).toEqual(expect.any(String));
     expect(frags[0].objectField).toContain(
       'referred_by_business_id: $agent_referred_by_business_id'
+    );
+    expect(frags[0].objectField).toContain(
+      'referral_applied_at: $agent_referral_applied_at'
     );
     expect(frags[0].objectField).not.toContain('referred_by_agent_id');
   });
