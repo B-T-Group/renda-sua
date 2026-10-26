@@ -207,7 +207,10 @@ export class BusinessTokensService {
     restoreNongiftable = 0
   ): Promise<void> {
     if (!Number.isInteger(amount) || amount <= 0) return;
-    const nongiftableInc = Math.max(0, restoreNongiftable);
+    const requested = Math.trunc(Number(restoreNongiftable));
+    const nongiftableInc = Number.isInteger(requested)
+      ? Math.min(amount, Math.max(0, requested))
+      : 0;
     await this.hasuraSystemService.executeMutation(
       `mutation RefundAiTokens($id: uuid!, $amount: Int!, $nongiftable: Int!) {
         update_businesses_by_pk(

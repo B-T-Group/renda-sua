@@ -179,7 +179,9 @@ describe('AiImageCleanupService.enqueueCleanupJob skip-all', () => {
     const images = [0, 1, 2, 3, 4].map((index) => image({ id: `img-${index}` }));
     stubEligible(service, images);
     jest.spyOn(service as any, 'findAppendableOpenJob').mockResolvedValue(null);
-    jest.spyOn(service as any, 'createJob').mockResolvedValue({ id: 'job-1' });
+    const createJob = jest
+      .spyOn(service as any, 'createJob')
+      .mockResolvedValue({ id: 'job-1' });
     jest.spyOn(service as any, 'createResults').mockRejectedValue(new Error('insert failed'));
     const cancel = jest.spyOn(service as any, 'setJobStatus').mockResolvedValue(undefined);
     jest.spyOn(service as any, 'loadJob').mockResolvedValue({ id: 'job-1' });
@@ -196,6 +198,12 @@ describe('AiImageCleanupService.enqueueCleanupJob skip-all', () => {
       'biz-1',
       images.length * CLEANUP_TOKEN_COST,
       3
+    );
+    expect(createJob).toHaveBeenCalledWith(
+      expect.objectContaining({
+        tokensReserved: images.length * CLEANUP_TOKEN_COST,
+        nongiftableReserved: 3,
+      })
     );
     expect(cancel).toHaveBeenCalledWith('job-1', 'cancelled');
     expect(queue.enqueueJob).not.toHaveBeenCalled();

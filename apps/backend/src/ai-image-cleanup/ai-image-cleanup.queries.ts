@@ -8,6 +8,7 @@ export const JOB_FIELDS = `
   tokens_reserved
   tokens_consumed
   tokens_refunded
+  nongiftable_reserved
   mode
   source
   created_at
@@ -368,6 +369,26 @@ export const UPDATE_BUSINESS_AUTO_ENHANCE = `
       id
       auto_enhance_enabled
     }
+  }
+`;
+
+export const INC_JOB_TOKENS = `
+  mutation IncAiCleanupJobTokens(
+    $id: uuid!
+    $reserved: Int!
+    $consumed: Int!
+    $refunded: Int!
+    $nongiftable: Int!
+  ) {
+    update_ai_image_cleanup_jobs_by_pk(
+      pk_columns: { id: $id }
+      _inc: {
+        tokens_reserved: $reserved
+        tokens_consumed: $consumed
+        tokens_refunded: $refunded
+        nongiftable_reserved: $nongiftable
+      }
+    ) { id }
   }
 `;
 

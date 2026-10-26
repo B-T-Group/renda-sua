@@ -24,6 +24,13 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { RentalListingAiReviewService } from '../rental-listing-ai-review/rental-listing-ai-review.service';
 import { isActivePersona } from '../users/persona.util';
 import { AiImageCleanupQueueService } from './ai-image-cleanup-queue.service';
+import {
+  freeTokensToRestore,
+  holdAfterConsume,
+  holdAfterRefund,
+  tokenHoldFromJob,
+  type CleanupTokenHold,
+} from './cleanup-token-hold';
 import * as Q from './ai-image-cleanup.queries';
 import type {
   AiImageCleanupConfidenceTier,
@@ -414,11 +421,12 @@ export class AiImageCleanupService implements OnModuleInit {
         source === 'admin_moderation' ? 'auto_apply' : 'review_all';
       const openJob = await this.findAppendableOpenJob(itemId, itemVariantId);
       if (openJob) {
-        job = await this.appendResultsToOpenJob({
+          job = await this.appendResultsToOpenJob({
           openJob,
           images: needingEdit,
           skippedIneligible,
           tokenCost,
+          nongiftableReserved: spentNongiftable,
           businessId,
           userId,
           chargeTokens: tokenCost > 0,
@@ -433,6 +441,7 @@ export class AiImageCleanupService implements OnModuleInit {
             images: needingEdit,
             skippedIneligible,
             tokenCost,
+            nongiftableReserved: spentNongiftable,
             businessId,
             userId,
             chargeTokens: tokenCost > 0,
@@ -445,6 +454,7 @@ export class AiImageCleanupService implements OnModuleInit {
             itemId,
             userId,
             tokensReserved: tokenCost,
+            nongiftableReserved: spentNongiftable,
             itemVariantId,
             mode,
             source,
@@ -523,6 +533,7 @@ export class AiImageCleanupService implements OnModuleInit {
     images: CleanupEligibleImage[];
     skippedIneligible: CleanupEligibleImage[];
     tokenCost: number;
+    nongiftableReserved: number;
     businessId: string;
     userId: string;
     chargeTokens: boolean;
@@ -539,7 +550,11 @@ export class AiImageCleanupService implements OnModuleInit {
         createdIds = createdIds.concat(ineligibleIds);
       }
       if (args.chargeTokens && args.tokenCost > 0) {
-        await this.bumpJobTokens(args.openJob.id, args.tokenCost);
+        await this.bumpJobTokens(
+          args.openJob.id,
+          args.tokenCost,
+          args.nongiftableReserved
+        );
         tokensBumped = true;
         await this.tokens.recordCleanupUsage({
           businessId: args.businessId,
@@ -568,9 +583,11 @@ export class AiImageCleanupService implements OnModuleInit {
           .catch(() => undefined);
       }
       if (tokensBumped) {
-        await this.bumpJobTokens(args.openJob.id, -args.tokenCost).catch(
-          () => undefined
-        );
+        await this.bumpJobTokens(
+          args.openJob.id,
+          -args.tokenCost,
+          -args.nongiftableReserved
+        ).catch(() => undefined);
       }
       throw error;
     }
@@ -1109,6 +1126,7 @@ export class AiImageCleanupService implements OnModuleInit {
     const kind = result.kind ?? 'ai';
     const tokenCost = kind === 'ai' ? CLEANUP_TOKEN_COST : 0;
     let balanceAfter = await this.tokens.getBalance(businessId);
+    let spentNongiftable = 0;
     if (tokenCost > 0) {
       const reserved = await this.tokens.tryReserveTokens(
         businessId,
@@ -1125,6 +1143,7 @@ export class AiImageCleanupService implements OnModuleInit {
         );
       }
       balanceAfter = reserved.balanceAfter;
+      spentNongiftable = reserved.spentNongiftable;
     }
     const inserted = await this.insertRetryResult(result);
     if (result.status === 'failed' || result.status === 'rejected') {
@@ -1139,7 +1158,7 @@ export class AiImageCleanupService implements OnModuleInit {
         tokensConsumed: tokenCost,
         imageUrl: result.original_image_url,
       });
-      await this.bumpJobTokens(result.job_id, tokenCost);
+      await this.bumpJobTokens(result.job_id, tokenCost, spentNongiftable);
     }
     await this.setJobStatus(result.job_id, 'queued');
     await this.queue.enqueueJob(result.job_id);
@@ -1158,15 +1177,16 @@ export class AiImageCleanupService implements OnModuleInit {
     const pending = (job.results ?? []).filter((r) =>
       this.isClaimableResultStatus(r.status, r.updated_at)
     );
+    const hold = tokenHoldFromJob(job);
     let consumed = 0;
     let refunded = 0;
     for (const result of pending) {
       const tokenUnit = this.tokenUnitForResult(job, result);
-      const outcome = await this.processOneResult(job, result, tokenUnit);
+      const outcome = await this.processOneResult(job, result, tokenUnit, hold);
       if (outcome === 'ready') consumed += tokenUnit;
       if (outcome === 'failed') refunded += tokenUnit;
     }
-    await this.finalizeJobAfterProcess(job, consumed, refunded);
+    await this.finalizeJobAfterProcess(job, consumed, refunded, hold);
     return { success: true };
   }
 
@@ -1190,8 +1210,9 @@ export class AiImageCleanupService implements OnModuleInit {
         HttpStatus.CONFLICT
       );
     }
-    const refunded = await this.failPendingResults(job);
-    await this.finalizeJobAfterProcess(job, 0, refunded);
+    const hold = tokenHoldFromJob(job);
+    const refunded = await this.failPendingResults(job, hold);
+    await this.finalizeJobAfterProcess(job, 0, refunded, hold);
     return { success: true };
   }
 
@@ -1261,7 +1282,10 @@ export class AiImageCleanupService implements OnModuleInit {
     });
   }
 
-  private async failPendingResults(job: AiImageCleanupJobRow): Promise<number> {
+  private async failPendingResults(
+    job: AiImageCleanupJobRow,
+    hold: CleanupTokenHold = tokenHoldFromJob(job)
+  ): Promise<number> {
     const now = new Date().toISOString();
     const data = await this.hasura.executeMutation<{
       update_ai_image_cleanup_results: {
@@ -1281,7 +1305,7 @@ export class AiImageCleanupService implements OnModuleInit {
     const aiFailed = justFailed.filter((r) => (r.kind ?? 'ai') === 'ai').length;
     const refunded = aiFailed * CLEANUP_TOKEN_COST;
     if (refunded <= 0) return 0;
-    await this.tokens.refundTokens(job.business_id, refunded);
+    await this.refundHeldTokens(job.business_id, job.id, hold, refunded);
     return refunded;
   }
 
@@ -1323,7 +1347,8 @@ export class AiImageCleanupService implements OnModuleInit {
   private async processOneResult(
     job: AiImageCleanupJobRow,
     result: AiImageCleanupResultRow,
-    tokenUnit: number
+    tokenUnit: number,
+    hold: CleanupTokenHold
   ): Promise<'ready' | 'failed' | 'skipped'> {
     const claimed = await this.claimResult(result.id);
     if (!claimed) return 'skipped';
@@ -1405,6 +1430,7 @@ export class AiImageCleanupService implements OnModuleInit {
           kind,
         });
       }
+      await this.consumeHeldTokens(job.id, hold, tokenUnit);
       return 'ready';
     } catch (error: any) {
       this.logger.warn(
@@ -1420,7 +1446,7 @@ export class AiImageCleanupService implements OnModuleInit {
         },
       });
       if (tokenUnit > 0) {
-        await this.tokens.refundTokens(job.business_id, tokenUnit);
+        await this.refundHeldTokens(job.business_id, job.id, hold, tokenUnit);
       }
       await this.trackEvent('enhancement_failed', result.id, {
         job_id: job.id,
@@ -1495,20 +1521,101 @@ export class AiImageCleanupService implements OnModuleInit {
     return CLEANUP_TOKEN_COST;
   }
 
+  private tokenHoldPatch(
+    job: AiImageCleanupJobRow,
+    consumed: number,
+    refunded: number,
+    hold?: CleanupTokenHold
+  ) {
+    return {
+      tokens_consumed: (job.tokens_consumed ?? 0) + consumed,
+      tokens_refunded: (job.tokens_refunded ?? 0) + refunded,
+      // nongiftable_reserved is only moved with _inc (checkpointHold / bumpJobTokens).
+      // A _set here would erase free tokens appended to the job while this run was in flight.
+      updated_at: new Date().toISOString(),
+    };
+  }
+
+  /** Balance refund first, then the job ledger. Paid tokens come back before free. */
+  private async refundHeldTokens(
+    businessId: string,
+    jobId: string,
+    hold: CleanupTokenHold,
+    amount: number
+  ): Promise<void> {
+    if (amount <= 0) return;
+    const restoreFree = freeTokensToRestore(hold, amount);
+    await this.tokens.refundTokens(businessId, amount, restoreFree);
+    Object.assign(hold, holdAfterRefund(hold, amount, restoreFree));
+    await this.checkpointHold(jobId, {
+      refunded: amount,
+      nongiftable: restoreFree > 0 ? -restoreFree : 0,
+    });
+  }
+
+  /** A ready photo burns free tokens first so a later failure refunds paid ones. */
+  private async consumeHeldTokens(
+    jobId: string,
+    hold: CleanupTokenHold,
+    amount: number
+  ): Promise<void> {
+    if (amount <= 0) return;
+    const next = holdAfterConsume(hold, amount);
+    const burnedFree = hold.nongiftable_reserved - next.nongiftable_reserved;
+    Object.assign(hold, next);
+    await this.checkpointHold(jobId, {
+      consumed: amount,
+      nongiftable: burnedFree > 0 ? -burnedFree : 0,
+    });
+  }
+
+  private async checkpointHold(
+    jobId: string,
+    delta: { consumed?: number; refunded?: number; nongiftable?: number }
+  ): Promise<void> {
+    try {
+      await this.incJobTokens(jobId, delta);
+    } catch (error: any) {
+      this.logger.warn(
+        `Cleanup token hold update failed for ${jobId}: ${error?.message ?? error}`
+      );
+    }
+  }
+
+  private async incJobTokens(
+    jobId: string,
+    delta: {
+      reserved?: number;
+      consumed?: number;
+      refunded?: number;
+      nongiftable?: number;
+    }
+  ): Promise<void> {
+    const reserved = delta.reserved ?? 0;
+    const consumed = delta.consumed ?? 0;
+    const refunded = delta.refunded ?? 0;
+    const nongiftable = delta.nongiftable ?? 0;
+    if (!reserved && !consumed && !refunded && !nongiftable) return;
+    await this.hasura.executeMutation(Q.INC_JOB_TOKENS, {
+      id: jobId,
+      reserved,
+      consumed,
+      refunded,
+      nongiftable,
+    });
+  }
+
   private async finalizeJobAfterProcess(
     job: AiImageCleanupJobRow,
     consumed: number,
-    refunded: number
+    refunded: number,
+    hold?: CleanupTokenHold
   ): Promise<void> {
     const refreshed = await this.loadJob(job.id);
     const stillPending = (refreshed.results ?? []).some((r) =>
       this.isClaimableResultStatus(r.status, r.updated_at)
     );
-    const tokenPatch = {
-      tokens_consumed: (job.tokens_consumed ?? 0) + consumed,
-      tokens_refunded: (job.tokens_refunded ?? 0) + refunded,
-      updated_at: new Date().toISOString(),
-    };
+    const tokenPatch = this.tokenHoldPatch(job, consumed, refunded, hold);
     // Results appended while this run was in-flight — re-queue instead of closing.
     if (stillPending) {
       await this.hasura.executeMutation(Q.UPDATE_JOB, {
@@ -2088,6 +2195,7 @@ export class AiImageCleanupService implements OnModuleInit {
     itemId: string | null;
     userId: string;
     tokensReserved: number;
+    nongiftableReserved?: number;
     itemVariantId: string | null;
     mode: AiImageCleanupJobMode;
     source: AiImageCleanupJobSource;
@@ -2102,6 +2210,7 @@ export class AiImageCleanupService implements OnModuleInit {
         requested_by_user_id: args.userId,
         status: 'queued',
         tokens_reserved: args.tokensReserved,
+        nongiftable_reserved: args.nongiftableReserved ?? 0,
         mode: args.mode,
         source: args.source,
       },
@@ -2269,14 +2378,14 @@ export class AiImageCleanupService implements OnModuleInit {
     return data.insert_ai_image_cleanup_results.returning[0];
   }
 
-  private async bumpJobTokens(jobId: string, amount: number): Promise<void> {
-    const job = await this.loadJob(jobId);
-    await this.hasura.executeMutation(Q.UPDATE_JOB, {
-      id: jobId,
-      _set: {
-        tokens_reserved: job.tokens_reserved + amount,
-        updated_at: new Date().toISOString(),
-      },
+  private async bumpJobTokens(
+    jobId: string,
+    amount: number,
+    nongiftableAmount = 0
+  ): Promise<void> {
+    await this.incJobTokens(jobId, {
+      reserved: amount,
+      nongiftable: nongiftableAmount,
     });
   }
 

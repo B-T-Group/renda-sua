@@ -67,6 +67,8 @@ export interface AiImageCleanupJobRow {
   tokens_reserved: number;
   tokens_consumed: number;
   tokens_refunded: number;
+  /** Free tokens still held. Missing on rows loaded before the column existed. */
+  nongiftable_reserved?: number;
   mode?: AiImageCleanupJobMode;
   source?: AiImageCleanupJobSource;
   created_at: string;
