@@ -16,6 +16,7 @@ import { businessVerificationApi } from '../../services/businessVerificationApi'
 import { useTheme } from '../../contexts/ThemeContext';
 import { useClientFlags } from '../../contexts/ClientFlagsContext';
 import { usePermissions } from '../usePermissions';
+import { useAdminDedicatedAgentsCapability } from '../useAdminDedicatedAgentsCapability';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { useActionsNeeded } from '../useActionsNeeded';
 import {
@@ -420,6 +421,22 @@ export function useBusinessDashboardScreen() {
     [t, navigation, colors.primary.main]
   );
 
+  const dedicatedAgentsModule: BusinessModuleCardModel = useMemo(
+    () => ({
+      id: 'admin-dedicated-agents',
+      title: t('admin.dedicatedAgents.title', 'Dedicated agents'),
+      description: t(
+        'admin.dedicatedAgents.dashboardDescription',
+        'Assign agents to store pickup slots, pause or remove them.'
+      ),
+      icon: 'store-clock-outline',
+      count: null,
+      accentColor: colors.primary.main,
+      onPress: () => navigation.navigate('AdminDedicatedAgents'),
+    }),
+    [t, navigation, colors.primary.main]
+  );
+
   const whatsappInboxModule = useMemo(
     (): BusinessModuleCardModel => ({
       id: 'admin-whatsapp-inbox',
@@ -469,10 +486,15 @@ export function useBusinessDashboardScreen() {
     isSuperuser || can(PlatformPermissions.OPS_USER_MESSAGES);
   const canSeeWhatsAppInbox =
     isSuperuser || can(PlatformPermissions.OPS_WHATSAPP_INBOX);
+  // platform.manage.agents AND /admin/dedicated-agents/capability enabled.
+  const canManageAgents = isSuperuser || can(PlatformPermissions.MANAGE_AGENTS);
+  const { visible: canSeeDedicatedAgents } =
+    useAdminDedicatedAgentsCapability(canManageAgents);
   const adminModules = useMemo(
     () => [
       ...(canViewPlatformStats ? [performanceModule] : []),
       ...(canSendBroadcasts ? [broadcastsModule] : []),
+      ...(canSeeDedicatedAgents ? [dedicatedAgentsModule] : []),
       ...(canSeeWhatsAppInbox ? [whatsappInboxModule] : []),
       ...(canManageBusinesses ? [businessVerificationModule] : []),
       ...(canModerateRentals
@@ -492,12 +514,14 @@ export function useBusinessDashboardScreen() {
       canManageBusinesses,
       canViewPlatformStats,
       canSendBroadcasts,
+      canSeeDedicatedAgents,
       canSeeWhatsAppInbox,
       canModerateRentals,
       canModerateItems,
       canBrowseCatalog,
       performanceModule,
       broadcastsModule,
+      dedicatedAgentsModule,
       whatsappInboxModule,
       businessVerificationModule,
       rentalModerationModule,

@@ -57,6 +57,7 @@ import BusinessReferralReviewScreen from '../screens/business/BusinessReferralRe
 import BusinessReferredBusinessesScreen from '../screens/business/BusinessReferredBusinessesScreen';
 import AdminUsersScreen from '../screens/business/AdminUsersScreen';
 import AdminBroadcastsScreen from '../screens/business/AdminBroadcastsScreen';
+import AdminDedicatedAgentsScreen from '../screens/business/AdminDedicatedAgentsScreen';
 import AdminWhatsAppInboxScreen from '../screens/business/AdminWhatsAppInboxScreen';
 import AdminWhatsAppConversationScreen from '../screens/business/AdminWhatsAppConversationScreen';
 import AdminOrdersScreen from '../screens/business/AdminOrdersScreen';
@@ -650,6 +651,11 @@ export function BusinessRootNavigator() {
           name="AdminBroadcasts"
           component={AdminBroadcastsScreen}
           options={{ title: t('admin.broadcasts.title', 'Global messaging') }}
+        />
+        <RootStack.Screen
+          name="AdminDedicatedAgents"
+          component={AdminDedicatedAgentsScreen}
+          options={{ title: t('admin.dedicatedAgents.title', 'Dedicated agents') }}
         />
         <RootStack.Screen
           name="AdminWhatsAppInbox"

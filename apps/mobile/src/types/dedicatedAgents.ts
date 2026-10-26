@@ -219,3 +219,113 @@ export interface UpdateOffTodayRequest {
 export interface DeleteAssignmentRequest {
   reason?: string;
 }
+
+// ---------------------------------------------------------------------------
+// Admin (platform.manage.agents) views: /admin/dedicated-agents/*
+// ---------------------------------------------------------------------------
+
+export interface AdminAssignmentView {
+  assignmentId: string;
+  slotKey: SlotKey;
+  status: AssignmentStatus;
+  source: AssignmentSource;
+  createdAt: string;
+  location: {
+    id: string;
+    name: string;
+    businessId?: string;
+    businessName: string;
+    city: string;
+    state: string;
+    country?: string;
+  };
+  agent: DedicatedAgent;
+  possible_relation: boolean;
+  relation_signals: string[] | null;
+  relation_dismissed: boolean;
+}
+
+export interface AdminAgentPickerItem {
+  id: string;
+  firstName: string;
+  lastName: string;
+  photoUrl: string | null;
+  isInternal: boolean;
+  chip: 'internal' | 'verified_independent';
+  assignmentCount: number;
+  activeOrders: number;
+  outstandingDedicatedOffers: number;
+  balanceCoversOrders: number | null;
+}
+
+export interface AdminLocationSearchItem {
+  id: string;
+  name: string;
+  businessId: string;
+  businessName: string;
+  address: {
+    line1: string | null;
+    city: string;
+    state: string;
+    country: string;
+  };
+  enabledSlotKeys: SlotKey[];
+  liveAgents: number;
+}
+
+export interface AdminAssignmentsResponse {
+  success: true;
+  assignments: AdminAssignmentView[];
+  truncated?: boolean;
+}
+
+export interface AdminAgentPickerResponse {
+  success: true;
+  agents: AdminAgentPickerItem[];
+  truncated: boolean;
+}
+
+export interface AdminLocationsResponse {
+  success: true;
+  locations: AdminLocationSearchItem[];
+  truncated: boolean;
+}
+
+/** GET /admin/dedicated-agents/capability: countries in the admin's scope with the flag on. */
+export interface AdminDedicatedCapabilityResponse {
+  success: true;
+  enabled: boolean;
+  countries: string[];
+}
+
+/** GET /admin/dedicated-agents/coverage (covered vs uncovered slots per location; not rendered yet). */
+export interface AdminCoverageResponse {
+  success: true;
+  truncated?: boolean;
+  [key: string]: unknown;
+}
+
+export interface AdminAssignmentFilters {
+  city?: string;
+  locationId?: string;
+  slotKey?: SlotKey;
+  status?: AssignmentStatus | 'removed';
+  source?: 'superuser_assign' | 'posting';
+}
+
+export interface CreateAdminAssignmentRequest {
+  locationId: string;
+  agentId: string;
+  slotKeys: SlotKey[];
+}
+
+export interface CreateAdminAssignmentResponse {
+  success: true;
+  assignments: Array<{
+    id: string;
+    agent_id: string;
+    slot_key: SlotKey;
+    status: string;
+    source: string;
+  }>;
+}

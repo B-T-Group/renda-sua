@@ -194,7 +194,10 @@
     "business": "Commerce",
     "saved": "Enregistré",
     "removed": "Retiré",
-    "notAvailable": "Non disponible"
+    "notAvailable": "Non disponible",
+    "all": "Tous",
+    "city": "Ville",
+    "required": "Obligatoire"
   },
   "cart": {
     "title": "Panier",
@@ -6906,6 +6909,16 @@
       "openVideo": "Ouvrir la vidéo",
       "mediaLoadError": "Impossible de charger la pièce jointe",
       "imageAccessibility": "Image WhatsApp"
+    },
+    "dedicatedAgents": {
+      "title": "Livreurs dédiés",
+      "menuSubtitle": "Affecter des livreurs aux créneaux de retrait des boutiques",
+      "dashboardDescription": "Affectez des livreurs aux créneaux de retrait des boutiques, mettez-les en pause ou retirez-les.",
+      "accessDenied": "Vous n'avez pas la permission de gérer les livreurs dédiés.",
+      "emptyBody": "Affectez un livreur à un créneau de boutique pour commencer.",
+      "unavailableTitle": "Les livreurs dédiés ne sont pas activés",
+      "unavailableBody": "Les livreurs dédiés ne sont activés dans aucun pays de votre périmètre.",
+      "unavailableLoadFailed": "Impossible de vérifier la disponibilité. Réessayez plus tard."
     }
   },
   "actionsNeeded": {
@@ -7767,7 +7780,9 @@
       "invalid_headcount": "Le nombre doit être entre 1 et 10",
       "invalid_slot_keys": "Veuillez sélectionner au moins un créneau",
       "invalid_days_of_week": "Veuillez sélectionner au moins un jour",
-      "terms_too_long": "Les conditions doivent faire 1000 caractères maximum"
+      "terms_too_long": "Les conditions doivent faire 1000 caractères maximum",
+      "geo_scope": "Hors de votre périmètre administrateur",
+      "query_too_short": "Saisissez au moins 2 caractères pour rechercher"
     },
     "metrics": {
       "deliveries": "livraisons",
@@ -7796,6 +7811,40 @@
       "decreaseCount": "Diminuer le nombre",
       "increaseCount": "Augmenter le nombre",
       "slotToggle": "Activer/désactiver le créneau {{slot}}"
+    },
+    "superuser": {
+      "assign": "Affecter",
+      "noAssignments": "Aucune affectation trouvée.",
+      "relationWarning": "Le livreur est peut-être lié à cette entreprise",
+      "removeConfirm": "Supprimer l'affectation ?",
+      "removeConfirmDetail": "Retirer {{name}} de {{store}} ({{slot}}) ? Le livreur ne sera plus dédié à ce créneau de la boutique."
+    },
+    "admin": {
+      "assignTitle": "Affecter un livreur dédié",
+      "assign": "Affecter",
+      "assigned": "Affecté. La boutique et le livreur ont été notifiés.",
+      "stepOf": "Étape {{n}} sur 3 · {{name}}",
+      "steps": {
+        "store": "Boutique",
+        "slots": "Créneaux",
+        "agent": "Livreur"
+      },
+      "searchStore": "Rechercher une boutique, une entreprise ou une ville",
+      "searchHint": "Saisissez au moins 2 caractères pour rechercher",
+      "noStoresFound": "Aucune boutique trouvée",
+      "noAgentsFound": "Aucun livreur trouvé",
+      "selectSlots": "Sélectionnez un ou plusieurs créneaux",
+      "slotOff": "La boutique a désactivé ce créneau",
+      "filterAgents": "Filtrer les livreurs",
+      "truncated": "Premiers résultats affichés ; affinez la recherche",
+      "agentLoad": "{{orders}} commandes actives · {{stores}} boutiques",
+      "busyBadge": "Plusieurs boutiques",
+      "unnamedAgent": "Livreur",
+      "errors": {
+        "notFoundOrOff": "Les livreurs dédiés ne sont pas disponibles pour cette boutique, ou la boutique ou le livreur n'existe plus",
+        "slotDisabledResume": "La boutique a désactivé ce créneau. Il doit être réactivé avant que le livreur puisse reprendre",
+        "assignmentNotFound": "Cette affectation n'existe plus, ou les livreurs dédiés sont désactivés pour cette boutique"
+      }
     }
   }
 }

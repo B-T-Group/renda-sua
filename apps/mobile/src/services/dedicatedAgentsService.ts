@@ -19,6 +19,14 @@ import type {
   MyDedicatedAssignmentsResponse,
   UpdateOffTodayRequest,
   DedicatedAgentsCapabilityResponse,
+  AdminAssignmentsResponse,
+  AdminAssignmentFilters,
+  AdminAgentPickerResponse,
+  AdminLocationsResponse,
+  AdminDedicatedCapabilityResponse,
+  CreateAdminAssignmentRequest,
+  CreateAdminAssignmentResponse,
+  AdminCoverageResponse,
 } from '../types/dedicatedAgents';
 
 export class DedicatedAgentsService {
@@ -174,6 +182,75 @@ export class DedicatedAgentsService {
       `/agents/me/dedicated-assignments/${assignmentId}/off-today`,
       data
     );
+  }
+
+  // -------------------------------------------------------------------------
+  // Admin (platform.manage.agents). Routes 404 when dedicated_agents_enabled is
+  // off for the store country; 403 when the store/agent is outside the geo scope.
+  // -------------------------------------------------------------------------
+
+  async getAdminCapability(): Promise<AdminDedicatedCapabilityResponse> {
+    return api.get<AdminDedicatedCapabilityResponse>('/admin/dedicated-agents/capability');
+  }
+
+  async getAdminAssignments(filters?: AdminAssignmentFilters): Promise<AdminAssignmentsResponse> {
+    const params = new URLSearchParams();
+    if (filters?.city?.trim()) params.append('city', filters.city.trim());
+    if (filters?.locationId) params.append('locationId', filters.locationId);
+    if (filters?.slotKey) params.append('slotKey', filters.slotKey);
+    if (filters?.status) params.append('status', filters.status);
+    if (filters?.source) params.append('source', filters.source);
+    const query = params.toString();
+    return api.get<AdminAssignmentsResponse>(`/admin/dedicated-agents${query ? `?${query}` : ''}`);
+  }
+
+  async getAdminCoverage(city?: string): Promise<AdminCoverageResponse> {
+    const query = city?.trim() ? `?${new URLSearchParams({ city: city.trim() }).toString()}` : '';
+    return api.get<AdminCoverageResponse>(`/admin/dedicated-agents/coverage${query}`);
+  }
+
+  async getAdminAgentPicker(locationId: string): Promise<AdminAgentPickerResponse> {
+    const query = new URLSearchParams({ locationId }).toString();
+    return api.get<AdminAgentPickerResponse>(`/admin/dedicated-agents/picker?${query}`);
+  }
+
+  /** Store search: the backend rejects queries under 2 characters with 400 query_too_short. */
+  async searchAdminLocations(
+    q: string,
+    opts?: { city?: string; limit?: number }
+  ): Promise<AdminLocationsResponse> {
+    const params = new URLSearchParams({ q });
+    if (opts?.city?.trim()) params.append('city', opts.city.trim());
+    if (opts?.limit) params.append('limit', String(opts.limit));
+    return api.get<AdminLocationsResponse>(`/admin/dedicated-agents/locations?${params.toString()}`);
+  }
+
+  async createAdminAssignment(
+    data: CreateAdminAssignmentRequest
+  ): Promise<CreateAdminAssignmentResponse> {
+    return api.post<CreateAdminAssignmentResponse>('/admin/dedicated-agents/assignments', data);
+  }
+
+  async updateAdminAssignment(
+    assignmentId: string,
+    data: UpdateAssignmentRequest
+  ): Promise<{ success: true }> {
+    return api.patch<{ success: true }>(
+      `/admin/dedicated-agents/assignments/${assignmentId}`,
+      data
+    );
+  }
+
+  async deleteAdminAssignment(
+    assignmentId: string,
+    data?: DeleteAssignmentRequest
+  ): Promise<{ success: true }> {
+    const url = `/admin/dedicated-agents/assignments/${assignmentId}`;
+    if (!data) return api.delete<{ success: true }>(url);
+    return apiRequest<{ success: true }>(url, {
+      method: 'DELETE',
+      body: JSON.stringify(data),
+    });
   }
 }
 
