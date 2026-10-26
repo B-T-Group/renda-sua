@@ -11,16 +11,18 @@ import type { AdminDedicatedCapabilityResponse } from '../types/dedicatedAgents'
  */
 export function useAdminDedicatedAgentsCapability(canManageAgents: boolean) {
   const [capability, setCapability] = useState<AdminDedicatedCapabilityResponse | null>(null);
-  const [loading, setLoading] = useState(canManageAgents);
+  // `settled` flips once the capability call for a permitted user finished (ok or error),
+  // so there is no one-frame "not enabled" flash between permission resolving and the fetch.
+  const [settled, setSettled] = useState(false);
 
   useEffect(() => {
     if (!canManageAgents) {
       setCapability(null);
-      setLoading(false);
+      setSettled(false);
       return;
     }
     let mounted = true;
-    setLoading(true);
+    setSettled(false);
     dedicatedAgentsService
       .getAdminCapability()
       .then((res) => {
@@ -30,7 +32,7 @@ export function useAdminDedicatedAgentsCapability(canManageAgents: boolean) {
         if (mounted) setCapability(null);
       })
       .finally(() => {
-        if (mounted) setLoading(false);
+        if (mounted) setSettled(true);
       });
     return () => {
       mounted = false;
@@ -39,7 +41,7 @@ export function useAdminDedicatedAgentsCapability(canManageAgents: boolean) {
 
   return {
     capability,
-    loading,
+    loading: canManageAgents && !settled,
     visible: shouldShowAdminDedicatedEntry(canManageAgents, capability),
   };
 }

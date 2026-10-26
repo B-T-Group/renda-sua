@@ -159,6 +159,8 @@ export function AdminDedicatedAssignModal({
         if (seq !== pickerSeq.current) return;
         setAgents(res.agents);
         setAgentsTruncated(res.truncated);
+        // Counts may have changed: drop a selection that is no longer offered.
+        setAgent((prev) => (prev && res.agents.some((a) => a.id === prev.id) ? prev : null));
       } catch (err: unknown) {
         if (seq !== pickerSeq.current) return;
         const mapped = mapAdminSearchError(err);
