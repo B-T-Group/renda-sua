@@ -617,6 +617,85 @@ describe('CheckoutPreflightService', () => {
       expect(ordersService.quoteDeliveryFeeForCheckout).toHaveBeenCalledTimes(2);
       expect(result.groups.map((g) => g.delivery_fee)).toEqual([8, 6]);
     });
+
+    it('quotes one delivery fee for every line from the same seller', async () => {
+      const second = makeInventoryRow({
+        id: 'inv-2',
+        sellerCountry: 'CA',
+        currency: 'CAD',
+        price: 10,
+      });
+      second.item = { ...second.item, id: 'item-2' };
+      mockInventory([caRow(), second], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockResolvedValue(quote());
+
+      const result = await service.resolve(
+        deliveryDto({
+          items: [
+            { business_inventory_id: 'inv-1', quantity: 2 },
+            { business_inventory_id: 'inv-2', quantity: 3 },
+          ],
+        }),
+        true
+      );
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).toHaveBeenCalledTimes(1);
+      expect(ordersService.quoteDeliveryFeeForCheckout).toHaveBeenCalledWith({
+        businessInventoryId: 'inv-1',
+        addressId: 'addr-canada',
+        requiresFastDelivery: false,
+        businessId: 'biz-1',
+        subtotal: 70,
+      });
+      expect(result.groups).toHaveLength(1);
+      expect(result.groups[0].subtotal).toBe(70);
+      expect(result.groups[0].delivery_fee).toBe(8);
+      expect(result.groups[0].total).toBeCloseTo(78.99, 2);
+    });
+
+    it('bills carrier shipping from item prices and does not quote a distance fee', async () => {
+      const paid = makeInventoryRow({
+        id: 'inv-ship-a',
+        sellerCountry: 'CA',
+        currency: 'CAD',
+        price: 20,
+        shippingEnabled: true,
+        shippingPrice: 6,
+      });
+      paid.item = { ...paid.item, id: 'item-ship-a' };
+      const extra = makeInventoryRow({
+        id: 'inv-ship-b',
+        sellerCountry: 'CA',
+        currency: 'CAD',
+        price: 10,
+        shippingEnabled: true,
+        shippingPrice: 4,
+      });
+      extra.item = { ...extra.item, id: 'item-ship-b' };
+      mockInventory([paid, extra], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockResolvedValue(
+        quote({ deliveryFee: 8 })
+      );
+
+      const result = await service.resolve(
+        deliveryDto({
+          fulfillment_method: 'shipping',
+          payment_timing: 'pay_now',
+          items: [
+            { business_inventory_id: 'inv-ship-a', quantity: 3 },
+            { business_inventory_id: 'inv-ship-b', quantity: 2 },
+          ],
+        }),
+        true
+      );
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).not.toHaveBeenCalled();
+      expect(result.can_proceed).toBe(true);
+      expect(result.groups[0].subtotal).toBe(80);
+      expect(result.groups[0].delivery_fee).toBe(26);
+      expect(result.groups[0].delivery_fee_estimated).toBeUndefined();
+      expect(result.groups[0].total).toBeCloseTo(106.99, 2);
+    });
   });
 
   // -------------------------------------------------------------------------
