@@ -68,4 +68,85 @@ describe('DedicatedAgentsService', () => {
     await dedicatedAgentsService.getCapability('CM');
     expect(api.get).toHaveBeenCalledWith('/dedicated-agents/capability?country=CM');
   });
+
+  describe('admin routes (platform.manage.agents)', () => {
+    it('reads the admin capability', async () => {
+      vi.mocked(api.get).mockResolvedValue({ success: true, enabled: true, countries: ['CM'] });
+      await dedicatedAgentsService.getAdminCapability();
+      expect(api.get).toHaveBeenCalledWith('/admin/dedicated-agents/capability');
+    });
+
+    it('lists assignments with no query string when unfiltered', async () => {
+      vi.mocked(api.get).mockResolvedValue({ success: true, assignments: [] });
+      await dedicatedAgentsService.getAdminAssignments();
+      expect(api.get).toHaveBeenCalledWith('/admin/dedicated-agents');
+    });
+
+    it('lists assignments with trimmed, encoded filters', async () => {
+      vi.mocked(api.get).mockResolvedValue({ success: true, assignments: [] });
+      await dedicatedAgentsService.getAdminAssignments({
+        city: ' Saint-Denis ',
+        slotKey: 'morning',
+        status: 'paused',
+        locationId: 'loc 1',
+      });
+      expect(api.get).toHaveBeenCalledWith(
+        '/admin/dedicated-agents?city=Saint-Denis&locationId=loc+1&slotKey=morning&status=paused'
+      );
+    });
+
+    it('reads coverage with and without a city', async () => {
+      vi.mocked(api.get).mockResolvedValue({ success: true });
+      await dedicatedAgentsService.getAdminCoverage();
+      expect(api.get).toHaveBeenLastCalledWith('/admin/dedicated-agents/coverage');
+      await dedicatedAgentsService.getAdminCoverage('Douala');
+      expect(api.get).toHaveBeenLastCalledWith('/admin/dedicated-agents/coverage?city=Douala');
+    });
+
+    it('loads the agent picker for a store', async () => {
+      vi.mocked(api.get).mockResolvedValue({ success: true, agents: [] });
+      await dedicatedAgentsService.getAdminAgentPicker('loc-1');
+      expect(api.get).toHaveBeenCalledWith('/admin/dedicated-agents/picker?locationId=loc-1');
+    });
+
+    it('searches stores with an encoded query, city and limit', async () => {
+      vi.mocked(api.get).mockResolvedValue({ success: true, locations: [] });
+      await dedicatedAgentsService.searchAdminLocations('café & co', { city: 'Yaoundé', limit: 20 });
+      expect(api.get).toHaveBeenCalledWith(
+        '/admin/dedicated-agents/locations?q=caf%C3%A9+%26+co&city=Yaound%C3%A9&limit=20'
+      );
+    });
+
+    it('creates an assignment', async () => {
+      vi.mocked(api.post).mockResolvedValue({ success: true, assignments: [] });
+      const body = { locationId: 'loc-1', agentId: 'ag-1', slotKeys: ['morning' as const, 'evening' as const] };
+      await dedicatedAgentsService.createAdminAssignment(body);
+      expect(api.post).toHaveBeenCalledWith('/admin/dedicated-agents/assignments', body);
+    });
+
+    it('pauses or resumes an assignment with PATCH', async () => {
+      vi.mocked(api.patch).mockResolvedValue({ success: true });
+      await dedicatedAgentsService.updateAdminAssignment('as-1', { status: 'paused' });
+      expect(api.patch).toHaveBeenCalledWith('/admin/dedicated-agents/assignments/as-1', {
+        status: 'paused',
+      });
+    });
+
+    it('removes an assignment without a body through api.delete', async () => {
+      vi.mocked(api.delete).mockResolvedValue({ success: true });
+      await dedicatedAgentsService.deleteAdminAssignment('as-1');
+      expect(api.delete).toHaveBeenCalledWith('/admin/dedicated-agents/assignments/as-1');
+      expect(apiRequest).not.toHaveBeenCalled();
+    });
+
+    it('removes an assignment with a reason as a DELETE JSON body', async () => {
+      vi.mocked(apiRequest).mockResolvedValue({ success: true });
+      await dedicatedAgentsService.deleteAdminAssignment('as-1', { reason: 'left' });
+      expect(apiRequest).toHaveBeenCalledWith('/admin/dedicated-agents/assignments/as-1', {
+        method: 'DELETE',
+        body: JSON.stringify({ reason: 'left' }),
+      });
+      expect(api.delete).not.toHaveBeenCalled();
+    });
+  });
 });

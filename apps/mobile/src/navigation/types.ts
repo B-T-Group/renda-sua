@@ -350,6 +350,7 @@ export type BusinessRootStackParamList = {
   BusinessReferredBusinesses: undefined;
   AdminUsers: undefined;
   AdminBroadcasts: undefined;
+  AdminDedicatedAgents: undefined;
   AdminWhatsAppInbox: undefined;
   AdminWhatsAppConversation: { conversationId: string };
   AdminOrders: undefined;
