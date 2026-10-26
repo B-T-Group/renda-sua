@@ -378,8 +378,17 @@ export class CheckoutGroupDto {
   @ApiProperty()
   subtotal!: number;
 
-  @ApiPropertyOptional({ description: 'Delivery fee. Null when address not provided.' })
+  @ApiPropertyOptional({
+    description:
+      'Delivery fee createOrder will charge (distance, tiers, first-order promo, waiver included). Null when no address, or the fee could not be quoted.',
+  })
   delivery_fee?: number | null;
+
+  @ApiPropertyOptional({
+    description:
+      'True when the delivery fee is the flat fallback because the distance lookup failed. The order uses the same fallback.',
+  })
+  delivery_fee_estimated?: boolean;
 
   @ApiPropertyOptional()
   is_first_order_client?: boolean;

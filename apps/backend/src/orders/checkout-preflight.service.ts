@@ -53,6 +53,7 @@ import {
 import { FxEstimateService } from '../diaspora/fx-estimate.service';
 import { DepositCalculationService } from './deposit-calculation.service';
 import { ServiceFeeService } from './service-fee.service';
+import { OrdersService } from './orders.service';
 import { comparableCountry, isoCountryCode } from './delivery-pricing.util';
 import {
   DIASPORA_ERROR_CODES,
@@ -199,6 +200,7 @@ export class CheckoutPreflightService {
     private readonly depositCalculationService: DepositCalculationService,
     private readonly serviceFeeService: ServiceFeeService,
     private readonly variantInventory: VariantInventoryService,
+    private readonly ordersService: OrdersService,
     @Optional()
     private readonly purchaseCreditsService?: PurchaseCreditsService,
     @Optional()
@@ -809,6 +811,7 @@ export class CheckoutPreflightService {
       let deliveryFee: number | null = null;
       let shippingFee: number | null = null;
       let isFirstOrderClient: boolean | undefined = undefined;
+      let deliveryFeeEstimated: boolean | undefined = undefined;
       
       if (fulfillment === 'shipping') {
         // Calculate shipping fee: sum of all item shipping prices * quantities
@@ -819,20 +822,16 @@ export class CheckoutPreflightService {
           shippingFee += itemShippingPrice * line.quantity;
         }
       } else if (dto.delivery_address_id && fulfillment === 'delivery' && isAuthenticated) {
-        try {
-          const feeResult = await this.hasuraSystemService.executeQuery(
-            `query GetDeliveryFeeForPreflight($inventoryId: uuid!, $addressId: uuid!) {
-              orders_aggregate(where: { 
-                order_items: { business_inventory_id: { _eq: $inventoryId } }
-                current_status: { _in: ["pending", "confirmed", "completed", "delivered"] }
-              }) { aggregate { count } }
-            }`,
-            { inventoryId: group.items[0].business_inventory_id, addressId: dto.delivery_address_id }
-          );
-          isFirstOrderClient = (feeResult.orders_aggregate?.aggregate?.count ?? 1) === 0;
-          deliveryFee = null; // Fee requires full calculation; mark as requiring a separate call
-        } catch {
-          deliveryFee = null;
+        const quote = await this.quoteDeliveryFee({
+          group,
+          addressId: dto.delivery_address_id,
+          requiresFastDelivery: dto.requires_fast_delivery === true,
+          subtotal,
+        });
+        if (quote) {
+          deliveryFee = quote.deliveryFee;
+          isFirstOrderClient = quote.isFirstOrderClient;
+          deliveryFeeEstimated = quote.method === 'flat_fee';
         }
       }
 
@@ -932,6 +931,7 @@ export class CheckoutPreflightService {
         business_location_id: group.businessLocationId || undefined,
         subtotal,
         delivery_fee: deliveryFee ?? shippingFee,
+        delivery_fee_estimated: deliveryFeeEstimated,
         is_first_order_client: isFirstOrderClient,
         service_fee: serviceFee,
         total: grandTotal,
@@ -1738,6 +1738,38 @@ export class CheckoutPreflightService {
         isCookedFood: lineIsCookedFood(item),
       };
     });
+  }
+
+  /**
+   * Same fee createOrder would charge for this group (distance, tiers, first-order
+   * promo, fast base, waiver), via OrdersService. Never throws: null leaves the fee
+   * unquoted so preflight still answers.
+   */
+  private async quoteDeliveryFee(params: {
+    group: {
+      businessId: string;
+      items: Array<{ business_inventory_id: string }>;
+    };
+    addressId: string;
+    requiresFastDelivery: boolean;
+    subtotal: number;
+  }): Promise<Awaited<ReturnType<OrdersService['quoteDeliveryFeeForCheckout']>> | null> {
+    const inventoryId = params.group.items[0]?.business_inventory_id;
+    if (!inventoryId) return null;
+    try {
+      return await this.ordersService.quoteDeliveryFeeForCheckout({
+        businessInventoryId: inventoryId,
+        addressId: params.addressId,
+        requiresFastDelivery: params.requiresFastDelivery,
+        businessId: params.group.businessId,
+        subtotal: params.subtotal,
+      });
+    } catch (error: any) {
+      this.logger.warn(
+        `Preflight delivery fee not quoted for business ${params.group.businessId}: ${error?.message ?? error}`
+      );
+      return null;
+    }
   }
 
   private quoteMomoItemDeposit(input: {

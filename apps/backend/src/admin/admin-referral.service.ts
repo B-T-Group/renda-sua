@@ -120,19 +120,33 @@ export class AdminReferralService {
   ): Promise<void> {
     const q = `
       mutation AdminApplyAgentReferral(
-        $id: uuid!, $agentId: uuid, $businessId: uuid, $code: String!
+        $id: uuid!, $agentId: uuid, $businessId: uuid, $code: String!, $appliedAt: timestamptz!
       ) {
-        update_agents_by_pk(
-          pk_columns: { id: $id }
+        update_agents(
+          where: {
+            id: { _eq: $id }
+            referred_by_agent_id: { _is_null: true }
+            referred_by_business_id: { _is_null: true }
+          }
           _set: {
             referred_by_agent_id: $agentId
             referred_by_business_id: $businessId
             referral_code_used: $code
+            referral_applied_at: $appliedAt
           }
-        ) { id }
+        ) { affected_rows }
       }
     `;
-    await this.hasuraSystemService.executeQuery(q, this.updateVars(agentId, resolved));
+    const result = await this.hasuraSystemService.executeQuery(
+      q,
+      this.updateVars(agentId, resolved)
+    );
+    if ((result?.update_agents?.affected_rows ?? 0) < 1) {
+      throw new HttpException(
+        { success: false, error: 'Referral already applied' },
+        HttpStatus.CONFLICT
+      );
+    }
   }
 
   private async updateBusinessReferral(
@@ -141,19 +155,33 @@ export class AdminReferralService {
   ): Promise<void> {
     const q = `
       mutation AdminApplyBusinessReferral(
-        $id: uuid!, $agentId: uuid, $businessId: uuid, $code: String!
+        $id: uuid!, $agentId: uuid, $businessId: uuid, $code: String!, $appliedAt: timestamptz!
       ) {
-        update_businesses_by_pk(
-          pk_columns: { id: $id }
+        update_businesses(
+          where: {
+            id: { _eq: $id }
+            referred_by_agent_id: { _is_null: true }
+            referred_by_business_id: { _is_null: true }
+          }
           _set: {
             referred_by_agent_id: $agentId
             referred_by_business_id: $businessId
             referral_code_used: $code
+            referral_applied_at: $appliedAt
           }
-        ) { id }
+        ) { affected_rows }
       }
     `;
-    await this.hasuraSystemService.executeQuery(q, this.updateVars(businessId, resolved));
+    const result = await this.hasuraSystemService.executeQuery(
+      q,
+      this.updateVars(businessId, resolved)
+    );
+    if ((result?.update_businesses?.affected_rows ?? 0) < 1) {
+      throw new HttpException(
+        { success: false, error: 'Referral already applied' },
+        HttpStatus.CONFLICT
+      );
+    }
   }
 
   private updateVars(id: string, resolved: ResolvedBusinessReferral) {
@@ -162,6 +190,7 @@ export class AdminReferralService {
       agentId: resolved.kind === 'agent' ? resolved.agentId : null,
       businessId: resolved.kind === 'business' ? resolved.businessId : null,
       code: resolved.normalizedCode,
+      appliedAt: new Date().toISOString(),
     };
   }
 

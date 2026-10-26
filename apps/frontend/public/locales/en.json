@@ -2092,6 +2092,19 @@
     "enterCodeTitle": "Referral code",
     "referralCodeLabel": "Referral code (optional)",
     "referralCodeHelp": "Enter the 6-character code of the Rendasua agent who referred you.",
+    "late": {
+      "menu": "Referral code",
+      "title": "Who referred you?",
+      "hint": "Enter the code of the person who invited you.",
+      "found": "Referred by {{name}}",
+      "not_found": "No user found with this code.",
+      "confirm_title": "Confirm your referrer?",
+      "confirm_body": "{{name}} will be saved as your referrer. This can't be changed later.",
+      "confirm": "Confirm",
+      "success": "Referral code saved.",
+      "locked": "Referred by {{name}} · locked",
+      "error": "Could not save referral code."
+    },
     "followUp": {
       "listTitle": "Referred businesses",
       "contractPending": "Contract pending",
@@ -2818,7 +2831,30 @@
       "buyToCleanup": "Buy tokens to cleanup",
       "purchaseError": "Failed to start purchase",
       "mobilePending": "Payment request sent. Tokens will be added when payment succeeds.",
-      "unsupportedCurrency": "Token packs are only available in CAD or XAF for your business country."
+      "unsupportedCurrency": "Token packs are only available in CAD or XAF for your business country.",
+      "gift": {
+        "title": "Gift AI tokens",
+        "tooltip": "Gift tokens",
+        "code_label": "Recipient's referral code",
+        "code_found": "Sending to {{name}}",
+        "code_not_found": "No user found with this code.",
+        "amount_label": "Amount",
+        "transferable": "Transferable: {{n}} tokens",
+        "free_info": "Free and promo tokens can't be gifted.",
+        "min": "Minimum {{min}} tokens.",
+        "max": "Maximum {{max}} tokens per transfer.",
+        "maxChip": "Max",
+        "insufficient": "Not enough transferable tokens.",
+        "confirm_title": "Send {{n}} tokens to {{name}}?",
+        "confirm_body": "Transfers are final and can't be reversed.",
+        "send": "Send",
+        "cancel": "Cancel",
+        "success": "{{n}} tokens sent to {{name}}.",
+        "generic_error": "Transfer failed. No tokens were deducted.",
+        "history": "Gift history",
+        "hist_sent": "Gift sent to {{name}}",
+        "hist_received": "Gift from {{name}}"
+      }
     },
     "csvUpload": {
       "downloadTemplate": "Download Template",

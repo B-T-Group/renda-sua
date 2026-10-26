@@ -47,6 +47,7 @@ import { ProfileMobileMoneySection } from '../../components/profile/ProfileMobil
 import { CustomerActivationChecklist } from '../../components/client/CustomerActivationChecklist';
 import { ProfileRolesSection } from '../../components/enroll/ProfileRolesSection';
 import { AgentReferralCodeCard } from '../../components/profile/AgentReferralCodeCard';
+import { LateReferralCodeCard } from '../../components/profile/LateReferralCodeCard';
 import { AgentFocusSettings } from '../../components/profile/AgentFocusSettings';
 import { showsCommercialChrome } from '../../types/agentFocus';
 import { EntityRatingsSection } from '../../components/rating/EntityRatingsSection';
@@ -713,6 +714,12 @@ function ProfileScreen() {
               "Agent-referral bonuses pay after the referred agent's first delivery."
             )}`}
           />
+        </View>
+      ) : null}
+
+      {me?.agent?.id || me?.business?.id ? (
+        <View style={{ marginTop: 16 }}>
+          <LateReferralCodeCard />
         </View>
       ) : null}
 

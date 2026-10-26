@@ -19359,6 +19359,27 @@ export class OrdersService {
   }
 
   /**
+   * Delivery fee createOrder charges for one seller group: the same distance
+   * lookup, tiered fee, first-order base promo and free-delivery waiver. Used
+   * by checkout preflight so its delivery_fee and total match the order.
+   * Read-only apart from the distance cache.
+   */
+  async quoteDeliveryFeeForCheckout(params: {
+    businessInventoryId: string;
+    addressId: string;
+    requiresFastDelivery: boolean;
+    businessId?: string;
+    subtotal: number;
+  }): Promise<OrderDeliveryFeeInfo> {
+    const info = await this.calculateItemDeliveryFee(
+      params.businessInventoryId,
+      params.addressId,
+      params.requiresFastDelivery
+    );
+    return this.applyDeliveryWaiver(info, params.businessId, params.subtotal);
+  }
+
+  /**
    * Calculate delivery fee using tiered pricing model based on country_delivery_configs
    * Returns base fee and per-km fee components separately
    */

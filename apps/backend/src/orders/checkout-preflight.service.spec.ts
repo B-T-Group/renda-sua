@@ -22,6 +22,7 @@ import { PaymentRoutingService } from '../stripe-payments/payment-routing.servic
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import { MetaConversionsService } from '../meta-conversions/meta-conversions.service';
 import { CheckoutPreflightService } from './checkout-preflight.service';
+import { OrdersService } from './orders.service';
 import { DedicatedCheckoutCoverageService } from '../dedicated-agents/dedicated-checkout-coverage.service';
 import { VariantInventoryService } from '../item-variants/variant-inventory.service';
 import { DepositCalculationService } from './deposit-calculation.service';
@@ -157,6 +158,7 @@ function makeFoodInventoryRow(overrides: {
 describe('CheckoutPreflightService', () => {
   let service: CheckoutPreflightService;
   let serviceFee: { resolve: jest.Mock };
+  let ordersService: { quoteDeliveryFeeForCheckout: jest.Mock };
   let hasuraSystemService: jest.Mocked<HasuraSystemService>;
   let hasuraUserService: jest.Mocked<HasuraUserService>;
   let paymentRoutingService: jest.Mocked<PaymentRoutingService>;
@@ -176,6 +178,15 @@ describe('CheckoutPreflightService', () => {
       providers: [
         CheckoutPreflightService,
         { provide: DedicatedCheckoutCoverageService, useValue: dedicatedCoverage },
+        {
+          provide: OrdersService,
+          useValue: {
+            // Unquoted by default: other tests keep a null delivery fee.
+            quoteDeliveryFeeForCheckout: jest
+              .fn()
+              .mockRejectedValue(new Error('not quoted')),
+          },
+        },
         {
           provide: HasuraSystemService,
           useValue: {
@@ -333,6 +344,7 @@ describe('CheckoutPreflightService', () => {
 
     service = module.get<CheckoutPreflightService>(CheckoutPreflightService);
     serviceFee = module.get(require('./service-fee.service').ServiceFeeService);
+    ordersService = module.get(OrdersService);
     hasuraSystemService = module.get(HasuraSystemService);
     hasuraUserService = module.get(HasuraUserService);
     paymentRoutingService = module.get(PaymentRoutingService);
@@ -434,6 +446,256 @@ describe('CheckoutPreflightService', () => {
     expect(result.groups[0].subtotal).toBe(1000);
     expect(result.groups[0].total).toBe(1100);
     expect(result.discount).toMatchObject({ valid: true, discount_amount: 100 });
+  });
+
+
+  // -------------------------------------------------------------------------
+  // Delivery fee: preflight quotes what createOrder will charge
+  // -------------------------------------------------------------------------
+  describe('delivery fee quote', () => {
+    const quote = (over: Record<string, unknown> = {}) => ({
+      deliveryFee: 8,
+      method: 'distance_based',
+      currency: 'CAD',
+      country: 'CA',
+      baseDeliveryFee: 5,
+      perKmDeliveryFee: 3,
+      isFirstOrderClient: false,
+      firstOrderDeliveryFeePromo: false,
+      firstOrderBaseDeliveryDiscountAmount: 0,
+      baseDeliveryFeeBeforeDiscount: 5,
+      distance: 3,
+      deliveryFeeWaived: false,
+      ...over,
+    });
+    const caRow = () =>
+      makeInventoryRow({ sellerCountry: 'CA', currency: 'CAD', price: 20 });
+    const deliveryDto = (over: Partial<CheckoutPreflightDto> = {}): CheckoutPreflightDto => ({
+      items: [{ business_inventory_id: 'inv-1', quantity: 2 }],
+      delivery_address_id: 'addr-canada',
+      fulfillment_method: 'delivery',
+      ...over,
+    });
+
+    beforeEach(() => {
+      serviceFee.resolve.mockResolvedValue(0.99);
+      (paymentRoutingService.resolveRailForCountry as jest.Mock).mockResolvedValue('stripe');
+      (paymentRoutingService.resolveRailForUser as jest.Mock).mockResolvedValue('stripe');
+    });
+
+    it('puts the order delivery fee in delivery_fee and total', async () => {
+      mockInventory([caRow()], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockResolvedValue(
+        quote({ isFirstOrderClient: true })
+      );
+
+      const result = await service.resolve(deliveryDto(), true);
+      const group = result.groups[0];
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).toHaveBeenCalledWith({
+        businessInventoryId: 'inv-1',
+        addressId: 'addr-canada',
+        requiresFastDelivery: false,
+        businessId: 'biz-1',
+        subtotal: 40,
+      });
+      expect(group.subtotal).toBe(40);
+      expect(group.delivery_fee).toBe(8);
+      expect(group.delivery_fee_estimated).toBe(false);
+      expect(group.is_first_order_client).toBe(true);
+      expect(group.service_fee).toBe(0.99);
+      expect(group.total).toBeCloseTo(48.99, 2);
+    });
+
+    it('passes fast delivery through and flags the flat fallback as an estimate', async () => {
+      mockInventory([caRow()], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockResolvedValue(
+        quote({ deliveryFee: 13, method: 'flat_fee', distance: undefined })
+      );
+
+      const result = await service.resolve(
+        deliveryDto({ requires_fast_delivery: true }),
+        true
+      );
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).toHaveBeenCalledWith(
+        expect.objectContaining({ requiresFastDelivery: true })
+      );
+      expect(result.groups[0].delivery_fee).toBe(13);
+      expect(result.groups[0].delivery_fee_estimated).toBe(true);
+      expect(result.groups[0].total).toBeCloseTo(53.99, 2);
+    });
+
+    it('charges nothing for a waived delivery fee', async () => {
+      mockInventory([caRow()], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockResolvedValue(
+        quote({ deliveryFee: 0, deliveryFeeWaived: true })
+      );
+
+      const result = await service.resolve(deliveryDto(), true);
+
+      expect(result.groups[0].delivery_fee).toBe(0);
+      expect(result.groups[0].total).toBeCloseTo(40.99, 2);
+    });
+
+    it('stays graceful and leaves the fee null when the quote fails', async () => {
+      mockInventory([caRow()], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockRejectedValue(
+        new Error('Google down')
+      );
+
+      const result = await service.resolve(deliveryDto(), true);
+
+      expect(result.can_proceed).toBe(true);
+      expect(result.groups[0].delivery_fee).toBeNull();
+      expect(result.groups[0].delivery_fee_estimated).toBeUndefined();
+      expect(result.groups[0].total).toBeCloseTo(40.99, 2);
+    });
+
+    it('still answers when delivery is unavailable', async () => {
+      mockInventory([caRow()], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockResolvedValue(quote());
+      (deliveryAvailabilityService.evaluate as jest.Mock).mockResolvedValue({
+        available: false,
+        estimatedDeliveryMinutes: null,
+        reason: 'NO_ELIGIBLE_AGENT',
+        ruleId: 'agent-in-region',
+      });
+
+      const result = await service.resolve(deliveryDto(), true);
+
+      expect(result.delivery_availability?.available).toBe(false);
+      expect(result.groups[0].delivery_fee).toBe(8);
+    });
+
+    it('does not quote pickup orders', async () => {
+      mockInventory([{ ...caRow(), item: { ...caRow().item, pay_at_pickup_enabled: true } }], {
+        addressCountry: 'CA',
+      });
+
+      const result = await service.resolve(
+        deliveryDto({ fulfillment_method: 'pickup' }),
+        true
+      );
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).not.toHaveBeenCalled();
+      expect(result.groups[0].delivery_fee ?? null).toBeNull();
+      expect(result.groups[0].total).toBeCloseTo(40.99, 2);
+    });
+
+    it('does not quote guests or carts without an address', async () => {
+      mockInventory([caRow()], { addressCountry: 'CA' });
+
+      await service.resolve(deliveryDto(), false);
+      await service.resolve(deliveryDto({ delivery_address_id: undefined }), true);
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).not.toHaveBeenCalled();
+    });
+
+    it('quotes once per seller group', async () => {
+      mockInventory(
+        [
+          caRow(),
+          { ...makeInventoryRow({ id: 'inv-2', businessId: 'biz-2', sellerCountry: 'CA', currency: 'CAD', price: 10 }) },
+        ],
+        { addressCountry: 'CA' }
+      );
+      ordersService.quoteDeliveryFeeForCheckout
+        .mockResolvedValueOnce(quote({ deliveryFee: 8 }))
+        .mockResolvedValueOnce(quote({ deliveryFee: 6 }));
+
+      const result = await service.resolve(
+        deliveryDto({
+          items: [
+            { business_inventory_id: 'inv-1', quantity: 1 },
+            { business_inventory_id: 'inv-2', quantity: 1 },
+          ],
+        }),
+        true
+      );
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).toHaveBeenCalledTimes(2);
+      expect(result.groups.map((g) => g.delivery_fee)).toEqual([8, 6]);
+    });
+
+    it('quotes one delivery fee for every line from the same seller', async () => {
+      const second = makeInventoryRow({
+        id: 'inv-2',
+        sellerCountry: 'CA',
+        currency: 'CAD',
+        price: 10,
+      });
+      second.item = { ...second.item, id: 'item-2' };
+      mockInventory([caRow(), second], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockResolvedValue(quote());
+
+      const result = await service.resolve(
+        deliveryDto({
+          items: [
+            { business_inventory_id: 'inv-1', quantity: 2 },
+            { business_inventory_id: 'inv-2', quantity: 3 },
+          ],
+        }),
+        true
+      );
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).toHaveBeenCalledTimes(1);
+      expect(ordersService.quoteDeliveryFeeForCheckout).toHaveBeenCalledWith({
+        businessInventoryId: 'inv-1',
+        addressId: 'addr-canada',
+        requiresFastDelivery: false,
+        businessId: 'biz-1',
+        subtotal: 70,
+      });
+      expect(result.groups).toHaveLength(1);
+      expect(result.groups[0].subtotal).toBe(70);
+      expect(result.groups[0].delivery_fee).toBe(8);
+      expect(result.groups[0].total).toBeCloseTo(78.99, 2);
+    });
+
+    it('bills carrier shipping from item prices and does not quote a distance fee', async () => {
+      const paid = makeInventoryRow({
+        id: 'inv-ship-a',
+        sellerCountry: 'CA',
+        currency: 'CAD',
+        price: 20,
+        shippingEnabled: true,
+        shippingPrice: 6,
+      });
+      paid.item = { ...paid.item, id: 'item-ship-a' };
+      const extra = makeInventoryRow({
+        id: 'inv-ship-b',
+        sellerCountry: 'CA',
+        currency: 'CAD',
+        price: 10,
+        shippingEnabled: true,
+        shippingPrice: 4,
+      });
+      extra.item = { ...extra.item, id: 'item-ship-b' };
+      mockInventory([paid, extra], { addressCountry: 'CA' });
+      ordersService.quoteDeliveryFeeForCheckout.mockResolvedValue(
+        quote({ deliveryFee: 8 })
+      );
+
+      const result = await service.resolve(
+        deliveryDto({
+          fulfillment_method: 'shipping',
+          payment_timing: 'pay_now',
+          items: [
+            { business_inventory_id: 'inv-ship-a', quantity: 3 },
+            { business_inventory_id: 'inv-ship-b', quantity: 2 },
+          ],
+        }),
+        true
+      );
+
+      expect(ordersService.quoteDeliveryFeeForCheckout).not.toHaveBeenCalled();
+      expect(result.can_proceed).toBe(true);
+      expect(result.groups[0].subtotal).toBe(80);
+      expect(result.groups[0].delivery_fee).toBe(26);
+      expect(result.groups[0].delivery_fee_estimated).toBeUndefined();
+      expect(result.groups[0].total).toBeCloseTo(106.99, 2);
+    });
   });
 
   // -------------------------------------------------------------------------

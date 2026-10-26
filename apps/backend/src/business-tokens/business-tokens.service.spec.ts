@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { BusinessTokensService } from './business-tokens.service';
 
 describe('BusinessTokensService', () => {
@@ -41,8 +41,11 @@ describe('BusinessTokensService', () => {
   });
 
   it('debits one token and records usage after successful cleanup', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 2 },
+    });
     hasuraSystemService.executeMutation.mockImplementation((query: string) => {
-      if (query.includes('ConsumeAiToken')) {
+      if (query.includes('DebitAiTokens')) {
         return Promise.resolve({ update_businesses: { returning: [{ ai_tokens: 4 }] } });
       }
       if (query.includes('InsertAiTokenUsage')) {
@@ -58,8 +61,15 @@ describe('BusinessTokensService', () => {
 
     expect(result).toEqual({ result: 'clean-image-url', balanceAfter: 4 });
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
-      expect.stringContaining('ConsumeAiToken'),
-      { id: 'business-1', cost: 1, delta: -1 }
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 1,
+        delta: -1,
+        nongiftableDelta: -1,
+        nongiftableMin: 1,
+        nongiftableMax: 2147483647,
+      }
     );
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('InsertAiTokenUsage'),
@@ -76,6 +86,9 @@ describe('BusinessTokensService', () => {
   });
 
   it('rejects cleanup when the conditional debit finds no available token', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 0 },
+    });
     hasuraSystemService.executeMutation.mockResolvedValue({
       update_businesses: { returning: [] },
     });
@@ -97,8 +110,11 @@ describe('BusinessTokensService', () => {
   });
 
   it('refunds the token when cleanup fails after a successful debit', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 0 },
+    });
     hasuraSystemService.executeMutation.mockImplementation((query: string) => {
-      if (query.includes('ConsumeAiToken')) {
+      if (query.includes('DebitAiTokens')) {
         return Promise.resolve({ update_businesses: { returning: [{ ai_tokens: 2 }] } });
       }
       if (query.includes('RefundAiToken')) {
@@ -116,13 +132,243 @@ describe('BusinessTokensService', () => {
 
     expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
       expect.stringContaining('RefundAiToken'),
-      { id: 'business-1', amount: 1 }
+      { id: 'business-1', amount: 1, nongiftable: 0 }
     );
     expect(hasuraSystemService.executeMutation).not.toHaveBeenCalledWith(
       expect.stringContaining('InsertAiTokenUsage'),
       expect.anything()
     );
   });
+
+  it('restores nongiftable tokens when a free-allotment debit is refunded', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockImplementation((query: string) => {
+      if (query.includes('DebitAiTokens')) {
+        return Promise.resolve({ update_businesses: { returning: [{ ai_tokens: 19 }] } });
+      }
+      if (query.includes('RefundAiToken')) {
+        return Promise.resolve({ update_businesses_by_pk: { ai_tokens: 20 } });
+      }
+      return Promise.resolve({});
+    });
+
+    await expect(
+      service.runCleanupWithToken(tokenParams(), async () => {
+        throw new Error('cleanup failed');
+      })
+    ).rejects.toThrow('cleanup failed');
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('RefundAiToken'),
+      { id: 'business-1', amount: 1, nongiftable: 1 }
+    );
+  });
+
+  it('reserves signup tokens by spending the nongiftable allotment first', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [{ ai_tokens: 19 }] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 1)).resolves.toEqual({
+      balanceAfter: 19,
+      spentNongiftable: 1,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 1,
+        delta: -1,
+        nongiftableDelta: -1,
+        nongiftableMin: 1,
+        nongiftableMax: 2147483647,
+      }
+    );
+  });
+
+  it('reserves purchased tokens without reducing a zero nongiftable allotment', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 0 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [{ ai_tokens: 99 }] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 1)).resolves.toEqual({
+      balanceAfter: 99,
+      spentNongiftable: 0,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 1,
+        delta: -1,
+        nongiftableDelta: 0,
+        nongiftableMin: 0,
+        nongiftableMax: 0,
+      }
+    );
+  });
+
+  it('pins the free count on a partial free spend and retries after a race', async () => {
+    hasuraSystemService.executeQuery
+      .mockResolvedValueOnce({ businesses_by_pk: { ai_tokens_nongiftable: 3 } })
+      .mockResolvedValueOnce({ businesses_by_pk: { ai_tokens_nongiftable: 4 } });
+    hasuraSystemService.executeMutation
+      .mockResolvedValueOnce({ update_businesses: { returning: [] } })
+      .mockResolvedValueOnce({
+        update_businesses: { returning: [{ ai_tokens: 10 }] },
+      });
+
+    await expect(service.tryReserveTokens('business-1', 5)).resolves.toEqual({
+      balanceAfter: 10,
+      spentNongiftable: 4,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 5,
+        delta: -5,
+        nongiftableDelta: -3,
+        nongiftableMin: 3,
+        nongiftableMax: 3,
+      }
+    );
+    expect(hasuraSystemService.executeMutation).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 5,
+        delta: -5,
+        nongiftableDelta: -4,
+        nongiftableMin: 4,
+        nongiftableMax: 4,
+      }
+    );
+  });
+
+  it('returns null when a reservation cannot debit enough tokens', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 1)).resolves.toBeNull();
+  });
+
+  it('spends a multi-token free allotment without pinning the free count', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [{ ai_tokens: 15 }] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 5)).resolves.toEqual({
+      balanceAfter: 15,
+      spentNongiftable: 5,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 5,
+        delta: -5,
+        nongiftableDelta: -5,
+        nongiftableMin: 5,
+        nongiftableMax: 2147483647,
+      }
+    );
+  });
+
+  it.each([
+    ['a missing business row', { businesses_by_pk: null }],
+    ['a null free balance', { businesses_by_pk: { ai_tokens_nongiftable: null } }],
+    ['a negative free balance', { businesses_by_pk: { ai_tokens_nongiftable: -4 } }],
+  ])('spends no free tokens for %s', async (_label, row) => {
+    hasuraSystemService.executeQuery.mockResolvedValue(row);
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [{ ai_tokens: 9 }] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 2)).resolves.toEqual({
+      balanceAfter: 9,
+      spentNongiftable: 0,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('DebitAiTokens'),
+      expect.objectContaining({
+        nongiftableDelta: 0,
+        nongiftableMin: 0,
+        nongiftableMax: 0,
+      })
+    );
+  });
+
+  it('stops after two failed debit attempts', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 5)).resolves.toBeNull();
+    expect(hasuraSystemService.executeQuery).toHaveBeenCalledTimes(2);
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([0, -1, 1.5])(
+    'rejects reservation amount %s before reading the balance',
+    async (amount) => {
+      await expect(service.tryReserveTokens('business-1', amount)).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    }
+  );
+
+  it('restores only the free tokens a partial debit spent', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({});
+
+    await service.refundTokens('business-1', 5, 3);
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('RefundAiToken'),
+      { id: 'business-1', amount: 5, nongiftable: 3 }
+    );
+  });
+
+  it('refunds purchased tokens without decreasing the free pool', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({});
+
+    await service.refundTokens('business-1', 3, -4);
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('RefundAiToken'),
+      { id: 'business-1', amount: 3, nongiftable: 0 }
+    );
+  });
+
+  it.each([0, -2, 1.5])(
+    'does not refund a non-positive token amount (%s)',
+    async (amount) => {
+      await service.refundTokens('business-1', amount, 1);
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    }
+  );
 
   it('grants the pack matching a successful token payment', async () => {
     const grantPackTokens = jest
@@ -343,6 +589,95 @@ describe('BusinessTokensService', () => {
       })
     ).resolves.toEqual(expect.objectContaining({ success: true, paymentPending: true }));
     expect(mobilePaymentsDatabaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it('restores the free allotment when cleanup fails after spending it', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 2 },
+    });
+    hasuraSystemService.executeMutation.mockImplementation((query: string) => {
+      if (query.includes('DebitAiTokens')) {
+        return Promise.resolve({
+          update_businesses: { returning: [{ ai_tokens: 19 }] },
+        });
+      }
+      return Promise.resolve({ update_businesses_by_pk: { ai_tokens: 20 } });
+    });
+
+    await expect(
+      service.runCleanupWithToken(tokenParams(), async () => {
+        throw new Error('cleanup failed');
+      })
+    ).rejects.toThrow('cleanup failed');
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('RefundAiToken'),
+      { id: 'business-1', amount: 1, nongiftable: 1 }
+    );
+  });
+
+  it('clamps free tokens when the balance is set below that allotment', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens: 20, ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses_by_pk: { ai_tokens: 5 },
+    });
+
+    await expect(service.setTokens('business-1', 5)).resolves.toBe(5);
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('SetBusinessAiTokens'),
+      { id: 'business-1', ai_tokens: 5, nongiftable: 5 }
+    );
+  });
+
+  it('keeps free tokens when the new balance is higher', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens: 20, ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses_by_pk: { ai_tokens: 40 },
+    });
+
+    await service.setTokens('business-1', 40);
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('SetBusinessAiTokens'),
+      { id: 'business-1', ai_tokens: 40, nongiftable: 20 }
+    );
+  });
+
+  it('rejects a negative token total before writing', async () => {
+    await expect(service.setTokens('business-1', -1)).rejects.toThrow(
+      'non-negative'
+    );
+    expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+    expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('floors giftable at zero when free tokens exceed the balance', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens: 4, ai_tokens_nongiftable: 20 },
+    });
+
+    await expect(service.getBalanceDetails('business-1')).resolves.toEqual({
+      ai_tokens: 4,
+      ai_tokens_nongiftable: 20,
+      giftable: 0,
+    });
+  });
+
+  it('grants purchased packs onto the giftable balance only', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses_by_pk: { ai_tokens: 1020 },
+    });
+
+    await service.grantPackTokens('business-1', 1000, 'pay-1');
+
+    const [query, vars] = hasuraSystemService.executeMutation.mock.calls[0];
+    expect(query).toContain('_inc: { ai_tokens: $amount }');
+    expect(query).not.toContain('ai_tokens_nongiftable');
+    expect(vars).toEqual({ id: 'business-1', amount: 1000 });
   });
 });
 

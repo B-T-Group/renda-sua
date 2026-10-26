@@ -257,6 +257,7 @@ select_permissions:
         - can_accept_orders
         - is_storefront_visible
         - ai_tokens
+        - ai_tokens_nongiftable
         - ai_reel_tokens
         - auto_enhance_enabled
         - tips_reminders_enabled
@@ -265,6 +266,7 @@ select_permissions:
         - referred_by_agent_id
         - referred_by_business_id
         - referral_code_used
+        - referral_applied_at
         - business_code
         - account_type
         - account_type_locked_until

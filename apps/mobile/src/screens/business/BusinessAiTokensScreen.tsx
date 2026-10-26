@@ -2,8 +2,10 @@ import React, { useEffect, useState } from 'react';
 import { Linking, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { CountryCode } from 'libphonenumber-js';
-import { ActivityIndicator, Button, Text } from 'react-native-paper';
+import { ActivityIndicator, Button, IconButton, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useProfileMe } from '@/hooks/useProfileMe';
 import { useBusinessTokens } from '@/hooks/business/useBusinessTokens';
@@ -11,11 +13,14 @@ import type { TokenPackId } from '@/hooks/business/useBusinessTokens';
 import PhoneNumberInput from '@/components/PhoneNumberInput';
 import { nationalDigitsToE164, seedPhoneInputFromE164 } from '@/utils/phoneLoginUsername';
 import { pickMobileMoneyDefaultCountry } from '@/utils/placeOrderPhoneValidation';
+import type { BusinessRootStackParamList } from '@/navigation/types';
 
 export default function BusinessAiTokensScreen() {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const { me, refetch } = useProfileMe();
   const { packs, balance, loading, error, purchasePack, refreshBalance } =
     useBusinessTokens();
@@ -86,9 +91,16 @@ export default function BusinessAiTokensScreen() {
         },
       ]}
     >
-      <Text variant="titleLarge" style={{ color: colors.text.primary, fontWeight: '600' }}>
-        {t('business.tokens.title', 'AI tokens')}
-      </Text>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text variant="titleLarge" style={{ color: colors.text.primary, fontWeight: '600', flex: 1 }}>
+          {t('business.tokens.title', 'AI tokens')}
+        </Text>
+        <IconButton
+          icon="gift"
+          accessibilityLabel={t('business.tokens.gift.tooltip', 'Gift tokens')}
+          onPress={() => navigation.navigate('BusinessGiftAiTokens')}
+        />
+      </View>
       <Text
         variant="bodyMedium"
         style={{ color: colors.text.secondary, marginTop: spacing.xs, marginBottom: spacing.md }}

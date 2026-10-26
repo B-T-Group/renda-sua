@@ -260,6 +260,7 @@ export class BusinessReferralPayoutsService {
           where: {
             referred_by_agent_id: { _is_null: false }
             created_at: { _gte: $cutoff }
+            referral_applied_at: { _is_null: false }
             items_aggregate: {
               count: {
                 predicate: { _gte: $minItems }
@@ -277,6 +278,7 @@ export class BusinessReferralPayoutsService {
           id
           name
           referred_by_agent_id
+          referral_applied_at
           agent: referring_agent {
             id
             user_id
@@ -296,10 +298,61 @@ export class BusinessReferralPayoutsService {
       cutoff: BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
       minItems: BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
     });
-    return (result?.businesses ?? []).map((b: Omit<EligibleAgentReferral, 'kind'>) => ({
+    const rows = await this.filterByPostReferralItems(
+      (result?.businesses ?? []) as Array<
+        Omit<EligibleAgentReferral, 'kind'> & {
+          referral_applied_at?: string | null;
+        }
+      >
+    );
+    return rows.map((b) => ({
       ...b,
       kind: 'agent' as const,
     }));
+  }
+
+  /** Late referrals only count catalog items created after attribution. */
+  private async filterByPostReferralItems<
+    T extends {
+      id: string;
+      referral_applied_at?: string | null;
+      items_aggregate?: { aggregate?: { count?: number } };
+    },
+  >(rows: T[]): Promise<T[]> {
+    const out: T[] = [];
+    for (const row of rows) {
+      const since = row.referral_applied_at;
+      if (!since) continue;
+      const count = await this.countApprovedItemsSince(row.id, since);
+      if (count >= BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS) {
+        out.push({
+          ...row,
+          items_aggregate: { aggregate: { count } },
+        });
+      }
+    }
+    return out;
+  }
+
+  private async countApprovedItemsSince(
+    businessId: string,
+    since: string
+  ): Promise<number> {
+    const result = await this.hasuraSystemService.executeQuery(
+      `query CountItemsSinceReferral($businessId: uuid!, $since: timestamptz!) {
+        items_aggregate(
+          where: {
+            business_id: { _eq: $businessId }
+            status: { _eq: active }
+            is_active: { _eq: true }
+            moderation_status: { _eq: approved }
+            created_at: { _gte: $since }
+          }
+        ) { aggregate { count } }
+      }`,
+      { businessId, since }
+    );
+    return result?.items_aggregate?.aggregate?.count ?? 0;
   }
 
   private async fetchEligibleBusinessReferrals(): Promise<
@@ -312,6 +365,7 @@ export class BusinessReferralPayoutsService {
             referred_by_business_id: { _is_null: false }
             lifecycle_status: { _eq: active }
             created_at: { _gte: $cutoff }
+            referral_applied_at: { _is_null: false }
             items_aggregate: {
               count: {
                 predicate: { _gte: $minItems }
@@ -329,6 +383,7 @@ export class BusinessReferralPayoutsService {
           id
           name
           referred_by_business_id
+          referral_applied_at
           referring_business {
             id
             name
@@ -349,12 +404,17 @@ export class BusinessReferralPayoutsService {
       cutoff: BUSINESS_REFERRAL_PAYOUT_CUTOFF_DATE,
       minItems: BUSINESS_REFERRAL_PAYOUT_MIN_ITEMS,
     });
-    return (result?.businesses ?? []).map(
-      (b: Omit<EligibleBusinessReferral, 'kind'>) => ({
-        ...b,
-        kind: 'business' as const,
-      })
+    const rows = await this.filterByPostReferralItems(
+      (result?.businesses ?? []) as Array<
+        Omit<EligibleBusinessReferral, 'kind'> & {
+          referral_applied_at?: string | null;
+        }
+      >
     );
+    return rows.map((b) => ({
+      ...b,
+      kind: 'business' as const,
+    }));
   }
 
   async processBusinessPayout(

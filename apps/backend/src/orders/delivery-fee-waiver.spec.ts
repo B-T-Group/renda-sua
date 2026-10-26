@@ -154,3 +154,58 @@ describe('calculateTieredDeliveryFee', () => {
     expect(fee).toEqual({ baseFee: 1000, perKmFee: 1500, totalFee: 2500 });
   });
 });
+
+describe('quoteDeliveryFeeForCheckout', () => {
+  it('returns the order fee then applies the waiver for the seller group', async () => {
+    const { service } = createHarness();
+    const info = feeInfo();
+    const waived = { ...info, deliveryFee: 0, deliveryFeeWaived: true };
+    const calc = jest
+      .spyOn(service, 'calculateItemDeliveryFee')
+      .mockResolvedValue(info as never);
+    const waiver = jest
+      .spyOn(service, 'applyDeliveryWaiver')
+      .mockResolvedValue(waived as never);
+
+    const result = await service.quoteDeliveryFeeForCheckout({
+      businessInventoryId: 'inv-1',
+      addressId: 'addr-1',
+      requiresFastDelivery: true,
+      businessId: 'biz-1',
+      subtotal: 5000,
+    });
+
+    expect(calc).toHaveBeenCalledWith('inv-1', 'addr-1', true);
+    expect(waiver).toHaveBeenCalledWith(info, 'biz-1', 5000);
+    expect(result).toBe(waived);
+  });
+});
+
+describe('Canada tiered delivery fee (base 2, fast base 8, 1 per km, max per-km 15, no total cap)', () => {
+  function canadaService() {
+    const { service, deliveryConfigService } = createHarness();
+    deliveryConfigService.getNormalDeliveryBaseFee.mockResolvedValue(2);
+    deliveryConfigService.getFastDeliveryBaseFee.mockResolvedValue(8);
+    deliveryConfigService.getPerKmDeliveryFee.mockResolvedValue(1);
+    deliveryConfigService.getMaxPerKmDeliveryFee.mockResolvedValue(15);
+    deliveryConfigService.getMaxDeliveryFee.mockResolvedValue(0);
+    return service as unknown as {
+      calculateTieredDeliveryFee(
+        km: number,
+        country: string,
+        fast: boolean
+      ): Promise<{ baseFee: number; perKmFee: number; totalFee: number }>;
+    };
+  }
+
+  it.each([
+    [3, false, 5],
+    [8, true, 16],
+    [15, false, 17],
+    [40, false, 17],
+    [40, true, 23],
+  ])('%i km fast=%s costs %i CAD', async (km, fast, total) => {
+    const result = await canadaService().calculateTieredDeliveryFee(km, 'CA', fast);
+    expect(result.totalFee).toBe(total);
+  });
+});
