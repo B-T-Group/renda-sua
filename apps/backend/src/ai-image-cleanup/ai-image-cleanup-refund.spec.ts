@@ -18,6 +18,7 @@ jest.mock('../business-tokens/business-tokens.service', () => ({
 }));
 
 import { AiImageCleanupService } from './ai-image-cleanup.service';
+import * as Q from './ai-image-cleanup.queries';
 import type {
   AiImageCleanupJobRow,
   AiImageCleanupResultRow,
@@ -139,16 +140,24 @@ describe('AI cleanup failure refunds', () => {
 
     expect(tokens.refundTokens).toHaveBeenCalledTimes(1);
     expect(tokens.refundTokens).toHaveBeenCalledWith('biz-1', 1, 0);
-    const patch = hasura.executeMutation.mock.calls
+    const holdDeltas = hasura.executeMutation.mock.calls
+      .filter((call) => call[0] === Q.INC_JOB_TOKENS)
+      .map((call) => call[1]);
+    expect(holdDeltas).toEqual([
+      expect.objectContaining({ consumed: 1, refunded: 0, nongiftable: -1 }),
+      expect.objectContaining({ consumed: 0, refunded: 1, nongiftable: 0 }),
+    ]);
+    const sets = hasura.executeMutation.mock.calls
       .map((call) => call[1]?._set)
-      .find((set) => set && 'nongiftable_reserved' in set);
-    expect(patch).toEqual(
-      expect.objectContaining({
-        tokens_consumed: 1,
-        tokens_refunded: 1,
-        nongiftable_reserved: 0,
-      })
-    );
+      .filter((set) => set && 'tokens_consumed' in set);
+    expect(sets.length).toBeGreaterThan(0);
+    for (const set of sets) {
+      // Appends during the run _inc nongiftable_reserved; finalize must not overwrite it.
+      expect(set).not.toHaveProperty('nongiftable_reserved');
+      expect(set).toEqual(
+        expect.objectContaining({ tokens_consumed: 1, tokens_refunded: 1 })
+      );
+    }
   });
 
   it('restores the free portion once when the queue gives up on the batch', async () => {

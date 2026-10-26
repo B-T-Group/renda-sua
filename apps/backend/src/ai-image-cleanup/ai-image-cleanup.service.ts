@@ -1530,8 +1530,8 @@ export class AiImageCleanupService implements OnModuleInit {
     return {
       tokens_consumed: (job.tokens_consumed ?? 0) + consumed,
       tokens_refunded: (job.tokens_refunded ?? 0) + refunded,
-      nongiftable_reserved:
-        hold?.nongiftable_reserved ?? job.nongiftable_reserved ?? 0,
+      // nongiftable_reserved is only moved with _inc (checkpointHold / bumpJobTokens).
+      // A _set here would erase free tokens appended to the job while this run was in flight.
       updated_at: new Date().toISOString(),
     };
   }
@@ -1549,7 +1549,7 @@ export class AiImageCleanupService implements OnModuleInit {
     Object.assign(hold, holdAfterRefund(hold, amount, restoreFree));
     await this.checkpointHold(jobId, {
       refunded: amount,
-      nongiftable: -restoreFree,
+      nongiftable: restoreFree > 0 ? -restoreFree : 0,
     });
   }
 
@@ -1563,7 +1563,10 @@ export class AiImageCleanupService implements OnModuleInit {
     const next = holdAfterConsume(hold, amount);
     const burnedFree = hold.nongiftable_reserved - next.nongiftable_reserved;
     Object.assign(hold, next);
-    await this.checkpointHold(jobId, { consumed: amount, nongiftable: -burnedFree });
+    await this.checkpointHold(jobId, {
+      consumed: amount,
+      nongiftable: burnedFree > 0 ? -burnedFree : 0,
+    });
   }
 
   private async checkpointHold(
