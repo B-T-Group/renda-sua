@@ -1,4 +1,4 @@
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { BadRequestException, HttpException, HttpStatus } from '@nestjs/common';
 import { BusinessTokensService } from './business-tokens.service';
 
 describe('BusinessTokensService', () => {
@@ -266,6 +266,109 @@ describe('BusinessTokensService', () => {
 
     await expect(service.tryReserveTokens('business-1', 1)).resolves.toBeNull();
   });
+
+  it('spends a multi-token free allotment without pinning the free count', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [{ ai_tokens: 15 }] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 5)).resolves.toEqual({
+      balanceAfter: 15,
+      spentNongiftable: 5,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('DebitAiTokens'),
+      {
+        id: 'business-1',
+        cost: 5,
+        delta: -5,
+        nongiftableDelta: -5,
+        nongiftableMin: 5,
+        nongiftableMax: 2147483647,
+      }
+    );
+  });
+
+  it.each([
+    ['a missing business row', { businesses_by_pk: null }],
+    ['a null free balance', { businesses_by_pk: { ai_tokens_nongiftable: null } }],
+    ['a negative free balance', { businesses_by_pk: { ai_tokens_nongiftable: -4 } }],
+  ])('spends no free tokens for %s', async (_label, row) => {
+    hasuraSystemService.executeQuery.mockResolvedValue(row);
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [{ ai_tokens: 9 }] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 2)).resolves.toEqual({
+      balanceAfter: 9,
+      spentNongiftable: 0,
+    });
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('DebitAiTokens'),
+      expect.objectContaining({
+        nongiftableDelta: 0,
+        nongiftableMin: 0,
+        nongiftableMax: 0,
+      })
+    );
+  });
+
+  it('stops after two failed debit attempts', async () => {
+    hasuraSystemService.executeQuery.mockResolvedValue({
+      businesses_by_pk: { ai_tokens_nongiftable: 20 },
+    });
+    hasuraSystemService.executeMutation.mockResolvedValue({
+      update_businesses: { returning: [] },
+    });
+
+    await expect(service.tryReserveTokens('business-1', 5)).resolves.toBeNull();
+    expect(hasuraSystemService.executeQuery).toHaveBeenCalledTimes(2);
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([0, -1, 1.5])(
+    'rejects reservation amount %s before reading the balance',
+    async (amount) => {
+      await expect(service.tryReserveTokens('business-1', amount)).rejects.toBeInstanceOf(
+        BadRequestException
+      );
+      expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    }
+  );
+
+  it('restores only the free tokens a partial debit spent', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({});
+
+    await service.refundTokens('business-1', 5, 3);
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('RefundAiToken'),
+      { id: 'business-1', amount: 5, nongiftable: 3 }
+    );
+  });
+
+  it('refunds purchased tokens without decreasing the free pool', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({});
+
+    await service.refundTokens('business-1', 3, -4);
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('RefundAiToken'),
+      { id: 'business-1', amount: 3, nongiftable: 0 }
+    );
+  });
+
+  it.each([0, -2, 1.5])(
+    'does not refund a non-positive token amount (%s)',
+    async (amount) => {
+      await service.refundTokens('business-1', amount, 1);
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    }
+  );
 
   it('grants the pack matching a successful token payment', async () => {
     const grantPackTokens = jest
