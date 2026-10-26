@@ -12,6 +12,7 @@ import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBot
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { usePermissions } from '../../hooks/usePermissions';
 import { useProfileMe } from '../../hooks/useProfileMe';
+import { useAdminDedicatedAgentsCapability } from '../../hooks/useAdminDedicatedAgentsCapability';
 import { useBusinessVerificationStatus } from '../../hooks/useBusinessVerificationStatus';
 import Logo from '../../components/Logo';
 import { PersonaQuickSwitch } from '../../components/persona/PersonaQuickSwitch';
@@ -83,6 +84,10 @@ function BusinessMenuTabScreenBase() {
     isSuperuser || can(PlatformPermissions.ORDERS_CROSS_BUSINESS);
   const canSeeCredits =
     isSuperuser || can(PlatformPermissions.OPS_CREDITS);
+
+  // platform.manage.agents AND /admin/dedicated-agents/capability enabled (flag on in scope).
+  const canManageAgents = isSuperuser || can(PlatformPermissions.MANAGE_AGENTS);
+  const { visible: canSeeDedicatedAgents } = useAdminDedicatedAgentsCapability(canManageAgents);
 
   const logoutSheet = useLogoutAccountSheet();
 
@@ -323,7 +328,8 @@ function BusinessMenuTabScreenBase() {
           canSendBroadcasts ||
           canSeeWhatsAppInbox ||
           canSeeOrderOps ||
-          canSeeCredits) ? (
+          canSeeCredits ||
+          canSeeDedicatedAgents) ? (
           <UserMenuSection title={t('menuTab.sections.admin', 'Admin')}>
             {canSeeOrderOps ? (
               <UserMenuRow
@@ -353,6 +359,17 @@ function BusinessMenuTabScreenBase() {
                 label={t('admin.users.title', 'Manage users')}
                 subtitle={t('admin.users.menuSubtitle', 'Clients, businesses, agents')}
                 onPress={() => goTo('AdminUsers')}
+              />
+            ) : null}
+            {canSeeDedicatedAgents ? (
+              <UserMenuRow
+                icon="store-clock-outline"
+                label={t('admin.dedicatedAgents.title', 'Dedicated agents')}
+                subtitle={t(
+                  'admin.dedicatedAgents.menuSubtitle',
+                  'Assign agents to store pickup slots'
+                )}
+                onPress={() => goTo('AdminDedicatedAgents')}
               />
             ) : null}
             {canSendBroadcasts ? (

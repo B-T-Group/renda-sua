@@ -199,7 +199,10 @@
     "business": "Business",
     "saved": "Saved",
     "removed": "Removed",
-    "notAvailable": "Not available"
+    "notAvailable": "Not available",
+    "all": "All",
+    "city": "City",
+    "required": "Required"
   },
   "cart": {
     "title": "Cart",
@@ -6984,6 +6987,16 @@
       "openVideo": "Open video",
       "mediaLoadError": "Could not load attachment",
       "imageAccessibility": "WhatsApp image"
+    },
+    "dedicatedAgents": {
+      "title": "Dedicated agents",
+      "menuSubtitle": "Assign agents to store pickup slots",
+      "dashboardDescription": "Assign agents to store pickup slots, pause or remove them.",
+      "accessDenied": "You do not have permission to manage dedicated agents.",
+      "emptyBody": "Assign an agent to a store slot to get started.",
+      "unavailableTitle": "Dedicated agents is not enabled",
+      "unavailableBody": "Dedicated agents is not turned on for any country in your scope.",
+      "unavailableLoadFailed": "Could not check availability. Try again later."
     }
   },
   "actionsNeeded": {
@@ -7845,7 +7858,9 @@
       "invalid_headcount": "Headcount must be between 1 and 10",
       "invalid_slot_keys": "Please select at least one slot",
       "invalid_days_of_week": "Please select at least one day",
-      "terms_too_long": "Terms must be 1000 characters or less"
+      "terms_too_long": "Terms must be 1000 characters or less",
+      "geo_scope": "Outside your admin scope",
+      "query_too_short": "Type at least 2 characters to search"
     },
     "metrics": {
       "deliveries": "deliveries",
@@ -7874,6 +7889,40 @@
       "decreaseCount": "Decrease count",
       "increaseCount": "Increase count",
       "slotToggle": "Toggle {{slot}} slot"
+    },
+    "superuser": {
+      "assign": "Assign",
+      "noAssignments": "No assignments found.",
+      "relationWarning": "Agent may be related to this business",
+      "removeConfirm": "Remove assignment?",
+      "removeConfirmDetail": "Remove {{name}} from {{store}} ({{slot}})? The agent will no longer be dedicated to this store slot."
+    },
+    "admin": {
+      "assignTitle": "Assign a dedicated agent",
+      "assign": "Assign",
+      "assigned": "Assigned. The store and agent were notified.",
+      "stepOf": "Step {{n}} of 3 · {{name}}",
+      "steps": {
+        "store": "Store",
+        "slots": "Slots",
+        "agent": "Agent"
+      },
+      "searchStore": "Search store, business or city",
+      "searchHint": "Type at least 2 characters to search",
+      "noStoresFound": "No stores found",
+      "noAgentsFound": "No agents found",
+      "selectSlots": "Select one or more slots",
+      "slotOff": "The store has turned this slot off",
+      "filterAgents": "Filter agents",
+      "truncated": "Showing the first results; refine the search",
+      "agentLoad": "{{orders}} active orders · {{stores}} stores",
+      "busyBadge": "Many stores",
+      "unnamedAgent": "Agent",
+      "errors": {
+        "notFoundOrOff": "Dedicated agents is not available for this store, or the store or agent no longer exists",
+        "slotDisabledResume": "The store has turned this slot off. It must be turned back on before the agent can resume",
+        "assignmentNotFound": "This assignment no longer exists, or dedicated agents is off for this store"
+      }
     }
   }
 }
