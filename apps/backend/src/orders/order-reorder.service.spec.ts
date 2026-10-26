@@ -1,11 +1,11 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { FOOD_CATEGORY_NAME } from '../food/food.constants';
-import { isLocationPaymentsEnabled } from '../inventory-items/inventory-catalog-eligibility.util';
+import { isLocationPurchaseEnabled } from '../inventory-items/inventory-catalog-eligibility.util';
 import { OrderReorderService } from './order-reorder.service';
 
 jest.mock('../inventory-items/inventory-catalog-eligibility.util', () => ({
   fetchStripeEnabledCountries: jest.fn().mockResolvedValue(['CA', 'US']),
-  isLocationPaymentsEnabled: jest.fn().mockReturnValue(true),
+  isLocationPurchaseEnabled: jest.fn().mockReturnValue(true),
 }));
 
 describe('OrderReorderService', () => {
@@ -110,7 +110,7 @@ describe('OrderReorderService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (isLocationPaymentsEnabled as jest.Mock).mockReturnValue(true);
+    (isLocationPurchaseEnabled as jest.Mock).mockReturnValue(true);
     hasuraUser.sessionPersonaContext.mockReturnValue({
       activePersona: 'client',
       jwtDefaultRole: 'client',
@@ -550,7 +550,7 @@ describe('OrderReorderService', () => {
   });
 
   it('skips locations whose payments are disabled', async () => {
-    (isLocationPaymentsEnabled as jest.Mock).mockReturnValue(false);
+    (isLocationPurchaseEnabled as jest.Mock).mockReturnValue(false);
     mockOrderAndInventory(baseOrder, [baseInventory]);
     const result = await service.reorder('order-1');
     expect(result.skipped[0].reason).toBe('unavailable');

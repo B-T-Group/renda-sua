@@ -23,7 +23,10 @@ export async function fetchStripeEnabledCountries(
     .filter(Boolean);
 }
 
-/** MoMo locations need a verified registry phone; Stripe-country locations are exempt. */
+/**
+ * Rentals / payout readiness: MoMo locations need a verified registry phone;
+ * Stripe-country locations are exempt.
+ */
 export function isLocationPaymentsEnabled(
   location: CatalogLocationPhoneGate | null | undefined,
   stripeCountries: string[]
@@ -33,6 +36,20 @@ export function isLocationPaymentsEnabled(
   const country = location.address?.country?.trim().toUpperCase();
   if (!country) return false;
   return stripeCountries.includes(country);
+}
+
+/**
+ * Sale catalog / checkout: shoppers can buy before the merchant confirms their
+ * MoMo payout number. Merchant confirmOrder enforces phone verification.
+ */
+export function isLocationPurchaseEnabled(
+  location: CatalogLocationPhoneGate | null | undefined,
+  _stripeCountries: string[] = []
+): boolean {
+  if (!location) return false;
+  if (location.mobile_payment_phone?.is_verified === true) return true;
+  const country = location.address?.country?.trim().toUpperCase();
+  return !!country;
 }
 
 /** @deprecated Use isLocationPaymentsEnabled */

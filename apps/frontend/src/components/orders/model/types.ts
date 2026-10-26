@@ -209,6 +209,7 @@ export interface OrderLike {
   } | null;
   business_location?: {
     name?: string | null;
+    mobile_payment_phone?: { is_verified?: boolean } | null;
     address?: AddressFields | null;
   } | null;
   client?: {

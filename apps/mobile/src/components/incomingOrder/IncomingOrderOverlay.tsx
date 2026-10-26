@@ -1,14 +1,19 @@
+import { CommonActions } from '@react-navigation/native';
 import { observer } from 'mobx-react-lite';
 import React, { useCallback, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useCountdown } from '../../hooks/useCountdown';
 import { useActionableDeliverySlotPast } from '../../hooks/useActionableDeliverySlotPast';
 import { useDashboardAggregates } from '../../hooks/business/useDashboardAggregates';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
+import { rootNavigationRef } from '../../navigation/rootNavigationRef';
 import { useStore } from '../../stores/RootStore';
 import { AppModal } from '../common/AppModal';
 import { BusinessCancelOrderDialog } from '../business/BusinessCancelOrderDialog';
 import { CookedFoodConfirmOrderDialog } from '../business/CookedFoodConfirmOrderDialog';
+import { ConfirmActionDialog } from '../dialogs/ConfirmActionDialog';
 import { IncomingOrderView } from './IncomingOrderView';
 import type { BusinessOrder } from '../../types/business/orders';
 import type { ConfirmOrderPayload } from '../../types/business/orders';
@@ -23,8 +28,23 @@ import {
   trackFirstOrderConfirmed,
 } from '../../utils/firstOrderAnalytics';
 import { ensureFirstOrderPinForOrder } from '../../utils/firstOrderPinSync';
+import {
+  isMmPhoneUnconfirmedError,
+  orderNeedsMmPhoneBeforeConfirm,
+} from '../../utils/orderMmPhoneGate';
+
+function navigateToBusinessLocations(): void {
+  if (!rootNavigationRef.isReady()) return;
+  const routeNames = rootNavigationRef.getRootState()?.routeNames ?? [];
+  if (!routeNames.includes('BusinessLocationsList')) return;
+  rootNavigationRef.dispatch(
+    CommonActions.navigate({ name: 'BusinessLocationsList' })
+  );
+}
 
 function IncomingOrderOverlayBase() {
+  const { t } = useTranslation();
+  const { isStripeRail } = useIsStripeRail();
   const { incomingOrder, ftue } = useStore();
   const { colors } = useTheme();
   const { data: aggregates } = useDashboardAggregates(incomingOrder.visible);
@@ -70,7 +90,8 @@ function IncomingOrderOverlayBase() {
   const showInterrupt =
     incomingOrder.visible &&
     !incomingOrder.showCancelDialog &&
-    !incomingOrder.showConfirmDialog;
+    !incomingOrder.showConfirmDialog &&
+    !incomingOrder.showMmPhoneGate;
   const slotPast = useActionableDeliverySlotPast(
     incomingOrder.visible ? incomingOrder.details : null,
     incomingOrder.uiState
@@ -96,6 +117,13 @@ function IncomingOrderOverlayBase() {
     if (showFirstOrderGuidance && orderId) {
       trackFirstOrderConfirmStarted({ order_id: orderId });
     }
+    if (
+      order &&
+      orderNeedsMmPhoneBeforeConfirm(order, isStripeRail)
+    ) {
+      incomingOrder.openMmPhoneGate();
+      return;
+    }
     if (needsReadyInConfirm) {
       incomingOrder.openConfirm();
       return;
@@ -107,12 +135,13 @@ function IncomingOrderOverlayBase() {
           await finishFirstOrderGuidance(orderId, order);
         }
       } catch {
-        // IncomingOrderStore surfaces the error message.
+        // IncomingOrderStore surfaces the error / MoMo phone gate.
       }
     })();
   }, [
     finishFirstOrderGuidance,
     incomingOrder,
+    isStripeRail,
     needsReadyInConfirm,
     orderForDialog,
     showFirstOrderGuidance,
@@ -122,17 +151,24 @@ function IncomingOrderOverlayBase() {
     async (payload: ConfirmOrderPayload) => {
       const orderId = incomingOrder.orderId;
       const order = orderForDialog;
-      const res = await incomingOrder.confirm({
-        ready_in_minutes: payload.ready_in_minutes,
-      });
-      if (res.success && orderId && order) {
-        await finishFirstOrderGuidance(orderId, order);
+      try {
+        const res = await incomingOrder.confirm({
+          ready_in_minutes: payload.ready_in_minutes,
+        });
+        if (res.success && orderId && order) {
+          await finishFirstOrderGuidance(orderId, order);
+        }
+        return {
+          success: res.success,
+          message: res.message,
+          pay_after_merchant_confirm: res.pay_after_merchant_confirm,
+        };
+      } catch (e: unknown) {
+        if (isMmPhoneUnconfirmedError(e)) {
+          incomingOrder.openMmPhoneGate();
+        }
+        throw e;
       }
-      return {
-        success: res.success,
-        message: res.message,
-        pay_after_merchant_confirm: res.pay_after_merchant_confirm,
-      };
     },
     [finishFirstOrderGuidance, incomingOrder, orderForDialog]
   );
@@ -190,6 +226,29 @@ function IncomingOrderOverlayBase() {
           }}
         />
       ) : null}
+
+      <ConfirmActionDialog
+        visible={incomingOrder.showMmPhoneGate}
+        title={t(
+          'mobilePaymentPhone.confirmCta',
+          'Confirm mobile money number'
+        )}
+        message={t(
+          'orders.confirmRequiresMmPhone',
+          'Confirm that your mobile money number can receive payments before accepting this order.'
+        )}
+        cancelLabel={t('common.cancel', 'Cancel')}
+        confirmLabel={t(
+          'mobilePaymentPhone.confirmCta',
+          'Confirm mobile money number'
+        )}
+        onDismiss={() => incomingOrder.closeMmPhoneGate()}
+        onConfirm={() => {
+          incomingOrder.closeMmPhoneGate();
+          incomingOrder.dismiss();
+          navigateToBusinessLocations();
+        }}
+      />
     </>
   );
 }

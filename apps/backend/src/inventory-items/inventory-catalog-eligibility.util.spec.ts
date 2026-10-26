@@ -1,9 +1,10 @@
 import {
   isLocationPaymentsEnabled,
+  isLocationPurchaseEnabled,
   isPayAfterConfirmBadgeVisible,
 } from './inventory-catalog-eligibility.util';
 
-describe('inventory-catalog-eligibility.util', () => {
+describe('isLocationPaymentsEnabled (rentals / payout readiness)', () => {
   it('allows verified MoMo location phones', () => {
     expect(
       isLocationPaymentsEnabled(
@@ -31,6 +32,45 @@ describe('inventory-catalog-eligibility.util', () => {
         { address: { country: 'CM' }, mobile_payment_phone: { is_verified: false } },
         ['CA']
       )
+    ).toBe(false);
+  });
+});
+
+describe('isLocationPurchaseEnabled (sale catalog / checkout)', () => {
+  it('allows MoMo locations without verified phone', () => {
+    expect(
+      isLocationPurchaseEnabled(
+        {
+          address: { country: 'CM' },
+          mobile_payment_phone: { is_verified: false },
+        },
+        ['CA']
+      )
+    ).toBe(true);
+  });
+
+  it('allows MoMo locations with null phone', () => {
+    expect(
+      isLocationPurchaseEnabled(
+        { address: { country: 'CM' }, mobile_payment_phone: null },
+        []
+      )
+    ).toBe(true);
+  });
+
+  it('allows stripe-country locations without verified phone', () => {
+    expect(
+      isLocationPurchaseEnabled(
+        { address: { country: 'CA' }, mobile_payment_phone: null },
+        ['CA']
+      )
+    ).toBe(true);
+  });
+
+  it('rejects missing location or country', () => {
+    expect(isLocationPurchaseEnabled(null, [])).toBe(false);
+    expect(
+      isLocationPurchaseEnabled({ address: { country: null }, mobile_payment_phone: null }, [])
     ).toBe(false);
   });
 });

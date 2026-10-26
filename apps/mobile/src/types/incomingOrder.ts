@@ -30,6 +30,12 @@ export interface IncomingOrderDetails {
   promised_ready_at?: string | null;
   promised_fulfill_by?: string | null;
   business_id: string;
+  business_location_id?: string | null;
+  business_location?: {
+    id?: string;
+    mobile_payment_phone?: { is_verified?: boolean } | null;
+    address?: { country?: string | null } | null;
+  } | null;
   client?: {
     user?: {
       first_name?: string | null;

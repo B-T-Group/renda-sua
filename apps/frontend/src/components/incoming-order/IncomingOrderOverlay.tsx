@@ -23,6 +23,7 @@ import type { OrderData } from '../../hooks/useOrderById';
 import { useIncomingOrderInterrupt } from '../../hooks/useIncomingOrderInterrupt';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import CookedFoodConfirmOrderModal from '../business/food/CookedFoodConfirmOrderModal';
+import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 
 function formatCurrency(amount = 0, currency = 'XAF'): string {
   return new Intl.NumberFormat(undefined, {
@@ -239,6 +240,15 @@ export function IncomingOrderOverlay() {
           loading={isConfirming}
         />
       ) : null}
+
+      <MobilePaymentPhoneVerifyModal
+        open={interrupt.mmPhoneModalOpen}
+        mode="add"
+        onClose={interrupt.closeMmPhoneConfirm}
+        onCompleted={(phone) => {
+          void interrupt.completeMmPhoneConfirm(phone);
+        }}
+      />
     </>
   );
 }

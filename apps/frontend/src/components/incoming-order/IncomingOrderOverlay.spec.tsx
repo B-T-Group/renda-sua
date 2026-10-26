@@ -21,6 +21,9 @@ const mockInterrupt = {
   showDeclineDialog: false,
   cookedFoodConfirmOpen: false,
   closeCookedFoodConfirm: jest.fn(),
+  mmPhoneModalOpen: false,
+  closeMmPhoneConfirm: jest.fn(),
+  completeMmPhoneConfirm: jest.fn(),
   refreshPending: jest.fn(),
   dismiss: jest.fn(),
   openDeclineDialog: jest.fn(),
@@ -54,6 +57,9 @@ jest.mock('react-i18next', () => ({
 
 jest.mock('../dialogs/CancellationReasonModal', () => () => null);
 jest.mock('../business/food/CookedFoodConfirmOrderModal', () => () => null);
+jest.mock('../dialogs/MobilePaymentPhoneVerifyModal', () => ({
+  MobilePaymentPhoneVerifyModal: () => null,
+}));
 
 describe('IncomingOrderOverlay', () => {
   it('keeps the dialog open and ignores backdrop dismiss', () => {

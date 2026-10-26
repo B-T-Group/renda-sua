@@ -166,6 +166,7 @@ import { LocationsService } from '../locations/locations.service';
 import {
   fetchStripeEnabledCountries,
   isLocationPaymentsEnabled,
+  isLocationPurchaseEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { ORDER_PAID_EVENT } from '../meta-conversions/meta-conversions.constants';
 import { buildOrderMetaCapiContext } from '../meta-conversions/order-meta-capi.util';
@@ -1821,6 +1822,33 @@ export class OrdersService {
     });
   }
 
+  /**
+   * MoMo locations must have a verified payout phone before the merchant can
+   * accept. Shoppers may already have paid; Stripe-country locations are exempt.
+   */
+  private async assertMerchantConfirmPhoneReady(order: {
+    business_location?: {
+      address?: { country?: string | null } | null;
+      mobile_payment_phone?: { is_verified?: boolean } | null;
+    } | null;
+  }): Promise<void> {
+    const stripeCountries = await fetchStripeEnabledCountries(
+      this.hasuraSystemService
+    );
+    if (isLocationPaymentsEnabled(order.business_location, stripeCountries)) {
+      return;
+    }
+    throw new HttpException(
+      {
+        success: false,
+        error: 'MOBILE_MONEY_PHONE_UNCONFIRMED',
+        message:
+          'Confirm that your mobile money number can receive payments before accepting this order.',
+      },
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
   async confirmOrder(
     request: ConfirmOrderRequest,
     actor?: AuthorizedBusinessActor
@@ -1835,6 +1863,7 @@ export class OrdersService {
     if (!order)
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     this.orderAcceptanceService.assertConfirmableAcceptance(order as any);
+    await this.assertMerchantConfirmPhoneReady(order as any);
     await this.applyEatInUnavailable(request, order as any);
 
     const isAsapConfirm =
@@ -11240,6 +11269,9 @@ export class OrdersService {
           business_location {
             id
             address_id
+            mobile_payment_phone {
+              is_verified
+            }
             address {
               country
               latitude
@@ -15147,7 +15179,7 @@ export class OrdersService {
       }
 
       if (
-        !isLocationPaymentsEnabled(
+        !isLocationPurchaseEnabled(
           businessInventory.business_location,
           stripeCountries
         )

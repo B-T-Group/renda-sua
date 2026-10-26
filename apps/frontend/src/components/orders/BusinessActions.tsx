@@ -32,11 +32,17 @@ import {
   ConfirmOrderData,
   useBackendOrders,
 } from '../../hooks/useBackendOrders';
+import { useApiClient } from '../../hooks/useApiClient';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import type { OrderData } from '../../hooks/useOrderById';
 import {
   businessMayCancelDeferredUncollectedOrder,
   businessMayCancelOrder,
 } from '../../utils/orderUtils';
+import {
+  isMmPhoneUnconfirmedError,
+  orderNeedsMmPhoneBeforeConfirm,
+} from '../../utils/orderMmPhoneGate';
 import { useShippingLabels } from '../../hooks/useShippingLabels';
 import ConfirmOrderModal from '../business/ConfirmOrderModal';
 import CookedFoodConfirmOrderModal from '../business/food/CookedFoodConfirmOrderModal';
@@ -50,6 +56,8 @@ import FailPickupDialog from '../dialogs/FailPickupDialog';
 import PickupNoshowDialog from '../dialogs/PickupNoshowDialog';
 import { hasCashExceptionBlockingDeposit } from '../../utils/depositRemainder';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
+import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
+import type { MobilePaymentPhone } from '../../hooks/useMobilePaymentPhones';
 
 /** ISO 3166-1 alpha-2 from order addresses; falls back when missing or not a 2-letter code. */
 function resolveOrderPhoneCountryIso2(order: OrderData): string {
@@ -138,6 +146,8 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const { isDelegationContext } = useUserProfileContext();
   const isDelegate =
     isDelegationContext || ordersPrefix === '/delegate';
+  const { isStripeRail } = useIsStripeRail();
+  const apiClient = useApiClient();
   const {
     confirmOrder,
     completePreparation,
@@ -151,6 +161,7 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [cookedFoodConfirmOpen, setCookedFoodConfirmOpen] = useState(false);
+  const [mmPhoneModalOpen, setMmPhoneModalOpen] = useState(false);
   const [reconcileDialogOpen, setReconcileDialogOpen] = useState(false);
   const [reconcileNationalDigits, setReconcileNationalDigits] = useState('');
   const [reconcileReference, setReconcileReference] = useState('');
@@ -201,12 +212,49 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     onShowNotification?.(errorMessage, 'error');
   };
 
+  const openMmPhoneConfirm = () => {
+    setMmPhoneModalOpen(true);
+    onShowNotification?.(
+      t(
+        'orders.confirmRequiresMmPhone',
+        'Confirm that your mobile money number can receive payments before accepting this order.'
+      ),
+      'warning'
+    );
+  };
+
   const handleConfirmOrder = () => {
+    if (orderNeedsMmPhoneBeforeConfirm(order, isStripeRail)) {
+      openMmPhoneConfirm();
+      return;
+    }
     if (shouldUseGuidedConfirmModal(order)) {
       setCookedFoodConfirmOpen(true);
       return;
     }
     setConfirmModalOpen(true);
+  };
+
+  const handleMmPhoneCompleted = async (phone: MobilePaymentPhone) => {
+    if (phone.is_verified && order.business_location_id && apiClient) {
+      try {
+        await apiClient.patch(
+          `/business-items/locations/${order.business_location_id}`,
+          { mobile_payment_phone_id: phone.id }
+        );
+      } catch {
+        // Phone is verified; location link can be fixed on Locations. Still close.
+      }
+    }
+    setMmPhoneModalOpen(false);
+    onShowNotification?.(
+      t(
+        'orders.mmPhoneConfirmedRetry',
+        'Mobile money number confirmed. You can accept the order now.'
+      ),
+      'success'
+    );
+    onActionComplete?.();
   };
 
   const handleConfirmOrderSuccess = async (data: ConfirmOrderData) => {
@@ -220,7 +268,16 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       );
       onActionComplete?.();
       setConfirmModalOpen(false);
+      setCookedFoodConfirmOpen(false);
       return result;
+    } catch (error: unknown) {
+      if (isMmPhoneUnconfirmedError(error)) {
+        setConfirmModalOpen(false);
+        setCookedFoodConfirmOpen(false);
+        openMmPhoneConfirm();
+        return;
+      }
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -645,6 +702,15 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         onClose={() => setCookedFoodConfirmOpen(false)}
         onConfirm={handleConfirmOrderSuccess}
         loading={loading}
+      />
+
+      <MobilePaymentPhoneVerifyModal
+        open={mmPhoneModalOpen}
+        mode="add"
+        onClose={() => setMmPhoneModalOpen(false)}
+        onCompleted={(phone) => {
+          void handleMmPhoneCompleted(phone);
+        }}
       />
 
       {/* Overwrite code dialog */}

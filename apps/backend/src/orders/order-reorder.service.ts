@@ -7,7 +7,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import {
   fetchStripeEnabledCountries,
-  isLocationPaymentsEnabled,
+  isLocationPurchaseEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import {
   packQuantityOf,
@@ -446,7 +446,7 @@ export class OrderReorderService {
       return 'unavailable';
     }
     if (inv.item?.export_available === true) return 'not_orderable';
-    if (!isLocationPaymentsEnabled(inv.business_location, stripeCountries)) {
+    if (!isLocationPurchaseEnabled(inv.business_location, stripeCountries)) {
       return 'unavailable';
     }
     const foodBlock = checkFoodOrderable(inv);

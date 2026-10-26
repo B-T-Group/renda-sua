@@ -274,13 +274,20 @@ export const useBackendOrders = () => {
         return response.data;
       } catch (err: any) {
         // Extract error message from response - check message first, then error, then data.message
+        const errorCode =
+          typeof err.response?.data?.error === 'string' &&
+          /^[A-Z][A-Z0-9_]+$/.test(err.response.data.error)
+            ? err.response.data.error
+            : undefined;
         const errorMessage =
           err.response?.data?.message ||
           err.response?.data?.error ||
           err.message ||
           'Failed to confirm order';
         setError(errorMessage);
-        throw new Error(errorMessage);
+        const wrapped = new Error(errorMessage) as Error & { code?: string };
+        wrapped.code = errorCode;
+        throw wrapped;
       }
     }, 'orders.confirming');
   };

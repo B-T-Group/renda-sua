@@ -4,7 +4,7 @@ import type { Configuration } from '../config/configuration';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
   fetchStripeEnabledCountries,
-  isLocationPaymentsEnabled,
+  isLocationPurchaseEnabled,
   type CatalogLocationPhoneGate,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import {
@@ -174,7 +174,7 @@ export class FacebookCatalogFeedService {
     row: FeedQueryRow,
     stripeCountries: string[]
   ): boolean {
-    return isLocationPaymentsEnabled(row.business_location, stripeCountries);
+    return isLocationPurchaseEnabled(row.business_location, stripeCountries);
   }
 }
 

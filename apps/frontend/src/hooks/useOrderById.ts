@@ -114,6 +114,7 @@ export interface OrderData {
     id: string;
     name: string;
     location_type: string;
+    mobile_payment_phone?: { is_verified?: boolean } | null;
     address: {
       id: string;
       address_line_1: string;

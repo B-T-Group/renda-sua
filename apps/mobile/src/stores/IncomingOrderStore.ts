@@ -11,6 +11,7 @@ import {
 } from '../services/orderAlertSound';
 import type { IncomingOrderDetails } from '../types/incomingOrder';
 import { isDeliverySlotPast } from '../utils/isDeliverySlotPast';
+import { isMmPhoneUnconfirmedError } from '../utils/orderMmPhoneGate';
 import type { RootStore } from './RootStore';
 import { syncFirstOrderPinAfterOrderUpdate } from '../utils/firstOrderPinSync';
 
@@ -107,6 +108,8 @@ export class IncomingOrderStore {
   message: string | null = null;
   showConfirmDialog = false;
   showCancelDialog = false;
+  /** Merchant must confirm MoMo payout phone before accepting. */
+  showMmPhoneGate = false;
   /** Bumped on foreground location/delegate pushes so open-order lists can refresh. */
   ordersRefreshEpoch = 0;
   /** Bumped when the business orders subscription sees a create or status change. */
@@ -297,12 +300,32 @@ export class IncomingOrderStore {
 
   openConfirm(): void {
     this.showCancelDialog = false;
+    this.showMmPhoneGate = false;
     this.showConfirmDialog = true;
     this.stopReminderLoop();
   }
 
   closeConfirm(): void {
     this.showConfirmDialog = false;
+    if (this.visible && this.uiState === 'active') {
+      this.startReminderLoop();
+    }
+  }
+
+  openMmPhoneGate(): void {
+    this.showConfirmDialog = false;
+    this.showCancelDialog = false;
+    this.showMmPhoneGate = true;
+    this.uiState = 'active';
+    this.message = this.t(
+      'orders.confirmRequiresMmPhone',
+      'Confirm that your mobile money number can receive payments before accepting this order.'
+    );
+    this.stopReminderLoop();
+  }
+
+  closeMmPhoneGate(): void {
+    this.showMmPhoneGate = false;
     if (this.visible && this.uiState === 'active') {
       this.startReminderLoop();
     }
@@ -354,10 +377,19 @@ export class IncomingOrderStore {
     } catch (e: unknown) {
       runInAction(() => {
         this.uiState = 'active';
-        this.message = this.t(
-          'incomingOrder.confirmFailed',
-          'Could not confirm the order.'
-        );
+        if (isMmPhoneUnconfirmedError(e)) {
+          this.showConfirmDialog = false;
+          this.showMmPhoneGate = true;
+          this.message = this.t(
+            'orders.confirmRequiresMmPhone',
+            'Confirm that your mobile money number can receive payments before accepting this order.'
+          );
+        } else {
+          this.message = this.t(
+            'incomingOrder.confirmFailed',
+            'Could not confirm the order.'
+          );
+        }
       });
       this.startReminderLoop();
       throw e;
@@ -499,6 +531,7 @@ export class IncomingOrderStore {
       this.message = null;
       this.showConfirmDialog = false;
       this.showCancelDialog = false;
+      this.showMmPhoneGate = false;
       this.waitingCount = 0;
     });
   }

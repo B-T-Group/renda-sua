@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useIncomingOrderInterrupt } from '../../hooks/useIncomingOrderInterrupt';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import CookedFoodConfirmOrderModal from '../business/food/CookedFoodConfirmOrderModal';
+import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 import { FoodServiceStyleLabel } from '../orders/FoodServiceStyleLabel';
 
 type WakeLockSentinelLike = {
@@ -322,6 +323,15 @@ export function KitchenModePage() {
           loading={isWorking}
         />
       ) : null}
+
+      <MobilePaymentPhoneVerifyModal
+        open={interrupt.mmPhoneModalOpen}
+        mode="add"
+        onClose={interrupt.closeMmPhoneConfirm}
+        onCompleted={(phone) => {
+          void interrupt.completeMmPhoneConfirm(phone);
+        }}
+      />
     </Container>
   );
 }
