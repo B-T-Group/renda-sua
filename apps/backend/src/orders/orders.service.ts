@@ -10563,6 +10563,9 @@ export class OrdersService {
             id
             name
             location_type
+            mobile_payment_phone {
+              is_verified
+            }
             address {
               id
               address_line_1
