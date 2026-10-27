@@ -79,6 +79,22 @@ export interface MtnMomoConfig {
   remittancePrimaryKey?: string;
   remittanceSecondaryKey?: string;
   callbackUrl?: string;
+  /** MTN_MOMO_BASE_URL: host called; independent of the target environment. */
+  baseUrl?: string;
+  /** MTN_MOMO_CURRENCY: default currency (sandbox EUR, otherwise XAF). */
+  currency?: string;
+  /** MTN_MOMO_WEBHOOK_SECRET: signs the per-request callback token. */
+  webhookSecret?: string;
+  /** Per-product credentials; see mtn-momo/mtn-momo.config.ts for fallbacks. */
+  collection?: MtnMomoProductEnv;
+  disbursement?: MtnMomoProductEnv;
+  remittance?: MtnMomoProductEnv;
+}
+
+export interface MtnMomoProductEnv {
+  subscriptionKey?: string;
+  apiUserId?: string;
+  apiKey?: string;
 }
 
 /** Orange Money Core APIs (api-s1.orange.cm) — OAuth + Core X-AUTH-TOKEN. */
@@ -989,6 +1005,24 @@ export default (): Configuration => {
       remittanceSecondaryKey:
         process.env.MTN_MOMO_REMITTANCE_SECONDARY_KEY || '',
       callbackUrl: process.env.MTN_MOMO_CALLBACK_URL,
+      baseUrl: process.env.MTN_MOMO_BASE_URL,
+      currency: process.env.MTN_MOMO_CURRENCY,
+      webhookSecret: process.env.MTN_MOMO_WEBHOOK_SECRET,
+      collection: {
+        subscriptionKey: process.env.MTN_MOMO_COLLECTION_SUBSCRIPTION_KEY,
+        apiUserId: process.env.MTN_MOMO_COLLECTION_API_USER_ID,
+        apiKey: process.env.MTN_MOMO_COLLECTION_API_KEY,
+      },
+      disbursement: {
+        subscriptionKey: process.env.MTN_MOMO_DISBURSEMENT_SUBSCRIPTION_KEY,
+        apiUserId: process.env.MTN_MOMO_DISBURSEMENT_API_USER_ID,
+        apiKey: process.env.MTN_MOMO_DISBURSEMENT_API_KEY,
+      },
+      remittance: {
+        subscriptionKey: process.env.MTN_MOMO_REMITTANCE_SUBSCRIPTION_KEY,
+        apiUserId: process.env.MTN_MOMO_REMITTANCE_API_USER_ID,
+        apiKey: process.env.MTN_MOMO_REMITTANCE_API_KEY,
+      },
     },
     orangeMomo: {
       baseUrl:

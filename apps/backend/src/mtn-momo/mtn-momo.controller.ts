@@ -10,6 +10,7 @@ import {
   Post,
   Put,
   Query,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Public } from '../auth/public.decorator';
@@ -40,19 +41,17 @@ export class MtnMomoController {
    */
   @Post('collection/request-to-pay')
   @HttpCode(HttpStatus.OK)
-  async requestToPay(@ReqContext() ctx: RequestContext, @Body() request: CollectionRequest) {
+  async requestToPay(
+    @ReqContext() ctx: RequestContext,
+    @Body() request: CollectionRequest
+  ) {
     try {
       this.logger.log(
         `Collection request received: ${JSON.stringify(request)}`
       );
 
       // Validate request
-      if (
-        !request.amount ||
-        !request.currency ||
-        !request.externalId ||
-        !request.payer
-      ) {
+      if (!request.amount || !request.externalId || !request.payer) {
         throw new BadRequestException('Missing required fields');
       }
 
@@ -120,12 +119,7 @@ export class MtnMomoController {
       );
 
       // Validate request
-      if (
-        !request.amount ||
-        !request.currency ||
-        !request.externalId ||
-        !request.payee
-      ) {
+      if (!request.amount || !request.externalId || !request.payee) {
         throw new BadRequestException('Missing required fields');
       }
 
@@ -185,12 +179,7 @@ export class MtnMomoController {
       );
 
       // Validate request
-      if (
-        !request.amount ||
-        !request.currency ||
-        !request.externalId ||
-        !request.payee
-      ) {
+      if (!request.amount || !request.externalId || !request.payee) {
         throw new BadRequestException('Missing required fields');
       }
 
@@ -344,30 +333,53 @@ export class MtnMomoController {
   }
 
   /**
-   * Webhook endpoint for MTN MoMo callbacks (POST or PUT)
+   * Webhook endpoint for MTN MoMo callbacks (POST or PUT).
+   * Public, so every call must carry the per-request `ref` + `token` query pair that
+   * the service put in X-Callback-Url. The token is never logged.
    */
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  async handleWebhookPost(@Body() callbackData: unknown) {
-    return this.processMtnMomoWebhook(callbackData);
+  async handleWebhookPost(
+    @Body() callbackData: unknown,
+    @Query('ref') ref?: string,
+    @Query('token') token?: string
+  ) {
+    return this.processMtnMomoWebhook(callbackData, ref, token);
   }
 
   @Public()
   @Put('webhook')
   @HttpCode(HttpStatus.OK)
-  async handleWebhookPut(@Body() callbackData: unknown) {
-    return this.processMtnMomoWebhook(callbackData);
+  async handleWebhookPut(
+    @Body() callbackData: unknown,
+    @Query('ref') ref?: string,
+    @Query('token') token?: string
+  ) {
+    return this.processMtnMomoWebhook(callbackData, ref, token);
   }
 
-  private async processMtnMomoWebhook(callbackData: unknown) {
+  private async processMtnMomoWebhook(
+    callbackData: unknown,
+    ref?: string,
+    token?: string
+  ) {
+    if (!this.mtnMomoService.verifyWebhookToken(ref, token)) {
+      this.logger.warn('MTN MoMo webhook rejected: invalid or missing token');
+      throw new UnauthorizedException('Invalid webhook token');
+    }
     try {
-      this.logger.log(`Webhook received: ${JSON.stringify(callbackData)}`);
-      await this.mtnMomoService.handleCallback(callbackData);
-      return { success: true, message: 'Webhook processed successfully' };
+      const outcome = await this.mtnMomoService.handleCallback(
+        callbackData,
+        ref as string
+      );
+      return {
+        success: true,
+        message: 'Webhook processed successfully',
+        outcome,
+      };
     } catch (error: unknown) {
-      const msg =
-        error instanceof Error ? error.message : String(error);
+      const msg = error instanceof Error ? error.message : String(error);
       this.logger.error(`Webhook processing error: ${msg}`);
       throw error;
     }
