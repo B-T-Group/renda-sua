@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { WhatsAppOrderActionService } from './whatsapp-order-action.service';
 
 describe('WhatsAppOrderActionService', () => {
@@ -448,6 +449,81 @@ describe('WhatsAppOrderActionService', () => {
       action: 'CONFIRM',
     });
     expect(result.message).toMatch(/no longer awaiting confirmation/i);
+  });
+
+  it('tells the merchant to confirm the payout number before accepting', async () => {
+    queueOwnerConfirm();
+    orders.confirmOrder.mockRejectedValue(phoneUnconfirmedException());
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'CONFIRM',
+    });
+    expect(result.message).toBe(
+      'Confirm your Mobile Money number in Rendasua before accepting order ORD-1.'
+    );
+  });
+
+  it('uses the merchant language when the payout number is unconfirmed', async () => {
+    queueOwnerConfirm('fr');
+    orders.confirmOrder.mockRejectedValue(phoneUnconfirmedException());
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'CONFIRM',
+    });
+    expect(result.message).toBe(
+      "Confirmez votre numéro Mobile Money dans Rendasua avant d'accepter la commande ORD-1."
+    );
+  });
+
+  it('reads the phone-gate code from getResponse when response is absent', async () => {
+    queueOwnerConfirm();
+    orders.confirmOrder.mockRejectedValue({
+      getStatus: () => HttpStatus.BAD_REQUEST,
+      getResponse: () => ({ error: 'MOBILE_MONEY_PHONE_UNCONFIRMED' }),
+      message: 'Confirm that your mobile money number can receive payments',
+    });
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'CONFIRM',
+    });
+    expect(result.message).toBe(
+      'Confirm your Mobile Money number in Rendasua before accepting order ORD-1.'
+    );
+  });
+
+  it('keeps a taken order ahead of the payout-phone message', async () => {
+    queueOwnerConfirm();
+    orders.confirmOrder.mockRejectedValue(
+      new HttpException(
+        {
+          error: 'MOBILE_MONEY_PHONE_UNCONFIRMED',
+          message: 'Order is no longer awaiting merchant acceptance',
+        },
+        HttpStatus.CONFLICT
+      )
+    );
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'CONFIRM',
+    });
+    expect(result.message).toBe(
+      'Order ORD-1 is no longer awaiting confirmation.'
+    );
+  });
+
+  it('keeps an unrelated confirm failure on the generic message', async () => {
+    queueOwnerConfirm();
+    orders.confirmOrder.mockRejectedValue({
+      status: HttpStatus.INTERNAL_SERVER_ERROR,
+      message: 'db down',
+    });
+    const result = await service.handleAction({
+      fromPhone: '237600000000',
+      action: 'CONFIRM',
+    });
+    expect(result.message).toBe(
+      'Could not update order ORD-1. Open Rendasua.'
+    );
   });
 
   it('does not confirm shipping without a time slot from WhatsApp', async () => {
@@ -1377,7 +1453,36 @@ describe('WhatsAppOrderActionService', () => {
     expect(notifications.notifyClientOrderNotReady).not.toHaveBeenCalled();
     expect(result.message).toMatch(/declined/i);
   });
+
+  function queueOwnerConfirm(preferredLanguage?: string | null) {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        users: [
+          {
+            id: 'u1',
+            preferred_language: preferredLanguage ?? null,
+            business: { id: 'b1' },
+            location_delegations: [],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({ orders: [{ id: 'o1' }] })
+      .mockResolvedValueOnce({ notification_events: [] })
+      .mockResolvedValueOnce({ orders: [ownerOrder()] });
+  }
 });
+
+function phoneUnconfirmedException(): HttpException {
+  return new HttpException(
+    {
+      success: false,
+      error: 'MOBILE_MONEY_PHONE_UNCONFIRMED',
+      message:
+        'Confirm that your mobile money number can receive payments before accepting this order.',
+    },
+    HttpStatus.BAD_REQUEST
+  );
+}
 
 function ownerOrder(
   overrides: Record<string, unknown> = {}

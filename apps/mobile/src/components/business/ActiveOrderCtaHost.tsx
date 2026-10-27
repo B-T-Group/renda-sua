@@ -9,7 +9,9 @@ import type { ActionLoadingKind } from '../feedback/actionLoadingKinds';
 import { ConfirmActionDialog } from '../dialogs/ConfirmActionDialog';
 import { SimpleMessageDialog } from '../dialogs/SimpleMessageDialog';
 import { useBusinessOrderActions } from '../../hooks/business/useBusinessOrderActions';
+import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import type { BusinessOrder } from '../../types/business/orders';
+import type { ConfirmOrderPayload } from '../../types/business/orders';
 import {
   getBusinessOrderActions,
   type BusinessOrderActionId,
@@ -26,6 +28,10 @@ import { FailPickupSheet } from './FailPickupSheet';
 import { PickupNoshowSheet } from './PickupNoshowSheet';
 import { ReconcileCashDialog } from './ReconcileCashDialog';
 import type { BusinessRootStackParamList } from '@/navigation/types';
+import {
+  isMmPhoneUnconfirmedError,
+  orderNeedsMmPhoneBeforeConfirm,
+} from '../../utils/orderMmPhoneGate';
 
 function waitForModalDismiss(ms = 350): Promise<void> {
   return new Promise((resolve) => {
@@ -64,6 +70,7 @@ export function ActiveOrderCtaHost({
   const { t } = useTranslation();
   const navigation =
     useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
+  const { isStripeRail } = useIsStripeRail();
   const {
     actingId,
     snack,
@@ -80,6 +87,7 @@ export function ActiveOrderCtaHost({
   const acting = !!order && actingId === order.id;
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cookedConfirmOpen, setCookedConfirmOpen] = useState(false);
+  const [mmPhoneGateOpen, setMmPhoneGateOpen] = useState(false);
   const [pickupOpen, setPickupOpen] = useState(false);
   const [failPickupOpen, setFailPickupOpen] = useState(false);
   const [noshowOpen, setNoshowOpen] = useState(false);
@@ -128,9 +136,33 @@ export function ActiveOrderCtaHost({
     [navigation, runImmediateAction, t]
   );
 
+  const openMmPhoneGate = useCallback(() => {
+    setConfirmOpen(false);
+    setCookedConfirmOpen(false);
+    setMmPhoneGateOpen(true);
+  }, []);
+
+  const confirmOrderGuarded = useCallback(
+    async (payload: ConfirmOrderPayload) => {
+      try {
+        return await confirmOrder(payload);
+      } catch (e: unknown) {
+        if (isMmPhoneUnconfirmedError(e)) {
+          openMmPhoneGate();
+        }
+        throw e;
+      }
+    },
+    [confirmOrder, openMmPhoneGate]
+  );
+
   const handlePrimary = useCallback(
     (actionOrder: BusinessOrder, actionId: BusinessOrderActionId) => {
       if (actionId === 'confirm') {
+        if (orderNeedsMmPhoneBeforeConfirm(actionOrder, isStripeRail)) {
+          openMmPhoneGate();
+          return;
+        }
         if (shouldUseGuidedConfirmModal(actionOrder)) {
           setCookedConfirmOpen(true);
         } else {
@@ -200,7 +232,7 @@ export function ActiveOrderCtaHost({
       }
       void runAction(actionOrder, actionId);
     },
-    [navigation, runAction, t]
+    [isStripeRail, navigation, openMmPhoneGate, runAction, t]
   );
 
   useEffect(() => {
@@ -303,17 +335,39 @@ export function ActiveOrderCtaHost({
         onDismiss={() => setInfoDialog(null)}
       />
 
+      <ConfirmActionDialog
+        visible={mmPhoneGateOpen}
+        title={t(
+          'mobilePaymentPhone.confirmCta',
+          'Confirm mobile money number'
+        )}
+        message={t(
+          'orders.confirmRequiresMmPhone',
+          'Confirm that your mobile money number can receive payments before accepting this order.'
+        )}
+        cancelLabel={t('common.cancel', 'Cancel')}
+        confirmLabel={t(
+          'mobilePaymentPhone.confirmCta',
+          'Confirm mobile money number'
+        )}
+        onDismiss={() => setMmPhoneGateOpen(false)}
+        onConfirm={() => {
+          setMmPhoneGateOpen(false);
+          navigation.navigate('BusinessLocationsList');
+        }}
+      />
+
       <BusinessConfirmOrderDialog
         visible={confirmOpen}
         order={order}
         onDismiss={() => setConfirmOpen(false)}
-        onConfirm={confirmOrder}
+        onConfirm={confirmOrderGuarded}
       />
       <CookedFoodConfirmOrderDialog
         visible={cookedConfirmOpen}
         order={order}
         onDismiss={() => setCookedConfirmOpen(false)}
-        onConfirm={confirmOrder}
+        onConfirm={confirmOrderGuarded}
       />
       <BusinessMarkShippedSheet
         visible={shipOpen}

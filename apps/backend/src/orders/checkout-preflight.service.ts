@@ -71,7 +71,7 @@ import {
 } from './resolve-shopper-variant.util';
 import {
   fetchStripeEnabledCountries,
-  isLocationPaymentsEnabled,
+  isLocationPurchaseEnabled,
 } from '../inventory-items/inventory-catalog-eligibility.util';
 import { checkFoodOrderable } from '../food/food-order-guard.util';
 import {
@@ -362,7 +362,7 @@ export class CheckoutPreflightService {
           message: `${inv.item?.name ?? 'An item'} is not currently available.`,
         });
       } else if (
-        !isLocationPaymentsEnabled(inv.business_location, stripeCountries)
+        !isLocationPurchaseEnabled(inv.business_location, stripeCountries)
       ) {
         blockers.push({
           code: 'LOCATION_PAYMENTS_COMING_SOON',

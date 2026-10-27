@@ -52,13 +52,13 @@ describe('FacebookCatalogFeedService', () => {
             },
           },
           {
-            id: 'inv-blocked',
+            id: 'inv-unverified',
             selling_price: 500,
             computed_available_quantity: 1,
             is_active: true,
             item: {
-              name: 'Blocked',
-              description: 'no pay',
+              name: 'Unverified phone',
+              description: 'still for sale',
               price: 500,
               currency: 'XAF',
               is_used: false,
@@ -72,6 +72,29 @@ describe('FacebookCatalogFeedService', () => {
               mobile_payment_phone: { is_verified: false },
               address: { country: 'CM' },
               business: { name: 'Biz2' },
+            },
+          },
+          {
+            id: 'inv-no-country',
+            selling_price: 400,
+            computed_available_quantity: 1,
+            is_active: true,
+            item: {
+              name: 'No country',
+              description: 'not for sale',
+              price: 400,
+              currency: 'XAF',
+              is_used: false,
+              brand: null,
+              item_images: [],
+              item_tags: [],
+              item_sub_category: null,
+            },
+            business_location: {
+              name: 'Nowhere',
+              mobile_payment_phone: { is_verified: false },
+              address: { country: null },
+              business: { name: 'Biz3' },
             },
           },
           {
@@ -116,10 +139,11 @@ describe('FacebookCatalogFeedService', () => {
         ]),
       })
     );
-    expect(rowCount).toBe(2);
+    expect(rowCount).toBe(3);
     expect(csv).toContain('inv-momo-ok');
+    expect(csv).toContain('inv-unverified');
     expect(csv).toContain('inv-stripe');
-    expect(csv).not.toContain('inv-blocked');
+    expect(csv).not.toContain('inv-no-country');
     expect(csv).toContain('1000 XAF');
     expect(csv).toContain('20 CAD');
     expect(csv).toContain('https://rendasua.com/items/inv-momo-ok');

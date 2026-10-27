@@ -67,6 +67,9 @@ export const GET_ORDERS = gql`
         id
         name
         location_type
+        mobile_payment_phone {
+          is_verified
+        }
         address {
           id
           address_line_1
@@ -284,6 +287,9 @@ export const GET_ORDER_BY_ID = gql`
         id
         name
         location_type
+        mobile_payment_phone {
+          is_verified
+        }
         address {
           id
           address_line_1

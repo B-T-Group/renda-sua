@@ -59,6 +59,7 @@ export interface BusinessLocation {
   id: string;
   name: string;
   location_type: string;
+  mobile_payment_phone?: { is_verified?: boolean } | null;
   address: Address;
 }
 

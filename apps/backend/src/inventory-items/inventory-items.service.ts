@@ -23,7 +23,7 @@ import { RbacService } from '../rbac/rbac.service';
 import {
   fetchStripeEnabledCountries,
   isPayAfterConfirmBadgeVisible,
-  isLocationPaymentsEnabled,
+  isLocationPurchaseEnabled,
 } from './inventory-catalog-eligibility.util';
 import { buildLexicalItemSearchOr } from './inventory-lexical-search.util';
 import {
@@ -763,7 +763,7 @@ export class InventoryItemsService {
         item.business_location?.business?.is_storefront_visible === true;
       return {
         ...item,
-        payments_enabled: isLocationPaymentsEnabled(
+        payments_enabled: isLocationPurchaseEnabled(
           item.business_location,
           stripeCountries
         ),

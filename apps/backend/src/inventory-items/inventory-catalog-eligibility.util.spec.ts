@@ -1,9 +1,10 @@
 import {
   isLocationPaymentsEnabled,
+  isLocationPurchaseEnabled,
   isPayAfterConfirmBadgeVisible,
 } from './inventory-catalog-eligibility.util';
 
-describe('inventory-catalog-eligibility.util', () => {
+describe('isLocationPaymentsEnabled (rentals / payout readiness)', () => {
   it('allows verified MoMo location phones', () => {
     expect(
       isLocationPaymentsEnabled(
@@ -32,6 +33,97 @@ describe('inventory-catalog-eligibility.util', () => {
         ['CA']
       )
     ).toBe(false);
+  });
+
+  it('blocks a missing location, a blank country, and an unverified trimmed MoMo country', () => {
+    expect(isLocationPaymentsEnabled(null, ['CM'])).toBe(false);
+    expect(
+      isLocationPaymentsEnabled(
+        { address: { country: '   ' }, mobile_payment_phone: null },
+        ['CM']
+      )
+    ).toBe(false);
+    expect(
+      isLocationPaymentsEnabled(
+        {
+          address: { country: ' cm ' },
+          mobile_payment_phone: { is_verified: false },
+        },
+        ['CA']
+      )
+    ).toBe(false);
+    expect(
+      isLocationPaymentsEnabled(
+        { address: { country: ' ca ' }, mobile_payment_phone: null },
+        ['CA']
+      )
+    ).toBe(true);
+  });
+});
+
+describe('isLocationPurchaseEnabled (sale catalog / checkout)', () => {
+  it('allows MoMo locations without verified phone', () => {
+    expect(
+      isLocationPurchaseEnabled(
+        {
+          address: { country: 'CM' },
+          mobile_payment_phone: { is_verified: false },
+        },
+        ['CA']
+      )
+    ).toBe(true);
+  });
+
+  it('allows MoMo locations with null phone', () => {
+    expect(
+      isLocationPurchaseEnabled(
+        { address: { country: 'CM' }, mobile_payment_phone: null },
+        []
+      )
+    ).toBe(true);
+  });
+
+  it('allows stripe-country locations without verified phone', () => {
+    expect(
+      isLocationPurchaseEnabled(
+        { address: { country: 'CA' }, mobile_payment_phone: null },
+        ['CA']
+      )
+    ).toBe(true);
+  });
+
+  it('rejects missing location or country', () => {
+    expect(isLocationPurchaseEnabled(null, [])).toBe(false);
+    expect(
+      isLocationPurchaseEnabled({ address: { country: null }, mobile_payment_phone: null }, [])
+    ).toBe(false);
+  });
+
+  it('trims the country and still allows a verified phone with no country', () => {
+    expect(
+      isLocationPurchaseEnabled(
+        {
+          address: { country: ' cm ' },
+          mobile_payment_phone: { is_verified: false },
+        },
+        []
+      )
+    ).toBe(true);
+    expect(
+      isLocationPurchaseEnabled(
+        { address: { country: '   ' }, mobile_payment_phone: null },
+        ['CM']
+      )
+    ).toBe(false);
+    expect(
+      isLocationPurchaseEnabled(
+        {
+          address: { country: '   ' },
+          mobile_payment_phone: { is_verified: true },
+        },
+        []
+      )
+    ).toBe(true);
   });
 });
 

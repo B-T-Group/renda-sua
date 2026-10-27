@@ -978,6 +978,29 @@ describe('InventoryItemsService pay-after storefront badge', () => {
   it('shows the badge when the location country is missing and the switch is on', async () => {
     expect((await badges({ flag: true }, { address: null })).badge).toBe(true);
   });
+
+  it('keeps an unverified MoMo listing purchasable and a country-less listing closed', async () => {
+    const { service } = createService({ stripeCountries: ['CA'] });
+    const [open, closed, stripe] = await (
+      service as any
+    ).attachPaymentsEnabledToItemsAsync([
+      listing({
+        mobile_payment_phone: { is_verified: false },
+        address: { country: 'CM' },
+      }),
+      listing({
+        mobile_payment_phone: null,
+        address: { country: '   ' },
+      }),
+      listing({
+        mobile_payment_phone: null,
+        address: { country: 'CA' },
+      }),
+    ]);
+    expect(open.payments_enabled).toBe(true);
+    expect(closed.payments_enabled).toBe(false);
+    expect(stripe.payments_enabled).toBe(true);
+  });
 });
 
 describe('InventoryItemsService store distance region', () => {

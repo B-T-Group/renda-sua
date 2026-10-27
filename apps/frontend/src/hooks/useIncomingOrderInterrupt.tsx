@@ -10,6 +10,7 @@ import React, {
 import { useBackendOrders } from './useBackendOrders';
 import type { OrderData } from './useOrderById';
 import { useApiClient } from './useApiClient';
+import { useIsStripeRail } from './useIsStripeRail';
 import { useUserProfileContext } from '../contexts/UserProfileContext';
 import { useBusinessOrdersLiveRevision } from './useBusinessOrdersLive';
 import { withOrdersApiPrefix } from '../contexts/OrdersApiPrefixContext';
@@ -25,6 +26,12 @@ import {
   shouldOpenIncomingInterrupt,
 } from '../utils/incomingOrderInterrupt';
 import { shouldUseGuidedConfirmModal } from '../utils/cookedFoodOrder';
+import {
+  isMmPhoneUnconfirmedError,
+  MOBILE_MONEY_PHONE_UNCONFIRMED,
+  orderNeedsMmPhoneBeforeConfirm,
+} from '../utils/orderMmPhoneGate';
+import type { MobilePaymentPhone } from './useMobilePaymentPhones';
 import type {
   ConfirmOrderData,
   OrderStatusChangeResponse,
@@ -52,6 +59,9 @@ type IncomingOrderInterruptContextValue = {
   showDeclineDialog: boolean;
   cookedFoodConfirmOpen: boolean;
   closeCookedFoodConfirm: () => void;
+  mmPhoneModalOpen: boolean;
+  closeMmPhoneConfirm: () => void;
+  completeMmPhoneConfirm: (phone: MobilePaymentPhone) => Promise<void>;
   refreshPending: () => Promise<void>;
   dismiss: () => void;
   openDeclineDialog: () => void;
@@ -72,6 +82,7 @@ export function IncomingOrderInterruptProvider({
 }) {
   const apiClient = useApiClient();
   const { userType, isDelegationContext } = useUserProfileContext();
+  const { isStripeRail } = useIsStripeRail();
   const { confirmOrder, markBusy } = useBackendOrders();
   const [visible, setVisible] = useState(false);
   const [order, setOrder] = useState<OrderData | null>(null);
@@ -79,6 +90,7 @@ export function IncomingOrderInterruptProvider({
   const [message, setMessage] = useState<string | null>(null);
   const [showDeclineDialog, setShowDeclineDialog] = useState(false);
   const [cookedFoodConfirmOpen, setCookedFoodConfirmOpen] = useState(false);
+  const [mmPhoneModalOpen, setMmPhoneModalOpen] = useState(false);
   const [waitingCount, setWaitingCount] = useState(0);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const loadEpochRef = useRef(0);
@@ -102,8 +114,51 @@ export function IncomingOrderInterruptProvider({
     setMessage(null);
     setShowDeclineDialog(false);
     setCookedFoodConfirmOpen(false);
+    setMmPhoneModalOpen(false);
     setWaitingCount(0);
   }, []);
+
+  const openMmPhoneConfirm = useCallback(() => {
+    setCookedFoodConfirmOpen(false);
+    setMmPhoneModalOpen(true);
+    setUiState('active');
+    setMessage(
+      'Confirm that your mobile money number can receive payments before accepting this order.'
+    );
+  }, []);
+
+  const closeMmPhoneConfirm = useCallback(() => {
+    setMmPhoneModalOpen(false);
+  }, []);
+
+  const completeMmPhoneConfirm = useCallback(
+    async (phone: MobilePaymentPhone) => {
+      if (phone.is_verified && order?.business_location_id && apiClient) {
+        try {
+          await apiClient.patch(
+            `/business-items/locations/${order.business_location_id}`,
+            { mobile_payment_phone_id: phone.id }
+          );
+        } catch {
+          // Phone is verified; location link can be fixed on Locations.
+        }
+      }
+      setMmPhoneModalOpen(false);
+      if (order && phone.is_verified && order.business_location) {
+        setOrder({
+          ...order,
+          business_location: {
+            ...order.business_location,
+            mobile_payment_phone: { is_verified: true },
+          },
+        });
+      }
+      setMessage(
+        'Mobile money number confirmed. You can accept the order now.'
+      );
+    },
+    [apiClient, order]
+  );
 
   const isSnoozed = useCallback((orderId: string) => {
     const until = snoozedUntilRef.current[orderId];
@@ -268,7 +323,17 @@ export function IncomingOrderInterruptProvider({
             data
           );
           if (!response.data.success) {
-            throw new Error(response.data.message || 'Could not confirm the order.');
+            const fail = new Error(
+              response.data.message || 'Could not confirm the order.'
+            ) as Error & { code?: string };
+            const code = (response.data as { error?: string }).error;
+            if (
+              typeof code === 'string' &&
+              /^[A-Z][A-Z0-9_]+$/.test(code)
+            ) {
+              fail.code = code;
+            }
+            throw fail;
           }
           result = response.data;
         } else {
@@ -280,6 +345,24 @@ export function IncomingOrderInterruptProvider({
         return result;
       } catch (error: any) {
         setUiState('active');
+        const code =
+          typeof error?.response?.data?.error === 'string' &&
+          /^[A-Z][A-Z0-9_]+$/.test(error.response.data.error)
+            ? error.response.data.error
+            : error?.code;
+        if (
+          code === MOBILE_MONEY_PHONE_UNCONFIRMED ||
+          isMmPhoneUnconfirmedError(error)
+        ) {
+          openMmPhoneConfirm();
+          const wrapped = new Error(
+            error?.response?.data?.message ||
+              error?.message ||
+              'Confirm that your mobile money number can receive payments before accepting this order.'
+          ) as Error & { code?: string };
+          wrapped.code = MOBILE_MONEY_PHONE_UNCONFIRMED;
+          throw wrapped;
+        }
         setMessage(error?.message || 'Could not confirm the order.');
         throw error;
       } finally {
@@ -291,6 +374,7 @@ export function IncomingOrderInterruptProvider({
       clearVisibleState,
       confirmOrder,
       isDelegationContext,
+      openMmPhoneConfirm,
       order,
       orderPath,
     ]
@@ -298,6 +382,10 @@ export function IncomingOrderInterruptProvider({
 
   const confirm = useCallback(async () => {
     if (!isActionableIncomingOrder(order) || !apiClient) return;
+    if (orderNeedsMmPhoneBeforeConfirm(order, isStripeRail)) {
+      openMmPhoneConfirm();
+      return;
+    }
     if (shouldUseGuidedConfirmModal(order)) {
       setCookedFoodConfirmOpen(true);
       return;
@@ -313,9 +401,15 @@ export function IncomingOrderInterruptProvider({
     try {
       await confirmWithData(body);
     } catch {
-      // message set in confirmWithData
+      // message / phone modal set in confirmWithData
     }
-  }, [confirmWithData, order, apiClient]);
+  }, [
+    apiClient,
+    confirmWithData,
+    isStripeRail,
+    openMmPhoneConfirm,
+    order,
+  ]);
 
   const closeCookedFoodConfirm = useCallback(() => {
     setCookedFoodConfirmOpen(false);
@@ -377,6 +471,9 @@ export function IncomingOrderInterruptProvider({
       showDeclineDialog,
       cookedFoodConfirmOpen,
       closeCookedFoodConfirm,
+      mmPhoneModalOpen,
+      closeMmPhoneConfirm,
+      completeMmPhoneConfirm,
       refreshPending,
       dismiss,
       openDeclineDialog,
@@ -389,6 +486,8 @@ export function IncomingOrderInterruptProvider({
     [
       closeCookedFoodConfirm,
       closeDeclineDialog,
+      closeMmPhoneConfirm,
+      completeMmPhoneConfirm,
       confirm,
       confirmWithData,
       cookedFoodConfirmOpen,
@@ -396,6 +495,7 @@ export function IncomingOrderInterruptProvider({
       isBusinessPersona,
       markOrderBusy,
       message,
+      mmPhoneModalOpen,
       nowMs,
       onDeclineSuccess,
       openDeclineDialog,

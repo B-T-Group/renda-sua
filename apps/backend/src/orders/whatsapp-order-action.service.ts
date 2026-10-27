@@ -1007,9 +1007,22 @@ export class WhatsAppOrderActionService {
 
   private mapError(error: any, order: PendingWaOrder, lang?: string | null): string {
     const status = error?.status ?? error?.getStatus?.();
+    const response = error?.response ?? error?.getResponse?.();
+    const code =
+      typeof response === 'object' && response !== null
+        ? (response as { error?: string }).error
+        : undefined;
     const message = String(error?.message ?? error?.response ?? '');
     if (status === HttpStatus.CONFLICT || /no longer awaiting/i.test(message)) {
       return this.msgAlready(order.order_number, lang);
+    }
+    if (
+      code === 'MOBILE_MONEY_PHONE_UNCONFIRMED' ||
+      /MOBILE_MONEY_PHONE_UNCONFIRMED/i.test(message)
+    ) {
+      return lang === 'fr'
+        ? `Confirmez votre numéro Mobile Money dans Rendasua avant d'accepter la commande ${order.order_number}.`
+        : `Confirm your Mobile Money number in Rendasua before accepting order ${order.order_number}.`;
     }
     this.logger.warn(`WA action failed for ${order.order_number}: ${message}`);
     return lang === 'fr'
