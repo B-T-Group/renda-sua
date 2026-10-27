@@ -1,7 +1,8 @@
 /**
  * MTN MoMo payment service.
- * @deprecated For Cameroon mobile payments, Freemopay is used instead (see mobile-payments FreemopayService).
- * This module is retained for potential use in other countries or future removal.
+ * MTN MoMo is the planned future replacement for Freemopay for Cameroon mobile payments.
+ * Until production credentials are in place, Freemopay (see mobile-payments FreemopayService)
+ * stays the live provider and this module is deliberately not connected to orders.
  */
 import { Inject, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';

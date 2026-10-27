@@ -1,5 +1,9 @@
 # MTN MoMo Integration
 
+> **Status:** MTN MoMo is the planned future replacement for Freemopay for Cameroon mobile
+> payments. It runs against the sandbox on DEV, but it is intentionally **not connected to
+> orders yet**: that waits for production credentials. Freemopay remains the live provider until then.
+
 This module provides comprehensive integration with MTN Mobile Money (MoMo) API for collection, disbursement, and remittance operations.
 
 ## Features
