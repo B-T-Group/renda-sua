@@ -370,6 +370,35 @@ describe('BusinessTokensService', () => {
     }
   );
 
+  it('does not restore more free tokens than the refunded amount', async () => {
+    hasuraSystemService.executeMutation.mockResolvedValue({});
+
+    await service.refundTokens('business-1', 3, 10);
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('RefundAiToken'),
+      { id: 'business-1', amount: 3, nongiftable: 3 }
+    );
+  });
+
+  it.each([
+    ['a fractional restore', 2.9, 2],
+    ['NaN', Number.NaN, 0],
+    ['Infinity', Number.POSITIVE_INFINITY, 0],
+  ] as const)(
+    'writes an integer free restore for %s',
+    async (_label, restore, nongiftable) => {
+      hasuraSystemService.executeMutation.mockResolvedValue({});
+
+      await service.refundTokens('business-1', 5, restore);
+
+      expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+        expect.stringContaining('RefundAiToken'),
+        { id: 'business-1', amount: 5, nongiftable }
+      );
+    }
+  );
+
   it('grants the pack matching a successful token payment', async () => {
     const grantPackTokens = jest
       .spyOn(service, 'grantPackTokens')

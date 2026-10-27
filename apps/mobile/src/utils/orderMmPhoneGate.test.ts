@@ -27,6 +27,13 @@ describe('orderNeedsMmPhoneBeforeConfirm', () => {
         false
       )
     ).toBe(true);
+    expect(orderNeedsMmPhoneBeforeConfirm({}, false)).toBe(true);
+    expect(
+      orderNeedsMmPhoneBeforeConfirm(
+        { business_location: { mobile_payment_phone: {} } },
+        false
+      )
+    ).toBe(true);
   });
 
   it('does not require phone when verified', () => {
@@ -50,5 +57,9 @@ describe('isMmPhoneUnconfirmedError', () => {
       })
     ).toBe(true);
     expect(isMmPhoneUnconfirmedError({ message: 'other' })).toBe(false);
+    expect(isMmPhoneUnconfirmedError(null)).toBe(false);
+    expect(
+      isMmPhoneUnconfirmedError('MOBILE_MONEY_PHONE_UNCONFIRMED')
+    ).toBe(false);
   });
 });

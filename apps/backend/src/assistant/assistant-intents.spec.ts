@@ -75,6 +75,17 @@ describe('assistant intents', () => {
     expect(fr).not.toEqual(en);
   });
 
+  it('tells sellers customers can order before the payout number is confirmed', () => {
+    const en = getKnowledgeSection({ topic: 'seller_faq', locale: 'en' });
+    const fr = getKnowledgeSection({ topic: 'seller_faq', locale: 'fr' });
+    expect(en).toMatch(/Customers can order before that number is confirmed/);
+    expect(en).toMatch(/before you can accept the order/);
+    expect(fr).toMatch(
+      /Les clients peuvent commander avant que ce numéro soit confirmé/
+    );
+    expect(fr).toMatch(/avant d'accepter la commande/);
+  });
+
   it('tells sellers free tokens cannot be gifted and late codes last 30 days', () => {
     const en = getKnowledgeSection({ topic: 'seller_faq', locale: 'en' });
     const fr = getKnowledgeSection({ topic: 'seller_faq', locale: 'fr' });
