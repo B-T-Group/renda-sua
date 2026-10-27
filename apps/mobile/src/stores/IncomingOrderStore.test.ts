@@ -254,6 +254,64 @@ describe('IncomingOrderStore present-first', () => {
     });
   });
 
+  function readyToConfirm() {
+    const store = new IncomingOrderStore(
+      makeRoot({ activePersona: 'business' })
+    );
+    store.visible = true;
+    store.orderId = 'ord-1';
+    store.uiState = 'active';
+    store.showConfirmDialog = true;
+    store.details = {
+      id: 'ord-1',
+      current_status: 'pending',
+      delivery_time_windows: [],
+    } as IncomingOrderDetails;
+    return store;
+  }
+
+  it('opens the payout-phone gate when confirm returns that code', async () => {
+    const store = readyToConfirm();
+    const error = new Error(
+      'Confirm that your mobile money number can receive payments'
+    ) as Error & { code?: string };
+    error.code = 'MOBILE_MONEY_PHONE_UNCONFIRMED';
+    confirm.mockRejectedValue(error);
+
+    await expect(store.confirm()).rejects.toMatchObject({
+      code: 'MOBILE_MONEY_PHONE_UNCONFIRMED',
+    });
+
+    expect(store.showMmPhoneGate).toBe(true);
+    expect(store.showConfirmDialog).toBe(false);
+    expect(store.uiState).toBe('active');
+    expect(store.message).toMatch(/mobile money number/i);
+    expect(store.orderId).toBe('ord-1');
+  });
+
+  it('opens the payout-phone gate when the code is only in the message', async () => {
+    const store = readyToConfirm();
+    confirm.mockRejectedValue(
+      new Error('Failed: MOBILE_MONEY_PHONE_UNCONFIRMED')
+    );
+
+    await expect(store.confirm()).rejects.toThrow(
+      'MOBILE_MONEY_PHONE_UNCONFIRMED'
+    );
+
+    expect(store.showMmPhoneGate).toBe(true);
+  });
+
+  it('keeps a generic confirm failure off the payout-phone gate', async () => {
+    const store = readyToConfirm();
+    confirm.mockRejectedValue(new Error('db down'));
+
+    await expect(store.confirm()).rejects.toThrow('db down');
+
+    expect(store.showMmPhoneGate).toBe(false);
+    expect(store.message).toMatch(/Could not confirm the order/);
+  });
+
   it('does not reopen a confirmed order after the review-later window', async () => {
     vi.useFakeTimers();
     const store = new IncomingOrderStore(

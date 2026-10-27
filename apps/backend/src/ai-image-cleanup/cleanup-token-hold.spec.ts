@@ -2,6 +2,7 @@ import {
   freeTokensToRestore,
   holdAfterConsume,
   holdAfterRefund,
+  tokenHoldFromJob,
   type CleanupTokenHold,
 } from './cleanup-token-hold';
 
@@ -41,5 +42,46 @@ describe('cleanup token hold', () => {
 
   it('restores nothing when the hold has no free tokens', () => {
     expect(freeTokensToRestore(hold({ nongiftable_reserved: 0 }), 3)).toBe(0);
+  });
+
+  it('does not restore free tokens for a zero or negative refund', () => {
+    expect(freeTokensToRestore(hold(), 0)).toBe(0);
+    expect(freeTokensToRestore(hold(), -1)).toBe(0);
+  });
+
+  it('never restores more free tokens than the hold recorded', () => {
+    expect(freeTokensToRestore(hold(), 8)).toBe(2);
+    expect(
+      freeTokensToRestore(hold({ nongiftable_reserved: -3 }), 5)
+    ).toBe(0);
+  });
+
+  it('refunds the remainder as purchased tokens after the free hold is spent', () => {
+    const spent = holdAfterConsume(
+      hold({ tokens_reserved: 4, nongiftable_reserved: 2 }),
+      2
+    );
+    expect(spent.nongiftable_reserved).toBe(0);
+    expect(spent.tokens_consumed).toBe(2);
+    expect(freeTokensToRestore(spent, 2)).toBe(0);
+  });
+
+  it('reads a job from before the free-hold column as zeros', () => {
+    expect(
+      tokenHoldFromJob({
+        tokens_reserved: null,
+        tokens_consumed: null,
+        tokens_refunded: null,
+        nongiftable_reserved: null,
+      })
+    ).toEqual({
+      tokens_reserved: 0,
+      tokens_consumed: 0,
+      tokens_refunded: 0,
+      nongiftable_reserved: 0,
+    });
+    const restored = holdAfterRefund(hold({ nongiftable_reserved: 1 }), 1, 5);
+    expect(restored.nongiftable_reserved).toBe(0);
+    expect(restored.tokens_refunded).toBe(1);
   });
 });

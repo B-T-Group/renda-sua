@@ -402,6 +402,45 @@ describe('CheckoutPreflightService', () => {
     expect(hasuraSystemService.executeQuery).not.toHaveBeenCalled();
   });
 
+  it('lets a shopper check out before the MoMo payout phone is verified', async () => {
+    mockInventory([
+      makeInventoryRow({ sellerCountry: 'CM', phoneVerified: false }),
+    ]);
+
+    const result = await service.resolve(
+      {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+      },
+      false
+    );
+
+    expect(result.can_proceed).toBe(true);
+    expect(result.checkout_method).toBe(CheckoutMethod.MOBILE_MONEY);
+    expect(result.blocking_errors.map((error) => error.code)).not.toContain(
+      'LOCATION_PAYMENTS_COMING_SOON'
+    );
+  });
+
+  it('still blocks checkout when the sale location has no country', async () => {
+    const row = makeInventoryRow({ sellerCountry: 'CM', phoneVerified: false });
+    row.business_location.address = { country: null };
+    mockInventory([row]);
+
+    const result = await service.resolve(
+      {
+        items: [{ business_inventory_id: 'inv-1', quantity: 1 }],
+        provisional_country: 'CM',
+      },
+      false
+    );
+
+    expect(result.can_proceed).toBe(false);
+    expect(result.blocking_errors).toEqual([
+      expect.objectContaining({ code: 'LOCATION_PAYMENTS_COMING_SOON' }),
+    ]);
+  });
+
   // -------------------------------------------------------------------------
   // 1. Returns EMAIL + STRIPE for Stripe seller/order groups
   // -------------------------------------------------------------------------
