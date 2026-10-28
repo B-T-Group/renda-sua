@@ -19170,27 +19170,27 @@ export class OrdersService {
         console.warn('Failed to calculate distance-based fee:', distanceError);
       }
 
-      // Fallback to normal delivery base fee
+      // Fallback (distance lookup failed): flat base fee only. Fast delivery REPLACES the normal
+      // base (same as the distance path via calculateTieredDeliveryFee); it is never added on top.
       const countryCode = this.extractCountryCode(
         businessAddress as unknown as Addresses
       );
-      const flatFee = await this.deliveryConfigService.getNormalDeliveryBaseFee(
+      let flatFee = await this.deliveryConfigService.getNormalDeliveryBaseFee(
         countryCode
       );
 
-      let fastExtra = 0;
       if (requiresFastDelivery) {
         const fastDeliveryConfig = await this.getFastDeliveryFee(
           userAddress.state || '',
           userAddress.country || ''
         );
-        if (fastDeliveryConfig.enabled) {
-          fastExtra = fastDeliveryConfig.fee;
+        if (fastDeliveryConfig.enabled && fastDeliveryConfig.fee > 0) {
+          flatFee = fastDeliveryConfig.fee;
         }
       }
 
       const promo = this.applyFirstOrderBasePromo(flatFee, 0, applyPromo);
-      const finalDeliveryFee = this.roundCurrency(promo.deliveryFee + fastExtra);
+      const finalDeliveryFee = this.roundCurrency(promo.deliveryFee);
 
       this.logger.log(`Flat fee calculated: ${finalDeliveryFee}`);
       this.logger.log(`Currency: ${item.item.currency}`);
