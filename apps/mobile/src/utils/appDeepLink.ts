@@ -1,7 +1,17 @@
 import type { PersonaSlug } from '../types/persona';
 import { restockPathToTarget } from './restockDeepLink';
 
-/** Parse https://…/app/…, https://…/store/:id and rendasua://… into an app-relative path. */
+/** Public item share links: /items/:id and /items/:id/seo (not place_order etc.). */
+const PUBLIC_ITEM_PATH = /^\/items\/([^/]+)(?:\/seo)?\/?$/;
+
+/**
+ * Parse https://…/app/…, https://…/store/:id, https://…/items/:id[/seo] and
+ * rendasua://… into an app-relative path.
+ *
+ * Public item links map to the synthetic `item/:id` path (catalog item detail).
+ * A plain `items/:id` path (from /app/items/:id or rendasua://items/:id) stays
+ * the business AI proposal screen.
+ */
 export function extractAppPath(url: string): string | null {
   try {
     const parsed = new URL(url);
@@ -12,6 +22,8 @@ export function extractAppPath(url: string): string | null {
     if (/^\/store\/[^/]+\/?$/.test(parsed.pathname)) {
       return parsed.pathname.replace(/^\//, '').replace(/\/$/, '');
     }
+    const item = PUBLIC_ITEM_PATH.exec(parsed.pathname);
+    if (item) return `item/${item[1]}`;
     return null;
   } catch {
     return null;
@@ -47,6 +59,7 @@ export type DeepLinkTarget =
   | { type: 'rental'; id: string }
   | { type: 'food'; id?: string }
   | { type: 'store'; id: string }
+  | { type: 'inventoryItem'; id: string }
   | { type: 'restockItem'; itemId: string }
   | { type: 'restockLikes'; filter: 'all' | 'back_in_stock' }
   | { type: 'dedicatedAgents'; locationId: string }
@@ -78,6 +91,7 @@ function matchDeepLinkHead(segments: string[]): DeepLinkTarget | null {
   }
   if (head === 'chat' && id) return { type: 'order', id, openMessages: true };
   if (head === 'items' && id) return { type: 'itemProposal', id };
+  if (head === 'item' && id) return { type: 'inventoryItem', id };
   return matchDeepLinkRest(head, id, segments);
 }
 

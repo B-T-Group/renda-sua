@@ -31,6 +31,14 @@ describe('parseRestockLink', () => {
     });
   });
 
+  it('still resolves restock links on the public /items path before the item-detail mapping', () => {
+    expect(parseRestockLink(`https://rendasua.com/items/${ID}/seo?src=restock_alert`)).toEqual({
+      type: 'item',
+      itemId: ID,
+    });
+    expect(parseRestockLink(`https://rendasua.com/items/${ID}/seo`)).toBeNull();
+  });
+
   it('ignores business item-proposal links (no src)', () => {
     expect(parseRestockLink(`https://rendasua.com/app/items/${ID}`)).toBeNull();
     expect(extractAppPath(`https://rendasua.com/app/items/${ID}`)).toBe(`items/${ID}`);
