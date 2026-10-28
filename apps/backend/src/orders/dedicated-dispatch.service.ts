@@ -49,6 +49,8 @@ interface DispatchOfferRow {
   user_id: string | null;
   status: string;
   expires_at: string;
+  /** How many times a dedicated offer was sent to this agent for the order (1 = the original send). */
+  dedicated_attempt?: number | null;
 }
 
 export interface DedicatedDispatchOrder {
@@ -101,6 +103,7 @@ const DISPATCH_ORDER_QUERY = `
       user_id
       status
       expires_at
+      dedicated_attempt
     }
   }
 `;
@@ -124,6 +127,7 @@ const UPSERT_DEDICATED_OFFERS = `
           expires_at
           created_at
           responded_at
+          dedicated_attempt
         ]
       }
     ) {
@@ -228,7 +232,21 @@ export class DedicatedDispatchService {
       // Declined rows (a declined offer, or a released auto-assignment, PR 6) are
       // exclusions, not a sign the fallback already ran: those agents are skipped below.
       const declined = new Set(offers.filter((o) => o.status === 'declined').map((o) => o.agent_id));
-      if (offers.some((o) => o.status !== 'declined')) return this.followUp(order, offers);
+      const config = await this.dedicatedConfig.getConfig(country);
+      // Attempts already sent per agent (a row from before the counter existed counts as 1).
+      const attempts = new Map<string, number>();
+      const prior = offers.filter((o) => o.status !== 'declined');
+      if (prior.length > 0) {
+        const outcome = await this.followUp(order, offers);
+        // Re-send only when every earlier offer simply lapsed unanswered (never after an
+        // accept/cancel) and more than one attempt is allowed: otherwise exhaustion proceeds.
+        const lapsed = prior.every(
+          (o) => o.status === 'expired' || (o.status === 'offered' && new Date(o.expires_at).getTime() <= Date.now())
+        );
+        if (outcome.kind !== 'done' || !lapsed || config.offerMaxAttempts <= 1) return outcome;
+        for (const o of prior) attempts.set(o.agent_id, o.dedicated_attempt ?? 1);
+      }
+      const resend = prior.length > 0;
 
       const slot = await this.coverage.resolveSlot({
         locationId: order.business_location_id,
@@ -261,10 +279,15 @@ export class DedicatedDispatchService {
           assignedAgents: evaluation.rejected.length,
         });
       }
-      const reachable = eligible.filter((a) => !!a.userId && !declined.has(a.agentId));
-      if (reachable.length === 0) return none;
+      const reachable = eligible.filter(
+        (a) =>
+          !!a.userId &&
+          !declined.has(a.agentId) &&
+          (attempts.get(a.agentId) ?? 0) < config.offerMaxAttempts
+      );
+      if (reachable.length === 0) return resend ? { kind: 'done' } : none;
 
-      if (reachable.length === 1 && reachable[0].isInternal) {
+      if (!resend && reachable.length === 1 && reachable[0].isInternal) {
         const failure = await this.autoAssign(order, slot, reachable[0], country);
         if (!failure) return { kind: 'auto_assigned', agentId: reachable[0].agentId };
         this.logger.warn(
@@ -272,8 +295,7 @@ export class DedicatedDispatchService {
         );
         return none;
       }
-      const config = await this.dedicatedConfig.getConfig(country);
-      await this.offer(order, slot, reachable, config.offerTtlSeconds);
+      await this.offer(order, slot, reachable, config.offerTtlSeconds, attempts);
       return {
         kind: 'offered',
         agentIds: reachable.map((a) => a.agentId),
@@ -481,7 +503,8 @@ export class DedicatedDispatchService {
     order: DedicatedDispatchOrder,
     slot: ResolvedDedicatedSlot,
     agents: DedicatedEligibleAgent[],
-    ttlSeconds: number
+    ttlSeconds: number,
+    previousAttempts: ReadonlyMap<string, number> = new Map()
   ): Promise<void> {
     const earnings = await this.commissionsService
       .calculateAgentEarnings(order.id, true)
@@ -498,6 +521,7 @@ export class DedicatedDispatchService {
         status: 'offered',
         offer_kind: 'dedicated',
         decline_reason: null,
+        dedicated_attempt: (previousAttempts.get(a.agentId) ?? 0) + 1,
         distance_km: null,
         estimated_earnings: earnings.amount,
         currency: earnings.currency,
@@ -542,6 +566,7 @@ export class DedicatedDispatchService {
         slotDate: slot.date,
         ttlSeconds,
         offerCount: agents.length,
+        attempt: (previousAttempts.get(a.agentId) ?? 0) + 1,
       });
     }
   }
