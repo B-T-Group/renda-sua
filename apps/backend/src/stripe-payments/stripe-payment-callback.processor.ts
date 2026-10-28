@@ -143,14 +143,20 @@ export class StripePaymentCallbackProcessor {
     }
     if (tx.status === 'success') {
       this.logger.log(`Stripe PI skipped (already success): ${tx.id}`);
-      // Our own capture marks the row success before this webhook lands, so the
-      // applyCaptured tax finalizer never runs. Retry the (idempotent) snapshot
-      // finalization here in case the capture-time attempt failed.
+      // Our own capture marks the row success before this webhook lands, so applyCaptured
+      // never runs. Retry the (idempotent) finalization here in case the capture-time attempt
+      // failed. A Stripe webhook retry would be dropped as a duplicate event, so a `deferred`
+      // outcome is picked up by the reconciler / next refund instead of by throwing here.
       if (tx.payment_entity === 'order' && tx.entity_id) {
-        await this.orderTaxLifecycle.finalizeAfterCapture({
+        const outcome = await this.orderTaxLifecycle.finalizeAfterCapture({
           orderNumber: tx.entity_id.trim(),
           paymentIntent,
         });
+        if (outcome === 'deferred') {
+          this.logger.warn(
+            `order_tax_finalize_needs_reconcile order=${tx.entity_id.trim()} pi=${paymentIntent.id}`
+          );
+        }
       }
       return;
     }
@@ -357,32 +363,15 @@ export class StripePaymentCallbackProcessor {
       return;
     }
 
-    const calcId = paymentIntent?.metadata?.stripe_tax_calculation_id?.trim();
-    if (!calcId) return;
-
-    const calculation = await this.stripeService.retrieveTaxCalculation(calcId);
-    let taxTransactionId: string | undefined;
-    try {
-      const taxTx =
-        await this.stripeService.createTaxTransactionFromCalculation(
-          calcId,
-          orderNumber
-        );
-      taxTransactionId = taxTx.id;
-    } catch {
-      // Payment may already have created the tax transaction
-    }
-    await this.taxOrderPersistence.finalizeFromTaxCalculation({
+    if (!paymentIntent) return;
+    // One finalizer for calculation-based orders (shared with our own capture and the
+    // refund/reconcile heal paths). Never rewrites total_amount / tax_amount / tx.amount:
+    // the wallet is credited the pre-tax ledger amount and tax stays in the Stripe pool.
+    const outcome = await this.orderTaxLifecycle.finalizeAfterCapture({
       orderNumber,
-      calculation,
-      transactionId: tx.id,
-      taxTransactionId,
+      paymentIntent,
     });
-    await this.orderTaxLifecycle.syncLegacyFinalized({
-      orderNumber,
-      calculation,
-      taxTransactionId,
-    });
+    this.logger.log(`order_tax_finalize_webhook order=${orderNumber} outcome=${outcome}`);
   }
 
   private async creditWalletIfNeeded(
@@ -526,6 +515,7 @@ export class StripePaymentCallbackProcessor {
       tx.amount
     );
 
+    let walletRefundMajor = refundedMajor;
     if (charge.refunds?.data && charge.refunds.data.length > 0) {
       const stripeRefundObj = charge.refunds.data[0];
       const stripeRefundId = stripeRefundObj.id;
@@ -533,6 +523,11 @@ export class StripePaymentCallbackProcessor {
         stripeRefundId,
         stripeRefundObj
       );
+      // The card refund can include tax on top of the ledger amount (tax-inclusive refunds);
+      // the wallet only ever held the ledger amount, so reverse that part, never more.
+      if (existingRefund && existingRefund.amount > 0) {
+        walletRefundMajor = Math.min(Number(existingRefund.amount), tx.amount);
+      }
       if (existingRefund?.status === 'succeeded') {
         this.logger.log(
           `Refund ${stripeRefundId} already processed, skipping wallet reversal`
@@ -558,7 +553,7 @@ export class StripePaymentCallbackProcessor {
       }
     }
 
-    await this.reverseWalletForRefund(tx, refundedMajor);
+    await this.reverseWalletForRefund(tx, walletRefundMajor);
     await this.databaseService.updateTransaction(tx.id, {
       status: 'refunded',
       error_message: `Refunded ${refundedMajor} ${tx.currency} via Stripe`,

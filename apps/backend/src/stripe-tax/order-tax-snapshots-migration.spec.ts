@@ -56,3 +56,20 @@ describe('20261028090000_order_tax_snapshots', () => {
     expect(ordersMeta).toContain('tax_snapshot');
   });
 });
+
+describe('20261028100000_stripe_refund_tax_amount', () => {
+  const dir = join(ROOT, 'migrations/Rendasua/20261028100000_stripe_refund_tax_amount');
+  const rup = readFileSync(join(dir, 'up.sql'), 'utf8');
+  const rdown = readFileSync(join(dir, 'down.sql'), 'utf8');
+
+  it('is additive with a constant default and a non-negative check', () => {
+    expect(rup).toMatch(/ADD COLUMN IF NOT EXISTS tax_refund_amount numeric\(12, 2\) NOT NULL DEFAULT 0/);
+    expect(rup).toMatch(/CHECK \(tax_refund_amount >= 0\)/);
+    expect(rup).not.toMatch(/\bDROP\b|UPDATE public\./i);
+  });
+
+  it('has a down that drops only that column', () => {
+    expect(rdown).toMatch(/DROP COLUMN IF EXISTS tax_refund_amount/);
+    expect(rdown.match(/DROP COLUMN/gi)).toHaveLength(1);
+  });
+});

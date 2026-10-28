@@ -10,11 +10,12 @@ describe('StripeRefundService cancel uncaptured authorization', () => {
   let orderTaxLifecycle: {
     reverseForRefund: jest.Mock;
     voidForOrder: jest.Mock;
+    resolveRefundTaxMode: jest.Mock;
   };
   let databaseService: {
     getTransactionByEntityId: jest.Mock;
     updateTransaction: jest.Mock;
-    sumSucceededRefundsForOrder: jest.Mock;
+    sumSucceededRefundPartsForOrder: jest.Mock;
     createRefundRecord: jest.Mock;
     linkStripeRefundRecord: jest.Mock;
   };
@@ -28,13 +29,14 @@ describe('StripeRefundService cancel uncaptured authorization', () => {
     databaseService = {
       getTransactionByEntityId: jest.fn(),
       updateTransaction: jest.fn().mockResolvedValue(undefined),
-      sumSucceededRefundsForOrder: jest.fn().mockResolvedValue(0),
+      sumSucceededRefundPartsForOrder: jest.fn().mockResolvedValue({ amount: 0, taxAmount: 0 }),
       createRefundRecord: jest.fn(),
       linkStripeRefundRecord: jest.fn(),
     };
     orderTaxLifecycle = {
       reverseForRefund: jest.fn().mockResolvedValue(undefined),
       voidForOrder: jest.fn().mockResolvedValue(undefined),
+      resolveRefundTaxMode: jest.fn().mockResolvedValue(false),
     };
     service = new StripeRefundService(
       stripeService as never,
@@ -268,8 +270,8 @@ describe('StripeRefundService cancel uncaptured authorization', () => {
       });
     });
 
-    it('refund amount is capped by tx.amount minus prior refunds, unaffected by tax tracking', async () => {
-      databaseService.sumSucceededRefundsForOrder.mockResolvedValue(100);
+    it('legacy (pre-tax) orders: refund amount is capped by tx.amount minus prior refunds', async () => {
+      databaseService.sumSucceededRefundPartsForOrder.mockResolvedValue({ amount: 100, taxAmount: 0 });
       stripeService.createRefund.mockResolvedValue({ id: 're_5', status: 'succeeded' });
       await service.initiateOrderRefund(refundParams);
       expect(stripeService.createRefund).toHaveBeenCalledWith(
@@ -289,6 +291,102 @@ describe('StripeRefundService cancel uncaptured authorization', () => {
       await expect(service.initiateOrderRefund(refundParams)).resolves.toMatchObject({
         success: true,
       });
+    });
+  });
+  describe('tax-inclusive refunds (finalized tax snapshot)', () => {
+    const refundParams = {
+      orderId: 'order-1',
+      orderNumber: 'ORD-1',
+      cancellationFee: 0,
+      cancelledBy: 'system' as const,
+    };
+
+    beforeEach(() => {
+      // Ledger 100.00 pre-tax, card charged 113.00 tax-inclusive.
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        authorizedTx({ status: 'success', amount: 100 })
+      );
+      stripeService.retrievePaymentIntent.mockResolvedValue({
+        status: 'succeeded',
+        amount_received: 11300,
+      });
+      orderTaxLifecycle.resolveRefundTaxMode.mockResolvedValue(true);
+      databaseService.createRefundRecord.mockResolvedValue({ id: 'refund-db-1' });
+      stripeService.createRefund.mockResolvedValue({ id: 're_1', status: 'succeeded' });
+    });
+
+    it('full refund returns ledger + tax to the card and reverses exactly that amount', async () => {
+      await expect(service.initiateOrderRefund(refundParams)).resolves.toMatchObject({
+        success: true,
+        message: 'Refund initiated: 113 CAD (includes 13 tax)',
+      });
+      expect(stripeService.createRefund).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 11300 })
+      );
+      // stripe_refunds.amount keeps the ledger part, tax is stored separately.
+      expect(databaseService.createRefundRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 100, tax_refund_amount: 13 })
+      );
+      expect(orderTaxLifecycle.reverseForRefund).toHaveBeenCalledWith({
+        orderNumber: 'ORD-1',
+        stripeRefundId: 're_1',
+        refundAmountMinor: 11300,
+      });
+    });
+
+    it('partial refund (cancellation fee kept) returns a proportional tax share', async () => {
+      await service.initiateOrderRefund({ ...refundParams, cancellationFee: 20 });
+      expect(stripeService.createRefund).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 9040 })
+      );
+      expect(databaseService.createRefundRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 80, tax_refund_amount: 10.4 })
+      );
+      expect(orderTaxLifecycle.reverseForRefund).toHaveBeenCalledWith(
+        expect.objectContaining({ refundAmountMinor: 9040 })
+      );
+    });
+
+    it('the remaining refund takes ALL remaining tax (card refunds sum to the charge)', async () => {
+      databaseService.sumSucceededRefundPartsForOrder.mockResolvedValue({
+        amount: 80,
+        taxAmount: 10.4,
+      });
+      await service.initiateOrderRefund(refundParams);
+      expect(stripeService.createRefund).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 2260 })
+      );
+      expect(databaseService.createRefundRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 20, tax_refund_amount: 2.6 })
+      );
+    });
+
+    it('nothing left to refund after a full refund', async () => {
+      databaseService.sumSucceededRefundPartsForOrder.mockResolvedValue({ amount: 100, taxAmount: 13 });
+      await expect(service.initiateOrderRefund(refundParams)).resolves.toMatchObject({
+        success: true,
+        message: expect.stringContaining('No refund needed'),
+      });
+      expect(stripeService.createRefund).not.toHaveBeenCalled();
+    });
+
+    it('FAILS CLOSED when the tax state cannot be read: no Stripe refund is attempted', async () => {
+      orderTaxLifecycle.resolveRefundTaxMode.mockRejectedValue(new Error('hasura down'));
+      const res = await service.initiateOrderRefund(refundParams);
+      expect(res.success).toBe(false);
+      expect(stripeService.createRefund).not.toHaveBeenCalled();
+      expect(databaseService.createRefundRecord).not.toHaveBeenCalled();
+    });
+
+    it('legacy mode refunds the pre-tax amount only and records no tax part', async () => {
+      orderTaxLifecycle.resolveRefundTaxMode.mockResolvedValue(false);
+      await service.initiateOrderRefund(refundParams);
+      expect(stripeService.createRefund).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 10000 })
+      );
+      expect(databaseService.createRefundRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 100, tax_refund_amount: 0 })
+      );
     });
   });
 });

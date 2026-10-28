@@ -31,7 +31,6 @@ describe('StripeTaxCalculationService snapshot recording', () => {
       discountAmount: 0,
       deliveryAddress: address,
       transactionId: 'tx-1',
-      finalizeOnSuccess: false,
       ...over,
     }) as never;
 
@@ -41,7 +40,6 @@ describe('StripeTaxCalculationService snapshot recording', () => {
     service = new StripeTaxCalculationService(
       stripeService as never,
       builder,
-      { finalizeFromTaxCalculation: jest.fn() } as never,
       configService,
       taxLifecycle as never
     );

@@ -11,6 +11,8 @@ export interface OrderTaxSnapshotRow {
   stripe_tax_calculation_id: string;
   stripe_tax_transaction_id: string | null;
   total_including_tax: number;
+  estimated_tax_amount: number;
+  captured_total_including_tax: number | null;
 }
 
 export interface OrderTaxContext {
@@ -55,6 +57,8 @@ export class OrderTaxSnapshotRepository {
             stripe_tax_calculation_id
             stripe_tax_transaction_id
             total_including_tax
+            estimated_tax_amount
+            captured_total_including_tax
           }
         }
       }
@@ -70,14 +74,21 @@ export class OrderTaxSnapshotRepository {
         ? {
             ...snap,
             total_including_tax: Number(snap.total_including_tax),
+            estimated_tax_amount: Number(snap.estimated_tax_amount ?? 0),
+            captured_total_including_tax:
+              snap.captured_total_including_tax == null
+                ? null
+                : Number(snap.captured_total_including_tax),
           }
         : null,
     };
   }
 
   /**
-   * Insert the estimate, or refresh it while it is still `estimated` (a payment retry
-   * takes a new calculation). A finalized/void snapshot is never overwritten.
+   * Insert the estimate, or refresh it while it is still `estimated` or `void` (a payment
+   * retry takes a new calculation; a void snapshot that has never been captured is reopened).
+   * A finalized snapshot is never overwritten. The order's `void` tax_status is reopened to
+   * `estimated` in the same transaction.
    */
   async upsertEstimate(
     orderId: string,
@@ -85,12 +96,14 @@ export class OrderTaxSnapshotRepository {
   ): Promise<void> {
     await this.hasura.executeMutation(
       `
-      mutation UpsertOrderTaxSnapshot($object: order_tax_snapshots_insert_input!) {
+      mutation UpsertOrderTaxSnapshot($object: order_tax_snapshots_insert_input!, $orderId: uuid!, $now: timestamptz!) {
         insert_order_tax_snapshots_one(
           object: $object
           on_conflict: {
             constraint: order_tax_snapshots_order_id_key
             update_columns: [
+              status
+              voided_at
               currency
               stripe_tax_calculation_id
               estimated_tax_amount
@@ -101,26 +114,34 @@ export class OrderTaxSnapshotRepository {
               tax_jurisdiction
               updated_at
             ]
-            where: { status: { _eq: "estimated" } }
+            where: { status: { _in: ["estimated", "void"] } }
           }
         ) { id }
+        update_orders(
+          where: { id: { _eq: $orderId }, tax_status: { _eq: "void" } }
+          _set: { tax_status: "estimated", updated_at: $now }
+        ) { affected_rows }
       }
     `,
       {
         object: {
           order_id: orderId,
           status: 'estimated',
+          voided_at: null,
           ...input,
           updated_at: new Date().toISOString(),
         },
+        orderId,
+        now: new Date().toISOString(),
       }
     );
   }
 
   /**
-   * One transaction: snapshot estimated -> finalized, and the order's tax_status/ids/breakdown.
-   * Both statements are guarded on `estimated`, so replays and the webhook path are no-ops.
-   * Totals on the order are deliberately not part of this write.
+   * One transaction: snapshot estimated|void -> finalized, and the order's
+   * tax_status/ids/breakdown. Both statements are guarded, so replays and the webhook path
+   * are no-ops. `void` may finalize: a capture that really happened outranks an earlier
+   * cancel/expiry. Totals on the order are deliberately not part of this write.
    */
   async markFinalized(params: {
     orderId: string;
@@ -129,7 +150,7 @@ export class OrderTaxSnapshotRepository {
     capturedTotalIncludingTax: number | null;
     taxBreakdown: unknown;
     taxJurisdiction: unknown;
-  }): Promise<{ snapshotsUpdated: number }> {
+  }): Promise<{ snapshotsUpdated: number; ordersUpdated: number }> {
     const now = new Date().toISOString();
     const res = await this.hasura.executeMutation(
       `
@@ -143,17 +164,18 @@ export class OrderTaxSnapshotRepository {
         $now: timestamptz!
       ) {
         update_order_tax_snapshots(
-          where: { order_id: { _eq: $orderId }, status: { _eq: "estimated" } }
+          where: { order_id: { _eq: $orderId }, status: { _in: ["estimated", "void"] } }
           _set: {
             status: "finalized"
             stripe_tax_transaction_id: $taxTransactionId
             captured_total_including_tax: $captured
             finalized_at: $now
+            voided_at: null
             updated_at: $now
           }
         ) { affected_rows }
         update_orders(
-          where: { id: { _eq: $orderId }, tax_status: { _eq: "estimated" } }
+          where: { id: { _eq: $orderId }, tax_status: { _in: ["estimated", "void"] } }
           _set: {
             tax_status: "finalized"
             stripe_tax_calculation_id: $calculationId
@@ -177,7 +199,57 @@ export class OrderTaxSnapshotRepository {
     );
     return {
       snapshotsUpdated: res?.update_order_tax_snapshots?.affected_rows ?? 0,
+      ordersUpdated: res?.update_orders?.affected_rows ?? 0,
     };
+  }
+
+  /**
+   * Heal an already-`finalized` snapshot / order that was finalized without a Stripe tax
+   * transaction id (or without the captured total): fill only the NULL columns. Never
+   * changes a value that is already set.
+   */
+  async fillFinalizedGaps(params: {
+    orderId: string;
+    taxTransactionId: string | null;
+    capturedTotalIncludingTax: number | null;
+  }): Promise<{ filled: number }> {
+    const now = new Date().toISOString();
+    const parts: string[] = [];
+    const decls: string[] = ['$orderId: uuid!', '$now: timestamptz!'];
+    const vars: Record<string, unknown> = { orderId: params.orderId, now };
+    if (params.taxTransactionId) {
+      decls.push('$txn: String!');
+      vars.txn = params.taxTransactionId;
+      parts.push(`
+        fill_snapshot_txn: update_order_tax_snapshots(
+          where: { order_id: { _eq: $orderId }, status: { _eq: "finalized" }, stripe_tax_transaction_id: { _is_null: true } }
+          _set: { stripe_tax_transaction_id: $txn, updated_at: $now }
+        ) { affected_rows }
+        fill_order_txn: update_orders(
+          where: { id: { _eq: $orderId }, tax_status: { _eq: "finalized" }, stripe_tax_transaction_id: { _is_null: true } }
+          _set: { stripe_tax_transaction_id: $txn, updated_at: $now }
+        ) { affected_rows }`);
+    }
+    if (params.capturedTotalIncludingTax != null) {
+      decls.push('$captured: numeric!');
+      vars.captured = params.capturedTotalIncludingTax;
+      parts.push(`
+        fill_snapshot_captured: update_order_tax_snapshots(
+          where: { order_id: { _eq: $orderId }, status: { _eq: "finalized" }, captured_total_including_tax: { _is_null: true } }
+          _set: { captured_total_including_tax: $captured, updated_at: $now }
+        ) { affected_rows }`);
+    }
+    if (parts.length === 0) return { filled: 0 };
+    const res = await this.hasura.executeMutation(
+      `mutation FillOrderTaxGaps(${decls.join(', ')}) {${parts.join('')}
+      }`,
+      vars
+    );
+    const filled = Object.values(res ?? {}).reduce(
+      (sum: number, r: any) => sum + Number(r?.affected_rows ?? 0),
+      0
+    );
+    return { filled };
   }
 
   /** estimated -> void on both the snapshot and the order. Finalized rows are untouched. */
@@ -203,7 +275,11 @@ export class OrderTaxSnapshotRepository {
   async getReversalState(
     snapshotId: string,
     stripeRefundId: string
-  ): Promise<{ alreadyReversed: boolean; reversedMinor: number }> {
+  ): Promise<{
+    alreadyReversed: boolean;
+    reversedMinor: number;
+    refundIds: string[];
+  }> {
     const res = await this.hasura.executeQuery(
       `
       query OrderTaxReversals($snapshotId: uuid!) {
@@ -220,7 +296,46 @@ export class OrderTaxSnapshotRepository {
     return {
       alreadyReversed: rows.some((r) => r.stripe_refund_id === stripeRefundId),
       reversedMinor: rows.reduce((sum, r) => sum + Number(r.amount_minor), 0),
+      refundIds: rows.map((r) => r.stripe_refund_id),
     };
+  }
+
+  /**
+   * Order numbers whose tax state looks unfinished, oldest first:
+   *  - `estimated`/`void` but paid (captured money, snapshot never finalized);
+   *  - `finalized` whose snapshot has no Stripe tax transaction id (cannot be reversed);
+   *  - `finalized` with a succeeded refund but no reversal row at all.
+   * `olderThanMinutes` leaves in-flight captures/webhooks alone.
+   */
+  async listReconcileCandidates(
+    limit: number,
+    olderThanMinutes: number
+  ): Promise<string[]> {
+    const cutoff = new Date(Date.now() - olderThanMinutes * 60_000).toISOString();
+    const res = await this.hasura.executeQuery(
+      `
+      query OrderTaxReconcileCandidates($limit: Int!, $cutoff: timestamptz!) {
+        orders(
+          where: {
+            updated_at: { _lt: $cutoff }
+            _or: [
+              { tax_status: { _in: ["estimated", "void"] }, payment_status: { _eq: "paid" } }
+              { tax_status: { _eq: "finalized" }, tax_snapshot: { stripe_tax_transaction_id: { _is_null: true } } }
+              {
+                tax_status: { _eq: "finalized" }
+                tax_snapshot: { status: { _eq: "finalized" }, _not: { reversals: {} } }
+                stripe_refunds: { status: { _eq: "succeeded" } }
+              }
+            ]
+          }
+          order_by: { updated_at: asc }
+          limit: $limit
+        ) { order_number }
+      }
+    `,
+      { limit, cutoff }
+    );
+    return (res?.orders ?? []).map((o: { order_number: string }) => o.order_number);
   }
 
   async insertReversal(input: OrderTaxReversalInput): Promise<void> {

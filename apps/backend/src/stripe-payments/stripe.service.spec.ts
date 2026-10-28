@@ -1,4 +1,4 @@
-import { StripeService } from './stripe.service';
+import { STRIPE_TAX_REQUEST_TIMEOUT_MS, StripeService } from './stripe.service';
 
 describe('StripeService', () => {
   const createAccount = jest.fn();
@@ -164,12 +164,12 @@ describe('StripeService', () => {
       await service.createTaxTransactionFromCalculation('taxcalc_1', 'ORD-1', 'tax_txn_ORD-1');
       expect(createFromCalculation).toHaveBeenLastCalledWith(
         { calculation: 'taxcalc_1', reference: 'ORD-1' },
-        { idempotencyKey: 'tax_txn_ORD-1' }
+        { idempotencyKey: 'tax_txn_ORD-1', timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS }
       );
       await service.createTaxTransactionFromCalculation('taxcalc_1', 'ORD-1');
       expect(createFromCalculation).toHaveBeenLastCalledWith(
         { calculation: 'taxcalc_1', reference: 'ORD-1' },
-        undefined
+        { timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS }
       );
     });
 
@@ -190,7 +190,7 @@ describe('StripeService', () => {
           flat_amount: -4000,
           metadata: { orderNumber: 'ORD-1' },
         },
-        { idempotencyKey: 'tax_reversal_re_1' }
+        { idempotencyKey: 'tax_reversal_re_1', timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS }
       );
     });
 

@@ -65,6 +65,9 @@ export interface CreatePaymentIntentParams {
   captureMethod?: 'automatic' | 'manual';
 }
 
+/** Per-request cap for the Stripe Tax calls made inline in capture/refund flows. */
+export const STRIPE_TAX_REQUEST_TIMEOUT_MS = 8000;
+
 @Injectable()
 export class StripeService {
   private client: Stripe | null = null;
@@ -276,7 +279,7 @@ export class StripeService {
         calculation: calculationId,
         reference,
       },
-      idempotencyKey ? { idempotencyKey } : undefined
+      { ...(idempotencyKey ? { idempotencyKey } : {}), timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS }
     );
   }
 
@@ -303,14 +306,19 @@ export class StripeService {
           : {}),
         ...(params.metadata ? { metadata: params.metadata } : {}),
       },
-      { idempotencyKey: params.idempotencyKey }
+      {
+        idempotencyKey: params.idempotencyKey,
+        timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS,
+      }
     );
   }
 
   async retrieveTaxCalculation(
     calculationId: string
   ): Promise<Stripe.Tax.Calculation> {
-    return this.getClient().tax.calculations.retrieve(calculationId);
+    return this.getClient().tax.calculations.retrieve(calculationId, undefined, {
+      timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS,
+    });
   }
 
   /**

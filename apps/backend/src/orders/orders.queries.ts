@@ -843,6 +843,11 @@ export const GET_ORDER_FOR_RECEIPT = gql`
       service_fee
       tax_jurisdiction
       tax_breakdown
+      tax_snapshot {
+        status
+        total_including_tax
+        captured_total_including_tax
+      }
       total_amount
       currency
       payment_status

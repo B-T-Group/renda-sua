@@ -2,6 +2,7 @@ import { Module, forwardRef } from '@nestjs/common';
 import { AdminAuthModule } from '../admin/admin-auth.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
 import { OrderTaxLifecycleService } from './order-tax-lifecycle.service';
+import { OrderTaxReconcilerService } from './order-tax-reconciler.service';
 import { OrderTaxSnapshotRepository } from './order-tax-snapshot.repository';
 import { StripeTaxAdminController } from './stripe-tax-admin.controller';
 import { StripeTaxCalculationService } from './stripe-tax-calculation.service';
@@ -22,6 +23,7 @@ import { StripeTaxOrderPersistenceService } from './stripe-tax-order-persistence
     StripeTaxCalculationService,
     OrderTaxSnapshotRepository,
     OrderTaxLifecycleService,
+    OrderTaxReconcilerService,
   ],
   exports: [
     StripeTaxCodesService,

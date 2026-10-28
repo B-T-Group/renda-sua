@@ -17350,7 +17350,6 @@ export class OrdersService {
         serviceFee: tax.serviceFee,
         deliveryAddress: tax.deliveryAddress,
         transactionId: result.transactionId,
-        finalizeOnSuccess: false,
       });
       if (taxResult && result.paymentIntentId) {
         await this.stripeCheckoutService.updatePaymentIntentTax(

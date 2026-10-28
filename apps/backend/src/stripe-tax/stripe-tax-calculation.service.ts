@@ -4,7 +4,6 @@ import { StripeConfig } from '../config/configuration';
 import { StripeService } from '../stripe-payments/stripe.service';
 import { StripeTaxCheckoutBuilderService } from './stripe-tax-checkout-builder.service';
 import { OrderTaxLifecycleService } from './order-tax-lifecycle.service';
-import { StripeTaxOrderPersistenceService } from './stripe-tax-order-persistence.service';
 import type { OrderTaxLineInput } from './stripe-tax-checkout-builder.service';
 
 export interface CalculateOrderTaxParams {
@@ -25,7 +24,6 @@ export interface CalculateOrderTaxParams {
     country: string;
   };
   transactionId: string;
-  finalizeOnSuccess?: boolean;
 }
 
 export interface CalculateOrderTaxResult {
@@ -41,7 +39,6 @@ export class StripeTaxCalculationService {
   constructor(
     private readonly stripeService: StripeService,
     private readonly taxBuilder: StripeTaxCheckoutBuilderService,
-    private readonly taxPersistence: StripeTaxOrderPersistenceService,
     private readonly configService: ConfigService,
     private readonly taxLifecycle: OrderTaxLifecycleService
   ) {}
@@ -103,25 +100,6 @@ export class StripeTaxCalculationService {
         orderId: params.orderId,
         currency: params.currency,
         calculation,
-      });
-    }
-
-    if (params.finalizeOnSuccess) {
-      let taxTransactionId: string | undefined;
-      try {
-        const tx = await this.stripeService.createTaxTransactionFromCalculation(
-          calculationId,
-          params.orderNumber
-        );
-        taxTransactionId = tx.id ?? undefined;
-      } catch {
-        // Non-fatal if transaction creation fails before payment
-      }
-      await this.taxPersistence.finalizeFromTaxCalculation({
-        orderNumber: params.orderNumber,
-        calculation,
-        transactionId: params.transactionId,
-        taxTransactionId,
       });
     }
 
