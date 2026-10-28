@@ -297,6 +297,18 @@ function world() {
             : null,
         };
       }
+      case 'DeclineLiveOffers':
+        return {
+          order_offers: state.offers
+            .filter(
+              (o) =>
+                o.order_id === vars.orderId &&
+                o.status === 'offered' &&
+                new Date(o.expires_at).getTime() > new Date(String(vars.now)).getTime()
+            )
+            .map((o) => ({ agent_id: o.agent_id }))
+            .slice(0, 1),
+        };
       case 'DedicatedDeclinedAgents':
         return {
           order_offers: state.offers
@@ -1536,6 +1548,77 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
     });
     await w.flush();
     expect(w.events('dedicated.offer_declined')).toHaveLength(0);
+  });
+
+  describe("#664 'Can't take this': a dedicated decline releases the order to fallback dispatch at once", () => {
+    it('the only dedicated agent declines in round 1: round 2 runs immediately, the decline reason is stored', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      expect(w.state.order.dispatch_round).toBe(1);
+      w.schedule.scheduleDispatchRound.mockClear();
+      await w.offersService.declineOffer(ORDER, 'a1', 'busy');
+      expect(w.state.order.dispatch_round).toBe(2);
+      expect(w.dedicatedOffers().map((o) => [o.status, o.decline_reason])).toEqual([['declined', 'busy']]);
+      // Round 2 found nobody (the decliner is excluded) and queued the exhaustion check.
+      expect(w.schedule.scheduleDispatchRound).toHaveBeenCalledWith(ORDER, 3, expect.any(Number));
+      expect(w.notifications.sendOrderOfferPush).toHaveBeenCalledTimes(1);
+      // The scheduled callbacks that come later are harmless no-ops.
+      await w.offersService.runDispatchRound(ORDER, 2);
+      await w.offersService.runDispatchRound(ORDER, 3);
+      expect(w.state.noAgentMessages).toBe(1);
+    });
+
+    it('declining in round 2 goes straight to the exhaustion path, exactly once', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000 });
+      w.state.order.dispatch_round = 2;
+      await w.offersService.runDispatchRound(ORDER, 3);
+      expect(w.dedicatedOffers()).toHaveLength(1);
+      await w.offersService.declineOffer(ORDER, 'a1', null);
+      expect(w.state.order.dispatch_exhausted_at).not.toBeNull();
+      expect(w.state.noAgentMessages).toBe(1);
+      await w.offersService.runDispatchRound(ORDER, 3);
+      expect(w.state.noAgentMessages).toBe(1);
+    });
+
+    it('does not advance while a sibling dedicated offer is still live', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000 });
+      w.addAgent('a2', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      await w.offersService.declineOffer(ORDER, 'a1', 'too_far');
+      expect(w.state.order.dispatch_round).toBe(1);
+      await w.offersService.declineOffer(ORDER, 'a2', null);
+      expect(w.state.order.dispatch_round).toBe(2);
+    });
+
+    it('a standard decline never advances dispatch', async () => {
+      const w = world();
+      w.state.offers.push({
+        order_id: ORDER,
+        agent_id: 's1',
+        user_id: 'u-s1',
+        status: 'offered',
+        offer_kind: 'standard',
+        decline_reason: null,
+        expires_at: new Date(NOW.getTime() + 30_000).toISOString(),
+      });
+      w.state.order.dispatch_round = 1;
+      await w.offersService.declineOffer(ORDER, 's1', 'busy');
+      expect(w.state.order.dispatch_round).toBe(1);
+    });
+
+    it('a failure while advancing never fails the decline', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      const original = w.offersService.runDispatchRound.bind(w.offersService);
+      jest.spyOn(w.offersService, 'runDispatchRound').mockRejectedValueOnce(new Error('boom'));
+      await expect(w.offersService.declineOffer(ORDER, 'a1', null)).resolves.toBeUndefined();
+      expect(w.dedicatedOffers().map((o) => o.status)).toEqual(['declined']);
+      await original(ORDER, 2);
+    });
   });
 
   describe('accepting a dedicated offer re-checks eligibility', () => {

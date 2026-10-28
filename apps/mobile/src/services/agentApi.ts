@@ -7,6 +7,7 @@ import { api } from './apiClient';
 import type { ActionsNeededDto } from '../types/actions';
 import type { DeliveryEarnings, DeliveryEarningsPeriod } from '../types/agentDeliveryEarnings';
 import type { PayBoard, PayBoardStatus } from '../types/agentPayBoard';
+import type { DedicatedDeclineReason } from '../utils/dedicatedRelease';
 import { getLocationConsentPlatform } from '../utils/agentLocationConsentPlatform';
 import type {
   Order,
@@ -444,8 +445,15 @@ const orders = {
     api.post<OrderActionResponse>('/orders/offer/accept', { orderId }),
 
   /** Push-offer flow: decline the offer. */
-  declineOffer: (orderId: string): Promise<OrderActionResponse> =>
-    api.post<OrderActionResponse>('/orders/offer/decline', { orderId }),
+  declineOffer: (orderId: string, reason?: DedicatedDeclineReason): Promise<OrderActionResponse> =>
+    api.post<OrderActionResponse>('/orders/offer/decline', reason ? { orderId, reason } : { orderId }),
+
+  /**
+   * #664: hand back an auto-assigned dedicated order inside its release window (no strike).
+   * Refusals throw an apiClient error carrying `code` (see classifyDedicatedReleaseError).
+   */
+  releaseDedicated: (orderId: string, reason?: DedicatedDeclineReason): Promise<OrderActionResponse> =>
+    api.post<OrderActionResponse>(`/orders/${orderId}/dedicated-release`, reason ? { reason } : {}),
 
   pickUp: (orderId: string, notes?: string): Promise<OrderActionResponse> =>
     api.post<OrderActionResponse>('/orders/pick_up', { orderId, notes }),

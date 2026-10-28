@@ -10,6 +10,7 @@ import {
   navigateToOrderFromPush,
 } from '../navigation/rootNavigationRef';
 import type { OrderOfferDetails } from '../types/orderOffer';
+import type { DedicatedDeclineReason } from '../utils/dedicatedRelease';
 import type { RootStore } from './RootStore';
 
 export type OrderOfferUiState =
@@ -234,13 +235,17 @@ export class OrderOfferStore {
     }
   }
 
-  /** Decline (or auto-decline on timeout). Optimistically dismisses. */
-  async decline(): Promise<void> {
+  /**
+   * Decline (or auto-decline on timeout). Optimistically dismisses. `reason` is the optional
+   * "Can't take this" reason (#664); the server records it on dedicated offers only.
+   */
+  async decline(reason?: DedicatedDeclineReason): Promise<void> {
     const orderId = this.orderId;
     this.dismiss();
     if (!orderId) return;
     try {
-      await agentApi.orders.declineOffer(orderId);
+      if (reason) await agentApi.orders.declineOffer(orderId, reason);
+      else await agentApi.orders.declineOffer(orderId);
     } catch {
       // Best-effort: the offer expires server-side regardless.
     }

@@ -190,4 +190,22 @@ describe('OrderOfferStore chime', () => {
     expect(declineOffer).toHaveBeenCalledWith('ord-1');
     expect(stopOrderAlertSound).toHaveBeenCalledWith('orderOffer');
   });
+
+  it("#664: \"Can't take this\" sends the optional reason and closes the offer at once", async () => {
+    declineOffer.mockResolvedValue({ success: true });
+    const store = new OrderOfferStore(makeRoot());
+    await store.handleOfferPush('ord-1');
+    await store.decline('too_far');
+
+    expect(store.visible).toBe(false);
+    expect(declineOffer).toHaveBeenCalledWith('ord-1', 'too_far');
+  });
+
+  it('#664: a failed decline call still dismisses (the offer expires server-side)', async () => {
+    declineOffer.mockRejectedValue(new Error('offline'));
+    const store = new OrderOfferStore(makeRoot());
+    await store.handleOfferPush('ord-1');
+    await expect(store.decline('busy')).resolves.toBeUndefined();
+    expect(store.visible).toBe(false);
+  });
 });

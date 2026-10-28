@@ -1,5 +1,5 @@
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import React from 'react';
+import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,8 @@ import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { OrderOfferUiState } from '../../stores/OrderOfferStore';
 import type { OrderOfferDetails } from '../../types/orderOffer';
+import type { DedicatedDeclineReason } from '../../utils/dedicatedRelease';
+import { DeclineReasonChips } from '../dedicated/DeclineReasonChips';
 import { OfferCountdownRing } from './OfferCountdownRing';
 
 interface OrderOfferViewProps {
@@ -15,7 +17,8 @@ interface OrderOfferViewProps {
   message: string | null;
   secondsLeft: number;
   onAccept: () => void;
-  onDecline: () => void;
+  /** `reason` is only passed from the dedicated "Can't take this" picker (#664). */
+  onDecline: (reason?: DedicatedDeclineReason) => void;
   onClose: () => void;
   onGoToAvailable: () => void;
 }
@@ -42,6 +45,9 @@ export function OrderOfferView({
   const { colors, spacing, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
+  // #664: a dedicated offer's decline is "Can't take this" with an optional reason.
+  const [pickingReason, setPickingReason] = useState(false);
+  const [reason, setReason] = useState<DedicatedDeclineReason | null>(null);
 
   const isActive = uiState === 'active' || uiState === 'accepting';
 
@@ -117,6 +123,7 @@ export function OrderOfferView({
     );
   }
 
+  const isDedicated = details?.offerKind === 'dedicated';
   const distanceText =
     details?.distanceKm != null
       ? `${details.distanceKm.toFixed(1)} ${t('agent.orderOffer.km', 'km')}`
@@ -235,7 +242,7 @@ export function OrderOfferView({
           </View>
         </View>
 
-        {details?.offerKind === 'dedicated' && (
+        {isDedicated && (
           <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: spacing.lg, marginBottom: spacing.sm, paddingHorizontal: spacing.md }}>
             <MaterialCommunityIcons
               name="storefront-check"
@@ -259,7 +266,7 @@ export function OrderOfferView({
           </View>
         )}
 
-        <View style={[styles.metricsRow, { marginTop: details?.offerKind === 'dedicated' ? 0 : spacing.lg }]}>
+        <View style={[styles.metricsRow, { marginTop: isDedicated ? 0 : spacing.lg }]}>
           <Metric
             icon="map-marker-distance"
             label={t('agent.orderOffer.distance', 'Distance')}
@@ -291,25 +298,59 @@ export function OrderOfferView({
         )}
       </Text>
 
+      {isDedicated && pickingReason ? (
+        <View style={{ marginBottom: spacing.md }}>
+          <DeclineReasonChips value={reason} onChange={setReason} disabled={uiState === 'accepting'} />
+        </View>
+      ) : null}
+
       <View style={[styles.actions, { gap: spacing.md }]}>
-        <Button
-          mode="outlined"
-          onPress={onDecline}
-          disabled={uiState === 'accepting'}
-          style={styles.actionButton}
-          textColor={colors.error.main}
-        >
-          {t('agent.orderOffer.decline', 'Decline')}
-        </Button>
-        <Button
-          mode="contained"
-          onPress={onAccept}
-          loading={uiState === 'accepting'}
-          disabled={uiState === 'accepting'}
-          style={styles.actionButton}
-        >
-          {t('agent.orderOffer.accept', 'Accept')}
-        </Button>
+        {isDedicated && pickingReason ? (
+          <>
+            <Button
+              mode="outlined"
+              onPress={() => {
+                setPickingReason(false);
+                setReason(null);
+              }}
+              style={styles.actionButton}
+            >
+              {t('common.back', 'Back')}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={() => onDecline(reason ?? undefined)}
+              style={styles.actionButton}
+              buttonColor={colors.error.main}
+              textColor={colors.onDark}
+            >
+              {t('common.confirm', 'Confirm')}
+            </Button>
+          </>
+        ) : (
+          <>
+            <Button
+              mode="outlined"
+              onPress={isDedicated ? () => setPickingReason(true) : () => onDecline()}
+              disabled={uiState === 'accepting'}
+              style={styles.actionButton}
+              textColor={colors.error.main}
+            >
+              {isDedicated
+                ? t('dedicatedAgents.agent.cantTake', "Can't take this")
+                : t('agent.orderOffer.decline', 'Decline')}
+            </Button>
+            <Button
+              mode="contained"
+              onPress={onAccept}
+              loading={uiState === 'accepting'}
+              disabled={uiState === 'accepting'}
+              style={styles.actionButton}
+            >
+              {t('agent.orderOffer.accept', 'Accept')}
+            </Button>
+          </>
+        )}
       </View>
     </View>
   );
