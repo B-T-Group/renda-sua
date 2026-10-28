@@ -884,6 +884,46 @@ export class OrderOffersService {
     });
     if ((result?.dedicated?.affected_rows ?? 0) > 0) {
       this.dedicatedDispatch?.onOfferDeclined(orderId, agentId, reason);
+      await this.advanceAfterDedicatedDecline(orderId);
+    }
+  }
+
+  /**
+   * #664: "Can't take this". A declined dedicated offer releases the order to the next
+   * dispatch step right away instead of waiting out the scheduled round/exhaustion callback,
+   * but only once no other offer (a sibling dedicated agent or a standard one) is still
+   * live. The step is `runDispatchRound`, so it is idempotent on `orders.dispatch_round`
+   * and the later scheduled callbacks stay harmless no-ops. The declined agent is excluded
+   * from every later dedicated send. Never throws: the decline itself already succeeded.
+   */
+  private async advanceAfterDedicatedDecline(orderId: string): Promise<void> {
+    try {
+      const order = await this.getOrderForOffer(orderId);
+      if (!order || !this.isDispatchable(order) || !order.coverage_slot_key) return;
+      const live = await this.hasuraSystemService.executeQuery<{
+        order_offers: Array<{ agent_id: string }>;
+      }>(
+        `query DeclineLiveOffers($orderId: uuid!, $now: timestamptz!) {
+          order_offers(
+            where: {
+              order_id: { _eq: $orderId }
+              status: { _eq: "offered" }
+              expires_at: { _gt: $now }
+            }
+            limit: 1
+          ) { agent_id }
+        }`,
+        { orderId, now: new Date().toISOString() }
+      );
+      if ((live?.order_offers ?? []).length > 0) return;
+      const next = order.dispatch_round < 2 ? 2 : EXHAUSTION_CHECK_ROUND;
+      await this.runDispatchRound(orderId, next);
+    } catch (error) {
+      this.logger.warn(
+        `Dispatch advance after dedicated decline failed for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 

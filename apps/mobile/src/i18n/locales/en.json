@@ -7830,7 +7830,22 @@
       "removedByStore": "This store removed you",
       "offerBadge": "Dedicated · {{store}}",
       "payChip": "Standard pay",
-      "daysLabel": "Days"
+      "daysLabel": "Days",
+      "cantTake": "Can't take this",
+      "reasonPrompt": "Why? (optional)",
+      "reasons": {
+        "too_far": "Too far",
+        "busy": "I'm busy",
+        "not_enough_balance": "Not enough balance",
+        "other": "Other"
+      },
+      "release": {
+        "countdown": "You can hand this order back for {{time}}",
+        "confirm": "Hand this order back? It will go to another agent. No penalty.",
+        "confirmButton": "Hand back",
+        "retry": "Try again",
+        "error": "Could not hand this order back."
+      }
     },
     "offline": "Offline · showing last update",
     "generic": "Something went wrong",

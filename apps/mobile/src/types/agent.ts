@@ -70,6 +70,10 @@ export interface Order {
   business_id: string;
   business_location_id: string;
   assigned_agent_id?: string;
+  /** #664: 'dedicated_auto' | 'dedicated_offer' | … (agent GET order). */
+  assignment_source?: string | null;
+  /** #664: end of the "Can't take this" window for a dedicated auto-assignment (ISO). */
+  dedicated_release_until?: string | null;
   delivery_address_id: string;
   subtotal?: number;
   base_delivery_fee?: number;

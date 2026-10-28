@@ -7647,6 +7647,23 @@ describe('OrdersService', () => {
       expect(result.total_amount).toBeUndefined();
       expect(result.subtotal).toBeUndefined();
     });
+
+    it("#664: exposes assignment_source and dedicated_release_until so the agent app can show the release button", async () => {
+      const until = '2026-10-27T22:00:00.000Z';
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        const row: Record<string, unknown> = { ...padOrderRow };
+        if (/\bdedicated_release_until\b/.test(query)) {
+          row.assignment_source = 'dedicated_auto';
+          row.dedicated_release_until = until;
+        }
+        return { orders_by_pk: row };
+      });
+
+      const result: any = await service.getOrderById('order-pad-1');
+
+      expect(result.assignment_source).toBe('dedicated_auto');
+      expect(result.dedicated_release_until).toBe(until);
+    });
   });
 
   describe('settlement copy for pay-at-pickup deposit orders', () => {

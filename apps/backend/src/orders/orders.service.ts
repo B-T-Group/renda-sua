@@ -10229,6 +10229,8 @@ export class OrdersService {
           business_id
           business_location_id
           assigned_agent_id
+          assignment_source
+          dedicated_release_until
           delivery_address_id
       fulfillment_method
       fulfillment_timing
