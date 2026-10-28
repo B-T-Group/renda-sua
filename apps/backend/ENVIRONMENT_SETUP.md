@@ -76,6 +76,16 @@ The application uses three environment-specific configuration files:
 - **Secret keys are managed via AWS Secrets Manager** in production
 - **Environment files are already configured** with the correct MyPVit values
 
+## Stripe Tax order reconciler
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `ORDER_TAX_RECONCILER_ENABLED` | on | The hourly sweep runs unless this is exactly `false`. |
+| `ORDER_TAX_RECONCILER_DRY_RUN` | dry-run | The sweep only logs (`order_tax_reconcile_summary dryRun=true ... would_finalize=N`). It writes (creates Stripe Tax transactions / reversals) only when this is exactly `false`. |
+
+Late finalizations are posted to the **current** tax period (Stripe's default `posted_at` = now).
+The admin endpoint `POST /admin/stripe-tax/reconcile` (admin auth + `CONTENT_STRIPE_TAX` permission) is dry-run unless the body has `dryRun: false`.
+
 ## Troubleshooting
 
 If you encounter configuration errors:

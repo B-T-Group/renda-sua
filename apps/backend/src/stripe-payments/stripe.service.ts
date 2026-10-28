@@ -269,6 +269,10 @@ export class StripeService {
     });
   }
 
+  /**
+   * `posted_at` is deliberately omitted: Stripe defaults it to now, so a late finalization
+   * (heal / reconcile) lands in the CURRENT tax period (decision 2026-10-28).
+   */
   async createTaxTransactionFromCalculation(
     calculationId: string,
     reference: string,
