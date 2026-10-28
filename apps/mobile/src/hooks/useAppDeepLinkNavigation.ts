@@ -14,21 +14,18 @@ import {
   rootNavigationRef,
 } from '../navigation/rootNavigationRef';
 import { useStore } from '../stores/RootStore';
+import type { AuthStore } from '../stores/AuthStore';
+import type { PersonaStore } from '../stores/PersonaStore';
 import type { PersonaSlug } from '../types/persona';
+import { extractAppPath, type DeepLinkTarget } from '../utils/appDeepLink';
 import {
-  extractAppPath,
-  resolveDeepLinkTarget,
-  targetPersonaForDeepLinkPath,
-  type DeepLinkTarget,
-} from '../utils/appDeepLink';
-import { isGuestAccessibleDeepLinkPath } from '../utils/appDeepLinkPath';
-import { storeWebUrl } from '../utils/storeWebUrl';
+  flushDeepLink,
+  type DeepLinkDispatchContext,
+  type PendingDeepLink,
+} from '../utils/appDeepLinkFlush';
+import { itemWebUrl, storeWebUrl } from '../utils/storeWebUrl';
 import { openRestockTarget, restockRoutesReady } from '../navigation/restockNavigation';
 import { parseRestockLink, restockTargetToPath } from '../utils/restockDeepLink';
-import {
-  canSwitchToPersona,
-  isOnPersona,
-} from '../utils/notificationPersona';
 
 let externalEnqueue: ((url: string) => void) | null = null;
 const earlyQueue: string[] = [];
@@ -38,11 +35,6 @@ export function enqueueAppDeepLink(url: string): void {
   if (externalEnqueue) externalEnqueue(url);
   else earlyQueue.push(url);
 }
-
-type PendingDeepLink = {
-  path: string;
-  routeAttempts: number;
-};
 
 const MAX_ROUTE_RETRIES = 40;
 const RETRY_MS = 500;
@@ -111,11 +103,25 @@ function navigateRentalBooking(
   return false;
 }
 
-function dispatchDeepLinkTarget(
+/**
+ * Catalog item detail lives in the client and guest shells. Agent, business and
+ * delegation shells have no such screen, so a public item link opens the web
+ * page in-app instead of switching persona.
+ */
+function openInventoryItem(id: string, ctx: DeepLinkDispatchContext): boolean {
+  if (navigateToInventoryItemFromPush(id)) return true;
+  const shellHasNoItemDetail =
+    ctx.signedIn && (ctx.isDelegation || ctx.persona !== 'client');
+  if (!shellHasNoItemDetail || !rootNavigationRef.isReady()) return false;
+  void WebBrowser.openBrowserAsync(itemWebUrl(id, getEnv().apiUrl));
+  return true;
+}
+
+export function dispatchDeepLinkTarget(
   target: DeepLinkTarget,
-  persona: PersonaSlug,
-  isDelegation: boolean
+  ctx: DeepLinkDispatchContext
 ): boolean {
+  const { persona, isDelegation } = ctx;
   const orderShell = isDelegation ? 'delegate' : persona;
   if (target.type === 'order') {
     return navigateToOrderFromPush(target.id, orderShell, target.openMessages);
@@ -128,6 +134,9 @@ function dispatchDeepLinkTarget(
   }
   if (target.type === 'itemProposal') {
     return navigateToItemAiProposalFromPush(target.id);
+  }
+  if (target.type === 'inventoryItem') {
+    return openInventoryItem(target.id, ctx);
   }
   if (
     (target.type === 'restockItem' || target.type === 'restockLikes') &&
@@ -192,7 +201,7 @@ function isInviteUrl(url: string): boolean {
 }
 
 /**
- * Opens rendasua.com/app/*, rendasua.com/store/:id and rendasua://* links into the active persona shell.
+ * Opens rendasua.com/app/*, rendasua.com/store/:id, rendasua.com/items/:id[/seo] and rendasua://* links into the active persona shell.
  * Queues until auth + navigation are ready (same pattern as push opens).
  */
 export function useAppDeepLinkNavigation(navReady: boolean): void {
@@ -269,7 +278,7 @@ export function useAppDeepLinkNavigation(navReady: boolean): void {
   }, [
     navReady,
     auth.isAuthenticated,
-    auth.accessToken,
+    auth.tokens?.accessToken,
     personaStore.activePersona,
     personaStore.activeContext,
     personaStore.isDelegationContext,
@@ -278,72 +287,15 @@ export function useAppDeepLinkNavigation(navReady: boolean): void {
   ]);
 }
 
-type FlushResult = 'wait' | 'retry' | 'hold' | 'done';
-
-type DeepLinkAuth = {
-  isAuthenticated: boolean;
-  accessToken: string | null;
+const flushDeps = {
+  guestShellMounted,
+  dispatch: dispatchDeepLinkTarget,
 };
-
-type DeepLinkPersona = {
-  showMainApp: boolean;
-  activePersona: PersonaSlug;
-  personas: PersonaSlug[];
-  pickingPersona: PersonaSlug | null;
-  isDelegationContext: boolean;
-  selectPersona: (persona: PersonaSlug) => Promise<void>;
-};
-
-function maybeSwitchPersona(
-  a: DeepLinkAuth,
-  p: DeepLinkPersona,
-  target: PersonaSlug
-): void {
-  if (
-    canSwitchToPersona({
-      isAuthenticated: a.isAuthenticated,
-      showMainApp: p.showMainApp,
-      activePersona: p.activePersona,
-      enrolled: p.personas,
-      pickingPersona: p.pickingPersona,
-      target,
-    })
-  ) {
-    void p.selectPersona(target);
-  }
-}
 
 function flushOne(
   pending: PendingDeepLink,
-  a: DeepLinkAuth,
-  p: DeepLinkPersona
-): FlushResult {
-  const signedIn = a.isAuthenticated && !!a.accessToken && p.showMainApp;
-  const guestLink = isGuestAccessibleDeepLinkPath(pending.path);
-  if (!signedIn && !guestLink) return 'wait';
-  if (!signedIn && guestLink && !guestShellMounted()) return 'hold';
-  const required = signedIn ? targetPersonaForDeepLinkPath(pending.path) : null;
-  if (required && !isOnRequiredPersona(a, p, required)) {
-    maybeSwitchPersona(a, p, required);
-    return 'hold';
-  }
-  const ok = dispatchDeepLinkTarget(
-    resolveDeepLinkTarget(pending.path),
-    p.activePersona,
-    p.isDelegationContext
-  );
-  return ok ? 'done' : 'retry';
-}
-
-function isOnRequiredPersona(
-  a: DeepLinkAuth,
-  p: DeepLinkPersona,
-  target: PersonaSlug
-): boolean {
-  return isOnPersona({
-    isAuthenticated: a.isAuthenticated,
-    showMainApp: p.showMainApp,
-    activePersona: p.activePersona,
-    target,
-  });
+  a: AuthStore,
+  p: PersonaStore
+) {
+  return flushDeepLink(pending, a, p, flushDeps);
 }

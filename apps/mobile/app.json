@@ -79,6 +79,21 @@
               "scheme": "https",
               "host": "dev.rendasua.com",
               "pathPrefix": "/store/"
+            },
+            {
+              "scheme": "https",
+              "host": "rendasua.com",
+              "pathPrefix": "/items/"
+            },
+            {
+              "scheme": "https",
+              "host": "www.rendasua.com",
+              "pathPrefix": "/items/"
+            },
+            {
+              "scheme": "https",
+              "host": "dev.rendasua.com",
+              "pathPrefix": "/items/"
             }
           ],
           "category": [
