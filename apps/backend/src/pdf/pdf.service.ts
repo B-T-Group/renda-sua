@@ -17,6 +17,7 @@ import {
 } from '../orders/orders.queries';
 import { UploadService } from '../services/upload.service';
 import { generateBarcodeDataUrl } from './barcode.util';
+import { resolveReceiptTax } from './receipt-tax.util';
 import {
   httpExceptionFromPdfEndpointError,
   httpExceptionFromPdfStoreError,
@@ -121,6 +122,8 @@ export class PdfService {
       );
       const template = fs.readFileSync(templatePath, 'utf8');
 
+      const receiptTax = resolveReceiptTax(orderData);
+
       // Prepare template data
       const templateData: ReceiptTemplateData = {
         orderNumber: orderData.order_number,
@@ -155,10 +158,12 @@ export class PdfService {
         subtotal: orderData.subtotal,
         baseDeliveryFee: orderData.base_delivery_fee,
         perKmDeliveryFee: orderData.per_km_delivery_fee,
-        taxAmount: orderData.tax_amount,
+        taxAmount: receiptTax.taxAmount,
         serviceFee: Number(orderData.service_fee) || 0,
-        taxJurisdiction: this.formatTaxJurisdiction(orderData.tax_jurisdiction),
-        totalAmount: orderData.total_amount,
+        taxJurisdiction: receiptTax.showJurisdiction
+          ? this.formatTaxJurisdiction(orderData.tax_jurisdiction)
+          : undefined,
+        totalAmount: receiptTax.totalAmount,
         currency: orderData.currency,
         paymentStatus: orderData.payment_status,
         currentYear: new Date().getFullYear(),

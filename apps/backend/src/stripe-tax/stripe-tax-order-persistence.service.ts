@@ -3,6 +3,7 @@ import type Stripe from 'stripe';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payments-database.service';
 import { StripeService } from '../stripe-payments/stripe.service';
+import { normalizeSessionBreakdown } from './order-tax-snapshot.util';
 import { OrderTaxStatus } from './stripe-tax.constants';
 import { StripeTaxCheckoutBuilderService } from './stripe-tax-checkout-builder.service';
 
@@ -73,7 +74,7 @@ export class StripeTaxOrderPersistenceService {
         totalAmount: totalMajor,
         taxStatus: 'finalized' as OrderTaxStatus,
         jurisdiction: this.extractJurisdiction(expanded),
-        breakdown: expanded.total_details?.breakdown ?? null,
+        breakdown: normalizeSessionBreakdown(expanded.total_details?.breakdown),
       }
     );
 
@@ -81,67 +82,6 @@ export class StripeTaxOrderPersistenceService {
       amount: totalMajor,
       amount_subtotal: subtotalMajor,
       amount_tax: taxAmountMajor,
-    });
-  }
-
-  async finalizeFromTaxCalculation(params: {
-    orderNumber: string;
-    calculation: Stripe.Tax.Calculation;
-    transactionId: string;
-    taxTransactionId?: string;
-  }): Promise<void> {
-    const order = await this.getOrderByNumber(params.orderNumber);
-    if (!order || order.tax_status === 'finalized') return;
-
-    const taxAmountMajor = this.majorAmount(
-      params.calculation.tax_amount_exclusive,
-      order.currency
-    );
-    const totalMajor = this.majorAmount(
-      params.calculation.amount_total,
-      order.currency
-    );
-    const subtotalMajor = totalMajor - taxAmountMajor;
-
-    await this.hasura.executeMutation(
-      `
-      mutation FinalizeOrderTaxCalc(
-        $orderId: uuid!
-        $taxAmount: numeric!
-        $totalAmount: numeric!
-        $calculationId: String!
-        $taxTransactionId: String
-        $breakdown: jsonb
-      ) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: {
-            tax_amount: $taxAmount
-            total_amount: $totalAmount
-            tax_status: "finalized"
-            stripe_tax_calculation_id: $calculationId
-            stripe_tax_transaction_id: $taxTransactionId
-            tax_breakdown: $breakdown
-            updated_at: "now()"
-          }
-        ) { id }
-      }
-    `,
-      {
-        orderId: order.id,
-        taxAmount: taxAmountMajor,
-        totalAmount: totalMajor,
-        calculationId: params.calculation.id,
-        taxTransactionId: params.taxTransactionId ?? undefined,
-        breakdown: params.calculation.tax_breakdown ?? null,
-      }
-    );
-
-    await this.paymentsDb.updateTransaction(params.transactionId, {
-      amount: totalMajor,
-      amount_subtotal: subtotalMajor,
-      amount_tax: taxAmountMajor,
-      stripe_tax_calculation_id: params.calculation.id ?? undefined,
     });
   }
 

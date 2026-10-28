@@ -1,0 +1,37 @@
+table:
+  name: order_tax_snapshots
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+array_relationships:
+  - name: reversals
+    using:
+      foreign_key_constraint_on:
+        column: snapshot_id
+        table:
+          name: order_tax_reversals
+          schema: public
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - status
+        - currency
+        - estimated_tax_amount
+        - pre_tax_amount
+        - total_including_tax
+        - effective_tax_rate
+        - tax_breakdown
+        - tax_jurisdiction
+        - created_at
+        - updated_at
+      filter:
+        order:
+          client:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

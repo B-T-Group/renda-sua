@@ -12,6 +12,12 @@ describe('isGuestAccessibleDeepLinkPath', () => {
     expect(isGuestAccessibleDeepLinkPath('store')).toBe(false);
   });
 
+  it('allows a public item page but not the business proposal path', () => {
+    expect(isGuestAccessibleDeepLinkPath('item/abc-123')).toBe(true);
+    expect(isGuestAccessibleDeepLinkPath('item')).toBe(false);
+    expect(isGuestAccessibleDeepLinkPath('items/abc-123')).toBe(false);
+  });
+
   it('does not treat account or order links as guest-safe', () => {
     expect(isGuestAccessibleDeepLinkPath('orders/abc')).toBe(false);
     expect(isGuestAccessibleDeepLinkPath('wallet')).toBe(false);

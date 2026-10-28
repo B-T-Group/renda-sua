@@ -11,6 +11,11 @@ export interface OrderReceiptData {
   service_fee?: number;
   tax_jurisdiction?: { state?: string; country?: string } | null;
   tax_breakdown?: Record<string, unknown> | null;
+  tax_snapshot?: {
+    status: string;
+    total_including_tax: number;
+    captured_total_including_tax: number | null;
+  } | null;
   total_amount: number;
   currency: string;
   payment_status: string;

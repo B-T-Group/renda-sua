@@ -6384,6 +6384,7 @@ export class OrdersService {
     if (options?.stripePaymentMethod === 'payment_sheet') {
       const paymentIntent = await this.createStripeOrderPaymentIntent({
         orderNumber: order.order_number,
+        orderId: order.id,
         amount: checkoutAmount,
         currency: order.currency,
         accountId: account.id,
@@ -16564,6 +16565,7 @@ export class OrdersService {
         if (orderData.stripe_payment_method === 'payment_sheet') {
           const paymentIntent = await this.createStripeOrderPaymentIntent({
             orderNumber,
+            orderId: order.id,
             amount: total_amount,
             currency,
             accountId: account.id,
@@ -17313,6 +17315,7 @@ export class OrdersService {
    */
   private async createStripeOrderPaymentIntent(params: {
     orderNumber: string;
+    orderId?: string;
     amount: number;
     currency: string;
     accountId: string;
@@ -17339,6 +17342,7 @@ export class OrdersService {
     if (tax?.taxEnabled && tax.deliveryAddress && tax.orderItems.length > 0) {
       const taxResult = await this.taxCalculationService.calculateForOrder({
         orderNumber: params.orderNumber,
+        orderId: params.orderId,
         currency: params.currency,
         orderItems: tax.orderItems,
         deliveryFee: tax.deliveryFee,
@@ -17346,7 +17350,6 @@ export class OrdersService {
         serviceFee: tax.serviceFee,
         deliveryAddress: tax.deliveryAddress,
         transactionId: result.transactionId,
-        finalizeOnSuccess: false,
       });
       if (taxResult && result.paymentIntentId) {
         await this.stripeCheckoutService.updatePaymentIntentTax(

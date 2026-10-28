@@ -4,11 +4,16 @@
     "details": [
       {
         "appID": "A289B23AXW.com.rendasua.agent",
-        "paths": ["/app/*", "/store/*"]
+        "paths": ["NOT /items/*/place_order*", "/app/*", "/store/*", "/items/*"]
       },
       {
         "appIDs": ["A289B23AXW.com.rendasua.agent"],
-        "components": [{ "/": "/app/*" }, { "/": "/store/*" }]
+        "components": [
+          { "/": "/items/*/place_order*", "exclude": true },
+          { "/": "/app/*" },
+          { "/": "/store/*" },
+          { "/": "/items/*" }
+        ]
       }
     ]
   }
