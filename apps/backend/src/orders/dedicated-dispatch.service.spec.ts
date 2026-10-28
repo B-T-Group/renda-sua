@@ -1514,6 +1514,74 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       expect(w.state.mutations.filter((m) => m === 'UpsertDedicatedOffers')).toHaveLength(1);
       expect(w.state.order.dispatch_exhausted_at).not.toBeNull();
     });
+
+    it('an accepted or cancelled offer is never re-sent', async () => {
+      const accepted = world();
+      accepted.addAgent('a1', { balance: 50000 });
+      accepted.addAgent('a2', { balance: 50000 });
+      await accepted.offersService.runDispatchRound(ORDER, 1);
+      const winner = accepted.dedicatedOffers().find((o) => o.agent_id === 'a1');
+      if (winner) winner.status = 'accepted';
+      lapse();
+      await accepted.offersService.runDispatchRound(ORDER, 2);
+      expect(accepted.state.mutations.filter((m) => m === 'UpsertDedicatedOffers')).toHaveLength(1);
+      expect(accepted.dedicatedOffers().find((o) => o.agent_id === 'a1')?.status).toBe('accepted');
+      expect(accepted.dedicatedOffers().some((o) => o.status === 'offered')).toBe(false);
+      expect(accepted.notifications.sendOrderOfferPush).toHaveBeenCalledTimes(2);
+
+      const cancelled = world();
+      cancelled.addAgent('a1', { balance: 50000 });
+      await cancelled.offersService.runDispatchRound(ORDER, 1);
+      cancelled.dedicatedOffers()[0].status = 'cancelled';
+      lapse();
+      await cancelled.offersService.runDispatchRound(ORDER, 2);
+      expect(cancelled.state.mutations.filter((m) => m === 'UpsertDedicatedOffers')).toHaveLength(1);
+      expect(cancelled.dedicatedOffers()[0].status).toBe('cancelled');
+      expect(cancelled.notifications.sendOrderOfferPush).toHaveBeenCalledTimes(1);
+    });
+
+    it('a row written before the attempt counter counts as attempt 1', async () => {
+      const w = world();
+      w.addAgent('a1', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      const row = w.dedicatedOffers()[0] as OfferRow & { dedicated_attempt?: number | null };
+      row.dedicated_attempt = null;
+      lapse();
+      await w.offersService.runDispatchRound(ORDER, 2);
+      const attempt = (o: OfferRow) => (o as OfferRow & { dedicated_attempt?: number }).dedicated_attempt;
+      expect(w.dedicatedOffers().map((o) => [o.status, attempt(o)])).toEqual([['offered', 2]]);
+      lapse();
+      await w.offersService.runDispatchRound(ORDER, 3);
+      expect(w.state.mutations.filter((m) => m === 'UpsertDedicatedOffers')).toHaveLength(2);
+      expect(w.state.order.dispatch_exhausted_at).not.toBeNull();
+    });
+
+    it('re-sends a lone internal agent as an offer instead of auto-assigning', async () => {
+      const w = world();
+      w.addAgent('int', { internal: true, balance: 50000 });
+      w.addAgent('a2', { balance: 50000 });
+      await w.offersService.runDispatchRound(ORDER, 1);
+      expect(w.claimer.claimOrderForAgent).not.toHaveBeenCalled();
+      for (let i = 0; i < 10; i++) {
+        w.state.activeOrders.push({
+          id: `busy-${i}`,
+          assigned_agent_id: 'a2',
+          current_status: 'in_transit',
+        });
+      }
+      lapse();
+      await w.offersService.runDispatchRound(ORDER, 2);
+      const attempt = (o: OfferRow) => (o as OfferRow & { dedicated_attempt?: number }).dedicated_attempt;
+      expect(w.claimer.claimOrderForAgent).not.toHaveBeenCalled();
+      expect(w.events('dedicated.auto_assigned')).toHaveLength(0);
+      expect(
+        w.dedicatedOffers().map((o) => [o.agent_id, o.status, attempt(o)]).sort()
+      ).toEqual([
+        ['a2', 'expired', 1],
+        ['int', 'offered', 2],
+      ]);
+      expect(w.notifications.sendOrderOfferPush).toHaveBeenCalledTimes(3);
+    });
   });
 
   it('standard offers expired with nobody claiming: the exhaustion check tries dedicated agents first', async () => {
