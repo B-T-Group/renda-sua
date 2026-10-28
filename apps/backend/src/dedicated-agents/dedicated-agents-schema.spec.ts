@@ -31,6 +31,9 @@ const validateDown = read(MIGRATIONS, '20261018180001_dedicated_agents_validate_
 const code = (sql: string) => sql.replace(/--[^\n]*/g, '');
 const sqlList = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ');
 
+/** Keys added after PR 1 seed their own rows in their own migration (see the *_migration specs). */
+const KEYS_SEEDED_LATER: string[] = ['dedicated_offer_max_attempts'];
+
 const NEW_TABLES = [
   'business_location_pickup_slots',
   'dedicated_agent_postings',
@@ -100,9 +103,12 @@ describe('dedicated agents migration (20261018180000)', () => {
 
   it('seeds every number key with the code default', () => {
     for (const [key, spec] of Object.entries(DEDICATED_NUMBER_CONFIG)) {
+      if (KEYS_SEEDED_LATER.includes(key)) continue;
       expect(up).toMatch(new RegExp(`\\('${key}',[\\s\\S]*?'number', NULL, ${spec.fallback},`));
     }
-    for (const key of DEDICATED_CONFIG_KEYS) expect(down).toContain(`'${key}'`);
+    for (const key of DEDICATED_CONFIG_KEYS) {
+      if (!KEYS_SEEDED_LATER.includes(key)) expect(down).toContain(`'${key}'`);
+    }
   });
 
   it('keeps enum CHECKs in step with the backend constants', () => {
