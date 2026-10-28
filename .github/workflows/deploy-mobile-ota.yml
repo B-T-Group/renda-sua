@@ -34,6 +34,11 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Check native dependencies vs store-binary baseline
+        # Fails if a native dependency was added after the last store build
+        # and is not guarded (see apps/mobile/native-deps-baseline.json).
+        run: node scripts/check-native-deps.js
+
       - name: Run tests
         run: yarn test
 
