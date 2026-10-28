@@ -120,4 +120,16 @@ describe('MTN webhook token', () => {
     }
     expect(verifyMtnWebhookToken(null, ref, token)).toBe(false);
   });
+
+  it('accepts an upper-case token and rejects a blank secret or a non-reference', () => {
+    const token = signMtnWebhookToken('s1', ref).toUpperCase();
+    expect(verifyMtnWebhookToken('s1', ref, token)).toBe(true);
+    const blank = signMtnWebhookToken('', ref);
+    expect(verifyMtnWebhookToken('', ref, blank)).toBe(false);
+    expect(verifyMtnWebhookToken('s1', ` ${ref}`, token)).toBe(false);
+    expect(
+      verifyMtnWebhookToken('s1', '00000000-0000-0000-0000-000000000000', token)
+    ).toBe(false);
+    expect(verifyMtnWebhookToken('s1', ref, token.slice(0, 63))).toBe(false);
+  });
 });

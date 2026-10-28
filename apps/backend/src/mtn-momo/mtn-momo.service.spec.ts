@@ -530,6 +530,61 @@ describe('MtnMomoService', () => {
       });
       expect(db.getPendingPaymentRequests).not.toHaveBeenCalled();
     });
+
+    it('polls rows older than the minimum age and does not count a final row as updated', async () => {
+      jest.useFakeTimers({ now: new Date('2026-10-28T10:00:00.000Z') });
+      try {
+        const service = await build();
+        db.getPendingPaymentRequests.mockResolvedValue([
+          { transaction_id: REF, external_id: 'order-1' },
+        ]);
+        db.getPaymentRequestByTransactionId.mockResolvedValue({
+          ...pendingRow,
+          status: 'SUCCESSFUL',
+        });
+        await expect(service.reconcilePendingPaymentRequests()).resolves.toEqual({
+          checked: 1,
+          updated: 0,
+          errors: 0,
+        });
+        expect(db.getPendingPaymentRequests).toHaveBeenCalledWith(
+          new Date('2026-10-28T09:59:00.000Z'),
+          50
+        );
+        await service.reconcilePendingPaymentRequests({
+          minAgeSeconds: 120,
+          limit: 3,
+        });
+        expect(db.getPendingPaymentRequests).toHaveBeenLastCalledWith(
+          new Date('2026-10-28T09:58:00.000Z'),
+          3
+        );
+        expect(db.completePendingPaymentRequest).not.toHaveBeenCalled();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('rejects a non-numeric success amount and still closes a failed one', async () => {
+      const service = await build();
+      db.getPaymentRequestByTransactionId.mockResolvedValue(pendingRow);
+      http.get.mockResolvedValueOnce({
+        data: { status: 'SUCCESSFUL', externalId: 'order-1', amount: '10.0abc' },
+      });
+      expect(await service.reconcilePaymentRequest(REF)).toBe('mismatch');
+      expect(db.completePendingPaymentRequest).not.toHaveBeenCalled();
+
+      http.get.mockResolvedValueOnce({
+        data: {
+          status: 'FAILED',
+          externalId: 'order-1',
+          amount: '1',
+          reason: 'APPROVAL_REJECTED',
+        },
+      });
+      expect(await service.reconcilePaymentRequest(REF)).toBe('updated');
+      expect(db.completePendingPaymentRequest).toHaveBeenCalledWith(REF, 'FAILED');
+    });
   });
 
   it('never logs credential or token values', async () => {

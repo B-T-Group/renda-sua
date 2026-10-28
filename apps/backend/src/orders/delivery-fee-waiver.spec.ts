@@ -277,4 +277,43 @@ describe('calculateItemDeliveryFee flat fallback (distance lookup failed): fast 
     }).calculateTieredDeliveryFee(0, 'CA', true);
     expect(flat.deliveryFee).toBe(tiered.totalFee);
   });
+
+  it.each([0, -3])(
+    'a non-positive fast base (%s) keeps the normal base',
+    async (fee) => {
+      const service = fallbackService();
+      const config = (service as unknown as {
+        deliveryConfigService: { getFastDeliveryBaseFee: jest.Mock };
+      }).deliveryConfigService;
+      config.getFastDeliveryBaseFee.mockResolvedValue(fee);
+      const info = await service.calculateItemDeliveryFee('inv-1', 'addr-1', true);
+      expect(info.deliveryFee).toBe(2);
+      expect(info.baseDeliveryFee).toBe(2);
+    }
+  );
+
+  it('a first order halves the fast base (4), not the normal base and not both', async () => {
+    const info = await fallbackService({ firstOrder: true }).calculateItemDeliveryFee(
+      'inv-1',
+      'addr-1',
+      true
+    );
+    expect(info.deliveryFee).toBe(4);
+    expect(info.baseDeliveryFee).toBe(4);
+    expect(info.perKmDeliveryFee).toBe(0);
+    expect(info.firstOrderDeliveryFeePromo).toBe(true);
+    expect(info.firstOrderBaseDeliveryDiscountAmount).toBe(4);
+    expect(info.isFirstOrderClient).toBe(true);
+  });
+
+  it('a fast-config outage keeps the normal base', async () => {
+    const service = fallbackService();
+    const config = (service as unknown as {
+      deliveryConfigService: { isFastDeliveryEnabled: jest.Mock };
+    }).deliveryConfigService;
+    config.isFastDeliveryEnabled.mockRejectedValue(new Error('config down'));
+    const info = await service.calculateItemDeliveryFee('inv-1', 'addr-1', true);
+    expect(info.deliveryFee).toBe(2);
+    expect(info.method).toBe('flat_fee');
+  });
 });
