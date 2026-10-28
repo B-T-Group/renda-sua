@@ -7752,7 +7752,22 @@
       "removedByStore": "Cette boutique vous a retiré",
       "offerBadge": "Dédié · {{store}}",
       "payChip": "Rémunération standard",
-      "daysLabel": "Jours"
+      "daysLabel": "Jours",
+      "cantTake": "Je ne peux pas la prendre",
+      "reasonPrompt": "Pourquoi ? (facultatif)",
+      "reasons": {
+        "too_far": "Trop loin",
+        "busy": "Je suis occupé",
+        "not_enough_balance": "Solde insuffisant",
+        "other": "Autre"
+      },
+      "release": {
+        "countdown": "Vous pouvez rendre cette commande pendant {{time}}",
+        "confirm": "Rendre cette commande ? Elle sera proposée à un autre livreur. Sans pénalité.",
+        "confirmButton": "Rendre",
+        "retry": "Réessayer",
+        "error": "Impossible de rendre cette commande."
+      }
     },
     "offline": "Hors ligne · dernière mise à jour affichée",
     "generic": "Une erreur est survenue",

@@ -51,7 +51,7 @@ function OrderOfferOverlayBase() {
               else void haptics.success();
             });
           }}
-          onDecline={() => orderOffer.decline()}
+          onDecline={(reason) => orderOffer.decline(reason)}
           onClose={() => orderOffer.dismiss()}
           onGoToAvailable={() => orderOffer.goToAvailableOrders()}
         />

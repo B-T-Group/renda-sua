@@ -265,4 +265,59 @@ export class MtnMomoDatabaseService {
       throw error;
     }
   }
+
+  /**
+   * Move a payment request out of PENDING. The `status = PENDING` guard makes the
+   * transition happen once: a callback and the polling fallback can race, and only
+   * the caller that gets `true` back should run follow-up side effects.
+   */
+  async completePendingPaymentRequest(
+    transactionId: string,
+    status: 'SUCCESSFUL' | 'FAILED'
+  ): Promise<boolean> {
+    const mutation = `
+      mutation CompletePendingPaymentRequest($transactionId: String!, $status: String!) {
+        update_mtn_momo_payment_requests(
+          where: {transaction_id: {_eq: $transactionId}, status: {_eq: "PENDING"}},
+          _set: {status: $status, updated_at: "now()"}
+        ) {
+          affected_rows
+        }
+      }
+    `;
+    const result = await this.graphqlClient.request<UpdatePaymentRequestResult>(
+      mutation,
+      {
+        transactionId,
+        status,
+      }
+    );
+    return result.update_mtn_momo_payment_requests.affected_rows > 0;
+  }
+
+  /** PENDING payment requests created before `olderThan`, oldest first. */
+  async getPendingPaymentRequests(
+    olderThan: Date,
+    limit: number
+  ): Promise<Array<{ transaction_id: string; external_id: string }>> {
+    const query = `
+      query GetPendingPaymentRequests($olderThan: timestamptz!, $limit: Int!) {
+        mtn_momo_payment_requests(
+          where: {status: {_eq: "PENDING"}, created_at: {_lte: $olderThan}},
+          order_by: {created_at: asc},
+          limit: $limit
+        ) {
+          transaction_id
+          external_id
+        }
+      }
+    `;
+    const result = await this.graphqlClient.request<{
+      mtn_momo_payment_requests: Array<{
+        transaction_id: string;
+        external_id: string;
+      }>;
+    }>(query, { olderThan: olderThan.toISOString(), limit });
+    return result.mtn_momo_payment_requests;
+  }
 }
