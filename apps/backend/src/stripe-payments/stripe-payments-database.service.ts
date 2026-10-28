@@ -391,6 +391,8 @@ export class StripePaymentsDatabaseService {
     refund_type?: string | null;
     refund_request_id?: string | null;
     refund_payment_id?: string | null;
+    /** Tax returned to the card on top of `amount` (tax-inclusive refunds). Default 0. */
+    tax_refund_amount?: number;
     metadata?: Record<string, unknown>;
   }): Promise<{ id: string }> {
     const mutation = `
@@ -445,6 +447,30 @@ export class StripePaymentsDatabaseService {
     const response = await this.hasuraService.executeQuery(query, { orderId });
     const sum = response.stripe_refunds_aggregate?.aggregate?.sum?.amount;
     return Number(sum ?? 0);
+  }
+
+  /**
+   * Succeeded refunds of an order, split into the ledger part (`amount`) and the tax part
+   * returned on top of it (`tax_refund_amount`, 0 for refunds that were pre-tax only).
+   */
+  async sumSucceededRefundPartsForOrder(
+    orderId: string
+  ): Promise<{ amount: number; taxAmount: number }> {
+    const query = `
+      query SumRefundParts($orderId: uuid!) {
+        stripe_refunds_aggregate(
+          where: { order_id: { _eq: $orderId }, status: { _eq: succeeded } }
+        ) {
+          aggregate { sum { amount tax_refund_amount } }
+        }
+      }
+    `;
+    const response = await this.hasuraService.executeQuery(query, { orderId });
+    const sum = response.stripe_refunds_aggregate?.aggregate?.sum;
+    return {
+      amount: Number(sum?.amount ?? 0),
+      taxAmount: Number(sum?.tax_refund_amount ?? 0),
+    };
   }
 
   async getRefundFullByStripeId(stripeRefundId: string): Promise<{
@@ -541,6 +567,7 @@ export class StripePaymentsDatabaseService {
     id: string;
     stripe_refund_id: string;
     amount: number;
+    tax_refund_amount: number;
     currency: string;
     status: string;
     cancellation_fee: number;
@@ -556,6 +583,7 @@ export class StripePaymentsDatabaseService {
           id
           stripe_refund_id
           amount
+          tax_refund_amount
           currency
           status
           cancellation_fee

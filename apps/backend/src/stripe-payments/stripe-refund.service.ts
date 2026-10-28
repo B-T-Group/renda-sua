@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { OrderTaxLifecycleService } from '../stripe-tax/order-tax-lifecycle.service';
+import { planTaxInclusiveRefund } from '../stripe-tax/order-tax-snapshot.util';
 import { StripeService } from './stripe.service';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
 
@@ -8,7 +10,8 @@ export class StripeRefundService {
 
   constructor(
     private readonly stripeService: StripeService,
-    private readonly databaseService: StripePaymentsDatabaseService
+    private readonly databaseService: StripePaymentsDatabaseService,
+    private readonly orderTaxLifecycle: OrderTaxLifecycleService
   ) {}
 
   async initiateOrderRefund(params: {
@@ -166,13 +169,37 @@ export class StripeRefundService {
         };
       }
 
-      const alreadyRefunded = await this.databaseService.sumSucceededRefundsForOrder(
+      // Tax-inclusive refunds only for orders with a finalized tax snapshot. Throws (and so
+      // fails this refund, which is idempotent and retriable) if the tax state is unreadable.
+      const taxInclusive = await this.orderTaxLifecycle.resolveRefundTaxMode(
+        params.orderNumber,
+        pi
+      );
+      const earlier = await this.databaseService.sumSucceededRefundPartsForOrder(
         params.orderId
       );
-      const maxRefundable = Math.max(0, transaction.amount - alreadyRefunded);
       const requestedAmount =
         params.amount ?? Math.max(0, transaction.amount - params.cancellationFee);
-      const refundAmount = Math.min(requestedAmount, maxRefundable);
+
+      let refundAmount: number;
+      let taxRefundAmount = 0;
+      let refundAmountMinor: number;
+      if (taxInclusive) {
+        const plan = planTaxInclusiveRefund({
+          ledgerTotalMinor: this.toMinorUnits(transaction.amount, transaction.currency),
+          chargedMinor: pi.amount_received ?? 0,
+          refundedLedgerMinor: this.toMinorUnits(earlier.amount, transaction.currency),
+          refundedTaxMinor: this.toMinorUnits(earlier.taxAmount, transaction.currency),
+          requestedLedgerMinor: this.toMinorUnits(requestedAmount, transaction.currency),
+        });
+        refundAmount = this.fromMinorUnits(plan.ledgerMinor, transaction.currency);
+        taxRefundAmount = this.fromMinorUnits(plan.taxMinor, transaction.currency);
+        refundAmountMinor = plan.cardMinor;
+      } else {
+        const maxRefundable = Math.max(0, transaction.amount - earlier.amount);
+        refundAmount = Math.min(requestedAmount, maxRefundable);
+        refundAmountMinor = this.toMinorUnits(refundAmount, transaction.currency);
+      }
 
       if (refundAmount <= 0) {
         return {
@@ -180,8 +207,6 @@ export class StripeRefundService {
           message: 'No refund needed (amount is zero or already fully refunded)',
         };
       }
-
-      const refundAmountMinor = this.toMinorUnits(refundAmount, transaction.currency);
 
       const refundRecord = await this.databaseService.createRefundRecord({
         stripe_payment_intent_id: transaction.stripe_payment_intent_id,
@@ -195,10 +220,12 @@ export class StripeRefundService {
         refund_type: params.refundType,
         refund_request_id: params.refundRequestId ?? null,
         refund_payment_id: params.refundPaymentId ?? null,
+        tax_refund_amount: taxRefundAmount,
         metadata: {
           orderId: params.orderId,
           orderNumber: params.orderNumber,
           refundType: params.refundType,
+          ...(taxInclusive ? { taxRefundAmount, cardRefundMinor: refundAmountMinor } : {}),
         },
       });
 
@@ -226,12 +253,24 @@ export class StripeRefundService {
           `Stripe refund created: ${stripeRefund.id} for order ${params.orderNumber}`
         );
 
+        // A pending refund is reversed from the refund webhook once it succeeds.
+        if (stripeRefund.status === 'succeeded') {
+          await this.reverseTaxSafely(
+            params.orderNumber,
+            stripeRefund.id,
+            refundAmountMinor
+          );
+        }
+
         return {
           success: true,
           refundId: stripeRefund.id,
           stripeRefundDbId: refundRecord.id,
           immediateSuccess: stripeRefund.status === 'succeeded',
-          message: `Refund initiated: ${refundAmount} ${transaction.currency}`,
+          message:
+            taxRefundAmount > 0
+              ? `Refund initiated: ${this.fromMinorUnits(refundAmountMinor, transaction.currency)} ${transaction.currency} (includes ${taxRefundAmount} tax)`
+              : `Refund initiated: ${refundAmount} ${transaction.currency}`,
         };
       } catch (refundError: any) {
         if (
@@ -262,6 +301,35 @@ export class StripeRefundService {
     }
   }
 
+  /** Tax reversal is bookkeeping: its failure is logged and never blocks the refund. */
+  private async reverseTaxSafely(
+    orderNumber: string,
+    stripeRefundId: string,
+    refundAmountMinor: number
+  ): Promise<void> {
+    try {
+      await this.orderTaxLifecycle.reverseForRefund({
+        orderNumber,
+        stripeRefundId,
+        refundAmountMinor,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Stripe Tax reversal failed for order ${orderNumber} refund ${stripeRefundId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async voidTaxSafely(orderNumber: string): Promise<void> {
+    try {
+      await this.orderTaxLifecycle.voidForOrder(orderNumber);
+    } catch (error: any) {
+      this.logger.error(
+        `Order tax void failed for order ${orderNumber}: ${error?.message}`
+      );
+    }
+  }
+
   private async cancelUncapturedAuthorization(
     transactionId: string,
     paymentIntentId: string,
@@ -279,6 +347,7 @@ export class StripeRefundService {
       status: 'cancelled',
       error_message: 'Authorization cancelled on order cancellation',
     });
+    await this.voidTaxSafely(orderNumber);
     return {
       success: true,
       message: 'Payment authorization released (no charge was made)',
@@ -293,6 +362,11 @@ export class StripeRefundService {
       msg.includes('cancel the payment intent') ||
       (msg.includes('requires_capture') && msg.includes('refund'))
     );
+  }
+
+  private fromMinorUnits(minor: number, currency: string): number {
+    const zeroDecimal = new Set(['XAF', 'XOF', 'JPY', 'KRW', 'VND', 'CLP']);
+    return zeroDecimal.has(currency.toUpperCase()) ? minor : minor / 100;
   }
 
   private toMinorUnits(amount: number, currency: string): number {

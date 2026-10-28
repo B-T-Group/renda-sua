@@ -15,6 +15,7 @@ import {
   type StripePaymentTransaction,
 } from './stripe-payments-database.service';
 import { StripeService } from './stripe.service';
+import { OrderTaxLifecycleService } from '../stripe-tax/order-tax-lifecycle.service';
 import { StripeTaxOrderPersistenceService } from '../stripe-tax/stripe-tax-order-persistence.service';
 
 @Injectable()
@@ -28,6 +29,7 @@ export class StripePaymentCallbackProcessor {
     private readonly stripeService: StripeService,
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly taxOrderPersistence: StripeTaxOrderPersistenceService,
+    private readonly orderTaxLifecycle: OrderTaxLifecycleService,
     @Inject(forwardRef(() => RefundPaymentService))
     private readonly refundPaymentService: RefundPaymentService
   ) {}
@@ -141,6 +143,21 @@ export class StripePaymentCallbackProcessor {
     }
     if (tx.status === 'success') {
       this.logger.log(`Stripe PI skipped (already success): ${tx.id}`);
+      // Our own capture marks the row success before this webhook lands, so applyCaptured
+      // never runs. Retry the (idempotent) finalization here in case the capture-time attempt
+      // failed. A Stripe webhook retry would be dropped as a duplicate event, so a `deferred`
+      // outcome is picked up by the reconciler / next refund instead of by throwing here.
+      if (tx.payment_entity === 'order' && tx.entity_id) {
+        const outcome = await this.orderTaxLifecycle.finalizeAfterCapture({
+          orderNumber: tx.entity_id.trim(),
+          paymentIntent,
+        });
+        if (outcome === 'deferred') {
+          this.logger.warn(
+            `order_tax_finalize_needs_reconcile order=${tx.entity_id.trim()} pi=${paymentIntent.id}`
+          );
+        }
+      }
       return;
     }
     if (this.isManualCapture(tx)) {
@@ -179,6 +196,9 @@ export class StripePaymentCallbackProcessor {
         ? 'Payment authorization expired'
         : 'Payment authorization cancelled',
     });
+    if (tx.payment_entity === 'order' && tx.entity_id) {
+      await this.orderTaxLifecycle.voidForOrder(tx.entity_id.trim());
+    }
     if (await this.shouldSkipCanceledIntentFailureHandler(tx)) {
       return;
     }
@@ -343,27 +363,15 @@ export class StripePaymentCallbackProcessor {
       return;
     }
 
-    const calcId = paymentIntent?.metadata?.stripe_tax_calculation_id?.trim();
-    if (!calcId) return;
-
-    const calculation = await this.stripeService.retrieveTaxCalculation(calcId);
-    let taxTransactionId: string | undefined;
-    try {
-      const taxTx =
-        await this.stripeService.createTaxTransactionFromCalculation(
-          calcId,
-          orderNumber
-        );
-      taxTransactionId = taxTx.id;
-    } catch {
-      // Payment may already have created the tax transaction
-    }
-    await this.taxOrderPersistence.finalizeFromTaxCalculation({
+    if (!paymentIntent) return;
+    // One finalizer for calculation-based orders (shared with our own capture and the
+    // refund/reconcile heal paths). Never rewrites total_amount / tax_amount / tx.amount:
+    // the wallet is credited the pre-tax ledger amount and tax stays in the Stripe pool.
+    const outcome = await this.orderTaxLifecycle.finalizeAfterCapture({
       orderNumber,
-      calculation,
-      transactionId: tx.id,
-      taxTransactionId,
+      paymentIntent,
     });
+    this.logger.log(`order_tax_finalize_webhook order=${orderNumber} outcome=${outcome}`);
   }
 
   private async creditWalletIfNeeded(
@@ -507,6 +515,7 @@ export class StripePaymentCallbackProcessor {
       tx.amount
     );
 
+    let walletRefundMajor = refundedMajor;
     if (charge.refunds?.data && charge.refunds.data.length > 0) {
       const stripeRefundObj = charge.refunds.data[0];
       const stripeRefundId = stripeRefundObj.id;
@@ -514,6 +523,11 @@ export class StripePaymentCallbackProcessor {
         stripeRefundId,
         stripeRefundObj
       );
+      // The card refund can include tax on top of the ledger amount (tax-inclusive refunds);
+      // the wallet only ever held the ledger amount, so reverse that part, never more.
+      if (existingRefund && existingRefund.amount > 0) {
+        walletRefundMajor = Math.min(Number(existingRefund.amount), tx.amount);
+      }
       if (existingRefund?.status === 'succeeded') {
         this.logger.log(
           `Refund ${stripeRefundId} already processed, skipping wallet reversal`
@@ -539,7 +553,7 @@ export class StripePaymentCallbackProcessor {
       }
     }
 
-    await this.reverseWalletForRefund(tx, refundedMajor);
+    await this.reverseWalletForRefund(tx, walletRefundMajor);
     await this.databaseService.updateTransaction(tx.id, {
       status: 'refunded',
       error_message: `Refunded ${refundedMajor} ${tx.currency} via Stripe`,
@@ -641,6 +655,10 @@ export class StripePaymentCallbackProcessor {
       failure_reason: failureReason,
     });
 
+    if (refundStatus === 'succeeded') {
+      await this.reverseTaxForSucceededRefund(refund);
+    }
+
     if (this.isPostDeliveryRefundType(existingRefund.refund_type)) {
       await this.refundPaymentService.completeStripePayment(
         existingRefund.id,
@@ -663,6 +681,28 @@ export class StripePaymentCallbackProcessor {
     } else if (refundStatus === 'failed') {
       this.logger.warn(
         `Stripe refund failed: ${refund.id}, reason: ${failureReason}`
+      );
+    }
+  }
+
+  /**
+   * A refund that was still pending when we created it is reversed in Stripe Tax once
+   * it succeeds. Idempotent with the create-time reversal (ledger keyed on refund id).
+   */
+  private async reverseTaxForSucceededRefund(
+    refund: Stripe.Refund
+  ): Promise<void> {
+    const orderNumber = refund.metadata?.orderNumber?.trim();
+    if (!orderNumber || !refund.id) return;
+    try {
+      await this.orderTaxLifecycle.reverseForRefund({
+        orderNumber,
+        stripeRefundId: refund.id,
+        refundAmountMinor: refund.amount,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Stripe Tax reversal failed for refund ${refund.id}: ${error?.message}`
       );
     }
   }

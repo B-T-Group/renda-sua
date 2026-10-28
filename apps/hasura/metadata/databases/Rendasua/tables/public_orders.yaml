@@ -36,6 +36,13 @@ object_relationships:
         table:
           name: order_holds
           schema: public
+  - name: tax_snapshot
+    using:
+      foreign_key_constraint_on:
+        column: order_id
+        table:
+          name: order_tax_snapshots
+          schema: public
 array_relationships:
   - name: risk_incidents
     using:
