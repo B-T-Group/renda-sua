@@ -73,7 +73,7 @@ describe('repo native dependency baseline', () => {
           if (/\.test\.|[\\/]__tests__[\\/]/.test(rel)) continue;
           const src = fs.readFileSync(full, 'utf8');
           for (const [dep, guardFile] of Object.entries<string>(baseline.guardedAllowlist)) {
-            if (rel !== guardFile && src.includes(`'${dep}'`)) offenders.push(`${rel} -> ${dep}`);
+            if (rel !== guardFile && (src.includes(`'${dep}'`) || src.includes(`"${dep}"`))) offenders.push(`${rel} -> ${dep}`);
           }
         }
       }
@@ -82,7 +82,7 @@ describe('repo native dependency baseline', () => {
     for (const f of ['App.tsx', 'index.js']) {
       const src = fs.readFileSync(path.join(appRoot, f), 'utf8');
       for (const dep of Object.keys(baseline.guardedAllowlist)) {
-        if (src.includes(`'${dep}'`)) offenders.push(`${f} -> ${dep}`);
+        if (src.includes(`'${dep}'`) || src.includes(`"${dep}"`)) offenders.push(`${f} -> ${dep}`);
       }
     }
     expect(offenders).toEqual([]);
