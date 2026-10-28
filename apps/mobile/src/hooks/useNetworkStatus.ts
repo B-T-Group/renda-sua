@@ -1,18 +1,21 @@
 /**
  * useNetworkStatus hook
  *
- * Provides network connectivity status using @react-native-community/netinfo.
+ * Provides network connectivity status using @react-native-community/netinfo,
+ * accessed through the safe lazy wrapper (src/utils/safeNetInfo.ts) so a binary
+ * without the netinfo native module assumes "online" instead of crashing the
+ * OTA bundle at startup.
  * Returns isOffline boolean to disable mutations and show offline indicators.
  */
 
 import { useEffect, useState } from 'react';
-import NetInfo, { type NetInfoState } from '@react-native-community/netinfo';
+import { subscribeToNetInfo, type SafeNetInfoState } from '../utils/safeNetInfo';
 
 export function useNetworkStatus() {
   const [isOffline, setIsOffline] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
+    const unsubscribe = subscribeToNetInfo((state: SafeNetInfoState) => {
       setIsOffline(!state.isConnected || !state.isInternetReachable);
     });
 
