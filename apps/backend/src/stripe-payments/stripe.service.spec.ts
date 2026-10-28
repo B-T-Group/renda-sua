@@ -147,4 +147,67 @@ describe('StripeService', () => {
     ).resolves.toEqual({ id: 'acct_123' });
     expect(createAccount).toHaveBeenCalledTimes(2);
   });
+
+  describe('Stripe Tax transactions', () => {
+    const createFromCalculation = jest.fn();
+    const createReversal = jest.fn();
+
+    beforeEach(() => {
+      (service as any).client = {
+        tax: { transactions: { createFromCalculation, createReversal } },
+      };
+      createFromCalculation.mockResolvedValue({ id: 'tax_txn_1' });
+      createReversal.mockResolvedValue({ id: 'taxtr_1' });
+    });
+
+    it('passes an idempotency key when creating a tax transaction, and none otherwise', async () => {
+      await service.createTaxTransactionFromCalculation('taxcalc_1', 'ORD-1', 'tax_txn_ORD-1');
+      expect(createFromCalculation).toHaveBeenLastCalledWith(
+        { calculation: 'taxcalc_1', reference: 'ORD-1' },
+        { idempotencyKey: 'tax_txn_ORD-1' }
+      );
+      await service.createTaxTransactionFromCalculation('taxcalc_1', 'ORD-1');
+      expect(createFromCalculation).toHaveBeenLastCalledWith(
+        { calculation: 'taxcalc_1', reference: 'ORD-1' },
+        undefined
+      );
+    });
+
+    it('creates a partial reversal with a negative flat amount', async () => {
+      await service.createTaxReversal({
+        originalTransactionId: 'tax_txn_1',
+        mode: 'partial',
+        flatAmountMinor: 4000,
+        reference: 'ORD-1_re_1',
+        idempotencyKey: 'tax_reversal_re_1',
+        metadata: { orderNumber: 'ORD-1' },
+      });
+      expect(createReversal).toHaveBeenCalledWith(
+        {
+          original_transaction: 'tax_txn_1',
+          mode: 'partial',
+          reference: 'ORD-1_re_1',
+          flat_amount: -4000,
+          metadata: { orderNumber: 'ORD-1' },
+        },
+        { idempotencyKey: 'tax_reversal_re_1' }
+      );
+    });
+
+    it('creates a full reversal without a flat amount', async () => {
+      await service.createTaxReversal({
+        originalTransactionId: 'tax_txn_1',
+        mode: 'full',
+        flatAmountMinor: 11300,
+        reference: 'ORD-1_re_2',
+        idempotencyKey: 'tax_reversal_re_2',
+      });
+      const [params] = createReversal.mock.calls[0];
+      expect(params).toEqual({
+        original_transaction: 'tax_txn_1',
+        mode: 'full',
+        reference: 'ORD-1_re_2',
+      });
+    });
+  });
 });

@@ -116,6 +116,8 @@
 - "!include public_order_risk_incidents.yaml"
 - "!include public_user_credits.yaml"
 - "!include public_order_status_history.yaml"
+- "!include public_order_tax_reversals.yaml"
+- "!include public_order_tax_snapshots.yaml"
 - "!include public_orders.yaml"
 - "!include public_partner_businesses.yaml"
 - "!include public_partners.yaml"

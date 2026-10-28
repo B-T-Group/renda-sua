@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AccountsService } from '../accounts/accounts.service';
 import { StripeConfig } from '../config/configuration';
+import { OrderTaxLifecycleService } from '../stripe-tax/order-tax-lifecycle.service';
 import {
   StripePaymentsDatabaseService,
   type StripePaymentTransaction,
@@ -37,7 +38,8 @@ export class StripeCaptureService {
     private readonly stripeService: StripeService,
     private readonly databaseService: StripePaymentsDatabaseService,
     private readonly configService: ConfigService,
-    private readonly accountsService: AccountsService
+    private readonly accountsService: AccountsService,
+    private readonly orderTaxLifecycle: OrderTaxLifecycleService
   ) {}
 
   private get config(): StripeConfig {
@@ -101,7 +103,13 @@ export class StripeCaptureService {
       params.orderNumber
     );
     if (existingPi?.status === 'succeeded') {
-      return this.syncAlreadyCapturedTransaction(tx, existingPi, params.captureAmount);
+      const synced = await this.syncAlreadyCapturedTransaction(
+        tx,
+        existingPi,
+        params.captureAmount
+      );
+      await this.finalizeTaxAfterCapture(params.orderNumber, existingPi);
+      return synced;
     }
     if (existingPi?.status && existingPi.status !== 'requires_capture') {
       return {
@@ -143,6 +151,9 @@ export class StripeCaptureService {
         this.logger.log(
           `stripe_capture_success order=${params.orderNumber} tx=${tx.id}`
         );
+        // The payment_intent.succeeded webhook now sees tx 'success' and returns early,
+        // so the tax snapshot has to be finalized here (idempotent with the webhook retry).
+        await this.finalizeTaxAfterCapture(params.orderNumber, pi);
         return { success: true, captured: true };
       }
       return { success: true, message: 'Capture initiated', captured: false };
@@ -159,10 +170,48 @@ export class StripeCaptureService {
     }
   }
 
+  /** Never throws: tax bookkeeping must not fail a capture that already succeeded. */
+  private async finalizeTaxAfterCapture(
+    orderNumber: string,
+    paymentIntent: {
+      id?: string;
+      amount_received?: number | null;
+      metadata?: Record<string, string> | null;
+    }
+  ): Promise<void> {
+    try {
+      await this.orderTaxLifecycle.finalizeAfterCapture({
+        orderNumber,
+        paymentIntent,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `order_tax_finalize_after_capture_failed order=${orderNumber}: ${error?.message}`
+      );
+    }
+  }
+
+  /** Never throws: a cancel that succeeded must not fail on tax bookkeeping. */
+  private async voidTaxAfterCancel(orderNumber: string): Promise<void> {
+    try {
+      await this.orderTaxLifecycle.voidForOrder(orderNumber);
+    } catch (error: any) {
+      this.logger.error(
+        `order_tax_void_after_cancel_failed order=${orderNumber}: ${error?.message}`
+      );
+    }
+  }
+
   private async tryRetrievePaymentIntent(
     paymentIntentId: string,
     orderNumber: string
-  ): Promise<{ status?: string; amount?: number; amount_received?: number } | null> {
+  ): Promise<{
+    id?: string;
+    status?: string;
+    amount?: number;
+    amount_received?: number;
+    metadata?: Record<string, string> | null;
+  } | null> {
     try {
       return await this.stripeService.retrievePaymentIntent(paymentIntentId);
     } catch (error: any) {
@@ -342,7 +391,11 @@ export class StripeCaptureService {
     await this.expireCheckoutSessionIfPresent(tx);
 
     if (!tx.stripe_payment_intent_id) {
-      return this.markPendingCheckoutCancelled(tx);
+      const pendingResult = await this.markPendingCheckoutCancelled(tx);
+      if (pendingResult.success && !pendingResult.skipped) {
+        await this.voidTaxAfterCancel(params.orderNumber);
+      }
+      return pendingResult;
     }
     if (tx.status === 'success') {
       // Status drift: DB says captured but Stripe may still be requires_capture.
@@ -359,6 +412,7 @@ export class StripeCaptureService {
             status: 'cancelled',
             error_message: 'PaymentIntent already canceled on Stripe',
           });
+          await this.voidTaxAfterCancel(params.orderNumber);
           return { success: true, skipped: true, message: 'Already canceled' };
         } else {
           return { success: false, message: 'Payment already captured; use refund' };
@@ -374,6 +428,9 @@ export class StripeCaptureService {
       tx.status !== 'capture_pending' &&
       tx.status !== 'pending'
     ) {
+      if (tx.status === 'cancelled' || tx.status === 'expired') {
+        await this.voidTaxAfterCancel(params.orderNumber);
+      }
       return { success: true, skipped: true, message: `Status is ${tx.status}` };
     }
 
@@ -389,6 +446,7 @@ export class StripeCaptureService {
       this.logger.log(
         `stripe_authorization_cancelled order=${params.orderNumber} tx=${tx.id}`
       );
+      await this.voidTaxAfterCancel(params.orderNumber);
       return { success: true };
     } catch (error: any) {
       if (isPaymentIntentAlreadyCanceled(error)) {
@@ -397,6 +455,7 @@ export class StripeCaptureService {
         this.logger.log(
           `stripe_authorization_already_cancelled order=${params.orderNumber} tx=${tx.id}`
         );
+        await this.voidTaxAfterCancel(params.orderNumber);
         return { success: true, skipped: true, message: 'Already canceled' };
       }
       await this.databaseService.updateTransaction(tx.id, {

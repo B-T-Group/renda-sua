@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { OrderTaxLifecycleService } from '../stripe-tax/order-tax-lifecycle.service';
 import { StripeService } from './stripe.service';
 import { StripePaymentsDatabaseService } from './stripe-payments-database.service';
 
@@ -8,7 +9,8 @@ export class StripeRefundService {
 
   constructor(
     private readonly stripeService: StripeService,
-    private readonly databaseService: StripePaymentsDatabaseService
+    private readonly databaseService: StripePaymentsDatabaseService,
+    private readonly orderTaxLifecycle: OrderTaxLifecycleService
   ) {}
 
   async initiateOrderRefund(params: {
@@ -226,6 +228,15 @@ export class StripeRefundService {
           `Stripe refund created: ${stripeRefund.id} for order ${params.orderNumber}`
         );
 
+        // A pending refund is reversed from the refund webhook once it succeeds.
+        if (stripeRefund.status === 'succeeded') {
+          await this.reverseTaxSafely(
+            params.orderNumber,
+            stripeRefund.id,
+            refundAmountMinor
+          );
+        }
+
         return {
           success: true,
           refundId: stripeRefund.id,
@@ -262,6 +273,35 @@ export class StripeRefundService {
     }
   }
 
+  /** Tax reversal is bookkeeping: its failure is logged and never blocks the refund. */
+  private async reverseTaxSafely(
+    orderNumber: string,
+    stripeRefundId: string,
+    refundAmountMinor: number
+  ): Promise<void> {
+    try {
+      await this.orderTaxLifecycle.reverseForRefund({
+        orderNumber,
+        stripeRefundId,
+        refundAmountMinor,
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Stripe Tax reversal failed for order ${orderNumber} refund ${stripeRefundId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async voidTaxSafely(orderNumber: string): Promise<void> {
+    try {
+      await this.orderTaxLifecycle.voidForOrder(orderNumber);
+    } catch (error: any) {
+      this.logger.error(
+        `Order tax void failed for order ${orderNumber}: ${error?.message}`
+      );
+    }
+  }
+
   private async cancelUncapturedAuthorization(
     transactionId: string,
     paymentIntentId: string,
@@ -279,6 +319,7 @@ export class StripeRefundService {
       status: 'cancelled',
       error_message: 'Authorization cancelled on order cancellation',
     });
+    await this.voidTaxSafely(orderNumber);
     return {
       success: true,
       message: 'Payment authorization released (no charge was made)',

@@ -1,6 +1,8 @@
 import { Module, forwardRef } from '@nestjs/common';
 import { AdminAuthModule } from '../admin/admin-auth.module';
 import { StripePaymentsModule } from '../stripe-payments/stripe-payments.module';
+import { OrderTaxLifecycleService } from './order-tax-lifecycle.service';
+import { OrderTaxSnapshotRepository } from './order-tax-snapshot.repository';
 import { StripeTaxAdminController } from './stripe-tax-admin.controller';
 import { StripeTaxCalculationService } from './stripe-tax-calculation.service';
 import { StripeTaxCheckoutBuilderService } from './stripe-tax-checkout-builder.service';
@@ -18,6 +20,8 @@ import { StripeTaxOrderPersistenceService } from './stripe-tax-order-persistence
     StripeTaxCheckoutBuilderService,
     StripeTaxOrderPersistenceService,
     StripeTaxCalculationService,
+    OrderTaxSnapshotRepository,
+    OrderTaxLifecycleService,
   ],
   exports: [
     StripeTaxCodesService,
@@ -25,6 +29,7 @@ import { StripeTaxOrderPersistenceService } from './stripe-tax-order-persistence
     StripeTaxCheckoutBuilderService,
     StripeTaxOrderPersistenceService,
     StripeTaxCalculationService,
+    OrderTaxLifecycleService,
   ],
 })
 export class StripeTaxModule {}

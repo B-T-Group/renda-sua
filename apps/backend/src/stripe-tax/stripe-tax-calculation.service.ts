@@ -3,11 +3,14 @@ import { ConfigService } from '@nestjs/config';
 import { StripeConfig } from '../config/configuration';
 import { StripeService } from '../stripe-payments/stripe.service';
 import { StripeTaxCheckoutBuilderService } from './stripe-tax-checkout-builder.service';
+import { OrderTaxLifecycleService } from './order-tax-lifecycle.service';
 import { StripeTaxOrderPersistenceService } from './stripe-tax-order-persistence.service';
 import type { OrderTaxLineInput } from './stripe-tax-checkout-builder.service';
 
 export interface CalculateOrderTaxParams {
   orderNumber: string;
+  /** When set, the calculation is persisted as an order_tax_snapshots row. */
+  orderId?: string;
   currency: string;
   orderItems: OrderTaxLineInput[];
   deliveryFee: number;
@@ -39,7 +42,8 @@ export class StripeTaxCalculationService {
     private readonly stripeService: StripeService,
     private readonly taxBuilder: StripeTaxCheckoutBuilderService,
     private readonly taxPersistence: StripeTaxOrderPersistenceService,
-    private readonly configService: ConfigService
+    private readonly configService: ConfigService,
+    private readonly taxLifecycle: OrderTaxLifecycleService
   ) {}
 
   private get config(): StripeConfig {
@@ -92,6 +96,15 @@ export class StripeTaxCalculationService {
 
     const calculationId = calculation.id ?? '';
     if (!calculationId) return null;
+
+    if (params.orderId) {
+      // Best effort: the snapshot must never block checkout.
+      await this.taxLifecycle.recordEstimate({
+        orderId: params.orderId,
+        currency: params.currency,
+        calculation,
+      });
+    }
 
     if (params.finalizeOnSuccess) {
       let taxTransactionId: string | undefined;

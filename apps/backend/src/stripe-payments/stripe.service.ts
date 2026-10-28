@@ -268,12 +268,43 @@ export class StripeService {
 
   async createTaxTransactionFromCalculation(
     calculationId: string,
-    reference: string
+    reference: string,
+    idempotencyKey?: string
   ): Promise<Stripe.Tax.Transaction> {
-    return this.getClient().tax.transactions.createFromCalculation({
-      calculation: calculationId,
-      reference,
-    });
+    return this.getClient().tax.transactions.createFromCalculation(
+      {
+        calculation: calculationId,
+        reference,
+      },
+      idempotencyKey ? { idempotencyKey } : undefined
+    );
+  }
+
+  /**
+   * Reverse (fully or partially) a Stripe Tax transaction. `flatAmountMinor` is the
+   * positive tax-inclusive amount; Stripe takes it negative. `reference` must be unique
+   * across all Stripe Tax transactions.
+   */
+  async createTaxReversal(params: {
+    originalTransactionId: string;
+    mode: 'full' | 'partial';
+    flatAmountMinor?: number;
+    reference: string;
+    idempotencyKey: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Tax.Transaction> {
+    return this.getClient().tax.transactions.createReversal(
+      {
+        original_transaction: params.originalTransactionId,
+        mode: params.mode,
+        reference: params.reference,
+        ...(params.mode === 'partial'
+          ? { flat_amount: -Math.abs(params.flatAmountMinor ?? 0) }
+          : {}),
+        ...(params.metadata ? { metadata: params.metadata } : {}),
+      },
+      { idempotencyKey: params.idempotencyKey }
+    );
   }
 
   async retrieveTaxCalculation(
