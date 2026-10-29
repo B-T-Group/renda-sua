@@ -216,6 +216,7 @@ export const SERVER_SITE_EVENT_TYPES = [
   'pref_slot.assignment_resumed',
   'pref_slot.offer_pool_size',
   'pref_slot.fallback_unfiltered',
+  'pref_slot.posting_push_sent',
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',
