@@ -1,3 +1,5 @@
+import { AgentSlotPrefsController } from './agent-slot-prefs.controller';
+import { AgentSlotPrefsService } from './agent-slot-prefs.service';
 import { Module, forwardRef } from '@nestjs/common';
 import { AdminAuthModule } from '../admin/admin-auth.module';
 import { AgentContractsModule } from '../agent-contracts/agent-contracts.module';
@@ -53,12 +55,14 @@ import { DedicatedPostingsService } from './dedicated-postings.service';
     DedicatedAdminPostingsController,
     DedicatedAgentsBusinessController,
     DedicatedAgentsAgentController,
+    AgentSlotPrefsController,
     DedicatedPostingsBusinessController,
     DedicatedOpportunitiesController,
     DedicatedCapabilityController,
   ],
   providers: [
     DedicatedAssignmentsService,
+    AgentSlotPrefsService,
     DedicatedLocationAccessService,
     DedicatedPostingsService,
     DedicatedOpportunitiesService,
