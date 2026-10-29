@@ -11,7 +11,7 @@ import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import type { DedicatedOpportunity } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 import { useProfilePhotoUpload } from '../../hooks/useProfilePhotoUpload';
-import { mapDedicatedError } from '../../utils/dedicatedAgentsErrors';
+import { mapDedicatedError, dedicatedApiError } from '../../utils/dedicatedAgentsErrors';
 import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useSlotPreferences } from '../../hooks/useSlotPreferences';
@@ -62,7 +62,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       setOpportunity(res.opportunity);
     } catch (err: any) {
       console.error('Error loading opportunity:', err);
-      const status = err.response?.status;
+      const { status } = dedicatedApiError(err);
       if (status === 404) {
         setError(t('dedicatedAgents.agent.noLongerAvailable', 'This opportunity is no longer available'));
       } else {
@@ -96,9 +96,9 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       setSnackMessage(t('dedicatedAgents.agent.appliedSnackbar', 'Application submitted'));
       await loadData(true);
     } catch (err: any) {
-      const errorCode = err.response?.data?.code;
-      
-      if (err.response?.status === 422 && errorCode === 'PROFILE_PHOTO_REQUIRED') {
+      const { status, code: errorCode } = dedicatedApiError(err);
+
+      if (status === 422 && errorCode === 'PROFILE_PHOTO_REQUIRED') {
         dedicatedAnalytics.trackDedicatedPhotoGateShown('profile_photo_required');
         setPhotoGateVisible(true);
       } else if (errorCode === 'posting_not_open' || errorCode === 'application_closed') {
@@ -109,6 +109,10 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
         const msg = mapDedicatedError(errorCode, t);
         setSnackMessage(msg);
         await loadData(true);
+      } else if (status === 404) {
+        setSnackMessage(t('dedicatedAgents.agent.noLongerAvailable', 'This opportunity is no longer available'));
+      } else if (status === 403 && errorCode === 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE') {
+        setSnackMessage(err?.message || t('dedicatedAgents.generic', 'Something went wrong'));
       } else {
         const msg = errorCode ? mapDedicatedError(errorCode, t) : t('dedicatedAgents.generic', 'Something went wrong');
         setSnackMessage(msg);
@@ -144,7 +148,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       setPhotoGateVisible(false);
       await loadData(true);
     } catch (err: any) {
-      const errorCode = err.response?.data?.code;
+      const errorCode = dedicatedApiError(err).code;
       const msg = errorCode ? mapDedicatedError(errorCode, t) : t('dedicatedAgents.generic', 'Something went wrong');
       setUploadError(msg);
     } finally {
@@ -177,7 +181,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
               setSnackMessage(t('dedicatedAgents.agent.withdrawnSnackbar', 'Application withdrawn'));
               await loadData(true);
             } catch (err: any) {
-              const errorCode = err.response?.data?.code;
+              const errorCode = dedicatedApiError(err).code;
               if (errorCode === 'application_not_pending') {
                 const msg = mapDedicatedError(errorCode, t);
                 setSnackMessage(msg);

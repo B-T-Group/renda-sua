@@ -26,7 +26,7 @@ import type {
 } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
-import { shouldShowGate, shouldHideOnError } from '../../utils/dedicatedAgentsErrors';
+import { shouldShowGate, shouldHideOnError, dedicatedApiError } from '../../utils/dedicatedAgentsErrors';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useSlotPreferences } from '../../hooks/useSlotPreferences';
 import PreferredSlotsToggles from '../../components/agent/PreferredSlotsToggles';
@@ -91,9 +91,10 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
       }
       setError(null);
     } catch (err: any) {
-      const status = err.response?.status;
-      const errorCode = err.response?.data?.code;
-      const reason = err.response?.data?.reason;
+      const apiErr = dedicatedApiError(err);
+      const status = apiErr.status ?? 0;
+      const errorCode = apiErr.code ?? undefined;
+      const reason = apiErr.reason as OpportunityIneligibleReason | null;
 
       
       // Handle 403 no_address as address prompt state, not an error
@@ -102,10 +103,10 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
         setShowNoAddressPrompt(true);
         setGateReason(null);
         setError(null);
-      } else if (shouldShowGate(status, errorCode, reason)) {
+      } else if (shouldShowGate(status, errorCode ?? '', reason)) {
         setGateReason(reason);
         setError(null);
-      } else if (shouldHideOnError(status, errorCode, reason)) {
+      } else if (shouldHideOnError(status, errorCode, reason ?? undefined)) {
         setError(null);
       } else {
         console.error('Error loading dedicated agents data:', err);
@@ -183,7 +184,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
     } catch (err: any) {
       setOffTodayOptimistic(prev => ({ ...prev, [assignmentId]: originalValue }));
 
-      const errorCode = err.response?.data?.code;
+      const errorCode = dedicatedApiError(err).code;
       if (errorCode === 'assignment_removed') {
         dedicatedAnalytics.trackDedicatedActionConflict('toggle_off_today', 'assignment_removed');
         setSnackMessage(t('dedicatedAgents.agent.removedByStore', 'This store removed you'));

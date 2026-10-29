@@ -125,3 +125,22 @@ export function isDedicatedAgentsFeatureHidden(error: any): boolean {
   const status = error?.response?.status || error?.status;
   return status === 404 || status === 403;
 }
+
+/**
+ * Status / code / reason / body from a dedicated API error. `apiClient` throws an
+ * Error with `status`, `code` and `data` (raw JSON body), not an axios-style
+ * `response`; reading only `err.response` turned every failure (e.g. 422
+ * PROFILE_PHOTO_REQUIRED) into the generic message. Both shapes are accepted.
+ */
+export function dedicatedApiError(err: any): {
+  status: number | null;
+  code: string | null;
+  reason: string | null;
+  data: any;
+} {
+  const data = err?.data ?? err?.response?.data ?? null;
+  const status = err?.status ?? err?.response?.status ?? null;
+  const code = data?.code ?? err?.code ?? null;
+  const reason = data?.reason ?? null;
+  return { status: typeof status === 'number' ? status : null, code: code || null, reason, data };
+}
