@@ -62,6 +62,7 @@ export interface SlotOffConflictStore {
 /** Why an agent can't resume (AC-P5 re-check of v5 D5 profile rules). */
 export type ResumeRefusal =
   | 'slot_pref_off'
+  | 'store_slot_off'
   | 'not_slot_off_pause'
   | 'not_verified'
   | 'contract_unsigned'
@@ -244,6 +245,8 @@ export class AgentSlotPrefsService {
   private async resumeRefusal(agent: AgentPrefsRow, row: AssignmentRow): Promise<ResumeRefusal | null> {
     if (row.pause_reason !== 'paused_slot_off') return 'not_slot_off_pause';
     if (!slotPrefsFromRow(agent)[row.slot_key]) return 'slot_pref_off';
+    // Friendly refusal; the resume mutation's own predicate stays the guard.
+    if ((await this.assignments.disabledSlots(row.business_location_id)).has(row.slot_key)) return 'store_slot_off';
     if (agent.is_verified !== true) return 'not_verified';
     if (agent.status === 'suspended') return 'suspended';
     if (!showsDeliveryChrome(agent.focus)) return 'commercial_focus';
@@ -279,6 +282,7 @@ export class AgentSlotPrefsService {
 
 const RESUME_MESSAGES: Record<ResumeRefusal, string> = {
   slot_pref_off: 'Turn this slot back on before resuming',
+  store_slot_off: 'The store has turned this slot off',
   not_slot_off_pause: 'This assignment was paused by the store or RendaSua',
   not_verified: 'Your account must be verified to resume',
   contract_unsigned: 'Sign the agent contract to resume',

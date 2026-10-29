@@ -160,4 +160,46 @@ describe('AdminDedicatedAssignmentsSection', () => {
     await waitFor(() => expect(removeConfirm).toHaveAttribute('disabled'));
     resolveDelete();
   });
+
+  describe('#594 addendum AC-P17 preferred slots', () => {
+    it('shows the preferred-slot icons and "Paused by agent" for paused_slot_off, with Resume disabled', async () => {
+      mockGetAdminAssignments.mockResolvedValue({
+        assignments: [
+          {
+            ...mockAssignment,
+            status: 'paused',
+            pauseReason: 'paused_slot_off',
+            preferredSlots: { morning: false, afternoon: true, evening: true },
+          },
+        ],
+      });
+      render(<AdminDedicatedAssignmentsSection />);
+      await screen.findByText('Paused by agent');
+      expect(screen.getByText('paused_slot_off')).toBeInTheDocument();
+      const icons = screen.getByTestId('pref-slots-a1').querySelectorAll('[data-pref]');
+      expect(Array.from(icons).map((el) => el.getAttribute('data-pref'))).toEqual(['off', 'on', 'on']);
+      expect(screen.getByRole('button', { name: 'Resume' })).toBeDisabled();
+    });
+
+    it('older payloads without preferredSlots render all slots on', async () => {
+      mockGetAdminAssignments.mockResolvedValue({ assignments: [mockAssignment] });
+      render(<AdminDedicatedAssignmentsSection />);
+      await screen.findByTestId('pref-slots-a1');
+      const icons = screen.getByTestId('pref-slots-a1').querySelectorAll('[data-pref]');
+      expect(Array.from(icons).map((el) => el.getAttribute('data-pref'))).toEqual(['on', 'on', 'on']);
+    });
+
+    it('the preferred-slots filter sends prefOff, or pauseReason for the slot-off pause option', async () => {
+      render(<AdminDedicatedAssignmentsSection />);
+      await waitFor(() => expect(mockGetAdminAssignments).toHaveBeenCalled());
+      fireEvent.change(screen.getByTestId('pref-filter'), { target: { value: 'evening' } });
+      await waitFor(() =>
+        expect(mockGetAdminAssignments).toHaveBeenLastCalledWith(expect.objectContaining({ prefOff: 'evening' }))
+      );
+      fireEvent.change(screen.getByTestId('pref-filter'), { target: { value: 'paused_slot_off' } });
+      await waitFor(() =>
+        expect(mockGetAdminAssignments).toHaveBeenLastCalledWith({ pauseReason: 'paused_slot_off' })
+      );
+    });
+  });
 });

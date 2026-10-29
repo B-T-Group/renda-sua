@@ -83,7 +83,7 @@ describe('PR 8 admin view controllers', () => {
     expect(service.searchLocations).toHaveBeenCalledWith(scope, { q: 'mama', city: 'Douala', limit: '10' });
     expect(service.locationPickupSlots).toHaveBeenCalledWith(scope, 'loc-1');
     expect(geo.require.mock.calls.every((c) => (c as unknown[])[0] === PlatformPermissions.MANAGE_AGENTS)).toBe(true);
-    expect(service.listAssignments).toHaveBeenCalledWith(scope, { city: 'Douala', locationId: 'loc-1', slotKey: 'morning', status: 'active', source: 'posting' });
+    expect(service.listAssignments).toHaveBeenCalledWith(scope, { city: 'Douala', locationId: 'loc-1', slotKey: 'morning', status: 'active', source: 'posting', prefOff: undefined, pauseReason: undefined });
     expect(service.coverage).toHaveBeenCalledWith(scope, { city: 'Douala' });
     expect(service.picker).toHaveBeenCalledWith(scope, 'loc-1');
     expect(service.dismissRelation).toHaveBeenCalledWith(scope, 'u-admin', 'as-1');

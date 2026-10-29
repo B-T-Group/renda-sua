@@ -12,7 +12,7 @@ type Loose = Record<string, any>;
 const USER = 'u-agent';
 const AGENT = 'agent-1';
 
-function setup(opts: { agent?: Loose; rows?: Loose[]; storeSlotOff?: boolean; contractSigned?: boolean; flag?: boolean } = {}) {
+function setup(opts: { agent?: Loose; rows?: Loose[]; storeSlotOff?: boolean; storeSlotsOff?: string[]; contractSigned?: boolean; flag?: boolean } = {}) {
   const agent: Loose = {
     id: AGENT,
     user_id: USER,
@@ -77,6 +77,7 @@ function setup(opts: { agent?: Loose; rows?: Loose[]; storeSlotOff?: boolean; co
   };
   const config = { getConfig: jest.fn(async () => ({ enabled: opts.flag ?? true })) };
   const assignments = {
+    disabledSlots: jest.fn(async () => new Set<string>(opts.storeSlotsOff ?? [])),
     statusChanged: jest.fn((r: Loose[], from: string, to: string, cause: string) =>
       statusChanges.push(...r.map((x) => ({ id: x.id, from, to, cause })))
     ),
@@ -236,6 +237,14 @@ describe('AgentSlotPrefsService (#594 addendum PR1)', () => {
       expect(err.getResponse()).toMatchObject({ code });
     });
 
+    it('refuses with store_slot_off when the business turned the slot off', async () => {
+      const { service, rows } = setup({ rows: [paused], storeSlotsOff: ['morning'] });
+      const err = await service.resume(USER, 'a1').catch((e: Loose) => e);
+      expect(err).toBeInstanceOf(ConflictException);
+      expect(err.getResponse()).toMatchObject({ code: 'store_slot_off', slotKey: 'morning' });
+      expect(rows[0].status).toBe('paused');
+    });
+
     it('refuses an unsigned contract', async () => {
       const { service } = setup({ rows: [paused], contractSigned: false });
       const err = await service.resume(USER, 'a1').catch((e: Loose) => e);
@@ -248,7 +257,7 @@ describe('AgentSlotPrefsService (#594 addendum PR1)', () => {
       expect(err.getResponse()).toMatchObject({ code: 'not_slot_off_pause' });
     });
 
-    it('409s when the store slot was switched off (guarded write affects 0 rows)', async () => {
+    it('409s when the store slot is switched off between the read and the guarded write (0 rows)', async () => {
       const { service } = setup({ rows: [paused], storeSlotOff: true });
       const err = await service.resume(USER, 'a1').catch((e: Loose) => e);
       expect(err.getResponse()).toMatchObject({ code: 'assignment_changed' });

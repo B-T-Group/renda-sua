@@ -9,6 +9,7 @@ import { DedicatedAgentsConfigService } from './dedicated-agents-config.service'
 import {
   DEDICATED_ASSIGNMENT_SOURCES,
   DEDICATED_ASSIGNMENT_STATUSES,
+  DEDICATED_PAUSE_REASONS,
   DEDICATED_POSTING_STATUSES,
   DEDICATED_SLOT_KEYS,
   type DedicatedSlotKey,
@@ -42,14 +43,28 @@ export interface AdminAssignmentFilters {
   slotKey?: string;
   status?: string;
   source?: string;
+  /** #594 addendum AC-P17: only assignments whose agent has this slot preference OFF. */
+  prefOff?: string;
+  /** #594 addendum AC-P17: e.g. `paused_slot_off`. */
+  pauseReason?: string;
+}
+
+/** #594 addendum AC-P17: the agent's preferred-slot toggles (default ON). */
+export interface AdminPreferredSlots {
+  morning: boolean;
+  afternoon: boolean;
+  evening: boolean;
 }
 
 export interface AdminAssignmentView {
   assignmentId: string;
   slotKey: string;
   status: string;
+  /** #594 addendum AC-P17: set only while paused. */
+  pauseReason: string | null;
   source: string;
   createdAt: string;
+  preferredSlots: AdminPreferredSlots;
   location: { id: string; name: string; businessId: string; businessName: string; city: string; state: string; country: string };
   agent: { id: string; firstName: string; lastName: string; photoUrl: string | null; isInternal: boolean };
   possible_relation: boolean;
@@ -168,6 +183,8 @@ export class DedicatedAdminViewsService {
     const slotKey = pick(filters.slotKey, DEDICATED_SLOT_KEYS, 'slotKey');
     const status = pick(filters.status, DEDICATED_ASSIGNMENT_STATUSES, 'status');
     const source = pick(filters.source, DEDICATED_ASSIGNMENT_SOURCES, 'source');
+    const prefOff = pick(filters.prefOff, DEDICATED_SLOT_KEYS, 'prefOff');
+    const pauseReason = pick(filters.pauseReason, DEDICATED_PAUSE_REASONS, 'pauseReason');
     const geoAddress = await this.geo.addressWhere(scope);
     const where = and([
       geoAddress ? { business_location: { address: geoAddress } } : null,
@@ -175,6 +192,8 @@ export class DedicatedAdminViewsService {
       slotKey ? { slot_key: { _eq: slotKey } } : null,
       status ? { status: { _eq: status } } : null,
       source ? { source: { _eq: source } } : null,
+      prefOff ? { agent: { [`pref_${prefOff}`]: { _eq: false } } } : null,
+      pauseReason ? { pause_reason: { _eq: pauseReason } } : null,
     ]);
     const { rows, truncated } = await this.pages<AssignmentListRow>(DEDICATED_ADMIN_ASSIGNMENTS_QUERY, where, 'dedicated_agent_assignments');
     const visible = await this.enabledOnly(rows, (r) => r.business_location?.address?.country);
@@ -366,8 +385,14 @@ export class DedicatedAdminViewsService {
       assignmentId: r.id,
       slotKey: r.slot_key,
       status: r.status,
+      pauseReason: r.status === 'paused' ? r.pause_reason ?? null : null,
       source: r.source,
       createdAt: r.created_at,
+      preferredSlots: {
+        morning: agent?.pref_morning !== false,
+        afternoon: agent?.pref_afternoon !== false,
+        evening: agent?.pref_evening !== false,
+      },
       location: {
         id: loc?.id ?? r.business_location_id,
         name: loc?.name ?? '',
@@ -526,10 +551,14 @@ interface AssignmentListRow {
   status: string;
   source: string;
   off_today_date: string | null;
+  pause_reason?: string | null;
   created_at: string;
   relation_dismissed_at: string | null;
   agent: {
     id: string;
+    pref_morning?: boolean | null;
+    pref_afternoon?: boolean | null;
+    pref_evening?: boolean | null;
     is_internal: boolean | null;
     is_verified: boolean | null;
     referred_by_business_id: string | null;
