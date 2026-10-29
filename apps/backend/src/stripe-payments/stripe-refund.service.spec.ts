@@ -388,5 +388,25 @@ describe('StripeRefundService cancel uncaptured authorization', () => {
         expect.objectContaining({ amount: 100, tax_refund_amount: 0 })
       );
     });
+
+    it('keeps a zero-decimal currency in major units (lowercase xaf is not divided by 100)', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        authorizedTx({ status: 'success', amount: 100, currency: 'xaf' })
+      );
+      stripeService.retrievePaymentIntent.mockResolvedValue({
+        status: 'succeeded',
+        amount_received: 113,
+      });
+      await expect(service.initiateOrderRefund(refundParams)).resolves.toMatchObject({
+        success: true,
+        message: 'Refund initiated: 113 xaf (includes 13 tax)',
+      });
+      expect(stripeService.createRefund).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 113 })
+      );
+      expect(databaseService.createRefundRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 100, tax_refund_amount: 13, currency: 'xaf' })
+      );
+    });
   });
 });

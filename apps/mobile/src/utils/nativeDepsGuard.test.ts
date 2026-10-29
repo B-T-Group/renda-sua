@@ -47,6 +47,19 @@ describe('check-native-deps evaluate()', () => {
     expect(r.ok).toBe(true);
     expect(r.warnings[0]).toContain('1.0.0 -> 1.1.0');
   });
+
+  it('warns when a guardedAllowlist entry is no longer a dependency', () => {
+    const withAllow = { ...base, guardedAllowlist: { gone: 'src/utils/safeGone.ts' } };
+    const r = evaluate(withAllow, { dependencies: { a: '1.0.0' } }, () => true);
+    expect(r.ok).toBe(true);
+    expect(r.warnings.some((w: string) => w.includes('gone') && w.includes('stale'))).toBe(true);
+  });
+
+  it('does not fail the OTA check when a baseline dependency was removed', () => {
+    const r = evaluate(base, { dependencies: {} }, () => true);
+    expect(r.ok).toBe(true);
+    expect(r.errors).toEqual([]);
+  });
 });
 
 describe('repo native dependency baseline', () => {
