@@ -1482,6 +1482,16 @@ describe('DedicatedOpportunitiesService.apply / withdraw (AC-A2, A3, B16)', () =
   });
 });
 
+describe('dual persona: business owner applying to their own store', () => {
+  it('apply is allowed (self-apply is permitted)', async () => {
+    const w = world();
+    w.addAgent('own', { user_id: OWNER });
+    const p = w.seedPosting();
+    await w.opportunities.apply(OWNER, p.id, NOW);
+    expect(w.writes('UpsertDedicatedApplication')).toHaveLength(1);
+  });
+});
+
 describe('#594 G2: internal agents cannot apply', () => {
   it('apply -> 403 internal_agent, nothing written; withdraw of a legacy application still works', async () => {
     const w = world();
