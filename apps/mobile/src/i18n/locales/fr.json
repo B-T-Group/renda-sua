@@ -7775,6 +7775,7 @@
     "retry": "Réessayer",
     "errors": {
       "posting_filled": "Cette demande est déjà complète",
+      "cannot_apply_own_store": "Vous ne pouvez pas postuler comme livreur dédié pour votre propre boutique",
       "posting_not_open": "Cette demande n'est plus ouverte",
       "posting_expired": "Cette demande n'est plus ouverte",
       "application_closed": "Cette opportunité n'est plus ouverte",
