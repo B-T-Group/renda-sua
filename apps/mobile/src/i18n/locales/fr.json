@@ -7656,7 +7656,8 @@
       "status": {
         "active": "Actif",
         "paused": "En pause",
-        "offToday": "Absent aujourd'hui"
+        "offToday": "Absent aujourd'hui",
+        "pausedByAgent": "Mis en pause par l'agent"
       }
     },
     "assignedChip": "Affecté par RendaSua",
@@ -7797,7 +7798,8 @@
       "invalid_days_of_week": "Veuillez sélectionner au moins un jour",
       "terms_too_long": "Les conditions doivent faire 1000 caractères maximum",
       "geo_scope": "Hors de votre périmètre administrateur",
-      "query_too_short": "Saisissez au moins 2 caractères pour rechercher"
+      "query_too_short": "Saisissez au moins 2 caractères pour rechercher",
+      "paused_by_agent": "L'agent a mis cette affectation en pause en désactivant le créneau. Seul l'agent peut la reprendre."
     },
     "metrics": {
       "deliveries": "livraisons",
@@ -7832,7 +7834,11 @@
       "noAssignments": "Aucune affectation trouvée.",
       "relationWarning": "Le livreur est peut-être lié à cette entreprise",
       "removeConfirm": "Supprimer l'affectation ?",
-      "removeConfirmDetail": "Retirer {{name}} de {{store}} ({{slot}}) ? Le livreur ne sera plus dédié à ce créneau de la boutique."
+      "removeConfirmDetail": "Retirer {{name}} de {{store}} ({{slot}}) ? Le livreur ne sera plus dédié à ce créneau de la boutique.",
+      "preferredSlots": "Créneaux préférés",
+      "prefOn": "{{slot}} : activé",
+      "prefOffOne": "{{slot}} : désactivé",
+      "offShort": "Désactivé"
     },
     "admin": {
       "assignTitle": "Affecter un livreur dédié",

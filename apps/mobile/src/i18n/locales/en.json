@@ -7734,7 +7734,8 @@
       "status": {
         "active": "Active",
         "paused": "Paused",
-        "offToday": "Off today"
+        "offToday": "Off today",
+        "pausedByAgent": "Paused by agent"
       }
     },
     "assignedChip": "Assigned by RendaSua",
@@ -7875,7 +7876,8 @@
       "invalid_days_of_week": "Please select at least one day",
       "terms_too_long": "Terms must be 1000 characters or less",
       "geo_scope": "Outside your admin scope",
-      "query_too_short": "Type at least 2 characters to search"
+      "query_too_short": "Type at least 2 characters to search",
+      "paused_by_agent": "The agent paused this assignment by turning the slot off. Only the agent can resume it."
     },
     "metrics": {
       "deliveries": "deliveries",
@@ -7910,7 +7912,11 @@
       "noAssignments": "No assignments found.",
       "relationWarning": "Agent may be related to this business",
       "removeConfirm": "Remove assignment?",
-      "removeConfirmDetail": "Remove {{name}} from {{store}} ({{slot}})? The agent will no longer be dedicated to this store slot."
+      "removeConfirmDetail": "Remove {{name}} from {{store}} ({{slot}})? The agent will no longer be dedicated to this store slot.",
+      "preferredSlots": "Preferred slots",
+      "prefOn": "{{slot}}: on",
+      "prefOffOne": "{{slot}}: off",
+      "offShort": "Off"
     },
     "admin": {
       "assignTitle": "Assign a dedicated agent",

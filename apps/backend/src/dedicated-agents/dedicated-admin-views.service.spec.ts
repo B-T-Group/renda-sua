@@ -229,6 +229,32 @@ describe('DedicatedAdminViewsService.listAssignments (AC-S1, S5)', () => {
     expect(await ids({ source: 'posting' })).toEqual([a.id, 'as-2']);
   });
 
+  it('#594 addendum AC-P17: exposes preferred slots + pause reason, and filters by prefOff / pauseReason', async () => {
+    const w = world();
+    const base = w.addAssignment();
+    w.addAssignment({
+      status: 'paused',
+      pause_reason: 'paused_slot_off',
+      agent: { id: 'ag-x', pref_morning: false, pref_afternoon: true, pref_evening: true, is_internal: false, is_verified: true, referred_by_business_id: null, mobile_payment_phone: null, user: { first_name: 'P', last_name: 'Q', phone_number: null, profile_picture_url: null } },
+    });
+    w.addAssignment({ status: 'active', pause_reason: 'paused_admin' });
+    const all = (await w.service.listAssignments(ALL, {})).assignments;
+    const byId = new Map(all.map((x) => [x.assignmentId, x]));
+    expect(byId.get(base.id)).toMatchObject({ pauseReason: null, preferredSlots: { morning: true, afternoon: true, evening: true } });
+    expect(byId.get('as-2')).toMatchObject({ pauseReason: 'paused_slot_off', preferredSlots: { morning: false, afternoon: true, evening: true } });
+    // a stale reason on an active row is never surfaced
+    expect(byId.get('as-3')?.pauseReason).toBeNull();
+
+    await w.service.listAssignments(ALL, { prefOff: 'Morning', pauseReason: 'paused_slot_off' });
+    const where = w.state.queries.filter((q) => q.op === 'DedicatedAdminAssignments').pop()?.vars.where;
+    expect(where._and).toEqual(
+      expect.arrayContaining([{ agent: { pref_morning: { _eq: false } } }, { pause_reason: { _eq: 'paused_slot_off' } }])
+    );
+    for (const f of [{ prefOff: 'night' }, { pauseReason: 'tired' }]) {
+      await expect(w.service.listAssignments(ALL, f)).rejects.toBeInstanceOf(BadRequestException);
+    }
+  });
+
   it('rejects unknown filter values with 400', async () => {
     const w = world();
     for (const f of [{ slotKey: 'night' }, { status: 'gone' }, { source: 'invite' }]) {

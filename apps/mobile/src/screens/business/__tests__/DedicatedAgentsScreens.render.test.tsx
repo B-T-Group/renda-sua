@@ -172,6 +172,19 @@ describe('BusinessLocationDedicatedAgentsScreen', () => {
     expect(screen.getByText(/3 paused/i)).toBeTruthy();
     expect(screen.queryByText(/Agent1/)).toBeNull();
   });
+
+  it('#594 addendum AC-P16: shows "Paused by agent" for a slot-off pause', async () => {
+    service.getDedicatedAgents.mockResolvedValue({
+      success: true,
+      maxActiveOrders: 10,
+      assignments: [
+        { ...card('1', 'morning', 'paused'), pauseReason: 'paused_slot_off' },
+        card('2', 'morning', 'active'),
+      ],
+    });
+    await renderScreen(<BusinessLocationDedicatedAgentsScreen route={route} navigation={navigation} />);
+    expect(await screen.findByText('Paused by agent')).toBeTruthy();
+  });
 });
 
 describe('DedicatedApplicantsScreen', () => {

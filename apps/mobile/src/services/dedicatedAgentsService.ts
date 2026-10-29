@@ -220,6 +220,8 @@ export class DedicatedAgentsService {
     if (filters?.slotKey) params.append('slotKey', filters.slotKey);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.source) params.append('source', filters.source);
+    if (filters?.prefOff) params.append('prefOff', filters.prefOff);
+    if (filters?.pauseReason) params.append('pauseReason', filters.pauseReason);
     const query = params.toString();
     return api.get<AdminAssignmentsResponse>(`/admin/dedicated-agents${query ? `?${query}` : ''}`);
   }

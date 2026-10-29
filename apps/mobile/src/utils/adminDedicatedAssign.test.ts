@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import en from '../i18n/locales/en.json';
 import fr from '../i18n/locales/fr.json';
 import {
+  adminPreferredSlots,
+  isAdminSlotOffPause,
   agentFullName,
   agentInitials,
   buildAdminAssignmentFilters,
@@ -54,6 +56,22 @@ describe('list helpers', () => {
       slotKey: 'evening',
       status: 'paused',
     });
+  });
+  it('#594 addendum AC-P17: preferred-slot filter maps to prefOff or pauseReason', () => {
+    expect(buildAdminAssignmentFilters({ pref: 'all' })).toEqual({});
+    expect(buildAdminAssignmentFilters({ pref: 'morning' })).toEqual({ prefOff: 'morning' });
+    expect(buildAdminAssignmentFilters({ pref: 'paused_slot_off' })).toEqual({ pauseReason: 'paused_slot_off' });
+  });
+  it('#594 addendum AC-P17: preferred slots default ON; slot-off pause detection', () => {
+    expect(adminPreferredSlots({})).toEqual({ morning: true, afternoon: true, evening: true });
+    expect(adminPreferredSlots({ preferredSlots: { morning: false, afternoon: true, evening: true } })).toEqual({
+      morning: false,
+      afternoon: true,
+      evening: true,
+    });
+    expect(isAdminSlotOffPause({ status: 'paused', pauseReason: 'paused_slot_off' })).toBe(true);
+    expect(isAdminSlotOffPause({ status: 'paused', pauseReason: 'paused_admin' })).toBe(false);
+    expect(isAdminSlotOffPause({ status: 'active', pauseReason: 'paused_slot_off' })).toBe(false);
   });
   it('flips status for pause/resume', () => {
     expect(nextAssignmentStatus('active')).toBe('paused');

@@ -10,6 +10,15 @@ export type AssignmentStatus = 'active' | 'paused';
 
 export type AssignmentSource = 'posting' | 'superuser_assign';
 
+/** #594 addendum: why an assignment is paused (`paused_slot_off` = the agent turned the slot off). */
+export type PauseReason = 'paused_slot_off' | 'paused_business' | 'paused_admin' | 'paused_store_slot_disabled';
+
+export interface PreferredSlots {
+  morning: boolean;
+  afternoon: boolean;
+  evening: boolean;
+}
+
 export type OpportunityIneligibleReason =
   | 'not_verified'
   | 'contract_unsigned'
@@ -40,6 +49,8 @@ export interface DedicatedAgentCard {
   assignmentId: string;
   slotKey: SlotKey;
   status: AssignmentStatus;
+  /** #594 addendum AC-P16 (older backends omit it). */
+  pauseReason?: PauseReason | null;
   source: AssignmentSource;
   assignedByRendasua: boolean;
   offToday: boolean;
@@ -138,6 +149,9 @@ export interface AdminAssignmentView {
   assignmentId: string;
   slotKey: SlotKey;
   status: AssignmentStatus;
+  /** #594 addendum AC-P17. */
+  pauseReason?: PauseReason | null;
+  preferredSlots?: PreferredSlots;
   source: AssignmentSource;
   createdAt: string;
   location: {

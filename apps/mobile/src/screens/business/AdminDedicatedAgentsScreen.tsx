@@ -19,14 +19,19 @@ import { SectionCard } from '../../components/common/SectionCard';
 import { AdminDedicatedAssignModal } from '../../components/admin/AdminDedicatedAssignModal';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import { dedicatedAgentsAnalytics, type DedicatedAgentsPlatform } from '../../services/dedicatedAgentsAnalytics';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { SLOT_PREF_ICONS } from '../../utils/slotPrefs';
 import {
   ADMIN_SLOT_KEYS,
+  adminPreferredSlots,
   agentFullName,
+  isAdminSlotOffPause,
   buildAdminAssignmentFilters,
   isAdminFeatureOff,
   mapAdminActionError,
   nextAssignmentStatus,
   showRelationWarning,
+  type AdminPrefFilter,
   type AdminSlotFilter,
   type AdminStatusFilter,
 } from '../../utils/adminDedicatedAssign';
@@ -57,6 +62,7 @@ export default function AdminDedicatedAgentsScreen() {
   const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set());
   const [slotFilter, setSlotFilter] = useState<AdminSlotFilter>('all');
   const [statusFilter, setStatusFilter] = useState<AdminStatusFilter>('all');
+  const [prefFilter, setPrefFilter] = useState<AdminPrefFilter>('all');
   const [city, setCity] = useState('');
   const [appliedCity, setAppliedCity] = useState('');
   const [assignOpen, setAssignOpen] = useState(false);
@@ -78,7 +84,7 @@ export default function AdminDedicatedAgentsScreen() {
       setLoadError(null);
       try {
         const res = await dedicatedAgentsService.getAdminAssignments(
-          buildAdminAssignmentFilters({ city: appliedCity, slot: slotFilter, status: statusFilter })
+          buildAdminAssignmentFilters({ city: appliedCity, slot: slotFilter, status: statusFilter, pref: prefFilter })
         );
         if (seq !== loadSeq.current) return;
         setAssignments(res.assignments ?? []);
@@ -108,7 +114,7 @@ export default function AdminDedicatedAgentsScreen() {
         }
       }
     },
-    [appliedCity, slotFilter, statusFilter]
+    [appliedCity, slotFilter, statusFilter, prefFilter]
   );
 
   useEffect(() => {
@@ -266,6 +272,29 @@ export default function AdminDedicatedAgentsScreen() {
         ]}
         density="small"
       />
+      <Text style={[typography.caption, { color: colors.text.secondary }]}>
+        {t('dedicatedAgents.superuser.preferredSlots', 'Preferred slots')}
+      </Text>
+      <SegmentedButtons
+        value={prefFilter}
+        onValueChange={(v) => setPrefFilter(v as AdminPrefFilter)}
+        buttons={[
+          { value: 'all', label: t('common.all', 'All') },
+          ...ADMIN_SLOT_KEYS.map((s) => ({
+            value: s,
+            icon: SLOT_PREF_ICONS[s],
+            label: t('dedicatedAgents.superuser.offShort', 'Off'),
+            accessibilityLabel: t('dedicatedAgents.superuser.prefOffOne', '{{slot}}: off', {
+              slot: t(`dedicatedAgents.slots.${s}`, s),
+            }),
+          })),
+          {
+            value: 'paused_slot_off',
+            label: t('dedicatedAgents.chips.status.pausedByAgent', 'Paused by agent'),
+          },
+        ]}
+        density="small"
+      />
       {truncated ? (
         <NoticeBanner
           tone="info"
@@ -278,6 +307,9 @@ export default function AdminDedicatedAgentsScreen() {
   const renderItem = ({ item: a }: { item: AdminAssignmentView }) => {
     const busy = busyIds.has(a.assignmentId);
     const paused = a.status === 'paused';
+    // #594 addendum AC-P17: only the agent can resume a slot-off pause.
+    const slotOffPause = isAdminSlotOffPause(a);
+    const prefs = adminPreferredSlots(a);
     const actionLabel = paused
       ? t('dedicatedAgents.actions.resume', 'Resume')
       : t('dedicatedAgents.actions.pause', 'Pause');
@@ -300,9 +332,11 @@ export default function AdminDedicatedAgentsScreen() {
             <Badge
               tone={paused ? 'warning' : 'success'}
               label={
-                paused
-                  ? t('dedicatedAgents.chips.status.paused', 'Paused')
-                  : t('dedicatedAgents.chips.status.active', 'Active')
+                slotOffPause
+                  ? t('dedicatedAgents.chips.status.pausedByAgent', 'Paused by agent')
+                  : paused
+                    ? t('dedicatedAgents.chips.status.paused', 'Paused')
+                    : t('dedicatedAgents.chips.status.active', 'Active')
               }
             />
             {showRelationWarning(a) ? (
@@ -312,6 +346,32 @@ export default function AdminDedicatedAgentsScreen() {
               />
             ) : null}
           </View>
+          <View style={styles.prefs} testID={`pref-slots-${a.assignmentId}`}>
+            <Text style={[typography.caption, { color: colors.text.secondary }]}>
+              {t('dedicatedAgents.superuser.preferredSlots', 'Preferred slots')}
+            </Text>
+            {ADMIN_SLOT_KEYS.map((s) => {
+              const on = prefs[s];
+              const slot = t(`dedicatedAgents.slots.${s}`, s);
+              return (
+                <MaterialCommunityIcons
+                  key={s}
+                  name={SLOT_PREF_ICONS[s] as any}
+                  size={18}
+                  color={on ? colors.primary.main : colors.text.disabled}
+                  style={on ? undefined : { opacity: 0.35 }}
+                  accessibilityLabel={
+                    on
+                      ? t('dedicatedAgents.superuser.prefOn', '{{slot}}: on', { slot })
+                      : t('dedicatedAgents.superuser.prefOffOne', '{{slot}}: off', { slot })
+                  }
+                />
+              );
+            })}
+          </View>
+          {paused && a.pauseReason ? (
+            <Text style={[typography.caption, { color: colors.text.secondary }]}>{a.pauseReason}</Text>
+          ) : null}
           <Text style={[typography.body2, { color: colors.text.primary }]}>{a.location.businessName}</Text>
           <Text style={[typography.caption, { color: colors.text.secondary }]}>
             {[a.location.name, a.location.city].filter(Boolean).join(' · ')}
@@ -323,7 +383,7 @@ export default function AdminDedicatedAgentsScreen() {
               size="small"
               icon={paused ? 'play-outline' : 'pause'}
               loading={busy}
-              disabled={isOffline}
+              disabled={isOffline || slotOffPause}
               onPress={() => void togglePause(a)}
               style={styles.actionBtn}
             />
@@ -393,5 +453,6 @@ const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   actions: { flexDirection: 'row' },
+  prefs: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   actionBtn: { flex: 1 },
 });

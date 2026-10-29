@@ -8890,7 +8890,8 @@
       "status": {
         "active": "Active",
         "paused": "Paused",
-        "offToday": "Off today"
+        "offToday": "Off today",
+        "pausedByAgent": "Paused by agent"
       }
     },
     "assignedChip": "Assigned by RendaSua",
@@ -9019,7 +9020,8 @@
       "invalid_headcount": "Headcount must be between 1 and 10",
       "invalid_days_of_week": "Please select at least one day",
       "terms_too_long": "Terms must be 1000 characters or less",
-      "generic": "Something went wrong"
+      "generic": "Something went wrong",
+      "paused_by_agent": "The agent paused this assignment by turning the slot off. Only the agent can resume it."
     },
     "superuser": {
       "tab": "Dedicated",
@@ -9038,7 +9040,13 @@
       "removeConfirm": "Remove assignment?",
       "removeConfirmDesc": "The agent will no longer be dedicated to this location.",
       "posting": "Posting",
-      "adminAssigned": "Admin assigned"
+      "adminAssigned": "Admin assigned",
+      "preferredSlots": "Preferred slots",
+      "prefOff": "Preferred slot off",
+      "pauseReason": "Pause reason",
+      "pausedSlotOff": "Paused by agent (slot off)",
+      "prefOn": "{{slot}}: on",
+      "prefOffOne": "{{slot}}: off"
     },
     "metrics": {
       "deliveries": "deliveries",

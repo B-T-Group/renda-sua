@@ -33,6 +33,9 @@ import {
   Warning as WarningIcon,
   Refresh as RefreshIcon,
   WifiOff as WifiOffIcon,
+  WbSunny as MorningIcon,
+  Brightness6 as AfternoonIcon,
+  NightsStay as EveningIcon,
 } from '@mui/icons-material';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
@@ -47,7 +50,17 @@ import {
   SITE_EVENT_DEDICATED_UI_ACTION_CONFLICT,
 } from '../../../hooks/useTrackSiteEvent';
 import AdminDedicatedAssignDialog from './AdminDedicatedAssignDialog';
-import type { AdminAssignmentView, AssignmentStatus } from '../../../types/dedicatedAgents';
+import type { AdminAssignmentView, AssignmentStatus, SlotKey } from '../../../types/dedicatedAgents';
+
+const PREF_SLOTS: Array<{ key: SlotKey; Icon: typeof MorningIcon; label: string }> = [
+  { key: 'morning', Icon: MorningIcon, label: 'Morning' },
+  { key: 'afternoon', Icon: AfternoonIcon, label: 'Afternoon' },
+  { key: 'evening', Icon: EveningIcon, label: 'Evening' },
+];
+
+/** #594 addendum AC-P17: true when the agent paused it by turning the slot off (only the agent can resume). */
+export const isPausedSlotOff = (a: Pick<AdminAssignmentView, 'status' | 'pauseReason'>) =>
+  a.status === 'paused' && a.pauseReason === 'paused_slot_off';
 
 export function AdminDedicatedAssignmentsSection() {
   const { t } = useTranslation();
@@ -68,6 +81,7 @@ export function AdminDedicatedAssignmentsSection() {
   const [slotFilter, setSlotFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
+  const [prefOffFilter, setPrefOffFilter] = useState<string>('all');
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
 
@@ -88,6 +102,8 @@ export function AdminDedicatedAssignmentsSection() {
       if (slotFilter !== 'all') filters.slotKey = slotFilter;
       if (statusFilter !== 'all') filters.status = statusFilter;
       if (sourceFilter !== 'all') filters.source = sourceFilter;
+      if (prefOffFilter === 'paused_slot_off') filters.pauseReason = 'paused_slot_off';
+      else if (prefOffFilter !== 'all') filters.prefOff = prefOffFilter;
       const result = await getAdminAssignments(filters);
       setAssignments(result.assignments);
     } catch (err: any) {
@@ -96,7 +112,7 @@ export function AdminDedicatedAssignmentsSection() {
     } finally {
       setLoading(false);
     }
-  }, [getAdminAssignments, cityFilter, slotFilter, statusFilter, sourceFilter, t]);
+  }, [getAdminAssignments, cityFilter, slotFilter, statusFilter, sourceFilter, prefOffFilter, t]);
 
   useEffect(() => {
     loadAssignments();
@@ -251,6 +267,26 @@ export function AdminDedicatedAssignmentsSection() {
               </Select>
             </FormControl>
 
+            <FormControl size="small" sx={{ minWidth: 200 }}>
+              <InputLabel>{t('dedicatedAgents.superuser.preferredSlots', 'Preferred slots')}</InputLabel>
+              <Select
+                value={prefOffFilter}
+                label={t('dedicatedAgents.superuser.preferredSlots', 'Preferred slots')}
+                onChange={(e) => setPrefOffFilter(e.target.value)}
+                inputProps={{ 'data-testid': 'pref-filter' }}
+              >
+                <MenuItem value="all">{t('common.all', 'All')}</MenuItem>
+                {PREF_SLOTS.map(({ key, label }) => (
+                  <MenuItem key={key} value={key}>
+                    {t('dedicatedAgents.superuser.prefOffOne', '{{slot}}: off', { slot: t(`dedicatedAgents.slots.${key}`, label) })}
+                  </MenuItem>
+                ))}
+                <MenuItem value="paused_slot_off">
+                  {t('dedicatedAgents.superuser.pausedSlotOff', 'Paused by agent (slot off)')}
+                </MenuItem>
+              </Select>
+            </FormControl>
+
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
@@ -311,6 +347,7 @@ export function AdminDedicatedAssignmentsSection() {
                 <TableCell>{t('dedicatedAgents.superuser.agent', 'Agent')}</TableCell>
                 <TableCell>{t('dedicatedAgents.superuser.location', 'Location')}</TableCell>
                 <TableCell>{t('dedicatedAgents.superuser.slots', 'Slots')}</TableCell>
+                <TableCell>{t('dedicatedAgents.superuser.preferredSlots', 'Preferred slots')}</TableCell>
                 <TableCell>{t('dedicatedAgents.superuser.status', 'Status')}</TableCell>
                 <TableCell>{t('common.actions', 'Actions')}</TableCell>
               </TableRow>
@@ -351,11 +388,41 @@ export function AdminDedicatedAssignmentsSection() {
                     />
                   </TableCell>
                   <TableCell>
+                    <Box sx={{ display: 'flex', gap: 0.5 }} data-testid={`pref-slots-${assignment.assignmentId}`}>
+                      {PREF_SLOTS.map(({ key, Icon, label }) => {
+                        const on = assignment.preferredSlots?.[key] !== false;
+                        const slot = t(`dedicatedAgents.slots.${key}`, label);
+                        const text = on
+                          ? t('dedicatedAgents.superuser.prefOn', '{{slot}}: on', { slot })
+                          : t('dedicatedAgents.superuser.prefOffOne', '{{slot}}: off', { slot });
+                        return (
+                          <Tooltip key={key} title={text}>
+                            <Icon
+                              fontSize="small"
+                              color={on ? 'primary' : 'disabled'}
+                              aria-label={text}
+                              data-pref={on ? 'on' : 'off'}
+                            />
+                          </Tooltip>
+                        );
+                      })}
+                    </Box>
+                  </TableCell>
+                  <TableCell>
                     <Chip
-                      label={t(`dedicatedAgents.chips.status.${assignment.status}`, assignment.status === 'paused' ? 'Paused' : 'Active')}
+                      label={
+                        isPausedSlotOff(assignment)
+                          ? t('dedicatedAgents.chips.status.pausedByAgent', 'Paused by agent')
+                          : t(`dedicatedAgents.chips.status.${assignment.status}`, assignment.status === 'paused' ? 'Paused' : 'Active')
+                      }
                       color={assignment.status === 'paused' ? 'default' : 'success'}
                       size="small"
                     />
+                    {assignment.status === 'paused' && assignment.pauseReason && (
+                      <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5 }}>
+                        {assignment.pauseReason}
+                      </Typography>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Box sx={{ display: 'flex', gap: 1 }}>
@@ -364,7 +431,7 @@ export function AdminDedicatedAssignmentsSection() {
                           size="small"
                           onClick={() => handlePauseResume(assignment.assignmentId, assignment.status)}
                           aria-label={assignment.status === 'paused' ? t('dedicatedAgents.actions.resume', 'Resume') : t('dedicatedAgents.actions.pause', 'Pause')}
-                          disabled={!isOnline || busyIds.has(assignment.assignmentId)}
+                          disabled={!isOnline || busyIds.has(assignment.assignmentId) || isPausedSlotOff(assignment)}
                         >
                           {busyIds.has(assignment.assignmentId) ? (
                             <CircularProgress size={20} />
