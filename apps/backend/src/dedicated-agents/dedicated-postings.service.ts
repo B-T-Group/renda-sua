@@ -8,9 +8,13 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
   buildDedicatedPostingAgentMessage,
   buildDedicatedPostingApplicationMessage,
+  buildDedicatedPostingCreatedMessage,
   type DedicatedPostingAgentEvent,
 } from '../notifications/dedicated-posting-push.messages';
 import { NotificationsService } from '../notifications/notifications.service';
+import { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
+import { AGENT_SLOT_PREF_COLUMNS } from './agent-slot-prefs.util';
+import { postingPushSkipReason, type PostingPushCandidate, type PostingPushSkip } from './dedicated-posting-push.util';
 import { DedicatedAgentsConfigService } from './dedicated-agents-config.service';
 import {
   DEDICATED_AGENT_OPPORTUNITY_PATH,
@@ -38,6 +42,7 @@ import {
   DEDICATED_POSTING_BY_ID_QUERY,
   DEDICATED_POSTING_LOCATION_QUERY,
   DEDICATED_POSTING_PENDING_AGENTS_QUERY,
+  DEDICATED_POSTING_PUSH_CANDIDATES_QUERY,
   EXPIRE_DEDICATED_POSTINGS_MUTATION,
   INSERT_DEDICATED_POSTING_MUTATION,
   UPDATE_DEDICATED_POSTING_TERMS_MUTATION,
@@ -48,6 +53,8 @@ const ALL_DAYS = [1, 2, 3, 4, 5, 6, 7];
 const CLOSED_REASON_MAX = 500;
 const LIST_LIMIT = 20;
 export const POSTING_EXPIRY_BATCH = 50;
+/** AC-P13 new-posting push: candidate agents read per create (country + slot prefs filtered in SQL). */
+export const POSTING_PUSH_CANDIDATE_LIMIT = 500;
 
 /** Error codes of the posting endpoints (409 unless noted). */
 export const DEDICATED_POSTING_ERRORS = {
@@ -293,7 +300,8 @@ export class DedicatedPostingsService {
     private readonly hasuraSystemService: HasuraSystemService,
     private readonly configService: DedicatedAgentsConfigService,
     private readonly notifications: NotificationsService,
-    @Optional() private readonly siteEventsService?: SiteEventsService
+    @Optional() private readonly siteEventsService?: SiteEventsService,
+    @Optional() private readonly contractGate?: AgentContractGateService
   ) {}
 
   /** AC section 5 event, fire-and-forget. */
@@ -344,7 +352,9 @@ export class DedicatedPostingsService {
       JSON.stringify({ event: 'dedicated.posting_created', postingId: id, locationId: location.id, headcount, slotKeys, expiresAt })
     );
     this.track('dedicated.posting_created', { postingId: id, businessLocationId: location.id, headcount, slotKeys, expiresAt });
-    return { posting: postingView(await this.loadPosting(id)) };
+    const posting = await this.loadPosting(id);
+    await this.notifyPostingCreated(posting, location, slotKeys);
+    return { posting: postingView(posting) };
   }
 
   async list(locationId: string): Promise<{ postings: DedicatedPostingView[] }> {
@@ -776,5 +786,75 @@ export class DedicatedPostingsService {
       persona: 'agent',
       locationId: posting.business_location_id,
     });
+  }
+
+  /**
+   * #594 AC-P13: in-app + push to in-city agents preferring ALL the posting's slots.
+   * Runs once per inserted posting (a retried create 409s on the open slot before
+   * it gets here); recipients are de-duplicated by user. Never throws.
+   */
+  private async notifyPostingCreated(
+    posting: PostingRow,
+    location: { id: string; address?: { city?: string | null; state?: string | null; country?: string | null } | null },
+    slotKeys: DedicatedSlotKey[]
+  ): Promise<void> {
+    try {
+      const country = location.address?.country?.trim() ?? '';
+      if (!country || slotKeys.length === 0) return;
+      const where: Record<string, unknown> = {
+        status: { _neq: 'suspended' },
+        is_verified: { _eq: true },
+        is_internal: { _neq: true },
+        agent_addresses: { address: { status: { _eq: 'active' }, country: { _ilike: country } } },
+      };
+      for (const k of slotKeys) where[AGENT_SLOT_PREF_COLUMNS[k]] = { _neq: false };
+      const res = await this.hasuraSystemService.executeQuery<{ agents: PostingPushCandidate[] }>(DEDICATED_POSTING_PUSH_CANDIDATES_QUERY, {
+        where,
+        limit: POSTING_PUSH_CANDIDATE_LIMIT,
+      });
+      const candidates = res?.agents ?? [];
+      const skipped: Partial<Record<PostingPushSkip | 'contract_unsigned', number>> = {};
+      const sent = new Set<string>();
+      for (const agent of candidates) {
+        let reason: PostingPushSkip | 'contract_unsigned' | null = postingPushSkipReason(agent, location.address ?? {}, slotKeys);
+        if (!reason && this.contractGate && !(await this.contractGate.canOperate(agent.id))) reason = 'contract_unsigned';
+        if (reason) {
+          skipped[reason] = (skipped[reason] ?? 0) + 1;
+          continue;
+        }
+        const userId = agent.user_id as string;
+        if (sent.has(userId)) continue;
+        sent.add(userId);
+        const { title, body } = buildDedicatedPostingCreatedMessage({
+          storeName: posting.business_location?.name ?? posting.business_location?.business?.name ?? '',
+          slotKeys,
+          preferredLanguage: agent.user?.preferred_language,
+        });
+        await this.notifications.sendDedicatedAgentNotice({
+          userId,
+          title,
+          body,
+          messageType: 'DEDICATED_POSTING_CREATED',
+          postingId: posting.id,
+          path: DEDICATED_AGENT_OPPORTUNITY_PATH(posting.id),
+          event: 'dedicated_posting_created',
+          persona: 'agent',
+          locationId: posting.business_location_id,
+        });
+      }
+      const metric = {
+        postingId: posting.id,
+        businessLocationId: posting.business_location_id,
+        slotKeys,
+        candidates: candidates.length,
+        matched_count: sent.size,
+        skipped,
+        truncated: candidates.length >= POSTING_PUSH_CANDIDATE_LIMIT,
+      };
+      this.logger.log(JSON.stringify({ event: 'pref_slot.posting_push_sent', ...metric }));
+      this.track('pref_slot.posting_push_sent', metric);
+    } catch (error: unknown) {
+      this.logger.warn(`notifyPostingCreated failed for ${posting.id}: ${(error as Error)?.message ?? error}`);
+    }
   }
 }

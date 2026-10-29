@@ -470,3 +470,35 @@ export const DEDICATED_AGENTS_CONTACT_QUERY = `
     }
   }
 `;
+
+/**
+ * AC-P13 new-posting push candidates: verified, non-internal, non-suspended agents
+ * preferring every posting slot (pref_* columns, set by the caller), with an active
+ * address in the store's country. City / state matching happens in Nest (normalised).
+ */
+export const DEDICATED_POSTING_PUSH_CANDIDATES_QUERY = `
+  query DedicatedPostingPushCandidates($where: agents_bool_exp!, $limit: Int!) {
+    agents(where: $where, order_by: { created_at: asc }, limit: $limit) {
+      id
+      user_id
+      status
+      focus
+      is_verified
+      is_internal
+      pref_morning
+      pref_afternoon
+      pref_evening
+      user {
+        preferred_language
+      }
+      agent_addresses(where: { address: { status: { _eq: active } } }, order_by: { address: { created_at: asc } }) {
+        address {
+          city
+          state
+          country
+          is_primary
+        }
+      }
+    }
+  }
+`;

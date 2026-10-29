@@ -55,6 +55,9 @@ interface AgentFake {
   pickups_reassigned_count: number;
   user: { first_name: string; profile_picture_url: string | null; preferred_language: string | null; phone_number: string | null };
   addresses: Array<{ city: string; state: string; country: string; latitude: number | null; longitude: number | null; is_primary: boolean }>;
+  pref_morning?: boolean;
+  pref_afternoon?: boolean;
+  pref_evening?: boolean;
 }
 interface PostingFake {
   id: string;
@@ -115,6 +118,7 @@ function world() {
     /** Simulates a concurrent create winning the open-slot unique index. */
     raceOpenOnInsert: false,
     mutations: [] as Array<{ op: string; vars: Loose }>,
+    pushQueries: [] as Loose[],
     nextId: 1,
   };
   const ID_PREFIX: Record<string, string> = { po: '0000a0a0', app: '0000a4a4', as: '0000a5a5' };
@@ -296,6 +300,18 @@ function world() {
               }
             : null,
           held: state.assignments.filter((x) => x.agent_id === vars.agentId && live(x.status)),
+        };
+      }
+      case 'DedicatedPostingPushCandidates': {
+        const w = vars.where as Loose;
+        const country = String(w.agent_addresses.address.country._ilike).toLowerCase();
+        state.pushQueries.push(vars);
+        return {
+          agents: [...state.agents.values()]
+            .filter((a) => a.status !== 'suspended' && a.is_verified && !a.is_internal)
+            .filter((a) => ['pref_morning', 'pref_afternoon', 'pref_evening'].every((c) => !w[c] || (a as Loose)[c] !== false))
+            .filter((a) => a.addresses.some((x) => x.country.toLowerCase() === country))
+            .map((a) => ({ ...a, user: { preferred_language: a.user.preferred_language }, agent_addresses: agentAddresses(a) })),
         };
       }
       case 'DedicatedAgentHeldAssignments':
@@ -537,12 +553,6 @@ function world() {
       .map((c) => c[0] as { eventType: string; metadata: Record<string, unknown> })
       .filter((e) => e.eventType === type)
       .map((e) => e.metadata);
-  const postings = new DedicatedPostingsService(
-    hasura,
-    config,
-    notifications as unknown as NotificationsService,
-    siteEvents as unknown as SiteEventsService
-  );
   const coverage = {
     slotBoundsFor: jest.fn(async () => [
       { slotKey: 'morning', slotId: 's-m', startTime: '08:00:00', endTime: '12:00:00' },
@@ -553,6 +563,13 @@ function world() {
   const contractGate = {
     canOperate: jest.fn(async (agentId: string) => !state.contractRequired || state.signed.has(agentId)),
   };
+  const postings = new DedicatedPostingsService(
+    hasura,
+    config,
+    notifications as unknown as NotificationsService,
+    siteEvents as unknown as SiteEventsService,
+    contractGate as unknown as AgentContractGateService
+  );
   const opportunities = new DedicatedOpportunitiesService(
     hasura,
     postings,
@@ -584,6 +601,70 @@ async function expectConflict(p: Promise<unknown>, code: string): Promise<Loose>
 }
 
 // ------------------------------------------------------------------ business
+
+describe('DedicatedPostingsService.create new-posting push (AC-P13)', () => {
+  it('notifies in-city agents preferring ALL posting slots, in-app + push, once each', async () => {
+    const w = world();
+    w.addAgent('ag-all'); // all prefs default ON
+    w.addAgent('ag-evening-off', { pref_evening: false });
+    w.addAgent('ag-morning-only', { pref_afternoon: false, pref_evening: false });
+    w.addAgent('ag-yaounde', { addresses: [{ city: 'Yaoundé', state: 'Centre', country: 'CM', latitude: 3.8, longitude: 11.5, is_primary: true }] });
+    w.addAgent('ag-no-address', { addresses: [] });
+    w.addAgent('ag-unverified', { is_verified: false });
+    w.addAgent('ag-internal', { is_internal: true });
+    w.addAgent('ag-suspended', { status: 'suspended' });
+    w.addAgent('ag-commercial', { focus: 'commercial' });
+    w.addAgent('ag-unsigned');
+    w.state.signed.delete('ag-unsigned');
+    w.addAgent('ag-fr', {}, { preferred_language: 'fr' });
+    const { posting } = await w.postings.create(actor, { slotKeys: ['morning', 'evening'] }, NOW);
+
+    expect(w.notices.map((n) => n.userId).sort()).toEqual(['u-ag-all', 'u-ag-fr']);
+    const en = w.notices.find((n) => n.userId === 'u-ag-all') as Notice;
+    expect(en).toMatchObject({
+      messageType: 'DEDICATED_POSTING_CREATED',
+      postingId: posting.id,
+      event: 'dedicated_posting_created',
+      persona: 'agent',
+      locationId: LOC,
+      title: 'New dedicated spot',
+    });
+    expect(en.path).toContain(posting.id);
+    expect(en.body).toContain('Chez Mama');
+    expect((w.notices.find((n) => n.userId === 'u-ag-fr') as Notice).title).toBe('Nouveau poste dédié');
+    // Slot prefs are filtered in SQL too (only the posting's slots).
+    const where = w.state.pushQueries[0].where;
+    expect(where.pref_morning).toEqual({ _neq: false });
+    expect(where.pref_evening).toEqual({ _neq: false });
+    expect(where.pref_afternoon).toBeUndefined();
+    const [metric] = w.events('pref_slot.posting_push_sent');
+    expect(metric).toMatchObject({ postingId: posting.id, matched_count: 2 });
+  });
+
+  it('does not notify the business owner unless they are a real eligible agent', async () => {
+    const w = world();
+    w.addAgent('ag-owner', { user_id: OWNER, is_verified: false });
+    await w.postings.create(actor, { slotKeys: ['morning'] }, NOW);
+    expect(w.notices).toHaveLength(0);
+  });
+
+  it('a retried create (posting already open) sends nothing twice', async () => {
+    const w = world();
+    w.addAgent('ag-all');
+    await w.postings.create(actor, { slotKeys: ['morning'] }, NOW);
+    await expectConflict(w.postings.create(actor, { slotKeys: ['morning'] }, NOW), 'posting_already_open');
+    expect(w.notices).toHaveLength(1);
+  });
+
+  it('a notify failure never fails the create', async () => {
+    const w = world();
+    w.addAgent('ag-all');
+    w.state.pushQueries = null as unknown as Loose[]; // fake throws on push
+    const { posting } = await w.postings.create(actor, { slotKeys: ['morning'] }, NOW);
+    expect(posting.status).toBe('open');
+    expect(w.notices).toHaveLength(0);
+  });
+});
 
 describe('DedicatedPostingsService.create (AC-B11, B12)', () => {
   it('stores headcount, slots in fixed order, days, sanitised terms and a 14-day expiry, in one mutation', async () => {
