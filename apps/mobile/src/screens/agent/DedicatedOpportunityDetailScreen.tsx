@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View, Alert, Modal, Pressable, useWindowDimensions } from 'react-native';
-import { ActivityIndicator, Button, Card, Chip, Text, Snackbar } from 'react-native-paper';
+import { ActivityIndicator, Button, Card, Chip, Portal, Text, Snackbar } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -14,6 +14,8 @@ import { useProfilePhotoUpload } from '../../hooks/useProfilePhotoUpload';
 import { mapDedicatedError } from '../../utils/dedicatedAgentsErrors';
 import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { useSlotPreferences } from '../../hooks/useSlotPreferences';
+import { missingPreferredSlots } from '../../utils/slotPrefs';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedOpportunityDetail'>;
 
@@ -47,6 +49,8 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const { isOffline } = useNetworkStatus();
+  // #594 addendum AC-P14: Apply needs all of the posting's slots preferred.
+  const slotPrefs = useSlotPreferences();
   
   const loadData = useCallback(async (isRefresh = false) => {
     try {
@@ -258,6 +262,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const isPostingOpen = opportunity.status === 'open';
   const isFilled = !isPostingOpen;
   
+  const missingSlots = missingPreferredSlots(opportunity.slots, slotPrefs.prefs);
   const canApply =
     !opportunity.application &&
     isPostingOpen &&
@@ -387,11 +392,44 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
           </Card>
         )}
 
+        {!isFilled && canApply && missingSlots.length > 0 && (
+          <Card style={{ marginHorizontal: spacing.md, marginBottom: spacing.sm }} testID="posting-not-preferred">
+            <Card.Content>
+              <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
+                {t('slotPrefs.postingGreyed')}
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>
+                {missingSlots.map((slot) => (
+                  <Button
+                    key={slot}
+                    compact
+                    mode="outlined"
+                    icon={SLOT_ICONS[slot]}
+                    disabled={slotPrefs.savingSlot === slot}
+                    onPress={() => {
+                      dedicatedAnalytics.trackDedicatedSlotTurnOnCta(opportunity.id, slot);
+                      slotPrefs.setSlot(slot, true);
+                    }}
+                  >
+                    {t('slotPrefs.postingCta', { slot: slotPrefs.slotLabel(slot) })}
+                  </Button>
+                ))}
+              </View>
+            </Card.Content>
+          </Card>
+        )}
+        <Portal>
+          <Snackbar visible={!!slotPrefs.message} onDismiss={slotPrefs.clearMessage} duration={3000}>
+            {slotPrefs.message ?? ''}
+          </Snackbar>
+        </Portal>
+
         {!isFilled && canApply && (
           <Button
             mode="contained"
+            testID="apply-button"
             onPress={handleApply}
-            disabled={submitting}
+            disabled={submitting || missingSlots.length > 0}
             loading={submitting}
             style={{ marginHorizontal: spacing.md }}
           >

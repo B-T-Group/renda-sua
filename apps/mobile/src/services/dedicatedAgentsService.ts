@@ -27,6 +27,8 @@ import type {
   CreateAdminAssignmentRequest,
   CreateAdminAssignmentResponse,
   AdminCoverageResponse,
+  SlotPreferencesResponse,
+  UpdateSlotPreferencesRequest,
 } from '../types/dedicatedAgents';
 
 export class DedicatedAgentsService {
@@ -181,6 +183,24 @@ export class DedicatedAgentsService {
     return api.patch<{ success: true }>(
       `/agents/me/dedicated-assignments/${assignmentId}/off-today`,
       data
+    );
+  }
+
+  // #594 addendum: preferred delivery slots. PATCH turning a slot off with active
+  // dedicated assignments throws 409 slot_has_dedicated_assignments (see
+  // utils/slotPrefs#parseSlotOffConflict) until resent with confirmPause: true.
+  async getSlotPreferences(): Promise<SlotPreferencesResponse> {
+    return api.get<SlotPreferencesResponse>('/agents/me/slot-preferences');
+  }
+
+  async updateSlotPreferences(data: UpdateSlotPreferencesRequest): Promise<SlotPreferencesResponse> {
+    return api.patch<SlotPreferencesResponse>('/agents/me/slot-preferences', data);
+  }
+
+  /** Resume an assignment paused by turning its slot off (slot must be on). */
+  async resumeAssignment(assignmentId: string): Promise<{ success: true; assignment: unknown }> {
+    return api.patch<{ success: true; assignment: unknown }>(
+      `/agents/me/dedicated-assignments/${assignmentId}/resume`
     );
   }
 

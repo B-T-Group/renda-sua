@@ -146,3 +146,11 @@ export function trackDedicatedAgentGateDismissed(reason: string) {
     metadata: { reason },
   });
 }
+
+/** #594 addendum §8: `pref_slot.posting_turn_on_cta_tapped`. */
+export function trackDedicatedSlotTurnOnCta(postingId: string, slot: string) {
+  AppEventsService.track({
+    eventType: 'pref_slot.posting_turn_on_cta_tapped',
+    metadata: { postingId, slot },
+  });
+}

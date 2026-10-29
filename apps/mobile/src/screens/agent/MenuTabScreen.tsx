@@ -35,6 +35,7 @@ const ROOT_STACK_SCREENS: AppNavScreen[] = [
   'AgentBusinessReferral',
   'Profile',
   'NotificationPreferences',
+  'AgentAvailability',
   'SavedAccounts',
   'AccountManagement',
   'ConfigurePayments',
@@ -213,6 +214,12 @@ function MenuTabScreen() {
               'Push, WhatsApp, email, and categories'
             )}
             onPress={() => goTo('NotificationPreferences')}
+          />
+          <UserMenuRow
+            icon="clock-outline"
+            label={t('slotPrefs.navTitle', 'Availability')}
+            subtitle={t('slotPrefs.title', 'Preferred delivery times')}
+            onPress={() => goTo('AgentAvailability')}
           />
         </UserMenuSection>
 
