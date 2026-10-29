@@ -45,7 +45,6 @@ export const DEDICATED_OPPORTUNITY_ERRORS = {
   applicationClosed: 'application_closed', // 409
   notApplied: 'application_not_pending', // 409
   invalidCountry: 'invalid_country', // 400 (#594 G12)
-  ownStore: 'cannot_apply_own_store', // 409: the agent's user owns the posting's business (dual persona)
 } as const;
 
 /** #594 G12 capability payload. */
@@ -248,12 +247,6 @@ export class DedicatedOpportunitiesService {
     const { config } = await this.postings.requireEnabled(posting.business_location?.address?.country);
     await this.assertEligible(agent);
     const eligible = agent as OpportunityAgent;
-    if (posting.business_location?.business?.user_id && posting.business_location.business.user_id === eligible.user_id) {
-      throw new ConflictException({
-        code: DEDICATED_OPPORTUNITY_ERRORS.ownStore,
-        message: "You can't apply to be a dedicated agent for your own store",
-      });
-    }
     await this.assertApplyCity(eligible, posting);
     if (!eligible.user?.profile_picture_url?.trim()) {
       this.postings.track('dedicated.photo_gate_shown', { postingId: posting.id, agentId: eligible.id });
