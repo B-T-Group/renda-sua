@@ -72,6 +72,7 @@ export interface DedicatedDispatchOrder {
     slot_id: string | null;
     preferred_date: string | null;
     is_confirmed: boolean | null;
+    time_slot_start?: string | null;
   }>;
 }
 
@@ -96,6 +97,7 @@ const DISPATCH_ORDER_QUERY = `
         slot_id
         preferred_date
         is_confirmed
+        time_slot_start
       }
     }
     order_offers(where: { order_id: { _eq: $orderId }, offer_kind: { _eq: "dedicated" } }) {
@@ -377,6 +379,8 @@ export class DedicatedDispatchService {
       currency: order.currency,
       verifiedAgentDelivery: order.verified_agent_delivery === true,
       excludeOrderId: order.id,
+      // #594 addendum AC-P12: a pref change never invalidates a live offer.
+      ignoreSlotPrefs: true,
       // QA #607 N4: the agent's other live offers don't block this accept; the
       // claim re-checks active orders < cap under the agent lock (N1).
       ignoreOutstandingOffers: true,
@@ -617,6 +621,45 @@ export class DedicatedDispatchService {
       { message, error: 'DEDICATED_OFFER_INELIGIBLE', code, reason },
       HttpStatus.CONFLICT
     );
+  }
+
+  /** #594 addendum AC-P10 metric: the slot filter left nobody, so dispatch ran unfiltered. */
+  notePrefSlotFallback(orderId: string, slotKey: string, reason: 'empty' | 'all_declined'): void {
+    this.logger.log(`pref_slot.fallback_unfiltered order=${orderId} slot=${slotKey} reason=${reason}`);
+    emitServerSiteEvent(this.siteEventsService, 'pref_slot.fallback_unfiltered', { orderId, slotKey, reason });
+  }
+
+  /** #594 addendum metric: preferred pool size at offer time. */
+  notePrefSlotPoolSize(orderId: string, slotKey: string, kind: 'scheduled' | 'dedicated', size: number): void {
+    emitServerSiteEvent(this.siteEventsService, 'pref_slot.offer_pool_size', { orderId, slot: slotKey, kind, size });
+  }
+
+  /**
+   * #594 addendum AC-P7: the store-local slot key of a scheduled order, for
+   * every scheduled order (not only covered ones). Same resolution as v5 AC-E1:
+   * the stored coverage key, else the picked slot, else the window start, in
+   * store local time. ASAP (AC-P11) and unresolvable windows -> null (no filter).
+   */
+  async scheduledSlotKey(orderId: string): Promise<string | null> {
+    try {
+      const { order } = await this.loadOrder(orderId);
+      if (!order || order.fulfillment_timing !== 'scheduled') return null;
+      if (order.coverage_slot_key) return order.coverage_slot_key;
+      const window = order.delivery_time_windows?.[0];
+      if (!window?.preferred_date) return null;
+      const base = { locationId: order.business_location_id, preferredDate: window.preferred_date };
+      const slot = window.slot_id
+        ? await this.coverage.resolveSlot({ ...base, slotId: window.slot_id })
+        : window.time_slot_start
+          ? await this.coverage.resolveSlot({ ...base, windowStart: window.time_slot_start.slice(0, 5) })
+          : null;
+      return slot?.slotKey ?? null;
+    } catch (error) {
+      this.logger.warn(
+        `scheduledSlotKey failed for ${orderId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return null;
+    }
   }
 
   private async loadOrder(
