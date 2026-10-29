@@ -46,4 +46,37 @@ describe('resolveReceiptTax', () => {
       resolveReceiptTax({ total_amount: 100, tax_amount: 0, tax_snapshot: { status: 'finalized', captured_total_including_tax: 100 } })
     ).toEqual({ taxAmount: 0, totalAmount: 100, showJurisdiction: false });
   });
+
+  it.each([0, '0', '', -1])(
+    'does not invent tax from the estimate when the captured total is %j',
+    (captured) => {
+      expect(
+        resolveReceiptTax({
+          total_amount: 100,
+          tax_amount: 0,
+          tax_jurisdiction: { state: 'ON', country: 'CA' },
+          tax_snapshot: {
+            status: 'finalized',
+            total_including_tax: 113,
+            captured_total_including_tax: captured,
+          },
+        })
+      ).toEqual({ taxAmount: 0, totalAmount: 100, showJurisdiction: false });
+    }
+  );
+
+  it('does not print NaN when the captured total is not a number', () => {
+    expect(
+      resolveReceiptTax({
+        total_amount: 100,
+        tax_amount: 0,
+        tax_jurisdiction: { state: 'ON', country: 'CA' },
+        tax_snapshot: {
+          status: 'finalized',
+          total_including_tax: 113,
+          captured_total_including_tax: 'n/a',
+        },
+      })
+    ).toEqual({ taxAmount: 0, totalAmount: 100, showJurisdiction: false });
+  });
 });

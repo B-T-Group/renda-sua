@@ -317,4 +317,26 @@ describe('planTaxInclusiveRefund', () => {
       cardMinor: 10170,
     });
   });
+
+  it('treats a negative prior refund as zero so the card refund cannot exceed the charge', () => {
+    expect(
+      planTaxInclusiveRefund({
+        ...base,
+        refundedLedgerMinor: -500,
+        refundedTaxMinor: -100,
+        requestedLedgerMinor: Number.POSITIVE_INFINITY,
+      })
+    ).toEqual({ ledgerMinor: 10000, taxMinor: 1300, cardMinor: 11300 });
+  });
+
+  it('an over-reported prior tax cannot make the next tax share negative', () => {
+    expect(
+      planTaxInclusiveRefund({
+        ...base,
+        refundedLedgerMinor: 4000,
+        refundedTaxMinor: 99999,
+        requestedLedgerMinor: 1000,
+      })
+    ).toEqual({ ledgerMinor: 1000, taxMinor: 0, cardMinor: 1000 });
+  });
 });

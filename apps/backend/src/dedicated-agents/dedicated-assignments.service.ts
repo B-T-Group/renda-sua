@@ -27,6 +27,7 @@ import {
   DEDICATED_BUSINESS_NOTICE_PATH,
   DEDICATED_SLOT_KEYS,
   type DedicatedAgentsConfig,
+  type DedicatedPauseReason,
   type DedicatedSlotKey,
 } from './dedicated-agents.constants';
 import { orderAssignmentsForLocking } from './dedicated-assignment-locking.util';
@@ -101,6 +102,8 @@ export interface AssignmentRow {
   source: 'superuser_assign' | 'posting';
   off_today_date: string | null;
   paused_at: string | null;
+  /** #594 addendum: why the row is paused (see DEDICATED_PAUSE_REASONS); null on legacy rows. */
+  pause_reason?: DedicatedPauseReason | null;
   removed_at: string | null;
   created_at: string;
   agent: {
@@ -181,6 +184,8 @@ export interface MyDedicatedAssignment {
   startTime: string | null;
   endTime: string | null;
   status: 'active' | 'paused';
+  /** #594 addendum: `paused_slot_off` drives the agent's "Paused — slot off" chip and Resume. */
+  pauseReason: DedicatedPauseReason | null;
   source: 'superuser_assign' | 'posting';
   offToday: boolean;
   activeOrders: number;
@@ -321,6 +326,7 @@ export class DedicatedAssignmentsService {
         status: 'paused',
         paused_at: new Date().toISOString(),
         paused_by_user_id: params.actorUserId,
+        pause_reason: 'paused_store_slot_disabled',
       }).catch((error: unknown) => {
         // QA #603: never swallow silently; the row stays active on a now-off slot.
         this.logger.error(
@@ -475,6 +481,13 @@ export class DedicatedAssignmentsService {
     }
     const target = paused ? 'paused' : 'active';
     if (row.status === target) return { assignment: this.summary(row) };
+    if (!paused && row.pause_reason === 'paused_slot_off') {
+      // #594 addendum P5: only the agent resumes a slot-off pause (after turning the slot back on).
+      throw new ConflictException({
+        code: 'paused_by_agent',
+        message: 'The agent paused this assignment by turning the slot off; only the agent can resume it',
+      });
+    }
     if (!paused && (await this.disabledSlots(row.business_location_id)).has(row.slot_key)) {
       throw new ConflictException({
         code: 'slot_disabled',
@@ -483,8 +496,13 @@ export class DedicatedAssignmentsService {
     }
     const now = new Date().toISOString();
     const set = paused
-      ? { status: 'paused', paused_at: now, paused_by_user_id: actor.userId }
-      : { status: 'active', paused_at: null, paused_by_user_id: null };
+      ? {
+          status: 'paused',
+          paused_at: now,
+          paused_by_user_id: actor.userId,
+          pause_reason: actor.locationId ? 'paused_business' : 'paused_admin',
+        }
+      : { status: 'active', paused_at: null, paused_by_user_id: null, pause_reason: null };
     const updated = paused
       ? await this.guardedUpdate(row.id, [row.status], set)
       : await this.resumeGuarded(row, set);
@@ -684,7 +702,12 @@ export class DedicatedAssignmentsService {
               slots: objects,
               locationId: location.id,
               offSlots,
-              pauseSet: { status: 'paused', paused_at: now, paused_by_user_id: actor.userId },
+              pauseSet: {
+                status: 'paused',
+                paused_at: now,
+                paused_by_user_id: actor.userId,
+                pause_reason: 'paused_store_slot_disabled',
+              },
             }
           : { slots: objects, locationId: location.id }
       )
@@ -737,6 +760,7 @@ export class DedicatedAssignmentsService {
         startTime: bound ? shortTime(bound.startTime) : null,
         endTime: bound ? shortTime(bound.endTime) : null,
         status: row.status as 'active' | 'paused',
+        pauseReason: row.status === 'paused' ? (row.pause_reason ?? null) : null,
         source: row.source,
         offToday: row.off_today_date === localToday,
         activeOrders: load.active.get(agent.id) ?? 0,
@@ -784,6 +808,7 @@ export class DedicatedAssignmentsService {
       status: row.status,
       off_today_date: row.off_today_date,
       paused_at: row.paused_at,
+      pause_reason: row.pause_reason ?? null,
       removed_at: row.removed_at,
     };
   }

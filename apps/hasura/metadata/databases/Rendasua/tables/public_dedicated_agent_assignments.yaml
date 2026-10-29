@@ -27,6 +27,7 @@ select_permissions:
         - posting_id
         - off_today_date
         - paused_at
+        - pause_reason
         - removed_at
         - created_at
         - updated_at
@@ -48,6 +49,7 @@ select_permissions:
         - application_id
         - off_today_date
         - paused_at
+        - pause_reason
         - removed_at
         - removed_reason
         - created_at

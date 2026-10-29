@@ -8,6 +8,14 @@
  * the package lazily inside try/catch so a missing native module degrades to
  * "assume online, no listeners" instead of throwing.
  *
+ * IMPORTANT: a try/catch around `require` is NOT enough on device. Metro's
+ * `guardedLoadModule` reports a module-factory error straight to
+ * `ErrorUtils.reportFatalError` (a hard crash in release builds) whenever the
+ * require runs outside an existing guard, e.g. from a `useEffect` when a screen
+ * using `useNetworkStatus` first mounts. The catch block never runs. So we first
+ * probe for the native module with the non-throwing `TurboModuleRegistry.get` /
+ * `NativeModules` lookups and only `require` netinfo when it is present.
+ *
  * Never import `@react-native-community/netinfo` directly elsewhere in the app;
  * use this module (see apps/mobile/native-deps-baseline.json allowlist).
  */
@@ -20,6 +28,22 @@ export interface SafeNetInfoState {
 export type NetInfoListener = (state: SafeNetInfoState) => void;
 export type Unsubscribe = () => void;
 
+import { NativeModules, TurboModuleRegistry } from 'react-native';
+
+/** Non-throwing probe for the RNCNetInfo native module in this binary. */
+export function hasNativeNetInfoModule(): boolean {
+  try {
+    const turbo =
+      typeof TurboModuleRegistry?.get === 'function'
+        ? TurboModuleRegistry.get('RNCNetInfo')
+        : null;
+    if (turbo) return true;
+    return !!NativeModules?.RNCNetInfo;
+  } catch {
+    return false;
+  }
+}
+
 interface NetInfoModule {
   addEventListener: (listener: NetInfoListener) => Unsubscribe | undefined;
 }
@@ -30,6 +54,10 @@ let cached: NetInfoModule | null | undefined;
 
 function loadNetInfo(): NetInfoModule | null {
   if (cached !== undefined) return cached;
+  if (!hasNativeNetInfoModule()) {
+    cached = null;
+    return cached;
+  }
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require('@react-native-community/netinfo');

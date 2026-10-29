@@ -70,4 +70,14 @@ describe('netinfo native module present', () => {
     expect(result.current.isOffline).toBe(false);
     await expect(Promise.resolve(unmount())).resolves.not.toThrow();
   });
+
+  it('treats a non-function unsubscribe as a no-op so unmount does not throw', async () => {
+    mockAddEventListener.mockImplementation((l: Listener) => {
+      listener = l;
+      return undefined;
+    });
+    const { unmount } = await renderHook(() => useNetworkStatus());
+    await expect(Promise.resolve(unmount())).resolves.not.toThrow();
+    expect(mockUnsubscribe).not.toHaveBeenCalled();
+  });
 });
