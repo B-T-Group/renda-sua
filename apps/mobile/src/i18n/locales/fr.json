@@ -1419,7 +1419,12 @@
     }
   },
   "menuTab": {
-    "recipientsSubtitle": "Gérer les destinataires des commandes diaspora"
+    "recipientsSubtitle": "Gérer les destinataires des commandes diaspora",
+    "opportunitiesTitle": "Opportunités",
+    "opportunitiesSubtitle": "Postes dédiés près de chez vous",
+    "sections": {
+      "work": "Travail"
+    }
   },
   "documents": {
     "title": "Mes documents",

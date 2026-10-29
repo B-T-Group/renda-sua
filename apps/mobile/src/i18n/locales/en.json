@@ -1486,7 +1486,12 @@
     }
   },
   "menuTab": {
-    "recipientsSubtitle": "Manage diaspora order recipients"
+    "recipientsSubtitle": "Manage diaspora order recipients",
+    "opportunitiesTitle": "Opportunities",
+    "opportunitiesSubtitle": "Dedicated store spots near you",
+    "sections": {
+      "work": "Work"
+    }
   },
   "documents": {
     "title": "My documents",
