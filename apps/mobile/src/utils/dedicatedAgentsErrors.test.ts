@@ -4,8 +4,7 @@ import {
   shouldShowGate,
   mapDedicatedAgentsErrorCode,
   extractDedicatedAgentsError,
-  isDedicatedAgentsFeatureHidden,
-} from './dedicatedAgentsErrors';
+  isDedicatedAgentsFeatureHidden, dedicatedApiError } from './dedicatedAgentsErrors';
 
 describe('dedicatedAgentsErrors', () => {
 
@@ -185,5 +184,23 @@ describe('dedicatedAgentsErrors', () => {
       expect(isDedicatedAgentsFeatureHidden(undefined)).toBe(false);
       expect(isDedicatedAgentsFeatureHidden({})).toBe(false);
     });
+  });
+});
+
+describe('dedicatedApiError', () => {
+  it('reads the apiClient error shape (status/code/data)', () => {
+    const err = Object.assign(new Error('Add a profile photo to apply'), {
+      status: 422,
+      code: 'PROFILE_PHOTO_REQUIRED',
+      data: { code: 'PROFILE_PHOTO_REQUIRED', error: 'PROFILE_PHOTO_REQUIRED' },
+    });
+    expect(dedicatedApiError(err)).toMatchObject({ status: 422, code: 'PROFILE_PHOTO_REQUIRED' });
+  });
+  it('reads reason from a 403 body', () => {
+    const err = Object.assign(new Error('x'), { status: 403, data: { code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', reason: 'internal_agent' } });
+    expect(dedicatedApiError(err)).toMatchObject({ status: 403, code: 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE', reason: 'internal_agent' });
+  });
+  it('still accepts an axios-style response', () => {
+    expect(dedicatedApiError({ response: { status: 409, data: { code: 'holds_slot' } } })).toMatchObject({ status: 409, code: 'holds_slot' });
   });
 });
