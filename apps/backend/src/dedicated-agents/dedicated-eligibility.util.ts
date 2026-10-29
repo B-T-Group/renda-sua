@@ -16,7 +16,9 @@ export type DedicatedIneligibleReason =
   | 'negative_balance'
   | 'insufficient_balance'
   /** The order hold could not be resolved for this agent (fail closed). */
-  | 'hold_unavailable';
+  | 'hold_unavailable'
+  /** #594 addendum AC-P9: the agent turned this slot's preference off. */
+  | 'slot_pref_off';
 
 export interface DedicatedAgentFacts {
   assignmentStatus: DedicatedAssignmentStatus | string;

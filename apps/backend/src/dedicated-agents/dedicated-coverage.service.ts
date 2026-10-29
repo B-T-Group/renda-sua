@@ -1,3 +1,4 @@
+import { agentPrefersSlot, slotPrefsFromRow } from './agent-slot-prefs.util';
 import { Injectable, Logger } from '@nestjs/common';
 import { AgentContractGateService } from '../agent-contracts/agent-contract-gate.service';
 import { AgentHoldService } from '../agents/agent-hold.service';
@@ -72,6 +73,11 @@ export interface DedicatedEligibilityParams {
   /** Accept-time check (QA #607 N4): count active orders only, not other live offers. */
   ignoreOutstandingOffers?: boolean;
   /**
+   * #594 addendum AC-P12: accept-time check skips the slot preference, so an
+   * outstanding offer stays valid when the agent turns the slot off.
+   */
+  ignoreSlotPrefs?: boolean;
+  /**
    * Local date (YYYY-MM-DD) of the slot being covered. Off today only removes
    * an agent from that day's slots; defaults to today in the country timezone.
    */
@@ -137,6 +143,9 @@ interface AssignmentRow {
     is_internal: boolean | null;
     status: string | null;
     focus: string | null;
+    pref_morning?: boolean | null;
+    pref_afternoon?: boolean | null;
+    pref_evening?: boolean | null;
   } | null;
 }
 
@@ -317,7 +326,11 @@ export class DedicatedCoverageService {
         activeOrders: load.active.get(row.agent_id) ?? 0,
         outstandingDedicatedOffers: params.ignoreOutstandingOffers ? 0 : load.offers.get(row.agent_id) ?? 0,
       };
-      const reason = agent ? dedicatedProfileIneligibleReason(facts, eligibilityCtx) : 'not_verified';
+      const reason = !agent
+        ? 'not_verified'
+        : !params.ignoreSlotPrefs && !agentPrefersSlot(slotPrefsFromRow(agent), params.slotKey)
+          ? 'slot_pref_off'
+          : dedicatedProfileIneligibleReason(facts, eligibilityCtx);
       if (reason) {
         result.rejected.push({ agentId: row.agent_id, assignmentId: row.id, reason });
       } else if (requiresBalanceCheck(facts.isInternal, params.rail)) {
