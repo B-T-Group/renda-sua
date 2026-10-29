@@ -223,4 +223,44 @@ describe('public item link (/items/:id/seo)', () => {
     });
     expect(mockNav.dispatch).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['agent', 'agent' as const, false],
+    ['delegation client', 'client' as const, true],
+  ])(
+    '%s shell opens the public item page in-app and does not switch persona',
+    async (_label, persona, delegation) => {
+      freshStore(true, persona);
+      mockStore.persona.isDelegationContext = delegation;
+      mountNav(delegation ? ['DelegateMainTabs'] : ['AgentMainTabs']);
+      await renderHook(() => useAppDeepLinkNavigation(true));
+      await act(async () => {
+        urlListener?.({ url: `https://rendasua.com/items/${ITEM_ID}` });
+      });
+      await waitFor(() => expect(WebBrowser.openBrowserAsync).toHaveBeenCalledTimes(1));
+      expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(
+        `https://rendasua.com/items/${ITEM_ID}/seo`
+      );
+      expect(mockNav.dispatch).not.toHaveBeenCalled();
+      expect(mockStore.persona.selectPersona).not.toHaveBeenCalled();
+    }
+  );
+});
+
+describe('delegation store share link', () => {
+  it('opens the store on the web even when StoreDetail is mounted', async () => {
+    freshStore(true, 'client');
+    mockStore.persona.isDelegationContext = true;
+    mountNav(['DelegateMainTabs', 'StoreDetail']);
+    await renderHook(() => useAppDeepLinkNavigation(true));
+    await act(async () => {
+      urlListener?.({ url: `https://rendasua.com/store/${STORE_ID}` });
+    });
+    await waitFor(() => expect(WebBrowser.openBrowserAsync).toHaveBeenCalledTimes(1));
+    expect(WebBrowser.openBrowserAsync).toHaveBeenCalledWith(
+      `https://rendasua.com/store/${STORE_ID}`
+    );
+    expect(mockNav.dispatch).not.toHaveBeenCalled();
+    expect(mockStore.persona.selectPersona).not.toHaveBeenCalled();
+  });
 });
