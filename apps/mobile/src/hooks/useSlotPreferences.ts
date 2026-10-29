@@ -82,7 +82,8 @@ export function useSlotPreferences(opts?: { onPaused?: (ids: string[]) => void }
     async (slot: SlotKey, on: boolean, confirmPause: boolean) => {
       const before = cached;
       setSavingSlot(slot);
-      if (before) publish({ ...before, [slot]: on }); // optimistic
+      // Optimistic only for ON / confirmed OFF, so a 409 never flickers the toggle off (AC-P4).
+      if (before && (on || confirmPause)) publish({ ...before, [slot]: on });
       try {
         const res = await dedicatedAgentsService.updateSlotPreferences(
           confirmPause ? { [slot]: on, confirmPause: true } : { [slot]: on }
