@@ -43,6 +43,7 @@ interface Row {
   off_today_date: string | null;
   paused_at: string | null;
   paused_by_user_id?: string | null;
+  pause_reason?: string | null;
   removed_at: string | null;
   removed_by_user_id?: string | null;
   removed_reason?: string | null;
@@ -535,6 +536,27 @@ describe('DedicatedAssignmentsService — business pause / resume / remove', () 
         messageType: 'DEDICATED_AGENT_PAUSED',
       }),
     ]);
+  });
+
+  it('#594 addendum: business pause tags paused_business, admin paused_admin; resume clears the reason', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const row = w.seedRow({ agent_id: A1, slot_key: 'morning' });
+    await w.service.setPaused({ userId: OWNER, locationId: LOC }, row.id, true);
+    expect(row.pause_reason).toBe('paused_business');
+    await w.service.setPaused({ userId: OWNER, locationId: LOC }, row.id, false);
+    expect(row).toMatchObject({ status: 'active', pause_reason: null });
+    await w.service.setPaused({ userId: ADMIN }, row.id, true);
+    expect(row.pause_reason).toBe('paused_admin');
+  });
+
+  it('#594 addendum P5: business / admin cannot resume an agent slot-off pause', async () => {
+    const w = world();
+    w.addAgent(A1);
+    const row = w.seedRow({ agent_id: A1, slot_key: 'morning', status: 'paused', paused_at: 'x', pause_reason: 'paused_slot_off' });
+    await expectConflict(w.service.setPaused({ userId: OWNER, locationId: LOC }, row.id, false), 'paused_by_agent');
+    await expectConflict(w.service.setPaused({ userId: ADMIN }, row.id, false), 'paused_by_agent');
+    expect(row.status).toBe('paused');
   });
 
   it('resume clears the pause and notifies; resuming into a turned-off slot is refused', async () => {
