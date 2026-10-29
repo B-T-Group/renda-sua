@@ -7939,5 +7939,37 @@
         "assignmentNotFound": "This assignment no longer exists, or dedicated agents is off for this store"
       }
     }
+  },
+  "slotPrefs": {
+    "navTitle": "Availability",
+    "title": "Preferred delivery times",
+    "helper": "You'll only get scheduled orders and postings for the times you turn on.",
+    "slots": {
+      "morning": "Morning",
+      "afternoon": "Afternoon",
+      "evening": "Evening"
+    },
+    "footnote": "Times follow each store's local hours. Instant (ASAP) orders aren't affected.",
+    "toastOn": "{{slot}} turned on",
+    "toastOff": "{{slot}} turned off",
+    "toastOffPaused": "{{slot}} turned off · {{count}} assignment paused",
+    "toastOffPaused_plural": "{{slot}} turned off · {{count}} assignments paused",
+    "confirmTitle": "Turn off {{slot}}?",
+    "confirmBody": "You're the dedicated agent for {{slot}} at {{stores}}. We'll pause these until you resume them.",
+    "confirmCta": "Turn off and pause",
+    "keepOn": "Keep on",
+    "storeFallback": "a store",
+    "pausedChip": "Paused — slot off",
+    "resume": "Resume",
+    "resumed": "Assignment resumed",
+    "resumeHint": "Turn on {{slot}} first",
+    "storeSlotOff": "The store has turned this slot off",
+    "allOffBanner": "All times are off. You'll only get instant (ASAP) orders.",
+    "postingGreyed": "Not in your preferred slots",
+    "postingCta": "Turn on {{slot}}",
+    "a11yOn": "{{slot}}, on",
+    "a11yOff": "{{slot}}, off",
+    "saveError": "Couldn't save. Please try again.",
+    "loadError": "Couldn't load your preferred times."
   }
 }

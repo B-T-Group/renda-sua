@@ -107,9 +107,15 @@ export function resolveApiUrl(endpoint: string): string {
 function throwApiError(status: number, statusText: string, text: string): never {
   const errorBody = extractApiErrorBody(text);
   const errorMessage = errorBody.message ?? `API ${status}: ${statusText}`;
-  const error = new Error(errorMessage) as Error & { code?: string; status?: number };
+  const error = new Error(errorMessage) as Error & { code?: string; status?: number; data?: unknown };
   error.code = errorBody.code;
   error.status = status;
+  // Raw JSON body so callers can read structured fields (e.g. 409 `stores`).
+  try {
+    error.data = text ? JSON.parse(text) : undefined;
+  } catch {
+    error.data = undefined;
+  }
   throw error;
 }
 

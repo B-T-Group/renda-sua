@@ -23,6 +23,7 @@ import DedicatedHubScreen from '../screens/agent/DedicatedHubScreen';
 import DedicatedOpportunityDetailScreen from '../screens/agent/DedicatedOpportunityDetailScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
+import AgentAvailabilityScreen from '../screens/agent/AgentAvailabilityScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
 import AccountManagementScreen from '../screens/shared/AccountManagementScreen';
 import DocumentsScreen from '../screens/shared/DocumentsScreen';
@@ -102,6 +103,7 @@ export type AgentRootStackParamList = {
   AgentBusinessReferral: undefined;
   Profile: undefined;
   NotificationPreferences: undefined;
+  AgentAvailability: undefined;
   SavedAccounts: { mode?: 'continue' | 'switch' };
   AccountManagement: undefined;
   ConfigurePayments: undefined;
@@ -377,6 +379,11 @@ function AgentNavigatorChrome() {
             options={{
               title: t('notifications.preferences.title', 'Notification preferences'),
             }}
+          />
+          <RootStack.Screen
+            name="AgentAvailability"
+            component={AgentAvailabilityScreen}
+            options={{ title: t('slotPrefs.navTitle', 'Availability') }}
           />
           <RootStack.Screen
             name="SavedAccounts"

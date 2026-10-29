@@ -26,6 +26,8 @@ export const DEDICATED_UI_SITE_EVENT_TYPES = [
   'dedicated_ui.applicant_declined',
   // Agent (#645)
   'dedicated_ui.opportunities_viewed',
+  // #594 addendum §8 (mobile Opportunities "Turn on {{slot}}")
+  'pref_slot.posting_turn_on_cta_tapped',
   'dedicated_ui.opportunity_opened',
   'dedicated_ui.apply_tapped',
   'dedicated_ui.apply_succeeded',

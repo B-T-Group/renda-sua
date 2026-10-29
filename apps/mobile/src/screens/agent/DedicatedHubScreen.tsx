@@ -28,6 +28,9 @@ import { spacing } from '../../theme/spacing';
 import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 import { shouldShowGate, shouldHideOnError } from '../../utils/dedicatedAgentsErrors';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { useSlotPreferences } from '../../hooks/useSlotPreferences';
+import PreferredSlotsToggles from '../../components/agent/PreferredSlotsToggles';
+import { canResume, isSlotOffPause, missingPreferredSlots } from '../../utils/slotPrefs';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedHub'>;
 
@@ -119,6 +122,36 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
     setLoading(true);
     loadData();
   }, [loadData]);
+
+  // #594 addendum: preferred slots chip row (synced with Settings → Availability).
+  const slotPrefs = useSlotPreferences({ onPaused: () => loadData(true) });
+  const [resumingId, setResumingId] = useState<string | null>(null);
+
+  const handleResume = async (assignment: MyDedicatedAssignment) => {
+    if (isOffline) {
+      setSnackMessage(t('dedicatedAgents.offline', 'Offline · showing last update'));
+      return;
+    }
+    setResumingId(assignment.assignmentId);
+    try {
+      await dedicatedAgentsService.resumeAssignment(assignment.assignmentId);
+      setSnackMessage(t('slotPrefs.resumed'));
+      await loadData(true);
+    } catch (err: any) {
+      const code: string | undefined = err?.data?.code ?? err?.code;
+      if (code === 'slot_pref_off') {
+        setSnackMessage(t('slotPrefs.resumeHint', { slot: slotPrefs.slotLabel(assignment.slotKey) }));
+        slotPrefs.reload();
+      } else if (code === 'store_slot_off') {
+        setSnackMessage(t('slotPrefs.storeSlotOff'));
+      } else {
+        setSnackMessage(code ? mapDedicatedError(code, t) : t('dedicatedAgents.generic', 'Something went wrong'));
+      }
+      if (code === 'assignment_changed' || code === 'assignment_removed') await loadData(true);
+    } finally {
+      setResumingId(null);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -244,6 +277,11 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
           />
         </View>
       )}
+      {slotPrefs.prefs && (
+        <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm }} testID="dedicated-slot-chips">
+          <PreferredSlotsToggles state={slotPrefs} variant="chips" />
+        </View>
+      )}
 
       <ScrollView
         contentContainerStyle={[
@@ -297,13 +335,17 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
           ) : (
             opportunities.map((opp) => {
               const isDisabled = Boolean(opp.disabledReason);
+              // AC-P14: postings outside the agent's preferred slots stay visible but greyed.
+              const missingSlots = missingPreferredSlots(opp.slots, slotPrefs.prefs);
+              const notPreferred = missingSlots.length > 0;
               return (
                 <Card
                   key={opp.id}
                   style={[
                     { marginBottom: spacing.md },
-                    isDisabled && { opacity: 0.6, backgroundColor: colors.surfaceInput }
+                    (isDisabled || notPreferred) && { opacity: 0.6, backgroundColor: colors.surfaceInput }
                   ]}
+                  testID={`opp-card-${opp.id}`}
                   onPress={isDisabled ? undefined : () =>
                     navigation.navigate('DedicatedOpportunityDetail', { postingId: opp.id })
                   }
@@ -372,6 +414,31 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
                         {t(`dedicatedAgents.agent.disabled.${opp.disabledReason}`, opp.disabledReason)}
                       </Text>
                     )}
+
+                    {notPreferred && (
+                      <View style={{ marginTop: spacing.sm }}>
+                        <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+                          {t('slotPrefs.postingGreyed')}
+                        </Text>
+                        <View style={[styles.chips, { marginTop: spacing.xs }]}>
+                          {missingSlots.map((slot) => (
+                            <Button
+                              key={slot}
+                              compact
+                              mode="outlined"
+                              icon={SLOT_ICONS[slot]}
+                              disabled={slotPrefs.savingSlot === slot}
+                              onPress={() => {
+                                dedicatedAnalytics.trackDedicatedSlotTurnOnCta(opp.id, slot);
+                                slotPrefs.setSlot(slot, true);
+                              }}
+                            >
+                              {t('slotPrefs.postingCta', { slot: slotPrefs.slotLabel(slot) })}
+                            </Button>
+                          ))}
+                        </View>
+                      </View>
+                    )}
                   </Card.Content>
                 </Card>
               );
@@ -434,7 +501,12 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
                         {t('dedicatedAgents.chips.status.active', 'Active')}
                       </Chip>
                     )}
-                    {assignment.status === 'paused' && (
+                    {assignment.status === 'paused' && isSlotOffPause(assignment) && (
+                      <Chip compact style={{ backgroundColor: colors.warningTint }}>
+                        {t('slotPrefs.pausedChip')}
+                      </Chip>
+                    )}
+                    {assignment.status === 'paused' && !isSlotOffPause(assignment) && (
                       <Chip compact>
                         {t('dedicatedAgents.agent.pausedByStore', 'Paused by the store')}
                       </Chip>
@@ -458,6 +530,28 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
                       max: assignment.maxActiveOrders,
                     })}
                   </Text>
+
+                  {isSlotOffPause(assignment) && (() => {
+                    const resumable = canResume(assignment, slotPrefs.prefs);
+                    return (
+                      <View style={{ marginTop: spacing.sm }}>
+                        <Button
+                          mode="contained"
+                          testID={`resume-${assignment.assignmentId}`}
+                          disabled={!resumable || resumingId === assignment.assignmentId}
+                          loading={resumingId === assignment.assignmentId}
+                          onPress={() => handleResume(assignment)}
+                        >
+                          {t('slotPrefs.resume')}
+                        </Button>
+                        {!resumable && (
+                          <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xs }}>
+                            {t('slotPrefs.resumeHint', { slot: slotPrefs.slotLabel(assignment.slotKey) })}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })()}
                 </Card.Content>
               </Card>
             );
