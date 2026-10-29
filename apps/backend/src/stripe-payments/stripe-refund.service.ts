@@ -169,8 +169,8 @@ export class StripeRefundService {
         };
       }
 
-      // Tax-inclusive refunds only for orders with a finalized tax snapshot. Throws (and so
-      // fails this refund, which is idempotent and retriable) if the tax state is unreadable.
+      // Tax-inclusive refunds for calculation-based tax orders (finalized or still
+      // estimated). Throws so this refund fails closed if the tax state is unreadable.
       const taxInclusive = await this.orderTaxLifecycle.resolveRefundTaxMode(
         params.orderNumber,
         pi

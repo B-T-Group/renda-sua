@@ -388,5 +388,18 @@ describe('StripeRefundService cancel uncaptured authorization', () => {
         expect.objectContaining({ amount: 100, tax_refund_amount: 0 })
       );
     });
+
+    it('an unfinalized tax-calculation order still refunds the charged (tax-inclusive) amount', async () => {
+      // resolveRefundTaxMode is true for estimated/void calculation orders even when
+      // Stripe Tax finalization is deferred — card math uses amount_received.
+      orderTaxLifecycle.resolveRefundTaxMode.mockResolvedValue(true);
+      await service.initiateOrderRefund(refundParams);
+      expect(stripeService.createRefund).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 11300 })
+      );
+      expect(databaseService.createRefundRecord).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 100, tax_refund_amount: 13 })
+      );
+    });
   });
 });

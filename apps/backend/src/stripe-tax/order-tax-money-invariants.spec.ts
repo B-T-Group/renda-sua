@@ -406,7 +406,7 @@ describe('order tax snapshot lifecycle keeps money semantics unchanged', () => {
       expect(plan).toEqual({ ledgerMinor: 7300, taxMinor: 0, cardMinor: 7300 });
     });
 
-    it('pre-tax-only (not finalized) orders keep the old cap: tx.amount - refunds', () => {
+    it('legacy (tax_status none) orders keep the old cap: tx.amount - refunds', () => {
       const refundCap = (txAmount: number, refunded: number) => Math.max(0, txAmount - refunded);
       expect(refundCap(100, 40)).toBe(60);
       expect(refundCap(100, 140)).toBe(0);
