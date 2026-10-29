@@ -385,6 +385,17 @@ describe('DedicatedCoverageService.eligibleAgents', () => {
     expect((await w.service.evaluate(params())).rejected[0]?.reason).toBe(reason);
   });
 
+  it('#594 addendum AC-P9: slot pref OFF is skipped; accept-time check ignores it (AC-P12)', async () => {
+    const w = world();
+    const key = params().slotKey as string;
+    w.addAgent('a', { is_internal: true, [`pref_${key}`]: false });
+    w.addAgent('b', { is_internal: true });
+    const res = await w.service.evaluate(params());
+    expect(ids(res.eligible)).toEqual(['b']);
+    expect(res.rejected[0]).toMatchObject({ agentId: 'a', reason: 'slot_pref_off' });
+    expect(ids(await w.service.eligibleAgents(params({ ignoreSlotPrefs: true })))).toEqual(['a', 'b']);
+  });
+
   it('contract gate: unsigned agent skipped; gate off (null) skips nobody', async () => {
     const w = world();
     w.addAgent('a', { is_internal: true });
