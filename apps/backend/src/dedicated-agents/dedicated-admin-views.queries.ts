@@ -19,10 +19,14 @@ export const DEDICATED_ADMIN_ASSIGNMENTS_QUERY = `
       status
       source
       off_today_date
+      pause_reason
       created_at
       relation_dismissed_at
       agent {
         id
+        pref_morning
+        pref_afternoon
+        pref_evening
         is_internal
         is_verified
         referred_by_business_id

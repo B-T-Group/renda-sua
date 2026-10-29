@@ -156,6 +156,8 @@ export interface DedicatedAgentCard {
   assignmentId: string;
   slotKey: DedicatedSlotKey;
   status: 'active' | 'paused';
+  /** #594 addendum AC-P16: `paused_slot_off` shows "Paused by agent" on the business roster. */
+  pauseReason: DedicatedPauseReason | null;
   source: 'superuser_assign' | 'posting';
   /** AC-B17 "Assigned by RendaSua" chip. */
   assignedByRendasua: boolean;
@@ -563,6 +565,7 @@ export class DedicatedAssignmentsService {
         assignmentId: row.id,
         slotKey: row.slot_key,
         status: row.status as 'active' | 'paused',
+        pauseReason: row.status === 'paused' ? (row.pause_reason ?? null) : null,
         source: row.source,
         assignedByRendasua: row.source === 'superuser_assign',
         offToday: row.off_today_date === localToday,
@@ -933,7 +936,8 @@ export class DedicatedAssignmentsService {
     return res?.business_location_pickup_slots ?? [];
   }
 
-  private async disabledSlots(locationId: string): Promise<Set<string>> {
+  /** Slot keys the business turned off at this location (also used by the agent slot-off resume). */
+  async disabledSlots(locationId: string): Promise<Set<string>> {
     const rows = await this.pickupSlotRows(locationId);
     return new Set(rows.filter((r) => r.is_enabled === false).map((r) => r.slot_key));
   }

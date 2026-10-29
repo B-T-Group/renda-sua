@@ -30,15 +30,22 @@ export class DedicatedAdminViewsController {
   @ApiQuery({ name: 'slotKey', required: false, enum: ['morning', 'afternoon', 'evening'] })
   @ApiQuery({ name: 'status', required: false, enum: ['active', 'paused', 'removed'] })
   @ApiQuery({ name: 'source', required: false, enum: ['superuser_assign', 'posting'] })
+  @ApiQuery({ name: 'prefOff', required: false, enum: ['morning', 'afternoon', 'evening'], description: 'Agent has this preferred slot OFF' })
+  @ApiQuery({ name: 'pauseReason', required: false, enum: ['paused_slot_off', 'paused_business', 'paused_admin', 'paused_store_slot_disabled'] })
   async list(
     @Query('city') city?: string,
     @Query('locationId') locationId?: string,
     @Query('slotKey') slotKey?: string,
     @Query('status') status?: string,
-    @Query('source') source?: string
+    @Query('source') source?: string,
+    @Query('prefOff') prefOff?: string,
+    @Query('pauseReason') pauseReason?: string
   ) {
     const scope = await this.geo.require(PlatformPermissions.MANAGE_AGENTS);
-    return { success: true, ...(await this.service.listAssignments(scope, { city, locationId, slotKey, status, source })) };
+    return {
+      success: true,
+      ...(await this.service.listAssignments(scope, { city, locationId, slotKey, status, source, prefOff, pauseReason })),
+    };
   }
 
   @Get('coverage')

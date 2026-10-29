@@ -43,6 +43,8 @@ export interface DedicatedAgentCard {
   source: AssignmentSource;
   assignedByRendasua: boolean;
   offToday: boolean;
+  /** #594 addendum AC-P16: `paused_slot_off` shows "Paused by agent" (older backends omit it). */
+  pauseReason?: string | null;
   agent: DedicatedAgent;
   activeOrders: number;
   maxActiveOrders: number;
@@ -254,6 +256,9 @@ export interface AdminAssignmentView {
   assignmentId: string;
   slotKey: SlotKey;
   status: AssignmentStatus;
+  /** #594 addendum AC-P17. */
+  pauseReason?: string | null;
+  preferredSlots?: SlotPreferences;
   source: AssignmentSource;
   createdAt: string;
   location: {
@@ -337,6 +342,9 @@ export interface AdminAssignmentFilters {
   slotKey?: SlotKey;
   status?: AssignmentStatus | 'removed';
   source?: 'superuser_assign' | 'posting';
+  /** #594 addendum AC-P17: agent has this preferred slot OFF. */
+  prefOff?: SlotKey;
+  pauseReason?: 'paused_slot_off';
 }
 
 export interface CreateAdminAssignmentRequest {

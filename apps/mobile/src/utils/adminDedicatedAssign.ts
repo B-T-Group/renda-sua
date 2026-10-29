@@ -51,17 +51,22 @@ export function shouldShowAdminDedicatedEntry(
 
 export type AdminSlotFilter = SlotKey | 'all';
 export type AdminStatusFilter = AssignmentStatus | 'all';
+/** #594 addendum AC-P17: a slot the agent turned OFF, or slot-off pauses. */
+export type AdminPrefFilter = SlotKey | 'paused_slot_off' | 'all';
 
 export function buildAdminAssignmentFilters(input: {
   city?: string;
   slot?: AdminSlotFilter;
   status?: AdminStatusFilter;
+  pref?: AdminPrefFilter;
 }): AdminAssignmentFilters {
   const filters: AdminAssignmentFilters = {};
   const city = input.city?.trim();
   if (city) filters.city = city;
   if (input.slot && input.slot !== 'all') filters.slotKey = input.slot;
   if (input.status && input.status !== 'all') filters.status = input.status;
+  if (input.pref === 'paused_slot_off') filters.pauseReason = 'paused_slot_off';
+  else if (input.pref && input.pref !== 'all') filters.prefOff = input.pref;
   return filters;
 }
 
@@ -327,4 +332,14 @@ export function mapAdminSearchError(err: unknown): MappedAdminError {
     };
   }
   return { key: 'dedicatedAgents.generic', defaultMessage: 'Something went wrong', step: null, reload: false };
+}
+
+/** #594 addendum AC-P17: preferred slots default ON when an older backend omits them. */
+export function adminPreferredSlots(a: { preferredSlots?: Partial<Record<SlotKey, boolean>> | null }): Record<SlotKey, boolean> {
+  const p = a.preferredSlots ?? {};
+  return { morning: p.morning !== false, afternoon: p.afternoon !== false, evening: p.evening !== false };
+}
+
+export function isAdminSlotOffPause(a: { status: string; pauseReason?: string | null }): boolean {
+  return a.status === 'paused' && a.pauseReason === 'paused_slot_off';
 }
