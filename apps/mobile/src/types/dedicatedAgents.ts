@@ -132,6 +132,32 @@ export interface MyDedicatedAssignment {
   offToday: boolean;
   activeOrders: number;
   maxActiveOrders: number;
+  /** #594 addendum: why a paused row is paused (`paused_slot_off` = agent turned the slot off). */
+  pauseReason?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// #594 addendum: agent preferred delivery slots (/agents/me/slot-preferences)
+// ---------------------------------------------------------------------------
+
+export type SlotPreferences = Record<SlotKey, boolean>;
+
+export interface SlotPreferencesResponse {
+  success?: boolean;
+  preferences: SlotPreferences;
+  allOff: boolean;
+  pausedAssignmentIds?: string[];
+}
+
+export interface UpdateSlotPreferencesRequest extends Partial<SlotPreferences> {
+  confirmPause?: boolean;
+}
+
+/** 409 `slot_has_dedicated_assignments` body. */
+export interface SlotOffConflict {
+  code: 'slot_has_dedicated_assignments';
+  slots: SlotKey[];
+  stores: Array<{ assignmentId: string; locationId: string; storeName: string; slotKey: SlotKey }>;
 }
 
 export interface DedicatedAgentsCapability {

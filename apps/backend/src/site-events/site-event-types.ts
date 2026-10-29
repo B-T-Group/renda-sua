@@ -26,6 +26,8 @@ export const DEDICATED_UI_SITE_EVENT_TYPES = [
   'dedicated_ui.applicant_declined',
   // Agent (#645)
   'dedicated_ui.opportunities_viewed',
+  // #594 addendum §8 (mobile Opportunities "Turn on {{slot}}")
+  'pref_slot.posting_turn_on_cta_tapped',
   'dedicated_ui.opportunity_opened',
   'dedicated_ui.apply_tapped',
   'dedicated_ui.apply_succeeded',
@@ -207,6 +209,11 @@ export const SERVER_SITE_EVENT_TYPES = [
   'dedicated.application_auto_declined',
   'dedicated.photo_gate_shown',
   'dedicated.slot_full',
+  // #594 addendum: agent preferred delivery slots (metrics hooks section 8)
+  'pref_slot.toggled',
+  'pref_slot.all_off_state',
+  'pref_slot.assignment_paused',
+  'pref_slot.assignment_resumed',
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',

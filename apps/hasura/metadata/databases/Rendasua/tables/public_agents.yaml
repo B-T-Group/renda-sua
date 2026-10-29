@@ -164,6 +164,9 @@ select_permissions:
         - pickup_issues_reported_count
         - pickup_reliability_score
         - focus
+        - pref_morning
+        - pref_afternoon
+        - pref_evening
       filter:
         user:
           id:

@@ -71,6 +71,7 @@ const ASSIGNMENT_FIELDS = `
   source
   off_today_date
   paused_at
+  pause_reason
   removed_at
   created_at
   agent {
@@ -197,7 +198,7 @@ export const DEDICATED_LOCATION_PICKUP_SLOTS_QUERY = `
  * - Lock order: business_locations -> (posting -> application) -> agents. The agent
  *   lock (cap trigger, dedicated_claim_order) is always taken after the location.
  */
-const LOCK_LOCATION_FIELD = `lockLocation: update_business_locations_by_pk(pk_columns: { id: $locationId }, _set: { updated_at: "now()" }) { id }`;
+export const LOCK_LOCATION_FIELD = `lockLocation: update_business_locations_by_pk(pk_columns: { id: $locationId }, _set: { updated_at: "now()" }) { id }`;
 
 export const INSERT_DEDICATED_ASSIGNMENTS_MUTATION = `
   mutation InsertDedicatedAssignments($locationId: uuid!, $objects: [dedicated_agent_assignments_insert_input!]!) {
@@ -228,6 +229,7 @@ export const UPDATE_DEDICATED_ASSIGNMENT_MUTATION = `
         status
         off_today_date
         paused_at
+        pause_reason
         removed_at
       }
     }
@@ -266,6 +268,7 @@ export const RESUME_DEDICATED_ASSIGNMENT_MUTATION = `
         status
         off_today_date
         paused_at
+        pause_reason
         removed_at
       }
     }

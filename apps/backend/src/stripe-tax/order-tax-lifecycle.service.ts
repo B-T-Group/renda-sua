@@ -58,10 +58,12 @@ export const ORDER_TAX_STEP_DEADLINE_MS = 12_000;
  * Every public method is best-effort for its caller: it logs, bounds itself with a deadline
  * and swallows its own errors (returning `deferred` / `failed`) so a tax bookkeeping problem
  * can never fail a capture, a cancellation or a refund. The one exception is
- * {@link resolveRefundTaxMode}, which throws so a refund fails closed rather than silently
- * dropping the tax portion. It never writes orders.total_amount / tax_amount / pre_tax_total
- * (see OrderTaxSnapshotRepository): payouts, wallet credits and the cancellation-fee base
- * are unaffected.
+ * {@link resolveRefundTaxMode}, which throws when the tax state cannot be read so a refund
+ * fails closed rather than silently dropping the tax portion. An unfinalized snapshot is
+ * still tax-inclusive: card math uses the PaymentIntent charge, and Stripe Tax bookkeeping
+ * stays deferred for the reconciler. It never writes orders.total_amount / tax_amount /
+ * pre_tax_total (see OrderTaxSnapshotRepository): payouts, wallet credits and the
+ * cancellation-fee base are unaffected.
  */
 @Injectable()
 export class OrderTaxLifecycleService {
@@ -231,9 +233,10 @@ export class OrderTaxLifecycleService {
   }
 
   /**
-   * Does this order refund tax-inclusively? True only for an order whose snapshot is
-   * `finalized` (after a heal attempt for a captured but not yet finalized order). Legacy and
-   * hosted-Checkout orders return false: their refunds stay exactly as before.
+   * Does this order refund tax-inclusively? True for calculation-based orders (estimated /
+   * void / snapshot present / PaymentIntent calculation id), after a heal attempt when the
+   * snapshot is not yet `finalized`. Card refunds use PaymentIntent `amount_received` and
+   * do not wait on Stripe Tax. Legacy and hosted-Checkout orders return false.
    *
    * THROWS when the tax state cannot be read: the caller must fail the refund (it is
    * idempotent and retriable) instead of refunding pre-tax and silently keeping the tax.
@@ -243,21 +246,31 @@ export class OrderTaxLifecycleService {
     paymentIntent: CapturedPaymentIntentLike
   ): Promise<boolean> {
     let ctx = await this.repo.getContextByOrderNumber(orderNumber);
+    if (!this.isTaxCalculationOrder(ctx, paymentIntent)) return false;
+    if (ctx?.snapshot?.status === 'finalized') return true;
+    const outcome = await this.finalizeAfterCapture({
+      orderNumber,
+      paymentIntent,
+    });
+    ctx = await this.repo.getContextByOrderNumber(orderNumber);
+    if (ctx?.snapshot?.status === 'finalized') return true;
+    this.logger.warn(
+      `order_tax_refund_unfinalized order=${orderNumber} outcome=${outcome}: refunding tax-inclusive from the charge; Stripe Tax stays deferred`
+    );
+    return this.isTaxCalculationOrder(ctx, paymentIntent);
+  }
+
+  /** Calculation-based tax (PaymentSheet) vs legacy / hosted Checkout (ledger already includes tax). */
+  private isTaxCalculationOrder(
+    ctx: OrderTaxContext | null,
+    paymentIntent: CapturedPaymentIntentLike
+  ): boolean {
     if (!ctx || ctx.order.tax_status === 'none') return false;
-    if (ctx.snapshot?.status !== 'finalized') {
-      const outcome = await this.finalizeAfterCapture({
-        orderNumber,
-        paymentIntent,
-      });
-      ctx = await this.repo.getContextByOrderNumber(orderNumber);
-      if (ctx?.snapshot?.status !== 'finalized') {
-        this.logger.warn(
-          `order_tax_refund_unfinalized order=${orderNumber} outcome=${outcome}: refunding pre-tax only; tax stays with the platform until reconciled`
-        );
-        return false;
-      }
+    if (ctx.order.tax_status === 'estimated' || ctx.order.tax_status === 'void') {
+      return true;
     }
-    return true;
+    if (ctx.snapshot) return true;
+    return !!paymentIntent.metadata?.stripe_tax_calculation_id?.trim();
   }
 
   /**

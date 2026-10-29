@@ -7861,5 +7861,37 @@
         "assignmentNotFound": "Cette affectation n'existe plus, ou les livreurs dédiés sont désactivés pour cette boutique"
       }
     }
+  },
+  "slotPrefs": {
+    "navTitle": "Disponibilités",
+    "title": "Créneaux de livraison préférés",
+    "helper": "Vous ne recevrez que les commandes programmées et les offres pour les créneaux activés.",
+    "slots": {
+      "morning": "Matin",
+      "afternoon": "Après-midi",
+      "evening": "Soir"
+    },
+    "footnote": "Les horaires suivent l'heure locale de chaque magasin. Les commandes immédiates ne sont pas concernées.",
+    "toastOn": "{{slot}} activé",
+    "toastOff": "{{slot}} désactivé",
+    "toastOffPaused": "{{slot}} désactivé · {{count}} affectation mise en pause",
+    "toastOffPaused_plural": "{{slot}} désactivé · {{count}} affectations mises en pause",
+    "confirmTitle": "Désactiver {{slot}} ?",
+    "confirmBody": "Vous êtes l'agent dédié pour le créneau {{slot}} chez {{stores}}. Ces affectations seront mises en pause jusqu'à ce que vous les repreniez.",
+    "confirmCta": "Désactiver et mettre en pause",
+    "keepOn": "Garder activé",
+    "storeFallback": "un magasin",
+    "pausedChip": "En pause — créneau désactivé",
+    "resume": "Reprendre",
+    "resumed": "Affectation reprise",
+    "resumeHint": "Activez d'abord {{slot}}",
+    "storeSlotOff": "Le magasin a désactivé ce créneau",
+    "allOffBanner": "Tous les créneaux sont désactivés. Vous ne recevrez que des commandes immédiates.",
+    "postingGreyed": "Hors de vos créneaux préférés",
+    "postingCta": "Activer {{slot}}",
+    "a11yOn": "{{slot}}, activé",
+    "a11yOff": "{{slot}}, désactivé",
+    "saveError": "Enregistrement impossible. Veuillez réessayer.",
+    "loadError": "Impossible de charger vos créneaux préférés."
   }
 }
