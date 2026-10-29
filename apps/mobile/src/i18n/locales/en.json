@@ -7858,7 +7858,6 @@
     "retry": "Retry",
     "errors": {
       "posting_filled": "This request is already full",
-      "cannot_apply_own_store": "You can't apply to be a dedicated agent for your own store",
       "posting_not_open": "This request is no longer open",
       "posting_expired": "This request is no longer open",
       "application_closed": "This opportunity is no longer open",

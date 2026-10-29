@@ -37,7 +37,7 @@ export class DedicatedOpportunitiesController {
   @HttpCode(200)
   @ApiOperation({ summary: 'Apply (idempotent while applied)' })
   @ApiResponse({ status: 422, description: 'PROFILE_PHOTO_REQUIRED: show the add-photo step, then apply again' })
-  @ApiResponse({ status: 409, description: 'posting_not_open | holds_slot | max_assignments | application_closed | cannot_apply_own_store' })
+  @ApiResponse({ status: 409, description: 'posting_not_open | holds_slot | max_assignments | application_closed' })
   async apply(@Param('postingId') postingId: string) {
     return { success: true, ...(await this.service.apply(this.requireUserId(), postingId)) };
   }
