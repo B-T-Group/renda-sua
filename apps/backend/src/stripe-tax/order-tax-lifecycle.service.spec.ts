@@ -308,10 +308,16 @@ describe('OrderTaxLifecycleService', () => {
       expect(repo.markFinalized).toHaveBeenCalledTimes(1);
     });
 
-    it('falls back to a pre-tax refund (with a warning) when the heal cannot finish', async () => {
+    it('stays tax-inclusive when the heal cannot finish so the customer still gets the tax', async () => {
       repo.getContextByOrderNumber.mockResolvedValue(estimatedCtx(snap()));
       stripe.createTaxTransactionFromCalculation.mockRejectedValue(new Error('stripe 500'));
-      await expect(service.resolveRefundTaxMode('ORD-1', pi)).resolves.toBe(false);
+      await expect(service.resolveRefundTaxMode('ORD-1', pi)).resolves.toBe(true);
+    });
+
+    it('stays tax-inclusive for a void snapshot that capture reopened but could not finalize', async () => {
+      repo.getContextByOrderNumber.mockResolvedValue(ctxWith('void', snap({ status: 'void' })));
+      stripe.createTaxTransactionFromCalculation.mockRejectedValue(new Error('stripe 500'));
+      await expect(service.resolveRefundTaxMode('ORD-1', pi)).resolves.toBe(true);
     });
 
     it('THROWS when the tax state cannot be read, so the refund fails closed', async () => {
