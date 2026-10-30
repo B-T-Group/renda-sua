@@ -162,6 +162,7 @@ function world() {
       is_active: boolean;
     }>,
     offers: [] as OfferRow[],
+    headsUpUnavailable: [] as string[],
     noAgentMessages: 0,
     mutations: [] as string[],
     /** Users with a push token (standard rounds only offer to them); null = everyone. */
@@ -207,6 +208,7 @@ function world() {
           order_offers: state.offers.filter(
             (o) => o.order_id === vars.orderId && o.offer_kind === 'dedicated'
           ),
+          dedicated_order_heads_ups: state.headsUpUnavailable.map((agent_id) => ({ agent_id })),
         };
       case 'DedicatedAgentsConfig':
         return {
@@ -1303,6 +1305,24 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
       status: 'declined',
       decline_reason: 'too_far',
     });
+  });
+
+  it("heads-up: an agent who said Can't take it is skipped by the dedicated fallback", async () => {
+    const w = world();
+    w.addAgent('a1', { balance: 50000 });
+    w.addAgent('a2', { balance: 50000 });
+    w.state.headsUpUnavailable.push('a1');
+    const out = await w.dispatch.fallback(ORDER);
+    expect(out).toMatchObject({ kind: 'offered', agentIds: ['a2'] });
+    expect(w.dedicatedOffers().map((o) => o.agent_id)).toEqual(['a2']);
+  });
+
+  it("heads-up: when every dedicated agent can't take it, dispatch goes to the open market", async () => {
+    const w = world();
+    w.addAgent('a1', { balance: 50000 });
+    w.state.headsUpUnavailable.push('a1');
+    expect(await w.dispatch.fallback(ORDER)).toEqual({ kind: 'none' });
+    expect(w.dedicatedOffers()).toEqual([]);
   });
 
   it('QA #607 N3: an expired offer may be offered again', async () => {

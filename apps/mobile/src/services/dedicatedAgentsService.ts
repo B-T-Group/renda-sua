@@ -31,6 +31,11 @@ import type {
   UpdateSlotPreferencesRequest,
 } from '../types/dedicatedAgents';
 
+export interface DedicatedHeadsUpResponse {
+  success: true;
+  headsUp: { status: 'sent' | 'unavailable'; dispatchReadyAt: string | null; active: boolean } | null;
+}
+
 export class DedicatedAgentsService {
   async getCapability(country?: string): Promise<DedicatedAgentsCapabilityResponse> {
     const url = country
@@ -189,6 +194,18 @@ export class DedicatedAgentsService {
   // #594 addendum: preferred delivery slots. PATCH turning a slot off with active
   // dedicated assignments throws 409 slot_has_dedicated_assignments (see
   // utils/slotPrefs#parseSlotOffConflict) until resent with confirmPause: true.
+  /** Early heads-up for a covered scheduled order (null when this agent never got one). */
+  async getHeadsUp(orderId: string): Promise<DedicatedHeadsUpResponse> {
+    return api.get<DedicatedHeadsUpResponse>(`/agents/me/dedicated-heads-ups/${orderId}`);
+  }
+
+  /** "Can't take it": skip this agent for the order's dedicated dispatch. */
+  async markHeadsUpUnavailable(orderId: string): Promise<{ success: true; status: 'unavailable' }> {
+    return api.post<{ success: true; status: 'unavailable' }>(
+      `/agents/me/dedicated-heads-ups/${orderId}/unavailable`
+    );
+  }
+
   async getSlotPreferences(): Promise<SlotPreferencesResponse> {
     return api.get<SlotPreferencesResponse>('/agents/me/slot-preferences');
   }

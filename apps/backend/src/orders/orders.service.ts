@@ -45,6 +45,7 @@ import {
 } from '../dedicated-agents/dedicated-agents.constants';
 import type { ClaimAssignment } from './dedicated-claim.port';
 import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
+import { DedicatedHeadsUpService } from './dedicated-heads-up.service';
 import { dedicatedReleaseRefusalMessage } from './dedicated-accept-refusal.messages';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
 import {
@@ -827,7 +828,9 @@ export class OrdersService {
     @Optional()
     private readonly dedicatedSlotReminder?: DedicatedSlotReminderService,
     @Optional()
-    private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService
+    private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService,
+    @Optional()
+    private readonly dedicatedHeadsUp?: DedicatedHeadsUpService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -2196,6 +2199,8 @@ export class OrdersService {
     );
     await this.recordPreparationReadyHistory(request, viaSystem, userId);
     await this.scheduleDispatchRelease(order.id, dispatchSchedule);
+    // Early soft heads-up to the slot's dedicated agents (no-op unless covered, confirmed and gated).
+    void this.dedicatedHeadsUp?.sendForOrder(order.id);
     return {
       success: true,
       order: updatedOrder,

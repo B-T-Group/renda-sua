@@ -14,6 +14,7 @@ import {
   DedicatedSlotReminderService,
   type SlotReminderOutcome,
 } from './dedicated-slot-reminder.service';
+import { DedicatedHeadsUpService, type HeadsUpOutcome } from './dedicated-heads-up.service';
 import { internalKeyMatches } from './internal-key.util';
 import { OrderOffersService } from './order-offers.service';
 
@@ -24,7 +25,9 @@ export class OrderDispatchInternalController {
     private readonly orderOffersService: OrderOffersService,
     private readonly configService: ConfigService<Configuration>,
     @Optional()
-    private readonly slotReminderService?: DedicatedSlotReminderService
+    private readonly slotReminderService?: DedicatedSlotReminderService,
+    @Optional()
+    private readonly headsUpService?: DedicatedHeadsUpService
   ) {}
 
   private assertInternalKey(internalKey?: string): void {
@@ -96,6 +99,32 @@ export class OrderDispatchInternalController {
     if (!orderId) return { success: false, error: 'orderId is required' };
     if (!this.slotReminderService) return { success: false, error: 'unavailable' };
     const outcome = await this.slotReminderService.sendForOrder(orderId);
+    return { success: true, outcome };
+  }
+
+  @Public()
+  @Post('internal/dedicated-heads-up-reping')
+  @ApiOperation({
+    summary: 'Internal: optional dedicated heads-up re-ping shortly before dispatch_ready_at (wait-handler Lambda)',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['orderId'],
+      properties: { orderId: { type: 'string', format: 'uuid' } },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Processed (sent or skipped, with the reason)' })
+  @ApiResponse({ status: 401, description: 'Invalid or missing internal key' })
+  async dedicatedHeadsUpReping(
+    @Body() body: { orderId?: string },
+    @Headers('x-rendasua-internal-key') internalKey?: string
+  ): Promise<{ success: boolean; error?: string; outcome?: HeadsUpOutcome }> {
+    this.assertInternalKey(internalKey);
+    const orderId = body?.orderId?.trim();
+    if (!orderId) return { success: false, error: 'orderId is required' };
+    if (!this.headsUpService) return { success: false, error: 'unavailable' };
+    const outcome = await this.headsUpService.repingForOrder(orderId);
     return { success: true, outcome };
   }
 }
