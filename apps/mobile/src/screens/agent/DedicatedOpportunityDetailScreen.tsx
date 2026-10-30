@@ -16,6 +16,7 @@ import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useSlotPreferences } from '../../hooks/useSlotPreferences';
 import { missingPreferredSlots } from '../../utils/slotPrefs';
+import PreferredSlotsHint from '../../components/agent/PreferredSlotsHint';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedOpportunityDetail'>;
 
@@ -33,12 +34,9 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const { colors, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const { pickAndUploadPhoto, uploading: uploadingPhoto, error: photoUploadError } = useProfilePhotoUpload({
-    onSuccess: async () => {
-      await loadData(true);
-      await handleApply();
-    },
-  });
+  // No onSuccess: handlePhotoSource re-applies itself (a second apply here
+  // used to race it).
+  const { pickAndUploadPhoto, uploading: uploadingPhoto } = useProfilePhotoUpload();
 
   const [loading, setLoading] = useState(true);
   const [opportunity, setOpportunity] = useState<DedicatedOpportunity | null>(null);
@@ -131,9 +129,11 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       dedicatedAnalytics.trackDedicatedPhotoGateGalleryOpened();
     }
     setUploadError(null);
-    const uploadSuccess = await pickAndUploadPhoto(source);
-    if (!uploadSuccess) {
-      setUploadError(photoUploadError || t('dedicatedAgents.agent.photoError', 'Failed to upload photo'));
+    const upload = await pickAndUploadPhoto(source);
+    if (!upload.success) {
+      if (!upload.canceled) {
+        setUploadError(upload.error || t('dedicatedAgents.agent.photoError', 'Failed to upload photo'));
+      }
       return;
     }
 
@@ -297,6 +297,13 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
             <Text variant="headlineSmall" style={{ fontWeight: '600', marginBottom: spacing.sm }}>
               {opportunity.storeName}
             </Text>
+            <Text
+              variant="bodyMedium"
+              style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+              testID="opp-detail-explainer"
+            >
+              {t('dedicatedAgents.agent.explain.detail')}
+            </Text>
             <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginBottom: spacing.md }}>
               📍 {opportunity.address.line1 ? `${opportunity.address.line1}, ` : ''}
               {opportunity.address.city}, {opportunity.address.state}
@@ -337,6 +344,12 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
                 💶 {t('dedicatedAgents.agent.payChip', 'Standard pay')}
               </Text>
             </View>
+          </Card.Content>
+        </Card>
+
+        <Card style={{ marginBottom: spacing.md }}>
+          <Card.Content>
+            <PreferredSlotsHint onPress={() => navigation.navigate('AgentAvailability')} />
           </Card.Content>
         </Card>
 
@@ -428,12 +441,27 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
           </Snackbar>
         </Portal>
 
+        {!isFilled && canApply && slotPrefs.error && !slotPrefs.prefs && (
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.md, marginBottom: spacing.sm }}
+            testID="detail-prefs-error"
+          >
+            <Text variant="bodySmall" style={{ flex: 1, color: colors.error.main }}>
+              {t('slotPrefs.loadError')}
+            </Text>
+            <Button compact mode="text" onPress={() => slotPrefs.reload()}>
+              {t('dedicatedAgents.retry', 'Retry')}
+            </Button>
+          </View>
+        )}
+
         {!isFilled && canApply && (
           <Button
             mode="contained"
             testID="apply-button"
             onPress={handleApply}
-            disabled={submitting || missingSlots.length > 0}
+            // Wait for slot prefs so the greyed-posting gate can't be bypassed.
+            disabled={submitting || slotPrefs.loading || !slotPrefs.prefs || missingSlots.length > 0}
             loading={submitting}
             style={{ marginHorizontal: spacing.md }}
           >

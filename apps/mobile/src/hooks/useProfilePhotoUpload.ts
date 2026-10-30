@@ -3,7 +3,7 @@ import { Alert } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useTranslation } from 'react-i18next';
 import { useStore } from '../stores/RootStore';
-import { uploadProfilePhoto } from '../services/profilePhotoApi';
+import { uploadMyProfilePhoto } from '../services/profilePhotoApi';
 
 const IMAGE_LIBRARY_PICKER_OPTIONS: ImagePicker.ImagePickerOptions = {
   mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -18,6 +18,13 @@ export function isSupportedImageAsset(asset: ImagePicker.ImagePickerAsset): bool
   return supported.includes(asset.mimeType.toLowerCase());
 }
 
+export interface ProfilePhotoUploadResult {
+  success: boolean;
+  /** true when the user dismissed the picker (no error to show). */
+  canceled?: boolean;
+  error?: string;
+}
+
 export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void> }) {
   const { t } = useTranslation();
   const { auth } = useStore();
@@ -25,7 +32,7 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
   const [error, setError] = useState<string | null>(null);
 
   const pickAndUploadPhoto = useCallback(
-    async (source: 'camera' | 'gallery'): Promise<boolean> => {
+    async (source: 'camera' | 'gallery'): Promise<ProfilePhotoUploadResult> => {
       try {
         setError(null);
         setUploading(true);
@@ -38,7 +45,7 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
             const msg = t('dedicatedAgents.agent.cameraPermissionDenied', 'Camera permission is required');
             setError(msg);
             Alert.alert(t('common.error', 'Error'), msg);
-            return false;
+            return { success: false, error: msg };
           }
           result = await ImagePicker.launchCameraAsync(IMAGE_LIBRARY_PICKER_OPTIONS);
         } else {
@@ -47,13 +54,13 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
             const msg = t('dedicatedAgents.agent.photoPermissionDenied', 'Photo library permission is required');
             setError(msg);
             Alert.alert(t('common.error', 'Error'), msg);
-            return false;
+            return { success: false, error: msg };
           }
           result = await ImagePicker.launchImageLibraryAsync(IMAGE_LIBRARY_PICKER_OPTIONS);
         }
 
         if (result.canceled || !result.assets[0]?.uri) {
-          return false;
+          return { success: false, canceled: true };
         }
 
         if (!isSupportedImageAsset(result.assets[0])) {
@@ -63,25 +70,20 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
           );
           setError(msg);
           Alert.alert(t('common.error', 'Error'), msg);
-          return false;
+          return { success: false, error: msg };
         }
 
         // Save locally first
         await auth.setLocalProfilePhoto(result.assets[0].uri);
 
-        // Upload to server - need user ID
-        if (!auth.user?.id) {
-          const msg = t('dedicatedAgents.agent.photoError', 'Failed to upload photo');
-          setError(msg);
-          return false;
-        }
+        // Upload + set as the user's profile picture. The users.id is resolved
+        // from /users/me (auth.user.id is the Auth0 sub, not the users uuid).
+        const uploadResult = await uploadMyProfilePhoto(result.assets[0].uri);
 
-        const uploadResult = await uploadProfilePhoto(result.assets[0].uri, auth.user.id);
-        
         if (!uploadResult.success) {
           const msg = uploadResult.error || t('dedicatedAgents.agent.photoError', 'Failed to upload photo');
           setError(msg);
-          return false;
+          return { success: false, error: msg };
         }
 
         // Refresh 'me' profile to get updated photo URL
@@ -92,11 +94,11 @@ export function useProfilePhotoUpload(options?: { onSuccess?: () => Promise<void
           await options.onSuccess();
         }
 
-        return true;
+        return { success: true };
       } catch (err: any) {
-        const msg = err.message || t('dedicatedAgents.agent.photoError', 'Failed to upload photo');
+        const msg = err?.message || t('dedicatedAgents.agent.photoError', 'Failed to upload photo');
         setError(msg);
-        return false;
+        return { success: false, error: msg };
       } finally {
         setUploading(false);
       }
