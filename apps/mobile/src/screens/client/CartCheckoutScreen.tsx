@@ -1484,6 +1484,7 @@ export default observer(function CartCheckoutScreen() {
             estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
             opensAt={preflightConfig?.opens_at}
             coveredSlots={deliveryCoverage.coveredSlots}
+            value={deliveryWindow}
             onReadyChange={onDwReadyChange}
             onCommit={onDwCommit}
           />
