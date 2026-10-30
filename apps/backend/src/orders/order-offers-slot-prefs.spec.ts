@@ -54,5 +54,52 @@ describe('OrderOffersService slot preference filter', () => {
   it('fails open when the prefs query errors', async () => {
     hasura.executeQuery.mockRejectedValue(new Error('boom'));
     expect(await run()).toEqual(ranked);
+    expect(dedicated.notePrefSlotPoolSize).not.toHaveBeenCalled();
+    expect(dedicated.notePrefSlotFallback).not.toHaveBeenCalled();
+  });
+
+  it('drops only the preferred agents who already passed; the rest stay offered', async () => {
+    prefs(
+      [
+        { id: 'a1', pref_evening: false },
+        { id: 'a2', pref_evening: true },
+        { id: 'a3', pref_evening: true },
+      ],
+      ['a2']
+    );
+    expect((await run()).map((c: { agentId: string }) => c.agentId)).toEqual(['a3']);
+    expect(dedicated.notePrefSlotFallback).not.toHaveBeenCalled();
+    expect(dedicated.notePrefSlotPoolSize).toHaveBeenCalledWith('order-1', 'evening', 'scheduled', 1);
+    expect(hasura.executeQuery).toHaveBeenCalledWith(expect.any(String), {
+      ids: ['a1', 'a2', 'a3'],
+      orderId: 'order-1',
+    });
+  });
+
+  it('keeps an agent whose prefs row is missing, and does not treat that as an empty pool', async () => {
+    hasura.executeQuery.mockResolvedValue({ agents: [], order_offers: [] });
+    expect(await run()).toEqual(ranked);
+    expect(dedicated.notePrefSlotFallback).not.toHaveBeenCalled();
+    expect(dedicated.notePrefSlotPoolSize).toHaveBeenCalledWith('order-1', 'evening', 'scheduled', 3);
+  });
+
+  it('an unknown slot key prefers nobody, then falls back to the full pool', async () => {
+    dedicated.scheduledSlotKey.mockResolvedValue('night');
+    prefs(ranked.map((c) => ({ id: c.agentId, pref_evening: true })));
+    expect(await run()).toEqual(ranked);
+    expect(dedicated.notePrefSlotFallback).toHaveBeenCalledWith('order-1', 'night', 'empty');
+    expect(dedicated.notePrefSlotPoolSize).toHaveBeenCalledWith('order-1', 'night', 'scheduled', 0);
+  });
+
+  it('an empty slot key, an empty candidate list, and no dispatcher skip the prefs query', async () => {
+    dedicated.scheduledSlotKey.mockResolvedValue('');
+    expect(await run()).toEqual(ranked);
+    expect(await service.applySlotPreference('order-1', [])).toEqual([]);
+    const bare = new OrderOffersService(
+      hasura as any, undefined as any, undefined as any, undefined as any, undefined as any,
+      undefined as any, undefined as any, undefined as any, undefined as any
+    );
+    expect(await (bare as any).applySlotPreference('order-1', ranked)).toEqual(ranked);
+    expect(hasura.executeQuery).not.toHaveBeenCalled();
   });
 });
