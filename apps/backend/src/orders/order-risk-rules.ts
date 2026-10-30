@@ -165,8 +165,16 @@ export function readyUnassignedRisk(
 ): OrderRiskFinding | null {
   if (order.current_status !== 'ready_for_pickup') return null;
   if (!isDeliveryOrder(order) || order.assigned_agent_id) return null;
-  const readySince = statusSince(order);
-  if (!readySince) return null;
+  const statusReadySince = statusSince(order);
+  if (!statusReadySince) return null;
+  // Scheduled orders are held from dispatch until dispatch_ready_at; nobody can
+  // be assigned before then, so the clock starts at the dispatch gate.
+  const dispatchReadyAt = toDateTime(order.dispatch_ready_at);
+  if (dispatchReadyAt && dispatchReadyAt > now) return null;
+  const readySince =
+    dispatchReadyAt && dispatchReadyAt > statusReadySince
+      ? dispatchReadyAt
+      : statusReadySince;
 
   const dueAt = readySince.plus({ minutes: config.readyUnassignedMinutes });
   const overdueMinutes = minutesBetween(dueAt, now);
