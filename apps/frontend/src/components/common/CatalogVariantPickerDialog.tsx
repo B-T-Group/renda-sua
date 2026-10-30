@@ -32,12 +32,12 @@ const CatalogVariantPickerDialog: React.FC<CatalogVariantPickerDialogProps> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const parentImageUrl = useMemo(() => {
-    if (!item) return null;
+    if (!item?.item) return null;
     return orderedItemImages(item.item.item_images)[0]?.image_url ?? null;
   }, [item]);
 
   const options = useMemo(() => {
-    if (!item) return [];
+    if (!item?.item) return [];
     return shopperVariantOptions({
       itemName: item.item.name,
       defaultLabel,
@@ -54,7 +54,7 @@ const CatalogVariantPickerDialog: React.FC<CatalogVariantPickerDialogProps> = ({
     setSelectedId(null);
   }, [open, item?.id]);
 
-  if (!item) return null;
+  if (!item?.item) return null;
 
   return (
     <SwipeableDrawer anchor="bottom" open={open} onClose={onClose} onOpen={() => undefined}>

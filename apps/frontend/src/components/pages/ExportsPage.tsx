@@ -6,7 +6,7 @@ import {
   Paper,
   Typography,
 } from '@mui/material';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useCart } from '../../contexts/CartContext';
@@ -34,6 +34,32 @@ import { MarketSelector } from '../market/MarketSelector';
 
 const ITEMS_PER_PAGE = 24;
 
+export function hasCatalogItem(
+  row: InventoryItem | undefined | null
+): row is InventoryItem {
+  return Boolean(row?.item);
+}
+
+export function buildExportAddToCartEvent(
+  cartItem: CartItem,
+  item: InventoryItem
+) {
+  const catalog = item.item;
+  const unitPrice = cartItem.itemData.price;
+  const quantity = cartItem.quantity || 1;
+  const contentId = String(item.item_id || item.id);
+  return {
+    content_ids: [contentId],
+    content_name: catalog?.name,
+    content_type: 'product' as const,
+    content_category: metaPixelContentCategoryFromItem(catalog),
+    google_product_category: metaPixelGoogleProductCategoryFromItem(catalog),
+    value: unitPrice * quantity,
+    currency: cartItem.itemData.currency || catalog?.currency || 'XAF',
+    contents: [{ id: contentId, quantity, item_price: unitPrice }],
+  };
+}
+
 const ExportsPage: React.FC = () => {
   const { t } = useTranslation();
   const { isAuthenticated } = useSessionAuth();
@@ -57,6 +83,11 @@ const ExportsPage: React.FC = () => {
     anonymousOrigin: browserGeo,
   });
 
+  const renderableItems = useMemo(
+    () => inventoryItems.filter(hasCatalogItem),
+    [inventoryItems]
+  );
+
   const { trackView } = useTrackItemView(null);
   const trackAddToCart = useMetaAddToCartTrack();
 
@@ -67,43 +98,39 @@ const ExportsPage: React.FC = () => {
 
   const onCartBuilt = useCallback(
     (cartItem: CartItem, item: InventoryItem) => {
-      const unitPrice = cartItem.itemData.price;
-      const contentCategory = metaPixelContentCategoryFromItem(item.item);
-      trackAddToCart({
-        content_ids: [String(item.item_id || item.id)],
-        content_name: item.item.name,
-        content_type: 'product',
-        content_category: contentCategory,
-        google_product_category:
-          metaPixelGoogleProductCategoryFromItem(item.item),
-        value: unitPrice * (cartItem.quantity || 1),
-        currency: cartItem.itemData.currency || item.item.currency || 'XAF',
-        contents: [
-          {
-            id: String(item.item_id || item.id),
-            quantity: cartItem.quantity || 1,
-            item_price: unitPrice,
-          },
-        ],
-      });
+      trackAddToCart(buildExportAddToCartEvent(cartItem, item));
       addToCart(cartItem);
     },
     [addToCart, trackAddToCart]
   );
 
-  const {
-    dialogOpen,
-    dialogItem,
-    closeVariantDialog,
-    handleOrderClick,
-    handleAddToCart,
-    confirmVariantSelection,
-  } = useCatalogVariantFlow({
-    isAuthenticated,
-    isClientUser: Boolean(isClientUser),
-    openLoginDialog,
+  const variantFlow = useCatalogVariantFlow({
     onCartBuilt,
+    requireAuth: (run) => {
+      if (!isAuthenticated) {
+        openLoginDialog();
+        return false;
+      }
+      void run();
+      return true;
+    },
   });
+
+  const handleOrderClick = (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => {
+    trackView(item.id);
+    variantFlow.requestOrder(item, selectionId);
+  };
+
+  const handleAddToCart = (
+    item: InventoryItem,
+    selectionId?: string | null
+  ) => {
+    trackView(item.id);
+    variantFlow.requestAddToCart(item, selectionId);
+  };
 
   return (
     <Container maxWidth="lg" sx={{ py: 3 }}>
@@ -147,7 +174,7 @@ const ExportsPage: React.FC = () => {
         </Alert>
       ) : null}
 
-      {!loading && inventoryItems.length === 0 ? (
+      {!loading && renderableItems.length === 0 ? (
         <Paper variant="outlined" sx={{ p: 4, textAlign: 'center' }}>
           <ExportCatalogIllustration size={120} />
           <Typography sx={{ mt: 2 }} color="text.secondary">
@@ -168,13 +195,11 @@ const ExportsPage: React.FC = () => {
           }}
         >
           {loading
-            ? Array.from({ length: 8 }).map((_, i) => (
-                <Box key={i} />
-              ))
-            : inventoryItems.map((inventoryItem) => (
+            ? Array.from({ length: 8 }).map((_, i) => <Box key={i} />)
+            : renderableItems.map((inventoryItem) => (
                 <Box key={inventoryItem.id}>
                   <DashboardItemCard
-                    inventory={inventoryItem}
+                    item={inventoryItem}
                     formatCurrency={formatCurrency}
                     onOrderClick={handleOrderClick}
                     onAddToCart={handleAddToCart}
@@ -188,7 +213,6 @@ const ExportsPage: React.FC = () => {
                     orderButtonText={t('common.orderNow', 'Order Now')}
                     addToCartButtonText={t('cart.addToCart', 'Add to Cart')}
                     buyNowButtonText={t('cart.buyNow', 'Buy Now')}
-                    onView={() => trackView(inventoryItem.id)}
                   />
                 </Box>
               ))}
@@ -207,10 +231,12 @@ const ExportsPage: React.FC = () => {
       ) : null}
 
       <CatalogVariantPickerDialog
-        open={dialogOpen}
-        item={dialogItem}
-        onClose={closeVariantDialog}
-        onConfirm={confirmVariantSelection}
+        open={variantFlow.pickerOpen}
+        item={variantFlow.pickerItem}
+        onClose={variantFlow.closePicker}
+        onConfirm={variantFlow.onPickerConfirm}
+        confirmLabel={variantFlow.confirmLabel}
+        formatCurrency={formatCurrency}
       />
       {loginMethodDialog}
     </Container>
