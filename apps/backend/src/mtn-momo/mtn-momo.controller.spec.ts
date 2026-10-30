@@ -1,5 +1,71 @@
 import { BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { Reflector } from '@nestjs/core';
+import { AdminAuthGuard } from '../admin/admin-auth.guard';
+import { PERMISSIONS_KEY } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { MtnMomoController } from './mtn-momo.controller';
+
+const ADMIN_ONLY_HANDLERS = [
+  'requestToPay',
+  'getCollectionStatus',
+  'transfer',
+  'getDisbursementStatus',
+  'remittance',
+  'getAccountBalance',
+  'validateAccountHolder',
+  'getUserPaymentRequests',
+  'getPaymentRequestByTransactionId',
+  'healthCheck',
+] as const;
+
+describe('MtnMomoController admin gate', () => {
+  it.each(ADMIN_ONLY_HANDLERS)(
+    '%s requires AdminAuthGuard + platform.financial.mobile_payments',
+    (method) => {
+      const handler = MtnMomoController.prototype[method];
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler)).toContain(
+        AdminAuthGuard
+      );
+      expect(Reflect.getMetadata(PERMISSIONS_KEY, handler)).toEqual([
+        PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS,
+      ]);
+    }
+  );
+
+  it.each(['handleWebhookPost', 'handleWebhookPut'] as const)(
+    '%s stays public (no admin guard) so MTN callbacks still land',
+    (method) => {
+      const handler = MtnMomoController.prototype[method];
+      expect(Reflect.getMetadata(GUARDS_METADATA, handler) ?? []).not.toContain(
+        AdminAuthGuard
+      );
+    }
+  );
+
+  it('a signed-in shopper without financial.mobile_payments cannot disburse', async () => {
+    const guard = new AdminAuthGuard(
+      new Reflector(),
+      { getUser: async () => ({ id: 'shopper-1' }) } as never,
+      { isBusinessAdmin: async () => false } as never,
+      {
+        getEffectiveAccess: async () => ({
+          isSuperuser: false,
+          roles: [],
+          permissions: [],
+        }),
+      } as never
+    );
+    const ctx = {
+      getHandler: () => MtnMomoController.prototype.transfer,
+      getClass: () => MtnMomoController,
+      switchToHttp: () => ({ getRequest: () => ({}) }),
+    };
+    await expect(guard.canActivate(ctx as never)).rejects.toBeInstanceOf(
+      UnauthorizedException
+    );
+  });
+});
 
 describe('MtnMomoController webhook', () => {
   const REF = '3f1c6a52-8f0e-4c0a-9a53-0e1c8f7a2b11';

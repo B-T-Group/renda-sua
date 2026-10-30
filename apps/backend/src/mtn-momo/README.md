@@ -286,6 +286,13 @@ interface MtnMomoResponse {
 3. **Webhook Validation**: Per-request HMAC token in the callback URL (see Callbacks) plus a status re-check against MTN
 4. **Rate Limiting**: Implement rate limiting for API endpoints
 5. **Logging**: Log all transactions for audit purposes
+6. **Admin-only HTTP money routes**: Collection, disbursement, remittance, balance,
+   account validation, payment-request reads, and health require a JWT plus
+   `platform.financial.mobile_payments` (or superuser). Any authenticated user
+   used to be able to call `POST /disbursement/transfer` and
+   `POST /remittance/transfer` when product credentials were set. The webhook
+   stays `@Public()` and is gated only by the HMAC token. Order checkout still
+   goes through `MobilePaymentsService`, not these routes.
 
 ## Testing
 
