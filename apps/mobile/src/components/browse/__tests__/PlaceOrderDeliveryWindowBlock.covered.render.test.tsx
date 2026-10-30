@@ -6,6 +6,13 @@ import { PlaceOrderDeliveryWindowBlock } from '../PlaceOrderDeliveryWindowBlock'
 import type { DedicatedCoveredSlot } from '../../../types/checkout';
 import type { ClientDeliveryWindowPayload } from '../../../types/deliveryWindow';
 
+// The standard picker pulls in the API client (expo-secure-store → native
+// modules), which the render-test env can't resolve. This test only exercises
+// the covered-slot path, so stub it out.
+jest.mock('../../common/DeliveryWindowPicker', () => ({
+  DeliveryWindowPicker: () => null,
+}));
+
 const SLOTS: DedicatedCoveredSlot[] = [
   { date: '2026-10-30', slot_id: 'evening-id', slot_key: 'evening', start: '16:00', end: '20:00', pickup_time: '16:30' },
 ];
