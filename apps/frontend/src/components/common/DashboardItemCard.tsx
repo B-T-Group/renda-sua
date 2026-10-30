@@ -104,7 +104,7 @@ interface DashboardItemCardProps {
   onLikedChange?: (itemId: string, liked: boolean) => void;
 }
 
-const DashboardItemCard: React.FC<DashboardItemCardProps> = ({
+const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
   item: inventory,
   formatCurrency,
   onOrderClick,
@@ -1506,5 +1506,12 @@ function ProductCardHintLine({
     </Typography>
   );
 }
+
+const DashboardItemCard: React.FC<DashboardItemCardProps> = (props) => {
+  if (!props.item?.item) {
+    return null;
+  }
+  return <DashboardItemCardReady {...props} />;
+};
 
 export default DashboardItemCard;
