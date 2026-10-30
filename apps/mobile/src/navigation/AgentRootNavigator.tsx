@@ -58,6 +58,7 @@ import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersona
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
 import { AgentStatusBar } from '../components/agent/AgentStatusBar';
 import { PersistentActiveDeliveryHeader } from '../components/agent/PersistentActiveDeliveryHeader';
+import { AgentHomeFocusProvider } from '../contexts/AgentHomeFocusContext';
 import ClaimAwaitingPaymentScreen from '../screens/agent/ClaimAwaitingPaymentScreen';
 import type { CashAdvanceDrawSuccessParams, ClaimAwaitingPaymentParams, EnrollPersonaParams } from './types';
 import {
@@ -289,7 +290,8 @@ function AgentNavigatorChrome() {
   const insets = useSafeAreaInsets();
   const store = useStore();
   return (
-    <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
+    <AgentHomeFocusProvider>
+      <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
       <View style={{ paddingTop: insets.top }}>
         <AgentStatusBar />
         <PersistentActiveDeliveryHeader />
@@ -470,7 +472,8 @@ function AgentNavigatorChrome() {
           />
         </RootStack.Navigator>
       </SafeAreaInsetsContext.Provider>
-    </View>
+      </View>
+    </AgentHomeFocusProvider>
   );
 }
 

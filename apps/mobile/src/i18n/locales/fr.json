@@ -662,8 +662,8 @@
       },
       "urgency": {
         "pickupWithin": "Retrait dans",
-        "deliverBy": "Livrer avant",
-        "pickupBy": "Collecter avant"
+        "deliverBy": "Livrer avant {{time}}",
+        "pickupBy": "Collecter avant {{time}}"
       },
       "stops": {
         "pickup": "Lieu de retrait",

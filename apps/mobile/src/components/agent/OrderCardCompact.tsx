@@ -10,6 +10,7 @@ import type { Order } from '../../types/agent';
 import { buildDeliveryOrderViewModel } from '../../orders/model/buildDeliveryOrderViewModel';
 import { useOrderViewModelContext } from '../../orders/model/useOrderViewModelContext';
 import { getTotalItemQuantity } from '../../utils/orderCardHelpers';
+import { OrderCardUrgencyLine } from './OrderCardUrgencyLine';
 
 export interface OrderCardCompactProps {
   order: Order;
@@ -274,6 +275,7 @@ export function OrderCardActive({
           </Text>
         </Pressable>
       </View>
+      <OrderCardUrgencyLine urgency={vm.urgency} />
 
       {/* Delivery address */}
       <View style={styles.routeRow}>
