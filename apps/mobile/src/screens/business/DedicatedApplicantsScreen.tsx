@@ -35,6 +35,37 @@ import type {
 } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 
+/** Shows the applicant's profile picture, falling back to their initial. */
+export function ApplicantAvatar({
+  photoUrl,
+  firstName,
+  backgroundColor,
+}: {
+  photoUrl: string | null | undefined;
+  firstName: string;
+  backgroundColor: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  if (photoUrl && !failed) {
+    return (
+      <Avatar.Image
+        testID="applicant-avatar-image"
+        size={40}
+        source={{ uri: photoUrl }}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return (
+    <Avatar.Text
+      testID="applicant-avatar-text"
+      size={40}
+      label={(firstName || '?')[0]}
+      style={{ backgroundColor }}
+    />
+  );
+}
+
 type Props = NativeStackScreenProps<BusinessRootStackParamList, 'DedicatedApplicants'>;
 
 export default function DedicatedApplicantsScreen({ route, navigation }: Props) {
@@ -431,10 +462,10 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
               >
                 <Card.Content>
                   <View style={styles.applicantRow}>
-                    <Avatar.Text
-                      size={40}
-                      label={app.agent.firstName[0]}
-                      style={{ backgroundColor: colors.primary.main }}
+                    <ApplicantAvatar
+                      photoUrl={app.agent.photoUrl}
+                      firstName={app.agent.firstName}
+                      backgroundColor={colors.primary.main}
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
@@ -452,10 +483,10 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
               <Card key={app.applicationId} style={{ marginBottom: spacing.sm }}>
                 <Card.Content>
                   <View style={styles.applicantRow}>
-                    <Avatar.Text
-                      size={40}
-                      label={app.agent.firstName[0]}
-                      style={{ backgroundColor: colors.primary.main }}
+                    <ApplicantAvatar
+                      photoUrl={app.agent.photoUrl}
+                      firstName={app.agent.firstName}
+                      backgroundColor={colors.primary.main}
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
@@ -514,10 +545,10 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
               <Card key={app.applicationId} style={{ marginBottom: spacing.sm }}>
                 <Card.Content>
                   <View style={styles.applicantRow}>
-                    <Avatar.Text
-                      size={40}
-                      label={app.agent.firstName[0]}
-                      style={{ backgroundColor: colors.primary.main }}
+                    <ApplicantAvatar
+                      photoUrl={app.agent.photoUrl}
+                      firstName={app.agent.firstName}
+                      backgroundColor={colors.primary.main}
                     />
                     <View style={{ flex: 1, marginLeft: spacing.md }}>
                       <Text variant="titleSmall" style={{ fontWeight: '600' }}>
