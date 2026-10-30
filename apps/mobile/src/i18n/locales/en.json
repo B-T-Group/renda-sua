@@ -726,8 +726,8 @@
       },
       "urgency": {
         "pickupWithin": "Pickup within",
-        "deliverBy": "Deliver by",
-        "pickupBy": "Pick up by"
+        "deliverBy": "Deliver by {{time}}",
+        "pickupBy": "Pick up by {{time}}"
       },
       "stops": {
         "pickup": "Pickup location",

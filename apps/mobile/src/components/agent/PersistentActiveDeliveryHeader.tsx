@@ -7,6 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAgentActiveDelivery } from '../../contexts/AgentActiveDeliveryContext';
+import { useAgentHomeFocus } from '../../contexts/AgentHomeFocusContext';
 import { DeliveryStatusIndicator, statusToTone, statusToLabel } from './DeliveryStatusIndicator';
 
 /**
@@ -18,12 +19,13 @@ export const PersistentActiveDeliveryHeader = observer(function PersistentActive
   const { colors, spacing, borderRadius } = useTheme();
   const navigation = useNavigation<any>();
   const delivery = useAgentActiveDelivery();
+  const { isHomeFocused } = useAgentHomeFocus();
 
   const goToOrders = useCallback(() => {
     navigation.navigate('MainTabs', { screen: 'Orders' });
   }, [navigation]);
 
-  if (!delivery.activeOrder) return null;
+  if (isHomeFocused || !delivery.activeOrder) return null;
 
   const order = delivery.activeOrder;
   const tone = statusToTone(order.current_status);
