@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, Text } from 'react-native';
 import { act, fireEvent, screen } from '@testing-library/react-native';
 import { renderWithProviders } from '@/__tests__/test-utils';
+import { ThemeProvider } from '../../../contexts/ThemeContext';
 import { PlaceOrderDeliveryWindowBlock } from '../PlaceOrderDeliveryWindowBlock';
 import type { DedicatedCoveredSlot } from '../../../types/checkout';
 import type { ClientDeliveryWindowPayload } from '../../../types/deliveryWindow';
@@ -54,7 +55,11 @@ function Harness({ passValue, onWindow }: { passValue: boolean; onWindow: (w: Cl
 describe('PlaceOrderDeliveryWindowBlock covered slots', () => {
   it('keeps the default covered slot committed when the screen resets its window on switching to delivery', async () => {
     let last: ClientDeliveryWindowPayload | null = null;
-    await renderWithProviders(<Harness passValue onWindow={(w) => (last = w)} />);
+    await renderWithProviders(
+      <ThemeProvider>
+        <Harness passValue onWindow={(w) => (last = w)} />
+      </ThemeProvider>
+    );
     await act(async () => {
       fireEvent.press(screen.getByText('choose-delivery'));
     });
