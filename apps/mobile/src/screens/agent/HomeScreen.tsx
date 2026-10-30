@@ -51,6 +51,7 @@ import { AgentObjectiveFocusCard } from '../../components/agent/AgentObjectiveFo
 import { FeatureCard } from '../../components/common/FeatureCard';
 import { AssistantHomeEntry } from '../../components/common/AssistantHomeEntry';
 import DedicatedOpportunitiesHomeCard from '../../components/agent/DedicatedOpportunitiesHomeCard';
+import DedicatedStoresHomeCard from '../../components/agent/DedicatedStoresHomeCard';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import type { AppNavScreen } from '../../navigation/AppNavigator';
 import type { RootStackParamList as AgentRootStackParamList } from '../../navigation/AgentRootNavigator';
@@ -495,6 +496,13 @@ export default function HomeScreen() {
             onPress={() => goTo('AssistantChat')}
             style={{ marginBottom: spacing.md }}
           />
+          {showDelivery ? (
+            <DedicatedStoresHomeCard
+              onPress={() =>
+                (navigation.getParent() as any)?.navigate('DedicatedHub', { segment: 'stores' })
+              }
+            />
+          ) : null}
           {showDelivery ? (
             <DedicatedOpportunitiesHomeCard
               onPress={() =>

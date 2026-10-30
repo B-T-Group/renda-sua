@@ -7862,6 +7862,21 @@
         "detail": "What this is: a recurring delivery spot at this store. If the store accepts you, you become one of its dedicated agents for the times and days below.",
         "slotsHint": "Postings follow your preferred working times. You can pick or change them anytime.",
         "slotsHintCta": "Change preferred times"
+      },
+      "headsUp": {
+        "title": "Heads-up: you may get this delivery later",
+        "body": "This scheduled order is in your dedicated slot. It is not an offer yet: it may come to you when dispatch opens{{time}}.",
+        "opensAt": " at {{time}}",
+        "cantTake": "Can't take it",
+        "confirm": "Skip you for this order? It will go to other agents. No penalty.",
+        "confirmButton": "Yes, skip me",
+        "marked": "Got it: you won't be offered this order.",
+        "error": "Could not update. Try again."
+      },
+      "homeStores": {
+        "title": "My dedicated stores",
+        "paused": "Paused",
+        "more": "+{{count}} more"
       }
     },
     "offline": "Offline · showing last update",

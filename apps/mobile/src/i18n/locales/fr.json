@@ -7784,6 +7784,21 @@
         "detail": "De quoi s’agit-il : un poste de livraison récurrent dans cette boutique. Si la boutique vous accepte, vous devenez l’un de ses livreurs dédiés pour les horaires et jours ci-dessous.",
         "slotsHint": "Les annonces suivent vos créneaux de travail préférés. Vous pouvez les choisir ou les modifier à tout moment.",
         "slotsHintCta": "Modifier mes créneaux"
+      },
+      "headsUp": {
+        "title": "À noter : vous pourriez recevoir cette livraison plus tard",
+        "body": "Cette commande programmée est dans votre créneau dédié. Ce n'est pas encore une offre : elle pourrait vous être proposée à l'ouverture de l'envoi{{time}}.",
+        "opensAt": " à {{time}}",
+        "cantTake": "Je ne peux pas la prendre",
+        "confirm": "Vous retirer de cette commande ? Elle ira à d'autres livreurs. Aucune pénalité.",
+        "confirmButton": "Oui, me retirer",
+        "marked": "C'est noté : cette commande ne vous sera pas proposée.",
+        "error": "Mise à jour impossible. Réessayez."
+      },
+      "homeStores": {
+        "title": "Mes magasins dédiés",
+        "paused": "En pause",
+        "more": "+{{count}} de plus"
       }
     },
     "offline": "Hors ligne · dernière mise à jour affichée",
