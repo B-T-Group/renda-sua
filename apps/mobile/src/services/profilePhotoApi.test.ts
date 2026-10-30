@@ -1,13 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('./apiClient');
+vi.mock('./agentApi', () => ({ agentApi: { users: { getMe: vi.fn() } } }));
 vi.mock('./apolloClient', () => ({
   client: {
     mutate: vi.fn(),
   },
 }));
 
-import { uploadProfilePhoto } from './profilePhotoApi';
+import { uploadProfilePhoto, uploadMyProfilePhoto } from './profilePhotoApi';
+import { agentApi } from './agentApi';
 import { api } from './apiClient';
 import { client } from './apolloClient';
 
@@ -118,5 +120,43 @@ describe('profilePhotoApi', () => {
         profile_picture_url: 'https://s3.final.url/profile_picture.jpg',
       },
     });
+  });
+});
+
+describe('uploadMyProfilePhoto (Dedicated apply photo gate)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('sets the picture on the users.id from /users/me, not the Auth0 sub', async () => {
+    vi.mocked(agentApi.users.getMe).mockResolvedValue({
+      success: true,
+      user: { id: '123e4567-e89b-12d3-a456-426614174000' },
+    } as any);
+    vi.mocked(api.post).mockResolvedValue({
+      success: true,
+      presigned_url: 'https://s3.presigned.url',
+      final_url: 'https://s3.final.url/profile_picture.jpg',
+    });
+    vi.mocked(global.fetch)
+      .mockResolvedValueOnce({ blob: () => Promise.resolve(new Blob()) } as any)
+      .mockResolvedValueOnce({ ok: true } as any);
+    vi.mocked(client.mutate).mockResolvedValue({
+      data: { update_users_by_pk: { id: 'x', profile_picture_url: 'https://s3.final.url/profile_picture.jpg' } },
+    } as any);
+
+    const result = await uploadMyProfilePhoto('file://photo.jpg');
+
+    expect(result.success).toBe(true);
+    expect(vi.mocked(client.mutate).mock.calls[0][0].variables).toEqual({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      profile_picture_url: 'https://s3.final.url/profile_picture.jpg',
+    });
+  });
+
+  it('fails cleanly without uploading when /users/me has no user', async () => {
+    vi.mocked(agentApi.users.getMe).mockResolvedValue({ success: false } as any);
+    const result = await uploadMyProfilePhoto('file://photo.jpg');
+    expect(result.success).toBe(false);
+    expect(api.post).not.toHaveBeenCalled();
+    expect(client.mutate).not.toHaveBeenCalled();
   });
 });

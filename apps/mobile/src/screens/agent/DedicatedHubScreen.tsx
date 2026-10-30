@@ -29,6 +29,7 @@ import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 import { shouldShowGate, shouldHideOnError, dedicatedApiError } from '../../utils/dedicatedAgentsErrors';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useSlotPreferences } from '../../hooks/useSlotPreferences';
+import PreferredSlotsHint from '../../components/agent/PreferredSlotsHint';
 import PreferredSlotsToggles from '../../components/agent/PreferredSlotsToggles';
 import { canResume, isSlotOffPause, missingPreferredSlots } from '../../utils/slotPrefs';
 
@@ -278,9 +279,26 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
           />
         </View>
       )}
-      {slotPrefs.prefs && (
+      {slotPrefs.prefs ? (
         <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm }} testID="dedicated-slot-chips">
           <PreferredSlotsToggles state={slotPrefs} variant="chips" />
+        </View>
+      ) : slotPrefs.error ? (
+        <View
+          style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm, flexDirection: 'row', alignItems: 'center' }}
+          testID="dedicated-slot-chips-error"
+        >
+          <Text variant="bodySmall" style={{ flex: 1, color: colors.error.main }}>
+            {t('slotPrefs.loadError')}
+          </Text>
+          <Button compact mode="text" onPress={() => slotPrefs.reload()} testID="dedicated-slot-chips-retry">
+            {t('dedicatedAgents.retry', 'Retry')}
+          </Button>
+        </View>
+      ) : null}
+      {segment === 'opportunities' && (
+        <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm }}>
+          <PreferredSlotsHint onPress={() => navigation.navigate('AgentAvailability')} />
         </View>
       )}
 
@@ -309,6 +327,16 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
               </View>
             </Card.Content>
           </Card>
+        )}
+
+        {segment === 'opportunities' && (
+          <Text
+            variant="bodyMedium"
+            style={{ color: colors.text.secondary, marginBottom: spacing.md }}
+            testID="opp-list-explainer"
+          >
+            {t('dedicatedAgents.agent.explain.list')}
+          </Text>
         )}
 
         {segment === 'opportunities' ? (

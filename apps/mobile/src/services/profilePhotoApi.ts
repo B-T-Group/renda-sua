@@ -1,6 +1,7 @@
 import { gql } from '@apollo/client';
 import { api } from './apiClient';
 import { client } from './apolloClient';
+import { agentApi } from './agentApi';
 
 export interface UploadProfilePhotoResponse {
   success: boolean;
@@ -81,4 +82,26 @@ export async function uploadProfilePhoto(uri: string, userId: string): Promise<U
   } catch (error: any) {
     return { success: false, error: error.message || 'Upload failed' };
   }
+}
+
+/**
+ * Upload a photo as the signed-in user's profile picture.
+ *
+ * The Hasura `users.id` (uuid) is resolved from `/users/me`. Do NOT pass
+ * `auth.user.id`: that is the Auth0 `sub` (e.g. `auth0|abc`), which makes the
+ * `update_users_by_pk(id: uuid!)` mutation fail with an invalid-uuid error —
+ * the root cause of the Dedicated apply photo-gate upload error.
+ */
+export async function uploadMyProfilePhoto(uri: string): Promise<UploadProfilePhotoResponse> {
+  let userId: string | undefined;
+  try {
+    const me = await agentApi.users.getMe();
+    userId = me?.success ? me.user?.id : undefined;
+  } catch (error: any) {
+    return { success: false, error: error?.message || 'Failed to load profile' };
+  }
+  if (!userId) {
+    return { success: false, error: 'Failed to load profile' };
+  }
+  return uploadProfilePhoto(uri, userId);
 }

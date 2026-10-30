@@ -50,6 +50,7 @@ import { AgentNowSection } from '../../components/agent/AgentNowSection';
 import { AgentObjectiveFocusCard } from '../../components/agent/AgentObjectiveFocusCard';
 import { FeatureCard } from '../../components/common/FeatureCard';
 import { AssistantHomeEntry } from '../../components/common/AssistantHomeEntry';
+import DedicatedOpportunitiesHomeCard from '../../components/agent/DedicatedOpportunitiesHomeCard';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import type { AppNavScreen } from '../../navigation/AppNavigator';
 import type { RootStackParamList as AgentRootStackParamList } from '../../navigation/AgentRootNavigator';
@@ -494,6 +495,13 @@ export default function HomeScreen() {
             onPress={() => goTo('AssistantChat')}
             style={{ marginBottom: spacing.md }}
           />
+          {showDelivery ? (
+            <DedicatedOpportunitiesHomeCard
+              onPress={() =>
+                (navigation.getParent() as any)?.navigate('DedicatedHub', { segment: 'opportunities' })
+              }
+            />
+          ) : null}
           <ReferralPayoutSnapshot
             availableBalance={walletAvailable}
             balanceCurrency={displayCurrency}
