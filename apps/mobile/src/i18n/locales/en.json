@@ -7851,6 +7851,17 @@
         "confirmButton": "Hand back",
         "retry": "Try again",
         "error": "Could not hand this order back."
+      },
+      "homeCard": {
+        "title": "{{count}} delivery opportunity near you",
+        "title_plural": "{{count}} delivery opportunities near you",
+        "subtitle": "Regular delivery spots at nearby stores · tap to view"
+      },
+      "explain": {
+        "list": "Stores near you are looking for regular delivery agents. Each posting is a recurring spot: the store’s scheduled deliveries for the times and days shown. Apply, and the store chooses who it takes on.",
+        "detail": "What this is: a recurring delivery spot at this store. If the store accepts you, you become one of its dedicated agents for the times and days below.",
+        "slotsHint": "Postings follow your preferred working times. You can pick or change them anytime.",
+        "slotsHintCta": "Change preferred times"
       }
     },
     "offline": "Offline · showing last update",

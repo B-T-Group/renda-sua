@@ -7773,6 +7773,17 @@
         "confirmButton": "Rendre",
         "retry": "Réessayer",
         "error": "Impossible de rendre cette commande."
+      },
+      "homeCard": {
+        "title": "{{count}} opportunité de livraison près de vous",
+        "title_plural": "{{count}} opportunités de livraison près de vous",
+        "subtitle": "Postes de livraison réguliers dans des boutiques proches · touchez pour voir"
+      },
+      "explain": {
+        "list": "Des boutiques près de vous recherchent des livreurs réguliers. Chaque annonce est un poste récurrent : les livraisons programmées de la boutique aux horaires et jours indiqués. Postulez, et la boutique choisit qui elle retient.",
+        "detail": "De quoi s’agit-il : un poste de livraison récurrent dans cette boutique. Si la boutique vous accepte, vous devenez l’un de ses livreurs dédiés pour les horaires et jours ci-dessous.",
+        "slotsHint": "Les annonces suivent vos créneaux de travail préférés. Vous pouvez les choisir ou les modifier à tout moment.",
+        "slotsHintCta": "Modifier mes créneaux"
       }
     },
     "offline": "Hors ligne · dernière mise à jour affichée",

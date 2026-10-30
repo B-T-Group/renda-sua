@@ -324,6 +324,31 @@ describe('OrderTaxLifecycleService', () => {
       repo.getContextByOrderNumber.mockRejectedValue(new Error('hasura down'));
       await expect(service.resolveRefundTaxMode('ORD-1', pi)).rejects.toThrow('hasura down');
     });
+
+    it('stays tax-inclusive when the snapshot row is missing but the order is still estimated or void', async () => {
+      const bare = { ...pi, metadata: {} };
+      repo.getContextByOrderNumber.mockResolvedValue(estimatedCtx(null));
+      await expect(service.resolveRefundTaxMode('ORD-1', bare)).resolves.toBe(true);
+      repo.getContextByOrderNumber.mockResolvedValue(ctxWith('void', null));
+      await expect(service.resolveRefundTaxMode('ORD-1', bare)).resolves.toBe(true);
+      expect(repo.markFinalized).not.toHaveBeenCalled();
+    });
+
+    it('stays tax-inclusive when the snapshot row is gone but the charge still names a calculation', async () => {
+      repo.getContextByOrderNumber.mockResolvedValue(ctxWith('finalized', null));
+      await expect(service.resolveRefundTaxMode('ORD-1', pi)).resolves.toBe(true);
+    });
+
+    it('a blank calculation id without a snapshot is legacy, and a missing order is not tax-inclusive', async () => {
+      repo.getContextByOrderNumber.mockResolvedValue(ctxWith('finalized', null));
+      const blank = { ...pi, metadata: { stripe_tax_calculation_id: '   ' } };
+      await expect(service.resolveRefundTaxMode('ORD-1', blank)).resolves.toBe(false);
+      expect(stripe.retrieveTaxCalculation).not.toHaveBeenCalled();
+
+      repo.getContextByOrderNumber.mockResolvedValue(null);
+      await expect(service.resolveRefundTaxMode('ORD-1', pi)).resolves.toBe(false);
+      expect(stripe.createTaxTransactionFromCalculation).not.toHaveBeenCalled();
+    });
   });
 
   describe('voidForOrder', () => {
