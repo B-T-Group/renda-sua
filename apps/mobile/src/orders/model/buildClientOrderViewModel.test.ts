@@ -121,6 +121,7 @@ describe('persona order view models', () => {
         assigned_agent_id: 'a1',
         delivery_commission: 5,
         estimated_delivery_time: '2026-08-02T12:20:00Z',
+        pickup_due_at: '2026-08-02T12:30:00Z',
       }),
       ctx
     );
@@ -130,6 +131,8 @@ describe('persona order view models', () => {
     expect(vm.stops[1].kind).toBe('delivery');
     expect(vm.earnings.commission).toBe(5);
     expect(vm.packageInfo.items[0].name).toBe('Widget');
+    expect(vm.urgency?.deadlineAt).toBe('2026-08-02T12:30:00Z');
+    expect(vm.urgency?.label).toContain('Pick up by');
   });
 
   it('hides item names for unclaimed delivery orders', () => {

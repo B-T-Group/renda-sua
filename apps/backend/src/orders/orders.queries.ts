@@ -33,6 +33,8 @@ export const GET_ORDERS = gql`
       fulfillment_timing
       promised_ready_at
       promised_fulfill_by
+      pickup_by
+      pickup_due_at
       estimated_prep_minutes
       is_cooked_food_pickup
       pay_after_merchant_confirm

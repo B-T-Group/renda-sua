@@ -12,19 +12,23 @@ import type { ClaimReadiness } from '@/utils/claimReadiness';
 import { AppText } from '../common/AppText';
 import { PriceText } from '../common/PriceText';
 
-type Props = { readiness?: ClaimReadiness | null };
+type Props = {
+  readiness?: ClaimReadiness | null;
+  hideActiveDeliveryCard?: boolean;
+};
 
 /** What the agent should do right now: active delivery, setup, then today's numbers. */
-export function AgentNowSection({ readiness }: Props) {
+export function AgentNowSection({ readiness, hideActiveDeliveryCard }: Props) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const navigation = useNavigation();
   const { activeOrder: active } = useAgentActiveDelivery();
   const { summary } = useAgentEarningsSummary();
   const earnings = useCountUp(summary?.todayEarnings ?? 0);
+  const showHero = Boolean(active) && !hideActiveDeliveryCard;
   return (
     <Animated.View entering={enterRise} style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
-      {active ? (
+      {showHero ? (
         <Pressable
           accessibilityRole="button"
           onPress={() => (navigation as { navigate: (name: string) => void }).navigate('Orders')}
@@ -34,7 +38,7 @@ export function AgentNowSection({ readiness }: Props) {
             {t('agent.now.active', 'Active delivery')}
           </AppText>
           <AppText role="h3" color={colors.primary.contrast} style={{ marginTop: spacing.xxs }}>
-            {active.business_location?.name || t('agent.now.openDelivery', 'Open this delivery')}
+            {active?.business_location?.name || t('agent.now.openDelivery', 'Open this delivery')}
           </AppText>
         </Pressable>
       ) : readiness ? (
