@@ -16,6 +16,7 @@ import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useSlotPreferences } from '../../hooks/useSlotPreferences';
 import { missingPreferredSlots } from '../../utils/slotPrefs';
+import { formatKmSuffix } from '../../utils/formatKm';
 import PreferredSlotsHint from '../../components/agent/PreferredSlotsHint';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedOpportunityDetail'>;
@@ -307,7 +308,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
             <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginBottom: spacing.md }}>
               📍 {opportunity.address.line1 ? `${opportunity.address.line1}, ` : ''}
               {opportunity.address.city}, {opportunity.address.state}
-              {opportunity.distanceKm ? ` · ${opportunity.distanceKm.toFixed(1)} km` : ''}
+              {formatKmSuffix(opportunity.distanceKm)}
             </Text>
 
             {opportunity.slots.map((slot) => {

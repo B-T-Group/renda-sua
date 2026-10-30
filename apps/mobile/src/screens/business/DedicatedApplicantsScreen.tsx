@@ -34,6 +34,7 @@ import type {
   DedicatedPostingView,
 } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
+import { formatKmSuffix } from '../../utils/formatKm';
 
 /** Shows the applicant's profile picture, falling back to their initial. */
 export function ApplicantAvatar({
@@ -499,7 +500,7 @@ export default function DedicatedApplicantsScreen({ route, navigation }: Props) 
                           m: app.missedDeliveries,
                         })}
                         {app.onTimePickupPct !== null && ` · ${t('dedicatedAgents.applicant.onTime', '{{pct}}% on-time pickups', { pct: app.onTimePickupPct })}`}
-                        {app.distanceKm !== null && ` · ${app.distanceKm.toFixed(1)} km`}
+                        {formatKmSuffix(app.distanceKm)}
                       </Text>
                     </View>
                   </View>

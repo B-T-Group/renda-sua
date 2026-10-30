@@ -5,6 +5,7 @@ import {
   resolveOrderPhase,
   type OrderPhaseRole,
 } from '../../utils/orderPhase';
+import { toFiniteNumber } from '../../utils/formatKm';
 import { isStorePickupOrder } from '../../utils/businessOrderListDisplay';
 import type { ContactInfo } from '../../components/orders/shared/ContactCard';
 import type { TimelineEntry } from '../../components/orders/shared/Timeline';
@@ -251,6 +252,5 @@ export function friendlyStatus(
 }
 
 export function distanceKm(order: OrderLike): number | null {
-  const km = order.distance_km ?? order.pickup_distance_km;
-  return km != null ? km : null;
+  return toFiniteNumber(order.distance_km ?? order.pickup_distance_km);
 }

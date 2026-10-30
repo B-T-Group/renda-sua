@@ -38,6 +38,7 @@ import type {
   ApplicantCard,
   DedicatedPostingView,
 } from '../../../types/dedicatedAgents';
+import { formatKmSuffix } from '../../../utils/formatKm';
 
 const ApplicantsScreen: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -444,7 +445,7 @@ const ApplicantsScreen: React.FC = () => {
                       {t('dedicatedAgents.applicant.joined', 'Joined')} {new Date(app.agent.joinedAt).toLocaleDateString(i18n.language)} · ✓{' '}
                       {app.deliveriesCompleted} · ✕ {app.missedDeliveries}
                       {app.onTimePickupPct !== null && ` · ${app.onTimePickupPct}% ${t('dedicatedAgents.applicant.onTimeShort', 'on-time')}`}
-                      {app.distanceKm !== null && ` · ${app.distanceKm.toFixed(1)} km`}
+                      {formatKmSuffix(app.distanceKm)}
                     </Typography>
                   </Stack>
 

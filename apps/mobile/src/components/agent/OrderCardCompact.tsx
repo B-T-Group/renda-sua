@@ -10,6 +10,7 @@ import type { Order } from '../../types/agent';
 import { buildDeliveryOrderViewModel } from '../../orders/model/buildDeliveryOrderViewModel';
 import { useOrderViewModelContext } from '../../orders/model/useOrderViewModelContext';
 import { getTotalItemQuantity } from '../../utils/orderCardHelpers';
+import { formatKm } from '../../utils/formatKm';
 import { OrderCardUrgencyLine } from './OrderCardUrgencyLine';
 
 export interface OrderCardCompactProps {
@@ -58,6 +59,7 @@ export function OrderCardCompact({
   const commission = vm.earnings.estimatedTotal ?? vm.earnings.commission ?? order.delivery_commission ?? 0;
   const currency = vm.earnings.currency ?? order.currency ?? 'XAF';
   const isExpress = order.requires_fast_delivery;
+  const pickupKmLabel = formatKm(order.pickup_distance_km);
 
   return (
     <Pressable
@@ -115,13 +117,13 @@ export function OrderCardCompact({
         >
           {formatAddress(order.business_location?.address)}
         </Text>
-        {order.pickup_distance_km != null && Number.isFinite(order.pickup_distance_km) && (
+        {pickupKmLabel != null && (
           <Text
             variant="labelSmall"
             style={[styles.distanceBadge, { color: colors.primary.main }]}
           >
             {t('agent.openOrders.approxPickupDistance', '~{{km}} km away', {
-              km: order.pickup_distance_km.toFixed(1),
+              km: pickupKmLabel,
             })}
           </Text>
         )}
