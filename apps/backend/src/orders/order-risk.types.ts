@@ -71,6 +71,8 @@ export interface RiskEvaluableOrder {
   accepted_at?: string | null;
   promised_ready_at?: string | null;
   dispatch_exhausted_at?: string | null;
+  /** Scheduled dispatch gate; agents are not offered the order before this. */
+  dispatch_ready_at?: string | null;
   assigned_agent_id?: string | null;
   assigned_at?: string | null;
   pickup_state?: string | null;
