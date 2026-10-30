@@ -102,6 +102,15 @@ export class WaitAndExecuteScheduleService {
     );
   }
 
+  /** Early dedicated heads-up: optional re-ping shortly before dispatch_ready_at. */
+  async scheduleDedicatedHeadsUpReping(orderId: string, waitSeconds: number): Promise<void> {
+    await this.scheduleEvent(
+      'order.dedicated_heads_up_reping',
+      { order_id: orderId },
+      Math.max(1, waitSeconds)
+    );
+  }
+
   private async scheduleEvent(
     eventType: string,
     payload: WaitExecutePayload,

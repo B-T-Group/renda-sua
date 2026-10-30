@@ -113,3 +113,42 @@ export function buildDedicatedSlotReminderMessage(params: {
     body: `${n} scheduled ${n === 1 ? 'order' : 'orders'} at ${params.storeName} · pickup ${params.pickupTime}`,
   };
 }
+
+/** Early heads-up in-app type, seeded by 20261030120000_dedicated_order_heads_ups. */
+export const DEDICATED_ORDER_HEADS_UP_MESSAGE_TYPE = 'DEDICATED_ORDER_HEADS_UP';
+
+/**
+ * Agent: soft heads-up (not a claimable offer) that a scheduled order in their
+ * dedicated slot may come to them at dispatch. `reping` = the short reminder
+ * shortly before dispatch opens.
+ */
+export function buildDedicatedHeadsUpMessage(params: {
+  orderNumber: string;
+  storeName: string;
+  slotKey: string;
+  reping?: boolean;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const slot = dedicatedSlotLabel(params.slotKey, locale);
+  if (locale === 'fr') {
+    return params.reping
+      ? {
+          title: 'Livraison dédiée bientôt',
+          body: `Commande ${params.orderNumber} de ${params.storeName} (${slot}) part bientôt en livraison. Vous pourriez la recevoir. Touchez si vous ne pouvez pas la prendre.`,
+        }
+      : {
+          title: 'Livraison possible plus tard',
+          body: `Commande ${params.orderNumber} de ${params.storeName} (${slot}) est prête. Elle pourrait vous être proposée plus tard. Touchez si vous ne pouvez pas la prendre.`,
+        };
+  }
+  return params.reping
+    ? {
+        title: 'Dedicated delivery soon',
+        body: `Order ${params.orderNumber} from ${params.storeName} (${slot}) dispatches soon. You may get it. Tap if you can't take it.`,
+      }
+    : {
+        title: 'You may get this delivery later',
+        body: `Order ${params.orderNumber} from ${params.storeName} (${slot}) is ready. It may come to you later. Tap if you can't take it.`,
+      };
+}

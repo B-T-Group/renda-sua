@@ -107,6 +107,9 @@ const DISPATCH_ORDER_QUERY = `
       expires_at
       dedicated_attempt
     }
+    dedicated_order_heads_ups(where: { order_id: { _eq: $orderId }, status: { _eq: "unavailable" } }) {
+      agent_id
+    }
   }
 `;
 
@@ -216,7 +219,7 @@ export class DedicatedDispatchService {
   async fallback(orderId: string): Promise<DedicatedFallbackOutcome> {
     const none: DedicatedFallbackOutcome = { kind: 'none' };
     try {
-      const { order, offers } = await this.loadOrder(orderId);
+      const { order, offers, unavailable } = await this.loadOrder(orderId);
       if (!order || !this.isDispatchable(order) || !order.coverage_slot_key) return none;
       const country = isoCountryCode(order.business_location?.address?.country);
       if (!(await this.dedicatedConfig.isEnabled(country))) return none;
@@ -234,6 +237,8 @@ export class DedicatedDispatchService {
       // Declined rows (a declined offer, or a released auto-assignment, PR 6) are
       // exclusions, not a sign the fallback already ran: those agents are skipped below.
       const declined = new Set(offers.filter((o) => o.status === 'declined').map((o) => o.agent_id));
+      // Early heads-up "Can't take it": skipped like a decline, so dispatch reaches the open market.
+      for (const agentId of unavailable) declined.add(agentId);
       const config = await this.dedicatedConfig.getConfig(country);
       // Attempts already sent per agent (a row from before the counter existed counts as 1).
       const attempts = new Map<string, number>();
@@ -664,11 +669,16 @@ export class DedicatedDispatchService {
 
   private async loadOrder(
     orderId: string
-  ): Promise<{ order: DedicatedDispatchOrder | null; offers: DispatchOfferRow[] }> {
+  ): Promise<{ order: DedicatedDispatchOrder | null; offers: DispatchOfferRow[]; unavailable: string[] }> {
     const res = await this.hasuraSystemService.executeQuery<{
       orders_by_pk: DedicatedDispatchOrder | null;
       order_offers: DispatchOfferRow[];
+      dedicated_order_heads_ups?: Array<{ agent_id: string }>;
     }>(DISPATCH_ORDER_QUERY, { orderId });
-    return { order: res?.orders_by_pk ?? null, offers: res?.order_offers ?? [] };
+    return {
+      order: res?.orders_by_pk ?? null,
+      offers: res?.order_offers ?? [],
+      unavailable: (res?.dedicated_order_heads_ups ?? []).map((r) => r.agent_id),
+    };
   }
 }
