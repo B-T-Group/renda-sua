@@ -7794,6 +7794,11 @@
         "confirmButton": "Oui, me retirer",
         "marked": "C'est noté : cette commande ne vous sera pas proposée.",
         "error": "Mise à jour impossible. Réessayez."
+      },
+      "homeStores": {
+        "title": "Mes magasins dédiés",
+        "paused": "En pause",
+        "more": "+{{count}} de plus"
       }
     },
     "offline": "Hors ligne · dernière mise à jour affichée",

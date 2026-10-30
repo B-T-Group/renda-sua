@@ -7872,6 +7872,11 @@
         "confirmButton": "Yes, skip me",
         "marked": "Got it: you won't be offered this order.",
         "error": "Could not update. Try again."
+      },
+      "homeStores": {
+        "title": "My dedicated stores",
+        "paused": "Paused",
+        "more": "+{{count}} more"
       }
     },
     "offline": "Offline · showing last update",
