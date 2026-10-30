@@ -49,11 +49,16 @@ export function CoveredDeliverySlotPicker({ slots, value, onChange }: CoveredDel
   }, [slots]);
 
   // Keep the selection inside the covered set; default to the earliest covered slot.
+  // Runs after every render (no deps): a parent can clear `value` in its own
+  // effect right after this one committed the default (child effects run
+  // first), leaving `value` null both before and after, so a deps-based effect
+  // would never fire again and the order would go out with no window.
   useEffect(() => {
     if (isCoveredDeliveryWindow(value, slots)) return;
     const first = slots[0];
+    if (!first && value == null) return;
     onChange(first ? { slot_id: first.slot_id, preferred_date: first.date } : null);
-  }, [slots, value, onChange]);
+  });
 
   const selected = value ? `${value.preferred_date}|${value.slot_id}` : '';
 
