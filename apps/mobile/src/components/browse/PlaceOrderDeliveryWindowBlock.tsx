@@ -32,6 +32,13 @@ export interface PlaceOrderDeliveryWindowBlockProps {
    * agent covers these slots. Non-empty → scheduled-only, these slots only.
    */
   coveredSlots?: DedicatedCoveredSlot[];
+  /**
+   * The window the screen will submit. Passed so the covered-slot picker stays
+   * in sync with it: a screen that resets its window (e.g. on a fulfillment
+   * change, whose effect runs after this child's mount effect) gets the
+   * default covered slot committed again instead of submitting no window.
+   */
+  value?: ClientDeliveryWindowPayload | null;
   onReadyChange: (ok: boolean) => void;
   onCommit: (window: ClientDeliveryWindowPayload | null) => void;
 }
@@ -50,6 +57,7 @@ export function PlaceOrderDeliveryWindowBlock({
   estimatedFulfillBy,
   opensAt,
   coveredSlots,
+  value,
   onReadyChange,
   onCommit,
 }: PlaceOrderDeliveryWindowBlockProps) {
@@ -58,6 +66,7 @@ export function PlaceOrderDeliveryWindowBlock({
       <CoveredOnlyBlock
         enabled={enabled}
         slots={coveredSlots}
+        value={value}
         onReadyChange={onReadyChange}
         onCommit={onCommit}
       />
@@ -87,11 +96,13 @@ export function PlaceOrderDeliveryWindowBlock({
 function CoveredOnlyBlock({
   enabled,
   slots,
+  value,
   onReadyChange,
   onCommit,
 }: {
   enabled: boolean;
   slots: DedicatedCoveredSlot[];
+  value?: ClientDeliveryWindowPayload | null;
   onReadyChange: (ok: boolean) => void;
   onCommit: (window: ClientDeliveryWindowPayload | null) => void;
 }) {
@@ -134,7 +145,11 @@ function CoveredOnlyBlock({
           'Choose one of the times below.'
         )}
       </Text>
-      <CoveredDeliverySlotPicker slots={slots} value={selected} onChange={handleChange} />
+      <CoveredDeliverySlotPicker
+        slots={slots}
+        value={value !== undefined ? value : selected}
+        onChange={handleChange}
+      />
     </View>
   );
 }
