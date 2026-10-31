@@ -334,4 +334,78 @@ describe('ClientConfirmDeliveryService', () => {
       status: 403,
     });
   });
+
+  it('uses the stamp write result when another confirmer already labeled the order', async () => {
+    const ctx = buildService();
+    ctx.users.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      client: { id: 'c1' },
+    });
+    ctx.repo.stampConfirmationMethod.mockResolvedValue(false);
+    ctx.repo.loadOrder
+      .mockResolvedValueOnce(
+        deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION })
+      )
+      .mockResolvedValueOnce(
+        deliveryOrder({
+          current_status: 'complete',
+          delivery_confirmation_method: 'auto_complete',
+        })
+      );
+
+    const result = await ctx.svc.confirmReceipt('order-1');
+
+    expect(result.confirmationMethod).toBe('auto_complete');
+  });
+
+  it('late gift Problem on a completed order opens a post-completion claim', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: 'complete',
+        recipient_phone: '+237670000000',
+      })
+    );
+
+    const result = await ctx.svc.handleRecipientAction(
+      'order-1',
+      '+237670000000',
+      'problem'
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      status: 'complete',
+      postCompletionClaim: true,
+    });
+    expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+    expect(ctx.support.createTicket).toHaveBeenCalledWith(
+      'client-user',
+      expect.objectContaining({ type: 'complaint', orderId: 'order-1' })
+    );
+  });
+
+  it('gift Problem on a mid-flight PIN order refuses without disputing', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        delivery_pin_hash: 'hash',
+        recipient_phone: '+237670000000',
+      })
+    );
+
+    const result = await ctx.svc.handleRecipientAction(
+      'order-1',
+      '+237670000000',
+      'problem'
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      status: 'out_for_delivery',
+    });
+    expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+    expect(ctx.support.createTicket).not.toHaveBeenCalled();
+  });
 });

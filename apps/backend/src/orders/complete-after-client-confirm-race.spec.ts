@@ -33,22 +33,36 @@ describe('OrdersService.completeAfterClientConfirmation race', () => {
     return svc;
   };
 
-  it('loser of confirm vs auto-complete skips the tail', async () => {
+  it('loser of confirm vs auto-complete skips settle and the tail', async () => {
     const svc = build(true);
     const result = await svc.completeAfterClientConfirmation(
       'order-1',
       'Client confirmed'
     );
     expect(result.alreadyComplete).toBe(true);
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+    expect(svc.processOrderDeliveryPayment).not.toHaveBeenCalled();
     expect(svc.runCompletionSideEffects).not.toHaveBeenCalled();
     expect(svc.createStatusHistoryEntry).not.toHaveBeenCalled();
   });
 
-  it('winner settles then runs the tail once', async () => {
+  it('winner settles only after winning the status CAS', async () => {
     const svc = build(false);
+    const order: string[] = [];
+    svc.updateOrderStatusWithSingleRetry = jest.fn(async () => {
+      order.push('cas');
+      return { id: 'order-1', current_status: 'complete' };
+    });
+    svc.processOrderPayment = jest.fn(async () => {
+      order.push('item');
+    });
+    svc.processOrderDeliveryPayment = jest.fn(async () => {
+      order.push('delivery');
+    });
+
     await svc.completeAfterClientConfirmation('order-1', 'Client confirmed');
-    expect(svc.processOrderPayment).toHaveBeenCalledTimes(1);
-    expect(svc.processOrderDeliveryPayment).toHaveBeenCalledTimes(1);
+
+    expect(order).toEqual(['cas', 'item', 'delivery']);
     expect(svc.runCompletionSideEffects).toHaveBeenCalledTimes(1);
   });
 });

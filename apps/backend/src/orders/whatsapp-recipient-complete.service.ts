@@ -80,12 +80,15 @@ export class WhatsAppRecipientCompleteService {
     }
     const locale = recipientCompleteLocale(order.fulfillment_country);
     try {
-      await this.clientConfirm.handleRecipientAction(
+      const result = await this.clientConfirm.handleRecipientAction(
         order.id,
         params.fromPhone,
         params.action
       );
-      const outcome = params.action === 'problem' ? 'failed' : 'completed';
+      const outcome =
+        params.action === 'problem'
+          ? this.problemReplyOutcome(result)
+          : 'completed';
       return {
         handled: true,
         message: recipientCompleteReply(outcome, locale, order.order_number),
@@ -117,6 +120,15 @@ export class WhatsAppRecipientCompleteService {
         message: recipientCompleteReply('failed', locale, order.order_number),
       };
     }
+  }
+
+  private problemReplyOutcome(result: {
+    success?: boolean;
+    postCompletionClaim?: boolean;
+  }): RecipientCompleteOutcome {
+    if (result.postCompletionClaim) return 'already_complete';
+    if (!result.success) return 'not_allowed';
+    return 'failed';
   }
 
   private reply(

@@ -74,6 +74,7 @@ export class ClientConfirmMarketConfigService {
         countryCode,
         DEFAULT_NONSTRIPE_SUPPORT_HOURS
       ),
+      // OQ1 default true (Samuel has not locked). Flip the config row to false.
       giftBuyerCanConfirm: this.boolean(
         rows,
         CONFIG_GIFT_BUYER_CAN_CONFIRM,

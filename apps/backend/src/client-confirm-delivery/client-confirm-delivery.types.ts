@@ -75,4 +75,12 @@ export interface ConfirmReceiptResult {
   confirmationMethod?: DeliveryConfirmationMethod;
 }
 
+export interface RecipientProblemResult {
+  success: boolean;
+  status: string;
+  ticketId?: string | null;
+  postCompletionClaim?: boolean;
+  message: string;
+}
+
 export type RecipientDeliveryAction = 'received' | 'problem';

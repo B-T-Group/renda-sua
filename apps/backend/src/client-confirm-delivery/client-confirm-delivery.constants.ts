@@ -29,6 +29,7 @@ export const CONFIG_AUTO_COMPLETE_HOURS = 'client_confirm_auto_complete_hours';
 export const CONFIG_GRACE_MINUTES = 'client_confirm_grace_minutes';
 export const CONFIG_NONSTRIPE_SUPPORT_HOURS =
   'client_confirm_nonstripe_support_hours';
+/** OQ1 unlocked: default ON. Flip this config to false to restrict confirm to the recipient. */
 export const CONFIG_GIFT_BUYER_CAN_CONFIRM =
   'client_confirm_gift_buyer_can_confirm';
 

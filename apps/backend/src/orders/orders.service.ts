@@ -12637,7 +12637,8 @@ export class OrdersService {
 
   /**
    * Client-confirm / auto-complete / PAD-after-confirm completion.
-   * Settlement is idempotent; race losers skip the completion tail.
+   * Win the status CAS first; only the winner settles. Ledger moves stay
+   * idempotent (`settle:*` keys + settlement lease) if a retry runs after complete.
    */
   async completeAfterClientConfirmation(
     orderId: string,
@@ -12650,23 +12651,11 @@ export class OrdersService {
     if (order.current_status === 'complete') {
       return { alreadyComplete: true, order };
     }
-    const cashPending =
-      (order as { reconciliation_status?: string }).reconciliation_status ===
-      'pending_manual_reconciliation';
-    if (!cashPending) {
-      await this.processOrderPayment(orderId);
-      await this.processOrderDeliveryPayment(orderId);
+    const updated = await this.winClientConfirmComplete(orderId);
+    if (!updated) {
+      return { alreadyComplete: true, order: await this.getOrderDetails(orderId) };
     }
-    let lostCompletionRace = false;
-    const updated = await this.updateOrderStatusWithSingleRetry(orderId, 'complete', {
-      viaSystem: true,
-      onSameStatusReplay: () => {
-        lostCompletionRace = true;
-      },
-    });
-    if (lostCompletionRace) {
-      return { alreadyComplete: true, order: updated };
-    }
+    await this.settleAfterClientConfirmWin(order, orderId);
     await this.createStatusHistoryEntry(
       orderId,
       'complete',
@@ -12676,6 +12665,30 @@ export class OrdersService {
     );
     await this.runCompletionSideEffects(order);
     return { alreadyComplete: false, order: updated };
+  }
+
+  private async winClientConfirmComplete(orderId: string): Promise<Orders | null> {
+    let lostRace = false;
+    const updated = await this.updateOrderStatusWithSingleRetry(orderId, 'complete', {
+      viaSystem: true,
+      onSameStatusReplay: () => {
+        lostRace = true;
+      },
+    });
+    return lostRace ? null : updated;
+  }
+
+  /** Cash exception stays unpaid until reconcile; other rails settle after CAS. */
+  private async settleAfterClientConfirmWin(
+    order: Orders,
+    orderId: string
+  ): Promise<void> {
+    const cashPending =
+      (order as { reconciliation_status?: string }).reconciliation_status ===
+      'pending_manual_reconciliation';
+    if (cashPending) return;
+    await this.processOrderPayment(orderId);
+    await this.processOrderDeliveryPayment(orderId);
   }
 
   async recordClientConfirmHistory(

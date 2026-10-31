@@ -31,6 +31,7 @@ import {
   DeliveryConfirmationState,
   DeliveryProofPhotoInput,
   RecipientDeliveryAction,
+  RecipientProblemResult,
 } from './client-confirm-delivery.types';
 import {
   canConfirmFromStatus,
@@ -115,7 +116,7 @@ export class ClientConfirmDeliveryService {
     const resolved =
       method === 'client' && order.is_third_party_recipient ? 'buyer' : method;
     await this.assertConfirmerAllowed(order, resolved);
-    await this.repo.stampConfirmationMethod(
+    const stamped = await this.repo.stampConfirmationMethod(
       orderId,
       resolved,
       new Date().toISOString()
@@ -130,7 +131,7 @@ export class ClientConfirmDeliveryService {
       orderId,
       status: 'complete',
       message: CLIENT_CONFIRM_COPY.confirmDone.en,
-      confirmationMethod: resolved,
+      confirmationMethod: await this.methodFromStamp(orderId, stamped, resolved),
     };
   }
 
@@ -237,24 +238,13 @@ export class ClientConfirmDeliveryService {
     orderId: string,
     fromPhone: string,
     action: RecipientDeliveryAction
-  ): Promise<ConfirmReceiptResult | { success: boolean; status: string }> {
+  ): Promise<ConfirmReceiptResult | RecipientProblemResult> {
     const order = await this.requireOrder(orderId);
     if (!this.phonesMatch(fromPhone, order.recipient_phone)) {
       throw new HttpException('Recipient phone does not match', HttpStatus.FORBIDDEN);
     }
     if (action === 'problem') {
-      await this.transition(
-        orderId,
-        DISPUTED,
-        'Gift recipient reported a delivery problem',
-        order.client?.user_id ?? order.client_id ?? order.id
-      );
-      await this.openDisputeTicket(
-        order,
-        order.client?.user_id ?? order.client_id ?? order.id,
-        'Recipient reported a problem via WhatsApp/SMS'
-      );
-      return { success: true, status: DISPUTED };
+      return this.handleRecipientProblem(order);
     }
     return this.confirmReceipt(orderId, 'recipient');
   }
@@ -297,16 +287,105 @@ export class ClientConfirmDeliveryService {
   private async autoCompleteOne(orderId: string, now: Date): Promise<boolean> {
     const order = await this.repo.loadOrder(orderId);
     if (!order || order.current_status !== PENDING_AUTO_COMPLETE) return false;
-    await this.repo.stampConfirmationMethod(
+    const stamped = await this.repo.stampConfirmationMethod(
       orderId,
       'auto_complete',
       now.toISOString()
     );
     await this.orders.completeAfterClientConfirmation(
       orderId,
-      'Auto-completed after photo fallback deadline'
+      stamped
+        ? 'Auto-completed after photo fallback deadline'
+        : 'Completed after photo fallback (confirmation method already recorded)'
     );
     return true;
+  }
+
+  private async handleRecipientProblem(
+    order: ClientConfirmOrder
+  ): Promise<RecipientProblemResult> {
+    if (usesLegacyDeliveryPin(order)) {
+      return {
+        success: false,
+        status: order.current_status,
+        message: 'This order uses the delivery PIN flow until it is complete',
+      };
+    }
+    if (order.current_status === DISPUTED) {
+      return {
+        success: true,
+        status: DISPUTED,
+        ticketId: order.awaiting_confirm_support_ticket_id,
+        message: 'Delivery reported as a problem. Support will follow up.',
+      };
+    }
+    if (order.current_status === 'complete') {
+      return this.openPostCompletionClaim(order);
+    }
+    if (!canConfirmFromStatus(order.current_status)) {
+      return {
+        success: false,
+        status: order.current_status,
+        message: `Cannot report a delivery problem in ${order.current_status} status`,
+      };
+    }
+    return this.disputeFromRecipient(order);
+  }
+
+  private async disputeFromRecipient(
+    order: ClientConfirmOrder
+  ): Promise<RecipientProblemResult> {
+    const actor = order.client?.user_id ?? order.client_id ?? order.id;
+    await this.transition(
+      order.id,
+      DISPUTED,
+      'Gift recipient reported a delivery problem',
+      actor
+    );
+    const ticket = await this.openDisputeTicket(
+      order,
+      actor,
+      'Recipient reported a problem via WhatsApp/SMS'
+    );
+    return {
+      success: true,
+      status: DISPUTED,
+      ticketId: ticket.id,
+      message: 'Delivery reported as a problem. Support will follow up.',
+    };
+  }
+
+  private async openPostCompletionClaim(
+    order: ClientConfirmOrder
+  ): Promise<RecipientProblemResult> {
+    const ticket = await this.support.createTicket(
+      order.client?.user_id ?? order.client_id ?? order.id,
+      {
+        orderId: order.id,
+        type: 'complaint',
+        subject: `Post-delivery problem — ${order.order_number ?? order.id}`,
+        description:
+          'Gift recipient reported a problem after the order was already complete',
+      }
+    );
+    return {
+      success: true,
+      status: 'complete',
+      ticketId: ticket.id,
+      postCompletionClaim: true,
+      message: 'Order is already complete. Support will review the claim.',
+    };
+  }
+
+  private async methodFromStamp(
+    orderId: string,
+    stamped: boolean,
+    intended: DeliveryConfirmationMethod
+  ): Promise<DeliveryConfirmationMethod> {
+    if (stamped) return intended;
+    const latest = await this.repo.loadOrder(orderId);
+    const existing = latest?.delivery_confirmation_method;
+    return (existing as DeliveryConfirmationMethod) || intended;
   }
 
   private async processStuckOrder(
