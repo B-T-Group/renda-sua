@@ -951,6 +951,105 @@ export const useBackendOrders = () => {
     });
   };
 
+  const markDelivered = async (
+    orderId: string
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          op(`/orders/${orderId}/mark-delivered`),
+          {}
+        );
+        if (!response.data.success) {
+          throw new Error(response.data.message || 'Failed to mark delivered');
+        }
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to mark delivered'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
+  const reportDeliveryProblem = async (
+    orderId: string,
+    description?: string
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          op(`/orders/${orderId}/report-delivery-problem`),
+          { description: description?.trim() || undefined }
+        );
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to report a delivery problem'
+          );
+        }
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to report a delivery problem'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
+  const clientCouldNotConfirm = async (
+    orderId: string,
+    photos: Array<{
+      photoUrl: string;
+      capturedAt: string;
+      latitude: number;
+      longitude: number;
+      note?: string;
+    }>
+  ): Promise<OrderStatusChangeResponse> => {
+    if (!apiClient) {
+      throw new Error(
+        'API client not available. Please ensure you are authenticated.'
+      );
+    }
+    return callWithoutGlobalOverlay(async () => {
+      try {
+        const response = await apiClient.post<OrderStatusChangeResponse>(
+          op(`/orders/${orderId}/client-could-not-confirm`),
+          { photos }
+        );
+        if (!response.data.success) {
+          throw new Error(
+            response.data.message || 'Failed to submit delivery proof'
+          );
+        }
+        return response.data;
+      } catch (err: any) {
+        const errorMessage = getHttpExceptionMessage(
+          err,
+          'Failed to submit delivery proof'
+        );
+        setError(errorMessage);
+        throw new Error(errorMessage);
+      }
+    });
+  };
+
   const initiatePayAtDeliveryPayment = async (
     orderId: string,
     phoneNumberOverride?: string
@@ -1342,6 +1441,9 @@ export const useBackendOrders = () => {
 
     // PIN-based completion (agent: complete with PIN or overwrite; client: get PIN; business: overwrite code)
     completeDelivery,
+    markDelivered,
+    reportDeliveryProblem,
+    clientCouldNotConfirm,
     initiatePayAtDeliveryPayment,
     initiatePayAtPickupPayment,
     confirmClientPickup,

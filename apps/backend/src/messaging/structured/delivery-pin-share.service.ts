@@ -89,6 +89,12 @@ export class DeliveryPinShareService {
     }
 
     const isPickup = order.fulfillment_method === 'pickup';
+    if (!isPickup && !order.delivery_pin_hash) {
+      throw new HttpException(
+        'Delivery PIN is not used for this order. Confirm receipt in the app.',
+        HttpStatus.NOT_FOUND
+      );
+    }
     if (isPickup && order.current_status !== 'ready_for_pickup') {
       throw new HttpException(
         'Pickup PIN can only be shared when the order is ready for pickup',

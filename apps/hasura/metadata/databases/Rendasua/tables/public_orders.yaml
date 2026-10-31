@@ -103,6 +103,13 @@ array_relationships:
         remote_table:
           name: order_items
           schema: public
+  - name: delivery_proof_photos
+    using:
+      foreign_key_constraint_on:
+        column: order_id
+        table:
+          name: order_delivery_proof_photos
+          schema: public
   - name: order_refund_requests
     using:
       manual_configuration:
@@ -203,6 +210,14 @@ select_permissions:
         - verified_agent_delivery
         - delivery_pin_attempts
         - delivery_overwrite_code_used_at
+        - delivery_confirmation_method
+        - client_confirmation_requested_at
+        - client_confirmed_at
+        - auto_complete_deadline_at
+        - delivery_proof_submitted_at
+        - awaiting_confirm_reminder_1h_at
+        - awaiting_confirm_reminder_24h_at
+        - awaiting_confirm_support_ticket_id
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo
@@ -305,6 +320,14 @@ select_permissions:
         - requires_fast_delivery
         - verified_agent_delivery
         - delivery_overwrite_code_used_at
+        - delivery_confirmation_method
+        - client_confirmation_requested_at
+        - client_confirmed_at
+        - auto_complete_deadline_at
+        - delivery_proof_submitted_at
+        - awaiting_confirm_reminder_1h_at
+        - awaiting_confirm_reminder_24h_at
+        - awaiting_confirm_support_ticket_id
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo
@@ -413,6 +436,14 @@ select_permissions:
         - completed_at
         - requires_fast_delivery
         - verified_agent_delivery
+        - delivery_confirmation_method
+        - client_confirmation_requested_at
+        - client_confirmed_at
+        - auto_complete_deadline_at
+        - delivery_proof_submitted_at
+        - awaiting_confirm_reminder_1h_at
+        - awaiting_confirm_reminder_24h_at
+        - awaiting_confirm_support_ticket_id
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo

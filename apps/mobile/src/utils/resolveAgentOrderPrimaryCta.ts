@@ -3,13 +3,16 @@ export type AgentOrderPrimaryCtaId =
   | 'pickUp'
   | 'outForDelivery'
   | 'requestPayment'
-  | 'markDelivered';
+  | 'markDelivered'
+  | 'clientCouldNotConfirm';
 
 export type AgentOrderPrimaryCtaInput = {
   status: string;
   assignedAgentId?: string | null;
   agentSuspended?: boolean;
   needsPayAtDeliveryActions?: boolean;
+  /** GET /delivery-confirmation — fallback CTA only when this is true. */
+  canSubmitFallback?: boolean;
 };
 
 /** Single sticky primary action for AgentOrderDetail. Null hides the footer. */
@@ -25,6 +28,9 @@ export function resolveAgentOrderPrimaryCta(
   if (status === 'picked_up' || status === 'in_transit') return 'outForDelivery';
   if (status === 'out_for_delivery') {
     return input.needsPayAtDeliveryActions ? 'requestPayment' : 'markDelivered';
+  }
+  if (status === 'awaiting_client_confirmation' && input.canSubmitFallback) {
+    return 'clientCouldNotConfirm';
   }
   return null;
 }

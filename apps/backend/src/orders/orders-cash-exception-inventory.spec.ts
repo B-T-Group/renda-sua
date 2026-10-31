@@ -44,6 +44,7 @@ describe('OrdersService cash-exception inventory', () => {
     client: { user_id: 'client-user' },
     payment_timing: 'pay_at_delivery',
     current_status: 'out_for_delivery',
+    delivery_pin_hash: 'legacy-hash',
     reconciliation_status: null,
     order_items: [
       { business_inventory_id: 'inv-1', quantity: 2 },
@@ -125,6 +126,25 @@ describe('OrdersService cash-exception inventory', () => {
       String(query).includes('UpdateInventoryOnCompletion')
     );
   }
+
+  it('new-flow cash exception awaits client confirm and does not complete inventory', async () => {
+    stubOrder({ delivery_pin_hash: null });
+
+    await expect(service.markPaidInCashException('order-123')).resolves.toEqual({
+      success: true,
+      message:
+        'Payment received. Ask the client to confirm receipt in the app.',
+    });
+
+    expect(hasuraSystemService.executeMutation).toHaveBeenCalledWith(
+      expect.stringContaining('MarkCashException'),
+      expect.objectContaining({
+        orderId: 'order-123',
+        status: 'awaiting_client_confirmation',
+      })
+    );
+    expect(inventoryCalls()).toEqual([]);
+  });
 
   it('decrements reserved and on-hand quantity when cash exception completes', async () => {
     stubOrder();

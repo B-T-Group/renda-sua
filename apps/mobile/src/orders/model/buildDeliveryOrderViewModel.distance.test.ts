@@ -25,6 +25,32 @@ function order(overrides: Partial<OrderLike> = {}): OrderLike {
   } as OrderLike;
 }
 
+describe('buildDeliveryOrderViewModel client-confirm copy', () => {
+  it('hides PIN required unless uses_legacy_pin is true', () => {
+    expect(
+      buildDeliveryOrderViewModel(
+        order({ current_status: 'out_for_delivery' }),
+        ctx
+      ).deliveryRequirements
+    ).toEqual([]);
+    expect(
+      buildDeliveryOrderViewModel(
+        order({ current_status: 'out_for_delivery', uses_legacy_pin: true }),
+        ctx
+      ).deliveryRequirements
+    ).toEqual([{ id: 'pin', label: 'PIN required' }]);
+  });
+
+  it('uses mark-as-delivered hero for new-flow OFD', () => {
+    expect(
+      buildDeliveryOrderViewModel(
+        order({ current_status: 'out_for_delivery' }),
+        ctx
+      ).heroTitle
+    ).toBe('Mark as delivered');
+  });
+});
+
 describe('buildDeliveryOrderViewModel distanceLabel', () => {
   it('formats a numeric distance', () => {
     const vm = buildDeliveryOrderViewModel(order({ distance_km: 2.5 }), ctx);

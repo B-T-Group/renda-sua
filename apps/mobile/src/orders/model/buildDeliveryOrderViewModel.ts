@@ -18,8 +18,23 @@ import type {
 } from './types';
 import { formatKm } from '../../utils/formatKm';
 
+function doorstepObjective(order: OrderLike, ctx: OrderViewModelContext): string | null {
+  const s = order.current_status;
+  if (s === 'out_for_delivery') {
+    return order.uses_legacy_pin === true
+      ? ctx.t('orders.delivery.hero.complete', 'Complete delivery')
+      : ctx.t('orders.delivery.hero.markDelivered', 'Mark as delivered');
+  }
+  if (s === 'awaiting_client_confirmation' || s === 'pending_auto_complete') {
+    return ctx.t('orders.delivery.hero.waitClient', 'Waiting for the client to confirm');
+  }
+  return null;
+}
+
 function objective(order: OrderLike, ctx: OrderViewModelContext): string {
   const s = order.current_status;
+  const doorstep = doorstepObjective(order, ctx);
+  if (doorstep) return doorstep;
   if (s === 'ready_for_pickup') {
     return ctx.t('orders.delivery.hero.claim', 'Claim this delivery');
   }
@@ -31,9 +46,6 @@ function objective(order: OrderLike, ctx: OrderViewModelContext): string {
   }
   if (s === 'in_transit') {
     return ctx.t('orders.delivery.hero.deliver', 'Deliver to customer');
-  }
-  if (s === 'out_for_delivery') {
-    return ctx.t('orders.delivery.hero.complete', 'Complete delivery');
   }
   return friendlyStatus(order, 'agent', ctx);
 }
@@ -65,21 +77,13 @@ function requirements(
   ctx: OrderViewModelContext
 ): DeliveryRequirement[] {
   const list: DeliveryRequirement[] = [];
-  const payAfterDelivery = order.pay_after_merchant_confirm === true;
-  const pinOk =
-    payAfterDelivery ||
-    (order.payment_timing !== 'pay_at_delivery' &&
-      order.payment_timing !== 'pay_at_pickup' &&
-      order.payment_method !== 'pay_on_delivery');
-  if (
-    pinOk &&
-    [
-      'out_for_delivery',
-      'assigned_to_agent',
-      'picked_up',
-      'in_transit',
-    ].includes(order.current_status)
-  ) {
+  const pinStatuses = [
+    'out_for_delivery',
+    'assigned_to_agent',
+    'picked_up',
+    'in_transit',
+  ];
+  if (order.uses_legacy_pin === true && pinStatuses.includes(order.current_status)) {
     list.push({
       id: 'pin',
       label: ctx.t('orders.delivery.requirements.pin', 'PIN required'),

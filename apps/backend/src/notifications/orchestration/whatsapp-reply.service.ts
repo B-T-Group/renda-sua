@@ -23,6 +23,10 @@ import {
   type MerchantWaAction,
 } from '../../orders/whatsapp-order-action.service';
 import { isRecipientCompleteButton } from '../../orders/recipient-pickup-complete.util';
+import {
+  isRecipientDeliveryConfirmButton,
+  isRecipientDeliveryProblemButton,
+} from '../../orders/recipient-delivery-confirm.util';
 import { WhatsAppRecipientCompleteService } from '../../orders/whatsapp-recipient-complete.service';
 import { WhatsAppService } from '../../whatsapp/whatsapp.service';
 import { WhatsAppInboxPersistenceService } from './whatsapp-inbox-persistence.service';
@@ -39,6 +43,8 @@ export type WhatsAppCommand =
   | 'PICKED_UP'
   | 'COMPLETE'
   | 'COMPLETE_ORDER'
+  | 'RECEIVED_DELIVERY'
+  | 'PROBLEM_DELIVERY'
   | 'YES'
   | 'NO'
   | 'STOP'
@@ -125,6 +131,12 @@ export class WhatsAppReplyService implements OnModuleInit {
       PICKED_UP: 'PICKED_UP',
       PICKEDUP: 'PICKED_UP',
       COMPLETE: 'COMPLETE',
+      RECEIVED: 'RECEIVED_DELIVERY',
+      RECU: 'RECEIVED_DELIVERY',
+      REÇU: 'RECEIVED_DELIVERY',
+      PROBLEM: 'PROBLEM_DELIVERY',
+      PROBLEME: 'PROBLEM_DELIVERY',
+      PROBLÈME: 'PROBLEM_DELIVERY',
       YES: 'CONFIRM',
       OUI: 'CONFIRM',
       NO: 'DECLINE',
@@ -138,6 +150,11 @@ export class WhatsAppReplyService implements OnModuleInit {
 
   parseButtonReply(buttonId?: string, buttonTitle?: string): WhatsAppCommand {
     if (isRecipientCompleteButton(buttonId, buttonTitle)) return 'COMPLETE_ORDER';
+    if (isRecipientDeliveryConfirmButton(buttonId, buttonTitle)) {
+      return isRecipientDeliveryProblemButton(buttonId, buttonTitle)
+        ? 'PROBLEM_DELIVERY'
+        : 'RECEIVED_DELIVERY';
+    }
     const id = (buttonId || '').trim().toLowerCase();
     if (id && BUTTON_TO_ACTION[id]) {
       return BUTTON_TO_ACTION[id] as WhatsAppCommand;
@@ -197,6 +214,9 @@ export class WhatsAppReplyService implements OnModuleInit {
     }
     if (command === 'COMPLETE_ORDER') {
       return this.handleRecipientComplete(params);
+    }
+    if (command === 'RECEIVED_DELIVERY' || command === 'PROBLEM_DELIVERY') {
+      return this.handleRecipientDeliveryConfirm(params);
     }
 
     const action = this.toMerchantAction(command);
@@ -468,6 +488,24 @@ export class WhatsAppReplyService implements OnModuleInit {
     const result = await this.recipientComplete.handleComplete({
       fromPhone: params.fromPhone,
       contextMessageId: params.contextMessageId,
+    });
+    await this.ackSession(params.fromPhone, result.message);
+    return { handled: result.handled, command: params.command };
+  }
+
+  private async handleRecipientDeliveryConfirm(params: {
+    fromPhone: string;
+    command: WhatsAppCommand;
+    contextMessageId?: string;
+  }): Promise<{ handled: boolean; command: WhatsAppCommand; userId?: string }> {
+    if (!this.recipientComplete) {
+      this.logger.warn('WhatsAppRecipientCompleteService unavailable');
+      return { handled: false, command: params.command };
+    }
+    const result = await this.recipientComplete.handleDeliveryConfirm({
+      fromPhone: params.fromPhone,
+      contextMessageId: params.contextMessageId,
+      action: params.command === 'PROBLEM_DELIVERY' ? 'problem' : 'received',
     });
     await this.ackSession(params.fromPhone, result.message);
     return { handled: result.handled, command: params.command };

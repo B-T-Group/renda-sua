@@ -64,6 +64,7 @@ export interface MessagingOrder {
   assigned_agent_id: string | null;
   current_status?: string;
   fulfillment_method?: string | null;
+  delivery_pin_hash?: string | null;
   client?: {
     user_id?: string | null;
     user?: {

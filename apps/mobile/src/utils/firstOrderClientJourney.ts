@@ -273,6 +273,7 @@ function templatesForPath(
 }
 
 function isPinEligible(order: ClientFirstOrderOrder): boolean {
+  if (order.fulfillment_method !== 'pickup') return false;
   if (order.is_cooked_food_pickup === true) return false;
   if (
     order.pay_after_merchant_confirm === true &&
@@ -301,7 +302,13 @@ function resolveDeliveryStep(order: FirstOrderJourneyOrder): ClientFirstOrderSte
   if (status === 'ready_for_pickup' || status === 'assigned_to_agent') {
     return 'courier_assigned';
   }
-  if (status === 'picked_up' || status === 'in_transit' || status === 'out_for_delivery') {
+  if (
+    status === 'picked_up' ||
+    status === 'in_transit' ||
+    status === 'out_for_delivery' ||
+    status === 'awaiting_client_confirmation' ||
+    status === 'pending_auto_complete'
+  ) {
     return 'on_the_way';
   }
   return 'order_received';

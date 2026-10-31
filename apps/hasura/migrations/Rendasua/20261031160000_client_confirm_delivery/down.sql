@@ -1,0 +1,1 @@
+-- Postgres cannot drop enum values. Schema objects live in 20261031161000.

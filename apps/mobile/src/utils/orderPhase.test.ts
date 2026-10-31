@@ -96,6 +96,63 @@ describe('resolveOrderPhase shipping', () => {
   });
 });
 
+describe('resolveOrderPhase client confirm delivery', () => {
+  it('asks the client to confirm receipt instead of sending a PIN', () => {
+    const info = resolveOrderPhase(
+      { status: 'awaiting_client_confirmation', fulfillmentMethod: 'delivery' },
+      'client'
+    );
+    expect(info.primaryActionId).toBe('confirm_receipt');
+  });
+
+  it('lets business generate overwrite while awaiting client confirmation', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'awaiting_client_confirmation', fulfillmentMethod: 'delivery' },
+        'business'
+      ).primaryActionId
+    ).toBe('generate_overwrite');
+  });
+
+  it('uses mark-delivered next-step copy unless GET usesLegacyPin', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'out_for_delivery', fulfillmentMethod: 'delivery' },
+        'agent'
+      ).nextStepKey
+    ).toBe('orders.nextStep.ofdAgentMark');
+    expect(
+      resolveOrderPhase(
+        {
+          status: 'out_for_delivery',
+          fulfillmentMethod: 'delivery',
+          usesLegacyPin: true,
+        },
+        'agent'
+      ).nextStepKey
+    ).toBe('orders.nextStep.ofdAgent');
+  });
+
+  it('keeps send PIN only for mid-flight PIN orders', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'out_for_delivery', fulfillmentMethod: 'delivery' },
+        'client'
+      ).primaryActionId
+    ).toBe('confirm_receipt');
+    expect(
+      resolveOrderPhase(
+        {
+          status: 'out_for_delivery',
+          fulfillmentMethod: 'delivery',
+          usesLegacyPin: true,
+        },
+        'client'
+      ).primaryActionId
+    ).toBe('send_pin');
+  });
+});
+
 describe('resolveOrderPhase pickup ready', () => {
   it('asks pay-at-pickup clients to complete in the app when ready', () => {
     const info = resolveOrderPhase(

@@ -5,9 +5,11 @@ import { WhatsAppRecipientCompleteService } from './whatsapp-recipient-complete.
 describe('WhatsAppRecipientCompleteService', () => {
   const hasura = { executeQuery: jest.fn() };
   const orders = { completeDiasporaRecipientPickup: jest.fn() };
+  const clientConfirm = { handleRecipientAction: jest.fn() };
   const service = new WhatsAppRecipientCompleteService(
     hasura as unknown as HasuraSystemService,
-    orders as unknown as OrdersService
+    orders as unknown as OrdersService,
+    clientConfirm as any
   );
 
   beforeEach(() => {
@@ -173,5 +175,66 @@ describe('WhatsAppRecipientCompleteService', () => {
     });
 
     expect(result.message).toContain('ne peut pas être terminée');
+  });
+
+  it('routes Received / Problem delivery replies to client confirm', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [{ entity_id: 'order-1' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'order-1',
+          order_number: 'ORD-1',
+          recipient_phone: '+24177123456',
+          fulfillment_country: 'GA',
+        },
+      });
+    clientConfirm.handleRecipientAction.mockResolvedValue({
+      success: true,
+      status: 'complete',
+    });
+
+    const result = await service.handleDeliveryConfirm({
+      fromPhone: '24177123456',
+      contextMessageId: 'wamid.d1',
+      action: 'received',
+    });
+
+    expect(clientConfirm.handleRecipientAction).toHaveBeenCalledWith(
+      'order-1',
+      '24177123456',
+      'received'
+    );
+    expect(result.handled).toBe(true);
+  });
+
+  it('late Problem after complete does not throw and says already complete', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [{ entity_id: 'order-1' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'order-1',
+          order_number: 'ORD-1',
+          recipient_phone: '+24177123456',
+          fulfillment_country: 'GA',
+        },
+      });
+    clientConfirm.handleRecipientAction.mockResolvedValue({
+      success: true,
+      status: 'complete',
+      postCompletionClaim: true,
+    });
+
+    const result = await service.handleDeliveryConfirm({
+      fromPhone: '24177123456',
+      contextMessageId: 'wamid.d1',
+      action: 'problem',
+    });
+
+    expect(result.handled).toBe(true);
+    expect(result.message).toContain('déjà terminée');
   });
 });

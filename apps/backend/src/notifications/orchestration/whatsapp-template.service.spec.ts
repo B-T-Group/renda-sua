@@ -181,6 +181,7 @@ describe('WhatsAppTemplateService — recipient templates', () => {
     expect(service.needsDynamicCta('recipient_out_for_delivery')).toBe(false);
     expect(service.needsDynamicCta('recipient_order_ready')).toBe(false);
     expect(service.needsDynamicCta('recipient_complete_pickup')).toBe(false);
+    expect(service.needsDynamicCta('recipient_confirm_delivery')).toBe(false);
     expect(service.needsDynamicCta('recipient_order_update')).toBe(false);
   });
 

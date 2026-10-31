@@ -512,6 +512,8 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
 
       case 'out_for_delivery':
+      case 'awaiting_client_confirmation':
+      case 'pending_auto_complete':
         if (!isDelegate) {
           actions.push({
             label: t('orders.overwriteCode.button', 'Generate overwrite code'),

@@ -202,6 +202,8 @@ function standardOrderActions(
       }
       break;
     case 'out_for_delivery':
+    case 'awaiting_client_confirmation':
+    case 'pending_auto_complete':
       if (mode === 'owner') {
         actions.push({
           id: 'generateOverwriteCode',

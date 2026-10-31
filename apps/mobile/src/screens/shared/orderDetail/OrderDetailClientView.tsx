@@ -16,6 +16,8 @@ import { ForfeitDepositCancelDialog } from '../../../components/dialogs/ForfeitD
 import { ClientPickupPaymentSheet } from '../../../components/client/ClientPickupPaymentSheet';
 import { NoAgentOptionsSheet } from '../../../components/client/NoAgentOptionsSheet';
 import { SendDeliveryPinButton } from '../../../components/client/SendDeliveryPinButton';
+import { ClientConfirmReceiptCard } from '../../../components/client/ClientConfirmReceiptCard';
+import { ReportDeliveryProblemDialog } from '../../../components/dialogs/ReportDeliveryProblemDialog';
 import { StatusPill } from '../../../components/common/StatusPill';
 import { SectionCard } from '../../../components/common/SectionCard';
 import { InfoRow } from '../../../components/common/InfoRow';
@@ -38,6 +40,11 @@ import { useCancellationPreview } from '../../../hooks/useCancellationPreview';
 import { agentApi } from '../../../services/agentApi';
 import type { Address, Order, OrderItem } from '../../../types/agent';
 import { clientCanCancelOrder, clientShowAgentLocation, clientShowDeliveryPin, clientShowNoAgentOptions } from '../../../utils/clientOrderActions';
+import { useDeliveryConfirmation } from '../../../hooks/useDeliveryConfirmation';
+import {
+  clientCanShowConfirmReceipt,
+  resolveUsesLegacyPin,
+} from '../../../utils/deliveryConfirmationUi';
 import { getClientOrderJourney } from '../../../utils/clientOrderJourney';
 import { isOrderRefundRequestAllowed } from '../../../utils/orderRefundWindow';
 import { trackCancellationEvent } from '../../../utils/cancellationAnalytics';
@@ -231,6 +238,19 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabPad = useMainTabContentBottomPadding(24);
   const { order, loading, error, refetch } = useOrderDetail(orderId);
+  const { state: confirmState, refetch: refetchConfirm } = useDeliveryConfirmation(
+    orderId,
+    order?.current_status,
+    order?.fulfillment_method
+  );
+  const usesLegacyPin = resolveUsesLegacyPin(confirmState);
+  const canConfirmDelivery = clientCanShowConfirmReceipt({
+    status: order?.current_status,
+    fulfillmentMethod: order?.fulfillment_method,
+    isGift: order?.is_third_party_recipient,
+    giftBuyerCanConfirm: confirmState?.giftBuyerCanConfirm,
+  });
+  const [problemOpen, setProblemOpen] = useState(false);
   const { orders, loading: ordersLoading, error: ordersError } = useClientOrders(true);
   const firstOrderJourney = useFirstOrderClientJourney({
     order,
@@ -349,7 +369,10 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const isPickup = isStorePickupOrder(order);
   const slotWindow = resolveOrderTimeWindow(order);
   const slotLabel = formatOrderTimeWindowLabel(order, locale);
-  const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), 'client');
+  const phaseInfo = resolveOrderPhase(
+    orderToPhaseInput(order, { usesLegacyPin }),
+    'client'
+  );
   const primaryActionId = phaseInfo.primaryActionId;
   const canShowRatePrimary = !!(
     eligibility?.canRateAgent || eligibility?.canRateItem
@@ -369,7 +392,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     'send_pin',
     'rate',
     'complete',
-    'confirm_receipt',
+    ...(canConfirmDelivery ? [] : ['confirm_receipt']),
     'reorder',
   ].includes(stickyPrimaryId);
   
@@ -418,7 +441,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     paddingBottom: showStickyPrimary || showCancel ? 120 : tabPad,
   };
   const cur = order.currency || 'XAF';
-  const showPin = clientShowDeliveryPin(order);
+  const showPin = clientShowDeliveryPin(order, usesLegacyPin);
   const showMap = clientShowAgentLocation(status, order.fulfillment_method);
   const isShipping = isCarrierShipping(order.fulfillment_method);
   const journey = getClientOrderJourney(order);
@@ -460,13 +483,33 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     setActionLoading(true);
     try {
       await agentApi.orders.confirmReceipt(orderId);
-      setSnack(t('orders.shipping.receiptSuccess', 'Thanks — your order is complete.'));
+      setSnack(t('orders.clientConfirm.confirmDone', 'Thanks! Your order is complete.'));
       void refetch();
+      void refetchConfirm();
     } catch (e: unknown) {
       setSnack(
         e instanceof Error
           ? e.message
           : t('orders.shipping.receiptFailed', 'Failed to confirm receipt')
+      );
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const runReportProblem = async (description: string) => {
+    setActionLoading(true);
+    try {
+      await agentApi.orders.reportDeliveryProblem(orderId, description);
+      setProblemOpen(false);
+      setSnack(t('orders.clientConfirm.problemSubmitted', 'We opened a support case.'));
+      void refetch();
+      void refetchConfirm();
+    } catch (e: unknown) {
+      setSnack(
+        e instanceof Error
+          ? e.message
+          : t('common.genericError', 'Something went wrong.')
       );
     } finally {
       setActionLoading(false);
@@ -682,6 +725,15 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           storeAddress={order.business_location?.address?.address_line_1}
           onOpenMap={phaseInfo.phase === 'in_delivery' ? () => setMapOpen(true) : undefined}
         />
+
+        {canConfirmDelivery ? (
+          <ClientConfirmReceiptCard
+            state={confirmState}
+            busy={actionLoading}
+            onConfirm={() => void runConfirmReceipt()}
+            onReportProblem={() => setProblemOpen(true)}
+          />
+        ) : null}
 
         {showNoAgentOptions ? (
           <View style={{ marginBottom: SECTION_GAP }}>
@@ -1054,6 +1106,13 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           onSubmit={runPayAtPickup}
         />
       ) : null}
+      <ReportDeliveryProblemDialog
+        visible={problemOpen}
+        submitting={actionLoading}
+        onDismiss={() => setProblemOpen(false)}
+        onSubmit={(description) => void runReportProblem(description)}
+      />
+
       <CancellationConfirmSheet
         visible={cancelOpen}
         order={order}

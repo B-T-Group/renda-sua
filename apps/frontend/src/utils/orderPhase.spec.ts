@@ -130,7 +130,39 @@ describe('flagged location pay-after (non-cooked goods)', () => {
     expect(info.primaryActionId).toBe('none');
     expect(info.hubGroup).toBe('waiting');
   });
+});
 
+describe('resolveOrderPhase client confirm delivery', () => {
+  it('lets business generate overwrite while awaiting client confirmation', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'awaiting_client_confirmation', fulfillmentMethod: 'delivery' },
+        'business'
+      ).primaryActionId
+    ).toBe('generate_overwrite');
+  });
+
+  it('uses mark-delivered next-step copy unless GET usesLegacyPin', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'out_for_delivery', fulfillmentMethod: 'delivery' },
+        'agent'
+      ).nextStepKey
+    ).toBe('orders.nextStep.ofdAgentMark');
+    expect(
+      resolveOrderPhase(
+        {
+          status: 'out_for_delivery',
+          fulfillmentMethod: 'delivery',
+          usesLegacyPin: true,
+        },
+        'agent'
+      ).nextStepKey
+    ).toBe('orders.nextStep.ofdAgent');
+  });
+});
+
+describe('pay-after ready', () => {
   it('business can mark ready after payment on flagged location order', () => {
     const info = resolveOrderPhase(
       {

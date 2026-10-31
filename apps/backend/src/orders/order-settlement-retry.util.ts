@@ -62,6 +62,8 @@ export const RETRY_SETTLEABLE_STATUSES: string[] = [
   'picked_up',
   'in_transit',
   'out_for_delivery',
+  'awaiting_client_confirmation',
+  'pending_auto_complete',
   'delivered',
   'shipped',
   'in_delivery',
