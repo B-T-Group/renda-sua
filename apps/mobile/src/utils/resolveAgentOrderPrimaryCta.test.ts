@@ -24,6 +24,7 @@ describe('resolveAgentOrderPrimaryCta', () => {
         assignedAgentId: 'ag-1',
       })
     ).toBe('pickUp');
+    // Backend outForDelivery + order-status transitions allow picked_up → out_for_delivery.
     expect(
       resolveAgentOrderPrimaryCta({
         status: 'picked_up',

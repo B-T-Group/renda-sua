@@ -17,6 +17,8 @@ describe('agentOrder copy keys', () => {
     expect(en.agentOrder.urgency.pickupBy).toBe('Pick up by {{time}}');
     expect(en.agentOrder.urgency.deliverBy).toBe('Deliver by {{time}}');
     expect(en.agentOrder.urgency.overdue).toBe('Late by {{duration}}');
+    expect(en.agentOrder.urgency.durationMinutes).toBe('{{mins}}m');
+    expect(en.agentOrder.urgency.durationHours).toBe('{{hours}}h');
   });
 
   it('has the locked FR vous strings', () => {
@@ -33,5 +35,7 @@ describe('agentOrder copy keys', () => {
     expect(fr.agentOrder.urgency.pickupBy).toBe('À récupérer avant {{time}}');
     expect(fr.agentOrder.urgency.deliverBy).toBe('À livrer avant {{time}}');
     expect(fr.agentOrder.urgency.overdue).toBe('En retard de {{duration}}');
+    expect(fr.agentOrder.urgency.durationMinutes).toBe('{{mins}} min');
+    expect(fr.agentOrder.urgency.durationHours).toBe('{{hours}} h');
   });
 });
