@@ -12,7 +12,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { renderWithProviders } from '../../../__tests__/test-utils';
 import { ThemeProvider } from '../../../contexts/ThemeContext';
 import BusinessLocationDedicatedAgentsScreen from '../BusinessLocationDedicatedAgentsScreen';
-import DedicatedApplicantsScreen from '../DedicatedApplicantsScreen';
+import DedicatedApplicantsScreen, { ApplicantAvatar } from '../DedicatedApplicantsScreen';
 import DedicatedPostingFormScreen from '../DedicatedPostingFormScreen';
 import dedicatedAgentsService from '../../../services/dedicatedAgentsService';
 import { dedicatedAgentsAnalytics } from '../../../services/dedicatedAgentsAnalytics';
@@ -172,6 +172,19 @@ describe('BusinessLocationDedicatedAgentsScreen', () => {
     expect(screen.getByText(/3 paused/i)).toBeTruthy();
     expect(screen.queryByText(/Agent1/)).toBeNull();
   });
+
+  it('#594 addendum AC-P16: shows "Paused by agent" for a slot-off pause', async () => {
+    service.getDedicatedAgents.mockResolvedValue({
+      success: true,
+      maxActiveOrders: 10,
+      assignments: [
+        { ...card('1', 'morning', 'paused'), pauseReason: 'paused_slot_off' },
+        card('2', 'morning', 'active'),
+      ],
+    });
+    await renderScreen(<BusinessLocationDedicatedAgentsScreen route={route} navigation={navigation} />);
+    expect(await screen.findByText('Paused by agent')).toBeTruthy();
+  });
 });
 
 describe('DedicatedApplicantsScreen', () => {
@@ -260,5 +273,19 @@ describe('DedicatedPostingFormScreen', () => {
     expect(await screen.findByText('Offline · showing last update')).toBeTruthy();
     expect(screen.getByLabelText('Increase count').props.accessibilityState).toMatchObject({ disabled: true });
     expect(screen.getByLabelText('Decrease count').props.accessibilityState).toMatchObject({ disabled: true });
+  });
+});
+
+describe('ApplicantAvatar', () => {
+  it('renders the profile picture when photoUrl is present', async () => {
+    await renderScreen(<ApplicantAvatar photoUrl="https://cdn.example/p.jpg" firstName="Awa" backgroundColor="#000" />);
+    expect(screen.getByTestId('applicant-avatar-image')).toBeTruthy();
+    expect(screen.queryByTestId('applicant-avatar-text')).toBeNull();
+  });
+
+  it('falls back to the initial when there is no photo', async () => {
+    await renderScreen(<ApplicantAvatar photoUrl={null} firstName="Awa" backgroundColor="#000" />);
+    expect(screen.getByTestId('applicant-avatar-text')).toBeTruthy();
+    expect(screen.getByText('A')).toBeTruthy();
   });
 });

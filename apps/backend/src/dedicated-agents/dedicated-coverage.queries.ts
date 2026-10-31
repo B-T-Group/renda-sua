@@ -58,6 +58,9 @@ export const DEDICATED_SLOT_ASSIGNMENTS_QUERY = `
         is_internal
         status
         focus
+        pref_morning
+        pref_afternoon
+        pref_evening
       }
     }
   }

@@ -23,6 +23,7 @@ import DedicatedHubScreen from '../screens/agent/DedicatedHubScreen';
 import DedicatedOpportunityDetailScreen from '../screens/agent/DedicatedOpportunityDetailScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
 import NotificationPreferencesScreen from '../screens/shared/NotificationPreferencesScreen';
+import AgentAvailabilityScreen from '../screens/agent/AgentAvailabilityScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
 import AccountManagementScreen from '../screens/shared/AccountManagementScreen';
 import DocumentsScreen from '../screens/shared/DocumentsScreen';
@@ -57,6 +58,7 @@ import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersona
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
 import { AgentStatusBar } from '../components/agent/AgentStatusBar';
 import { PersistentActiveDeliveryHeader } from '../components/agent/PersistentActiveDeliveryHeader';
+import { AgentHomeFocusProvider } from '../contexts/AgentHomeFocusContext';
 import ClaimAwaitingPaymentScreen from '../screens/agent/ClaimAwaitingPaymentScreen';
 import type { CashAdvanceDrawSuccessParams, ClaimAwaitingPaymentParams, EnrollPersonaParams } from './types';
 import {
@@ -102,6 +104,7 @@ export type AgentRootStackParamList = {
   AgentBusinessReferral: undefined;
   Profile: undefined;
   NotificationPreferences: undefined;
+  AgentAvailability: undefined;
   SavedAccounts: { mode?: 'continue' | 'switch' };
   AccountManagement: undefined;
   ConfigurePayments: undefined;
@@ -287,7 +290,8 @@ function AgentNavigatorChrome() {
   const insets = useSafeAreaInsets();
   const store = useStore();
   return (
-    <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
+    <AgentHomeFocusProvider>
+      <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
       <View style={{ paddingTop: insets.top }}>
         <AgentStatusBar />
         <PersistentActiveDeliveryHeader />
@@ -379,6 +383,11 @@ function AgentNavigatorChrome() {
             }}
           />
           <RootStack.Screen
+            name="AgentAvailability"
+            component={AgentAvailabilityScreen}
+            options={{ title: t('slotPrefs.navTitle', 'Availability') }}
+          />
+          <RootStack.Screen
             name="SavedAccounts"
             component={SavedAccountsScreen}
             options={{ headerShown: false }}
@@ -463,7 +472,8 @@ function AgentNavigatorChrome() {
           />
         </RootStack.Navigator>
       </SafeAreaInsetsContext.Provider>
-    </View>
+      </View>
+    </AgentHomeFocusProvider>
   );
 }
 

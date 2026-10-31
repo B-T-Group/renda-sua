@@ -164,13 +164,15 @@ const AppContent = observer(AppContentBase);
 function ThemedProviders({ children }: { children: React.ReactNode }) {
   const { paperTheme, isDark } = useTheme();
   useReducedMotion();
+  // Paper portals render beside PaperProvider's children. The sheet provider
+  // has to wrap Paper so those portals still see BottomSheetModal context.
   return (
-    <PaperProvider theme={paperTheme}>
-      <BottomSheetModalProvider>
+    <BottomSheetModalProvider>
+      <PaperProvider theme={paperTheme}>
         {children}
         <SystemBars style={isDark ? 'light' : 'dark'} />
-      </BottomSheetModalProvider>
-    </PaperProvider>
+      </PaperProvider>
+    </BottomSheetModalProvider>
   );
 }
 

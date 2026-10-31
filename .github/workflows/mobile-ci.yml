@@ -35,6 +35,9 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
+      - name: Check native dependencies vs store-binary baseline (warn only)
+        run: node scripts/check-native-deps.js --warn-only
+
       - name: Run lint
         run: yarn lint
 

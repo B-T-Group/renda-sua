@@ -35,6 +35,7 @@ const ROOT_STACK_SCREENS: AppNavScreen[] = [
   'AgentBusinessReferral',
   'Profile',
   'NotificationPreferences',
+  'AgentAvailability',
   'SavedAccounts',
   'AccountManagement',
   'ConfigurePayments',
@@ -47,6 +48,7 @@ const ROOT_STACK_SCREENS: AppNavScreen[] = [
   'Messages',
   'SupportTickets',
   'AgentLocationTracking',
+  'DedicatedHub',
 ];
 
 function MenuTabScreen() {
@@ -62,12 +64,12 @@ function MenuTabScreen() {
   } = useManualAppUpdateCheck();
   const navigation = useNavigation<{
     navigate: (name: AppNavScreen, params?: { segment?: 'commissions' | 'deliveries' | 'objectives' | 'wallet' }) => void;
-    getParent: () => { navigate: (name: AppNavScreen) => void } | undefined;
+    getParent: () => { navigate: (name: AppNavScreen, params?: { segment?: 'opportunities' | 'stores' }) => void } | undefined;
   }>();
   const rootNav = navigation.getParent();
   const locationCtx = useAgentLocationOptional();
   const { isStripeRail } = useIsStripeRail();
-  const { showCommercial } = useAgentFocus(true);
+  const { showCommercial, showDelivery } = useAgentFocus(true);
 
   const logoutSheet = useLogoutAccountSheet();
 
@@ -142,6 +144,17 @@ function MenuTabScreen() {
           <MyRatingMenuRow persona="agent" onPress={() => goTo('Profile')} />
         </UserMenuSection>
 
+        {showDelivery ? (
+          <UserMenuSection title={t('menuTab.sections.work', 'Work')}>
+            <UserMenuRow
+              icon="briefcase-search-outline"
+              label={t('menuTab.opportunitiesTitle', 'Opportunities')}
+              subtitle={t('menuTab.opportunitiesSubtitle', 'Dedicated store spots near you')}
+              onPress={() => rootNav?.navigate('DedicatedHub', { segment: 'opportunities' })}
+            />
+          </UserMenuSection>
+        ) : null}
+
         <UserMenuSection title={t('menuTab.sections.payments', 'Payments')}>
           <UserMenuRow
             icon="cash-multiple"
@@ -213,6 +226,12 @@ function MenuTabScreen() {
               'Push, WhatsApp, email, and categories'
             )}
             onPress={() => goTo('NotificationPreferences')}
+          />
+          <UserMenuRow
+            icon="clock-outline"
+            label={t('slotPrefs.navTitle', 'Availability')}
+            subtitle={t('slotPrefs.title', 'Preferred delivery times')}
+            onPress={() => goTo('AgentAvailability')}
           />
         </UserMenuSection>
 

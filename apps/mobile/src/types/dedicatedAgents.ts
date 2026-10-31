@@ -43,6 +43,8 @@ export interface DedicatedAgentCard {
   source: AssignmentSource;
   assignedByRendasua: boolean;
   offToday: boolean;
+  /** #594 addendum AC-P16: `paused_slot_off` shows "Paused by agent" (older backends omit it). */
+  pauseReason?: string | null;
   agent: DedicatedAgent;
   activeOrders: number;
   maxActiveOrders: number;
@@ -132,6 +134,32 @@ export interface MyDedicatedAssignment {
   offToday: boolean;
   activeOrders: number;
   maxActiveOrders: number;
+  /** #594 addendum: why a paused row is paused (`paused_slot_off` = agent turned the slot off). */
+  pauseReason?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// #594 addendum: agent preferred delivery slots (/agents/me/slot-preferences)
+// ---------------------------------------------------------------------------
+
+export type SlotPreferences = Record<SlotKey, boolean>;
+
+export interface SlotPreferencesResponse {
+  success?: boolean;
+  preferences: SlotPreferences;
+  allOff: boolean;
+  pausedAssignmentIds?: string[];
+}
+
+export interface UpdateSlotPreferencesRequest extends Partial<SlotPreferences> {
+  confirmPause?: boolean;
+}
+
+/** 409 `slot_has_dedicated_assignments` body. */
+export interface SlotOffConflict {
+  code: 'slot_has_dedicated_assignments';
+  slots: SlotKey[];
+  stores: Array<{ assignmentId: string; locationId: string; storeName: string; slotKey: SlotKey }>;
 }
 
 export interface DedicatedAgentsCapability {
@@ -228,6 +256,9 @@ export interface AdminAssignmentView {
   assignmentId: string;
   slotKey: SlotKey;
   status: AssignmentStatus;
+  /** #594 addendum AC-P17. */
+  pauseReason?: string | null;
+  preferredSlots?: SlotPreferences;
   source: AssignmentSource;
   createdAt: string;
   location: {
@@ -311,6 +342,9 @@ export interface AdminAssignmentFilters {
   slotKey?: SlotKey;
   status?: AssignmentStatus | 'removed';
   source?: 'superuser_assign' | 'posting';
+  /** #594 addendum AC-P17: agent has this preferred slot OFF. */
+  prefOff?: SlotKey;
+  pauseReason?: 'paused_slot_off';
 }
 
 export interface CreateAdminAssignmentRequest {

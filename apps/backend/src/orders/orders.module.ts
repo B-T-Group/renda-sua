@@ -44,6 +44,8 @@ import { OrderNotificationsInternalController } from './order-notifications-inte
 import { OrderOffersService } from './order-offers.service';
 import { DedicatedDispatchService } from './dedicated-dispatch.service';
 import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
+import { DedicatedHeadsUpService } from './dedicated-heads-up.service';
+import { DedicatedHeadsUpController } from './dedicated-heads-up.controller';
 import { DEDICATED_ORDER_CLAIMER } from './dedicated-claim.port';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
 import { OrderPickupAnalyticsService } from './order-pickup-analytics.service';
@@ -121,6 +123,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     ItemVariantsModule,
   ],
   controllers: [
+    DedicatedHeadsUpController,
     OrdersController,
     AdminPickupOpsController,
     AdminOrdersController,
@@ -147,6 +150,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     OrderOffersService,
     DedicatedDispatchService,
     DedicatedSlotReminderService,
+    DedicatedHeadsUpService,
     { provide: DEDICATED_ORDER_CLAIMER, useExisting: OrdersService },
     WaitAndExecuteScheduleService,
     FailedDeliveriesService,

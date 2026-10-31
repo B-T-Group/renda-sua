@@ -26,6 +26,7 @@ import {
   extractDedicatedAgentsError,
   mapDedicatedAgentsErrorCode,
   isDedicatedAgentsFeatureHidden,
+  dedicatedApiError,
 } from '../../utils/dedicatedAgentsErrors';
 import { dedicatedAgentsAnalytics } from '../../services/dedicatedAgentsAnalytics';
 import type {
@@ -168,10 +169,10 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
         })
         .catch((err: any) => {
           const { code } = extractDedicatedAgentsError(err);
-          if (code === 'slot_has_dedicated_agents' && err.response?.data?.agentsToPause) {
+          if (code === 'slot_has_dedicated_agents' && dedicatedApiError(err).data?.agentsToPause) {
             setConfirmPause({
               slotKey,
-              agentsToPause: err.response.data.agentsToPause,
+              agentsToPause: dedicatedApiError(err).data.agentsToPause,
             });
             void loadData({ silent: true });
             return;
@@ -518,7 +519,9 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                                   </Chip>
                                   {agent.status === 'paused' && (
                                     <Chip compact mode="outlined">
-                                      {t('dedicatedAgents.chips.status.paused', 'Paused')}
+                                      {agent.pauseReason === 'paused_slot_off'
+                                        ? t('dedicatedAgents.chips.status.pausedByAgent', 'Paused by agent')
+                                        : t('dedicatedAgents.chips.status.paused', 'Paused')}
                                     </Chip>
                                   )}
                                   {agent.offToday && (
@@ -558,7 +561,7 @@ export default function BusinessLocationDedicatedAgentsScreen({ route, navigatio
                                     onPress={() => handlePauseAgent(agent.assignmentId, slot.slotKey)}
                                   />
                                 )}
-                                {agent.status === 'paused' && (
+                                {agent.status === 'paused' && agent.pauseReason !== 'paused_slot_off' && (
                                   <Menu.Item
                                     title={t('dedicatedAgents.actions.resume', 'Resume')}
                                     onPress={() => handleResumeAgent(agent.assignmentId, slot.slotKey)}

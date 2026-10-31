@@ -7,7 +7,11 @@ export const STRIPE_TAX_CODE_GENERAL_SERVICES = 'txcd_10000000';
 /** Stripe Tax Code: Shipping (delivery fees). */
 export const STRIPE_TAX_CODE_SHIPPING = 'txcd_92010001';
 
-export type OrderTaxStatus = 'none' | 'estimated' | 'finalized';
+/**
+ * `void`: tax was estimated at checkout but the order was cancelled/expired before
+ * the payment was captured, so no tax was ever collected.
+ */
+export type OrderTaxStatus = 'none' | 'estimated' | 'finalized' | 'void';
 
 export interface StripeTaxCodeRow {
   id: string;

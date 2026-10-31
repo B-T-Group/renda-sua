@@ -33,6 +33,8 @@ export const GET_ORDERS = gql`
       fulfillment_timing
       promised_ready_at
       promised_fulfill_by
+      pickup_by
+      pickup_due_at
       estimated_prep_minutes
       is_cooked_food_pickup
       pay_after_merchant_confirm
@@ -843,6 +845,11 @@ export const GET_ORDER_FOR_RECEIPT = gql`
       service_fee
       tax_jurisdiction
       tax_breakdown
+      tax_snapshot {
+        status
+        total_including_tax
+        captured_total_including_tax
+      }
       total_amount
       currency
       payment_status

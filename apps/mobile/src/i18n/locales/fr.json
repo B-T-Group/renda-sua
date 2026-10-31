@@ -662,8 +662,8 @@
       },
       "urgency": {
         "pickupWithin": "Retrait dans",
-        "deliverBy": "Livrer avant",
-        "pickupBy": "Collecter avant"
+        "deliverBy": "Livrer avant {{time}}",
+        "pickupBy": "Collecter avant {{time}}"
       },
       "stops": {
         "pickup": "Lieu de retrait",
@@ -1419,7 +1419,12 @@
     }
   },
   "menuTab": {
-    "recipientsSubtitle": "Gérer les destinataires des commandes diaspora"
+    "recipientsSubtitle": "Gérer les destinataires des commandes diaspora",
+    "opportunitiesTitle": "Opportunités",
+    "opportunitiesSubtitle": "Postes dédiés près de chez vous",
+    "sections": {
+      "work": "Travail"
+    }
   },
   "documents": {
     "title": "Mes documents",
@@ -7656,7 +7661,8 @@
       "status": {
         "active": "Actif",
         "paused": "En pause",
-        "offToday": "Absent aujourd'hui"
+        "offToday": "Absent aujourd'hui",
+        "pausedByAgent": "Mis en pause par l'agent"
       }
     },
     "assignedChip": "Affecté par RendaSua",
@@ -7752,7 +7758,48 @@
       "removedByStore": "Cette boutique vous a retiré",
       "offerBadge": "Dédié · {{store}}",
       "payChip": "Rémunération standard",
-      "daysLabel": "Jours"
+      "daysLabel": "Jours",
+      "cantTake": "Je ne peux pas la prendre",
+      "reasonPrompt": "Pourquoi ? (facultatif)",
+      "reasons": {
+        "too_far": "Trop loin",
+        "busy": "Je suis occupé",
+        "not_enough_balance": "Solde insuffisant",
+        "other": "Autre"
+      },
+      "release": {
+        "countdown": "Vous pouvez rendre cette commande pendant {{time}}",
+        "confirm": "Rendre cette commande ? Elle sera proposée à un autre livreur. Sans pénalité.",
+        "confirmButton": "Rendre",
+        "retry": "Réessayer",
+        "error": "Impossible de rendre cette commande."
+      },
+      "homeCard": {
+        "title": "{{count}} opportunité de livraison près de vous",
+        "title_plural": "{{count}} opportunités de livraison près de vous",
+        "subtitle": "Postes de livraison réguliers dans des boutiques proches · touchez pour voir"
+      },
+      "explain": {
+        "list": "Des boutiques près de vous recherchent des livreurs réguliers. Chaque annonce est un poste récurrent : les livraisons programmées de la boutique aux horaires et jours indiqués. Postulez, et la boutique choisit qui elle retient.",
+        "detail": "De quoi s’agit-il : un poste de livraison récurrent dans cette boutique. Si la boutique vous accepte, vous devenez l’un de ses livreurs dédiés pour les horaires et jours ci-dessous.",
+        "slotsHint": "Les annonces suivent vos créneaux de travail préférés. Vous pouvez les choisir ou les modifier à tout moment.",
+        "slotsHintCta": "Modifier mes créneaux"
+      },
+      "headsUp": {
+        "title": "À noter : vous pourriez recevoir cette livraison plus tard",
+        "body": "Cette commande programmée est dans votre créneau dédié. Ce n'est pas encore une offre : elle pourrait vous être proposée à l'ouverture de l'envoi{{time}}.",
+        "opensAt": " à {{time}}",
+        "cantTake": "Je ne peux pas la prendre",
+        "confirm": "Vous retirer de cette commande ? Elle ira à d'autres livreurs. Aucune pénalité.",
+        "confirmButton": "Oui, me retirer",
+        "marked": "C'est noté : cette commande ne vous sera pas proposée.",
+        "error": "Mise à jour impossible. Réessayez."
+      },
+      "homeStores": {
+        "title": "Mes magasins dédiés",
+        "paused": "En pause",
+        "more": "+{{count}} de plus"
+      }
     },
     "offline": "Hors ligne · dernière mise à jour affichée",
     "generic": "Une erreur est survenue",
@@ -7782,7 +7829,8 @@
       "invalid_days_of_week": "Veuillez sélectionner au moins un jour",
       "terms_too_long": "Les conditions doivent faire 1000 caractères maximum",
       "geo_scope": "Hors de votre périmètre administrateur",
-      "query_too_short": "Saisissez au moins 2 caractères pour rechercher"
+      "query_too_short": "Saisissez au moins 2 caractères pour rechercher",
+      "paused_by_agent": "L'agent a mis cette affectation en pause en désactivant le créneau. Seul l'agent peut la reprendre."
     },
     "metrics": {
       "deliveries": "livraisons",
@@ -7817,7 +7865,11 @@
       "noAssignments": "Aucune affectation trouvée.",
       "relationWarning": "Le livreur est peut-être lié à cette entreprise",
       "removeConfirm": "Supprimer l'affectation ?",
-      "removeConfirmDetail": "Retirer {{name}} de {{store}} ({{slot}}) ? Le livreur ne sera plus dédié à ce créneau de la boutique."
+      "removeConfirmDetail": "Retirer {{name}} de {{store}} ({{slot}}) ? Le livreur ne sera plus dédié à ce créneau de la boutique.",
+      "preferredSlots": "Créneaux préférés",
+      "prefOn": "{{slot}} : activé",
+      "prefOffOne": "{{slot}} : désactivé",
+      "offShort": "Désactivé"
     },
     "admin": {
       "assignTitle": "Affecter un livreur dédié",
@@ -7846,5 +7898,37 @@
         "assignmentNotFound": "Cette affectation n'existe plus, ou les livreurs dédiés sont désactivés pour cette boutique"
       }
     }
+  },
+  "slotPrefs": {
+    "navTitle": "Disponibilités",
+    "title": "Créneaux de livraison préférés",
+    "helper": "Vous ne recevrez que les commandes programmées et les offres pour les créneaux activés.",
+    "slots": {
+      "morning": "Matin",
+      "afternoon": "Après-midi",
+      "evening": "Soir"
+    },
+    "footnote": "Les horaires suivent l'heure locale de chaque magasin. Les commandes immédiates ne sont pas concernées.",
+    "toastOn": "{{slot}} activé",
+    "toastOff": "{{slot}} désactivé",
+    "toastOffPaused": "{{slot}} désactivé · {{count}} affectation mise en pause",
+    "toastOffPaused_plural": "{{slot}} désactivé · {{count}} affectations mises en pause",
+    "confirmTitle": "Désactiver {{slot}} ?",
+    "confirmBody": "Vous êtes l'agent dédié pour le créneau {{slot}} chez {{stores}}. Ces affectations seront mises en pause jusqu'à ce que vous les repreniez.",
+    "confirmCta": "Désactiver et mettre en pause",
+    "keepOn": "Garder activé",
+    "storeFallback": "un magasin",
+    "pausedChip": "En pause — créneau désactivé",
+    "resume": "Reprendre",
+    "resumed": "Affectation reprise",
+    "resumeHint": "Activez d'abord {{slot}}",
+    "storeSlotOff": "Le magasin a désactivé ce créneau",
+    "allOffBanner": "Tous les créneaux sont désactivés. Vous ne recevrez que des commandes immédiates.",
+    "postingGreyed": "Hors de vos créneaux préférés",
+    "postingCta": "Activer {{slot}}",
+    "a11yOn": "{{slot}}, activé",
+    "a11yOff": "{{slot}}, désactivé",
+    "saveError": "Enregistrement impossible. Veuillez réessayer.",
+    "loadError": "Impossible de charger vos créneaux préférés."
   }
 }

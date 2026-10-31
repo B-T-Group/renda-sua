@@ -49,6 +49,8 @@ interface DispatchOfferRow {
   user_id: string | null;
   status: string;
   expires_at: string;
+  /** How many times a dedicated offer was sent to this agent for the order (1 = the original send). */
+  dedicated_attempt?: number | null;
 }
 
 export interface DedicatedDispatchOrder {
@@ -70,6 +72,7 @@ export interface DedicatedDispatchOrder {
     slot_id: string | null;
     preferred_date: string | null;
     is_confirmed: boolean | null;
+    time_slot_start?: string | null;
   }>;
 }
 
@@ -94,6 +97,7 @@ const DISPATCH_ORDER_QUERY = `
         slot_id
         preferred_date
         is_confirmed
+        time_slot_start
       }
     }
     order_offers(where: { order_id: { _eq: $orderId }, offer_kind: { _eq: "dedicated" } }) {
@@ -101,6 +105,10 @@ const DISPATCH_ORDER_QUERY = `
       user_id
       status
       expires_at
+      dedicated_attempt
+    }
+    dedicated_order_heads_ups(where: { order_id: { _eq: $orderId }, status: { _eq: "unavailable" } }) {
+      agent_id
     }
   }
 `;
@@ -124,6 +132,7 @@ const UPSERT_DEDICATED_OFFERS = `
           expires_at
           created_at
           responded_at
+          dedicated_attempt
         ]
       }
     ) {
@@ -210,7 +219,7 @@ export class DedicatedDispatchService {
   async fallback(orderId: string): Promise<DedicatedFallbackOutcome> {
     const none: DedicatedFallbackOutcome = { kind: 'none' };
     try {
-      const { order, offers } = await this.loadOrder(orderId);
+      const { order, offers, unavailable } = await this.loadOrder(orderId);
       if (!order || !this.isDispatchable(order) || !order.coverage_slot_key) return none;
       const country = isoCountryCode(order.business_location?.address?.country);
       if (!(await this.dedicatedConfig.isEnabled(country))) return none;
@@ -228,7 +237,23 @@ export class DedicatedDispatchService {
       // Declined rows (a declined offer, or a released auto-assignment, PR 6) are
       // exclusions, not a sign the fallback already ran: those agents are skipped below.
       const declined = new Set(offers.filter((o) => o.status === 'declined').map((o) => o.agent_id));
-      if (offers.some((o) => o.status !== 'declined')) return this.followUp(order, offers);
+      // Early heads-up "Can't take it": skipped like a decline, so dispatch reaches the open market.
+      for (const agentId of unavailable) declined.add(agentId);
+      const config = await this.dedicatedConfig.getConfig(country);
+      // Attempts already sent per agent (a row from before the counter existed counts as 1).
+      const attempts = new Map<string, number>();
+      const prior = offers.filter((o) => o.status !== 'declined');
+      if (prior.length > 0) {
+        const outcome = await this.followUp(order, offers);
+        // Re-send only when every earlier offer simply lapsed unanswered (never after an
+        // accept/cancel) and more than one attempt is allowed: otherwise exhaustion proceeds.
+        const lapsed = prior.every(
+          (o) => o.status === 'expired' || (o.status === 'offered' && new Date(o.expires_at).getTime() <= Date.now())
+        );
+        if (outcome.kind !== 'done' || !lapsed || config.offerMaxAttempts <= 1) return outcome;
+        for (const o of prior) attempts.set(o.agent_id, o.dedicated_attempt ?? 1);
+      }
+      const resend = prior.length > 0;
 
       const slot = await this.coverage.resolveSlot({
         locationId: order.business_location_id,
@@ -261,10 +286,15 @@ export class DedicatedDispatchService {
           assignedAgents: evaluation.rejected.length,
         });
       }
-      const reachable = eligible.filter((a) => !!a.userId && !declined.has(a.agentId));
-      if (reachable.length === 0) return none;
+      const reachable = eligible.filter(
+        (a) =>
+          !!a.userId &&
+          !declined.has(a.agentId) &&
+          (attempts.get(a.agentId) ?? 0) < config.offerMaxAttempts
+      );
+      if (reachable.length === 0) return resend ? { kind: 'done' } : none;
 
-      if (reachable.length === 1 && reachable[0].isInternal) {
+      if (!resend && reachable.length === 1 && reachable[0].isInternal) {
         const failure = await this.autoAssign(order, slot, reachable[0], country);
         if (!failure) return { kind: 'auto_assigned', agentId: reachable[0].agentId };
         this.logger.warn(
@@ -272,8 +302,7 @@ export class DedicatedDispatchService {
         );
         return none;
       }
-      const config = await this.dedicatedConfig.getConfig(country);
-      await this.offer(order, slot, reachable, config.offerTtlSeconds);
+      await this.offer(order, slot, reachable, config.offerTtlSeconds, attempts);
       return {
         kind: 'offered',
         agentIds: reachable.map((a) => a.agentId),
@@ -355,6 +384,8 @@ export class DedicatedDispatchService {
       currency: order.currency,
       verifiedAgentDelivery: order.verified_agent_delivery === true,
       excludeOrderId: order.id,
+      // #594 addendum AC-P12: a pref change never invalidates a live offer.
+      ignoreSlotPrefs: true,
       // QA #607 N4: the agent's other live offers don't block this accept; the
       // claim re-checks active orders < cap under the agent lock (N1).
       ignoreOutstandingOffers: true,
@@ -481,7 +512,8 @@ export class DedicatedDispatchService {
     order: DedicatedDispatchOrder,
     slot: ResolvedDedicatedSlot,
     agents: DedicatedEligibleAgent[],
-    ttlSeconds: number
+    ttlSeconds: number,
+    previousAttempts: ReadonlyMap<string, number> = new Map()
   ): Promise<void> {
     const earnings = await this.commissionsService
       .calculateAgentEarnings(order.id, true)
@@ -498,6 +530,7 @@ export class DedicatedDispatchService {
         status: 'offered',
         offer_kind: 'dedicated',
         decline_reason: null,
+        dedicated_attempt: (previousAttempts.get(a.agentId) ?? 0) + 1,
         distance_km: null,
         estimated_earnings: earnings.amount,
         currency: earnings.currency,
@@ -542,6 +575,7 @@ export class DedicatedDispatchService {
         slotDate: slot.date,
         ttlSeconds,
         offerCount: agents.length,
+        attempt: (previousAttempts.get(a.agentId) ?? 0) + 1,
       });
     }
   }
@@ -594,13 +628,57 @@ export class DedicatedDispatchService {
     );
   }
 
+  /** #594 addendum AC-P10 metric: the slot filter left nobody, so dispatch ran unfiltered. */
+  notePrefSlotFallback(orderId: string, slotKey: string, reason: 'empty' | 'all_declined'): void {
+    this.logger.log(`pref_slot.fallback_unfiltered order=${orderId} slot=${slotKey} reason=${reason}`);
+    emitServerSiteEvent(this.siteEventsService, 'pref_slot.fallback_unfiltered', { orderId, slotKey, reason });
+  }
+
+  /** #594 addendum metric: preferred pool size at offer time. */
+  notePrefSlotPoolSize(orderId: string, slotKey: string, kind: 'scheduled' | 'dedicated', size: number): void {
+    emitServerSiteEvent(this.siteEventsService, 'pref_slot.offer_pool_size', { orderId, slot: slotKey, kind, size });
+  }
+
+  /**
+   * #594 addendum AC-P7: the store-local slot key of a scheduled order, for
+   * every scheduled order (not only covered ones). Same resolution as v5 AC-E1:
+   * the stored coverage key, else the picked slot, else the window start, in
+   * store local time. ASAP (AC-P11) and unresolvable windows -> null (no filter).
+   */
+  async scheduledSlotKey(orderId: string): Promise<string | null> {
+    try {
+      const { order } = await this.loadOrder(orderId);
+      if (!order || order.fulfillment_timing !== 'scheduled') return null;
+      if (order.coverage_slot_key) return order.coverage_slot_key;
+      const window = order.delivery_time_windows?.[0];
+      if (!window?.preferred_date) return null;
+      const base = { locationId: order.business_location_id, preferredDate: window.preferred_date };
+      const slot = window.slot_id
+        ? await this.coverage.resolveSlot({ ...base, slotId: window.slot_id })
+        : window.time_slot_start
+          ? await this.coverage.resolveSlot({ ...base, windowStart: window.time_slot_start.slice(0, 5) })
+          : null;
+      return slot?.slotKey ?? null;
+    } catch (error) {
+      this.logger.warn(
+        `scheduledSlotKey failed for ${orderId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return null;
+    }
+  }
+
   private async loadOrder(
     orderId: string
-  ): Promise<{ order: DedicatedDispatchOrder | null; offers: DispatchOfferRow[] }> {
+  ): Promise<{ order: DedicatedDispatchOrder | null; offers: DispatchOfferRow[]; unavailable: string[] }> {
     const res = await this.hasuraSystemService.executeQuery<{
       orders_by_pk: DedicatedDispatchOrder | null;
       order_offers: DispatchOfferRow[];
+      dedicated_order_heads_ups?: Array<{ agent_id: string }>;
     }>(DISPATCH_ORDER_QUERY, { orderId });
-    return { order: res?.orders_by_pk ?? null, offers: res?.order_offers ?? [] };
+    return {
+      order: res?.orders_by_pk ?? null,
+      offers: res?.order_offers ?? [],
+      unavailable: (res?.dedicated_order_heads_ups ?? []).map((r) => r.agent_id),
+    };
   }
 }

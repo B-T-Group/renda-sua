@@ -21,6 +21,10 @@ describe('StripeCaptureService', () => {
   let accountsService: {
     registerDepositIfNotExists: jest.Mock;
   };
+  let orderTaxLifecycle: {
+    finalizeAfterCapture: jest.Mock;
+    voidForOrder: jest.Mock;
+  };
 
   beforeEach(() => {
     jest.useFakeTimers();
@@ -39,11 +43,16 @@ describe('StripeCaptureService', () => {
     accountsService = {
       registerDepositIfNotExists: jest.fn(),
     };
+    orderTaxLifecycle = {
+      finalizeAfterCapture: jest.fn().mockResolvedValue(undefined),
+      voidForOrder: jest.fn().mockResolvedValue(undefined),
+    };
     service = new StripeCaptureService(
       stripeService as never,
       databaseService as never,
       { get: jest.fn(() => config) } as never,
-      accountsService as never
+      accountsService as never,
+      orderTaxLifecycle as never
     );
   });
 
@@ -452,6 +461,257 @@ describe('StripeCaptureService', () => {
       const res = await service.cancelOrderPaymentIntent({ orderId: 'order-id-123', orderNumber: 'ORDER-1001' });
       expect(res.success).toBe(false);
       expect(databaseService.updateTransaction).toHaveBeenLastCalledWith('tx-123', expect.objectContaining({ status: 'authorized' }));
+    });
+  });
+
+  describe('order tax snapshot lifecycle', () => {
+    const capture = () =>
+      service.captureOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+      });
+
+    it('finalizes the tax snapshot after our own capture (webhook returns early on success)', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+      const pi = {
+        id: 'pi_123',
+        status: 'succeeded',
+        amount_received: 11300,
+        metadata: { stripe_tax_calculation_id: 'taxcalc_1' },
+      };
+      stripeService.capturePaymentIntent.mockResolvedValue(pi);
+
+      await expect(capture()).resolves.toEqual({ success: true, captured: true });
+
+      expect(orderTaxLifecycle.finalizeAfterCapture).toHaveBeenCalledWith({
+        orderNumber: 'ORDER-1001',
+        paymentIntent: pi,
+      });
+      // ...after the transaction row was marked success.
+      const successOrder = databaseService.updateTransaction.mock.invocationCallOrder[1];
+      expect(orderTaxLifecycle.finalizeAfterCapture.mock.invocationCallOrder[0]).toBeGreaterThan(
+        successOrder
+      );
+    });
+
+    it('does not change the transaction amount or capture amount because of tax finalization', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+      stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+      await capture();
+      expect(databaseService.updateTransaction.mock.calls.map((c) => c[1])).toEqual([
+        { status: 'capture_pending' },
+        { status: 'success', captured_at: now.toISOString() },
+      ]);
+      expect(stripeService.capturePaymentIntent).toHaveBeenCalledWith(
+        'pi_123',
+        'capture_order-id-123',
+        undefined
+      );
+    });
+
+    it('still reports a successful capture when tax finalization throws', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+      stripeService.capturePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+      orderTaxLifecycle.finalizeAfterCapture.mockRejectedValue(new Error('hasura down'));
+      await expect(capture()).resolves.toEqual({ success: true, captured: true });
+    });
+
+    it('does not finalize when the capture fails or is only initiated', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+      stripeService.capturePaymentIntent.mockRejectedValueOnce(new Error('card_declined'));
+      await capture();
+      stripeService.capturePaymentIntent.mockResolvedValueOnce({ status: 'processing' });
+      await capture();
+      expect(orderTaxLifecycle.finalizeAfterCapture).not.toHaveBeenCalled();
+    });
+
+    it('finalizes when Stripe had already captured the PaymentIntent', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(makeTransaction());
+      const pi = { id: 'pi_123', status: 'succeeded', amount_received: 12500 };
+      stripeService.retrievePaymentIntent.mockResolvedValue(pi);
+      await capture();
+      expect(orderTaxLifecycle.finalizeAfterCapture).toHaveBeenCalledWith({
+        orderNumber: 'ORDER-1001',
+        paymentIntent: pi,
+      });
+    });
+
+    it('voids the estimated tax when the authorization is cancelled', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'authorized' })
+      );
+      stripeService.cancelPaymentIntent.mockResolvedValue({ id: 'pi_123' });
+      await service.cancelOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+      });
+      expect(orderTaxLifecycle.voidForOrder).toHaveBeenCalledWith('ORDER-1001');
+    });
+
+    it('voids when a never-paid checkout session is cancelled', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({
+          status: 'pending',
+          stripe_payment_intent_id: undefined,
+          stripe_session_id: 'cs_123',
+        })
+      );
+      await service.cancelOrderPaymentIntent({
+        orderId: 'order-id-123',
+        orderNumber: 'ORDER-1001',
+      });
+      expect(orderTaxLifecycle.voidForOrder).toHaveBeenCalledWith('ORDER-1001');
+    });
+
+    it('never voids a captured order and does not void when the cancel fails', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'success' })
+      );
+      stripeService.retrievePaymentIntent.mockResolvedValue({ status: 'succeeded' });
+      await service.cancelOrderPaymentIntent({ orderId: 'o', orderNumber: 'ORDER-1001' });
+
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'authorized' })
+      );
+      stripeService.cancelPaymentIntent.mockRejectedValue(new Error('network'));
+      await service.cancelOrderPaymentIntent({ orderId: 'o', orderNumber: 'ORDER-1001' });
+      expect(orderTaxLifecycle.voidForOrder).not.toHaveBeenCalled();
+    });
+
+    it('a failing void never fails the cancel', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'authorized' })
+      );
+      stripeService.cancelPaymentIntent.mockResolvedValue({ id: 'pi_123' });
+      orderTaxLifecycle.voidForOrder.mockRejectedValue(new Error('boom'));
+      await expect(
+        service.cancelOrderPaymentIntent({ orderId: 'o', orderNumber: 'ORDER-1001' })
+      ).resolves.toEqual({ success: true });
+    });
+
+    it('voids tax when Stripe says the PaymentIntent is already canceled', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'authorized' })
+      );
+      const error: any = new Error(
+        'You cannot cancel this PaymentIntent because it has a status of canceled.'
+      );
+      error.code = 'payment_intent_unexpected_state';
+      error.payment_intent = { status: 'canceled' };
+      stripeService.cancelPaymentIntent.mockRejectedValue(error);
+
+      await expect(
+        service.cancelOrderPaymentIntent({
+          orderId: 'order-id-123',
+          orderNumber: 'ORDER-1001',
+        })
+      ).resolves.toEqual({
+        success: true,
+        skipped: true,
+        message: 'Already canceled',
+      });
+      expect(orderTaxLifecycle.voidForOrder).toHaveBeenCalledWith('ORDER-1001');
+    });
+
+    it.each(['cancelled', 'expired'] as const)(
+      'a %s row is not sent to Stripe again, but the tax estimate is still voided',
+      async (status) => {
+        databaseService.getTransactionByEntityId.mockResolvedValue(
+          makeTransaction({ status })
+        );
+        await expect(
+          service.cancelOrderPaymentIntent({ orderNumber: 'ORDER-1001' })
+        ).resolves.toEqual({
+          success: true,
+          skipped: true,
+          message: `Status is ${status}`,
+        });
+        expect(stripeService.cancelPaymentIntent).not.toHaveBeenCalled();
+        expect(orderTaxLifecycle.voidForOrder).toHaveBeenCalledTimes(1);
+        expect(orderTaxLifecycle.voidForOrder).toHaveBeenCalledWith('ORDER-1001');
+      }
+    );
+
+    it('does not void tax for a skipped status that was never an open estimate', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'refunded' })
+      );
+      await expect(
+        service.cancelOrderPaymentIntent({ orderNumber: 'ORDER-1001' })
+      ).resolves.toMatchObject({ success: true, skipped: true });
+      expect(stripeService.cancelPaymentIntent).not.toHaveBeenCalled();
+      expect(orderTaxLifecycle.voidForOrder).not.toHaveBeenCalled();
+    });
+
+    it('voids tax when the row says captured but Stripe has already canceled the PaymentIntent', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'success' })
+      );
+      stripeService.retrievePaymentIntent.mockResolvedValue({
+        id: 'pi_123',
+        status: 'canceled',
+      });
+      await expect(
+        service.cancelOrderPaymentIntent({ orderNumber: 'ORDER-1001' })
+      ).resolves.toEqual({
+        success: true,
+        skipped: true,
+        message: 'Already canceled',
+      });
+      expect(databaseService.updateTransaction).toHaveBeenCalledWith('tx-123', {
+        status: 'cancelled',
+        error_message: 'PaymentIntent already canceled on Stripe',
+      });
+      expect(stripeService.cancelPaymentIntent).not.toHaveBeenCalled();
+      expect(orderTaxLifecycle.voidForOrder).toHaveBeenCalledWith('ORDER-1001');
+    });
+
+    it('releases a success-marked authorization Stripe still holds, and voids tax', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'success' })
+      );
+      stripeService.retrievePaymentIntent.mockResolvedValue({
+        id: 'pi_123',
+        status: 'requires_capture',
+      });
+      stripeService.cancelPaymentIntent.mockResolvedValue({ id: 'pi_123' });
+      await expect(
+        service.cancelOrderPaymentIntent({
+          orderId: 'order-id-123',
+          orderNumber: 'ORDER-1001',
+        })
+      ).resolves.toEqual({ success: true });
+      expect(stripeService.cancelPaymentIntent).toHaveBeenCalledWith(
+        'pi_123',
+        'cancel_order-id-123'
+      );
+      expect(orderTaxLifecycle.voidForOrder).toHaveBeenCalledWith('ORDER-1001');
+    });
+
+    it('does not void tax when a captured row cannot be re-read from Stripe', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'success' })
+      );
+      stripeService.retrievePaymentIntent.mockRejectedValue(new Error('stripe down'));
+      await expect(
+        service.cancelOrderPaymentIntent({ orderNumber: 'ORDER-1001' })
+      ).resolves.toEqual({ success: false, message: 'stripe down' });
+      expect(stripeService.cancelPaymentIntent).not.toHaveBeenCalled();
+      expect(orderTaxLifecycle.voidForOrder).not.toHaveBeenCalled();
+    });
+
+    it('does not void tax when there is no PaymentIntent and checkout was not pending', async () => {
+      databaseService.getTransactionByEntityId.mockResolvedValue(
+        makeTransaction({ status: 'failed', stripe_payment_intent_id: undefined })
+      );
+      await expect(
+        service.cancelOrderPaymentIntent({ orderNumber: 'ORDER-1001' })
+      ).resolves.toEqual({
+        success: true,
+        skipped: true,
+        message: 'No Stripe payment intent',
+      });
+      expect(orderTaxLifecycle.voidForOrder).not.toHaveBeenCalled();
     });
   });
 });

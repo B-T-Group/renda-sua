@@ -1,9 +1,9 @@
+import { urgencyFor } from './deliveryUrgency';
 import {
   actionFromPrimary,
   deliveryWindowLabel,
   distanceKm,
   friendlyStatus,
-  isOverdue,
   mapItems,
   phaseFor,
   toContact,
@@ -35,35 +35,6 @@ function objective(order: OrderLike, ctx: OrderViewModelContext): string {
     return ctx.t('orders.delivery.hero.complete', 'Complete delivery');
   }
   return friendlyStatus(order, 'agent', ctx);
-}
-
-function urgencyFor(
-  order: OrderLike,
-  ctx: OrderViewModelContext
-): DeliveryOrderViewModel['urgency'] {
-  if (order.current_status === 'assigned_to_agent') {
-    const pickupDeadline = order.pickup_due_at || order.pickup_by;
-    if (pickupDeadline) {
-      return {
-        deadlineAt: pickupDeadline,
-        label: ctx.t('orders.delivery.urgency.pickupBy', 'Pick up by'),
-        overdue: isOverdue(pickupDeadline, ctx.now),
-      };
-    }
-  }
-  if (
-    ['picked_up', 'in_transit', 'out_for_delivery'].includes(
-      order.current_status
-    ) &&
-    order.estimated_delivery_time
-  ) {
-    return {
-      deadlineAt: order.estimated_delivery_time,
-      label: ctx.t('orders.delivery.urgency.deliverBy', 'Deliver by'),
-      overdue: isOverdue(order.estimated_delivery_time, ctx.now),
-    };
-  }
-  return null;
 }
 
 function packageProperties(

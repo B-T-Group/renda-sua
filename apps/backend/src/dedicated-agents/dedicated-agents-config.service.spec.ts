@@ -33,6 +33,7 @@ describe('resolveDedicatedAgentsConfig', () => {
       num('dedicated_slot_reminder_minutes', 45),
       num('dedicated_posting_expiry_days', 7),
       num('dedicated_slot_end_grace_minutes', 10),
+      num('dedicated_offer_max_attempts', 3),
     ]);
     expect(config).toEqual({
       enabled: true,
@@ -43,6 +44,7 @@ describe('resolveDedicatedAgentsConfig', () => {
       slotReminderMinutes: 45,
       postingExpiryDays: 7,
       slotEndGraceMinutes: 10,
+      offerMaxAttempts: 3,
     });
   });
 
@@ -66,12 +68,15 @@ describe('resolveDedicatedAgentsConfig', () => {
       num('dedicated_max_assignments_per_agent', 2.5),
       num('dedicated_posting_expiry_days', 'abc'),
       num('dedicated_slot_end_grace_minutes', 1000),
+      num('dedicated_offer_max_attempts', 6),
     ]);
     expect(config.offerTtlSeconds).toBe(120);
     expect(config.maxActiveOrders).toBe(10);
     expect(config.maxAssignmentsPerAgent).toBe(3);
     expect(config.postingExpiryDays).toBe(14);
     expect(config.slotEndGraceMinutes).toBe(15);
+    expect(config.offerMaxAttempts).toBe(2);
+    expect(resolveDedicatedAgentsConfig([num('dedicated_offer_max_attempts', 0)]).offerMaxAttempts).toBe(2);
   });
 });
 
@@ -92,7 +97,7 @@ describe('DedicatedAgentsConfigService', () => {
     expect(vars.keys).toEqual(
       expect.arrayContaining(['dedicated_agents_enabled', 'dedicated_max_active_orders', 'dedicated_offer_ttl_seconds'])
     );
-    expect(vars.keys).toHaveLength(8);
+    expect(vars.keys).toHaveLength(9);
   });
 
   it('stays off when the config query fails', async () => {

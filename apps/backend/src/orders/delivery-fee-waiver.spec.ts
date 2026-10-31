@@ -209,3 +209,111 @@ describe('Canada tiered delivery fee (base 2, fast base 8, 1 per km, max per-km 
     expect(result.totalFee).toBe(total);
   });
 });
+
+describe('calculateItemDeliveryFee flat fallback (distance lookup failed): fast replaces normal, never adds', () => {
+  function fallbackService(opts: { fastEnabled?: boolean; firstOrder?: boolean } = {}) {
+    const { service, deliveryConfigService } = createHarness();
+    Object.assign(deliveryConfigService, {
+      getNormalDeliveryBaseFee: jest.fn().mockResolvedValue(2),
+      getFastDeliveryBaseFee: jest.fn().mockResolvedValue(8),
+      isFastDeliveryEnabled: jest.fn().mockResolvedValue(opts.fastEnabled ?? true),
+    });
+    const address = (id: string) => ({
+      id,
+      address_line_1: '1 Main St',
+      city: 'Toronto',
+      state: 'ON',
+      country: 'CA',
+      postal_code: 'M1M1M1',
+    });
+    Object.assign(service, {
+      hasuraUserService: {
+        getUser: jest.fn().mockResolvedValue({
+          id: 'u1',
+          client: { id: 'c1' },
+          addresses: [{ id: 'addr-1', is_primary: true, is_active: true }],
+        }),
+      },
+      addressesService: {
+        getAddressesByIds: jest.fn().mockImplementation(async (ids: string[]) => ids.map(address)),
+      },
+      googleDistanceService: {
+        getDistanceMatrixWithCaching: jest.fn().mockRejectedValue(new Error('google down')),
+      },
+    });
+    jest.spyOn(service as never, 'clientHasAnyOrders').mockResolvedValue(!(opts.firstOrder ?? false) as never);
+    jest.spyOn(service as never, 'getItemDetails').mockResolvedValue({
+      selling_price: 10,
+      item: { currency: 'CAD' },
+      business_location: { address_id: 'biz-addr', business_id: 'biz-1' },
+    } as never);
+    return service;
+  }
+
+  it('normal delivery: the normal base only', async () => {
+    const info = await fallbackService().calculateItemDeliveryFee('inv-1', 'addr-1', false);
+    expect(info.method).toBe('flat_fee');
+    expect(info.deliveryFee).toBe(2);
+  });
+
+  it('fast delivery: the fast base REPLACES the normal base (8, not 2 + 8)', async () => {
+    const info = await fallbackService().calculateItemDeliveryFee('inv-1', 'addr-1', true);
+    expect(info.method).toBe('flat_fee');
+    expect(info.deliveryFee).toBe(8);
+    expect(info.baseDeliveryFee).toBe(8);
+    expect(info.perKmDeliveryFee).toBe(0);
+  });
+
+  it('fast delivery disabled for the country: falls back to the normal base', async () => {
+    const info = await fallbackService({ fastEnabled: false }).calculateItemDeliveryFee('inv-1', 'addr-1', true);
+    expect(info.deliveryFee).toBe(2);
+  });
+
+  it('the fallback fee equals the fee the distance path would charge at 0 km', async () => {
+    const service = fallbackService();
+    const flat = await service.calculateItemDeliveryFee('inv-1', 'addr-1', true);
+    const tiered = await (service as unknown as {
+      calculateTieredDeliveryFee(km: number, c: string, fast: boolean): Promise<{ totalFee: number }>;
+    }).calculateTieredDeliveryFee(0, 'CA', true);
+    expect(flat.deliveryFee).toBe(tiered.totalFee);
+  });
+
+  it.each([0, -3])(
+    'a non-positive fast base (%s) keeps the normal base',
+    async (fee) => {
+      const service = fallbackService();
+      const config = (service as unknown as {
+        deliveryConfigService: { getFastDeliveryBaseFee: jest.Mock };
+      }).deliveryConfigService;
+      config.getFastDeliveryBaseFee.mockResolvedValue(fee);
+      const info = await service.calculateItemDeliveryFee('inv-1', 'addr-1', true);
+      expect(info.deliveryFee).toBe(2);
+      expect(info.baseDeliveryFee).toBe(2);
+    }
+  );
+
+  it('a first order halves the fast base (4), not the normal base and not both', async () => {
+    const info = await fallbackService({ firstOrder: true }).calculateItemDeliveryFee(
+      'inv-1',
+      'addr-1',
+      true
+    );
+    expect(info.deliveryFee).toBe(4);
+    expect(info.baseDeliveryFee).toBe(4);
+    expect(info.perKmDeliveryFee).toBe(0);
+    expect(info.firstOrderDeliveryFeePromo).toBe(true);
+    expect(info.firstOrderBaseDeliveryDiscountAmount).toBe(4);
+    expect(info.isFirstOrderClient).toBe(true);
+  });
+
+  it('a fast-config outage keeps the normal base', async () => {
+    const service = fallbackService();
+    const config = (service as unknown as {
+      deliveryConfigService: { isFastDeliveryEnabled: jest.Mock };
+    }).deliveryConfigService;
+    config.isFastDeliveryEnabled.mockRejectedValue(new Error('config down'));
+    const info = await service.calculateItemDeliveryFee('inv-1', 'addr-1', true);
+    expect(info.deliveryFee).toBe(2);
+    expect(info.method).toBe('flat_fee');
+  });
+});

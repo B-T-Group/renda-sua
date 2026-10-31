@@ -1,4 +1,5 @@
 import {
+  applyDecorators,
   BadRequestException,
   Body,
   Controller,
@@ -10,10 +11,15 @@ import {
   Post,
   Put,
   Query,
+  UnauthorizedException,
+  UseGuards,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { Public } from '../auth/public.decorator';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { RequirePermissions } from '../rbac/permissions.decorator';
+import { PlatformPermissions } from '../rbac/platform-permissions';
 import { MtnMomoDatabaseService } from './mtn-momo-database.service';
 import type {
   CollectionRequest,
@@ -23,6 +29,18 @@ import type {
 import { MtnMomoService } from './mtn-momo.service';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
+
+/**
+ * HTTP collection / disbursement / remittance routes are not wired to orders.
+ * They still call live MTN APIs when credentials exist, so they stay admin-only.
+ * The signed webhook is the only public route.
+ */
+function MtnMomoAdminOnly() {
+  return applyDecorators(
+    UseGuards(AdminAuthGuard),
+    RequirePermissions(PlatformPermissions.FINANCIAL_MOBILE_PAYMENTS)
+  );
+}
 
 @Controller('mtn-momo')
 @Throttle({ short: { limit: 20, ttl: 60000 } })
@@ -40,19 +58,18 @@ export class MtnMomoController {
    */
   @Post('collection/request-to-pay')
   @HttpCode(HttpStatus.OK)
-  async requestToPay(@ReqContext() ctx: RequestContext, @Body() request: CollectionRequest) {
+  @MtnMomoAdminOnly()
+  async requestToPay(
+    @ReqContext() ctx: RequestContext,
+    @Body() request: CollectionRequest
+  ) {
     try {
       this.logger.log(
         `Collection request received: ${JSON.stringify(request)}`
       );
 
       // Validate request
-      if (
-        !request.amount ||
-        !request.currency ||
-        !request.externalId ||
-        !request.payer
-      ) {
+      if (!request.amount || !request.externalId || !request.payer) {
         throw new BadRequestException('Missing required fields');
       }
 
@@ -85,6 +102,7 @@ export class MtnMomoController {
    * Check collection payment status
    */
   @Get('collection/status/:referenceId')
+  @MtnMomoAdminOnly()
   async getCollectionStatus(@Param('referenceId') referenceId: string) {
     try {
       this.logger.log(`Checking collection status for: ${referenceId}`);
@@ -113,6 +131,7 @@ export class MtnMomoController {
    */
   @Post('disbursement/transfer')
   @HttpCode(HttpStatus.OK)
+  @MtnMomoAdminOnly()
   async transfer(@Body() request: DisbursementRequest) {
     try {
       this.logger.log(
@@ -120,12 +139,7 @@ export class MtnMomoController {
       );
 
       // Validate request
-      if (
-        !request.amount ||
-        !request.currency ||
-        !request.externalId ||
-        !request.payee
-      ) {
+      if (!request.amount || !request.externalId || !request.payee) {
         throw new BadRequestException('Missing required fields');
       }
 
@@ -150,6 +164,7 @@ export class MtnMomoController {
    * Check disbursement status
    */
   @Get('disbursement/status/:referenceId')
+  @MtnMomoAdminOnly()
   async getDisbursementStatus(@Param('referenceId') referenceId: string) {
     try {
       this.logger.log(`Checking disbursement status for: ${referenceId}`);
@@ -178,6 +193,7 @@ export class MtnMomoController {
    */
   @Post('remittance/transfer')
   @HttpCode(HttpStatus.OK)
+  @MtnMomoAdminOnly()
   async remittance(@Body() request: RemittanceRequest) {
     try {
       this.logger.log(
@@ -185,12 +201,7 @@ export class MtnMomoController {
       );
 
       // Validate request
-      if (
-        !request.amount ||
-        !request.currency ||
-        !request.externalId ||
-        !request.payee
-      ) {
+      if (!request.amount || !request.externalId || !request.payee) {
         throw new BadRequestException('Missing required fields');
       }
 
@@ -215,6 +226,7 @@ export class MtnMomoController {
    * Get account balance
    */
   @Get('balance')
+  @MtnMomoAdminOnly()
   async getAccountBalance(
     @Query('type')
     type: 'collection' | 'disbursement' | 'remittance' = 'collection'
@@ -241,6 +253,7 @@ export class MtnMomoController {
    * Validate account holder
    */
   @Get('validate-account')
+  @MtnMomoAdminOnly()
   async validateAccountHolder(
     @Query('partyId') partyId: string,
     @Query('partyIdType') partyIdType: 'MSISDN' | 'EMAIL' | 'PARTY_CODE',
@@ -281,6 +294,7 @@ export class MtnMomoController {
    * Get payment requests for a user
    */
   @Get('payment-requests/:userId')
+  @MtnMomoAdminOnly()
   async getUserPaymentRequests(@Param('userId') userId: string) {
     try {
       this.logger.log(`Getting payment requests for user: ${userId}`);
@@ -309,6 +323,7 @@ export class MtnMomoController {
    * Get payment request by transaction ID
    */
   @Get('payment-request/transaction/:transactionId')
+  @MtnMomoAdminOnly()
   async getPaymentRequestByTransactionId(
     @Param('transactionId') transactionId: string
   ) {
@@ -344,30 +359,53 @@ export class MtnMomoController {
   }
 
   /**
-   * Webhook endpoint for MTN MoMo callbacks (POST or PUT)
+   * Webhook endpoint for MTN MoMo callbacks (POST or PUT).
+   * Public, so every call must carry the per-request `ref` + `token` query pair that
+   * the service put in X-Callback-Url. The token is never logged.
    */
   @Public()
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  async handleWebhookPost(@Body() callbackData: unknown) {
-    return this.processMtnMomoWebhook(callbackData);
+  async handleWebhookPost(
+    @Body() callbackData: unknown,
+    @Query('ref') ref?: string,
+    @Query('token') token?: string
+  ) {
+    return this.processMtnMomoWebhook(callbackData, ref, token);
   }
 
   @Public()
   @Put('webhook')
   @HttpCode(HttpStatus.OK)
-  async handleWebhookPut(@Body() callbackData: unknown) {
-    return this.processMtnMomoWebhook(callbackData);
+  async handleWebhookPut(
+    @Body() callbackData: unknown,
+    @Query('ref') ref?: string,
+    @Query('token') token?: string
+  ) {
+    return this.processMtnMomoWebhook(callbackData, ref, token);
   }
 
-  private async processMtnMomoWebhook(callbackData: unknown) {
+  private async processMtnMomoWebhook(
+    callbackData: unknown,
+    ref?: string,
+    token?: string
+  ) {
+    if (!this.mtnMomoService.verifyWebhookToken(ref, token)) {
+      this.logger.warn('MTN MoMo webhook rejected: invalid or missing token');
+      throw new UnauthorizedException('Invalid webhook token');
+    }
     try {
-      this.logger.log(`Webhook received: ${JSON.stringify(callbackData)}`);
-      await this.mtnMomoService.handleCallback(callbackData);
-      return { success: true, message: 'Webhook processed successfully' };
+      const outcome = await this.mtnMomoService.handleCallback(
+        callbackData,
+        ref as string
+      );
+      return {
+        success: true,
+        message: 'Webhook processed successfully',
+        outcome,
+      };
     } catch (error: unknown) {
-      const msg =
-        error instanceof Error ? error.message : String(error);
+      const msg = error instanceof Error ? error.message : String(error);
       this.logger.error(`Webhook processing error: ${msg}`);
       throw error;
     }
@@ -377,6 +415,7 @@ export class MtnMomoController {
    * Health check endpoint
    */
   @Get('health')
+  @MtnMomoAdminOnly()
   async healthCheck() {
     try {
       // Try to get collection balance as a health check

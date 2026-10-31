@@ -25,6 +25,8 @@ import { useIsStripeRail } from '../../../hooks/useIsStripeRail';
 import { agentApi } from '../../../services/agentApi';
 import type { Order } from '../../../types/agent';
 import { Portal, Dialog, Button, Text as PaperText, Snackbar } from 'react-native-paper';
+import { DedicatedReleaseCard } from '../../../components/dedicated/DedicatedReleaseCard';
+import { DedicatedHeadsUpCard } from '../../../components/dedicated/DedicatedHeadsUpCard';
 import { AgentClaimConfirmDialog } from '../../../components/dialogs/AgentClaimConfirmDialog';
 import { ClaimTopupFormDialog } from '../../../components/dialogs/ClaimTopupFormDialog';
 import { MarkPaidCashExceptionDialog } from '../../../components/dialogs/MarkPaidCashExceptionDialog';
@@ -832,6 +834,15 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
             cardStyle={cardStyle}
           />
         ) : null}
+
+        {/* #664: "Can't take this" for a dedicated auto-assignment, inside its release window */}
+        <DedicatedReleaseCard order={order} onReleased={goBack} onRefresh={refetchOrder} />
+
+        {/* Early dedicated heads-up (soft, not an offer) while the order waits for dispatch */}
+        <DedicatedHeadsUpCard
+          orderId={order?.id}
+          enabled={status === 'ready_for_pickup' && !order?.assigned_agent_id}
+        />
 
         {/* Delivery workflow indicator – only shown for active agent orders */}
         {['assigned_to_agent', 'picked_up', 'in_transit', 'out_for_delivery'].includes(status) && (

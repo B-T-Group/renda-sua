@@ -3,6 +3,7 @@ import {
   payAfterCopyVariantForPreflight,
   resolveCreatedPayAfter,
 } from '../../utils/payAfterConfirm';
+import { computeSellerOrderTotal } from '../../utils/checkoutOrderTotal';
 import { PayAfterConfirmExplainer } from '../checkout/PayAfterConfirmExplainer';
 import { FoodServiceChoice } from '../orders/FoodServiceChoice';
 import {
@@ -138,8 +139,6 @@ function sharedDepositCopy(
 interface OrderSummaryProps {
   cartItems: CartItem[];
   businessDeliveryFees: Map<string, BusinessDeliveryFee>;
-  fastDeliveryFee: number;
-  requiresFastDelivery: boolean;
   fulfillment: 'delivery' | 'pickup';
   /** Seller groups that currently cannot deliver (reason-blind). */
   unavailableBusinessIds: Set<string>;
@@ -165,8 +164,6 @@ interface OrderSummaryProps {
 const OrderSummary: React.FC<OrderSummaryProps> = ({
   cartItems,
   businessDeliveryFees,
-  fastDeliveryFee,
-  requiresFastDelivery,
   fulfillment,
   unavailableBusinessIds,
   formatCurrency,
@@ -199,7 +196,8 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
     );
     const deliveryFeeData = businessDeliveryFees.get(businessId);
     const deliveryFee = deliveryFeeData?.deliveryFee || 0;
-    const orderTotal = subtotal + deliveryFee + (requiresFastDelivery ? fastDeliveryFee : 0);
+    // The delivery quote already includes the fast base (fast replaces normal): never add it again.
+    const orderTotal = computeSellerOrderTotal(subtotal, deliveryFee);
     
     return {
       businessId,
@@ -385,17 +383,6 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
                   </Typography>
                 </Box>
               )}
-
-            {requiresFastDelivery && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  {t('checkout.fastDeliveryFee', 'Fast Delivery Fee')}
-                </Typography>
-                <Typography variant="body2" fontWeight="medium">
-                  {formatCurrency(fastDeliveryFee, currency)}
-                </Typography>
-              </Box>
-            )}
 
             {feeFor(business.businessId) > 0 ? (
               <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
@@ -1430,10 +1417,6 @@ const CheckoutPage: React.FC = () => {
     return <CheckoutPageSkeleton />;
   }
 
-  const fastDeliveryFee = requiresFastDelivery
-    ? fastDeliveryConfig?.fee || 0
-    : 0;
-
   return (
     <Box
       sx={{
@@ -1938,10 +1921,6 @@ const CheckoutPage: React.FC = () => {
           <OrderSummary
             cartItems={cartItems}
             businessDeliveryFees={businessDeliveryFees}
-            fastDeliveryFee={fulfillment === 'pickup' ? 0 : fastDeliveryFee}
-            requiresFastDelivery={
-              fulfillment === 'pickup' ? false : requiresFastDelivery
-            }
             fulfillment={fulfillment}
             unavailableBusinessIds={unavailableBusinessIds}
             formatCurrency={formatCurrency}

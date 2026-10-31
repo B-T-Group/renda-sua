@@ -108,8 +108,8 @@ describe('TrackSiteEventDto', () => {
       expect(await validate(dto)).toHaveLength(0);
     });
 
-    it('lists 31 unique client events, all public, none server-only', () => {
-      expect(new Set(DEDICATED_UI_SITE_EVENT_TYPES).size).toBe(31);
+    it('lists 32 unique client events, all public, none server-only', () => {
+      expect(new Set(DEDICATED_UI_SITE_EVENT_TYPES).size).toBe(32);
       expect(DEDICATED_UI_SITE_EVENT_TYPES).toEqual(expect.arrayContaining(FROM_646));
       for (const t of DEDICATED_UI_SITE_EVENT_TYPES) {
         expect(SITE_EVENT_TYPES_V1 as readonly string[]).toContain(t);

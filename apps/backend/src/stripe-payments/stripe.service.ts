@@ -65,6 +65,9 @@ export interface CreatePaymentIntentParams {
   captureMethod?: 'automatic' | 'manual';
 }
 
+/** Per-request cap for the Stripe Tax calls made inline in capture/refund flows. */
+export const STRIPE_TAX_REQUEST_TIMEOUT_MS = 8000;
+
 @Injectable()
 export class StripeService {
   private client: Stripe | null = null;
@@ -266,20 +269,60 @@ export class StripeService {
     });
   }
 
+  /**
+   * `posted_at` is deliberately omitted: Stripe defaults it to now, so a late finalization
+   * (heal / reconcile) lands in the CURRENT tax period (decision 2026-10-28).
+   */
   async createTaxTransactionFromCalculation(
     calculationId: string,
-    reference: string
+    reference: string,
+    idempotencyKey?: string
   ): Promise<Stripe.Tax.Transaction> {
-    return this.getClient().tax.transactions.createFromCalculation({
-      calculation: calculationId,
-      reference,
-    });
+    return this.getClient().tax.transactions.createFromCalculation(
+      {
+        calculation: calculationId,
+        reference,
+      },
+      { ...(idempotencyKey ? { idempotencyKey } : {}), timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS }
+    );
+  }
+
+  /**
+   * Reverse (fully or partially) a Stripe Tax transaction. `flatAmountMinor` is the
+   * positive tax-inclusive amount; Stripe takes it negative. `reference` must be unique
+   * across all Stripe Tax transactions.
+   */
+  async createTaxReversal(params: {
+    originalTransactionId: string;
+    mode: 'full' | 'partial';
+    flatAmountMinor?: number;
+    reference: string;
+    idempotencyKey: string;
+    metadata?: Record<string, string>;
+  }): Promise<Stripe.Tax.Transaction> {
+    return this.getClient().tax.transactions.createReversal(
+      {
+        original_transaction: params.originalTransactionId,
+        mode: params.mode,
+        reference: params.reference,
+        ...(params.mode === 'partial'
+          ? { flat_amount: -Math.abs(params.flatAmountMinor ?? 0) }
+          : {}),
+        ...(params.metadata ? { metadata: params.metadata } : {}),
+      },
+      {
+        idempotencyKey: params.idempotencyKey,
+        timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS,
+      }
+    );
   }
 
   async retrieveTaxCalculation(
     calculationId: string
   ): Promise<Stripe.Tax.Calculation> {
-    return this.getClient().tax.calculations.retrieve(calculationId);
+    return this.getClient().tax.calculations.retrieve(calculationId, undefined, {
+      timeout: STRIPE_TAX_REQUEST_TIMEOUT_MS,
+    });
   }
 
   /**

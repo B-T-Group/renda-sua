@@ -187,6 +187,47 @@ describe('evaluateOrderRisk — ready but unassigned', () => {
     ).toEqual(['ready_unassigned']);
   });
 
+  it('stays quiet while a scheduled order waits for dispatch_ready_at', () => {
+    expect(
+      evaluate({
+        current_status: 'ready_for_pickup',
+        fulfillment_method: 'delivery',
+        status_changed_at: minutesAgo(120),
+        dispatch_ready_at: minutesAhead(60),
+      })
+    ).not.toContain('ready_unassigned');
+  });
+
+  it('starts the clock at dispatch_ready_at once the gate opens', () => {
+    expect(
+      evaluate({
+        current_status: 'ready_for_pickup',
+        fulfillment_method: 'delivery',
+        status_changed_at: minutesAgo(120),
+        dispatch_ready_at: minutesAgo(10),
+      })
+    ).not.toContain('ready_unassigned');
+    expect(
+      evaluate({
+        current_status: 'ready_for_pickup',
+        fulfillment_method: 'delivery',
+        status_changed_at: minutesAgo(120),
+        dispatch_ready_at: minutesAgo(45),
+      })
+    ).toEqual(['ready_unassigned']);
+  });
+
+  it('uses status time when dispatch_ready_at is null', () => {
+    expect(
+      evaluate({
+        current_status: 'ready_for_pickup',
+        fulfillment_method: 'delivery',
+        status_changed_at: minutesAgo(45),
+        dispatch_ready_at: null,
+      })
+    ).toEqual(['ready_unassigned']);
+  });
+
   it('measures time in status, not the last row write', () => {
     expect(
       evaluate({

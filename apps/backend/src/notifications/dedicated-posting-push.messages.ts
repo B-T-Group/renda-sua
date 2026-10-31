@@ -39,6 +39,20 @@ export function buildDedicatedPostingAgentMessage(params: {
   }
 }
 
+/** AC-P13: a new posting near the agent, in slots they all prefer. */
+export function buildDedicatedPostingCreatedMessage(params: {
+  storeName: string;
+  slotKeys: string[];
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const locale = normalizeLanguage(params.preferredLanguage);
+  const slot = dedicatedSlotList(params.slotKeys, locale);
+  if (locale === 'fr') {
+    return { title: 'Nouveau poste dédié', body: `${params.storeName} recherche un livreur dédié (${slot})` };
+  }
+  return { title: 'New dedicated spot', body: `${params.storeName} is looking for a dedicated agent (${slot})` };
+}
+
 /** Business owner / managing delegates: a new applicant (AC-B16). */
 export function buildDedicatedPostingApplicationMessage(params: {
   agentFirstName: string;

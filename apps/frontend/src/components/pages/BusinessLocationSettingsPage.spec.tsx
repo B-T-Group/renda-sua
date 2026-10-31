@@ -55,6 +55,7 @@ jest.mock('../business/location-settings/OrderAlertsSection', () => () => null);
 jest.mock('../business/location-settings/BasicsSection', () => () => null);
 jest.mock('../business/location-settings/MoreOptionsSection', () => () => null);
 jest.mock('../business/location-settings/ForAllLocationsPanel', () => () => null);
+jest.mock('../business/dedicated-agents/DedicatedAgentsSection', () => () => null);
 jest.mock('../business/location-settings/OpenClosedSection', () => ({
   __esModule: true,
   default: ({

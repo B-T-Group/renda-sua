@@ -18,6 +18,7 @@ import {
   type DedicatedFallbackOutcome,
 } from './dedicated-dispatch.service';
 import type { ClaimAssignment } from './dedicated-claim.port';
+import { agentPrefersSlot, slotPrefsFromRow, type AgentSlotPrefRow } from '../dedicated-agents/agent-slot-prefs.util';
 
 /** Final "round" value used to signal the exhaustion check rather than a real dispatch round. */
 const EXHAUSTION_CHECK_ROUND = 3;
@@ -884,6 +885,46 @@ export class OrderOffersService {
     });
     if ((result?.dedicated?.affected_rows ?? 0) > 0) {
       this.dedicatedDispatch?.onOfferDeclined(orderId, agentId, reason);
+      await this.advanceAfterDedicatedDecline(orderId);
+    }
+  }
+
+  /**
+   * #664: "Can't take this". A declined dedicated offer releases the order to the next
+   * dispatch step right away instead of waiting out the scheduled round/exhaustion callback,
+   * but only once no other offer (a sibling dedicated agent or a standard one) is still
+   * live. The step is `runDispatchRound`, so it is idempotent on `orders.dispatch_round`
+   * and the later scheduled callbacks stay harmless no-ops. The declined agent is excluded
+   * from every later dedicated send. Never throws: the decline itself already succeeded.
+   */
+  private async advanceAfterDedicatedDecline(orderId: string): Promise<void> {
+    try {
+      const order = await this.getOrderForOffer(orderId);
+      if (!order || !this.isDispatchable(order) || !order.coverage_slot_key) return;
+      const live = await this.hasuraSystemService.executeQuery<{
+        order_offers: Array<{ agent_id: string }>;
+      }>(
+        `query DeclineLiveOffers($orderId: uuid!, $now: timestamptz!) {
+          order_offers(
+            where: {
+              order_id: { _eq: $orderId }
+              status: { _eq: "offered" }
+              expires_at: { _gt: $now }
+            }
+            limit: 1
+          ) { agent_id }
+        }`,
+        { orderId, now: new Date().toISOString() }
+      );
+      if ((live?.order_offers ?? []).length > 0) return;
+      const next = order.dispatch_round < 2 ? 2 : EXHAUSTION_CHECK_ROUND;
+      await this.runDispatchRound(orderId, next);
+    } catch (error) {
+      this.logger.warn(
+        `Dispatch advance after dedicated decline failed for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
@@ -989,7 +1030,49 @@ export class OrderOffersService {
 
     const withPushToken = await this.filterAgentsWithPushToken(eligible);
     const ranked = await this.rankByPickupReliability(withPushToken);
-    return ranked.slice(0, this.maxAgents);
+    const pool = await this.applySlotPreference(order.id, ranked);
+    return pool.slice(0, this.maxAgents);
+  }
+
+  /**
+   * #594 addendum AC-P7/P8/P10/P11: for a scheduled order, offer only agents who
+   * prefer its store-local slot and haven't already passed on it. When that
+   * leaves nobody (empty, or every preferred agent declined/expired), fall back
+   * silently to the unfiltered pool. ASAP / unresolved slot -> unchanged.
+   * Prefs are read at offer time, so a change only affects new offers (AC-P12).
+   */
+  private async applySlotPreference(orderId: string, ranked: CandidateAgent[]): Promise<CandidateAgent[]> {
+    if (ranked.length === 0 || !this.dedicatedDispatch) return ranked;
+    const slotKey = await this.dedicatedDispatch.scheduledSlotKey(orderId);
+    if (!slotKey) return ranked;
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        agents: Array<AgentSlotPrefRow & { id: string }>;
+        order_offers: Array<{ agent_id: string }>;
+      }>(
+        `query AgentSlotPrefsForOffer($ids: [uuid!]!, $orderId: uuid!) {
+          agents(where: { id: { _in: $ids } }) { id pref_morning pref_afternoon pref_evening }
+          order_offers(where: { order_id: { _eq: $orderId }, status: { _in: [declined, expired] } }) { agent_id }
+        }`,
+        { ids: ranked.map((c) => c.agentId), orderId }
+      );
+      const prefersById = new Map(
+        (res?.agents ?? []).map((a) => [a.id, agentPrefersSlot(slotPrefsFromRow(a), slotKey)])
+      );
+      const passed = new Set((res?.order_offers ?? []).map((o) => o.agent_id));
+      const preferring = ranked.filter((c) => prefersById.get(c.agentId) ?? true);
+      const fresh = preferring.filter((c) => !passed.has(c.agentId));
+      this.dedicatedDispatch.notePrefSlotPoolSize(orderId, slotKey, 'scheduled', fresh.length);
+      if (fresh.length > 0) return fresh;
+      this.dedicatedDispatch.notePrefSlotFallback(orderId, slotKey, preferring.length > 0 ? 'all_declined' : 'empty');
+      return ranked;
+    } catch (error) {
+      // Fail open: prefs never stop an order from being offered (AC-P10).
+      this.logger.warn(
+        `Slot preference filter failed for ${orderId}: ${error instanceof Error ? error.message : String(error)}`
+      );
+      return ranked;
+    }
   }
 
   private async dedicatedDeclinedAgentIds(orderId: string): Promise<Set<string>> {

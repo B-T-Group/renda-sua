@@ -27,7 +27,14 @@ import type {
   CreateAdminAssignmentRequest,
   CreateAdminAssignmentResponse,
   AdminCoverageResponse,
+  SlotPreferencesResponse,
+  UpdateSlotPreferencesRequest,
 } from '../types/dedicatedAgents';
+
+export interface DedicatedHeadsUpResponse {
+  success: true;
+  headsUp: { status: 'sent' | 'unavailable'; dispatchReadyAt: string | null; active: boolean } | null;
+}
 
 export class DedicatedAgentsService {
   async getCapability(country?: string): Promise<DedicatedAgentsCapabilityResponse> {
@@ -184,6 +191,36 @@ export class DedicatedAgentsService {
     );
   }
 
+  // #594 addendum: preferred delivery slots. PATCH turning a slot off with active
+  // dedicated assignments throws 409 slot_has_dedicated_assignments (see
+  // utils/slotPrefs#parseSlotOffConflict) until resent with confirmPause: true.
+  /** Early heads-up for a covered scheduled order (null when this agent never got one). */
+  async getHeadsUp(orderId: string): Promise<DedicatedHeadsUpResponse> {
+    return api.get<DedicatedHeadsUpResponse>(`/agents/me/dedicated-heads-ups/${orderId}`);
+  }
+
+  /** "Can't take it": skip this agent for the order's dedicated dispatch. */
+  async markHeadsUpUnavailable(orderId: string): Promise<{ success: true; status: 'unavailable' }> {
+    return api.post<{ success: true; status: 'unavailable' }>(
+      `/agents/me/dedicated-heads-ups/${orderId}/unavailable`
+    );
+  }
+
+  async getSlotPreferences(): Promise<SlotPreferencesResponse> {
+    return api.get<SlotPreferencesResponse>('/agents/me/slot-preferences');
+  }
+
+  async updateSlotPreferences(data: UpdateSlotPreferencesRequest): Promise<SlotPreferencesResponse> {
+    return api.patch<SlotPreferencesResponse>('/agents/me/slot-preferences', data);
+  }
+
+  /** Resume an assignment paused by turning its slot off (slot must be on). */
+  async resumeAssignment(assignmentId: string): Promise<{ success: true; assignment: unknown }> {
+    return api.patch<{ success: true; assignment: unknown }>(
+      `/agents/me/dedicated-assignments/${assignmentId}/resume`
+    );
+  }
+
   // -------------------------------------------------------------------------
   // Admin (platform.manage.agents). Routes 404 when dedicated_agents_enabled is
   // off for the store country; 403 when the store/agent is outside the geo scope.
@@ -200,6 +237,8 @@ export class DedicatedAgentsService {
     if (filters?.slotKey) params.append('slotKey', filters.slotKey);
     if (filters?.status) params.append('status', filters.status);
     if (filters?.source) params.append('source', filters.source);
+    if (filters?.prefOff) params.append('prefOff', filters.prefOff);
+    if (filters?.pauseReason) params.append('pauseReason', filters.pauseReason);
     const query = params.toString();
     return api.get<AdminAssignmentsResponse>(`/admin/dedicated-agents${query ? `?${query}` : ''}`);
   }

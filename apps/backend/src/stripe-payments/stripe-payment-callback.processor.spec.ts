@@ -29,9 +29,18 @@ describe('StripePaymentCallbackProcessor', () => {
   };
   let stripeService: {
     retrievePaymentIntent: jest.Mock;
+    retrieveTaxCalculation?: jest.Mock;
+    createTaxTransactionFromCalculation?: jest.Mock;
   };
   let hasuraSystemService: {
     executeQuery: jest.Mock;
+  };
+  let taxOrderPersistence: { finalizeFromTaxCalculation: jest.Mock };
+  let orderTaxLifecycle: {
+    finalizeAfterCapture: jest.Mock;
+    voidForOrder: jest.Mock;
+    syncLegacyFinalized: jest.Mock;
+    reverseForRefund: jest.Mock;
   };
 
   beforeEach(() => {
@@ -60,12 +69,21 @@ describe('StripePaymentCallbackProcessor', () => {
     };
     stripeService = { retrievePaymentIntent: jest.fn() };
     hasuraSystemService = { executeQuery: jest.fn() };
+    taxOrderPersistence = { finalizeFromTaxCalculation: jest.fn() };
+    orderTaxLifecycle = {
+      finalizeAfterCapture: jest.fn().mockResolvedValue(undefined),
+      voidForOrder: jest.fn().mockResolvedValue(undefined),
+      syncLegacyFinalized: jest.fn().mockResolvedValue(undefined),
+      reverseForRefund: jest.fn().mockResolvedValue(undefined),
+    };
     processor = new StripePaymentCallbackProcessor(
       databaseService as never,
       accountsService as never,
       paymentCallbackRegistry as never,
       stripeService as never,
-      hasuraSystemService as never
+      hasuraSystemService as never,
+      taxOrderPersistence as never,
+      orderTaxLifecycle as never
     );
   });
 
@@ -273,5 +291,157 @@ describe('StripePaymentCallbackProcessor', () => {
       { orderNumber: 'ORDER-1001' }
     );
     expect(callbackHandler.onPaymentFailure).not.toHaveBeenCalled();
+  });
+
+  describe('order tax snapshot lifecycle', () => {
+    it('finalizes the snapshot when the PI-succeeded webhook finds our own capture already success', async () => {
+      databaseService.getTransactionByReference.mockResolvedValue(
+        makeTransaction({ status: 'success' })
+      );
+      const pi = { id: 'pi_123', metadata: { reference: 'stripe-ref-123' } };
+
+      await processor.onPaymentIntentSucceeded(pi as never, req);
+
+      expect(orderTaxLifecycle.finalizeAfterCapture).toHaveBeenCalledWith({
+        orderNumber: 'ORDER-1001',
+        paymentIntent: pi,
+      });
+      expect(databaseService.updateTransaction).not.toHaveBeenCalled();
+      expect(accountsService.registerDepositIfNotExists).not.toHaveBeenCalled();
+    });
+
+    it('a deferred finalize on the already-success path warns for the reconciler and never throws', async () => {
+      databaseService.getTransactionByReference.mockResolvedValue(
+        makeTransaction({ status: 'success' })
+      );
+      orderTaxLifecycle.finalizeAfterCapture.mockResolvedValue('deferred');
+      const warn = jest.spyOn((processor as any).logger, 'warn').mockImplementation();
+      await expect(
+        processor.onPaymentIntentSucceeded(
+          { id: 'pi_123', metadata: { reference: 'stripe-ref-123' } } as never,
+          req
+        )
+      ).resolves.toBeUndefined();
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('order_tax_finalize_needs_reconcile order=ORDER-1001')
+      );
+    });
+
+    describe('charge.refunded with a tax-inclusive card refund', () => {
+      const charge = {
+        payment_intent: 'pi_123',
+        amount_refunded: 11300, // ledger 100.00 + 13.00 tax
+        refunded: true,
+        refunds: { data: [{ id: 're_9', metadata: {} }] },
+      } as never;
+
+      it('reverses only the LEDGER part from the wallet (the wallet never held the tax)', async () => {
+        databaseService.getTransactionByPaymentIntentId.mockResolvedValue(
+          makeTransaction({ status: 'success', amount: 100 })
+        );
+        (databaseService as any).getRefundFullByStripeId = jest.fn().mockResolvedValue({
+          id: 'rf-1',
+          status: 'pending',
+          amount: 100,
+          refund_type: 'cancellation',
+          refund_payment_id: null,
+        });
+        const reverse = jest.fn().mockResolvedValue(undefined);
+        (processor as any).reverseWalletForRefund = reverse;
+        await processor.onChargeRefunded(charge);
+        expect(reverse).toHaveBeenCalledWith(expect.anything(), 100);
+      });
+
+      it('never reverses more than the ledger amount even without a refund record', async () => {
+        databaseService.getTransactionByPaymentIntentId.mockResolvedValue(
+          makeTransaction({ status: 'success', amount: 100 })
+        );
+        const reverse = jest.fn().mockResolvedValue(undefined);
+        (processor as any).reverseWalletForRefund = reverse;
+        await processor.onChargeRefunded({ ...(charge as object), refunds: { data: [] } } as never);
+        expect(reverse).toHaveBeenCalledWith(expect.anything(), 100);
+      });
+    });
+
+    it('does not finalize an order snapshot for non-order entities', async () => {
+      databaseService.getTransactionByReference.mockResolvedValue(
+        makeTransaction({ status: 'success', payment_entity: 'claim_order' })
+      );
+      await processor.onPaymentIntentSucceeded(
+        { id: 'pi_123', metadata: { reference: 'stripe-ref-123' } } as never,
+        req
+      );
+      expect(orderTaxLifecycle.finalizeAfterCapture).not.toHaveBeenCalled();
+    });
+
+    it('voids the estimate when the authorization is cancelled/expired', async () => {
+      databaseService.getTransactionByReference.mockResolvedValue(
+        makeTransaction({ status: 'authorized' })
+      );
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders: [{ current_status: 'cancelled', payment_status: 'cancelled' }],
+      });
+      await processor.onPaymentIntentCanceled(
+        {
+          id: 'pi_123',
+          metadata: { reference: 'stripe-ref-123' },
+          cancellation_reason: 'automatic',
+        } as never,
+        req
+      );
+      expect(orderTaxLifecycle.voidForOrder).toHaveBeenCalledWith('ORDER-1001');
+    });
+
+    describe('refund.updated', () => {
+      const refund = (over: Record<string, unknown> = {}) =>
+        ({
+          id: 're_9',
+          status: 'succeeded',
+          amount: 5650,
+          payment_intent: 'pi_123',
+          metadata: { orderNumber: 'ORDER-1001', refundType: 'cancellation' },
+          ...over,
+        }) as never;
+
+      beforeEach(() => {
+        (databaseService as any).getRefundFullByStripeId = jest.fn().mockResolvedValue({
+          id: 'rf-1',
+          status: 'pending',
+          amount: 56.5,
+          refund_type: 'cancellation',
+          refund_payment_id: null,
+        });
+        (databaseService as any).updateRefundByStripeId = jest.fn();
+        databaseService.getTransactionByPaymentIntentId.mockResolvedValue(null);
+      });
+
+      it('reverses tax once a pending refund succeeds', async () => {
+        await processor.onRefundUpdated(refund());
+        expect(orderTaxLifecycle.reverseForRefund).toHaveBeenCalledWith({
+          orderNumber: 'ORDER-1001',
+          stripeRefundId: 're_9',
+          refundAmountMinor: 5650,
+        });
+      });
+
+      it('does not reverse a failed refund', async () => {
+        await processor.onRefundUpdated(refund({ status: 'failed' }));
+        expect(orderTaxLifecycle.reverseForRefund).not.toHaveBeenCalled();
+      });
+
+      it('skips reversal when the refund carries no order number', async () => {
+        await processor.onRefundUpdated(refund({ metadata: {} }));
+        expect(orderTaxLifecycle.reverseForRefund).not.toHaveBeenCalled();
+      });
+
+      it('a reversal failure never blocks the refund bookkeeping', async () => {
+        orderTaxLifecycle.reverseForRefund.mockRejectedValue(new Error('stripe tax'));
+        await expect(processor.onRefundUpdated(refund())).resolves.toBeUndefined();
+        expect((databaseService as any).updateRefundByStripeId).toHaveBeenCalledWith(
+          're_9',
+          expect.objectContaining({ status: 'succeeded' })
+        );
+      });
+    });
   });
 });

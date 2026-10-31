@@ -26,6 +26,8 @@ export const DEDICATED_UI_SITE_EVENT_TYPES = [
   'dedicated_ui.applicant_declined',
   // Agent (#645)
   'dedicated_ui.opportunities_viewed',
+  // #594 addendum §8 (mobile Opportunities "Turn on {{slot}}")
+  'pref_slot.posting_turn_on_cta_tapped',
   'dedicated_ui.opportunity_opened',
   'dedicated_ui.apply_tapped',
   'dedicated_ui.apply_succeeded',
@@ -195,6 +197,9 @@ export const SERVER_SITE_EVENT_TYPES = [
   // #594 PR 6: auto-assign release (A6b), day-of slot reminder (A8)
   'dedicated.auto_assign_released',
   'dedicated.slot_reminder_sent',
+  'dedicated.heads_up_sent',
+  'dedicated.heads_up_repinged',
+  'dedicated.heads_up_unavailable',
   // #594 PR 8: AC section 5 events not emitted by earlier PRs
   'dedicated.assignment_status_changed',
   'dedicated.off_today_toggled',
@@ -207,6 +212,14 @@ export const SERVER_SITE_EVENT_TYPES = [
   'dedicated.application_auto_declined',
   'dedicated.photo_gate_shown',
   'dedicated.slot_full',
+  // #594 addendum: agent preferred delivery slots (metrics hooks section 8)
+  'pref_slot.toggled',
+  'pref_slot.all_off_state',
+  'pref_slot.assignment_paused',
+  'pref_slot.assignment_resumed',
+  'pref_slot.offer_pool_size',
+  'pref_slot.fallback_unfiltered',
+  'pref_slot.posting_push_sent',
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',

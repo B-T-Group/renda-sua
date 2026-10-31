@@ -8907,7 +8907,8 @@
       "status": {
         "active": "Actif",
         "paused": "En pause",
-        "offToday": "Absent aujourd'hui"
+        "offToday": "Absent aujourd'hui",
+        "pausedByAgent": "Mis en pause par l'agent"
       }
     },
     "assignedChip": "Affecté par RendaSua",
@@ -9036,7 +9037,8 @@
       "invalid_headcount": "Le nombre doit être entre 1 et 10",
       "invalid_days_of_week": "Veuillez sélectionner au moins un jour",
       "terms_too_long": "Les conditions doivent faire 1000 caractères maximum",
-      "generic": "Une erreur est survenue"
+      "generic": "Une erreur est survenue",
+      "paused_by_agent": "L'agent a mis cette affectation en pause en désactivant le créneau. Seul l'agent peut la reprendre."
     },
     "superuser": {
       "tab": "Dédiés",
@@ -9055,7 +9057,13 @@
       "removeConfirm": "Retirer l'affectation ?",
       "removeConfirmDesc": "Le livreur ne sera plus dédié à cette boutique.",
       "posting": "Demande",
-      "adminAssigned": "Affecté par admin"
+      "adminAssigned": "Affecté par admin",
+      "preferredSlots": "Créneaux préférés",
+      "prefOff": "Créneau préféré désactivé",
+      "pauseReason": "Motif de pause",
+      "pausedSlotOff": "Mis en pause par l'agent (créneau désactivé)",
+      "prefOn": "{{slot}} : activé",
+      "prefOffOne": "{{slot}} : désactivé"
     },
     "metrics": {
       "deliveries": "livraisons",

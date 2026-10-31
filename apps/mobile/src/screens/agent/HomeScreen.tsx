@@ -50,6 +50,8 @@ import { AgentNowSection } from '../../components/agent/AgentNowSection';
 import { AgentObjectiveFocusCard } from '../../components/agent/AgentObjectiveFocusCard';
 import { FeatureCard } from '../../components/common/FeatureCard';
 import { AssistantHomeEntry } from '../../components/common/AssistantHomeEntry';
+import DedicatedOpportunitiesHomeCard from '../../components/agent/DedicatedOpportunitiesHomeCard';
+import DedicatedStoresHomeCard from '../../components/agent/DedicatedStoresHomeCard';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import type { AppNavScreen } from '../../navigation/AppNavigator';
 import type { RootStackParamList as AgentRootStackParamList } from '../../navigation/AgentRootNavigator';
@@ -74,6 +76,11 @@ import {
 } from '../../utils/agentClaimSetupGate';
 import { useAgentContractStatus } from '../../hooks/useAgentContractStatus';
 import { resolveClaimReadiness } from '../../utils/claimReadiness';
+import {
+  filterAgentHomeActionsNeeded,
+  shouldHideAgentNowHero,
+} from '../../utils/agentHomeActiveDelivery';
+import { useAgentHomeFocus } from '../../contexts/AgentHomeFocusContext';
 
 const MAX_HOME_ORDERS = 3;
 
@@ -144,6 +151,7 @@ export default function HomeScreen() {
   const [infoDialog, setInfoDialog] = useState<{ title: string; message: string } | null>(null);
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
 
+  const { setHomeFocused } = useAgentHomeFocus();
   const { items: actionsNeededItems, refresh: refreshActionsNeeded, dismissAll } =
     useActionsNeeded('agent');
   const { summary: creditSummary, usable: usableCredits } = usePurchaseCredits(true);
@@ -180,9 +188,11 @@ export default function HomeScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      setHomeFocused(true);
       void refetchVerification();
       void refetchProfile({ silent: true });
-    }, [refetchVerification, refetchProfile])
+      return () => setHomeFocused(false);
+    }, [refetchVerification, refetchProfile, setHomeFocused])
   );
 
   // After Stripe Connect becomes ready, backend sets agent.is_verified; refresh
@@ -210,6 +220,11 @@ export default function HomeScreen() {
   const activeOrders = agentOrdersCategorized.active;
   const previewOpenOrders = openOrders.slice(0, MAX_HOME_ORDERS);
   const previewActiveOrders = activeOrders.slice(0, MAX_HOME_ORDERS);
+  const showActiveOrdersSection = showDelivery && activeOrders.length > 0;
+  const homeActionsNeededItems = filterAgentHomeActionsNeeded(
+    actionsNeededItems,
+    showActiveOrdersSection
+  );
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -482,9 +497,14 @@ export default function HomeScreen() {
             />
           </View>
           <AgentContractBanner />
-          <AgentNowSection readiness={claimReadiness} />
+          <AgentNowSection
+            readiness={claimReadiness}
+            hideActiveDeliveryCard={
+              showActiveOrdersSection && shouldHideAgentNowHero(activeOrders.length)
+            }
+          />
           <ActionsNeededSection
-            items={actionsNeededItems}
+            items={homeActionsNeededItems}
             onMarkAllRead={() => void dismissAll()}
           />
         </TintedHeaderBlock>
@@ -494,6 +514,20 @@ export default function HomeScreen() {
             onPress={() => goTo('AssistantChat')}
             style={{ marginBottom: spacing.md }}
           />
+          {showDelivery ? (
+            <DedicatedStoresHomeCard
+              onPress={() =>
+                (navigation.getParent() as any)?.navigate('DedicatedHub', { segment: 'stores' })
+              }
+            />
+          ) : null}
+          {showDelivery ? (
+            <DedicatedOpportunitiesHomeCard
+              onPress={() =>
+                (navigation.getParent() as any)?.navigate('DedicatedHub', { segment: 'opportunities' })
+              }
+            />
+          ) : null}
           <ReferralPayoutSnapshot
             availableBalance={walletAvailable}
             balanceCurrency={displayCurrency}
@@ -756,7 +790,7 @@ export default function HomeScreen() {
         )}
 
         {/* ── SECTION 2: Active Orders preview ── */}
-        {previewActiveOrders.length > 0 && (
+        {showActiveOrdersSection && (
           <>
             <View style={[styles.section, { paddingHorizontal: spacing.md, marginTop: spacing.sm }]}>
               <View style={styles.sectionHeader}>

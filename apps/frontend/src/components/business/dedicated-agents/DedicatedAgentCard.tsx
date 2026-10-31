@@ -55,6 +55,16 @@ const DedicatedAgentCard: React.FC<DedicatedAgentCardProps> = ({
         />
       );
     }
+    if (agent.status === 'paused' && agent.pauseReason === 'paused_slot_off') {
+      // #594 addendum AC-P16: the agent turned this slot off; only the agent can resume.
+      return (
+        <Chip
+          label={t('dedicatedAgents.chips.status.pausedByAgent', 'Paused by agent')}
+          size="small"
+          color="default"
+        />
+      );
+    }
     if (agent.status === 'paused') {
       return (
         <Chip
@@ -170,7 +180,7 @@ const DedicatedAgentCard: React.FC<DedicatedAgentCardProps> = ({
                     <PauseIcon />
                   </IconButton>
                 </Tooltip>
-              ) : (
+              ) : agent.pauseReason === 'paused_slot_off' ? null : (
                 <Tooltip title={t('dedicatedAgents.actions.resume', 'Resume')}>
                   <IconButton
                     size="small"

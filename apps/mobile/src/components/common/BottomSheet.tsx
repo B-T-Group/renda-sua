@@ -5,8 +5,10 @@ import {
   BottomSheetBackdrop,
   BottomSheetFooter,
   BottomSheetModal,
+  BottomSheetModalProvider,
   BottomSheetScrollView,
   BottomSheetView,
+  useBottomSheetModalInternal,
   type BottomSheetBackdropProps,
   type BottomSheetFooterProps,
 } from '@gorhom/bottom-sheet';
@@ -134,7 +136,7 @@ function SheetTitle({ title, onClose }: { title?: string; onClose: () => void })
 }
 
 /** Native sheet. Drag, scrim, and the close control all dismiss. */
-export function BottomSheet({
+function BottomSheetBody({
   visible,
   onClose,
   title,
@@ -223,6 +225,17 @@ export function BottomSheet({
         </BottomSheetView>
       )}
     </BottomSheetModal>
+  );
+}
+
+export function BottomSheet(props: Props) {
+  const modalContext = useBottomSheetModalInternal(true);
+  if (modalContext) return <BottomSheetBody {...props} />;
+  // Paper portals mount outside the root provider. Supply one here.
+  return (
+    <BottomSheetModalProvider>
+      <BottomSheetBody {...props} />
+    </BottomSheetModalProvider>
   );
 }
 

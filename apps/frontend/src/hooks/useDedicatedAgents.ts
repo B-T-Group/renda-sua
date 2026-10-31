@@ -203,6 +203,8 @@ export const useDedicatedAgents = () => {
       slotKey?: string;
       status?: string;
       source?: string;
+      prefOff?: string;
+      pauseReason?: string;
     }): Promise<AdminAssignmentsResponse> => {
       const params = new URLSearchParams();
       if (filters?.city) params.append('city', filters.city);
@@ -210,6 +212,8 @@ export const useDedicatedAgents = () => {
       if (filters?.slotKey) params.append('slotKey', filters.slotKey);
       if (filters?.status) params.append('status', filters.status);
       if (filters?.source) params.append('source', filters.source);
+      if (filters?.prefOff) params.append('prefOff', filters.prefOff);
+      if (filters?.pauseReason) params.append('pauseReason', filters.pauseReason);
       
       const query = params.toString();
       const url = `/admin/dedicated-agents${query ? `?${query}` : ''}`;

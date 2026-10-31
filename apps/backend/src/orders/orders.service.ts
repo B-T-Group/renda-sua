@@ -45,6 +45,7 @@ import {
 } from '../dedicated-agents/dedicated-agents.constants';
 import type { ClaimAssignment } from './dedicated-claim.port';
 import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
+import { DedicatedHeadsUpService } from './dedicated-heads-up.service';
 import { dedicatedReleaseRefusalMessage } from './dedicated-accept-refusal.messages';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
 import {
@@ -827,7 +828,9 @@ export class OrdersService {
     @Optional()
     private readonly dedicatedSlotReminder?: DedicatedSlotReminderService,
     @Optional()
-    private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService
+    private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService,
+    @Optional()
+    private readonly dedicatedHeadsUp?: DedicatedHeadsUpService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -2196,6 +2199,8 @@ export class OrdersService {
     );
     await this.recordPreparationReadyHistory(request, viaSystem, userId);
     await this.scheduleDispatchRelease(order.id, dispatchSchedule);
+    // Early soft heads-up to the slot's dedicated agents (no-op unless covered, confirmed and gated).
+    void this.dedicatedHeadsUp?.sendForOrder(order.id);
     return {
       success: true,
       order: updatedOrder,
@@ -6384,6 +6389,7 @@ export class OrdersService {
     if (options?.stripePaymentMethod === 'payment_sheet') {
       const paymentIntent = await this.createStripeOrderPaymentIntent({
         orderNumber: order.order_number,
+        orderId: order.id,
         amount: checkoutAmount,
         currency: order.currency,
         accountId: account.id,
@@ -10229,6 +10235,8 @@ export class OrdersService {
           business_id
           business_location_id
           assigned_agent_id
+          assignment_source
+          dedicated_release_until
           delivery_address_id
       fulfillment_method
       fulfillment_timing
@@ -16562,6 +16570,7 @@ export class OrdersService {
         if (orderData.stripe_payment_method === 'payment_sheet') {
           const paymentIntent = await this.createStripeOrderPaymentIntent({
             orderNumber,
+            orderId: order.id,
             amount: total_amount,
             currency,
             accountId: account.id,
@@ -17311,6 +17320,7 @@ export class OrdersService {
    */
   private async createStripeOrderPaymentIntent(params: {
     orderNumber: string;
+    orderId?: string;
     amount: number;
     currency: string;
     accountId: string;
@@ -17337,6 +17347,7 @@ export class OrdersService {
     if (tax?.taxEnabled && tax.deliveryAddress && tax.orderItems.length > 0) {
       const taxResult = await this.taxCalculationService.calculateForOrder({
         orderNumber: params.orderNumber,
+        orderId: params.orderId,
         currency: params.currency,
         orderItems: tax.orderItems,
         deliveryFee: tax.deliveryFee,
@@ -17344,7 +17355,6 @@ export class OrdersService {
         serviceFee: tax.serviceFee,
         deliveryAddress: tax.deliveryAddress,
         transactionId: result.transactionId,
-        finalizeOnSuccess: false,
       });
       if (taxResult && result.paymentIntentId) {
         await this.stripeCheckoutService.updatePaymentIntentTax(
@@ -19168,27 +19178,27 @@ export class OrdersService {
         console.warn('Failed to calculate distance-based fee:', distanceError);
       }
 
-      // Fallback to normal delivery base fee
+      // Fallback (distance lookup failed): flat base fee only. Fast delivery REPLACES the normal
+      // base (same as the distance path via calculateTieredDeliveryFee); it is never added on top.
       const countryCode = this.extractCountryCode(
         businessAddress as unknown as Addresses
       );
-      const flatFee = await this.deliveryConfigService.getNormalDeliveryBaseFee(
+      let flatFee = await this.deliveryConfigService.getNormalDeliveryBaseFee(
         countryCode
       );
 
-      let fastExtra = 0;
       if (requiresFastDelivery) {
         const fastDeliveryConfig = await this.getFastDeliveryFee(
           userAddress.state || '',
           userAddress.country || ''
         );
-        if (fastDeliveryConfig.enabled) {
-          fastExtra = fastDeliveryConfig.fee;
+        if (fastDeliveryConfig.enabled && fastDeliveryConfig.fee > 0) {
+          flatFee = fastDeliveryConfig.fee;
         }
       }
 
       const promo = this.applyFirstOrderBasePromo(flatFee, 0, applyPromo);
-      const finalDeliveryFee = this.roundCurrency(promo.deliveryFee + fastExtra);
+      const finalDeliveryFee = this.roundCurrency(promo.deliveryFee);
 
       this.logger.log(`Flat fee calculated: ${finalDeliveryFee}`);
       this.logger.log(`Currency: ${item.item.currency}`);

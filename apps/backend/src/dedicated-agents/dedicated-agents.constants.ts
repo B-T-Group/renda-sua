@@ -4,6 +4,15 @@ export const DEDICATED_AGENTS_FLAG_KEY = 'dedicated_agents_enabled';
 export const DEDICATED_SLOT_KEYS = ['morning', 'afternoon', 'evening'] as const;
 export type DedicatedSlotKey = (typeof DEDICATED_SLOT_KEYS)[number];
 
+/** #594 addendum: `dedicated_agent_assignments.pause_reason` (DB check constraint mirrors this list). */
+export const DEDICATED_PAUSE_REASONS = [
+  'paused_slot_off',
+  'paused_business',
+  'paused_admin',
+  'paused_store_slot_disabled',
+] as const;
+export type DedicatedPauseReason = (typeof DEDICATED_PAUSE_REASONS)[number];
+
 export const DEDICATED_ASSIGNMENT_STATUSES = ['active', 'paused', 'removed'] as const;
 export type DedicatedAssignmentStatus =
   (typeof DEDICATED_ASSIGNMENT_STATUSES)[number];
@@ -54,6 +63,12 @@ export const DEDICATED_NUMBER_CONFIG = {
   dedicated_slot_reminder_minutes: { field: 'slotReminderMinutes', fallback: 30, min: 0, max: 240 },
   dedicated_posting_expiry_days: { field: 'postingExpiryDays', fallback: 14, min: 1, max: 90 },
   dedicated_slot_end_grace_minutes: { field: 'slotEndGraceMinutes', fallback: 15, min: 0, max: 120 },
+  /**
+   * Dedicated offer rounds per agent: 1 = the original single send (never re-sent),
+   * 2 = one re-send to an agent whose offer expired unanswered, and so on. Seeded by
+   * 20261027210000_dedicated_offer_attempts.
+   */
+  dedicated_offer_max_attempts: { field: 'offerMaxAttempts', fallback: 2, min: 1, max: 5 },
 } as const;
 
 export type DedicatedNumberConfigKey = keyof typeof DEDICATED_NUMBER_CONFIG;
@@ -71,6 +86,7 @@ export interface DedicatedAgentsConfig {
   slotReminderMinutes: number;
   postingExpiryDays: number;
   slotEndGraceMinutes: number;
+  offerMaxAttempts: number;
 }
 
 /** Used when the config rows are missing or unreadable: the feature stays off. */
@@ -83,6 +99,7 @@ export const DEFAULT_DEDICATED_AGENTS_CONFIG: DedicatedAgentsConfig = {
   slotReminderMinutes: 30,
   postingExpiryDays: 14,
   slotEndGraceMinutes: 15,
+  offerMaxAttempts: 2,
 };
 
 /** In-app / push paths of the dedicated-agent notices (PR 3; the PR 6 slot reminder reuses the agent one). */

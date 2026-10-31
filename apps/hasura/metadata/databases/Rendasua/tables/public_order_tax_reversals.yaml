@@ -1,0 +1,10 @@
+table:
+  name: order_tax_reversals
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: snapshot
+    using:
+      foreign_key_constraint_on: snapshot_id

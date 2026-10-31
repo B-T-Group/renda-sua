@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View, Alert, Modal, Pressable, useWindowDimensions } from 'react-native';
-import { ActivityIndicator, Button, Card, Chip, Text, Snackbar } from 'react-native-paper';
+import { ActivityIndicator, Button, Card, Chip, Portal, Text, Snackbar } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -11,9 +11,12 @@ import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import type { DedicatedOpportunity } from '../../types/dedicatedAgents';
 import { spacing } from '../../theme/spacing';
 import { useProfilePhotoUpload } from '../../hooks/useProfilePhotoUpload';
-import { mapDedicatedError } from '../../utils/dedicatedAgentsErrors';
+import { mapDedicatedError, dedicatedApiError } from '../../utils/dedicatedAgentsErrors';
 import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
+import { useSlotPreferences } from '../../hooks/useSlotPreferences';
+import { missingPreferredSlots } from '../../utils/slotPrefs';
+import PreferredSlotsHint from '../../components/agent/PreferredSlotsHint';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedOpportunityDetail'>;
 
@@ -31,12 +34,9 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const { colors, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
   const { height: screenHeight } = useWindowDimensions();
-  const { pickAndUploadPhoto, uploading: uploadingPhoto, error: photoUploadError } = useProfilePhotoUpload({
-    onSuccess: async () => {
-      await loadData(true);
-      await handleApply();
-    },
-  });
+  // No onSuccess: handlePhotoSource re-applies itself (a second apply here
+  // used to race it).
+  const { pickAndUploadPhoto, uploading: uploadingPhoto } = useProfilePhotoUpload();
 
   const [loading, setLoading] = useState(true);
   const [opportunity, setOpportunity] = useState<DedicatedOpportunity | null>(null);
@@ -47,6 +47,8 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const [error, setError] = useState<string | null>(null);
   const [notFound, setNotFound] = useState(false);
   const { isOffline } = useNetworkStatus();
+  // #594 addendum AC-P14: Apply needs all of the posting's slots preferred.
+  const slotPrefs = useSlotPreferences();
   
   const loadData = useCallback(async (isRefresh = false) => {
     try {
@@ -58,7 +60,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       setOpportunity(res.opportunity);
     } catch (err: any) {
       console.error('Error loading opportunity:', err);
-      const status = err.response?.status;
+      const { status } = dedicatedApiError(err);
       if (status === 404) {
         setError(t('dedicatedAgents.agent.noLongerAvailable', 'This opportunity is no longer available'));
       } else {
@@ -92,9 +94,9 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       setSnackMessage(t('dedicatedAgents.agent.appliedSnackbar', 'Application submitted'));
       await loadData(true);
     } catch (err: any) {
-      const errorCode = err.response?.data?.code;
-      
-      if (err.response?.status === 422 && errorCode === 'PROFILE_PHOTO_REQUIRED') {
+      const { status, code: errorCode } = dedicatedApiError(err);
+
+      if (status === 422 && errorCode === 'PROFILE_PHOTO_REQUIRED') {
         dedicatedAnalytics.trackDedicatedPhotoGateShown('profile_photo_required');
         setPhotoGateVisible(true);
       } else if (errorCode === 'posting_not_open' || errorCode === 'application_closed') {
@@ -105,6 +107,10 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
         const msg = mapDedicatedError(errorCode, t);
         setSnackMessage(msg);
         await loadData(true);
+      } else if (status === 404) {
+        setSnackMessage(t('dedicatedAgents.agent.noLongerAvailable', 'This opportunity is no longer available'));
+      } else if (status === 403 && errorCode === 'DEDICATED_OPPORTUNITIES_NOT_ELIGIBLE') {
+        setSnackMessage(err?.message || t('dedicatedAgents.generic', 'Something went wrong'));
       } else {
         const msg = errorCode ? mapDedicatedError(errorCode, t) : t('dedicatedAgents.generic', 'Something went wrong');
         setSnackMessage(msg);
@@ -123,9 +129,11 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       dedicatedAnalytics.trackDedicatedPhotoGateGalleryOpened();
     }
     setUploadError(null);
-    const uploadSuccess = await pickAndUploadPhoto(source);
-    if (!uploadSuccess) {
-      setUploadError(photoUploadError || t('dedicatedAgents.agent.photoError', 'Failed to upload photo'));
+    const upload = await pickAndUploadPhoto(source);
+    if (!upload.success) {
+      if (!upload.canceled) {
+        setUploadError(upload.error || t('dedicatedAgents.agent.photoError', 'Failed to upload photo'));
+      }
       return;
     }
 
@@ -140,7 +148,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
       setPhotoGateVisible(false);
       await loadData(true);
     } catch (err: any) {
-      const errorCode = err.response?.data?.code;
+      const errorCode = dedicatedApiError(err).code;
       const msg = errorCode ? mapDedicatedError(errorCode, t) : t('dedicatedAgents.generic', 'Something went wrong');
       setUploadError(msg);
     } finally {
@@ -173,7 +181,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
               setSnackMessage(t('dedicatedAgents.agent.withdrawnSnackbar', 'Application withdrawn'));
               await loadData(true);
             } catch (err: any) {
-              const errorCode = err.response?.data?.code;
+              const errorCode = dedicatedApiError(err).code;
               if (errorCode === 'application_not_pending') {
                 const msg = mapDedicatedError(errorCode, t);
                 setSnackMessage(msg);
@@ -258,6 +266,7 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
   const isPostingOpen = opportunity.status === 'open';
   const isFilled = !isPostingOpen;
   
+  const missingSlots = missingPreferredSlots(opportunity.slots, slotPrefs.prefs);
   const canApply =
     !opportunity.application &&
     isPostingOpen &&
@@ -287,6 +296,13 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
           <Card.Content>
             <Text variant="headlineSmall" style={{ fontWeight: '600', marginBottom: spacing.sm }}>
               {opportunity.storeName}
+            </Text>
+            <Text
+              variant="bodyMedium"
+              style={{ color: colors.text.secondary, marginBottom: spacing.sm }}
+              testID="opp-detail-explainer"
+            >
+              {t('dedicatedAgents.agent.explain.detail')}
             </Text>
             <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginBottom: spacing.md }}>
               📍 {opportunity.address.line1 ? `${opportunity.address.line1}, ` : ''}
@@ -328,6 +344,12 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
                 💶 {t('dedicatedAgents.agent.payChip', 'Standard pay')}
               </Text>
             </View>
+          </Card.Content>
+        </Card>
+
+        <Card style={{ marginBottom: spacing.md }}>
+          <Card.Content>
+            <PreferredSlotsHint onPress={() => navigation.navigate('AgentAvailability')} />
           </Card.Content>
         </Card>
 
@@ -387,11 +409,59 @@ export default function DedicatedOpportunityDetailScreen({ route, navigation }: 
           </Card>
         )}
 
+        {!isFilled && canApply && missingSlots.length > 0 && (
+          <Card style={{ marginHorizontal: spacing.md, marginBottom: spacing.sm }} testID="posting-not-preferred">
+            <Card.Content>
+              <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
+                {t('slotPrefs.postingGreyed')}
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs, marginTop: spacing.xs }}>
+                {missingSlots.map((slot) => (
+                  <Button
+                    key={slot}
+                    compact
+                    mode="outlined"
+                    icon={SLOT_ICONS[slot]}
+                    disabled={slotPrefs.savingSlot === slot}
+                    onPress={() => {
+                      dedicatedAnalytics.trackDedicatedSlotTurnOnCta(opportunity.id, slot);
+                      slotPrefs.setSlot(slot, true);
+                    }}
+                  >
+                    {t('slotPrefs.postingCta', { slot: slotPrefs.slotLabel(slot) })}
+                  </Button>
+                ))}
+              </View>
+            </Card.Content>
+          </Card>
+        )}
+        <Portal>
+          <Snackbar visible={!!slotPrefs.message} onDismiss={slotPrefs.clearMessage} duration={3000}>
+            {slotPrefs.message ?? ''}
+          </Snackbar>
+        </Portal>
+
+        {!isFilled && canApply && slotPrefs.error && !slotPrefs.prefs && (
+          <View
+            style={{ flexDirection: 'row', alignItems: 'center', marginHorizontal: spacing.md, marginBottom: spacing.sm }}
+            testID="detail-prefs-error"
+          >
+            <Text variant="bodySmall" style={{ flex: 1, color: colors.error.main }}>
+              {t('slotPrefs.loadError')}
+            </Text>
+            <Button compact mode="text" onPress={() => slotPrefs.reload()}>
+              {t('dedicatedAgents.retry', 'Retry')}
+            </Button>
+          </View>
+        )}
+
         {!isFilled && canApply && (
           <Button
             mode="contained"
+            testID="apply-button"
             onPress={handleApply}
-            disabled={submitting}
+            // Wait for slot prefs so the greyed-posting gate can't be bypassed.
+            disabled={submitting || slotPrefs.loading || !slotPrefs.prefs || missingSlots.length > 0}
             loading={submitting}
             style={{ marginHorizontal: spacing.md }}
           >
