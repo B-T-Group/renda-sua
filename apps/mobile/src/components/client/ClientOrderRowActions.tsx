@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { Snackbar } from 'react-native-paper';
 import { EntityActionRow } from '../common/EntityActionRow';
 import { useOrderRatingEligibility } from '../../hooks/useOrderRatingEligibility';
 import { agentApi } from '../../services/agentApi';
 import type { Order } from '../../types/agent';
+import { clientOrderCtaClusterSpacing } from './clientOrderCtaCluster';
 import {
   clientCanAskIfReady,
   clientCanCancelOrder,
@@ -26,6 +28,17 @@ type Props = {
   /** Navigate to the order detail with the rating mode that is actually available. */
   onRatePress?: (mode: 'agent' | 'item') => void;
 };
+
+function ClientOrderCtaCluster({ children }: { children: ReactNode }) {
+  return (
+    <View
+      testID="client-order-cta-cluster"
+      style={[styles.ctaCluster, clientOrderCtaClusterSpacing]}
+    >
+      {children}
+    </View>
+  );
+}
 
 export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Props) {
   const { t } = useTranslation();
@@ -117,78 +130,83 @@ export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Pr
 
   return (
     <>
-      {showPin ? (
-        <SendDeliveryPinButton
-          orderId={order.id}
-          pinAudience={isPickup ? 'business' : 'agent'}
-          onSent={onOrderMutated}
-          onError={(msg) => setSnack(msg)}
-          compact
-        />
-      ) : null}
-      {actions.length > 0 ? (
-        <EntityActionRow
-          layout="column"
-          actions={actions}
-          onActionPress={(id) => {
-            if (id === 'askIfReady') {
-              void (async () => {
-                if (askReadyBusy) return;
-                setAskReadyBusy(true);
-                try {
-                  await agentApi.orders.remindReady(order.id);
-                  setSnack(
-                    t(
-                      'orderActions.askIfReadySuccess',
-                      'We asked the store if your order is ready'
-                    )
-                  );
-                  onOrderMutated?.();
-                } catch (e: unknown) {
-                  setSnack(
-                    e instanceof Error
-                      ? e.message
-                      : t(
-                          'orderActions.askIfReadyError',
-                          'Could not send the reminder'
-                        )
-                  );
-                } finally {
-                  setAskReadyBusy(false);
-                }
-              })();
-            }
-            if (id === 'confirmReceipt') {
-              void (async () => {
-                if (receiptBusy) return;
-                setReceiptBusy(true);
-                try {
-                  await agentApi.orders.confirmReceipt(order.id);
-                  setSnack(t('orders.clientConfirm.confirmDone', 'Thanks! Your order is complete.'));
-                  onOrderMutated?.();
-                } catch (e: unknown) {
-                  setSnack(
-                    e instanceof Error
-                      ? e.message
-                      : t('orders.shipping.receiptFailed', 'Failed to confirm receipt')
-                  );
-                } finally {
-                  setReceiptBusy(false);
-                }
-              })();
-            }
-            if (id === 'rate' && rateMode) onRatePress?.(rateMode);
-            if (id === 'cancel') {
-              setCancelOpen(true);
-              trackCancellationEvent('cancellation_dialog_opened', {
-                orderId: order.id,
-                orderStatus: order.current_status ?? '',
-                paymentSource: (order as { payment_source?: string }).payment_source ?? '',
-              });
-            }
-          }}
-        />
-      ) : null}
+      <ClientOrderCtaCluster>
+        {showPin ? (
+          <SendDeliveryPinButton
+            orderId={order.id}
+            pinAudience={isPickup ? 'business' : 'agent'}
+            onSent={onOrderMutated}
+            onError={(msg) => setSnack(msg)}
+            compact
+          />
+        ) : null}
+        {actions.length > 0 ? (
+          <EntityActionRow
+            layout="column"
+            style={styles.ctaActions}
+            actions={actions}
+            onActionPress={(id) => {
+              if (id === 'askIfReady') {
+                void (async () => {
+                  if (askReadyBusy) return;
+                  setAskReadyBusy(true);
+                  try {
+                    await agentApi.orders.remindReady(order.id);
+                    setSnack(
+                      t(
+                        'orderActions.askIfReadySuccess',
+                        'We asked the store if your order is ready'
+                      )
+                    );
+                    onOrderMutated?.();
+                  } catch (e: unknown) {
+                    setSnack(
+                      e instanceof Error
+                        ? e.message
+                        : t(
+                            'orderActions.askIfReadyError',
+                            'Could not send the reminder'
+                          )
+                    );
+                  } finally {
+                    setAskReadyBusy(false);
+                  }
+                })();
+              }
+              if (id === 'confirmReceipt') {
+                void (async () => {
+                  if (receiptBusy) return;
+                  setReceiptBusy(true);
+                  try {
+                    await agentApi.orders.confirmReceipt(order.id);
+                    setSnack(
+                      t('orders.clientConfirm.confirmDone', 'Thanks! Your order is complete.')
+                    );
+                    onOrderMutated?.();
+                  } catch (e: unknown) {
+                    setSnack(
+                      e instanceof Error
+                        ? e.message
+                        : t('orders.shipping.receiptFailed', 'Failed to confirm receipt')
+                    );
+                  } finally {
+                    setReceiptBusy(false);
+                  }
+                })();
+              }
+              if (id === 'rate' && rateMode) onRatePress?.(rateMode);
+              if (id === 'cancel') {
+                setCancelOpen(true);
+                trackCancellationEvent('cancellation_dialog_opened', {
+                  orderId: order.id,
+                  orderStatus: order.current_status ?? '',
+                  paymentSource: (order as { payment_source?: string }).payment_source ?? '',
+                });
+              }
+            }}
+          />
+        ) : null}
+      </ClientOrderCtaCluster>
 
       <CancellationConfirmSheet
         visible={cancelOpen}
@@ -207,3 +225,12 @@ export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Pr
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  ctaCluster: {
+    alignSelf: 'stretch',
+  },
+  ctaActions: {
+    marginTop: 0,
+  },
+});
