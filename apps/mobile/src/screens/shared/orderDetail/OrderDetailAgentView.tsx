@@ -176,8 +176,11 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
       now: new Date(),
       locale: i18n.language,
     };
-    return buildDeliveryOrderViewModel(order, ctx);
-  }, [order, t, i18n.language]);
+    return buildDeliveryOrderViewModel(
+      { ...order, uses_legacy_pin: usesLegacyPin },
+      ctx
+    );
+  }, [order, t, i18n.language, usesLegacyPin]);
   const [actionLoading, setActionLoading] = useState(false);
   const [failModalVisible, setFailModalVisible] = useState(false);
   const [failReasonId, setFailReasonId] = useState('');

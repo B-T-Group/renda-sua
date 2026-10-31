@@ -116,6 +116,19 @@ function isShipping(input: OrderPhaseInput): boolean {
   return input.fulfillmentMethod === 'shipping';
 }
 
+function ofdNextStepKey(role: OrderPhaseRole, input: OrderPhaseInput): string {
+  const pin = isPinEligible(input);
+  if (role === 'client') return pin ? 'orders.nextStep.ofdClientPin' : 'orders.nextStep.ofdClient';
+  if (role === 'agent') return pin ? 'orders.nextStep.ofdAgent' : 'orders.nextStep.ofdAgentMark';
+  return pin ? 'orders.nextStep.ofdBusiness' : 'orders.nextStep.ofdBusinessConfirm';
+}
+
+function awaitingConfirmNextStepKey(role: OrderPhaseRole): string {
+  if (role === 'client') return 'orders.nextStep.awaitingClientConfirm';
+  if (role === 'agent') return 'orders.nextStep.awaitingAgentConfirm';
+  return 'orders.nextStep.awaitingBusinessConfirm';
+}
+
 function isPinEligible(input: OrderPhaseInput): boolean {
   if (!isPickup(input) && input.usesLegacyPin !== true) return false;
   // Pay-after MoMo delivery is prepaid once paid; PIN like pay_now.
@@ -274,14 +287,9 @@ function nextStepKeyFor(
           ? 'orders.nextStep.shippingBusiness'
           : null;
     }
-    if (s === 'out_for_delivery') {
-      return role === 'client'
-        ? isPinEligible(input)
-          ? 'orders.nextStep.ofdClientPin'
-          : 'orders.nextStep.ofdClient'
-        : role === 'agent'
-          ? 'orders.nextStep.ofdAgent'
-          : 'orders.nextStep.ofdBusiness';
+    if (s === 'out_for_delivery') return ofdNextStepKey(role, input);
+    if (s === 'awaiting_client_confirmation' || s === 'pending_auto_complete') {
+      return awaitingConfirmNextStepKey(role);
     }
     if (role === 'agent') {
       if (s === 'assigned_to_agent') return 'orders.nextStep.pickUpAgent';

@@ -688,7 +688,9 @@
         "goPickup": "Aller au point de retrait",
         "pickupDone": "Colis récupéré",
         "deliver": "Livrer au client",
-        "complete": "Terminer la livraison"
+        "complete": "Terminer la livraison",
+        "markDelivered": "Marquer comme livrée",
+        "waitClient": "En attente de la confirmation du client"
       },
       "urgency": {
         "pickupWithin": "Retrait dans",
@@ -1036,7 +1038,12 @@
       "ofdClientPin": "Envoyez votre code PIN dans la discussion pour finaliser la livraison.",
       "ofdClient": "Votre commande arrive. Restez disponible pour le livreur.",
       "ofdAgent": "Saisissez le code PIN du client pour terminer la livraison.",
+      "ofdAgentMark": "Marquez comme livrée, puis attendez la confirmation du client.",
       "ofdBusiness": "Générez un code de remplacement si le client ne peut pas partager son PIN.",
+      "ofdBusinessConfirm": "Le livreur marque la livraison ; le client confirme la réception.",
+      "awaitingClientConfirm": "Confirmez la réception ou signalez un problème.",
+      "awaitingAgentConfirm": "En attente de la confirmation du client.",
+      "awaitingBusinessConfirm": "En attente de la confirmation du client.",
       "deliveredClient": "Terminez cette commande lorsque vous êtes satisfait.",
       "deliveredBusiness": "Terminez cette commande pour clôturer la livraison.",
       "deliveredAgent": "Cette livraison est enregistrée comme livrée.",

@@ -5782,7 +5782,9 @@
         "goPickup": "Go to pickup",
         "pickupDone": "Package picked up",
         "deliver": "Deliver to customer",
-        "complete": "Complete delivery"
+        "complete": "Complete delivery",
+        "markDelivered": "Mark as delivered",
+        "waitClient": "Waiting for the client to confirm"
       },
       "urgency": {
         "pickupWithin": "Pickup within",
@@ -6568,7 +6570,12 @@
       "ofdClientPin": "Send your delivery PIN in chat so the agent can complete delivery.",
       "ofdClient": "Your order is arriving. Stay available for the agent.",
       "ofdAgent": "Enter the client PIN to complete delivery.",
+      "ofdAgentMark": "Mark as delivered, then wait for the client to confirm.",
       "ofdBusiness": "Generate an overwrite code if the client cannot share their PIN.",
+      "ofdBusinessConfirm": "The courier marks delivered; the client confirms receipt.",
+      "awaitingClientConfirm": "Confirm receipt or report a problem.",
+      "awaitingAgentConfirm": "Waiting for the client to confirm receipt.",
+      "awaitingBusinessConfirm": "Waiting for the client to confirm receipt.",
       "deliveredClient": "Mark this order complete when you are satisfied.",
       "deliveredBusiness": "Complete this order to finish fulfillment.",
       "deliveredAgent": "This delivery is recorded as delivered.",
