@@ -163,6 +163,8 @@ function world() {
     }>,
     offers: [] as OfferRow[],
     headsUpUnavailable: [] as string[],
+    /** Hasura omitted the heads-up relation (older schema / partial selection). */
+    omitHeadsUpField: false,
     noAgentMessages: 0,
     mutations: [] as string[],
     /** Users with a push token (standard rounds only offer to them); null = everyone. */
@@ -208,7 +210,13 @@ function world() {
           order_offers: state.offers.filter(
             (o) => o.order_id === vars.orderId && o.offer_kind === 'dedicated'
           ),
-          dedicated_order_heads_ups: state.headsUpUnavailable.map((agent_id) => ({ agent_id })),
+          ...(state.omitHeadsUpField
+            ? {}
+            : {
+                dedicated_order_heads_ups: state.headsUpUnavailable.map((agent_id) => ({
+                  agent_id,
+                })),
+              }),
         };
       case 'DedicatedAgentsConfig':
         return {
@@ -1323,6 +1331,20 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
     w.state.headsUpUnavailable.push('a1');
     expect(await w.dispatch.fallback(ORDER)).toEqual({ kind: 'none' });
     expect(w.dedicatedOffers()).toEqual([]);
+  });
+
+  it('heads-up: an unavailable id outside the pool still offers the dedicated agents', async () => {
+    const w = world();
+    w.addAgent('a1', { balance: 50000 });
+    w.state.headsUpUnavailable.push('someone-else');
+    expect(await w.dispatch.fallback(ORDER)).toMatchObject({ kind: 'offered', agentIds: ['a1'] });
+  });
+
+  it('heads-up: a missing heads-up relation does not throw and still offers', async () => {
+    const w = world();
+    w.addAgent('a1', { balance: 50000 });
+    w.state.omitHeadsUpField = true;
+    expect(await w.dispatch.fallback(ORDER)).toMatchObject({ kind: 'offered', agentIds: ['a1'] });
   });
 
   it('QA #607 N3: an expired offer may be offered again', async () => {

@@ -36,6 +36,21 @@ class DedicatedHeadsUpRepingRouteTest(unittest.TestCase):
             "dedicated-heads-up-reping", {"orderId": ORDER_ID}, "Dedicated heads-up re-ping"
         )
 
+    def test_missing_order_id_does_not_call_the_backend(self):
+        with patch.object(handler, "_get_hasura_config", return_value=("e", "s")), patch.object(
+            handler, "_call_backend_internal", return_value={"success": True}
+        ) as call:
+            result = handler.handler(
+                {
+                    "event_type": "order.dedicated_heads_up_reping",
+                    "payload": {"order_id": ""},
+                    "run_at": "2026-10-19T10:30:00Z",
+                },
+                None,
+            )
+        self.assertEqual(result, {"success": False, "error": "Missing order_id"})
+        call.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()
