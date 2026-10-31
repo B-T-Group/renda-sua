@@ -27,6 +27,10 @@ import type { CreateOrderPayload, CreateOrderResponse } from '../types/clientOrd
 import type { CheckoutPreflightRequest, ResolvedCheckoutConfig } from '../types/checkout';
 import type { OrderOfferResponse } from '../types/orderOffer';
 import type { DiscountCodeValidateResponse, ItemDeliveryFeeResponse } from '../types/placeOrderPricing';
+import type {
+  DeliveryConfirmationState,
+  DeliveryProofPhotoInput,
+} from '../types/deliveryConfirmation';
 import type { MeResponse, MeUser, SetMyPhoneResponse, UpdateMeResponse, UpdateMyEmailResponse } from '../types/me';
 import type { PersonaSlug } from '../types/persona';
 import type {
@@ -473,6 +477,28 @@ const orders = {
    */
   completeDelivery: (request: CompleteDeliveryRequest): Promise<OrderActionResponse> =>
     api.post<OrderActionResponse>('/orders/complete-delivery', request),
+
+  markDelivered: (orderId: string): Promise<OrderActionResponse> =>
+    api.post<OrderActionResponse>(`/orders/${orderId}/mark-delivered`, {}),
+
+  getDeliveryConfirmation: (orderId: string): Promise<DeliveryConfirmationState> =>
+    api.get<DeliveryConfirmationState>(`/orders/${orderId}/delivery-confirmation`),
+
+  reportDeliveryProblem: (
+    orderId: string,
+    description?: string
+  ): Promise<OrderActionResponse> =>
+    api.post<OrderActionResponse>(`/orders/${orderId}/report-delivery-problem`, {
+      description: description?.trim() || undefined,
+    }),
+
+  clientCouldNotConfirm: (
+    orderId: string,
+    photos: DeliveryProofPhotoInput[]
+  ): Promise<OrderActionResponse> =>
+    api.post<OrderActionResponse>(`/orders/${orderId}/client-could-not-confirm`, {
+      photos,
+    }),
 
   initiatePayAtDeliveryPayment: (
     orderId: string,

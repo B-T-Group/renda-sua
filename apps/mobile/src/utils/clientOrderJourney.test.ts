@@ -22,11 +22,11 @@ const flaggedGoods = {
 };
 
 describe('getClientOrderJourney flagged-location goods (pay-after)', () => {
-  it('keeps the delivery PIN for flagged delivery orders even with pay_at_delivery timing', () => {
+  it('does not show a doorstep PIN for flagged delivery orders', () => {
     const journey = getClientOrderJourney(
       order({ ...flaggedGoods, current_status: 'out_for_delivery' })
     );
-    expect(journey.showPinHint).toBe(true);
+    expect(journey.showPinHint).toBe(false);
   });
 
   it('does not use the classic pay-at-delivery (no PIN) path', () => {

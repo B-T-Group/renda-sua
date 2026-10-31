@@ -156,6 +156,9 @@
       "picked_up": "Récupérée",
       "in_transit": "En transit",
       "out_for_delivery": "En livraison",
+      "awaiting_client_confirmation": "En attente de confirmation",
+      "pending_auto_complete": "Photo de livraison envoyée",
+      "disputed": "Litige",
       "delivered": "Livrée",
       "complete": "Terminée",
       "cancelled": "Annulée",
@@ -515,7 +518,13 @@
       "agentFallbackDone": "Envoyé. La commande sera terminée automatiquement dans {{h}} h sauf si le client signale un problème.",
       "clientFallbackNotice": "Votre livreur a indiqué que la commande est livrée, photo à l'appui. Confirmez ou signalez un problème dans les {{h}} h.",
       "agentNonstripe": "En attente du client. Contactez le support si besoin.",
-      "payReceivedNext": "Paiement reçu. Demandez au client de confirmer la réception dans l'application."
+      "payReceivedNext": "Paiement reçu. Demandez au client de confirmer la réception dans l'application.",
+      "takePhoto": "Prendre une photo",
+      "photoNoteOptional": "Note (facultatif)",
+      "submitFallback": "Envoyer",
+      "proofPhoto": "Photo de livraison",
+      "problemDescription": "Que s'est-il passé ? (facultatif)",
+      "problemSubmitted": "Nous avons ouvert un ticket de support."
     },
     "deliveryPin": {
       "viewPin": "Voir le PIN de livraison",

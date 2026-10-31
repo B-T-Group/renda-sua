@@ -96,6 +96,35 @@ describe('resolveOrderPhase shipping', () => {
   });
 });
 
+describe('resolveOrderPhase client confirm delivery', () => {
+  it('asks the client to confirm receipt instead of sending a PIN', () => {
+    const info = resolveOrderPhase(
+      { status: 'awaiting_client_confirmation', fulfillmentMethod: 'delivery' },
+      'client'
+    );
+    expect(info.primaryActionId).toBe('confirm_receipt');
+  });
+
+  it('keeps send PIN only for mid-flight PIN orders', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'out_for_delivery', fulfillmentMethod: 'delivery' },
+        'client'
+      ).primaryActionId
+    ).toBe('confirm_receipt');
+    expect(
+      resolveOrderPhase(
+        {
+          status: 'out_for_delivery',
+          fulfillmentMethod: 'delivery',
+          usesLegacyPin: true,
+        },
+        'client'
+      ).primaryActionId
+    ).toBe('send_pin');
+  });
+});
+
 describe('resolveOrderPhase pickup ready', () => {
   it('asks pay-at-pickup clients to complete in the app when ready', () => {
     const info = resolveOrderPhase(

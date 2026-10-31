@@ -224,7 +224,7 @@ describe('firstOrderClientJourney', () => {
     expect(view.fulfillmentPath).toBe('shipping');
   });
 
-  it('shows a delivery PIN explainer on the way', () => {
+  it('does not show a delivery PIN explainer on the way', () => {
     const view = resolveClientFirstOrderJourney({
       order: {
         id: 'o1',
@@ -237,7 +237,7 @@ describe('firstOrderClientJourney', () => {
         { current_status: 'out_for_delivery', created_at: '2026-09-03T12:00:00.000Z' },
       ],
     });
-    expect(view.pinExplainerKey).toBe('client.firstOrder.pinExplainerDelivery');
+    expect(view.pinExplainerKey).toBeNull();
   });
 
   it('maps success statuses to the path end step', () => {

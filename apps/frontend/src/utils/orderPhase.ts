@@ -42,6 +42,7 @@ export type OrderPrimaryActionId =
   | 'confirm_pickup'
   | 'collect_pickup_payment'
   | 'send_pin'
+  | 'confirm_receipt'
   | 'complete'
   | 'rate'
   | 'open_refunds'
@@ -61,6 +62,7 @@ export interface OrderPhaseInput {
   payAfterMerchantConfirm?: boolean | null;
   /** Pay-after order that is NOT cooked food (flagged-location goods): use "store" wording. */
   payAfterStoreWording?: boolean | null;
+  usesLegacyPin?: boolean | null;
 }
 
 export interface OrderPhaseInfo {
@@ -105,6 +107,7 @@ function isPickup(input: OrderPhaseInput): boolean {
 }
 
 function isPinEligible(input: OrderPhaseInput): boolean {
+  if (!isPickup(input) && input.usesLegacyPin !== true) return false;
   // Pay-after MoMo delivery is prepaid once paid; PIN like pay_now.
   if (input.payAfterMerchantConfirm === true && !isPickup(input)) {
     return true;
@@ -165,7 +168,9 @@ function resolvePhase(input: OrderPhaseInput): OrderPhase {
     s === 'assigned_to_agent' ||
     s === 'picked_up' ||
     s === 'in_transit' ||
-    s === 'out_for_delivery'
+    s === 'out_for_delivery' ||
+    s === 'awaiting_client_confirmation' ||
+    s === 'pending_auto_complete'
   ) {
     return 'in_delivery';
   }
@@ -366,6 +371,13 @@ function primaryActionFor(
       return 'complete';
     }
     if (s === 'out_for_delivery' && isPinEligible(input)) return 'send_pin';
+    if (
+      s === 'out_for_delivery' ||
+      s === 'awaiting_client_confirmation' ||
+      s === 'pending_auto_complete'
+    ) {
+      return 'confirm_receipt';
+    }
     if (s === 'delivered') return 'complete';
     if (s === 'complete') return 'rate';
     return 'none';
@@ -578,6 +590,7 @@ export const ORDER_PRIMARY_ACTION_LABEL: Record<
     'Collect pickup payment',
   ],
   send_pin: ['orders.actions.sendPin', 'Send PIN'],
+  confirm_receipt: ['orders.clientConfirm.cta.confirm', 'Confirm receipt'],
   complete: ['orders.actions.complete', 'Complete order'],
   rate: ['orders.actions.rate', 'Rate order'],
   open_refunds: ['orders.actions.openRefunds', 'Manage refund'],
@@ -602,7 +615,10 @@ export type OrderPhaseSource = CookedFoodOrderLike & {
 };
 
 /** Build OrderPhaseInput from a typical order-shaped object. */
-export function orderToPhaseInput(order: OrderPhaseSource): OrderPhaseInput {
+export function orderToPhaseInput(
+  order: OrderPhaseSource,
+  extras?: { usesLegacyPin?: boolean | null }
+): OrderPhaseInput {
   const isCookedFoodPickup =
     order.is_cooked_food_pickup ?? shouldUseCookedFoodConfirmModal(order);
   return {
@@ -618,5 +634,6 @@ export function orderToPhaseInput(order: OrderPhaseSource): OrderPhaseInput {
     payAfterStoreWording:
       order.pay_after_merchant_confirm === true &&
       !isCookedFoodOrderSnapshot(order),
+    usesLegacyPin: extras?.usesLegacyPin,
   };
 }

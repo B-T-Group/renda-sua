@@ -21,6 +21,8 @@ const IN_MOTION_STATUSES = new Set([
   'picked_up',
   'in_transit',
   'out_for_delivery',
+  'awaiting_client_confirmation',
+  'pending_auto_complete',
   'shipped',
   'in_delivery',
 ]);

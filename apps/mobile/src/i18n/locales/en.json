@@ -154,6 +154,9 @@
       "picked_up": "Picked up",
       "in_transit": "In transit",
       "out_for_delivery": "Out for delivery",
+      "awaiting_client_confirmation": "Waiting for confirmation",
+      "pending_auto_complete": "Delivery photo submitted",
+      "disputed": "Disputed",
       "delivered": "Delivered",
       "complete": "Complete",
       "cancelled": "Cancelled",
@@ -579,7 +582,13 @@
       "agentFallbackDone": "Submitted. Order completes automatically in {{h}}h unless the client reports a problem.",
       "clientFallbackNotice": "Your courier marked this order delivered with a photo. Confirm or report a problem within {{h}}h.",
       "agentNonstripe": "Waiting for the client. Contact support if needed.",
-      "payReceivedNext": "Payment received. Ask the client to confirm receipt in the app."
+      "payReceivedNext": "Payment received. Ask the client to confirm receipt in the app.",
+      "takePhoto": "Take photo",
+      "photoNoteOptional": "Note (optional)",
+      "submitFallback": "Submit",
+      "proofPhoto": "Delivery photo",
+      "problemDescription": "What happened? (optional)",
+      "problemSubmitted": "We opened a support case."
     },
     "deliveryPin": {
       "viewPin": "View delivery PIN",

@@ -68,6 +68,21 @@ describe('agentOrderDetailMoreItems', () => {
     ).toEqual(['reportIssue', 'failDelivery']);
   });
 
+  it('keeps report while waiting for client confirmation', () => {
+    expect(
+      agentOrderDetailMoreItems({
+        status: 'awaiting_client_confirmation',
+        assignedAgentId: 'ag-1',
+      })
+    ).toEqual(['reportIssue']);
+    expect(
+      agentOrderDetailMoreItems({
+        status: 'pending_auto_complete',
+        assignedAgentId: 'ag-1',
+      })
+    ).toEqual(['reportIssue']);
+  });
+
   it('keeps report after delivery and hides release', () => {
     expect(
       agentOrderDetailMoreItems({

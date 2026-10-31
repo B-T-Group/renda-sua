@@ -86,6 +86,7 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
     startTransit,
     outForDelivery,
     completeDelivery,
+    markDelivered,
     failDelivery,
     dropOrder,
     initiatePayAtDeliveryPayment,
@@ -323,11 +324,32 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
       const onPickUp = () => setLifecycle({ orderId: order.id, key: 'pickUp' });
       const onStartTransit = () => setLifecycle({ orderId: order.id, key: 'startTransit' });
       const onOutForDelivery = () => setLifecycle({ orderId: order.id, key: 'outForDelivery' });
-      const onCompleteDelivery = () => { setCompletePinOrder(order); setCompleteError(null); };
+      const onCompleteDelivery = () => {
+        void (async () => {
+          setActionBusyOrderId(order.id);
+          try {
+            const state = await agentApi.orders.getDeliveryConfirmation(order.id);
+            if (state.usesLegacyPin) {
+              setCompletePinOrder(order);
+              setCompleteError(null);
+              return;
+            }
+            await markDelivered(order.id);
+            Alert.alert(
+              t('common.done', { defaultValue: 'Done' }),
+              t('orders.clientConfirm.agentWaiting', 'Waiting for the client to confirm')
+            );
+          } catch (e: unknown) {
+            Alert.alert(t('common.error'), e instanceof Error ? e.message : String(e));
+          } finally {
+            setActionBusyOrderId(null);
+          }
+        })();
+      };
       const onRequestPayment = () => setRequestPayOrder(order);
       return primaryActionForOrder(order, { onPickUp, onStartTransit, onOutForDelivery, onCompleteDelivery, onRequestPayment });
     },
-    []
+    [markDelivered, t]
   );
 
   const showQuickActionLoadingOverlay =
