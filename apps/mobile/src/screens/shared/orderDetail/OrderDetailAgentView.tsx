@@ -33,6 +33,8 @@ import { MarkPaidCashExceptionDialog } from '../../../components/dialogs/MarkPai
 import { RequestPayAtDeliveryDialog } from '../../../components/dialogs/RequestPayAtDeliveryDialog';
 import { SimpleMessageDialog } from '../../../components/dialogs/SimpleMessageDialog';
 import { CompleteDeliveryPinDialog } from '../../../components/dialogs/CompleteDeliveryPinDialog';
+import { ClientCouldNotConfirmSheet } from '../../../components/dialogs/ClientCouldNotConfirmSheet';
+import { AgentWaitingForClientCard } from '../../../components/agent/AgentWaitingForClientCard';
 import { DeliveryCompleteSuccessModal } from '../../../components/dialogs/DeliveryCompleteSuccessModal';
 import { ConfirmActionDialog } from '../../../components/dialogs/ConfirmActionDialog';
 import { ActionLoadingDialog } from '../../../components/feedback/ActionLoadingDialog';
@@ -63,6 +65,10 @@ import {
   type AgentOrderMoreItemId,
 } from '../../../utils/agentOrderDetailMoreItems';
 import { resolveAgentOrderPrimaryCta } from '../../../utils/resolveAgentOrderPrimaryCta';
+import { useDeliveryConfirmation } from '../../../hooks/useDeliveryConfirmation';
+import { captureAndUploadDeliveryProof } from '../../../services/deliveryProofUpload';
+import { resolveUsesLegacyPin } from '../../../utils/deliveryConfirmationUi';
+import type { DeliveryProofPhotoInput } from '../../../types/deliveryConfirmation';
 
 export const AgentOrderDetailMoreRegisterContext = createContext<{
   setMorePress: (press: (() => void) | null) => void;
@@ -97,7 +103,17 @@ const LIFECYCLE_ACTION_CONFIRM: Record<
 function showClientPiiToAgent(order: Order): boolean {
   if (order.assigned_agent_id) return true;
   const s = order.current_status;
-  return ['assigned_to_agent', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered', 'complete'].includes(s);
+  return [
+    'assigned_to_agent',
+    'picked_up',
+    'in_transit',
+    'out_for_delivery',
+    'awaiting_client_confirmation',
+    'pending_auto_complete',
+    'disputed',
+    'delivered',
+    'complete',
+  ].includes(s);
 }
 
 function formatDate(dateString: string): string {
@@ -122,6 +138,8 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     pickUp,
     outForDelivery,
     completeDelivery,
+    markDelivered,
+    clientCouldNotConfirm,
     initiatePayAtDeliveryPayment,
     markPaidInCashException,
     dropOrder,
@@ -134,6 +152,14 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     useAgentVerificationStatus();
   const { canClaim: ordersCanClaim, refetch: refetchOpenOrders } = useOpenOrders();
   const { isStripeRail } = useIsStripeRail();
+  const { state: confirmState, refetch: refetchConfirm } = useDeliveryConfirmation(
+    orderId,
+    order?.current_status,
+    order?.fulfillment_method
+  );
+  const usesLegacyPin = resolveUsesLegacyPin(confirmState);
+  const [fallbackSheetVisible, setFallbackSheetVisible] = useState(false);
+  const [fallbackError, setFallbackError] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -150,8 +176,11 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
       now: new Date(),
       locale: i18n.language,
     };
-    return buildDeliveryOrderViewModel(order, ctx);
-  }, [order, t, i18n.language]);
+    return buildDeliveryOrderViewModel(
+      { ...order, uses_legacy_pin: usesLegacyPin },
+      ctx
+    );
+  }, [order, t, i18n.language, usesLegacyPin]);
   const [actionLoading, setActionLoading] = useState(false);
   const [failModalVisible, setFailModalVisible] = useState(false);
   const [failReasonId, setFailReasonId] = useState('');
@@ -344,9 +373,14 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         await refreshAfterOrderAction();
         Alert.alert(
           t('common.done', { defaultValue: 'Done' }),
-          t('agent.orders.payAtDelivery.successCash', {
-            defaultValue: 'Cash exception recorded. Business reconciliation required.',
-          })
+          usesLegacyPin
+            ? t('agent.orders.payAtDelivery.successCash', {
+                defaultValue: 'Cash exception recorded. Business reconciliation required.',
+              })
+            : t(
+                'orders.clientConfirm.payReceivedNext',
+                'Payment received. Ask the client to confirm receipt in the app.'
+              )
         );
       } catch (error: any) {
         Alert.alert(t('common.error'), error instanceof Error ? error.message : t('common.genericError', 'Something went wrong.'));
@@ -354,7 +388,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         setPayAtDeliveryDialogLoading(false);
       }
     },
-    [applyOrderFromActionResponse, markPaidInCashException, orderId, refreshAfterOrderAction, t]
+    [applyOrderFromActionResponse, markPaidInCashException, orderId, refreshAfterOrderAction, t, usesLegacyPin]
   );
 
   const showStripeClaimFundingUnavailable = useCallback(() => {
@@ -446,6 +480,54 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
       await finishCompleteDelivery({ pin: trimmed });
     },
     [finishCompleteDelivery, t]
+  );
+
+  const handleMarkDelivered = useCallback(async () => {
+    setActionLoading(true);
+    try {
+      const latest = (await refetchConfirm()) ?? confirmState;
+      if (latest?.usesLegacyPin === true) {
+        setCompleteModalVisible(true);
+        setCompleteError(null);
+        return;
+      }
+      const res = await markDelivered(orderId);
+      applyOrderFromActionResponse(res);
+      await refreshAfterOrderAction();
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), e instanceof Error ? e.message : t('common.genericError', 'Something went wrong.'));
+    } finally {
+      setActionLoading(false);
+    }
+  }, [
+    applyOrderFromActionResponse,
+    confirmState,
+    markDelivered,
+    orderId,
+    refetchConfirm,
+    refreshAfterOrderAction,
+    t,
+  ]);
+
+  const handleFallbackSubmit = useCallback(
+    async (photos: DeliveryProofPhotoInput[], note: string) => {
+      if (photos.length < 1) return;
+      setActionLoading(true);
+      setFallbackError(null);
+      try {
+        const withNote = note.trim() ? photos.map((p) => ({ ...p, note: note.trim() })) : photos;
+        const res = await clientCouldNotConfirm(orderId, withNote);
+        applyOrderFromActionResponse(res);
+        setFallbackSheetVisible(false);
+        await refreshAfterOrderAction();
+        await refetchConfirm();
+      } catch (e: unknown) {
+        setFallbackError(e instanceof Error ? e.message : t('common.genericError', 'Something went wrong.'));
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [applyOrderFromActionResponse, clientCouldNotConfirm, orderId, refetchConfirm, refreshAfterOrderAction, t]
   );
 
   const closeReportModal = useCallback(() => {
@@ -717,7 +799,13 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     assignedAgentId: order.assigned_agent_id,
     agentSuspended: agentStatus === 'suspended',
     needsPayAtDeliveryActions,
+    canSubmitFallback: confirmState?.canSubmitFallback === true,
   });
+  const showWaitingCard =
+    status === 'awaiting_client_confirmation' || status === 'pending_auto_complete';
+  const payAtDeliveryPaid =
+    order.payment_timing === 'pay_at_delivery' &&
+    (order.payment_status === 'paid' || order.payment_status === 'authorized');
   const claimButtonLabel = ordersCanClaim
     ? t('agent.openOrders.claimButton', 'Réclamer')
     : agentIdVerificationPending({
@@ -761,6 +849,10 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
             earnings={earningsForCard}
             maskDeliveryContact={!showClientPii}
           />
+        ) : null}
+
+        {showWaitingCard && confirmState ? (
+          <AgentWaitingForClientCard state={confirmState} payAtDeliveryPaid={payAtDeliveryPaid} />
         ) : null}
 
         <AgentOrderStatusUrgencyRow
@@ -978,15 +1070,27 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
           {primaryCta === 'markDelivered' ? (
             <Pressable
               style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
-              onPress={() => {
-                setCompleteModalVisible(true);
-                setCompleteError(null);
-              }}
+              onPress={() => void handleMarkDelivered()}
               disabled={actionLoading}
             >
               <MaterialCommunityIcons name="check-circle" size={20} color={colors.primary.contrast} />
               <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
                 {t('agent.orders.detail.markDelivered')}
+              </Text>
+            </Pressable>
+          ) : null}
+          {primaryCta === 'clientCouldNotConfirm' ? (
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
+              onPress={() => {
+                setFallbackError(null);
+                setFallbackSheetVisible(true);
+              }}
+              disabled={actionLoading}
+            >
+              <MaterialCommunityIcons name="camera" size={20} color={colors.primary.contrast} />
+              <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
+                {t('orders.clientConfirm.agentFallbackCta', "Client couldn't confirm")}
               </Text>
             </Pressable>
           ) : null}
@@ -1054,17 +1158,28 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         </View>
       </AppModal>
 
-      <CompleteDeliveryPinDialog
-        visible={completeModalVisible}
-        onDismiss={closeCompleteModal}
-        onSubmit={(pin) => void handleCompleteDeliverySubmit(pin)}
-        onSubmitSharedPin={() => void handleCompleteWithSharedPin()}
+      {usesLegacyPin || completeModalVisible ? (
+        <CompleteDeliveryPinDialog
+          visible={completeModalVisible}
+          onDismiss={closeCompleteModal}
+          onSubmit={(pin) => void handleCompleteDeliverySubmit(pin)}
+          onSubmitSharedPin={() => void handleCompleteWithSharedPin()}
+          submitting={actionLoading}
+          errorText={completeError}
+          onPinEdited={() => setCompleteError(null)}
+          autoSharedPin={autoSharedPin}
+          resolvingSharedPin={resolvingSharedPin}
+          noSharedPin={noSharedPin}
+        />
+      ) : null}
+
+      <ClientCouldNotConfirmSheet
+        visible={fallbackSheetVisible}
         submitting={actionLoading}
-        errorText={completeError}
-        onPinEdited={() => setCompleteError(null)}
-        autoSharedPin={autoSharedPin}
-        resolvingSharedPin={resolvingSharedPin}
-        noSharedPin={noSharedPin}
+        errorText={fallbackError}
+        onDismiss={() => setFallbackSheetVisible(false)}
+        onCapture={() => captureAndUploadDeliveryProof(orderId)}
+        onSubmit={(photos, note) => void handleFallbackSubmit(photos, note)}
       />
 
       <DeliveryCompleteSuccessModal

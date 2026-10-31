@@ -31,6 +31,12 @@ import { useBackendOrders } from '../../hooks/useBackendOrders';
 import type { OrderData } from '../../hooks/useOrderById';
 import ConfirmationModal from '../common/ConfirmationModal';
 import CompleteDeliveryDialog from '../dialogs/CompleteDeliveryDialog';
+import ClientCouldNotConfirmDialog from '../dialogs/ClientCouldNotConfirmDialog';
+import AgentWaitingForClient from './AgentWaitingForClient';
+import { useDeliveryConfirmation } from '../../hooks/useDeliveryConfirmation';
+import { resolveAgentOrderPrimaryCta } from '../../utils/resolveAgentOrderPrimaryCta';
+import { resolveUsesLegacyPin } from '../../utils/deliveryConfirmationUi';
+import type { DeliveryProofPhotoInput } from '../../types/deliveryConfirmation';
 import MarkDeliveryAsFailedDialog from '../dialogs/MarkDeliveryAsFailedDialog';
 import RequestPayAtDeliveryPaymentDialog from '../dialogs/RequestPayAtDeliveryPaymentDialog';
 import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
@@ -84,6 +90,21 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   const [showCashExceptionDialog, setShowCashExceptionDialog] = useState(false);
   const [cashExceptionNotes, setCashExceptionNotes] = useState('');
   const [showRequestPaymentDialog, setShowRequestPaymentDialog] = useState(false);
+  const [showFallbackDialog, setShowFallbackDialog] = useState(false);
+  const [fallbackError, setFallbackError] = useState<string | null>(null);
+  const { state: confirmState, refetch: refetchConfirm } = useDeliveryConfirmation(
+    order.id,
+    order.current_status,
+    order.fulfillment_method
+  );
+  const usesLegacyPin = resolveUsesLegacyPin(confirmState);
+  const primaryCta = resolveAgentOrderPrimaryCta({
+    status: order.current_status,
+    assignedAgentId: order.assigned_agent_id,
+    agentSuspended: profile?.agent?.status === 'suspended',
+    needsPayAtDeliveryActions: orderNeedsPayAtDeliveryAgentActions(order),
+    canSubmitFallback: confirmState?.canSubmitFallback === true,
+  });
   const [claimHoldAmount, setClaimHoldAmount] = useState(
     order.agent_hold_amount || 0
   );
@@ -604,6 +625,57 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     setPendingAction(null);
   };
 
+  const handleMarkDelivered = async () => {
+    if (actionInFlightRef.current) return;
+    actionInFlightRef.current = true;
+    setLoading(true);
+    try {
+      const latest = (await refetchConfirm()) ?? confirmState;
+      if (latest?.usesLegacyPin === true) {
+        setShowCompleteDeliveryDialog(true);
+        return;
+      }
+      await backendOrders.markDelivered(order.id);
+      onShowNotification?.(
+        t('orders.clientConfirm.agentWaiting', 'Waiting for the client to confirm'),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message || t('messages.orderStatusUpdateError', 'Failed to update order status'),
+        'error'
+      );
+    } finally {
+      setLoading(false);
+      actionInFlightRef.current = false;
+    }
+  };
+
+  const handleFallbackSubmit = async (photos: DeliveryProofPhotoInput[]) => {
+    if (photos.length < 1) return;
+    setLoading(true);
+    setFallbackError(null);
+    try {
+      await backendOrders.clientCouldNotConfirm(order.id, photos);
+      setShowFallbackDialog(false);
+      await refetchConfirm();
+      onShowNotification?.(
+        t('orders.clientConfirm.agentFallbackDone', {
+          defaultValue:
+            'Submitted. Order completes automatically in {{h}}h unless the client reports a problem.',
+          h: confirmState?.autoCompleteHours ?? 2,
+        }),
+        'success'
+      );
+      onActionComplete?.();
+    } catch (error: any) {
+      setFallbackError(error?.message || t('common.genericError', 'Something went wrong.'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getAvailableActions = () => {
     const actions = [];
 
@@ -699,8 +771,8 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           }
         } else {
           actions.push({
-            label: t('orderActions.completeDelivery', 'Complete delivery'),
-            action: () => setShowCompleteDeliveryDialog(true),
+            label: t('agent.orders.detail.markDelivered', 'Mark as delivered'),
+            action: () => void handleMarkDelivered(),
             color: 'success' as const,
             icon: <CheckCircle />,
           });
@@ -713,6 +785,20 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         });
         break;
 
+      case 'awaiting_client_confirmation':
+        if (primaryCta === 'clientCouldNotConfirm') {
+          actions.push({
+            label: t('orders.clientConfirm.agentFallbackCta', "Client couldn't confirm"),
+            action: () => {
+              setFallbackError(null);
+              setShowFallbackDialog(true);
+            },
+            color: 'success' as const,
+            icon: <CheckCircle />,
+          });
+        }
+        break;
+
       default:
         // No actions available for other statuses
         break;
@@ -723,12 +809,25 @@ const AgentActions: React.FC<AgentActionsProps> = ({
 
   const availableActions = getAvailableActions();
 
-  if (availableActions.length === 0) {
+  const showWaiting =
+    order.current_status === 'awaiting_client_confirmation' ||
+    order.current_status === 'pending_auto_complete';
+  const payAtDeliveryPaid =
+    order.payment_timing === 'pay_at_delivery' &&
+    (order.payment_status === 'paid' || order.payment_status === 'authorized');
+
+  if (availableActions.length === 0 && !showWaiting) {
     return null;
   }
 
   return (
     <>
+      {showWaiting && confirmState ? (
+        <AgentWaitingForClient
+          state={confirmState}
+          payAtDeliveryPaid={payAtDeliveryPaid}
+        />
+      ) : null}
       <Box
         sx={{
           display: 'flex',
@@ -885,18 +984,29 @@ const AgentActions: React.FC<AgentActionsProps> = ({
         loading={loading}
       />
 
-      <CompleteDeliveryDialog
-        open={showCompleteDeliveryDialog}
-        onClose={() => setShowCompleteDeliveryDialog(false)}
+      {usesLegacyPin || showCompleteDeliveryDialog ? (
+        <CompleteDeliveryDialog
+          open={showCompleteDeliveryDialog}
+          onClose={() => setShowCompleteDeliveryDialog(false)}
+          orderId={order.id}
+          orderNumber={order.order_number}
+          onSuccess={() => {
+            onShowNotification?.(
+              t('messages.orderCompleted', 'Order completed successfully'),
+              'success'
+            );
+            onActionComplete?.();
+          }}
+        />
+      ) : null}
+
+      <ClientCouldNotConfirmDialog
+        open={showFallbackDialog}
         orderId={order.id}
-        orderNumber={order.order_number}
-        onSuccess={() => {
-          onShowNotification?.(
-            t('messages.orderCompleted', 'Order completed successfully'),
-            'success'
-          );
-          onActionComplete?.();
-        }}
+        submitting={loading}
+        errorText={fallbackError}
+        onClose={() => setShowFallbackDialog(false)}
+        onSubmit={(photos) => void handleFallbackSubmit(photos)}
       />
 
       <RequestPayAtDeliveryPaymentDialog

@@ -70,7 +70,12 @@ export function orderStatusStripeColor(status: string, colors: Theme['colors']):
     case 'in_transit':
       return colors.primary.main;
     case 'out_for_delivery':
+    case 'awaiting_client_confirmation':
       return colors.secondary.main;
+    case 'pending_auto_complete':
+      return colors.info.main;
+    case 'disputed':
+      return colors.error.main;
     case 'delivered':
     case 'complete':
       return colors.success.main;

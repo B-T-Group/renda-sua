@@ -11,7 +11,8 @@ export function clientShowAgentLocation(status: string | undefined, fulfillmentM
 }
 
 /** Delivery PIN only — store pickup uses client Complete (no PIN). */
-export function clientShowDeliveryPin(order: Order): boolean {
+export function clientShowDeliveryPin(order: Order, usesLegacyPin?: boolean): boolean {
+  if (usesLegacyPin !== true && !isStorePickupOrder(order)) return false;
   if (isCarrierShipping(order.fulfillment_method)) return false;
   if (isStorePickupOrder(order)) return false;
   const payAfterDelivery =
@@ -46,9 +47,11 @@ export function clientCanCancelOrder(order: Order): boolean {
 }
 
 export function clientCanConfirmReceipt(order: Order): boolean {
-  if (!isCarrierShipping(order.fulfillment_method)) return false;
-  const s = order.current_status || '';
-  return s === 'shipped' || s === 'in_delivery';
+  if (isCarrierShipping(order.fulfillment_method)) {
+    const s = order.current_status || '';
+    return s === 'shipped' || s === 'in_delivery';
+  }
+  return false;
 }
 
 /**
