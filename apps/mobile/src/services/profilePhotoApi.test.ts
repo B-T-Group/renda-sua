@@ -159,4 +159,19 @@ describe('uploadMyProfilePhoto (Dedicated apply photo gate)', () => {
     expect(api.post).not.toHaveBeenCalled();
     expect(client.mutate).not.toHaveBeenCalled();
   });
+
+  it('does not upload when /users/me throws', async () => {
+    vi.mocked(agentApi.users.getMe).mockRejectedValue(new Error('network'));
+    const result = await uploadMyProfilePhoto('file://photo.jpg');
+    expect(result).toEqual({ success: false, error: 'network' });
+    expect(api.post).not.toHaveBeenCalled();
+    expect(client.mutate).not.toHaveBeenCalled();
+  });
+
+  it('does not upload when /users/me returns an empty id', async () => {
+    vi.mocked(agentApi.users.getMe).mockResolvedValue({ success: true, user: { id: '' } } as any);
+    const result = await uploadMyProfilePhoto('file://photo.jpg');
+    expect(result).toEqual({ success: false, error: 'Failed to load profile' });
+    expect(api.post).not.toHaveBeenCalled();
+  });
 });

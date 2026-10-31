@@ -228,6 +228,31 @@ describe('evaluateOrderRisk — ready but unassigned', () => {
     ).toEqual(['ready_unassigned']);
   });
 
+  it('does not start the clock before the order was actually ready', () => {
+    expect(
+      evaluate({
+        current_status: 'ready_for_pickup',
+        fulfillment_method: 'delivery',
+        status_changed_at: minutesAgo(10),
+        dispatch_ready_at: minutesAgo(120),
+      })
+    ).not.toContain('ready_unassigned');
+  });
+
+  it.each(['', '   ', 'not-a-time'])(
+    'still flags from status time when dispatch_ready_at is %j',
+    (dispatchReadyAt) => {
+      expect(
+        evaluate({
+          current_status: 'ready_for_pickup',
+          fulfillment_method: 'delivery',
+          status_changed_at: minutesAgo(45),
+          dispatch_ready_at: dispatchReadyAt,
+        })
+      ).toEqual(['ready_unassigned']);
+    }
+  );
+
   it('measures time in status, not the last row write', () => {
     expect(
       evaluate({
