@@ -88,6 +88,52 @@ describe('OrderStatusService', () => {
     });
   };
 
+  describe('updateOrderStatus pending → confirmed', () => {
+    const pendingOrder = { ...baseOrder, current_status: 'pending' };
+
+    it('rejects generic pending → confirmed (must use POST /orders/confirm)', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: pendingOrder,
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'confirmed')
+      ).rejects.toThrow('Confirmations must use POST /orders/confirm');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('allows confirm when called from the dedicated confirm endpoint', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: pendingOrder,
+      });
+      mockSuccessfulUpdate('confirmed');
+
+      const result = await service.updateOrderStatus('order-123', 'confirmed', {
+        viaConfirmEndpoint: true,
+      });
+
+      expect(result.current_status).toBe('confirmed');
+    });
+
+    it('replays confirmed → confirmed without requiring the confirm flag', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...baseOrder, current_status: 'confirmed' },
+      });
+      const onSameStatusReplay = jest.fn();
+
+      const result = await service.updateOrderStatus('order-123', 'confirmed', {
+        onSameStatusReplay,
+      });
+
+      expect(result.current_status).toBe('confirmed');
+      expect(onSameStatusReplay).toHaveBeenCalled();
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+  });
+
   describe('updateOrderStatus from ready_for_pickup', () => {
     it('rejects client cancel via generic status path (must use POST /orders/cancel)', async () => {
       hasuraUserService.getUser.mockResolvedValue(clientUser as any);

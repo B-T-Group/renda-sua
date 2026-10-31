@@ -2165,7 +2165,10 @@ export class OrdersService {
       orderId,
       'confirmed',
       actor,
-      { onSameStatusReplay: () => { alreadyConfirmed = true; } },
+      {
+        viaConfirmEndpoint: true,
+        onSameStatusReplay: () => { alreadyConfirmed = true; },
+      },
     );
     return { order, alreadyConfirmed };
   }
