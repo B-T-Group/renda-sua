@@ -72,7 +72,8 @@ export class ClientConfirmDeliveryService {
       orderId,
       AWAITING_CLIENT_CONFIRMATION,
       'Agent marked delivered; awaiting client confirmation',
-      user.id
+      user.id,
+      'agent'
     );
     const at = new Date().toISOString();
     await this.repo.stampRequestedAt(orderId, at);
@@ -152,7 +153,8 @@ export class ClientConfirmDeliveryService {
       orderId,
       DISPUTED,
       description?.trim() || 'Client reported a delivery problem',
-      user.id
+      user.id,
+      'client'
     );
     const ticket = await this.openDisputeTicket(order, user.id, description);
     return {
@@ -181,7 +183,8 @@ export class ClientConfirmDeliveryService {
       orderId,
       PENDING_AUTO_COMPLETE,
       'Agent submitted photo proof; pending auto-complete',
-      user.id
+      user.id,
+      'agent'
     );
     await this.notifyGiftRecipient(order);
     return {
@@ -340,7 +343,8 @@ export class ClientConfirmDeliveryService {
       order.id,
       DISPUTED,
       'Gift recipient reported a delivery problem',
-      actor
+      actor,
+      'client'
     );
     const ticket = await this.openDisputeTicket(
       order,
@@ -427,7 +431,8 @@ export class ClientConfirmDeliveryService {
     orderId: string,
     status: string,
     history: string,
-    actorUserId?: string
+    actorUserId?: string,
+    changedByType: string = 'system'
   ): Promise<void> {
     await this.orderStatus.updateOrderStatus(orderId, status, {
       viaSystem: true,
@@ -436,7 +441,8 @@ export class ClientConfirmDeliveryService {
       orderId,
       status,
       history,
-      actorUserId
+      actorUserId,
+      changedByType
     );
   }
 

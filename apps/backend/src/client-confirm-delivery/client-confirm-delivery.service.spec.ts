@@ -118,6 +118,13 @@ describe('ClientConfirmDeliveryService', () => {
     expect(ctx.recipientNotifications.notifyDeliveryConfirm).toHaveBeenCalledWith(
       'order-1'
     );
+    expect(ctx.orders.recordClientConfirmHistory).toHaveBeenCalledWith(
+      'order-1',
+      AWAITING_CLIENT_CONFIRMATION,
+      expect.any(String),
+      'agent-user',
+      'agent'
+    );
   });
 
   it('rejects markDelivered on mid-flight PIN orders', async () => {
@@ -199,6 +206,13 @@ describe('ClientConfirmDeliveryService', () => {
       expect.objectContaining({ type: 'dispute', orderId: 'order-1' })
     );
     expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    expect(ctx.orders.recordClientConfirmHistory).toHaveBeenCalledWith(
+      'order-1',
+      DISPUTED,
+      'Wrong items',
+      'client-user',
+      'client'
+    );
   });
 
   it('rejects Stripe fallback on a non-Stripe market', async () => {
@@ -243,6 +257,13 @@ describe('ClientConfirmDeliveryService', () => {
       'order-1',
       PENDING_AUTO_COMPLETE,
       { viaSystem: true }
+    );
+    expect(ctx.orders.recordClientConfirmHistory).toHaveBeenCalledWith(
+      'order-1',
+      PENDING_AUTO_COMPLETE,
+      expect.any(String),
+      'agent-user',
+      'agent'
     );
   });
 
@@ -296,6 +317,13 @@ describe('ClientConfirmDeliveryService', () => {
       { viaSystem: true }
     );
     expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    expect(ctx.orders.recordClientConfirmHistory).toHaveBeenCalledWith(
+      'order-1',
+      AWAITING_CLIENT_CONFIRMATION,
+      'PAD paid',
+      undefined,
+      'system'
+    );
   });
 
   it('enterAwaitingAfterPayment keeps mid-flight PIN on the old complete path', async () => {
@@ -357,6 +385,31 @@ describe('ClientConfirmDeliveryService', () => {
     const result = await ctx.svc.confirmReceipt('order-1');
 
     expect(result.confirmationMethod).toBe('auto_complete');
+  });
+
+  it('gift Problem on an awaiting order disputes as client', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        recipient_phone: '+237670000000',
+      })
+    );
+
+    const result = await ctx.svc.handleRecipientAction(
+      'order-1',
+      '+237670000000',
+      'problem'
+    );
+
+    expect(result).toMatchObject({ success: true, status: DISPUTED });
+    expect(ctx.orders.recordClientConfirmHistory).toHaveBeenCalledWith(
+      'order-1',
+      DISPUTED,
+      'Gift recipient reported a delivery problem',
+      'client-user',
+      'client'
+    );
   });
 
   it('late gift Problem on a completed order opens a post-completion claim', async () => {

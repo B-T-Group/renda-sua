@@ -12695,13 +12695,14 @@ export class OrdersService {
     orderId: string,
     status: string,
     notes: string,
-    changedByUserId?: string | null
+    changedByUserId?: string | null,
+    changedByType: string = 'system'
   ): Promise<void> {
     await this.createStatusHistoryEntry(
       orderId,
       status,
       notes,
-      changedByUserId ? 'user' : 'system',
+      changedByType,
       changedByUserId
     );
   }

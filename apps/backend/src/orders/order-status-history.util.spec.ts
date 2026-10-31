@@ -1,6 +1,7 @@
 import {
   CREATE_STATUS_HISTORY_MUTATION,
   insertOrderStatusHistory,
+  normalizeChangedByType,
   statusHistoryUserId,
   statusHistoryVariables,
 } from './order-status-history.util';
@@ -22,6 +23,27 @@ describe('order-status-history.util', () => {
     });
   });
 
+  describe('normalizeChangedByType', () => {
+    it('keeps the four check-constraint values', () => {
+      expect(normalizeChangedByType('client')).toBe('client');
+      expect(normalizeChangedByType('business')).toBe('business');
+      expect(normalizeChangedByType('agent')).toBe('agent');
+      expect(normalizeChangedByType('system')).toBe('system');
+    });
+
+    it('maps the client-confirm "user" sentinel to client', () => {
+      expect(normalizeChangedByType('user')).toBe('client');
+      expect(normalizeChangedByType('USER')).toBe('client');
+    });
+
+    it('maps admin and delegate aliases and unknown values to allowed types', () => {
+      expect(normalizeChangedByType('admin')).toBe('system');
+      expect(normalizeChangedByType('delegate')).toBe('business');
+      expect(normalizeChangedByType('')).toBe('system');
+      expect(normalizeChangedByType(null)).toBe('system');
+    });
+  });
+
   describe('statusHistoryVariables', () => {
     it('sends null instead of "system" for changed_by_user_id', () => {
       expect(
@@ -39,6 +61,18 @@ describe('order-status-history.util', () => {
         changedByType: 'system',
         changedByUserId: null,
       });
+    });
+
+    it('does not send "user" as changed_by_type', () => {
+      expect(
+        statusHistoryVariables({
+          orderId: validUserId,
+          status: 'awaiting_client_confirmation',
+          notes: 'Agent marked delivered',
+          changedByType: 'user',
+          changedByUserId: validUserId,
+        }).changedByType
+      ).toBe('client');
     });
   });
 
