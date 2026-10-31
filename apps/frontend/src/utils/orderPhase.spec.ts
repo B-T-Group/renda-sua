@@ -133,6 +133,15 @@ describe('flagged location pay-after (non-cooked goods)', () => {
 });
 
 describe('resolveOrderPhase client confirm delivery', () => {
+  it('lets business generate overwrite while awaiting client confirmation', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'awaiting_client_confirmation', fulfillmentMethod: 'delivery' },
+        'business'
+      ).primaryActionId
+    ).toBe('generate_overwrite');
+  });
+
   it('uses mark-delivered next-step copy unless GET usesLegacyPin', () => {
     expect(
       resolveOrderPhase(

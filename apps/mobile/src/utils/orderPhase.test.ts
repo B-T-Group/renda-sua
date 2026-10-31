@@ -105,6 +105,15 @@ describe('resolveOrderPhase client confirm delivery', () => {
     expect(info.primaryActionId).toBe('confirm_receipt');
   });
 
+  it('lets business generate overwrite while awaiting client confirmation', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'awaiting_client_confirmation', fulfillmentMethod: 'delivery' },
+        'business'
+      ).primaryActionId
+    ).toBe('generate_overwrite');
+  });
+
   it('uses mark-delivered next-step copy unless GET usesLegacyPin', () => {
     expect(
       resolveOrderPhase(

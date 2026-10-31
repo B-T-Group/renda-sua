@@ -54,6 +54,8 @@ describe('client-confirm-delivery.util', () => {
 
   it('allows overwrite from the same active delivery statuses', () => {
     expect(canOverwriteFromStatus('awaiting_client_confirmation')).toBe(true);
+    expect(canOverwriteFromStatus(' awaiting_client_confirmation ')).toBe(true);
+    expect(canOverwriteFromStatus('pending_auto_complete')).toBe(true);
     expect(canOverwriteFromStatus('picked_up')).toBe(false);
   });
 

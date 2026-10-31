@@ -35,8 +35,18 @@ export function canConfirmFromStatus(status: string | null | undefined): boolean
   );
 }
 
+export function normalizeOrderStatus(status: string | null | undefined): string {
+  return (status ?? '').trim().toLowerCase();
+}
+
 export function canOverwriteFromStatus(status: string | null | undefined): boolean {
-  return (OVERWRITE_ALLOWED_STATUSES as readonly string[]).includes(status ?? '');
+  return (OVERWRITE_ALLOWED_STATUSES as readonly string[]).includes(
+    normalizeOrderStatus(status)
+  );
+}
+
+export function overwriteGenerationStatusError(status: string | null | undefined): string {
+  return `Overwrite code can only be generated while out for delivery or awaiting client confirmation (current: ${status})`;
 }
 
 export function isAwaitingClientConfirmation(status: string | null | undefined): boolean {
