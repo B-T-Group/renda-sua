@@ -62,21 +62,11 @@ export class ClientConfirmDeliveryService {
     const { user, agentId } = await this.requireAssignedAgent(orderId);
     const order = await this.requireOrder(orderId);
     this.assertNotLegacyPin(order);
-    if (order.current_status !== 'out_for_delivery') {
-      throw new HttpException(
-        `Cannot mark delivered in ${order.current_status} status`,
-        HttpStatus.BAD_REQUEST
-      );
-    }
-    await this.transition(
-      orderId,
-      AWAITING_CLIENT_CONFIRMATION,
-      'Agent marked delivered; awaiting client confirmation',
-      user.id
-    );
-    const at = new Date().toISOString();
-    await this.repo.stampRequestedAt(orderId, at);
-    await this.notifyGiftRecipient(order);
+    this.assertOutForDelivery(order);
+    await this.orderStatus.updateOrderStatus(orderId, AWAITING_CLIENT_CONFIRMATION, {
+      viaSystem: true,
+    });
+    await this.afterMarkDeliveredCommitted(order, user.id);
     return {
       success: true,
       status: AWAITING_CLIENT_CONFIRMATION,
@@ -459,6 +449,43 @@ export class ClientConfirmDeliveryService {
       throw new HttpException('Your account is suspended', HttpStatus.FORBIDDEN);
     }
     return { user, agentId: user.agent.id as string, order };
+  }
+
+  private async afterMarkDeliveredCommitted(
+    order: ClientConfirmOrder,
+    actorUserId: string
+  ): Promise<void> {
+    await this.safeAfterCommit('history', () =>
+      this.orders.recordClientConfirmHistory(
+        order.id,
+        AWAITING_CLIENT_CONFIRMATION,
+        'Agent marked delivered; awaiting client confirmation',
+        actorUserId
+      )
+    );
+    await this.safeAfterCommit('requested_at', () =>
+      this.repo.stampRequestedAt(order.id, new Date().toISOString())
+    );
+    await this.notifyGiftRecipient(order);
+  }
+
+  private async safeAfterCommit(
+    name: string,
+    run: () => Promise<void>
+  ): Promise<void> {
+    try {
+      await run();
+    } catch (error: any) {
+      this.logger.warn(`mark-delivered ${name} failed after commit: ${error?.message}`);
+    }
+  }
+
+  private assertOutForDelivery(order: ClientConfirmOrder): void {
+    if (order.current_status === 'out_for_delivery') return;
+    throw new HttpException(
+      `Cannot mark delivered in ${order.current_status} status`,
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   private assertNotLegacyPin(order: ClientConfirmOrder): void {

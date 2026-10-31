@@ -120,6 +120,30 @@ describe('ClientConfirmDeliveryService', () => {
     );
   });
 
+  it('markDelivered returns success when post-commit side-effects throw', async () => {
+    const ctx = buildService();
+    ctx.orders.recordClientConfirmHistory.mockRejectedValue(new Error('history down'));
+    ctx.repo.stampRequestedAt.mockRejectedValue(new Error('stamp down'));
+    ctx.recipientNotifications.notifyDeliveryConfirm.mockRejectedValue(
+      new Error('notify down')
+    );
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({ is_third_party_recipient: true })
+    );
+
+    const result = await ctx.svc.markDelivered('order-1');
+
+    expect(result).toMatchObject({
+      success: true,
+      status: AWAITING_CLIENT_CONFIRMATION,
+    });
+    expect(ctx.orderStatus.updateOrderStatus).toHaveBeenCalledWith(
+      'order-1',
+      AWAITING_CLIENT_CONFIRMATION,
+      { viaSystem: true }
+    );
+  });
+
   it('rejects markDelivered on mid-flight PIN orders', async () => {
     const ctx = buildService();
     ctx.repo.loadOrder.mockResolvedValue(
