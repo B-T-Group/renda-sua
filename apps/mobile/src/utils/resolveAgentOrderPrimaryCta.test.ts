@@ -61,4 +61,38 @@ describe('resolveAgentOrderPrimaryCta', () => {
     expect(resolveAgentOrderPrimaryCta({ status: 'cancelled' })).toBeNull();
     expect(resolveAgentOrderPrimaryCta({ status: 'failed', assignedAgentId: 'ag-1' })).toBeNull();
   });
+
+  it('shows Client could not confirm only when GET canSubmitFallback is true', () => {
+    expect(
+      resolveAgentOrderPrimaryCta({
+        status: 'awaiting_client_confirmation',
+        assignedAgentId: 'ag-1',
+        canSubmitFallback: true,
+      })
+    ).toBe('clientCouldNotConfirm');
+    expect(
+      resolveAgentOrderPrimaryCta({
+        status: 'awaiting_client_confirmation',
+        assignedAgentId: 'ag-1',
+        canSubmitFallback: false,
+      })
+    ).toBeNull();
+    expect(
+      resolveAgentOrderPrimaryCta({
+        status: 'pending_auto_complete',
+        assignedAgentId: 'ag-1',
+        canSubmitFallback: true,
+      })
+    ).toBeNull();
+  });
+
+  it('keeps Mark as delivered on out_for_delivery even on Stripe (fallback is after mark)', () => {
+    expect(
+      resolveAgentOrderPrimaryCta({
+        status: 'out_for_delivery',
+        assignedAgentId: 'ag-1',
+        canSubmitFallback: true,
+      })
+    ).toBe('markDelivered');
+  });
 });

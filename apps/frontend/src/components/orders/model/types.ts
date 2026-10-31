@@ -180,6 +180,7 @@ export interface OrderLike {
   eat_in?: boolean | null;
   eat_in_unavailable?: boolean | null;
   pay_after_merchant_confirm?: boolean | null;
+  uses_legacy_pin?: boolean | null;
   acceptance_deadline_at?: string | null;
   estimated_delivery_time?: string | null;
   preferred_delivery_time?: string | null;

@@ -11,6 +11,7 @@ export const CLIENT_HOME_ORDERS_CAP = 2;
 const NEEDS_CLIENT_ACTIONS = new Set<OrderPrimaryActionId>([
   'pay',
   'send_pin',
+  'confirm_receipt',
   'complete',
 ]);
 
@@ -20,6 +21,8 @@ const IN_MOTION_STATUSES = new Set([
   'picked_up',
   'in_transit',
   'out_for_delivery',
+  'awaiting_client_confirmation',
+  'pending_auto_complete',
   'shipped',
   'in_delivery',
 ]);

@@ -14,7 +14,9 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAccountInfo } from '../../../hooks';
 import { useApiClient } from '../../../hooks/useApiClient';
+import { useDeliveryConfirmation } from '../../../hooks/useDeliveryConfirmation';
 import type { OrderData } from '../../../hooks/useOrderById';
+import { resolveUsesLegacyPin } from '../../../utils/deliveryConfirmationUi';
 import { buildDeliveryOrderViewModel } from '../model/buildDeliveryOrderViewModel';
 import { useOrderViewModelContext } from '../model/useOrderViewModelContext';
 import {
@@ -62,9 +64,19 @@ export const DeliveryOrderDetails: React.FC<DeliveryOrderDetailsProps> = ({
   const apiClient = useApiClient();
   const { enqueueSnackbar } = useSnackbar();
   const ctx = useOrderViewModelContext();
+  const { state: confirmState } = useDeliveryConfirmation(
+    order.id,
+    order.current_status,
+    order.fulfillment_method
+  );
+  const usesLegacyPin = resolveUsesLegacyPin(confirmState);
   const vm = useMemo(
-    () => buildDeliveryOrderViewModel(order, ctx),
-    [order, ctx]
+    () =>
+      buildDeliveryOrderViewModel(
+        { ...order, uses_legacy_pin: usesLegacyPin },
+        ctx
+      ),
+    [ctx, order, usesLegacyPin]
   );
   const [cancellingClaim, setCancellingClaim] = useState(false);
   const claimPending = Boolean(

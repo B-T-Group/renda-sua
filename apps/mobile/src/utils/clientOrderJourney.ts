@@ -489,6 +489,7 @@ function shippingJourney(status: string): ClientOrderJourney {
 }
 
 function isPinEligible(order: Order): boolean {
+  if (order.fulfillment_method !== 'pickup') return false;
   if (
     order.pay_after_merchant_confirm === true &&
     order.fulfillment_method !== 'pickup'
@@ -550,6 +551,8 @@ export function getClientOrderJourney(order: Order): ClientOrderJourney {
     case 'in_transit':
       return onTheWayStage(name, pinEligible);
     case 'out_for_delivery':
+    case 'awaiting_client_confirmation':
+    case 'pending_auto_complete':
       return outForDeliveryStage(name, pinEligible);
     case 'delivered':
       return deliveredStage();

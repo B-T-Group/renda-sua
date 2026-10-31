@@ -23,9 +23,21 @@ function order(partial: Partial<Order>): Order {
 }
 
 describe('clientShowDeliveryPin', () => {
-  it('shows PIN for delivery in transit statuses', () => {
+  it('hides the doorstep PIN unless GET usesLegacyPin is true', () => {
     expect(
       clientShowDeliveryPin(order({ current_status: 'out_for_delivery', payment_timing: 'pay_now' }))
+    ).toBe(false);
+    expect(
+      clientShowDeliveryPin(
+        order({ current_status: 'out_for_delivery', payment_timing: 'pay_now' }),
+        true
+      )
+    ).toBe(true);
+  });
+
+  it('shows PIN for mid-flight PIN orders only', () => {
+    expect(
+      clientShowDeliveryPin(order({ current_status: 'out_for_delivery', payment_timing: 'pay_now' }), true)
     ).toBe(true);
   });
 

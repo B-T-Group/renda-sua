@@ -4768,6 +4768,9 @@
       "failed": "Échoué",
       "in_transit": "En transit",
       "out_for_delivery": "En livraison",
+      "awaiting_client_confirmation": "En attente de confirmation",
+      "pending_auto_complete": "Photo de livraison envoyée",
+      "disputed": "Litige",
       "pending": "En attente",
       "pending_payment": "Paiement en attente",
       "picked_up": "Récupéré",
@@ -5502,7 +5505,9 @@
         "goPickup": "Aller au point de retrait",
         "pickupDone": "Colis récupéré",
         "deliver": "Livrer au client",
-        "complete": "Terminer la livraison"
+        "complete": "Terminer la livraison",
+        "markDelivered": "Marquer comme livrée",
+        "waitClient": "En attente de la confirmation du client"
       },
       "urgency": {
         "pickupWithin": "Retrait dans",
@@ -5641,7 +5646,13 @@
       "agentFallbackDone": "Envoyé. La commande sera terminée automatiquement dans {{h}} h sauf si le client signale un problème.",
       "clientFallbackNotice": "Votre livreur a indiqué que la commande est livrée, photo à l'appui. Confirmez ou signalez un problème dans les {{h}} h.",
       "agentNonstripe": "En attente du client. Contactez le support si besoin.",
-      "payReceivedNext": "Paiement reçu. Demandez au client de confirmer la réception dans l'application."
+      "payReceivedNext": "Paiement reçu. Demandez au client de confirmer la réception dans l'application.",
+      "takePhoto": "Prendre une photo",
+      "photoNoteOptional": "Note (facultatif)",
+      "submitFallback": "Envoyer",
+      "proofPhoto": "Photo de livraison",
+      "problemDescription": "Que s'est-il passé ? (facultatif)",
+      "problemSubmitted": "Nous avons ouvert un ticket de support."
     },
     "deliveryPin": {
       "title": "PIN de livraison",
@@ -6279,7 +6290,12 @@
       "ofdClientPin": "Envoyez votre code PIN dans la discussion pour finaliser la livraison.",
       "ofdClient": "Votre commande arrive. Restez disponible pour le livreur.",
       "ofdAgent": "Saisissez le code PIN du client pour terminer la livraison.",
+      "ofdAgentMark": "Marquez comme livrée, puis attendez la confirmation du client.",
       "ofdBusiness": "Générez un code de remplacement si le client ne peut pas partager son PIN.",
+      "ofdBusinessConfirm": "Le livreur marque la livraison ; le client confirme la réception.",
+      "awaitingClientConfirm": "Confirmez la réception ou signalez un problème.",
+      "awaitingAgentConfirm": "En attente de la confirmation du client.",
+      "awaitingBusinessConfirm": "En attente de la confirmation du client.",
       "deliveredClient": "Terminez cette commande lorsque vous êtes satisfait.",
       "deliveredBusiness": "Terminez cette commande pour clôturer la livraison.",
       "deliveredAgent": "Cette livraison est enregistrée comme livrée.",

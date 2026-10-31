@@ -262,7 +262,7 @@ export function AgentOrderListQuickActions({
           row(
             <>
               <ActionBtn
-                label={t('orderActions.completeDelivery', 'Complete delivery')}
+                label={t('agent.orders.detail.markDelivered', 'Mark as delivered')}
                 icon="check-circle"
                 onPress={onCompleteDelivery}
                 variant="filledSuccess"

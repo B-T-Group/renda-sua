@@ -95,6 +95,18 @@ export function useAgentOrders() {
     [runStatusAction]
   );
 
+  const markDelivered = useCallback(
+    (orderId: string) =>
+      runStatusAction(() => agentApi.orders.markDelivered(orderId)),
+    [runStatusAction]
+  );
+
+  const clientCouldNotConfirm = useCallback(
+    (orderId: string, photos: Parameters<typeof agentApi.orders.clientCouldNotConfirm>[1]) =>
+      runStatusAction(() => agentApi.orders.clientCouldNotConfirm(orderId, photos)),
+    [runStatusAction]
+  );
+
   const initiatePayAtDeliveryPayment = useCallback(
     (orderId: string, phone_number?: string) =>
       runStatusAction(() =>
@@ -148,6 +160,8 @@ export function useAgentOrders() {
     outForDelivery,
     deliver,
     completeDelivery,
+    markDelivered,
+    clientCouldNotConfirm,
     initiatePayAtDeliveryPayment,
     markPaidInCashException,
     dropOrder,
