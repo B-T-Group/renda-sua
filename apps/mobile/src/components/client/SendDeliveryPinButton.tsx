@@ -83,6 +83,7 @@ export function SendDeliveryPinButton({
         onPress={() => void handleSend()}
         disabled={busy || cooldownMs > 0}
         compact={compact}
+        style={styles.button}
         accessibilityLabel={
           isPickup
             ? t(
@@ -133,5 +134,9 @@ export function SendDeliveryPinButton({
 const styles = StyleSheet.create({
   wrap: {
     gap: 4,
+    alignSelf: 'stretch',
+  },
+  button: {
+    alignSelf: 'stretch',
   },
 });

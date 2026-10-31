@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Button } from 'react-native-paper';
 import { useTheme } from '@/contexts/ThemeContext';
 
@@ -21,6 +21,7 @@ export interface EntityActionRowProps {
   actions: EntityActionDefinition[];
   onActionPress: (actionId: string) => void;
   layout?: 'row-wrap' | 'column';
+  style?: StyleProp<ViewStyle>;
 }
 
 /** Shared inline action buttons for orders, items, rentals, and agent deliveries. */
@@ -28,6 +29,7 @@ export function EntityActionRow({
   actions,
   onActionPress,
   layout = 'row-wrap',
+  style,
 }: EntityActionRowProps) {
   const { colors, spacing } = useTheme();
 
@@ -38,6 +40,7 @@ export function EntityActionRow({
       style={[
         layout === 'column' ? styles.column : styles.rowWrap,
         { gap: spacing.sm, marginTop: spacing.md },
+        style,
       ]}
     >
       {actions.map((action) => {
