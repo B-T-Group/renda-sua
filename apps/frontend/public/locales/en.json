@@ -5901,6 +5901,27 @@
       "usingSharedPin": "Using the delivery PIN shared by the client in order chat.",
       "enterManually": "Enter PIN manually instead"
     },
+    "clientConfirm": {
+      "push": {
+        "title": "Your order has arrived",
+        "body": "Tap to confirm you received it."
+      },
+      "cta": {
+        "confirm": "Confirm receipt",
+        "problem": "Report a problem"
+      },
+      "confirmDone": "Thanks! Your order is complete.",
+      "giftWa": "Hi {{name}}, {{sender}} sent you an order via Rendasua. Did you receive it?",
+      "giftQrYes": "Received",
+      "giftQrNo": "Problem",
+      "agentWaiting": "Waiting for the client to confirm",
+      "agentFallbackCta": "Client couldn't confirm",
+      "agentFallbackPhoto": "Take a photo of the delivered order",
+      "agentFallbackDone": "Submitted. Order completes automatically in {{h}}h unless the client reports a problem.",
+      "clientFallbackNotice": "Your courier marked this order delivered with a photo. Confirm or report a problem within {{h}}h.",
+      "agentNonstripe": "Waiting for the client. Contact support if needed.",
+      "payReceivedNext": "Payment received. Ask the client to confirm receipt in the app."
+    },
     "deliveryPin": {
       "title": "Delivery PIN",
       "pickupTitle": "Pickup PIN",
