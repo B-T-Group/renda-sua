@@ -12,7 +12,13 @@ const ORDER_ENTITIES = new Set([
 ]);
 
 /** Order statuses after which a MoMo failure must not touch the order (QA #597 F1). */
-const FINISHED_ORDER_STATUSES = new Set(['cancelled', 'failed', 'refunded', 'complete']);
+const FINISHED_ORDER_STATUSES = new Set([
+  'cancelled',
+  'failed',
+  'refunded',
+  'complete',
+  'disputed',
+]);
 
 /**
  * QA #597 F1: the order is still waiting for this MoMo payment: not cancelled or finished,

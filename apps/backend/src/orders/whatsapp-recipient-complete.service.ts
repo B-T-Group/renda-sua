@@ -7,6 +7,9 @@ import {
   type RecipientCompleteOutcome,
 } from './recipient-pickup-complete.util';
 import { OrdersService } from './orders.service';
+import { ClientConfirmDeliveryService } from '../client-confirm-delivery/client-confirm-delivery.service';
+import { RECIPIENT_CONFIRM_NOTIFICATION_TYPE } from '../client-confirm-delivery/client-confirm-delivery.constants';
+import type { RecipientDeliveryAction } from '../client-confirm-delivery/client-confirm-delivery.types';
 
 const BOUND_ORDER_QUERY = `
   query WaRecipientCompleteByWamid($wamid: String!) {
@@ -48,7 +51,9 @@ export class WhatsAppRecipientCompleteService {
   constructor(
     private readonly hasura: HasuraSystemService,
     @Inject(forwardRef(() => OrdersService))
-    private readonly orders: OrdersService
+    private readonly orders: OrdersService,
+    @Inject(forwardRef(() => ClientConfirmDeliveryService))
+    private readonly clientConfirm: ClientConfirmDeliveryService
   ) {}
 
   async handleComplete(params: {
@@ -61,6 +66,39 @@ export class WhatsAppRecipientCompleteService {
       return { handled: true, message: recipientCompleteReply('unmatched', 'en') };
     }
     return this.settle(order);
+  }
+
+  async handleDeliveryConfirm(params: {
+    fromPhone: string;
+    contextMessageId?: string | null;
+    action: RecipientDeliveryAction;
+  }): Promise<{ handled: boolean; message: string }> {
+    const orderId = await this.boundDeliveryOrderId(params.contextMessageId);
+    const order = orderId ? await this.loadOrder(orderId) : null;
+    if (!order || !phonesEqual(params.fromPhone, order.recipient_phone)) {
+      return { handled: true, message: recipientCompleteReply('unmatched', 'en') };
+    }
+    const locale = recipientCompleteLocale(order.fulfillment_country);
+    try {
+      await this.clientConfirm.handleRecipientAction(
+        order.id,
+        params.fromPhone,
+        params.action
+      );
+      const outcome = params.action === 'problem' ? 'failed' : 'completed';
+      return {
+        handled: true,
+        message: recipientCompleteReply(outcome, locale, order.order_number),
+      };
+    } catch (error: any) {
+      this.logger.warn(
+        `Recipient delivery confirm failed for ${order.id}: ${error?.message}`
+      );
+      return {
+        handled: true,
+        message: recipientCompleteReply('failed', locale, order.order_number),
+      };
+    }
   }
 
   private async settle(
@@ -87,6 +125,29 @@ export class WhatsAppRecipientCompleteService {
     order: RecipientOrder
   ): string {
     return recipientCompleteReply(outcome, locale, order.order_number);
+  }
+
+  private async boundDeliveryOrderId(wamid?: string | null): Promise<string | null> {
+    const id = wamid?.trim();
+    if (!id) return null;
+    const res = await this.hasura.executeQuery<{
+      notification_events: Array<{ entity_id?: string | null }>;
+    }>(
+      `query WaRecipientDeliveryConfirmByWamid($wamid: String!) {
+        notification_events(
+          where: {
+            provider_message_id: { _eq: $wamid }
+            notification_type: { _eq: "${RECIPIENT_CONFIRM_NOTIFICATION_TYPE}" }
+            entity_type: { _eq: "order" }
+            entity_id: { _is_null: false }
+          }
+          order_by: { created_at: desc }
+          limit: 1
+        ) { entity_id }
+      }`,
+      { wamid: id }
+    );
+    return res.notification_events?.[0]?.entity_id?.trim() || null;
   }
 
   private async boundOrderId(wamid?: string | null): Promise<string | null> {

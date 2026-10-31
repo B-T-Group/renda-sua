@@ -3841,6 +3841,9 @@ export class NotificationsService {
       picked_up: 'picked up',
       in_transit: 'in transit',
       out_for_delivery: 'out for delivery',
+      awaiting_client_confirmation: 'waiting for your confirmation',
+      pending_auto_complete: 'marked delivered — confirm or report a problem',
+      disputed: 'delivery problem reported',
       delivered: 'delivered',
       complete: 'complete',
       cancelled: 'cancelled',
@@ -3856,6 +3859,9 @@ export class NotificationsService {
       picked_up: 'récupérée',
       in_transit: 'en transit',
       out_for_delivery: 'en cours de livraison',
+      awaiting_client_confirmation: 'en attente de votre confirmation',
+      pending_auto_complete: 'marquée livrée — confirmez ou signalez un problème',
+      disputed: 'problème de livraison signalé',
       delivered: 'livrée',
       complete: 'terminée',
       cancelled: 'annulée',
@@ -4077,6 +4083,32 @@ export class NotificationsService {
     };
   }
 
+  private clientConfirmPush(
+    orderNumber: string,
+    data?: NotificationData
+  ): { title: string; body: string } {
+    const fr = (data?.clientPreferredLanguage || '').toLowerCase().startsWith('fr');
+    return {
+      title: fr ? 'Votre commande est arrivée' : 'Your order has arrived',
+      body: fr
+        ? 'Touchez pour confirmer la réception.'
+        : 'Tap to confirm you received it.',
+    };
+  }
+
+  private clientFallbackPush(
+    orderNumber: string,
+    data?: NotificationData
+  ): { title: string; body: string } {
+    const fr = (data?.clientPreferredLanguage || '').toLowerCase().startsWith('fr');
+    return {
+      title: fr ? 'Confirmez la livraison' : 'Confirm this delivery',
+      body: fr
+        ? `Votre livreur a indiqué que la commande ${orderNumber} est livrée, photo à l'appui. Confirmez ou signalez un problème.`
+        : `Your courier marked order ${orderNumber} delivered with a photo. Confirm or report a problem.`,
+    };
+  }
+
   private prepaidPickupReadyPush(
     orderNumber: string,
     language?: string | null
@@ -4178,6 +4210,16 @@ export class NotificationsService {
       out_for_delivery: {
         title: 'Order out for delivery',
         body: `Order ${orderNumber} is on its way.`,
+      },
+      awaiting_client_confirmation: this.clientConfirmPush(orderNumber, data),
+      pending_auto_complete: this.clientFallbackPush(orderNumber, data),
+      disputed: {
+        title: data?.clientPreferredLanguage?.toLowerCase().startsWith('fr')
+          ? 'Problème signalé'
+          : 'Delivery problem reported',
+        body: data?.clientPreferredLanguage?.toLowerCase().startsWith('fr')
+          ? `Un problème a été signalé pour la commande ${orderNumber}.`
+          : `A problem was reported for order ${orderNumber}.`,
       },
       delivered: {
         title: 'Order delivered',
@@ -6106,6 +6148,21 @@ export class NotificationsService {
         }
         break;
       case 'out_for_delivery':
+      case 'awaiting_client_confirmation':
+      case 'pending_auto_complete':
+        recipients.push(
+          { email: data.clientEmail, type: 'client', userId: cuid },
+          { email: data.businessEmail, type: 'business', userId: buid }
+        );
+        if (data.agentEmail) {
+          recipients.push({
+            email: data.agentEmail,
+            type: 'agent',
+            userId: auid,
+          });
+        }
+        break;
+      case 'disputed':
         recipients.push(
           { email: data.clientEmail, type: 'client', userId: cuid },
           { email: data.businessEmail, type: 'business', userId: buid }

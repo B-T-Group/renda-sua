@@ -209,6 +209,8 @@ describe('AgentHoldService', () => {
       expect(query).toContain('current_status: { _eq: complete }');
       expect(query).toContain('delivery_pin_hash: { _is_null: false }');
       expect(query).toContain('delivery_overwrite_code_used_at: { _is_null: true }');
+      expect(query).toContain('delivery_confirmation_method');
+      expect(query).toContain('auto_complete');
       expect(query).toContain('resolution_type: { _eq: agent_fault }');
       expect(query).toContain('agent_addresses(');
       expect(query).toContain('is_primary');

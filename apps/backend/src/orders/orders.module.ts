@@ -85,6 +85,11 @@ import { DepositLedgerService } from './deposit-ledger.service';
 import { DepositRefundService } from './deposit-refund.service';
 import { CookedFoodPickupFlowService } from './cooked-food-pickup-flow.service';
 import { ItemVariantsModule } from '../item-variants/item-variants.module';
+import { SupportModule } from '../support/support.module';
+import { ClientConfirmDeliveryService } from '../client-confirm-delivery/client-confirm-delivery.service';
+import { ClientConfirmDeliveryCronService } from '../client-confirm-delivery/client-confirm-delivery.cron';
+import { ClientConfirmDeliveryRepository } from '../client-confirm-delivery/client-confirm-delivery.repository';
+import { ClientConfirmMarketConfigService } from '../client-confirm-delivery/client-confirm-market-config.service';
 
 @Module({
   imports: [
@@ -121,6 +126,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     CreditsModule,
     FoodModule,
     ItemVariantsModule,
+    SupportModule,
   ],
   controllers: [
     DedicatedHeadsUpController,
@@ -178,6 +184,10 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     AdminOrdersService,
     WhatsAppOrderActionService,
     WhatsAppRecipientCompleteService,
+    ClientConfirmDeliveryService,
+    ClientConfirmDeliveryCronService,
+    ClientConfirmDeliveryRepository,
+    ClientConfirmMarketConfigService,
     DepositCalculationService,
     ServiceFeeService,
     DepositLedgerService,
@@ -204,6 +214,7 @@ import { ItemVariantsModule } from '../item-variants/item-variants.module';
     FailedPickupsService,
     WhatsAppOrderActionService,
     WhatsAppRecipientCompleteService,
+    ClientConfirmDeliveryService,
     DepositCalculationService,
     DepositLedgerService,
     DepositRefundService,

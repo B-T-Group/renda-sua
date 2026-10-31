@@ -28,6 +28,7 @@ Internal keys are mapped in `WhatsAppTemplateService`.
 | `recipient_out_for_delivery` | `rs_recipient_out_for_delivery` | UTILITY (IN_APPEAL) | orderNumber | none |
 | `recipient_order_ready` | `rs_recipient_order_ready` | UTILITY (IN_APPEAL) | orderNumber, storeName | none |
 | `recipient_complete_pickup` | `rs_recipient_complete_pickup` | UTILITY (PENDING, submitted 2026-10-05) | orderNumber, storeName | QUICK_REPLY: Complete order (`complete_order`) |
+| `recipient_confirm_delivery` | `rs_recipient_confirm_delivery` | UTILITY (submit before send) | recipientName, payerName | QUICK_REPLY: Received (`received`) / Problem (`problem`) |
 | `recipient_order_update` | `rs_recipient_order_update` | UTILITY | orderNumber, statusLabel | none |
 
 ## Meta body rules (important)

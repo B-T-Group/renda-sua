@@ -66,6 +66,13 @@ export function smsRecipientOrderCancelled(ctx: RecipientSmsContext): string {
     : `Rendasua: order ${ctx.orderNumber} was cancelled. ${sender(ctx)} has been notified.`;
 }
 
+/** Gift recipient: confirm they received a delivery (no PIN). */
+export function smsRecipientConfirmDelivery(ctx: RecipientSmsContext): string {
+  return ctx.locale === 'fr'
+    ? `Rendasua: ${sender(ctx)} vous a envoyé la commande ${ctx.orderNumber}. L'avez-vous reçue ? Répondez 1 Reçu, 2 Problème.`
+    : `Rendasua: ${sender(ctx)} sent you order ${ctx.orderNumber}. Did you receive it? Reply 1 Received, 2 Problem.`;
+}
+
 /** Carries the delivery PIN to a recipient who has no Rendasua account. */
 export function smsRecipientDeliveryPin(
   ctx: RecipientSmsContext,

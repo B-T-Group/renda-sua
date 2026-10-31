@@ -30,6 +30,17 @@ import {
   nextSettlementRetryAtIso,
 } from './order-settlement-retry.util';
 import { canRecipientCompletePickup } from './recipient-pickup-complete.util';
+import {
+  AWAITING_CLIENT_CONFIRMATION,
+  PENDING_AUTO_COMPLETE,
+} from '../client-confirm-delivery/client-confirm-delivery.constants';
+import {
+  canOverwriteFromStatus,
+  isClientConfirmDeliveryOrder,
+  shouldMintDeliveryPin,
+  usesLegacyDeliveryPin,
+} from '../client-confirm-delivery/client-confirm-delivery.util';
+import { CLIENT_CONFIRM_COPY } from '../client-confirm-delivery/client-confirm-copy';
 import type { Configuration } from '../config/configuration';
 import { buildDeliveryAvailabilityContext } from '../delivery-availability/build-delivery-availability-context';
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
@@ -2765,11 +2776,11 @@ export class OrdersService {
     );
   }
 
-  /** Ensure Stripe-authorized store pickup orders have a retrievable PIN. */
+  /** Mid-flight PIN orders only: backfill plaintext if the hash already exists. */
   private async ensurePickupPinIfNeeded(order: Orders): Promise<void> {
-    // Store pickup is completed by the client tapping Complete — no PIN.
     if ((order as any).fulfillment_method === 'pickup') return;
     if ((order as any).payment_timing === 'pay_at_pickup') return;
+    if (!usesLegacyDeliveryPin(order as { delivery_pin_hash?: string })) return;
     const paymentStatus = (order as any).payment_status;
     if (paymentStatus !== 'authorized' && paymentStatus !== 'paid') return;
 
@@ -3859,7 +3870,7 @@ export class OrdersService {
 
   async completeOrder(_request: OrderStatusChangeRequest) {
     throw new HttpException(
-      'Order completion is now done by the delivery agent using the PIN. Please share your delivery PIN with the agent at delivery.',
+      'Order completion is done by client confirmation in the app (or the delivery PIN on older orders).',
       HttpStatus.GONE
     );
   }
@@ -3924,9 +3935,15 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
-    if (order.current_status !== 'out_for_delivery') {
+    if (hasResolvedPin && order.current_status !== 'out_for_delivery') {
       throw new HttpException(
         `Cannot complete delivery in ${order.current_status} status`,
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    if (!hasResolvedPin && !canOverwriteFromStatus(order.current_status)) {
+      throw new HttpException(
+        `Overwrite can only complete out_for_delivery / awaiting confirmation (current: ${order.current_status})`,
         HttpStatus.BAD_REQUEST
       );
     }
@@ -3953,7 +3970,7 @@ export class OrdersService {
       const hash = (order as any).delivery_pin_hash;
       if (!hash) {
         throw new HttpException(
-          'This order has no delivery PIN set.',
+          'This order has no delivery PIN. Use mark-delivered and wait for the client to confirm.',
           HttpStatus.BAD_REQUEST
         );
       }
@@ -3995,6 +4012,20 @@ export class OrdersService {
       }
       await this.setOrderDeliveryOverwriteUsedAt(request.orderId);
     }
+
+    await this.hasuraSystemService.executeMutation(
+      `mutation StampDeliveryConfirmMethod($id: uuid!, $method: String!, $at: timestamptz!) {
+        update_orders(
+          where: { id: { _eq: $id }, delivery_confirmation_method: { _is_null: true } }
+          _set: { delivery_confirmation_method: $method, client_confirmed_at: $at }
+        ) { affected_rows }
+      }`,
+      {
+        id: request.orderId,
+        method: hasResolvedPin ? 'pin' : 'overwrite',
+        at: new Date().toISOString(),
+      }
+    );
 
     await this.processOrderDeliveryPayment(request.orderId);
 
@@ -7117,12 +7148,16 @@ export class OrdersService {
     }
 
     const at = new Date().toISOString();
+    const clientConfirm = isClientConfirmDeliveryOrder(
+      order as { delivery_pin_hash?: string; fulfillment_method?: string }
+    );
     const mutation = `
       mutation MarkCashException(
         $orderId: uuid!
         $agentId: uuid!
         $at: timestamptz!
         $notes: String
+        $status: order_status!
       ) {
         update_orders_by_pk(
           pk_columns: { id: $orderId }
@@ -7131,8 +7166,8 @@ export class OrdersService {
             cash_exception_reported_by_agent_id: $agentId
             cash_exception_reported_at: $at
             reconciliation_notes: $notes
-            current_status: complete
-            completed_at: $at
+            current_status: $status
+            client_confirmation_requested_at: $at
             updated_at: $at
           }
         ) {
@@ -7149,7 +7184,27 @@ export class OrdersService {
       agentId: agent.id,
       at,
       notes: notes?.trim() || null,
+      status: clientConfirm ? AWAITING_CLIENT_CONFIRMATION : 'complete',
     });
+    if (clientConfirm) {
+      await this.createStatusHistoryEntry(
+        orderId,
+        AWAITING_CLIENT_CONFIRMATION,
+        `Cash received. ${CLIENT_CONFIRM_COPY.payReceivedNext.en}`,
+        'agent',
+        user.id
+      );
+      return {
+        success: true,
+        message: CLIENT_CONFIRM_COPY.payReceivedNext.en,
+      };
+    }
+    await this.hasuraSystemService.executeMutation(
+      `mutation StampCashCompletedAt($orderId: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(pk_columns: { id: $orderId }, _set: { completed_at: $at }) { id }
+      }`,
+      { orderId, at }
+    );
     await this.creditAgentReferralIfDelivered(order);
     void this.representativeCompensationService?.evaluateForOrderSafe(
       order.id,
@@ -7472,7 +7527,7 @@ export class OrdersService {
         );
       }
       throw new HttpException(
-        'Delivery PIN is not available. If the order was just paid, try again in a moment.',
+        'Delivery PIN is not used for this order. Confirm receipt in the app.',
         HttpStatus.NOT_FOUND
       );
     }
@@ -7482,7 +7537,10 @@ export class OrdersService {
   /**
    * Generate overwrite code for an order (business only). Returns plain code once.
    */
-  async generateDeliveryOverwriteCode(orderId: string): Promise<{
+  async generateDeliveryOverwriteCode(
+    orderId: string,
+    reason?: string
+  ): Promise<{
     overwriteCode: string;
   }> {
     const user = await this.hasuraUserService.getUser();
@@ -7502,9 +7560,9 @@ export class OrdersService {
         HttpStatus.FORBIDDEN
       );
     }
-    if (order.current_status !== 'out_for_delivery') {
+    if (!canOverwriteFromStatus(order.current_status)) {
       throw new HttpException(
-        `Overwrite code can only be generated for orders that are out for delivery (current: ${order.current_status})`,
+        `Overwrite code can only be generated while out for delivery or awaiting client confirmation (current: ${order.current_status})`,
         HttpStatus.BAD_REQUEST
       );
     }
@@ -7520,6 +7578,22 @@ export class OrdersService {
         }
       }
     `;
+    if (isClientConfirmDeliveryOrder(order as { delivery_pin_hash?: string; fulfillment_method?: string })) {
+      const trimmed = reason?.trim();
+      if (!trimmed) {
+        throw new HttpException(
+          'A reason is required to generate a delivery overwrite code',
+          HttpStatus.BAD_REQUEST
+        );
+      }
+      await this.createStatusHistoryEntry(
+        orderId,
+        order.current_status,
+        `Business generated delivery overwrite code: ${trimmed}`,
+        'business',
+        user.id
+      );
+    }
     await this.hasuraSystemService.executeMutation(mutation, {
       orderId,
       hash,
@@ -11660,7 +11734,7 @@ export class OrdersService {
       const orderWithDetails = await this.requireOrderDetailsByNumber(
         order.order_number
       );
-      if ((orderWithDetails as any).fulfillment_method !== 'pickup') {
+      if (shouldMintDeliveryPin(orderWithDetails as { fulfillment_method?: string })) {
         const deliveryPin = this.deliveryPinService.generatePin();
         const deliveryPinHash = this.deliveryPinService.hashPin(
           orderWithDetails.id,
@@ -12424,7 +12498,9 @@ export class OrdersService {
   }
 
   /**
-   * Pay-at-delivery: once mobile payment succeeds, settle and complete the order.
+   * Pay-at-delivery: once mobile payment succeeds, mark paid.
+   * New-flow delivery then awaits client confirmation (settle on confirm).
+   * Mid-flight PIN orders still settle and complete here.
    *
    * Incoming funds are credited to the client wallet in the callback; this path only records
    * settlement amounts on order_holds and runs payment + commission distribution (no client holds).
@@ -12460,12 +12536,42 @@ export class OrdersService {
       this.emitOrderPaid(order.id);
     }
 
+    if (isClientConfirmDeliveryOrder(order as { delivery_pin_hash?: string; fulfillment_method?: string })) {
+      await this.enterAwaitingAfterPad(order);
+      return;
+    }
+
     await this.processOrderPayment(order.id);
     await this.processOrderDeliveryPayment(order.id);
 
     await this.completeOrderWithSideEffects(
       order,
       `Order completed after ${remainderTimingLabel(order, 'hyphen')} payment confirmation`
+    );
+  }
+
+  /** Pay-at-delivery success: client confirm next, never direct complete. */
+  private async enterAwaitingAfterPad(order: Orders): Promise<void> {
+    if (order.current_status === AWAITING_CLIENT_CONFIRMATION) return;
+    if (order.current_status === 'complete') return;
+    await this.updateOrderStatusWithSingleRetry(
+      order.id,
+      AWAITING_CLIENT_CONFIRMATION,
+      { viaSystem: true }
+    );
+    await this.hasuraSystemService.executeMutation(
+      `mutation StampPadAwaiting($id: uuid!, $at: timestamptz!) {
+        update_orders_by_pk(pk_columns: { id: $id }, _set: {
+          client_confirmation_requested_at: $at, updated_at: $at
+        }) { id }
+      }`,
+      { id: order.id, at: new Date().toISOString() }
+    );
+    await this.createStatusHistoryEntry(
+      order.id,
+      AWAITING_CLIENT_CONFIRMATION,
+      `Payment received. ${CLIENT_CONFIRM_COPY.payReceivedNext.en}`,
+      'system'
     );
   }
 
@@ -12494,34 +12600,30 @@ export class OrdersService {
     }
 
     await this.setOrderCompleteSystemWithRetry(order.id, historyMessage);
-    await this.creditAgentReferralIfDelivered(freshOrder ?? order);
+    await this.runCompletionSideEffects(freshOrder ?? order);
+  }
+
+  private async runCompletionSideEffects(order: Orders): Promise<void> {
+    await this.creditAgentReferralIfDelivered(order);
     void this.representativeCompensationService?.evaluateForOrderSafe(
       order.id,
       order.business_id
     );
-
     try {
       const orderWithDetails = await this.getOrderDetails(order.id);
-      const orderItems = orderWithDetails?.order_items || [];
-      await this.updateInventoryOnCompletion(orderItems);
+      await this.updateInventoryOnCompletion(orderWithDetails?.order_items || []);
     } catch (error: any) {
-      this.logger.error(
-        `Failed to update inventory after completion: ${error.message}`
-      );
+      this.logger.error(`Failed to update inventory after completion: ${error.message}`);
     }
     try {
       await this.pdfService.generateReceipt(order.id, order.client.user_id);
     } catch (error: any) {
-      this.logger.error(
-        `Failed to generate receipt after completion: ${error.message}`
-      );
+      this.logger.error(`Failed to generate receipt after completion: ${error.message}`);
     }
     try {
       await this.orderQueueService.sendOrderCompletedMessage(order.id);
     } catch (error: any) {
-      this.logger.error(
-        `Failed to send order.completed after completion: ${error.message}`
-      );
+      this.logger.error(`Failed to send order.completed after completion: ${error.message}`);
     }
     try {
       await this.handleOrderCompletionRewards(order.id);
@@ -12531,6 +12633,64 @@ export class OrdersService {
       );
     }
     await this.sendRateAgentPromptToClient(order.id);
+  }
+
+  /**
+   * Client-confirm / auto-complete / PAD-after-confirm completion.
+   * Settlement is idempotent; race losers skip the completion tail.
+   */
+  async completeAfterClientConfirmation(
+    orderId: string,
+    historyMessage: string
+  ): Promise<{ alreadyComplete: boolean; order: Orders | null }> {
+    const order = await this.getOrderDetails(orderId);
+    if (!order) {
+      throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
+    }
+    if (order.current_status === 'complete') {
+      return { alreadyComplete: true, order };
+    }
+    const cashPending =
+      (order as { reconciliation_status?: string }).reconciliation_status ===
+      'pending_manual_reconciliation';
+    if (!cashPending) {
+      await this.processOrderPayment(orderId);
+      await this.processOrderDeliveryPayment(orderId);
+    }
+    let lostCompletionRace = false;
+    const updated = await this.updateOrderStatusWithSingleRetry(orderId, 'complete', {
+      viaSystem: true,
+      onSameStatusReplay: () => {
+        lostCompletionRace = true;
+      },
+    });
+    if (lostCompletionRace) {
+      return { alreadyComplete: true, order: updated };
+    }
+    await this.createStatusHistoryEntry(
+      orderId,
+      'complete',
+      historyMessage,
+      'system',
+      order.client?.user_id
+    );
+    await this.runCompletionSideEffects(order);
+    return { alreadyComplete: false, order: updated };
+  }
+
+  async recordClientConfirmHistory(
+    orderId: string,
+    status: string,
+    notes: string,
+    changedByUserId?: string | null
+  ): Promise<void> {
+    await this.createStatusHistoryEntry(
+      orderId,
+      status,
+      notes,
+      changedByUserId ? 'user' : 'system',
+      changedByUserId
+    );
   }
 
   private async creditAgentReferralIfDelivered(order: {
@@ -12763,7 +12923,8 @@ export class OrdersService {
     }
 
     // Store pickup completes via client Complete (no PIN).
-    if ((order as any).fulfillment_method !== 'pickup') {
+    // New delivery orders use client confirm — do not mint a doorstep PIN.
+    if (shouldMintDeliveryPin(order as { fulfillment_method?: string })) {
       const deliveryPin = this.deliveryPinService.generatePin();
       const deliveryPinHash =
         this.deliveryPinService.hashPin(order.id, deliveryPin);
@@ -18070,12 +18231,26 @@ export class OrdersService {
     const fulfillment = (order as any).fulfillment_method as string | undefined;
     const itemStatuses =
       paymentTiming === 'pay_at_delivery'
-        ? ['assigned_to_agent', 'picked_up', 'out_for_delivery', 'complete']
+        ? [
+            'assigned_to_agent',
+            'picked_up',
+            'out_for_delivery',
+            AWAITING_CLIENT_CONFIRMATION,
+            PENDING_AUTO_COMPLETE,
+            'complete',
+          ]
         : paymentTiming === 'pay_at_pickup' || fulfillment === 'pickup'
           ? ['ready_for_pickup', 'complete']
           : fulfillment === 'shipping'
             ? ['shipped', 'in_delivery', 'complete']
-            : ['assigned_to_agent', 'picked_up'];
+            : [
+                'assigned_to_agent',
+                'picked_up',
+                'out_for_delivery',
+                AWAITING_CLIENT_CONFIRMATION,
+                PENDING_AUTO_COMPLETE,
+                'complete',
+              ];
     if (options?.isRetry === true) {
       // A queued retry runs after the order has moved on, so it may see later statuses,
       // but never a cancelled / failed / refunded order (no merchant payout then).
@@ -18260,7 +18435,12 @@ export class OrdersService {
         ? ['ready_for_pickup', 'complete']
         : fulfillment === 'shipping'
           ? ['shipped', 'in_delivery', 'complete']
-          : ['out_for_delivery', 'complete'];
+          : [
+              'out_for_delivery',
+              AWAITING_CLIENT_CONFIRMATION,
+              PENDING_AUTO_COMPLETE,
+              'complete',
+            ];
     if (options?.isRetry === true) {
       if (
         !this.isRetrySettleableStatus(order.current_status, deliveryStatuses)

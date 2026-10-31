@@ -7,6 +7,8 @@ export const ADMIN_OPERATIONAL_STATUSES = [
   'assigned_to_agent',
   'in_transit',
   'out_for_delivery',
+  'awaiting_client_confirmation',
+  'pending_auto_complete',
 ] as const;
 
 export const ADMIN_TERMINAL_STATUSES = [
@@ -22,6 +24,7 @@ export const ADMIN_TERMINAL_STATUSES = [
   'refund_approved_partial',
   'refund_rejected',
   'refund_approved_replace',
+  'disputed',
 ] as const;
 
 /** Statuses that skip capture, settlement, or refunds if written directly. */
