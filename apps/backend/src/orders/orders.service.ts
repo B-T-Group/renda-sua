@@ -37,6 +37,7 @@ import {
 import {
   canOverwriteFromStatus,
   isClientConfirmDeliveryOrder,
+  overwriteGenerationStatusError,
   shouldMintDeliveryPin,
   usesLegacyDeliveryPin,
 } from '../client-confirm-delivery/client-confirm-delivery.util';
@@ -7535,70 +7536,90 @@ export class OrdersService {
   }
 
   /**
-   * Generate overwrite code for an order (business only). Returns plain code once.
+   * Generate overwrite code (business owner or support). Returns plain code once.
    */
   async generateDeliveryOverwriteCode(
     orderId: string,
     reason?: string
-  ): Promise<{
-    overwriteCode: string;
-  }> {
+  ): Promise<{ overwriteCode: string }> {
     const user = await this.hasuraUserService.getUser();
-    this.requireActivePersona(
-      user,
-      'business',
-      'Only the order business can generate an overwrite code'
-    );
-    const business = this.requireBusinessRecord(user);
+    const order = await this.requireOrderForOverwrite(orderId);
+    const actor = await this.resolveOverwriteActor(user, order);
+    this.assertOverwriteGenerationStatus(order.current_status);
+    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
+    const hash = this.deliveryPinService.hashOverwriteCode(orderId, code);
+    await this.recordOverwriteGenerationAudit(order, actor, reason);
+    await this.persistOverwriteHash(orderId, hash);
+    return { overwriteCode: code };
+  }
+
+  private async requireOrderForOverwrite(orderId: string): Promise<Orders> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
       throw new HttpException('Order not found', HttpStatus.NOT_FOUND);
     }
-    if (order.business_id !== business.id) {
-      throw new HttpException(
-        'Only the order business can generate an overwrite code',
-        HttpStatus.FORBIDDEN
-      );
+    return order;
+  }
+
+  private async resolveOverwriteActor(
+    user: { id: string; business?: { id?: string } | null },
+    order: Orders
+  ): Promise<{ userId: string; actorType: 'business' | 'support' }> {
+    const isOwner =
+      isActivePersona(user, 'business') && order.business_id === user.business?.id;
+    if (isOwner) return { userId: user.id, actorType: 'business' };
+    if (await this.canAccessOrder(user.id, order.id)) {
+      return { userId: user.id, actorType: 'support' };
     }
-    if (!canOverwriteFromStatus(order.current_status)) {
+    throw new HttpException(
+      'Only the order business can generate an overwrite code',
+      HttpStatus.FORBIDDEN
+    );
+  }
+
+  private assertOverwriteGenerationStatus(status: string | null | undefined): void {
+    if (canOverwriteFromStatus(status)) return;
+    throw new HttpException(
+      overwriteGenerationStatusError(status),
+      HttpStatus.BAD_REQUEST
+    );
+  }
+
+  private async recordOverwriteGenerationAudit(
+    order: Orders,
+    actor: { userId: string; actorType: 'business' | 'support' },
+    reason?: string
+  ): Promise<void> {
+    if (!isClientConfirmDeliveryOrder(order)) return;
+    const trimmed = reason?.trim();
+    if (!trimmed) {
       throw new HttpException(
-        `Overwrite code can only be generated while out for delivery or awaiting client confirmation (current: ${order.current_status})`,
+        'A reason is required to generate a delivery overwrite code',
         HttpStatus.BAD_REQUEST
       );
     }
-    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
-    const hash = this.deliveryPinService.hashOverwriteCode(orderId, code);
-    const mutation = `
+    const who = actor.actorType === 'support' ? 'Support' : 'Business';
+    await this.createStatusHistoryEntry(
+      order.id,
+      order.current_status,
+      `${who} generated delivery overwrite code: ${trimmed}`,
+      actor.actorType,
+      actor.userId
+    );
+  }
+
+  private async persistOverwriteHash(orderId: string, hash: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `
       mutation SetOverwriteCodeHash($orderId: uuid!, $hash: String!) {
         update_orders_by_pk(
           pk_columns: { id: $orderId }
           _set: { delivery_overwrite_code_hash: $hash }
-        ) {
-          id
-        }
+        ) { id }
       }
-    `;
-    if (isClientConfirmDeliveryOrder(order as { delivery_pin_hash?: string; fulfillment_method?: string })) {
-      const trimmed = reason?.trim();
-      if (!trimmed) {
-        throw new HttpException(
-          'A reason is required to generate a delivery overwrite code',
-          HttpStatus.BAD_REQUEST
-        );
-      }
-      await this.createStatusHistoryEntry(
-        orderId,
-        order.current_status,
-        `Business generated delivery overwrite code: ${trimmed}`,
-        'business',
-        user.id
-      );
-    }
-    await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      hash,
-    });
-    return { overwriteCode: code };
+    `,
+      { orderId, hash }
+    );
   }
 
   async failDelivery(request: OrderStatusChangeRequest) {

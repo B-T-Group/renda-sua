@@ -41,6 +41,15 @@ describe('getBusinessOrderActions delegate mode', () => {
   });
 });
 
+describe('getBusinessOrderActions overwrite', () => {
+  it('offers overwrite while awaiting client confirmation', () => {
+    const actions = getBusinessOrderActions(
+      baseOrder({ current_status: 'awaiting_client_confirmation' })
+    );
+    expect(actions.map((a) => a.id)).toContain('generateOverwriteCode');
+  });
+});
+
 describe('getBusinessOrderActions shipping', () => {
   it('confirms pending shipping orders', () => {
     const actions = getBusinessOrderActions(

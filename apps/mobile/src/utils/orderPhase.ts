@@ -464,7 +464,13 @@ function standardPrimaryAction(
     if (phase === 'ready' && pickup) {
       return 'none';
     }
-    if (s === 'out_for_delivery') return 'generate_overwrite';
+    if (
+      s === 'out_for_delivery' ||
+      s === 'awaiting_client_confirmation' ||
+      s === 'pending_auto_complete'
+    ) {
+      return 'generate_overwrite';
+    }
     if (s === 'delivered') return 'complete';
     return 'none';
   }
