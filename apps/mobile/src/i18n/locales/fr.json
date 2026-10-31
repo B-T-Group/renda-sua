@@ -496,6 +496,27 @@
       "receiptFailed": "Impossible de confirmer la réception"
     },
     "viewOnMap": "Voir la position du livreur sur la carte",
+    "clientConfirm": {
+      "push": {
+        "title": "Votre commande est arrivée",
+        "body": "Touchez pour confirmer la réception."
+      },
+      "cta": {
+        "confirm": "Confirmer la réception",
+        "problem": "Signaler un problème"
+      },
+      "confirmDone": "Merci ! Votre commande est terminée.",
+      "giftWa": "Bonjour {{name}}, {{sender}} vous a envoyé une commande via Rendasua. L'avez-vous reçue ?",
+      "giftQrYes": "Reçu",
+      "giftQrNo": "Problème",
+      "agentWaiting": "En attente de la confirmation du client",
+      "agentFallbackCta": "Le client n'a pas pu confirmer",
+      "agentFallbackPhoto": "Prenez une photo de la commande livrée",
+      "agentFallbackDone": "Envoyé. La commande sera terminée automatiquement dans {{h}} h sauf si le client signale un problème.",
+      "clientFallbackNotice": "Votre livreur a indiqué que la commande est livrée, photo à l'appui. Confirmez ou signalez un problème dans les {{h}} h.",
+      "agentNonstripe": "En attente du client. Contactez le support si besoin.",
+      "payReceivedNext": "Paiement reçu. Demandez au client de confirmer la réception dans l'application."
+    },
     "deliveryPin": {
       "viewPin": "Voir le PIN de livraison",
       "title": "PIN de livraison",

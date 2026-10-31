@@ -5,6 +5,7 @@ import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { SmsService } from '../sms/sms.service';
 import { normalizeLanguage, type EmailLocale } from './email-template-data';
 import {
+  smsRecipientConfirmDelivery,
   smsRecipientDeliveryPin,
   smsRecipientOrderCancelled,
   smsRecipientOrderComplete,
@@ -14,6 +15,7 @@ import {
   smsRecipientOutForDelivery,
   type RecipientSmsContext,
 } from './order-recipient-sms.messages';
+import { RECIPIENT_CONFIRM_NOTIFICATION_TYPE } from '../client-confirm-delivery/client-confirm-delivery.constants';
 import { normalizeAlertPhone } from './merchant-order-notify.util';
 import { WhatsAppChannel } from './orchestration/channels/whatsapp.channel';
 
@@ -61,10 +63,15 @@ const BIND_COMPLETE_MUTATION = `
   }
 `;
 
-function completeBindObject(wamid: string, orderId: string, phone: string) {
+function completeBindObject(
+  wamid: string,
+  orderId: string,
+  phone: string,
+  notificationType = 'order.recipient.complete_pickup'
+) {
   const normalized = normalizeAlertPhone(phone);
   return {
-    notification_type: 'order.recipient.complete_pickup',
+    notification_type: notificationType,
     category: 'actionable',
     channel: 'whatsapp',
     status: 'sent',
@@ -129,6 +136,25 @@ export class OrderRecipientNotificationsService {
       locale,
       smsBody: body,
       whatsapp: this.whatsAppPayloadForStatus(status, contact, locale),
+    });
+  }
+
+  /** Gift recipient: confirm receipt after the agent marks delivered. */
+  async notifyDeliveryConfirm(orderId: string): Promise<void> {
+    if (this.alreadySent(`confirm-delivery:${orderId}`)) return;
+    const contact = await this.loadContact(orderId);
+    if (!contact) return;
+    const locale = this.localeFor(contact);
+    await this.deliver(contact, {
+      locale,
+      smsBody: smsRecipientConfirmDelivery(this.smsContext(contact, locale)),
+      whatsapp: {
+        templateKey: 'recipient_confirm_delivery',
+        variables: {
+          recipientName: (contact.recipientName || '').trim() || '-',
+          payerName: (contact.payerName || '').trim() || '-',
+        },
+      },
     });
   }
 
@@ -382,19 +408,29 @@ export class OrderRecipientNotificationsService {
     contact: OrderRecipientContact,
     phone: string
   ): Promise<void> {
-    if (templateKey !== 'recipient_complete_pickup') return;
-    await this.bindCompleteMessage(wamid, contact.orderId, phone);
+    if (
+      templateKey !== 'recipient_complete_pickup' &&
+      templateKey !== 'recipient_confirm_delivery'
+    ) {
+      return;
+    }
+    const type =
+      templateKey === 'recipient_confirm_delivery'
+        ? RECIPIENT_CONFIRM_NOTIFICATION_TYPE
+        : 'order.recipient.complete_pickup';
+    await this.bindCompleteMessage(wamid, contact.orderId, phone, type);
   }
 
   private async bindCompleteMessage(
     wamid: string | undefined,
     orderId: string,
-    phone: string
+    phone: string,
+    notificationType = 'order.recipient.complete_pickup'
   ): Promise<void> {
     if (!wamid) return;
     try {
       await this.hasuraSystemService.executeMutation(BIND_COMPLETE_MUTATION, {
-        object: completeBindObject(wamid, orderId, phone),
+        object: completeBindObject(wamid, orderId, phone, notificationType),
       });
     } catch (error: any) {
       this.logger.warn(

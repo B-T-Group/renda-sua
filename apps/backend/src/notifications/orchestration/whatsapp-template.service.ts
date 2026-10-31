@@ -43,6 +43,10 @@ const TEMPLATE_NAMES: Record<string, { en: string; fr: string }> = {
     en: 'rs_recipient_complete_pickup',
     fr: 'rs_recipient_complete_pickup',
   },
+  recipient_confirm_delivery: {
+    en: 'rs_recipient_confirm_delivery',
+    fr: 'rs_recipient_confirm_delivery',
+  },
   recipient_order_update: {
     en: 'rs_recipient_order_update',
     fr: 'rs_recipient_order_update',
@@ -70,6 +74,7 @@ const BODY_VARS: Record<string, string[]> = {
   recipient_out_for_delivery: ['orderNumber'],
   recipient_order_ready: ['orderNumber', 'storeName'],
   recipient_complete_pickup: ['orderNumber', 'storeName'],
+  recipient_confirm_delivery: ['recipientName', 'payerName'],
   recipient_order_update: ['orderNumber', 'statusLabel'],
   restock_alert: ['itemName', 'storeName'],
 };
@@ -109,6 +114,7 @@ const NO_CTA_KEYS = new Set([
   'recipient_out_for_delivery',
   'recipient_order_ready',
   'recipient_complete_pickup',
+  'recipient_confirm_delivery',
   'recipient_order_update',
 ]);
 

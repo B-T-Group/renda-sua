@@ -4222,6 +4222,8 @@ describe('OrdersService', () => {
         id: 'order-123',
         order_number: 'ORD-1',
         payment_status: 'pending',
+        fulfillment_method: 'delivery',
+        delivery_pin_hash: 'legacy-hash',
         subtotal: 10000,
         total_amount: 9000,
         base_delivery_fee: 1000,
@@ -4269,6 +4271,48 @@ describe('OrdersService', () => {
       itemSettle.mockRestore();
       deliverySettle.mockRestore();
       completeSpy.mockRestore();
+    });
+
+    it('finalizePayAtDeliveryPaymentAndComplete awaits client confirm on new-flow orders', async () => {
+      const padOrder = {
+        id: 'order-123',
+        order_number: 'ORD-1',
+        payment_status: 'pending',
+        fulfillment_method: 'delivery',
+        delivery_pin_hash: null,
+        current_status: 'out_for_delivery',
+        subtotal: 10000,
+        total_amount: 9000,
+        base_delivery_fee: 1000,
+        per_km_delivery_fee: 0,
+      };
+      jest.spyOn(service as any, 'getOrderDetails').mockResolvedValue(padOrder);
+      jest.spyOn(service, 'updateOrderHold').mockResolvedValue({ id: 'hold-1' });
+      jest.spyOn(service, 'getOrCreateOrderHold').mockResolvedValue({
+        id: 'hold-1',
+      } as any);
+      const itemSettle = jest
+        .spyOn(service, 'processOrderPayment')
+        .mockResolvedValue(undefined);
+      const deliverySettle = jest
+        .spyOn(service, 'processOrderDeliveryPayment')
+        .mockResolvedValue(undefined);
+      const completeSpy = jest
+        .spyOn(service as any, 'completeOrderWithSideEffects')
+        .mockResolvedValue(undefined);
+      const awaitingSpy = jest
+        .spyOn(service as any, 'enterAwaitingAfterPad')
+        .mockResolvedValue(undefined);
+      jest
+        .spyOn(service as any, 'updateOrderPaymentStatusOnly')
+        .mockResolvedValue(undefined);
+
+      await (service as any).finalizePayAtDeliveryPaymentAndComplete(padOrder);
+
+      expect(awaitingSpy).toHaveBeenCalled();
+      expect(itemSettle).not.toHaveBeenCalled();
+      expect(deliverySettle).not.toHaveBeenCalled();
+      expect(completeSpy).not.toHaveBeenCalled();
     });
 
     it('finalizeClientOrderPayment does not regress assigned_to_agent to pending', async () => {

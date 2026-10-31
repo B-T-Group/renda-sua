@@ -56,6 +56,12 @@ import type {
 } from './orders.service';
 import { toCreateOrderHttpException } from './create-order-http-error';
 import { OrdersService } from './orders.service';
+import { ClientConfirmDeliveryService } from '../client-confirm-delivery/client-confirm-delivery.service';
+import {
+  ClientCouldNotConfirmDto,
+  GenerateOverwriteCodeDto,
+  ReportDeliveryProblemDto,
+} from '../client-confirm-delivery/dto/client-confirm-delivery.dto';
 import { OFFER_DECLINE_REASONS } from '../dedicated-agents/dedicated-agents.constants';
 import { ReqContext } from '../auth/req-context.decorator';
 import type { RequestContext } from '../auth/request-context';
@@ -85,7 +91,8 @@ export class OrdersController {
     private readonly hasuraUserService: HasuraUserService,
     private readonly messagingService: MessagingService,
     private readonly deliveryPinShareService: DeliveryPinShareService,
-    private readonly quickMessageService: QuickMessageService
+    private readonly quickMessageService: QuickMessageService,
+    private readonly clientConfirmDelivery: ClientConfirmDeliveryService
   ) {}
 
   // -------------------------------------------------------------------------
@@ -631,11 +638,73 @@ export class OrdersController {
     return this.ordersService.completeDelivery(request);
   }
 
+  @Post(':id/mark-delivered')
+  @ApiOperation({
+    summary: 'Agent marks a delivery as arrived (client-confirm flow)',
+    description:
+      'Sets awaiting_client_confirmation and notifies the client (push) and gift recipient (WhatsApp/SMS). Mid-flight PIN orders must use complete-delivery.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Waiting for client confirmation' })
+  async markDelivered(@Param('id') orderId: string) {
+    return this.clientConfirmDelivery.markDelivered(orderId);
+  }
+
+  @Post(':id/confirm-receipt')
+  @ApiOperation({
+    summary: 'Client confirms they received the delivery',
+    description:
+      'Completes a delivery order and settles payouts once (out_for_delivery / awaiting_client_confirmation / pending_auto_complete). Gift buyers may confirm on the recipient\'s behalf (OQ1 flag, default on). Shipping orders in shipped / in_delivery still complete via this same path.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Order completed' })
+  async confirmReceipt(@Param('id') orderId: string) {
+    return this.clientConfirmDelivery.confirmReceipt(orderId);
+  }
+
+  @Post(':id/report-delivery-problem')
+  @ApiOperation({
+    summary: 'Report a problem with a delivery instead of confirming',
+    description: 'Sets disputed, holds payouts, and opens a support case.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  async reportDeliveryProblem(
+    @Param('id') orderId: string,
+    @Body() body: ReportDeliveryProblemDto
+  ) {
+    return this.clientConfirmDelivery.reportProblem(orderId, body?.description);
+  }
+
+  @Post(':id/client-could-not-confirm')
+  @ApiOperation({
+    summary: 'Stripe-rail only: agent photo fallback when the client cannot confirm',
+    description:
+      'After the grace period, the assigned agent submits ≥1 geotagged photo. Sets pending_auto_complete with a per-market deadline (default 2h). Rejected on non-Stripe markets.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  async clientCouldNotConfirm(
+    @Param('id') orderId: string,
+    @Body() body: ClientCouldNotConfirmDto
+  ) {
+    return this.clientConfirmDelivery.submitCouldNotConfirm(orderId, body.photos);
+  }
+
+  @Get(':id/delivery-confirmation')
+  @ApiOperation({
+    summary: 'Client-confirm delivery state for mobile/web',
+    description:
+      'Grace remaining, Stripe vs non-Stripe fallback visibility, proof photos, and OQ1 gift-buyer flag.',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  async getDeliveryConfirmation(@Param('id') orderId: string) {
+    return this.clientConfirmDelivery.getState(orderId);
+  }
+
   @Post(':id/initiate-pay-at-delivery-payment')
   @ApiOperation({
     summary: 'Initiate pay-at-delivery mobile payment (agent only)',
     description:
-      'For pay-at-delivery orders, the assigned agent triggers a mobile payment request at the doorstep. On successful payment callback, the order is automatically settled and marked complete.',
+      'For pay-at-delivery orders, the assigned agent triggers a mobile payment request at the doorstep. On successful payment the order moves to awaiting_client_confirmation (never direct complete). Mid-flight PIN orders still complete on payment.',
   })
   @ApiResponse({ status: 200, description: 'Payment request initiated' })
   @ApiResponse({ status: 400, description: 'Invalid order state or missing data' })
@@ -816,11 +885,16 @@ export class OrdersController {
   @Post(':id/delivery-overwrite-code')
   @ApiOperation({
     summary: 'Generate overwrite code (business only)',
-    description: 'Generates a one-time overwrite code so the agent can complete the order without the client PIN. Order must be out_for_delivery.',
+    description:
+      'Business/support overwrite (audited). Requires a reason on client-confirm orders. Not used in the agent default UI.',
   })
+  @ApiBody({ type: GenerateOverwriteCodeDto, required: false })
   @ApiResponse({ status: 200, description: 'Overwrite code generated' })
-  async generateDeliveryOverwriteCode(@Param('id') orderId: string) {
-    return this.ordersService.generateDeliveryOverwriteCode(orderId);
+  async generateDeliveryOverwriteCode(
+    @Param('id') orderId: string,
+    @Body() body: GenerateOverwriteCodeDto
+  ) {
+    return this.ordersService.generateDeliveryOverwriteCode(orderId, body?.reason);
   }
 
   @Get(':orderId/cancellation-preview')
@@ -2686,20 +2760,6 @@ export class OrdersController {
       body.tracking_number,
       body?.carrier
     );
-  }
-
-  @Post(':id/confirm-receipt')
-  @ApiOperation({
-    summary: 'Confirm order receipt (client only)',
-    description:
-      'For shipping orders in shipped or in_delivery status, client confirms they received the package. Updates status to complete.',
-  })
-  @ApiParam({ name: 'id', description: 'Order UUID', type: String })
-  @ApiResponse({ status: 200, description: 'Receipt confirmed; order complete' })
-  @ApiResponse({ status: 400, description: 'Invalid order state or not a shipping order' })
-  @ApiResponse({ status: 403, description: 'Not authorized (client only)' })
-  async confirmOrderReceipt(@Param('id') orderId: string) {
-    return this.ordersService.confirmOrderReceipt(orderId);
   }
 
   private withRequestMetaCapi(

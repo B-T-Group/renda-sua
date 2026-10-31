@@ -458,6 +458,30 @@ Après l'avoir récupérée, appuyez sur Terminer la commande pour que le magasi
   },
   {
     kind: 'content',
+    name: 'rs_recipient_confirm_delivery',
+    category: 'UTILITY',
+    exampleValues: ['Amina', 'Samuel'],
+    quickReplies: [
+      {
+        id: 'received',
+        text: { en: 'Received', fr: 'Reçu' },
+      },
+      {
+        id: 'problem',
+        text: { en: 'Problem', fr: 'Problème' },
+      },
+    ],
+    body: {
+      en: `Hi {{1}}, {{2}} sent you an order via Rendasua. Did you receive it?
+
+Tap Received if you have it, or Problem if something is wrong.`,
+      fr: `Bonjour {{1}}, {{2}} vous a envoyé une commande via Rendasua. L'avez-vous reçue ?
+
+Appuyez sur Reçu si vous l'avez, ou Problème s'il y a un souci.`,
+    },
+  },
+  {
+    kind: 'content',
     name: 'rs_recipient_order_ready',
     category: 'UTILITY',
     exampleValues: ['ORD-1001', 'Acme Store'],

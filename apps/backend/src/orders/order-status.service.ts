@@ -176,9 +176,10 @@ export class OrderStatusService {
       ((order.current_status === 'confirmed' && newStatus === 'preparing') ||
         ((order.current_status === 'confirmed' ||
           order.current_status === 'preparing') &&
-          newStatus === 'ready_for_pickup'))
+          newStatus === 'ready_for_pickup') ||
+        this.isClientConfirmSystemTransition(order.current_status, newStatus))
     ) {
-      // Cooked-food auto prep / auto-ready system transitions
+      // Cooked-food auto prep / auto-ready, or client-confirm delivery transitions
     } else if (newStatus === 'cancelled') {
       this.assertCancelViaDedicatedEndpoint(options?.viaCancelEndpoint);
       this.assertCancelFromExpectedStatus(
@@ -645,7 +646,18 @@ export class OrderStatusService {
       assigned_to_agent: isAssignedAgent ? ['picked_up'] : [],
       picked_up: isAssignedAgent ? ['in_transit', 'out_for_delivery'] : [],
       in_transit: isAssignedAgent ? ['out_for_delivery'] : [],
-      out_for_delivery: isAssignedAgent ? ['complete', 'failed'] : [],
+      out_for_delivery: isAssignedAgent
+        ? ['complete', 'failed', 'awaiting_client_confirmation']
+        : isClient
+          ? ['complete', 'disputed']
+          : [],
+      awaiting_client_confirmation: isAssignedAgent
+        ? ['pending_auto_complete']
+        : isClient
+          ? ['complete', 'disputed']
+          : [],
+      pending_auto_complete: isClient ? ['complete', 'disputed'] : [],
+      disputed: [],
       shipped: [],
       in_delivery: [],
       delivered: isClient ? ['complete'] : [],
@@ -655,6 +667,26 @@ export class OrderStatusService {
     };
 
     return transitions[currentStatus] || [];
+  }
+
+  private isClientConfirmSystemTransition(
+    currentStatus: string,
+    newStatus: string
+  ): boolean {
+    const fromAwaiting =
+      currentStatus === 'awaiting_client_confirmation' &&
+      (newStatus === 'pending_auto_complete' ||
+        newStatus === 'complete' ||
+        newStatus === 'disputed');
+    const fromPending =
+      currentStatus === 'pending_auto_complete' &&
+      (newStatus === 'complete' || newStatus === 'disputed');
+    const fromOut =
+      currentStatus === 'out_for_delivery' &&
+      (newStatus === 'awaiting_client_confirmation' ||
+        newStatus === 'complete' ||
+        newStatus === 'disputed');
+    return fromAwaiting || fromPending || fromOut;
   }
 
   /**

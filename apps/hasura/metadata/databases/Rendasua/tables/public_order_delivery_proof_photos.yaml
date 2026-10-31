@@ -1,0 +1,65 @@
+table:
+  name: order_delivery_proof_photos
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: agent
+    using:
+      foreign_key_constraint_on: agent_id
+select_permissions:
+  - role: agent
+    permission:
+      columns:
+        - id
+        - order_id
+        - agent_id
+        - photo_url
+        - captured_at
+        - latitude
+        - longitude
+        - note
+        - created_at
+      filter:
+        order:
+          assigned_agent:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+  - role: business
+    permission:
+      columns:
+        - id
+        - order_id
+        - agent_id
+        - photo_url
+        - captured_at
+        - latitude
+        - longitude
+        - note
+        - created_at
+      filter:
+        order:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - agent_id
+        - photo_url
+        - captured_at
+        - latitude
+        - longitude
+        - note
+        - created_at
+      filter:
+        order:
+          client:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

@@ -190,9 +190,9 @@ export class AgentHoldService {
    * Eligibility requires ALL of:
    * - is_verified=true
    * - is_internal=false
-   * - >= N PIN-confirmed completed deliveries (orders.current_status=complete AND
-   *   delivery_pin_hash IS NOT NULL AND delivery_overwrite_code_used_at IS NULL,
-   *   i.e. completed via the customer PIN, not the business overwrite code)
+   * - >= N clean completed deliveries: client/recipient/buyer/auto_complete
+   *   confirmation, or legacy PIN-confirmed (hash set, overwrite unused, no
+   *   confirmation method yet). Overwrite and disputed fallbacks do not count.
    * - zero failed_deliveries with resolution_type='agent_fault' (all-time)
    * - agent in pilot city: city of the agent's active primary address, else of
    *   the oldest active address when none is primary (see resolveAgentCity);
@@ -225,8 +225,20 @@ export class AgentHoldService {
           where: {
             assigned_agent_id: { _eq: $agentId }
             current_status: { _eq: complete }
-            delivery_pin_hash: { _is_null: false }
-            delivery_overwrite_code_used_at: { _is_null: true }
+            _or: [
+              {
+                delivery_confirmation_method: {
+                  _in: ["client", "recipient", "buyer", "auto_complete"]
+                }
+              }
+              {
+                _and: [
+                  { delivery_pin_hash: { _is_null: false } }
+                  { delivery_overwrite_code_used_at: { _is_null: true } }
+                  { delivery_confirmation_method: { _is_null: true } }
+                ]
+              }
+            ]
           }
         ) {
           aggregate {

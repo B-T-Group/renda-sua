@@ -611,6 +611,7 @@ export class MessagingService {
           assigned_agent_id
           current_status
           fulfillment_method
+          delivery_pin_hash
           client {
             user_id
             user {
