@@ -15,6 +15,7 @@ import type {
   OrderViewModelContext,
   PackageProperty,
 } from './types';
+import { formatKm } from '../../../utils/formatKm';
 
 function objective(
   order: OrderLike,
@@ -172,6 +173,7 @@ export function buildDeliveryOrderViewModel(
     ? ctx.t(phase.nextStepKey, '')
     : null;
   const objectiveTitle = objective(order, ctx);
+  const kmLabel = formatKm(order.distance_km);
 
   return {
     orderId: order.id,
@@ -241,10 +243,8 @@ export function buildDeliveryOrderViewModel(
       currency: order.currency,
     },
     distanceLabel:
-      order.distance_km != null
-        ? ctx.t('orders.delivery.distance', '{{km}} km', {
-            km: order.distance_km.toFixed(1),
-          })
+      kmLabel != null
+        ? ctx.t('orders.delivery.distance', '{{km}} km', { km: kmLabel })
         : null,
     availableActions: deliveryActions(order, phase.primaryActionId),
   };
