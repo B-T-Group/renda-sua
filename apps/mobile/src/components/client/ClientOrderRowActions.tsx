@@ -11,6 +11,11 @@ import {
   clientCanConfirmReceipt,
   clientShowDeliveryPin,
 } from '../../utils/clientOrderActions';
+import { useDeliveryConfirmation } from '../../hooks/useDeliveryConfirmation';
+import {
+  clientCanShowConfirmReceipt,
+  resolveUsesLegacyPin,
+} from '../../utils/deliveryConfirmationUi';
 import { trackCancellationEvent } from '../../utils/cancellationAnalytics';
 import { CancellationConfirmSheet } from './CancellationConfirmSheet';
 import { SendDeliveryPinButton } from './SendDeliveryPinButton';
@@ -24,10 +29,22 @@ type Props = {
 
 export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Props) {
   const { t } = useTranslation();
-  const showPin = clientShowDeliveryPin(order);
+  const { state: confirmState } = useDeliveryConfirmation(
+    order.id,
+    order.current_status,
+    order.fulfillment_method
+  );
+  const showPin = clientShowDeliveryPin(order, resolveUsesLegacyPin(confirmState));
   const isPickup = order.fulfillment_method === 'pickup';
   const showCancel = clientCanCancelOrder(order);
-  const showReceipt = clientCanConfirmReceipt(order);
+  const showReceipt =
+    clientCanConfirmReceipt(order) ||
+    clientCanShowConfirmReceipt({
+      status: order.current_status,
+      fulfillmentMethod: order.fulfillment_method,
+      isGift: order.is_third_party_recipient,
+      giftBuyerCanConfirm: confirmState?.giftBuyerCanConfirm,
+    });
   const showAskReady = clientCanAskIfReady(order);
   const [receiptBusy, setReceiptBusy] = useState(false);
   const [askReadyBusy, setAskReadyBusy] = useState(false);
@@ -64,7 +81,7 @@ export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Pr
     showReceipt
       ? {
           id: 'confirmReceipt',
-          label: t('orders.shipping.confirmReceipt', 'I received my order'),
+          label: t('orders.clientConfirm.cta.confirm', 'Confirm receipt'),
           icon: 'package-check',
           mode: 'contained' as const,
           loading: receiptBusy,
@@ -147,6 +164,7 @@ export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Pr
                 setReceiptBusy(true);
                 try {
                   await agentApi.orders.confirmReceipt(order.id);
+                  setSnack(t('orders.clientConfirm.confirmDone', 'Thanks! Your order is complete.'));
                   onOrderMutated?.();
                 } catch (e: unknown) {
                   setSnack(

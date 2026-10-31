@@ -10,6 +10,12 @@ import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import ClientRefundRequestDialog from '../dialogs/ClientRefundRequestDialog';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 import { ClientDeliveryPinButton } from './ClientDeliveryPinButton';
+import ClientConfirmReceiptActions from './ClientConfirmReceiptActions';
+import { useDeliveryConfirmation } from '../../hooks/useDeliveryConfirmation';
+import {
+  clientCanShowConfirmReceipt,
+  resolveUsesLegacyPin,
+} from '../../utils/deliveryConfirmationUi';
 import { EatInUnavailableNotice } from './EatInUnavailableNotice';
 import { ReorderCartConflictDialog } from './ReorderCartConflictDialog';
 
@@ -57,9 +63,22 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     completeOrder,
     completeClientPickup,
     confirmOrderReceipt,
+    reportDeliveryProblem,
     switchToPickup,
     remindReady,
   } = useBackendOrders();
+  const { state: confirmState, refetch: refetchConfirm } = useDeliveryConfirmation(
+    order.id,
+    order.current_status,
+    order.fulfillment_method
+  );
+  const usesLegacyPin = resolveUsesLegacyPin(confirmState);
+  const canConfirmDelivery = clientCanShowConfirmReceipt({
+    status: order.current_status,
+    fulfillmentMethod: order.fulfillment_method,
+    isGift: order.is_third_party_recipient,
+    giftBuyerCanConfirm: confirmState?.giftBuyerCanConfirm,
+  });
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);
   const [payPickupOpen, setPayPickupOpen] = useState(false);
@@ -129,14 +148,35 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     try {
       await confirmOrderReceipt(order.id);
       onShowNotification?.(
-        t('messages.orderConfirmReceiptSuccess', 'Receipt confirmed'),
+        t('orders.clientConfirm.confirmDone', 'Thanks! Your order is complete.'),
         'success'
       );
+      await refetchConfirm();
       onActionComplete?.();
     } catch (error: any) {
       onShowNotification?.(
         error?.message ||
           t('messages.orderConfirmReceiptError', 'Failed to confirm receipt'),
+        'error'
+      );
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const handleReportProblem = async (description?: string) => {
+    setCompleting(true);
+    try {
+      await reportDeliveryProblem(order.id, description);
+      onShowNotification?.(
+        t('orders.clientConfirm.problemSubmitted', 'We opened a support case.'),
+        'success'
+      );
+      await refetchConfirm();
+      onActionComplete?.();
+    } catch (error: any) {
+      onShowNotification?.(
+        error?.message || t('common.genericError', 'Something went wrong.'),
         'error'
       );
     } finally {
@@ -328,6 +368,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     order.pay_after_merchant_confirm === true &&
     order.fulfillment_method !== 'pickup';
   const showPin =
+    usesLegacyPin &&
     !hideDeliveryPin &&
     (payAfterDelivery ||
       (order.payment_timing !== 'pay_at_delivery' &&
@@ -338,13 +379,28 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       order.current_status
     );
 
-  if (availableActions.length === 0 && !showPin && !reorderFlow.enabled) {
+  if (
+    availableActions.length === 0 &&
+    !showPin &&
+    !reorderFlow.enabled &&
+    !canConfirmDelivery
+  ) {
     return <EatInUnavailableNotice order={order} />;
   }
 
   return (
     <>
       <EatInUnavailableNotice order={order} />
+      {canConfirmDelivery ? (
+        <Box sx={{ mb: 2 }}>
+          <ClientConfirmReceiptActions
+            state={confirmState}
+            busy={completing}
+            onConfirm={() => void handleConfirmReceipt()}
+            onReportProblem={(description) => void handleReportProblem(description)}
+          />
+        </Box>
+      ) : null}
       {(availableActions.length > 0 || showPin) && (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {showPin && (

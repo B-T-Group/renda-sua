@@ -157,7 +157,10 @@ export function deliveryWindowLabel(
 }
 
 export function phaseFor(order: OrderLike, role: OrderPhaseRole) {
-  return resolveOrderPhase(orderToPhaseInput(order), role);
+  return resolveOrderPhase(
+    orderToPhaseInput(order, { usesLegacyPin: order.uses_legacy_pin }),
+    role
+  );
 }
 
 export function progressFor(order: OrderLike) {

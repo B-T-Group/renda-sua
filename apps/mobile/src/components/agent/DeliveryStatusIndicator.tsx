@@ -91,8 +91,12 @@ export function statusToTone(status: string): StatusTone {
     case 'picked_up':
     case 'in_transit':
     case 'out_for_delivery':
+    case 'awaiting_client_confirmation':
+    case 'pending_auto_complete':
     case 'ready_for_pickup':
       return 'active';
+    case 'disputed':
+      return 'attention';
     case 'pending':
     case 'pending_payment':
     case 'confirmed':
@@ -128,7 +132,9 @@ export function statusToPrimaryAction(
     case 'in_transit':
       return t('agent.orders.detail.outForDelivery', 'Out for delivery');
     case 'out_for_delivery':
-      return t('orderActions.completeDelivery', 'Complete delivery');
+      return t('agent.orders.detail.markDelivered', 'Mark as delivered');
+    case 'awaiting_client_confirmation':
+      return t('orders.clientConfirm.agentWaiting', 'Waiting for the client to confirm');
     default:
       return null;
   }

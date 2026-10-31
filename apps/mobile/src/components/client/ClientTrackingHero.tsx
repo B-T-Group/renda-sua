@@ -44,6 +44,22 @@ function deliveryCopy(
         : t('client.orderJourney.outForDelivery.now', 'Your order is out for delivery and will arrive soon.'),
     };
   }
+  if (status === 'awaiting_client_confirmation') {
+    return {
+      title: t('orders.clientConfirm.push.title', 'Your order has arrived'),
+      body: t('orders.clientConfirm.push.body', 'Tap to confirm you received it.'),
+    };
+  }
+  if (status === 'pending_auto_complete') {
+    return {
+      title: t('orders.clientConfirm.push.title', 'Your order has arrived'),
+      body: t(
+        'orders.clientConfirm.clientFallbackNotice',
+        'Your courier marked this order delivered with a photo. Confirm or report a problem within {{h}}h.',
+        { h: '2' }
+      ),
+    };
+  }
   return {
     title: t('client.orderJourney.shippingInTransit.title', 'On the way'),
     body: t('client.journey.onTheWay', 'Your order is on the way.'),

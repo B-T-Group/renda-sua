@@ -5046,6 +5046,9 @@
       "failed": "Failed",
       "in_transit": "In Transit",
       "out_for_delivery": "Out for Delivery",
+      "awaiting_client_confirmation": "Waiting for confirmation",
+      "pending_auto_complete": "Delivery photo submitted",
+      "disputed": "Disputed",
       "pending": "Pending",
       "pending_payment": "Pending Payment",
       "picked_up": "Picked Up",
@@ -5779,7 +5782,9 @@
         "goPickup": "Go to pickup",
         "pickupDone": "Package picked up",
         "deliver": "Deliver to customer",
-        "complete": "Complete delivery"
+        "complete": "Complete delivery",
+        "markDelivered": "Mark as delivered",
+        "waitClient": "Waiting for the client to confirm"
       },
       "urgency": {
         "pickupWithin": "Pickup within",
@@ -5920,7 +5925,13 @@
       "agentFallbackDone": "Submitted. Order completes automatically in {{h}}h unless the client reports a problem.",
       "clientFallbackNotice": "Your courier marked this order delivered with a photo. Confirm or report a problem within {{h}}h.",
       "agentNonstripe": "Waiting for the client. Contact support if needed.",
-      "payReceivedNext": "Payment received. Ask the client to confirm receipt in the app."
+      "payReceivedNext": "Payment received. Ask the client to confirm receipt in the app.",
+      "takePhoto": "Take photo",
+      "photoNoteOptional": "Note (optional)",
+      "submitFallback": "Submit",
+      "proofPhoto": "Delivery photo",
+      "problemDescription": "What happened? (optional)",
+      "problemSubmitted": "We opened a support case."
     },
     "deliveryPin": {
       "title": "Delivery PIN",
@@ -6559,7 +6570,12 @@
       "ofdClientPin": "Send your delivery PIN in chat so the agent can complete delivery.",
       "ofdClient": "Your order is arriving. Stay available for the agent.",
       "ofdAgent": "Enter the client PIN to complete delivery.",
+      "ofdAgentMark": "Mark as delivered, then wait for the client to confirm.",
       "ofdBusiness": "Generate an overwrite code if the client cannot share their PIN.",
+      "ofdBusinessConfirm": "The courier marks delivered; the client confirms receipt.",
+      "awaitingClientConfirm": "Confirm receipt or report a problem.",
+      "awaitingAgentConfirm": "Waiting for the client to confirm receipt.",
+      "awaitingBusinessConfirm": "Waiting for the client to confirm receipt.",
       "deliveredClient": "Mark this order complete when you are satisfied.",
       "deliveredBusiness": "Complete this order to finish fulfillment.",
       "deliveredAgent": "This delivery is recorded as delivered.",
