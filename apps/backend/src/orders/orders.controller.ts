@@ -325,7 +325,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Update order status',
     description:
-      'Cancellation must use POST /orders/cancel. PATCH with status=cancelled is routed there so Stripe release and inventory restore always run.',
+      'Cancellation must use POST /orders/cancel. Confirm must use POST /orders/confirm. PATCH with status=cancelled is routed to cancel; PATCH status=confirmed is rejected so the payout-phone gate and payment initiation cannot be skipped.',
   })
   @ApiResponse({
     status: 409,
@@ -348,6 +348,19 @@ export class OrdersController {
         cancellationReasonId: 1, // "other" fallback for legacy path
         notes: 'Cancelled via legacy PATCH endpoint',
       });
+    }
+    // Never confirm via the generic status path — that skips the MoMo payout
+    // phone gate, pay-after payment initiation, and delivery-window handling.
+    if (updateData.status === 'confirmed') {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'USE_CONFIRM_ENDPOINT',
+          message:
+            'Use POST /orders/confirm so the payout-phone gate, payment initiation, and delivery window run.',
+        },
+        HttpStatus.BAD_REQUEST
+      );
     }
 
     try {
@@ -374,7 +387,8 @@ export class OrdersController {
       } else if (
         errorMessage.includes('Invalid status transition') ||
         errorMessage.includes('Unauthorized') ||
-        errorMessage.includes('Cancellations must use POST /orders/cancel')
+        errorMessage.includes('Cancellations must use POST /orders/cancel') ||
+        errorMessage.includes('Confirmations must use POST /orders/confirm')
       ) {
         statusCode = HttpStatus.BAD_REQUEST;
       }

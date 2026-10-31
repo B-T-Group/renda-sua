@@ -1,3 +1,4 @@
+import { HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersController } from './orders.controller';
@@ -494,6 +495,20 @@ describe('OrdersController', () => {
         cancellationReasonId: 1, // "other" fallback for legacy path
         notes: 'Cancelled via legacy PATCH endpoint',
       });
+    });
+
+    it('rejects confirmed so the payout-phone gate cannot be skipped', async () => {
+      await expect(
+        controller.updateOrderStatus('order-123', { status: 'confirmed' })
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: {
+          success: false,
+          error: 'USE_CONFIRM_ENDPOINT',
+          message: expect.stringContaining('POST /orders/confirm'),
+        },
+      });
+      expect(ordersService.confirmOrder).not.toHaveBeenCalled();
     });
   });
 });
