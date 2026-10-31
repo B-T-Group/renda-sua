@@ -103,6 +103,7 @@
 - "!include public_orange_momo_payment_requests.yaml"
 - "!include public_order_agent_notifications.yaml"
 - "!include public_order_cancellation_reasons.yaml"
+- "!include public_order_delivery_proof_photos.yaml"
 - "!include public_order_discount_codes.yaml"
 - "!include public_order_holds.yaml"
 - "!include public_order_items.yaml"
