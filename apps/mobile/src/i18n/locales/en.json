@@ -5275,6 +5275,27 @@
       "pendingBody": "You can claim deliveries once your ID is approved."
     }
   },
+  "agentOrder": {
+    "more": {
+      "a11y": "More actions",
+      "runningLate": "I'm running late",
+      "release": "Release order",
+      "reportIssue": "Report a problem"
+    },
+    "release": {
+      "confirmTitle": "Release this order?",
+      "confirmBody": "It will go back to other agents. You won't be able to deliver it.",
+      "confirmCta": "Release",
+      "cancel": "Keep order"
+    },
+    "urgency": {
+      "pickupBy": "Pick up by {{time}}",
+      "deliverBy": "Deliver by {{time}}",
+      "overdue": "Late by {{duration}}",
+      "durationMinutes": "{{mins}}m",
+      "durationHours": "{{hours}}h"
+    }
+  },
   "completeProfile": {
     "title": "Complete Your Profile",
     "subtitle": "Provide a few details to complete your account",
