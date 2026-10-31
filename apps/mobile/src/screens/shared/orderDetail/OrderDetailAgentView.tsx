@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -34,17 +34,12 @@ import { RequestPayAtDeliveryDialog } from '../../../components/dialogs/RequestP
 import { SimpleMessageDialog } from '../../../components/dialogs/SimpleMessageDialog';
 import { CompleteDeliveryPinDialog } from '../../../components/dialogs/CompleteDeliveryPinDialog';
 import { DeliveryCompleteSuccessModal } from '../../../components/dialogs/DeliveryCompleteSuccessModal';
+import { ConfirmActionDialog } from '../../../components/dialogs/ConfirmActionDialog';
 import { ActionLoadingDialog } from '../../../components/feedback/ActionLoadingDialog';
 import { hasCashExceptionBlockingDeposit } from '../../../utils/depositResume';
-import {
-  DeliveryEarningsCard,
-  DeliveryObjectiveHero,
-  DeliveryPackageCard,
-  DeliveryRequirementsCard,
-  DeliveryStopsSection,
-} from '../../../components/delivery';
-import { ActiveDeliveryView } from '../../../components/agent/ActiveDeliveryView';
-import type { DeliveryEarnings, DeliveryOrderViewModel } from '../../../orders/model';
+import { AgentOrderInlineDelivery } from '../../../components/agent/AgentOrderInlineDelivery';
+import { AgentOrderStatusUrgencyRow } from '../../../components/agent/AgentOrderStatusUrgencyRow';
+import { AgentOrderDetailMoreSheet } from '../../../components/agent/AgentOrderDetailMoreSheet';
 import { useStore } from '../../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../../utils/defaultClaimTopupPhone';
 import { claimAwaitingParams } from '../../../utils/claimAwaitingNav';
@@ -57,24 +52,28 @@ import { mergeOrderForDeliverySuccess } from '../../../utils/mergeOrderForDelive
 import { orderNeedsPayAtDeliveryAgentActions } from '../../../utils/orderPaymentAgentActions';
 import { resolveAmountDueAfterDeposit } from '../../../utils/depositResume';
 import type { OrderDetailScreenProps } from './types';
-import { APP_FEATURES } from '../../../constants/appFeatures';
-import { DeliveryWorkflowIndicator } from '../../../components/agent/DeliveryWorkflowIndicator';
 import { ExpandableSection } from '../../../components/common/ExpandableSection';
-import { StatusPill } from '../../../components/common/StatusPill';
-import { OrderPhaseBanner } from '../../../components/orders/OrderPhaseBanner';
 import {
   buildDeliveryOrderViewModel,
   type OrderViewModelContext,
 } from '../../../orders/model';
-import { orderToPhaseInput, resolveOrderPhase } from '../../../utils/orderPhase';
 import { orderStatusStripeColor } from '../../../utils/clientOrderListDisplay';
+import {
+  agentOrderDetailMoreItems,
+  type AgentOrderMoreItemId,
+} from '../../../utils/agentOrderDetailMoreItems';
+import { resolveAgentOrderPrimaryCta } from '../../../utils/resolveAgentOrderPrimaryCta';
+
+export const AgentOrderDetailMoreRegisterContext = createContext<{
+  setMorePress: (press: (() => void) | null) => void;
+}>({ setMorePress: () => undefined });
 
 type Props = OrderDetailScreenProps;
 
 const CARD_PADDING = 16;
 const SECTION_GAP = 16;
 
-type LifecycleActionKey = 'pickUp' | 'startTransit' | 'outForDelivery';
+type LifecycleActionKey = 'pickUp' | 'outForDelivery';
 
 const LIFECYCLE_ACTION_CONFIRM: Record<
   LifecycleActionKey,
@@ -85,12 +84,6 @@ const LIFECYCLE_ACTION_CONFIRM: Record<
     titleDef: 'Confirm pickup',
     messageKey: 'agent.orders.detail.actionConfirm.pickUpMessage',
     messageDef: 'Mark this order as picked up from the business?',
-  },
-  startTransit: {
-    titleKey: 'agent.orders.detail.actionConfirm.inTransitTitle',
-    titleDef: 'Confirm in transit',
-    messageKey: 'agent.orders.detail.actionConfirm.inTransitMessage',
-    messageDef: 'Mark this order as in transit toward the customer?',
   },
   outForDelivery: {
     titleKey: 'agent.orders.detail.actionConfirm.outForDeliveryTitle',
@@ -117,54 +110,6 @@ function formatDate(dateString: string): string {
   });
 }
 
-function DeliveryDetails({
-  sheet,
-  bottomInset,
-  vm,
-  earnings,
-  maskDeliveryContact,
-  cardStyle,
-}: {
-  sheet: boolean;
-  bottomInset: number;
-  vm: DeliveryOrderViewModel;
-  earnings: DeliveryEarnings | null;
-  maskDeliveryContact: boolean;
-  cardStyle: object;
-}) {
-  const { t } = useTranslation();
-  const { colors, typography } = useTheme();
-  const body = (
-    <>
-      <DeliveryObjectiveHero
-        objective={vm.currentObjective}
-        nextStepMessage={vm.nextStepMessage}
-        urgency={vm.urgency}
-      />
-      <DeliveryStopsSection stops={vm.stops} maskDeliveryContact={maskDeliveryContact} />
-      {vm.deliveryWindowLabel ? (
-        <View style={cardStyle}>
-          <Text style={[styles.sectionTitle, { color: colors.text.secondary }, typography.caption]}>
-            {t('orders.deliveryTimeWindow.title', 'Delivery Time Window')}
-          </Text>
-          <Text style={[styles.sectionValue, { color: colors.text.primary }, typography.body2]}>
-            {vm.deliveryWindowLabel}
-          </Text>
-        </View>
-      ) : null}
-      <DeliveryPackageCard packageInfo={vm.packageInfo} />
-      <DeliveryRequirementsCard requirements={vm.deliveryRequirements} />
-      {earnings ? <DeliveryEarningsCard earnings={earnings} /> : null}
-    </>
-  );
-  if (!sheet) return body;
-  return (
-    <ActiveDeliveryView visible bottomInset={bottomInset}>
-      {body}
-    </ActiveDeliveryView>
-  );
-}
-
 export default function OrderDetailAgentView({ route, navigation }: Props) {
   const { orderId } = route.params;
   const { auth, ordersSignal } = useStore();
@@ -175,14 +120,12 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     useOrderDetail(orderId);
   const {
     pickUp,
-    startTransit,
     outForDelivery,
     completeDelivery,
     initiatePayAtDeliveryPayment,
     markPaidInCashException,
     dropOrder,
     requestPickupDelay,
-    reportPickupIssue,
     failDelivery,
     refetch: refetchOrders,
   } = useAgentOrders();
@@ -242,6 +185,9 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
   const stickyBottomPad = tabBarOverlay + 12;
   const [dropConfirmVisible, setDropConfirmVisible] = useState(false);
   const [dropSnack, setDropSnack] = useState<string | null>(null);
+  const [moreSheetVisible, setMoreSheetVisible] = useState(false);
+  const [footerHeight, setFooterHeight] = useState(0);
+  const { setMorePress } = useContext(AgentOrderDetailMoreRegisterContext);
 
   const prevVerifiedRef = useRef(isVerified);
   useEffect(() => {
@@ -284,9 +230,8 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     setLifecycleActionConfirm(null);
     if (!action) return;
     if (action === 'pickUp') void runAction(() => pickUp(orderId));
-    else if (action === 'startTransit') void runAction(() => startTransit(orderId));
     else void runAction(() => outForDelivery(orderId));
-  }, [lifecycleActionConfirm, orderId, outForDelivery, pickUp, runAction, startTransit]);
+  }, [lifecycleActionConfirm, orderId, outForDelivery, pickUp, runAction]);
 
   const handleConfirmDropOrder = useCallback(async () => {
     setDropConfirmVisible(false);
@@ -335,43 +280,38 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     }
   }, [orderId, refetchOrder, requestPickupDelay, t]);
 
-  const handleReportPickupIssue = useCallback(async () => {
-    Alert.alert(
-      t('agent.orders.detail.reportPickupTitle', 'Report a problem?'),
-      t(
-        'agent.orders.detail.reportPickupMessage',
-        'This releases the order so another agent can take it. Your hold will be released without a reliability penalty.'
-      ),
-      [
-        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
-        {
-          text: t('agent.orders.detail.reportPickupConfirm', 'Release order'),
-          style: 'destructive',
-          onPress: () => {
-            void (async () => {
-              setActionLoading(true);
-              try {
-                await reportPickupIssue(orderId, 'agent_reported');
-                void refetchOrders();
-                navigation.goBack();
-              } catch (e: unknown) {
-                setDropSnack(
-                  e instanceof Error
-                    ? e.message
-                    : t(
-                        'agent.orders.detail.reportPickupError',
-                        'Could not release this order.'
-                      )
-                );
-              } finally {
-                setActionLoading(false);
-              }
-            })();
-          },
-        },
-      ]
-    );
-  }, [navigation, orderId, refetchOrders, reportPickupIssue, t]);
+  const moreItems = useMemo(
+    () =>
+      order
+        ? agentOrderDetailMoreItems({
+            status: order.current_status,
+            assignedAgentId: order.assigned_agent_id,
+            pickupExtensionMinutes: order.pickup_extension_minutes,
+            needsPayAtDeliveryActions: orderNeedsPayAtDeliveryAgentActions(order),
+            cashExceptionBlocked: hasCashExceptionBlockingDeposit(order),
+          })
+        : [],
+    [order]
+  );
+
+  const openMore = useCallback(() => setMoreSheetVisible(true), []);
+
+  useEffect(() => {
+    if (moreItems.length === 0) {
+      setMorePress(null);
+      return () => setMorePress(null);
+    }
+    setMorePress(() => openMore);
+    return () => setMorePress(null);
+  }, [moreItems.length, openMore, setMorePress]);
+
+  const handleMoreSelect = useCallback((id: AgentOrderMoreItemId) => {
+    if (id === 'runningLate') void handleRunningLate();
+    else if (id === 'release') setDropConfirmVisible(true);
+    else if (id === 'reportIssue') setReportModalVisible(true);
+    else if (id === 'failDelivery') setFailModalVisible(true);
+    else setShowCashExceptionDialog(true);
+  }, [handleRunningLate]);
 
   const handlePayAtDeliveryRequestSubmit = useCallback(
     async (phoneOverride?: string) => {
@@ -772,14 +712,12 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
   const needsPayAtDeliveryActions = orderNeedsPayAtDeliveryAgentActions(order);
   const agentAmountDue = resolveAmountDueAfterDeposit(order);
   const statusLabel = t(`common.orderStatus.${status}`, status);
-  const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), 'agent');
-  const showStickyPrimary =
-    (phaseInfo.primaryActionId === 'claim' &&
-      !order.assigned_agent_id &&
-      agentStatus !== 'suspended') ||
-    ['pick_up', 'out_for_delivery', 'complete_delivery'].includes(
-      phaseInfo.primaryActionId
-    );
+  const primaryCta = resolveAgentOrderPrimaryCta({
+    status,
+    assignedAgentId: order.assigned_agent_id,
+    agentSuspended: agentStatus === 'suspended',
+    needsPayAtDeliveryActions,
+  });
   const claimButtonLabel = ordersCanClaim
     ? t('agent.openOrders.claimButton', 'Réclamer')
     : agentIdVerificationPending({
@@ -797,12 +735,6 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
             })
           ? t('agent.openOrders.uploadIdToClaim', 'Upload ID to claim')
           : t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim');
-  const showActiveDeliverySheet = [
-    'assigned_to_agent',
-    'picked_up',
-    'in_transit',
-    'out_for_delivery',
-  ].includes(status);
   const earningsForCard = deliveryVm
     ? {
         ...deliveryVm.earnings,
@@ -818,58 +750,36 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         contentContainerStyle={[
           styles.scroll,
           {
-            // Sticky footer sits above the floating tab bar; leave room for ~1–2 CTA rows.
-            paddingBottom: showStickyPrimary ? 120 : tabScrollBottomPad,
+            paddingBottom: primaryCta ? footerHeight : tabScrollBottomPad,
           },
         ]}
         showsVerticalScrollIndicator={false}
       >
         {deliveryVm ? (
-          <DeliveryDetails
-            sheet={showActiveDeliverySheet}
-            bottomInset={showStickyPrimary ? stickyBottomPad + 140 : 0}
+          <AgentOrderInlineDelivery
             vm={deliveryVm}
             earnings={earningsForCard}
             maskDeliveryContact={!showClientPii}
-            cardStyle={cardStyle}
           />
         ) : null}
 
-        {/* #664: "Can't take this" for a dedicated auto-assignment, inside its release window */}
+        <AgentOrderStatusUrgencyRow
+          statusLabel={statusLabel}
+          statusColor={orderStatusStripeColor(order.current_status || '', colors)}
+          urgency={deliveryVm?.urgency ?? null}
+        />
+
         <DedicatedReleaseCard order={order} onReleased={goBack} onRefresh={refetchOrder} />
 
-        {/* Early dedicated heads-up (soft, not an offer) while the order waits for dispatch */}
         <DedicatedHeadsUpCard
           orderId={order?.id}
           enabled={status === 'ready_for_pickup' && !order?.assigned_agent_id}
         />
 
-        {/* Delivery workflow indicator – only shown for active agent orders */}
-        {['assigned_to_agent', 'picked_up', 'in_transit', 'out_for_delivery'].includes(status) && (
-          <View style={{ marginBottom: 12 }}>
-            <DeliveryWorkflowIndicator currentStatus={status} />
-          </View>
-        )}
-
-        <View style={{ marginBottom: 12 }}>
-          <OrderPhaseBanner order={order} role="agent" />
-        </View>
-
-        {/* Header: numéro, date, statut */}
         <View style={[styles.headerCard, cardStyle]}>
-          <View style={styles.headerRow}>
-            <Text style={[styles.orderNum, { color: colors.primary.main }, typography.h5]}>
-              #{order.order_number}
-            </Text>
-            <StatusPill
-              compact
-              label={statusLabel}
-              backgroundColor={orderStatusStripeColor(order.current_status || '', colors) + '28'}
-              borderColor={orderStatusStripeColor(order.current_status || '', colors) + '55'}
-              textColor={colors.text.primary}
-              icon="clipboard-text-outline"
-            />
-          </View>
+          <Text style={[styles.orderNum, { color: colors.primary.main }, typography.h5]}>
+            #{order.order_number}
+          </Text>
           <Text style={[styles.placedOn, { color: colors.text.secondary }, typography.caption]}>
             {t('agent.orders.detail.placedOn')} {formatDate(order.created_at)}
           </Text>
@@ -880,9 +790,18 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
           ) : null}
         </View>
 
-        {/* Infos livraison – progressive disclosure */}
-        {(order.special_instructions || order.preferred_delivery_time || order.requires_fast_delivery || order.estimated_delivery_time || order.actual_delivery_time) && (
+        {(order.special_instructions ||
+          order.preferred_delivery_time ||
+          order.requires_fast_delivery ||
+          order.estimated_delivery_time ||
+          order.actual_delivery_time ||
+          deliveryVm?.deliveryWindowLabel) && (
           <ExpandableSection title={t('agent.orders.detail.deliveryInfo', 'Delivery info')}>
+            {deliveryVm?.deliveryWindowLabel ? (
+              <Text style={[styles.sectionValue, { color: colors.text.primary }, typography.body2]}>
+                {deliveryVm.deliveryWindowLabel}
+              </Text>
+            ) : null}
             {order.special_instructions ? (
               <Text style={[styles.sectionValue, { color: colors.text.primary }, typography.body2]}>
                 {t('agent.orders.detail.specialInstructions')}: {order.special_instructions}
@@ -976,84 +895,21 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
             </>
           ) : null}
         </ExpandableSection>
-
-        {/* Secondary actions; primary lifecycle CTA stays in sticky footer above the tab bar */}
-        <View style={styles.actions}>
-          {status === 'out_for_delivery' && (
-            <Pressable
-              style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.error.main, borderRadius: borderRadius.md }]}
-              onPress={() => setFailModalVisible(true)}
-              disabled={actionLoading}
-            >
-              <MaterialCommunityIcons name="close-circle" size={20} color={colors.error.main} />
-              <Text style={[styles.actionBtnTextSecondary, { color: colors.error.main }, typography.button]}>
-                {t('agent.orders.detail.deliveryFailed')}
-              </Text>
-            </Pressable>
-          )}
-          {status === 'assigned_to_agent' &&
-            !(order.pickup_extension_minutes && order.pickup_extension_minutes > 0) && (
-            <Pressable
-              style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.warning.main, borderRadius: borderRadius.md }]}
-              onPress={() => void handleRunningLate()}
-              disabled={actionLoading}
-            >
-              <MaterialCommunityIcons name="clock-alert-outline" size={20} color={colors.warning.main} />
-              <Text style={[styles.actionBtnTextSecondary, { color: colors.warning.main }, typography.button]}>
-                {t('agent.orders.detail.runningLate', 'Running late')}
-              </Text>
-            </Pressable>
-          )}
-          {status === 'assigned_to_agent' && (
-            <Pressable
-              style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.error.main, borderRadius: borderRadius.md }]}
-              onPress={() => void handleReportPickupIssue()}
-              disabled={actionLoading}
-            >
-              <MaterialCommunityIcons name="alert-octagon-outline" size={20} color={colors.error.main} />
-              <Text style={[styles.actionBtnTextSecondary, { color: colors.error.main }, typography.button]}>
-                {t('agent.orders.detail.reportPickupIssue', 'Report a problem')}
-              </Text>
-            </Pressable>
-          )}
-          {status === 'assigned_to_agent' && (
-            <Pressable
-              style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.text.secondary, borderRadius: borderRadius.md }]}
-              onPress={() => setDropConfirmVisible(true)}
-              disabled={actionLoading}
-            >
-              <Text style={[styles.actionBtnTextSecondary, { color: colors.text.secondary }, typography.button]}>
-                {t('agent.orders.detail.dropOrder')}
-              </Text>
-            </Pressable>
-          )}
-
-          <Pressable
-            style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.warning.main, borderRadius: borderRadius.md }]}
-            onPress={() => setReportModalVisible(true)}
-            disabled={actionLoading}
-          >
-            <MaterialCommunityIcons name="alert-circle-outline" size={20} color={colors.warning.main} />
-            <Text style={[styles.actionBtnTextSecondary, { color: colors.warning.main }, typography.button]}>
-              {t('support.reportIssue', 'Signaler un problème')}
-            </Text>
-          </Pressable>
-        </View>
       </ScrollView>
 
-      {showStickyPrimary ? (
+      {primaryCta ? (
         <View
+          onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
           style={[
             styles.stickyActions,
             {
               borderTopColor: colors.divider,
               backgroundColor: colors.surface,
-              // Clear the absolute floating tab bar so Pick up / next CTA stays tappable.
               paddingBottom: stickyBottomPad,
             },
           ]}
         >
-          {status === 'ready_for_pickup' && !order.assigned_agent_id ? (
+          {primaryCta === 'claim' ? (
             <Pressable
               style={[
                 styles.actionBtn,
@@ -1083,7 +939,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
               )}
             </Pressable>
           ) : null}
-          {status === 'assigned_to_agent' ? (
+          {primaryCta === 'pickUp' ? (
             <Pressable
               style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
               onPress={() => setLifecycleActionConfirm('pickUp')}
@@ -1095,19 +951,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
               </Text>
             </Pressable>
           ) : null}
-          {status === 'picked_up' && APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT ? (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
-              onPress={() => setLifecycleActionConfirm('startTransit')}
-              disabled={actionLoading}
-            >
-              <MaterialCommunityIcons name="truck-delivery" size={20} color={colors.primary.contrast} />
-              <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
-                {t('agent.orders.detail.inTransit')}
-              </Text>
-            </Pressable>
-          ) : null}
-          {(status === 'picked_up' || status === 'in_transit') ? (
+          {primaryCta === 'outForDelivery' ? (
             <Pressable
               style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
               onPress={() => setLifecycleActionConfirm('outForDelivery')}
@@ -1119,33 +963,19 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
               </Text>
             </Pressable>
           ) : null}
-          {status === 'out_for_delivery' && needsPayAtDeliveryActions ? (
-            <>
-              <Pressable
-                style={[styles.actionBtn, { backgroundColor: colors.success.main, borderRadius: borderRadius.md }]}
-                onPress={() => setShowRequestPayAtDeliveryDialog(true)}
-                disabled={actionLoading || payAtDeliveryDialogLoading}
-              >
-                <MaterialCommunityIcons name="cellphone-message" size={20} color={colors.primary.contrast} />
-                <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
-                  {t('agent.orders.payAtDelivery.requestPayment', { defaultValue: 'Request payment' })}
-                </Text>
-              </Pressable>
-              {!hasCashExceptionBlockingDeposit(order) ? (
-                <Pressable
-                  style={[styles.actionBtn, styles.actionBtnSecondary, { borderColor: colors.warning.main, borderRadius: borderRadius.md }]}
-                  onPress={() => setShowCashExceptionDialog(true)}
-                  disabled={actionLoading || payAtDeliveryDialogLoading}
-                >
-                  <MaterialCommunityIcons name="cash-multiple" size={20} color={colors.warning.main} />
-                  <Text style={[styles.actionBtnTextSecondary, { color: colors.warning.main }, typography.button]}>
-                    {t('agent.orders.payAtDelivery.markPaidInCash', { defaultValue: 'Mark paid in cash' })}
-                  </Text>
-                </Pressable>
-              ) : null}
-            </>
+          {primaryCta === 'requestPayment' ? (
+            <Pressable
+              style={[styles.actionBtn, { backgroundColor: colors.success.main, borderRadius: borderRadius.md }]}
+              onPress={() => setShowRequestPayAtDeliveryDialog(true)}
+              disabled={actionLoading || payAtDeliveryDialogLoading}
+            >
+              <MaterialCommunityIcons name="cellphone-message" size={20} color={colors.primary.contrast} />
+              <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
+                {t('agent.orders.payAtDelivery.requestPayment', { defaultValue: 'Request payment' })}
+              </Text>
+            </Pressable>
           ) : null}
-          {status === 'out_for_delivery' && !needsPayAtDeliveryActions ? (
+          {primaryCta === 'markDelivered' ? (
             <Pressable
               style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
               onPress={() => {
@@ -1318,30 +1148,27 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         </Dialog>
       </Portal>
 
-      <Portal>
-        <Dialog visible={dropConfirmVisible} onDismiss={() => setDropConfirmVisible(false)}>
-          <Dialog.Title style={{ color: colors.text.primary }}>
-            {t('agent.orders.detail.dropDialogTitle', 'Drop this order?')}
-          </Dialog.Title>
-          <Dialog.Content>
-            <PaperText variant="bodyMedium" style={{ color: colors.text.secondary }}>
-              {t('agent.orders.detail.dropConfirm')}
-            </PaperText>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setDropConfirmVisible(false)}>{t('common.cancel', { defaultValue: 'Cancel' })}</Button>
-            <Button
-              mode="contained"
-              buttonColor={colors.error.main}
-              textColor={colors.onDark}
-              onPress={() => void handleConfirmDropOrder()}
-              disabled={actionLoading}
-            >
-              {t('agent.orders.detail.dropOrder')}
-            </Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+      <ConfirmActionDialog
+        visible={dropConfirmVisible}
+        title={t('agentOrder.release.confirmTitle', 'Release this order?')}
+        message={t(
+          'agentOrder.release.confirmBody',
+          "It will go back to other agents. You won't be able to deliver it."
+        )}
+        cancelLabel={t('agentOrder.release.cancel', 'Keep order')}
+        confirmLabel={t('agentOrder.release.confirmCta', 'Release')}
+        destructive
+        loading={actionLoading}
+        onDismiss={() => setDropConfirmVisible(false)}
+        onConfirm={() => void handleConfirmDropOrder()}
+      />
+
+      <AgentOrderDetailMoreSheet
+        visible={moreSheetVisible}
+        items={moreItems}
+        onClose={() => setMoreSheetVisible(false)}
+        onSelect={handleMoreSelect}
+      />
 
       <AppModal visible={reportModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
@@ -1460,7 +1287,6 @@ const styles = StyleSheet.create({
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   scroll: { padding: 16 },
   headerCard: {},
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
   orderNum: {},
   statusChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   statusChipText: {},
@@ -1471,7 +1297,6 @@ const styles = StyleSheet.create({
   financialRowTotal: { marginTop: 4 },
   financialLabel: {},
   financialValue: {},
-  actions: { gap: 12 },
   stickyActions: {
     borderTopWidth: 1,
     paddingHorizontal: 16,
@@ -1485,9 +1310,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 8,
   },
-  actionBtnSecondary: { borderWidth: 1 },
   actionBtnText: {},
-  actionBtnTextSecondary: {},
   errorText: { marginBottom: 16 },
   backBtn: { paddingVertical: 12, paddingHorizontal: 24 },
   backBtnText: {},

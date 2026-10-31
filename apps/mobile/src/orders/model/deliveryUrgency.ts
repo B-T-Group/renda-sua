@@ -124,7 +124,7 @@ export function urgencyFor(
   if (PICKUP_URGENCY_STATUSES.has(status)) {
     return labeledUrgency(
       pickupDeadlineAt(order),
-      'orders.delivery.urgency.pickupBy',
+      'agentOrder.urgency.pickupBy',
       'Pick up by {{time}}',
       ctx
     );
@@ -132,7 +132,7 @@ export function urgencyFor(
   if (DELIVER_URGENCY_STATUSES.has(status)) {
     return labeledUrgency(
       deliverByDeadlineAt(order),
-      'orders.delivery.urgency.deliverBy',
+      'agentOrder.urgency.deliverBy',
       'Deliver by {{time}}',
       ctx
     );
