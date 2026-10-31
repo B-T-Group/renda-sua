@@ -24,6 +24,8 @@ import type { AuthorizedBusinessActor } from './authorized-business-actor';
 export type OrderStatusUpdateOptions = {
   viaCancelEndpoint?: boolean;
   viaSystem?: boolean;
+  /** Merchant confirm from POST /orders/confirm (phone gate + pay-after). */
+  viaConfirmEndpoint?: boolean;
   /** Business fail-pickup from ready_for_pickup (POST /orders/:id/fail-pickup). */
   viaFailPickupEndpoint?: boolean;
   /**
@@ -182,6 +184,15 @@ export class OrderStatusService {
       this.assertCancelFromExpectedStatus(
         order.current_status,
         options?.expectedFromStatus
+      );
+    } else if (newStatus === 'confirmed') {
+      const replay = this.replaySameStatus(order, newStatus, options);
+      if (replay) return replay;
+      this.assertConfirmViaDedicatedEndpoint(options?.viaConfirmEndpoint);
+      this.assertValidStatusTransition(
+        order.current_status,
+        newStatus,
+        validTransitions
       );
     } else if (
       order.current_status === 'ready_for_pickup' &&
@@ -584,6 +595,15 @@ export class OrderStatusService {
     if (viaCancelEndpoint) return;
     throw new Error(
       'Cancellations must use POST /orders/cancel so payment release and inventory restore run'
+    );
+  }
+
+  private assertConfirmViaDedicatedEndpoint(
+    viaConfirmEndpoint?: boolean
+  ): void {
+    if (viaConfirmEndpoint) return;
+    throw new Error(
+      'Confirmations must use POST /orders/confirm so the payout-phone gate and payment initiation run'
     );
   }
 

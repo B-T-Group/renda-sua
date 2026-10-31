@@ -5182,6 +5182,27 @@
       "pendingBody": "Vous pourrez prendre des livraisons une fois votre pièce approuvée."
     }
   },
+  "agentOrder": {
+    "more": {
+      "a11y": "Plus d'actions",
+      "runningLate": "Je suis en retard",
+      "release": "Libérer la commande",
+      "reportIssue": "Signaler un problème"
+    },
+    "release": {
+      "confirmTitle": "Libérer cette commande ?",
+      "confirmBody": "Elle sera proposée à d'autres livreurs. Vous ne pourrez plus la livrer.",
+      "confirmCta": "Libérer",
+      "cancel": "Garder la commande"
+    },
+    "urgency": {
+      "pickupBy": "À récupérer avant {{time}}",
+      "deliverBy": "À livrer avant {{time}}",
+      "overdue": "En retard de {{duration}}",
+      "durationMinutes": "{{mins}} min",
+      "durationHours": "{{hours}} h"
+    }
+  },
   "completeProfile": {
     "title": "Complétez Votre Profil",
     "subtitle": "Quelques informations pour finaliser votre compte",

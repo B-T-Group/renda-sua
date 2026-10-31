@@ -8,6 +8,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import type { OrderOfferUiState } from '../../stores/OrderOfferStore';
 import type { OrderOfferDetails } from '../../types/orderOffer';
 import type { DedicatedDeclineReason } from '../../utils/dedicatedRelease';
+import { formatKm } from '../../utils/formatKm';
 import { DeclineReasonChips } from '../dedicated/DeclineReasonChips';
 import { OfferCountdownRing } from './OfferCountdownRing';
 
@@ -124,9 +125,10 @@ export function OrderOfferView({
   }
 
   const isDedicated = details?.offerKind === 'dedicated';
+  const kmLabel = formatKm(details?.distanceKm);
   const distanceText =
-    details?.distanceKm != null
-      ? `${details.distanceKm.toFixed(1)} ${t('agent.orderOffer.km', 'km')}`
+    kmLabel != null
+      ? `${kmLabel} ${t('agent.orderOffer.km', 'km')}`
       : '—';
   const earningsText =
     details?.estimatedEarnings != null

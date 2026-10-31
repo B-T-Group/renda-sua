@@ -33,6 +33,7 @@ import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { pickClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
 import { buildClaimAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
+import { formatKm } from '../../utils/formatKm';
 import type { OrderData } from '../../hooks/useOrderById';
 import ClaimOrderDialog from '../orders/ClaimOrderDialog';
 import ClaimingOrderOverlay from './ClaimingOrderOverlay';
@@ -111,6 +112,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
     order.recipient_phone ??
     order.client?.user?.phone_number ??
     null;
+  const pickupKmLabel = formatKm(order.pickup_distance_km);
 
   // Claim dialog state
   const [showClaimDialog, setShowClaimDialog] = useState(false);
@@ -487,8 +489,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
               >
                 <strong>{t('orders.pickupAddress', 'Pickup')}:</strong>{' '}
                 {formatAddress(order.business_location?.address)}
-                {order.pickup_distance_km != null &&
-                  Number.isFinite(order.pickup_distance_km) && (
+                {pickupKmLabel != null && (
                     <>
                       {' · '}
                       <Box
@@ -496,7 +497,7 @@ const AvailableOrderCard: React.FC<AvailableOrderCardProps> = ({
                         sx={{ color: 'primary.main', fontWeight: 700 }}
                       >
                         {t('orders.approxPickupDistance', '~{{km}} km away', {
-                          km: order.pickup_distance_km.toFixed(1),
+                          km: pickupKmLabel,
                         })}
                       </Box>
                     </>

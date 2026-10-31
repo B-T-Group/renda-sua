@@ -8,6 +8,7 @@ import { useCallback } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useAgentActiveDelivery } from '../../contexts/AgentActiveDeliveryContext';
 import { useAgentHomeFocus } from '../../contexts/AgentHomeFocusContext';
+import { shouldHidePersistentActiveDeliveryHeader } from '../../utils/shouldHidePersistentActiveDeliveryHeader';
 import { DeliveryStatusIndicator, statusToTone, statusToLabel } from './DeliveryStatusIndicator';
 
 /**
@@ -19,13 +20,21 @@ export const PersistentActiveDeliveryHeader = observer(function PersistentActive
   const { colors, spacing, borderRadius } = useTheme();
   const navigation = useNavigation<any>();
   const delivery = useAgentActiveDelivery();
-  const { isHomeFocused } = useAgentHomeFocus();
+  const { isHomeFocused, isOrderDetailFocused } = useAgentHomeFocus();
 
   const goToOrders = useCallback(() => {
     navigation.navigate('MainTabs', { screen: 'Orders' });
   }, [navigation]);
 
-  if (isHomeFocused || !delivery.activeOrder) return null;
+  if (
+    shouldHidePersistentActiveDeliveryHeader({
+      isHomeFocused,
+      isOrderDetailFocused,
+      hasActiveOrder: Boolean(delivery.activeOrder),
+    })
+  ) {
+    return null;
+  }
 
   const order = delivery.activeOrder;
   const tone = statusToTone(order.current_status);

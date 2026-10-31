@@ -1,13 +1,18 @@
-import { useEffect, useLayoutEffect } from 'react';
-import { Pressable } from 'react-native';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
+import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { observer } from 'mobx-react-lite';
+import { useFocusEffect } from '@react-navigation/native';
+import { IconButton } from 'react-native-paper';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { OrderMessageHeaderButton } from '../../components/orders/OrderMessageHeaderButton';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAgentHomeFocus } from '../../contexts/AgentHomeFocusContext';
 import { useProfileMe } from '../../hooks/useProfileMe';
 import { useOrderDetail } from '../../hooks/useOrderDetail';
-import OrderDetailAgentView from '../shared/orderDetail/OrderDetailAgentView';
+import OrderDetailAgentView, {
+  AgentOrderDetailMoreRegisterContext,
+} from '../shared/orderDetail/OrderDetailAgentView';
 import type { OrderDetailScreenProps } from '../shared/orderDetail/types';
 
 type Props = OrderDetailScreenProps;
@@ -19,11 +24,27 @@ function AgentOrderDetailScreenBase(props: Props) {
   const { colors } = useTheme();
   const { me } = useProfileMe();
   const { order } = useOrderDetail(orderId);
+  const { setOrderDetailFocused } = useAgentHomeFocus();
+  const [morePress, setMorePress] = useState<(() => void) | null>(null);
   const agentId = me?.agent?.id;
   const canSeeMessages =
     Boolean(agentId) &&
     Boolean(order?.assigned_agent_id) &&
     order?.assigned_agent_id === agentId;
+
+  useFocusEffect(
+    useCallback(() => {
+      setOrderDetailFocused(true);
+      return () => setOrderDetailFocused(false);
+    }, [setOrderDetailFocused])
+  );
+
+  const moreRegister = useMemo(
+    () => ({
+      setMorePress,
+    }),
+    []
+  );
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -40,16 +61,28 @@ function AgentOrderDetailScreenBase(props: Props) {
           <MaterialCommunityIcons name="arrow-left" size={24} color={colors.text.primary} />
         </Pressable>
       ),
-      headerRight: canSeeMessages
+      headerRight: morePress || canSeeMessages
         ? () => (
-            <OrderMessageHeaderButton
-              onPress={() =>
-                navigation.navigate('OrderMessages', {
-                  orderId,
-                  highlightMessageId,
-                })
-              }
-            />
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {morePress ? (
+                <IconButton
+                  icon="dots-vertical"
+                  size={22}
+                  onPress={morePress}
+                  accessibilityLabel={t('agentOrder.more.a11y', 'More actions')}
+                />
+              ) : null}
+              {canSeeMessages ? (
+                <OrderMessageHeaderButton
+                  onPress={() =>
+                    navigation.navigate('OrderMessages', {
+                      orderId,
+                      highlightMessageId,
+                    })
+                  }
+                />
+              ) : null}
+            </View>
           )
         : undefined,
     });
@@ -60,6 +93,7 @@ function AgentOrderDetailScreenBase(props: Props) {
     orderId,
     highlightMessageId,
     canSeeMessages,
+    morePress,
   ]);
 
   useEffect(() => {
@@ -68,7 +102,11 @@ function AgentOrderDetailScreenBase(props: Props) {
     navigation.navigate('OrderMessages', { orderId, highlightMessageId });
   }, [openMessages, canSeeMessages, orderId, highlightMessageId, navigation]);
 
-  return <OrderDetailAgentView {...props} />;
+  return (
+    <AgentOrderDetailMoreRegisterContext.Provider value={moreRegister}>
+      <OrderDetailAgentView {...props} />
+    </AgentOrderDetailMoreRegisterContext.Provider>
+  );
 }
 
 export default observer(AgentOrderDetailScreenBase);

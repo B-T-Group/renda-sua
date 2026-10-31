@@ -32,6 +32,7 @@ import { useSlotPreferences } from '../../hooks/useSlotPreferences';
 import PreferredSlotsHint from '../../components/agent/PreferredSlotsHint';
 import PreferredSlotsToggles from '../../components/agent/PreferredSlotsToggles';
 import { canResume, isSlotOffPause, missingPreferredSlots } from '../../utils/slotPrefs';
+import { formatKm } from '../../utils/formatKm';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'DedicatedHub'>;
 
@@ -367,6 +368,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
               // AC-P14: postings outside the agent's preferred slots stay visible but greyed.
               const missingSlots = missingPreferredSlots(opp.slots, slotPrefs.prefs);
               const notPreferred = missingSlots.length > 0;
+              const kmLabel = formatKm(opp.distanceKm);
               return (
                 <Card
                   key={opp.id}
@@ -388,7 +390,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
                     </View>
                     <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xs }}>
                       {opp.address.city}
-                      {opp.distanceKm ? ` · 📍 ${opp.distanceKm.toFixed(1)} km` : ''}
+                      {kmLabel ? ` · 📍 ${kmLabel} km` : ''}
                     </Text>
 
                     <View style={[styles.chips, { marginTop: spacing.sm }]}>

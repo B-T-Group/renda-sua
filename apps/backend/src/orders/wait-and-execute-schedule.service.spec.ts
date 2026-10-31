@@ -27,6 +27,31 @@ describe('WaitAndExecuteScheduleService', () => {
     ]);
   });
 
+  it('schedules order.dedicated_heads_up_reping and clamps a non-positive wait to one second', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-30T09:00:00Z') });
+    const { service, inputs } = make();
+    await service.scheduleDedicatedHeadsUpReping('order-1', 720);
+    await service.scheduleDedicatedHeadsUpReping('order-1', 0);
+    await service.scheduleDedicatedHeadsUpReping('order-1', -30);
+    expect(inputs()).toEqual([
+      {
+        event_type: 'order.dedicated_heads_up_reping',
+        payload: { order_id: 'order-1' },
+        run_at: '2026-10-30T09:12:00.000Z',
+      },
+      {
+        event_type: 'order.dedicated_heads_up_reping',
+        payload: { order_id: 'order-1' },
+        run_at: '2026-10-30T09:00:01.000Z',
+      },
+      {
+        event_type: 'order.dedicated_heads_up_reping',
+        payload: { order_id: 'order-1' },
+        run_at: '2026-10-30T09:00:01.000Z',
+      },
+    ]);
+  });
+
   it('a non-positive wait still schedules at least one second out; a send failure does not throw', async () => {
     jest.useFakeTimers({ now: new Date('2026-10-18T09:00:00Z') });
     const { service, send, inputs } = make();
