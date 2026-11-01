@@ -113,7 +113,8 @@ export class ClientConfirmDeliveryService {
     );
     const result = await this.orders.completeAfterClientConfirmation(
       orderId,
-      this.completeHistory(resolved)
+      this.completeHistory(resolved),
+      this.confirmChangedByType(resolved)
     );
     return {
       success: true,
@@ -142,7 +143,8 @@ export class ClientConfirmDeliveryService {
       orderId,
       DISPUTED,
       description?.trim() || 'Client reported a delivery problem',
-      user.id
+      user.id,
+      'client'
     );
     const ticket = await this.openDisputeTicket(order, user.id, description);
     return {
@@ -171,7 +173,8 @@ export class ClientConfirmDeliveryService {
       orderId,
       PENDING_AUTO_COMPLETE,
       'Agent submitted photo proof; pending auto-complete',
-      user.id
+      user.id,
+      'agent'
     );
     await this.notifyGiftRecipient(order);
     return {
@@ -330,7 +333,8 @@ export class ClientConfirmDeliveryService {
       order.id,
       DISPUTED,
       'Gift recipient reported a delivery problem',
-      actor
+      actor,
+      'client'
     );
     const ticket = await this.openDisputeTicket(
       order,
@@ -417,7 +421,8 @@ export class ClientConfirmDeliveryService {
     orderId: string,
     status: string,
     history: string,
-    actorUserId?: string
+    actorUserId?: string,
+    changedByType: string = 'system'
   ): Promise<void> {
     await this.orderStatus.updateOrderStatus(orderId, status, {
       viaSystem: true,
@@ -426,7 +431,8 @@ export class ClientConfirmDeliveryService {
       orderId,
       status,
       history,
-      actorUserId
+      actorUserId,
+      changedByType
     );
   }
 
@@ -460,7 +466,8 @@ export class ClientConfirmDeliveryService {
         order.id,
         AWAITING_CLIENT_CONFIRMATION,
         'Agent marked delivered; awaiting client confirmation',
-        actorUserId
+        actorUserId,
+        'agent'
       )
     );
     await this.safeAfterCommit('requested_at', () =>
@@ -604,6 +611,10 @@ export class ClientConfirmDeliveryService {
     if (method === 'buyer') return 'Completed by gift buyer on recipient behalf (OQ1)';
     if (method === 'auto_complete') return 'Auto-completed after photo fallback deadline';
     return 'Completed by client confirmation';
+  }
+
+  private confirmChangedByType(method: DeliveryConfirmationMethod): string {
+    return method === 'auto_complete' ? 'system' : 'client';
   }
 
   private agentMessageKey(
