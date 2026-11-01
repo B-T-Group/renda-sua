@@ -332,7 +332,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Update order status',
     description:
-      'Cancellation must use POST /orders/cancel. Confirm must use POST /orders/confirm. PATCH with status=cancelled is routed to cancel; PATCH status=confirmed is rejected so the payout-phone gate and payment initiation cannot be skipped.',
+      'Cancellation must use POST /orders/cancel. Confirm must use POST /orders/confirm. Complete must use confirm-receipt, complete-delivery, or pickup complete. PATCH cancelled is routed to cancel; PATCH confirmed/complete are rejected so money side effects cannot be skipped.',
   })
   @ApiResponse({
     status: 409,
@@ -356,19 +356,7 @@ export class OrdersController {
         notes: 'Cancelled via legacy PATCH endpoint',
       });
     }
-    // Never confirm via the generic status path — that skips the MoMo payout
-    // phone gate, pay-after payment initiation, and delivery-window handling.
-    if (updateData.status === 'confirmed') {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'USE_CONFIRM_ENDPOINT',
-          message:
-            'Use POST /orders/confirm so the payout-phone gate, payment initiation, and delivery window run.',
-        },
-        HttpStatus.BAD_REQUEST
-      );
-    }
+    this.rejectStatusThatSkipsMoneySideEffects(updateData.status);
 
     try {
       const order = await this.orderStatusService.updateOrderStatus(
@@ -408,6 +396,29 @@ export class OrdersController {
         statusCode
       );
     }
+  }
+
+  /** Generic PATCH skips payout-phone / settlement. Dedicated endpoints own those. */
+  private rejectStatusThatSkipsMoneySideEffects(status: string): void {
+    if (status === 'confirmed') {
+      this.throwUseDedicatedEndpoint(
+        'USE_CONFIRM_ENDPOINT',
+        'Use POST /orders/confirm so the payout-phone gate, payment initiation, and delivery window run.'
+      );
+    }
+    if (status === 'complete') {
+      this.throwUseDedicatedEndpoint(
+        'USE_COMPLETE_ENDPOINT',
+        'Use POST /orders/:id/confirm-receipt, POST /orders/complete-delivery, or pickup complete so settlement runs.'
+      );
+    }
+  }
+
+  private throwUseDedicatedEndpoint(error: string, message: string): never {
+    throw new HttpException(
+      { success: false, error, message },
+      HttpStatus.BAD_REQUEST
+    );
   }
 
   @Get('acceptance/pending')

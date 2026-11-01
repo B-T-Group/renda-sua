@@ -2,11 +2,13 @@ import { HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersController } from './orders.controller';
+import { OrderStatusService } from './order-status.service';
 import { OrdersService } from './orders.service';
 
 describe('OrdersController', () => {
   let controller: OrdersController;
   let ordersService: jest.Mocked<OrdersService>;
+  let orderStatusService: { updateOrderStatus: jest.Mock };
   let hasuraUserService: jest.Mocked<HasuraUserService>;
 
   beforeEach(async () => {
@@ -35,6 +37,9 @@ describe('OrdersController', () => {
       createOrder: jest.fn(),
       updateOrderStatus: jest.fn(),
     };
+    const mockOrderStatusService = {
+      updateOrderStatus: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OrdersController],
@@ -42,6 +47,10 @@ describe('OrdersController', () => {
         {
           provide: OrdersService,
           useValue: mockOrdersService,
+        },
+        {
+          provide: OrderStatusService,
+          useValue: mockOrderStatusService,
         },
         {
           provide: HasuraUserService,
@@ -54,6 +63,7 @@ describe('OrdersController', () => {
 
     controller = module.get<OrdersController>(OrdersController);
     ordersService = module.get(OrdersService);
+    orderStatusService = module.get(OrderStatusService);
     hasuraUserService = module.get(HasuraUserService);
   });
 
@@ -509,6 +519,41 @@ describe('OrdersController', () => {
         },
       });
       expect(ordersService.confirmOrder).not.toHaveBeenCalled();
+    });
+
+    it('rejects complete so settlement cannot be skipped', async () => {
+      await expect(
+        controller.updateOrderStatus('order-123', { status: 'complete' })
+      ).rejects.toMatchObject({
+        status: HttpStatus.BAD_REQUEST,
+        response: {
+          success: false,
+          error: 'USE_COMPLETE_ENDPOINT',
+          message: expect.stringContaining('confirm-receipt'),
+        },
+      });
+      expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    });
+
+    it('still forwards non-settlement statuses to OrderStatusService', async () => {
+      orderStatusService.updateOrderStatus.mockResolvedValue({
+        id: 'order-123',
+        current_status: 'out_for_delivery',
+      });
+
+      const result = await controller.updateOrderStatus('order-123', {
+        status: 'out_for_delivery',
+      });
+
+      expect(result).toEqual({
+        success: true,
+        order: { id: 'order-123', current_status: 'out_for_delivery' },
+        message: 'Order status updated successfully',
+      });
+      expect(orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
+        'order-123',
+        'out_for_delivery'
+      );
     });
   });
 });
