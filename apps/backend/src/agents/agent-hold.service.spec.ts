@@ -210,6 +210,14 @@ describe('AgentHoldService', () => {
       expect(query).toContain('delivery_pin_hash: { _is_null: false }');
       expect(query).toContain('delivery_overwrite_code_used_at: { _is_null: true }');
       expect(query).toContain('delivery_confirmation_method');
+      expect(query).toContain(
+        '_in: ["client", "recipient", "buyer", "auto_complete"]'
+      );
+      expect(query).toContain(
+        'delivery_confirmation_method: { _is_null: true }'
+      );
+      expect(query).not.toMatch(/_in:\s*\[[^\]]*"overwrite"/);
+      expect(query).not.toMatch(/_in:\s*\[[^\]]*"pin"/);
       expect(query).toContain('auto_complete');
       expect(query).toContain('resolution_type: { _eq: agent_fault }');
       expect(query).toContain('agent_addresses(');

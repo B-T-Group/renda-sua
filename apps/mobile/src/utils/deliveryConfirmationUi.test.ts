@@ -145,4 +145,11 @@ describe('shouldFetchDeliveryConfirmation', () => {
       shouldFetchDeliveryConfirmation('awaiting_client_confirmation', 'pickup')
     ).toBe(false);
   });
+
+  it('still fetches disputed and arrived doorstep orders', () => {
+    expect(shouldFetchDeliveryConfirmation('disputed', 'delivery')).toBe(true);
+    expect(shouldFetchDeliveryConfirmation('arrived', 'delivery')).toBe(true);
+    expect(shouldFetchDeliveryConfirmation('complete', 'delivery')).toBe(false);
+    expect(shouldFetchDeliveryConfirmation('disputed', 'shipping')).toBe(false);
+  });
 });

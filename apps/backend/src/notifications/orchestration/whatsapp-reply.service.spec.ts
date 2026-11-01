@@ -103,6 +103,19 @@ describe('WhatsAppReplyService', () => {
     expect(service.parseCommand('Marquer prêt')).toBe('MARK_AS_READY');
   });
 
+  it('routes gift Received and Problem buttons without completing a problem', () => {
+    expect(service.parseButtonReply('gift_received')).toBe('RECEIVED_DELIVERY');
+    expect(service.parseButtonReply(undefined, 'Reçu')).toBe('RECEIVED_DELIVERY');
+    expect(service.parseButtonReply('gift_problem')).toBe('PROBLEM_DELIVERY');
+    expect(service.parseButtonReply(undefined, 'Problème')).toBe(
+      'PROBLEM_DELIVERY'
+    );
+    expect(service.parseButtonReply('received', 'Problème')).toBe(
+      'PROBLEM_DELIVERY'
+    );
+    expect(service.parseButtonReply('  probleme  ')).toBe('PROBLEM_DELIVERY');
+  });
+
   it('maps French quick-reply titles when Meta sends text as id', () => {
     expect(service.parseButtonReply('Confirmer', 'Confirmer')).toBe('CONFIRM');
     expect(service.parseButtonReply(undefined, 'Besoin de temps')).toBe('BUSY');

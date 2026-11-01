@@ -510,4 +510,377 @@ describe('ClientConfirmDeliveryService', () => {
     expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
     expect(ctx.support.createTicket).not.toHaveBeenCalled();
   });
+
+  it('refuses markDelivered from the wrong agent, a suspended agent, or the wrong status', async () => {
+    const wrongAgent = buildService();
+    wrongAgent.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({ assigned_agent_id: 'agent-2' })
+    );
+    await expect(wrongAgent.svc.markDelivered('order-1')).rejects.toMatchObject({
+      status: 403,
+    });
+
+    const suspended = buildService();
+    suspended.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({ assigned_agent: { id: 'agent-1', status: 'suspended' } })
+    );
+    await expect(suspended.svc.markDelivered('order-1')).rejects.toMatchObject({
+      status: 403,
+    });
+
+    const tooEarly = buildService();
+    tooEarly.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION })
+    );
+    await expect(tooEarly.svc.markDelivered('order-1')).rejects.toMatchObject({
+      status: 400,
+    });
+
+    expect(wrongAgent.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+    expect(suspended.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+    expect(tooEarly.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('labels a gift-buyer confirm as buyer and still records changed_by_type client', async () => {
+    const ctx = buildService();
+    ctx.users.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      client: { id: 'c1' },
+    });
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        is_third_party_recipient: true,
+      })
+    );
+
+    const result = await ctx.svc.confirmReceipt('order-1');
+
+    expect(result.confirmationMethod).toBe('buyer');
+    expect(ctx.repo.stampConfirmationMethod).toHaveBeenCalledWith(
+      'order-1',
+      'buyer',
+      expect.any(String)
+    );
+    expect(ctx.orders.completeAfterClientConfirmation).toHaveBeenCalledWith(
+      'order-1',
+      'Completed by gift buyer on recipient behalf (OQ1)',
+      'client'
+    );
+  });
+
+  it('lets a normalized recipient phone confirm without a client session', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        recipient_phone: '00237670000000',
+      })
+    );
+
+    const result = await ctx.svc.handleRecipientAction(
+      'order-1',
+      '+237 670-000-000',
+      'received'
+    );
+
+    expect(result).toMatchObject({ success: true, status: 'complete' });
+    expect(ctx.users.getUser).not.toHaveBeenCalled();
+    expect(ctx.orders.completeAfterClientConfirmation).toHaveBeenCalledWith(
+      'order-1',
+      'Completed by gift recipient confirmation',
+      'client'
+    );
+  });
+
+  it('rejects a recipient reply from a different phone without mutating the order', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        recipient_phone: '+237670000000',
+      })
+    );
+
+    await expect(
+      ctx.svc.handleRecipientAction('order-1', '+19995550100', 'received')
+    ).rejects.toMatchObject({ status: 403 });
+    await expect(
+      ctx.svc.handleRecipientAction('order-1', '', 'problem')
+    ).rejects.toMatchObject({ status: 403 });
+    expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+    expect(ctx.support.createTicket).not.toHaveBeenCalled();
+  });
+
+  it('does not dispute a gift Problem before the order is out for delivery', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: 'picked_up',
+        recipient_phone: '+237670000000',
+      })
+    );
+
+    const result = await ctx.svc.handleRecipientAction(
+      'order-1',
+      '+237670000000',
+      'problem'
+    );
+
+    expect(result).toMatchObject({ success: false, status: 'picked_up' });
+    expect(ctx.support.createTicket).not.toHaveBeenCalled();
+    expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not open a second ticket when the delivery is already disputed', async () => {
+    const ctx = buildService();
+    ctx.users.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      client: { id: 'c1' },
+    });
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: DISPUTED,
+        awaiting_confirm_support_ticket_id: 'ticket-existing',
+      })
+    );
+
+    const result = await ctx.svc.reportProblem('order-1', 'again');
+
+    expect(result).toMatchObject({
+      success: true,
+      status: DISPUTED,
+      ticketId: 'ticket-existing',
+    });
+    expect(ctx.support.createTicket).not.toHaveBeenCalled();
+    expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('does not store photo proof before grace or without a real photo url', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        client_confirmation_requested_at: new Date().toISOString(),
+      })
+    );
+
+    await expect(
+      ctx.svc.submitCouldNotConfirm('order-1', [PHOTO])
+    ).rejects.toMatchObject({ status: 400 });
+
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        client_confirmation_requested_at: new Date(
+          Date.now() - 10 * 60_000
+        ).toISOString(),
+      })
+    );
+    await expect(
+      ctx.svc.submitCouldNotConfirm('order-1', [])
+    ).rejects.toMatchObject({ status: 400 });
+    await expect(
+      ctx.svc.submitCouldNotConfirm('order-1', [{ ...PHOTO, photoUrl: '   ' }])
+    ).rejects.toMatchObject({ status: 400 });
+
+    expect(ctx.repo.insertProofPhotos).not.toHaveBeenCalled();
+    expect(ctx.repo.stampFallback).not.toHaveBeenCalled();
+    expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('offers photo fallback only after grace on a Stripe doorstep order', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        client_confirmation_requested_at: new Date(
+          Date.now() - 60_000
+        ).toISOString(),
+      })
+    );
+
+    const early = await ctx.svc.getState('order-1');
+    expect(early.canSubmitFallback).toBe(false);
+    expect(early.agentMessageKey).toBe('agent.waiting');
+
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        client_confirmation_requested_at: new Date(
+          Date.now() - 6 * 60_000
+        ).toISOString(),
+      })
+    );
+    const open = await ctx.svc.getState('order-1');
+    expect(open.canSubmitFallback).toBe(true);
+    expect(open.agentMessageKey).toBe('agent.fallback.cta');
+
+    ctx.marketConfig.forOrder.mockResolvedValue({
+      isStripeRail: false,
+      graceMinutes: 5,
+      autoCompleteHours: 2,
+      giftBuyerCanConfirm: true,
+    });
+    const momo = await ctx.svc.getState('order-1');
+    expect(momo.canSubmitFallback).toBe(false);
+    expect(momo.agentMessageKey).toBe('agent.nonstripe');
+
+    ctx.marketConfig.forOrder.mockResolvedValue({
+      isStripeRail: true,
+      graceMinutes: 5,
+      autoCompleteHours: 2,
+      giftBuyerCanConfirm: true,
+    });
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        delivery_pin_hash: 'hash',
+        client_confirmation_requested_at: new Date(
+          Date.now() - 6 * 60_000
+        ).toISOString(),
+      })
+    );
+    const legacy = await ctx.svc.getState('order-1');
+    expect(legacy.usesLegacyPin).toBe(true);
+    expect(legacy.isClientConfirmFlow).toBe(false);
+    expect(legacy.canSubmitFallback).toBe(false);
+  });
+
+  it('still completes when the auto-complete label was already stamped', async () => {
+    const ctx = buildService();
+    ctx.repo.dueAutoComplete.mockResolvedValue(['missing', 'stamped']);
+    ctx.repo.loadOrder
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        deliveryOrder({ id: 'stamped', current_status: PENDING_AUTO_COMPLETE })
+      );
+    ctx.repo.stampConfirmationMethod.mockResolvedValue(false);
+
+    const result = await ctx.svc.autoCompleteDue();
+
+    expect(result.completed).toBe(1);
+    expect(ctx.orders.completeAfterClientConfirmation).toHaveBeenCalledTimes(1);
+    expect(ctx.orders.completeAfterClientConfirmation).toHaveBeenCalledWith(
+      'stamped',
+      'Completed after photo fallback (confirmation method already recorded)'
+    );
+  });
+
+  it('does not transition again when payment arrives on an awaiting or complete order', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder
+      .mockResolvedValueOnce(
+        deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION })
+      )
+      .mockResolvedValueOnce(deliveryOrder({ current_status: 'complete' }));
+
+    await ctx.svc.enterAwaitingAfterPayment('order-1', 'again');
+    await ctx.svc.enterAwaitingAfterPayment('order-1', 'done');
+
+    expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+    expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    expect(ctx.repo.stampRequestedAt).not.toHaveBeenCalled();
+  });
+
+  it('reminds non-Stripe orders on the 1h and 24h marks and escalates once at the SLA', async () => {
+    const ctx = buildService();
+    const now = new Date('2026-10-31T12:00:00.000Z');
+    ctx.marketConfig.forOrder.mockImplementation(async (order: { fulfillment_country?: string }) => ({
+      countryCode: order.fulfillment_country,
+      isStripeRail: order.fulfillment_country === 'CA',
+      autoCompleteHours: 2,
+      graceMinutes: 5,
+      nonStripeSupportHours: order.fulfillment_country === 'GA' ? 12 : 48,
+      giftBuyerCanConfirm: true,
+    }));
+    ctx.repo.awaitingSince.mockResolvedValue([
+      deliveryOrder({
+        id: 'stripe',
+        fulfillment_country: 'CA',
+        client_confirmation_requested_at: '2026-10-29T12:00:00.000Z',
+      }),
+      deliveryOrder({
+        id: 'bad-time',
+        fulfillment_country: 'CM',
+        client_confirmation_requested_at: 'not-a-time',
+      }),
+      deliveryOrder({
+        id: 'under-hour',
+        fulfillment_country: 'CM',
+        client_confirmation_requested_at: '2026-10-31T11:01:00.000Z',
+      }),
+      deliveryOrder({
+        id: 'hour',
+        fulfillment_country: 'CM',
+        client_confirmation_requested_at: '2026-10-31T11:00:00.000Z',
+      }),
+      deliveryOrder({
+        id: 'day',
+        fulfillment_country: 'CM',
+        client_confirmation_requested_at: '2026-10-30T12:00:00.000Z',
+        awaiting_confirm_reminder_1h_at: '2026-10-30T13:00:00.000Z',
+      }),
+      deliveryOrder({
+        id: 'sla',
+        fulfillment_country: 'CM',
+        client_confirmation_requested_at: '2026-10-29T12:00:00.000Z',
+      }),
+      deliveryOrder({
+        id: 'already',
+        fulfillment_country: 'CM',
+        client_confirmation_requested_at: '2026-10-29T12:00:00.000Z',
+        awaiting_confirm_support_ticket_id: 'ticket-existing',
+        awaiting_confirm_reminder_1h_at: '2026-10-29T13:00:00.000Z',
+        awaiting_confirm_reminder_24h_at: '2026-10-30T12:00:00.000Z',
+      }),
+      deliveryOrder({
+        id: 'short-sla',
+        fulfillment_country: 'GA',
+        client_confirmation_requested_at: '2026-10-31T00:00:00.000Z',
+      }),
+    ]);
+
+    const result = await ctx.svc.processNonStripeStuck(now);
+
+    expect(ctx.repo.awaitingSince).toHaveBeenCalledWith(
+      '2026-10-31T11:00:00.000Z',
+      50
+    );
+    expect(result).toEqual({ reminded1h: 1, reminded24h: 1, tickets: 2 });
+    expect(ctx.repo.stampReminder).toHaveBeenCalledTimes(2);
+    expect(ctx.repo.stampReminder).toHaveBeenCalledWith(
+      'hour',
+      'awaiting_confirm_reminder_1h_at',
+      now.toISOString()
+    );
+    expect(ctx.repo.stampReminder).toHaveBeenCalledWith(
+      'day',
+      'awaiting_confirm_reminder_24h_at',
+      now.toISOString()
+    );
+    expect(ctx.support.createTicket).toHaveBeenCalledTimes(2);
+    expect(ctx.repo.stampSupportTicket).toHaveBeenCalledWith(
+      'sla',
+      'ticket-1',
+      now.toISOString()
+    );
+    expect(ctx.repo.stampSupportTicket).toHaveBeenCalledWith(
+      'short-sla',
+      'ticket-1',
+      now.toISOString()
+    );
+    expect(ctx.repo.stampReminder).not.toHaveBeenCalledWith(
+      'short-sla',
+      expect.any(String),
+      expect.any(String)
+    );
+    expect(ctx.support.createTicket).not.toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ orderId: 'already' })
+    );
+  });
 });

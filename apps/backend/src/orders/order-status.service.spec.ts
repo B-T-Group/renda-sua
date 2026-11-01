@@ -117,6 +117,18 @@ describe('OrderStatusService', () => {
       expect(result.current_status).toBe('confirmed');
     });
 
+    it('rejects viaSystem pending → confirmed without the confirm endpoint', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: pendingOrder,
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'confirmed', { viaSystem: true })
+      ).rejects.toThrow('Confirmations must use POST /orders/confirm');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
     it('replays confirmed → confirmed without requiring the confirm flag', async () => {
       hasuraUserService.getUser.mockResolvedValue(businessUser as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
