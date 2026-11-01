@@ -53,6 +53,23 @@ describe('clientCanShowConfirmReceipt', () => {
     ).toBe(true);
   });
 
+  it('keeps mid-flight PIN orders on Send PIN and hides Confirm', () => {
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        usesLegacyPin: true,
+      })
+    ).toBe(false);
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        usesLegacyPin: false,
+      })
+    ).toBe(true);
+  });
+
   it('hides confirm for pickup and shipping', () => {
     expect(
       clientCanShowConfirmReceipt({
@@ -127,5 +144,12 @@ describe('shouldFetchDeliveryConfirmation', () => {
     expect(
       shouldFetchDeliveryConfirmation('awaiting_client_confirmation', 'pickup')
     ).toBe(false);
+  });
+
+  it('still fetches disputed and arrived doorstep orders', () => {
+    expect(shouldFetchDeliveryConfirmation('disputed', 'delivery')).toBe(true);
+    expect(shouldFetchDeliveryConfirmation('arrived', 'delivery')).toBe(true);
+    expect(shouldFetchDeliveryConfirmation('complete', 'delivery')).toBe(false);
+    expect(shouldFetchDeliveryConfirmation('disputed', 'shipping')).toBe(false);
   });
 });

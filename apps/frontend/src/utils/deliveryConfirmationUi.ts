@@ -9,6 +9,7 @@ export type ClientConfirmVisibilityInput = {
   fulfillmentMethod?: string | null;
   isGift?: boolean | null;
   giftBuyerCanConfirm?: boolean | null;
+  usesLegacyPin?: boolean | null;
 };
 
 export function isClientConfirmCompletableStatus(status?: string | null): boolean {
@@ -25,6 +26,7 @@ export function clientCanShowConfirmReceipt(
   input: ClientConfirmVisibilityInput
 ): boolean {
   if (!isDeliveryFulfillment(input.fulfillmentMethod)) return false;
+  if (input.usesLegacyPin === true) return false;
   if (!isClientConfirmCompletableStatus(input.status)) return false;
   if (input.isGift) return input.giftBuyerCanConfirm === true;
   return true;

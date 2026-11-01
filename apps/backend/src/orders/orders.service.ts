@@ -4011,7 +4011,9 @@ export class OrdersService {
       if (!valid) {
         throw new HttpException('Invalid overwrite code', HttpStatus.FORBIDDEN);
       }
-      await this.setOrderDeliveryOverwriteUsedAt(request.orderId);
+      if (!isClientConfirmDeliveryOrder(order)) {
+        await this.setOrderDeliveryOverwriteUsedAt(request.orderId);
+      }
     }
 
     await this.hasuraSystemService.executeMutation(
@@ -4028,13 +4030,20 @@ export class OrdersService {
       }
     );
 
+    if (isClientConfirmDeliveryOrder(order)) {
+      return this.completeClientConfirmByOverwrite(request.orderId);
+    }
+
     await this.processOrderDeliveryPayment(request.orderId);
 
     let lostCompletionRace = false;
     const updatedOrder = await this.updateOrderStatusWithSingleRetry(
       request.orderId,
       'complete',
-      { onSameStatusReplay: () => { lostCompletionRace = true; } }
+      {
+        viaCompleteDelivery: true,
+        onSameStatusReplay: () => { lostCompletionRace = true; },
+      }
     );
     if (lostCompletionRace) {
       // A parallel complete-delivery already flipped the order and owns the
@@ -4104,6 +4113,28 @@ export class OrdersService {
       success: true,
       order: updatedOrder,
       message: 'Delivery completed successfully',
+    };
+  }
+
+  /**
+   * Overwrite on a client-confirm order. Win complete first, then settle.
+   * Marking the code used before that left awaiting orders unpaid when the
+   * agent status map rejected awaiting → complete.
+   */
+  private async completeClientConfirmByOverwrite(orderId: string) {
+    const result = await this.completeAfterClientConfirmation(
+      orderId,
+      'Order completed by agent (overwrite code used)',
+      'agent'
+    );
+    await this.setOrderDeliveryOverwriteUsedAt(orderId);
+    await this.deliveryPinService.clearPinForOrder(orderId);
+    return {
+      success: true,
+      order: result.order,
+      message: result.alreadyComplete
+        ? 'Delivery already completed'
+        : 'Delivery completed successfully',
     };
   }
 
@@ -12663,7 +12694,8 @@ export class OrdersService {
    */
   async completeAfterClientConfirmation(
     orderId: string,
-    historyMessage: string
+    historyMessage: string,
+    changedByType: string = 'system'
   ): Promise<{ alreadyComplete: boolean; order: Orders | null }> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
@@ -12681,7 +12713,7 @@ export class OrdersService {
       orderId,
       'complete',
       historyMessage,
-      'system',
+      changedByType,
       order.client?.user_id
     );
     await this.runCompletionSideEffects(order);
@@ -12716,13 +12748,14 @@ export class OrdersService {
     orderId: string,
     status: string,
     notes: string,
-    changedByUserId?: string | null
+    changedByUserId?: string | null,
+    changedByType: string = 'system'
   ): Promise<void> {
     await this.createStatusHistoryEntry(
       orderId,
       status,
       notes,
-      changedByUserId ? 'user' : 'system',
+      changedByType,
       changedByUserId
     );
   }

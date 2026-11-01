@@ -25,6 +25,7 @@ describe('OrdersService.completeDelivery race and completed_at', () => {
       assigned_agent_id: 'agent-1',
       current_status: 'out_for_delivery',
       assigned_agent: { status: 'active' },
+      delivery_pin_hash: 'legacy-pin',
       delivery_overwrite_code_hash: 'hash',
       order_items: [{ id: 'item-1' }],
       client: { user_id: 'client-user' },
@@ -97,5 +98,58 @@ describe('OrdersService.completeDelivery race and completed_at', () => {
 
     expect(svc.orderStatusService.updateOrderStatus).toHaveBeenCalledTimes(2);
     expect(svc.updateInventoryOnCompletion).not.toHaveBeenCalled();
+  });
+
+  it('client-confirm overwrite settles after the complete CAS, not before', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      assigned_agent_id: 'agent-1',
+      current_status: 'awaiting_client_confirmation',
+      fulfillment_method: 'delivery',
+      assigned_agent: { status: 'active' },
+      delivery_overwrite_code_hash: 'hash',
+      order_items: [{ id: 'item-1' }],
+      client: { user_id: 'client-user' },
+    });
+    svc.completeAfterClientConfirmation = jest.fn().mockResolvedValue({
+      alreadyComplete: false,
+      order: { id: 'order-1', current_status: 'complete' },
+    });
+
+    const result = await svc.completeDelivery(request);
+
+    expect(svc.completeAfterClientConfirmation).toHaveBeenCalledWith(
+      'order-1',
+      'Order completed by agent (overwrite code used)',
+      'agent'
+    );
+    expect(svc.processOrderDeliveryPayment).not.toHaveBeenCalled();
+    expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    expect(svc.setOrderDeliveryOverwriteUsedAt).toHaveBeenCalledWith('order-1');
+    expect(svc.updateInventoryOnCompletion).not.toHaveBeenCalled();
+    expect(result.success).toBe(true);
+    expect(result.message).toBe('Delivery completed successfully');
+  });
+
+  it('does not burn the overwrite code when client-confirm completion throws', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      assigned_agent_id: 'agent-1',
+      current_status: 'awaiting_client_confirmation',
+      fulfillment_method: 'delivery',
+      assigned_agent: { status: 'active' },
+      delivery_overwrite_code_hash: 'hash',
+      client: { user_id: 'client-user' },
+    });
+    svc.completeAfterClientConfirmation = jest.fn().mockRejectedValue(
+      new Error('Invalid status transition from disputed to complete')
+    );
+
+    await expect(svc.completeDelivery(request)).rejects.toThrow(
+      'Invalid status transition'
+    );
+    expect(svc.setOrderDeliveryOverwriteUsedAt).not.toHaveBeenCalled();
   });
 });

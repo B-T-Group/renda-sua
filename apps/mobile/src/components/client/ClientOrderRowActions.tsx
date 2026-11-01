@@ -57,6 +57,7 @@ export function ClientOrderRowActions({ order, onOrderMutated, onRatePress }: Pr
       fulfillmentMethod: order.fulfillment_method,
       isGift: order.is_third_party_recipient,
       giftBuyerCanConfirm: confirmState?.giftBuyerCanConfirm,
+      usesLegacyPin: resolveUsesLegacyPin(confirmState),
     });
   const showAskReady = clientCanAskIfReady(order);
   const [receiptBusy, setReceiptBusy] = useState(false);

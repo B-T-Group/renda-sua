@@ -117,6 +117,18 @@ describe('OrderStatusService', () => {
       expect(result.current_status).toBe('confirmed');
     });
 
+    it('rejects viaSystem pending → confirmed without the confirm endpoint', async () => {
+      hasuraUserService.getUser.mockResolvedValue(businessUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: pendingOrder,
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'confirmed', { viaSystem: true })
+      ).rejects.toThrow('Confirmations must use POST /orders/confirm');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
     it('replays confirmed → confirmed without requiring the confirm flag', async () => {
       hasuraUserService.getUser.mockResolvedValue(businessUser as any);
       hasuraSystemService.executeQuery.mockResolvedValue({
@@ -444,7 +456,9 @@ describe('OrderStatusService', () => {
       });
       mockSuccessfulUpdate('complete');
 
-      await service.updateOrderStatus('order-123', 'complete');
+      await service.updateOrderStatus('order-123', 'complete', {
+        viaCompleteDelivery: true,
+      });
 
       expect(paymentRoutingService.getUserCountryCode).toHaveBeenCalledWith(
         'user-agent-1'
@@ -453,6 +467,66 @@ describe('OrderStatusService', () => {
         'agent-1',
         'CM'
       );
+    });
+  });
+
+  describe('client-confirm status gate', () => {
+    const awaiting = {
+      ...baseOrder,
+      current_status: 'awaiting_client_confirmation',
+      assigned_agent_id: 'agent-1',
+      assigned_agent: { user_id: 'user-agent-1' },
+    };
+
+    it('rejects PATCH complete while awaiting client confirmation', async () => {
+      hasuraUserService.getUser.mockResolvedValue(clientUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: awaiting });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'complete')
+      ).rejects.toThrow(
+        'Delivery confirmation must use mark-delivered, confirm-receipt, report-delivery-problem, client-could-not-confirm, or complete-delivery'
+      );
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('rejects an assigned agent completing from out_for_delivery on the generic path', async () => {
+      hasuraUserService.getUser.mockResolvedValue(agentUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: {
+          ...awaiting,
+          current_status: 'out_for_delivery',
+        },
+      });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'complete')
+      ).rejects.toThrow('Delivery confirmation must use');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('allows overwrite completion from awaiting_client_confirmation', async () => {
+      hasuraUserService.getUser.mockResolvedValue(agentUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: awaiting });
+      mockSuccessfulUpdate('complete');
+
+      const result = await service.updateOrderStatus('order-123', 'complete', {
+        viaCompleteDelivery: true,
+      });
+
+      expect(result.current_status).toBe('complete');
+    });
+
+    it('still lets system complete after the client confirms', async () => {
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: awaiting });
+      mockSuccessfulUpdate('complete');
+
+      const result = await service.updateOrderStatus('order-123', 'complete', {
+        viaSystem: true,
+      });
+
+      expect(result.current_status).toBe('complete');
+      expect(hasuraUserService.getUser).not.toHaveBeenCalled();
     });
   });
 });
@@ -529,7 +603,9 @@ describe('OrderStatusService status updates with completed_at', () => {
       },
     });
 
-    const result = await service.updateOrderStatus('order-1', 'complete');
+    const result = await service.updateOrderStatus('order-1', 'complete', {
+      viaCompleteDelivery: true,
+    });
 
     expect(result.current_status).toBe('complete');
     expect(result.completed_at).toBeDefined();
