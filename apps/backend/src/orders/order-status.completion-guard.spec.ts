@@ -103,7 +103,9 @@ describe('OrderStatusService completion guard (F1/F2)', () => {
         updateResult(1, { id: 'order-1', current_status: 'complete', completed_at: '2026-10-13T12:00:00Z' })
       );
 
-      await service.updateOrderStatus('order-1', 'complete');
+      await service.updateOrderStatus('order-1', 'complete', {
+        viaCompleteDelivery: true,
+      });
 
       const mutation = hasura.executeMutation.mock.calls[0][0] as string;
       expect(mutation).toContain('completed_at: { _is_null: true }');
@@ -117,7 +119,10 @@ describe('OrderStatusService completion guard (F1/F2)', () => {
       hasura.executeMutation.mockResolvedValue(updateResult(0));
       const onSameStatusReplay = jest.fn();
 
-      const row = await service.updateOrderStatus('order-1', 'complete', { onSameStatusReplay });
+      const row = await service.updateOrderStatus('order-1', 'complete', {
+        viaCompleteDelivery: true,
+        onSameStatusReplay,
+      });
 
       expect(row.current_status).toBe('complete');
       expect(onSameStatusReplay).toHaveBeenCalledTimes(1);
@@ -132,7 +137,10 @@ describe('OrderStatusService completion guard (F1/F2)', () => {
       const onSameStatusReplay = jest.fn();
 
       await expect(
-        service.updateOrderStatus('order-1', 'complete', { onSameStatusReplay })
+        service.updateOrderStatus('order-1', 'complete', {
+          viaCompleteDelivery: true,
+          onSameStatusReplay,
+        })
       ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
 
       expect(onSameStatusReplay).not.toHaveBeenCalled();
@@ -147,7 +155,10 @@ describe('OrderStatusService completion guard (F1/F2)', () => {
       );
       const onSameStatusReplay = jest.fn();
 
-      await service.updateOrderStatus('order-1', 'complete', { onSameStatusReplay });
+      await service.updateOrderStatus('order-1', 'complete', {
+        viaCompleteDelivery: true,
+        onSameStatusReplay,
+      });
 
       expect(onSameStatusReplay).not.toHaveBeenCalled();
       expect(queue.sendOrderStatusUpdatedMessage).toHaveBeenCalledTimes(1);

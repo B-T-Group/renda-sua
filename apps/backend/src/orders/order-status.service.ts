@@ -43,6 +43,12 @@ export type OrderStatusUpdateOptions = {
   adminCancelToken?: string;
   /** Invoked when current_status already equals the requested status. */
   onSameStatusReplay?: () => void;
+  /**
+   * PIN or overwrite completion from POST /orders/complete-delivery.
+   * Allows out_for_delivery / awaiting_client_confirmation / pending_auto_complete → complete
+   * so that path can settle. Generic PATCH must not use this flag.
+   */
+  viaCompleteDelivery?: boolean;
 };
 
 export function isDeliveredToComplete(
@@ -180,6 +186,18 @@ export class OrderStatusService {
         this.isClientConfirmSystemTransition(order.current_status, newStatus))
     ) {
       // Cooked-food auto prep / auto-ready, or client-confirm delivery transitions
+    } else if (
+      this.isCompleteDeliveryTransition(options, order.current_status, newStatus)
+    ) {
+      // POST /orders/complete-delivery (PIN or overwrite), including while awaiting confirm
+    } else if (
+      !options?.viaSystem &&
+      this.isClientConfirmGatedTransition(order.current_status, newStatus)
+    ) {
+      throw new HttpException(
+        'Delivery confirmation must use mark-delivered, confirm-receipt, report-delivery-problem, client-could-not-confirm, or complete-delivery',
+        HttpStatus.BAD_REQUEST
+      );
     } else if (newStatus === 'cancelled') {
       this.assertCancelViaDedicatedEndpoint(options?.viaCancelEndpoint);
       this.assertCancelFromExpectedStatus(
@@ -667,6 +685,40 @@ export class OrderStatusService {
     };
 
     return transitions[currentStatus] || [];
+  }
+
+  private isCompleteDeliveryTransition(
+    options: OrderStatusUpdateOptions | undefined,
+    currentStatus: string,
+    newStatus: string
+  ): boolean {
+    return (
+      !!options?.viaCompleteDelivery &&
+      newStatus === 'complete' &&
+      this.isClientConfirmFromStatus(currentStatus)
+    );
+  }
+
+  private isClientConfirmFromStatus(status: string): boolean {
+    return (
+      status === 'out_for_delivery' ||
+      status === 'awaiting_client_confirmation' ||
+      status === 'pending_auto_complete'
+    );
+  }
+
+  /** Status writes that skip settlement, dispute tickets, or the confirm clock. */
+  private isClientConfirmGatedTransition(
+    currentStatus: string,
+    newStatus: string
+  ): boolean {
+    if (!this.isClientConfirmFromStatus(currentStatus)) return false;
+    return (
+      newStatus === 'complete' ||
+      newStatus === 'disputed' ||
+      newStatus === 'awaiting_client_confirmation' ||
+      newStatus === 'pending_auto_complete'
+    );
   }
 
   private isClientConfirmSystemTransition(
