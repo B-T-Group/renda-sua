@@ -160,6 +160,25 @@ describe('resolveOrderPhase client confirm delivery', () => {
       ).nextStepKey
     ).toBe('orders.nextStep.ofdAgent');
   });
+
+  it('keeps send PIN only for mid-flight PIN orders', () => {
+    expect(
+      resolveOrderPhase(
+        { status: 'out_for_delivery', fulfillmentMethod: 'delivery' },
+        'client'
+      ).primaryActionId
+    ).toBe('confirm_receipt');
+    expect(
+      resolveOrderPhase(
+        {
+          status: 'out_for_delivery',
+          fulfillmentMethod: 'delivery',
+          usesLegacyPin: true,
+        },
+        'client'
+      ).primaryActionId
+    ).toBe('send_pin');
+  });
 });
 
 describe('pay-after ready', () => {
