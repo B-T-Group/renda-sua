@@ -12663,7 +12663,8 @@ export class OrdersService {
    */
   async completeAfterClientConfirmation(
     orderId: string,
-    historyMessage: string
+    historyMessage: string,
+    changedByType: string = 'system'
   ): Promise<{ alreadyComplete: boolean; order: Orders | null }> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
@@ -12681,7 +12682,7 @@ export class OrdersService {
       orderId,
       'complete',
       historyMessage,
-      'system',
+      changedByType,
       order.client?.user_id
     );
     await this.runCompletionSideEffects(order);
@@ -12716,13 +12717,14 @@ export class OrdersService {
     orderId: string,
     status: string,
     notes: string,
-    changedByUserId?: string | null
+    changedByUserId?: string | null,
+    changedByType: string = 'system'
   ): Promise<void> {
     await this.createStatusHistoryEntry(
       orderId,
       status,
       notes,
-      changedByUserId ? 'user' : 'system',
+      changedByType,
       changedByUserId
     );
   }

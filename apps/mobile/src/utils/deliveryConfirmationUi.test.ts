@@ -53,6 +53,23 @@ describe('clientCanShowConfirmReceipt', () => {
     ).toBe(true);
   });
 
+  it('keeps mid-flight PIN orders on Send PIN and hides Confirm', () => {
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        usesLegacyPin: true,
+      })
+    ).toBe(false);
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        usesLegacyPin: false,
+      })
+    ).toBe(true);
+  });
+
   it('hides confirm for pickup and shipping', () => {
     expect(
       clientCanShowConfirmReceipt({
