@@ -1,3 +1,4 @@
+import { HttpException } from '@nestjs/common';
 import { OrdersService } from './orders.service';
 
 jest.mock('../addresses/addresses.service', () => ({
@@ -64,5 +65,75 @@ describe('OrdersService.completeAfterClientConfirmation race', () => {
 
     expect(order).toEqual(['cas', 'item', 'delivery']);
     expect(svc.runCompletionSideEffects).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not settle a cash exception that is still pending reconciliation', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      current_status: 'awaiting_client_confirmation',
+      client: { user_id: 'client-user' },
+      reconciliation_status: 'pending_manual_reconciliation',
+    });
+
+    const result = await svc.completeAfterClientConfirmation(
+      'order-1',
+      'Client confirmed',
+      'client'
+    );
+
+    expect(result.alreadyComplete).toBe(false);
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+    expect(svc.processOrderDeliveryPayment).not.toHaveBeenCalled();
+    expect(svc.createStatusHistoryEntry).toHaveBeenCalledWith(
+      'order-1',
+      'complete',
+      'Client confirmed',
+      'client',
+      'client-user'
+    );
+    expect(svc.runCompletionSideEffects).toHaveBeenCalledTimes(1);
+  });
+
+  it('still settles after the client confirms a reconciled order', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      current_status: 'awaiting_client_confirmation',
+      client: { user_id: 'client-user' },
+      reconciliation_status: 'reconciled',
+    });
+
+    await svc.completeAfterClientConfirmation('order-1', 'Client confirmed');
+
+    expect(svc.processOrderPayment).toHaveBeenCalledWith('order-1');
+    expect(svc.processOrderDeliveryPayment).toHaveBeenCalledWith('order-1');
+  });
+
+  it('does not settle when the order is already complete', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      current_status: 'complete',
+      client: { user_id: 'client-user' },
+    });
+
+    const result = await svc.completeAfterClientConfirmation('order-1', 'again');
+
+    expect(result.alreadyComplete).toBe(true);
+    expect(svc.updateOrderStatusWithSingleRetry).not.toHaveBeenCalled();
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+    expect(svc.createStatusHistoryEntry).not.toHaveBeenCalled();
+  });
+
+  it('does not settle when the order is missing', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue(null);
+
+    await expect(
+      svc.completeAfterClientConfirmation('order-1', 'missing')
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+    expect(svc.updateOrderStatusWithSingleRetry).not.toHaveBeenCalled();
   });
 });

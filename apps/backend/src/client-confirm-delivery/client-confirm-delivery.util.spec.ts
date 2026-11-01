@@ -68,4 +68,34 @@ describe('client-confirm-delivery.util', () => {
       graceElapsed(requested.toISOString(), 5, new Date('2026-10-31T12:05:00Z'))
     ).toBe(true);
   });
+
+  it('does not start grace from a missing or unreadable timestamp', () => {
+    const now = new Date('2026-10-31T12:05:00Z');
+    expect(graceElapsed(null, 5, now)).toBe(false);
+    expect(graceElapsed(undefined, 5, now)).toBe(false);
+    expect(graceElapsed('not-a-time', 5, now)).toBe(false);
+    expect(graceElapsed('', 5, now)).toBe(false);
+  });
+
+  it('treats a blank PIN hash as client confirm and excludes shipping', () => {
+    expect(
+      usesLegacyDeliveryPin({
+        fulfillment_method: 'delivery',
+        delivery_pin_hash: '   ',
+      })
+    ).toBe(false);
+    expect(
+      isClientConfirmDeliveryOrder({
+        fulfillment_method: 'delivery',
+        delivery_pin_hash: '   ',
+      })
+    ).toBe(true);
+    expect(
+      isClientConfirmDeliveryOrder({ fulfillment_method: 'shipping' })
+    ).toBe(false);
+    expect(canConfirmFromStatus(null)).toBe(false);
+    expect(canConfirmFromStatus(undefined)).toBe(false);
+    expect(canOverwriteFromStatus('OUT_FOR_DELIVERY')).toBe(true);
+    expect(canOverwriteFromStatus('Pending_Auto_Complete')).toBe(true);
+  });
 });
