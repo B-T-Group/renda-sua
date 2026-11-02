@@ -237,12 +237,7 @@ export class ItemAppealsService {
   async withdrawAppeal(businessId: string, userId: string, itemId: string, appealId: string) {
     await this.loadOwnedItem(businessId, itemId);
     const res = await this.hasura.executeMutation<{ update_item_appeals: { affected_rows: number } }>(
-      `mutation WithdrawItemAppeal($id: uuid!, $itemId: uuid!) {
-        update_item_appeals(
-          where: { id: { _eq: $id }, item_id: { _eq: $itemId }, status: { _eq: pending } }
-          _set: { status: withdrawn, withdrawn_reason: "business" }
-        ) { affected_rows }
-      }`,
+      Q.WITHDRAW_APPEAL,
       { id: appealId, itemId }
     );
     if (!res.update_item_appeals?.affected_rows) {

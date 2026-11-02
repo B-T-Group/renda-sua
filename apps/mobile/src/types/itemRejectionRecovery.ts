@@ -212,6 +212,10 @@ export const RECOVERY_ACTIONS: readonly RecoveryAction[] = [
 export const APPEAL_REASON_MIN = 20;
 export const APPEAL_REASON_MAX = 500;
 export const APPEAL_EVIDENCE_MAX = 3;
+/** Matches `AwsController.MAX_IMAGE_SIZE_BYTES` (image presign used for evidence). */
+export const APPEAL_EVIDENCE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+/** Matches `AwsController.MAX_DOCUMENT_SIZE_BYTES` (PDF presign used for evidence). */
+export const APPEAL_EVIDENCE_PDF_MAX_BYTES = 50 * 1024 * 1024;
 export const WEAR_NOTE_MIN = 10;
 export const WEAR_NOTE_MAX = 300;
 export const DEFAULT_CLEANUP_TOKEN_COST = 1;

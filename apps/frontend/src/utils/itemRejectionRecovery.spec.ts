@@ -5,6 +5,7 @@ import {
   extractRecoveryErrorCode,
   getAppealTileDisabledReason,
   getRecoveryChipPresentation,
+  isAllowedEvidenceFile,
   isAlteredCleanup,
   isCategoryRequiredError,
   isInsufficientTokensError,
@@ -23,7 +24,11 @@ import {
   validateWearNote,
   visibleRecoveryTiles,
 } from './itemRejectionRecovery';
-import type { ItemRejectionRecovery } from '../types/itemRejectionRecovery';
+import {
+  APPEAL_EVIDENCE_IMAGE_MAX_BYTES,
+  APPEAL_EVIDENCE_PDF_MAX_BYTES,
+  type ItemRejectionRecovery,
+} from '../types/itemRejectionRecovery';
 
 function rejectedRecovery(
   overrides: Partial<ItemRejectionRecovery> = {}
@@ -93,6 +98,33 @@ describe('chip presentation', () => {
     });
     expect(chip.defaultLabel).toBe('In review · usually within 24 h');
   });
+
+  it('shows In review from server statusDisplay after resubmit', () => {
+    const chip = getRecoveryChipPresentation({
+      status: 'pending',
+      statusDisplay: 'in_review',
+    });
+    expect(chip.tone).toBe('warning');
+    expect(chip.defaultLabel).toBe('In review · usually within 24 h');
+    expect(chip.labelKey).toBe('business.items.recovery.status.inReview');
+    expect(
+      shouldShowRecoveryCard(
+        rejectedRecovery({
+          item: {
+            id: 'item-1',
+            name: 'Lamp',
+            moderationStatus: 'pending',
+            statusDisplay: 'in_review',
+            condition: 'new',
+            wearNote: null,
+          },
+          rejection: null,
+          actions: [],
+          canResubmit: false,
+        })
+      )
+    ).toBe(true);
+  });
 });
 
 describe('validations', () => {
@@ -124,6 +156,43 @@ describe('validations', () => {
         { type: 'image/png', name: 'd.png' },
       ]).valid
     ).toBe(false);
+  });
+
+  it('rejects SVG evidence and files over the AWS presign caps', () => {
+    // AwsController.MAX_IMAGE_SIZE_BYTES = 10MB; MAX_DOCUMENT_SIZE_BYTES = 50MB.
+    // Image presign also rejects SVG (jpeg/jpg/png/webp only).
+    expect(isAllowedEvidenceFile({ type: 'image/svg+xml', name: 'logo.svg' })).toBe(
+      false
+    );
+    expect(isAllowedEvidenceFile({ type: 'image/png', name: 'logo.svg' })).toBe(false);
+    expect(
+      isAllowedEvidenceFile({
+        type: 'image/jpeg',
+        name: 'photo.jpg',
+        size: APPEAL_EVIDENCE_IMAGE_MAX_BYTES + 1,
+      })
+    ).toBe(false);
+    expect(
+      isAllowedEvidenceFile({
+        type: 'application/pdf',
+        name: 'receipt.pdf',
+        size: APPEAL_EVIDENCE_PDF_MAX_BYTES + 1,
+      })
+    ).toBe(false);
+    expect(
+      isAllowedEvidenceFile({
+        type: 'image/webp',
+        name: 'photo.webp',
+        size: APPEAL_EVIDENCE_IMAGE_MAX_BYTES,
+      })
+    ).toBe(true);
+    expect(
+      isAllowedEvidenceFile({
+        type: 'application/pdf',
+        name: 'receipt.pdf',
+        size: APPEAL_EVIDENCE_PDF_MAX_BYTES,
+      })
+    ).toBe(true);
   });
 });
 

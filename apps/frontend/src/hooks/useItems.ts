@@ -182,6 +182,7 @@ export interface CreateItemData {
   export_market_country_codes?: string[];
   stripe_tax_code_id?: string;
   business_id: string;
+  confirmWithdrawAppeal?: boolean;
 }
 
 export interface CreateBrandData {

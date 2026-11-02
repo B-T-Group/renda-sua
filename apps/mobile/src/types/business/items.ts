@@ -159,6 +159,7 @@ export interface UpdateBusinessItemPayload {
   shipping_price?: number | null;
   shipping_currency?: string;
   stripe_tax_code_id?: string;
+  confirmWithdrawAppeal?: boolean;
 }
 
 export interface CreateItemFromImagePayload {

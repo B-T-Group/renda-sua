@@ -110,4 +110,38 @@ describe('useItemRejectionRecovery', () => {
     expect(result.current.locked).toBe(true);
     expect(result.current.recovery?.item.moderationStatus).toBe('pending');
   });
+
+  it('shows In review from server statusDisplay after resubmit', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        data: {
+          item: {
+            id: 'item-1',
+            name: 'Lamp',
+            moderationStatus: 'pending',
+            statusDisplay: 'in_review',
+            condition: 'new',
+            wearNote: null,
+          },
+          rejection: null,
+          actions: [],
+          resubmitEditLink: null,
+          appeal: null,
+          appealsUsed: 0,
+          appealLimit: 1,
+          canAppeal: false,
+          canResubmit: false,
+          resubmitWithdrawsAppeal: false,
+          aiCleanup: { costPerImage: 1, tokenBalance: 4, tokensSpentOnItem: 0 },
+          reviewSlaHours: 24,
+          appealSlaHours: 48,
+        },
+      },
+    });
+    const { result } = renderHook(() => useItemRejectionRecovery('item-1'));
+    await waitFor(() => expect(result.current.recovery).toBeTruthy());
+    expect(result.current.visible).toBe(true);
+    expect(result.current.recovery?.item.statusDisplay).toBe('in_review');
+    expect(result.current.canResubmit).toBe(false);
+  });
 });

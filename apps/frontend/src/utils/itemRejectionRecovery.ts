@@ -1,5 +1,7 @@
 import {
+  APPEAL_EVIDENCE_IMAGE_MAX_BYTES,
   APPEAL_EVIDENCE_MAX,
+  APPEAL_EVIDENCE_PDF_MAX_BYTES,
   APPEAL_REASON_MAX,
   APPEAL_REASON_MIN,
   DEFAULT_CLEANUP_TOKEN_COST,
@@ -58,7 +60,7 @@ export function shouldShowRecoveryCard(
   pendingResubmit = false
 ): boolean {
   if (!recovery) return false;
-  if (pendingResubmit) return true;
+  if (pendingResubmit || recovery.item.statusDisplay === 'in_review') return true;
   if (recovery.item.moderationStatus === 'rejected') return true;
   return isVisibleAppeal(recovery.appeal);
 }
@@ -75,9 +77,12 @@ function isVisibleAppeal(appeal: ItemAppeal | null | undefined): boolean {
 export function getRecoveryChipPresentation(input: {
   status?: string | null;
   category?: string | null;
+  statusDisplay?: string | null;
   pendingResubmit?: boolean;
 }): RecoveryChipPresentation {
-  if (input.pendingResubmit) return inReviewChip();
+  if (input.pendingResubmit || input.statusDisplay === 'in_review') {
+    return inReviewChip();
+  }
   if (input.status === 'rejected') return rejectedChip(input.category);
   return defaultChip(input.status);
 }
@@ -210,15 +215,26 @@ export function validateAppealReason(
 export function isAllowedEvidenceFile(file: {
   type?: string | null;
   name?: string | null;
+  size?: number | null;
 }): boolean {
-  const type = (file.type ?? '').toLowerCase();
+  const type = (file.type ?? '').toLowerCase().split(';')[0].trim();
   const name = (file.name ?? '').toLowerCase();
-  if (type.startsWith('image/')) return true;
-  return type === 'application/pdf' || name.endsWith('.pdf');
+  if (type === 'image/svg+xml' || name.endsWith('.svg')) return false;
+  const isPdf = type === 'application/pdf' || name.endsWith('.pdf');
+  const isImage =
+    type === 'image/jpeg' ||
+    type === 'image/jpg' ||
+    type === 'image/png' ||
+    type === 'image/webp' ||
+    /\.(jpe?g|png|webp)$/.test(name);
+  if (!isPdf && !isImage) return false;
+  if (file.size == null) return true;
+  const max = isPdf ? APPEAL_EVIDENCE_PDF_MAX_BYTES : APPEAL_EVIDENCE_IMAGE_MAX_BYTES;
+  return file.size <= max;
 }
 
 export function validateAppealEvidence(
-  files: Array<{ type?: string | null; name?: string | null }>
+  files: Array<{ type?: string | null; name?: string | null; size?: number | null }>
 ): AppealEvidenceValidation {
   if (files.length > APPEAL_EVIDENCE_MAX) {
     return {
@@ -316,6 +332,30 @@ export function isCategoryRequiredError(error: unknown): boolean {
     extractRecoveryErrorCode(error) ===
     RECOVERY_ERROR_CODES.ITEM_REJECTION_CATEGORY_REQUIRED
   );
+}
+
+export function isWithdrawConfirmRequired(error: unknown): boolean {
+  return (
+    extractRecoveryErrorCode(error) ===
+    RECOVERY_ERROR_CODES.ITEM_APPEAL_WITHDRAW_CONFIRM_REQUIRED
+  );
+}
+
+export type AppealConfirmSaveResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; cancelled: true };
+
+export async function saveItemWithAppealConfirm<T>(
+  save: (confirmWithdrawAppeal?: boolean) => Promise<T>,
+  confirmWithdraw: () => boolean | Promise<boolean>
+): Promise<AppealConfirmSaveResult<T>> {
+  try {
+    return { ok: true, data: await save() };
+  } catch (error: unknown) {
+    if (!isWithdrawConfirmRequired(error)) throw error;
+    if (!(await confirmWithdraw())) return { ok: false, cancelled: true };
+    return { ok: true, data: await save(true) };
+  }
 }
 
 export function recoveryErrorI18n(code: string | null | undefined): {

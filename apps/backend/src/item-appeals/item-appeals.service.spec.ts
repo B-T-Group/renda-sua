@@ -76,6 +76,7 @@ function setup(opts: { item?: any; appeal?: any; config?: any[]; others?: { role
       if (q === Q.UPHOLD_APPEAL) return { update_item_appeals: { affected_rows: 1 } };
       if (q === Q.OVERTURN_APPEAL) return { appeal: { affected_rows: 1 }, item: { affected_rows: 1 } };
       if (q === Q.SET_ITEM_CONDITION) return { update_items_by_pk: { condition: v.condition, wear_note: v.wearNote, is_used: v.condition !== 'new' } };
+      if (q === Q.WITHDRAW_APPEAL) return { update_item_appeals: { affected_rows: 1 } };
       return {};
     }),
   };
@@ -204,6 +205,16 @@ describe('ItemAppealsService (business)', () => {
       },
     });
     expect(await codeOf(s.createAppeal(BIZ, 'u', 'i1', { reason: REASON }))).toBe('ITEM_APPEAL_ALREADY_PENDING');
+  });
+
+  it('withdraws a pending appeal through WITHDRAW_APPEAL', async () => {
+    const { s, hasura, rejections } = setup({ item: rejectedItem() });
+    await expect(s.withdrawAppeal(BIZ, 'u1', 'i1', 'a1')).resolves.toEqual({
+      appealId: 'a1',
+      status: 'withdrawn',
+    });
+    expect(mutationsOf(hasura, Q.WITHDRAW_APPEAL)[0][1]).toEqual({ id: 'a1', itemId: 'i1' });
+    expect(rejections.audit).toHaveBeenCalled();
   });
 
   it('resubmit uses the strict gate, resets to pending, and re-queues review', async () => {
