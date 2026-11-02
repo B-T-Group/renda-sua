@@ -308,6 +308,187 @@ describe('ItemAppealsService (business)', () => {
     await expect(s.cleanupQuote(BIZ, 'i1', 5)).resolves.toMatchObject({ totalCost: 5, tokenBalance: 3, sufficient: false, shortfall: 2, code: 'INSUFFICIENT_AI_TOKENS' });
     await expect(s.cleanupQuote(BIZ, 'i1', 2)).resolves.toMatchObject({ sufficient: true, code: null });
   });
+
+  it('clamps the cleanup quote and prompts a token purchase only when short', async () => {
+    const { s, siteEvents } = setup({ item: rejectedItem() });
+    await expect(s.cleanupQuote(BIZ, 'i1', 0)).resolves.toMatchObject({ imageCount: 1, totalCost: 1, sufficient: true, code: null });
+    await expect(s.cleanupQuote(BIZ, 'i1', Number.NaN)).resolves.toMatchObject({ imageCount: 1, totalCost: 1 });
+    await expect(s.cleanupQuote(BIZ, 'i1', -4)).resolves.toMatchObject({ imageCount: 1 });
+    await expect(s.cleanupQuote(BIZ, 'i1', 2.9)).resolves.toMatchObject({ imageCount: 2, totalCost: 2, sufficient: true });
+    await expect(s.cleanupQuote(BIZ, 'i1', '21' as any)).resolves.toMatchObject({
+      imageCount: 20,
+      totalCost: 20,
+      sufficient: false,
+      shortfall: 17,
+      code: 'INSUFFICIENT_AI_TOKENS',
+    });
+    const prompts = siteEvents.trackEvent.mock.calls.filter((c: any[]) => c[0].eventType === 'item_recovery.buy_tokens_prompted');
+    expect(prompts).toHaveLength(1);
+    expect(prompts[0][0].metadata).toEqual({ itemId: 'i1', needed: 17 });
+  });
+
+  it('does not quote cleanup tokens for another business', async () => {
+    const { s, siteEvents } = setup({ item: rejectedItem({ business_id: 'other' }) });
+    expect(await codeOf(s.cleanupQuote(BIZ, 'i1', 5))).toBe('ITEM_APPEAL_NOT_OWNER');
+    expect(siteEvents.trackEvent).not.toHaveBeenCalled();
+  });
+
+  it('withdraws only a pending appeal on this item', async () => {
+    const { s, hasura, rejections, siteEvents } = setup({ item: rejectedItem() });
+    hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      if (q.includes('WithdrawItemAppeal')) return { update_item_appeals: { affected_rows: 1 } };
+      return { id: v?.id };
+    });
+    await expect(s.withdrawAppeal(BIZ, 'u1', 'i1', 'a1')).resolves.toEqual({ appealId: 'a1', status: 'withdrawn' });
+    const [[q, vars]] = hasura.executeMutation.mock.calls;
+    expect(q).toContain('status: { _eq: pending }');
+    expect(q).toContain('item_id: { _eq: $itemId }');
+    expect(vars).toEqual({ id: 'a1', itemId: 'i1' });
+    expect(rejections.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'appeal_withdrawn', appeal_id: 'a1', actor_user_id: 'u1' }));
+    expect(siteEvents.trackEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ eventType: 'item_appeal.withdrawn', metadata: { itemId: 'i1', appealId: 'a1', reason: 'business' } }),
+      expect.anything()
+    );
+  });
+
+  it('a lost withdraw is 409 and does not audit', async () => {
+    const { s, rejections, siteEvents } = setup({ item: rejectedItem() });
+    expect(await codeOf(s.withdrawAppeal(BIZ, 'u1', 'i1', 'a1'))).toBe('ITEM_APPEAL_NOT_PENDING');
+    expect(rejections.audit).not.toHaveBeenCalled();
+    expect(siteEvents.trackEvent).not.toHaveBeenCalled();
+  });
+
+  it('does not withdraw an appeal on another business item', async () => {
+    const { s, hasura } = setup({ item: rejectedItem({ business_id: 'other' }) });
+    expect(await codeOf(s.withdrawAppeal(BIZ, 'u1', 'i1', 'a1'))).toBe('ITEM_APPEAL_NOT_OWNER');
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('a deleted item is not found before the owner check', async () => {
+    const { s } = setup({ item: rejectedItem({ status: 'deleted', business_id: 'other' }) });
+    expect(await codeOf(s.getRecovery(BIZ, 'i1'))).toBe('ITEM_NOT_FOUND');
+    expect(await codeOf(s.withdrawAppeal(BIZ, 'u1', 'i1', 'a1'))).toBe('ITEM_NOT_FOUND');
+  });
+
+  it('refuses an appeal with no rejection record and does not write', async () => {
+    const { s, hasura, notifications } = setup({ item: rejectedItem({ current_rejection: null }) });
+    expect(await codeOf(s.createAppeal(BIZ, 'u', 'i1', { reason: REASON }))).toBe('ITEM_NOT_REJECTED');
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+    expect(notifications.sendItemAppealNotice).not.toHaveBeenCalled();
+  });
+
+  it('a non-uniqueness insert failure is not reported as already pending', async () => {
+    const { s } = setup({
+      item: rejectedItem(),
+      mutation: (q) => {
+        if (q === Q.INSERT_APPEAL) throw new Error('connection reset');
+        return undefined;
+      },
+    });
+    await expect(s.createAppeal(BIZ, 'u', 'i1', { reason: REASON })).rejects.toThrow('connection reset');
+  });
+
+  it('skips the received notice when the business has no user', async () => {
+    const { s, notifications } = setup({ item: rejectedItem({ business: { id: BIZ, user_id: null, name: 'Shop' } }) });
+    await expect(s.createAppeal(BIZ, 'u', 'i1', { reason: REASON })).resolves.toMatchObject({ status: 'pending' });
+    expect(notifications.sendItemAppealNotice).not.toHaveBeenCalled();
+  });
+
+  it('keeps the French notice default when the language lookup fails, and uses English when asked', async () => {
+    const failed = setup({ item: rejectedItem() });
+    failed.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q === Q.USER_FOR_NOTICE) throw new Error('lang down');
+      if (q === Q.ITEM_RECOVERY_STATE) {
+        return { items_by_pk: rejectedItem(), ai_image_cleanup_jobs_aggregate: { aggregate: { sum: { tokens_consumed: 0 } } } };
+      }
+      if (q === Q.APPEAL_CONFIG) return { application_configurations: [] };
+      if (q === Q.BUSINESS_TOKEN_BALANCE) return { businesses_by_pk: { ai_tokens: 3 } };
+      return {};
+    });
+    await expect(failed.s.createAppeal(BIZ, 'u', 'i1', { reason: REASON })).resolves.toMatchObject({ status: 'pending' });
+    expect(failed.notifications.sendItemAppealNotice.mock.calls[0][0].title).toBe('Recours reçu');
+
+    const english = setup({ item: rejectedItem() });
+    english.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q === Q.USER_FOR_NOTICE) return { users_by_pk: { preferred_language: ' EN ' } };
+      if (q === Q.ITEM_RECOVERY_STATE) {
+        return { items_by_pk: rejectedItem(), ai_image_cleanup_jobs_aggregate: { aggregate: { sum: { tokens_consumed: 0 } } } };
+      }
+      if (q === Q.APPEAL_CONFIG) return { application_configurations: [] };
+      if (q === Q.BUSINESS_TOKEN_BALANCE) return { businesses_by_pk: { ai_tokens: 3 } };
+      return {};
+    });
+    await english.s.createAppeal(BIZ, 'u', 'i1', { reason: REASON });
+    expect(english.notifications.sendItemAppealNotice.mock.calls[0][0].title).toBe('Appeal received');
+  });
+
+  it('treats an explicit appeal limit of 0 as closed, and a missing or bad SLA as 48h', async () => {
+    jest.useFakeTimers().setSystemTime(new Date('2026-11-01T12:00:00Z'));
+    try {
+      const closed = setup({
+        item: rejectedItem(),
+        config: [
+          { config_key: 'item_appeal_limit_per_rejection', number_value: 0 },
+          { config_key: 'item_appeal_sla_hours', number_value: 0 },
+        ],
+      });
+      await expect(closed.s.getRecovery(BIZ, 'i1')).resolves.toMatchObject({ appealLimit: 0, canAppeal: false, appealSlaHours: 48 });
+      expect(await codeOf(closed.s.createAppeal(BIZ, 'u', 'i1', { reason: REASON }))).toBe('ITEM_APPEAL_LIMIT_REACHED');
+
+      const nullLimit = setup({
+        item: rejectedItem(),
+        config: [{ config_key: 'item_appeal_limit_per_rejection', number_value: null }],
+      });
+      await expect(nullLimit.s.getRecovery(BIZ, 'i1')).resolves.toMatchObject({ appealLimit: 0, canAppeal: false, appealSlaHours: 48 });
+
+      const junk = setup({
+        item: rejectedItem(),
+        config: [
+          { config_key: 'item_appeal_limit_per_rejection', number_value: 'nope' as any },
+          { config_key: 'item_appeal_sla_hours', number_value: -3 },
+        ],
+      });
+      await expect(junk.s.getRecovery(BIZ, 'i1')).resolves.toMatchObject({ appealLimit: 1, appealSlaHours: 48, canAppeal: true });
+
+      const down = setup({ item: rejectedItem() });
+      down.hasura.executeQuery.mockImplementation(async (q: string) => {
+        if (q === Q.APPEAL_CONFIG) throw new Error('config down');
+        if (q === Q.ITEM_RECOVERY_STATE) {
+          return { items_by_pk: rejectedItem(), ai_image_cleanup_jobs_aggregate: { aggregate: { sum: { tokens_consumed: 0 } } } };
+        }
+        if (q === Q.BUSINESS_TOKEN_BALANCE) return { businesses_by_pk: { ai_tokens: 3 } };
+        if (q === Q.USER_FOR_NOTICE) return { users_by_pk: { preferred_language: 'en' } };
+        return {};
+      });
+      const created = await down.s.createAppeal(BIZ, 'u', 'i1', { reason: REASON });
+      expect(created.slaDueAt).toBe('2026-11-03T12:00:00.000Z');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('a lost resubmit race does not record the resubmit or requeue review', async () => {
+    const { s, rejections, aiReview } = setup({
+      item: rejectedItem(),
+      mutation: (q) => (q === RESET_ITEM_PENDING ? { update_items_by_pk: null } : undefined),
+    });
+    expect(await codeOf(s.resubmit(BIZ, 'u1', 'i1', {}))).toBe('ITEM_NOT_REJECTED');
+    expect(rejections.noteResubmitted).not.toHaveBeenCalled();
+    expect(aiReview.requestReview).not.toHaveBeenCalled();
+  });
+
+  it('changes condition on a live item without a recovery audit', async () => {
+    const { s, rejections, siteEvents, hasura } = setup({
+      item: rejectedItem({ moderation_status: 'approved', rejection_category: 'pricing' }),
+    });
+    await expect(s.setCondition(BIZ, 'u', 'i1', { condition: 'used', wearNote: 'Scratches on the base' })).resolves.toMatchObject({
+      condition: 'used',
+      isUsed: true,
+    });
+    expect(mutationsOf(hasura, Q.SET_ITEM_CONDITION)).toHaveLength(1);
+    expect(rejections.audit).not.toHaveBeenCalled();
+    expect(siteEvents.trackEvent).not.toHaveBeenCalled();
+  });
 });
 
 describe('ItemAppealsService (admin decide)', () => {
@@ -379,6 +560,70 @@ describe('ItemAppealsService (admin decide)', () => {
     });
     expect(out.appeals[0].slaState).toBe('breached');
   });
+
+  it('rejects a bad decision or category before any write', async () => {
+    const { s, hasura } = setup({ appeal: pendingAppeal() });
+    expect(await codeOf(s.decide('a1', 'mod2', { decision: 'maybe' }))).toBe('ITEM_ACTION_NOT_ALLOWED_FOR_CATEGORY');
+    expect(await codeOf(s.decide('a1', 'mod2', { decision: 'uphold', note: 'Still blurry', correctedCategory: 'nope' }))).toBe(
+      'ITEM_REJECTION_CATEGORY_REQUIRED'
+    );
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+    expect(hasura.executeQuery).not.toHaveBeenCalled();
+  });
+
+  it('does not rewrite the category when the correction matches', async () => {
+    const { s, hasura } = setup({ appeal: pendingAppeal() });
+    await s.decide('a1', 'mod2', { decision: 'uphold', note: 'Still blurry', correctedCategory: 'photo_quality' });
+    expect(mutationsOf(hasura, Q.CORRECT_CATEGORY)).toHaveLength(0);
+    expect(mutationsOf(hasura, Q.UPHOLD_APPEAL)).toHaveLength(1);
+  });
+
+  it('does not overturn when activation checks fail', async () => {
+    const { s, hasura, activation } = setup({ appeal: pendingAppeal() });
+    activation.assertItemCanActivateAsSystem.mockRejectedValue(new Error('missing price'));
+    await expect(s.decide('a1', 'mod2', { decision: 'overturn' })).rejects.toThrow('missing price');
+    expect(mutationsOf(hasura, Q.OVERTURN_APPEAL)).toHaveLength(0);
+  });
+
+  it('a partial overturn is 409 and does not approve or requeue', async () => {
+    const { s, rejections, aiReview } = setup({
+      appeal: pendingAppeal(),
+      mutation: (q) => (q === Q.OVERTURN_APPEAL ? { appeal: { affected_rows: 1 }, item: { affected_rows: 0 } } : undefined),
+    });
+    expect(await codeOf(s.decide('a1', 'mod2', { decision: 'overturn' }))).toBe('ITEM_APPEAL_NOT_PENDING');
+    expect(rejections.noteApproved).not.toHaveBeenCalled();
+    expect(aiReview.requestReview).not.toHaveBeenCalled();
+  });
+
+  it('appends the admin note on uphold and omits a blank overturn note', async () => {
+    const upheld = setup({ appeal: pendingAppeal() });
+    await upheld.s.decide('a1', 'mod2', { decision: 'uphold', note: 'Still blurry' });
+    expect(upheld.notifications.sendItemAppealNotice.mock.calls[0][0].body).toContain('Still blurry');
+    const overturned = setup({ appeal: pendingAppeal() });
+    await overturned.s.decide('a1', 'mod2', { decision: 'overturn' });
+    const body = overturned.notifications.sendItemAppealNotice.mock.calls[0][0].body as string;
+    expect(body).toContain('votre article est approuvé');
+    expect(body).not.toContain('\n\n');
+  });
+
+  it('rejects an unknown queue category and clamps limit and offset', async () => {
+    const { s, hasura } = setup();
+    expect(await codeOf(s.listQueue({ category: 'nope' }))).toBe('ITEM_REJECTION_CATEGORY_REQUIRED');
+    hasura.executeQuery.mockResolvedValue({ item_appeals: [], item_appeals_aggregate: { aggregate: { count: 0 } } });
+    await s.listQueue({ limit: 500, offset: -3 });
+    expect(hasura.executeQuery.mock.calls.at(-1)[1]).toMatchObject({ limit: 100, offset: 0 });
+    await s.listQueue({ limit: 0 });
+    expect(hasura.executeQuery.mock.calls.at(-1)[1]).toMatchObject({ limit: 50, offset: 0 });
+    await s.listQueue({ limit: -3 });
+    expect(hasura.executeQuery.mock.calls.at(-1)[1]).toMatchObject({ limit: 1, offset: 0 });
+  });
+
+  it('counts missing aggregates as zero and 404s a missing appeal', async () => {
+    const { s, hasura } = setup();
+    hasura.executeQuery.mockResolvedValueOnce({});
+    await expect(s.counts()).resolves.toEqual({ pending: 0, breached: 0 });
+    expect(await codeOf(s.detail('missing', 'mod2'))).toBe('ITEM_APPEAL_NOT_FOUND');
+  });
 });
 
 describe('appeal evidence upload URL', () => {
@@ -396,7 +641,18 @@ describe('appeal evidence upload URL', () => {
     expect(aws.getDefaultBucketName).not.toHaveBeenCalled(); // never the public uploads bucket
   });
 
-  it('APPEAL_EVIDENCE_BUCKET overrides the private bucket for upload and view', async () => {
+    it('a blank APPEAL_EVIDENCE_BUCKET stays on the private bucket', async () => {
+      process.env.APPEAL_EVIDENCE_BUCKET = '   ';
+      try {
+        const { s, aws } = setup({ item: rejectedItem({ id: ITEM }) });
+        await s.createEvidenceUploadUrl(BIZ, ITEM, { contentType: 'image/png', fileSize: 10 });
+        expect(aws.generateStrictUploadUrl.mock.calls[0][0].bucketName).toBe(PRIVATE_BUCKET);
+      } finally {
+        delete process.env.APPEAL_EVIDENCE_BUCKET;
+      }
+    });
+
+    it('APPEAL_EVIDENCE_BUCKET overrides the private bucket for upload and view', async () => {
     process.env.APPEAL_EVIDENCE_BUCKET = 'rs-private-evidence';
     try {
       const { s, aws } = setup({ item: rejectedItem({ id: ITEM }) });

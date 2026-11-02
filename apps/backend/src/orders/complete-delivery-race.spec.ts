@@ -152,4 +152,49 @@ describe('OrdersService.completeDelivery race and completed_at', () => {
     );
     expect(svc.setOrderDeliveryOverwriteUsedAt).not.toHaveBeenCalled();
   });
+
+  it('reports an already-complete client-confirm overwrite without paying again', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      assigned_agent_id: 'agent-1',
+      current_status: 'awaiting_client_confirmation',
+      fulfillment_method: 'delivery',
+      assigned_agent: { status: 'active' },
+      delivery_overwrite_code_hash: 'hash',
+      client: { user_id: 'client-user' },
+    });
+    svc.completeAfterClientConfirmation = jest.fn().mockResolvedValue({
+      alreadyComplete: true,
+      order: { id: 'order-1', current_status: 'complete' },
+    });
+
+    const result = await svc.completeDelivery(request);
+
+    expect(result.message).toBe('Delivery already completed');
+    expect(svc.setOrderDeliveryOverwriteUsedAt).toHaveBeenCalledWith('order-1');
+    expect(svc.deliveryPinService.clearPinForOrder).toHaveBeenCalledWith('order-1');
+    expect(svc.processOrderDeliveryPayment).not.toHaveBeenCalled();
+    expect(svc.orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
+    const settled = svc.completeAfterClientConfirmation.mock.invocationCallOrder[0];
+    const burned = svc.setOrderDeliveryOverwriteUsedAt.mock.invocationCallOrder[0];
+    expect(settled).toBeLessThan(burned);
+  });
+
+  it('still burns a legacy PIN overwrite before payment', async () => {
+    const svc = build(false);
+    svc.completeAfterClientConfirmation = jest.fn();
+
+    await svc.completeDelivery(request);
+
+    expect(svc.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    const burned = svc.setOrderDeliveryOverwriteUsedAt.mock.invocationCallOrder[0];
+    const paid = svc.processOrderDeliveryPayment.mock.invocationCallOrder[0];
+    expect(burned).toBeLessThan(paid);
+    expect(svc.orderStatusService.updateOrderStatus).toHaveBeenCalledWith(
+      'order-1',
+      'complete',
+      expect.objectContaining({ viaCompleteDelivery: true })
+    );
+  });
 });

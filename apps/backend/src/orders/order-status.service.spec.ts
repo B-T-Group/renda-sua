@@ -528,6 +528,88 @@ describe('OrderStatusService', () => {
       expect(result.current_status).toBe('complete');
       expect(hasuraUserService.getUser).not.toHaveBeenCalled();
     });
+
+    it.each([
+      ['client', 'awaiting_client_confirmation', 'disputed'],
+      ['client', 'pending_auto_complete', 'disputed'],
+      ['client', 'pending_auto_complete', 'complete'],
+      ['agent', 'out_for_delivery', 'awaiting_client_confirmation'],
+      ['agent', 'awaiting_client_confirmation', 'pending_auto_complete'],
+      ['agent', 'awaiting_client_confirmation', 'disputed'],
+      ['business', 'awaiting_client_confirmation', 'complete'],
+    ] as const)(
+      'blocks generic %s PATCH %s → %s so settlement and dispute stay on the dedicated routes',
+      async (who, from, to) => {
+        const user =
+          who === 'client' ? clientUser : who === 'agent' ? agentUser : businessUser;
+        hasuraUserService.getUser.mockResolvedValue(user as any);
+        hasuraSystemService.executeQuery.mockResolvedValue({
+          orders_by_pk: { ...awaiting, current_status: from },
+        });
+
+        await expect(service.updateOrderStatus('order-123', to)).rejects.toThrow(
+          'Delivery confirmation must use'
+        );
+        expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+      }
+    );
+
+    it('does not let the complete-delivery flag open dispute or the confirm clock', async () => {
+      hasuraUserService.getUser.mockResolvedValue(agentUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: awaiting });
+
+      await expect(
+        service.updateOrderStatus('order-123', 'disputed', {
+          viaCompleteDelivery: true,
+        })
+      ).rejects.toThrow('Delivery confirmation must use');
+      await expect(
+        service.updateOrderStatus('order-123', 'pending_auto_complete', {
+          viaCompleteDelivery: true,
+        })
+      ).rejects.toThrow('Delivery confirmation must use');
+      expect(hasuraSystemService.executeMutation).not.toHaveBeenCalled();
+    });
+
+    it('allows complete-delivery from pending auto-complete and system clock moves', async () => {
+      hasuraUserService.getUser.mockResolvedValue(agentUser as any);
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...awaiting, current_status: 'pending_auto_complete' },
+      });
+      mockSuccessfulUpdate('complete');
+
+      const completed = await service.updateOrderStatus('order-123', 'complete', {
+        viaCompleteDelivery: true,
+      });
+      expect(completed.current_status).toBe('complete');
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { ...awaiting, current_status: 'out_for_delivery' },
+      });
+      mockSuccessfulUpdate('awaiting_client_confirmation');
+      const clock = await service.updateOrderStatus(
+        'order-123',
+        'awaiting_client_confirmation',
+        { viaSystem: true }
+      );
+      expect(clock.current_status).toBe('awaiting_client_confirmation');
+
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: awaiting });
+      mockSuccessfulUpdate('pending_auto_complete');
+      const couldNot = await service.updateOrderStatus(
+        'order-123',
+        'pending_auto_complete',
+        { viaSystem: true }
+      );
+      expect(couldNot.current_status).toBe('pending_auto_complete');
+
+      mockSuccessfulUpdate('disputed');
+      const disputed = await service.updateOrderStatus('order-123', 'disputed', {
+        viaSystem: true,
+      });
+      expect(disputed.current_status).toBe('disputed');
+      expect(hasuraUserService.getUser).toHaveBeenCalledTimes(1);
+    });
   });
 });
 
