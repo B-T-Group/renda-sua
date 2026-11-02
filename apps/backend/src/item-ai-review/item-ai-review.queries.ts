@@ -133,6 +133,7 @@ export const APPLY_ITEM_MODERATION = `
   mutation ApplyItemModeration(
     $id: uuid!
     $status: item_moderation_status!
+    $rejectionCategory: item_rejection_category
     $isActive: Boolean!
     $moderatedAt: timestamptz!
     $moderatorId: uuid
@@ -148,6 +149,7 @@ export const APPLY_ITEM_MODERATION = `
         moderated_by_user_id: $moderatorId
         moderation_source: $source
         ai_reviewed_at: $aiReviewedAt
+        rejection_category: $rejectionCategory
       }
     ) {
       id
@@ -160,6 +162,7 @@ export const APPLY_ITEM_MODERATION_IF_AI_REVIEWING = `
   mutation ApplyItemModerationIfAiReviewing(
     $id: uuid!
     $status: item_moderation_status!
+    $rejectionCategory: item_rejection_category
     $isActive: Boolean!
     $moderatedAt: timestamptz!
     $source: String!
@@ -177,6 +180,7 @@ export const APPLY_ITEM_MODERATION_IF_AI_REVIEWING = `
         moderated_by_user_id: null
         moderation_source: $source
         ai_reviewed_at: $aiReviewedAt
+        rejection_category: $rejectionCategory
       }
     ) {
       affected_rows

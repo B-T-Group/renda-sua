@@ -1,0 +1,34 @@
+table:
+  name: item_rejections
+  schema: public
+object_relationships:
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: reviewer
+    using:
+      foreign_key_constraint_on: reviewer_id
+array_relationships:
+  - name: appeals
+    using:
+      foreign_key_constraint_on:
+        column: rejection_id
+        table:
+          name: item_appeals
+          schema: public
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - item_id
+        - category
+        - reason
+        - source
+        - created_at
+      filter:
+        item:
+          business:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

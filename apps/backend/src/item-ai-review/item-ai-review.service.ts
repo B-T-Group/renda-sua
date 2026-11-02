@@ -17,6 +17,11 @@ import { CollectionAutoAssignService } from '../collections/collection-auto-assi
 import { ItemAiReviewModelService } from './item-ai-review-model.service';
 import { ItemAiReviewQueueService } from './item-ai-review-queue.service';
 import * as Q from './item-ai-review.queries';
+import { ItemRejectionsService } from '../item-appeals/item-rejections.service';
+import {
+  RejectionCategory,
+  categoryFromAiIssues,
+} from '../item-appeals/item-recovery.constants';
 import { stripRedundantCleanupRecommendations } from './strip-redundant-cleanup-recommendations';
 import {
   AiReviewModelResult,
@@ -38,8 +43,31 @@ export class ItemAiReviewService {
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly collectionAutoAssignService: CollectionAutoAssignService,
     @Optional()
-    private readonly representativeCompensationService?: RepresentativeCompensationService
+    private readonly representativeCompensationService?: RepresentativeCompensationService,
+    @Optional()
+    private readonly itemRejections?: ItemRejectionsService
   ) {}
+
+  /** B2: rejection record + metric. Never blocks the AI decision that already landed. */
+  private async recordRejectionSafe(
+    itemId: string,
+    category: RejectionCategory,
+    reason: string
+  ): Promise<void> {
+    try {
+      await this.itemRejections?.recordRejection({
+        itemId,
+        category,
+        reason,
+        reviewerId: null,
+        source: 'ai',
+      });
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to record AI rejection for ${itemId}: ${error?.message ?? error}`
+      );
+    }
+  }
 
   isEnabled(): boolean {
     return (
@@ -77,6 +105,16 @@ export class ItemAiReviewService {
     if (result.items_by_pk?.moderation_status !== 'rejected') {
       return false;
     }
+    // Implicit resubmits (CSV, image attach) never withdraw a pending appeal and
+    // never resubmit not-allowed categories (prohibited/counterfeit).
+    const gate = this.itemRejections
+      ? await this.itemRejections
+          .assertResubmitAllowed(itemId, { confirmWithdrawAppeal: false })
+          .catch(() => null)
+      : undefined;
+    if (gate === null || (gate && !gate.resubmit)) {
+      return false;
+    }
     const reset = await this.hasura.executeMutation<{
       update_items_by_pk: { id: string } | null;
     }>(Q.RESET_ITEM_PENDING, { id: itemId });
@@ -86,6 +124,7 @@ export class ItemAiReviewService {
         HttpStatus.BAD_REQUEST
       );
     }
+    if (gate) await this.itemRejections?.noteResubmitted(itemId, gate, null);
     void this.requestReview(itemId);
     return true;
   }
@@ -470,6 +509,7 @@ export class ItemAiReviewService {
       );
       return;
     }
+    void this.itemRejections?.noteApproved(item.id, 'ai');
     await this.notifications.sendSaleItemApprovedEmail({
       itemId: item.id,
       itemName: item.name,
@@ -514,11 +554,13 @@ export class ItemAiReviewService {
     modelMeta: Record<string, unknown>
   ): Promise<void> {
     await this.completeReview(reviewId, 'rejected', result, modelMeta);
+    const category = categoryFromAiIssues(result.issues);
     const applied = await this.patchItemStatusIfAiReviewing(
       item.id,
       'rejected',
       false,
-      'ai'
+      'ai',
+      category
     );
     if (!applied) {
       this.logger.warn(
@@ -527,6 +569,7 @@ export class ItemAiReviewService {
       return;
     }
     const reason = result.reason;
+    await this.recordRejectionSafe(item.id, category, reason);
     await this.insertOwnerMessage(item.business.user_id, item.id, reason);
     await this.notifications.sendSaleItemRejectedEmail({
       itemId: item.id,
@@ -564,7 +607,8 @@ export class ItemAiReviewService {
     itemId: string,
     status: string,
     isActive: boolean,
-    source: string
+    source: string,
+    rejectionCategory: RejectionCategory | null = null
   ): Promise<boolean> {
     const now = new Date().toISOString();
     const result = await this.hasura.executeMutation<{
@@ -576,6 +620,7 @@ export class ItemAiReviewService {
       moderatedAt: now,
       source,
       aiReviewedAt: now,
+      rejectionCategory,
     });
     return (result.update_items?.affected_rows ?? 0) > 0;
   }

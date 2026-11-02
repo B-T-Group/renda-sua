@@ -98,11 +98,13 @@ export const REJECT_ITEM_MODERATION = `
     $id: uuid!
     $moderatedAt: timestamptz!
     $moderatorId: uuid!
+    $rejectionCategory: item_rejection_category!
   ) {
     update_items_by_pk(
       pk_columns: { id: $id }
       _set: {
         moderation_status: rejected
+        rejection_category: $rejectionCategory
         is_active: false
         moderated_at: $moderatedAt
         moderated_by_user_id: $moderatorId
