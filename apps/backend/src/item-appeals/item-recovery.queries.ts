@@ -140,24 +140,29 @@ export const ITEM_HISTORY = `
 `;
 
 /**
- * Overturn. Item update runs first and only matches while the appeal is still
- * pending; the appeal update then flips it. Both in one Hasura transaction, so a
- * concurrent decide leaves both at 0 affected rows.
+ * Overturn only while this appeal's rejection is still the item's current one.
+ * A later re-reject must not be published by deciding the older appeal.
+ * Appeal update runs first so items_withdraw_pending_appeals finds nothing pending.
+ * Both run in one Hasura transaction; a lost race leaves both at 0 affected rows.
  */
 export const OVERTURN_APPEAL = `
   mutation OverturnItemAppeal(
     $appealId: uuid!
     $itemId: uuid!
+    $rejectionId: uuid!
     $itemSet: items_set_input!
     $appealSet: item_appeals_set_input!
   ) {
-    # Order matters (one transaction, sequential): decide the appeal first so the
-    # items_withdraw_pending_appeals trigger finds nothing pending when the item flips.
     appeal: update_item_appeals(
       where: {
         id: { _eq: $appealId }
         status: { _eq: pending }
-        item: { id: { _eq: $itemId }, moderation_status: { _eq: rejected } }
+        rejection_id: { _eq: $rejectionId }
+        item: {
+          id: { _eq: $itemId }
+          moderation_status: { _eq: rejected }
+          current_rejection_id: { _eq: $rejectionId }
+        }
       }
       _set: $appealSet
     ) { affected_rows }
@@ -165,6 +170,7 @@ export const OVERTURN_APPEAL = `
       where: {
         id: { _eq: $itemId }
         moderation_status: { _eq: rejected }
+        current_rejection_id: { _eq: $rejectionId }
         appeals: { id: { _eq: $appealId }, status: { _eq: overturned } }
       }
       _set: $itemSet
