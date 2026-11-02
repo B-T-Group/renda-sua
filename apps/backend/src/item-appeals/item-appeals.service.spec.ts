@@ -41,7 +41,7 @@ function pendingAppeal(over: Record<string, any> = {}) {
     business_id: BIZ,
     status: 'pending',
     reason: REASON,
-    evidence_urls: [],
+    evidence_keys: [],
     created_at: '2026-11-01T11:00:00Z',
     sla_due_at: '2026-11-03T11:00:00Z',
     rejection: { id: 'r1', category: 'photo_quality', reason: 'blurry', reviewer_id: 'mod1', source: 'admin', created_at: '2026-11-01T10:00:00Z' },
@@ -93,6 +93,10 @@ function setup(opts: { item?: any; appeal?: any; config?: any[]; others?: { role
   const aws = {
     getDefaultBucketName: jest.fn(() => 'rs-bucket'),
     getBucketRegion: jest.fn(() => 'ca-central-1'),
+    generatePresignedDownloadUrl: jest.fn(async (o: any) => ({
+      url: `https://${o.bucketName}.s3.ca-central-1.amazonaws.com/${o.key}?X-Amz-Expires=${o.expiresIn}&X-Amz-Signature=sig`,
+      expiresAt: new Date('2026-11-01T12:15:00Z'),
+    })),
     generateStrictUploadUrl: jest.fn(async (o: any) => ({ url: `https://signed/${o.key}`, expiresAt: new Date('2026-11-01T12:10:00Z'), signedHeaders: [] })),
   };
   const s = new ItemAppealsService(
@@ -111,46 +115,49 @@ function setup(opts: { item?: any; appeal?: any; config?: any[]; others?: { role
 const ITEM = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
 const OTHER_ITEM = '0a1b2c3d-4e5f-4061-8728-394a5b6c7d8e';
 const FILE = '11111111-2222-4333-8444-555555555555';
-const EV = { itemId: ITEM, storage: { bucket: 'rs-bucket', region: 'ca-central-1' } };
-const evUrl = (file = FILE, ext = 'jpg') => `https://rs-bucket.s3.ca-central-1.amazonaws.com/items/${ITEM}/appeal-evidence/${file}.${ext}`;
+const EV = { itemId: ITEM };
+const evKey = (file = FILE, ext = 'jpg', item = ITEM) => `item-appeal-evidence/${item}/${file}.${ext}`;
+const PRIVATE_BUCKET = 'rendasua-user-uploads';
 
 const mutationsOf = (h: any, q: string) => h.executeMutation.mock.calls.filter((c: any[]) => c[0] === q);
 
 describe('appeal input rules', () => {
-  it('reason 20–500 after trim; evidence ≤ 3 of our own upload URLs', () => {
-    expect(validateAppealInput(`  ${'a'.repeat(20)}  `, undefined, EV)).toEqual({ reason: 'a'.repeat(20), evidenceUrls: [] });
-    const four = [1, 2, 3, 4].map((n) => evUrl(`${n}0000000-0000-4000-8000-000000000000`));
+  it('reason 20–500 after trim; evidence ≤ 3 of our own upload keys', () => {
+    expect(validateAppealInput(`  ${'a'.repeat(20)}  `, undefined, EV)).toEqual({ reason: 'a'.repeat(20), evidenceKeys: [] });
+    const four = [1, 2, 3, 4].map((n) => evKey(`${n}0000000-0000-4000-8000-000000000000`));
     return Promise.all([
       codeOf(() => validateAppealInput('a'.repeat(19), [], EV)).then((c) => expect(c).toBe('ITEM_APPEAL_REASON_LENGTH')),
       codeOf(() => validateAppealInput('a'.repeat(501), [], EV)).then((c) => expect(c).toBe('ITEM_APPEAL_REASON_LENGTH')),
       codeOf(() => validateAppealInput(REASON, four, EV)).then((c) => expect(c).toBe('ITEM_APPEAL_EVIDENCE_LIMIT')),
-      codeOf(() => validateAppealInput(REASON, [evUrl(), evUrl()], EV)).then((c) => expect(c).toBe('ITEM_APPEAL_EVIDENCE_URL_INVALID')),
+      codeOf(() => validateAppealInput(REASON, [evKey(), evKey()], EV)).then((c) => expect(c).toBe('ITEM_APPEAL_EVIDENCE_URL_INVALID')),
     ]);
   });
 
-  it('evidence must be our bucket, this item, appeal-evidence/, uuid raster file — nothing else', async () => {
-    expect(validateAppealInput(REASON, [evUrl()], EV).evidenceUrls).toEqual([evUrl()]);
-    const H = 'https://rs-bucket.s3.ca-central-1.amazonaws.com';
+  it('evidence must be a private key for this item, uuid raster file — no URLs, nothing else', async () => {
+    expect(validateAppealInput(REASON, [evKey(), evKey(OTHER_ITEM, 'webp')], EV).evidenceKeys).toEqual([evKey(), evKey(OTHER_ITEM, 'webp')]);
+    expect(validateAppealInput(REASON, [evKey()], { itemId: ITEM.toUpperCase() }).evidenceKeys).toEqual([evKey()]);
     const bad = [
-      'https://cdn.example.com/x.jpg', // any https URL (the old rule)
-      evUrl().replace('https:', 'http:'),
-      evUrl().replace('rs-bucket', 'evil-bucket'),
-      evUrl().replace('.amazonaws.com', '.amazonaws.com.evil.io'),
-      evUrl().replace('.amazonaws.com', '.amazonaws.com:8443'),
-      evUrl().replace('https://', 'https://user:pw@'),
-      `${H}/items/${OTHER_ITEM}/appeal-evidence/${FILE}.jpg`, // another item's evidence
-      `${H}/items/${ITEM}/images/${FILE}.jpg`, // not the evidence prefix
-      `${H}/items/${ITEM}/appeal-evidence/../../${OTHER_ITEM}/appeal-evidence/${FILE}.jpg`,
-      `${H}/items/${ITEM}/appeal-evidence/%2e%2e/${FILE}.jpg`,
-      `${H}/items/${ITEM}/appeal-evidence/${FILE}.svg`, // SVG refused
-      `${H}/items/${ITEM}/appeal-evidence/${FILE}.SVG`,
-      `${H}/items/${ITEM}/appeal-evidence/${FILE}.jpg.svg`,
-      `${H}/items/${ITEM}/appeal-evidence/${FILE}.html`,
-      `${H}/items/${ITEM}/appeal-evidence/not-a-uuid.jpg`,
-      `${evUrl()}?x=1`,
-      `${evUrl()}#frag`,
-      ` ${evUrl()}x`,
+      `https://rendasua-uploads.s3.amazonaws.com/items/${ITEM}/appeal-evidence/${FILE}.jpg`, // old public-URL shape
+      `https://rendasua-user-uploads.s3.ca-central-1.amazonaws.com/${evKey()}`, // URL, even of the private bucket
+      `items/${ITEM}/appeal-evidence/${FILE}.jpg`, // old public prefix
+      `/${evKey()}`,
+      evKey(FILE, 'jpg', OTHER_ITEM), // another item's evidence
+      `item-appeal-evidence/${ITEM}/../${OTHER_ITEM}/${FILE}.jpg`,
+      `item-appeal-evidence/${ITEM}/%2e%2e/${FILE}.jpg`,
+      `item-appeal-evidence/${ITEM}/sub/${FILE}.jpg`,
+      evKey(FILE, 'svg'), // SVG refused
+      evKey(FILE, 'SVG'),
+      evKey(FILE, 'jpg.svg'),
+      evKey(FILE, 'html'),
+      evKey('not-a-uuid'),
+      evKey('a'.repeat(36)), // right length/charset, not a uuid
+      evKey('-'.repeat(36)),
+      evKey('ABCDEF00-2222-4333-8444-555555555555'), // we only issue lowercase
+      `${evKey()}?x=1`,
+      `${evKey()}x`,
+      `x${evKey()}`,
       42 as any,
+      null as any,
     ];
     for (const u of bad) {
       expect([u, await codeOf(() => validateAppealInput(REASON, [u], EV))]).toEqual([u, 'ITEM_APPEAL_EVIDENCE_URL_INVALID']);
@@ -214,7 +221,7 @@ describe('ItemAppealsService (business)', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-11-01T12:00:00Z'));
     try {
       const { s, hasura, notifications } = setup({ item: rejectedItem({ id: ITEM }), config: [{ config_key: 'item_appeal_sla_hours', number_value: 24 }] });
-      const out = await s.createAppeal(BIZ, 'u1', ITEM, { reason: `  ${REASON} `, evidenceUrls: [evUrl()] });
+      const out = await s.createAppeal(BIZ, 'u1', ITEM, { reason: `  ${REASON} `, evidenceKeys: [`  ${evKey()} `] });
       const [[, vars]] = mutationsOf(hasura, Q.INSERT_APPEAL);
       expect(vars.object).toMatchObject({
         rejection_id: 'r1',
@@ -222,11 +229,15 @@ describe('ItemAppealsService (business)', () => {
         business_id: BIZ,
         submitted_by_user_id: 'u1',
         reason: REASON,
-        evidence_urls: [evUrl()],
+        evidence_keys: [evKey()],
         sla_due_at: '2026-11-02T12:00:00.000Z',
       });
       expect(vars.audit).toMatchObject({ action: 'appeal_created', rejection_id: 'r1' });
       expect(out).toMatchObject({ slaDueAt: '2026-11-02T12:00:00.000Z', slaState: 'ok' });
+      expect(out.evidence).toEqual([
+        { key: evKey(), url: expect.stringContaining(`https://${PRIVATE_BUCKET}.s3.ca-central-1.amazonaws.com/${evKey()}?X-Amz-Expires=900`), expiresAt: '2026-11-01T12:15:00.000Z' },
+      ]);
+      expect(out).not.toHaveProperty('evidenceUrls');
       const notice = notifications.sendItemAppealNotice.mock.calls[0][0];
       expect(notice).toMatchObject({ userId: 'owner', messageType: 'item_appeal_received', emailTemplateKey: 'business_item_appeal_received' });
       expect(notice.title).toBe('Recours reçu');
@@ -371,16 +382,32 @@ describe('ItemAppealsService (admin decide)', () => {
 });
 
 describe('appeal evidence upload URL', () => {
-  it('issues a 10-minute PUT for our bucket under items/{itemId}/appeal-evidence/ with type + size pinned', async () => {
+  it('issues a 10-minute PUT into the PRIVATE bucket under item-appeal-evidence/{itemId}/ with type + size pinned', async () => {
     const { s, aws } = setup({ item: rejectedItem({ id: ITEM }) });
     const out = await s.createEvidenceUploadUrl(BIZ, ITEM, { contentType: 'image/JPG', fileSize: 1234 });
     const [[o]] = aws.generateStrictUploadUrl.mock.calls;
-    expect(o).toMatchObject({ bucketName: 'rs-bucket', contentType: 'image/jpeg', contentLength: 1234, expiresIn: 600 });
-    expect(o.key).toMatch(new RegExp(`^items/${ITEM}/appeal-evidence/[0-9a-f-]{36}\\.jpg$`));
+    expect(o).toMatchObject({ bucketName: PRIVATE_BUCKET, contentType: 'image/jpeg', contentLength: 1234, expiresIn: 600 });
+    expect(o.key).toMatch(new RegExp(`^item-appeal-evidence/${ITEM}/[0-9a-f-]{36}\\.jpg$`));
     expect(out).toMatchObject({ method: 'PUT', key: o.key, headers: { 'Content-Type': 'image/jpeg', 'Content-Length': '1234' }, maxBytes: 5 * 1024 * 1024 });
-    // the URL we hand back is exactly what createAppeal accepts for this item
-    expect(validateAppealInput(REASON, [out.evidenceUrl], EV).evidenceUrls).toEqual([out.evidenceUrl]);
-    expect(await codeOf(() => validateAppealInput(REASON, [out.evidenceUrl], { ...EV, itemId: OTHER_ITEM }))).toBe('ITEM_APPEAL_EVIDENCE_URL_INVALID');
+    // no viewable URL is handed out at upload time; the key is exactly what createAppeal accepts for this item
+    expect(Object.keys(out).sort()).toEqual(['expiresAt', 'headers', 'key', 'maxBytes', 'method', 'uploadUrl']);
+    expect(validateAppealInput(REASON, [out.key], EV).evidenceKeys).toEqual([out.key]);
+    expect(await codeOf(() => validateAppealInput(REASON, [out.key], { itemId: OTHER_ITEM }))).toBe('ITEM_APPEAL_EVIDENCE_URL_INVALID');
+    expect(aws.getDefaultBucketName).not.toHaveBeenCalled(); // never the public uploads bucket
+  });
+
+  it('APPEAL_EVIDENCE_BUCKET overrides the private bucket for upload and view', async () => {
+    process.env.APPEAL_EVIDENCE_BUCKET = 'rs-private-evidence';
+    try {
+      const { s, aws } = setup({ item: rejectedItem({ id: ITEM }) });
+      await s.createEvidenceUploadUrl(BIZ, ITEM, { contentType: 'image/png', fileSize: 10 });
+      expect(aws.generateStrictUploadUrl.mock.calls[0][0].bucketName).toBe('rs-private-evidence');
+      const d = setup({ appeal: pendingAppeal({ item_id: ITEM, evidence_keys: [evKey()] }) });
+      await d.s.detail('a1', 'mod2');
+      expect(d.aws.generatePresignedDownloadUrl.mock.calls[0][0].bucketName).toBe('rs-private-evidence');
+    } finally {
+      delete process.env.APPEAL_EVIDENCE_BUCKET;
+    }
   });
 
   it('refuses SVG / non-images and bad sizes before signing anything', async () => {
@@ -406,10 +433,58 @@ describe('appeal evidence upload URL', () => {
 
   it('createAppeal rejects foreign evidence before writing anything', async () => {
     const { s, hasura } = setup({ item: rejectedItem({ id: ITEM }) });
-    expect(await codeOf(() => s.createAppeal(BIZ, 'u1', ITEM, { reason: REASON, evidenceUrls: ['https://evil.example/x.jpg'] }))).toBe(
+    expect(await codeOf(() => s.createAppeal(BIZ, 'u1', ITEM, { reason: REASON, evidenceKeys: ['https://evil.example/x.jpg'] }))).toBe(
       'ITEM_APPEAL_EVIDENCE_URL_INVALID'
     );
     expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+});
+
+describe('appeal evidence is only ever served as short-lived presigned GETs', () => {
+  const KEYS = [evKey(), evKey(OTHER_ITEM, 'png')];
+  const expectPresigned = (ev: any[], aws: any) => {
+    expect(ev.map((e) => e.key)).toEqual(KEYS);
+    for (const e of ev) {
+      expect(e.url).toContain('X-Amz-Signature=');
+      expect(e.url).toContain(`https://${PRIVATE_BUCKET}.`);
+      expect(e.expiresAt).toBe('2026-11-01T12:15:00.000Z');
+    }
+    expect(aws.generatePresignedDownloadUrl.mock.calls.map((c: any[]) => c[0])).toEqual(
+      KEYS.map((key) => ({ bucketName: PRIVATE_BUCKET, key, expiresIn: 900 }))
+    );
+  };
+
+  it('business recovery view (owner)', async () => {
+    const { s, aws } = setup({ item: rejectedItem({ id: ITEM, appeals: [pendingAppeal({ item_id: ITEM, evidence_keys: KEYS })] }) });
+    const r = await s.getRecovery(BIZ, ITEM);
+    expectPresigned(r.appeal!.evidence, aws);
+    expect(JSON.stringify(r)).not.toContain('evidence_keys');
+  });
+
+  it('recovery view signs nothing for a non-owner (rejected before any signing)', async () => {
+    const { s, aws } = setup({ item: rejectedItem({ id: ITEM, business_id: 'x', business: { id: 'x', user_id: 'x', name: 'X' }, appeals: [pendingAppeal({ item_id: ITEM, evidence_keys: KEYS })] }) });
+    expect(await codeOf(s.getRecovery(BIZ, ITEM))).toBe('ITEM_APPEAL_NOT_OWNER');
+    expect(aws.generatePresignedDownloadUrl).not.toHaveBeenCalled();
+  });
+
+  it('admin queue and detail', async () => {
+    const q = setup();
+    q.hasura.executeQuery.mockImplementationOnce(async () => ({
+      item_appeals: [pendingAppeal({ item_id: ITEM, evidence_keys: KEYS })],
+      item_appeals_aggregate: { aggregate: { count: 1 } },
+    }));
+    expectPresigned((await q.s.listQueue({})).appeals[0].evidence, q.aws);
+    const d = setup({ appeal: pendingAppeal({ item_id: ITEM, evidence_keys: KEYS }) });
+    expectPresigned((await d.s.detail('a1', 'mod2')).appeal.evidence, d.aws);
+  });
+
+  it('a stored key that is not this item\'s evidence is never signed', async () => {
+    const { s, aws } = setup({
+      appeal: pendingAppeal({ item_id: ITEM, evidence_keys: [evKey(), evKey(FILE, 'jpg', OTHER_ITEM), `businesses/${OTHER_ITEM}/images/x.jpg`] }),
+    });
+    const out = await s.detail('a1', 'mod2');
+    expect(out.appeal.evidence.map((e: any) => e.key)).toEqual([evKey()]);
+    expect(aws.generatePresignedDownloadUrl).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -417,7 +492,7 @@ describe('AwsService.generateStrictUploadUrl (real SDK signer, offline)', () => 
   it('signs content-type and content-length so S3 refuses a different type or size', async () => {
     const { AwsService } = require('../aws/aws.service');
     const svc = new AwsService({ get: () => ({ region: 'ca-central-1', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'test-only' }) } as any);
-    const out = await svc.generateStrictUploadUrl({ bucketName: 'rs-bucket', key: `items/${ITEM}/appeal-evidence/${FILE}.png`, contentType: 'image/png', contentLength: 2048 });
+    const out = await svc.generateStrictUploadUrl({ bucketName: 'rs-bucket', key: evKey(FILE, 'png'), contentType: 'image/png', contentLength: 2048 });
     expect(out.signedHeaders).toEqual(expect.arrayContaining(['content-type', 'content-length', 'host']));
     expect(new URL(out.url).searchParams.get('X-Amz-Expires')).toBe('600');
     await expect(svc.generateStrictUploadUrl({ bucketName: 'b', key: 'k', contentType: 'image/png', contentLength: 0 })).rejects.toThrow();
