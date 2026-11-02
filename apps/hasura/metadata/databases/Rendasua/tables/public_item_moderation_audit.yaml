@@ -1,0 +1,16 @@
+table:
+  name: item_moderation_audit
+  schema: public
+object_relationships:
+  - name: actor
+    using:
+      foreign_key_constraint_on: actor_user_id
+  - name: appeal
+    using:
+      foreign_key_constraint_on: appeal_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: rejection
+    using:
+      foreign_key_constraint_on: rejection_id

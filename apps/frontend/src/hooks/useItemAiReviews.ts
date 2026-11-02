@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react';
+import type { RejectionCategory } from '../types/itemRejectionRecovery';
+import { extractRecoveryErrorCode } from '../utils/itemRejectionRecovery';
 import { useApiClient } from './useApiClient';
 
 export type ItemAiReviewAuditStatus =
@@ -121,14 +123,26 @@ export function useItemAiReviews() {
     async (
       reviewId: string,
       action: 'force_approve' | 'force_reject' | 'force_requeue',
-      reason?: string
+      reason?: string,
+      rejectionCategory?: RejectionCategory
     ) => {
-      if (!apiClient) return false;
-      const { data } = await apiClient.post<{ success: boolean }>(
-        `/admin/items/ai-reviews/${reviewId}/override`,
-        { action, reason }
-      );
-      return !!data.success;
+      if (!apiClient) return { success: false as const, code: null };
+      try {
+        const { data } = await apiClient.post<{
+          success: boolean;
+          code?: string;
+        }>(`/admin/items/ai-reviews/${reviewId}/override`, {
+          action,
+          reason,
+          ...(action === 'force_reject' ? { rejectionCategory } : {}),
+        });
+        return {
+          success: !!data.success,
+          code: extractRecoveryErrorCode({ code: data.code }),
+        };
+      } catch (error: any) {
+        return { success: false as const, code: extractRecoveryErrorCode(error) };
+      }
     },
     [apiClient]
   );

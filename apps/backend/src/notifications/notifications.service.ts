@@ -3183,6 +3183,72 @@ export class NotificationsService {
     }
   }
 
+  /**
+   * Rejected-item appeals (B7): in-app row on the item, push (push.enabled) and
+   * email (EN/FR template; skipped with a warning until the Resend id is synced).
+   * Copy is built by the caller per recipient language. Never throws.
+   */
+  async sendItemAppealNotice(params: {
+    userId: string;
+    itemId: string;
+    appealId: string;
+    messageType: 'item_appeal_received' | 'item_appeal_decided';
+    title: string;
+    body: string;
+    path: string;
+    event: string;
+    emailTemplateKey: 'business_item_appeal_received' | 'business_item_appeal_decided';
+    emailVariables: Record<string, string | number | boolean | null | undefined>;
+  }): Promise<void> {
+    const userId = params.userId?.trim();
+    if (!userId) return;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `
+          mutation InsertItemAppealNotice($object: user_messages_insert_input!) {
+            insert_user_messages_one(object: $object) { id }
+          }
+        `,
+        {
+          object: {
+            user_id: userId,
+            entity_type: 'sale_item',
+            entity_id: params.itemId,
+            message_type: params.messageType,
+            message: params.body,
+            message_payload: { path: params.path, event: params.event, appealId: params.appealId },
+          },
+        }
+      );
+    } catch (error: any) {
+      this.logger.warn(`sendItemAppealNotice in-app failed: ${error?.message ?? error}`);
+    }
+    if (this.configService.get<Configuration['push']>('push')?.enabled) {
+      try {
+        await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+          url: params.path,
+          event: params.event,
+          persona: 'business',
+          itemId: params.itemId,
+          appealId: params.appealId,
+        });
+      } catch (error: any) {
+        this.logger.warn(`sendItemAppealNotice push failed: ${error?.message ?? error}`);
+      }
+    }
+    try {
+      const u = await this.getUserRowForEmail(userId);
+      if (!u?.email) return;
+      await this.sendEmail({
+        to: u.email,
+        templateKey: this.mapKeyForLanguage(params.emailTemplateKey, normalizeLanguage(u.preferred_language)),
+        variables: params.emailVariables,
+      });
+    } catch (error: any) {
+      this.logger.warn(`sendItemAppealNotice email failed: ${error?.message ?? error}`);
+    }
+  }
+
   async sendSaleItemRejectedEmail(
     payload: SaleItemRejectedEmailPayload
   ): Promise<void> {

@@ -361,7 +361,7 @@ export type BusinessRootStackParamList = {
   UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
   CashAdvanceDrawSuccess: CashAdvanceDrawSuccessParams;
-  BusinessAiTokens: undefined;
+  BusinessAiTokens: { returnItemId?: string } | undefined;
   BusinessGiftAiTokens: undefined;
   BusinessAddReel:
     | {

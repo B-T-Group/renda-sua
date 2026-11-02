@@ -11,6 +11,9 @@ object_relationships:
   - name: item_sub_category
     using:
       foreign_key_constraint_on: item_sub_category_id
+  - name: current_rejection
+    using:
+      foreign_key_constraint_on: current_rejection_id
   - name: moderated_by_user
     using:
       foreign_key_constraint_on: moderated_by_user_id
@@ -24,6 +27,13 @@ array_relationships:
         column: item_id
         table:
           name: item_ai_reviews
+          schema: public
+  - name: appeals
+    using:
+      foreign_key_constraint_on:
+        column: item_id
+        table:
+          name: item_appeals
           schema: public
   - name: business_inventories
     using:
@@ -83,6 +93,13 @@ array_relationships:
         insertion_order: null
         remote_table:
           name: item_variants
+          schema: public
+  - name: rejections
+    using:
+      foreign_key_constraint_on:
+        column: item_id
+        table:
+          name: item_rejections
           schema: public
   - name: order_items
     using:
@@ -166,6 +183,8 @@ select_permissions:
         - is_fragile
         - is_perishable
         - is_used
+        - condition
+        - wear_note
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -211,6 +230,8 @@ select_permissions:
         - is_fragile
         - is_perishable
         - is_used
+        - condition
+        - wear_note
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -256,6 +277,8 @@ select_permissions:
         - is_fragile
         - is_perishable
         - is_used
+        - condition
+        - wear_note
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -280,6 +303,8 @@ select_permissions:
         - ai_reviewed_at
         - ai_review_version
         - moderation_source
+        - rejection_category
+        - current_rejection_id
         - likes_count
         - created_at
         - updated_at
@@ -308,6 +333,8 @@ select_permissions:
         - is_fragile
         - is_perishable
         - is_used
+        - condition
+        - wear_note
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time
@@ -353,6 +380,8 @@ select_permissions:
         - is_fragile
         - is_perishable
         - is_used
+        - condition
+        - wear_note
         - requires_special_handling
         - max_delivery_distance
         - estimated_delivery_time

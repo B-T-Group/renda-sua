@@ -1622,7 +1622,9 @@
       "loadError": "Could not load moderation queue",
       "actionFailed": "Action failed",
       "refresh": "Refresh",
-      "accessDenied": "You do not have permission to view this page."
+      "accessDenied": "You do not have permission to view this page.",
+      "rejectionCategory": "Rejection category",
+      "categoryRequired": "Choose a rejection category."
     },
     "itemAiReviews": {
       "pageTitle": "Sale item AI review decisions",
@@ -1654,7 +1656,8 @@
       "overrideSaved": "Override applied",
       "refresh": "Refresh",
       "backToModeration": "Item moderation",
-      "accessDenied": "You do not have permission to view this page."
+      "accessDenied": "You do not have permission to view this page.",
+      "rejectionCategory": "Category for force reject"
     },
     "reels": {
       "moderation": {
@@ -2083,6 +2086,57 @@
         "weight": "Weight",
         "count": "Actions"
       }
+    },
+    "itemAppeals": {
+      "tab": "Appeals",
+      "pageTitle": "Item appeals",
+      "queueCount": "{{pending}} pending · {{breached}} past SLA",
+      "backToModeration": "Item moderation",
+      "backToQueue": "Back to appeals",
+      "refresh": "Refresh",
+      "accessDenied": "Access denied",
+      "loadError": "Could not load appeals",
+      "empty": "No appeals in this queue",
+      "itemName": "Sale item",
+      "business": "Business",
+      "category": "Category",
+      "sla": "SLA",
+      "review": "Review",
+      "statusFilter": "Status",
+      "categoryFilter": "Category",
+      "businessFilter": "Business id",
+      "allCategories": "All categories",
+      "status": {
+        "pending": "Pending",
+        "upheld": "Upheld",
+        "overturned": "Overturned",
+        "withdrawn": "Withdrawn"
+      },
+      "slaBreached": "SLA breached",
+      "slaWarning": "SLA due soon",
+      "slaOk": "Due {{when}}",
+      "slaOkShort": "On track",
+      "untitled": "Untitled item",
+      "selfReviewNotice": "This appeal is about a rejection you made. Another moderator should decide it when one is available.",
+      "selfReviewBlocked": "Another moderator must review an appeal of your own decision.",
+      "selfReviewWarning": "You are the only moderator. This decision was recorded with a warning.",
+      "editedSince": "The item changed after the rejection. Overturn will send it back for review.",
+      "rejection": "Original rejection",
+      "appealEvidence": "Appeal",
+      "history": "Item history",
+      "decide": "Decide",
+      "uphold": "Uphold",
+      "overturn": "Overturn",
+      "overturnTo": "After overturn",
+      "approve": "Approve",
+      "reReview": "Re-review",
+      "correctCategory": "Correct category",
+      "note": "Note to the business",
+      "submitDecision": "Submit decision",
+      "decided": "Appeal decided",
+      "currentItem": "Current item",
+      "asRejected": "As rejected",
+      "upholdNoteRequired": "A note is required to uphold this decision."
     }
   },
   "referrals": {
@@ -3213,7 +3267,9 @@
         "missingWhatsapp": "WhatsApp order alerts are not ready. Turn them on so your kitchen has a backup when browser push is missed.",
         "openNotifications": "Notification settings",
         "openLocations": "Locations"
-      }
+      },
+      "manageItemAppeals": "Item appeals",
+      "manageItemAppealsDescription": "Review merchant appeals of rejected sale items. Oldest SLA first."
     },
     "clientCities": {
       "seoTitle": "Where your clients are from",
@@ -4240,6 +4296,92 @@
         "activateRequiresApproval": "Item must be approved before it can be activated.",
         "resubmitHint": "If this item was rejected, saving name or description changes will send it for review again.",
         "rejectionReason": "Why this item was rejected"
+      },
+      "recovery": {
+        "status": {
+          "needsChanges": "Needs changes",
+          "notAllowed": "Not allowed",
+          "inReview": "In review · usually within 24 h"
+        },
+        "action": {
+          "aiFix": "Fix photos with AI",
+          "retake": "Retake photo",
+          "condition": "Change condition",
+          "resubmit": "Resubmit for review",
+          "appeal": "Appeal decision",
+          "editFields": "Edit item details",
+          "editPrice": "Edit price"
+        },
+        "aiFix": {
+          "cost": "Cost: {{n}} tokens · You have {{m}}",
+          "buy": "Buy tokens",
+          "keep": "Keep",
+          "discard": "Discard",
+          "altered": "AI may have changed the item itself. Check carefully.",
+          "selectPhotos": "Choose photos to fix"
+        },
+        "retake": {
+          "tips": "Use daylight, a plain background, and show any wear.",
+          "tipDaylight": "Use daylight",
+          "tipBackground": "Use a plain background",
+          "tipWhole": "Show the whole item plus one close-up",
+          "tipNoWatermark": "No watermarks or stock photos",
+          "tipWear": "Show real wear",
+          "replace": "Replace photo",
+          "add": "Add photo",
+          "choose": "Choose photo",
+          "photo": "Photo"
+        },
+        "condition": {
+          "new": "New",
+          "used": "Used",
+          "refurb": "Refurbished",
+          "wearNote": "Describe the wear",
+          "wearRequired": "Describe the wear",
+          "wearTooShort": "Use at least 10 characters",
+          "wearTooLong": "Use at most 300 characters",
+          "save": "Save condition"
+        },
+        "appeal": {
+          "reason": "Why should we reconsider?",
+          "evidence": "Add evidence (optional)",
+          "addFiles": "Choose files",
+          "limit": "1 appeal per decision",
+          "pending": "Appeal pending",
+          "upheld": "Decision upheld",
+          "overturned": "Decision overturned, your item is live",
+          "withdrawWarn": "Resubmitting will withdraw your pending appeal.",
+          "submit": "Submit appeal",
+          "adminNote": "Reviewer note",
+          "disabledInReview": "In review",
+          "disabledAllowance": "1 appeal per decision",
+          "reasonTooShort": "Use at least 20 characters",
+          "reasonTooLong": "Use at most 500 characters",
+          "evidenceLimit": "Add up to 3 files",
+          "evidenceType": "Use a JPEG, PNG or WebP photo",
+          "evidenceTooLarge": "Photos must be 5 MB or smaller",
+          "evidenceUrlInvalid": "That evidence file could not be used. Upload it again.",
+          "evidencePhoto": "Appeal evidence"
+        },
+        "resubmit": {
+          "confirmNoChanges": "Resubmit this item without more changes?",
+          "confirmTitle": "Resubmit for review"
+        },
+        "tokensUsed": "Tokens used on this item: {{n}}",
+        "translate": "Translate",
+        "showOriginal": "Show original",
+        "cat": {
+          "photo_quality": "Photo quality",
+          "prohibited_item": "Prohibited item",
+          "counterfeit": "Possible counterfeit",
+          "wrong_condition": "Wrong condition",
+          "missing_info": "Missing info",
+          "pricing": "Pricing",
+          "other": "Other"
+        },
+        "errors": {
+          "generic": "This action could not be completed."
+        }
       },
       "aiProposal": {
         "title": "Review AI suggestions",

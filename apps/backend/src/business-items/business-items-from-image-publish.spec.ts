@@ -74,7 +74,8 @@ describe('BusinessItemsService createItemFromImage / quickPublish', () => {
       {} as any,
       categoriesService as any,
       { autoAssignCollectionsIfFit: jest.fn() } as any,
-      { incrementGeneration: jest.fn() } as any
+      { incrementGeneration: jest.fn() } as any,
+      { assertResubmitAllowed: jest.fn(), noteResubmitted: jest.fn(), noteDeleted: jest.fn().mockResolvedValue(undefined) } as any
     );
 
     return {

@@ -4,6 +4,7 @@ import {
 } from '@mui/icons-material';
 import {
   Box,
+  Chip,
   InputAdornment,
   List,
   ListItemButton,
@@ -156,6 +157,16 @@ const AdminToolsNav: React.FC<AdminToolsNavProps> = ({
                           },
                         }}
                       />
+                      {mod.count != null && mod.count > 0 ? (
+                        <Chip
+                          size="small"
+                          color={
+                            mod.path === '/admin/item-appeals' ? 'warning' : 'default'
+                          }
+                          label={mod.count}
+                          sx={{ ml: 0.5 }}
+                        />
+                      ) : null}
                     </ListItemButton>
                   </Tooltip>
                 ))}

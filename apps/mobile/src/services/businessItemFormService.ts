@@ -9,6 +9,7 @@ import type {
   ItemFormTag,
 } from '../types/business/itemForm';
 import type { UpdateBusinessItemPayload } from '../types/business/items';
+import { saveItemWithAppealConfirm } from '../utils/itemRejectionRecovery';
 
 const GET_CATEGORIES = gql`
   query GetItemCategories {
@@ -161,6 +162,19 @@ export async function updateBusinessItemFields(
   if (!res.success) {
     throw new Error('Failed to update item');
   }
+}
+
+export async function updateBusinessItemWithAppealConfirm(
+  itemId: string,
+  body: UpdateBusinessItemPayload,
+  confirmWithdraw: () => boolean | Promise<boolean>
+) {
+  return saveItemWithAppealConfirm(async (confirmWithdrawAppeal) => {
+    await updateBusinessItemFields(
+      itemId,
+      confirmWithdrawAppeal ? { ...body, confirmWithdrawAppeal: true } : body
+    );
+  }, confirmWithdraw);
 }
 
 export async function setBusinessItemTags(itemId: string, tagIds: string[]): Promise<void> {

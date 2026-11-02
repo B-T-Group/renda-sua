@@ -99,7 +99,8 @@ describe('BusinessItemsService.updateBusinessLocation allow-list (UAT S-9)', () 
       {} as any,
       {} as any,
       {} as any,
-      catalogCache as any
+      catalogCache as any,
+      { assertResubmitAllowed: jest.fn(), noteResubmitted: jest.fn(), noteDeleted: jest.fn().mockResolvedValue(undefined) } as any
     );
     return { service, hasuraUserService, hasuraSystemService, catalogCache };
   }

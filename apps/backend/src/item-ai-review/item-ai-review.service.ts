@@ -17,6 +17,11 @@ import { CollectionAutoAssignService } from '../collections/collection-auto-assi
 import { ItemAiReviewModelService } from './item-ai-review-model.service';
 import { ItemAiReviewQueueService } from './item-ai-review-queue.service';
 import * as Q from './item-ai-review.queries';
+import { ItemRejectionsService, PreparedRejection } from '../item-appeals/item-rejections.service';
+import {
+  RejectionCategory,
+  categoryFromAiIssues,
+} from '../item-appeals/item-recovery.constants';
 import { stripRedundantCleanupRecommendations } from './strip-redundant-cleanup-recommendations';
 import {
   AiReviewModelResult,
@@ -37,6 +42,7 @@ export class ItemAiReviewService {
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly collectionAutoAssignService: CollectionAutoAssignService,
+    private readonly itemRejections: ItemRejectionsService,
     @Optional()
     private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
@@ -77,6 +83,14 @@ export class ItemAiReviewService {
     if (result.items_by_pk?.moderation_status !== 'rejected') {
       return false;
     }
+    // Implicit resubmits (CSV, image attach) never withdraw a pending appeal and
+    // never resubmit not-allowed categories (prohibited/counterfeit).
+    const gate = await this.itemRejections
+      .assertResubmitAllowed(itemId, { confirmWithdrawAppeal: false })
+      .catch(() => null);
+    if (!gate || !gate.resubmit) {
+      return false;
+    }
     const reset = await this.hasura.executeMutation<{
       update_items_by_pk: { id: string } | null;
     }>(Q.RESET_ITEM_PENDING, { id: itemId });
@@ -86,6 +100,7 @@ export class ItemAiReviewService {
         HttpStatus.BAD_REQUEST
       );
     }
+    await this.itemRejections.noteResubmitted(itemId, gate, null);
     void this.requestReview(itemId);
     return true;
   }
@@ -470,6 +485,7 @@ export class ItemAiReviewService {
       );
       return;
     }
+    void this.itemRejections.noteApproved(item.id, 'ai');
     await this.notifications.sendSaleItemApprovedEmail({
       itemId: item.id,
       itemName: item.name,
@@ -514,19 +530,18 @@ export class ItemAiReviewService {
     modelMeta: Record<string, unknown>
   ): Promise<void> {
     await this.completeReview(reviewId, 'rejected', result, modelMeta);
-    const applied = await this.patchItemStatusIfAiReviewing(
-      item.id,
-      'rejected',
-      false,
-      'ai'
-    );
+    const category = categoryFromAiIssues(result.issues);
+    const reason = result.reason;
+    const record = { itemId: item.id, category, reason, reviewerId: null, source: 'ai' as const };
+    const prepared = await this.itemRejections.prepareRejection(record);
+    const applied = await this.rejectIfAiReviewing(item.id, category, prepared);
     if (!applied) {
       this.logger.warn(
         `Skipped AI reject for ${item.id}; item left ai_reviewing`
       );
       return;
     }
-    const reason = result.reason;
+    this.itemRejections.noteRejected(record, prepared.rejectionId);
     await this.insertOwnerMessage(item.business.user_id, item.id, reason);
     await this.notifications.sendSaleItemRejectedEmail({
       itemId: item.id,
@@ -560,11 +575,41 @@ export class ItemAiReviewService {
     });
   }
 
+  /**
+   * Reject + rejection record + audit in one transaction, guarded on ai_reviewing.
+   * Lost race (someone else decided first): the DB guard rolls the mutation back;
+   * we report "not applied". Any other failure is rethrown so SQS retries.
+   */
+  private async rejectIfAiReviewing(
+    itemId: string,
+    category: RejectionCategory,
+    prepared: PreparedRejection
+  ): Promise<boolean> {
+    try {
+      const result = await this.hasura.executeMutation<{
+        update_items: { affected_rows: number };
+      }>(Q.REJECT_ITEM_IF_AI_REVIEWING_WITH_RECORD, {
+        id: itemId,
+        rejectionCategory: category,
+        moderatedAt: new Date().toISOString(),
+        ...prepared.variables,
+      });
+      return (result.update_items?.affected_rows ?? 0) > 0;
+    } catch (error) {
+      const current = await this.loadModerationRow(itemId).catch(() => null);
+      if (current && current.moderation_status !== 'ai_reviewing') {
+        return false;
+      }
+      throw error;
+    }
+  }
+
   private async patchItemStatusIfAiReviewing(
     itemId: string,
     status: string,
     isActive: boolean,
-    source: string
+    source: string,
+    rejectionCategory: RejectionCategory | null = null
   ): Promise<boolean> {
     const now = new Date().toISOString();
     const result = await this.hasura.executeMutation<{
@@ -576,6 +621,7 @@ export class ItemAiReviewService {
       moderatedAt: now,
       source,
       aiReviewedAt: now,
+      rejectionCategory,
     });
     return (result.update_items?.affected_rows ?? 0) > 0;
   }

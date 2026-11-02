@@ -105,6 +105,12 @@ export const AdminReelAiReviewsPage = lazy(() =>
 export const AdminItemAiReviewsPage = lazy(() =>
   import('../components/pages/AdminItemAiReviewsPage')
 );
+export const AdminItemAppealsPage = lazy(() =>
+  import('../components/pages/AdminItemAppealsPage')
+);
+export const AdminItemAppealDetailPage = lazy(() =>
+  import('../components/pages/AdminItemAppealDetailPage')
+);
 export const AdminUserDocumentsPage = lazy(() =>
   import('../components/pages/AdminUserDocumentsPage')
 );

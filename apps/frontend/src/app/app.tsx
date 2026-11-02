@@ -562,6 +562,14 @@ function App() {
                 element={<LazyPages.AdminItemAiReviewsPage />}
               />
               <Route
+                path="/admin/item-appeals"
+                element={<LazyPages.AdminItemAppealsPage />}
+              />
+              <Route
+                path="/admin/item-appeals/:appealId"
+                element={<LazyPages.AdminItemAppealDetailPage />}
+              />
+              <Route
                 path="/admin/configurations"
                 element={<LazyPages.AdminConfigurationPage />}
               />

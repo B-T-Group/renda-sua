@@ -11,7 +11,7 @@ import {
   fetchItemFormTags,
   generateItemDescription,
   setBusinessItemTags,
-  updateBusinessItemFields,
+  updateBusinessItemWithAppealConfirm,
 } from '../../services/businessItemFormService';
 import type {
   BusinessItemDetail,
@@ -22,7 +22,42 @@ import type {
 } from '../../types/business/itemForm';
 import type { UpdateBusinessItemPayload } from '../../types/business/items';
 import { isFoodCategoryName } from '../../utils/foodAvailability';
+import { useAppealWithdrawConfirm } from '../useAppealWithdrawConfirm';
 import { useSupportedCurrencies } from './useSupportedCurrencies';
+
+function formSaveError(e: unknown, fallback: string): string {
+  return e instanceof Error ? e.message : fallback;
+}
+
+function validateItemForm(
+  values: BusinessItemFormValues,
+  categories: ItemFormCategory[],
+  t: (key: string, fallback: string) => string
+): string | null {
+  if (!values.name.trim()) return t('business.items.nameRequired', 'Name is required');
+  if (depositPercentInvalid(values, categories)) {
+    return t('business.items.initialDepositPercentInvalid', 'Enter a deposit percent from 1 to 25.');
+  }
+  return null;
+}
+
+async function persistEditedItem(
+  itemId: string,
+  values: BusinessItemFormValues,
+  categories: ItemFormCategory[],
+  defaultCurrency: string | null | undefined,
+  selectedTagIds: string[],
+  confirmWithdraw: () => boolean | Promise<boolean>
+): Promise<boolean> {
+  const saved = await updateBusinessItemWithAppealConfirm(
+    itemId,
+    buildPayload(values, categories, defaultCurrency),
+    confirmWithdraw
+  );
+  if (!saved.ok) return false;
+  await setBusinessItemTags(itemId, selectedTagIds);
+  return true;
+}
 
 function depositPercentInvalid(
   values: BusinessItemFormValues,
@@ -206,30 +241,32 @@ export function useBusinessItemForm(itemId: string) {
     return categories.find((c) => c.id === values.categoryId)?.item_sub_categories ?? [];
   }, [categories, values.categoryId]);
 
+  const { confirmWithdraw, dialog: withdrawDialog } = useAppealWithdrawConfirm();
+
   const save = useCallback(async () => {
-    if (!values.name.trim()) {
-      setError(t('business.items.nameRequired', 'Name is required'));
-      return false;
-    }
-    if (depositPercentInvalid(values, categories)) {
-      setError(
-        t('business.items.initialDepositPercentInvalid', 'Enter a deposit percent from 1 to 25.')
-      );
+    const invalid = validateItemForm(values, categories, t);
+    if (invalid) {
+      setError(invalid);
       return false;
     }
     setSaving(true);
     setError(null);
     try {
-      await updateBusinessItemFields(itemId, buildPayload(values, categories, defaultCurrency));
-      await setBusinessItemTags(itemId, selectedTagIds);
-      return true;
+      return await persistEditedItem(
+        itemId,
+        values,
+        categories,
+        defaultCurrency,
+        selectedTagIds,
+        confirmWithdraw
+      );
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : t('business.items.updateError', 'Failed to update item'));
+      setError(formSaveError(e, t('business.items.updateError', 'Failed to update item')));
       return false;
     } finally {
       setSaving(false);
     }
-  }, [categories, defaultCurrency, itemId, selectedTagIds, t, values]);
+  }, [categories, confirmWithdraw, defaultCurrency, itemId, selectedTagIds, t, values]);
 
   const runAiDescription = useCallback(async () => {
     if (!values.name.trim()) return;
@@ -328,6 +365,7 @@ export function useBusinessItemForm(itemId: string) {
     selectedTagIds,
     subCategories,
     save,
+    withdrawDialog,
     runAiDescription,
     addTagById,
     removeTag,

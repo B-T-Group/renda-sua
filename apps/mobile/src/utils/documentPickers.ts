@@ -1,5 +1,6 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import { APPEAL_EVIDENCE_CONTENT_TYPES } from '../types/itemRejectionRecovery';
 import {
   IMAGE_LIBRARY_PICKER_OPTIONS,
   isSupportedImageAsset,
@@ -17,14 +18,19 @@ export type DocumentPickResult =
   | { ok: true; file: PickedUploadFile }
   | { ok: false; reason: 'canceled' | 'permission_denied' | 'error'; message?: string };
 
+export async function pickAppealEvidenceFile(): Promise<DocumentPickResult> {
+  return pickDocumentFile({ types: [...APPEAL_EVIDENCE_CONTENT_TYPES] });
+}
+
 export async function pickDocumentFile(options?: {
   allTypes?: boolean;
+  types?: string[];
 }): Promise<DocumentPickResult> {
   try {
     const result = await DocumentPicker.getDocumentAsync({
       type: options?.allTypes
         ? '*/*'
-        : ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
+        : options?.types ?? ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'],
       copyToCacheDirectory: true,
     });
     if (result.canceled || !result.assets[0]) {

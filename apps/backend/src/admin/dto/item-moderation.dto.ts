@@ -1,5 +1,7 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { REJECTION_CATEGORIES } from '../../item-appeals/item-recovery.constants';
+import type { RejectionCategory } from '../../item-appeals/item-recovery.constants';
 
 export class RejectSaleItemDto {
   @ApiProperty({
@@ -10,6 +12,13 @@ export class RejectSaleItemDto {
   @IsNotEmpty()
   @MaxLength(8000)
   rejectionReason!: string;
+
+  @ApiProperty({
+    enum: REJECTION_CATEGORIES,
+    description: 'A4: required. Drives the business recovery actions (B8).',
+  })
+  @IsIn(REJECTION_CATEGORIES as unknown as string[])
+  rejectionCategory!: RejectionCategory;
 }
 
 export class MessageBusinessAboutItemDto {

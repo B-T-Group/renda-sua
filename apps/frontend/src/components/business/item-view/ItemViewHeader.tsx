@@ -22,6 +22,8 @@ interface ItemViewHeaderProps {
   itemId?: string | null;
   isActive: boolean;
   moderationStatus?: string | null;
+  rejectionCategory?: string | null;
+  pendingResubmit?: boolean;
   canToggleActive?: boolean;
   toggling: boolean;
   onToggleActive: (next: boolean) => void;
@@ -35,6 +37,8 @@ const ItemViewHeader: React.FC<ItemViewHeaderProps> = ({
   itemId,
   isActive,
   moderationStatus,
+  rejectionCategory,
+  pendingResubmit,
   canToggleActive = true,
   toggling,
   onToggleActive,
@@ -104,6 +108,8 @@ const ItemViewHeader: React.FC<ItemViewHeaderProps> = ({
               <ItemModerationStatusChip
                 status={moderationStatus}
                 itemId={itemId}
+                rejectionCategory={rejectionCategory}
+                pendingResubmit={pendingResubmit}
               />
             </Stack>
             {sku && (

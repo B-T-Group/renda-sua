@@ -20,6 +20,7 @@ import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { findSelectedAdminPath } from '../../constants/adminModuleSections';
 import { useBusinessDashboardModules } from '../../hooks/useBusinessDashboardModules';
 import { useDashboardAggregates } from '../../hooks/useDashboardAggregates';
+import { useItemAppealsCount } from '../../hooks/useItemAppealsAdmin';
 import AdminToolsNav from './AdminToolsNav';
 import AdminScopeChip from './AdminScopeChip';
 
@@ -144,11 +145,13 @@ const AdminToolsLayout: React.FC = () => {
   const [search, setSearch] = useState('');
 
   const { aggregates } = useDashboardAggregates(profile?.business?.id);
+  const appealCounts = useItemAppealsCount();
   const isRentalFocused =
     (profile?.business?.main_interest ?? 'sell_items') === 'rent_items';
   const { adminModules, hasAdminAccess } = useBusinessDashboardModules({
     aggregates,
     isRentalFocused,
+    itemAppealsPending: appealCounts?.pending ?? null,
   });
 
   const selectedPath = useMemo(
