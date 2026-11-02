@@ -40,12 +40,11 @@ export function ItemDetailAttentionStrip({
   const hasStock = getItemInventories(item).length > 0;
 
   const showDraft = moderation === 'draft';
-  const showRejected = moderation === 'rejected';
   const showProposal = moderation === 'proposal_pending';
   const showNoPhoto = !hasPhoto;
   const showNoStock = !hasStock;
 
-  if (!showDraft && !showRejected && !showProposal && !showNoPhoto && !showNoStock) {
+  if (!showDraft && !showProposal && !showNoPhoto && !showNoStock) {
     return null;
   }
 
@@ -80,36 +79,6 @@ export function ItemDetailAttentionStrip({
           >
             {t('business.items.moderation.publish', 'Publish')}
           </Button>
-        </View>
-      ) : null}
-
-      {showRejected ? (
-        <View style={styles.block}>
-          {item.rejection_reason ? (
-            <>
-              <Text variant="labelMedium" style={{ color: colors.text.primary }}>
-                {t(
-                  'business.items.moderation.rejectionReason',
-                  'Why this item was rejected'
-                )}
-              </Text>
-              <Text
-                variant="bodyMedium"
-                style={{ color: colors.error.main, marginTop: 4 }}
-              >
-                {item.rejection_reason}
-              </Text>
-            </>
-          ) : null}
-          <Text
-            variant="bodySmall"
-            style={{ color: colors.text.secondary, marginTop: 4 }}
-          >
-            {t(
-              'business.items.moderation.resubmitHint',
-              'If this item was rejected, saving changes will send it for review again.'
-            )}
-          </Text>
         </View>
       ) : null}
 
@@ -160,5 +129,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  block: {},
 });

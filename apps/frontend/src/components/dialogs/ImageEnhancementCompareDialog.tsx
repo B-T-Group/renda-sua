@@ -25,6 +25,10 @@ export interface ImageEnhancementCompareDialogProps {
   useEnhancedDisabled?: boolean;
   onUseOriginal: () => void;
   onUseEnhanced: () => void;
+  originalLabel?: string;
+  enhancedLabel?: string;
+  preferOriginal?: boolean;
+  warning?: string;
 }
 
 const ImageEnhancementCompareDialog: React.FC<
@@ -40,6 +44,10 @@ const ImageEnhancementCompareDialog: React.FC<
   useEnhancedDisabled = false,
   onUseOriginal,
   onUseEnhanced,
+  originalLabel,
+  enhancedLabel,
+  preferOriginal = false,
+  warning,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -56,6 +64,11 @@ const ImageEnhancementCompareDialog: React.FC<
         ) : (
           <SideBySide originalUrl={originalUrl} enhancedUrl={enhancedUrl} />
         )}
+        {warning ? (
+          <Typography variant="body2" color="warning.main" sx={{ mt: 2 }}>
+            {warning}
+          </Typography>
+        ) : null}
         {changes && changes.length > 0 ? (
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
             {changes.map((change) => (
@@ -69,18 +82,18 @@ const ImageEnhancementCompareDialog: React.FC<
           {t('common.close', 'Close')}
         </Button>
         <Button
-          variant="outlined"
+          variant={preferOriginal ? 'contained' : 'outlined'}
           onClick={onUseOriginal}
           disabled={busy || useOriginalDisabled || !originalUrl}
         >
-          {t('business.aiImageCleanup.useOriginal', 'Use original')}
+          {originalLabel || t('business.aiImageCleanup.useOriginal', 'Use original')}
         </Button>
         <Button
-          variant="contained"
+          variant={preferOriginal ? 'outlined' : 'contained'}
           onClick={onUseEnhanced}
           disabled={busy || useEnhancedDisabled || !enhancedUrl}
         >
-          {t('business.aiImageCleanup.useEnhanced', 'Use enhanced')}
+          {enhancedLabel || t('business.aiImageCleanup.useEnhanced', 'Use enhanced')}
         </Button>
       </DialogActions>
     </Dialog>

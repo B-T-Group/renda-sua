@@ -50,7 +50,9 @@ export function BusinessItemListRow({ item, onPressDetails, onPressEdit, onItemM
   const showActivePill = canToggleItemActive(moderation) || !moderation;
   const modColors =
     moderation && moderation !== 'approved'
-      ? itemModerationColors(moderation, colors)
+      ? itemModerationColors(moderation, colors, {
+          category: item.rejection_category,
+        })
       : null;
 
   return (
@@ -97,8 +99,12 @@ export function BusinessItemListRow({ item, onPressDetails, onPressEdit, onItemM
                   <StatusPill
                     compact
                     label={t(
-                      itemModerationLabelKey(moderation),
-                      itemModerationDefaultLabel(moderation)
+                      itemModerationLabelKey(moderation, {
+                        category: item.rejection_category,
+                      }),
+                      itemModerationDefaultLabel(moderation, {
+                        category: item.rejection_category,
+                      })
                     )}
                     backgroundColor={modColors.backgroundColor}
                     textColor={modColors.textColor}

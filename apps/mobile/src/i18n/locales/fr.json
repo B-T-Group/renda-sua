@@ -3547,6 +3547,87 @@
         "resubmitHint": "Si cet article a été refusé, l’enregistrer à nouveau le renverra en revue.",
         "rejectionReason": "Pourquoi cet article a été refusé"
       },
+      "recovery": {
+        "status": {
+          "needsChanges": "Modifications requises",
+          "notAllowed": "Non autorisé",
+          "inReview": "En cours d'examen · généralement sous 24 h"
+        },
+        "action": {
+          "aiFix": "Corriger les photos avec l'IA",
+          "retake": "Reprendre la photo",
+          "condition": "Modifier l'état",
+          "resubmit": "Soumettre à nouveau",
+          "appeal": "Contester la décision",
+          "editFields": "Modifier les détails",
+          "editPrice": "Modifier le prix"
+        },
+        "aiFix": {
+          "cost": "Coût : {{n}} jetons · Vous en avez {{m}}",
+          "buy": "Acheter des jetons",
+          "keep": "Conserver",
+          "discard": "Annuler",
+          "altered": "L'IA a peut-être modifié l'article lui-même. Vérifiez attentivement.",
+          "selectPhotos": "Choisissez les photos à corriger"
+        },
+        "retake": {
+          "tips": "Utilisez la lumière du jour, un fond uni, et montrez l'usure éventuelle.",
+          "tipDaylight": "Utilisez la lumière du jour",
+          "tipBackground": "Utilisez un fond uni",
+          "tipWhole": "Montrez l'article entier plus un gros plan",
+          "tipNoWatermark": "Pas de filigranes ni de photos d'archives",
+          "tipWear": "Montrez l'usure réelle",
+          "replace": "Remplacer la photo",
+          "add": "Ajouter une photo",
+          "camera": "Prendre une photo",
+          "library": "Choisir dans la galerie",
+          "photo": "Photo"
+        },
+        "condition": {
+          "new": "Neuf",
+          "used": "Occasion",
+          "refurb": "Reconditionné",
+          "wearNote": "Décrivez l'usure",
+          "wearRequired": "Décrivez l'usure",
+          "wearTooShort": "Utilisez au moins 10 caractères",
+          "wearTooLong": "Utilisez au plus 300 caractères",
+          "save": "Enregistrer l'état"
+        },
+        "appeal": {
+          "reason": "Pourquoi devrions-nous reconsidérer ?",
+          "evidence": "Ajouter des preuves (facultatif)",
+          "addFiles": "Ajouter un fichier",
+          "limit": "1 contestation par décision",
+          "pending": "Contestation en cours",
+          "upheld": "Décision maintenue",
+          "overturned": "Décision annulée, votre article est en ligne",
+          "withdrawWarn": "Soumettre à nouveau retirera votre contestation en cours.",
+          "submit": "Envoyer la contestation",
+          "adminNote": "Note du réviseur",
+          "disabledInReview": "En cours d'examen",
+          "disabledAllowance": "1 contestation par décision",
+          "reasonTooShort": "Utilisez au moins 20 caractères",
+          "reasonTooLong": "Utilisez au plus 500 caractères",
+          "evidenceLimit": "Ajoutez jusqu'à 3 fichiers",
+          "evidenceType": "Utilisez des images ou un PDF"
+        },
+        "resubmit": {
+          "confirmNoChanges": "Soumettre à nouveau cet article sans autres modifications ?",
+          "confirmTitle": "Soumettre à nouveau"
+        },
+        "tokensUsed": "Jetons utilisés pour cet article : {{n}}",
+        "translate": "Traduire",
+        "showOriginal": "Afficher l'original",
+        "cat": {
+          "photo_quality": "Qualité photo",
+          "prohibited_item": "Article interdit",
+          "counterfeit": "Contrefaçon possible",
+          "wrong_condition": "État incorrect",
+          "missing_info": "Informations manquantes",
+          "pricing": "Prix",
+          "other": "Autre"
+        }
+      },
       "aiProposal": {
         "title": "Examiner les suggestions IA",
         "reviewCta": "Examiner les suggestions IA",

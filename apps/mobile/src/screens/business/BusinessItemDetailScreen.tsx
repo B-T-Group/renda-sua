@@ -14,6 +14,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { AddInventoryLocationDialog } from '../../components/business/AddInventoryLocationDialog';
 import { BusinessItemRowActions } from '../../components/business/BusinessItemRowActions';
 import { ItemDetailAttentionStrip } from '../../components/business/item-detail/ItemDetailAttentionStrip';
+import { ItemRecoverySection } from '../../components/business/item-recovery/ItemRecoverySection';
 import { ItemIdentitySection } from '../../components/business/item-detail/ItemIdentitySection';
 import { ItemImageManagementSection } from '../../components/business/item-detail/ItemImageManagementSection';
 import { ItemTaxCategorySection } from '../../components/business/item-detail/ItemTaxCategorySection';
@@ -168,6 +169,12 @@ function BusinessItemDetailContent({ route, navigation }: Props) {
           />
         }
       >
+        <ItemRecoverySection
+          item={item}
+          onChanged={() => load({ soft: true })}
+          onEdit={() => navigation.navigate('BusinessItemForm', { itemId: item.id })}
+          onMessage={setSnackbar}
+        />
         <ItemDetailAttentionStrip
           item={item}
           busy={busy}

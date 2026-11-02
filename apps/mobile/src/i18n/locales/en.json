@@ -3640,6 +3640,87 @@
         "resubmitHint": "If this item was rejected, saving changes will send it for review again.",
         "rejectionReason": "Why this item was rejected"
       },
+      "recovery": {
+        "status": {
+          "needsChanges": "Needs changes",
+          "notAllowed": "Not allowed",
+          "inReview": "In review · usually within 24 h"
+        },
+        "action": {
+          "aiFix": "Fix photos with AI",
+          "retake": "Retake photo",
+          "condition": "Change condition",
+          "resubmit": "Resubmit for review",
+          "appeal": "Appeal decision",
+          "editFields": "Edit item details",
+          "editPrice": "Edit price"
+        },
+        "aiFix": {
+          "cost": "Cost: {{n}} tokens · You have {{m}}",
+          "buy": "Buy tokens",
+          "keep": "Keep",
+          "discard": "Discard",
+          "altered": "AI may have changed the item itself. Check carefully.",
+          "selectPhotos": "Choose photos to fix"
+        },
+        "retake": {
+          "tips": "Use daylight, a plain background, and show any wear.",
+          "tipDaylight": "Use daylight",
+          "tipBackground": "Use a plain background",
+          "tipWhole": "Show the whole item plus one close-up",
+          "tipNoWatermark": "No watermarks or stock photos",
+          "tipWear": "Show real wear",
+          "replace": "Replace photo",
+          "add": "Add photo",
+          "camera": "Take photo",
+          "library": "Choose from library",
+          "photo": "Photo"
+        },
+        "condition": {
+          "new": "New",
+          "used": "Used",
+          "refurb": "Refurbished",
+          "wearNote": "Describe the wear",
+          "wearRequired": "Describe the wear",
+          "wearTooShort": "Use at least 10 characters",
+          "wearTooLong": "Use at most 300 characters",
+          "save": "Save condition"
+        },
+        "appeal": {
+          "reason": "Why should we reconsider?",
+          "evidence": "Add evidence (optional)",
+          "addFiles": "Add file",
+          "limit": "1 appeal per decision",
+          "pending": "Appeal pending",
+          "upheld": "Decision upheld",
+          "overturned": "Decision overturned, your item is live",
+          "withdrawWarn": "Resubmitting will withdraw your pending appeal.",
+          "submit": "Submit appeal",
+          "adminNote": "Reviewer note",
+          "disabledInReview": "In review",
+          "disabledAllowance": "1 appeal per decision",
+          "reasonTooShort": "Use at least 20 characters",
+          "reasonTooLong": "Use at most 500 characters",
+          "evidenceLimit": "Add up to 3 files",
+          "evidenceType": "Use images or a PDF"
+        },
+        "resubmit": {
+          "confirmNoChanges": "Resubmit this item without more changes?",
+          "confirmTitle": "Resubmit for review"
+        },
+        "tokensUsed": "Tokens used on this item: {{n}}",
+        "translate": "Translate",
+        "showOriginal": "Show original",
+        "cat": {
+          "photo_quality": "Photo quality",
+          "prohibited_item": "Prohibited item",
+          "counterfeit": "Possible counterfeit",
+          "wrong_condition": "Wrong condition",
+          "missing_info": "Missing info",
+          "pricing": "Pricing",
+          "other": "Other"
+        }
+      },
       "aiProposal": {
         "title": "Review AI suggestions",
         "reviewCta": "Review AI suggestions",
