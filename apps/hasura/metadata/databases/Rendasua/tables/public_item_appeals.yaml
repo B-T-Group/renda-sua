@@ -1,0 +1,40 @@
+table:
+  name: item_appeals
+  schema: public
+object_relationships:
+  - name: admin
+    using:
+      foreign_key_constraint_on: admin_id
+  - name: business
+    using:
+      foreign_key_constraint_on: business_id
+  - name: item
+    using:
+      foreign_key_constraint_on: item_id
+  - name: rejection
+    using:
+      foreign_key_constraint_on: rejection_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - rejection_id
+        - item_id
+        - business_id
+        - reason
+        - evidence_keys
+        - status
+        - admin_note
+        - outcome_moderation_status
+        - corrected_category
+        - withdrawn_reason
+        - decided_at
+        - sla_due_at
+        - created_at
+        - updated_at
+      filter:
+        business:
+          user:
+            id:
+              _eq: X-Hasura-User-Id

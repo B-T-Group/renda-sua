@@ -386,7 +386,8 @@ export class AdminController {
     await this.itemModerationService.rejectItem(
       itemId,
       request.user.id,
-      reason
+      reason,
+      body.rejectionCategory
     );
     return { success: true };
   }

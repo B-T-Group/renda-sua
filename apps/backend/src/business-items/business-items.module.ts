@@ -1,3 +1,4 @@
+import { ItemRejectionsModule } from '../item-appeals/item-rejections.module';
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { BusinessContractsModule } from '../business-contracts/business-contracts.module';
@@ -22,6 +23,7 @@ import { CollectionsModule } from '../collections/collections.module';
 
 @Module({
   imports: [
+    ItemRejectionsModule,
     AuthModule,
     FoodModule,
     CategoriesModule,

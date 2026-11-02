@@ -34,6 +34,12 @@ const SERVER_EVENT_ID_ALLOWLIST = new Set([
   'businessId',
   'businessLocationId',
   'clientId',
+  // Rejected-item recovery + appeals (B10)
+  'itemId',
+  'appealId',
+  'rejectionId',
+  'reviewerId',
+  'deciderId',
 ]);
 
 // Assistant metadata validators (Phase 0 #451 PR review): per-key validation
