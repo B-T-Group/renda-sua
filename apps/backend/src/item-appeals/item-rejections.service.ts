@@ -20,6 +20,15 @@ export interface RecordRejectionParams {
   source: 'admin' | 'ai';
 }
 
+export interface PreparedRejection {
+  rejectionId: string;
+  variables: {
+    rejectionId: string;
+    rejection: Record<string, unknown>;
+    rejectionAudit: Record<string, unknown>;
+  };
+}
+
 interface ResubmitGateItem {
   id: string;
   moderation_status: string;
@@ -52,8 +61,15 @@ export class ItemRejectionsService {
     @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
 
-  /** Called after the item status flipped to rejected (category set in that same write). */
-  async recordRejection(params: RecordRejectionParams): Promise<{ rejectionId: string }> {
+  /**
+   * Builds the rejection row + audit row for a reject mutation. Callers send these
+   * variables in the SAME GraphQL mutation that flips the item to rejected and
+   * sets current_rejection_id = rejectionId (see REJECTION_RECORD_VARS /
+   * REJECTION_RECORD_ROOTS), so the item status and its record commit together.
+   * The DB trigger item_rejections_require_current rejects a row whose item was
+   * not rejected in that transaction, rolling the whole mutation back.
+   */
+  async prepareRejection(params: RecordRejectionParams): Promise<PreparedRejection> {
     if (!isRejectionCategory(params.category)) {
       throw new HttpException(
         { success: false, code: RECOVERY_ERRORS.CATEGORY_REQUIRED, error: 'A valid rejection category is required' },
@@ -62,27 +78,32 @@ export class ItemRejectionsService {
     }
     const snapshot = await this.loadSnapshot(params.itemId);
     const rejectionId = randomUUID();
-    await this.hasura.executeMutation(Q.RECORD_ITEM_REJECTION, {
-      rejection: {
-        id: rejectionId,
-        item_id: params.itemId,
-        category: params.category,
-        reason: params.reason ?? '',
-        reviewer_id: params.reviewerId,
-        source: params.source,
-        item_snapshot: snapshot,
-      },
-      itemId: params.itemId,
+    return {
       rejectionId,
-      category: params.category,
-      audit: {
-        item_id: params.itemId,
-        rejection_id: rejectionId,
-        actor_user_id: params.reviewerId,
-        action: 'rejected',
-        details: { category: params.category, source: params.source },
+      variables: {
+        rejectionId,
+        rejection: {
+          id: rejectionId,
+          item_id: params.itemId,
+          category: params.category,
+          reason: params.reason ?? '',
+          reviewer_id: params.reviewerId,
+          source: params.source,
+          item_snapshot: snapshot,
+        },
+        rejectionAudit: {
+          item_id: params.itemId,
+          rejection_id: rejectionId,
+          actor_user_id: params.reviewerId,
+          action: 'rejected',
+          details: { category: params.category, source: params.source },
+        },
       },
-    });
+    };
+  }
+
+  /** Metric after the atomic reject mutation committed. */
+  noteRejected(params: RecordRejectionParams, rejectionId: string): void {
     emitServerSiteEvent(this.siteEvents, 'item_moderation.rejected', {
       itemId: params.itemId,
       rejectionId,
@@ -90,7 +111,6 @@ export class ItemRejectionsService {
       source: params.source,
       ...(params.reviewerId ? { reviewerId: params.reviewerId } : {}),
     });
-    return { rejectionId };
   }
 
   /**

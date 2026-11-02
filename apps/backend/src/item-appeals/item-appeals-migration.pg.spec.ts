@@ -53,22 +53,49 @@ suite('item rejection appeals migration (real Postgres)', () => {
     }
   });
 
+  /** Runs statements in one transaction on one connection (like a Hasura multi-root mutation). */
+  async function tx<T>(fn: (c: { query: (q: string, v?: unknown[]) => Promise<any> }) => Promise<T>): Promise<T> {
+    const c = await pool.connect();
+    try {
+      await c.query('BEGIN');
+      const out = await fn(c);
+      await c.query('COMMIT');
+      return out;
+    } catch (e) {
+      await c.query('ROLLBACK');
+      throw e;
+    } finally {
+      c.release();
+    }
+  }
+  async function newItem(status = 'pending') {
+    return (
+      await pool.query(
+        `INSERT INTO items (name, item_sub_category_id, business_id, moderation_status) VALUES ('Lamp', $1, $2, $3) RETURNING id`,
+        [subCat, businessId, status]
+      )
+    ).rows[0].id as string;
+  }
+  /** The API's reject: item flip + pointer first, then the record, in ONE transaction. */
+  async function rejectAtomically(item: string, category: string, guardStatus: string | null = null) {
+    return tx(async (c) => {
+      const rej = (await c.query(`SELECT gen_random_uuid() AS id`)).rows[0].id as string;
+      const upd = await c.query(
+        `UPDATE items SET moderation_status = 'rejected', rejection_category = $2, current_rejection_id = $3
+          WHERE id = $1 AND ($4::text IS NULL OR moderation_status::text = $4)`,
+        [item, category, rej, guardStatus]
+      );
+      await c.query(
+        `INSERT INTO item_rejections (id, item_id, category, reason, reviewer_id, source) VALUES ($2,$1,$3,'blurry',$4,'admin')`,
+        [item, rej, category, adminUserId]
+      );
+      return { rej, affected: upd.rowCount };
+    });
+  }
   /** A rejected item with its rejection record + pointer, as the API writes it. */
   async function rejectedItem(category = 'photo_quality') {
-    const item = (
-      await pool.query(
-        `INSERT INTO items (name, item_sub_category_id, business_id, moderation_status, rejection_category)
-         VALUES ('Lamp', $1, $2, 'rejected', $3) RETURNING id`,
-        [subCat, businessId, category]
-      )
-    ).rows[0].id as string;
-    const rej = (
-      await pool.query(
-        `INSERT INTO item_rejections (item_id, category, reason, reviewer_id, source) VALUES ($1,$2,'blurry',$3,'admin') RETURNING id`,
-        [item, category, adminUserId]
-      )
-    ).rows[0].id as string;
-    await pool.query(`UPDATE items SET current_rejection_id = $2 WHERE id = $1`, [item, rej]);
+    const item = await newItem();
+    const { rej } = await rejectAtomically(item, category);
     return { item, rej };
   }
   async function appeal(item: string, rej: string) {
@@ -185,6 +212,45 @@ suite('item rejection appeals migration (real Postgres)', () => {
     await pool.query(`UPDATE items SET condition='refurbished', wear_note='Small scratch on the lid' WHERE id=$1`, [i.id]);
     expect((await pool.query(`SELECT is_used FROM items WHERE id=$1`, [i.id])).rows[0].is_used).toBe(true);
     await expect(pool.query(`UPDATE items SET wear_note='short' WHERE id=$1`, [i.id])).rejects.toThrow(/check/i);
+  });
+
+  it('reject + rejection record commit together (deferred pointer FK)', async () => {
+    const item = await newItem('ai_reviewing');
+    const { rej, affected } = await rejectAtomically(item, 'pricing', 'ai_reviewing');
+    expect(affected).toBe(1);
+    const row = (await pool.query(`SELECT moderation_status, current_rejection_id FROM items WHERE id = $1`, [item])).rows[0];
+    expect(row).toEqual({ moderation_status: 'rejected', current_rejection_id: rej });
+  });
+
+  it('a rejection row cannot exist without the item being rejected onto it', async () => {
+    const item = await newItem('pending');
+    await expect(
+      pool.query(`INSERT INTO item_rejections (item_id, category, reason, source) VALUES ($1,'other','x','ai')`, [item])
+    ).rejects.toThrow(/item_rejection_not_current/);
+    const { item: rejected } = await rejectedItem('pricing');
+    // an extra record not pointed at by the item is refused too
+    await expect(
+      pool.query(`INSERT INTO item_rejections (item_id, category, reason, source) VALUES ($1,'other','x','ai')`, [rejected])
+    ).rejects.toThrow(/item_rejection_not_current/);
+  });
+
+  it('pointing a non-rejected item at a record is not enough', async () => {
+    const item = await newItem('approved');
+    await expect(
+      tx(async (c) => {
+        const rej = (await c.query(`SELECT gen_random_uuid() AS id`)).rows[0].id;
+        await c.query(`UPDATE items SET current_rejection_id = $2 WHERE id = $1`, [item, rej]);
+        await c.query(`INSERT INTO item_rejections (id, item_id, category, reason, source) VALUES ($2,$1,'other','x','ai')`, [item, rej]);
+      })
+    ).rejects.toThrow(/item_rejection_not_current/);
+  });
+
+  it('a guarded reject that matched no row rolls the whole transaction back (AI lost the race)', async () => {
+    const item = await newItem('approved');
+    await expect(rejectAtomically(item, 'other', 'ai_reviewing')).rejects.toThrow(/item_rejection_not_current/);
+    const row = (await pool.query(`SELECT moderation_status, current_rejection_id FROM items WHERE id = $1`, [item])).rows[0];
+    expect(row).toEqual({ moderation_status: 'approved', current_rejection_id: null });
+    expect((await pool.query(`SELECT count(*)::int AS n FROM item_rejections WHERE item_id = $1`, [item])).rows[0].n).toBe(0);
   });
 
   it('down then up again is clean', async () => {

@@ -17,7 +17,7 @@ import { CollectionAutoAssignService } from '../collections/collection-auto-assi
 import { ItemAiReviewModelService } from './item-ai-review-model.service';
 import { ItemAiReviewQueueService } from './item-ai-review-queue.service';
 import * as Q from './item-ai-review.queries';
-import { ItemRejectionsService } from '../item-appeals/item-rejections.service';
+import { ItemRejectionsService, PreparedRejection } from '../item-appeals/item-rejections.service';
 import {
   RejectionCategory,
   categoryFromAiIssues,
@@ -42,32 +42,10 @@ export class ItemAiReviewService {
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly collectionAutoAssignService: CollectionAutoAssignService,
+    private readonly itemRejections: ItemRejectionsService,
     @Optional()
-    private readonly representativeCompensationService?: RepresentativeCompensationService,
-    @Optional()
-    private readonly itemRejections?: ItemRejectionsService
+    private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
-
-  /** B2: rejection record + metric. Never blocks the AI decision that already landed. */
-  private async recordRejectionSafe(
-    itemId: string,
-    category: RejectionCategory,
-    reason: string
-  ): Promise<void> {
-    try {
-      await this.itemRejections?.recordRejection({
-        itemId,
-        category,
-        reason,
-        reviewerId: null,
-        source: 'ai',
-      });
-    } catch (error: any) {
-      this.logger.error(
-        `Failed to record AI rejection for ${itemId}: ${error?.message ?? error}`
-      );
-    }
-  }
 
   isEnabled(): boolean {
     return (
@@ -107,12 +85,10 @@ export class ItemAiReviewService {
     }
     // Implicit resubmits (CSV, image attach) never withdraw a pending appeal and
     // never resubmit not-allowed categories (prohibited/counterfeit).
-    const gate = this.itemRejections
-      ? await this.itemRejections
-          .assertResubmitAllowed(itemId, { confirmWithdrawAppeal: false })
-          .catch(() => null)
-      : undefined;
-    if (gate === null || (gate && !gate.resubmit)) {
+    const gate = await this.itemRejections
+      .assertResubmitAllowed(itemId, { confirmWithdrawAppeal: false })
+      .catch(() => null);
+    if (!gate || !gate.resubmit) {
       return false;
     }
     const reset = await this.hasura.executeMutation<{
@@ -124,7 +100,7 @@ export class ItemAiReviewService {
         HttpStatus.BAD_REQUEST
       );
     }
-    if (gate) await this.itemRejections?.noteResubmitted(itemId, gate, null);
+    await this.itemRejections.noteResubmitted(itemId, gate, null);
     void this.requestReview(itemId);
     return true;
   }
@@ -509,7 +485,7 @@ export class ItemAiReviewService {
       );
       return;
     }
-    void this.itemRejections?.noteApproved(item.id, 'ai');
+    void this.itemRejections.noteApproved(item.id, 'ai');
     await this.notifications.sendSaleItemApprovedEmail({
       itemId: item.id,
       itemName: item.name,
@@ -555,21 +531,17 @@ export class ItemAiReviewService {
   ): Promise<void> {
     await this.completeReview(reviewId, 'rejected', result, modelMeta);
     const category = categoryFromAiIssues(result.issues);
-    const applied = await this.patchItemStatusIfAiReviewing(
-      item.id,
-      'rejected',
-      false,
-      'ai',
-      category
-    );
+    const reason = result.reason;
+    const record = { itemId: item.id, category, reason, reviewerId: null, source: 'ai' as const };
+    const prepared = await this.itemRejections.prepareRejection(record);
+    const applied = await this.rejectIfAiReviewing(item.id, category, prepared);
     if (!applied) {
       this.logger.warn(
         `Skipped AI reject for ${item.id}; item left ai_reviewing`
       );
       return;
     }
-    const reason = result.reason;
-    await this.recordRejectionSafe(item.id, category, reason);
+    this.itemRejections.noteRejected(record, prepared.rejectionId);
     await this.insertOwnerMessage(item.business.user_id, item.id, reason);
     await this.notifications.sendSaleItemRejectedEmail({
       itemId: item.id,
@@ -601,6 +573,35 @@ export class ItemAiReviewService {
       modelMeta,
       completedAt: new Date().toISOString(),
     });
+  }
+
+  /**
+   * Reject + rejection record + audit in one transaction, guarded on ai_reviewing.
+   * Lost race (someone else decided first): the DB guard rolls the mutation back;
+   * we report "not applied". Any other failure is rethrown so SQS retries.
+   */
+  private async rejectIfAiReviewing(
+    itemId: string,
+    category: RejectionCategory,
+    prepared: PreparedRejection
+  ): Promise<boolean> {
+    try {
+      const result = await this.hasura.executeMutation<{
+        update_items: { affected_rows: number };
+      }>(Q.REJECT_ITEM_IF_AI_REVIEWING_WITH_RECORD, {
+        id: itemId,
+        rejectionCategory: category,
+        moderatedAt: new Date().toISOString(),
+        ...prepared.variables,
+      });
+      return (result.update_items?.affected_rows ?? 0) > 0;
+    } catch (error) {
+      const current = await this.loadModerationRow(itemId).catch(() => null);
+      if (current && current.moderation_status !== 'ai_reviewing') {
+        return false;
+      }
+      throw error;
+    }
   }
 
   private async patchItemStatusIfAiReviewing(

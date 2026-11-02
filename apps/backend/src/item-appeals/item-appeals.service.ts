@@ -1,3 +1,14 @@
+import { AwsService } from '../aws/aws.service';
+import { randomUUID } from 'crypto';
+import {
+  APPEAL_EVIDENCE_MAX_BYTES,
+  APPEAL_EVIDENCE_URL_TTL_SECONDS,
+  EvidenceStorage,
+  evidencePrefix,
+  evidencePublicUrl,
+  isOwnEvidenceUrl,
+  validateEvidenceUpload,
+} from './appeal-evidence';
 import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
 import { CLEANUP_TOKEN_COST } from '../business-tokens/business-tokens.packs';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
@@ -43,7 +54,11 @@ export function recoveryError(status: HttpStatus, code: string, error: string, e
 }
 
 /** Pure B4 validation, exported for tests. Returns the trimmed reason and evidence. */
-export function validateAppealInput(reason: unknown, evidenceUrls: unknown): { reason: string; evidenceUrls: string[] } {
+export function validateAppealInput(
+  reason: unknown,
+  evidenceUrls: unknown,
+  evidence: { itemId: string; storage: EvidenceStorage }
+): { reason: string; evidenceUrls: string[] } {
   const trimmed = typeof reason === 'string' ? reason.trim() : '';
   if (trimmed.length < APPEAL_REASON_MIN || trimmed.length > APPEAL_REASON_MAX) {
     throw recoveryError(
@@ -60,8 +75,15 @@ export function validateAppealInput(reason: unknown, evidenceUrls: unknown): { r
     });
   }
   const clean = urls.map((u) => (typeof u === 'string' ? u.trim() : ''));
-  if (clean.some((u) => !/^https:\/\/\S+$/i.test(u))) {
-    throw recoveryError(HttpStatus.BAD_REQUEST, RECOVERY_ERRORS.EVIDENCE_LIMIT, 'Evidence must be https image URLs');
+  if (clean.some((u) => !isOwnEvidenceUrl(u, evidence.storage, evidence.itemId))) {
+    throw recoveryError(
+      HttpStatus.BAD_REQUEST,
+      RECOVERY_ERRORS.EVIDENCE_URL,
+      'Evidence must be photos uploaded for this item via the appeal evidence upload URL'
+    );
+  }
+  if (new Set(clean).size !== clean.length) {
+    throw recoveryError(HttpStatus.BAD_REQUEST, RECOVERY_ERRORS.EVIDENCE_URL, 'Duplicate evidence photo');
   }
   return { reason: trimmed, evidenceUrls: clean };
 }
@@ -101,8 +123,44 @@ export class ItemAppealsService {
     private readonly aiReview: ItemAiReviewService,
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycle: MerchantLifecycleService,
+    private readonly aws: AwsService,
     @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
+
+  /** Same bucket/host the backend writes item images to (see AI image cleanup). */
+  evidenceStorage(): EvidenceStorage {
+    const bucket = this.aws.getDefaultBucketName() || process.env.S3_BUCKET_NAME || 'rendasua-uploads';
+    return { bucket, region: this.aws.getBucketRegion() };
+  }
+
+  /**
+   * B4 evidence upload: validates type (no SVG) + size, then issues a short-lived
+   * PUT URL that pins Content-Type and Content-Length, under
+   * items/{itemId}/appeal-evidence/ for an item the caller owns and that is rejected.
+   */
+  async createEvidenceUploadUrl(businessId: string, itemId: string, body: { contentType?: unknown; fileSize?: unknown }) {
+    const file = validateEvidenceUpload(body?.contentType, body?.fileSize);
+    const { item } = await this.loadOwnedItem(businessId, itemId);
+    this.assertRejected(item);
+    const storage = this.evidenceStorage();
+    const key = `${evidencePrefix(item.id)}${randomUUID()}.${file.ext}`;
+    const signed = await this.aws.generateStrictUploadUrl({
+      bucketName: storage.bucket,
+      key,
+      contentType: file.contentType,
+      contentLength: file.size,
+      expiresIn: APPEAL_EVIDENCE_URL_TTL_SECONDS,
+    });
+    return {
+      uploadUrl: signed.url,
+      method: 'PUT' as const,
+      headers: { 'Content-Type': file.contentType, 'Content-Length': String(file.size) },
+      key,
+      evidenceUrl: evidencePublicUrl(storage, key),
+      expiresAt: signed.expiresAt.toISOString(),
+      maxBytes: APPEAL_EVIDENCE_MAX_BYTES,
+    };
+  }
 
   // ---------------------------------------------------------------- business
 
@@ -177,8 +235,11 @@ export class ItemAppealsService {
   }
 
   async createAppeal(businessId: string, userId: string, itemId: string, body: { reason?: unknown; evidenceUrls?: unknown }) {
-    const input = validateAppealInput(body?.reason, body?.evidenceUrls);
     const { item } = await this.loadOwnedItem(businessId, itemId);
+    const input = validateAppealInput(body?.reason, body?.evidenceUrls, {
+      itemId: item.id,
+      storage: this.evidenceStorage(),
+    });
     this.assertRejected(item);
     const rejection = item.current_rejection;
     if (!rejection) {

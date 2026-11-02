@@ -1,3 +1,5 @@
+DROP TRIGGER IF EXISTS item_rejections_require_current ON public.item_rejections;
+DROP FUNCTION IF EXISTS public.item_rejections_require_current();
 -- Postgres cannot drop enum values; the new enum types are dropped whole.
 DROP TRIGGER IF EXISTS items_withdraw_pending_appeals ON public.items;
 DROP TRIGGER IF EXISTS items_clear_rejection_category ON public.items;

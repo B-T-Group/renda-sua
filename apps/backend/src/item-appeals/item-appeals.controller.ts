@@ -4,7 +4,7 @@ import { UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { BusinessItemsAccessService } from '../business-items/business-items-access.service';
 import { HasuraUserService } from '../hasura/hasura-user.service';
-import { AiCleanupQuoteQueryDto, CreateItemAppealDto, ResubmitItemDto, SetItemConditionDto } from './dto/item-appeals.dto';
+import { AiCleanupQuoteQueryDto, AppealEvidenceUploadUrlDto, CreateItemAppealDto, ResubmitItemDto, SetItemConditionDto } from './dto/item-appeals.dto';
 import { ItemAppealsService } from './item-appeals.service';
 
 const PIPE = new ValidationPipe({ transform: true, whitelist: true });
@@ -42,6 +42,13 @@ export class ItemAppealsController {
   async quote(@Param('itemId', ParseUUIDPipe) itemId: string, @Query(PIPE) q: AiCleanupQuoteQueryDto) {
     const businessId = await this.ownBusinessId();
     return { success: true, data: await this.appeals.cleanupQuote(businessId, itemId, q.imageCount) };
+  }
+
+  @Post('items/:itemId/appeal-evidence/upload-url')
+  @ApiOperation({ summary: 'Presigned PUT URL for one appeal evidence photo (JPEG/PNG/WebP, ≤5 MB)' })
+  async evidenceUploadUrl(@Param('itemId', ParseUUIDPipe) itemId: string, @Body(PIPE) body: AppealEvidenceUploadUrlDto) {
+    const businessId = await this.ownBusinessId();
+    return { success: true, data: await this.appeals.createEvidenceUploadUrl(businessId, itemId, body) };
   }
 
   @Post('items/:itemId/appeals')

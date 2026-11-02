@@ -4,7 +4,7 @@ import {
   RejectionCategory,
   isRejectionCategory,
 } from '../item-appeals/item-recovery.constants';
-import { HttpException, HttpStatus, Injectable, Optional } from '@nestjs/common';
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
 import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecycle.service';
@@ -24,8 +24,7 @@ export class ItemAiReviewAdminService {
     private readonly notifications: NotificationsService,
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
-    @Optional()
-    private readonly itemRejections?: ItemRejectionsService
+    private readonly itemRejections: ItemRejectionsService
   ) {}
 
   async listReviews(params: {
@@ -158,7 +157,7 @@ export class ItemAiReviewAdminService {
       source: 'admin',
       aiReviewedAt: null,
     });
-    void this.itemRejections?.noteApproved(review.item_id, 'admin');
+    void this.itemRejections.noteApproved(review.item_id, 'admin');
     const item = review.item;
     if (item?.business?.user_id) {
       await this.notifications.sendSaleItemApprovedEmail({
@@ -185,24 +184,22 @@ export class ItemAiReviewAdminService {
     const trimmed =
       reason?.trim() ||
       'An admin reversed the AI decision. Please update your product.';
-    const now = new Date().toISOString();
-    await this.hasura.executeMutation(Q.APPLY_ITEM_MODERATION, {
-      id: review.item_id,
-      status: 'rejected',
-      isActive: false,
-      moderatedAt: now,
-      moderatorId: adminUserId,
-      source: 'admin',
-      aiReviewedAt: null,
-      rejectionCategory,
-    });
-    await this.itemRejections?.recordRejection({
-      itemId: review.item_id,
+    const record = {
+      itemId: review.item_id as string,
       category: rejectionCategory,
       reason: trimmed,
       reviewerId: adminUserId,
-      source: 'admin',
+      source: 'admin' as const,
+    };
+    const prepared = await this.itemRejections.prepareRejection(record);
+    await this.hasura.executeMutation(Q.REJECT_ITEM_WITH_RECORD, {
+      id: review.item_id,
+      rejectionCategory,
+      moderatedAt: new Date().toISOString(),
+      moderatorId: adminUserId,
+      ...prepared.variables,
     });
+    this.itemRejections.noteRejected(record, prepared.rejectionId);
     const item = review.item;
     if (item?.business?.user_id) {
       await this.hasura.executeMutation(Q.INSERT_OWNER_MESSAGE, {

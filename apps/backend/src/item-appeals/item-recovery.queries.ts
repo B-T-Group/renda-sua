@@ -8,23 +8,18 @@ export const ITEM_SNAPSHOT_FOR_REJECTION = `
   }
 `;
 
-/** One transaction: rejection row, item pointer (+category), audit row. */
-export const RECORD_ITEM_REJECTION = `
-  mutation RecordItemRejection(
-    $rejection: item_rejections_insert_input!
-    $itemId: uuid!
+/**
+ * Spliced into every reject mutation so the item flip, the rejection row and the
+ * audit row commit in one transaction. The item update in the same mutation must
+ * also set `current_rejection_id: $rejectionId` and run BEFORE these roots.
+ */
+export const REJECTION_RECORD_VARS = `
     $rejectionId: uuid!
-    $category: item_rejection_category!
-    $audit: item_moderation_audit_insert_input!
-  ) {
-    insert_item_rejections_one(object: $rejection) { id created_at }
-    update_items_by_pk(
-      pk_columns: { id: $itemId }
-      _set: { current_rejection_id: $rejectionId, rejection_category: $category }
-    ) { id }
-    insert_item_moderation_audit_one(object: $audit) { id }
-  }
-`;
+    $rejection: item_rejections_insert_input!
+    $rejectionAudit: item_moderation_audit_insert_input!`;
+export const REJECTION_RECORD_ROOTS = `
+    rejection: insert_item_rejections_one(object: $rejection) { id }
+    rejection_audit: insert_item_moderation_audit_one(object: $rejectionAudit) { id }`;
 
 export const INSERT_AUDIT = `
   mutation InsertItemModerationAudit($object: item_moderation_audit_insert_input!) {

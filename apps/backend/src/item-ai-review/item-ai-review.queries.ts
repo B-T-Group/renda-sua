@@ -1,3 +1,4 @@
+import { REJECTION_RECORD_ROOTS, REJECTION_RECORD_VARS } from '../item-appeals/item-recovery.queries';
 export const ITEM_FOR_AI_REVIEW = `
   query ItemForAiReview($id: uuid!) {
     items_by_pk(id: $id) {
@@ -186,6 +187,61 @@ export const APPLY_ITEM_MODERATION_IF_AI_REVIEWING = `
       affected_rows
       returning { id }
     }
+  }
+`;
+
+/** Admin force-reject: item flip + rejection record + audit in one transaction. */
+export const REJECT_ITEM_WITH_RECORD = `
+  mutation RejectItemWithRecord(
+    $id: uuid!
+    $rejectionCategory: item_rejection_category!
+    $moderatedAt: timestamptz!
+    $moderatorId: uuid${REJECTION_RECORD_VARS}
+  ) {
+    update_items_by_pk(
+      pk_columns: { id: $id }
+      _set: {
+        moderation_status: rejected
+        is_active: false
+        moderated_at: $moderatedAt
+        moderated_by_user_id: $moderatorId
+        moderation_source: "admin"
+        ai_reviewed_at: null
+        rejection_category: $rejectionCategory
+        current_rejection_id: $rejectionId
+      }
+    ) {
+      id
+    }${REJECTION_RECORD_ROOTS}
+  }
+`;
+
+/**
+ * AI worker reject, only while still ai_reviewing, with its rejection record in the
+ * same transaction. When the guard matches no row the record insert fails the DB
+ * check (item_rejections_require_current) and the whole mutation rolls back.
+ */
+export const REJECT_ITEM_IF_AI_REVIEWING_WITH_RECORD = `
+  mutation RejectItemIfAiReviewingWithRecord(
+    $id: uuid!
+    $rejectionCategory: item_rejection_category!
+    $moderatedAt: timestamptz!${REJECTION_RECORD_VARS}
+  ) {
+    update_items(
+      where: { id: { _eq: $id }, moderation_status: { _eq: ai_reviewing } }
+      _set: {
+        moderation_status: rejected
+        is_active: false
+        moderated_at: $moderatedAt
+        moderated_by_user_id: null
+        moderation_source: "ai"
+        ai_reviewed_at: $moderatedAt
+        rejection_category: $rejectionCategory
+        current_rejection_id: $rejectionId
+      }
+    ) {
+      affected_rows
+    }${REJECTION_RECORD_ROOTS}
   }
 `;
 
