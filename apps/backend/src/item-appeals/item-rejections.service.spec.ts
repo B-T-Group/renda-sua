@@ -51,16 +51,16 @@ describe('ItemRejectionsService resubmit gate', () => {
     await expect(s.assertResubmitAllowed('i1', {})).resolves.toMatchObject({ resubmit: false });
   });
 
-  it('recordRejection refuses a missing category and writes rejection + pointer + audit in one mutation', async () => {
+  it('prepareRejection refuses a missing category and builds record + audit vars without writing', async () => {
     const { s, hasura } = svc(null);
-    expect(await codeOf(s.recordRejection({ itemId: 'i1', category: undefined as any, reason: 'x', reviewerId: 'u', source: 'admin' }))).toBe(
+    expect(await codeOf(s.prepareRejection({ itemId: 'i1', category: undefined as any, reason: 'x', reviewerId: 'u', source: 'admin' }))).toBe(
       'ITEM_REJECTION_CATEGORY_REQUIRED'
     );
     hasura.executeQuery.mockResolvedValue({ items_by_pk: { id: 'i1', name: 'Lamp' } });
-    const { rejectionId } = await s.recordRejection({ itemId: 'i1', category: 'pricing', reason: 'too high', reviewerId: null, source: 'ai' });
-    const [, vars] = hasura.executeMutation.mock.calls[0];
-    expect(vars.rejection).toMatchObject({ id: rejectionId, category: 'pricing', reviewer_id: null, source: 'ai', item_snapshot: { name: 'Lamp' } });
-    expect(vars).toMatchObject({ itemId: 'i1', rejectionId, category: 'pricing' });
-    expect(vars.audit).toMatchObject({ rejection_id: rejectionId, action: 'rejected' });
+    const { rejectionId, variables } = await s.prepareRejection({ itemId: 'i1', category: 'pricing', reason: 'too high', reviewerId: null, source: 'ai' });
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+    expect(variables.rejectionId).toBe(rejectionId);
+    expect(variables.rejection).toMatchObject({ id: rejectionId, item_id: 'i1', category: 'pricing', reviewer_id: null, source: 'ai', item_snapshot: { name: 'Lamp' } });
+    expect(variables.rejectionAudit).toMatchObject({ item_id: 'i1', rejection_id: rejectionId, action: 'rejected' });
   });
 });

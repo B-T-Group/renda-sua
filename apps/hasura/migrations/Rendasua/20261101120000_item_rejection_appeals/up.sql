@@ -229,3 +229,35 @@ SELECT 'item_appeal_sla_hours', 'Item appeal review SLA (hours)',
   'number', 48, 1, 336, NULL, ARRAY['moderation', 'appeals'], 'active'
 WHERE NOT EXISTS (SELECT 1 FROM public.application_configurations
   WHERE config_key = 'item_appeal_sla_hours' AND country_code IS NULL);
+
+-- Deferred only now (after the backfill) so the backfill leaves no pending FK
+-- events that would block later ALTERs in this transaction. The API sets the
+-- pointer before inserting the record, within one mutation.
+ALTER TABLE public.items
+  ALTER CONSTRAINT items_current_rejection_id_fkey DEFERRABLE INITIALLY DEFERRED;
+
+-- Atomic rejection records: the API writes the item (status rejected +
+-- current_rejection_id) and the item_rejections row in ONE mutation. This guard
+-- makes a rejection row valid only when the same transaction pointed the item at
+-- it, so a conditional reject that matched no row (AI worker lost the race)
+-- rolls the whole mutation back instead of leaving an orphan record.
+CREATE OR REPLACE FUNCTION public.item_rejections_require_current()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM public.items i
+    WHERE i.id = NEW.item_id
+      AND i.current_rejection_id = NEW.id
+      AND i.moderation_status = 'rejected'
+  ) THEN
+    RAISE EXCEPTION 'item_rejection_not_current: item % is not rejected with rejection %', NEW.item_id, NEW.id
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS item_rejections_require_current ON public.item_rejections;
+CREATE TRIGGER item_rejections_require_current
+  BEFORE INSERT ON public.item_rejections
+  FOR EACH ROW EXECUTE FUNCTION public.item_rejections_require_current();

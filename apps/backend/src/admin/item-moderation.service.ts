@@ -67,10 +67,9 @@ export class ItemModerationService {
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly threadsService: ThreadsService,
+    private readonly itemRejections: ItemRejectionsService,
     @Optional()
-    private readonly representativeCompensationService?: RepresentativeCompensationService,
-    @Optional()
-    private readonly itemRejections?: ItemRejectionsService
+    private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
 
   async listModerationQueue(params: {
@@ -118,7 +117,7 @@ export class ItemModerationService {
       moderatorUserId,
       Q.APPROVE_ITEM_MODERATION
     );
-    void this.itemRejections?.noteApproved(itemId, 'admin');
+    void this.itemRejections.noteApproved(itemId, 'admin');
     await this.notificationsService.sendSaleItemApprovedEmail({
       itemId,
       businessUserId: item.business.user_id,
@@ -153,19 +152,21 @@ export class ItemModerationService {
     this.assertPendingModeration(item.moderation_status, 'rejected');
     const ownerUserId = item.business.user_id;
     const trimmed = rejectionReason.trim();
-    await this.runModerationPatch(
-      itemId,
-      moderatorUserId,
-      Q.REJECT_ITEM_MODERATION,
-      { rejectionCategory }
-    );
-    await this.itemRejections?.recordRejection({
+    const record = {
       itemId,
       category: rejectionCategory,
       reason: trimmed,
       reviewerId: moderatorUserId,
-      source: 'admin',
-    });
+      source: 'admin' as const,
+    };
+    const prepared = await this.itemRejections.prepareRejection(record);
+    await this.runModerationPatch(
+      itemId,
+      moderatorUserId,
+      Q.REJECT_ITEM_MODERATION,
+      { rejectionCategory, ...prepared.variables }
+    );
+    this.itemRejections.noteRejected(record, prepared.rejectionId);
     await this.insertOwnerMessage(ownerUserId, itemId, trimmed);
     await this.notificationsService.sendSaleItemRejectedEmail({
       itemId,

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { AwsModule } from '../aws/aws.module';
 import { BusinessItemsModule } from '../business-items/business-items.module';
 import { HasuraModule } from '../hasura/hasura.module';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
@@ -14,6 +15,7 @@ import { ItemRejectionsModule } from './item-rejections.module';
 @Module({
   imports: [
     AuthModule,
+    AwsModule,
     HasuraModule,
     BusinessItemsModule,
     ItemAiReviewModule,

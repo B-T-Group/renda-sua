@@ -21,11 +21,26 @@ export class CreateItemAppealDto {
   @IsString()
   reason!: string;
 
-  @ApiPropertyOptional({ type: [String], maxItems: 3, description: 'https URLs of uploaded evidence photos' })
+  @ApiPropertyOptional({
+    type: [String],
+    maxItems: 3,
+    description: 'evidenceUrl values returned by POST items/:itemId/appeal-evidence/upload-url for this item',
+  })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
   evidenceUrls?: string[];
+}
+
+/** Type/size are enforced in the service (coded errors); class-validator only checks shape. */
+export class AppealEvidenceUploadUrlDto {
+  @ApiProperty({ enum: ['image/jpeg', 'image/png', 'image/webp'] })
+  @IsString()
+  contentType!: string;
+
+  @ApiProperty({ description: 'Exact byte size of the file; signed into the URL (max 5 MB)' })
+  @IsInt()
+  fileSize!: number;
 }
 
 export class ResubmitItemDto {

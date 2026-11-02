@@ -1,3 +1,4 @@
+import { REJECTION_RECORD_ROOTS, REJECTION_RECORD_VARS } from '../item-appeals/item-recovery.queries';
 export const ITEMS_MODERATION_LIST = `
   query ItemsModeration($where: items_bool_exp!, $limit: Int!, $offset: Int!) {
     items(
@@ -93,18 +94,20 @@ export const APPROVE_ITEM_MODERATION = `
   }
 `;
 
+/** Reject + rejection record + audit in one transaction (pending -> rejected only). */
 export const REJECT_ITEM_MODERATION = `
   mutation RejectItemModeration(
     $id: uuid!
     $moderatedAt: timestamptz!
     $moderatorId: uuid!
-    $rejectionCategory: item_rejection_category!
+    $rejectionCategory: item_rejection_category!${REJECTION_RECORD_VARS}
   ) {
     update_items_by_pk(
       pk_columns: { id: $id }
       _set: {
         moderation_status: rejected
         rejection_category: $rejectionCategory
+        current_rejection_id: $rejectionId
         is_active: false
         moderated_at: $moderatedAt
         moderated_by_user_id: $moderatorId
@@ -112,7 +115,7 @@ export const REJECT_ITEM_MODERATION = `
       }
     ) {
       id
-    }
+    }${REJECTION_RECORD_ROOTS}
   }
 `;
 

@@ -3,7 +3,6 @@ import {
   HttpStatus,
   Injectable,
   Logger,
-  Optional,
 } from '@nestjs/common';
 import { ItemRejectionsService } from '../item-appeals/item-rejections.service';
 import { BusinessImagesService } from '../business-images/business-images.service';
@@ -879,8 +878,7 @@ export class BusinessItemsService {
     private readonly categoriesService: CategoriesService,
     private readonly collectionAutoAssignService: CollectionAutoAssignService,
     private readonly catalogCacheService: CatalogCacheService,
-    @Optional()
-    private readonly itemRejections?: ItemRejectionsService
+    private readonly itemRejections: ItemRejectionsService
   ) {}
 
   private async invalidateCatalogCache(): Promise<void> {
@@ -2502,7 +2500,7 @@ export class BusinessItemsService {
     // Gate before writing so a 409 (pending appeal not confirmed) saves nothing.
     const gate =
       wasRejected && contentKeys.length > 0
-        ? await this.itemRejections?.assertResubmitAllowed(itemId, {
+        ? await this.itemRejections.assertResubmitAllowed(itemId, {
             confirmWithdrawAppeal: confirmWithdrawAppeal === true,
           })
         : undefined;
@@ -2514,7 +2512,7 @@ export class BusinessItemsService {
     const shouldResubmit = gate ? gate.resubmit : wasRejected && contentKeys.length > 0;
     if (shouldResubmit) {
       await this.resetRejectedItemToPendingModeration(itemId);
-      if (gate) await this.itemRejections?.noteResubmitted(itemId, gate, null);
+      if (gate) await this.itemRejections.noteResubmitted(itemId, gate, null);
     }
     this.triggerLifecycleRecompute(businessId);
     return updated;
@@ -2767,7 +2765,7 @@ export class BusinessItemsService {
     await this.clearInventoriesForItemDelete(itemId);
     // Pending appeals are withdrawn by the items_withdraw_pending_appeals trigger (no notification).
     await this.markItemDeleted(itemId);
-    void this.itemRejections?.noteDeleted(itemId);
+    void this.itemRejections.noteDeleted(itemId);
     this.triggerLifecycleRecompute(businessId);
     void this.invalidateCatalogCache();
   }

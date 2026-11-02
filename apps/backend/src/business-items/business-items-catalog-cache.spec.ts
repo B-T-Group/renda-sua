@@ -36,7 +36,8 @@ describe('BusinessItemsService catalog cache invalidation', () => {
       {} as any,
       {} as any,
       {} as any,
-      catalogCacheService as any
+      catalogCacheService as any,
+      { assertResubmitAllowed: jest.fn(), noteResubmitted: jest.fn(), noteDeleted: jest.fn().mockResolvedValue(undefined) } as any
     );
     return { service, hasuraUserService, catalogCacheService };
   };
