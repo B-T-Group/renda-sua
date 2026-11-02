@@ -47,7 +47,8 @@ export interface UserUploadsBucketConfigProps {
  *
  * First deploy: `yarn cdk deploy RendasuaUserUploadsBucket` from apps/cdk
  * (no `cdk import` — the bucket is referenced by name, not owned as a CFN
- * AWS::S3::Bucket). If CDK is not used, apply the equivalent CLI in the PR.
+ * AWS::S3::Bucket). The Lambda reads live CORS/lifecycle and merges by rule
+ * ID. Stack delete removes only those IDs and leaves Block Public Access on.
  */
 export class UserUploadsBucketConfig extends Construct {
   constructor(

@@ -1,7 +1,12 @@
-"""Merge CORS/lifecycle and force Block Public Access on rendasua-user-uploads.
+"""Merge CORS/lifecycle on rendasua-user-uploads; force Block Public Access.
 
-Never creates or deletes the bucket. Stack Delete leaves live settings in place.
-Does not put a bucket policy (no public-read policy is added).
+Reads the live config (GetBucketCors / GetBucketLifecycleConfiguration),
+handles NoSuchCORSConfiguration / NoSuchLifecycleConfiguration, and upserts
+our rule by ID so Put* does not wipe or duplicate other rules.
+
+Create/Update: merge our rules, then put. BPA stays all-blocked.
+Delete: remove only our rule IDs. If nothing else remains, delete that
+config. Never turn Block Public Access off. Never delete the bucket.
 """
 
 from __future__ import annotations
@@ -15,25 +20,48 @@ NO_CORS = "NoSuchCORSConfiguration"
 NO_LIFECYCLE = "NoSuchLifecycleConfiguration"
 
 
-def handler(event, context):
+def handler(event, context, client=None):
     request_type = event.get("RequestType", "Create")
     props = event.get("ResourceProperties") or {}
     physical_id = event.get("PhysicalResourceId") or "user-uploads-bucket-config"
-    if request_type != "Delete":
-        apply_config(props)
+    if request_type == "Delete":
+        remove_our_config(props, client=client)
     else:
-        logger.info("Delete is a no-op; bucket and settings are retained")
+        apply_config(props, client=client)
     return {"PhysicalResourceId": physical_id}
 
 
-def apply_config(props: dict) -> None:
-    import boto3
-
+def apply_config(props: dict, client=None) -> None:
+    client = client or _s3_client()
     bucket = props["BucketName"]
-    client = boto3.client("s3")
     put_public_access_block(client, bucket)
-    merge_cors(client, bucket, props["CorsRule"])
-    merge_lifecycle(client, bucket, props["LifecycleRule"])
+    write_cors(
+        client,
+        bucket,
+        upsert_cors_rule(_get_cors_rules(client, bucket), props["CorsRule"]),
+    )
+    write_lifecycle(
+        client,
+        bucket,
+        upsert_lifecycle_rule(
+            _get_lifecycle_rules(client, bucket), props["LifecycleRule"]
+        ),
+    )
+
+
+def remove_our_config(props: dict, client=None) -> None:
+    client = client or _s3_client()
+    bucket = props["BucketName"]
+    apply_rule_removal(
+        client, bucket, "cors", _get_cors_rules(client, bucket), props["CorsRule"]["ID"]
+    )
+    apply_rule_removal(
+        client,
+        bucket,
+        "lifecycle",
+        _get_lifecycle_rules(client, bucket),
+        props["LifecycleRule"]["ID"],
+    )
 
 
 def put_public_access_block(client, bucket: str) -> None:
@@ -48,30 +76,50 @@ def put_public_access_block(client, bucket: str) -> None:
     )
 
 
-def merge_cors(client, bucket: str, required: dict) -> None:
-    rules = _get_cors_rules(client, bucket)
-    merged = upsert_cors_rule(rules, required)
-    client.put_bucket_cors(Bucket=bucket, CORSConfiguration={"CORSRules": merged})
-
-
-def merge_lifecycle(client, bucket: str, required: dict) -> None:
-    rules = _get_lifecycle_rules(client, bucket)
-    merged = upsert_lifecycle_rule(rules, required)
-    client.put_bucket_lifecycle_configuration(
-        Bucket=bucket, LifecycleConfiguration={"Rules": merged}
-    )
-
-
 def upsert_cors_rule(existing: list, required: dict) -> list:
     rule = _to_s3_cors_rule(required)
-    kept = [r for r in existing if r.get("ID") != rule["ID"]]
-    return kept + [rule]
+    return [r for r in existing if r.get("ID") != rule["ID"]] + [rule]
 
 
 def upsert_lifecycle_rule(existing: list, required: dict) -> list:
     rule = _to_s3_lifecycle_rule(required)
-    kept = [r for r in existing if r.get("ID") != rule["ID"]]
-    return kept + [rule]
+    return [r for r in existing if r.get("ID") != rule["ID"]] + [rule]
+
+
+def plan_rule_removal(existing: list, rule_id: str) -> tuple[str, list]:
+    remaining = [r for r in existing if r.get("ID") != rule_id]
+    had_ours = any(r.get("ID") == rule_id for r in existing)
+    if remaining:
+        return "put", remaining
+    if had_ours:
+        return "delete", []
+    return "noop", []
+
+
+def apply_rule_removal(client, bucket: str, kind: str, existing: list, rule_id: str):
+    action, remaining = plan_rule_removal(existing, rule_id)
+    if action == "noop":
+        return
+    if kind == "cors":
+        write_cors(client, bucket, remaining)
+        return
+    write_lifecycle(client, bucket, remaining)
+
+
+def write_cors(client, bucket: str, rules: list) -> None:
+    if not rules:
+        client.delete_bucket_cors(Bucket=bucket)
+        return
+    client.put_bucket_cors(Bucket=bucket, CORSConfiguration={"CORSRules": rules})
+
+
+def write_lifecycle(client, bucket: str, rules: list) -> None:
+    if not rules:
+        client.delete_bucket_lifecycle(Bucket=bucket)
+        return
+    client.put_bucket_lifecycle_configuration(
+        Bucket=bucket, LifecycleConfiguration={"Rules": rules}
+    )
 
 
 def _to_s3_cors_rule(required: dict) -> dict:
@@ -95,24 +143,31 @@ def _to_s3_lifecycle_rule(required: dict) -> dict:
     }
 
 
-def _get_cors_rules(client, bucket: str) -> list:
-    from botocore.exceptions import ClientError
+def _s3_client():
+    import boto3
 
+    return boto3.client("s3")
+
+
+def _missing_config(error, code: str) -> bool:
+    response = getattr(error, "response", None) or {}
+    return response.get("Error", {}).get("Code") == code
+
+
+def _get_cors_rules(client, bucket: str) -> list:
     try:
         return list(client.get_bucket_cors(Bucket=bucket).get("CORSRules") or [])
-    except ClientError as error:
-        if error.response["Error"]["Code"] == NO_CORS:
+    except Exception as error:
+        if _missing_config(error, NO_CORS):
             return []
         raise
 
 
 def _get_lifecycle_rules(client, bucket: str) -> list:
-    from botocore.exceptions import ClientError
-
     try:
         response = client.get_bucket_lifecycle_configuration(Bucket=bucket)
         return list(response.get("Rules") or [])
-    except ClientError as error:
-        if error.response["Error"]["Code"] == NO_LIFECYCLE:
+    except Exception as error:
+        if _missing_config(error, NO_LIFECYCLE):
             return []
         raise
