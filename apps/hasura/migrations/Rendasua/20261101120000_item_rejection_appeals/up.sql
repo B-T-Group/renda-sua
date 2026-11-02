@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS public.item_appeals (
   admin_note text NULL CHECK (admin_note IS NULL OR char_length(admin_note) <= 2000),
   outcome_moderation_status text NULL CHECK (outcome_moderation_status IN ('approved', 'pending')),
   corrected_category public.item_rejection_category NULL,
-  withdrawn_reason text NULL CHECK (withdrawn_reason IN ('resubmitted', 'item_deleted', 'business')),
+  withdrawn_reason text NULL CHECK (withdrawn_reason IN ('resubmitted', 'item_deleted', 'business', 'superseded')),
   decided_at timestamptz NULL,
   sla_due_at timestamptz NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
@@ -193,6 +193,10 @@ BEGIN
   ELSIF OLD.moderation_status = 'rejected'
         AND NEW.moderation_status IN ('pending', 'ai_reviewing') THEN
     why := 'resubmitted';
+  ELSIF OLD.moderation_status = 'rejected' AND NEW.moderation_status = 'approved' THEN
+    -- A moderator approved the item directly; an appeal overturn decides the
+    -- appeal before flipping the item, so it never reaches this branch.
+    why := 'superseded';
   ELSE
     RETURN NEW;
   END IF;

@@ -150,3 +150,49 @@ describe('ItemModerationService', () => {
     expect(result.threadId).toBe('thread-1');
   });
 });
+
+describe('ItemModerationService rejectItem with a category (A4)', () => {
+  function build() {
+    const executeQuery = jest.fn(async (q: string) =>
+      q.includes('ItemForModeration')
+        ? { items_by_pk: { id: 'item-1', name: 'Widget', moderation_status: 'pending', status: 'active', business: { id: 'b1', user_id: 'u1' } } }
+        : { user_messages: [], item_ai_reviews: [] }
+    );
+    const executeMutation = jest.fn(async () => ({ update_items_by_pk: { id: 'item-1' }, insert_user_messages_one: { id: 'm' } }));
+    const itemRejections = { recordRejection: jest.fn().mockResolvedValue({ rejectionId: 'r1' }), noteApproved: jest.fn() };
+    const service = new ItemModerationService(
+      { executeQuery, executeMutation } as any,
+      { sendSaleItemApprovedEmail: jest.fn(), sendSaleItemRejectedEmail: jest.fn() } as any,
+      { assertItemCanActivateAsSystem: jest.fn() } as any,
+      { recompute: jest.fn() } as any,
+      { createThread: jest.fn(async () => ({ thread: { id: 't' }, message: { id: 'm' } })) } as any,
+      undefined,
+      itemRejections as any
+    );
+    return { service, executeMutation, itemRejections };
+  }
+
+  it('refuses a missing or unknown category before touching the item', async () => {
+    const { service, executeMutation } = build();
+    for (const bad of [undefined, 'blurry']) {
+      await expect(service.rejectItem('item-1', 'mod-1', 'Bad photos', bad as any)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'ITEM_REJECTION_CATEGORY_REQUIRED' }),
+      });
+    }
+    expect(executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('sets the category on the item and records the rejection with the reviewer', async () => {
+    const { service, executeMutation, itemRejections } = build();
+    await service.rejectItem('item-1', 'mod-1', '  Bad photos ', 'photo_quality');
+    const reject = (executeMutation.mock.calls as any[]).find((c) => String(c[0]).includes('RejectItemModeration'));
+    expect(reject[1]).toMatchObject({ id: 'item-1', moderatorId: 'mod-1', rejectionCategory: 'photo_quality' });
+    expect(itemRejections.recordRejection).toHaveBeenCalledWith({
+      itemId: 'item-1',
+      category: 'photo_quality',
+      reason: 'Bad photos',
+      reviewerId: 'mod-1',
+      source: 'admin',
+    });
+  });
+});

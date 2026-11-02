@@ -3,7 +3,9 @@ import {
   HttpStatus,
   Injectable,
   Logger,
+  Optional,
 } from '@nestjs/common';
+import { ItemRejectionsService } from '../item-appeals/item-rejections.service';
 import { BusinessImagesService } from '../business-images/business-images.service';
 import { AiService } from '../ai/ai.service';
 import { CreateItemDto } from '../items/dto/create-item.dto';
@@ -876,7 +878,9 @@ export class BusinessItemsService {
     private readonly imageThumbnailsService: ImageThumbnailsService,
     private readonly categoriesService: CategoriesService,
     private readonly collectionAutoAssignService: CollectionAutoAssignService,
-    private readonly catalogCacheService: CatalogCacheService
+    private readonly catalogCacheService: CatalogCacheService,
+    @Optional()
+    private readonly itemRejections?: ItemRejectionsService
   ) {}
 
   private async invalidateCatalogCache(): Promise<void> {
@@ -2490,16 +2494,27 @@ export class BusinessItemsService {
     updates: UpdateItemDto,
     asAdmin: boolean
   ) {
-    await this.assertOfflinePaymentAllowed(businessId, updates);
+    const { confirmWithdrawAppeal, ...changes } = updates;
+    await this.assertOfflinePaymentAllowed(businessId, changes);
     const existing = await this.loadItemModerationRow(businessId, itemId);
     const wasRejected = existing.moderation_status === 'rejected';
-    const payload = await this.buildUpdatePayload(businessId, updates);
+    const contentKeys = Object.keys(changes).filter((k) => k !== 'is_active');
+    // Gate before writing so a 409 (pending appeal not confirmed) saves nothing.
+    const gate =
+      wasRejected && contentKeys.length > 0
+        ? await this.itemRejections?.assertResubmitAllowed(itemId, {
+            confirmWithdrawAppeal: confirmWithdrawAppeal === true,
+          })
+        : undefined;
+    const payload = await this.buildUpdatePayload(businessId, changes);
     const updated = asAdmin
       ? await this.itemsService.adminUpdateItem(itemId, payload)
       : await this.itemsService.updateItem(businessId, itemId, payload);
-    const contentKeys = Object.keys(updates).filter((k) => k !== 'is_active');
-    if (wasRejected && contentKeys.length > 0) {
+    // Not-allowed categories (prohibited/counterfeit) keep the edit but stay rejected.
+    const shouldResubmit = gate ? gate.resubmit : wasRejected && contentKeys.length > 0;
+    if (shouldResubmit) {
       await this.resetRejectedItemToPendingModeration(itemId);
+      if (gate) await this.itemRejections?.noteResubmitted(itemId, gate, null);
     }
     this.triggerLifecycleRecompute(businessId);
     return updated;
@@ -2637,6 +2652,7 @@ export class BusinessItemsService {
       return;
     }
     if (item.moderation_status === 'rejected') {
+      // Gated inside resubmitIfRejected (pending appeal / not-allowed category).
       await this.itemAiReviewService.resubmitIfRejected(itemId);
     }
   }
@@ -2749,7 +2765,9 @@ export class BusinessItemsService {
   async deleteItem(businessId: string, itemId: string): Promise<void> {
     await this.assertOwnedCatalogItem(businessId, itemId);
     await this.clearInventoriesForItemDelete(itemId);
+    // Pending appeals are withdrawn by the items_withdraw_pending_appeals trigger (no notification).
     await this.markItemDeleted(itemId);
+    void this.itemRejections?.noteDeleted(itemId);
     this.triggerLifecycleRecompute(businessId);
     void this.invalidateCatalogCache();
   }
