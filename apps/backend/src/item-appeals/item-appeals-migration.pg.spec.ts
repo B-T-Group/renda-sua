@@ -12,8 +12,10 @@ import { Client, Pool } from 'pg';
 const TEMPLATE = process.env.DEDICATED_PG_TEMPLATE?.trim();
 const MIGRATIONS = join(__dirname, '../../../hasura/migrations/Rendasua');
 const M = '20261101120000_item_rejection_appeals';
+const FIX = '20261102120000_supersede_appeals_on_rereject';
 const suite = TEMPLATE ? describe : describe.skip;
 const sql = (f: 'up' | 'down') => readFileSync(join(MIGRATIONS, M, `${f}.sql`), 'utf8');
+const fixSql = (f: 'up' | 'down') => readFileSync(join(MIGRATIONS, FIX, `${f}.sql`), 'utf8');
 
 suite('item rejection appeals migration (real Postgres)', () => {
   jest.setTimeout(60_000);
@@ -31,6 +33,7 @@ suite('item rejection appeals migration (real Postgres)', () => {
     pool = new Pool({ database: dbName, max: 4 });
     pool.on('error', () => undefined);
     await pool.query(`BEGIN;\n${sql('up')}\nCOMMIT;`);
+    await pool.query(`BEGIN;\n${fixSql('up')}\nCOMMIT;`);
     const tag = `${process.pid}-${Date.now()}`;
     const u = await pool.query(
       `INSERT INTO users (user_type_id, first_name, last_name, email) VALUES ('business','B','T',$1) RETURNING id`,
@@ -195,6 +198,16 @@ suite('item rejection appeals migration (real Postgres)', () => {
     expect(await appealRow(id)).toEqual({ status: 'withdrawn', withdrawn_reason: 'item_deleted' });
   });
 
+  it('replacing the current rejection withdraws the pending appeal as superseded', async () => {
+    const { item, rej } = await rejectedItem('photo_quality');
+    const id = await appeal(item, rej);
+    const again = await rejectAtomically(item, 'prohibited_item');
+    expect(again.rej).not.toBe(rej);
+    expect(await appealRow(id)).toEqual({ status: 'withdrawn', withdrawn_reason: 'superseded' });
+    const row = (await pool.query(`SELECT moderation_status::text, current_rejection_id FROM items WHERE id = $1`, [item])).rows[0];
+    expect(row).toEqual({ moderation_status: 'rejected', current_rejection_id: again.rej });
+  });
+
   it('a direct moderator approve supersedes the pending appeal', async () => {
     const { item, rej } = await rejectedItem();
     const id = await appeal(item, rej);
@@ -284,6 +297,7 @@ suite('item rejection appeals migration (real Postgres)', () => {
     const gone = await pool.query(`SELECT to_regclass('public.item_appeals') t, to_regclass('public.item_rejections') r`);
     expect(gone.rows[0]).toEqual({ t: null, r: null });
     await pool.query(`BEGIN;\n${sql('up')}\nCOMMIT;`);
+    await pool.query(`BEGIN;\n${fixSql('up')}\nCOMMIT;`);
     const back = await pool.query(`SELECT to_regclass('public.item_appeals')::text t`);
     expect(back.rows[0].t).toBe('item_appeals');
   });

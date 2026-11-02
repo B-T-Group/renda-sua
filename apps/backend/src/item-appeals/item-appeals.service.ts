@@ -451,6 +451,7 @@ export class ItemAppealsService {
       const res = await this.hasura.executeMutation<{ appeal: { affected_rows: number }; item: { affected_rows: number } }>(Q.OVERTURN_APPEAL, {
         appealId,
         itemId: a.item_id,
+        rejectionId: a.rejection_id,
         itemSet,
         appealSet: { status: 'overturned', admin_id: adminUserId, admin_note: note || null, decided_at: decidedAt, outcome_moderation_status: target },
       });

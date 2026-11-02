@@ -529,6 +529,8 @@ describe('ItemAppealsService (admin decide)', () => {
     await expect(s.decide('a1', 'mod2', { decision: 'overturn' })).resolves.toMatchObject({ status: 'overturned', itemModerationStatus: 'approved' });
     expect(activation.assertItemCanActivateAsSystem).toHaveBeenCalledWith('i1');
     const [[, vars]] = mutationsOf(hasura, Q.OVERTURN_APPEAL);
+    expect(vars.rejectionId).toBe('r1');
+    expect(Q.OVERTURN_APPEAL).toContain('current_rejection_id: { _eq: $rejectionId }');
     expect(vars.itemSet).toMatchObject({ moderation_status: 'approved', is_active: true });
     expect(vars.appealSet).toMatchObject({ status: 'overturned', outcome_moderation_status: 'approved' });
     expect(rejections.noteApproved).toHaveBeenCalledWith('i1', 'appeal');
