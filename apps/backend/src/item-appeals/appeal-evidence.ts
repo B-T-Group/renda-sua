@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
 import { RECOVERY_ERRORS } from './item-recovery.constants';
 
-/** Evidence photos live only in our bucket under items/{itemId}/appeal-evidence/. */
+/** Appeal evidence photos: private bucket, key-only storage, presigned access. */
 export const APPEAL_EVIDENCE_MAX_BYTES = 5 * 1024 * 1024;
 export const APPEAL_EVIDENCE_URL_TTL_SECONDS = 600;
 /** Raster only: SVG (scriptable) and anything else is refused. */
@@ -12,9 +12,17 @@ export const APPEAL_EVIDENCE_TYPES: Readonly<Record<string, string>> = {
 };
 const EXTENSIONS = new Set(Object.values(APPEAL_EVIDENCE_TYPES));
 
-export interface EvidenceStorage {
-  bucket: string;
-  region: string;
+/**
+ * Evidence is private: it lives in the private user-uploads bucket (the one ID
+ * documents use, served only via presigned GETs) — never in the public
+ * rendasua-uploads bucket, whose items/* and businesses/* objects are anonymously
+ * readable. We store the S3 key only and hand out short-lived presigned GETs.
+ */
+export const APPEAL_EVIDENCE_DEFAULT_BUCKET = 'rendasua-user-uploads';
+export const APPEAL_EVIDENCE_VIEW_TTL_SECONDS = 900;
+
+export function appealEvidenceBucket(): string {
+  return process.env.APPEAL_EVIDENCE_BUCKET?.trim() || APPEAL_EVIDENCE_DEFAULT_BUCKET;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -24,15 +32,7 @@ function bad(code: string, error: string, extra: Record<string, unknown> = {}): 
 }
 
 export function evidencePrefix(itemId: string): string {
-  return `items/${itemId}/appeal-evidence/`;
-}
-
-export function evidenceHost(storage: EvidenceStorage): string {
-  return `${storage.bucket}.s3.${storage.region}.amazonaws.com`;
-}
-
-export function evidencePublicUrl(storage: EvidenceStorage, key: string): string {
-  return `https://${evidenceHost(storage)}/${key}`;
+  return `item-appeal-evidence/${itemId}/`;
 }
 
 /** Validates the upload request; returns the canonical content type + extension. */
@@ -55,24 +55,14 @@ export function validateEvidenceUpload(contentType: unknown, fileSize: unknown):
 }
 
 /**
- * Accepts only URLs of the exact shape we issue for this item:
- *   https://{bucket}.s3.{region}.amazonaws.com/items/{itemId}/appeal-evidence/{uuid}.{jpg|png|webp}
- * No other host, port, credentials, query, fragment, encoding, traversal, or extension.
+ * Accepts only keys of the exact shape we issue for this item:
+ *   item-appeal-evidence/{itemId}/{uuid}.{jpg|png|webp}
+ * No URL, other item, other prefix, traversal, encoding, whitespace, or extension.
  */
-export function isOwnEvidenceUrl(raw: string, storage: EvidenceStorage, itemId: string): boolean {
-  if (!UUID_RE.test(itemId)) return false;
-  let u: URL;
-  try {
-    u = new URL(raw);
-  } catch {
-    return false;
-  }
-  if (u.protocol !== 'https:' || u.username || u.password || u.port || u.search || u.hash) return false;
-  if (u.hostname !== evidenceHost(storage).toLowerCase()) return false;
-  if (raw !== `https://${u.hostname}${u.pathname}`) return false; // no normalisation tricks
-  const prefix = `/${evidencePrefix(itemId)}`;
-  if (!u.pathname.startsWith(prefix)) return false;
-  const file = u.pathname.slice(prefix.length);
-  const m = /^([0-9a-f-]{36})\.([a-z]+)$/.exec(file);
+export function isOwnEvidenceKey(raw: unknown, itemId: string): boolean {
+  if (typeof raw !== 'string' || !UUID_RE.test(itemId)) return false;
+  const prefix = evidencePrefix(itemId.toLowerCase());
+  if (!raw.startsWith(prefix)) return false;
+  const m = /^([0-9a-f-]{36})\.([a-z]+)$/.exec(raw.slice(prefix.length));
   return !!m && UUID_RE.test(m[1]) && EXTENSIONS.has(m[2]);
 }

@@ -3,10 +3,10 @@ import { randomUUID } from 'crypto';
 import {
   APPEAL_EVIDENCE_MAX_BYTES,
   APPEAL_EVIDENCE_URL_TTL_SECONDS,
-  EvidenceStorage,
+  APPEAL_EVIDENCE_VIEW_TTL_SECONDS,
+  appealEvidenceBucket,
   evidencePrefix,
-  evidencePublicUrl,
-  isOwnEvidenceUrl,
+  isOwnEvidenceKey,
   validateEvidenceUpload,
 } from './appeal-evidence';
 import { HttpException, HttpStatus, Injectable, Logger, Optional } from '@nestjs/common';
@@ -56,9 +56,9 @@ export function recoveryError(status: HttpStatus, code: string, error: string, e
 /** Pure B4 validation, exported for tests. Returns the trimmed reason and evidence. */
 export function validateAppealInput(
   reason: unknown,
-  evidenceUrls: unknown,
-  evidence: { itemId: string; storage: EvidenceStorage }
-): { reason: string; evidenceUrls: string[] } {
+  evidenceKeys: unknown,
+  evidence: { itemId: string }
+): { reason: string; evidenceKeys: string[] } {
   const trimmed = typeof reason === 'string' ? reason.trim() : '';
   if (trimmed.length < APPEAL_REASON_MIN || trimmed.length > APPEAL_REASON_MAX) {
     throw recoveryError(
@@ -68,24 +68,24 @@ export function validateAppealInput(
       { min: APPEAL_REASON_MIN, max: APPEAL_REASON_MAX }
     );
   }
-  const urls = evidenceUrls == null ? [] : evidenceUrls;
+  const urls = evidenceKeys == null ? [] : evidenceKeys;
   if (!Array.isArray(urls) || urls.length > APPEAL_EVIDENCE_MAX) {
     throw recoveryError(HttpStatus.BAD_REQUEST, RECOVERY_ERRORS.EVIDENCE_LIMIT, `At most ${APPEAL_EVIDENCE_MAX} evidence photos`, {
       max: APPEAL_EVIDENCE_MAX,
     });
   }
   const clean = urls.map((u) => (typeof u === 'string' ? u.trim() : ''));
-  if (clean.some((u) => !isOwnEvidenceUrl(u, evidence.storage, evidence.itemId))) {
+  if (clean.some((u) => !isOwnEvidenceKey(u, evidence.itemId))) {
     throw recoveryError(
       HttpStatus.BAD_REQUEST,
       RECOVERY_ERRORS.EVIDENCE_URL,
-      'Evidence must be photos uploaded for this item via the appeal evidence upload URL'
+      'Evidence must be keys returned by the appeal evidence upload URL for this item'
     );
   }
   if (new Set(clean).size !== clean.length) {
     throw recoveryError(HttpStatus.BAD_REQUEST, RECOVERY_ERRORS.EVIDENCE_URL, 'Duplicate evidence photo');
   }
-  return { reason: trimmed, evidenceUrls: clean };
+  return { reason: trimmed, evidenceKeys: clean };
 }
 
 /** Pure condition/wear-note rule (wear note required unless new). Returns the value to store. */
@@ -127,25 +127,37 @@ export class ItemAppealsService {
     @Optional() private readonly siteEvents?: SiteEventsService
   ) {}
 
-  /** Same bucket/host the backend writes item images to (see AI image cleanup). */
-  evidenceStorage(): EvidenceStorage {
-    const bucket = this.aws.getDefaultBucketName() || process.env.S3_BUCKET_NAME || 'rendasua-uploads';
-    return { bucket, region: this.aws.getBucketRegion() };
+  /**
+   * Short-lived presigned GETs for stored evidence keys. Evidence is never exposed
+   * as a direct/public URL; a key that fails validation is skipped, not signed.
+   */
+  private async evidenceView(itemId: string, keys: string[] | null | undefined) {
+    const bucketName = appealEvidenceBucket();
+    const out: { key: string; url: string; expiresAt: string }[] = [];
+    for (const key of keys ?? []) {
+      if (!isOwnEvidenceKey(key, itemId)) {
+        this.logger.warn(`skipping unexpected appeal evidence key for item ${itemId}`);
+        continue;
+      }
+      const signed = await this.aws.generatePresignedDownloadUrl({ bucketName, key, expiresIn: APPEAL_EVIDENCE_VIEW_TTL_SECONDS });
+      out.push({ key, url: signed.url, expiresAt: signed.expiresAt.toISOString() });
+    }
+    return out;
   }
 
   /**
    * B4 evidence upload: validates type (no SVG) + size, then issues a short-lived
    * PUT URL that pins Content-Type and Content-Length, under
-   * items/{itemId}/appeal-evidence/ for an item the caller owns and that is rejected.
+   * item-appeal-evidence/{itemId}/ in the PRIVATE evidence bucket, for an item the
+   * caller owns and that is rejected. Only the key is returned (no viewable URL).
    */
   async createEvidenceUploadUrl(businessId: string, itemId: string, body: { contentType?: unknown; fileSize?: unknown }) {
     const file = validateEvidenceUpload(body?.contentType, body?.fileSize);
     const { item } = await this.loadOwnedItem(businessId, itemId);
     this.assertRejected(item);
-    const storage = this.evidenceStorage();
-    const key = `${evidencePrefix(item.id)}${randomUUID()}.${file.ext}`;
+    const key = `${evidencePrefix(String(item.id).toLowerCase())}${randomUUID()}.${file.ext}`;
     const signed = await this.aws.generateStrictUploadUrl({
-      bucketName: storage.bucket,
+      bucketName: appealEvidenceBucket(),
       key,
       contentType: file.contentType,
       contentLength: file.size,
@@ -156,7 +168,6 @@ export class ItemAppealsService {
       method: 'PUT' as const,
       headers: { 'Content-Type': file.contentType, 'Content-Length': String(file.size) },
       key,
-      evidenceUrl: evidencePublicUrl(storage, key),
       expiresAt: signed.expiresAt.toISOString(),
       maxBytes: APPEAL_EVIDENCE_MAX_BYTES,
     };
@@ -202,7 +213,7 @@ export class ItemAppealsService {
           : null,
       actions: actions?.actions ?? [],
       resubmitEditLink: actions?.resubmitEditLink ?? null,
-      appeal: latest ? this.appealView(latest) : null,
+      appeal: latest ? await this.appealView(latest) : null,
       appealsUsed: used,
       appealLimit: config.limit,
       canAppeal: rejected && !!rejection && !pending && used < config.limit,
@@ -234,12 +245,9 @@ export class ItemAppealsService {
     };
   }
 
-  async createAppeal(businessId: string, userId: string, itemId: string, body: { reason?: unknown; evidenceUrls?: unknown }) {
+  async createAppeal(businessId: string, userId: string, itemId: string, body: { reason?: unknown; evidenceKeys?: unknown }) {
     const { item } = await this.loadOwnedItem(businessId, itemId);
-    const input = validateAppealInput(body?.reason, body?.evidenceUrls, {
-      itemId: item.id,
-      storage: this.evidenceStorage(),
-    });
+    const input = validateAppealInput(body?.reason, body?.evidenceKeys, { itemId: item.id });
     this.assertRejected(item);
     const rejection = item.current_rejection;
     if (!rejection) {
@@ -266,7 +274,7 @@ export class ItemAppealsService {
           business_id: item.business_id,
           submitted_by_user_id: userId,
           reason: input.reason,
-          evidence_urls: input.evidenceUrls,
+          evidence_keys: input.evidenceKeys,
           sla_due_at: slaDueAt,
         },
         audit: {
@@ -274,7 +282,7 @@ export class ItemAppealsService {
           rejection_id: rejection.id,
           actor_user_id: userId,
           action: 'appeal_created',
-          details: { evidenceCount: input.evidenceUrls.length },
+          details: { evidenceCount: input.evidenceKeys.length },
         },
       });
       created = res.insert_item_appeals_one;
@@ -288,7 +296,7 @@ export class ItemAppealsService {
       itemId: item.id,
       appealId: created.id,
       category: item.rejection_category,
-      evidenceCount: input.evidenceUrls.length,
+      evidenceCount: input.evidenceKeys.length,
     });
     emitServerSiteEvent(this.siteEvents, 'item_recovery.action_used', { itemId: item.id, action: 'appeal', category: item.rejection_category });
     await this.noticeReceived(item, created.id, config.slaHours);
@@ -367,12 +375,12 @@ export class ItemAppealsService {
     const now = new Date();
     return {
       total: res.item_appeals_aggregate?.aggregate?.count ?? 0,
-      appeals: (res.item_appeals ?? []).map((a) => ({
-        ...this.appealView(a, now),
+      appeals: await Promise.all((res.item_appeals ?? []).map(async (a) => ({
+        ...(await this.appealView(a, now)),
         item: { id: a.item?.id, name: a.item?.name, moderationStatus: a.item?.moderation_status, imageUrl: a.item?.item_images?.[0]?.image_url ?? null },
         business: a.business ? { id: a.business.id, name: a.business.name } : null,
         rejection: a.rejection ? this.rejectionView(a.rejection) : null,
-      })),
+      }))),
     };
   }
 
@@ -388,7 +396,7 @@ export class ItemAppealsService {
     });
     const selfReview = !!a.rejection?.reviewer_id && a.rejection.reviewer_id === adminUserId;
     return {
-      appeal: this.appealView(a),
+      appeal: await this.appealView(a),
       rejection: a.rejection ? { ...this.rejectionView(a.rejection), itemSnapshot: a.rejection.item_snapshot ?? null } : null,
       item: a.item,
       business: a.business ? { id: a.business.id, name: a.business.name } : null,
@@ -544,14 +552,14 @@ export class ItemAppealsService {
     return Number(res.businesses_by_pk?.ai_tokens ?? 0);
   }
 
-  private appealView(a: Row, now = new Date()) {
+  private async appealView(a: Row, now = new Date()) {
     return {
       id: a.id,
       rejectionId: a.rejection_id,
       itemId: a.item_id,
       businessId: a.business_id,
       reason: a.reason,
-      evidenceUrls: a.evidence_urls ?? [],
+      evidence: await this.evidenceView(a.item_id, a.evidence_keys),
       status: a.status,
       adminNote: a.admin_note ?? null,
       outcomeModerationStatus: a.outcome_moderation_status ?? null,

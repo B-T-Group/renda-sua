@@ -141,11 +141,11 @@ suite('item rejection appeals migration (real Postgres)', () => {
     ).rejects.toThrow(/check/i);
     await expect(
       pool.query(
-        `INSERT INTO item_appeals (rejection_id,item_id,business_id,reason,evidence_urls,sla_due_at)
-         VALUES ($1,$2,$3,repeat('a',25),ARRAY['https://a','https://b','https://c','https://d'],now())`,
-        [rej, item, businessId]
+        `INSERT INTO item_appeals (rejection_id,item_id,business_id,reason,evidence_keys,sla_due_at)
+         VALUES ($1,$2,$3,repeat('a',25),$4,now())`,
+        [rej, item, businessId, [1, 2, 3, 4].map((n) => `item-appeal-evidence/${item}/${n}0000000-0000-4000-8000-000000000000.jpg`)]
       )
-    ).rejects.toThrow(/check/i);
+    ).rejects.toThrow(/item_appeals_evidence_keys_count/);
     const id = await appeal(item, rej);
     await expect(
       pool.query(`UPDATE item_appeals SET status='upheld', admin_id=$2, decided_at=now(), admin_note='  ' WHERE id=$1`, [id, adminUserId])
@@ -153,6 +153,32 @@ suite('item rejection appeals migration (real Postgres)', () => {
     await expect(pool.query(`UPDATE item_appeals SET status='upheld', admin_note='no' WHERE id=$1`, [id])).rejects.toThrow(
       /item_appeals_decided_fields_chk/
     );
+  });
+
+  it('evidence_keys only holds private-bucket keys for this item (no URLs, other items, SVG, NULLs)', async () => {
+    const { item, rej } = await rejectedItem();
+    const other = (await rejectedItem()).item;
+    const F = '0a1b2c3d-0000-4000-8000-000000000001';
+    const insert = (keys: (string | null)[]) =>
+      pool.query(
+        `INSERT INTO item_appeals (rejection_id,item_id,business_id,reason,evidence_keys,sla_due_at)
+         VALUES ($1,$2,$3,repeat('a',25),$4,now()) RETURNING id`,
+        [rej, item, businessId, keys]
+      );
+    const bad = [
+      [`https://rendasua-uploads.s3.amazonaws.com/items/${item}/appeal-evidence/${F}.jpg`],
+      [`items/${item}/appeal-evidence/${F}.jpg`],
+      [`item-appeal-evidence/${other}/${F}.jpg`],
+      [`item-appeal-evidence/${item}/${F}.svg`],
+      [`item-appeal-evidence/${item}/../${other}/${F}.jpg`],
+      [`item-appeal-evidence/${item}/${F}.jpg x`],
+      [`item-appeal-evidence/${item}/${F}.jpg`, null],
+    ];
+    for (const keys of bad) {
+      await expect(insert(keys)).rejects.toThrow(/item_appeals_evidence_keys_shape/);
+    }
+    const ok = await insert([`item-appeal-evidence/${item}/${F}.jpg`, `item-appeal-evidence/${item}/${F.replace('1', '2')}.webp`]);
+    expect(ok.rows[0].id).toEqual(expect.any(String));
   });
 
   it('resubmit (rejected -> pending) withdraws the pending appeal as resubmitted', async () => {

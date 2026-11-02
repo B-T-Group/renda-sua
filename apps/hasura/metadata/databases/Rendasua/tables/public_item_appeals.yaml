@@ -23,7 +23,7 @@ select_permissions:
         - item_id
         - business_id
         - reason
-        - evidence_urls
+        - evidence_keys
         - status
         - admin_note
         - outcome_moderation_status

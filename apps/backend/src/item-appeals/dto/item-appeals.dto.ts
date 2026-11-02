@@ -24,12 +24,12 @@ export class CreateItemAppealDto {
   @ApiPropertyOptional({
     type: [String],
     maxItems: 3,
-    description: 'evidenceUrl values returned by POST items/:itemId/appeal-evidence/upload-url for this item',
+    description: 'key values returned by POST items/:itemId/appeal-evidence/upload-url for this item (S3 keys, not URLs)',
   })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  evidenceUrls?: string[];
+  evidenceKeys?: string[];
 }
 
 /** Type/size are enforced in the service (coded errors); class-validator only checks shape. */

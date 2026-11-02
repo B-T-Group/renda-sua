@@ -96,7 +96,15 @@ CREATE TABLE IF NOT EXISTS public.item_appeals (
   business_id uuid NOT NULL REFERENCES public.businesses(id) ON UPDATE RESTRICT ON DELETE CASCADE,
   submitted_by_user_id uuid NULL REFERENCES public.users(id) ON UPDATE RESTRICT ON DELETE SET NULL,
   reason text NOT NULL CHECK (char_length(btrim(reason)) BETWEEN 20 AND 500),
-  evidence_urls text[] NOT NULL DEFAULT '{}' CHECK (cardinality(evidence_urls) <= 3),
+  -- Private-bucket S3 keys only (never public URLs): item-appeal-evidence/{item_id}/{uuid}.{jpg|png|webp}
+  evidence_keys text[] NOT NULL DEFAULT '{}'
+    CONSTRAINT item_appeals_evidence_keys_count CHECK (cardinality(evidence_keys) <= 3)
+    CONSTRAINT item_appeals_evidence_keys_shape CHECK (
+      array_position(evidence_keys, NULL) IS NULL
+      AND array_to_string(evidence_keys, ' ') ~ (
+        '^(item-appeal-evidence/' || item_id::text || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)( |$))*$'
+      )
+    ),
   status public.item_appeal_status NOT NULL DEFAULT 'pending',
   admin_id uuid NULL REFERENCES public.users(id) ON UPDATE RESTRICT ON DELETE SET NULL,
   admin_note text NULL CHECK (admin_note IS NULL OR char_length(admin_note) <= 2000),

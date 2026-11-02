@@ -40,7 +40,7 @@ export const ITEM_RECOVERY_STATE = `
         id category reason reviewer_id source created_at
       }
       appeals(order_by: { created_at: desc }) {
-        id rejection_id reason evidence_urls status admin_note outcome_moderation_status
+        id rejection_id item_id reason evidence_keys status admin_note outcome_moderation_status
         corrected_category withdrawn_reason decided_at sla_due_at created_at
       }
     }
@@ -70,7 +70,7 @@ export const INSERT_APPEAL = `
     $audit: item_moderation_audit_insert_input!
   ) {
     insert_item_appeals_one(object: $object) {
-      id rejection_id item_id business_id reason evidence_urls status sla_due_at created_at
+      id rejection_id item_id business_id reason evidence_keys status sla_due_at created_at
     }
     insert_item_moderation_audit_one(object: $audit) { id }
   }
@@ -91,7 +91,7 @@ export const APPEALS_QUEUE = `
     $offset: Int!
   ) {
     item_appeals(where: $where, order_by: [{ sla_due_at: asc }, { created_at: asc }], limit: $limit, offset: $offset) {
-      id item_id business_id reason evidence_urls status sla_due_at created_at
+      id item_id business_id reason evidence_keys status sla_due_at created_at
       item { id name moderation_status item_images(order_by: { display_order: asc }, limit: 1) { image_url } }
       business { id name }
       rejection { id category reason reviewer_id source created_at }
@@ -112,7 +112,7 @@ export const APPEALS_COUNTS = `
 export const APPEAL_DETAIL = `
   query ItemAppealDetail($id: uuid!) {
     item_appeals_by_pk(id: $id) {
-      id rejection_id item_id business_id submitted_by_user_id reason evidence_urls status admin_id
+      id rejection_id item_id business_id submitted_by_user_id reason evidence_keys status admin_id
       admin_note outcome_moderation_status corrected_category withdrawn_reason decided_at sla_due_at created_at
       rejection {
         id category reason reviewer_id source item_snapshot created_at
