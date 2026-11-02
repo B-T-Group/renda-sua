@@ -1355,7 +1355,9 @@
       "loadError": "Impossible de charger la file de modération",
       "actionFailed": "L’action a échoué",
       "refresh": "Actualiser",
-      "accessDenied": "Vous n’avez pas l’autorisation d’accéder à cette page."
+      "accessDenied": "Vous n’avez pas l’autorisation d’accéder à cette page.",
+      "rejectionCategory": "Catégorie de refus",
+      "categoryRequired": "Choisissez une catégorie de refus."
     },
     "itemAiReviews": {
       "pageTitle": "Décisions de revue IA des articles",
@@ -1387,7 +1389,8 @@
       "overrideSaved": "Override appliqué",
       "refresh": "Actualiser",
       "backToModeration": "Modération des articles",
-      "accessDenied": "Vous n’avez pas l’autorisation d’accéder à cette page."
+      "accessDenied": "Vous n’avez pas l’autorisation d’accéder à cette page.",
+      "rejectionCategory": "Catégorie pour le refus forcé"
     },
     "reels": {
       "moderation": {
@@ -1816,6 +1819,57 @@
         "weight": "Poids",
         "count": "Actions"
       }
+    },
+    "itemAppeals": {
+      "tab": "Contestations",
+      "pageTitle": "Contestations d’articles",
+      "queueCount": "{{pending}} en attente · {{breached}} hors délai",
+      "backToModeration": "Modération des articles",
+      "backToQueue": "Retour aux contestations",
+      "refresh": "Actualiser",
+      "accessDenied": "Accès refusé",
+      "loadError": "Impossible de charger les contestations",
+      "empty": "Aucune contestation dans cette file",
+      "itemName": "Article en vente",
+      "business": "Entreprise",
+      "category": "Catégorie",
+      "sla": "SLA",
+      "review": "Examiner",
+      "statusFilter": "Statut",
+      "categoryFilter": "Catégorie",
+      "businessFilter": "Identifiant de l’entreprise",
+      "allCategories": "Toutes les catégories",
+      "status": {
+        "pending": "En attente",
+        "upheld": "Maintenue",
+        "overturned": "Annulée",
+        "withdrawn": "Retirée"
+      },
+      "slaBreached": "SLA dépassé",
+      "slaWarning": "SLA bientôt dû",
+      "slaOk": "Échéance {{when}}",
+      "slaOkShort": "Dans les temps",
+      "untitled": "Article sans titre",
+      "selfReviewNotice": "Cette contestation concerne un refus que vous avez prononcé. Un autre modérateur devrait décider lorsqu’il y en a un.",
+      "selfReviewBlocked": "Un autre modérateur doit examiner une contestation de votre propre décision.",
+      "selfReviewWarning": "Vous êtes le seul modérateur. Cette décision a été enregistrée avec un avertissement.",
+      "editedSince": "L’article a changé après le refus. L’annulation le renverra en examen.",
+      "rejection": "Refus d’origine",
+      "appealEvidence": "Contestation",
+      "history": "Historique de l’article",
+      "decide": "Décider",
+      "uphold": "Maintenir",
+      "overturn": "Annuler",
+      "overturnTo": "Après l’annulation",
+      "approve": "Approuver",
+      "reReview": "Réexaminer",
+      "correctCategory": "Corriger la catégorie",
+      "note": "Note à l’entreprise",
+      "submitDecision": "Envoyer la décision",
+      "decided": "Contestation tranchée",
+      "currentItem": "Article actuel",
+      "asRejected": "Tel que refusé",
+      "upholdNoteRequired": "Une note est obligatoire pour maintenir cette décision."
     }
   },
   "referrals": {
@@ -2936,7 +2990,9 @@
         "missingWhatsapp": "Les alertes WhatsApp ne sont pas prêtes. Activez-les comme secours si le navigateur rate une notification.",
         "openNotifications": "Paramètres de notification",
         "openLocations": "Emplacements"
-      }
+      },
+      "manageItemAppeals": "Contestations d’articles",
+      "manageItemAppealsDescription": "Examinez les contestations des commerçants pour les articles refusés. Les SLA les plus anciens d’abord."
     },
     "clientCities": {
       "seoTitle": "D'où viennent vos clients",
@@ -3934,6 +3990,92 @@
         "activateRequiresApproval": "L’article doit être approuvé avant d’être activé.",
         "resubmitHint": "Si cet article a été refusé, l’enregistrement du nom ou de la description le renverra pour vérification.",
         "rejectionReason": "Pourquoi cet article a été refusé"
+      },
+      "recovery": {
+        "status": {
+          "needsChanges": "Modifications requises",
+          "notAllowed": "Non autorisé",
+          "inReview": "En cours d'examen · généralement sous 24 h"
+        },
+        "action": {
+          "aiFix": "Corriger les photos avec l'IA",
+          "retake": "Reprendre la photo",
+          "condition": "Modifier l'état",
+          "resubmit": "Soumettre à nouveau",
+          "appeal": "Contester la décision",
+          "editFields": "Modifier les détails",
+          "editPrice": "Modifier le prix"
+        },
+        "aiFix": {
+          "cost": "Coût : {{n}} jetons · Vous en avez {{m}}",
+          "buy": "Acheter des jetons",
+          "keep": "Conserver",
+          "discard": "Annuler",
+          "altered": "L'IA a peut-être modifié l'article lui-même. Vérifiez attentivement.",
+          "selectPhotos": "Choisissez les photos à corriger"
+        },
+        "retake": {
+          "tips": "Utilisez la lumière du jour, un fond uni, et montrez l'usure éventuelle.",
+          "tipDaylight": "Utilisez la lumière du jour",
+          "tipBackground": "Utilisez un fond uni",
+          "tipWhole": "Montrez l'article entier plus un gros plan",
+          "tipNoWatermark": "Pas de filigranes ni de photos d'archives",
+          "tipWear": "Montrez l'usure réelle",
+          "replace": "Remplacer la photo",
+          "add": "Ajouter une photo",
+          "choose": "Choisir une photo",
+          "photo": "Photo"
+        },
+        "condition": {
+          "new": "Neuf",
+          "used": "Occasion",
+          "refurb": "Reconditionné",
+          "wearNote": "Décrivez l'usure",
+          "wearRequired": "Décrivez l'usure",
+          "wearTooShort": "Utilisez au moins 10 caractères",
+          "wearTooLong": "Utilisez au plus 300 caractères",
+          "save": "Enregistrer l'état"
+        },
+        "appeal": {
+          "reason": "Pourquoi devrions-nous reconsidérer ?",
+          "evidence": "Ajouter des preuves (facultatif)",
+          "addFiles": "Choisir des fichiers",
+          "limit": "1 contestation par décision",
+          "pending": "Contestation en cours",
+          "upheld": "Décision maintenue",
+          "overturned": "Décision annulée, votre article est en ligne",
+          "withdrawWarn": "Soumettre à nouveau retirera votre contestation en cours.",
+          "submit": "Envoyer la contestation",
+          "adminNote": "Note du réviseur",
+          "disabledInReview": "En cours d'examen",
+          "disabledAllowance": "1 contestation par décision",
+          "reasonTooShort": "Utilisez au moins 20 caractères",
+          "reasonTooLong": "Utilisez au plus 500 caractères",
+          "evidenceLimit": "Ajoutez jusqu'à 3 fichiers",
+          "evidenceType": "Utilisez une photo JPEG, PNG ou WebP",
+          "evidenceTooLarge": "Les photos doivent faire 5 Mo ou moins",
+          "evidenceUrlInvalid": "Ce fichier de preuve n'a pas pu être utilisé. Téléversez-le à nouveau.",
+          "evidencePhoto": "Preuve de contestation"
+        },
+        "resubmit": {
+          "confirmNoChanges": "Soumettre à nouveau cet article sans autres modifications ?",
+          "confirmTitle": "Soumettre à nouveau"
+        },
+        "tokensUsed": "Jetons utilisés pour cet article : {{n}}",
+        "translate": "Traduire",
+        "showOriginal": "Afficher l'original",
+        "cat": {
+          "photo_quality": "Qualité photo",
+          "prohibited_item": "Article interdit",
+          "counterfeit": "Contrefaçon possible",
+          "wrong_condition": "État incorrect",
+          "missing_info": "Informations manquantes",
+          "pricing": "Prix",
+          "other": "Autre"
+        },
+        "errors": {
+          "generic": "Cette action n’a pas pu être terminée."
+        }
       },
       "aiProposal": {
         "title": "Examiner les suggestions IA",

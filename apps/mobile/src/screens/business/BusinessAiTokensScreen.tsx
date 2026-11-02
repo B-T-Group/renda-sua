@@ -4,8 +4,8 @@ import { useTranslation } from 'react-i18next';
 import type { CountryCode } from 'libphonenumber-js';
 import { ActivityIndicator, Button, IconButton, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import type { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useProfileMe } from '@/hooks/useProfileMe';
 import { useBusinessTokens } from '@/hooks/business/useBusinessTokens';
@@ -21,6 +21,9 @@ export default function BusinessAiTokensScreen() {
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
+  const route =
+    useRoute<NativeStackScreenProps<BusinessRootStackParamList, 'BusinessAiTokens'>['route']>();
+  const returnItemId = route.params?.returnItemId;
   const { me, refetch } = useProfileMe();
   const { packs, balance, loading, error, purchasePack, refreshBalance } =
     useBusinessTokens();
@@ -92,9 +95,19 @@ export default function BusinessAiTokensScreen() {
       ]}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text variant="titleLarge" style={{ color: colors.text.primary, fontWeight: '600', flex: 1 }}>
-          {t('business.tokens.title', 'AI tokens')}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+          {returnItemId ? (
+            <IconButton
+              icon="arrow-left"
+              onPress={() =>
+                navigation.navigate('BusinessItemDetail', { itemId: returnItemId })
+              }
+            />
+          ) : null}
+          <Text variant="titleLarge" style={{ color: colors.text.primary, fontWeight: '600', flex: 1 }}>
+            {t('business.tokens.title', 'AI tokens')}
+          </Text>
+        </View>
         <IconButton
           icon="gift"
           accessibilityLabel={t('business.tokens.gift.tooltip', 'Gift tokens')}

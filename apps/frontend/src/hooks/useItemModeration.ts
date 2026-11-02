@@ -1,4 +1,6 @@
 import { useCallback, useState } from 'react';
+import type { RejectionCategory } from '../types/itemRejectionRecovery';
+import { extractRecoveryErrorCode } from '../utils/itemRejectionRecovery';
 import { useApiClient } from './useApiClient';
 
 export type ItemModerationQueueStatus =
@@ -84,13 +86,28 @@ export function useItemModeration() {
   );
 
   const rejectItem = useCallback(
-    async (itemId: string, rejectionReason: string) => {
-      if (!apiClient) return false;
-      const { data } = await apiClient.post<{ success: boolean; error?: string }>(
-        `/admin/items/${itemId}/reject`,
-        { rejectionReason }
-      );
-      return !!data.success;
+    async (
+      itemId: string,
+      rejectionReason: string,
+      rejectionCategory: RejectionCategory
+    ) => {
+      if (!apiClient) return { success: false as const, code: null };
+      try {
+        const { data } = await apiClient.post<{
+          success: boolean;
+          error?: string;
+          code?: string;
+        }>(`/admin/items/${itemId}/reject`, {
+          rejectionReason,
+          rejectionCategory,
+        });
+        return {
+          success: !!data.success,
+          code: extractRecoveryErrorCode({ code: data.code }),
+        };
+      } catch (error: any) {
+        return { success: false as const, code: extractRecoveryErrorCode(error) };
+      }
     },
     [apiClient]
   );

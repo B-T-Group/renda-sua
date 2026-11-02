@@ -446,6 +446,8 @@ export function BusinessItemFormView({ itemId, form, onSaveSuccess }: Props) {
         />
       ) : null}
 
+      {form.withdrawDialog}
+
       <CreateNameDialog
         visible={createKind != null}
         title={

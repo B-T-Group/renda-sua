@@ -46,8 +46,10 @@ import {
   useCategories,
 } from '../../hooks/useCategory';
 import { useGraphQLRequest } from '../../hooks/useGraphQLRequest';
+import { useAppealWithdrawConfirm } from '../../hooks/useAppealWithdrawConfirm';
 import { CreateItemData, Item, useItems } from '../../hooks/useItems';
 import { Tag, useTags } from '../../hooks/useTags';
+import { patchItemWithAppealConfirm } from '../../utils/itemEditSave';
 import VariantsManagerSection from '../business/variants/VariantsManagerSection';
 import ProductTaxCategorySelect from '../business/ProductTaxCategorySelect';
 import ExportMarketsField from '../business/ExportMarketsField';
@@ -239,6 +241,7 @@ const ItemFormPage: React.FC = () => {
     createItem,
     updateItem,
   } = useItems(effectiveBusinessId);
+  const { confirmWithdraw, dialog: withdrawDialog } = useAppealWithdrawConfirm();
 
   const {
     brands,
@@ -518,10 +521,14 @@ const ItemFormPage: React.FC = () => {
             categories?.[0]?.item_sub_categories?.[0]?.id) as unknown as string,
         };
 
-        result = await updateItem(
+        const saved = await patchItemWithAppealConfirm(
+          updateItem,
           itemId,
-          updateData as unknown as Partial<CreateItemData>
+          updateData as unknown as Partial<CreateItemData>,
+          confirmWithdraw
         );
+        if (!saved.ok) return;
+        result = saved.data as Item;
         await setItemTags(itemId, selectedTags.map((t) => t.id));
         enqueueSnackbar(t('business.items.itemUpdated'), {
           variant: 'success',
@@ -1917,6 +1924,7 @@ const ItemFormPage: React.FC = () => {
           </Stack>
         </form>
       </Paper>
+      {withdrawDialog}
     </Container>
   );
 };

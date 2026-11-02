@@ -39,16 +39,23 @@ export async function approveSaleItem(itemId: string): Promise<boolean> {
 
 export async function rejectSaleItem(
   itemId: string,
-  rejectionReason: string
-): Promise<boolean> {
-  const res = await apiRequest<{ success: boolean; error?: string }>(
-    `/admin/items/${encodeURIComponent(itemId)}/reject`,
-    {
+  rejectionReason: string,
+  rejectionCategory: string
+): Promise<{ success: boolean; code?: string | null }> {
+  try {
+    const res = await apiRequest<{
+      success: boolean;
+      error?: string;
+      code?: string;
+    }>(`/admin/items/${encodeURIComponent(itemId)}/reject`, {
       method: 'POST',
-      body: JSON.stringify({ rejectionReason }),
-    }
-  );
-  return !!res.success;
+      body: JSON.stringify({ rejectionReason, rejectionCategory }),
+    });
+    return { success: !!res.success, code: res.code ?? null };
+  } catch (error: unknown) {
+    const record = error as { code?: string; data?: { code?: string } };
+    return { success: false, code: record.data?.code ?? record.code ?? null };
+  }
 }
 
 export async function messageBusinessAboutItem(
@@ -128,16 +135,27 @@ export async function submitItemAiReviewFeedback(
 export async function overrideItemAiReview(
   reviewId: string,
   action: 'force_approve' | 'force_reject' | 'force_requeue',
-  reason?: string
-): Promise<boolean> {
-  const res = await apiRequest<{ success: boolean; error?: string }>(
-    `/admin/items/ai-reviews/${encodeURIComponent(reviewId)}/override`,
-    {
+  reason?: string,
+  rejectionCategory?: string
+): Promise<{ success: boolean; code?: string | null }> {
+  try {
+    const res = await apiRequest<{
+      success: boolean;
+      error?: string;
+      code?: string;
+    }>(`/admin/items/ai-reviews/${encodeURIComponent(reviewId)}/override`, {
       method: 'POST',
-      body: JSON.stringify({ action, reason }),
-    }
-  );
-  return !!res.success;
+      body: JSON.stringify({
+        action,
+        reason,
+        ...(action === 'force_reject' ? { rejectionCategory } : {}),
+      }),
+    });
+    return { success: !!res.success, code: res.code ?? null };
+  } catch (error: unknown) {
+    const record = error as { code?: string; data?: { code?: string } };
+    return { success: false, code: record.data?.code ?? record.code ?? null };
+  }
 }
 
 export async function fetchBusinessItemAiProposal(

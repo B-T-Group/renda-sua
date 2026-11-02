@@ -2,39 +2,40 @@ import { Chip } from '@mui/material';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePhotoReviewJobId } from '../../hooks/usePhotoReviewJobId';
+import { getRecoveryChipPresentation } from '../../utils/itemRejectionRecovery';
 import { PhotoReviewLinkChip } from './PhotoReviewLinkChip';
 
 export interface ItemModerationStatusChipProps {
   status?: string | null;
   itemId?: string | null;
+  rejectionCategory?: string | null;
+  pendingResubmit?: boolean;
 }
 
 const ItemModerationStatusChip: React.FC<ItemModerationStatusChipProps> = ({
   status,
   itemId,
+  rejectionCategory,
+  pendingResubmit,
 }) => {
   const { t } = useTranslation();
   const s = status || 'pending';
   const photoReviewJobId = usePhotoReviewJobId({
-    enabled: s === 'ai_reviewing' && !!itemId,
+    enabled: s === 'ai_reviewing' && !!itemId && !pendingResubmit,
     itemId,
   });
-  if (s === 'approved') {
+  const recoveryChip = getRecoveryChipPresentation({
+    status: s,
+    category: rejectionCategory,
+    pendingResubmit,
+  });
+  if (s === 'rejected' || pendingResubmit) {
     return (
       <Chip
         size="small"
-        color="success"
-        label={t('business.items.moderation.approved', 'Live')}
-      />
-    );
-  }
-  if (s === 'rejected') {
-    return (
-      <Chip
-        size="small"
-        color="error"
+        color={recoveryChip.tone === 'error' ? 'error' : 'warning'}
         variant="outlined"
-        label={t('business.items.moderation.rejected', 'Rejected')}
+        label={t(recoveryChip.labelKey, recoveryChip.defaultLabel)}
       />
     );
   }
