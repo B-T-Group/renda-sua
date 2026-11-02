@@ -7,6 +7,7 @@ import { MerchantLifecycleModule } from '../merchant-lifecycle/merchant-lifecycl
 import { NotificationsModule } from '../notifications/notifications.module';
 import { RepresentativeCompensationModule } from '../representative-compensation/representative-compensation.module';
 import { CollectionsModule } from '../collections/collections.module';
+import { ItemRejectionsModule } from '../item-appeals/item-rejections.module';
 import { ItemAiProposalController } from './item-ai-proposal.controller';
 import { ItemAiProposalService } from './item-ai-proposal.service';
 import { ItemAiReviewAdminService } from './item-ai-review-admin.service';
@@ -26,6 +27,7 @@ import { ItemAiReviewSweeperService } from './item-ai-review-sweeper.service';
     AiGenerationModule,
     RepresentativeCompensationModule,
     CollectionsModule,
+    ItemRejectionsModule,
   ],
   controllers: [ItemAiReviewInternalController, ItemAiProposalController],
   providers: [

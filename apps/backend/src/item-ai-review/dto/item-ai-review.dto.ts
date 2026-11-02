@@ -1,3 +1,5 @@
+import { REJECTION_CATEGORIES } from '../../item-appeals/item-recovery.constants';
+import type { RejectionCategory } from '../../item-appeals/item-recovery.constants';
 import {
   IsBoolean,
   IsIn,
@@ -69,4 +71,12 @@ export class AiReviewOverrideDto {
   @IsString()
   @MaxLength(4000)
   reason?: string;
+
+  @ApiPropertyOptional({
+    enum: REJECTION_CATEGORIES,
+    description: 'Required when action = force_reject (A4).',
+  })
+  @IsOptional()
+  @IsIn(REJECTION_CATEGORIES as unknown as string[])
+  rejectionCategory?: RejectionCategory;
 }

@@ -1,3 +1,9 @@
+import { ItemRejectionsService } from '../item-appeals/item-rejections.service';
+import {
+  RECOVERY_ERRORS,
+  RejectionCategory,
+  isRejectionCategory,
+} from '../item-appeals/item-recovery.constants';
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
@@ -17,7 +23,8 @@ export class ItemAiReviewAdminService {
     private readonly reviewService: ItemAiReviewService,
     private readonly notifications: NotificationsService,
     private readonly activationValidation: ItemActivationValidationService,
-    private readonly merchantLifecycleService: MerchantLifecycleService
+    private readonly merchantLifecycleService: MerchantLifecycleService,
+    private readonly itemRejections: ItemRejectionsService
   ) {}
 
   async listReviews(params: {
@@ -83,6 +90,16 @@ export class ItemAiReviewAdminService {
     adminUserId: string,
     dto: AiReviewOverrideDto
   ) {
+    if (dto.action === 'force_reject' && !isRejectionCategory(dto.rejectionCategory)) {
+      throw new HttpException(
+        {
+          success: false,
+          code: RECOVERY_ERRORS.CATEGORY_REQUIRED,
+          error: 'rejectionCategory is required to reject',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
     const review = await this.getReview(reviewId);
     const itemStatus = review.item?.moderation_status;
     if (itemStatus === 'draft') {
@@ -98,7 +115,7 @@ export class ItemAiReviewAdminService {
     if (dto.action === 'force_approve') {
       await this.forceApprove(review, adminUserId);
     } else if (dto.action === 'force_reject') {
-      await this.forceReject(review, adminUserId, dto.reason);
+      await this.forceReject(review, adminUserId, dto.reason, dto.rejectionCategory);
     } else {
       await this.forceRequeue(review.item_id);
     }
@@ -140,6 +157,7 @@ export class ItemAiReviewAdminService {
       source: 'admin',
       aiReviewedAt: null,
     });
+    void this.itemRejections.noteApproved(review.item_id, 'admin');
     const item = review.item;
     if (item?.business?.user_id) {
       await this.notifications.sendSaleItemApprovedEmail({
@@ -159,21 +177,29 @@ export class ItemAiReviewAdminService {
   private async forceReject(
     review: any,
     adminUserId: string,
-    reason?: string
+    reason: string | undefined,
+    category: RejectionCategory | undefined
   ): Promise<void> {
+    const rejectionCategory: RejectionCategory = category ?? 'other';
     const trimmed =
       reason?.trim() ||
       'An admin reversed the AI decision. Please update your product.';
-    const now = new Date().toISOString();
-    await this.hasura.executeMutation(Q.APPLY_ITEM_MODERATION, {
+    const record = {
+      itemId: review.item_id as string,
+      category: rejectionCategory,
+      reason: trimmed,
+      reviewerId: adminUserId,
+      source: 'admin' as const,
+    };
+    const prepared = await this.itemRejections.prepareRejection(record);
+    await this.hasura.executeMutation(Q.REJECT_ITEM_WITH_RECORD, {
       id: review.item_id,
-      status: 'rejected',
-      isActive: false,
-      moderatedAt: now,
+      rejectionCategory,
+      moderatedAt: new Date().toISOString(),
       moderatorId: adminUserId,
-      source: 'admin',
-      aiReviewedAt: null,
+      ...prepared.variables,
     });
+    this.itemRejections.noteRejected(record, prepared.rejectionId);
     const item = review.item;
     if (item?.business?.user_id) {
       await this.hasura.executeMutation(Q.INSERT_OWNER_MESSAGE, {

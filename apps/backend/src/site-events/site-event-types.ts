@@ -223,6 +223,16 @@ export const SERVER_SITE_EVENT_TYPES = [
   // Assistant server-only events (#451)
   'assistant.message.classified',
   'assistant.support.deflected',
+  // Rejected-item recovery + appeals (B10, spec section 6)
+  'item_moderation.rejected',
+  'item_moderation.resubmitted',
+  'item_moderation.recovered',
+  'item_moderation.deleted_after_rejection',
+  'item_recovery.action_used',
+  'item_recovery.buy_tokens_prompted',
+  'item_appeal.created',
+  'item_appeal.decided',
+  'item_appeal.withdrawn',
 ] as const;
 
 export type SiteEventTypeV1 = (typeof SITE_EVENT_TYPES_V1)[number] | (typeof SERVER_SITE_EVENT_TYPES)[number];
