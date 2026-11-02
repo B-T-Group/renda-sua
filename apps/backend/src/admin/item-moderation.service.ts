@@ -7,6 +7,12 @@ import { MerchantLifecycleService } from '../merchant-lifecycle/merchant-lifecyc
 import { NotificationsService } from '../notifications/notifications.service';
 import { ThreadsService } from '../threads/threads.service';
 import * as Q from './item-moderation.queries';
+import { ItemRejectionsService } from '../item-appeals/item-rejections.service';
+import {
+  RECOVERY_ERRORS,
+  RejectionCategory,
+  isRejectionCategory,
+} from '../item-appeals/item-recovery.constants';
 
 type ModerationStatusFilter =
   | 'pending'
@@ -61,6 +67,7 @@ export class ItemModerationService {
     private readonly activationValidation: ItemActivationValidationService,
     private readonly merchantLifecycleService: MerchantLifecycleService,
     private readonly threadsService: ThreadsService,
+    private readonly itemRejections: ItemRejectionsService,
     @Optional()
     private readonly representativeCompensationService?: RepresentativeCompensationService
   ) {}
@@ -110,6 +117,7 @@ export class ItemModerationService {
       moderatorUserId,
       Q.APPROVE_ITEM_MODERATION
     );
+    void this.itemRejections.noteApproved(itemId, 'admin');
     await this.notificationsService.sendSaleItemApprovedEmail({
       itemId,
       businessUserId: item.business.user_id,
@@ -127,17 +135,38 @@ export class ItemModerationService {
   async rejectItem(
     itemId: string,
     moderatorUserId: string,
-    rejectionReason: string
+    rejectionReason: string,
+    rejectionCategory: RejectionCategory
   ): Promise<void> {
+    if (!isRejectionCategory(rejectionCategory)) {
+      throw new HttpException(
+        {
+          success: false,
+          code: RECOVERY_ERRORS.CATEGORY_REQUIRED,
+          error: 'rejectionCategory is required',
+        },
+        HttpStatus.BAD_REQUEST
+      );
+    }
     const item = await this.fetchItemForModeration(itemId);
     this.assertPendingModeration(item.moderation_status, 'rejected');
     const ownerUserId = item.business.user_id;
     const trimmed = rejectionReason.trim();
+    const record = {
+      itemId,
+      category: rejectionCategory,
+      reason: trimmed,
+      reviewerId: moderatorUserId,
+      source: 'admin' as const,
+    };
+    const prepared = await this.itemRejections.prepareRejection(record);
     await this.runModerationPatch(
       itemId,
       moderatorUserId,
-      Q.REJECT_ITEM_MODERATION
+      Q.REJECT_ITEM_MODERATION,
+      { rejectionCategory, ...prepared.variables }
     );
+    this.itemRejections.noteRejected(record, prepared.rejectionId);
     await this.insertOwnerMessage(ownerUserId, itemId, trimmed);
     await this.notificationsService.sendSaleItemRejectedEmail({
       itemId,
@@ -319,7 +348,8 @@ export class ItemModerationService {
   private async runModerationPatch(
     itemId: string,
     moderatorUserId: string,
-    mutation: string
+    mutation: string,
+    extra: Record<string, unknown> = {}
   ): Promise<void> {
     const moderatedAt = new Date().toISOString();
     const result = await this.hasuraSystemService.executeMutation<{
@@ -328,6 +358,7 @@ export class ItemModerationService {
       id: itemId,
       moderatedAt,
       moderatorId: moderatorUserId,
+      ...extra,
     });
     if (!result.update_items_by_pk) {
       throw new HttpException('Update failed', HttpStatus.BAD_REQUEST);

@@ -33,6 +33,9 @@ import { RentalListingModerationService } from './rental-listing-moderation.serv
 import { ItemModerationService } from './item-moderation.service';
 import { RentalListingAiReviewModule } from '../rental-listing-ai-review/rental-listing-ai-review.module';
 import { ItemAiReviewModule } from '../item-ai-review/item-ai-review.module';
+import { ItemRejectionsModule } from '../item-appeals/item-rejections.module';
+import { ItemAppealsModule } from '../item-appeals/item-appeals.module';
+import { ItemAppealsAdminController } from './item-appeals-admin.controller';
 import { ImageValidationModule } from '../image-validation/image-validation.module';
 import { AiImageCleanupModule } from '../ai-image-cleanup/ai-image-cleanup.module';
 import { WithdrawalPinService } from './withdrawal-pin.service';
@@ -73,6 +76,8 @@ import { AdminMapService } from './admin-map.service';
     BusinessContractsModule,
     forwardRef(() => BusinessVerificationModule),
     BusinessItemsModule,
+    ItemRejectionsModule,
+    ItemAppealsModule,
     RentalListingAiReviewModule,
     ItemAiReviewModule,
     ImageValidationModule,
@@ -82,6 +87,7 @@ import { AdminMapService } from './admin-map.service';
   ],
   controllers: [
     AdminController,
+    ItemAppealsAdminController,
     AdminCatalogItemsController,
     ConfigurationsController,
     AdminSiteEventsController,

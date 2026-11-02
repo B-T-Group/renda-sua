@@ -5,6 +5,10 @@ import { loadExpoNotifications } from '../services/expoNotificationsLoader';
 import { rootNavigationRef, resetToPersonaDashboard } from '../navigation/rootNavigationRef';
 import { useStore } from '../stores/RootStore';
 import { useProfileMe } from './useProfileMe';
+import {
+  isItemRecoveryPushType,
+  recoveryDeepLinkItemId,
+} from '../utils/itemRejectionRecovery';
 
 const ENGAGEMENT_TYPES = new Set([
   'business_add_item',
@@ -14,11 +18,15 @@ const ENGAGEMENT_TYPES = new Set([
   'business_location_hours',
   'business_orders',
   'business_items_rejected',
+  'item_appeal_received',
+  'item_appeal_decided',
+  'item_resubmit_decided',
   'business_share_store',
   'business_item_edit',
 ]);
 
 let pendingType: string | null = null;
+let pendingItemId: string | null = null;
 
 function parseType(data: Record<string, unknown> | undefined): string | null {
   if (!data) return null;
@@ -26,7 +34,11 @@ function parseType(data: Record<string, unknown> | undefined): string | null {
   return ENGAGEMENT_TYPES.has(type) ? type : null;
 }
 
-function navigateEngagement(type: string, businessId?: string | null): boolean {
+function navigateEngagement(
+  type: string,
+  businessId?: string | null,
+  itemId?: string | null
+): boolean {
   if (!rootNavigationRef.isReady()) return false;
   const routeNames = rootNavigationRef.getRootState()?.routeNames ?? [];
   const go = (name: string, params?: object) => {
@@ -34,6 +46,9 @@ function navigateEngagement(type: string, businessId?: string | null): boolean {
     rootNavigationRef.dispatch(CommonActions.navigate({ name, params }));
     return true;
   };
+  if (isItemRecoveryPushType(type) && itemId) {
+    return go('BusinessItemDetail', { itemId });
+  }
   switch (type) {
     case 'business_dashboard':
       resetToPersonaDashboard('business');
@@ -49,7 +64,12 @@ function navigateEngagement(type: string, businessId?: string | null): boolean {
     case 'business_orders':
       return go('BusinessOrdersList');
     case 'business_items_rejected':
-      return go('BusinessItemsList', { moderationStatus: 'rejected' });
+    case 'item_appeal_received':
+    case 'item_appeal_decided':
+    case 'item_resubmit_decided':
+      return itemId
+        ? go('BusinessItemDetail', { itemId })
+        : go('BusinessItemsList', { moderationStatus: 'rejected' });
     case 'business_item_edit':
       return go('BusinessItemsList');
     case 'business_share_store':
@@ -66,14 +86,18 @@ function navigateEngagement(type: string, businessId?: string | null): boolean {
 function navigateWhenReady(
   type: string,
   businessId?: string | null,
+  itemId?: string | null,
   maxAttempts = 24
 ): void {
   let attempts = 0;
   const tryNavigate = () => {
     attempts += 1;
-    if (navigateEngagement(type, businessId)) return;
+    if (navigateEngagement(type, businessId, itemId)) return;
     if (attempts < maxAttempts) setTimeout(tryNavigate, 250);
-    else pendingType = type;
+    else {
+      pendingType = type;
+      pendingItemId = itemId ?? null;
+    }
   };
   tryNavigate();
 }
@@ -81,8 +105,10 @@ function navigateWhenReady(
 function flushPending(canOpen: boolean, businessId?: string | null): void {
   if (!canOpen || !pendingType) return;
   const type = pendingType;
+  const itemId = pendingItemId;
   pendingType = null;
-  navigateWhenReady(type, businessId);
+  pendingItemId = null;
+  navigateWhenReady(type, businessId, itemId);
 }
 
 export function useNotificationOpenedMerchantEngagementNavigation(
@@ -128,11 +154,13 @@ export function useNotificationOpenedMerchantEngagementNavigation(
       const businessId =
         (typeof data?.businessId === 'string' && data.businessId) ||
         businessIdRef.current;
+      const itemId = recoveryDeepLinkItemId(data);
       if (canOpenBusinessApp) {
-        navigateWhenReady(type, businessId);
+        navigateWhenReady(type, businessId, itemId);
         return;
       }
       pendingType = type;
+      pendingItemId = itemId;
       if (canSwitchToBusiness) void persona.selectPersona('business');
     };
 

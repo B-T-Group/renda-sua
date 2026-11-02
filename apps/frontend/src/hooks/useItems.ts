@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ItemImage } from '../types/image';
 import type { FoodAvailabilitySlot } from '../types/food';
+import type {
+  ItemCondition,
+  RejectionCategory,
+} from '../types/itemRejectionRecovery';
 import { useApiClient } from './useApiClient';
 import { useDistanceMatrix } from './useDistanceMatrix';
 import { useGraphQLRequest } from './useGraphQLRequest';
@@ -42,6 +46,10 @@ export interface Item {
   moderation_status?: string | null;
   /** Set by API when moderation_status is rejected */
   rejection_reason?: string | null;
+  rejection_category?: RejectionCategory | null;
+  condition?: ItemCondition | null;
+  wear_note?: string | null;
+  translation_available?: boolean | null;
   stripe_tax_code_id?: string | null;
   stripe_tax_code?: {
     id: string;
@@ -174,6 +182,7 @@ export interface CreateItemData {
   export_market_country_codes?: string[];
   stripe_tax_code_id?: string;
   business_id: string;
+  confirmWithdrawAppeal?: boolean;
 }
 
 export interface CreateBrandData {

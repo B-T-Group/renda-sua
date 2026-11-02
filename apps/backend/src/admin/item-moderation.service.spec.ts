@@ -1,3 +1,4 @@
+import { ItemRejectionsService } from '../item-appeals/item-rejections.service';
 import { ItemModerationService } from './item-moderation.service';
 
 describe('ItemModerationService', () => {
@@ -51,7 +52,8 @@ describe('ItemModerationService', () => {
       } as any,
       { assertItemCanActivateAsSystem: jest.fn() } as any,
       { recompute: jest.fn() } as any,
-      { createThread } as any
+      { createThread } as any,
+      { prepareRejection: jest.fn(), noteRejected: jest.fn(), noteApproved: jest.fn() } as any
     );
     return { service, executeQuery, executeMutation, createThread };
   }
@@ -148,5 +150,71 @@ describe('ItemModerationService', () => {
       subject: 'Re: Widget',
     });
     expect(result.threadId).toBe('thread-1');
+  });
+});
+
+describe('ItemModerationService rejectItem with a category (A4)', () => {
+  function build(opts: { failReject?: boolean } = {}) {
+    const executeQuery = jest.fn(async (q: string) =>
+      q.includes('ItemForModeration')
+        ? { items_by_pk: { id: 'item-1', name: 'Widget', moderation_status: 'pending', status: 'active', business: { id: 'b1', user_id: 'u1' } } }
+        : q.includes('ItemSnapshotForRejection')
+          ? { items_by_pk: { id: 'item-1', name: 'Widget' } }
+          : { user_messages: [], item_ai_reviews: [] }
+    );
+    const executeMutation = jest.fn(async (q: string) => {
+      if (opts.failReject && q.includes('RejectItemModeration')) throw new Error('item_rejection_not_current');
+      return { update_items_by_pk: { id: 'item-1' }, insert_user_messages_one: { id: 'm' } };
+    });
+    const hasura = { executeQuery, executeMutation } as any;
+    const trackEvent = jest.fn().mockResolvedValue(undefined);
+    const itemRejections = new ItemRejectionsService(hasura, { trackEvent } as any);
+    const email = jest.fn();
+    const service = new ItemModerationService(
+      hasura,
+      { sendSaleItemApprovedEmail: jest.fn(), sendSaleItemRejectedEmail: email } as any,
+      { assertItemCanActivateAsSystem: jest.fn() } as any,
+      { recompute: jest.fn() } as any,
+      { createThread: jest.fn(async () => ({ thread: { id: 't' }, message: { id: 'm' } })) } as any,
+      itemRejections
+    );
+    return { service, executeMutation, trackEvent, email };
+  }
+
+  it('refuses a missing or unknown category before touching the item', async () => {
+    const { service, executeMutation } = build();
+    for (const bad of [undefined, 'blurry']) {
+      await expect(service.rejectItem('item-1', 'mod-1', 'Bad photos', bad as any)).rejects.toMatchObject({
+        response: expect.objectContaining({ code: 'ITEM_REJECTION_CATEGORY_REQUIRED' }),
+      });
+    }
+    expect(executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('writes the reject, the rejection record and the audit row in ONE mutation', async () => {
+    const { service, executeMutation, trackEvent } = build();
+    await service.rejectItem('item-1', 'mod-1', '  Bad photos ', 'photo_quality');
+    const calls = executeMutation.mock.calls as any[];
+    const rejects = calls.filter((c) => /insert_item_rejections_one/.test(String(c[0])));
+    expect(rejects).toHaveLength(1);
+    const [q, v] = rejects[0];
+    expect(q).toContain('RejectItemModeration');
+    expect(q).toMatch(/current_rejection_id: \$rejectionId/);
+    expect(q).toContain('insert_item_moderation_audit_one');
+    // item update precedes the inserts (the DB guard needs the pointer first)
+    expect(q.indexOf('update_items_by_pk')).toBeLessThan(q.indexOf('insert_item_rejections_one'));
+    expect(v).toMatchObject({ id: 'item-1', moderatorId: 'mod-1', rejectionCategory: 'photo_quality' });
+    expect(v.rejection).toMatchObject({ id: v.rejectionId, item_id: 'item-1', category: 'photo_quality', reason: 'Bad photos', reviewer_id: 'mod-1', source: 'admin' });
+    expect(v.rejectionAudit).toMatchObject({ rejection_id: v.rejectionId, action: 'rejected' });
+    expect(calls.some((c) => /RecordItemRejection/.test(String(c[0])))).toBe(false);
+    expect(trackEvent).toHaveBeenCalledWith(expect.objectContaining({ eventType: 'item_moderation.rejected' }), expect.anything());
+  });
+
+  it('a failed reject mutation leaves no follow-up writes, notices or metric', async () => {
+    const { service, executeMutation, trackEvent, email } = build({ failReject: true });
+    await expect(service.rejectItem('item-1', 'mod-1', 'Bad photos', 'pricing')).rejects.toThrow('item_rejection_not_current');
+    expect(executeMutation).toHaveBeenCalledTimes(1);
+    expect(email).not.toHaveBeenCalled();
+    expect(trackEvent).not.toHaveBeenCalled();
   });
 });

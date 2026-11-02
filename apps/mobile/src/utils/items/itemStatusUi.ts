@@ -1,4 +1,5 @@
 import type { Theme } from '../../theme';
+import { getRecoveryChipPresentation } from '../itemRejectionRecovery';
 
 export type ItemModerationStatus =
   | 'draft'
@@ -8,22 +9,35 @@ export type ItemModerationStatus =
   | 'approved'
   | 'rejected';
 
+export type ItemModerationDisplayOptions = {
+  category?: string | null;
+  pendingResubmit?: boolean;
+};
+
 export function itemModerationColors(
   status: string | null | undefined,
-  colors: Theme['colors']
+  colors: Theme['colors'],
+  options?: ItemModerationDisplayOptions
 ): { backgroundColor: string; textColor: string; borderColor: string } {
+  const recovery = getRecoveryChipPresentation({
+    status,
+    category: options?.category,
+    pendingResubmit: options?.pendingResubmit,
+  });
+  if (status === 'rejected' || options?.pendingResubmit) {
+    const tone = recovery.tone === 'error' ? colors.error.main : colors.warning.main;
+    return {
+      backgroundColor: tone + '18',
+      textColor: tone,
+      borderColor: tone + '44',
+    };
+  }
   switch (status) {
     case 'approved':
       return {
         backgroundColor: colors.success.main + '22',
         textColor: colors.success.dark ?? colors.success.main,
         borderColor: colors.success.main + '55',
-      };
-    case 'rejected':
-      return {
-        backgroundColor: colors.error.main + '18',
-        textColor: colors.error.main,
-        borderColor: colors.error.main + '44',
       };
     case 'proposal_pending':
       return {
@@ -48,12 +62,22 @@ export function itemModerationColors(
   }
 }
 
-export function itemModerationLabelKey(status: string | null | undefined): string {
+export function itemModerationLabelKey(
+  status: string | null | undefined,
+  options?: ItemModerationDisplayOptions
+): string {
+  if (status === 'rejected' || options?.pendingResubmit) {
+    return getRecoveryChipPresentation({
+      status,
+      category: options?.category,
+      pendingResubmit: options?.pendingResubmit,
+    }).labelKey;
+  }
   switch (status) {
     case 'approved':
       return 'business.items.moderation.approved';
     case 'rejected':
-      return 'business.items.moderation.rejected';
+      return 'business.items.recovery.status.needsChanges';
     case 'proposal_pending':
       return 'business.items.moderation.proposalPending';
     case 'ai_reviewing':
@@ -66,12 +90,22 @@ export function itemModerationLabelKey(status: string | null | undefined): strin
   }
 }
 
-export function itemModerationDefaultLabel(status: string | null | undefined): string {
+export function itemModerationDefaultLabel(
+  status: string | null | undefined,
+  options?: ItemModerationDisplayOptions
+): string {
+  if (status === 'rejected' || options?.pendingResubmit) {
+    return getRecoveryChipPresentation({
+      status,
+      category: options?.category,
+      pendingResubmit: options?.pendingResubmit,
+    }).defaultLabel;
+  }
   switch (status) {
     case 'approved':
       return 'Live';
     case 'rejected':
-      return 'Rejected';
+      return 'Needs changes';
     case 'proposal_pending':
       return 'AI suggestions ready';
     case 'ai_reviewing':

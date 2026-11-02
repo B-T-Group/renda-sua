@@ -114,7 +114,8 @@ describe('BusinessItemsService CSV upload', () => {
       {} as any,
       categoriesService as any,
       { autoAssignCollectionsIfFit: jest.fn() } as any,
-      { incrementGeneration: jest.fn() } as any
+      { incrementGeneration: jest.fn() } as any,
+      { assertResubmitAllowed: jest.fn(), noteResubmitted: jest.fn(), noteDeleted: jest.fn().mockResolvedValue(undefined) } as any
     );
 
     return {
@@ -207,7 +208,8 @@ describe('BusinessItemsService quickPublishBusinessItem', () => {
       {} as any,
       { listCategoryTree: jest.fn().mockResolvedValue([]) } as any,
       { autoAssignCollectionsIfFit: jest.fn() } as any,
-      { incrementGeneration: jest.fn() } as any
+      { incrementGeneration: jest.fn() } as any,
+      { assertResubmitAllowed: jest.fn(), noteResubmitted: jest.fn(), noteDeleted: jest.fn().mockResolvedValue(undefined) } as any
     );
     (service as any).updateInventoryItem = updateInventoryItem;
     (service as any).createInventoryItem = createInventoryItem;
@@ -369,7 +371,8 @@ describe('BusinessItemsService getBusinessLocations', () => {
       {} as any,
       {} as any,
       {} as any,
-      { incrementGeneration: jest.fn() } as any
+      { incrementGeneration: jest.fn() } as any,
+      { assertResubmitAllowed: jest.fn(), noteResubmitted: jest.fn(), noteDeleted: jest.fn().mockResolvedValue(undefined) } as any
     );
 
     const locations = await service.getBusinessLocations('biz-1');
@@ -423,7 +426,8 @@ describe('BusinessItemsService cooked-food inventory writes', () => {
       {} as any,
       {} as any,
       {} as any,
-      { incrementGeneration: jest.fn().mockResolvedValue(undefined) } as any
+      { incrementGeneration: jest.fn().mockResolvedValue(undefined) } as any,
+      { assertResubmitAllowed: jest.fn(), noteResubmitted: jest.fn(), noteDeleted: jest.fn().mockResolvedValue(undefined) } as any
     );
     return { service, executeMutation };
   }

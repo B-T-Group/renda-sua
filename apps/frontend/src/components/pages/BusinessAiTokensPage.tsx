@@ -14,7 +14,8 @@ import {
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { validateReturnTo } from '../../utils/returnToValidator';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import {
   TokenPackId,
@@ -29,6 +30,8 @@ import { pickMobileMoneyDefaultCountry } from '../../utils/mobileMoneyCountry';
 const BusinessAiTokensPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = searchParams.get('returnTo');
   const { profile, refetch } = useUserProfileContext();
   const { packs, balance, loading, error, purchasePack, refreshBalance } =
     useBusinessTokens();
@@ -96,7 +99,13 @@ const BusinessAiTokensPage: React.FC = () => {
 
       <Button
         startIcon={<ArrowBackIcon />}
-        onClick={() => navigate(-1)}
+        onClick={() => {
+          if (returnTo) {
+            navigate(validateReturnTo(returnTo));
+            return;
+          }
+          navigate(-1);
+        }}
         sx={{ mb: 2 }}
       >
         {t('common.back', 'Back')}

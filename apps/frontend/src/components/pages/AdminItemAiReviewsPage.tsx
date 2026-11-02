@@ -27,7 +27,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSnackbar } from 'notistack';
 import { Link as RouterLink } from 'react-router-dom';
-import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { PlatformPermissions } from '../../constants/platformPermissions';
 import { usePermission } from '../../hooks/usePermissions';
 import {
@@ -35,6 +34,9 @@ import {
   type AdminItemAiReviewDetail,
   type ItemAiReviewAuditStatus,
 } from '../../hooks/useItemAiReviews';
+import type { RejectionCategory } from '../../types/itemRejectionRecovery';
+import { recoveryErrorI18n } from '../../utils/itemRejectionRecovery';
+import { RejectionCategorySelect } from '../admin/RejectionCategorySelect';
 import ItemModerationStatusChip from '../business/ItemModerationStatusChip';
 
 function apiErrorMessage(error: unknown, fallback: string): string {
@@ -52,7 +54,6 @@ function apiErrorMessage(error: unknown, fallback: string): string {
 const AdminItemAiReviewsPage: React.FC = () => {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
-  const { profile } = useUserProfileContext();
   const isAdmin = usePermission(PlatformPermissions.MODERATE_ITEMS);
   const {
     reviews,
@@ -69,6 +70,7 @@ const AdminItemAiReviewsPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [detail, setDetail] = useState<AdminItemAiReviewDetail | null>(null);
   const [notes, setNotes] = useState('');
+  const [rejectCategory, setRejectCategory] = useState<RejectionCategory | ''>('');
   const [busy, setBusy] = useState(false);
 
   const reload = useCallback(() => {
@@ -91,6 +93,7 @@ const AdminItemAiReviewsPage: React.FC = () => {
       }
       setDetail(row);
       setNotes(row.admin_feedback_notes ?? '');
+      setRejectCategory('');
     } catch (e: unknown) {
       enqueueSnackbar(
         apiErrorMessage(
@@ -137,15 +140,24 @@ const AdminItemAiReviewsPage: React.FC = () => {
     action: 'force_approve' | 'force_reject' | 'force_requeue'
   ) => {
     if (!detail) return;
+    if (action === 'force_reject' && !rejectCategory) {
+      enqueueSnackbar(
+        t('admin.itemModeration.categoryRequired', 'Choose a rejection category.'),
+        { variant: 'error' }
+      );
+      return;
+    }
     setBusy(true);
     try {
-      const ok = await overrideReview(
+      const result = await overrideReview(
         detail.id,
         action,
-        notes.trim() || undefined
+        notes.trim() || undefined,
+        action === 'force_reject' ? rejectCategory || undefined : undefined
       );
-      if (!ok) {
-        throw new Error(t('admin.itemAiReviews.actionFailed', 'Action failed'));
+      if (!result.success) {
+        const copy = recoveryErrorI18n(result.code);
+        throw new Error(t(copy.key, copy.defaultValue));
       }
       enqueueSnackbar(
         t('admin.itemAiReviews.overrideSaved', 'Override applied'),
@@ -370,6 +382,16 @@ const AdminItemAiReviewsPage: React.FC = () => {
                   {detail.proposed_description}
                 </Typography>
               ) : null}
+              <RejectionCategorySelect
+                value={rejectCategory}
+                onChange={setRejectCategory}
+                disabled={busy}
+                required={false}
+                label={t(
+                  'admin.itemAiReviews.rejectionCategory',
+                  'Category for force reject'
+                )}
+              />
               <TextField
                 fullWidth
                 multiline
@@ -411,7 +433,7 @@ const AdminItemAiReviewsPage: React.FC = () => {
           <Button
             variant="contained"
             color="error"
-            disabled={busy}
+            disabled={busy || !rejectCategory}
             onClick={() => void onOverride('force_reject')}
           >
             {t('admin.itemAiReviews.forceReject', 'Force reject')}

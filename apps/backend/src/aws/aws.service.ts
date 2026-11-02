@@ -96,6 +96,42 @@ export class AwsService {
   }
 
   /**
+   * Presigned PUT that pins Content-Type AND Content-Length into the signature,
+   * so S3 rejects (403) an upload whose type or byte size differs from what the
+   * server validated when issuing the URL.
+   */
+  async generateStrictUploadUrl(options: {
+    bucketName: string;
+    key: string;
+    contentType: string;
+    contentLength: number;
+    expiresIn?: number;
+  }): Promise<PresignedUrlResponse & { signedHeaders: string[] }> {
+    const { bucketName, key, contentType, contentLength, expiresIn = 600 } = options;
+    if (!bucketName || !key) throw new Error('Bucket name and key are required');
+    if (!Number.isInteger(contentLength) || contentLength <= 0) {
+      throw new Error('contentLength must be a positive integer');
+    }
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      ContentType: contentType,
+      ContentLength: contentLength,
+    });
+    const url = await getSignedUrl(this.s3Client, command, {
+      expiresIn,
+      signableHeaders: new Set(['content-type', 'content-length']),
+    });
+    const signedHeaders = (new URL(url).searchParams.get('X-Amz-SignedHeaders') ?? '').split(';').filter(Boolean);
+    return { url, expiresAt: new Date(Date.now() + expiresIn * 1000), signedHeaders };
+  }
+
+  getBucketRegion(): string {
+    const awsConfig = this.configService.get('aws');
+    return awsConfig?.s3BucketRegion || awsConfig?.region || 'ca-central-1';
+  }
+
+  /**
    * Generate a presigned URL for a specific file type
    * @param bucketName S3 bucket name
    * @param key Object key (filename)

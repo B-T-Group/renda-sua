@@ -35,7 +35,15 @@ export function ItemIdentitySection({
   const [descExpanded, setDescExpanded] = useState(false);
 
   const moderation = item.moderation_status;
-  const modColors = itemModerationColors(moderation, colors);
+  const pendingResubmit =
+    moderation === 'pending' || moderation === 'ai_reviewing'
+      ? Boolean(item.rejection_reason)
+      : false;
+  const displayOptions = {
+    category: item.rejection_category,
+    pendingResubmit,
+  };
+  const modColors = itemModerationColors(moderation, colors, displayOptions);
   const showActivePill = canToggleItemActive(moderation);
   const description = item.description?.trim() ?? '';
   const descNeedsMore = description.length > 120;
@@ -85,8 +93,8 @@ export function ItemIdentitySection({
             <StatusPill
               compact
               label={t(
-                itemModerationLabelKey(moderation),
-                itemModerationDefaultLabel(moderation)
+                itemModerationLabelKey(moderation, displayOptions),
+                itemModerationDefaultLabel(moderation, displayOptions)
               )}
               backgroundColor={modColors.backgroundColor}
               textColor={modColors.textColor}

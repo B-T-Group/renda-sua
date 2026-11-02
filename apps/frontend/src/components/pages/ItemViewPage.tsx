@@ -14,7 +14,7 @@ import {
   Typography,
 } from '@mui/material';
 import { useSnackbar } from 'notistack';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
@@ -43,6 +43,7 @@ import ItemImageLightbox from '../business/item-view/ItemImageLightbox';
 import ItemImagesTab from '../business/item-view/ItemImagesTab';
 import ItemInventoryTab from '../business/item-view/ItemInventoryTab';
 import ItemOverviewTab from '../business/item-view/ItemOverviewTab';
+import { ItemRecoverySection } from '../business/item-recovery/ItemRecoverySection';
 import ItemViewHeader from '../business/item-view/ItemViewHeader';
 import {
   AnyInventory,
@@ -450,6 +451,13 @@ export default function ItemViewPage() {
         sku={item.sku}
         isActive={Boolean(item.is_active)}
         moderationStatus={item.moderation_status}
+        rejectionCategory={item.rejection_category}
+        pendingResubmit={
+          item.moderation_status === 'pending' ||
+          item.moderation_status === 'ai_reviewing'
+            ? Boolean(item.rejection_reason)
+            : false
+        }
         canToggleActive={item.moderation_status === 'approved'}
         toggling={itemActiveToggling}
         onToggleActive={(next) => void handleToggleItemActive(next)}
@@ -457,9 +465,14 @@ export default function ItemViewPage() {
         onEdit={handleEditItem}
       />
 
+      <ItemRecoverySection
+        item={item}
+        onItemUpdated={() => fetchItemDetails({ silent: true })}
+        onEdit={handleEditItem}
+      />
+
       {(item.moderation_status === 'draft' ||
-        item.moderation_status === 'proposal_pending' ||
-        item.moderation_status === 'rejected') && (
+        item.moderation_status === 'proposal_pending') && (
         <Box sx={{ mb: 2, display: 'flex', flexWrap: 'wrap', gap: 1 }}>
           {item.moderation_status === 'draft' ? (
             <Button
@@ -482,27 +495,6 @@ export default function ItemViewPage() {
                 'Review AI suggestions'
               )}
             </Button>
-          ) : null}
-          {item.moderation_status === 'rejected' ? (
-            <Alert severity="warning" sx={{ flex: 1, minWidth: 240 }}>
-              {item.rejection_reason ? (
-                <>
-                  <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
-                    {t(
-                      'business.items.moderation.rejectionReason',
-                      'Why this item was rejected'
-                    )}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 1 }}>
-                    {item.rejection_reason}
-                  </Typography>
-                </>
-              ) : null}
-              {t(
-                'business.items.moderation.resubmitHint',
-                'If this item was rejected, saving name or description changes will send it for review again.'
-              )}
-            </Alert>
           ) : null}
         </Box>
       )}

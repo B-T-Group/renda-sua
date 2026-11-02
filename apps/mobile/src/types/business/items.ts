@@ -1,5 +1,9 @@
 import type { FoodAvailabilitySlot } from '../food';
 import type {
+  ItemCondition,
+  RejectionCategory,
+} from '../itemRejectionRecovery';
+import type {
   InventoryVariantPriceOverride,
   ItemVariant,
 } from './itemVariant';
@@ -80,6 +84,10 @@ export interface BusinessCatalogItem {
   moderation_status?: string | null;
   /** Present when moderation_status is rejected */
   rejection_reason?: string | null;
+  rejection_category?: RejectionCategory | null;
+  condition?: ItemCondition | null;
+  wear_note?: string | null;
+  translation_available?: boolean | null;
   is_favorite?: boolean;
   pay_on_delivery_enabled?: boolean;
   pay_at_pickup_enabled?: boolean;
@@ -151,6 +159,7 @@ export interface UpdateBusinessItemPayload {
   shipping_price?: number | null;
   shipping_currency?: string;
   stripe_tax_code_id?: string;
+  confirmWithdrawAppeal?: boolean;
 }
 
 export interface CreateItemFromImagePayload {

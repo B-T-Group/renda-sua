@@ -43,5 +43,11 @@ export class UpdateItemDto {
   shipping_price?: number | null;
   shipping_currency?: string;
   stripe_tax_code_id?: string;
+  /**
+   * Edge case (spec section 3): saving content edits on a rejected item resubmits it.
+   * When an appeal is pending, the business must confirm the withdraw, else 409
+   * ITEM_APPEAL_WITHDRAW_CONFIRM_REQUIRED and nothing is saved.
+   */
+  confirmWithdrawAppeal?: boolean;
 }
 
