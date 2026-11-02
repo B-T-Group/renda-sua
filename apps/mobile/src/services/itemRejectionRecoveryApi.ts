@@ -1,22 +1,17 @@
-import Auth0DirectService from './auth0DirectService';
-import { api, resolveApiUrl } from './apiClient';
-import { buildActivePersonaHeaders } from '../utils/activePersonaStorage';
+import { api } from './apiClient';
+import { awsApi, buildS3PublicUrl, S3_BUCKET } from './awsApi';
 import type {
+  AiCleanupQuote,
+  ConditionUpdateResult,
   ItemAppeal,
   ItemCondition,
   ItemRejectionRecovery,
-  RecoveryItemSnapshot,
+  ResubmitResult,
 } from '../types/itemRejectionRecovery';
-import { ITEM_REJECTION_RECOVERY_GQL_FIELDS } from '../types/itemRejectionRecovery';
-import {
-  isNotFoundStatus,
-  mergeRecoveryPayload,
-  synthesizeRecoveryFromItem,
-  unwrapApiData,
-} from '../utils/itemRejectionRecovery';
+import { isAllowedEvidenceFile, unwrapApiData } from '../utils/itemRejectionRecovery';
 
-export const ITEM_REJECTION_RECOVERY_PATH = (itemId: string) =>
-  `/business-items/items/${encodeURIComponent(itemId)}/rejection-recovery`;
+export const ITEM_RECOVERY_PATH = (itemId: string) =>
+  `/business-items/items/${encodeURIComponent(itemId)}/recovery`;
 
 export const ITEM_RESUBMIT_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/resubmit`;
@@ -24,34 +19,13 @@ export const ITEM_RESUBMIT_PATH = (itemId: string) =>
 export const ITEM_APPEALS_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/appeals`;
 
-export const ITEM_APPEAL_EVIDENCE_PATH = (itemId: string) =>
-  `/business-items/items/${encodeURIComponent(itemId)}/appeals/evidence`;
-
 export const ITEM_CONDITION_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/condition`;
 
-export const ITEM_CLEANUP_COST_PATH = (itemId: string) =>
-  `/business-items/items/${encodeURIComponent(itemId)}/cleanup-cost`;
+export const ITEM_AI_CLEANUP_QUOTE_PATH = (itemId: string) =>
+  `/business-items/items/${encodeURIComponent(itemId)}/ai-cleanup-quote`;
 
 export const ITEM_TRANSLATE_PATH = '/ai/translate';
-
-export interface ResubmitResult {
-  moderation_status: string;
-  withdrawn_appeal_id?: string | null;
-  pending_resubmit?: boolean;
-}
-
-export interface ConditionUpdateResult {
-  condition: ItemCondition;
-  wear_note: string | null;
-  is_used: boolean;
-}
-
-export interface CleanupCostResult {
-  cost: number;
-  balance: number;
-  token_cost_per_image: number;
-}
 
 export interface TranslateResult {
   text: string;
@@ -64,41 +38,31 @@ export const itemRejectionRecoveryApi = {
   createAppeal,
   updateCondition,
   uploadEvidence,
-  getCleanupCost,
+  getCleanupQuote,
   translateText,
 };
 
-async function getRecovery(
-  itemId: string,
-  snapshot?: RecoveryItemSnapshot | null
-): Promise<ItemRejectionRecovery> {
-  try {
-    const body = await api.get<ItemRejectionRecovery | { data?: ItemRejectionRecovery }>(
-      ITEM_REJECTION_RECOVERY_PATH(itemId)
-    );
-    return mergeRecoveryPayload(unwrapApiData(body), snapshot);
-  } catch (error: unknown) {
-    if (isNotFoundStatus(error) && snapshot) {
-      return synthesizeRecoveryFromItem(snapshot);
-    }
-    throw error;
-  }
+async function getRecovery(itemId: string): Promise<ItemRejectionRecovery> {
+  const body = await api.get<ItemRejectionRecovery | { data?: ItemRejectionRecovery }>(
+    ITEM_RECOVERY_PATH(itemId)
+  );
+  return unwrapApiData(body);
 }
 
 async function resubmit(
   itemId: string,
-  confirmAppealWithdraw?: boolean
+  confirmWithdrawAppeal?: boolean
 ): Promise<ResubmitResult> {
   const body = await api.post<ResubmitResult | { data?: ResubmitResult }>(
     ITEM_RESUBMIT_PATH(itemId),
-    { confirmAppealWithdraw: Boolean(confirmAppealWithdraw) }
+    { confirmWithdrawAppeal: Boolean(confirmWithdrawAppeal) }
   );
   return unwrapApiData(body);
 }
 
 async function createAppeal(
   itemId: string,
-  payload: { reason: string; evidence_urls?: string[] }
+  payload: { reason: string; evidenceUrls?: string[] }
 ): Promise<ItemAppeal> {
   const body = await api.post(ITEM_APPEALS_PATH(itemId), payload);
   const data = unwrapApiData(body) as { appeal?: ItemAppeal } | ItemAppeal;
@@ -110,7 +74,7 @@ async function createAppeal(
 
 async function updateCondition(
   itemId: string,
-  payload: { condition: ItemCondition; wear_note?: string | null }
+  payload: { condition: ItemCondition; wearNote?: string | null }
 ): Promise<ConditionUpdateResult> {
   const body = await api.patch<
     ConditionUpdateResult | { data?: ConditionUpdateResult }
@@ -118,44 +82,54 @@ async function updateCondition(
   return unwrapApiData(body);
 }
 
+async function getCleanupQuote(
+  itemId: string,
+  imageCount: number
+): Promise<AiCleanupQuote> {
+  const qs = `?imageCount=${encodeURIComponent(String(imageCount))}`;
+  const body = await api.get<AiCleanupQuote | { data?: AiCleanupQuote }>(
+    `${ITEM_AI_CLEANUP_QUOTE_PATH(itemId)}${qs}`
+  );
+  return unwrapApiData(body);
+}
+
 async function uploadEvidence(
   itemId: string,
   file: { uri: string; fileName: string; contentType: string }
 ): Promise<string> {
-  const form = new FormData();
-  form.append('file', {
-    uri: file.uri,
-    name: file.fileName,
-    type: file.contentType,
-  } as unknown as Blob);
-  const token = await Auth0DirectService.getAccessToken();
-  const personaHeaders = await buildActivePersonaHeaders();
-  const headers: Record<string, string> = { ...personaHeaders };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(resolveApiUrl(ITEM_APPEAL_EVIDENCE_PATH(itemId)), {
-    method: 'POST',
-    headers,
-    body: form,
-  });
-  const text = await res.text();
-  if (!res.ok) {
-    const error = new Error(text || `API ${res.status}`) as Error & { status?: number };
-    error.status = res.status;
-    throw error;
+  if (!isAllowedEvidenceFile({ type: file.contentType, name: file.fileName })) {
+    throw new Error('Use images or a PDF');
   }
-  const parsed = text ? (JSON.parse(text) as { data?: { url?: string }; url?: string }) : {};
-  return parsed.data?.url ?? parsed.url ?? '';
-}
-
-async function getCleanupCost(
-  itemId: string,
-  imageCount: number
-): Promise<CleanupCostResult> {
-  const qs = `?imageCount=${encodeURIComponent(String(imageCount))}`;
-  const body = await api.get<CleanupCostResult | { data?: CleanupCostResult }>(
-    `${ITEM_CLEANUP_COST_PATH(itemId)}${qs}`
-  );
-  return unwrapApiData(body);
+  const isPdf =
+    file.contentType === 'application/pdf' || file.fileName.toLowerCase().endsWith('.pdf');
+  const presigned = isPdf
+    ? await api.post<{ success?: boolean; data?: { url?: string; key?: string } }>(
+        '/aws/presigned-url/document',
+        {
+          bucketName: S3_BUCKET,
+          originalFileName: file.fileName,
+          contentType: file.contentType,
+          prefix: `items/${itemId}/appeal-evidence`,
+        }
+      )
+    : await awsApi.presignImageUpload({
+        bucketName: S3_BUCKET,
+        originalFileName: file.fileName,
+        contentType: file.contentType,
+        prefix: `items/${itemId}/appeal-evidence`,
+      });
+  const url = presigned.data?.url;
+  const key = presigned.data?.key;
+  if (!url || !key) throw new Error('Failed to prepare evidence upload');
+  const blobRes = await fetch(file.uri);
+  const blob = await blobRes.blob();
+  const putRes = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.contentType },
+    body: blob,
+  });
+  if (!putRes.ok) throw new Error('Failed to upload evidence');
+  return buildS3PublicUrl(key);
 }
 
 async function translateText(
@@ -166,12 +140,7 @@ async function translateText(
     const body = await api.post(ITEM_TRANSLATE_PATH, { text, targetLanguage });
     const data = unwrapApiData(body) as { text?: string };
     return { text: data.text ?? text, available: true };
-  } catch (error: unknown) {
-    if (isNotFoundStatus(error)) return { text, available: false };
-    throw error;
+  } catch {
+    return { text, available: false };
   }
-}
-
-export function recoveryGraphqlFieldList(): string {
-  return ITEM_REJECTION_RECOVERY_GQL_FIELDS;
 }

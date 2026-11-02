@@ -38,11 +38,13 @@ import { brandTokens } from '../theme/brandTokens';
 interface UseBusinessDashboardModulesOptions {
   aggregates: DashboardAggregates | null;
   isRentalFocused: boolean;
+  itemAppealsPending?: number | null;
 }
 
 export function useBusinessDashboardModules({
   aggregates,
   isRentalFocused,
+  itemAppealsPending = null,
 }: UseBusinessDashboardModulesOptions) {
   const { t } = useTranslation();
   const { can, isSuperuser } = usePermissions();
@@ -519,6 +521,19 @@ export function useBusinessDashboardModules({
         path: '/admin/items/moderation',
       },
       {
+        title: t('business.dashboard.manageItemAppeals', 'Item appeals'),
+        description: t(
+          'business.dashboard.manageItemAppealsDescription',
+          'Review merchant appeals of rejected sale items. Oldest SLA first.'
+        ),
+        icon: <ItemsIcon sx={{ fontSize: 40 }} />,
+        count: itemAppealsPending,
+        color: brandTokens.warning.main,
+        requiredPermission: PlatformPermissions.MODERATE_ITEMS,
+        section: 'moderation',
+        path: '/admin/item-appeals',
+      },
+      {
         title: t(
           'business.dashboard.manageItemAiReviews',
           'Sale item AI review audit'
@@ -740,5 +755,5 @@ export function useBusinessDashboardModules({
       adminHubModule,
       hasAdminAccess: isSuperuser || visibleAdminModules.length > 0,
     };
-  }, [aggregates, can, isRentalFocused, isSuperuser, t]);
+  }, [aggregates, can, isRentalFocused, isSuperuser, itemAppealsPending, t]);
 }

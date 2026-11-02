@@ -1622,7 +1622,9 @@
       "loadError": "Could not load moderation queue",
       "actionFailed": "Action failed",
       "refresh": "Refresh",
-      "accessDenied": "You do not have permission to view this page."
+      "accessDenied": "You do not have permission to view this page.",
+      "rejectionCategory": "Rejection category",
+      "categoryRequired": "Choose a rejection category."
     },
     "itemAiReviews": {
       "pageTitle": "Sale item AI review decisions",
@@ -1654,7 +1656,8 @@
       "overrideSaved": "Override applied",
       "refresh": "Refresh",
       "backToModeration": "Item moderation",
-      "accessDenied": "You do not have permission to view this page."
+      "accessDenied": "You do not have permission to view this page.",
+      "rejectionCategory": "Category for force reject"
     },
     "reels": {
       "moderation": {
@@ -2083,6 +2086,57 @@
         "weight": "Weight",
         "count": "Actions"
       }
+    },
+    "itemAppeals": {
+      "tab": "Appeals",
+      "pageTitle": "Item appeals",
+      "queueCount": "{{pending}} pending · {{breached}} past SLA",
+      "backToModeration": "Item moderation",
+      "backToQueue": "Back to appeals",
+      "refresh": "Refresh",
+      "accessDenied": "Access denied",
+      "loadError": "Could not load appeals",
+      "empty": "No appeals in this queue",
+      "itemName": "Sale item",
+      "business": "Business",
+      "category": "Category",
+      "sla": "SLA",
+      "review": "Review",
+      "statusFilter": "Status",
+      "categoryFilter": "Category",
+      "businessFilter": "Business id",
+      "allCategories": "All categories",
+      "status": {
+        "pending": "Pending",
+        "upheld": "Upheld",
+        "overturned": "Overturned",
+        "withdrawn": "Withdrawn"
+      },
+      "slaBreached": "SLA breached",
+      "slaWarning": "SLA due soon",
+      "slaOk": "Due {{when}}",
+      "slaOkShort": "On track",
+      "untitled": "Untitled item",
+      "selfReviewNotice": "This appeal is about a rejection you made. Another moderator should decide it when one is available.",
+      "selfReviewBlocked": "Another moderator must review an appeal of your own decision.",
+      "selfReviewWarning": "You are the only moderator. This decision was recorded with a warning.",
+      "editedSince": "The item changed after the rejection. Overturn will send it back for review.",
+      "rejection": "Original rejection",
+      "appealEvidence": "Appeal",
+      "history": "Item history",
+      "decide": "Decide",
+      "uphold": "Uphold",
+      "overturn": "Overturn",
+      "overturnTo": "After overturn",
+      "approve": "Approve",
+      "reReview": "Re-review",
+      "correctCategory": "Correct category",
+      "note": "Note to the business",
+      "submitDecision": "Submit decision",
+      "decided": "Appeal decided",
+      "currentItem": "Current item",
+      "asRejected": "As rejected",
+      "upholdNoteRequired": "A note is required to uphold this decision."
     }
   },
   "referrals": {
@@ -3213,7 +3267,9 @@
         "missingWhatsapp": "WhatsApp order alerts are not ready. Turn them on so your kitchen has a backup when browser push is missed.",
         "openNotifications": "Notification settings",
         "openLocations": "Locations"
-      }
+      },
+      "manageItemAppeals": "Item appeals",
+      "manageItemAppealsDescription": "Review merchant appeals of rejected sale items. Oldest SLA first."
     },
     "clientCities": {
       "seoTitle": "Where your clients are from",
@@ -4319,6 +4375,9 @@
           "missing_info": "Missing info",
           "pricing": "Pricing",
           "other": "Other"
+        },
+        "errors": {
+          "generic": "This action could not be completed."
         }
       },
       "aiProposal": {

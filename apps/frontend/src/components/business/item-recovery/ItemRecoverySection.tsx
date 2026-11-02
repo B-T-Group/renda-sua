@@ -1,5 +1,5 @@
 import { useSnackbar } from 'notistack';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useUserProfileContext } from '../../../contexts/UserProfileContext';
@@ -8,7 +8,6 @@ import { useItemImages } from '../../../hooks/useItemImages';
 import { useItemRejectionRecovery } from '../../../hooks/useItemRejectionRecovery';
 import type { Item } from '../../../hooks/useItems';
 import type { ItemCondition } from '../../../types/itemRejectionRecovery';
-import type { RecoveryItemSnapshot } from '../../../types/itemRejectionRecovery';
 import {
   isAlteredCleanup,
   isInsufficientTokensError,
@@ -30,8 +29,7 @@ export function ItemRecoverySection({ item, onItemUpdated, onEdit }: Props) {
   const { uploadItemImage, deleteItemImage } = useItemImages();
   const cleanup = useAiImageCleanup();
   const [busy, setBusy] = useState(false);
-  const snapshot = useMemo(() => toSnapshot(item, profile?.business?.ai_tokens), [item, profile?.business?.ai_tokens]);
-  const recoveryApi = useItemRejectionRecovery(item.id, snapshot);
+  const recoveryApi = useItemRejectionRecovery(item.id);
 
   if (!recoveryApi.visible || !recoveryApi.recovery) return null;
 
@@ -44,7 +42,7 @@ export function ItemRecoverySection({ item, onItemUpdated, onEdit }: Props) {
       canResubmit={recoveryApi.canResubmit}
       warnAppealWithdraw={recoveryApi.warnAppealWithdraw}
       appealDisabledReason={recoveryApi.appealDisabledReason}
-      translationAvailable={recoveryApi.recovery.translation_available}
+      translationAvailable={Boolean(item.translation_available)}
       busy={busy}
       onAction={(id) => handleNavAction(id, onEdit)}
       onResubmit={async (confirmWithdraw) => {
@@ -105,26 +103,7 @@ export function ItemRecoverySection({ item, onItemUpdated, onEdit }: Props) {
 }
 
 function handleNavAction(id: RecoveryTileId, onEdit: () => void) {
-  if (id === 'editFields' || id === 'editPrice') onEdit();
-}
-
-function toSnapshot(item: Item, aiTokens?: number | null): RecoveryItemSnapshot {
-  return {
-    id: item.id,
-    moderation_status: item.moderation_status,
-    rejection_reason: item.rejection_reason,
-    rejection_category: item.rejection_category,
-    condition: item.condition,
-    wear_note: item.wear_note,
-    is_used: item.is_used,
-    updated_at: item.updated_at,
-    tokens_used_on_item: item.tokens_used_on_item,
-    ai_tokens: aiTokens ?? 0,
-    current_rejection: item.current_rejection,
-    current_appeal: item.current_appeal,
-    allowed_recovery_actions: item.allowed_recovery_actions,
-    translation_available: item.translation_available,
-  };
+  if (id === 'edit_fields' || id === 'edit_price') onEdit();
 }
 
 async function runBusy(

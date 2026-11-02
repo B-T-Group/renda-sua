@@ -6608,7 +6608,9 @@
         "loadError": "Impossible de charger la file",
         "empty": "Aucun article dans cette file",
         "accessDenied": "Accès refusé",
-        "pageOf": "Page {{page}} sur {{total}}"
+        "pageOf": "Page {{page}} sur {{total}}",
+        "rejectionCategory": "Catégorie de refus",
+        "categoryRequired": "Choisissez une catégorie de refus."
       },
       "aiReviews": {
         "title": "Revues IA des articles",

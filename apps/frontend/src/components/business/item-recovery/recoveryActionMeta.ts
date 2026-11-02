@@ -1,15 +1,12 @@
-import type { RejectionAllowedActions } from '../../../types/itemRejectionRecovery';
+import type { RecoveryTileId } from '../../../types/itemRejectionRecovery';
 
-export type RecoveryTileId = Exclude<
-  keyof RejectionAllowedActions,
-  'resubmit'
->;
+export type { RecoveryTileId };
 
 export const RECOVERY_TILE_META: Record<
-  RecoveryTileId,
+  Exclude<RecoveryTileId, 'resubmit'>,
   { labelKey: string; defaultLabel: string; icon: string }
 > = {
-  aiFix: {
+  ai_fix: {
     labelKey: 'business.items.recovery.action.aiFix',
     defaultLabel: 'Fix photos with AI',
     icon: 'auto_awesome',
@@ -24,12 +21,12 @@ export const RECOVERY_TILE_META: Record<
     defaultLabel: 'Change condition',
     icon: 'sell',
   },
-  editFields: {
+  edit_fields: {
     labelKey: 'business.items.recovery.action.editFields',
     defaultLabel: 'Edit item details',
     icon: 'edit',
   },
-  editPrice: {
+  edit_price: {
     labelKey: 'business.items.recovery.action.editPrice',
     defaultLabel: 'Edit price',
     icon: 'payments',

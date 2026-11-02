@@ -43,6 +43,11 @@ import type {
   AdminItemModerationRow,
   ItemModerationQueueStatus,
 } from '../../types/adminItems';
+import { REJECTION_CATEGORIES } from '../../types/itemRejectionRecovery';
+import {
+  categoryDefaultLabel,
+  categoryLabelKey,
+} from '../../utils/itemRejectionRecovery';
 
 const PAGE_SIZE = 20;
 
@@ -70,6 +75,7 @@ export default function AdminItemModerationScreen() {
   const [rejectItem, setRejectItem] = useState<AdminItemModerationRow | null>(null);
   const [messageItem, setMessageItem] = useState<AdminItemModerationRow | null>(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [rejectCategory, setRejectCategory] = useState('');
   const [messageSubject, setMessageSubject] = useState('');
   const [messageBody, setMessageBody] = useState('');
   const [snack, setSnack] = useState<string | null>(null);
@@ -149,18 +155,23 @@ export default function AdminItemModerationScreen() {
 
   const onConfirmReject = useCallback(async () => {
     const reason = rejectNote.trim();
-    if (!rejectItem || !reason) return;
+    if (!rejectItem || !reason || !rejectCategory) return;
     setActionBusy(true);
     try {
-      const ok = await rejectSaleItem(rejectItem.id, reason);
-      setRejectItem(null);
-      setRejectNote('');
-      if (ok) {
+      const result = await rejectSaleItem(rejectItem.id, reason, rejectCategory);
+      if (result.success) {
+        setRejectItem(null);
+        setRejectNote('');
+        setRejectCategory('');
         setSnack(t('admin.items.moderation.rejectSuccess', 'Item rejected'));
         await load({ silent: true });
-      } else {
-        setSnack(t('admin.items.moderation.actionFailed', 'Action failed'));
+        return;
       }
+      setSnack(
+        result.code === 'ITEM_REJECTION_CATEGORY_REQUIRED'
+          ? t('admin.items.moderation.categoryRequired', 'Choose a rejection category.')
+          : t('admin.items.moderation.actionFailed', 'Action failed')
+      );
     } catch (e: unknown) {
       setSnack(
         e instanceof Error ? e.message : t('admin.items.moderation.actionFailed', 'Action failed')
@@ -168,7 +179,7 @@ export default function AdminItemModerationScreen() {
     } finally {
       setActionBusy(false);
     }
-  }, [load, rejectItem, rejectNote, t]);
+  }, [load, rejectCategory, rejectItem, rejectNote, t]);
 
   const onConfirmMessage = useCallback(async () => {
     const body = messageBody.trim();
@@ -506,6 +517,21 @@ export default function AdminItemModerationScreen() {
                   'Provide a reason. The business will be notified by email.'
                 )}
               </Text>
+              <Text style={[typography.caption, { color: colors.text.secondary, marginBottom: 6 }]}>
+                {t('admin.items.moderation.rejectionCategory', 'Rejection category')}
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: spacing.sm }}>
+                {REJECTION_CATEGORIES.map((category) => (
+                  <Button
+                    key={category}
+                    compact
+                    mode={rejectCategory === category ? 'contained' : 'outlined'}
+                    onPress={() => setRejectCategory(category)}
+                  >
+                    {t(categoryLabelKey(category), categoryDefaultLabel(category))}
+                  </Button>
+                ))}
+              </View>
               <QuickRejectionResponses
                 value={rejectNote}
                 onSelect={(response) => {
@@ -538,7 +564,7 @@ export default function AdminItemModerationScreen() {
                 <Button
                   mode="contained"
                   loading={actionBusy}
-                  disabled={!rejectNote.trim()}
+                  disabled={!rejectNote.trim() || !rejectCategory}
                   buttonColor={colors.error.main}
                   onPress={() => void onConfirmReject()}
                 >

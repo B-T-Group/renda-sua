@@ -5,32 +5,29 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '@/contexts/ThemeContext';
 import type {
   AppealTileDisabledReason,
-  RejectionAllowedActions,
+  RecoveryAction,
+  RecoveryTileId,
+  ResubmitEditLink,
 } from '@/types/itemRejectionRecovery';
-import { visibleRecoveryActions } from '@/utils/itemRejectionRecovery';
+import { visibleRecoveryTiles } from '@/utils/itemRejectionRecovery';
 
-export type RecoveryTileId =
-  | 'aiFix'
-  | 'retake'
-  | 'condition'
-  | 'editFields'
-  | 'editPrice'
-  | 'appeal';
+export type { RecoveryTileId };
 
 const META: Record<
-  RecoveryTileId,
+  Exclude<RecoveryTileId, 'resubmit'>,
   { icon: keyof typeof MaterialCommunityIcons.glyphMap; key: string; fallback: string }
 > = {
-  aiFix: { icon: 'auto-fix', key: 'business.items.recovery.action.aiFix', fallback: 'Fix photos with AI' },
+  ai_fix: { icon: 'auto-fix', key: 'business.items.recovery.action.aiFix', fallback: 'Fix photos with AI' },
   retake: { icon: 'camera-outline', key: 'business.items.recovery.action.retake', fallback: 'Retake photo' },
   condition: { icon: 'tag-outline', key: 'business.items.recovery.action.condition', fallback: 'Change condition' },
-  editFields: { icon: 'pencil-outline', key: 'business.items.recovery.action.editFields', fallback: 'Edit item details' },
-  editPrice: { icon: 'cash', key: 'business.items.recovery.action.editPrice', fallback: 'Edit price' },
+  edit_fields: { icon: 'pencil-outline', key: 'business.items.recovery.action.editFields', fallback: 'Edit item details' },
+  edit_price: { icon: 'cash', key: 'business.items.recovery.action.editPrice', fallback: 'Edit price' },
   appeal: { icon: 'scale-balance', key: 'business.items.recovery.action.appeal', fallback: 'Appeal decision' },
 };
 
 type Props = {
-  actions: RejectionAllowedActions;
+  actions: RecoveryAction[];
+  resubmitEditLink: ResubmitEditLink;
   locked?: boolean;
   appealDisabledReason?: AppealTileDisabledReason;
   onAction: (id: RecoveryTileId) => void;
@@ -38,13 +35,14 @@ type Props = {
 
 export function RecoveryActionTiles({
   actions,
+  resubmitEditLink,
   locked,
   appealDisabledReason,
   onAction,
 }: Props) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
-  const tiles = visibleRecoveryActions(actions) as RecoveryTileId[];
+  const tiles = visibleRecoveryTiles(actions, resubmitEditLink);
 
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>

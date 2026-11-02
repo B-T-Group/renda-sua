@@ -2,7 +2,6 @@ import {
   APPEAL_EVIDENCE_MAX,
   APPEAL_REASON_MAX,
   APPEAL_REASON_MIN,
-  DEFAULT_APPEAL_LIMIT,
   DEFAULT_CLEANUP_TOKEN_COST,
   NOT_ALLOWED_CATEGORIES,
   RECOVERY_ERROR_CODES,
@@ -13,13 +12,14 @@ import {
   type AppealTileDisabledReason,
   type ItemAppeal,
   type ItemCondition,
-  type ItemRejection,
   type ItemRejectionRecovery,
+  type RecoveryAction,
   type RecoveryChipPresentation,
   type RecoveryErrorCode,
-  type RecoveryItemSnapshot,
-  type RejectionAllowedActions,
+  type RecoveryTileId,
   type RejectionCategory,
+  type ResubmitEditLink,
+  type SlaState,
   type WearNoteValidation,
 } from '../types/itemRejectionRecovery';
 
@@ -49,50 +49,17 @@ export function parseRejectionCategory(
   return isRejectionCategory(value) ? value : 'other';
 }
 
-/** Server is source of truth; this map is only used when the API omits actions. */
-export function fallbackAllowedActions(
-  category: RejectionCategory
-): RejectionAllowedActions {
-  if (category === 'prohibited_item' || category === 'counterfeit') {
-    return appealOnlyActions();
-  }
-  return actionsForRecoverableCategory(category);
-}
-
-function appealOnlyActions(): RejectionAllowedActions {
-  return {
-    aiFix: false,
-    retake: false,
-    condition: false,
-    resubmit: false,
-    appeal: true,
-  };
-}
-
-function actionsForRecoverableCategory(
-  category: RejectionCategory
-): RejectionAllowedActions {
-  return {
-    aiFix: category === 'photo_quality' || category === 'other',
-    retake: category !== 'pricing',
-    condition: category !== 'photo_quality' && category !== 'pricing',
-    resubmit: true,
-    appeal: true,
-    editFields: category === 'missing_info',
-    editPrice: category === 'pricing',
-  };
-}
-
 export function isInReviewStatus(status: string | null | undefined): boolean {
   return status === 'pending' || status === 'ai_reviewing';
 }
 
 export function shouldShowRecoveryCard(
-  recovery: ItemRejectionRecovery | null | undefined
+  recovery: ItemRejectionRecovery | null | undefined,
+  pendingResubmit = false
 ): boolean {
   if (!recovery) return false;
-  if (recovery.moderation_status === 'rejected') return true;
-  if (recovery.pending_resubmit) return true;
+  if (pendingResubmit) return true;
+  if (recovery.item.moderationStatus === 'rejected') return true;
   return isVisibleAppeal(recovery.appeal);
 }
 
@@ -123,9 +90,7 @@ function inReviewChip(): RecoveryChipPresentation {
   };
 }
 
-function rejectedChip(
-  category?: string | null
-): RecoveryChipPresentation {
+function rejectedChip(category?: string | null): RecoveryChipPresentation {
   if (isNotAllowedCategory(category)) {
     return {
       tone: 'error',
@@ -199,9 +164,7 @@ export function validateWearNote(
 ): WearNoteValidation {
   if (condition === 'new') return { valid: true };
   const trimmed = (note ?? '').trim();
-  if (!trimmed) {
-    return wearError('required', 'Describe the wear');
-  }
+  if (!trimmed) return wearError('required', 'Describe the wear');
   if (trimmed.length < WEAR_NOTE_MIN) {
     return wearError('tooShort', `Use at least ${WEAR_NOTE_MIN} characters`);
   }
@@ -215,9 +178,10 @@ function wearError(
   kind: 'required' | 'tooShort' | 'tooLong',
   defaultMessage: string
 ): WearNoteValidation {
+  const suffix = kind[0].toUpperCase() + kind.slice(1);
   return {
     valid: false,
-    errorKey: `business.items.recovery.condition.wear${kind[0].toUpperCase()}${kind.slice(1)}`,
+    errorKey: `business.items.recovery.condition.wear${suffix}`,
     defaultMessage,
   };
 }
@@ -250,8 +214,7 @@ export function isAllowedEvidenceFile(file: {
   const type = (file.type ?? '').toLowerCase();
   const name = (file.name ?? '').toLowerCase();
   if (type.startsWith('image/')) return true;
-  if (type === 'application/pdf' || name.endsWith('.pdf')) return true;
-  return false;
+  return type === 'application/pdf' || name.endsWith('.pdf');
 }
 
 export function validateAppealEvidence(
@@ -275,19 +238,20 @@ export function validateAppealEvidence(
 }
 
 export function getAppealTileDisabledReason(input: {
-  allowed: boolean;
+  canAppeal: boolean;
   pendingResubmit: boolean;
-  allowanceRemaining: number;
+  appealsUsed: number;
+  appealLimit: number;
   appealStatus?: string | null;
 }): AppealTileDisabledReason {
-  if (!input.allowed) return 'not_allowed';
   if (input.pendingResubmit) return 'in_review';
   if (input.appealStatus === 'pending') return 'in_review';
-  if (input.allowanceRemaining <= 0) return 'allowance_used';
+  if (input.canAppeal) return null;
+  if (input.appealsUsed >= input.appealLimit) return 'allowance_used';
   if (input.appealStatus === 'upheld' || input.appealStatus === 'overturned') {
     return 'allowance_used';
   }
-  return null;
+  return 'not_allowed';
 }
 
 export function isResubmitEnabled(input: {
@@ -340,113 +304,95 @@ function readErrorCode(error: unknown): string | null {
   const response = record.response as { data?: Record<string, unknown> } | undefined;
   const data = response?.data ?? (record.data as Record<string, unknown> | undefined);
   if (data && typeof data.code === 'string') return data.code;
-  if (data && typeof data.error === 'string') return data.error;
   return null;
 }
 
 export function isInsufficientTokensError(error: unknown): boolean {
-  return extractRecoveryErrorCode(error) === RECOVERY_ERROR_CODES.INSUFFICIENT_TOKENS;
+  return extractRecoveryErrorCode(error) === RECOVERY_ERROR_CODES.INSUFFICIENT_AI_TOKENS;
 }
 
-export function isNotFoundStatus(error: unknown): boolean {
-  if (!error || typeof error !== 'object') return false;
-  const record = error as Record<string, unknown>;
-  if (record.status === 404) return true;
-  const response = record.response as { status?: number } | undefined;
-  return response?.status === 404;
+export function isCategoryRequiredError(error: unknown): boolean {
+  return (
+    extractRecoveryErrorCode(error) ===
+    RECOVERY_ERROR_CODES.ITEM_REJECTION_CATEGORY_REQUIRED
+  );
 }
 
-export function buildLocalRejection(
-  item: RecoveryItemSnapshot
-): ItemRejection | null {
-  if (!item.rejection_reason && !item.rejection_category && !item.current_rejection) {
-    if (item.moderation_status !== 'rejected') return null;
-  }
-  if (item.current_rejection) return item.current_rejection;
-  if (item.moderation_status !== 'rejected' && !item.rejection_reason) return null;
-  return {
-    id: `local-${item.id}`,
-    item_id: item.id,
-    category: parseRejectionCategory(item.rejection_category),
-    reason: item.rejection_reason ?? '',
-    created_at: item.updated_at ?? new Date(0).toISOString(),
+export function recoveryErrorI18n(code: RecoveryErrorCode | null): {
+  key: string;
+  defaultValue: string;
+} {
+  return RECOVERY_ERROR_COPY[code ?? ''] ?? {
+    key: 'business.items.recovery.errors.generic',
+    defaultValue: 'This action could not be completed.',
   };
 }
 
-export function synthesizeRecoveryFromItem(
-  item: RecoveryItemSnapshot
-): ItemRejectionRecovery {
-  const rejection = buildLocalRejection(item);
-  const category = rejection?.category ?? parseRejectionCategory(item.rejection_category);
-  const pendingResubmit =
-    isInReviewStatus(item.moderation_status) && Boolean(rejection);
-  return {
-    item_id: item.id,
-    moderation_status: item.moderation_status ?? 'pending',
-    rejection,
-    allowed_actions: item.allowed_recovery_actions ?? fallbackAllowedActions(category),
-    appeal: item.current_appeal ?? null,
-    appeal_history: item.appeal_history ?? [],
-    appeal_allowance_remaining:
-      item.appeal_allowance_remaining ?? DEFAULT_APPEAL_LIMIT,
-    tokens_used_on_item: item.tokens_used_on_item ?? 0,
-    ai_tokens: item.ai_tokens ?? 0,
-    cleanup_token_cost: item.cleanup_token_cost ?? DEFAULT_CLEANUP_TOKEN_COST,
-    condition: item.condition ?? (item.is_used ? 'used' : 'new'),
-    wear_note: item.wear_note ?? null,
-    pending_resubmit: pendingResubmit,
-    translation_available: item.translation_available ?? false,
-  };
-}
-
-export function mergeRecoveryPayload(
-  payload: ItemRejectionRecovery,
-  snapshot?: RecoveryItemSnapshot | null
-): ItemRejectionRecovery {
-  if (!snapshot) return normalizeRecovery(payload);
-  const merged = {
-    ...synthesizeRecoveryFromItem(snapshot),
-    ...payload,
-    allowed_actions: payload.allowed_actions,
-    rejection: payload.rejection ?? buildLocalRejection(snapshot),
-  };
-  return normalizeRecovery(merged);
-}
-
-function normalizeRecovery(payload: ItemRejectionRecovery): ItemRejectionRecovery {
-  const category = payload.rejection
-    ? parseRejectionCategory(payload.rejection.category)
-    : 'other';
-  return {
-    ...payload,
-    allowed_actions: payload.allowed_actions ?? fallbackAllowedActions(category),
-    appeal_history: payload.appeal_history ?? [],
-    tokens_used_on_item: payload.tokens_used_on_item ?? 0,
-    cleanup_token_cost: payload.cleanup_token_cost ?? DEFAULT_CLEANUP_TOKEN_COST,
-    pending_resubmit: Boolean(payload.pending_resubmit),
-  };
-}
-
-export function visibleRecoveryActions(
-  actions: RejectionAllowedActions
-): Array<keyof RejectionAllowedActions> {
-  const order: Array<keyof RejectionAllowedActions> = [
-    'aiFix',
-    'retake',
-    'condition',
-    'editFields',
-    'editPrice',
-    'appeal',
-  ];
-  return order.filter((key) => Boolean(actions[key]));
-}
-
-export function conditionFromUsedFlag(isUsed: boolean | null | undefined): ItemCondition {
-  return isUsed ? 'used' : 'new';
-}
+const RECOVERY_ERROR_COPY: Record<string, { key: string; defaultValue: string }> = {
+  ITEM_APPEAL_WITHDRAW_CONFIRM_REQUIRED: {
+    key: 'business.items.recovery.appeal.withdrawWarn',
+    defaultValue: 'Resubmitting will withdraw your pending appeal.',
+  },
+  ITEM_APPEAL_LIMIT_REACHED: {
+    key: 'business.items.recovery.appeal.disabledAllowance',
+    defaultValue: '1 appeal per decision',
+  },
+  ITEM_RESUBMIT_PENDING: {
+    key: 'business.items.recovery.appeal.disabledInReview',
+    defaultValue: 'In review',
+  },
+  INSUFFICIENT_AI_TOKENS: {
+    key: 'business.items.recovery.aiFix.buy',
+    defaultValue: 'Buy tokens',
+  },
+  ITEM_REJECTION_CATEGORY_REQUIRED: {
+    key: 'admin.itemModeration.categoryRequired',
+    defaultValue: 'Choose a rejection category.',
+  },
+  ITEM_APPEAL_UPHOLD_NOTE_REQUIRED: {
+    key: 'admin.itemAppeals.upholdNoteRequired',
+    defaultValue: 'A note is required to uphold this decision.',
+  },
+  ITEM_APPEAL_SELF_REVIEW_BLOCKED: {
+    key: 'admin.itemAppeals.selfReviewBlocked',
+    defaultValue: 'Another moderator must review an appeal of your own decision.',
+  },
+  ITEM_WEAR_NOTE_REQUIRED: {
+    key: 'business.items.recovery.condition.wearRequired',
+    defaultValue: 'Describe the wear',
+  },
+};
 
 export function usedFlagFromCondition(condition: ItemCondition): boolean {
   return condition === 'used' || condition === 'refurbished';
+}
+
+export type VisibleRecoveryTileId = Exclude<RecoveryTileId, 'resubmit'>;
+
+export function visibleRecoveryTiles(
+  actions: RecoveryAction[],
+  resubmitEditLink: ResubmitEditLink
+): VisibleRecoveryTileId[] {
+  const tiles: VisibleRecoveryTileId[] = [];
+  for (const action of actions) {
+    if (action !== 'resubmit') tiles.push(action);
+  }
+  if (resubmitEditLink === 'fields') insertBeforeAppeal(tiles, 'edit_fields');
+  if (resubmitEditLink === 'price') insertBeforeAppeal(tiles, 'edit_price');
+  return tiles;
+}
+
+function insertBeforeAppeal(
+  tiles: VisibleRecoveryTileId[],
+  extra: VisibleRecoveryTileId
+) {
+  if (tiles.includes(extra)) return;
+  const appealAt = tiles.indexOf('appeal');
+  if (appealAt === -1) {
+    tiles.push(extra);
+    return;
+  }
+  tiles.splice(appealAt, 0, extra);
 }
 
 export function unwrapApiData<T>(body: { success?: boolean; data?: T } | T): T {
@@ -456,7 +402,18 @@ export function unwrapApiData<T>(body: { success?: boolean; data?: T } | T): T {
   return body as T;
 }
 
-export function recoveryDeepLinkItemId(data: Record<string, unknown> | undefined): string | null {
+export function slaBadgeTone(
+  state: SlaState | null | undefined
+): 'success' | 'warning' | 'error' | 'default' {
+  if (state === 'breached') return 'error';
+  if (state === 'warning') return 'warning';
+  if (state === 'ok') return 'success';
+  return 'default';
+}
+
+export function recoveryDeepLinkItemId(
+  data: Record<string, unknown> | undefined
+): string | null {
   if (!data) return null;
   const keys = ['itemId', 'item_id', 'entity_id', 'entityId'];
   for (const key of keys) {

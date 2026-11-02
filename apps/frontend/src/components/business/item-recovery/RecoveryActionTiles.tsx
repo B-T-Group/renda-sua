@@ -7,22 +7,27 @@ import SellIcon from '@mui/icons-material/Sell';
 import { Box, ButtonBase, Tooltip, Typography } from '@mui/material';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { RejectionAllowedActions } from '../../../types/itemRejectionRecovery';
-import type { AppealTileDisabledReason } from '../../../types/itemRejectionRecovery';
-import { visibleRecoveryActions } from '../../../utils/itemRejectionRecovery';
-import { RECOVERY_TILE_META, type RecoveryTileId } from './recoveryActionMeta';
+import type {
+  AppealTileDisabledReason,
+  RecoveryAction,
+  RecoveryTileId,
+  ResubmitEditLink,
+} from '../../../types/itemRejectionRecovery';
+import { visibleRecoveryTiles } from '../../../utils/itemRejectionRecovery';
+import { RECOVERY_TILE_META } from './recoveryActionMeta';
 
-const ICONS: Record<RecoveryTileId, ReactNode> = {
-  aiFix: <AutoAwesomeIcon />,
+const ICONS: Record<Exclude<RecoveryTileId, 'resubmit'>, ReactNode> = {
+  ai_fix: <AutoAwesomeIcon />,
   retake: <PhotoCameraIcon />,
   condition: <SellIcon />,
-  editFields: <EditIcon />,
-  editPrice: <PaymentsIcon />,
+  edit_fields: <EditIcon />,
+  edit_price: <PaymentsIcon />,
   appeal: <BalanceIcon />,
 };
 
 type Props = {
-  actions: RejectionAllowedActions;
+  actions: RecoveryAction[];
+  resubmitEditLink: ResubmitEditLink;
   locked?: boolean;
   appealDisabledReason?: AppealTileDisabledReason;
   onAction: (id: RecoveryTileId) => void;
@@ -30,12 +35,13 @@ type Props = {
 
 export function RecoveryActionTiles({
   actions,
+  resubmitEditLink,
   locked = false,
   appealDisabledReason,
   onAction,
 }: Props) {
   const { t } = useTranslation();
-  const tiles = visibleRecoveryActions(actions) as RecoveryTileId[];
+  const tiles = visibleRecoveryTiles(actions, resubmitEditLink);
 
   return (
     <Box
@@ -95,7 +101,7 @@ function RecoveryTile({
   secondary,
   onClick,
 }: {
-  id: RecoveryTileId;
+  id: Exclude<RecoveryTileId, 'resubmit'>;
   label: string;
   disabled: boolean;
   tooltip?: string;

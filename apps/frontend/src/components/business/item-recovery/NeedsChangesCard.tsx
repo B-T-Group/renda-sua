@@ -107,8 +107,8 @@ export function NeedsChangesCard({
             ) : null}
             <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 1 }}>
               {t('business.items.recovery.tokensUsed', {
-                n: recovery.tokens_used_on_item,
-                defaultValue: `Tokens used on this item: ${recovery.tokens_used_on_item}`,
+                n: recovery.aiCleanup.tokensSpentOnItem,
+                defaultValue: `Tokens used on this item: ${recovery.aiCleanup.tokensSpentOnItem}`,
               })}
             </Typography>
           </Box>
@@ -122,11 +122,12 @@ export function NeedsChangesCard({
         ) : null}
         <Box sx={{ mt: 2 }}>
           <RecoveryActionTiles
-            actions={recovery.allowed_actions}
+            actions={recovery.actions}
+            resubmitEditLink={recovery.resubmitEditLink}
             locked={locked}
             appealDisabledReason={appealDisabledReason}
             onAction={(id) => {
-              if (id === 'editFields' || id === 'editPrice') {
+              if (id === 'edit_fields' || id === 'edit_price') {
                 onAction(id);
                 return;
               }
@@ -225,10 +226,10 @@ function CardDialogs({
   return (
     <>
       <AiFixPhotosDialog
-        open={dialog === 'aiFix'}
+        open={dialog === 'ai_fix'}
         images={photos}
-        balance={recovery.ai_tokens}
-        costPerImage={recovery.cleanup_token_cost}
+        balance={recovery.aiCleanup.tokenBalance}
+        costPerImage={recovery.aiCleanup.costPerImage}
         running={busy}
         onClose={onClose}
         onBuyTokens={onBuyTokens}
@@ -248,8 +249,8 @@ function CardDialogs({
       />
       <ChangeConditionDialog
         open={dialog === 'condition'}
-        initialCondition={recovery.condition ?? 'new'}
-        initialWearNote={recovery.wear_note}
+        initialCondition={recovery.item.condition ?? 'new'}
+        initialWearNote={recovery.item.wearNote}
         saving={busy}
         onClose={onClose}
         onSave={async (condition, wearNote) => {

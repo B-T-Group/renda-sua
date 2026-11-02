@@ -2,10 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ItemImage } from '../types/image';
 import type { FoodAvailabilitySlot } from '../types/food';
 import type {
-  ItemAppeal,
   ItemCondition,
-  ItemRejection,
-  RejectionAllowedActions,
   RejectionCategory,
 } from '../types/itemRejectionRecovery';
 import { useApiClient } from './useApiClient';
@@ -52,10 +49,6 @@ export interface Item {
   rejection_category?: RejectionCategory | null;
   condition?: ItemCondition | null;
   wear_note?: string | null;
-  tokens_used_on_item?: number | null;
-  current_rejection?: ItemRejection | null;
-  current_appeal?: ItemAppeal | null;
-  allowed_recovery_actions?: RejectionAllowedActions | null;
   translation_available?: boolean | null;
   stripe_tax_code_id?: string | null;
   stripe_tax_code?: {

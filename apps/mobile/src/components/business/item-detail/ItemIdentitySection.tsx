@@ -37,7 +37,7 @@ export function ItemIdentitySection({
   const moderation = item.moderation_status;
   const pendingResubmit =
     moderation === 'pending' || moderation === 'ai_reviewing'
-      ? Boolean(item.rejection_reason || item.current_rejection)
+      ? Boolean(item.rejection_reason)
       : false;
   const displayOptions = {
     category: item.rejection_category,

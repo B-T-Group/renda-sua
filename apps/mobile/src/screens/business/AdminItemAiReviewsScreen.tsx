@@ -38,6 +38,11 @@ import type {
   AdminItemModerationPagination,
   ItemAiReviewAuditStatus,
 } from '../../types/adminItems';
+import { REJECTION_CATEGORIES } from '../../types/itemRejectionRecovery';
+import {
+  categoryDefaultLabel,
+  categoryLabelKey,
+} from '../../utils/itemRejectionRecovery';
 
 const PAGE_SIZE = 20;
 
@@ -62,6 +67,8 @@ export default function AdminItemAiReviewsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [detail, setDetail] = useState<AdminItemAiReviewDetail | null>(null);
   const [notes, setNotes] = useState('');
+  const [rejectCategory, setRejectCategory] = useState('');
+  const [rejectCategory, setRejectCategory] = useState('');
   const [busy, setBusy] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const openDetailRequestRef = React.useRef(0);
@@ -93,6 +100,7 @@ export default function AdminItemAiReviewsScreen() {
       if (requestId !== openDetailRequestRef.current) return;
       setDetail(row);
       setNotes(row.admin_feedback_notes ?? '');
+      setRejectCategory('');
     } catch (e: unknown) {
       if (requestId !== openDetailRequestRef.current) return;
       setSnack(e instanceof Error ? e.message : 'Failed to load detail');
@@ -132,9 +140,26 @@ export default function AdminItemAiReviewsScreen() {
     action: 'force_approve' | 'force_reject' | 'force_requeue'
   ) => {
     if (!detail) return;
+    if (action === 'force_reject' && !rejectCategory) {
+      setSnack(t('admin.items.moderation.categoryRequired', 'Choose a rejection category.'));
+      return;
+    }
     setBusy(true);
     try {
-      await overrideItemAiReview(detail.id, action, notes.trim() || undefined);
+      const result = await overrideItemAiReview(
+        detail.id,
+        action,
+        notes.trim() || undefined,
+        action === 'force_reject' ? rejectCategory : undefined
+      );
+      if (!result.success) {
+        setSnack(
+          result.code === 'ITEM_REJECTION_CATEGORY_REQUIRED'
+            ? t('admin.items.moderation.categoryRequired', 'Choose a rejection category.')
+            : t('admin.items.aiReviews.actionFailed', 'Action failed')
+        );
+        return;
+      }
       setSnack(t('admin.items.aiReviews.overrideSaved', 'Override applied'));
       setDetail(null);
       void load({ silent: true });
@@ -302,6 +327,21 @@ export default function AdminItemAiReviewsScreen() {
               <Text style={{ color: colors.text.secondary, marginTop: 8, fontSize: 12 }}>
                 {JSON.stringify(detail?.rubric ?? {}, null, 2)}
               </Text>
+              <Text style={{ marginTop: 12 }}>
+                {t('admin.items.moderation.rejectionCategory', 'Rejection category')}
+              </Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                {REJECTION_CATEGORIES.map((category) => (
+                  <Button
+                    key={category}
+                    compact
+                    mode={rejectCategory === category ? 'contained' : 'outlined'}
+                    onPress={() => setRejectCategory(category)}
+                  >
+                    {t(categoryLabelKey(category), categoryDefaultLabel(category))}
+                  </Button>
+                ))}
+              </View>
               <TextInput
                 mode="outlined"
                 multiline
@@ -322,7 +362,10 @@ export default function AdminItemAiReviewsScreen() {
             <Button disabled={busy} onPress={() => void onOverride('force_approve')}>
               {t('admin.items.aiReviews.forceApprove', 'Force approve')}
             </Button>
-            <Button disabled={busy} onPress={() => void onOverride('force_reject')}>
+            <Button
+              disabled={busy || !rejectCategory}
+              onPress={() => void onOverride('force_reject')}
+            >
               {t('admin.items.aiReviews.forceReject', 'Force reject')}
             </Button>
             <Button disabled={busy} onPress={() => void onOverride('force_requeue')}>

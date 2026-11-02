@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type {
   ItemCondition,
   ItemRejectionRecovery,
-  RecoveryItemSnapshot,
 } from '../types/itemRejectionRecovery';
 import { itemRejectionRecoveryApi } from '../services/itemRejectionRecoveryApi';
 import {
@@ -10,48 +9,30 @@ import {
   isResubmitEnabled,
   shouldShowRecoveryCard,
   shouldWarnAppealWithdraw,
-  synthesizeRecoveryFromItem,
 } from '../utils/itemRejectionRecovery';
 
-export function useItemRejectionRecovery(
-  itemId: string | undefined,
-  snapshot?: RecoveryItemSnapshot | null
-) {
-  const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
-  const snapshotKey = [
-    snapshot?.id,
-    snapshot?.moderation_status,
-    snapshot?.rejection_reason,
-    snapshot?.rejection_category,
-    snapshot?.ai_tokens,
-    snapshot?.current_appeal?.id,
-    snapshot?.current_appeal?.status,
-  ].join('|');
+export function useItemRejectionRecovery(itemId: string | undefined) {
   const [recovery, setRecovery] = useState<ItemRejectionRecovery | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
+  const [pendingResubmit, setPendingResubmit] = useState(false);
 
   const load = useCallback(async () => {
     if (!itemId) return;
     setLoading(true);
     setError(null);
     try {
-      const next = await itemRejectionRecoveryApi.getRecovery(
-        itemId,
-        snapshotRef.current
-      );
+      const next = await itemRejectionRecoveryApi.getRecovery(itemId);
       setRecovery(next);
+      if (next.item.moderationStatus === 'rejected') setPendingResubmit(false);
     } catch (err: unknown) {
-      if (snapshotRef.current) {
-        setRecovery(synthesizeRecoveryFromItem(snapshotRef.current));
-      }
+      setRecovery(null);
       setError(err instanceof Error ? err.message : 'Failed to load recovery');
     } finally {
       setLoading(false);
     }
-  }, [itemId, snapshotKey]);
+  }, [itemId]);
 
   useEffect(() => {
     void load();
@@ -60,25 +41,14 @@ export function useItemRejectionRecovery(
   const markChanged = useCallback(() => setHasLocalChanges(true), []);
 
   const submitResubmit = useCallback(
-    async (confirmAppealWithdraw?: boolean) => {
+    async (confirmWithdrawAppeal?: boolean) => {
       if (!itemId) throw new Error('Missing item');
       const result = await itemRejectionRecoveryApi.resubmit(
         itemId,
-        confirmAppealWithdraw
+        confirmWithdrawAppeal
       );
-      setRecovery((current) =>
-        current
-          ? {
-              ...current,
-              moderation_status: result.moderation_status,
-              pending_resubmit: true,
-              appeal:
-                result.withdrawn_appeal_id && current.appeal
-                  ? { ...current.appeal, status: 'withdrawn' }
-                  : current.appeal,
-            }
-          : current
-      );
+      setPendingResubmit(true);
+      setRecovery((current) => applyResubmit(current, result.withdrewAppealId));
       return result;
     },
     [itemId]
@@ -89,10 +59,18 @@ export function useItemRejectionRecovery(
       if (!itemId) throw new Error('Missing item');
       const appeal = await itemRejectionRecoveryApi.createAppeal(itemId, {
         reason,
-        evidence_urls: evidenceUrls,
+        evidenceUrls,
       });
       setRecovery((current) =>
-        current ? { ...current, appeal, appeal_allowance_remaining: 0 } : current
+        current
+          ? {
+              ...current,
+              appeal,
+              canAppeal: false,
+              appealsUsed: current.appealsUsed + 1,
+              resubmitWithdrawsAppeal: true,
+            }
+          : current
       );
       return appeal;
     },
@@ -104,11 +82,18 @@ export function useItemRejectionRecovery(
       if (!itemId) throw new Error('Missing item');
       const result = await itemRejectionRecoveryApi.updateCondition(itemId, {
         condition,
-        wear_note: wearNote,
+        wearNote,
       });
       setRecovery((current) =>
         current
-          ? { ...current, condition: result.condition, wear_note: result.wear_note }
+          ? {
+              ...current,
+              item: {
+                ...current.item,
+                condition: result.condition,
+                wearNote: result.wearNote,
+              },
+            }
           : current
       );
       setHasLocalChanges(true);
@@ -117,13 +102,14 @@ export function useItemRejectionRecovery(
     [itemId]
   );
 
-  const visible = shouldShowRecoveryCard(recovery);
-  const locked = Boolean(recovery?.pending_resubmit);
+  const visible = shouldShowRecoveryCard(recovery, pendingResubmit);
+  const locked = pendingResubmit;
   const appealDisabledReason = recovery
     ? getAppealTileDisabledReason({
-        allowed: recovery.allowed_actions.appeal,
-        pendingResubmit: recovery.pending_resubmit,
-        allowanceRemaining: recovery.appeal_allowance_remaining,
+        canAppeal: recovery.canAppeal,
+        pendingResubmit,
+        appealsUsed: recovery.appealsUsed,
+        appealLimit: recovery.appealLimit,
         appealStatus: recovery.appeal?.status,
       })
     : 'not_allowed';
@@ -140,19 +126,37 @@ export function useItemRejectionRecovery(
     submitResubmit,
     submitAppeal,
     saveCondition,
-    uploadEvidence: (
-      file: { uri: string; fileName: string; contentType: string }
-    ) => {
+    uploadEvidence: (file: { uri: string; fileName: string; contentType: string }) => {
       if (!itemId) return Promise.reject(new Error('Missing item'));
       return itemRejectionRecoveryApi.uploadEvidence(itemId, file);
     },
     translateText: itemRejectionRecoveryApi.translateText,
-    getCleanupCost: itemRejectionRecoveryApi.getCleanupCost,
+    getCleanupQuote: itemRejectionRecoveryApi.getCleanupQuote,
     canResubmit: isResubmitEnabled({
-      allowed: Boolean(recovery?.allowed_actions.resubmit),
+      allowed: Boolean(recovery?.canResubmit),
       locked,
     }),
-    warnAppealWithdraw: shouldWarnAppealWithdraw(recovery?.appeal?.status),
+    warnAppealWithdraw:
+      shouldWarnAppealWithdraw(recovery?.appeal?.status) ||
+      Boolean(recovery?.resubmitWithdrawsAppeal),
     appealDisabledReason,
+  };
+}
+
+function applyResubmit(
+  current: ItemRejectionRecovery | null,
+  withdrewAppealId: string | null
+): ItemRejectionRecovery | null {
+  if (!current) return current;
+  return {
+    ...current,
+    item: { ...current.item, moderationStatus: 'pending', statusDisplay: 'in_review' },
+    canResubmit: false,
+    canAppeal: false,
+    resubmitWithdrawsAppeal: false,
+    appeal:
+      withdrewAppealId && current.appeal
+        ? { ...current.appeal, status: 'withdrawn' }
+        : current.appeal,
   };
 }

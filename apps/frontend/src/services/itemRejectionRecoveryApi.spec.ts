@@ -1,9 +1,9 @@
 import {
+  ITEM_AI_CLEANUP_QUOTE_PATH,
   ITEM_APPEALS_PATH,
-  ITEM_REJECTION_RECOVERY_PATH,
+  ITEM_RECOVERY_PATH,
   ITEM_RESUBMIT_PATH,
   createItemRejectionRecoveryApi,
-  recoveryGraphqlFieldList,
 } from './itemRejectionRecoveryApi';
 
 function mockClient() {
@@ -14,77 +14,77 @@ function mockClient() {
   };
 }
 
+const recoveryPayload = {
+  item: {
+    id: 'item-1',
+    name: 'Lamp',
+    moderationStatus: 'rejected',
+    statusDisplay: 'needs_changes',
+    condition: 'new',
+    wearNote: null,
+  },
+  rejection: {
+    id: 'rej-1',
+    category: 'pricing',
+    reason: 'Price looks inconsistent',
+    source: 'admin',
+    decidedBy: 'admin',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  actions: ['resubmit', 'appeal'],
+  resubmitEditLink: 'price',
+  appeal: null,
+  appealsUsed: 0,
+  appealLimit: 1,
+  canAppeal: true,
+  canResubmit: true,
+  resubmitWithdrawsAppeal: false,
+  aiCleanup: { costPerImage: 1, tokenBalance: 8, tokensSpentOnItem: 0 },
+  reviewSlaHours: 24,
+  appealSlaHours: 48,
+};
+
 describe('itemRejectionRecoveryApi', () => {
-  it('loads recovery from the contract endpoint and unwraps data', async () => {
+  it('loads recovery from GET /recovery and unwraps data', async () => {
     const client = mockClient();
-    client.get.mockResolvedValue({
-      data: {
-        success: true,
-        data: {
-          item_id: 'item-1',
-          moderation_status: 'rejected',
-          rejection: {
-            id: 'rej-1',
-            item_id: 'item-1',
-            category: 'pricing',
-            reason: 'Price looks inconsistent',
-            created_at: '2026-01-01T00:00:00.000Z',
-          },
-          allowed_actions: {
-            aiFix: false,
-            retake: false,
-            condition: false,
-            resubmit: true,
-            appeal: true,
-            editPrice: true,
-          },
-          appeal: null,
-          appeal_history: [],
-          appeal_allowance_remaining: 1,
-          tokens_used_on_item: 0,
-          ai_tokens: 8,
-          cleanup_token_cost: 1,
-          condition: 'new',
-          wear_note: null,
-          pending_resubmit: false,
-        },
-      },
-    });
+    client.get.mockResolvedValue({ data: { success: true, data: recoveryPayload } });
     const api = createItemRejectionRecoveryApi(client as never);
     const recovery = await api.getRecovery('item-1');
-    expect(client.get).toHaveBeenCalledWith(ITEM_REJECTION_RECOVERY_PATH('item-1'));
-    expect(recovery.allowed_actions.editPrice).toBe(true);
-    expect(recovery.rejection?.category).toBe('pricing');
+    expect(client.get).toHaveBeenCalledWith(ITEM_RECOVERY_PATH('item-1'));
+    expect(recovery.resubmitEditLink).toBe('price');
+    expect(recovery.actions).toEqual(['resubmit', 'appeal']);
   });
 
-  it('synthesizes recovery from the item snapshot when the endpoint 404s', async () => {
+  it('does not synthesize a payload when GET recovery fails', async () => {
     const client = mockClient();
     client.get.mockRejectedValue({ response: { status: 404 } });
     const api = createItemRejectionRecoveryApi(client as never);
-    const recovery = await api.getRecovery('item-1', {
-      id: 'item-1',
-      moderation_status: 'rejected',
-      rejection_reason: 'Need daylight photos',
+    await expect(api.getRecovery('item-1')).rejects.toMatchObject({
+      response: { status: 404 },
     });
-    expect(recovery.rejection?.reason).toBe('Need daylight photos');
-    expect(recovery.allowed_actions.appeal).toBe(true);
   });
 
-  it('posts resubmit and appeal against the contract paths', async () => {
+  it('posts resubmit with confirmWithdrawAppeal and appeal with evidenceUrls', async () => {
     const client = mockClient();
     client.post
       .mockResolvedValueOnce({
-        data: { data: { moderation_status: 'pending', pending_resubmit: true } },
+        data: {
+          data: {
+            itemId: 'item-1',
+            moderationStatus: 'pending',
+            withdrewAppealId: 'ap-1',
+          },
+        },
       })
       .mockResolvedValueOnce({
         data: {
           data: {
             appeal: {
               id: 'ap-1',
-              rejection_id: 'rej-1',
-              item_id: 'item-1',
+              rejectionId: 'rej-1',
+              itemId: 'item-1',
               reason: 'The price matches the local market.',
-              evidence_urls: [],
+              evidenceUrls: [],
               status: 'pending',
             },
           },
@@ -93,9 +93,9 @@ describe('itemRejectionRecoveryApi', () => {
     const api = createItemRejectionRecoveryApi(client as never);
     const resubmit = await api.resubmit('item-1', true);
     expect(client.post).toHaveBeenCalledWith(ITEM_RESUBMIT_PATH('item-1'), {
-      confirmAppealWithdraw: true,
+      confirmWithdrawAppeal: true,
     });
-    expect(resubmit.moderation_status).toBe('pending');
+    expect(resubmit.moderationStatus).toBe('pending');
     const appeal = await api.createAppeal('item-1', {
       reason: 'The price matches the local market.',
     });
@@ -105,7 +105,27 @@ describe('itemRejectionRecoveryApi', () => {
     expect(appeal.status).toBe('pending');
   });
 
-  it('exports the GraphQL field list for a later rebase', () => {
-    expect(recoveryGraphqlFieldList()).toContain('allowed_recovery_actions');
+  it('quotes AI cleanup on /ai-cleanup-quote', async () => {
+    const client = mockClient();
+    client.get.mockResolvedValue({
+      data: {
+        data: {
+          imageCount: 2,
+          costPerImage: 1,
+          totalCost: 2,
+          tokenBalance: 1,
+          sufficient: false,
+          shortfall: 1,
+          code: 'INSUFFICIENT_AI_TOKENS',
+        },
+      },
+    });
+    const api = createItemRejectionRecoveryApi(client as never);
+    const quote = await api.getCleanupQuote('item-1', 2);
+    expect(client.get).toHaveBeenCalledWith(ITEM_AI_CLEANUP_QUOTE_PATH('item-1'), {
+      params: { imageCount: 2 },
+    });
+    expect(quote.sufficient).toBe(false);
+    expect(quote.code).toBe('INSUFFICIENT_AI_TOKENS');
   });
 });

@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   ItemAppeal,
   ItemCondition,
   ItemRejectionRecovery,
-  RecoveryItemSnapshot,
 } from '../types/itemRejectionRecovery';
 import { createItemRejectionRecoveryApi } from '../services/itemRejectionRecoveryApi';
 import {
@@ -11,48 +10,33 @@ import {
   isResubmitEnabled,
   shouldShowRecoveryCard,
   shouldWarnAppealWithdraw,
-  synthesizeRecoveryFromItem,
 } from '../utils/itemRejectionRecovery';
 import { useApiClient } from './useApiClient';
 
-export function useItemRejectionRecovery(
-  itemId: string | undefined,
-  snapshot?: RecoveryItemSnapshot | null
-) {
+export function useItemRejectionRecovery(itemId: string | undefined) {
   const client = useApiClient();
   const api = useMemo(() => createItemRejectionRecoveryApi(client), [client]);
-  const snapshotRef = useRef(snapshot);
-  snapshotRef.current = snapshot;
-  const snapshotKey = [
-    snapshot?.id,
-    snapshot?.moderation_status,
-    snapshot?.rejection_reason,
-    snapshot?.rejection_category,
-    snapshot?.ai_tokens,
-    snapshot?.current_appeal?.id,
-    snapshot?.current_appeal?.status,
-  ].join('|');
   const [recovery, setRecovery] = useState<ItemRejectionRecovery | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasLocalChanges, setHasLocalChanges] = useState(false);
+  const [pendingResubmit, setPendingResubmit] = useState(false);
 
   const load = useCallback(async () => {
     if (!itemId) return;
     setLoading(true);
     setError(null);
     try {
-      const next = await api.getRecovery(itemId, snapshotRef.current);
+      const next = await api.getRecovery(itemId);
       setRecovery(next);
+      if (next.item.moderationStatus === 'rejected') setPendingResubmit(false);
     } catch (err: any) {
-      if (snapshotRef.current) {
-        setRecovery(synthesizeRecoveryFromItem(snapshotRef.current));
-      }
+      setRecovery(null);
       setError(err?.message || 'Failed to load recovery');
     } finally {
       setLoading(false);
     }
-  }, [api, itemId, snapshotKey]);
+  }, [api, itemId]);
 
   useEffect(() => {
     void load();
@@ -61,22 +45,11 @@ export function useItemRejectionRecovery(
   const markChanged = useCallback(() => setHasLocalChanges(true), []);
 
   const submitResubmit = useCallback(
-    async (confirmAppealWithdraw?: boolean) => {
+    async (confirmWithdrawAppeal?: boolean) => {
       if (!itemId) throw new Error('Missing item');
-      const result = await api.resubmit(itemId, confirmAppealWithdraw);
-      setRecovery((current) =>
-        current
-          ? {
-              ...current,
-              moderation_status: result.moderation_status,
-              pending_resubmit: true,
-              appeal:
-                result.withdrawn_appeal_id && current.appeal
-                  ? { ...current.appeal, status: 'withdrawn' }
-                  : current.appeal,
-            }
-          : current
-      );
+      const result = await api.resubmit(itemId, confirmWithdrawAppeal);
+      setPendingResubmit(true);
+      setRecovery((current) => applyResubmit(current, result.withdrewAppealId));
       return result;
     },
     [api, itemId]
@@ -85,16 +58,15 @@ export function useItemRejectionRecovery(
   const submitAppeal = useCallback(
     async (reason: string, evidenceUrls?: string[]) => {
       if (!itemId) throw new Error('Missing item');
-      const appeal = await api.createAppeal(itemId, {
-        reason,
-        evidence_urls: evidenceUrls,
-      });
+      const appeal = await api.createAppeal(itemId, { reason, evidenceUrls });
       setRecovery((current) =>
         current
           ? {
               ...current,
               appeal,
-              appeal_allowance_remaining: 0,
+              canAppeal: false,
+              appealsUsed: current.appealsUsed + 1,
+              resubmitWithdrawsAppeal: true,
             }
           : current
       );
@@ -106,13 +78,17 @@ export function useItemRejectionRecovery(
   const saveCondition = useCallback(
     async (condition: ItemCondition, wearNote?: string | null) => {
       if (!itemId) throw new Error('Missing item');
-      const result = await api.updateCondition(itemId, {
-        condition,
-        wear_note: wearNote,
-      });
+      const result = await api.updateCondition(itemId, { condition, wearNote });
       setRecovery((current) =>
         current
-          ? { ...current, condition: result.condition, wear_note: result.wear_note }
+          ? {
+              ...current,
+              item: {
+                ...current.item,
+                condition: result.condition,
+                wearNote: result.wearNote,
+              },
+            }
           : current
       );
       setHasLocalChanges(true);
@@ -121,27 +97,14 @@ export function useItemRejectionRecovery(
     [api, itemId]
   );
 
-  const uploadEvidence = useCallback(
-    async (file: File) => {
-      if (!itemId) throw new Error('Missing item');
-      return api.uploadEvidence(itemId, file);
-    },
-    [api, itemId]
-  );
-
-  const translateText = useCallback(
-    (text: string, targetLanguage: 'en' | 'fr') =>
-      api.translateText(text, targetLanguage),
-    [api]
-  );
-
-  const visible = shouldShowRecoveryCard(recovery);
-  const locked = Boolean(recovery?.pending_resubmit);
+  const visible = shouldShowRecoveryCard(recovery, pendingResubmit);
+  const locked = pendingResubmit;
   const appealDisabledReason = recovery
     ? getAppealTileDisabledReason({
-        allowed: recovery.allowed_actions.appeal,
-        pendingResubmit: recovery.pending_resubmit,
-        allowanceRemaining: recovery.appeal_allowance_remaining,
+        canAppeal: recovery.canAppeal,
+        pendingResubmit,
+        appealsUsed: recovery.appealsUsed,
+        appealLimit: recovery.appealLimit,
         appealStatus: recovery.appeal?.status,
       })
     : 'not_allowed';
@@ -158,16 +121,39 @@ export function useItemRejectionRecovery(
     submitResubmit,
     submitAppeal,
     saveCondition,
-    uploadEvidence,
-    translateText,
-    getCleanupCost: api.getCleanupCost,
+    uploadEvidence: (file: File) => {
+      if (!itemId) return Promise.reject(new Error('Missing item'));
+      return api.uploadEvidence(itemId, file);
+    },
+    translateText: api.translateText,
+    getCleanupQuote: api.getCleanupQuote,
     canResubmit: isResubmitEnabled({
-      allowed: Boolean(recovery?.allowed_actions.resubmit),
+      allowed: Boolean(recovery?.canResubmit),
       locked,
     }),
-    warnAppealWithdraw: shouldWarnAppealWithdraw(recovery?.appeal?.status),
+    warnAppealWithdraw:
+      shouldWarnAppealWithdraw(recovery?.appeal?.status) ||
+      Boolean(recovery?.resubmitWithdrawsAppeal),
     appealDisabledReason,
     setAppeal: (appeal: ItemAppeal) =>
       setRecovery((current) => (current ? { ...current, appeal } : current)),
+  };
+}
+
+function applyResubmit(
+  current: ItemRejectionRecovery | null,
+  withdrewAppealId: string | null
+): ItemRejectionRecovery | null {
+  if (!current) return current;
+  return {
+    ...current,
+    item: { ...current.item, moderationStatus: 'pending', statusDisplay: 'in_review' },
+    canResubmit: false,
+    canAppeal: false,
+    resubmitWithdrawsAppeal: false,
+    appeal:
+      withdrewAppealId && current.appeal
+        ? { ...current.appeal, status: 'withdrawn' }
+        : current.appeal,
   };
 }

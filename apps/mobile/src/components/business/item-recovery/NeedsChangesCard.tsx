@@ -91,8 +91,8 @@ export function NeedsChangesCard(props: Props) {
           ) : null}
           <Text variant="labelSmall" style={{ color: colors.text.secondary, marginTop: 6 }}>
             {t('business.items.recovery.tokensUsed', {
-              n: props.recovery.tokens_used_on_item,
-              defaultValue: `Tokens used on this item: ${props.recovery.tokens_used_on_item}`,
+              n: props.recovery.aiCleanup.tokensSpentOnItem,
+              defaultValue: `Tokens used on this item: ${props.recovery.aiCleanup.tokensSpentOnItem}`,
             })}
           </Text>
         </View>
@@ -101,11 +101,12 @@ export function NeedsChangesCard(props: Props) {
         <AppealTimeline appeal={props.recovery.appeal} />
       ) : null}
       <RecoveryActionTiles
-        actions={props.recovery.allowed_actions}
+        actions={props.recovery.actions}
+        resubmitEditLink={props.recovery.resubmitEditLink}
         locked={props.locked}
         appealDisabledReason={props.appealDisabledReason}
         onAction={(id) => {
-          if (id === 'editFields' || id === 'editPrice') {
+          if (id === 'edit_fields' || id === 'edit_price') {
             props.onAction(id);
             return;
           }
@@ -181,8 +182,8 @@ function AppealTimeline({ appeal }: { appeal: ItemAppeal }) {
           {step.label}
         </Text>
       ))}
-      {appeal.admin_note ? (
-        <Text variant="bodySmall">{appeal.admin_note}</Text>
+      {appeal.adminNote ? (
+        <Text variant="bodySmall">{appeal.adminNote}</Text>
       ) : null}
     </View>
   );
@@ -192,8 +193,10 @@ function CardSheets(
   props: Props & { dialog: RecoveryTileId | 'resubmit' | null; onClose: () => void }
 ) {
   const { t } = useTranslation();
-  const [condition, setCondition] = useState<ItemCondition>(props.recovery.condition ?? 'new');
-  const [wearNote, setWearNote] = useState(props.recovery.wear_note ?? '');
+  const [condition, setCondition] = useState<ItemCondition>(
+    props.recovery.item.condition ?? 'new'
+  );
+  const [wearNote, setWearNote] = useState(props.recovery.item.wearNote ?? '');
   const [reason, setReason] = useState('');
   const [replaceId, setReplaceId] = useState<string | null>(null);
   const wear = validateWearNote(condition, wearNote);
@@ -207,7 +210,7 @@ function CardSheets(
   return (
     <>
       <RecoverySheet
-        visible={props.dialog === 'aiFix'}
+        visible={props.dialog === 'ai_fix'}
         title={t('business.items.recovery.action.aiFix', 'Fix photos with AI')}
         onClose={props.onClose}
         footer={

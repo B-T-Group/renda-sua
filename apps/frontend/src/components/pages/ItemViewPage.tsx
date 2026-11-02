@@ -455,7 +455,7 @@ export default function ItemViewPage() {
         pendingResubmit={
           item.moderation_status === 'pending' ||
           item.moderation_status === 'ai_reviewing'
-            ? Boolean(item.rejection_reason || item.current_rejection)
+            ? Boolean(item.rejection_reason)
             : false
         }
         canToggleActive={item.moderation_status === 'approved'}

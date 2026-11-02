@@ -1,46 +1,51 @@
-import { ITEM_REJECTION_RECOVERY_GQL_FIELDS } from '../types/itemRejectionRecovery';
 import {
   cleanupTokenCost,
   extractRecoveryErrorCode,
-  fallbackAllowedActions,
   getAppealTileDisabledReason,
   getRecoveryChipPresentation,
   isAlteredCleanup,
   isItemRecoveryPushType,
   isNotAllowedCategory,
-  mergeRecoveryPayload,
   needsToBuyTokens,
   recoveryDeepLinkItemId,
   shouldShowRecoveryCard,
   shouldWarnAppealWithdraw,
-  synthesizeRecoveryFromItem,
   validateAppealEvidence,
   validateAppealReason,
   validateWearNote,
-  visibleRecoveryActions,
+  visibleRecoveryTiles,
 } from './itemRejectionRecovery';
+import type { ItemRejectionRecovery } from '../types/itemRejectionRecovery';
 
-describe('fallbackAllowedActions', () => {
-  it('allows only appeal for prohibited and counterfeit', () => {
-    expect(fallbackAllowedActions('prohibited_item').appeal).toBe(true);
-    expect(fallbackAllowedActions('prohibited_item').resubmit).toBe(false);
-    expect(fallbackAllowedActions('counterfeit').aiFix).toBe(false);
-  });
-
-  it('matches the spec map for photo_quality and pricing', () => {
-    expect(fallbackAllowedActions('photo_quality')).toMatchObject({
-      aiFix: true,
-      retake: true,
-      condition: false,
-      resubmit: true,
-    });
-    expect(fallbackAllowedActions('pricing')).toMatchObject({
-      editPrice: true,
-      retake: false,
-      resubmit: true,
-    });
-  });
-});
+function rejectedRecovery(): ItemRejectionRecovery {
+  return {
+    item: {
+      id: 'i1',
+      name: 'Lamp',
+      moderationStatus: 'rejected',
+      statusDisplay: 'needs_changes',
+      condition: 'new',
+      wearNote: null,
+    },
+    rejection: {
+      id: 'r1',
+      category: 'wrong_condition',
+      reason: 'Wrong condition',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+    actions: ['retake', 'condition', 'resubmit', 'appeal'],
+    resubmitEditLink: null,
+    appeal: null,
+    appealsUsed: 0,
+    appealLimit: 1,
+    canAppeal: true,
+    canResubmit: true,
+    resubmitWithdrawsAppeal: false,
+    aiCleanup: { costPerImage: 1, tokenBalance: 5, tokensSpentOnItem: 0 },
+    reviewSlaHours: 24,
+    appealSlaHours: 48,
+  };
+}
 
 describe('chip presentation', () => {
   it('maps rejected categories to Needs changes or Not allowed', () => {
@@ -57,99 +62,56 @@ describe('chip presentation', () => {
       }).tone
     ).toBe('error');
   });
-
-  it('shows In review after a resubmit', () => {
-    expect(
-      getRecoveryChipPresentation({
-        status: 'pending',
-        pendingResubmit: true,
-      }).labelKey
-    ).toBe('business.items.recovery.status.inReview');
-  });
 });
 
 describe('validations and gates', () => {
   it('validates wear notes and appeal input', () => {
     expect(validateWearNote('used', 'Has a scratch on the lid').valid).toBe(true);
     expect(validateWearNote('refurbished', 'tiny').valid).toBe(false);
-    expect(validateAppealReason('Please look at this listing again.').valid).toBe(
-      true
-    );
+    expect(validateAppealReason('Please look at this listing again.').valid).toBe(true);
     expect(
-      validateAppealEvidence([{ type: 'application/pdf', name: 'receipt.pdf' }])
-        .valid
+      validateAppealEvidence([{ type: 'application/pdf', name: 'receipt.pdf' }]).valid
     ).toBe(true);
   });
 
   it('disables appeal during review and after the allowance is used', () => {
     expect(
       getAppealTileDisabledReason({
-        allowed: true,
+        canAppeal: true,
         pendingResubmit: true,
-        allowanceRemaining: 1,
+        appealsUsed: 0,
+        appealLimit: 1,
       })
     ).toBe('in_review');
     expect(
       getAppealTileDisabledReason({
-        allowed: true,
+        canAppeal: false,
         pendingResubmit: false,
-        allowanceRemaining: 0,
+        appealsUsed: 1,
+        appealLimit: 1,
       })
     ).toBe('allowance_used');
     expect(shouldWarnAppealWithdraw('pending')).toBe(true);
   });
 });
 
-describe('tokens, merge, and push deep links', () => {
+describe('tokens, tiles, and push deep links', () => {
   it('computes cleanup cost and altered confidence', () => {
     expect(cleanupTokenCost(2, 1)).toBe(2);
     expect(needsToBuyTokens(2, 1)).toBe(true);
     expect(isAlteredCleanup({ confidence_check: 'altered' })).toBe(true);
   });
 
-  it('uses server allowed_actions when present', () => {
-    const merged = mergeRecoveryPayload({
-      item_id: 'i1',
-      moderation_status: 'rejected',
-      rejection: {
-        id: 'r1',
-        item_id: 'i1',
-        category: 'other',
-        reason: 'Need a closer photo',
-        created_at: '2026-01-01T00:00:00.000Z',
-      },
-      allowed_actions: {
-        aiFix: false,
-        retake: true,
-        condition: false,
-        resubmit: true,
-        appeal: true,
-      },
-      appeal: null,
-      appeal_history: [],
-      appeal_allowance_remaining: 1,
-      tokens_used_on_item: 0,
-      ai_tokens: 5,
-      cleanup_token_cost: 1,
-      condition: 'new',
-      wear_note: null,
-      pending_resubmit: false,
-    });
-    expect(visibleRecoveryActions(merged.allowed_actions)).toEqual([
+  it('renders only the actions the server returns plus the edit link', () => {
+    expect(visibleRecoveryTiles(['retake', 'resubmit', 'appeal'], null)).toEqual([
       'retake',
       'appeal',
     ]);
-  });
-
-  it('synthesizes a card for current rejected items', () => {
-    const recovery = synthesizeRecoveryFromItem({
-      id: 'i1',
-      moderation_status: 'rejected',
-      rejection_reason: 'Wrong condition',
-      rejection_category: 'wrong_condition',
-    });
-    expect(shouldShowRecoveryCard(recovery)).toBe(true);
-    expect(recovery.allowed_actions.condition).toBe(true);
+    expect(visibleRecoveryTiles(['resubmit', 'appeal'], 'price')).toEqual([
+      'edit_price',
+      'appeal',
+    ]);
+    expect(shouldShowRecoveryCard(rejectedRecovery())).toBe(true);
   });
 
   it('routes recovery pushes to the item card', () => {
@@ -158,11 +120,9 @@ describe('tokens, merge, and push deep links', () => {
     expect(
       recoveryDeepLinkItemId({ type: 'business_items_rejected', itemId: 'abc' })
     ).toBe('abc');
-    expect(recoveryDeepLinkItemId({ entity_id: 'ent-1' })).toBe('ent-1');
     expect(isNotAllowedCategory('pricing')).toBe(false);
-    expect(extractRecoveryErrorCode({ code: 'EVIDENCE_LIMIT' })).toBe(
-      'EVIDENCE_LIMIT'
-    );
-    expect(ITEM_REJECTION_RECOVERY_GQL_FIELDS).toContain('wear_note');
+    expect(
+      extractRecoveryErrorCode({ code: 'ITEM_APPEAL_EVIDENCE_LIMIT' })
+    ).toBe('ITEM_APPEAL_EVIDENCE_LIMIT');
   });
 });

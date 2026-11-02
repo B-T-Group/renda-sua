@@ -1,6 +1,6 @@
 /**
- * Rejected-item recovery & appeals contract (spec §2–§5).
- * Backend is landing in parallel — keep this the only client shape.
+ * Rejected-item recovery + appeals — matches Nest REST contract (PR #746).
+ * Map `code`, never `error` text.
  */
 
 export type RejectionCategory =
@@ -16,83 +16,118 @@ export type ItemCondition = 'new' | 'used' | 'refurbished';
 
 export type AppealStatus = 'pending' | 'upheld' | 'overturned' | 'withdrawn';
 
-export type RecoveryActionId =
-  | 'aiFix'
-  | 'retake'
-  | 'condition'
-  | 'resubmit'
-  | 'appeal'
-  | 'editFields'
-  | 'editPrice';
+export type RecoveryAction = 'ai_fix' | 'retake' | 'condition' | 'resubmit' | 'appeal';
 
-export interface RejectionAllowedActions {
-  aiFix: boolean;
-  retake: boolean;
-  condition: boolean;
-  resubmit: boolean;
-  appeal: boolean;
-  editFields?: boolean;
-  editPrice?: boolean;
-}
+export type RecoveryTileId = RecoveryAction | 'edit_fields' | 'edit_price';
+
+export type ResubmitEditLink = 'fields' | 'price' | null;
+
+export type StatusDisplay =
+  | 'needs_changes'
+  | 'not_allowed'
+  | 'in_review'
+  | 'approved'
+  | 'draft';
+
+export type SlaState = 'ok' | 'warning' | 'breached';
+
+export type WithdrawnReason = 'resubmitted' | 'item_deleted' | 'business' | 'superseded';
 
 export interface ItemRejection {
   id: string;
-  item_id: string;
-  category: RejectionCategory;
+  category: RejectionCategory | null;
   reason: string;
-  reviewer_id?: string | null;
-  created_at: string;
+  source?: 'admin' | 'ai' | 'backfill';
+  decidedBy?: 'admin' | 'ai';
+  reviewerId?: string | null;
+  createdAt: string;
+  itemSnapshot?: ItemSnapshot | null;
 }
 
 export interface ItemAppeal {
   id: string;
-  rejection_id: string;
-  item_id: string;
-  business_id?: string;
+  rejectionId: string;
+  itemId: string;
+  businessId?: string;
   reason: string;
-  evidence_urls: string[];
+  evidenceUrls: string[];
   status: AppealStatus;
-  admin_id?: string | null;
-  admin_note?: string | null;
-  decided_at?: string | null;
-  sla_due_at?: string | null;
+  adminNote?: string | null;
+  outcomeModerationStatus?: string | null;
+  correctedCategory?: RejectionCategory | null;
+  withdrawnReason?: WithdrawnReason | null;
+  decidedAt?: string | null;
+  slaDueAt?: string | null;
+  slaState?: SlaState | null;
+  createdAt?: string;
+}
+
+export interface RecoveryItemState {
+  id: string;
+  name: string;
+  moderationStatus: string;
+  statusDisplay: StatusDisplay | string;
+  condition: ItemCondition | null;
+  wearNote: string | null;
+}
+
+export interface AiCleanupQuote {
+  imageCount: number;
+  costPerImage: number;
+  totalCost: number;
+  tokenBalance: number;
+  sufficient: boolean;
+  shortfall: number;
+  code: string | null;
 }
 
 export interface ItemRejectionRecovery {
-  item_id: string;
-  moderation_status: string;
+  item: RecoveryItemState;
   rejection: ItemRejection | null;
-  allowed_actions: RejectionAllowedActions;
+  actions: RecoveryAction[];
+  resubmitEditLink: ResubmitEditLink;
   appeal: ItemAppeal | null;
-  appeal_history: ItemAppeal[];
-  appeal_allowance_remaining: number;
-  tokens_used_on_item: number;
-  ai_tokens: number;
-  cleanup_token_cost: number;
-  condition: ItemCondition | null;
-  wear_note: string | null;
-  pending_resubmit: boolean;
-  translation_available?: boolean;
+  appealsUsed: number;
+  appealLimit: number;
+  canAppeal: boolean;
+  canResubmit: boolean;
+  resubmitWithdrawsAppeal: boolean;
+  aiCleanup: {
+    costPerImage: number;
+    tokenBalance: number;
+    tokensSpentOnItem: number;
+  };
+  reviewSlaHours: number;
+  appealSlaHours: number;
 }
 
-export interface RecoveryItemSnapshot {
-  id: string;
-  moderation_status?: string | null;
-  rejection_reason?: string | null;
-  rejection_category?: RejectionCategory | null;
+export interface ItemSnapshot {
+  id?: string;
+  name?: string | null;
+  description?: string | null;
+  price?: number | string | null;
+  currency?: string | null;
   condition?: ItemCondition | null;
   wear_note?: string | null;
   is_used?: boolean | null;
-  updated_at?: string | null;
-  tokens_used_on_item?: number | null;
-  ai_tokens?: number | null;
-  cleanup_token_cost?: number | null;
-  current_rejection?: ItemRejection | null;
-  current_appeal?: ItemAppeal | null;
-  appeal_history?: ItemAppeal[] | null;
-  appeal_allowance_remaining?: number | null;
-  allowed_recovery_actions?: RejectionAllowedActions | null;
-  translation_available?: boolean | null;
+  item_images?: Array<{
+    id?: string;
+    image_url?: string | null;
+    display_order?: number | null;
+  }>;
+}
+
+export interface ResubmitResult {
+  itemId: string;
+  moderationStatus: string;
+  withdrewAppealId: string | null;
+}
+
+export interface ConditionUpdateResult {
+  itemId: string;
+  condition: ItemCondition;
+  wearNote: string | null;
+  isUsed: boolean;
 }
 
 export type AppealTileDisabledReason =
@@ -128,18 +163,24 @@ export interface AppealEvidenceValidation {
 }
 
 export const RECOVERY_ERROR_CODES = {
-  INSUFFICIENT_TOKENS: 'INSUFFICIENT_TOKENS',
-  APPEAL_NOT_ALLOWED: 'APPEAL_NOT_ALLOWED',
-  APPEAL_ALLOWANCE_USED: 'APPEAL_ALLOWANCE_USED',
-  RESUBMIT_PENDING: 'RESUBMIT_PENDING',
+  ITEM_APPEAL_NOT_OWNER: 'ITEM_APPEAL_NOT_OWNER',
+  ITEM_NOT_FOUND: 'ITEM_NOT_FOUND',
+  ITEM_APPEAL_NOT_FOUND: 'ITEM_APPEAL_NOT_FOUND',
   ITEM_NOT_REJECTED: 'ITEM_NOT_REJECTED',
-  REASON_TOO_SHORT: 'REASON_TOO_SHORT',
-  REASON_TOO_LONG: 'REASON_TOO_LONG',
-  EVIDENCE_LIMIT: 'EVIDENCE_LIMIT',
-  APPEAL_PENDING_WITHDRAW_REQUIRED: 'APPEAL_PENDING_WITHDRAW_REQUIRED',
-  WEAR_NOTE_REQUIRED: 'WEAR_NOTE_REQUIRED',
-  WEAR_NOTE_TOO_SHORT: 'WEAR_NOTE_TOO_SHORT',
-  WEAR_NOTE_TOO_LONG: 'WEAR_NOTE_TOO_LONG',
+  ITEM_RESUBMIT_PENDING: 'ITEM_RESUBMIT_PENDING',
+  ITEM_APPEAL_ALREADY_PENDING: 'ITEM_APPEAL_ALREADY_PENDING',
+  ITEM_APPEAL_LIMIT_REACHED: 'ITEM_APPEAL_LIMIT_REACHED',
+  ITEM_APPEAL_NOT_PENDING: 'ITEM_APPEAL_NOT_PENDING',
+  ITEM_APPEAL_WITHDRAW_CONFIRM_REQUIRED: 'ITEM_APPEAL_WITHDRAW_CONFIRM_REQUIRED',
+  ITEM_ACTION_NOT_ALLOWED_FOR_CATEGORY: 'ITEM_ACTION_NOT_ALLOWED_FOR_CATEGORY',
+  ITEM_APPEAL_REASON_LENGTH: 'ITEM_APPEAL_REASON_LENGTH',
+  ITEM_APPEAL_EVIDENCE_LIMIT: 'ITEM_APPEAL_EVIDENCE_LIMIT',
+  ITEM_WEAR_NOTE_REQUIRED: 'ITEM_WEAR_NOTE_REQUIRED',
+  ITEM_WEAR_NOTE_LENGTH: 'ITEM_WEAR_NOTE_LENGTH',
+  ITEM_APPEAL_UPHOLD_NOTE_REQUIRED: 'ITEM_APPEAL_UPHOLD_NOTE_REQUIRED',
+  ITEM_APPEAL_SELF_REVIEW_BLOCKED: 'ITEM_APPEAL_SELF_REVIEW_BLOCKED',
+  ITEM_REJECTION_CATEGORY_REQUIRED: 'ITEM_REJECTION_CATEGORY_REQUIRED',
+  INSUFFICIENT_AI_TOKENS: 'INSUFFICIENT_AI_TOKENS',
 } as const;
 
 export type RecoveryErrorCode =
@@ -160,6 +201,14 @@ export const REJECTION_CATEGORIES: readonly RejectionCategory[] = [
   'other',
 ];
 
+export const RECOVERY_ACTIONS: readonly RecoveryAction[] = [
+  'ai_fix',
+  'retake',
+  'condition',
+  'resubmit',
+  'appeal',
+];
+
 export const APPEAL_REASON_MIN = 20;
 export const APPEAL_REASON_MAX = 500;
 export const APPEAL_EVIDENCE_MAX = 3;
@@ -167,14 +216,5 @@ export const WEAR_NOTE_MIN = 10;
 export const WEAR_NOTE_MAX = 300;
 export const DEFAULT_CLEANUP_TOKEN_COST = 1;
 export const DEFAULT_APPEAL_LIMIT = 1;
-
-/** GraphQL fields the backend will add on `items` (REST is the client path). */
-export const ITEM_REJECTION_RECOVERY_GQL_FIELDS = [
-  'rejection_category',
-  'condition',
-  'wear_note',
-  'tokens_used_on_item',
-  'current_rejection { id category reason created_at reviewer_id }',
-  'current_appeal { id status reason evidence_urls admin_note decided_at sla_due_at }',
-  'allowed_recovery_actions { aiFix retake condition resubmit appeal editFields editPrice }',
-].join('\n');
+export const DEFAULT_APPEAL_SLA_HOURS = 48;
+export const REVIEW_SLA_HOURS = 24;

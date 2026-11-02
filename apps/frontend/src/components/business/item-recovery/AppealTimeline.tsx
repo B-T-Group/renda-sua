@@ -37,13 +37,13 @@ export function AppealTimeline({
           </Box>
         ))}
       </Stack>
-      {appeal.admin_note ? (
+      {appeal.adminNote ? (
         <Box sx={{ mt: 1 }}>
           <Typography variant="caption" color="text.secondary">
             {t('business.items.recovery.appeal.adminNote', 'Reviewer note')}
           </Typography>
           <RejectionReasonBlock
-            text={appeal.admin_note}
+            text={appeal.adminNote}
             translationAvailable={translationAvailable}
             onTranslate={onTranslate}
           />

@@ -32,6 +32,9 @@ import {
   useItemModeration,
   type ItemModerationQueueStatus,
 } from '../../hooks/useItemModeration';
+import type { RejectionCategory } from '../../types/itemRejectionRecovery';
+import { recoveryErrorI18n } from '../../utils/itemRejectionRecovery';
+import { RejectionCategorySelect } from '../admin/RejectionCategorySelect';
 import ItemModerationStatusChip from '../business/ItemModerationStatusChip';
 
 const AdminItemsModerationPage: React.FC = () => {
@@ -52,6 +55,7 @@ const AdminItemsModerationPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectNote, setRejectNote] = useState('');
+  const [rejectCategory, setRejectCategory] = useState<RejectionCategory | ''>('');
   const [actionBusy, setActionBusy] = useState(false);
   const [cleanupBusyId, setCleanupBusyId] = useState<string | null>(null);
 
@@ -108,15 +112,23 @@ const AdminItemsModerationPage: React.FC = () => {
   };
 
   const onConfirmReject = async () => {
-    if (!rejectId || !rejectNote.trim()) return;
+    if (!rejectId || !rejectNote.trim() || !rejectCategory) return;
     setActionBusy(true);
     try {
-      const ok = await rejectItem(rejectId, rejectNote.trim());
-      if (ok) {
+      const result = await rejectItem(
+        rejectId,
+        rejectNote.trim(),
+        rejectCategory
+      );
+      if (result.success) {
         setRejectId(null);
         setRejectNote('');
+        setRejectCategory('');
         reload();
+        return;
       }
+      const copy = recoveryErrorI18n(result.code);
+      enqueueSnackbar(t(copy.key, copy.defaultValue), { variant: 'error' });
     } finally {
       setActionBusy(false);
     }
@@ -192,6 +204,13 @@ const AdminItemsModerationPage: React.FC = () => {
           variant="text"
         >
           {t('admin.itemModeration.aiReviewsLink', 'AI review audit')}
+        </Button>
+        <Button
+          component={RouterLink}
+          to="/admin/item-appeals"
+          variant="contained"
+        >
+          {t('admin.itemAppeals.tab', 'Appeals')}
         </Button>
       </Box>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -287,6 +306,7 @@ const AdminItemsModerationPage: React.FC = () => {
                             onClick={() => {
                               setRejectId(row.id);
                               setRejectNote('');
+                              setRejectCategory('');
                             }}
                           >
                             {t('admin.itemModeration.reject', 'Reject')}
@@ -348,6 +368,11 @@ const AdminItemsModerationPage: React.FC = () => {
               'The business will see this reason in their messages and by email.'
             )}
           </Typography>
+          <RejectionCategorySelect
+            value={rejectCategory}
+            onChange={setRejectCategory}
+            disabled={actionBusy}
+          />
           <TextField
             autoFocus
             fullWidth
@@ -366,7 +391,7 @@ const AdminItemsModerationPage: React.FC = () => {
           <Button
             variant="contained"
             color="error"
-            disabled={!rejectNote.trim() || actionBusy}
+            disabled={!rejectNote.trim() || !rejectCategory || actionBusy}
             onClick={() => void onConfirmReject()}
           >
             {t('admin.itemModeration.reject', 'Reject')}

@@ -1,20 +1,18 @@
 import type { AxiosInstance } from 'axios';
 import type {
+  AiCleanupQuote,
+  ConditionUpdateResult,
   ItemAppeal,
   ItemCondition,
   ItemRejectionRecovery,
-  RecoveryItemSnapshot,
+  ResubmitResult,
 } from '../types/itemRejectionRecovery';
-import { ITEM_REJECTION_RECOVERY_GQL_FIELDS } from '../types/itemRejectionRecovery';
-import {
-  isNotFoundStatus,
-  mergeRecoveryPayload,
-  synthesizeRecoveryFromItem,
-  unwrapApiData,
-} from '../utils/itemRejectionRecovery';
+import { isAllowedEvidenceFile, unwrapApiData } from '../utils/itemRejectionRecovery';
 
-export const ITEM_REJECTION_RECOVERY_PATH = (itemId: string) =>
-  `/business-items/items/${encodeURIComponent(itemId)}/rejection-recovery`;
+const DEFAULT_BUCKET = process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
+
+export const ITEM_RECOVERY_PATH = (itemId: string) =>
+  `/business-items/items/${encodeURIComponent(itemId)}/recovery`;
 
 export const ITEM_RESUBMIT_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/resubmit`;
@@ -22,34 +20,16 @@ export const ITEM_RESUBMIT_PATH = (itemId: string) =>
 export const ITEM_APPEALS_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/appeals`;
 
-export const ITEM_APPEAL_EVIDENCE_PATH = (itemId: string) =>
-  `/business-items/items/${encodeURIComponent(itemId)}/appeals/evidence`;
+export const ITEM_APPEAL_WITHDRAW_PATH = (itemId: string, appealId: string) =>
+  `/business-items/items/${encodeURIComponent(itemId)}/appeals/${encodeURIComponent(appealId)}/withdraw`;
 
 export const ITEM_CONDITION_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/condition`;
 
-export const ITEM_CLEANUP_COST_PATH = (itemId: string) =>
-  `/business-items/items/${encodeURIComponent(itemId)}/cleanup-cost`;
+export const ITEM_AI_CLEANUP_QUOTE_PATH = (itemId: string) =>
+  `/business-items/items/${encodeURIComponent(itemId)}/ai-cleanup-quote`;
 
 export const ITEM_TRANSLATE_PATH = '/ai/translate';
-
-export interface ResubmitResult {
-  moderation_status: string;
-  withdrawn_appeal_id?: string | null;
-  pending_resubmit?: boolean;
-}
-
-export interface ConditionUpdateResult {
-  condition: ItemCondition;
-  wear_note: string | null;
-  is_used: boolean;
-}
-
-export interface CleanupCostResult {
-  cost: number;
-  balance: number;
-  token_cost_per_image: number;
-}
 
 export interface TranslateResult {
   text: string;
@@ -58,22 +38,20 @@ export interface TranslateResult {
 
 export function createItemRejectionRecoveryApi(client: AxiosInstance) {
   return {
-    getRecovery: (itemId: string, snapshot?: RecoveryItemSnapshot | null) =>
-      getRecovery(client, itemId, snapshot),
-    resubmit: (itemId: string, confirmAppealWithdraw?: boolean) =>
-      resubmit(client, itemId, confirmAppealWithdraw),
-    createAppeal: (
-      itemId: string,
-      body: { reason: string; evidence_urls?: string[] }
-    ) => createAppeal(client, itemId, body),
+    getRecovery: (itemId: string) => getRecovery(client, itemId),
+    resubmit: (itemId: string, confirmWithdrawAppeal?: boolean) =>
+      resubmit(client, itemId, confirmWithdrawAppeal),
+    createAppeal: (itemId: string, body: { reason: string; evidenceUrls?: string[] }) =>
+      createAppeal(client, itemId, body),
+    withdrawAppeal: (itemId: string, appealId: string) =>
+      withdrawAppeal(client, itemId, appealId),
     updateCondition: (
       itemId: string,
-      body: { condition: ItemCondition; wear_note?: string | null }
+      body: { condition: ItemCondition; wearNote?: string | null }
     ) => updateCondition(client, itemId, body),
-    uploadEvidence: (itemId: string, file: File) =>
-      uploadEvidence(client, itemId, file),
-    getCleanupCost: (itemId: string, imageCount: number) =>
-      getCleanupCost(client, itemId, imageCount),
+    uploadEvidence: (itemId: string, file: File) => uploadEvidence(client, itemId, file),
+    getCleanupQuote: (itemId: string, imageCount: number) =>
+      getCleanupQuote(client, itemId, imageCount),
     translateText: (text: string, targetLanguage: 'en' | 'fr') =>
       translateText(client, text, targetLanguage),
   };
@@ -81,27 +59,19 @@ export function createItemRejectionRecoveryApi(client: AxiosInstance) {
 
 async function getRecovery(
   client: AxiosInstance,
-  itemId: string,
-  snapshot?: RecoveryItemSnapshot | null
+  itemId: string
 ): Promise<ItemRejectionRecovery> {
-  try {
-    const res = await client.get(ITEM_REJECTION_RECOVERY_PATH(itemId));
-    return mergeRecoveryPayload(unwrapApiData(res.data), snapshot);
-  } catch (error: any) {
-    if (isNotFoundStatus(error) && snapshot) {
-      return synthesizeRecoveryFromItem(snapshot);
-    }
-    throw error;
-  }
+  const res = await client.get(ITEM_RECOVERY_PATH(itemId));
+  return unwrapApiData(res.data);
 }
 
 async function resubmit(
   client: AxiosInstance,
   itemId: string,
-  confirmAppealWithdraw?: boolean
+  confirmWithdrawAppeal?: boolean
 ): Promise<ResubmitResult> {
   const res = await client.post(ITEM_RESUBMIT_PATH(itemId), {
-    confirmAppealWithdraw: Boolean(confirmAppealWithdraw),
+    confirmWithdrawAppeal: Boolean(confirmWithdrawAppeal),
   });
   return unwrapApiData(res.data);
 }
@@ -109,7 +79,7 @@ async function resubmit(
 async function createAppeal(
   client: AxiosInstance,
   itemId: string,
-  body: { reason: string; evidence_urls?: string[] }
+  body: { reason: string; evidenceUrls?: string[] }
 ): Promise<ItemAppeal> {
   const res = await client.post(ITEM_APPEALS_PATH(itemId), body);
   const data = unwrapApiData(res.data) as { appeal?: ItemAppeal } | ItemAppeal;
@@ -119,12 +89,32 @@ async function createAppeal(
   return data as ItemAppeal;
 }
 
+async function withdrawAppeal(
+  client: AxiosInstance,
+  itemId: string,
+  appealId: string
+): Promise<{ appealId: string; status: 'withdrawn' }> {
+  const res = await client.post(ITEM_APPEAL_WITHDRAW_PATH(itemId, appealId), {});
+  return unwrapApiData(res.data);
+}
+
 async function updateCondition(
   client: AxiosInstance,
   itemId: string,
-  body: { condition: ItemCondition; wear_note?: string | null }
+  body: { condition: ItemCondition; wearNote?: string | null }
 ): Promise<ConditionUpdateResult> {
   const res = await client.patch(ITEM_CONDITION_PATH(itemId), body);
+  return unwrapApiData(res.data);
+}
+
+async function getCleanupQuote(
+  client: AxiosInstance,
+  itemId: string,
+  imageCount: number
+): Promise<AiCleanupQuote> {
+  const res = await client.get(ITEM_AI_CLEANUP_QUOTE_PATH(itemId), {
+    params: { imageCount },
+  });
   return unwrapApiData(res.data);
 }
 
@@ -133,24 +123,32 @@ async function uploadEvidence(
   itemId: string,
   file: File
 ): Promise<string> {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await client.post(ITEM_APPEAL_EVIDENCE_PATH(itemId), form, {
-    headers: { 'Content-Type': 'multipart/form-data' },
+  if (!isAllowedEvidenceFile(file)) {
+    throw new Error('Use images or a PDF');
+  }
+  const isPdf =
+    file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+  const path = isPdf ? '/aws/presigned-url/document' : '/aws/presigned-url/image';
+  const res = await client.post(path, {
+    bucketName: DEFAULT_BUCKET,
+    originalFileName: file.name,
+    contentType: file.type,
+    prefix: `items/${itemId}/appeal-evidence`,
   });
-  const data = unwrapApiData(res.data) as { url?: string };
-  return data.url ?? '';
-}
-
-async function getCleanupCost(
-  client: AxiosInstance,
-  itemId: string,
-  imageCount: number
-): Promise<CleanupCostResult> {
-  const res = await client.get(ITEM_CLEANUP_COST_PATH(itemId), {
-    params: { imageCount },
+  const payload = res.data as {
+    success?: boolean;
+    data?: { url?: string; key?: string };
+  };
+  const url = payload.data?.url;
+  const key = payload.data?.key;
+  if (!url || !key) throw new Error('Failed to prepare evidence upload');
+  const putRes = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
   });
-  return unwrapApiData(res.data);
+  if (!putRes.ok) throw new Error('Failed to upload evidence');
+  return `https://${DEFAULT_BUCKET}.s3.amazonaws.com/${key}`;
 }
 
 async function translateText(
@@ -162,12 +160,7 @@ async function translateText(
     const res = await client.post(ITEM_TRANSLATE_PATH, { text, targetLanguage });
     const data = unwrapApiData(res.data) as { text?: string };
     return { text: data.text ?? text, available: true };
-  } catch (error: any) {
-    if (isNotFoundStatus(error)) return { text, available: false };
-    throw error;
+  } catch {
+    return { text, available: false };
   }
-}
-
-export function recoveryGraphqlFieldList(): string {
-  return ITEM_REJECTION_RECOVERY_GQL_FIELDS;
 }

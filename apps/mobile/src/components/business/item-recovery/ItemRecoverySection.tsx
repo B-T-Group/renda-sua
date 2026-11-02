@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -15,7 +15,6 @@ import {
   needsToBuyTokens,
 } from '@/utils/itemRejectionRecovery';
 import type { BusinessCatalogItem } from '@/types/business/items';
-import type { RecoveryItemSnapshot } from '@/types/itemRejectionRecovery';
 import { IMAGE_LIBRARY_PICKER_OPTIONS } from '@/utils/supportedImageFormats';
 import * as ImagePicker from 'expo-image-picker';
 import { NeedsChangesCard } from './NeedsChangesCard';
@@ -33,11 +32,7 @@ export function ItemRecoverySection({ item, onChanged, onEdit, onMessage }: Prop
   const { t, i18n } = useTranslation();
   const navigation = useNavigation<Nav>();
   const { me } = useProfileMe();
-  const snapshot = useMemo(
-    () => toSnapshot(item, me?.business?.ai_tokens),
-    [item, me?.business?.ai_tokens]
-  );
-  const recoveryApi = useItemRejectionRecovery(item.id, snapshot);
+  const recoveryApi = useItemRejectionRecovery(item.id);
   const [busy, setBusy] = useState(false);
   const [selectedAiIds, setSelectedAiIds] = useState<string[]>([]);
   const [evidence, setEvidence] = useState<Array<{ url: string; label: string }>>([]);
@@ -55,7 +50,7 @@ export function ItemRecoverySection({ item, onChanged, onEdit, onMessage }: Prop
     .map((image) => ({ id: image.id as string, image_url: image.image_url as string }));
   const cost = cleanupTokenCost(
     selectedAiIds.length || 1,
-    recoveryApi.recovery.cleanup_token_cost
+    recoveryApi.recovery.aiCleanup.costPerImage
   );
 
   return (
@@ -76,15 +71,15 @@ export function ItemRecoverySection({ item, onChanged, onEdit, onMessage }: Prop
       }
       aiCostLabel={t('business.items.recovery.aiFix.cost', {
         n: cost,
-        m: recoveryApi.recovery.ai_tokens,
-        defaultValue: `Cost: ${cost} tokens · You have ${recoveryApi.recovery.ai_tokens}`,
+        m: recoveryApi.recovery.aiCleanup.tokenBalance,
+        defaultValue: `Cost: ${cost} tokens · You have ${recoveryApi.recovery.aiCleanup.tokenBalance}`,
       })}
-      needsBuyTokens={needsToBuyTokens(cost, recoveryApi.recovery.ai_tokens)}
+      needsBuyTokens={needsToBuyTokens(cost, recoveryApi.recovery.aiCleanup.tokenBalance)}
       compare={compare}
-      translationAvailable={recoveryApi.recovery.translation_available}
+      translationAvailable={Boolean(item.translation_available)}
       evidenceLabels={evidence.map((file) => file.label)}
       onAction={(id) => {
-        if (id === 'editFields' || id === 'editPrice') onEdit();
+        if (id === 'edit_fields' || id === 'edit_price') onEdit();
       }}
       onResubmit={async (confirmWithdraw) => {
         setBusy(true);
@@ -166,27 +161,6 @@ export function ItemRecoverySection({ item, onChanged, onEdit, onMessage }: Prop
       }}
     />
   );
-}
-
-function toSnapshot(
-  item: BusinessCatalogItem,
-  aiTokens?: number | null
-): RecoveryItemSnapshot {
-  return {
-    id: item.id,
-    moderation_status: item.moderation_status,
-    rejection_reason: item.rejection_reason,
-    rejection_category: item.rejection_category,
-    condition: item.condition,
-    wear_note: item.wear_note,
-    is_used: item.is_used,
-    tokens_used_on_item: item.tokens_used_on_item,
-    ai_tokens: aiTokens ?? 0,
-    current_rejection: item.current_rejection,
-    current_appeal: item.current_appeal,
-    allowed_recovery_actions: item.allowed_recovery_actions,
-    translation_available: item.translation_available,
-  };
 }
 
 async function captureAndAttach(
