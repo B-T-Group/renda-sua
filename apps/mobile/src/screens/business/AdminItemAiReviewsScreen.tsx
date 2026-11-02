@@ -68,7 +68,6 @@ export default function AdminItemAiReviewsScreen() {
   const [detail, setDetail] = useState<AdminItemAiReviewDetail | null>(null);
   const [notes, setNotes] = useState('');
   const [rejectCategory, setRejectCategory] = useState('');
-  const [rejectCategory, setRejectCategory] = useState('');
   const [busy, setBusy] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const openDetailRequestRef = React.useRef(0);
