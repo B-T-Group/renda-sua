@@ -1,5 +1,6 @@
 import {
   ITEM_AI_CLEANUP_QUOTE_PATH,
+  ITEM_APPEAL_EVIDENCE_UPLOAD_PATH,
   ITEM_APPEALS_PATH,
   ITEM_RECOVERY_PATH,
   ITEM_RESUBMIT_PATH,
@@ -103,6 +104,42 @@ describe('itemRejectionRecoveryApi', () => {
       reason: 'The price matches the local market.',
     });
     expect(appeal.status).toBe('pending');
+  });
+
+  it('requests an appeal-evidence upload URL and PUTs with signed headers', async () => {
+    const client = mockClient();
+    const headers = { 'Content-Type': 'image/jpeg', 'Content-Length': '12' };
+    client.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          uploadUrl: 'https://s3.test/upload',
+          method: 'PUT',
+          headers,
+          key: 'items/item-1/appeal-evidence/abc.jpg',
+          evidenceUrl: 'https://bucket.s3.region.amazonaws.com/items/item-1/appeal-evidence/abc.jpg',
+          expiresAt: '2026-11-02T00:00:00.000Z',
+          maxBytes: 5 * 1024 * 1024,
+        },
+      },
+    });
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const file = new File([new Uint8Array(12)], 'photo.jpg', { type: 'image/jpeg' });
+    const api = createItemRejectionRecoveryApi(client as never);
+    const url = await api.uploadEvidence('item-1', file);
+    expect(client.post).toHaveBeenCalledWith(ITEM_APPEAL_EVIDENCE_UPLOAD_PATH('item-1'), {
+      contentType: 'image/jpeg',
+      fileSize: 12,
+    });
+    expect(fetchMock).toHaveBeenCalledWith('https://s3.test/upload', {
+      method: 'PUT',
+      headers,
+      body: file,
+    });
+    expect(url).toBe(
+      'https://bucket.s3.region.amazonaws.com/items/item-1/appeal-evidence/abc.jpg'
+    );
   });
 
   it('quotes AI cleanup on /ai-cleanup-quote', async () => {

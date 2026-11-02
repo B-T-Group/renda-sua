@@ -1,7 +1,7 @@
 import {
-  APPEAL_EVIDENCE_IMAGE_MAX_BYTES,
+  APPEAL_EVIDENCE_CONTENT_TYPES,
   APPEAL_EVIDENCE_MAX,
-  APPEAL_EVIDENCE_PDF_MAX_BYTES,
+  APPEAL_EVIDENCE_MAX_BYTES,
   APPEAL_REASON_MAX,
   APPEAL_REASON_MIN,
   DEFAULT_CLEANUP_TOKEN_COST,
@@ -212,25 +212,34 @@ export function validateAppealReason(
   return { valid: true };
 }
 
+export function normalizeEvidenceContentType(
+  type?: string | null,
+  name?: string | null
+): string {
+  const raw = (type ?? '').toLowerCase().split(';')[0].trim();
+  if (raw === 'image/jpg') return 'image/jpeg';
+  if (raw) return raw;
+  const ext = (name ?? '').toLowerCase().split('.').pop();
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg';
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  return raw;
+}
+
 export function isAllowedEvidenceFile(file: {
   type?: string | null;
   name?: string | null;
   size?: number | null;
 }): boolean {
-  const type = (file.type ?? '').toLowerCase().split(';')[0].trim();
+  const type = normalizeEvidenceContentType(file.type, file.name);
   const name = (file.name ?? '').toLowerCase();
-  if (type === 'image/svg+xml' || name.endsWith('.svg')) return false;
-  const isPdf = type === 'application/pdf' || name.endsWith('.pdf');
-  const isImage =
-    type === 'image/jpeg' ||
-    type === 'image/jpg' ||
-    type === 'image/png' ||
-    type === 'image/webp' ||
-    /\.(jpe?g|png|webp)$/.test(name);
-  if (!isPdf && !isImage) return false;
+  if (type === 'image/svg+xml' || name.endsWith('.svg') || name.endsWith('.pdf')) {
+    return false;
+  }
+  const allowed = (APPEAL_EVIDENCE_CONTENT_TYPES as readonly string[]).includes(type);
+  if (!allowed) return false;
   if (file.size == null) return true;
-  const max = isPdf ? APPEAL_EVIDENCE_PDF_MAX_BYTES : APPEAL_EVIDENCE_IMAGE_MAX_BYTES;
-  return file.size <= max;
+  return Number.isInteger(file.size) && file.size > 0 && file.size <= APPEAL_EVIDENCE_MAX_BYTES;
 }
 
 export function validateAppealEvidence(
@@ -244,10 +253,19 @@ export function validateAppealEvidence(
     };
   }
   if (files.some((file) => !isAllowedEvidenceFile(file))) {
+    const tooLarge = files.some(
+      (file) =>
+        file.size != null &&
+        (file.size <= 0 || file.size > APPEAL_EVIDENCE_MAX_BYTES)
+    );
     return {
       valid: false,
-      errorKey: 'business.items.recovery.appeal.evidenceType',
-      defaultMessage: 'Use images or a PDF',
+      errorKey: tooLarge
+        ? 'business.items.recovery.appeal.evidenceTooLarge'
+        : 'business.items.recovery.appeal.evidenceType',
+      defaultMessage: tooLarge
+        ? 'Photos must be 5 MB or smaller'
+        : 'Use a JPEG, PNG or WebP photo',
     };
   }
   return { valid: true };
@@ -400,6 +418,18 @@ const RECOVERY_ERROR_COPY: Record<string, { key: string; defaultValue: string }>
   ITEM_WEAR_NOTE_REQUIRED: {
     key: 'business.items.recovery.condition.wearRequired',
     defaultValue: 'Describe the wear',
+  },
+  ITEM_APPEAL_EVIDENCE_TYPE_UNSUPPORTED: {
+    key: 'business.items.recovery.appeal.evidenceType',
+    defaultValue: 'Use a JPEG, PNG or WebP photo',
+  },
+  ITEM_APPEAL_EVIDENCE_TOO_LARGE: {
+    key: 'business.items.recovery.appeal.evidenceTooLarge',
+    defaultValue: 'Photos must be 5 MB or smaller',
+  },
+  ITEM_APPEAL_EVIDENCE_URL_INVALID: {
+    key: 'business.items.recovery.appeal.evidenceUrlInvalid',
+    defaultValue: 'That evidence file could not be used. Upload it again.',
   },
 };
 

@@ -126,7 +126,12 @@ export function useItemRejectionRecovery(itemId: string | undefined) {
     submitResubmit,
     submitAppeal,
     saveCondition,
-    uploadEvidence: (file: { uri: string; fileName: string; contentType: string }) => {
+    uploadEvidence: (file: {
+      uri: string;
+      fileName: string;
+      contentType: string;
+      fileSize?: number;
+    }) => {
       if (!itemId) return Promise.reject(new Error('Missing item'));
       return itemRejectionRecoveryApi.uploadEvidence(itemId, file);
     },

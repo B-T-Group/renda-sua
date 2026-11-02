@@ -11,13 +11,8 @@ vi.mock('./apiClient', () => ({
   resolveApiUrl: (path: string) => `https://api.test${path}`,
 }));
 
-vi.mock('./awsApi', () => ({
-  awsApi: { presignImageUpload: vi.fn() },
-  buildS3PublicUrl: (key: string) => `https://cdn.test/${key}`,
-  S3_BUCKET: 'rendasua-uploads',
-}));
-
 import {
+  ITEM_APPEAL_EVIDENCE_UPLOAD_PATH,
   ITEM_APPEALS_PATH,
   ITEM_RECOVERY_PATH,
   itemRejectionRecoveryApi,
@@ -82,18 +77,58 @@ describe('itemRejectionRecoveryApi', () => {
         rejectionId: 'rej-1',
         itemId: 'item-1',
         reason: 'This is an authentic item with a receipt.',
-        evidenceUrls: ['https://cdn.test/receipt.pdf'],
+        evidenceUrls: ['https://cdn.test/photo.jpg'],
         status: 'pending',
       },
     });
     const appeal = await itemRejectionRecoveryApi.createAppeal('item-1', {
       reason: 'This is an authentic item with a receipt.',
-      evidenceUrls: ['https://cdn.test/receipt.pdf'],
+      evidenceUrls: ['https://cdn.test/photo.jpg'],
     });
     expect(post).toHaveBeenCalledWith(ITEM_APPEALS_PATH('item-1'), {
       reason: 'This is an authentic item with a receipt.',
-      evidenceUrls: ['https://cdn.test/receipt.pdf'],
+      evidenceUrls: ['https://cdn.test/photo.jpg'],
     });
     expect(appeal.status).toBe('pending');
+  });
+
+  it('requests an appeal-evidence upload URL and PUTs with signed headers', async () => {
+    const headers = { 'Content-Type': 'image/jpeg', 'Content-Length': '12' };
+    post.mockResolvedValue({
+      data: {
+        uploadUrl: 'https://s3.test/upload',
+        method: 'PUT',
+        headers,
+        key: 'items/item-1/appeal-evidence/abc.jpg',
+        evidenceUrl: 'https://bucket.s3.region.amazonaws.com/items/item-1/appeal-evidence/abc.jpg',
+        expiresAt: '2026-11-02T00:00:00.000Z',
+        maxBytes: 5 * 1024 * 1024,
+      },
+    });
+    const blob = new Blob([new Uint8Array(12)], { type: 'image/jpeg' });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ blob: async () => blob })
+      .mockResolvedValueOnce({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const url = await itemRejectionRecoveryApi.uploadEvidence('item-1', {
+      uri: 'file://photo.jpg',
+      fileName: 'photo.jpg',
+      contentType: 'image/jpeg',
+      fileSize: 12,
+    });
+    expect(post).toHaveBeenCalledWith(ITEM_APPEAL_EVIDENCE_UPLOAD_PATH('item-1'), {
+      contentType: 'image/jpeg',
+      fileSize: 12,
+    });
+    expect(fetchMock).toHaveBeenNthCalledWith(2, 'https://s3.test/upload', {
+      method: 'PUT',
+      headers,
+      body: blob,
+    });
+    expect(url).toBe(
+      'https://bucket.s3.region.amazonaws.com/items/item-1/appeal-evidence/abc.jpg'
+    );
+    vi.unstubAllGlobals();
   });
 });

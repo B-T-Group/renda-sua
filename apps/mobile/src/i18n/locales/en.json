@@ -3702,7 +3702,9 @@
           "reasonTooShort": "Use at least 20 characters",
           "reasonTooLong": "Use at most 500 characters",
           "evidenceLimit": "Add up to 3 files",
-          "evidenceType": "Use images or a PDF"
+          "evidenceType": "Use a JPEG, PNG or WebP photo",
+          "evidenceTooLarge": "Photos must be 5 MB or smaller",
+          "evidenceUrlInvalid": "That evidence file could not be used. Upload it again."
         },
         "resubmit": {
           "confirmNoChanges": "Resubmit this item without more changes?",

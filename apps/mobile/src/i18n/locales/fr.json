@@ -3609,7 +3609,9 @@
           "reasonTooShort": "Utilisez au moins 20 caractères",
           "reasonTooLong": "Utilisez au plus 500 caractères",
           "evidenceLimit": "Ajoutez jusqu'à 3 fichiers",
-          "evidenceType": "Utilisez des images ou un PDF"
+          "evidenceType": "Utilisez une photo JPEG, PNG ou WebP",
+          "evidenceTooLarge": "Les photos doivent faire 5 Mo ou moins",
+          "evidenceUrlInvalid": "Ce fichier de preuve n'a pas pu être utilisé. Téléversez-le à nouveau."
         },
         "resubmit": {
           "confirmNoChanges": "Soumettre à nouveau cet article sans autres modifications ?",

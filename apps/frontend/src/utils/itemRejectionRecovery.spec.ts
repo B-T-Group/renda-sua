@@ -25,8 +25,7 @@ import {
   visibleRecoveryTiles,
 } from './itemRejectionRecovery';
 import {
-  APPEAL_EVIDENCE_IMAGE_MAX_BYTES,
-  APPEAL_EVIDENCE_PDF_MAX_BYTES,
+  APPEAL_EVIDENCE_MAX_BYTES,
   type ItemRejectionRecovery,
 } from '../types/itemRejectionRecovery';
 
@@ -144,7 +143,7 @@ describe('validations', () => {
     ).toBe(true);
   });
 
-  it('allows up to 3 images or PDFs as evidence', () => {
+  it('allows up to 3 JPEG, PNG or WebP photos as evidence', () => {
     expect(validateAppealEvidence([{ type: 'image/png', name: 'a.png' }]).valid).toBe(
       true
     );
@@ -158,41 +157,30 @@ describe('validations', () => {
     ).toBe(false);
   });
 
-  it('rejects SVG evidence and files over the AWS presign caps', () => {
-    // AwsController.MAX_IMAGE_SIZE_BYTES = 10MB; MAX_DOCUMENT_SIZE_BYTES = 50MB.
-    // Image presign also rejects SVG (jpeg/jpg/png/webp only).
+  it('rejects PDF, SVG and files over 5MB', () => {
+    expect(isAllowedEvidenceFile({ type: 'application/pdf', name: 'receipt.pdf' })).toBe(
+      false
+    );
     expect(isAllowedEvidenceFile({ type: 'image/svg+xml', name: 'logo.svg' })).toBe(
       false
     );
-    expect(isAllowedEvidenceFile({ type: 'image/png', name: 'logo.svg' })).toBe(false);
     expect(
       isAllowedEvidenceFile({
         type: 'image/jpeg',
         name: 'photo.jpg',
-        size: APPEAL_EVIDENCE_IMAGE_MAX_BYTES + 1,
-      })
-    ).toBe(false);
-    expect(
-      isAllowedEvidenceFile({
-        type: 'application/pdf',
-        name: 'receipt.pdf',
-        size: APPEAL_EVIDENCE_PDF_MAX_BYTES + 1,
+        size: APPEAL_EVIDENCE_MAX_BYTES + 1,
       })
     ).toBe(false);
     expect(
       isAllowedEvidenceFile({
         type: 'image/webp',
         name: 'photo.webp',
-        size: APPEAL_EVIDENCE_IMAGE_MAX_BYTES,
+        size: APPEAL_EVIDENCE_MAX_BYTES,
       })
     ).toBe(true);
-    expect(
-      isAllowedEvidenceFile({
-        type: 'application/pdf',
-        name: 'receipt.pdf',
-        size: APPEAL_EVIDENCE_PDF_MAX_BYTES,
-      })
-    ).toBe(true);
+    expect(validateAppealEvidence([{ type: 'application/pdf', name: 'receipt.pdf' }]).valid).toBe(
+      false
+    );
   });
 });
 
@@ -259,6 +247,18 @@ describe('error mapping', () => {
     expect(
       recoveryErrorI18n('ITEM_REJECTION_CATEGORY_REQUIRED').key
     ).toBe('admin.itemModeration.categoryRequired');
+    expect(recoveryErrorI18n('ITEM_APPEAL_EVIDENCE_TYPE_UNSUPPORTED')).toEqual({
+      key: 'business.items.recovery.appeal.evidenceType',
+      defaultValue: 'Use a JPEG, PNG or WebP photo',
+    });
+    expect(recoveryErrorI18n('ITEM_APPEAL_EVIDENCE_TOO_LARGE')).toEqual({
+      key: 'business.items.recovery.appeal.evidenceTooLarge',
+      defaultValue: 'Photos must be 5 MB or smaller',
+    });
+    expect(recoveryErrorI18n('ITEM_APPEAL_EVIDENCE_URL_INVALID')).toEqual({
+      key: 'business.items.recovery.appeal.evidenceUrlInvalid',
+      defaultValue: 'That evidence file could not be used. Upload it again.',
+    });
   });
 });
 

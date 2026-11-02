@@ -10,7 +10,10 @@ import {
 } from '@mui/material';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { APPEAL_EVIDENCE_MAX } from '../../../types/itemRejectionRecovery';
+import {
+  APPEAL_EVIDENCE_ACCEPT,
+  APPEAL_EVIDENCE_MAX,
+} from '../../../types/itemRejectionRecovery';
 import {
   validateAppealEvidence,
   validateAppealReason,
@@ -80,7 +83,7 @@ export function AppealDecisionDialog({
             <input
               hidden
               type="file"
-              accept="image/*,.pdf,application/pdf"
+              accept={APPEAL_EVIDENCE_ACCEPT}
               multiple
               onChange={(event) => handleFiles(event.target.files)}
             />

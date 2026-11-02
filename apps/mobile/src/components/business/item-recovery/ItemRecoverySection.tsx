@@ -7,7 +7,7 @@ import { useItemRejectionRecovery } from '@/hooks/useItemRejectionRecovery';
 import type { BusinessRootStackParamList } from '@/navigation/types';
 import { businessApi } from '@/services/businessApi';
 import { uploadBusinessImages } from '@/services/businessImageUpload';
-import { pickCameraPhoto, pickDocumentFile } from '@/utils/documentPickers';
+import { pickAppealEvidenceFile, pickCameraPhoto } from '@/utils/documentPickers';
 import {
   cleanupTokenCost,
   isAlteredCleanup,
@@ -113,7 +113,7 @@ export function ItemRecoverySection({ item, onChanged, onEdit, onMessage }: Prop
         }
       }}
       onAddEvidence={async () => {
-        const picked = await pickDocumentFile();
+        const picked = await pickAppealEvidenceFile();
         if (!picked.ok) return;
         const url = await recoveryApi.uploadEvidence(picked.file);
         if (url) setEvidence((current) => [...current, { url, label: picked.file.fileName }]);

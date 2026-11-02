@@ -9,6 +9,7 @@ import {
   isNotAllowedCategory,
   needsToBuyTokens,
   recoveryDeepLinkItemId,
+  recoveryErrorI18n,
   shouldShowRecoveryCard,
   shouldWarnAppealWithdraw,
   validateAppealEvidence,
@@ -17,8 +18,7 @@ import {
   visibleRecoveryTiles,
 } from './itemRejectionRecovery';
 import {
-  APPEAL_EVIDENCE_IMAGE_MAX_BYTES,
-  APPEAL_EVIDENCE_PDF_MAX_BYTES,
+  APPEAL_EVIDENCE_MAX_BYTES,
   type ItemRejectionRecovery,
 } from '../types/itemRejectionRecovery';
 
@@ -100,7 +100,7 @@ describe('validations and gates', () => {
     expect(validateAppealReason('Please look at this listing again.').valid).toBe(true);
     expect(
       validateAppealEvidence([{ type: 'application/pdf', name: 'receipt.pdf' }]).valid
-    ).toBe(true);
+    ).toBe(false);
     expect(isAllowedEvidenceFile({ type: 'image/svg+xml', name: 'logo.svg' })).toBe(
       false
     );
@@ -108,21 +108,14 @@ describe('validations and gates', () => {
       isAllowedEvidenceFile({
         type: 'image/png',
         name: 'photo.png',
-        size: APPEAL_EVIDENCE_IMAGE_MAX_BYTES + 1,
-      })
-    ).toBe(false);
-    expect(
-      isAllowedEvidenceFile({
-        type: 'application/pdf',
-        name: 'receipt.pdf',
-        size: APPEAL_EVIDENCE_PDF_MAX_BYTES + 1,
+        size: APPEAL_EVIDENCE_MAX_BYTES + 1,
       })
     ).toBe(false);
     expect(
       isAllowedEvidenceFile({
         type: 'image/jpeg',
         name: 'photo.jpg',
-        size: APPEAL_EVIDENCE_IMAGE_MAX_BYTES,
+        size: APPEAL_EVIDENCE_MAX_BYTES,
       })
     ).toBe(true);
   });
@@ -177,5 +170,14 @@ describe('tokens, tiles, and push deep links', () => {
     expect(
       extractRecoveryErrorCode({ code: 'ITEM_APPEAL_EVIDENCE_LIMIT' })
     ).toBe('ITEM_APPEAL_EVIDENCE_LIMIT');
+    expect(recoveryErrorI18n('ITEM_APPEAL_EVIDENCE_TYPE_UNSUPPORTED').key).toBe(
+      'business.items.recovery.appeal.evidenceType'
+    );
+    expect(recoveryErrorI18n('ITEM_APPEAL_EVIDENCE_TOO_LARGE').key).toBe(
+      'business.items.recovery.appeal.evidenceTooLarge'
+    );
+    expect(recoveryErrorI18n('ITEM_APPEAL_EVIDENCE_URL_INVALID').key).toBe(
+      'business.items.recovery.appeal.evidenceUrlInvalid'
+    );
   });
 });

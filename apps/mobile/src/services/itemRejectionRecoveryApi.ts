@@ -1,5 +1,4 @@
 import { api } from './apiClient';
-import { awsApi, buildS3PublicUrl, S3_BUCKET } from './awsApi';
 import type {
   AiCleanupQuote,
   ConditionUpdateResult,
@@ -8,7 +7,11 @@ import type {
   ItemRejectionRecovery,
   ResubmitResult,
 } from '../types/itemRejectionRecovery';
-import { isAllowedEvidenceFile, unwrapApiData } from '../utils/itemRejectionRecovery';
+import {
+  isAllowedEvidenceFile,
+  normalizeEvidenceContentType,
+  unwrapApiData,
+} from '../utils/itemRejectionRecovery';
 
 export const ITEM_RECOVERY_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/recovery`;
@@ -25,7 +28,20 @@ export const ITEM_CONDITION_PATH = (itemId: string) =>
 export const ITEM_AI_CLEANUP_QUOTE_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/ai-cleanup-quote`;
 
+export const ITEM_APPEAL_EVIDENCE_UPLOAD_PATH = (itemId: string) =>
+  `/business-items/items/${encodeURIComponent(itemId)}/appeal-evidence/upload-url`;
+
 export const ITEM_TRANSLATE_PATH = '/ai/translate';
+
+export interface AppealEvidenceUploadTicket {
+  uploadUrl: string;
+  method: 'PUT';
+  headers: { 'Content-Type': string; 'Content-Length': string };
+  key: string;
+  evidenceUrl: string;
+  expiresAt: string;
+  maxBytes: number;
+}
 
 export interface TranslateResult {
   text: string;
@@ -93,43 +109,43 @@ async function getCleanupQuote(
   return unwrapApiData(body);
 }
 
-async function uploadEvidence(
+async function requestEvidenceUploadUrl(
   itemId: string,
-  file: { uri: string; fileName: string; contentType: string }
+  contentType: string,
+  fileSize: number
+): Promise<AppealEvidenceUploadTicket> {
+  const body = await api.post<
+    AppealEvidenceUploadTicket | { data?: AppealEvidenceUploadTicket }
+  >(ITEM_APPEAL_EVIDENCE_UPLOAD_PATH(itemId), { contentType, fileSize });
+  return unwrapApiData(body);
+}
+
+async function putEvidenceFile(
+  ticket: AppealEvidenceUploadTicket,
+  body: Blob
 ): Promise<string> {
-  if (!isAllowedEvidenceFile({ type: file.contentType, name: file.fileName })) {
-    throw new Error('Use images or a PDF');
-  }
-  const isPdf =
-    file.contentType === 'application/pdf' || file.fileName.toLowerCase().endsWith('.pdf');
-  const presigned = isPdf
-    ? await api.post<{ success?: boolean; data?: { url?: string; key?: string } }>(
-        '/aws/presigned-url/document',
-        {
-          bucketName: S3_BUCKET,
-          originalFileName: file.fileName,
-          contentType: file.contentType,
-          prefix: `items/${itemId}/appeal-evidence`,
-        }
-      )
-    : await awsApi.presignImageUpload({
-        bucketName: S3_BUCKET,
-        originalFileName: file.fileName,
-        contentType: file.contentType,
-        prefix: `items/${itemId}/appeal-evidence`,
-      });
-  const url = presigned.data?.url;
-  const key = presigned.data?.key;
-  if (!url || !key) throw new Error('Failed to prepare evidence upload');
-  const blobRes = await fetch(file.uri);
-  const blob = await blobRes.blob();
-  const putRes = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.contentType },
-    body: blob,
+  const putRes = await fetch(ticket.uploadUrl, {
+    method: ticket.method,
+    headers: ticket.headers,
+    body,
   });
   if (!putRes.ok) throw new Error('Failed to upload evidence');
-  return buildS3PublicUrl(key);
+  return ticket.evidenceUrl;
+}
+
+async function uploadEvidence(
+  itemId: string,
+  file: { uri: string; fileName: string; contentType: string; fileSize?: number }
+): Promise<string> {
+  const contentType = normalizeEvidenceContentType(file.contentType, file.fileName);
+  const blobRes = await fetch(file.uri);
+  const blob = await blobRes.blob();
+  const fileSize = file.fileSize && file.fileSize > 0 ? file.fileSize : blob.size;
+  if (!isAllowedEvidenceFile({ type: contentType, name: file.fileName, size: fileSize })) {
+    throw new Error('Use a JPEG, PNG or WebP photo');
+  }
+  const ticket = await requestEvidenceUploadUrl(itemId, contentType, fileSize);
+  return putEvidenceFile(ticket, blob);
 }
 
 async function translateText(

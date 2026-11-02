@@ -7,9 +7,11 @@ import type {
   ItemRejectionRecovery,
   ResubmitResult,
 } from '../types/itemRejectionRecovery';
-import { isAllowedEvidenceFile, unwrapApiData } from '../utils/itemRejectionRecovery';
-
-const DEFAULT_BUCKET = process.env.REACT_APP_S3_BUCKET_NAME || 'rendasua-uploads';
+import {
+  isAllowedEvidenceFile,
+  normalizeEvidenceContentType,
+  unwrapApiData,
+} from '../utils/itemRejectionRecovery';
 
 export const ITEM_RECOVERY_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/recovery`;
@@ -29,7 +31,20 @@ export const ITEM_CONDITION_PATH = (itemId: string) =>
 export const ITEM_AI_CLEANUP_QUOTE_PATH = (itemId: string) =>
   `/business-items/items/${encodeURIComponent(itemId)}/ai-cleanup-quote`;
 
+export const ITEM_APPEAL_EVIDENCE_UPLOAD_PATH = (itemId: string) =>
+  `/business-items/items/${encodeURIComponent(itemId)}/appeal-evidence/upload-url`;
+
 export const ITEM_TRANSLATE_PATH = '/ai/translate';
+
+export interface AppealEvidenceUploadTicket {
+  uploadUrl: string;
+  method: 'PUT';
+  headers: { 'Content-Type': string; 'Content-Length': string };
+  key: string;
+  evidenceUrl: string;
+  expiresAt: string;
+  maxBytes: number;
+}
 
 export interface TranslateResult {
   text: string;
@@ -118,37 +133,43 @@ async function getCleanupQuote(
   return unwrapApiData(res.data);
 }
 
+async function requestEvidenceUploadUrl(
+  client: AxiosInstance,
+  itemId: string,
+  contentType: string,
+  fileSize: number
+): Promise<AppealEvidenceUploadTicket> {
+  const res = await client.post(ITEM_APPEAL_EVIDENCE_UPLOAD_PATH(itemId), {
+    contentType,
+    fileSize,
+  });
+  return unwrapApiData(res.data);
+}
+
+async function putEvidenceFile(
+  ticket: AppealEvidenceUploadTicket,
+  body: Blob
+): Promise<string> {
+  const putRes = await fetch(ticket.uploadUrl, {
+    method: ticket.method,
+    headers: ticket.headers,
+    body,
+  });
+  if (!putRes.ok) throw new Error('Failed to upload evidence');
+  return ticket.evidenceUrl;
+}
+
 async function uploadEvidence(
   client: AxiosInstance,
   itemId: string,
   file: File
 ): Promise<string> {
-  if (!isAllowedEvidenceFile(file)) {
-    throw new Error('Use images or a PDF');
+  const contentType = normalizeEvidenceContentType(file.type, file.name);
+  if (!isAllowedEvidenceFile({ type: contentType, name: file.name, size: file.size })) {
+    throw new Error('Use a JPEG, PNG or WebP photo');
   }
-  const isPdf =
-    file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
-  const path = isPdf ? '/aws/presigned-url/document' : '/aws/presigned-url/image';
-  const res = await client.post(path, {
-    bucketName: DEFAULT_BUCKET,
-    originalFileName: file.name,
-    contentType: file.type,
-    prefix: `items/${itemId}/appeal-evidence`,
-  });
-  const payload = res.data as {
-    success?: boolean;
-    data?: { url?: string; key?: string };
-  };
-  const url = payload.data?.url;
-  const key = payload.data?.key;
-  if (!url || !key) throw new Error('Failed to prepare evidence upload');
-  const putRes = await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
-    body: file,
-  });
-  if (!putRes.ok) throw new Error('Failed to upload evidence');
-  return `https://${DEFAULT_BUCKET}.s3.amazonaws.com/${key}`;
+  const ticket = await requestEvidenceUploadUrl(client, itemId, contentType, file.size);
+  return putEvidenceFile(ticket, file);
 }
 
 async function translateText(
