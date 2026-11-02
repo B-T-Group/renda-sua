@@ -73,13 +73,18 @@ Optional (logging):
 - `CLOUDWATCH_LOG_GROUP`
 - `CLOUDWATCH_LOG_STREAM`
 
-## What else is needed outside code
+### 4) Private user-uploads bucket (`rendasua-user-uploads`)
 
-- An AWS account with:
-  - IAM credentials with least-privilege permissions (including Bedrock Nova + Titan in us-east-1)
-  - S3 bucket(s) configured (including CORS if browser uploads are used)
-  - (Optional) Secrets Manager entries for production secrets
-  - Bedrock model access enabled in us-east-1
+Shared by DEV and prod in `ca-central-1`. Used for ID documents and rejected-item appeal evidence (`item-appeal-evidence/{itemId}/…`). Objects are private; clients upload/view via presigned URLs.
+
+CDK stack `RendasuaUserUploadsBucket` **imports** this existing bucket (does not create or delete it) and:
+
+- Enables Block Public Access (all four settings)
+- Merges a CORS rule for www/apex/dev/localhost origins (`PUT`/`GET`/`HEAD`, `Content-Type` + `Content-Length`, `ETag` exposed)
+- Aborts incomplete multipart uploads under `item-appeal-evidence/` after 7 days (no object expiration)
+- Adds an additive `s3:PutObject` / `s3:GetObject` grant on that prefix for IAM user `s3User`
+
+Do **not** put appeal evidence in `rendasua-uploads` (public catalog images; not managed here).
 
 ## What can break
 

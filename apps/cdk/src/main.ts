@@ -4,6 +4,7 @@ import 'source-map-support/register';
 import { FedapayMonitoringStack } from './lib/fedapay-monitoring-stack';
 import { HasuraEc2EnvironmentStack } from './lib/hasura-ec2-infrastructure-stack';
 import { RendasuaInfrastructureStack } from './lib/rendasua-infrastructure-stack';
+import { UserUploadsBucketStack } from './lib/user-uploads-bucket';
 
 const app = new cdk.App();
 
@@ -17,6 +18,15 @@ const awsRegion = 'ca-central-1';
 
 new RendasuaInfrastructureStack(app, `RendasuaInfrastructure-${environment}`, {
   environment,
+  env: {
+    account: awsAccount,
+    region: awsRegion,
+  },
+});
+
+// Shared private user-uploads bucket (ID docs + appeal evidence). One stack
+// for DEV and prod: the bucket name is not environment-suffixed.
+new UserUploadsBucketStack(app, 'RendasuaUserUploadsBucket', {
   env: {
     account: awsAccount,
     region: awsRegion,
