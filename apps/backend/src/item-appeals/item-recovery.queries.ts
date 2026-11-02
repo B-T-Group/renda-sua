@@ -69,15 +69,6 @@ export const APPEAL_CONFIG = `
   }
 `;
 
-export const WITHDRAW_APPEAL = `
-  mutation WithdrawItemAppeal($id: uuid!, $itemId: uuid!) {
-    update_item_appeals(
-      where: { id: { _eq: $id }, item_id: { _eq: $itemId }, status: { _eq: pending } }
-      _set: { status: withdrawn, withdrawn_reason: "business" }
-    ) { affected_rows }
-  }
-`;
-
 export const INSERT_APPEAL = `
   mutation InsertItemAppeal(
     $object: item_appeals_insert_input!
