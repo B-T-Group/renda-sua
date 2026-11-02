@@ -5,8 +5,12 @@ import {
   extractRecoveryErrorCode,
   getAppealTileDisabledReason,
   getRecoveryChipPresentation,
+  evidenceSizeCap,
   isAllowedEvidenceFile,
   isAlteredCleanup,
+  isAppealEvidenceExpired,
+  nextEvidenceRefreshDelayMs,
+  shouldRefreshAppealEvidence,
   isCategoryRequiredError,
   isInsufficientTokensError,
   isNotAllowedCategory,
@@ -178,9 +182,31 @@ describe('validations', () => {
         size: APPEAL_EVIDENCE_MAX_BYTES,
       })
     ).toBe(true);
+    expect(
+      isAllowedEvidenceFile(
+        { type: 'image/jpeg', name: 'photo.jpg', size: 12 },
+        10
+      )
+    ).toBe(false);
+    expect(evidenceSizeCap(1024)).toBe(1024);
     expect(validateAppealEvidence([{ type: 'application/pdf', name: 'receipt.pdf' }]).valid).toBe(
       false
     );
+  });
+
+  it('treats expired presigned evidence as needing a refetch', () => {
+    expect(isAppealEvidenceExpired('2020-01-01T00:00:00.000Z')).toBe(true);
+    expect(isAppealEvidenceExpired('2099-01-01T00:00:00.000Z')).toBe(false);
+    expect(
+      shouldRefreshAppealEvidence([
+        { expiresAt: '2020-01-01T00:00:00.000Z' },
+        { expiresAt: '2099-01-01T00:00:00.000Z' },
+      ])
+    ).toBe(true);
+    expect(nextEvidenceRefreshDelayMs([{ expiresAt: '2020-01-01T00:00:00.000Z' }])).toBeNull();
+    expect(
+      nextEvidenceRefreshDelayMs([{ expiresAt: '2099-01-01T00:00:00.000Z' }])
+    ).toBeGreaterThan(0);
   });
 });
 

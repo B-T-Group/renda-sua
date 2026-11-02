@@ -12,6 +12,7 @@ import {
   shouldWarnAppealWithdraw,
 } from '../utils/itemRejectionRecovery';
 import { useApiClient } from './useApiClient';
+import { useRefreshExpiredEvidence } from './useRefreshExpiredEvidence';
 
 export function useItemRejectionRecovery(itemId: string | undefined) {
   const client = useApiClient();
@@ -56,9 +57,9 @@ export function useItemRejectionRecovery(itemId: string | undefined) {
   );
 
   const submitAppeal = useCallback(
-    async (reason: string, evidenceUrls?: string[]) => {
+    async (reason: string, evidenceKeys?: string[]) => {
       if (!itemId) throw new Error('Missing item');
-      const appeal = await api.createAppeal(itemId, { reason, evidenceUrls });
+      const appeal = await api.createAppeal(itemId, { reason, evidenceKeys });
       setRecovery((current) =>
         current
           ? {
@@ -96,6 +97,8 @@ export function useItemRejectionRecovery(itemId: string | undefined) {
     },
     [api, itemId]
   );
+
+  useRefreshExpiredEvidence(recovery?.appeal?.evidence, load);
 
   const visible = shouldShowRecoveryCard(recovery, pendingResubmit);
   const locked = pendingResubmit;

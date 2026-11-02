@@ -98,6 +98,7 @@ export function ItemRecoverySection({ item, onItemUpdated, onEdit }: Props) {
       onDiscardAiFix={async (resultId) => {
         await cleanup.rejectResult(resultId);
       }}
+      onEvidenceExpired={() => void recoveryApi.reload()}
     />
   );
 }
@@ -131,11 +132,11 @@ async function submitAppealWithFiles(
   reason: string,
   files: File[]
 ) {
-  const urls: string[] = [];
+  const keys: string[] = [];
   for (const file of files) {
-    urls.push(await recoveryApi.uploadEvidence(file));
+    keys.push(await recoveryApi.uploadEvidence(file));
   }
-  await recoveryApi.submitAppeal(reason, urls.filter(Boolean));
+  await recoveryApi.submitAppeal(reason, keys.filter(Boolean));
 }
 
 async function retakePhoto(input: {

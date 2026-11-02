@@ -21,7 +21,7 @@ describe('itemAppealsAdminApi', () => {
               rejectionId: 'rej-1',
               itemId: 'item-1',
               reason: 'Please reconsider this listing as it is accurate.',
-              evidenceUrls: [],
+              evidence: [],
               status: 'pending',
               slaState: 'breached',
               item: { id: 'item-1', name: 'Lamp', moderationStatus: 'rejected', imageUrl: null },

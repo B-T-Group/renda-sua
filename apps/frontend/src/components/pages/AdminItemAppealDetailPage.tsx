@@ -34,6 +34,7 @@ import {
   recoveryErrorI18n,
 } from '../../utils/itemRejectionRecovery';
 import { AppealSlaBadge } from '../admin/AppealSlaBadge';
+import { AppealEvidenceGallery } from '../business/item-recovery/AppealEvidenceGallery';
 
 const AdminItemAppealDetailPage: React.FC = () => {
   const { appealId = '' } = useParams();
@@ -70,7 +71,13 @@ const AdminItemAppealDetailPage: React.FC = () => {
           {t('admin.itemAppeals.loadError', 'Could not load appeals')}: {error}
         </Typography>
       ) : null}
-      {detail ? <AppealDetailBody detail={detail} onDecide={decide} /> : null}
+      {detail ? (
+        <AppealDetailBody
+          detail={detail}
+          onDecide={decide}
+          onRefresh={() => void fetchDetail(appealId)}
+        />
+      ) : null}
     </Container>
   );
 };
@@ -78,9 +85,11 @@ const AdminItemAppealDetailPage: React.FC = () => {
 function AppealDetailBody({
   detail,
   onDecide,
+  onRefresh,
 }: {
   detail: AppealDetail;
   onDecide: ReturnType<typeof useItemAppealsAdmin>['decide'];
+  onRefresh: () => void;
 }) {
   const { t } = useTranslation();
   const { enqueueSnackbar } = useSnackbar();
@@ -182,7 +191,10 @@ function AppealDetailBody({
           <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mb: 1 }}>
             {detail.appeal.reason}
           </Typography>
-          <EvidenceList urls={detail.appeal.evidenceUrls} />
+          <AppealEvidenceGallery
+            evidence={detail.appeal.evidence}
+            onExpired={onRefresh}
+          />
         </CardContent>
       </Card>
       <HistoryList detail={detail} />

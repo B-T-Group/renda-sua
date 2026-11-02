@@ -44,13 +44,19 @@ export interface ItemRejection {
   itemSnapshot?: ItemSnapshot | null;
 }
 
+export interface AppealEvidence {
+  key: string;
+  url: string;
+  expiresAt: string;
+}
+
 export interface ItemAppeal {
   id: string;
   rejectionId: string;
   itemId: string;
   businessId?: string;
   reason: string;
-  evidenceUrls: string[];
+  evidence: AppealEvidence[];
   status: AppealStatus;
   adminNote?: string | null;
   outcomeModerationStatus?: string | null;

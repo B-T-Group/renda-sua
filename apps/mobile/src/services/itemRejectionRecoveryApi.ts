@@ -35,10 +35,9 @@ export const ITEM_TRANSLATE_PATH = '/ai/translate';
 
 export interface AppealEvidenceUploadTicket {
   uploadUrl: string;
-  method: 'PUT';
-  headers: { 'Content-Type': string; 'Content-Length': string };
+  method: string;
+  headers: Record<string, string>;
   key: string;
-  evidenceUrl: string;
   expiresAt: string;
   maxBytes: number;
 }
@@ -78,7 +77,7 @@ async function resubmit(
 
 async function createAppeal(
   itemId: string,
-  payload: { reason: string; evidenceUrls?: string[] }
+  payload: { reason: string; evidenceKeys?: string[] }
 ): Promise<ItemAppeal> {
   const body = await api.post(ITEM_APPEALS_PATH(itemId), payload);
   const data = unwrapApiData(body) as { appeal?: ItemAppeal } | ItemAppeal;
@@ -130,7 +129,7 @@ async function putEvidenceFile(
     body,
   });
   if (!putRes.ok) throw new Error('Failed to upload evidence');
-  return ticket.evidenceUrl;
+  return ticket.key;
 }
 
 async function uploadEvidence(
@@ -145,6 +144,9 @@ async function uploadEvidence(
     throw new Error('Use a JPEG, PNG or WebP photo');
   }
   const ticket = await requestEvidenceUploadUrl(itemId, contentType, fileSize);
+  if (!isAllowedEvidenceFile({ type: contentType, name: file.fileName, size: fileSize }, ticket.maxBytes)) {
+    throw new Error('Use a JPEG, PNG or WebP photo');
+  }
   return putEvidenceFile(ticket, blob);
 }
 

@@ -226,11 +226,14 @@ export function normalizeEvidenceContentType(
   return raw;
 }
 
-export function isAllowedEvidenceFile(file: {
-  type?: string | null;
-  name?: string | null;
-  size?: number | null;
-}): boolean {
+export function evidenceSizeCap(maxBytes?: number | null): number {
+  return maxBytes && maxBytes > 0 ? maxBytes : APPEAL_EVIDENCE_MAX_BYTES;
+}
+
+export function isAllowedEvidenceFile(
+  file: { type?: string | null; name?: string | null; size?: number | null },
+  maxBytes?: number | null
+): boolean {
   const type = normalizeEvidenceContentType(file.type, file.name);
   const name = (file.name ?? '').toLowerCase();
   if (type === 'image/svg+xml' || name.endsWith('.svg') || name.endsWith('.pdf')) {
@@ -239,7 +242,35 @@ export function isAllowedEvidenceFile(file: {
   const allowed = (APPEAL_EVIDENCE_CONTENT_TYPES as readonly string[]).includes(type);
   if (!allowed) return false;
   if (file.size == null) return true;
-  return Number.isInteger(file.size) && file.size > 0 && file.size <= APPEAL_EVIDENCE_MAX_BYTES;
+  const cap = evidenceSizeCap(maxBytes);
+  return Number.isInteger(file.size) && file.size > 0 && file.size <= cap;
+}
+
+export function isAppealEvidenceExpired(
+  expiresAt: string | null | undefined,
+  now = Date.now()
+): boolean {
+  if (!expiresAt) return true;
+  const ms = Date.parse(expiresAt);
+  return Number.isNaN(ms) || ms <= now;
+}
+
+export function shouldRefreshAppealEvidence(
+  evidence: Array<{ expiresAt?: string | null }> | null | undefined,
+  now = Date.now()
+): boolean {
+  return (evidence ?? []).some((item) => isAppealEvidenceExpired(item.expiresAt, now));
+}
+
+export function nextEvidenceRefreshDelayMs(
+  evidence: Array<{ expiresAt?: string | null }> | null | undefined,
+  now = Date.now()
+): number | null {
+  const waits = (evidence ?? [])
+    .map((item) => Date.parse(item.expiresAt ?? ''))
+    .filter((ms) => !Number.isNaN(ms) && ms > now);
+  if (!waits.length) return null;
+  return Math.min(...waits) - now;
 }
 
 export function validateAppealEvidence(

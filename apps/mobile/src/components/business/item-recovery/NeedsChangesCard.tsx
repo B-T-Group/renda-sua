@@ -16,6 +16,7 @@ import type { AppealTileDisabledReason } from '@/types/itemRejectionRecovery';
 import {
   categoryDefaultLabel,
   categoryLabelKey,
+  isAppealEvidenceExpired,
   parseRejectionCategory,
   validateAppealReason,
   validateWearNote,
@@ -53,6 +54,7 @@ type Props = {
   onToggleAiId: (id: string) => void;
   aiCostLabel: string;
   needsBuyTokens: boolean;
+  onEvidenceExpired?: () => void;
 };
 
 export function NeedsChangesCard(props: Props) {
@@ -98,7 +100,10 @@ export function NeedsChangesCard(props: Props) {
         </View>
       </View>
       {props.recovery.appeal && props.recovery.appeal.status !== 'withdrawn' ? (
-        <AppealTimeline appeal={props.recovery.appeal} />
+        <AppealTimeline
+          appeal={props.recovery.appeal}
+          onExpired={props.onEvidenceExpired}
+        />
       ) : null}
       <RecoveryActionTiles
         actions={props.recovery.actions}
@@ -167,7 +172,13 @@ function ReasonText({
   );
 }
 
-function AppealTimeline({ appeal }: { appeal: ItemAppeal }) {
+function AppealTimeline({
+  appeal,
+  onExpired,
+}: {
+  appeal: ItemAppeal;
+  onExpired?: () => void;
+}) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const steps = [
@@ -182,6 +193,22 @@ function AppealTimeline({ appeal }: { appeal: ItemAppeal }) {
           {step.label}
         </Text>
       ))}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {(appeal.evidence ?? []).map((item) => (
+          <Image
+            key={item.key}
+            source={{ uri: item.url }}
+            style={{ width: 72, height: 72, borderRadius: 8 }}
+            accessibilityLabel={t(
+              'business.items.recovery.appeal.evidencePhoto',
+              'Appeal evidence'
+            )}
+            onError={() => {
+              if (isAppealEvidenceExpired(item.expiresAt)) onExpired?.();
+            }}
+          />
+        ))}
+      </View>
       {appeal.adminNote ? (
         <Text variant="bodySmall">{appeal.adminNote}</Text>
       ) : null}

@@ -8,6 +8,7 @@ import type {
 } from '../types/itemAppealsAdmin';
 import { createItemAppealsAdminApi } from '../services/itemAppealsAdminApi';
 import { useApiClient } from './useApiClient';
+import { useRefreshExpiredEvidence } from './useRefreshExpiredEvidence';
 
 export function useItemAppealsAdmin() {
   const client = useApiClient();
@@ -65,6 +66,13 @@ export function useItemAppealsAdmin() {
     },
     [api]
   );
+
+  const refreshDetail = useCallback(() => {
+    if (!detail?.appeal.id) return;
+    return fetchDetail(detail.appeal.id);
+  }, [detail?.appeal.id, fetchDetail]);
+
+  useRefreshExpiredEvidence(detail?.appeal.evidence, refreshDetail);
 
   const decide = useCallback(
     (appealId: string, body: DecideAppealBody) => api.decide(appealId, body),

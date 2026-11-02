@@ -5,6 +5,8 @@ import {
   getRecoveryChipPresentation,
   isAllowedEvidenceFile,
   isAlteredCleanup,
+  isAppealEvidenceExpired,
+  shouldRefreshAppealEvidence,
   isItemRecoveryPushType,
   isNotAllowedCategory,
   needsToBuyTokens,
@@ -179,5 +181,9 @@ describe('tokens, tiles, and push deep links', () => {
     expect(recoveryErrorI18n('ITEM_APPEAL_EVIDENCE_URL_INVALID').key).toBe(
       'business.items.recovery.appeal.evidenceUrlInvalid'
     );
+    expect(isAppealEvidenceExpired('2020-01-01T00:00:00.000Z')).toBe(true);
+    expect(
+      shouldRefreshAppealEvidence([{ expiresAt: '2020-01-01T00:00:00.000Z' }])
+    ).toBe(true);
   });
 });

@@ -1,18 +1,21 @@
 import { Box, Stack, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
 import type { ItemAppeal } from '../../../types/itemRejectionRecovery';
+import { AppealEvidenceGallery } from './AppealEvidenceGallery';
 import { RejectionReasonBlock } from './RejectionReasonBlock';
 
 type Props = {
   appeal: ItemAppeal;
   translationAvailable?: boolean;
   onTranslate?: (text: string) => Promise<string | null>;
+  onEvidenceExpired?: () => void;
 };
 
 export function AppealTimeline({
   appeal,
   translationAvailable,
   onTranslate,
+  onEvidenceExpired,
 }: Props) {
   const { t } = useTranslation();
   const steps = timelineSteps(appeal.status);
@@ -37,6 +40,10 @@ export function AppealTimeline({
           </Box>
         ))}
       </Stack>
+      <AppealEvidenceGallery
+        evidence={appeal.evidence}
+        onExpired={onEvidenceExpired ?? (() => undefined)}
+      />
       {appeal.adminNote ? (
         <Box sx={{ mt: 1 }}>
           <Typography variant="caption" color="text.secondary">

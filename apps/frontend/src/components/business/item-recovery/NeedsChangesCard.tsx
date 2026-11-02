@@ -51,6 +51,7 @@ type Props = {
   } | null>;
   onKeepAiFix: (resultId: string) => Promise<void>;
   onDiscardAiFix: (resultId: string) => Promise<void>;
+  onEvidenceExpired?: () => void;
 };
 
 export function NeedsChangesCard({
@@ -73,6 +74,7 @@ export function NeedsChangesCard({
   onRunAiFix,
   onKeepAiFix,
   onDiscardAiFix,
+  onEvidenceExpired,
 }: Props) {
   const { t } = useTranslation();
   const [dialog, setDialog] = useState<RecoveryTileId | 'resubmit' | null>(null);
@@ -118,6 +120,7 @@ export function NeedsChangesCard({
             appeal={recovery.appeal}
             translationAvailable={translationAvailable}
             onTranslate={onTranslate}
+            onEvidenceExpired={onEvidenceExpired}
           />
         ) : null}
         <Box sx={{ mt: 2 }}>

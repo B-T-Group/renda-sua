@@ -3611,7 +3611,8 @@
           "evidenceLimit": "Ajoutez jusqu'à 3 fichiers",
           "evidenceType": "Utilisez une photo JPEG, PNG ou WebP",
           "evidenceTooLarge": "Les photos doivent faire 5 Mo ou moins",
-          "evidenceUrlInvalid": "Ce fichier de preuve n'a pas pu être utilisé. Téléversez-le à nouveau."
+          "evidenceUrlInvalid": "Ce fichier de preuve n'a pas pu être utilisé. Téléversez-le à nouveau.",
+          "evidencePhoto": "Preuve de contestation"
         },
         "resubmit": {
           "confirmNoChanges": "Soumettre à nouveau cet article sans autres modifications ?",

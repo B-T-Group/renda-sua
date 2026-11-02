@@ -38,10 +38,9 @@ export const ITEM_TRANSLATE_PATH = '/ai/translate';
 
 export interface AppealEvidenceUploadTicket {
   uploadUrl: string;
-  method: 'PUT';
-  headers: { 'Content-Type': string; 'Content-Length': string };
+  method: string;
+  headers: Record<string, string>;
   key: string;
-  evidenceUrl: string;
   expiresAt: string;
   maxBytes: number;
 }
@@ -56,7 +55,7 @@ export function createItemRejectionRecoveryApi(client: AxiosInstance) {
     getRecovery: (itemId: string) => getRecovery(client, itemId),
     resubmit: (itemId: string, confirmWithdrawAppeal?: boolean) =>
       resubmit(client, itemId, confirmWithdrawAppeal),
-    createAppeal: (itemId: string, body: { reason: string; evidenceUrls?: string[] }) =>
+    createAppeal: (itemId: string, body: { reason: string; evidenceKeys?: string[] }) =>
       createAppeal(client, itemId, body),
     withdrawAppeal: (itemId: string, appealId: string) =>
       withdrawAppeal(client, itemId, appealId),
@@ -94,7 +93,7 @@ async function resubmit(
 async function createAppeal(
   client: AxiosInstance,
   itemId: string,
-  body: { reason: string; evidenceUrls?: string[] }
+  body: { reason: string; evidenceKeys?: string[] }
 ): Promise<ItemAppeal> {
   const res = await client.post(ITEM_APPEALS_PATH(itemId), body);
   const data = unwrapApiData(res.data) as { appeal?: ItemAppeal } | ItemAppeal;
@@ -156,7 +155,7 @@ async function putEvidenceFile(
     body,
   });
   if (!putRes.ok) throw new Error('Failed to upload evidence');
-  return ticket.evidenceUrl;
+  return ticket.key;
 }
 
 async function uploadEvidence(
@@ -169,6 +168,9 @@ async function uploadEvidence(
     throw new Error('Use a JPEG, PNG or WebP photo');
   }
   const ticket = await requestEvidenceUploadUrl(client, itemId, contentType, file.size);
+  if (!isAllowedEvidenceFile({ type: contentType, name: file.name, size: file.size }, ticket.maxBytes)) {
+    throw new Error('Use a JPEG, PNG or WebP photo');
+  }
   return putEvidenceFile(ticket, file);
 }
 

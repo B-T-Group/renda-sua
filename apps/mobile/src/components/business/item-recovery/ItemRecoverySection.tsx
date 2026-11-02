@@ -35,7 +35,7 @@ export function ItemRecoverySection({ item, onChanged, onEdit, onMessage }: Prop
   const recoveryApi = useItemRejectionRecovery(item.id);
   const [busy, setBusy] = useState(false);
   const [selectedAiIds, setSelectedAiIds] = useState<string[]>([]);
-  const [evidence, setEvidence] = useState<Array<{ url: string; label: string }>>([]);
+  const [evidence, setEvidence] = useState<Array<{ key: string; label: string }>>([]);
   const [compare, setCompare] = useState<{
     resultId: string;
     originalUrl: string;
@@ -104,7 +104,7 @@ export function ItemRecoverySection({ item, onChanged, onEdit, onMessage }: Prop
         try {
           await recoveryApi.submitAppeal(
             reason,
-            evidence.map((file) => file.url)
+            evidence.map((file) => file.key)
           );
           setEvidence([]);
           await onChanged();
@@ -112,11 +112,12 @@ export function ItemRecoverySection({ item, onChanged, onEdit, onMessage }: Prop
           setBusy(false);
         }
       }}
+      onEvidenceExpired={() => void recoveryApi.reload()}
       onAddEvidence={async () => {
         const picked = await pickAppealEvidenceFile();
         if (!picked.ok) return;
-        const url = await recoveryApi.uploadEvidence(picked.file);
-        if (url) setEvidence((current) => [...current, { url, label: picked.file.fileName }]);
+        const key = await recoveryApi.uploadEvidence(picked.file);
+        if (key) setEvidence((current) => [...current, { key, label: picked.file.fileName }]);
       }}
       onRetakeCamera={async (replaceId) => {
         await captureAndAttach(item, me?.business?.id, replaceId, 'camera', onChanged, recoveryApi.markChanged);

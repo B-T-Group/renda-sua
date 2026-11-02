@@ -4360,7 +4360,8 @@
           "evidenceLimit": "Add up to 3 files",
           "evidenceType": "Use a JPEG, PNG or WebP photo",
           "evidenceTooLarge": "Photos must be 5 MB or smaller",
-          "evidenceUrlInvalid": "That evidence file could not be used. Upload it again."
+          "evidenceUrlInvalid": "That evidence file could not be used. Upload it again.",
+          "evidencePhoto": "Appeal evidence"
         },
         "resubmit": {
           "confirmNoChanges": "Resubmit this item without more changes?",

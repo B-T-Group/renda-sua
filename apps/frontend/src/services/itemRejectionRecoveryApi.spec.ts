@@ -65,8 +65,9 @@ describe('itemRejectionRecoveryApi', () => {
     });
   });
 
-  it('posts resubmit with confirmWithdrawAppeal and appeal with evidenceUrls', async () => {
+  it('posts resubmit with confirmWithdrawAppeal and createAppeal with evidenceKeys', async () => {
     const client = mockClient();
+    const evidenceKey = 'item-appeal-evidence/item-1/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jpg';
     client.post
       .mockResolvedValueOnce({
         data: {
@@ -85,7 +86,7 @@ describe('itemRejectionRecoveryApi', () => {
               rejectionId: 'rej-1',
               itemId: 'item-1',
               reason: 'The price matches the local market.',
-              evidenceUrls: [],
+              evidence: [],
               status: 'pending',
             },
           },
@@ -99,25 +100,29 @@ describe('itemRejectionRecoveryApi', () => {
     expect(resubmit.moderationStatus).toBe('pending');
     const appeal = await api.createAppeal('item-1', {
       reason: 'The price matches the local market.',
+      evidenceKeys: [evidenceKey],
     });
     expect(client.post).toHaveBeenCalledWith(ITEM_APPEALS_PATH('item-1'), {
       reason: 'The price matches the local market.',
+      evidenceKeys: [evidenceKey],
     });
     expect(appeal.status).toBe('pending');
+    expect(appeal.evidence).toEqual([]);
   });
 
-  it('requests an appeal-evidence upload URL and PUTs with signed headers', async () => {
+  it('uploads evidence with the returned method and headers and returns the key', async () => {
     const client = mockClient();
+    const method = 'PUT';
     const headers = { 'Content-Type': 'image/jpeg', 'Content-Length': '12' };
+    const key = 'item-appeal-evidence/item-1/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jpg';
     client.post.mockResolvedValue({
       data: {
         success: true,
         data: {
           uploadUrl: 'https://s3.test/upload',
-          method: 'PUT',
+          method,
           headers,
-          key: 'items/item-1/appeal-evidence/abc.jpg',
-          evidenceUrl: 'https://bucket.s3.region.amazonaws.com/items/item-1/appeal-evidence/abc.jpg',
+          key,
           expiresAt: '2026-11-02T00:00:00.000Z',
           maxBytes: 5 * 1024 * 1024,
         },
@@ -127,19 +132,42 @@ describe('itemRejectionRecoveryApi', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
     const file = new File([new Uint8Array(12)], 'photo.jpg', { type: 'image/jpeg' });
     const api = createItemRejectionRecoveryApi(client as never);
-    const url = await api.uploadEvidence('item-1', file);
+    const uploaded = await api.uploadEvidence('item-1', file);
     expect(client.post).toHaveBeenCalledWith(ITEM_APPEAL_EVIDENCE_UPLOAD_PATH('item-1'), {
       contentType: 'image/jpeg',
       fileSize: 12,
     });
     expect(fetchMock).toHaveBeenCalledWith('https://s3.test/upload', {
-      method: 'PUT',
+      method,
       headers,
       body: file,
     });
-    expect(url).toBe(
-      'https://bucket.s3.region.amazonaws.com/items/item-1/appeal-evidence/abc.jpg'
+    expect(uploaded).toBe(key);
+  });
+
+  it('uses ticket maxBytes and does not upload an oversized file', async () => {
+    const client = mockClient();
+    client.post.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          uploadUrl: 'https://s3.test/upload',
+          method: 'PUT',
+          headers: { 'Content-Type': 'image/jpeg', 'Content-Length': '12' },
+          key: 'item-appeal-evidence/item-1/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee.jpg',
+          expiresAt: '2026-11-02T00:00:00.000Z',
+          maxBytes: 10,
+        },
+      },
+    });
+    const fetchMock = jest.fn().mockResolvedValue({ ok: true });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const file = new File([new Uint8Array(12)], 'photo.jpg', { type: 'image/jpeg' });
+    const api = createItemRejectionRecoveryApi(client as never);
+    await expect(api.uploadEvidence('item-1', file)).rejects.toThrow(
+      'Use a JPEG, PNG or WebP photo'
     );
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('quotes AI cleanup on /ai-cleanup-quote', async () => {
