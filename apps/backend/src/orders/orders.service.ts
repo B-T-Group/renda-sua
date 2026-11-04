@@ -12695,7 +12695,8 @@ export class OrdersService {
   async completeAfterClientConfirmation(
     orderId: string,
     historyMessage: string,
-    changedByType: string = 'system'
+    changedByType: string = 'system',
+    opts: { fromDisputed?: boolean; changedByUserId?: string | null } = {}
   ): Promise<{ alreadyComplete: boolean; order: Orders | null }> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
@@ -12704,7 +12705,7 @@ export class OrdersService {
     if (order.current_status === 'complete') {
       return { alreadyComplete: true, order };
     }
-    const updated = await this.winClientConfirmComplete(orderId);
+    const updated = await this.winClientConfirmComplete(orderId, !!opts.fromDisputed);
     if (!updated) {
       return { alreadyComplete: true, order: await this.getOrderDetails(orderId) };
     }
@@ -12714,16 +12715,20 @@ export class OrdersService {
       'complete',
       historyMessage,
       changedByType,
-      order.client?.user_id
+      opts.changedByUserId ?? order.client?.user_id
     );
     await this.runCompletionSideEffects(order);
     return { alreadyComplete: false, order: updated };
   }
 
-  private async winClientConfirmComplete(orderId: string): Promise<Orders | null> {
+  private async winClientConfirmComplete(
+    orderId: string,
+    fromDisputed = false
+  ): Promise<Orders | null> {
     let lostRace = false;
     const updated = await this.updateOrderStatusWithSingleRetry(orderId, 'complete', {
       viaSystem: true,
+      ...(fromDisputed ? { viaDisputeResolution: true } : {}),
       onSameStatusReplay: () => {
         lostRace = true;
       },
@@ -12742,6 +12747,43 @@ export class OrdersService {
     if (cashPending) return;
     await this.processOrderPayment(orderId);
     await this.processOrderDeliveryPayment(orderId);
+  }
+
+  /**
+   * Admin dispute resolution "delivery failed": disputed → failed (CAS) and a
+   * pending failed_deliveries row so the existing fault resolution moves money.
+   * Returns false when another admin already moved the order.
+   */
+  async failDisputedDelivery(
+    orderId: string,
+    failureReasonId: string,
+    notes: string,
+    adminUserId: string
+  ): Promise<boolean> {
+    let replay = false;
+    await this.orderStatusService.updateOrderStatus(orderId, 'failed', {
+      viaSystem: true,
+      viaDisputeResolution: true,
+      onSameStatusReplay: () => {
+        replay = true;
+      },
+    });
+    if (replay) return false;
+    await this.hasuraSystemService.executeMutation(
+      `mutation CreateDisputeFailedDelivery($row: failed_deliveries_insert_input!) {
+        insert_failed_deliveries_one(object: $row) { id }
+      }`,
+      {
+        row: {
+          order_id: orderId,
+          failure_reason_id: failureReasonId,
+          notes,
+          status: 'pending',
+        },
+      }
+    );
+    await this.createStatusHistoryEntry(orderId, 'failed', notes, 'admin', adminUserId);
+    return true;
   }
 
   async recordClientConfirmHistory(

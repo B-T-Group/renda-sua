@@ -63,6 +63,8 @@ import { StorePickupReminderService } from './store-pickup-reminder.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { AdminOrdersController } from './admin-orders.controller';
+import { AdminDeliveryDisputesController } from '../client-confirm-delivery/admin-delivery-disputes.controller';
+import { AdminDeliveryDisputesService } from '../client-confirm-delivery/admin-delivery-disputes.service';
 import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { OrdersController } from './orders.controller';
@@ -134,6 +136,7 @@ import { DeliveryConfirmNotifier } from '../client-confirm-delivery/delivery-con
     OrdersController,
     AdminPickupOpsController,
     AdminOrdersController,
+    AdminDeliveryDisputesController,
     FailedDeliveriesController,
     FailedPickupsController,
     OrderNotificationsInternalController,
@@ -189,6 +192,7 @@ import { DeliveryConfirmNotifier } from '../client-confirm-delivery/delivery-con
     ClientConfirmDeliveryCronService,
     ClientConfirmDeliveryRepository,
     ClientConfirmMarketConfigService,
+    AdminDeliveryDisputesService,
     DeliveryConfirmNotifier,
     DepositCalculationService,
     ServiceFeeService,
