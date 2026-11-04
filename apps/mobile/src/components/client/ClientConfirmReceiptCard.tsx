@@ -10,6 +10,8 @@ type Props = {
   busy?: boolean;
   onConfirm: () => void;
   onReportProblem: () => void;
+  /** MoMo Delivered → Complete: open the full confirm screen. */
+  onOpenConfirmScreen?: () => void;
 };
 
 export function ClientConfirmReceiptCard({
@@ -17,6 +19,7 @@ export function ClientConfirmReceiptCard({
   busy,
   onConfirm,
   onReportProblem,
+  onOpenConfirmScreen,
 }: Props) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
@@ -63,12 +66,32 @@ export function ClientConfirmReceiptCard({
           accessibilityLabel={t('orders.clientConfirm.proofPhoto', 'Delivery photo')}
         />
       ) : null}
+      {onOpenConfirmScreen ? (
+        <>
+          <Text style={[{ color: colors.text.secondary }, typography.body2]}>
+            {t('buyerProtection.orderLine', 'Received it? Confirm, or tell us if something is wrong.')}
+          </Text>
+          <Text style={[{ color: colors.text.secondary }, typography.caption]}>
+            {t(
+              'buyerProtection.orderLineInfo',
+              'Your courier is paid only once your order is complete. If you report a problem, their payment waits until we sort it out.'
+            )}
+          </Text>
+          <Button mode="contained" onPress={onOpenConfirmScreen} disabled={busy} testID="open-delivery-confirm">
+            {t('deliveryConfirm.navTitle', 'Confirm delivery')}
+          </Button>
+        </>
+      ) : null}
+      {onOpenConfirmScreen ? null : (
+      <>
       <Button mode="contained" onPress={onConfirm} loading={busy} disabled={busy}>
         {t('orders.clientConfirm.cta.confirm', 'Confirm receipt')}
       </Button>
       <Button mode="outlined" onPress={onReportProblem} disabled={busy}>
         {t('orders.clientConfirm.cta.problem', 'Report a problem')}
       </Button>
+      </>
+      )}
     </View>
   );
 }

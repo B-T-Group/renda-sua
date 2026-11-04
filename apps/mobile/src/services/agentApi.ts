@@ -29,6 +29,8 @@ import type { OrderOfferResponse } from '../types/orderOffer';
 import type { DiscountCodeValidateResponse, ItemDeliveryFeeResponse } from '../types/placeOrderPricing';
 import type {
   DeliveryConfirmationState,
+  DeliveryConfirmationForbidden,
+  DeliveryReportInput,
   DeliveryProofPhotoInput,
 } from '../types/deliveryConfirmation';
 import type { MeResponse, MeUser, SetMyPhoneResponse, UpdateMeResponse, UpdateMyEmailResponse } from '../types/me';
@@ -484,13 +486,28 @@ const orders = {
   getDeliveryConfirmation: (orderId: string): Promise<DeliveryConfirmationState> =>
     api.get<DeliveryConfirmationState>(`/orders/${orderId}/delivery-confirmation`),
 
+  /** Same endpoint; may return the no-data "other account" shape. */
+  getDeliveryConfirmLink: (
+    orderId: string
+  ): Promise<DeliveryConfirmationState | DeliveryConfirmationForbidden> =>
+    api.get<DeliveryConfirmationState | DeliveryConfirmationForbidden>(
+      `/orders/${orderId}/delivery-confirmation`
+    ),
+
   reportDeliveryProblem: (
     orderId: string,
-    description?: string
+    description?: string | DeliveryReportInput
   ): Promise<OrderActionResponse> =>
-    api.post<OrderActionResponse>(`/orders/${orderId}/report-delivery-problem`, {
-      description: description?.trim() || undefined,
-    }),
+    api.post<OrderActionResponse>(
+      `/orders/${orderId}/report-delivery-problem`,
+      typeof description === 'object' && description
+        ? {
+            type: description.type,
+            reason: description.reason,
+            note: description.note?.trim() || undefined,
+          }
+        : { description: (description as string | undefined)?.trim() || undefined }
+    ),
 
   clientCouldNotConfirm: (
     orderId: string,

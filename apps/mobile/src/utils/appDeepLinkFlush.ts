@@ -51,6 +51,14 @@ export type DeepLinkFlushDeps = {
   guestShellMounted: () => boolean;
   /** Navigates; false when the target route is not mounted yet. */
   dispatch: (target: DeepLinkTarget, ctx: DeepLinkDispatchContext) => boolean;
+  /** A persona switch for this link is starting (delivery-confirm overlay). */
+  onPersonaSwitchStart?: (from: PersonaSlug, path: string) => void;
+  /**
+   * The signed-in account cannot open the required persona at all. Return true
+   * when handled (e.g. the safe "belongs to another account" screen); the link
+   * is then dropped instead of waiting forever.
+   */
+  onMissingPersona?: (required: PersonaSlug, path: string) => boolean;
 };
 
 /** Signed in AND the persona shell (not the persona gate / picker) is showing. */
@@ -103,6 +111,12 @@ export function flushDeepLink(
   if (!signedIn && guestLink && !deps.guestShellMounted()) return 'hold';
   const required = signedIn ? targetPersonaForDeepLinkPath(pending.path) : null;
   if (required && !isOnRequiredPersona(a, p, required)) {
+    if (!p.personas.includes(required) && !p.isDelegationContext) {
+      if (deps.onMissingPersona?.(required, pending.path)) return 'done';
+    }
+    if (!p.pickingPersona && p.activePersona !== required) {
+      deps.onPersonaSwitchStart?.(p.activePersona, pending.path);
+    }
     maybeSwitchPersona(a, p, required);
     return 'hold';
   }

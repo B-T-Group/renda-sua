@@ -52,6 +52,8 @@ export function parseOrderPushPayload(
     const persona = parsePersonaFromPushData(data);
     if (persona !== 'business' && !locationId) return null;
   }
+  // Delivered → Complete pushes go through the delivery-confirm deep link.
+  if (data.screen === 'delivery-confirm') return null;
   // Client store-pickup reminder overlay owns these taps.
   if (data.event === 'store_pickup_reminder') {
     return null;

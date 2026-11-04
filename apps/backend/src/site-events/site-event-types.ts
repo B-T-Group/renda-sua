@@ -175,6 +175,9 @@ export const SITE_EVENT_TYPES_V1 = [
   'search.empty_rung_clicked',
   'search.filter_removed_from_empty',
   'card.rating_shown',
+  // MoMo Delivered → client Complete deep link (P6) — web + mobile
+  'delivery_confirm_opened',
+  'delivery_confirm_action',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event

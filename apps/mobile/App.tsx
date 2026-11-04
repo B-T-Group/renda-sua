@@ -45,6 +45,8 @@ import AppNavigator from './src/navigation/AppNavigator';
 import MaintenanceScreen from './src/screens/shared/MaintenanceScreen';
 import { MAINTENANCE_MODE } from './src/config/maintenance';
 import { OrderOfferOverlay } from './src/components/orderOffer/OrderOfferOverlay';
+import { PersonaSwitchOverlay } from './src/components/deliveryConfirm/PersonaSwitchOverlay';
+import { useNotificationOpenedDeliveryConfirm } from './src/hooks/useNotificationOpenedDeliveryConfirm';
 import { IncomingOrderOverlay } from './src/components/incomingOrder/IncomingOrderOverlay';
 import { StockAvailabilityOverlay } from './src/components/stockAvailability/StockAvailabilityOverlay';
 import { AdminBroadcastOverlay } from './src/components/admin/AdminBroadcastOverlay';
@@ -75,6 +77,7 @@ function AppContentBase() {
   useAuthForegroundRefresh();
   usePushTokenRegistration();
   useNotificationOpenedOrderNavigation(navReady);
+  useNotificationOpenedDeliveryConfirm(navReady);
   useNotificationOpenedRentalNavigation(navReady);
   useNotificationOpenedLocationTransferNavigation(navReady);
   useNotificationOpenedAiImageCleanupNavigation(navReady);
@@ -136,6 +139,7 @@ function AppContentBase() {
               <ReferralRejectionOverlay />
               <PickupReminderOverlay />
               <StorePickupReminderOverlay />
+              <PersonaSwitchOverlay />
             </SafeAreaProvider>
           </AgentLocationProvider>
         </AgentActiveDeliveryProvider>
