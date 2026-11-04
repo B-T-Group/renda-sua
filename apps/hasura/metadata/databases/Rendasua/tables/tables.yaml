@@ -7,6 +7,7 @@
 - "!include public_agent_contracts.yaml"
 - "!include public_agent_locations.yaml"
 - "!include public_agent_referrals.yaml"
+- "!include public_agent_reliability_events.yaml"
 - "!include public_agent_restorations.yaml"
 - "!include public_agent_strikes.yaml"
 - "!include public_agents.yaml"
