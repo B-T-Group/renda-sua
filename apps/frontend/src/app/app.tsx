@@ -598,6 +598,10 @@ function App() {
                 element={<LazyPages.AdminPaymentProgramsPage />}
               />
               <Route
+                path="/admin/delivery-disputes"
+                element={<LazyPages.AdminDeliveryDisputesPage />}
+              />
+              <Route
                 path="/admin/refunds"
                 element={<LazyPages.AdminRefundsPage />}
               />

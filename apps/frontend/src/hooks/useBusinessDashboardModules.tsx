@@ -663,6 +663,19 @@ export function useBusinessDashboardModules({
         path: '/admin/payment-programs',
       },
       {
+        title: t('business.dashboard.deliveryDisputesModule', 'Delivery reports'),
+        description: t(
+          'business.dashboard.deliveryDisputesModuleDescription',
+          'Client reports on delivered orders, waiting for a decision'
+        ),
+        icon: <AnalyticsIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: brandTokens.warning.main,
+        requiredPermission: PlatformPermissions.ORDERS_CROSS_BUSINESS,
+        section: 'operations',
+        path: '/admin/delivery-disputes',
+      },
+      {
         title: t('business.dashboard.creditsModule', 'Ops follow-ups'),
         description: t(
           'business.dashboard.creditsModuleDescription',
