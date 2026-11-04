@@ -21,6 +21,14 @@ export class DeepLinkService {
     return this.build(`orders/${orderId}`, `/orders/${orderId}`);
   }
 
+  /** P1: delivered notification target; the client opens it in the client persona. */
+  deliveryConfirm(orderId: string): DeepLinkPair {
+    return this.build(
+      `orders/${orderId}/confirm?persona=client`,
+      `/orders/${orderId}/confirm?persona=client`
+    );
+  }
+
   /** Superuser-only intervention view; not the persona-owned order screen. */
   adminOrder(orderId: string): DeepLinkPair {
     return this.build(`admin/orders/${orderId}`, `/admin/orders/${orderId}`);

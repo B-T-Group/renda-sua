@@ -32,6 +32,16 @@ function buildService(overrides: Record<string, any> = {}) {
     awaitingSince: jest.fn().mockResolvedValue([]),
     stampReminder: jest.fn(),
     stampSupportTicket: jest.fn(),
+    stampDelivered: jest.fn(),
+    stampDeliveredIfMissing: jest.fn(),
+    stampReportWindow: jest.fn(),
+    awaitingWithoutDeadline: jest.fn().mockResolvedValue([]),
+    backfillDeadline: jest.fn().mockResolvedValue(true),
+    dueMomoAutoComplete: jest.fn().mockResolvedValue([]),
+    pendingMomoReminders: jest.fn().mockResolvedValue([]),
+    claimReminder: jest.fn().mockResolvedValue(true),
+    openDispute: jest.fn(),
+    insertReport: jest.fn().mockResolvedValue('report-1'),
   };
   const marketConfig = {
     forOrder: jest.fn().mockResolvedValue({
@@ -41,6 +51,11 @@ function buildService(overrides: Record<string, any> = {}) {
       graceMinutes: 5,
       nonStripeSupportHours: 48,
       giftBuyerCanConfirm: true,
+      momoAutoCompleteHours: 2,
+      momoReminderHours: 1,
+      reportWindowHours: 24,
+      clientFlagThreshold: 2,
+      clientFlagWindowDays: 90,
     }),
   };
   const orderStatus = { updateOrderStatus: jest.fn().mockResolvedValue({}) };
@@ -62,6 +77,10 @@ function buildService(overrides: Record<string, any> = {}) {
   const recipientNotifications = {
     notifyDeliveryConfirm: jest.fn(),
   };
+  const notifier = {
+    sendReminder: jest.fn().mockResolvedValue(true),
+    sendAutoCompleted: jest.fn().mockResolvedValue(true),
+  };
   const svc = new ClientConfirmDeliveryService(
     users as any,
     repo as any,
@@ -69,7 +88,8 @@ function buildService(overrides: Record<string, any> = {}) {
     orderStatus as any,
     orders as any,
     support as any,
-    recipientNotifications as any
+    recipientNotifications as any,
+    notifier as any
   );
   Object.assign(svc as any, overrides);
   return {
@@ -81,6 +101,7 @@ function buildService(overrides: Record<string, any> = {}) {
     orders,
     support,
     recipientNotifications,
+    notifier,
   };
 }
 
@@ -258,7 +279,7 @@ describe('ClientConfirmDeliveryService', () => {
     expect(ctx.orders.recordClientConfirmHistory).toHaveBeenCalledWith(
       'order-1',
       DISPUTED,
-      'Wrong items',
+      'Client reported an issue (other): Wrong items',
       'client-user',
       'client'
     );
@@ -882,5 +903,391 @@ describe('ClientConfirmDeliveryService', () => {
       expect.any(String),
       expect.objectContaining({ orderId: 'already' })
     );
+  });
+});
+
+describe('MoMo Delivered → client Complete', () => {
+  const NOW = new Date('2026-11-04T15:00:00Z');
+  const MOMO = {
+    countryCode: 'CM',
+    isStripeRail: false,
+    autoCompleteHours: 2,
+    graceMinutes: 5,
+    nonStripeSupportHours: 48,
+    giftBuyerCanConfirm: true,
+    momoAutoCompleteHours: 2,
+    momoReminderHours: 1,
+    reportWindowHours: 24,
+    clientFlagThreshold: 2,
+    clientFlagWindowDays: 90,
+  };
+  const asClient = (ctx: ReturnType<typeof buildService>) =>
+    ctx.users.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      user_type_id: 'client',
+      client: { id: 'c1' },
+    });
+  const momoCtx = () => {
+    const ctx = buildService();
+    ctx.marketConfig.forOrder.mockResolvedValue(MOMO);
+    return ctx;
+  };
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: NOW, doNotFake: ['nextTick', 'setImmediate'] });
+  });
+  afterEach(() => jest.useRealTimers());
+
+  describe('markDelivered', () => {
+    it('stamps delivered_at and freezes a 2h deadline; the agent is not paid', async () => {
+      const ctx = momoCtx();
+      ctx.repo.loadOrder.mockResolvedValue(deliveryOrder({ fulfillment_country: 'CM' }));
+      const result = await ctx.svc.markDelivered('order-1');
+      expect(ctx.repo.stampDelivered).toHaveBeenCalledWith(
+        'order-1',
+        NOW.toISOString(),
+        '2026-11-04T17:00:00.000Z'
+      );
+      expect(result.autoCompleteDeadlineAt).toBe('2026-11-04T17:00:00.000Z');
+      expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    });
+
+    it('leaves the Stripe rail without a deadline (unchanged)', async () => {
+      const ctx = buildService();
+      ctx.repo.loadOrder.mockResolvedValue(deliveryOrder());
+      await ctx.svc.markDelivered('order-1');
+      expect(ctx.repo.stampDelivered).toHaveBeenCalledWith('order-1', NOW.toISOString(), null);
+    });
+  });
+
+  describe('client Complete', () => {
+    it('from out_for_delivery records delivered and completed with the same timestamp', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(deliveryOrder({ current_status: 'out_for_delivery' }));
+      await ctx.svc.confirmReceipt('order-1');
+      expect(ctx.repo.stampConfirmationMethod).toHaveBeenCalledWith(
+        'order-1',
+        'client',
+        NOW.toISOString()
+      );
+      expect(ctx.repo.stampDeliveredIfMissing).toHaveBeenCalledWith('order-1', NOW.toISOString());
+      expect(ctx.orders.recordClientConfirmHistory).toHaveBeenCalledWith(
+        'order-1',
+        AWAITING_CLIENT_CONFIRMATION,
+        expect.stringContaining(NOW.toISOString()),
+        'client-user',
+        'client'
+      );
+      expect(ctx.repo.stampReportWindow).toHaveBeenCalledWith(
+        'order-1',
+        '2026-11-05T15:00:00.000Z'
+      );
+    });
+
+    it('from awaiting does not write a second delivered event', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(
+        deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION })
+      );
+      await ctx.svc.confirmReceipt('order-1');
+      expect(ctx.repo.stampDeliveredIfMissing).not.toHaveBeenCalled();
+      expect(ctx.orders.completeAfterClientConfirmation).toHaveBeenCalledTimes(1);
+    });
+
+    it('is refused once the order is disputed (hold stays locked)', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(deliveryOrder({ current_status: DISPUTED }));
+      await expect(ctx.svc.confirmReceipt('order-1')).rejects.toBeInstanceOf(HttpException);
+      expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('auto-complete', () => {
+    const due = (extra: Record<string, any> = {}) =>
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        fulfillment_country: 'CM',
+        auto_complete_deadline_at: '2026-11-04T14:59:00Z',
+        ...extra,
+      });
+
+    it('completes a due MoMo order once, then tells the client about the 24h window', async () => {
+      const ctx = momoCtx();
+      ctx.repo.dueMomoAutoComplete.mockResolvedValue(['order-1']);
+      ctx.repo.loadOrder.mockResolvedValue(due());
+      const result = await ctx.svc.autoCompleteDue(NOW);
+      expect(result.completed).toBe(1);
+      expect(ctx.orders.completeAfterClientConfirmation).toHaveBeenCalledWith(
+        'order-1',
+        expect.stringContaining('Auto-completed 2 h after delivery')
+      );
+      // Method is stamped only after the status CAS was won.
+      const completeOrder = ctx.orders.completeAfterClientConfirmation.mock.invocationCallOrder[0];
+      const stampOrder = ctx.repo.stampConfirmationMethod.mock.invocationCallOrder[0];
+      expect(stampOrder).toBeGreaterThan(completeOrder);
+      expect(ctx.notifier.sendAutoCompleted).toHaveBeenCalledWith('order-1', 24);
+      expect(ctx.repo.stampReportWindow).toHaveBeenCalled();
+    });
+
+    it('never completes an order with a report on it', async () => {
+      const ctx = momoCtx();
+      ctx.repo.dueMomoAutoComplete.mockResolvedValue(['order-1']);
+      ctx.repo.loadOrder.mockResolvedValue(due({ dispute_opened_at: '2026-11-04T14:00:00Z' }));
+      expect((await ctx.svc.autoCompleteDue(NOW)).completed).toBe(0);
+      ctx.repo.loadOrder.mockResolvedValue(due({ current_status: DISPUTED }));
+      expect((await ctx.svc.autoCompleteDue(NOW)).completed).toBe(0);
+      expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    });
+
+    it('skips orders that are not due yet or on the Stripe rail', async () => {
+      const ctx = momoCtx();
+      ctx.repo.dueMomoAutoComplete.mockResolvedValue(['order-1']);
+      ctx.repo.loadOrder.mockResolvedValue(due({ auto_complete_deadline_at: '2026-11-04T15:30:00Z' }));
+      expect((await ctx.svc.autoCompleteDue(NOW)).completed).toBe(0);
+      ctx.marketConfig.forOrder.mockResolvedValue({ ...MOMO, isStripeRail: true });
+      ctx.repo.loadOrder.mockResolvedValue(due());
+      expect((await ctx.svc.autoCompleteDue(NOW)).completed).toBe(0);
+      expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    });
+
+    it('loses the race to client Complete quietly: no second message, no stamp', async () => {
+      const ctx = momoCtx();
+      ctx.repo.dueMomoAutoComplete.mockResolvedValue(['order-1']);
+      ctx.repo.loadOrder.mockResolvedValue(due());
+      ctx.orders.completeAfterClientConfirmation.mockResolvedValue({
+        alreadyComplete: true,
+        order: null,
+      });
+      expect((await ctx.svc.autoCompleteDue(NOW)).completed).toBe(0);
+      expect(ctx.repo.stampConfirmationMethod).not.toHaveBeenCalled();
+      expect(ctx.notifier.sendAutoCompleted).not.toHaveBeenCalled();
+    });
+
+    it('loses the race to a report: the refused transition is swallowed and nothing settles', async () => {
+      const ctx = momoCtx();
+      ctx.repo.dueMomoAutoComplete.mockResolvedValue(['order-1']);
+      ctx.repo.loadOrder.mockResolvedValue(due());
+      ctx.orders.completeAfterClientConfirmation.mockRejectedValue(
+        new Error('Invalid status transition from disputed to complete')
+      );
+      expect((await ctx.svc.autoCompleteDue(NOW)).completed).toBe(0);
+      expect(ctx.repo.stampConfirmationMethod).not.toHaveBeenCalled();
+      expect(ctx.notifier.sendAutoCompleted).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('1h reminder', () => {
+    const awaiting = (deadline: string) =>
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        fulfillment_country: 'CM',
+        auto_complete_deadline_at: deadline,
+      });
+
+    it('claims, then sends once the reminder time has passed', async () => {
+      const ctx = momoCtx();
+      ctx.repo.pendingMomoReminders.mockResolvedValue([awaiting('2026-11-04T15:50:00Z')]);
+      expect((await ctx.svc.sendDueReminders(NOW)).reminded).toBe(1);
+      expect(ctx.repo.claimReminder).toHaveBeenCalledWith('order-1', NOW.toISOString());
+      expect(ctx.notifier.sendReminder).toHaveBeenCalledWith('order-1', 50);
+    });
+
+    it('does not send when another worker already claimed it', async () => {
+      const ctx = momoCtx();
+      ctx.repo.pendingMomoReminders.mockResolvedValue([awaiting('2026-11-04T15:50:00Z')]);
+      ctx.repo.claimReminder.mockResolvedValue(false);
+      expect((await ctx.svc.sendDueReminders(NOW)).reminded).toBe(0);
+      expect(ctx.notifier.sendReminder).not.toHaveBeenCalled();
+    });
+
+    it('waits until delivered + 1h', async () => {
+      const ctx = momoCtx();
+      ctx.repo.pendingMomoReminders.mockResolvedValue([awaiting('2026-11-04T16:30:00Z')]);
+      expect((await ctx.svc.sendDueReminders(NOW)).reminded).toBe(0);
+      expect(ctx.repo.claimReminder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('in-flight orders', () => {
+    it('gives awaiting MoMo orders a fresh deadline from now, never retroactive', async () => {
+      const ctx = momoCtx();
+      ctx.repo.awaitingWithoutDeadline.mockResolvedValue([
+        deliveryOrder({
+          current_status: AWAITING_CLIENT_CONFIRMATION,
+          client_confirmation_requested_at: '2026-11-01T10:00:00Z',
+        }),
+      ]);
+      expect((await ctx.svc.backfillInFlightDeadlines(NOW)).backfilled).toBe(1);
+      expect(ctx.repo.backfillDeadline).toHaveBeenCalledWith(
+        'order-1',
+        '2026-11-01T10:00:00Z',
+        '2026-11-04T17:00:00.000Z',
+        NOW.toISOString()
+      );
+    });
+
+    it('leaves Stripe and legacy PIN orders alone', async () => {
+      const ctx = buildService();
+      ctx.repo.awaitingWithoutDeadline.mockResolvedValue([
+        deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION }),
+        deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION, delivery_pin_hash: 'x' }),
+      ]);
+      expect((await ctx.svc.backfillInFlightDeadlines(NOW)).backfilled).toBe(0);
+      expect(ctx.repo.backfillDeadline).not.toHaveBeenCalled();
+    });
+
+    it('legacy stuck sweep ignores orders that now have a deadline', async () => {
+      const ctx = momoCtx();
+      ctx.repo.awaitingSince.mockResolvedValue([
+        deliveryOrder({
+          current_status: AWAITING_CLIENT_CONFIRMATION,
+          client_confirmation_requested_at: '2026-11-04T10:00:00Z',
+          auto_complete_deadline_at: '2026-11-04T17:00:00Z',
+        }),
+      ]);
+      const counts = await ctx.svc.processNonStripeStuck(NOW);
+      expect(counts).toEqual({ reminded1h: 0, reminded24h: 0, tickets: 0 });
+      expect(ctx.repo.stampReminder).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reports', () => {
+    it('Delivery failed / Courier didn\'t come pauses auto-complete and goes to support', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(
+        deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION })
+      );
+      const result = await ctx.svc.reportProblem('order-1', {
+        type: 'delivery_failed',
+        reason: 'courier_didnt_come',
+      });
+      expect(result.status).toBe(DISPUTED);
+      expect(ctx.repo.openDispute).toHaveBeenCalledWith(
+        'order-1',
+        'delivery_failed',
+        'courier_didnt_come',
+        NOW.toISOString()
+      );
+      expect(ctx.repo.insertReport).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'pre_completion', ticketId: 'ticket-1' })
+      );
+      expect(ctx.repo.stampSupportTicket).toHaveBeenCalledWith(
+        'order-1',
+        'ticket-1',
+        NOW.toISOString()
+      );
+      expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    });
+
+    it('can be filed from out_for_delivery too', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(deliveryOrder({ current_status: 'out_for_delivery' }));
+      const result = await ctx.svc.reportProblem('order-1', { type: 'issue', reason: 'damaged' });
+      expect(result.status).toBe(DISPUTED);
+    });
+
+    it('rejects an unknown reason', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(
+        deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION })
+      );
+      await expect(
+        ctx.svc.reportProblem('order-1', { type: 'issue', reason: 'courier_didnt_come' })
+      ).rejects.toBeInstanceOf(HttpException);
+    });
+
+    it('a report that loses the race to completion becomes a post-completion report', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder
+        .mockResolvedValueOnce(deliveryOrder({ current_status: AWAITING_CLIENT_CONFIRMATION }))
+        .mockResolvedValue(
+          deliveryOrder({
+            current_status: 'complete',
+            report_window_ends_at: '2026-11-05T15:00:00Z',
+          })
+        );
+      ctx.orderStatus.updateOrderStatus.mockRejectedValue(new Error('invalid transition'));
+      const result = await ctx.svc.reportProblem('order-1', { type: 'issue', reason: 'wrong_items' });
+      expect(result.postCompletionClaim).toBe(true);
+      expect(ctx.repo.openDispute).not.toHaveBeenCalled();
+      expect(ctx.repo.insertReport).toHaveBeenCalledWith(
+        expect.objectContaining({ phase: 'post_completion' })
+      );
+    });
+
+    it('after completion: accepted inside the 24h window, refused after', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(
+        deliveryOrder({ current_status: 'complete', report_window_ends_at: '2026-11-05T14:00:00Z' })
+      );
+      const ok = await ctx.svc.reportProblem('order-1', { type: 'issue', reason: 'missing_items' });
+      expect(ok.postCompletionClaim).toBe(true);
+      expect(ctx.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+      ctx.repo.loadOrder.mockResolvedValue(
+        deliveryOrder({ current_status: 'complete', report_window_ends_at: '2026-11-04T14:00:00Z' })
+      );
+      await expect(
+        ctx.svc.reportProblem('order-1', { type: 'issue', reason: 'missing_items' })
+      ).rejects.toBeInstanceOf(HttpException);
+    });
+
+    it('a second report on a disputed order is idempotent', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(
+        deliveryOrder({ current_status: DISPUTED, awaiting_confirm_support_ticket_id: 't9' })
+      );
+      const result = await ctx.svc.reportProblem('order-1', { type: 'issue', reason: 'other' });
+      expect(result).toEqual(expect.objectContaining({ status: DISPUTED, ticketId: 't9' }));
+      expect(ctx.support.createTicket).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getState', () => {
+    it('returns no order data to another account (P4)', async () => {
+      const ctx = momoCtx();
+      ctx.users.getUser.mockResolvedValue({ id: 'stranger' });
+      ctx.repo.loadOrder.mockResolvedValue(deliveryOrder());
+      expect(await ctx.svc.getState('order-1')).toEqual({
+        orderId: 'order-1',
+        accessible: false,
+        reason: 'other_account',
+      });
+    });
+
+    it('gives the client the confirm fields and server time', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.repo.loadOrder.mockResolvedValue(
+        deliveryOrder({
+          current_status: AWAITING_CLIENT_CONFIRMATION,
+          delivered_at: '2026-11-04T14:30:00Z',
+          auto_complete_deadline_at: '2026-11-04T16:30:00Z',
+        })
+      );
+      const state: any = await ctx.svc.getState('order-1');
+      expect(state).toEqual(
+        expect.objectContaining({
+          accessible: true,
+          viewerRole: 'client',
+          serverNow: NOW.toISOString(),
+          deliveredAt: '2026-11-04T14:30:00Z',
+          reminderAt: '2026-11-04T15:30:00.000Z',
+          autoCompleteHours: 2,
+          canComplete: true,
+          canReport: true,
+          confirmVariant: 'awaiting',
+        })
+      );
+    });
   });
 });

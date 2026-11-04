@@ -6,6 +6,16 @@ import {
   CONFIG_GIFT_BUYER_CAN_CONFIRM,
   CONFIG_GRACE_MINUTES,
   CONFIG_NONSTRIPE_SUPPORT_HOURS,
+  CONFIG_CLIENT_FLAG_THRESHOLD,
+  CONFIG_CLIENT_FLAG_WINDOW_DAYS,
+  CONFIG_MOMO_AUTO_COMPLETE_HOURS,
+  CONFIG_MOMO_REMINDER_HOURS,
+  CONFIG_REPORT_WINDOW_HOURS,
+  DEFAULT_CLIENT_FLAG_THRESHOLD,
+  DEFAULT_CLIENT_FLAG_WINDOW_DAYS,
+  DEFAULT_MOMO_AUTO_COMPLETE_HOURS,
+  DEFAULT_MOMO_REMINDER_HOURS,
+  DEFAULT_REPORT_WINDOW_HOURS,
   DEFAULT_AUTO_COMPLETE_HOURS,
   DEFAULT_GRACE_MINUTES,
   DEFAULT_NONSTRIPE_SUPPORT_HOURS,
@@ -18,6 +28,14 @@ export interface ClientConfirmMarketConfig {
   graceMinutes: number;
   nonStripeSupportHours: number;
   giftBuyerCanConfirm: boolean;
+  /** Non-Stripe: hours from Delivered to auto-complete (default 2). */
+  momoAutoCompleteHours: number;
+  /** Non-Stripe: hours from Delivered to the reminder (default 1). */
+  momoReminderHours: number;
+  /** Hours after completion the client can still report an issue (default 24). */
+  reportWindowHours: number;
+  clientFlagThreshold: number;
+  clientFlagWindowDays: number;
 }
 
 interface ConfigRow {
@@ -32,6 +50,11 @@ const CONFIG_KEYS = [
   CONFIG_GRACE_MINUTES,
   CONFIG_NONSTRIPE_SUPPORT_HOURS,
   CONFIG_GIFT_BUYER_CAN_CONFIRM,
+  CONFIG_MOMO_AUTO_COMPLETE_HOURS,
+  CONFIG_MOMO_REMINDER_HOURS,
+  CONFIG_REPORT_WINDOW_HOURS,
+  CONFIG_CLIENT_FLAG_THRESHOLD,
+  CONFIG_CLIENT_FLAG_WINDOW_DAYS,
 ];
 
 @Injectable()
@@ -80,6 +103,45 @@ export class ClientConfirmMarketConfigService {
         CONFIG_GIFT_BUYER_CAN_CONFIRM,
         countryCode,
         true
+      ),
+      ...this.momoRules(rows, countryCode),
+    };
+  }
+
+  private momoRules(rows: ConfigRow[], country: string | null) {
+    const auto = this.number(
+      rows,
+      CONFIG_MOMO_AUTO_COMPLETE_HOURS,
+      country,
+      DEFAULT_MOMO_AUTO_COMPLETE_HOURS
+    );
+    const reminder = this.number(
+      rows,
+      CONFIG_MOMO_REMINDER_HOURS,
+      country,
+      DEFAULT_MOMO_REMINDER_HOURS
+    );
+    return {
+      momoAutoCompleteHours: auto,
+      // A reminder at or after auto-complete would never be useful.
+      momoReminderHours: reminder < auto ? reminder : auto / 2,
+      reportWindowHours: this.number(
+        rows,
+        CONFIG_REPORT_WINDOW_HOURS,
+        country,
+        DEFAULT_REPORT_WINDOW_HOURS
+      ),
+      clientFlagThreshold: this.number(
+        rows,
+        CONFIG_CLIENT_FLAG_THRESHOLD,
+        country,
+        DEFAULT_CLIENT_FLAG_THRESHOLD
+      ),
+      clientFlagWindowDays: this.number(
+        rows,
+        CONFIG_CLIENT_FLAG_WINDOW_DAYS,
+        country,
+        DEFAULT_CLIENT_FLAG_WINDOW_DAYS
       ),
     };
   }

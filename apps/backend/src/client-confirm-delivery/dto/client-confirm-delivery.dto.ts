@@ -1,7 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  DELIVERY_REPORT_TYPES,
+  type DeliveryReportType,
+} from '../client-confirm-delivery.constants';
+import {
+  ArrayMaxSize,
   ArrayMinSize,
+  IsIn,
+  IsUUID,
   IsArray,
   IsISO8601,
   IsNumber,
@@ -54,6 +61,39 @@ export class ReportDeliveryProblemDto {
   @IsString()
   @MaxLength(2000)
   description?: string;
+
+  @ApiPropertyOptional({ enum: DELIVERY_REPORT_TYPES })
+  @IsOptional()
+  @IsIn(DELIVERY_REPORT_TYPES as unknown as string[])
+  type?: DeliveryReportType;
+
+  @ApiPropertyOptional({
+    description: 'issue: missing_items|wrong_items|damaged|other; delivery_failed: courier_didnt_come|not_received|other',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(64)
+  reason?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  note?: string;
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(6)
+  @IsUrl({ require_tld: false }, { each: true })
+  photoUrls?: string[];
+
+  @ApiPropertyOptional({ type: [String] })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(50)
+  @IsUUID('all', { each: true })
+  itemIds?: string[];
 }
 
 export class GenerateOverwriteCodeDto {

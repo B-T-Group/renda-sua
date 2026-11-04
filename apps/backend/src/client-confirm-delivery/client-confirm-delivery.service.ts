@@ -17,8 +17,12 @@ import {
   NONSTRIPE_REMINDER_1H_HOURS,
   NONSTRIPE_REMINDER_24H_HOURS,
   PENDING_AUTO_COMPLETE,
+  DELIVERY_FAILED_REASONS,
+  ISSUE_REASONS,
   type DeliveryConfirmationMethod,
 } from './client-confirm-delivery.constants';
+import { DeliveryConfirmNotifier } from './delivery-confirm-notifier';
+import { deliveryConfirmVariant, momoReminderAt } from './delivery-confirm-state.util';
 import {
   CLIENT_CONFIRM_COPY,
   withHours,
@@ -28,8 +32,11 @@ import { ClientConfirmDeliveryRepository } from './client-confirm-delivery.repos
 import {
   ConfirmReceiptResult,
   ClientConfirmOrder,
+  DeliveryConfirmationForbidden,
   DeliveryConfirmationState,
   DeliveryProofPhotoInput,
+  DeliveryReportInput,
+  DeliveryReportResult,
   RecipientDeliveryAction,
   RecipientProblemResult,
 } from './client-confirm-delivery.types';
@@ -55,7 +62,8 @@ export class ClientConfirmDeliveryService {
     @Inject(forwardRef(() => OrdersService))
     private readonly orders: OrdersService,
     private readonly support: SupportService,
-    private readonly recipientNotifications: OrderRecipientNotificationsService
+    private readonly recipientNotifications: OrderRecipientNotificationsService,
+    private readonly notifier: DeliveryConfirmNotifier
   ) {}
 
   async markDelivered(orderId: string) {
@@ -66,11 +74,12 @@ export class ClientConfirmDeliveryService {
     await this.orderStatus.updateOrderStatus(orderId, AWAITING_CLIENT_CONFIRMATION, {
       viaSystem: true,
     });
-    await this.afterMarkDeliveredCommitted(order, user.id);
+    const deadline = await this.afterMarkDeliveredCommitted(order, user.id);
     return {
       success: true,
       status: AWAITING_CLIENT_CONFIRMATION,
       agentId,
+      autoCompleteDeadlineAt: deadline,
       message: CLIENT_CONFIRM_COPY.agentWaiting.en,
     };
   }
@@ -106,16 +115,32 @@ export class ClientConfirmDeliveryService {
     const resolved =
       method === 'client' && order.is_third_party_recipient ? 'buyer' : method;
     await this.assertConfirmerAllowed(order, resolved);
-    const stamped = await this.repo.stampConfirmationMethod(
-      orderId,
-      resolved,
-      new Date().toISOString()
-    );
+    const at = new Date().toISOString();
+    const stamped = await this.repo.stampConfirmationMethod(orderId, resolved, at);
+    const fromOutForDelivery = order.current_status === 'out_for_delivery';
+    if (fromOutForDelivery) {
+      // Complete straight from out_for_delivery: delivered and completed share one timestamp.
+      await this.repo.stampDeliveredIfMissing(orderId, at);
+    }
     const result = await this.orders.completeAfterClientConfirmation(
       orderId,
       this.completeHistory(resolved),
       this.confirmChangedByType(resolved)
     );
+    if (!result.alreadyComplete) {
+      if (fromOutForDelivery) {
+        await this.safeAfterCommit('delivered history', () =>
+          this.orders.recordClientConfirmHistory(
+            orderId,
+            AWAITING_CLIENT_CONFIRMATION,
+            `Delivered (recorded at client completion ${at})`,
+            order.client?.user_id ?? null,
+            'client'
+          )
+        );
+      }
+      await this.stampReportWindow(order);
+    }
     return {
       success: true,
       alreadyComplete: result.alreadyComplete,
@@ -126,33 +151,54 @@ export class ClientConfirmDeliveryService {
     };
   }
 
-  async reportProblem(orderId: string, description?: string) {
+  /**
+   * Client "Report an issue" or "Delivery failed". Before completion it moves the order to
+   * disputed (no auto-complete, agent hold stays locked, admin resolves). After completion
+   * it is accepted only inside the report window and opens a claim without moving money.
+   */
+  async reportProblem(
+    orderId: string,
+    input: DeliveryReportInput | string | undefined
+  ): Promise<DeliveryReportResult> {
+    const report = this.normalizeReport(input);
     const user = await this.users.getUser();
     const order = await this.requireOrder(orderId);
     if (order.current_status === DISPUTED) {
-      return {
-        success: true,
-        status: DISPUTED,
-        ticketId: order.awaiting_confirm_support_ticket_id,
-        message: 'Delivery reported as a problem. Support will follow up.',
-      };
+      return this.disputedResult(order.awaiting_confirm_support_ticket_id);
+    }
+    if (order.current_status === 'complete') {
+      await this.assertConfirmerAllowed(order, 'client');
+      return this.reportAfterCompletion(order, user.id, report);
     }
     this.assertConfirmable(order);
     await this.assertConfirmerAllowed(order, 'client');
-    await this.transition(
-      orderId,
-      DISPUTED,
-      description?.trim() || 'Client reported a delivery problem',
-      user.id,
-      'client'
+    const at = new Date().toISOString();
+    try {
+      await this.transition(
+        orderId,
+        DISPUTED,
+        this.reportHistory(report),
+        user.id,
+        'client'
+      );
+    } catch (error) {
+      // Lost the race to Complete / auto-complete: fall back to a post-completion report.
+      const latest = await this.requireOrder(orderId);
+      if (latest.current_status === 'complete') {
+        return this.reportAfterCompletion(latest, user.id, report);
+      }
+      if (latest.current_status === DISPUTED) {
+        return this.disputedResult(latest.awaiting_confirm_support_ticket_id);
+      }
+      throw error;
+    }
+    await this.repo.openDispute(orderId, report.type, report.reason, at);
+    const ticket = await this.openDisputeTicket(order, user.id, this.ticketText(report));
+    await this.safeAfterCommit('dispute ticket', () =>
+      this.repo.stampSupportTicket(orderId, ticket.id, at)
     );
-    const ticket = await this.openDisputeTicket(order, user.id, description);
-    return {
-      success: true,
-      status: DISPUTED,
-      ticketId: ticket.id,
-      message: 'Delivery reported as a problem. Support will follow up.',
-    };
+    const reportId = await this.safeInsertReport(order, user.id, report, 'pre_completion', ticket.id);
+    return { ...this.disputedResult(ticket.id), reportId };
   }
 
   async submitCouldNotConfirm(
@@ -189,10 +235,18 @@ export class ClientConfirmDeliveryService {
     };
   }
 
-  async getState(orderId: string): Promise<DeliveryConfirmationState> {
-    const order = await this.requireOrder(orderId);
+  async getState(
+    orderId: string
+  ): Promise<DeliveryConfirmationState | DeliveryConfirmationForbidden> {
+    const order = await this.repo.loadOrder(orderId);
+    const viewerRole = order ? await this.viewerRole(order) : null;
+    if (!order || !viewerRole) {
+      // P4: same answer for "missing" and "someone else's": no order data.
+      return { orderId, accessible: false, reason: 'other_account' };
+    }
     const market = await this.marketConfig.forOrder(order);
     const photos = await this.repo.listProofPhotos(orderId);
+    const now = new Date();
     const elapsed = graceElapsed(
       order.client_confirmation_requested_at,
       market.graceMinutes
@@ -202,6 +256,11 @@ export class ClientConfirmDeliveryService {
       isAwaitingClientConfirmation(order.current_status) &&
       market.isStripeRail &&
       elapsed;
+    const variant = deliveryConfirmVariant(order, now);
+    const confirmable =
+      viewerRole === 'client' &&
+      !usesLegacyDeliveryPin(order) &&
+      canConfirmFromStatus(order.current_status);
     return {
       orderId,
       status: order.current_status,
@@ -210,7 +269,9 @@ export class ClientConfirmDeliveryService {
       isStripeRail: market.isStripeRail,
       graceElapsed: elapsed,
       graceMinutes: market.graceMinutes,
-      autoCompleteHours: market.autoCompleteHours,
+      autoCompleteHours: market.isStripeRail
+        ? market.autoCompleteHours
+        : market.momoAutoCompleteHours,
       autoCompleteDeadlineAt: order.auto_complete_deadline_at ?? null,
       requestedAt: order.client_confirmation_requested_at ?? null,
       canSubmitFallback,
@@ -224,6 +285,20 @@ export class ClientConfirmDeliveryService {
         agentId: p.agent_id ?? null,
       })),
       market,
+      accessible: true,
+      viewerRole,
+      serverNow: now.toISOString(),
+      deliveredAt: order.delivered_at ?? null,
+      completedAt: order.completed_at ?? null,
+      reminderAt: momoReminderAt(order, market),
+      reportWindowEndsAt: order.report_window_ends_at ?? null,
+      disputeType: order.dispute_type ?? null,
+      disputeOpenedAt: order.dispute_opened_at ?? null,
+      canComplete: confirmable,
+      canReport: confirmable,
+      canReportAfterCompletion:
+        viewerRole === 'client' && variant === 'completed_can_report',
+      confirmVariant: variant,
     };
   }
 
@@ -248,7 +323,50 @@ export class ClientConfirmDeliveryService {
     for (const id of ids) {
       if (await this.autoCompleteOne(id, now)) completed += 1;
     }
+    for (const id of await this.repo.dueMomoAutoComplete(now.toISOString(), 50)) {
+      if (await this.safeAutoCompleteMomo(id, now)) completed += 1;
+    }
     return { completed };
+  }
+
+  /** 1h reminder (push + WhatsApp, SMS fallback). CAS-claimed before sending: at most once. */
+  async sendDueReminders(now: Date = new Date()): Promise<{ reminded: number }> {
+    // Reminder is due at deadline - (auto - reminder) hours; the widest gap we allow is 72h.
+    const latest = new Date(now.getTime() + 72 * 3_600_000).toISOString();
+    let reminded = 0;
+    for (const order of await this.repo.pendingMomoReminders(latest, 100)) {
+      const market = await this.marketConfig.forOrder(order);
+      if (market.isStripeRail) continue;
+      const remindAt = momoReminderAt(order, market);
+      if (!remindAt || Date.parse(remindAt) > now.getTime()) continue;
+      if (!(await this.repo.claimReminder(order.id, now.toISOString()))) continue;
+      const deadline = Date.parse(order.auto_complete_deadline_at ?? '');
+      const minutesLeft = (deadline - now.getTime()) / 60_000;
+      if (minutesLeft <= 0) continue; // auto-complete is about to send its own message
+      await this.notifier.sendReminder(order.id, minutesLeft);
+      reminded += 1;
+    }
+    return { reminded };
+  }
+
+  /**
+   * In-flight MoMo orders that were already awaiting before this release have no deadline.
+   * Give them a fresh one from now (never retroactive), so nothing auto-completes instantly.
+   */
+  async backfillInFlightDeadlines(now: Date = new Date()): Promise<{ backfilled: number }> {
+    let backfilled = 0;
+    for (const order of await this.repo.awaitingWithoutDeadline(500)) {
+      if (usesLegacyDeliveryPin(order)) continue;
+      const market = await this.marketConfig.forOrder(order);
+      if (market.isStripeRail) continue;
+      const delivered =
+        order.delivered_at || order.client_confirmation_requested_at || now.toISOString();
+      const deadline = hoursFromNow(market.momoAutoCompleteHours, now).toISOString();
+      if (await this.repo.backfillDeadline(order.id, delivered, deadline, now.toISOString())) {
+        backfilled += 1;
+      }
+    }
+    return { backfilled };
   }
 
   async processNonStripeStuck(now: Date = new Date()): Promise<{
@@ -387,6 +505,8 @@ export class ClientConfirmDeliveryService {
     now: Date,
     counts: { reminded1h: number; reminded24h: number; tickets: number }
   ): Promise<void> {
+    // MoMo orders with a deadline use the 1h reminder + 2h auto-complete instead.
+    if (order.auto_complete_deadline_at) return;
     const market = await this.marketConfig.forOrder(order);
     if (market.isStripeRail) return;
     const requested = Date.parse(order.client_confirmation_requested_at ?? '');
@@ -415,6 +535,152 @@ export class ClientConfirmDeliveryService {
       'Non-Stripe order still awaiting client confirmation after the support SLA'
     );
     await this.repo.stampSupportTicket(order.id, ticket.id, now.toISOString());
+  }
+
+  private async safeAutoCompleteMomo(orderId: string, now: Date): Promise<boolean> {
+    try {
+      return await this.autoCompleteMomo(orderId, now);
+    } catch (error: any) {
+      // A report that won the race leaves the order disputed: complete is refused. Expected.
+      this.logger.warn(`MoMo auto-complete skipped for ${orderId}: ${error?.message}`);
+      return false;
+    }
+  }
+
+  private async autoCompleteMomo(orderId: string, now: Date): Promise<boolean> {
+    const order = await this.repo.loadOrder(orderId);
+    if (!order || order.current_status !== AWAITING_CLIENT_CONFIRMATION) return false;
+    if (order.dispute_opened_at) return false;
+    const deadline = Date.parse(order.auto_complete_deadline_at ?? '');
+    if (Number.isNaN(deadline) || deadline > now.getTime()) return false;
+    const market = await this.marketConfig.forOrder(order);
+    if (market.isStripeRail) return false;
+    // The status CAS inside decides the single winner vs client Complete or a report.
+    // A report that already moved the order to disputed makes this throw (caught by caller),
+    // so a disputed order is never auto-completed and the agent hold stays locked.
+    const result = await this.orders.completeAfterClientConfirmation(
+      orderId,
+      `Auto-completed ${market.momoAutoCompleteHours} h after delivery (no report)`
+    );
+    if (result.alreadyComplete) return false;
+    // Stamp only after winning, so a lost race never labels an order auto-completed.
+    const stamped = await this.repo.stampConfirmationMethod(
+      orderId,
+      'auto_complete',
+      now.toISOString()
+    );
+    await this.stampReportWindow(order, market.reportWindowHours);
+    if (stamped) await this.notifier.sendAutoCompleted(orderId, market.reportWindowHours);
+    return true;
+  }
+
+  private async stampReportWindow(order: ClientConfirmOrder, hours?: number): Promise<void> {
+    await this.safeAfterCommit('report window', async () => {
+      const window = hours ?? (await this.marketConfig.forOrder(order)).reportWindowHours;
+      await this.repo.stampReportWindow(order.id, hoursFromNow(window).toISOString());
+    });
+  }
+
+  private async reportAfterCompletion(
+    order: ClientConfirmOrder,
+    userId: string,
+    report: DeliveryReportInput
+  ): Promise<DeliveryReportResult> {
+    const endsAt = Date.parse(order.report_window_ends_at ?? '');
+    if (Number.isNaN(endsAt) || Date.now() > endsAt) {
+      throw new HttpException(
+        'The window to report an issue on this order has closed',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+    const ticket = await this.support.createTicket(userId, {
+      orderId: order.id,
+      type: 'complaint',
+      subject: `Post-delivery report — ${order.order_number ?? order.id}`,
+      description: this.ticketText(report),
+    });
+    const reportId = await this.safeInsertReport(order, userId, report, 'post_completion', ticket.id);
+    return {
+      success: true,
+      status: 'complete',
+      ticketId: ticket.id,
+      reportId,
+      postCompletionClaim: true,
+      message: 'Thanks. Support will review your report.',
+    };
+  }
+
+  private async safeInsertReport(
+    order: ClientConfirmOrder,
+    userId: string,
+    report: DeliveryReportInput,
+    phase: 'pre_completion' | 'post_completion',
+    ticketId: string | null
+  ): Promise<string | null> {
+    const clientId = order.client?.id ?? order.client_id;
+    if (!clientId) return null;
+    try {
+      return await this.repo.insertReport({
+        orderId: order.id,
+        clientId,
+        reporterUserId: userId,
+        input: report,
+        phase,
+        ticketId,
+      });
+    } catch (error: any) {
+      this.logger.warn(`delivery report insert failed for ${order.id}: ${error?.message}`);
+      return null;
+    }
+  }
+
+  private normalizeReport(
+    input: DeliveryReportInput | string | undefined
+  ): DeliveryReportInput {
+    if (input == null || typeof input === 'string') {
+      // Legacy body { description } from older app builds.
+      return { type: 'issue', reason: 'other', note: input || undefined };
+    }
+    const type = input.type === 'delivery_failed' ? 'delivery_failed' : 'issue';
+    const allowed: readonly string[] =
+      type === 'delivery_failed' ? DELIVERY_FAILED_REASONS : ISSUE_REASONS;
+    if (!allowed.includes(input.reason)) {
+      throw new HttpException(`Unknown ${type} reason`, HttpStatus.BAD_REQUEST);
+    }
+    return { ...input, type };
+  }
+
+  private reportHistory(report: DeliveryReportInput): string {
+    const label =
+      report.type === 'delivery_failed' ? 'Client reported delivery failed' : 'Client reported an issue';
+    return `${label} (${report.reason})${report.note ? `: ${report.note.trim()}` : ''}`;
+  }
+
+  private ticketText(report: DeliveryReportInput): string {
+    const parts = [this.reportHistory(report)];
+    if (report.photoUrls?.length) parts.push(`Photos: ${report.photoUrls.join(' ')}`);
+    return parts.join('\n');
+  }
+
+  private disputedResult(ticketId?: string | null): DeliveryReportResult {
+    return {
+      success: true,
+      status: DISPUTED,
+      ticketId: ticketId ?? null,
+      message: 'Thanks. Auto-complete is paused and support will follow up.',
+    };
+  }
+
+  private async viewerRole(
+    order: ClientConfirmOrder
+  ): Promise<'client' | 'agent' | 'business' | null> {
+    const user = await this.users.getUser();
+    if (order.client?.user_id && order.client.user_id === user.id) return 'client';
+    if (order.assigned_agent?.user_id && order.assigned_agent.user_id === user.id) {
+      return 'agent';
+    }
+    if (order.business?.user_id && order.business.user_id === user.id) return 'business';
+    return null;
   }
 
   private async transition(
@@ -460,7 +726,7 @@ export class ClientConfirmDeliveryService {
   private async afterMarkDeliveredCommitted(
     order: ClientConfirmOrder,
     actorUserId: string
-  ): Promise<void> {
+  ): Promise<string | null> {
     await this.safeAfterCommit('history', () =>
       this.orders.recordClientConfirmHistory(
         order.id,
@@ -470,10 +736,19 @@ export class ClientConfirmDeliveryService {
         'agent'
       )
     );
-    await this.safeAfterCommit('requested_at', () =>
-      this.repo.stampRequestedAt(order.id, new Date().toISOString())
-    );
+    // MoMo: the deadline is frozen here; later config changes never move it.
+    // The agent is NOT paid at Delivered: settlement runs only on completion.
+    const at = new Date();
+    let deadline: string | null = null;
+    await this.safeAfterCommit('delivered_at', async () => {
+      const market = await this.marketConfig.forOrder(order);
+      deadline = market.isStripeRail
+        ? null
+        : hoursFromNow(market.momoAutoCompleteHours, at).toISOString();
+      await this.repo.stampDelivered(order.id, at.toISOString(), deadline);
+    });
     await this.notifyGiftRecipient(order);
+    return deadline;
   }
 
   private async safeAfterCommit(
