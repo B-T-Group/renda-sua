@@ -1154,11 +1154,68 @@ def trigger_stripe_refund_safe(
         return {"success": False, "error": str(e)}
 
 
+def _process_record(record: Dict[str, Any], idx: int) -> Dict[str, Any]:
+    """Process one SQS record. Raises only for retryable failures."""
+    message_id = record.get("messageId", "unknown")
+    log_info("Processing SQS record", message_id=message_id, record_index=idx)
+
+    message = parse_sqs_event_message(record)
+    if not message:
+        # Unparseable: a retry cannot fix it, so it is not reported as a failure.
+        log_error("Failed to parse message", message_id=message_id, record_index=idx)
+        return {"success": False, "error": "Failed to parse message"}
+
+    event_type = message.eventType
+    log_info("Routing to event handler", event_type=event_type, order_id=message.orderId)
+    try:
+        if event_type == "order.created":
+            result = handle_order_created({"Records": [record]})
+        elif event_type == "order.completed":
+            result = handle_order_completed({"Records": [record]})
+        elif event_type == "order.status.updated":
+            result = handle_order_status_updated({"Records": [record]})
+        elif event_type == "order.cancelled":
+            # cancel_financials_failed raises so SQS retries; do not swallow.
+            result = handle_order_cancelled({"Records": [record]})
+        else:
+            log_error("Unknown event type", event_type=event_type, order_id=message.orderId)
+            result = {"success": False, "error": f"Unknown event type: {event_type}"}
+    except Exception as e:
+        # Re-raise cancel financial failures so only this message is retried
+        # (release/fee keys make a retry safe; Slack/Stripe run only after
+        # financials succeed). Other errors keep the previous behaviour: logged,
+        # message deleted (no retry, avoids duplicate notifications).
+        if "cancel_financials_failed" in str(e):
+            raise
+        log_error(
+            "Unhandled error processing record",
+            error=e,
+            message_id=message_id,
+            event_type=event_type,
+            order_id=message.orderId,
+        )
+        import traceback
+        traceback.print_exc()
+        result = {"success": False, "error": str(e)}
+
+    log_info(
+        "Record processing completed",
+        message_id=message_id,
+        success=result.get("success", False),
+        notifications_sent=result.get("notifications_sent", 0),
+    )
+    return result
+
+
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
-    Main Lambda handler entry point.
-    
-    Routes to appropriate handler based on event type in SQS message.
+    Main Lambda handler entry point (SQS FIFO, ReportBatchItemFailures).
+
+    Returns {"batchItemFailures": [...]} so only failed messages are retried.
+    FIFO ordering: on the first retryable failure, stop and report that record
+    and every remaining record of the batch as failed (AWS guidance for FIFO
+    partial batch responses), so later events for the same order never run
+    ahead of the failed one.
     """
     log_info(
         "Lambda handler invoked",
@@ -1166,86 +1223,34 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         function_name=context.function_name if context else "unknown",
         records_count=len(event.get("Records", [])),
     )
-    
-    try:
-        # Extract records from SQS event
-        records = event.get("Records", [])
-        
-        if not records:
-            log_error("No records in event")
-            return {
-                "success": False,
-                "error": "No records in event",
-            }
-        
-        log_info("Processing SQS records", records_count=len(records))
-        
-        # Process each record (usually one for FIFO queue)
-        results = []
-        for idx, record in enumerate(records):
-            log_info(f"Processing record {idx + 1} of {len(records)}")
-            
-            message_id = record.get("messageId", "unknown")
-            log_info("Processing SQS record", message_id=message_id, record_index=idx)
-            
-            message = parse_sqs_event_message(record)
-            
-            if not message:
-                log_error("Failed to parse message", message_id=message_id, record_index=idx)
-                results.append({"success": False, "error": "Failed to parse message"})
-                continue
-            
-            event_type = message.eventType
-            log_info("Routing to event handler", event_type=event_type, order_id=message.orderId)
-            
-            # Route to appropriate handler
-            if event_type == "order.created":
-                result = handle_order_created({"Records": [record]})
-            elif event_type == "order.completed":
-                result = handle_order_completed({"Records": [record]})
-            elif event_type == "order.status.updated":
-                result = handle_order_status_updated({"Records": [record]})
-            elif event_type == "order.cancelled":
-                # cancel_financials_failed raises so SQS retries; do not swallow.
-                result = handle_order_cancelled({"Records": [record]})
-            else:
-                log_error("Unknown event type", event_type=event_type, order_id=message.orderId)
-                result = {
-                    "success": False,
-                    "error": f"Unknown event type: {event_type}",
-                }
-            
-            log_info(
-                "Record processing completed",
-                message_id=message_id,
-                success=result.get("success", False),
-                notifications_sent=result.get("notifications_sent", 0),
+    records = event.get("Records", []) or []
+    if not records:
+        log_error("No records in event")
+        return {"batchItemFailures": []}
+
+    failures = []
+    for idx, record in enumerate(records):
+        try:
+            _process_record(record, idx)
+        except Exception as e:
+            remaining = records[idx:]
+            log_error(
+                "Retryable record failure; reporting it and remaining records for retry",
+                error=e,
+                message_id=record.get("messageId", "unknown"),
+                failed_count=len(remaining),
             )
-            
-            results.append(result)
-        
-        # Return results (for FIFO, typically one result)
-        log_info("All records processed", total_results=len(results))
-        
-        if len(results) == 1:
-            return results[0]
-        
-        return {
-            "success": True,
-            "results": results,
-        }
-        
-    except Exception as e:
-        log_error("Unhandled error in Lambda handler", error=e)
-        import traceback
-        traceback.print_exc()
-        # Re-raise cancel financial failures so the SQS message is not deleted and
-        # can retry (release/fee keys make a retry safe; Slack/Stripe run only after
-        # financials succeed).
-        if "cancel_financials_failed" in str(e):
-            raise
-        return {
-            "success": False,
-            "error": str(e),
-        }
+            failures = [
+                {"itemIdentifier": r.get("messageId")}
+                for r in remaining
+                if r.get("messageId")
+            ]
+            break
+
+    log_info(
+        "All records processed",
+        total_records=len(records),
+        batch_item_failures=len(failures),
+    )
+    return {"batchItemFailures": failures}
 
