@@ -8144,12 +8144,8 @@
       "body": "Connectez-vous avec le compte qui a passé cette commande pour la confirmer.",
       "switch": "Changer de compte",
       "close": "Fermer"
-<<<<<<< HEAD
     },
     "openOrder": "Voir la commande"
-=======
-    }
->>>>>>> origin/main
   },
   "personaSwitch": {
     "client": "Passage à votre compte client…",
