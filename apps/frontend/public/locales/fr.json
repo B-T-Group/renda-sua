@@ -9349,5 +9349,49 @@
     "client": "Passage à votre compte client…",
     "backTo": "Retour à {{persona}}",
     "nowClient": "Vous êtes maintenant sur votre compte client."
+  },
+  "designatedFirst": {
+    "error": "Impossible de mettre à jour. Réessayez.",
+    "open": "Voir la commande",
+    "reason": "Motif",
+    "reasons": {
+      "too_far": "Trop loin",
+      "busy": "Je suis occupé",
+      "not_enough_balance": "Solde insuffisant",
+      "other": "Autre"
+    },
+    "banner": {
+      "cta": "Ouvrir",
+      "text": "Livraisons dédiées : {{offers}} offre(s), {{upcoming}} assignée(s)."
+    },
+    "offer": {
+      "title": "Votre livraison dédiée",
+      "acceptBefore": "Acceptez avant {{time}}. Ensuite, elle sera proposée à d'autres agents.",
+      "slot": "Créneau : {{date}} {{window}}",
+      "pickup": "Retrait : {{store}}, {{area}} {{km}}",
+      "dropoff": "Zone de livraison : {{area}} {{km}}",
+      "earnings": "Gains : {{amount}} {{currency}}",
+      "accept": "Accepter",
+      "decline": "Refuser",
+      "declineConfirm": "Refuser",
+      "accepted": "Acceptée. Elle est à vous pour ce créneau."
+    },
+    "upcoming": {
+      "confirmed": "Vous avez confirmé être toujours disponible.",
+      "notConfirmed": "Confirmez que vous êtes toujours disponible.",
+      "freeUntil": "Vous pouvez la rendre sans pénalité jusqu'à {{time}}.",
+      "lateWarning": "La rendre maintenant compte comme un avertissement (sans frais).",
+      "releaseConfirmFree": "Rendre cette commande ? Elle ira à d'autres agents. Sans pénalité.",
+      "releaseConfirmLate": "Rendre cette commande ? Cela compte comme un avertissement.",
+      "releaseButton": "La rendre",
+      "cantMakeIt": "Je ne peux pas",
+      "stillOnIt": "Toujours dispo"
+    },
+    "list": {
+      "title": "Mes livraisons dédiées",
+      "empty": "Aucune livraison dédiée pour le moment.",
+      "offerBadge": "Offre",
+      "assignedBadge": "Assignée"
+    }
   }
 }

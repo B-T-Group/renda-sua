@@ -308,6 +308,9 @@ export const SignupPage = lazy(() =>
 export const AgentDashboard = lazy(() =>
   import('../components/pages/AgentDashboard')
 );
+export const AgentDesignatedPage = lazy(() =>
+  import('../components/pages/AgentDesignatedPage')
+);
 export const AgentAgreementPage = lazy(() =>
   import('../components/pages/AgentAgreementPage')
 );
