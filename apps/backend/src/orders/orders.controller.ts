@@ -332,7 +332,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Update order status',
     description:
-      'Cancellation must use POST /orders/cancel. Confirm must use POST /orders/confirm. PATCH with status=cancelled is routed to cancel; PATCH status=confirmed is rejected so the payout-phone gate and payment initiation cannot be skipped.',
+      'Cancellation must use POST /orders/cancel. Confirm must use POST /orders/confirm. PATCH with status=cancelled is routed to cancel; PATCH status=confirmed is rejected so the payout-phone gate and payment initiation cannot be skipped. PATCH status=ready_for_pickup is routed to complete_preparation (dispatch gate, designated-first offer).',
   })
   @ApiResponse({
     status: 409,
@@ -368,6 +368,16 @@ export class OrdersController {
         },
         HttpStatus.BAD_REQUEST
       );
+    }
+
+    // Never mark ready via the generic status path — that skips the pickup PIN,
+    // ASAP re-anchor, dispatch_ready_at gate and designated-first offer.
+    // Route to the same flow as POST /orders/complete_preparation.
+    if (updateData.status === 'ready_for_pickup') {
+      this.logger.warn(
+        `Order ${orderId} marked ready via legacy PATCH - use POST /orders/complete_preparation instead`
+      );
+      return this.ordersService.completePreparation({ orderId });
     }
 
     try {

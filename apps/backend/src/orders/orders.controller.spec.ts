@@ -510,5 +510,23 @@ describe('OrdersController', () => {
       });
       expect(ordersService.confirmOrder).not.toHaveBeenCalled();
     });
+
+    it('routes ready_for_pickup to completePreparation so the dispatch gate runs', async () => {
+      const expected = {
+        success: true,
+        order: { id: 'order-123', current_status: 'ready_for_pickup' },
+        message: 'Order preparation completed successfully',
+      };
+      ordersService.completePreparation.mockResolvedValue(expected as any);
+
+      const result = await controller.updateOrderStatus('order-123', {
+        status: 'ready_for_pickup',
+      });
+
+      expect(result).toEqual(expected);
+      expect(ordersService.completePreparation).toHaveBeenCalledWith({
+        orderId: 'order-123',
+      });
+    });
   });
 });
