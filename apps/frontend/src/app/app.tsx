@@ -771,6 +771,14 @@ function App() {
               }
             />
             <Route
+              path="/orders/:orderId/confirm"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.DeliveryConfirmPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/orders/:orderId/messages"
               element={
                 <ProtectedRoute>

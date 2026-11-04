@@ -239,7 +239,9 @@ export type SiteEventTypeV1 =
   | 'dedicated_ui.posting_terms_edited'
   | 'dedicated_ui.applicants_viewed'
   | 'dedicated_ui.applicant_accepted'
-  | 'dedicated_ui.applicant_declined';
+  | 'dedicated_ui.applicant_declined'
+  | 'delivery_confirm_opened'
+  | 'delivery_confirm_action';
 
 export type TrackInventoryCtaSiteEventInput = {
   eventType: SiteEventTypeV1;
