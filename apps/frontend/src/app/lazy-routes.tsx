@@ -153,9 +153,12 @@ export const BusinessAccountTypePage = lazy(() =>
 export const BusinessRefundRequestsPage = lazy(() =>
   import('../components/pages/BusinessRefundRequestsPage')
 );
+<<<<<<< HEAD
 export const DeliveryConfirmPage = lazy(() =>
   import('../components/pages/DeliveryConfirmPage')
 );
+=======
+>>>>>>> origin/main
 export const AdminDeliveryDisputesPage = lazy(() =>
   import('../components/pages/AdminDeliveryDisputesPage')
 );
