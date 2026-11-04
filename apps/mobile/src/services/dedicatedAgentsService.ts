@@ -3,6 +3,7 @@
  * follows the active environment and sends the persona or delegation header.
  */
 import { api, apiRequest } from './apiClient';
+import type { DesignatedMineResponse } from '../types/designated';
 import type {
   PickupSlotsResponse,
   DedicatedAgentsResponse,
@@ -204,6 +205,21 @@ export class DedicatedAgentsService {
     return api.post<{ success: true; status: 'unavailable' }>(
       `/agents/me/dedicated-heads-ups/${orderId}/unavailable`
     );
+  }
+
+  /** Designated agent first: my early offers and upcoming designated orders. */
+  async getDesignatedMine(): Promise<DesignatedMineResponse> {
+    return api.get<DesignatedMineResponse>('/orders/designated/mine');
+  }
+
+  /** "Still on it" for an upcoming designated order. */
+  async confirmDesignated(orderId: string): Promise<{ success: boolean }> {
+    return api.post<{ success: boolean }>(`/orders/${orderId}/designated-confirm`);
+  }
+
+  /** "Can't make it": free before the cutoff, a strike after it (no money). */
+  async releaseDesignated(orderId: string, reason: string): Promise<{ success: boolean; late?: boolean }> {
+    return api.post<{ success: boolean; late?: boolean }>(`/orders/${orderId}/designated-release`, { reason });
   }
 
   async getSlotPreferences(): Promise<SlotPreferencesResponse> {

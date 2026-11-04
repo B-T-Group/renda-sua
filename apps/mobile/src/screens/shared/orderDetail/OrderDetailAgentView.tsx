@@ -27,6 +27,7 @@ import type { Order } from '../../../types/agent';
 import { Portal, Dialog, Button, Text as PaperText, Snackbar } from 'react-native-paper';
 import { DedicatedReleaseCard } from '../../../components/dedicated/DedicatedReleaseCard';
 import { DedicatedHeadsUpCard } from '../../../components/dedicated/DedicatedHeadsUpCard';
+import { DesignatedOrderCard } from '../../../components/dedicated/DesignatedOrderCard';
 import { AgentClaimConfirmDialog } from '../../../components/dialogs/AgentClaimConfirmDialog';
 import { ClaimTopupFormDialog } from '../../../components/dialogs/ClaimTopupFormDialog';
 import { MarkPaidCashExceptionDialog } from '../../../components/dialogs/MarkPaidCashExceptionDialog';
@@ -214,6 +215,8 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
   const stickyBottomPad = tabBarOverlay + 12;
   const [dropConfirmVisible, setDropConfirmVisible] = useState(false);
   const [dropSnack, setDropSnack] = useState<string | null>(null);
+  /** Designated agent first owns this order's offer / release UI (hides the legacy cards). */
+  const [isDesignated, setIsDesignated] = useState(false);
   const [moreSheetVisible, setMoreSheetVisible] = useState(false);
   const [footerHeight, setFooterHeight] = useState(0);
   const { setMorePress } = useContext(AgentOrderDetailMoreRegisterContext);
@@ -861,12 +864,22 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
           urgency={deliveryVm?.urgency ?? null}
         />
 
-        <DedicatedReleaseCard order={order} onReleased={goBack} onRefresh={refetchOrder} />
-
-        <DedicatedHeadsUpCard
+        <DesignatedOrderCard
           orderId={order?.id}
-          enabled={status === 'ready_for_pickup' && !order?.assigned_agent_id}
+          onDesignated={setIsDesignated}
+          onGone={goBack}
+          onRefresh={refetchOrder}
         />
+
+        {!isDesignated ? (
+          <>
+            <DedicatedReleaseCard order={order} onReleased={goBack} onRefresh={refetchOrder} />
+            <DedicatedHeadsUpCard
+              orderId={order?.id}
+              enabled={status === 'ready_for_pickup' && !order?.assigned_agent_id}
+            />
+          </>
+        ) : null}
 
         <View style={[styles.headerCard, cardStyle]}>
           <Text style={[styles.orderNum, { color: colors.primary.main }, typography.h5]}>

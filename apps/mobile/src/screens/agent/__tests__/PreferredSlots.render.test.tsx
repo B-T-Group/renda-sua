@@ -17,6 +17,7 @@ jest.mock('../../../services/dedicatedAgentsService', () => ({
   __esModule: true,
   default: {
     getSlotPreferences: jest.fn(),
+    getDesignatedMine: jest.fn(() => Promise.resolve({ success: true, offers: [], upcoming: [] })),
     updateSlotPreferences: jest.fn(),
     resumeAssignment: jest.fn(),
     getOpportunities: jest.fn(),

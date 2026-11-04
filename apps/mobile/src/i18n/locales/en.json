@@ -8229,5 +8229,39 @@
     "client": "Switching to your shopper account…",
     "backTo": "Back to {{persona}}",
     "nowClient": "You're now in your shopper account."
+  },
+  "designatedFirst": {
+    "error": "Could not update. Try again.",
+    "offer": {
+      "title": "Your designated delivery",
+      "acceptBefore": "Accept before {{time}}. After that it goes to other agents.",
+      "acceptBeforeShort": "Accept before {{time}}",
+      "slot": "Slot: {{date}} {{window}}",
+      "pickup": "Pickup: {{store}}, {{area}} {{km}}",
+      "dropoff": "Drop-off area: {{area}} {{km}}",
+      "earnings": "Earnings: {{amount}} {{currency}}",
+      "accept": "Accept",
+      "decline": "Decline",
+      "declineConfirm": "Decline",
+      "accepted": "Accepted. It is yours for this slot."
+    },
+    "upcoming": {
+      "title": "Your designated delivery",
+      "confirmed": "You confirmed you're still on it.",
+      "notConfirmed": "Let us know you're still on it.",
+      "freeUntil": "You can hand it back without penalty until {{time}}.",
+      "lateWarning": "Handing it back now counts as a strike (no fee).",
+      "releaseConfirmFree": "Hand this order back? It goes to other agents. No penalty.",
+      "releaseConfirmLate": "Hand this order back? This counts as a strike.",
+      "releaseButton": "Hand it back",
+      "cantMakeIt": "Can't make it",
+      "stillOnIt": "Still on it"
+    },
+    "list": {
+      "title": "My designated deliveries",
+      "empty": "No designated deliveries right now.",
+      "offerBadge": "Offer",
+      "assignedBadge": "Assigned"
+    }
   }
 }
