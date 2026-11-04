@@ -44,12 +44,15 @@ export function targetPersonaForDeepLinkPath(path: string): PersonaSlug | null {
   if (head === 'admin' || head === 'items') return 'business';
   if (head === 'rentals' && segments[1] === 'requests') return 'business';
   if (head === 'deliveries') return 'agent';
+  // Delivery-confirm links always open in the shopper (client) shell.
+  if (head === 'orders' && segments[2] === 'confirm') return 'client';
   if (head === 'restock') return 'client';
   return null;
 }
 
 export type DeepLinkTarget =
   | { type: 'order'; id: string; openMessages: boolean }
+  | { type: 'deliveryConfirm'; id: string }
   | { type: 'adminOrder'; id: string }
   | { type: 'whatsappInbox'; id: string }
   | { type: 'itemProposal'; id: string }
@@ -84,6 +87,9 @@ function matchDeepLinkHead(segments: string[]): DeepLinkTarget | null {
   }
   if (head === 'admin' && id === 'whatsapp' && adminOrderId) {
     return { type: 'whatsappInbox', id: adminOrderId };
+  }
+  if (head === 'orders' && id && segments[2] === 'confirm') {
+    return { type: 'deliveryConfirm', id };
   }
   if (head === 'orders' && id) return { type: 'order', id, openMessages: false };
   if (head === 'deliveries' && id) {

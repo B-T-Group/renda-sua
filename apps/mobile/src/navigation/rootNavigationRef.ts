@@ -102,6 +102,26 @@ export function navigateToOrderFromPush(
 }
 
 /**
+ * Opens the client Delivered → Complete screen. Back from it returns to the
+ * client order detail (not the previous persona), so the detail is pushed first.
+ */
+export function navigateToDeliveryConfirm(
+  orderId: string,
+  source: 'push' | 'wa' | 'sms' | 'in_app'
+): boolean {
+  if (!rootNavigationRef.isReady()) return false;
+  const routeNames = rootNavigationRef.getRootState()?.routeNames ?? [];
+  if (!routeNames.includes('DeliveryConfirm') || !routeNames.includes('OrderDetail')) {
+    return false;
+  }
+  rootNavigationRef.dispatch(CommonActions.navigate({ name: 'OrderDetail', params: { orderId } }));
+  rootNavigationRef.dispatch(
+    CommonActions.navigate({ name: 'DeliveryConfirm', params: { orderId, source } })
+  );
+  return true;
+}
+
+/**
  * Navigate to business locations focused on a transfer request (push tap).
  * Returns false when the business navigator is not mounted yet so callers can retry.
  */

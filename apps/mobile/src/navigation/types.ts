@@ -198,6 +198,7 @@ export type ClientMainTabParamList = {
 export type ClientRootStackParamList = {
   ClientMainTabs: NavigatorScreenParams<ClientMainTabParamList> | undefined;
   NotificationsCenter: undefined;
+  DeliveryConfirm: { orderId: string; source?: 'push' | 'wa' | 'sms' | 'in_app' };
   InventoryItemDetail: InventoryItemDetailParams;
   CategoriesBrowse: undefined;
   CollectionDetail: CollectionDetailParams;

@@ -21,6 +21,7 @@ import FollowingStoresScreen from '../screens/client/FollowingStoresScreen';
 import ClientProductInterestScreen from '../screens/client/ClientProductInterestScreen';
 import ProductInterestSuccessScreen from '../screens/client/ProductInterestSuccessScreen';
 import SavedAccountsScreen from '../screens/shared/SavedAccountsScreen';
+import DeliveryConfirmScreen from '../screens/client/DeliveryConfirmScreen';
 import AccountManagementScreen from '../screens/shared/AccountManagementScreen';
 import DocumentsScreen from '../screens/shared/DocumentsScreen';
 import TermsScreen from '../screens/shared/TermsScreen';
@@ -362,6 +363,14 @@ export function ClientRootNavigator() {
           options={{
             title: t('orders.detailScreenTitle', 'Order detail'),
             headerBackTitle: t('nav.clientTabs.orders', 'Orders'),
+          }}
+        />
+        <ClientRootStack.Screen
+          name="DeliveryConfirm"
+          component={DeliveryConfirmScreen}
+          options={{
+            title: t('deliveryConfirm.navTitle', 'Confirm delivery'),
+            headerBackTitle: t('orders.detailScreenTitle', 'Order detail'),
           }}
         />
         <ClientRootStack.Screen
