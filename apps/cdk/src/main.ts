@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import 'source-map-support/register';
 import { FedapayMonitoringStack } from './lib/fedapay-monitoring-stack';
 import { HasuraEc2EnvironmentStack } from './lib/hasura-ec2-infrastructure-stack';
+import { OrderStatusGuardStack } from './lib/order-status-guard-stack';
 import { RendasuaInfrastructureStack } from './lib/rendasua-infrastructure-stack';
 import { UserUploadsBucketStack } from './lib/user-uploads-bucket';
 
@@ -27,6 +28,25 @@ new RendasuaInfrastructureStack(app, `RendasuaInfrastructure-${environment}`, {
 // Shared private user-uploads bucket (ID docs + appeal evidence). One stack
 // for DEV and prod: the bucket name is not environment-suffixed.
 new UserUploadsBucketStack(app, 'RendasuaUserUploadsBucket', {
+  env: {
+    account: awsAccount,
+    region: awsRegion,
+  },
+});
+
+// Order-status SQS→Lambda guards (mapping disable/delete + queue backup).
+// Queues live in RendasuaInfrastructure-{development,production}; this stack
+// imports them by name. Email confirmation + CloudTrail notes:
+// apps/cdk/ORDER_STATUS_GUARDS.md
+new OrderStatusGuardStack(app, 'OrderStatusGuard-development', {
+  environment: 'development',
+  env: {
+    account: awsAccount,
+    region: awsRegion,
+  },
+});
+new OrderStatusGuardStack(app, 'OrderStatusGuard-production', {
+  environment: 'production',
   env: {
     account: awsAccount,
     region: awsRegion,
