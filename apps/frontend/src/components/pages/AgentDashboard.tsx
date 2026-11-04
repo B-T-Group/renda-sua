@@ -32,6 +32,7 @@ import { useReferredBusinesses } from '../../hooks/useReferredBusinesses';
 import { getOrderStatusBoxColor } from '../orders/shared';
 import OpenOrdersPage from './OpenOrdersPage';
 import { AgentContractBanner } from '../agent/AgentContractBanner';
+import { AgentDesignatedBanner } from '../agent/AgentDesignatedBanner';
 
 /**
  * AgentDashboard component that shows available orders for agents to claim,
@@ -76,6 +77,7 @@ const AgentDashboard: React.FC = () => {
     <>
       <Container maxWidth="lg" sx={{ py: 1.5, width: '100%' }}>
         <AgentContractBanner />
+        {profile?.agent ? <AgentDesignatedBanner /> : null}
         {!isStripeRail && profile?.agent && !hasVerifiedPhone ? (
           <Alert
             severity="warning"

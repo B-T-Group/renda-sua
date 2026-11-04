@@ -928,6 +928,14 @@ function App() {
               }
             />
             <Route
+              path="/agent/designated"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AgentDesignatedPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/agent/agreement"
               element={
                 <ProtectedRoute>
