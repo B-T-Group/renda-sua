@@ -32,7 +32,18 @@ const code = (sql: string) => sql.replace(/--[^\n]*/g, '');
 const sqlList = (values: readonly string[]) => values.map((v) => `'${v}'`).join(', ');
 
 /** Keys added after PR 1 seed their own rows in their own migration (see the *_migration specs). */
-const KEYS_SEEDED_LATER: string[] = ['dedicated_offer_max_attempts'];
+const KEYS_SEEDED_LATER: string[] = [
+  'dedicated_offer_max_attempts',
+  // Designated agent first (20261104200000_designated_agent_first).
+  'designated_open_offer_reminder_minutes',
+  'designated_release_cutoff_minutes',
+  'designated_reminder_minutes_before',
+  'designated_evening_before_local_minutes',
+  'designated_first_enabled',
+  'dedicated_auto_assign_internal',
+  'designated_evening_before_enabled',
+  'designated_unconfirmed_auto_release',
+];
 
 const NEW_TABLES = [
   'business_location_pickup_slots',

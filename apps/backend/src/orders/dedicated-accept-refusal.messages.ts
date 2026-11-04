@@ -55,6 +55,10 @@ const RELEASE_REFUSAL_COPY: Record<DedicatedReleaseRefusal, { en: string; fr: st
     en: 'We could not release this order. Please try again.',
     fr: "Nous n'avons pas pu libérer cette commande. Veuillez réessayer.",
   },
+  not_designated: {
+    en: 'This order was not assigned to you as its designated agent.',
+    fr: "Cette commande ne vous a pas été attribuée en tant que livreur désigné.",
+  },
   release_lost: {
     en: 'This order was released and another courier has taken it.',
     fr: 'Cette commande a été libérée et un autre livreur l’a prise.',

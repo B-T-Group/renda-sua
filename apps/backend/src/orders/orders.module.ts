@@ -45,6 +45,7 @@ import { OrderOffersService } from './order-offers.service';
 import { DedicatedDispatchService } from './dedicated-dispatch.service';
 import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
 import { DedicatedHeadsUpService } from './dedicated-heads-up.service';
+import { DesignatedFirstService } from './designated-first.service';
 import { DedicatedHeadsUpController } from './dedicated-heads-up.controller';
 import { DEDICATED_ORDER_CLAIMER } from './dedicated-claim.port';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
@@ -161,6 +162,7 @@ import { DeliveryConfirmNotifier } from '../client-confirm-delivery/delivery-con
     DedicatedDispatchService,
     DedicatedSlotReminderService,
     DedicatedHeadsUpService,
+    DesignatedFirstService,
     { provide: DEDICATED_ORDER_CLAIMER, useExisting: OrdersService },
     WaitAndExecuteScheduleService,
     FailedDeliveriesService,
