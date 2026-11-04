@@ -1,0 +1,28 @@
+table:
+  name: order_delivery_reports
+  schema: public
+object_relationships:
+  - name: order
+    using:
+      foreign_key_constraint_on: order_id
+  - name: client
+    using:
+      foreign_key_constraint_on: client_id
+select_permissions:
+  - role: client
+    permission:
+      columns:
+        - id
+        - order_id
+        - report_type
+        - reason
+        - note
+        - photo_urls
+        - phase
+        - support_ticket_id
+        - outcome
+        - created_at
+      filter:
+        client:
+          user_id:
+            _eq: X-Hasura-User-Id
