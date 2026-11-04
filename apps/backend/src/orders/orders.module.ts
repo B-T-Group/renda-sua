@@ -90,6 +90,7 @@ import { ClientConfirmDeliveryService } from '../client-confirm-delivery/client-
 import { ClientConfirmDeliveryCronService } from '../client-confirm-delivery/client-confirm-delivery.cron';
 import { ClientConfirmDeliveryRepository } from '../client-confirm-delivery/client-confirm-delivery.repository';
 import { ClientConfirmMarketConfigService } from '../client-confirm-delivery/client-confirm-market-config.service';
+import { DeliveryConfirmNotifier } from '../client-confirm-delivery/delivery-confirm-notifier';
 
 @Module({
   imports: [
@@ -188,6 +189,7 @@ import { ClientConfirmMarketConfigService } from '../client-confirm-delivery/cli
     ClientConfirmDeliveryCronService,
     ClientConfirmDeliveryRepository,
     ClientConfirmMarketConfigService,
+    DeliveryConfirmNotifier,
     DepositCalculationService,
     ServiceFeeService,
     DepositLedgerService,

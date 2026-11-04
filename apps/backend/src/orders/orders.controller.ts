@@ -665,14 +665,26 @@ export class OrdersController {
   @Post(':id/report-delivery-problem')
   @ApiOperation({
     summary: 'Report a problem with a delivery instead of confirming',
-    description: 'Sets disputed, holds payouts, and opens a support case.',
+    description:
+      'Report an issue or a failed delivery. Before completion: sets disputed (auto-complete paused, agent hold stays locked) and opens a support case. After completion: accepted inside the report window as a claim. Legacy body { description } still works.',
   })
   @ApiParam({ name: 'id', description: 'Order ID' })
   async reportDeliveryProblem(
     @Param('id') orderId: string,
     @Body() body: ReportDeliveryProblemDto
   ) {
-    return this.clientConfirmDelivery.reportProblem(orderId, body?.description);
+    return this.clientConfirmDelivery.reportProblem(
+      orderId,
+      body?.type
+        ? {
+            type: body.type,
+            reason: body.reason ?? 'other',
+            note: body.note ?? body.description,
+            photoUrls: body.photoUrls,
+            itemIds: body.itemIds,
+          }
+        : body?.description
+    );
   }
 
   @Post(':id/client-could-not-confirm')

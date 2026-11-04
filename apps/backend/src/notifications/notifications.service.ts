@@ -1,4 +1,5 @@
 import { forwardRef, Inject, Injectable, Logger } from '@nestjs/common';
+import { deliveryConfirmPushData } from './delivery-confirm-link.util';
 import { ConfigService } from '@nestjs/config';
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { existsSync, readFileSync } from 'fs';
@@ -3853,7 +3854,10 @@ export class NotificationsService {
     actorUserId?: string | null
   ): Promise<Set<string>> {
     const ok = new Set<string>();
-    const links = this.deepLinkService.order(data.orderId);
+    const links =
+      data.orderStatus === 'awaiting_client_confirmation'
+        ? this.deepLinkService.deliveryConfirm(data.orderId)
+        : this.deepLinkService.order(data.orderId);
     const templateKey =
       data.orderStatus === 'ready_for_pickup'
         ? 'order_ready'
@@ -3907,7 +3911,7 @@ export class NotificationsService {
       picked_up: 'picked up',
       in_transit: 'in transit',
       out_for_delivery: 'out for delivery',
-      awaiting_client_confirmation: 'waiting for your confirmation',
+      awaiting_client_confirmation: 'has arrived 📦 Tap to confirm',
       pending_auto_complete: 'marked delivered — confirm or report a problem',
       disputed: 'delivery problem reported',
       delivered: 'delivered',
@@ -3925,7 +3929,7 @@ export class NotificationsService {
       picked_up: 'récupérée',
       in_transit: 'en transit',
       out_for_delivery: 'en cours de livraison',
-      awaiting_client_confirmation: 'en attente de votre confirmation',
+      awaiting_client_confirmation: 'est arrivée 📦 Touchez pour confirmer',
       pending_auto_complete: 'marquée livrée — confirmez ou signalez un problème',
       disputed: 'problème de livraison signalé',
       delivered: 'livrée',
@@ -4060,6 +4064,7 @@ export class NotificationsService {
           orderId: data.orderId,
           orderNumber: data.orderNumber,
           persona: recipient.type,
+          ...deliveryConfirmPushData(status, recipient.type, data.orderId),
         };
         const pushOptions = this.getClientAlertPushOptions(
           status,
@@ -4154,11 +4159,10 @@ export class NotificationsService {
     data?: NotificationData
   ): { title: string; body: string } {
     const fr = (data?.clientPreferredLanguage || '').toLowerCase().startsWith('fr');
+    // buyerProtection.notif.delivered.{title,body}
     return {
-      title: fr ? 'Votre commande est arrivée' : 'Your order has arrived',
-      body: fr
-        ? 'Touchez pour confirmer la réception.'
-        : 'Tap to confirm you received it.',
+      title: fr ? 'Votre commande est arrivée 📦' : 'Your order has arrived 📦',
+      body: fr ? 'Touchez pour confirmer' : 'Tap to confirm',
     };
   }
 
