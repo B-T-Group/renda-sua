@@ -8222,7 +8222,8 @@
       "body": "Sign in with the account that placed this order to confirm it.",
       "switch": "Switch account",
       "close": "Close"
-    }
+    },
+    "openOrder": "View order"
   },
   "personaSwitch": {
     "client": "Switching to your shopper account…",

@@ -69,7 +69,8 @@
         "body": "Sign in with the account that placed this order to confirm it.",
         "switch": "Switch account",
         "close": "Close"
-      }
+      },
+      "openOrder": "View order"
     },
     "personaSwitch": {
       "client": "Switching to your shopper account…",
@@ -147,7 +148,8 @@
         "body": "Connectez-vous avec le compte qui a passé cette commande pour la confirmer.",
         "switch": "Changer de compte",
         "close": "Fermer"
-      }
+      },
+      "openOrder": "Voir la commande"
     },
     "personaSwitch": {
       "client": "Passage à votre compte client…",

@@ -305,7 +305,7 @@ export default function DeliveryConfirmScreen() {
             </>
           ) : null}
           <Button mode="text" onPress={backToOrder}>
-            {t('orders.detailScreenTitle', 'Order detail')}
+            {t('deliveryConfirm.openOrder', 'View order')}
           </Button>
         </View>
       )}
