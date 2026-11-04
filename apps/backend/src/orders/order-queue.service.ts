@@ -178,15 +178,35 @@ export class OrderQueueService {
         `Successfully sent ${message.eventType} message to SQS for order ${message.orderId}. MessageId: ${response.MessageId}`
       );
     } catch (error: unknown) {
-      // Log error but don't throw - SQS failures shouldn't break order operations
+      // Never swallow silently: log at error level with the order/event context
+      // so a lost order-status notification can be traced and replayed. Only
+      // rethrow when `strict` (SQS failures shouldn't break order operations).
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+      const errorName = error instanceof Error ? error.name : 'UnknownError';
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(
-        `Failed to send ${message.eventType} message to SQS for order ${message.orderId}: ${errorMessage}`,
+        `Failed to send ${message.eventType} message to SQS for order ${message.orderId} ` +
+          `(${OrderQueueService.describeContext(message, dedupId, strict)}): ${errorName}: ${errorMessage}`,
         errorStack
       );
       if (strict) throw error;
     }
+  }
+
+  /** Non-sensitive message context for failure logs (no free-text reasons). */
+  static describeContext(
+    message: Record<string, unknown>,
+    dedupId?: string,
+    strict = false
+  ): string {
+    const parts: string[] = [];
+    for (const key of ['previousStatus', 'status', 'cancelledBy', 'actorUserId']) {
+      const v = message[key];
+      if (v != null && String(v) !== '') parts.push(`${key}=${String(v)}`);
+    }
+    if (dedupId) parts.push(`dedupId=${dedupId}`);
+    parts.push(`strict=${strict}`);
+    return parts.join(' ');
   }
 }

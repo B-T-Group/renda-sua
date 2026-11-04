@@ -4095,7 +4095,7 @@ export class OrdersService {
       await this.orderQueueService.sendOrderCompletedMessage(order.id);
     } catch (error: any) {
       this.logger.error(
-        `Failed to send order.completed message: ${error.message}`
+        `Failed to send order.completed message for order ${order.id}: ${error.message}`
       );
     }
     try {
@@ -7267,7 +7267,7 @@ export class OrdersService {
       await this.orderQueueService.sendOrderCompletedMessage(orderId);
     } catch (error: any) {
       this.logger.error(
-        `Failed to send order.completed for cash exception: ${error.message}`
+        `Failed to send order.completed for cash exception, order ${orderId}: ${error.message}`
       );
     }
     try {
@@ -11957,7 +11957,7 @@ export class OrdersService {
         await this.orderQueueService.sendOrderCreatedMessage(order.id);
       } catch (error) {
         this.logger.error(
-          `Failed to send order.created message to SQS after deposit: ${
+          `Failed to send order.created message to SQS after deposit for order ${order.id}: ${
             error instanceof Error ? error.message : String(error)
           }`
         );
@@ -12675,7 +12675,7 @@ export class OrdersService {
     try {
       await this.orderQueueService.sendOrderCompletedMessage(order.id);
     } catch (error: any) {
-      this.logger.error(`Failed to send order.completed after completion: ${error.message}`);
+      this.logger.error(`Failed to send order.completed after completion for order ${order.id}: ${error.message}`);
     }
     try {
       await this.handleOrderCompletionRewards(order.id);
@@ -14360,7 +14360,7 @@ export class OrdersService {
         );
       } catch (notifError) {
         this.logger.error(
-          `Failed to enqueue order status notifications: ${
+          `Failed to enqueue order status notifications for order ${orderId}: ${
             notifError instanceof Error ? notifError.message : String(notifError)
           }`
         );
@@ -16530,7 +16530,7 @@ export class OrdersService {
       } catch (error) {
         // Log but don't throw - order creation should succeed
         this.logger.error(
-          `Failed to send order.created message to SQS: ${
+          `Failed to send order.created message to SQS for order ${order.id}: ${
             error instanceof Error ? error.message : String(error)
           }`
         );

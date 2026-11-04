@@ -286,7 +286,7 @@ export class OrderStatusService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to send order.status.updated message to SQS: ${
+        `Failed to send order.status.updated message to SQS for order ${orderId} (${previousStatus} -> ${newStatus}): ${
           error instanceof Error ? error.message : String(error)
         }`
       );
