@@ -82,6 +82,11 @@ export interface DedicatedEligibilityParams {
    * an agent from that day's slots; defaults to today in the country timezone.
    */
   slotDate?: string;
+  /**
+   * Designated agent first: the active-order cap counts per slot day. Assigned
+   * orders and live offers for another day don't count; picked-up orders always do.
+   */
+  capPerSlotDay?: boolean;
   now?: Date;
 }
 
@@ -301,7 +306,7 @@ export class DedicatedCoverageService {
     const now = params.now ?? new Date();
     const agentIds = [...new Set(assignments.map((a) => a.agent_id))];
     const [load, signedIds] = await Promise.all([
-      this.loadAgentLoad(agentIds, now, params.excludeOrderId ?? null),
+      this.loadAgentLoad(agentIds, now, params.excludeOrderId ?? null, params.capPerSlotDay ? params.slotDate ?? null : null),
       this.agentContractGate.signedIdsOrSkip(agentIds),
     ]);
     const eligibilityCtx = {
@@ -445,11 +450,14 @@ export class DedicatedCoverageService {
   private async loadAgentLoad(
     agentIds: string[],
     now: Date,
-    excludeOrderId: string | null
+    excludeOrderId: string | null,
+    slotDay: string | null = null
   ): Promise<{ active: Map<string, number>; offers: Map<string, number> }> {
+    type Win = { delivery_time_windows?: Array<{ preferred_date: string | null }> | null } | null | undefined;
+    const sameDay = (o: Win) => !slotDay || o?.delivery_time_windows?.[0]?.preferred_date === slotDay;
     const res = await this.hasuraSystemService.executeQuery<{
-      orders: Array<{ id: string; assigned_agent_id: string }>;
-      order_offers: Array<{ order_id: string; agent_id: string }>;
+      orders: Array<{ id: string; assigned_agent_id: string; current_status?: string } & NonNullable<Win>>;
+      order_offers: Array<{ order_id: string; agent_id: string; order?: Win }>;
     }>(DEDICATED_AGENT_LOAD_QUERY, {
       agentIds,
       activeStatuses: [...DEDICATED_ACTIVE_ORDER_STATUSES],
@@ -457,11 +465,13 @@ export class DedicatedCoverageService {
     });
     const active = new Map<string, number>();
     for (const o of res?.orders ?? []) {
+      if (slotDay && o.current_status === 'assigned_to_agent' && !sameDay(o)) continue;
       active.set(o.assigned_agent_id, (active.get(o.assigned_agent_id) ?? 0) + 1);
     }
     const offers = new Map<string, number>();
     for (const o of res?.order_offers ?? []) {
       if (excludeOrderId && o.order_id === excludeOrderId) continue;
+      if (!sameDay(o.order)) continue;
       offers.set(o.agent_id, (offers.get(o.agent_id) ?? 0) + 1);
     }
     return { active, offers };

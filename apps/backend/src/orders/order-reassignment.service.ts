@@ -12,6 +12,11 @@ import { SiteEventsService } from '../site-events/site-events.service';
 import { isoCountryCode } from './delivery-pricing.util';
 import { OrderEventsService } from './order-events.service';
 import { OrderOffersService } from './order-offers.service';
+import { DesignatedFirstService } from './designated-first.service';
+import {
+  buildDesignatedLateReleaseMessage,
+  DESIGNATED_FIRST_MESSAGE_TYPES,
+} from '../notifications/designated-first.messages';
 import type { MonitoredPickupOrder } from './order-pickup.types';
 
 /** Why a dedicated auto-assignment release was refused (the controller maps these to 4xx). */
@@ -23,7 +28,9 @@ export type DedicatedReleaseRefusal =
   | 'window_closed'
   | 'release_failed'
   /** QA #608 N1: the release could not complete and another agent claimed the order meanwhile. */
-  | 'release_lost';
+  | 'release_lost'
+  /** Designated agent first: the order was not offered/assigned through the designated flow. */
+  | 'not_designated';
 
 export type DedicatedReleaseResult =
   | { success: true; message: string }
@@ -110,6 +117,71 @@ const RELEASE_DEDICATED_AUTO_MUTATION = `
     ) {
       affected_rows
     }
+  }
+`;
+
+/** Designated free release: back to ready_for_pickup with the gate (dispatch_ready_at) unchanged. */
+const RELEASE_DESIGNATED_FREE_MUTATION = `
+  mutation ReleaseDesignatedFree($id: uuid!, $agentId: uuid!, $now: timestamptz!) {
+    update_orders(
+      where: {
+        _and: [
+          { id: { _eq: $id } }
+          { current_status: { _eq: "assigned_to_agent" } }
+          { assigned_agent_id: { _eq: $agentId } }
+          { dispatch_mode: { _eq: "designated_first" } }
+          { designated_release_cutoff_at: { _gt: $now } }
+        ]
+      }
+      _set: {
+        assigned_agent_id: null
+        current_status: "ready_for_pickup"
+        assignment_source: null
+        dedicated_assignment_id: null
+        dedicated_release_until: null
+        pickup_state: null
+        pickup_due_at: null
+        pickup_reminder_sent_at: null
+        pickup_at_risk_at: null
+        pickup_overdue_at: null
+        pickup_extension_minutes: 0
+        pickup_paused_at: null
+        pickup_pause_reason: null
+        pickup_pause_remaining_ms: null
+        last_agent_distance_m: null
+        last_agent_progress_at: null
+        agent_arrived_pickup_at: null
+        designated_accepted_at: null
+        designated_release_cutoff_at: null
+        designated_reminder_sent_at: null
+        designated_evening_reminder_sent_at: null
+        designated_confirmed_at: null
+        designated_unconfirmed_flagged_at: null
+        updated_at: "now()"
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+/** After a late designated release: the next agent is a normal dispatch, no designated reminders. */
+const CLEAR_DESIGNATED_STAMPS_MUTATION = `
+  mutation ClearDesignatedStamps($id: uuid!) {
+    update_orders_by_pk(
+      pk_columns: { id: $id }
+      _set: {
+        assignment_source: null
+        dedicated_assignment_id: null
+        dedicated_release_until: null
+        designated_accepted_at: null
+        designated_release_cutoff_at: null
+        designated_reminder_sent_at: null
+        designated_evening_reminder_sent_at: null
+        designated_confirmed_at: null
+        designated_unconfirmed_flagged_at: null
+      }
+    ) { id }
   }
 `;
 
@@ -262,8 +334,176 @@ export class OrderReassignmentService {
     @Optional()
     private readonly dedicatedConfig?: DedicatedAgentsConfigService,
     @Optional()
-    private readonly siteEventsService?: SiteEventsService
+    private readonly siteEventsService?: SiteEventsService,
+    @Optional()
+    private readonly designatedFirst?: DesignatedFirstService
   ) {}
+
+  /**
+   * Designated agent first, "Can't make it": the designated agent hands back an order
+   * they accepted early (or were auto-assigned at ready). Before
+   * `designated_release_cutoff_at` (window start - 2 h) it is free: exclusion row, the
+   * order goes back to ready_for_pickup with its gate unchanged, the other designated
+   * agents get it again (or round 1 when the gate already passed). After the cutoff
+   * it is a late release: a reliability strike through the standard reassignment
+   * (reassignment count + reliability) and an immediate round 1, plus an
+   * agent_reliability_events row and a notice to the business. No money fee.
+   */
+  async releaseDesignated(
+    orderId: string,
+    agentId: string,
+    reason: OfferDeclineReason | null,
+    now: Date = new Date()
+  ): Promise<DedicatedReleaseResult & { mode?: 'free' | 'late' }> {
+    const order = await this.fetchDedicatedReleaseOrder(orderId);
+    const extra = await this.hasura
+      .executeQuery<{
+        orders_by_pk: {
+          dispatch_mode: string | null;
+          dispatch_ready_at: string | null;
+          designated_release_cutoff_at: string | null;
+          designated_accepted_at: string | null;
+          business?: { user_id?: string | null; user?: { preferred_language?: string | null } | null } | null;
+        } | null;
+      }>(
+        `query DesignatedReleaseOrder($id: uuid!) {
+          orders_by_pk(id: $id) {
+            dispatch_mode dispatch_ready_at designated_release_cutoff_at designated_accepted_at
+            business { user_id user { preferred_language } }
+          }
+        }`,
+        { id: orderId }
+      )
+      .then((r) => r?.orders_by_pk ?? null);
+    if (!order || !extra) return this.refuse('unavailable', 'This order cannot be released');
+    if (order.current_status !== 'assigned_to_agent' || order.assigned_agent_id !== agentId) {
+      return this.refuse('not_assigned', 'This order is not assigned to you, or it was already picked up');
+    }
+    if (extra.dispatch_mode !== 'designated_first' || !extra.designated_accepted_at) {
+      return this.refuse('not_designated', 'Only a designated order can be released here');
+    }
+    const userId = order.assigned_agent?.user_id;
+    if (!userId) return this.refuse('release_failed', 'Agent user missing');
+    const cutoff = extra.designated_release_cutoff_at ? new Date(extra.designated_release_cutoff_at).getTime() : 0;
+    const nowIso = now.toISOString();
+    const exclusion = {
+      order_id: order.id,
+      agent_id: agentId,
+      user_id: userId,
+      status: 'declined',
+      offer_kind: 'dedicated',
+      decline_reason: reason,
+      expires_at: nowIso,
+      created_at: nowIso,
+      responded_at: nowIso,
+    };
+    try {
+      await runAssignmentWrite(() => this.hasura.executeMutation(RECORD_DEDICATED_RELEASE_MUTATION, { object: exclusion }));
+    } catch (error: unknown) {
+      this.logger.error(`Designated release of ${order.order_number}: exclusion not recorded: ${error instanceof Error ? error.message : String(error)}`);
+      return this.refuse('release_failed', 'Could not release the order');
+    }
+
+    if (cutoff > now.getTime()) {
+      const released = await runAssignmentWrite(() =>
+        this.hasura.executeMutation<{ update_orders: { affected_rows: number } | null }>(RELEASE_DESIGNATED_FREE_MUTATION, {
+          id: order.id,
+          agentId,
+          now: nowIso,
+        })
+      ).catch(async (error: unknown) => {
+        await this.dropExclusion(order.id, agentId, nowIso);
+        throw error;
+      });
+      if ((released?.update_orders?.affected_rows ?? 0) !== 1) {
+        await this.dropExclusion(order.id, agentId, nowIso);
+        return this.refuse('window_closed', 'The free release window for this order has closed');
+      }
+      const holdResult = await this.releaseHoldDetailed(order as unknown as MonitoredPickupOrder);
+      if (!holdResult.released) {
+        const restored = await this.revertDedicatedRelease(order);
+        if (restored) {
+          await this.hasura
+            .executeMutation(
+              `mutation RestoreDesignatedStamps($id: uuid!, $source: String, $cutoff: timestamptz, $accepted: timestamptz) {
+                update_orders_by_pk(pk_columns: { id: $id }, _set: {
+                  assignment_source: $source, designated_release_cutoff_at: $cutoff, designated_accepted_at: $accepted
+                }) { id }
+              }`,
+              {
+                id: order.id,
+                source: order.assignment_source,
+                cutoff: extra.designated_release_cutoff_at,
+                accepted: extra.designated_accepted_at,
+              }
+            )
+            .catch(() => undefined);
+          await this.dropExclusion(order.id, agentId, nowIso);
+          return this.refuse('release_failed', 'Could not release the order');
+        }
+        await this.recordStrandedHold(order as unknown as MonitoredPickupOrder, holdResult.hold, 'dedicated_release');
+        return this.refuse('release_lost', 'The order was released and another agent has taken it');
+      }
+      await this.insertAgentHistory(order.id, userId, 'Designated agent released the order before the cutoff (no strike)');
+      await this.orderEvents.recordEvent({
+        orderId: order.id,
+        eventType: 'reassignment_started',
+        actorType: 'agent',
+        actorId: agentId,
+        payload: { reason: 'designated_release_free', declineReason: reason },
+      });
+      emitServerSiteEvent(this.siteEventsService, 'dedicated.release_free', {
+        orderId: order.id,
+        agentId,
+        reason,
+        minutesBeforeCutoff: Math.floor((cutoff - now.getTime()) / 60_000),
+      });
+      const gate = extra.dispatch_ready_at ? new Date(extra.dispatch_ready_at).getTime() : 0;
+      if (gate <= now.getTime()) await this.redispatch(order.id);
+      else await this.designatedFirst?.offerAtReady(order.id, now);
+      return { success: true, mode: 'free', message: 'Order released, no strike' };
+    }
+
+    // Late: strike + immediate round 1 through the standard reassignment.
+    const result = await this.reassignOrder(order.id, 'designated_late_release');
+    if (!result.success) {
+      await this.dropExclusion(order.id, agentId, nowIso);
+      return this.refuse('release_failed', result.message || 'Could not release the order');
+    }
+    await this.hasura
+      .executeMutation(CLEAR_DESIGNATED_STAMPS_MUTATION, { id: order.id })
+      .catch(() => undefined);
+    await this.designatedFirst?.recordReliability(agentId, order.id, 'late_release', {
+      reason,
+      cutoffAt: extra.designated_release_cutoff_at,
+      at: nowIso,
+    });
+    emitServerSiteEvent(this.siteEventsService, 'dedicated.release_late', {
+      orderId: order.id,
+      agentId,
+      reason,
+      minutesAfterCutoff: cutoff ? Math.floor((now.getTime() - cutoff) / 60_000) : null,
+    });
+    const businessUserId = extra.business?.user_id;
+    if (businessUserId) {
+      const msg = buildDesignatedLateReleaseMessage({
+        orderNumber: order.order_number,
+        preferredLanguage: extra.business?.user?.preferred_language,
+      });
+      await this.notifications
+        .sendDedicatedOrderNotice({
+          userId: businessUserId,
+          title: msg.title,
+          body: msg.body,
+          messageType: DESIGNATED_FIRST_MESSAGE_TYPES.lateRelease,
+          orderId: order.id,
+          event: 'dedicated.release_late',
+          persona: 'business',
+        })
+        .catch(() => undefined);
+    }
+    return { success: true, mode: 'late', message: 'Order released late; this counts as a strike' };
+  }
 
   /**
    * #594 PR 6 (AC-A6b): an internal agent auto-assigned a dedicated order may

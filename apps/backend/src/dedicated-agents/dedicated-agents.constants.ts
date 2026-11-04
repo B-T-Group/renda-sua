@@ -69,12 +69,28 @@ export const DEDICATED_NUMBER_CONFIG = {
    * 20261027210000_dedicated_offer_attempts.
    */
   dedicated_offer_max_attempts: { field: 'offerMaxAttempts', fallback: 2, min: 1, max: 5 },
+  /** Designated agent first (20261104200000_designated_agent_first). */
+  designated_open_offer_reminder_minutes: { field: 'designatedOpenOfferReminderMinutes', fallback: 12, min: 0, max: 120 },
+  designated_release_cutoff_minutes: { field: 'designatedReleaseCutoffMinutes', fallback: 120, min: 0, max: 1440 },
+  designated_reminder_minutes_before: { field: 'designatedReminderMinutesBefore', fallback: 60, min: 5, max: 720 },
+  /** Evening-before reminder time, minutes after local midnight (1140 = 19:00). */
+  designated_evening_before_local_minutes: { field: 'designatedEveningBeforeLocalMinutes', fallback: 1140, min: 0, max: 1439 },
 } as const;
+
+/** Boolean keys -> config field and the fallback when the row is missing. */
+export const DEDICATED_BOOLEAN_CONFIG = {
+  designated_first_enabled: { field: 'designatedFirstEnabled', fallback: false },
+  dedicated_auto_assign_internal: { field: 'autoAssignInternal', fallback: true },
+  designated_evening_before_enabled: { field: 'designatedEveningBeforeEnabled', fallback: true },
+  designated_unconfirmed_auto_release: { field: 'designatedUnconfirmedAutoRelease', fallback: false },
+} as const;
+export type DedicatedBooleanConfigKey = keyof typeof DEDICATED_BOOLEAN_CONFIG;
 
 export type DedicatedNumberConfigKey = keyof typeof DEDICATED_NUMBER_CONFIG;
 export const DEDICATED_CONFIG_KEYS = [
   DEDICATED_AGENTS_FLAG_KEY,
   ...(Object.keys(DEDICATED_NUMBER_CONFIG) as DedicatedNumberConfigKey[]),
+  ...(Object.keys(DEDICATED_BOOLEAN_CONFIG) as DedicatedBooleanConfigKey[]),
 ] as const;
 
 export interface DedicatedAgentsConfig {
@@ -87,6 +103,17 @@ export interface DedicatedAgentsConfig {
   postingExpiryDays: number;
   slotEndGraceMinutes: number;
   offerMaxAttempts: number;
+  designatedOpenOfferReminderMinutes: number;
+  designatedReleaseCutoffMinutes: number;
+  designatedReminderMinutesBefore: number;
+  designatedEveningBeforeLocalMinutes: number;
+  /** Offer the designated agent at ready (before the gate) instead of the heads-up. */
+  designatedFirstEnabled: boolean;
+  /** Single internal agent: auto-assign (with Release) instead of offering. */
+  autoAssignInternal: boolean;
+  designatedEveningBeforeEnabled: boolean;
+  /** Unconfirmed at gate: release instead of only flagging (default flag only). */
+  designatedUnconfirmedAutoRelease: boolean;
 }
 
 /** Used when the config rows are missing or unreadable: the feature stays off. */
@@ -100,6 +127,14 @@ export const DEFAULT_DEDICATED_AGENTS_CONFIG: DedicatedAgentsConfig = {
   postingExpiryDays: 14,
   slotEndGraceMinutes: 15,
   offerMaxAttempts: 2,
+  designatedOpenOfferReminderMinutes: 12,
+  designatedReleaseCutoffMinutes: 120,
+  designatedReminderMinutesBefore: 60,
+  designatedEveningBeforeLocalMinutes: 1140,
+  designatedFirstEnabled: false,
+  autoAssignInternal: true,
+  designatedEveningBeforeEnabled: true,
+  designatedUnconfirmedAutoRelease: false,
 };
 
 /** In-app / push paths of the dedicated-agent notices (PR 3; the PR 6 slot reminder reuses the agent one). */

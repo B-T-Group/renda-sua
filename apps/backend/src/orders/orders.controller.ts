@@ -1513,6 +1513,12 @@ export class OrdersController {
     return this.ordersService.checkOrderClaimAvailability(orderId, platform);
   }
 
+  @Get('designated/mine')
+  @ApiOperation({ summary: 'Designated agent first: my early offers and upcoming designated orders' })
+  async listDesignatedForAgent() {
+    return this.ordersService.listDesignatedForAgent();
+  }
+
   // Must stay above @Get(':id'): Nest matches routes in declaration order, so
   // a later single-segment GET would be captured as an order id.
   @Get('cancellation-fee')
@@ -1856,6 +1862,21 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: 'Extension unavailable' })
   async requestPickupDelay(@Param('id') orderId: string) {
     return this.ordersService.requestPickupDelay(orderId);
+  }
+
+  @Post(':id/designated-confirm')
+  @ApiOperation({ summary: 'Designated agent first: "Still on it" for an upcoming order' })
+  async confirmDesignated(@Param('id') orderId: string) {
+    return this.ordersService.confirmDesignated(orderId);
+  }
+
+  @Post(':id/designated-release')
+  @ApiOperation({
+    summary:
+      '"Can\'t make it": free before the 2 h cutoff (re-offered to the other designated agents), a strike after it',
+  })
+  async releaseDesignated(@Param('id') orderId: string, @Body() body: { reason?: string }) {
+    return this.ordersService.releaseDesignated(orderId, body?.reason);
   }
 
   @Post(':id/dedicated-release')

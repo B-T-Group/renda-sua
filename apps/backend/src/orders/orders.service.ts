@@ -58,6 +58,7 @@ import {
 import type { ClaimAssignment } from './dedicated-claim.port';
 import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
 import { DedicatedHeadsUpService } from './dedicated-heads-up.service';
+import { DesignatedFirstService } from './designated-first.service';
 import { dedicatedReleaseRefusalMessage } from './dedicated-accept-refusal.messages';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
 import {
@@ -842,7 +843,9 @@ export class OrdersService {
     @Optional()
     private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService,
     @Optional()
-    private readonly dedicatedHeadsUp?: DedicatedHeadsUpService
+    private readonly dedicatedHeadsUp?: DedicatedHeadsUpService,
+    @Optional()
+    private readonly designatedFirst?: DesignatedFirstService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -2214,13 +2217,28 @@ export class OrdersService {
     );
     await this.recordPreparationReadyHistory(request, viaSystem, userId);
     await this.scheduleDispatchRelease(order.id, dispatchSchedule);
-    // Early soft heads-up to the slot's dedicated agents (no-op unless covered, confirmed and gated).
-    void this.dedicatedHeadsUp?.sendForOrder(order.id);
+    void this.offerDesignatedOrHeadsUp(order.id);
     return {
       success: true,
       order: updatedOrder,
       message: 'Order preparation completed successfully',
     };
+  }
+
+  /**
+   * Designated agent first: offer the order to its designated agent(s) now, valid
+   * until the gate. Out of scope (flag off, not covered, gate open) -> the legacy
+   * soft heads-up, which designated-first retires when it applies. Never throws.
+   */
+  private async offerDesignatedOrHeadsUp(orderId: string): Promise<void> {
+    try {
+      const outcome = await this.designatedFirst?.offerAtReady(orderId);
+      if (outcome && outcome.kind !== 'skipped') return;
+    } catch (error: any) {
+      this.logger.warn(`Designated early offer failed for ${orderId}: ${error?.message}`);
+    }
+    // Early soft heads-up to the slot's dedicated agents (no-op unless covered, confirmed and gated).
+    await this.dedicatedHeadsUp?.sendForOrder(orderId);
   }
 
   private async resolvePreparationActorUserId(
@@ -3189,10 +3207,20 @@ export class OrdersService {
     );
     const agent = this.requireAgentRecord(user);
 
-    const activeOffer = await this.orderOffersService.getActiveOfferForAgent(
+    let activeOffer = await this.orderOffersService.getActiveOfferForAgent(
       request.orderId,
       agent.id
     );
+    // Designated agent first: a late accept wins while the order is still unassigned.
+    if (
+      !activeOffer &&
+      (await this.designatedFirst?.reopenLateOffer(request.orderId, agent.id))
+    ) {
+      activeOffer = await this.orderOffersService.getActiveOfferForAgent(
+        request.orderId,
+        agent.id
+      );
+    }
     if (!activeOffer) {
       throw new HttpException(
         {
@@ -17866,6 +17894,7 @@ export class OrdersService {
         `startMonitoring failed for ${orderId}: ${error?.message}`
       );
     }
+    await this.designatedFirst?.onAssigned(orderId);
   }
 
   async requestPickupDelay(orderId: string) {
@@ -17900,6 +17929,50 @@ export class OrdersService {
       agent.id,
       reason
     );
+    if (result.success) return result;
+    const status =
+      result.refusal === 'release_failed'
+        ? HttpStatus.INTERNAL_SERVER_ERROR
+        : result.refusal === 'unavailable'
+          ? HttpStatus.NOT_FOUND
+          : HttpStatus.CONFLICT;
+    const code = DEDICATED_RELEASE_ERRORS[result.refusal];
+    throw new HttpException(
+      {
+        message: dedicatedReleaseRefusalMessage(result.refusal, user?.preferred_language),
+        error: code,
+        code,
+        reason: result.refusal,
+      },
+      status
+    );
+  }
+
+  /** Designated agent first: the agent's early offers and upcoming designated orders. */
+  async listDesignatedForAgent() {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can view offers');
+    const agent = this.requireAgentRecord(user);
+    if (!this.designatedFirst) return { success: true, offers: [], upcoming: [] };
+    return { success: true, ...(await this.designatedFirst.listForAgent(agent.id)) };
+  }
+
+  /** "Still on it": the designated agent confirms an upcoming order. */
+  async confirmDesignated(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can confirm');
+    const agent = this.requireAgentRecord(user);
+    if (!this.designatedFirst) throw new HttpException('Unavailable', HttpStatus.NOT_FOUND);
+    return { success: true, ...(await this.designatedFirst.confirm(orderId, agent.id)) };
+  }
+
+  /** "Can't make it": free before the 2 h cutoff, a strike after it (no money fee). */
+  async releaseDesignated(orderId: string, rawReason?: unknown) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can release an assignment');
+    const agent = this.requireAgentRecord(user);
+    const reason = parseOfferDeclineReason(rawReason);
+    const result = await this.orderReassignmentService.releaseDesignated(orderId, agent.id, reason);
     if (result.success) return result;
     const status =
       result.refusal === 'release_failed'
@@ -20468,6 +20541,7 @@ export const DEDICATED_RELEASE_ERRORS = {
   window_closed: 'DEDICATED_RELEASE_WINDOW_CLOSED',
   release_failed: 'DEDICATED_RELEASE_FAILED',
   release_lost: 'DEDICATED_RELEASE_LOST',
+  not_designated: 'DESIGNATED_RELEASE_NOT_DESIGNATED',
 } as const;
 
 export function parseOfferDeclineReason(raw: unknown): OfferDeclineReason | null {

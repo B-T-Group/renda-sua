@@ -45,7 +45,33 @@ describe('resolveDedicatedAgentsConfig', () => {
       postingExpiryDays: 7,
       slotEndGraceMinutes: 10,
       offerMaxAttempts: 3,
+      designatedOpenOfferReminderMinutes: 12,
+      designatedReleaseCutoffMinutes: 120,
+      designatedReminderMinutesBefore: 60,
+      designatedEveningBeforeLocalMinutes: 1140,
+      designatedFirstEnabled: false,
+      autoAssignInternal: true,
+      designatedEveningBeforeEnabled: true,
+      designatedUnconfirmedAutoRelease: false,
     });
+  });
+
+  it('reads the designated-first booleans per country and ignores non-booleans', () => {
+    const bool = (key: string, value: unknown, country: string | null = null) => ({
+      config_key: key,
+      data_type: 'boolean',
+      boolean_value: value,
+      number_value: null,
+      country_code: country,
+    });
+    const rows = [
+      bool('designated_first_enabled', false),
+      bool('designated_first_enabled', true, 'CM'),
+      bool('dedicated_auto_assign_internal', 'yes'),
+    ] as any[];
+    expect(resolveDedicatedAgentsConfig(rows, 'CM').designatedFirstEnabled).toBe(true);
+    expect(resolveDedicatedAgentsConfig(rows, 'GA').designatedFirstEnabled).toBe(false);
+    expect(resolveDedicatedAgentsConfig(rows, 'CM').autoAssignInternal).toBe(true);
   });
 
   it('lets a country row override the global row', () => {
@@ -97,7 +123,7 @@ describe('DedicatedAgentsConfigService', () => {
     expect(vars.keys).toEqual(
       expect.arrayContaining(['dedicated_agents_enabled', 'dedicated_max_active_orders', 'dedicated_offer_ttl_seconds'])
     );
-    expect(vars.keys).toHaveLength(9);
+    expect(vars.keys).toHaveLength(17);
   });
 
   it('stays off when the config query fails', async () => {

@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import {
   DEDICATED_AGENTS_FLAG_KEY,
+  DEDICATED_BOOLEAN_CONFIG,
   DEDICATED_CONFIG_KEYS,
+  type DedicatedBooleanConfigKey,
   DEDICATED_NUMBER_CONFIG,
   DEFAULT_DEDICATED_AGENTS_CONFIG,
   type DedicatedAgentsConfig,
@@ -56,6 +58,13 @@ export function resolveDedicatedAgentsConfig(
       Number.isInteger(value) && value >= spec.min && value <= spec.max
         ? value
         : spec.fallback;
+  }
+  for (const key of Object.keys(
+    DEDICATED_BOOLEAN_CONFIG
+  ) as DedicatedBooleanConfigKey[]) {
+    const spec = DEDICATED_BOOLEAN_CONFIG[key];
+    const raw = pickRow(rows, key, code)?.boolean_value;
+    config[spec.field] = typeof raw === 'boolean' ? raw : spec.fallback;
   }
   return config;
 }
