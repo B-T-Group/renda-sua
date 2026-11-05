@@ -1031,11 +1031,32 @@ export class OrderReassignmentService {
         );
       return false;
     }
+    // After the hold is released the original agent is gone. Clear their
+    // designated stamps here (not in the unassign CAS) so a reverted drop
+    // keeps the same agent's free-release window and confirmation state.
+    await this.clearLeftoverDesignatedStamps(order.id);
     await this.insertHistory(
       order.id,
       'System reassigned order after pickup SLA'
     );
     return true;
+  }
+
+  /**
+   * Designated accept/cutoff/confirm columns are per-agent. If they survive
+   * systemDrop, the next assignee inherits the previous cutoff: "Can't make it"
+   * can strike them, and the gate sweep can flag them as unconfirmed.
+   */
+  private async clearLeftoverDesignatedStamps(orderId: string): Promise<void> {
+    await this.hasura
+      .executeMutation(CLEAR_DESIGNATED_STAMPS_MUTATION, { id: orderId })
+      .catch((error: unknown) =>
+        this.logger.warn(
+          `Designated stamps not cleared after drop of ${orderId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`
+        )
+      );
   }
 
   /** The hold read before the credit is returned, so a failure can be recorded with it. */

@@ -175,6 +175,22 @@ describe('DesignatedFirstService', () => {
     expect(t.reassign.reassignOrder).not.toHaveBeenCalled();
   });
 
+  it('unconfirmed check is a no-op without designated_accepted_at (e.g. after a system drop)', async () => {
+    const t = setup();
+    jest.spyOn(t.service, 'load').mockResolvedValue({
+      order: order({
+        dispatch_mode: 'designated_first',
+        current_status: 'assigned_to_agent',
+        assigned_agent_id: 'a2',
+        assignment_source: 'dedicated_offer',
+      }),
+      offers: [],
+    });
+    expect(await t.service.checkUnconfirmedAtGate('o1', NOW)).toBe('ok');
+    expect(t.notifications.sendDedicatedOrderNotice).not.toHaveBeenCalled();
+    expect(t.reassign.reassignOrder).not.toHaveBeenCalled();
+  });
+
   it('confirm refuses an order the agent does not hold', async () => {
     const t = setup();
     jest.spyOn(t.service, 'load').mockResolvedValue({ order: order(), offers: [] });

@@ -86,5 +86,10 @@ describe('OrderReassignmentService.releaseDesignated', () => {
     expect(await t.service.releaseDesignated('o1', 'other', null)).toMatchObject({ success: false, refusal: 'not_assigned' });
     const n = build({ dispatch_mode: null });
     expect(await n.service.releaseDesignated('o1', 'a1', null)).toMatchObject({ success: false, refusal: 'not_designated' });
+    const cleared = build({ designated_accepted_at: null });
+    expect(await cleared.service.releaseDesignated('o1', 'a1', null)).toMatchObject({
+      success: false,
+      refusal: 'not_designated',
+    });
   });
 });

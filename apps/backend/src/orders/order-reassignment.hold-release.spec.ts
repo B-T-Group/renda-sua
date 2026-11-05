@@ -135,6 +135,36 @@ describe('OrderReassignmentService hold release safety', () => {
     ).toBe(true);
   });
 
+  it('clears leftover designated stamps after a successful drop so the next agent does not inherit the cutoff', async () => {
+    const { service, executeMutation } = buildService();
+
+    const result = await service.reassignOrder('order-1', 'agent_issue:emergency');
+
+    expect(result.success).toBe(true);
+    expect(
+      executeMutation.mock.calls.some(
+        (c) =>
+          String(c[0]).includes('ClearDesignatedStamps') &&
+          c[1]?.id === 'order-1'
+      )
+    ).toBe(true);
+  });
+
+  it('keeps designated stamps when the drop is reverted after a hold-release failure', async () => {
+    const { service, executeMutation } = buildService({
+      releaseSuccess: false,
+    });
+
+    const result = await service.reassignOrder('order-1', 'pickup_sla');
+
+    expect(result.success).toBe(false);
+    expect(
+      executeMutation.mock.calls.some((c) =>
+        String(c[0]).includes('ClearDesignatedStamps')
+      )
+    ).toBe(false);
+  });
+
   it('skips ledger work when hold is not active', async () => {
     const { service, accountsService, executeMutation } = buildService({
       holdStatus: 'cancelled',
