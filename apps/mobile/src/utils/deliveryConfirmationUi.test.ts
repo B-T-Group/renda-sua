@@ -17,6 +17,17 @@ describe('clientCanShowConfirmReceipt', () => {
     ).toBe(true);
   });
 
+  it('hides confirm while pay-at-delivery is still out for delivery and unpaid', () => {
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        paymentTiming: 'pay_at_delivery',
+        paymentStatus: 'pending',
+      })
+    ).toBe(false);
+  });
+
   it('allows confirm from out_for_delivery when the agent has not marked delivered', () => {
     expect(
       clientCanShowConfirmReceipt({

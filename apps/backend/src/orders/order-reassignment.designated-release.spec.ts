@@ -21,7 +21,10 @@ function build(extra: Record<string, unknown> = {}) {
       return { update_orders: { affected_rows: 1 } };
     }),
   };
-  const orderEvents = { recordEvent: jest.fn(async () => undefined) };
+  const orderEvents = {
+    recordEvent: jest.fn(async () => undefined),
+    recordEventStrict: jest.fn(async () => undefined),
+  };
   const notifications = { sendDedicatedOrderNotice: jest.fn(async () => undefined) };
   const designatedFirst = { offerAtReady: jest.fn(async () => ({ kind: 'offered' })), recordReliability: jest.fn(async () => undefined) };
   const service = new OrderReassignmentService(
@@ -49,7 +52,7 @@ function build(extra: Record<string, unknown> = {}) {
   s.dropExclusion = jest.fn(async () => undefined);
   s.redispatch = jest.fn(async () => undefined);
   const reassign = jest.spyOn(service, 'reassignOrder').mockResolvedValue({ success: true, message: 'ok' } as any);
-  return { service, s, mutations, notifications, designatedFirst, reassign };
+  return { service, s, mutations, notifications, designatedFirst, reassign, hasura, orderEvents };
 }
 
 describe('OrderReassignmentService.releaseDesignated', () => {
@@ -86,10 +89,120 @@ describe('OrderReassignmentService.releaseDesignated', () => {
     expect(await t.service.releaseDesignated('o1', 'other', null)).toMatchObject({ success: false, refusal: 'not_assigned' });
     const n = build({ dispatch_mode: null });
     expect(await n.service.releaseDesignated('o1', 'a1', null)).toMatchObject({ success: false, refusal: 'not_designated' });
-    const cleared = build({ designated_accepted_at: null });
-    expect(await cleared.service.releaseDesignated('o1', 'a1', null)).toMatchObject({
-      success: false,
-      refusal: 'not_designated',
+    const unaccepted = build({ designated_accepted_at: null });
+    expect(await unaccepted.service.releaseDesignated('o1', 'a1', null)).toMatchObject({ success: false, refusal: 'not_designated' });
+    expect(unaccepted.mutations).toHaveLength(0);
+    expect(unaccepted.reassign).not.toHaveBeenCalled();
+  });
+
+  it('treats the cutoff instant and a missing cutoff as a late strike', async () => {
+    const atCutoff = build();
+    const out = await atCutoff.service.releaseDesignated('o1', 'a1', null, new Date(CUTOFF));
+    expect(out).toMatchObject({ success: true, mode: 'late' });
+    expect(atCutoff.reassign).toHaveBeenCalledWith('o1', 'designated_late_release');
+    expect(atCutoff.designatedFirst.offerAtReady).not.toHaveBeenCalled();
+
+    const noCutoff = build({ designated_release_cutoff_at: null });
+    const late = await noCutoff.service.releaseDesignated('o1', 'a1', null, new Date('2026-11-09T12:00:00Z'));
+    expect(late).toMatchObject({ success: true, mode: 'late' });
+    expect(noCutoff.designatedFirst.offerAtReady).not.toHaveBeenCalled();
+  });
+
+  it('a lost free-release compare-and-swap drops the exclusion and does not re-offer', async () => {
+    const t = build();
+    t.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      t.mutations.push({ q, v });
+      if (q.includes('ReleaseDesignatedFree')) return { update_orders: { affected_rows: 0 } };
+      return { update_orders: { affected_rows: 1 } };
     });
+    const out = await t.service.releaseDesignated('o1', 'a1', null, new Date('2026-11-09T12:00:00Z'));
+    expect(out).toMatchObject({ success: false, refusal: 'window_closed' });
+    expect(t.s.dropExclusion).toHaveBeenCalledWith('o1', 'a1', '2026-11-09T12:00:00.000Z');
+    expect(t.designatedFirst.offerAtReady).not.toHaveBeenCalled();
+    expect(t.designatedFirst.recordReliability).not.toHaveBeenCalled();
+    expect(t.reassign).not.toHaveBeenCalled();
+  });
+
+  it('restores the assignment when the hold cannot be released', async () => {
+    const restored = build();
+    restored.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      restored.mutations.push({ q, v });
+      if (q.includes('RevertDedicatedRelease')) return { update_orders: { affected_rows: 1 }, restore: { affected_rows: 1 } };
+      return { update_orders: { affected_rows: 1 } };
+    });
+    restored.s.releaseHoldDetailed.mockResolvedValue({ released: false, hold: { id: 'h1', agent_hold_amount: 200 } });
+    const out = await restored.service.releaseDesignated('o1', 'a1', null, new Date('2026-11-09T12:00:00Z'));
+    expect(out).toMatchObject({ success: false, refusal: 'release_failed' });
+    expect(restored.s.dropExclusion).toHaveBeenCalled();
+    expect(restored.mutations.some((m) => m.q.includes('RestoreDesignatedStamps'))).toBe(true);
+    expect(restored.designatedFirst.offerAtReady).not.toHaveBeenCalled();
+    expect(restored.orderEvents.recordEventStrict).not.toHaveBeenCalled();
+
+    const stranded = build();
+    stranded.s.releaseHoldDetailed.mockResolvedValue({ released: false, hold: { id: 'h1', agent_hold_amount: 200 } });
+    const lost = await stranded.service.releaseDesignated('o1', 'a1', null, new Date('2026-11-09T12:00:00Z'));
+    expect(lost).toMatchObject({ success: false, refusal: 'release_lost' });
+    expect(stranded.orderEvents.recordEventStrict).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderId: 'o1',
+        eventType: 'agent_hold_stranded',
+        payload: expect.objectContaining({ amount: 200, path: 'dedicated_release', holdId: 'h1' }),
+      })
+    );
+    expect(stranded.designatedFirst.offerAtReady).not.toHaveBeenCalled();
+    expect(stranded.s.dropExclusion).not.toHaveBeenCalled();
+
+    const noMoney = build();
+    noMoney.s.releaseHoldDetailed.mockResolvedValue({ released: false, hold: null });
+    expect(await noMoney.service.releaseDesignated('o1', 'a1', null, new Date('2026-11-09T12:00:00Z'))).toMatchObject({
+      success: false,
+      refusal: 'release_lost',
+    });
+    expect(noMoney.orderEvents.recordEventStrict).not.toHaveBeenCalled();
+  });
+
+  it('does not release the order when the exclusion row cannot be written', async () => {
+    const t = build();
+    t.hasura.executeMutation.mockImplementation(async (q: string) => {
+      if (q.includes('RecordDedicatedRelease')) throw new Error('conflict');
+      return { update_orders: { affected_rows: 1 } };
+    });
+    const out = await t.service.releaseDesignated('o1', 'a1', null, new Date('2026-11-09T12:00:00Z'));
+    expect(out).toMatchObject({ success: false, refusal: 'release_failed' });
+    expect(t.mutations.some((m) => m.q.includes('ReleaseDesignatedFree'))).toBe(false);
+    expect(t.designatedFirst.offerAtReady).not.toHaveBeenCalled();
+    expect(t.reassign).not.toHaveBeenCalled();
+  });
+
+  it('a failed late reassignment drops the exclusion and does not strike or notify', async () => {
+    const t = build();
+    t.reassign.mockResolvedValue({ success: false, message: 'busy' } as any);
+    const out = await t.service.releaseDesignated('o1', 'a1', null, new Date('2026-11-10T06:30:00Z'));
+    expect(out).toMatchObject({ success: false, refusal: 'release_failed' });
+    expect(t.s.dropExclusion).toHaveBeenCalledWith('o1', 'a1', '2026-11-10T06:30:00.000Z');
+    expect(t.designatedFirst.recordReliability).not.toHaveBeenCalled();
+    expect(t.notifications.sendDedicatedOrderNotice).not.toHaveBeenCalled();
+    expect(t.mutations.some((m) => m.q.includes('ClearDesignatedStamps'))).toBe(false);
+  });
+
+  it('refuses when the agent user or the release row is missing, before any write', async () => {
+    const missingUser = build();
+    missingUser.s.fetchDedicatedReleaseOrder.mockResolvedValue({
+      id: 'o1',
+      order_number: 'ORD-1',
+      current_status: 'assigned_to_agent',
+      assigned_agent_id: 'a1',
+      currency: 'XAF',
+      assignment_source: 'dedicated_offer',
+      assigned_agent: { user_id: null },
+    });
+    expect(await missingUser.service.releaseDesignated('o1', 'a1', null)).toMatchObject({ success: false, refusal: 'release_failed' });
+    expect(missingUser.mutations).toHaveLength(0);
+
+    const gone = build();
+    gone.hasura.executeQuery.mockResolvedValue({ orders_by_pk: null });
+    expect(await gone.service.releaseDesignated('o1', 'a1', null)).toMatchObject({ success: false, refusal: 'unavailable' });
+    expect(gone.mutations).toHaveLength(0);
+    expect(gone.reassign).not.toHaveBeenCalled();
   });
 });

@@ -662,9 +662,11 @@ export class DesignatedFirstService {
 
   /** Reliability row (late release, unconfirmed at gate); one per (agent, order, kind). */
   async recordReliability(agentId: string, orderId: string, kind: 'late_release' | 'reminder_unconfirmed' | 'no_show', meta: Record<string, unknown>): Promise<void> {
+    // Must not block release/reassignment, but a failed insert is a real bug (missing
+    // Hasura unique constraint, permissions, etc.) — log at error so it pages.
     await this.hasura
       .executeMutation(RELIABILITY_EVENT, { object: { agent_id: agentId, order_id: orderId, kind, meta } })
-      .catch((error) => this.logger.warn(`Reliability event ${kind} for ${orderId}: ${this.msg(error)}`));
+      .catch((error) => this.logger.error(`Reliability event ${kind} for ${orderId}: ${this.msg(error)}`));
   }
 
   // ---- internals ----

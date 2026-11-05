@@ -21,7 +21,8 @@ export type RecipientCompleteOutcome =
   | 'already_complete'
   | 'not_allowed'
   | 'unmatched'
-  | 'failed';
+  | 'failed'
+  | 'reported';
 
 type ReplyLocale = 'en' | 'fr';
 
@@ -45,6 +46,10 @@ const REPLIES: Record<RecipientCompleteOutcome, Record<ReplyLocale, string>> = {
   failed: {
     en: 'Order {{orderNumber}} could not be completed. Ask the person who placed it to complete it in the app.',
     fr: "La commande {{orderNumber}} n'a pas pu être terminée. Demandez à la personne qui l'a passée de la terminer dans l'application.",
+  },
+  reported: {
+    en: 'Thanks. Order {{orderNumber}} is on hold while support reviews the problem.',
+    fr: 'Merci. La commande {{orderNumber}} est en attente pendant que le support examine le problème.',
   },
 };
 

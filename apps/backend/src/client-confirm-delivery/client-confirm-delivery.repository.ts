@@ -27,7 +27,7 @@ export interface DeliveryReportRow {
 
 const ORDER_FIELDS = `
   id order_number current_status fulfillment_method fulfillment_country
-  payment_timing payment_status reconciliation_status
+  payment_timing payment_method payment_status pay_after_merchant_confirm reconciliation_status
   delivery_pin_hash delivery_confirmation_method
   client_confirmation_requested_at client_confirmed_at
   auto_complete_deadline_at delivery_proof_submitted_at

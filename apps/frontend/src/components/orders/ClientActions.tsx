@@ -79,6 +79,10 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     isGift: order.is_third_party_recipient,
     giftBuyerCanConfirm: confirmState?.giftBuyerCanConfirm,
     usesLegacyPin,
+    paymentTiming: order.payment_timing,
+    paymentMethod: order.payment_method,
+    paymentStatus: order.payment_status,
+    payAfterMerchantConfirm: order.pay_after_merchant_confirm,
   });
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [refundOpen, setRefundOpen] = useState(false);

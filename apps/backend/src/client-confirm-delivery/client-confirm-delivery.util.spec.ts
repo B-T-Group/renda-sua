@@ -3,6 +3,7 @@ import {
   canOverwriteFromStatus,
   graceElapsed,
   isClientConfirmDeliveryOrder,
+  isUnpaidPayAtDelivery,
   shouldMintDeliveryPin,
   usesLegacyDeliveryPin,
 } from './client-confirm-delivery.util';
@@ -41,6 +42,47 @@ describe('client-confirm-delivery.util', () => {
       usesLegacyDeliveryPin({
         fulfillment_method: 'pickup',
         delivery_pin_hash: 'abc',
+      })
+    ).toBe(false);
+  });
+
+  it('treats classic unpaid pay-at-delivery as not collected', () => {
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+      })
+    ).toBe(true);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_method: 'pay_on_delivery',
+        payment_status: 'pending',
+      })
+    ).toBe(true);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        pay_after_merchant_confirm: true,
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        reconciliation_status: 'pending_manual_reconciliation',
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_now',
+        payment_status: 'paid',
       })
     ).toBe(false);
   });
