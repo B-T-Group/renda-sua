@@ -318,6 +318,7 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
         maxConcurrency: 10,
         // Handler returns batchItemFailures so only failed messages retry.
         reportBatchItemFailures: true,
+        enabled: true,
       })
     );
 
