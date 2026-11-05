@@ -16,6 +16,7 @@ import { ForfeitDepositCancelDialog } from '../../../components/dialogs/ForfeitD
 import { ClientPickupPaymentSheet } from '../../../components/client/ClientPickupPaymentSheet';
 import { NoAgentOptionsSheet } from '../../../components/client/NoAgentOptionsSheet';
 import { SendDeliveryPinButton } from '../../../components/client/SendDeliveryPinButton';
+import { navigateToDeliveryConfirm } from '../../../navigation/rootNavigationRef';
 import { ClientConfirmReceiptCard } from '../../../components/client/ClientConfirmReceiptCard';
 import { ReportDeliveryProblemDialog } from '../../../components/dialogs/ReportDeliveryProblemDialog';
 import { StatusPill } from '../../../components/common/StatusPill';
@@ -733,6 +734,11 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
             busy={actionLoading}
             onConfirm={() => void runConfirmReceipt()}
             onReportProblem={() => setProblemOpen(true)}
+            onOpenConfirmScreen={
+              confirmState?.confirmVariant && !confirmState.isStripeRail
+                ? () => void navigateToDeliveryConfirm(order.id, 'in_app')
+                : undefined
+            }
           />
         ) : null}
 

@@ -103,6 +103,13 @@ array_relationships:
         remote_table:
           name: order_items
           schema: public
+  - name: delivery_reports
+    using:
+      foreign_key_constraint_on:
+        column: order_id
+        table:
+          name: order_delivery_reports
+          schema: public
   - name: delivery_proof_photos
     using:
       foreign_key_constraint_on:
@@ -218,6 +225,10 @@ select_permissions:
         - awaiting_confirm_reminder_1h_at
         - awaiting_confirm_reminder_24h_at
         - awaiting_confirm_support_ticket_id
+        - delivered_at
+        - report_window_ends_at
+        - dispute_type
+        - dispute_opened_at
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo
@@ -328,6 +339,11 @@ select_permissions:
         - awaiting_confirm_reminder_1h_at
         - awaiting_confirm_reminder_24h_at
         - awaiting_confirm_support_ticket_id
+        - delivered_at
+        - report_window_ends_at
+        - dispute_type
+        - dispute_reason
+        - dispute_opened_at
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo
@@ -444,6 +460,11 @@ select_permissions:
         - awaiting_confirm_reminder_1h_at
         - awaiting_confirm_reminder_24h_at
         - awaiting_confirm_support_ticket_id
+        - delivered_at
+        - report_window_ends_at
+        - dispute_type
+        - dispute_reason
+        - dispute_opened_at
         - discount_code_id
         - discount_amount
         - first_order_delivery_fee_promo

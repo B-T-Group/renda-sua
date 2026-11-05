@@ -110,6 +110,24 @@ describe('RendasuaInfrastructureStack', () => {
     });
   });
 
+  it('order-status handler SQS mapping reports batch item failures', () => {
+    const app = new cdk.App();
+    const stack = new RendasuaInfrastructureStack(app, 'TestStack', {
+      environment: 'test',
+    });
+    const template = Template.fromStack(stack);
+    const fns = template.findResources('AWS::Lambda::Function', {
+      Properties: { FunctionName: 'order-status-handler-test' },
+    });
+    const fnId = Object.keys(fns)[0];
+    expect(fnId).toBeDefined();
+    template.hasResourceProperties('AWS::Lambda::EventSourceMapping', {
+      FunctionName: { Ref: fnId },
+      BatchSize: 10,
+      FunctionResponseTypes: ['ReportBatchItemFailures'],
+    });
+  });
+
   it('creates IAM role with correct permissions', () => {
     const app = new cdk.App();
     const stack = new RendasuaInfrastructureStack(app, 'TestStack', {

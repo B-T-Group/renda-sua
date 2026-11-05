@@ -18,6 +18,7 @@ import {
   type DedicatedFallbackOutcome,
 } from './dedicated-dispatch.service';
 import type { ClaimAssignment } from './dedicated-claim.port';
+import { DesignatedFirstService } from './designated-first.service';
 import { agentPrefersSlot, slotPrefsFromRow, type AgentSlotPrefRow } from '../dedicated-agents/agent-slot-prefs.util';
 
 /** Final "round" value used to signal the exhaustion check rather than a real dispatch round. */
@@ -35,6 +36,7 @@ interface OfferOrderDetails {
   dispatch_round: number;
   /** #594: set only when dedicated coverage made delivery possible at checkout. */
   coverage_slot_key?: string | null;
+  dispatch_mode?: string | null;
   business_location?: {
     name?: string | null;
     address?: {
@@ -140,7 +142,9 @@ export class OrderOffersService {
     private readonly paymentRoutingService: PaymentRoutingService,
     private readonly agentHoldService: AgentHoldService,
     @Optional()
-    private readonly dedicatedDispatch?: DedicatedDispatchService
+    private readonly dedicatedDispatch?: DedicatedDispatchService,
+    @Optional()
+    private readonly designatedFirst?: DesignatedFirstService
   ) {}
 
   private get ttlSeconds(): number {
@@ -191,6 +195,16 @@ export class OrderOffersService {
   async runDispatchRound(orderId: string, round: number): Promise<void> {
     try {
       const order = await this.getOrderForOffer(orderId);
+      // Designated agent first: the gate on an order the designated agent holds checks "Still on it".
+      if (
+        round === 1 &&
+        order?.dispatch_mode === 'designated_first' &&
+        order.assigned_agent_id &&
+        this.isDispatchGateOpen(order)
+      ) {
+        await this.designatedFirst?.checkUnconfirmedAtGate(orderId);
+        return;
+      }
       if (!order || !this.isDispatchable(order)) return;
       if (round === EXHAUSTION_CHECK_ROUND) {
         await this.finalizeIfUnclaimed(order);
@@ -214,12 +228,15 @@ export class OrderOffersService {
         order.business_location?.address?.country
       );
       const maxDistanceKm = await this.resolveRoundRadiusKm(round, country);
-      const candidates = await this.findClosestEligibleAgents(
-        order,
-        pickupLat,
-        pickupLon,
-        maxDistanceKm
-      );
+      // Designated agent first: an unanswered early offer stays live through round 1
+      // (the designated agent is in the first nearby round); its row is left alone below.
+      const keptDesignated =
+        round === 1 && order.dispatch_mode === 'designated_first' && this.designatedFirst
+          ? await this.designatedFirst.atGate(orderId, this.ttlSeconds)
+          : new Set<string>();
+      const candidates = (
+        await this.findClosestEligibleAgents(order, pickupLat, pickupLon, maxDistanceKm)
+      ).filter((c) => !keptDesignated.has(c.agentId));
 
       await this.markRoundDispatched(orderId, round);
       if (round === 1 && order.coverage_slot_key) {
@@ -885,6 +902,7 @@ export class OrderOffersService {
     });
     if ((result?.dedicated?.affected_rows ?? 0) > 0) {
       this.dedicatedDispatch?.onOfferDeclined(orderId, agentId, reason);
+      this.designatedFirst?.onEarlyDecline(orderId, agentId, reason);
       await this.advanceAfterDedicatedDecline(orderId);
     }
   }
@@ -917,6 +935,13 @@ export class OrderOffersService {
         { orderId, now: new Date().toISOString() }
       );
       if ((live?.order_offers ?? []).length > 0) return;
+      // Designated agent first: an early decline before the gate waits for it; at/after it, round 1.
+      const designated = this.designatedFirst?.decideAfterDecline(order) ?? 'legacy';
+      if (designated === 'wait') return;
+      if (designated === 'round1') {
+        await this.runDispatchRound(orderId, 1);
+        return;
+      }
       const next = order.dispatch_round < 2 ? 2 : EXHAUSTION_CHECK_ROUND;
       await this.runDispatchRound(orderId, next);
     } catch (error) {
@@ -976,6 +1001,7 @@ export class OrderOffersService {
           dispatch_ready_at
           dispatch_round
           coverage_slot_key
+          dispatch_mode
           business {
             name
           }

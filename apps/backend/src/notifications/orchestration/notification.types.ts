@@ -41,6 +41,8 @@ export type NotificationType =
   | 'order.pickup.overdue'
   | 'order.pickup.reassigned'
   | 'order.delivery_pin'
+  | 'order.delivery_confirm.reminder'
+  | 'order.delivery_confirm.auto_completed'
   | 'rental.request'
   | 'rental.request.accepted'
   | 'rental.request.rejected'

@@ -598,6 +598,10 @@ function App() {
                 element={<LazyPages.AdminPaymentProgramsPage />}
               />
               <Route
+                path="/admin/delivery-disputes"
+                element={<LazyPages.AdminDeliveryDisputesPage />}
+              />
+              <Route
                 path="/admin/refunds"
                 element={<LazyPages.AdminRefundsPage />}
               />
@@ -767,6 +771,14 @@ function App() {
               }
             />
             <Route
+              path="/orders/:orderId/confirm"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.DeliveryConfirmPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/orders/:orderId/messages"
               element={
                 <ProtectedRoute>
@@ -912,6 +924,14 @@ function App() {
               element={
                 <ProtectedRoute>
                   <LazyPages.BusinessIntegrationsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/agent/designated"
+              element={
+                <ProtectedRoute>
+                  <LazyPages.AgentDesignatedPage />
                 </ProtectedRoute>
               }
             />

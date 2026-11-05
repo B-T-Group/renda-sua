@@ -26,6 +26,15 @@ import {
 import { itemWebUrl, storeWebUrl } from '../utils/storeWebUrl';
 import { openRestockTarget, restockRoutesReady } from '../navigation/restockNavigation';
 import { parseRestockLink, restockTargetToPath } from '../utils/restockDeepLink';
+import {
+  deliveryConfirmOrderId,
+  deliveryConfirmSourceFromUrl,
+  type DeliveryConfirmSource,
+} from '../utils/deliveryConfirmLink';
+import { deliveryConfirmSwitch } from '../stores/deliveryConfirmSwitch';
+import { navigateToDeliveryConfirm } from '../navigation/rootNavigationRef';
+
+let pendingDeliveryConfirmSource: DeliveryConfirmSource = 'in_app';
 
 let externalEnqueue: ((url: string) => void) | null = null;
 const earlyQueue: string[] = [];
@@ -125,6 +134,12 @@ export function dispatchDeepLinkTarget(
   const orderShell = isDelegation ? 'delegate' : persona;
   if (target.type === 'order') {
     return navigateToOrderFromPush(target.id, orderShell, target.openMessages);
+  }
+  if (target.type === 'deliveryConfirm') {
+    if (isDelegation || persona !== 'client') return false;
+    const ok = navigateToDeliveryConfirm(target.id, pendingDeliveryConfirmSource);
+    if (ok) pendingDeliveryConfirmSource = 'in_app';
+    return ok;
   }
   if (target.type === 'adminOrder') {
     return navigateToAdminOrderFromPush(target.id);
@@ -250,6 +265,9 @@ export function useAppDeepLinkNavigation(navReady: boolean): void {
     const restock = parseRestockLink(url);
     const path = restock ? restockTargetToPath(restock) : extractAppPath(url);
     if (!path) return;
+    if (deliveryConfirmOrderId(path)) {
+      pendingDeliveryConfirmSource = deliveryConfirmSourceFromUrl(url);
+    }
     pendingRef.current = { path, routeAttempts: 0 };
     flushPending.current();
   });
@@ -290,6 +308,14 @@ export function useAppDeepLinkNavigation(navReady: boolean): void {
 const flushDeps = {
   guestShellMounted,
   dispatch: dispatchDeepLinkTarget,
+  onPersonaSwitchStart: (from: PersonaSlug, path: string) => {
+    if (deliveryConfirmOrderId(path)) deliveryConfirmSwitch.begin(from);
+  },
+  onMissingPersona: (_required: PersonaSlug, path: string) => {
+    if (!deliveryConfirmOrderId(path)) return false;
+    deliveryConfirmSwitch.showWrongAccount();
+    return true;
+  },
 };
 
 function flushOne(

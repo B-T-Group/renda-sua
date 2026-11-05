@@ -316,6 +316,8 @@ export class RendasuaInfrastructureStack extends cdk.Stack {
       new lambdaEventSources.SqsEventSource(orderStatusQueue, {
         batchSize: 10,
         maxConcurrency: 10,
+        // Handler returns batchItemFailures so only failed messages retry.
+        reportBatchItemFailures: true,
       })
     );
 

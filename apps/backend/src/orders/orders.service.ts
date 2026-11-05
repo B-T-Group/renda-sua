@@ -58,6 +58,7 @@ import {
 import type { ClaimAssignment } from './dedicated-claim.port';
 import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
 import { DedicatedHeadsUpService } from './dedicated-heads-up.service';
+import { DesignatedFirstService } from './designated-first.service';
 import { dedicatedReleaseRefusalMessage } from './dedicated-accept-refusal.messages';
 import { runAssignmentWrite } from '../dedicated-agents/dedicated-assignment-write.util';
 import {
@@ -842,7 +843,9 @@ export class OrdersService {
     @Optional()
     private readonly dedicatedCheckoutCoverage?: DedicatedCheckoutCoverageService,
     @Optional()
-    private readonly dedicatedHeadsUp?: DedicatedHeadsUpService
+    private readonly dedicatedHeadsUp?: DedicatedHeadsUpService,
+    @Optional()
+    private readonly designatedFirst?: DesignatedFirstService
   ) {}
 
   private emitOrderPaid(orderId: string): void {
@@ -2214,13 +2217,28 @@ export class OrdersService {
     );
     await this.recordPreparationReadyHistory(request, viaSystem, userId);
     await this.scheduleDispatchRelease(order.id, dispatchSchedule);
-    // Early soft heads-up to the slot's dedicated agents (no-op unless covered, confirmed and gated).
-    void this.dedicatedHeadsUp?.sendForOrder(order.id);
+    void this.offerDesignatedOrHeadsUp(order.id);
     return {
       success: true,
       order: updatedOrder,
       message: 'Order preparation completed successfully',
     };
+  }
+
+  /**
+   * Designated agent first: offer the order to its designated agent(s) now, valid
+   * until the gate. Out of scope (flag off, not covered, gate open) -> the legacy
+   * soft heads-up, which designated-first retires when it applies. Never throws.
+   */
+  private async offerDesignatedOrHeadsUp(orderId: string): Promise<void> {
+    try {
+      const outcome = await this.designatedFirst?.offerAtReady(orderId);
+      if (outcome && outcome.kind !== 'skipped') return;
+    } catch (error: any) {
+      this.logger.warn(`Designated early offer failed for ${orderId}: ${error?.message}`);
+    }
+    // Early soft heads-up to the slot's dedicated agents (no-op unless covered, confirmed and gated).
+    await this.dedicatedHeadsUp?.sendForOrder(orderId);
   }
 
   private async resolvePreparationActorUserId(
@@ -3189,10 +3207,20 @@ export class OrdersService {
     );
     const agent = this.requireAgentRecord(user);
 
-    const activeOffer = await this.orderOffersService.getActiveOfferForAgent(
+    let activeOffer = await this.orderOffersService.getActiveOfferForAgent(
       request.orderId,
       agent.id
     );
+    // Designated agent first: a late accept wins while the order is still unassigned.
+    if (
+      !activeOffer &&
+      (await this.designatedFirst?.reopenLateOffer(request.orderId, agent.id))
+    ) {
+      activeOffer = await this.orderOffersService.getActiveOfferForAgent(
+        request.orderId,
+        agent.id
+      );
+    }
     if (!activeOffer) {
       throw new HttpException(
         {
@@ -4095,7 +4123,7 @@ export class OrdersService {
       await this.orderQueueService.sendOrderCompletedMessage(order.id);
     } catch (error: any) {
       this.logger.error(
-        `Failed to send order.completed message: ${error.message}`
+        `Failed to send order.completed message for order ${order.id}: ${error.message}`
       );
     }
     try {
@@ -7267,7 +7295,7 @@ export class OrdersService {
       await this.orderQueueService.sendOrderCompletedMessage(orderId);
     } catch (error: any) {
       this.logger.error(
-        `Failed to send order.completed for cash exception: ${error.message}`
+        `Failed to send order.completed for cash exception, order ${orderId}: ${error.message}`
       );
     }
     try {
@@ -11957,7 +11985,7 @@ export class OrdersService {
         await this.orderQueueService.sendOrderCreatedMessage(order.id);
       } catch (error) {
         this.logger.error(
-          `Failed to send order.created message to SQS after deposit: ${
+          `Failed to send order.created message to SQS after deposit for order ${order.id}: ${
             error instanceof Error ? error.message : String(error)
           }`
         );
@@ -12675,7 +12703,7 @@ export class OrdersService {
     try {
       await this.orderQueueService.sendOrderCompletedMessage(order.id);
     } catch (error: any) {
-      this.logger.error(`Failed to send order.completed after completion: ${error.message}`);
+      this.logger.error(`Failed to send order.completed after completion for order ${order.id}: ${error.message}`);
     }
     try {
       await this.handleOrderCompletionRewards(order.id);
@@ -12695,7 +12723,8 @@ export class OrdersService {
   async completeAfterClientConfirmation(
     orderId: string,
     historyMessage: string,
-    changedByType: string = 'system'
+    changedByType: string = 'system',
+    opts: { fromDisputed?: boolean; changedByUserId?: string | null } = {}
   ): Promise<{ alreadyComplete: boolean; order: Orders | null }> {
     const order = await this.getOrderDetails(orderId);
     if (!order) {
@@ -12704,7 +12733,7 @@ export class OrdersService {
     if (order.current_status === 'complete') {
       return { alreadyComplete: true, order };
     }
-    const updated = await this.winClientConfirmComplete(orderId);
+    const updated = await this.winClientConfirmComplete(orderId, !!opts.fromDisputed);
     if (!updated) {
       return { alreadyComplete: true, order: await this.getOrderDetails(orderId) };
     }
@@ -12714,16 +12743,20 @@ export class OrdersService {
       'complete',
       historyMessage,
       changedByType,
-      order.client?.user_id
+      opts.changedByUserId ?? order.client?.user_id
     );
     await this.runCompletionSideEffects(order);
     return { alreadyComplete: false, order: updated };
   }
 
-  private async winClientConfirmComplete(orderId: string): Promise<Orders | null> {
+  private async winClientConfirmComplete(
+    orderId: string,
+    fromDisputed = false
+  ): Promise<Orders | null> {
     let lostRace = false;
     const updated = await this.updateOrderStatusWithSingleRetry(orderId, 'complete', {
       viaSystem: true,
+      ...(fromDisputed ? { viaDisputeResolution: true } : {}),
       onSameStatusReplay: () => {
         lostRace = true;
       },
@@ -12742,6 +12775,43 @@ export class OrdersService {
     if (cashPending) return;
     await this.processOrderPayment(orderId);
     await this.processOrderDeliveryPayment(orderId);
+  }
+
+  /**
+   * Admin dispute resolution "delivery failed": disputed → failed (CAS) and a
+   * pending failed_deliveries row so the existing fault resolution moves money.
+   * Returns false when another admin already moved the order.
+   */
+  async failDisputedDelivery(
+    orderId: string,
+    failureReasonId: string,
+    notes: string,
+    adminUserId: string
+  ): Promise<boolean> {
+    let replay = false;
+    await this.orderStatusService.updateOrderStatus(orderId, 'failed', {
+      viaSystem: true,
+      viaDisputeResolution: true,
+      onSameStatusReplay: () => {
+        replay = true;
+      },
+    });
+    if (replay) return false;
+    await this.hasuraSystemService.executeMutation(
+      `mutation CreateDisputeFailedDelivery($row: failed_deliveries_insert_input!) {
+        insert_failed_deliveries_one(object: $row) { id }
+      }`,
+      {
+        row: {
+          order_id: orderId,
+          failure_reason_id: failureReasonId,
+          notes,
+          status: 'pending',
+        },
+      }
+    );
+    await this.createStatusHistoryEntry(orderId, 'failed', notes, 'admin', adminUserId);
+    return true;
   }
 
   async recordClientConfirmHistory(
@@ -14318,7 +14388,7 @@ export class OrdersService {
         );
       } catch (notifError) {
         this.logger.error(
-          `Failed to enqueue order status notifications: ${
+          `Failed to enqueue order status notifications for order ${orderId}: ${
             notifError instanceof Error ? notifError.message : String(notifError)
           }`
         );
@@ -16488,7 +16558,7 @@ export class OrdersService {
       } catch (error) {
         // Log but don't throw - order creation should succeed
         this.logger.error(
-          `Failed to send order.created message to SQS: ${
+          `Failed to send order.created message to SQS for order ${order.id}: ${
             error instanceof Error ? error.message : String(error)
           }`
         );
@@ -17824,6 +17894,7 @@ export class OrdersService {
         `startMonitoring failed for ${orderId}: ${error?.message}`
       );
     }
+    await this.designatedFirst?.onAssigned(orderId);
   }
 
   async requestPickupDelay(orderId: string) {
@@ -17858,6 +17929,50 @@ export class OrdersService {
       agent.id,
       reason
     );
+    if (result.success) return result;
+    const status =
+      result.refusal === 'release_failed'
+        ? HttpStatus.INTERNAL_SERVER_ERROR
+        : result.refusal === 'unavailable'
+          ? HttpStatus.NOT_FOUND
+          : HttpStatus.CONFLICT;
+    const code = DEDICATED_RELEASE_ERRORS[result.refusal];
+    throw new HttpException(
+      {
+        message: dedicatedReleaseRefusalMessage(result.refusal, user?.preferred_language),
+        error: code,
+        code,
+        reason: result.refusal,
+      },
+      status
+    );
+  }
+
+  /** Designated agent first: the agent's early offers and upcoming designated orders. */
+  async listDesignatedForAgent() {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can view offers');
+    const agent = this.requireAgentRecord(user);
+    if (!this.designatedFirst) return { success: true, offers: [], upcoming: [] };
+    return { success: true, ...(await this.designatedFirst.listForAgent(agent.id)) };
+  }
+
+  /** "Still on it": the designated agent confirms an upcoming order. */
+  async confirmDesignated(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can confirm');
+    const agent = this.requireAgentRecord(user);
+    if (!this.designatedFirst) throw new HttpException('Unavailable', HttpStatus.NOT_FOUND);
+    return { success: true, ...(await this.designatedFirst.confirm(orderId, agent.id)) };
+  }
+
+  /** "Can't make it": free before the 2 h cutoff, a strike after it (no money fee). */
+  async releaseDesignated(orderId: string, rawReason?: unknown) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can release an assignment');
+    const agent = this.requireAgentRecord(user);
+    const reason = parseOfferDeclineReason(rawReason);
+    const result = await this.orderReassignmentService.releaseDesignated(orderId, agent.id, reason);
     if (result.success) return result;
     const status =
       result.refusal === 'release_failed'
@@ -20426,6 +20541,7 @@ export const DEDICATED_RELEASE_ERRORS = {
   window_closed: 'DEDICATED_RELEASE_WINDOW_CLOSED',
   release_failed: 'DEDICATED_RELEASE_FAILED',
   release_lost: 'DEDICATED_RELEASE_LOST',
+  not_designated: 'DESIGNATED_RELEASE_NOT_DESIGNATED',
 } as const;
 
 export function parseOfferDeclineReason(raw: unknown): OfferDeclineReason | null {

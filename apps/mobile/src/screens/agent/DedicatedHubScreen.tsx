@@ -29,6 +29,7 @@ import * as dedicatedAnalytics from '../../utils/dedicatedAgentsAnalytics';
 import { shouldShowGate, shouldHideOnError, dedicatedApiError } from '../../utils/dedicatedAgentsErrors';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { useSlotPreferences } from '../../hooks/useSlotPreferences';
+import { DesignatedListSection } from '../../components/dedicated/DesignatedListSection';
 import PreferredSlotsHint from '../../components/agent/PreferredSlotsHint';
 import PreferredSlotsToggles from '../../components/agent/PreferredSlotsToggles';
 import { canResume, isSlotOffPause, missingPreferredSlots } from '../../utils/slotPrefs';
@@ -280,6 +281,7 @@ export default function DedicatedHubScreen({ route, navigation }: Props) {
           />
         </View>
       )}
+      <DesignatedListSection />
       {slotPrefs.prefs ? (
         <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm }} testID="dedicated-slot-chips">
           <PreferredSlotsToggles state={slotPrefs} variant="chips" />

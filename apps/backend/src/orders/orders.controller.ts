@@ -332,7 +332,7 @@ export class OrdersController {
   @ApiOperation({
     summary: 'Update order status',
     description:
-      'Cancellation must use POST /orders/cancel. Confirm must use POST /orders/confirm. PATCH with status=cancelled is routed to cancel; PATCH status=confirmed is rejected so the payout-phone gate and payment initiation cannot be skipped.',
+      'Cancellation must use POST /orders/cancel. Confirm must use POST /orders/confirm. PATCH with status=cancelled is routed to cancel; PATCH status=confirmed is rejected so the payout-phone gate and payment initiation cannot be skipped. PATCH status=ready_for_pickup is routed to complete_preparation (dispatch gate, designated-first offer).',
   })
   @ApiResponse({
     status: 409,
@@ -368,6 +368,16 @@ export class OrdersController {
         },
         HttpStatus.BAD_REQUEST
       );
+    }
+
+    // Never mark ready via the generic status path — that skips the pickup PIN,
+    // ASAP re-anchor, dispatch_ready_at gate and designated-first offer.
+    // Route to the same flow as POST /orders/complete_preparation.
+    if (updateData.status === 'ready_for_pickup') {
+      this.logger.warn(
+        `Order ${orderId} marked ready via legacy PATCH - use POST /orders/complete_preparation instead`
+      );
+      return this.ordersService.completePreparation({ orderId });
     }
 
     try {
@@ -665,14 +675,26 @@ export class OrdersController {
   @Post(':id/report-delivery-problem')
   @ApiOperation({
     summary: 'Report a problem with a delivery instead of confirming',
-    description: 'Sets disputed, holds payouts, and opens a support case.',
+    description:
+      'Report an issue or a failed delivery. Before completion: sets disputed (auto-complete paused, agent hold stays locked) and opens a support case. After completion: accepted inside the report window as a claim. Legacy body { description } still works.',
   })
   @ApiParam({ name: 'id', description: 'Order ID' })
   async reportDeliveryProblem(
     @Param('id') orderId: string,
     @Body() body: ReportDeliveryProblemDto
   ) {
-    return this.clientConfirmDelivery.reportProblem(orderId, body?.description);
+    return this.clientConfirmDelivery.reportProblem(
+      orderId,
+      body?.type
+        ? {
+            type: body.type,
+            reason: body.reason ?? 'other',
+            note: body.note ?? body.description,
+            photoUrls: body.photoUrls,
+            itemIds: body.itemIds,
+          }
+        : body?.description
+    );
   }
 
   @Post(':id/client-could-not-confirm')
@@ -1501,6 +1523,12 @@ export class OrdersController {
     return this.ordersService.checkOrderClaimAvailability(orderId, platform);
   }
 
+  @Get('designated/mine')
+  @ApiOperation({ summary: 'Designated agent first: my early offers and upcoming designated orders' })
+  async listDesignatedForAgent() {
+    return this.ordersService.listDesignatedForAgent();
+  }
+
   // Must stay above @Get(':id'): Nest matches routes in declaration order, so
   // a later single-segment GET would be captured as an order id.
   @Get('cancellation-fee')
@@ -1844,6 +1872,21 @@ export class OrdersController {
   @ApiResponse({ status: 400, description: 'Extension unavailable' })
   async requestPickupDelay(@Param('id') orderId: string) {
     return this.ordersService.requestPickupDelay(orderId);
+  }
+
+  @Post(':id/designated-confirm')
+  @ApiOperation({ summary: 'Designated agent first: "Still on it" for an upcoming order' })
+  async confirmDesignated(@Param('id') orderId: string) {
+    return this.ordersService.confirmDesignated(orderId);
+  }
+
+  @Post(':id/designated-release')
+  @ApiOperation({
+    summary:
+      '"Can\'t make it": free before the 2 h cutoff (re-offered to the other designated agents), a strike after it',
+  })
+  async releaseDesignated(@Param('id') orderId: string, @Body() body: { reason?: string }) {
+    return this.ordersService.releaseDesignated(orderId, body?.reason);
   }
 
   @Post(':id/dedicated-release')

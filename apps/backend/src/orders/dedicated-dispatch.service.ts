@@ -66,6 +66,7 @@ export interface DedicatedDispatchOrder {
   currency: string;
   verified_agent_delivery: boolean | null;
   coverage_slot_key: string | null;
+  dispatch_mode?: string | null;
   business?: { name?: string | null } | null;
   business_location?: { name?: string | null; address?: { country?: string | null } | null } | null;
   delivery_time_windows?: Array<{
@@ -91,6 +92,7 @@ const DISPATCH_ORDER_QUERY = `
       currency
       verified_agent_delivery
       coverage_slot_key
+      dispatch_mode
       business { name }
       business_location { name address { country } }
       delivery_time_windows(order_by: { created_at: desc }, limit: 1) {
@@ -390,6 +392,8 @@ export class DedicatedDispatchService {
       // claim re-checks active orders < cap under the agent lock (N1).
       ignoreOutstandingOffers: true,
       slotDate: slot.date,
+      // Designated agent first: the cap counts per slot day (same rule as dedicated_claim_order).
+      capPerSlotDay: order.dispatch_mode === 'designated_first',
     });
     const { maxActiveOrders } = await this.dedicatedConfig.getConfig(country);
     const stamp = (assignmentId: string): ClaimAssignment => ({

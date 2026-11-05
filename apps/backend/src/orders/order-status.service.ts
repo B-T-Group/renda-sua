@@ -24,6 +24,8 @@ import type { AuthorizedBusinessActor } from './authorized-business-actor';
 export type OrderStatusUpdateOptions = {
   viaCancelEndpoint?: boolean;
   viaSystem?: boolean;
+  /** Admin delivery-dispute resolution: allows disputed → complete | failed (system only). */
+  viaDisputeResolution?: boolean;
   /** Merchant confirm from POST /orders/confirm (phone gate + pay-after). */
   viaConfirmEndpoint?: boolean;
   /** Business fail-pickup from ready_for_pickup (POST /orders/:id/fail-pickup). */
@@ -183,7 +185,10 @@ export class OrderStatusService {
         ((order.current_status === 'confirmed' ||
           order.current_status === 'preparing') &&
           newStatus === 'ready_for_pickup') ||
-        this.isClientConfirmSystemTransition(order.current_status, newStatus))
+        this.isClientConfirmSystemTransition(order.current_status, newStatus) ||
+        (options?.viaDisputeResolution === true &&
+          order.current_status === 'disputed' &&
+          (newStatus === 'complete' || newStatus === 'failed')))
     ) {
       // Cooked-food auto prep / auto-ready, or client-confirm delivery transitions
     } else if (
@@ -281,7 +286,7 @@ export class OrderStatusService {
       );
     } catch (error) {
       this.logger.error(
-        `Failed to send order.status.updated message to SQS: ${
+        `Failed to send order.status.updated message to SQS for order ${orderId} (${previousStatus} -> ${newStatus}): ${
           error instanceof Error ? error.message : String(error)
         }`
       );

@@ -19,6 +19,12 @@ export interface ClientConfirmOrder {
   awaiting_confirm_reminder_1h_at?: string | null;
   awaiting_confirm_reminder_24h_at?: string | null;
   awaiting_confirm_support_ticket_id?: string | null;
+  delivered_at?: string | null;
+  completed_at?: string | null;
+  report_window_ends_at?: string | null;
+  dispute_type?: string | null;
+  dispute_reason?: string | null;
+  dispute_opened_at?: string | null;
   assigned_agent_id?: string | null;
   business_id?: string | null;
   client_id?: string | null;
@@ -64,6 +70,53 @@ export interface DeliveryConfirmationState {
     agentId: string | null;
   }>;
   market: ClientConfirmMarketConfig;
+  /** Spec B4: fields the client confirm screen renders. */
+  accessible: true;
+  viewerRole: 'client' | 'agent' | 'business';
+  serverNow: string;
+  deliveredAt: string | null;
+  completedAt: string | null;
+  reminderAt: string | null;
+  reportWindowEndsAt: string | null;
+  disputeType: string | null;
+  disputeOpenedAt: string | null;
+  canComplete: boolean;
+  canReport: boolean;
+  canReportAfterCompletion: boolean;
+  confirmVariant: DeliveryConfirmVariant;
+}
+
+/** P5: the confirm screen never dead-ends; it renders one of these. */
+export type DeliveryConfirmVariant =
+  | 'not_delivered_yet'
+  | 'awaiting'
+  | 'disputed'
+  | 'completed_can_report'
+  | 'completed'
+  | 'closed';
+
+/** P4: wrong account. No order data leaks. */
+export interface DeliveryConfirmationForbidden {
+  orderId: string;
+  accessible: false;
+  reason: 'other_account';
+}
+
+export interface DeliveryReportInput {
+  type: 'issue' | 'delivery_failed';
+  reason: string;
+  note?: string;
+  photoUrls?: string[];
+  itemIds?: string[];
+}
+
+export interface DeliveryReportResult {
+  success: boolean;
+  status: string;
+  ticketId?: string | null;
+  reportId?: string | null;
+  postCompletionClaim?: boolean;
+  message: string;
 }
 
 export interface ConfirmReceiptResult {

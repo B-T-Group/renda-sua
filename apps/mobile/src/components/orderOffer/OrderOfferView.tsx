@@ -11,6 +11,7 @@ import type { DedicatedDeclineReason } from '../../utils/dedicatedRelease';
 import { formatKm } from '../../utils/formatKm';
 import { DeclineReasonChips } from '../dedicated/DeclineReasonChips';
 import { OfferCountdownRing } from './OfferCountdownRing';
+import { formatDateTime, LONG_OFFER_THRESHOLD_SECONDS } from '../../utils/designatedFirst';
 
 interface OrderOfferViewProps {
   uiState: OrderOfferUiState;
@@ -45,7 +46,9 @@ export function OrderOfferView({
 }: OrderOfferViewProps) {
   const { colors, spacing, shadows } = useTheme();
   const insets = useSafeAreaInsets();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  /** Designated early offer (valid until the dispatch gate): no ring, show the deadline. */
+  const longOffer = secondsLeft > LONG_OFFER_THRESHOLD_SECONDS;
   // #664: a dedicated offer's decline is "Can't take this" with an optional reason.
   const [pickingReason, setPickingReason] = useState(false);
   const [reason, setReason] = useState<DedicatedDeclineReason | null>(null);
@@ -164,11 +167,20 @@ export function OrderOfferView({
             {t('agent.orderOffer.title', 'New Delivery')}
           </Text>
         </View>
-        <OfferCountdownRing
-          secondsLeft={secondsLeft}
-          total={offerRingTotal(details?.ttlSeconds, secondsLeft)}
-          color={countdownColor}
-        />
+        {longOffer ? (
+          <Text style={{ color: colors.text.secondary, maxWidth: 160, textAlign: 'right' }}>
+            {t('designatedFirst.offer.acceptBeforeShort', {
+              defaultValue: 'Accept before {{time}}',
+              time: formatDateTime(details?.expiresAt, i18n.language),
+            })}
+          </Text>
+        ) : (
+          <OfferCountdownRing
+            secondsLeft={secondsLeft}
+            total={offerRingTotal(details?.ttlSeconds, secondsLeft)}
+            color={countdownColor}
+          />
+        )}
       </View>
 
       <ScrollView

@@ -1,0 +1,160 @@
+{
+  "en": {
+    "buyerProtection": {
+      "badge": "Delivery confirmed by you",
+      "oneLiner": "Your order is complete only when you confirm it, or automatically {{hours}} h after delivery if you report no problem.",
+      "orderLine": "Received it? Confirm, or tell us if something is wrong.",
+      "orderLineInfo": "Your courier is paid only once your order is complete. If you report a problem, their payment waits until we sort it out.",
+      "sheet": {
+        "title": "How it works",
+        "step1": "The courier marks your order Delivered.",
+        "step2": "You confirm, report an issue, or tell us it never arrived.",
+        "step3": "No answer within {{hours}} h? It completes automatically. You can still report an issue for {{reportHours}} h.",
+        "step4": "Your courier is paid only once your order is complete. If you report a problem, their payment waits until we sort it out."
+      },
+      "success": "Thanks! Your order is complete.",
+      "notif": {
+        "delivered": {
+          "title": "Your order has arrived 📦",
+          "body": "Tap to confirm"
+        }
+      },
+      "marketing": {
+        "headline": "Your delivery isn't done until you say so.",
+        "alt1": "Got it? Confirm it. Problem? Tell us.",
+        "alt2": "Your delivery, your say."
+      }
+    },
+    "deliveryConfirm": {
+      "navTitle": "Confirm delivery",
+      "title": "Did you get your order?",
+      "orderNumber": "Order #{{number}}",
+      "deliveredAt": "Marked delivered at {{time}}",
+      "countdown": "Completes automatically in {{h}} h {{m}} min",
+      "countdownMinutes": "Completes automatically in {{m}} min",
+      "countdownSoon": "Completing automatically…",
+      "notDeliveredYet": "Your courier is on the way. You can complete the order as soon as you have it.",
+      "howItWorks": "How it works",
+      "cta": {
+        "complete": "Complete",
+        "report": "Report an issue",
+        "failed": "Delivery failed",
+        "submit": "Send report",
+        "cancel": "Back"
+      },
+      "offline": "You're offline. Reconnect to confirm.",
+      "reportTitle": "What went wrong?",
+      "failedTitle": "What happened?",
+      "notePlaceholder": "Add details (optional)",
+      "noteRequired": "Please add a few details.",
+      "reportNotice": "Auto-complete is paused while our team reviews your report.",
+      "reason": {
+        "missing_items": "Missing item(s)",
+        "wrong_items": "Wrong item(s)",
+        "damaged": "Damaged",
+        "courier_didnt_come": "Courier didn't come",
+        "not_received": "I never received it",
+        "other": "Other"
+      },
+      "reported": "Thanks. Our team is looking into it.",
+      "state": {
+        "disputed": "Under review. Our team will contact you.",
+        "completed": "Completed on {{time}}.",
+        "completedCanReport": "Something wrong? You can report a problem until {{time}}.",
+        "closed": "This order is closed. Contact support if you need help."
+      },
+      "error": "Something went wrong. Please try again.",
+      "unavailable": {
+        "title": "This order belongs to another account",
+        "body": "Sign in with the account that placed this order to confirm it.",
+        "switch": "Switch account",
+        "close": "Close"
+      },
+      "openOrder": "View order"
+    },
+    "personaSwitch": {
+      "client": "Switching to your shopper account…",
+      "backTo": "Back to {{persona}}",
+      "nowClient": "You're now in your shopper account."
+    }
+  },
+  "fr": {
+    "buyerProtection": {
+      "badge": "Livraison confirmée par vous",
+      "oneLiner": "Votre commande n'est terminée que lorsque vous la confirmez, ou automatiquement {{hours}} h après la livraison si vous ne signalez aucun problème.",
+      "orderLine": "Bien reçu ? Confirmez, ou dites-nous si quelque chose ne va pas.",
+      "orderLineInfo": "Votre livreur n'est payé qu'une fois votre commande terminée. Si vous signalez un problème, son paiement attend que nous le réglions.",
+      "sheet": {
+        "title": "Comment ça marche",
+        "step1": "Le livreur marque votre commande comme livrée.",
+        "step2": "Vous confirmez, signalez un problème ou indiquez qu'elle n'est jamais arrivée.",
+        "step3": "Pas de réponse sous {{hours}} h ? Elle se termine automatiquement. Vous pouvez encore signaler un problème pendant {{reportHours}} h.",
+        "step4": "Votre livreur n'est payé qu'une fois votre commande terminée. Si vous signalez un problème, son paiement attend que nous le réglions."
+      },
+      "success": "Merci ! Votre commande est terminée.",
+      "notif": {
+        "delivered": {
+          "title": "Votre commande est arrivée 📦",
+          "body": "Touchez pour confirmer"
+        }
+      },
+      "marketing": {
+        "headline": "Votre livraison n'est terminée que lorsque vous le dites.",
+        "alt1": "Bien reçu ? Confirmez. Un souci ? Dites-le-nous.",
+        "alt2": "Votre livraison, votre avis."
+      }
+    },
+    "deliveryConfirm": {
+      "navTitle": "Confirmer la livraison",
+      "title": "Avez-vous reçu votre commande ?",
+      "orderNumber": "Commande n° {{number}}",
+      "deliveredAt": "Marquée livrée à {{time}}",
+      "countdown": "Finalisation automatique dans {{h}} h {{m}} min",
+      "countdownMinutes": "Finalisation automatique dans {{m}} min",
+      "countdownSoon": "Finalisation automatique en cours…",
+      "notDeliveredYet": "Votre livreur est en route. Vous pourrez terminer la commande dès que vous l'aurez reçue.",
+      "howItWorks": "Comment ça marche",
+      "cta": {
+        "complete": "Confirmer la réception",
+        "report": "Signaler un problème",
+        "failed": "Livraison échouée",
+        "submit": "Envoyer",
+        "cancel": "Retour"
+      },
+      "offline": "Vous êtes hors ligne. Reconnectez-vous pour confirmer.",
+      "reportTitle": "Quel est le problème ?",
+      "failedTitle": "Que s'est-il passé ?",
+      "notePlaceholder": "Ajoutez des détails (facultatif)",
+      "noteRequired": "Merci d'ajouter quelques détails.",
+      "reportNotice": "La finalisation automatique est suspendue pendant que notre équipe examine votre signalement.",
+      "reason": {
+        "missing_items": "Article(s) manquant(s)",
+        "wrong_items": "Mauvais article(s)",
+        "damaged": "Endommagé",
+        "courier_didnt_come": "Le livreur n'est pas venu",
+        "not_received": "Je ne l'ai jamais reçue",
+        "other": "Autre"
+      },
+      "reported": "Merci. Notre équipe s'en occupe.",
+      "state": {
+        "disputed": "En cours d'examen. Notre équipe va vous contacter.",
+        "completed": "Terminée le {{time}}.",
+        "completedCanReport": "Un souci ? Vous pouvez signaler un problème jusqu'au {{time}}.",
+        "closed": "Cette commande est clôturée. Contactez le support si besoin."
+      },
+      "error": "Une erreur s'est produite. Veuillez réessayer.",
+      "unavailable": {
+        "title": "Cette commande appartient à un autre compte",
+        "body": "Connectez-vous avec le compte qui a passé cette commande pour la confirmer.",
+        "switch": "Changer de compte",
+        "close": "Fermer"
+      },
+      "openOrder": "Voir la commande"
+    },
+    "personaSwitch": {
+      "client": "Passage à votre compte client…",
+      "backTo": "Retour à {{persona}}",
+      "nowClient": "Vous êtes maintenant sur votre compte client."
+    }
+  }
+}

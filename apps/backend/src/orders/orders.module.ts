@@ -45,6 +45,7 @@ import { OrderOffersService } from './order-offers.service';
 import { DedicatedDispatchService } from './dedicated-dispatch.service';
 import { DedicatedSlotReminderService } from './dedicated-slot-reminder.service';
 import { DedicatedHeadsUpService } from './dedicated-heads-up.service';
+import { DesignatedFirstService } from './designated-first.service';
 import { DedicatedHeadsUpController } from './dedicated-heads-up.controller';
 import { DEDICATED_ORDER_CLAIMER } from './dedicated-claim.port';
 import { OrderPaymentCallbackHandler } from './order-payment-callback.handler';
@@ -63,6 +64,8 @@ import { StorePickupReminderService } from './store-pickup-reminder.service';
 import { OrderSystemJobsService } from './order-system-jobs.service';
 import { AdminPickupOpsController } from './admin-pickup-ops.controller';
 import { AdminOrdersController } from './admin-orders.controller';
+import { AdminDeliveryDisputesController } from '../client-confirm-delivery/admin-delivery-disputes.controller';
+import { AdminDeliveryDisputesService } from '../client-confirm-delivery/admin-delivery-disputes.service';
 import { AdminOrdersService } from './admin-orders.service';
 import { AdminOrderContactService } from './admin-order-contact.service';
 import { OrdersController } from './orders.controller';
@@ -90,6 +93,7 @@ import { ClientConfirmDeliveryService } from '../client-confirm-delivery/client-
 import { ClientConfirmDeliveryCronService } from '../client-confirm-delivery/client-confirm-delivery.cron';
 import { ClientConfirmDeliveryRepository } from '../client-confirm-delivery/client-confirm-delivery.repository';
 import { ClientConfirmMarketConfigService } from '../client-confirm-delivery/client-confirm-market-config.service';
+import { DeliveryConfirmNotifier } from '../client-confirm-delivery/delivery-confirm-notifier';
 
 @Module({
   imports: [
@@ -133,6 +137,7 @@ import { ClientConfirmMarketConfigService } from '../client-confirm-delivery/cli
     OrdersController,
     AdminPickupOpsController,
     AdminOrdersController,
+    AdminDeliveryDisputesController,
     FailedDeliveriesController,
     FailedPickupsController,
     OrderNotificationsInternalController,
@@ -157,6 +162,7 @@ import { ClientConfirmMarketConfigService } from '../client-confirm-delivery/cli
     DedicatedDispatchService,
     DedicatedSlotReminderService,
     DedicatedHeadsUpService,
+    DesignatedFirstService,
     { provide: DEDICATED_ORDER_CLAIMER, useExisting: OrdersService },
     WaitAndExecuteScheduleService,
     FailedDeliveriesService,
@@ -188,6 +194,8 @@ import { ClientConfirmMarketConfigService } from '../client-confirm-delivery/cli
     ClientConfirmDeliveryCronService,
     ClientConfirmDeliveryRepository,
     ClientConfirmMarketConfigService,
+    AdminDeliveryDisputesService,
+    DeliveryConfirmNotifier,
     DepositCalculationService,
     ServiceFeeService,
     DepositLedgerService,

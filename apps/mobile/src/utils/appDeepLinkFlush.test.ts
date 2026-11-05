@@ -202,3 +202,46 @@ describe('flushDeepLink: existing links keep working', () => {
     expect(dispatch).not.toHaveBeenCalled();
   });
 });
+
+describe('flushDeepLink: delivery confirm (Delivered → Complete)', () => {
+  const ORDER_ID = '0f6e3a5e-1d1b-4b0a-9a51-2c8f6c4d1e2f';
+  const URL_WA = `https://rendasua.com/app/orders/${ORDER_ID}/confirm?persona=client&src=wa`;
+
+  it('resolves to the confirm target in the client shell', () => {
+    const { dispatch, deps: d } = deps();
+    expect(flushDeepLink(pendingFor(URL_WA), signedInAuth, persona(), d)).toBe('done');
+    expect(dispatch.mock.calls[0][0]).toEqual({ type: 'deliveryConfirm', id: ORDER_ID });
+  });
+
+  it('switches from agent to client before rendering and starts the overlay', () => {
+    const onPersonaSwitchStart = vi.fn();
+    const p = persona({ activePersona: 'agent', personas: ['agent', 'client'] });
+    const { dispatch, deps: d } = deps({ onPersonaSwitchStart });
+    expect(flushDeepLink(pendingFor(URL_WA), signedInAuth, p, d)).toBe('hold');
+    expect(p.selectPersona).toHaveBeenCalledWith('client');
+    expect(onPersonaSwitchStart).toHaveBeenCalledWith('agent', `orders/${ORDER_ID}/confirm`);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('keeps the link through sign-in', () => {
+    const { dispatch, deps: d } = deps();
+    expect(flushDeepLink(pendingFor(URL_WA), guestAuth, persona(), d)).toBe('wait');
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  it('account without a client persona gets the safe screen, never the order', () => {
+    const onMissingPersona = vi.fn(() => true);
+    const { dispatch, deps: d } = deps({ onMissingPersona });
+    const p = persona({ activePersona: 'agent', personas: ['agent'] });
+    expect(flushDeepLink(pendingFor(URL_WA), signedInAuth, p, d)).toBe('done');
+    expect(onMissingPersona).toHaveBeenCalledWith('client', `orders/${ORDER_ID}/confirm`);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(p.selectPersona).not.toHaveBeenCalled();
+  });
+
+  it('plain order links are unchanged', () => {
+    const { dispatch, deps: d } = deps();
+    flushDeepLink(pendingFor(`rendasua://orders/${ORDER_ID}`), signedInAuth, persona({ activePersona: 'agent' }), d);
+    expect(dispatch.mock.calls[0][0]).toEqual({ type: 'order', id: ORDER_ID, openMessages: false });
+  });
+});

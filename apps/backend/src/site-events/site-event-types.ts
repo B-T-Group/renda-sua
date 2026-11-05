@@ -175,6 +175,9 @@ export const SITE_EVENT_TYPES_V1 = [
   'search.empty_rung_clicked',
   'search.filter_removed_from_empty',
   'card.rating_shown',
+  // MoMo Delivered → client Complete deep link (P6) — web + mobile
+  'delivery_confirm_opened',
+  'delivery_confirm_action',
 ] as const;
 
 // Server-only events (Phase 0 #453) - not allowed in public /track-site-event
@@ -200,6 +203,19 @@ export const SERVER_SITE_EVENT_TYPES = [
   'dedicated.heads_up_sent',
   'dedicated.heads_up_repinged',
   'dedicated.heads_up_unavailable',
+  // Designated agent first
+  'dedicated.early_offer_sent',
+  'dedicated.early_offer_accepted',
+  'dedicated.early_offer_declined',
+  'dedicated.expired_at_gate',
+  'dedicated.open_offer_reminder_sent',
+  'dedicated.reminder_sent',
+  'dedicated.designated_confirmed',
+  'dedicated.unconfirmed_at_gate',
+  'dedicated.release_free',
+  'dedicated.release_late',
+  'dedicated.late_accept',
+  'dedicated.early_offer_stuck',
   // #594 PR 8: AC section 5 events not emitted by earlier PRs
   'dedicated.assignment_status_changed',
   'dedicated.off_today_toggled',

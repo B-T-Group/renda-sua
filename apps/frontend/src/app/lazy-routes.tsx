@@ -153,6 +153,12 @@ export const BusinessAccountTypePage = lazy(() =>
 export const BusinessRefundRequestsPage = lazy(() =>
   import('../components/pages/BusinessRefundRequestsPage')
 );
+export const DeliveryConfirmPage = lazy(() =>
+  import('../components/pages/DeliveryConfirmPage')
+);
+export const AdminDeliveryDisputesPage = lazy(() =>
+  import('../components/pages/AdminDeliveryDisputesPage')
+);
 export const AdminRefundsPage = lazy(() =>
   import('../components/pages/AdminRefundsPage')
 );
@@ -301,6 +307,9 @@ export const SignupPage = lazy(() =>
 );
 export const AgentDashboard = lazy(() =>
   import('../components/pages/AgentDashboard')
+);
+export const AgentDesignatedPage = lazy(() =>
+  import('../components/pages/AgentDesignatedPage')
 );
 export const AgentAgreementPage = lazy(() =>
   import('../components/pages/AgentAgreementPage')

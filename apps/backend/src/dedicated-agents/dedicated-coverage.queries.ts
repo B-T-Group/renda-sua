@@ -80,6 +80,8 @@ export const DEDICATED_AGENT_LOAD_QUERY = `
     ) {
       id
       assigned_agent_id
+      current_status
+      delivery_time_windows(order_by: { created_at: desc }, limit: 1) { preferred_date }
     }
     order_offers(
       where: {
@@ -91,6 +93,7 @@ export const DEDICATED_AGENT_LOAD_QUERY = `
     ) {
       order_id
       agent_id
+      order { delivery_time_windows(order_by: { created_at: desc }, limit: 1) { preferred_date } }
     }
   }
 `;

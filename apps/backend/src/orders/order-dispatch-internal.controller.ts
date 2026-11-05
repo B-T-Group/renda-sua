@@ -15,6 +15,7 @@ import {
   type SlotReminderOutcome,
 } from './dedicated-slot-reminder.service';
 import { DedicatedHeadsUpService, type HeadsUpOutcome } from './dedicated-heads-up.service';
+import { DesignatedFirstService } from './designated-first.service';
 import { internalKeyMatches } from './internal-key.util';
 import { OrderOffersService } from './order-offers.service';
 
@@ -27,7 +28,9 @@ export class OrderDispatchInternalController {
     @Optional()
     private readonly slotReminderService?: DedicatedSlotReminderService,
     @Optional()
-    private readonly headsUpService?: DedicatedHeadsUpService
+    private readonly headsUpService?: DedicatedHeadsUpService,
+    @Optional()
+    private readonly designatedFirst?: DesignatedFirstService
   ) {}
 
   private assertInternalKey(internalKey?: string): void {
@@ -119,10 +122,17 @@ export class OrderDispatchInternalController {
   async dedicatedHeadsUpReping(
     @Body() body: { orderId?: string },
     @Headers('x-rendasua-internal-key') internalKey?: string
-  ): Promise<{ success: boolean; error?: string; outcome?: HeadsUpOutcome }> {
+  ): Promise<{ success: boolean; error?: string; outcome?: HeadsUpOutcome; designated?: unknown }> {
     this.assertInternalKey(internalKey);
     const orderId = body?.orderId?.trim();
     if (!orderId) return { success: false, error: 'orderId is required' };
+    // Designated agent first reuses this SFN event as its reminder tick (no CDK change).
+    if (this.designatedFirst) {
+      const tick = await this.designatedFirst.tick(orderId).catch(() => null);
+      if (tick && (tick.sent.length > 0 || tick.nextAt)) return { success: true, designated: tick };
+      const { order } = await this.designatedFirst.load(orderId).catch(() => ({ order: null }));
+      if (order?.dispatch_mode === 'designated_first') return { success: true, designated: tick };
+    }
     if (!this.headsUpService) return { success: false, error: 'unavailable' };
     const outcome = await this.headsUpService.repingForOrder(orderId);
     return { success: true, outcome };
