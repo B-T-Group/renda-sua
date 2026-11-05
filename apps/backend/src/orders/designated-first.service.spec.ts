@@ -180,4 +180,21 @@ describe('DesignatedFirstService', () => {
     jest.spyOn(t.service, 'load').mockResolvedValue({ order: order(), offers: [] });
     await expect(t.service.confirm('o1', 'a1', NOW)).rejects.toMatchObject({ status: 409 });
   });
+
+  it('recordReliability inserts via agent_reliability_events_once_idx (Hasura unique constraint) and logs insert failures at error', async () => {
+    const t = setup();
+    await t.service.recordReliability('a1', 'o1', 'late_release', { mode: 'late' });
+    const insert = t.mutations.find((m) => m.q.includes('insert_agent_reliability_events_one'));
+    expect(insert?.q).toMatch(/constraint:\s*agent_reliability_events_once_idx/);
+    expect(insert?.q).toMatch(/update_columns:\s*\[\]/);
+    expect(insert?.v).toEqual({ object: { agent_id: 'a1', order_id: 'o1', kind: 'late_release', meta: { mode: 'late' } } });
+
+    const failing = setup();
+    const err = new Error('constraint "agent_reliability_events_once_idx" does not exist');
+    (failing.hasura.executeMutation as jest.Mock).mockRejectedValueOnce(err);
+    const errorSpy = jest.spyOn((failing.service as any).logger, 'error').mockImplementation(() => undefined);
+    await expect(failing.service.recordReliability('a1', 'o1', 'late_release', {})).resolves.toBeUndefined();
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining('Reliability event late_release for o1'));
+    errorSpy.mockRestore();
+  });
 });
