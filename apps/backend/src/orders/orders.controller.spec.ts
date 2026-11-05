@@ -2,11 +2,13 @@ import { HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { HasuraUserService } from '../hasura/hasura-user.service';
 import { OrdersController } from './orders.controller';
+import { OrderStatusService } from './order-status.service';
 import { OrdersService } from './orders.service';
 
 describe('OrdersController', () => {
   let controller: OrdersController;
   let ordersService: jest.Mocked<OrdersService>;
+  let orderStatusService: jest.Mocked<OrderStatusService>;
   let hasuraUserService: jest.Mocked<HasuraUserService>;
 
   beforeEach(async () => {
@@ -35,6 +37,9 @@ describe('OrdersController', () => {
       createOrder: jest.fn(),
       updateOrderStatus: jest.fn(),
     };
+    const mockOrderStatusService = {
+      updateOrderStatus: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [OrdersController],
@@ -47,6 +52,10 @@ describe('OrdersController', () => {
           provide: HasuraUserService,
           useValue: mockHasuraUserService,
         },
+        {
+          provide: OrderStatusService,
+          useValue: mockOrderStatusService,
+        },
       ],
     })
       .useMocker(() => ({}))
@@ -54,6 +63,7 @@ describe('OrdersController', () => {
 
     controller = module.get<OrdersController>(OrdersController);
     ordersService = module.get(OrdersService);
+    orderStatusService = module.get(OrderStatusService);
     hasuraUserService = module.get(HasuraUserService);
   });
 
@@ -527,6 +537,7 @@ describe('OrdersController', () => {
       expect(ordersService.completePreparation).toHaveBeenCalledWith({
         orderId: 'order-123',
       });
+      expect(orderStatusService.updateOrderStatus).not.toHaveBeenCalled();
     });
   });
 });
