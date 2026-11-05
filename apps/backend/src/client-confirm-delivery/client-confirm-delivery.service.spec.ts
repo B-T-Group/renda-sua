@@ -182,6 +182,55 @@ describe('ClientConfirmDeliveryService', () => {
     );
   });
 
+  it('rejects markDelivered and confirm while pay-at-delivery is unpaid', async () => {
+    const unpaid = deliveryOrder({
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'pending',
+    });
+    const agent = buildService();
+    agent.repo.loadOrder.mockResolvedValue(unpaid);
+    await expect(agent.svc.markDelivered('order-1')).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(agent.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+
+    const client = buildService();
+    client.users.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      client: { id: 'c1' },
+    });
+    client.repo.loadOrder.mockResolvedValue(unpaid);
+    await expect(client.svc.confirmReceipt('order-1')).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(client.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    expect(client.repo.stampConfirmationMethod).not.toHaveBeenCalled();
+    await expect(
+      client.svc.reportProblem('order-1', { type: 'delivery_failed', reason: 'not_received' })
+    ).rejects.toMatchObject({ status: 409 });
+    expect(client.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('still lets a client confirm a cash-exception delivery', async () => {
+    const ctx = buildService();
+    ctx.users.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      client: { id: 'c1' },
+    });
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        current_status: AWAITING_CLIENT_CONFIRMATION,
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        reconciliation_status: 'pending_manual_reconciliation',
+      })
+    );
+    await ctx.svc.confirmReceipt('order-1');
+    expect(ctx.orders.completeAfterClientConfirmation).toHaveBeenCalledTimes(1);
+  });
+
   it('confirmReceipt settles once and is idempotent when already complete', async () => {
     const ctx = buildService();
     ctx.users.getUser.mockResolvedValue({
@@ -479,6 +528,15 @@ describe('ClientConfirmDeliveryService', () => {
       'Gift recipient reported a delivery problem',
       'client-user',
       'client'
+    );
+    expect(ctx.repo.openDispute).toHaveBeenCalledWith(
+      'order-1',
+      'delivery_failed',
+      'not_received',
+      expect.any(String)
+    );
+    expect(ctx.repo.insertReport).toHaveBeenCalledWith(
+      expect.objectContaining({ phase: 'pre_completion', ticketId: 'ticket-1' })
     );
   });
 
@@ -1031,6 +1089,16 @@ describe('MoMo Delivered → client Complete', () => {
       expect(stampOrder).toBeGreaterThan(completeOrder);
       expect(ctx.notifier.sendAutoCompleted).toHaveBeenCalledWith('order-1', 24);
       expect(ctx.repo.stampReportWindow).toHaveBeenCalled();
+    });
+
+    it('does not auto-complete an unpaid pay-at-delivery order', async () => {
+      const ctx = momoCtx();
+      ctx.repo.dueMomoAutoComplete.mockResolvedValue(['order-1']);
+      ctx.repo.loadOrder.mockResolvedValue(
+        due({ payment_timing: 'pay_at_delivery', payment_status: 'pending' })
+      );
+      expect((await ctx.svc.autoCompleteDue(NOW)).completed).toBe(0);
+      expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
     });
 
     it('never completes an order with a report on it', async () => {

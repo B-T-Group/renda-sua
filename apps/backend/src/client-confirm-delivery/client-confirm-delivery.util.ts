@@ -53,6 +53,34 @@ export function isAwaitingClientConfirmation(status: string | null | undefined):
   return status === AWAITING_CLIENT_CONFIRMATION;
 }
 
+const COLLECTED_PAYMENT = new Set(['paid', 'authorized']);
+const CASH_EXCEPTION_RECON = new Set([
+  'pending_manual_reconciliation',
+  'reconciled',
+]);
+
+/**
+ * Classic pay-at-delivery / pay-on-delivery that has not been collected.
+ * Pay-after-confirm is collected before delivery. A cash exception is collected
+ * off-rail and settles later in reconciliation, so it is not unpaid here.
+ */
+export function isUnpaidPayAtDelivery(order: {
+  payment_timing?: string | null;
+  payment_method?: string | null;
+  payment_status?: string | null;
+  pay_after_merchant_confirm?: boolean | null;
+  reconciliation_status?: string | null;
+}): boolean {
+  if (order.pay_after_merchant_confirm === true) return false;
+  const doorstep =
+    order.payment_timing === 'pay_at_delivery' ||
+    order.payment_method === 'pay_on_delivery';
+  if (!doorstep) return false;
+  if (COLLECTED_PAYMENT.has(order.payment_status ?? '')) return false;
+  if (CASH_EXCEPTION_RECON.has(order.reconciliation_status ?? '')) return false;
+  return true;
+}
+
 export function isPendingAutoComplete(status: string | null | undefined): boolean {
   return status === PENDING_AUTO_COMPLETE;
 }

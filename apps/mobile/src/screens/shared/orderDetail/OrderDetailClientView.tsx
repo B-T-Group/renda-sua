@@ -251,6 +251,10 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     isGift: order?.is_third_party_recipient,
     giftBuyerCanConfirm: confirmState?.giftBuyerCanConfirm,
     usesLegacyPin,
+    paymentTiming: order?.payment_timing,
+    paymentMethod: order?.payment_method,
+    paymentStatus: order?.payment_status,
+    payAfterMerchantConfirm: order?.pay_after_merchant_confirm,
   });
   const [problemOpen, setProblemOpen] = useState(false);
   const { orders, loading: ordersLoading, error: ordersError } = useClientOrders(true);

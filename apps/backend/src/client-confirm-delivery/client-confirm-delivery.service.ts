@@ -46,6 +46,7 @@ import {
   hoursFromNow,
   isClientConfirmDeliveryOrder,
   isAwaitingClientConfirmation,
+  isUnpaidPayAtDelivery,
   usesLegacyDeliveryPin,
 } from './client-confirm-delivery.util';
 import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
@@ -71,6 +72,7 @@ export class ClientConfirmDeliveryService {
     const order = await this.requireOrder(orderId);
     this.assertNotLegacyPin(order);
     this.assertOutForDelivery(order);
+    this.assertDoorstepPaymentCollected(order);
     await this.orderStatus.updateOrderStatus(orderId, AWAITING_CLIENT_CONFIRMATION, {
       viaSystem: true,
     });
@@ -112,6 +114,7 @@ export class ClientConfirmDeliveryService {
       };
     }
     this.assertConfirmable(order);
+    this.assertDoorstepPaymentCollected(order);
     const resolved =
       method === 'client' && order.is_third_party_recipient ? 'buyer' : method;
     await this.assertConfirmerAllowed(order, resolved);
@@ -171,6 +174,9 @@ export class ClientConfirmDeliveryService {
       return this.reportAfterCompletion(order, user.id, report);
     }
     this.assertConfirmable(order);
+    if (order.current_status === 'out_for_delivery') {
+      this.assertDoorstepPaymentCollected(order);
+    }
     await this.assertConfirmerAllowed(order, 'client');
     const at = new Date().toISOString();
     try {
@@ -257,10 +263,12 @@ export class ClientConfirmDeliveryService {
       market.isStripeRail &&
       elapsed;
     const variant = deliveryConfirmVariant(order, now);
+    const unpaid = isUnpaidPayAtDelivery(order);
     const confirmable =
       viewerRole === 'client' &&
       !usesLegacyDeliveryPin(order) &&
-      canConfirmFromStatus(order.current_status);
+      canConfirmFromStatus(order.current_status) &&
+      !unpaid;
     return {
       orderId,
       status: order.current_status,
@@ -423,10 +431,13 @@ export class ClientConfirmDeliveryService {
       };
     }
     if (order.current_status === DISPUTED) {
+      const ticketId = order.dispute_opened_at
+        ? order.awaiting_confirm_support_ticket_id
+        : await this.stampRecipientDispute(order);
       return {
         success: true,
         status: DISPUTED,
-        ticketId: order.awaiting_confirm_support_ticket_id,
+        ticketId,
         message: 'Delivery reported as a problem. Support will follow up.',
       };
     }
@@ -438,6 +449,16 @@ export class ClientConfirmDeliveryService {
         success: false,
         status: order.current_status,
         message: `Cannot report a delivery problem in ${order.current_status} status`,
+      };
+    }
+    if (
+      order.current_status === 'out_for_delivery' &&
+      isUnpaidPayAtDelivery(order)
+    ) {
+      return {
+        success: false,
+        status: order.current_status,
+        message: 'Payment has not been collected for this delivery yet',
       };
     }
     return this.disputeFromRecipient(order);
@@ -454,17 +475,43 @@ export class ClientConfirmDeliveryService {
       actor,
       'client'
     );
-    const ticket = await this.openDisputeTicket(
+    const ticketId = await this.stampRecipientDispute(order);
+    return {
+      success: true,
+      status: DISPUTED,
+      ticketId,
+      message: 'Delivery reported as a problem. Support will follow up.',
+    };
+  }
+
+  /** Admin queue lists only rows with dispute_opened_at. Stamp that with the ticket. */
+  private async stampRecipientDispute(order: ClientConfirmOrder): Promise<string | null> {
+    const at = new Date().toISOString();
+    const actor = order.client?.user_id ?? order.client_id ?? order.id;
+    await this.repo.openDispute(order.id, 'delivery_failed', 'not_received', at);
+    const existing = order.awaiting_confirm_support_ticket_id ?? null;
+    const ticketId = existing ?? (await this.openRecipientDisputeTicket(order, actor)).id;
+    if (!existing) {
+      await this.safeAfterCommit('dispute ticket', () =>
+        this.repo.stampSupportTicket(order.id, ticketId, at)
+      );
+    }
+    await this.safeInsertReport(
+      order,
+      actor,
+      { type: 'delivery_failed', reason: 'not_received' },
+      'pre_completion',
+      ticketId
+    );
+    return ticketId;
+  }
+
+  private openRecipientDisputeTicket(order: ClientConfirmOrder, actor: string) {
+    return this.openDisputeTicket(
       order,
       actor,
       'Recipient reported a problem via WhatsApp/SMS'
     );
-    return {
-      success: true,
-      status: DISPUTED,
-      ticketId: ticket.id,
-      message: 'Delivery reported as a problem. Support will follow up.',
-    };
   }
 
   private async openPostCompletionClaim(
@@ -551,6 +598,7 @@ export class ClientConfirmDeliveryService {
     const order = await this.repo.loadOrder(orderId);
     if (!order || order.current_status !== AWAITING_CLIENT_CONFIRMATION) return false;
     if (order.dispute_opened_at) return false;
+    if (isUnpaidPayAtDelivery(order)) return false;
     const deadline = Date.parse(order.auto_complete_deadline_at ?? '');
     if (Number.isNaN(deadline) || deadline > now.getTime()) return false;
     const market = await this.marketConfig.forOrder(order);
@@ -760,6 +808,18 @@ export class ClientConfirmDeliveryService {
     } catch (error: any) {
       this.logger.warn(`mark-delivered ${name} failed after commit: ${error?.message}`);
     }
+  }
+
+  private assertDoorstepPaymentCollected(order: ClientConfirmOrder): void {
+    if (!isUnpaidPayAtDelivery(order)) return;
+    throw new HttpException(
+      {
+        success: false,
+        error: 'PAY_AT_DELIVERY_UNPAID',
+        message: 'Collect pay-at-delivery payment before completing this order.',
+      },
+      HttpStatus.CONFLICT
+    );
   }
 
   private assertOutForDelivery(order: ClientConfirmOrder): void {
