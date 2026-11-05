@@ -3,20 +3,18 @@ import { InteractionManager } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { EntityActionRow } from '../common/EntityActionRow';
 import { BottomOverlaySnackbar } from '../feedback/BottomOverlaySnackbar';
 import { ActionLoadingDialog } from '../feedback/ActionLoadingDialog';
 import type { ActionLoadingKind } from '../feedback/actionLoadingKinds';
 import { ConfirmActionDialog } from '../dialogs/ConfirmActionDialog';
 import { SimpleMessageDialog } from '../dialogs/SimpleMessageDialog';
+import { OrderActionBar } from '../orders/OrderActionBar';
 import { useBusinessOrderActions } from '../../hooks/business/useBusinessOrderActions';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import type { BusinessOrder } from '../../types/business/orders';
 import type { ConfirmOrderPayload } from '../../types/business/orders';
-import {
-  getBusinessOrderActions,
-  type BusinessOrderActionId,
-} from '../../utils/businessOrderActions';
+import { type BusinessOrderActionId } from '../../utils/businessOrderActions';
+import { rankBusinessOrderDetailActions } from '../../utils/rankBusinessOrderDetailActions';
 import { BusinessCancelOrderDialog } from './BusinessCancelOrderDialog';
 import { BusinessConfirmOrderDialog } from './BusinessConfirmOrderDialog';
 import { CookedFoodConfirmOrderDialog } from './CookedFoodConfirmOrderDialog';
@@ -36,12 +34,6 @@ import {
   isMmPhoneUnconfirmedError,
   orderNeedsMmPhoneBeforeConfirm,
 } from '../../utils/orderMmPhoneGate';
-
-function readyActionIcon(id: string, labelKey: string): string | undefined {
-  if (id !== 'completePreparation') return undefined;
-  if (labelKey !== 'orderActions.readyForPickup') return undefined;
-  return 'check-circle';
-}
 
 /** iOS freezes if a second Modal presents while another is still dismissing. */
 function waitForModalDismiss(ms = 350): Promise<void> {
@@ -85,7 +77,7 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
   } = useBusinessOrderActions(onSuccess);
 
   const acting = actingId === order.id;
-  const actions = getBusinessOrderActions(order, { mode });
+  const ranked = rankBusinessOrderDetailActions(order, { mode });
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [cookedConfirmOpen, setCookedConfirmOpen] = useState(false);
@@ -305,25 +297,24 @@ export function BusinessOrderRowActions({ order, onSuccess }: Props) {
     }
   }, [acting, pendingConfirm, runAction]);
 
-  if (actions.length === 0) return null;
+  if (!ranked.primary && !ranked.companion && ranked.overflow.length === 0) {
+    return null;
+  }
 
   return (
     <>
-      <EntityActionRow
-        actions={actions.map((a) => ({
-          id: a.id,
-          label: t(a.labelKey, a.defaultLabel),
-          icon: readyActionIcon(a.id, a.labelKey),
-          mode: a.destructive ? 'outlined' : a.primary ? 'contained' : 'contained-tonal',
-          destructive: a.destructive,
-          primary: a.primary,
-          compact: true,
-          loading: acting,
-          disabled: acting,
-        }))}
-        onActionPress={(id) => {
-          const action = actions.find((a) => a.id === id);
-          if (action) void handlePress(action.id, action.destructive);
+      <OrderActionBar
+        ranked={ranked}
+        plain
+        busy={acting}
+        onAction={(id) => {
+          const all = [
+            ranked.primary,
+            ranked.companion,
+            ...ranked.overflow,
+          ].filter(Boolean);
+          const match = all.find((a) => a?.id === id);
+          void handlePress(id as BusinessOrderActionId, Boolean(match?.destructive));
         }}
       />
 

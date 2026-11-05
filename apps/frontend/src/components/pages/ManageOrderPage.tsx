@@ -1,4 +1,4 @@
-import { ArrowBack as ArrowBackIcon, History as HistoryIcon, Message as MessageIcon, Star, Support as SupportIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Message as MessageIcon } from '@mui/icons-material';
 import {
   Alert,
   Box,
@@ -19,14 +19,13 @@ import { useTranslation } from 'react-i18next';
 import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useOrdersApiPrefix } from '../../contexts/OrdersApiPrefixContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
-import { useAccountInfo, useBackendOrders } from '../../hooks';
+import { useAccountInfo } from '../../hooks';
 import { useApiClient } from '../../hooks/useApiClient';
 import { useOrderById } from '../../hooks/useOrderById';
 import { useOrderSubscription } from '../../hooks/useOrderSubscription';
 import { useOrderRatings } from '../../hooks/useOrderRatings';
 import { useOrderRatingEligibility } from '../../hooks/useOrderRatingEligibility';
 import { useOrderRefunds, type RefundRequestDetail } from '../../hooks/useOrderRefunds';
-import { useStripeConnect } from '../../hooks/useStripeConnect';
 import ConfirmationModal from '../common/ConfirmationModal';
 import CancellationReasonModal from '../dialogs/CancellationReasonModal';
 import DeliveryTrackingMap from '../delivery/DeliveryTrackingMap';
@@ -42,7 +41,6 @@ import BusinessOrderActions from '../orders/business/BusinessOrderActions';
 import ClientOrderActions from '../orders/client/ClientOrderActions';
 import DeliveryOrderActions from '../orders/delivery/DeliveryOrderActions';
 import { OrderPhaseBanner } from '../orders/OrderPhaseBanner';
-import { OrderJourneyTimeline } from '../orders/OrderJourneyTimeline';
 import PersonaOrderDetails, {
   type OrderPersona,
 } from '../orders/PersonaOrderDetails';
@@ -50,12 +48,6 @@ import {
   isRefundOrderStatus,
   RefundProgressCard,
 } from '../orders/RefundProgressCard';
-import {
-  ORDER_PRIMARY_ACTION_LABEL,
-  orderToPhaseInput,
-  resolveOrderPhase,
-} from '../../utils/orderPhase';
-import { buildMomoAwaitingPaymentTo } from '../../utils/momoAwaitingPaymentNav';
 import SEOHead from '../seo/SEOHead';
 
 const CLIENT_TRACKING_STATUSES = ['picked_up', 'in_transit', 'out_for_delivery'];
@@ -109,13 +101,6 @@ const ManageOrderPageContent: React.FC = () => {
   const api = useApiClient();
   const { accounts } = useAccountInfo();
   const { enqueueSnackbar } = useSnackbar();
-  const {
-    retryOrderPayment,
-    loading: actionLoading,
-  } = useBackendOrders();
-  const { status: connectStatus } = useStripeConnect();
-  const isStripeRail = connectStatus?.paymentRail === 'stripe';
-
   const { order, loading, error, fetchOrder, refetch } = useOrderById();
   const { ratings, refetch: refetchRatings } = useOrderRatings(orderId || '');
   const { eligibility, refetch: refetchEligibility } =
@@ -230,99 +215,6 @@ const ManageOrderPageContent: React.FC = () => {
       </Container>
     );
   }
-
-  const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), persona);
-  const [primaryLabelKey, primaryLabelDefault] =
-    ORDER_PRIMARY_ACTION_LABEL[phaseInfo.primaryActionId];
-
-  const handleRetryPayment = async () => {
-    try {
-      const isStripeOrder =
-        order.payment_source === 'credit_card' || isStripeRail;
-      const result = await retryOrderPayment(order.id);
-      if (isStripeOrder && result.checkout_url) {
-        window.location.assign(result.checkout_url);
-        return;
-      }
-      if (!isStripeOrder) {
-        navigate(
-          buildMomoAwaitingPaymentTo({
-            orderIds: [order.id],
-            phoneE164: order.client?.user?.phone_number?.trim() || '',
-            source: 'retry',
-            orderNumbers: [order.order_number],
-          })
-        );
-        return;
-      }
-      enqueueSnackbar(
-        t(
-          'orders.retryPayment.successStripe',
-          'Opening secure card payment…'
-        ),
-        { variant: 'success' }
-      );
-      await refetch();
-    } catch (e: any) {
-      enqueueSnackbar(
-        e?.message || t('orders.retryPayment.error', 'Failed to retry payment'),
-        { variant: 'error' }
-      );
-    }
-  };
-
-  const handlePrimaryPhaseAction = () => {
-    if (phaseInfo.primaryActionId === 'pay') {
-      void handleRetryPayment();
-      return;
-    }
-    if (phaseInfo.primaryActionId === 'rate') {
-      if (eligibility?.canRateAgent) setRatingDialogMode('agent');
-      else if (eligibility?.canRateItem) setRatingDialogMode('item');
-      else if (eligibility?.canRateClient) setRatingDialogMode('client');
-    }
-  };
-
-  const showPayCta =
-    phaseInfo.primaryActionId === 'pay' &&
-    order.payment_status !== 'paid' &&
-    (order.payment_timing === 'pay_now' ||
-      order.pay_after_merchant_confirm === true);
-  const canShowRatePrimary = !!(
-    eligibility?.canRateAgent ||
-    eligibility?.canRateItem ||
-    eligibility?.canRateClient
-  );
-  const showRateCta =
-    phaseInfo.primaryActionId === 'rate' && canShowRatePrimary;
-  const itemRatingLocked =
-    !!eligibility &&
-    !eligibility.canRateItem &&
-    !!eligibility.itemRatingUnlocksAt &&
-    new Date(eligibility.itemRatingUnlocksAt) > new Date() &&
-    eligibility.items.some((i) => !i.rated) &&
-    !eligibility.canRateAgent &&
-    !eligibility.canRateClient;
-  const phaseBannerAction =
-    persona === 'client' && showPayCta ? (
-      <Button variant="contained" fullWidth onClick={handlePrimaryPhaseAction}>
-        {t(primaryLabelKey, primaryLabelDefault)}
-      </Button>
-    ) : persona === 'client' && showRateCta ? (
-      <Button variant="contained" fullWidth onClick={handlePrimaryPhaseAction}>
-        {t(primaryLabelKey, primaryLabelDefault)}
-      </Button>
-    ) : persona === 'client' &&
-      phaseInfo.primaryActionId === 'rate' &&
-      itemRatingLocked &&
-      eligibility?.itemRatingUnlocksAt ? (
-      <Typography variant="body2" color="text.secondary">
-        {t('orders.itemRatingUnlocksOn', {
-          defaultValue: 'You can rate your items from {{date}}',
-          date: new Date(eligibility.itemRatingUnlocksAt).toLocaleDateString(),
-        })}
-      </Typography>
-    ) : null;
 
   const handleCancelOrder = () => {
     setCancelModalOpen(true);
@@ -468,70 +360,6 @@ const ManageOrderPageContent: React.FC = () => {
   const extras = (
     <Stack spacing={2} sx={{ mt: 2 }}>
       <OrderRatingsDisplay ratings={ratings} userType={persona} />
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
-        {eligibility?.canRateAgent && (
-          <Button
-            variant="contained"
-            startIcon={<Star />}
-            onClick={() => setRatingDialogMode('agent')}
-          >
-            {t('orders.actions.rateAgent', 'Rate Delivery Agent')}
-          </Button>
-        )}
-        {eligibility?.canRateItem && (
-          <Button
-            variant="contained"
-            startIcon={<Star />}
-            onClick={() => setRatingDialogMode('item')}
-          >
-            {t('orders.actions.rateItems', 'Rate Your Items')}
-          </Button>
-        )}
-        {eligibility &&
-          !eligibility.canRateItem &&
-          persona === 'client' &&
-          eligibility.itemRatingUnlocksAt &&
-          new Date(eligibility.itemRatingUnlocksAt) > new Date() &&
-          eligibility.items.some((i) => !i.rated) && (
-            <Typography variant="caption" color="text.secondary">
-              {t('orders.itemRatingUnlocksOn', {
-                defaultValue: 'You can rate your items from {{date}}',
-                date: new Date(
-                  eligibility.itemRatingUnlocksAt
-                ).toLocaleDateString(),
-              })}
-            </Typography>
-          )}
-        {eligibility?.canRateClient && (
-          <Button
-            variant="contained"
-            startIcon={<Star />}
-            onClick={() => setRatingDialogMode('client')}
-          >
-            {t('orders.actions.rateClient', 'Rate Client')}
-          </Button>
-        )}
-        <Button
-          variant="outlined"
-          startIcon={<HistoryIcon />}
-          onClick={() => setHistoryDialogOpen(true)}
-        >
-          {t('orders.actions.viewHistory', 'View History')}
-        </Button>
-        {persona === 'client' &&
-          ['delivered', 'failed', 'complete', 'refunded'].includes(
-            order.current_status
-          ) && (
-            <Button
-              variant="outlined"
-              color="secondary"
-              startIcon={<SupportIcon />}
-              onClick={() => setReportIssueDialogOpen(true)}
-            >
-              {t('support.reportIssue', 'Report an issue')}
-            </Button>
-          )}
-      </Stack>
     </Stack>
   );
 
@@ -542,8 +370,14 @@ const ManageOrderPageContent: React.FC = () => {
           orderNumber: order.order_number,
         })}
       />
-      <Box sx={{ pb: isMobile ? 'calc(64px + min(45vh, 280px))' : 0 }}>
-        <Container maxWidth="xl" sx={{ py: { xs: 2, md: 4 } }}>
+      <Box
+        sx={{
+          pb: isMobile
+            ? 'calc(64px + min(40vh, 240px))'
+            : 'calc(24px + min(40vh, 240px))',
+        }}
+      >
+        <Container maxWidth={false} sx={{ py: { xs: 2, md: 4 }, maxWidth: 720 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
             <IconButton onClick={() => navigate(ordersListPath)} aria-label="back">
               <ArrowBackIcon />
@@ -557,13 +391,8 @@ const ManageOrderPageContent: React.FC = () => {
           {(persona === 'client' ||
             persona === 'business' ||
             persona === 'agent') && (
-            <OrderPhaseBanner
-              order={order}
-              role={persona}
-              action={phaseBannerAction}
-            />
+            <OrderPhaseBanner order={order} role={persona} />
           )}
-          {persona === 'client' ? <OrderJourneyTimeline order={order} /> : null}
 
           <PersonaOrderDetails
             persona={persona}
@@ -574,75 +403,72 @@ const ManageOrderPageContent: React.FC = () => {
             tracking={tracking}
             extras={extras}
             headerTrailing={headerTrailing}
-            hideActions={isMobile}
+            hideActions
             onActionComplete={() => refetch()}
             onShowNotification={handleShowNotification}
           />
         </Container>
 
-        {isMobile && (
-          <Box
-            sx={{
-              position: 'fixed',
-              bottom: 64,
-              left: 0,
-              right: 0,
-              zIndex: 1100,
-              maxHeight: '45vh',
-              overflowY: 'auto',
-              bgcolor: 'background.paper',
-              borderTop: 1,
-              borderColor: 'divider',
-              boxShadow: 3,
-            }}
-          >
-            <Box sx={{ p: 2 }}>
-              {persona === 'agent' ? (
-                (order as { is_claim_pending?: boolean }).is_claim_pending ? (
-                  <Button
-                    fullWidth
-                    variant="outlined"
-                    color="error"
-                    disabled={cancellingClaim}
-                    onClick={() => void handleCancelClaimRequest()}
-                    startIcon={
-                      cancellingClaim ? (
-                        <CircularProgress size={16} />
-                      ) : undefined
-                    }
-                  >
-                    {t(
-                      'orders.claimPending.cancelRequest',
-                      'Cancel claim request'
-                    )}
-                  </Button>
-                ) : (
-                  <DeliveryOrderActions
-                    order={order}
-                    agentAccounts={accounts}
-                    onActionComplete={() => refetch()}
-                    onShowNotification={handleShowNotification}
-                    mobileView
-                  />
-                )
-              ) : persona === 'business' ? (
-                <BusinessOrderActions
-                  order={order}
-                  onActionComplete={() => refetch()}
-                  onShowNotification={handleShowNotification}
-                  onShowHistory={() => setHistoryDialogOpen(true)}
-                />
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: isMobile ? 64 : 0,
+            left: 0,
+            right: 0,
+            zIndex: 1100,
+            bgcolor: 'background.paper',
+            borderTop: 1,
+            borderColor: 'divider',
+            boxShadow: 3,
+          }}
+        >
+          <Box sx={{ p: 2, maxWidth: 720, mx: 'auto', width: '100%' }}>
+            {persona === 'agent' ? (
+              (order as { is_claim_pending?: boolean }).is_claim_pending ? (
+                <Button
+                  fullWidth
+                  variant="outlined"
+                  color="error"
+                  disabled={cancellingClaim}
+                  onClick={() => void handleCancelClaimRequest()}
+                  startIcon={
+                    cancellingClaim ? (
+                      <CircularProgress size={16} />
+                    ) : undefined
+                  }
+                >
+                  {t(
+                    'orders.claimPending.cancelRequest',
+                    'Cancel claim request'
+                  )}
+                </Button>
               ) : (
-                <ClientOrderActions
+                <DeliveryOrderActions
                   order={order}
+                  agentAccounts={accounts}
                   onActionComplete={() => refetch()}
                   onShowNotification={handleShowNotification}
-                  deliveryPinFullWidth
+                  mobileView
                 />
-              )}
-            </Box>
+              )
+            ) : persona === 'business' ? (
+              <BusinessOrderActions
+                order={order}
+                onActionComplete={() => refetch()}
+                onShowNotification={handleShowNotification}
+                onShowHistory={() => setHistoryDialogOpen(true)}
+              />
+            ) : (
+              <ClientOrderActions
+                order={order}
+                onActionComplete={() => refetch()}
+                onShowNotification={handleShowNotification}
+                onShowHistory={() => setHistoryDialogOpen(true)}
+                deliveryPinFullWidth
+              />
+            )}
           </Box>
-        )}
+        </Box>
       </Box>
 
       {order.current_status === 'assigned_to_agent' && (

@@ -1,16 +1,12 @@
-import { Cancel, CheckCircle, LocalShipping } from '@mui/icons-material';
 import {
   Alert,
-  Box,
   Button,
-  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Stack,
   TextField,
-  Tooltip,
   Typography,
 } from '@mui/material';
 import React, { useMemo, useRef, useState } from 'react';
@@ -42,6 +38,14 @@ import RequestPayAtDeliveryPaymentDialog from '../dialogs/RequestPayAtDeliveryPa
 import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
 import { hasCashExceptionBlockingDeposit } from '../../utils/depositRemainder';
 import ClaimOrderDialog from './ClaimOrderDialog';
+import {
+  OrderActionBar,
+  type OrderActionBarHandler,
+} from './OrderActionBar';
+import {
+  rankOrderDetailActions,
+  type RankedOrderAction,
+} from '../../utils/rankOrderDetailActions';
 
 interface AgentActionsProps {
   order: OrderData;
@@ -59,7 +63,6 @@ const AgentActions: React.FC<AgentActionsProps> = ({
   agentAccounts = [],
   onActionComplete,
   onShowNotification,
-  mobileView = false,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -676,138 +679,173 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     }
   };
 
-  const getAvailableActions = () => {
-    const actions = [];
+  const claimSuspended = profile?.agent?.status === 'suspended';
+
+  const rankedActions = useMemo(() => {
+    const actions: RankedOrderAction[] = [];
+    const push = (
+      id: string,
+      labelKey: string,
+      defaultLabel: string,
+      opts?: { destructive?: boolean; preferred?: boolean }
+    ) => {
+      if (actions.some((a) => a.id === id)) return;
+      actions.push({
+        id,
+        labelKey,
+        defaultLabel,
+        destructive: opts?.destructive,
+        preferred: opts?.preferred,
+      });
+    };
 
     switch (order.current_status) {
       case 'ready_for_pickup':
-        actions.push({
-          label: ordersCanClaim
-            ? t('orderActions.claimOrder', 'Claim Order')
-            : t('agent.openOrders.completeSetupToClaim', 'Complete setup to claim'),
-          action: handleClaim,
-          color: 'primary' as const,
-          icon: <CheckCircle />,
-          disabled: profile?.agent?.status === 'suspended',
-          tooltip:
-            profile?.agent?.status === 'suspended'
-              ? t(
-                  'agent.suspendedCannotClaim',
-                  'Your account is suspended. You cannot claim orders. Contact support.'
-                )
-              : !ordersCanClaim
-                ? t(
-                    'agent.openOrders.previewBanner',
-                    'These deliveries are available in your country. Complete verification to claim them.'
-                  )
-                : undefined,
-          isClaim: true,
-        });
+        push(
+          'claim',
+          ordersCanClaim
+            ? 'orderActions.claimOrder'
+            : 'agent.openOrders.completeSetupToClaim',
+          ordersCanClaim ? 'Claim Order' : 'Complete setup to claim',
+          { preferred: true }
+        );
         break;
 
       case 'assigned_to_agent':
-        actions.push({
-          label: t('orderActions.pickUp', 'Pick Up'),
-          action: handlePickUp,
-          color: 'success' as const,
-          icon: <CheckCircle />,
-        });
-        actions.push({
-          label: t('orderActions.dropOrder', 'Drop Order'),
-          action: handleDrop,
-          color: 'error' as const,
-          icon: <Cancel />,
+        push('pickUp', 'orderActions.pickUp', 'Pick Up', { preferred: true });
+        push('drop', 'orderActions.dropOrder', 'Drop Order', {
+          destructive: true,
         });
         break;
 
       case 'picked_up':
-        // Only show "Mark as In Transit" if feature flag is enabled
         if (APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT) {
-          actions.push({
-            label: t('orderActions.markAsInTransit', 'Mark as In Transit'),
-            action: () => handleStatusUpdate('in_transit'),
-            color: 'primary' as const,
-            icon: <LocalShipping />,
-          });
+          push(
+            'markInTransit',
+            'orderActions.markAsInTransit',
+            'Mark as In Transit'
+          );
         }
-        actions.push({
-          label: t(
-            'orderActions.markAsOutForDelivery',
-            'Mark as Out for Delivery'
-          ),
-          action: () => handleStatusUpdate('out_for_delivery'),
-          color: 'secondary' as const,
-          icon: <LocalShipping />,
-        });
+        push(
+          'markOutForDelivery',
+          'orderActions.markAsOutForDelivery',
+          'Mark as Out for Delivery',
+          { preferred: true }
+        );
         break;
 
       case 'in_transit':
-        actions.push({
-          label: t(
-            'orderActions.markAsOutForDelivery',
-            'Mark as Out for Delivery'
-          ),
-          action: () => handleStatusUpdate('out_for_delivery'),
-          color: 'secondary' as const,
-          icon: <LocalShipping />,
-        });
+        push(
+          'markOutForDelivery',
+          'orderActions.markAsOutForDelivery',
+          'Mark as Out for Delivery',
+          { preferred: true }
+        );
         break;
 
       case 'out_for_delivery':
         if (orderNeedsPayAtDeliveryAgentActions(order)) {
-          actions.push({
-            label: t('orderActions.requestPayment', 'Request payment'),
-            action: () => setShowRequestPaymentDialog(true),
-            color: 'success' as const,
-            icon: <CheckCircle />,
-          });
+          push(
+            'requestPayment',
+            'orderActions.requestPayment',
+            'Request payment',
+            { preferred: true }
+          );
           if (!hasCashExceptionBlockingDeposit(order)) {
-            actions.push({
-              label: t('orderActions.markPaidInCash', 'Mark paid in cash'),
-              action: () => setShowCashExceptionDialog(true),
-              color: 'warning' as const,
-              icon: <Cancel />,
-            });
+            push(
+              'markPaidInCash',
+              'orderActions.markPaidInCash',
+              'Mark paid in cash'
+            );
           }
         } else {
-          actions.push({
-            label: t('agent.orders.detail.markDelivered', 'Mark as delivered'),
-            action: () => void handleMarkDelivered(),
-            color: 'success' as const,
-            icon: <CheckCircle />,
-          });
+          push(
+            'markDelivered',
+            'agent.orders.detail.markDelivered',
+            'Mark as delivered',
+            { preferred: true }
+          );
         }
-        actions.push({
-          label: t('orderActions.markAsFailed', 'Mark as Failed'),
-          action: () => handleStatusUpdate('failed'),
-          color: 'error' as const,
-          icon: <Cancel />,
+        push('markFailed', 'orderActions.markAsFailed', 'Mark as Failed', {
+          destructive: true,
         });
         break;
 
       case 'awaiting_client_confirmation':
         if (primaryCta === 'clientCouldNotConfirm') {
-          actions.push({
-            label: t('orders.clientConfirm.agentFallbackCta', "Client couldn't confirm"),
-            action: () => {
-              setFallbackError(null);
-              setShowFallbackDialog(true);
-            },
-            color: 'success' as const,
-            icon: <CheckCircle />,
-          });
+          push(
+            'clientCouldNotConfirm',
+            'orders.clientConfirm.agentFallbackCta',
+            "Client couldn't confirm",
+            { preferred: true }
+          );
         }
         break;
 
       default:
-        // No actions available for other statuses
         break;
     }
 
-    return actions;
-  };
+    return rankOrderDetailActions(
+      actions,
+      actions.find((a) => a.preferred)?.id
+    );
+  }, [order, ordersCanClaim, primaryCta]);
 
-  const availableActions = getAvailableActions();
+  const handlers: Record<string, OrderActionBarHandler> = {
+    claim: {
+      id: 'claim',
+      onClick: () => void handleClaim(),
+      loading,
+      disabled: claimSuspended,
+    },
+    pickUp: {
+      id: 'pickUp',
+      onClick: () => void handlePickUp(),
+      loading,
+    },
+    drop: {
+      id: 'drop',
+      onClick: () => void handleDrop(),
+      loading,
+    },
+    markInTransit: {
+      id: 'markInTransit',
+      onClick: () => void handleStatusUpdate('in_transit'),
+      loading,
+    },
+    markOutForDelivery: {
+      id: 'markOutForDelivery',
+      onClick: () => void handleStatusUpdate('out_for_delivery'),
+      loading,
+    },
+    requestPayment: {
+      id: 'requestPayment',
+      onClick: () => setShowRequestPaymentDialog(true),
+    },
+    markPaidInCash: {
+      id: 'markPaidInCash',
+      onClick: () => setShowCashExceptionDialog(true),
+    },
+    markDelivered: {
+      id: 'markDelivered',
+      onClick: () => void handleMarkDelivered(),
+      loading,
+    },
+    markFailed: {
+      id: 'markFailed',
+      onClick: () => void handleStatusUpdate('failed'),
+      loading,
+    },
+    clientCouldNotConfirm: {
+      id: 'clientCouldNotConfirm',
+      onClick: () => {
+        setFallbackError(null);
+        setShowFallbackDialog(true);
+      },
+      loading,
+    },
+  };
 
   const showWaiting =
     order.current_status === 'awaiting_client_confirmation' ||
@@ -816,7 +854,12 @@ const AgentActions: React.FC<AgentActionsProps> = ({
     order.payment_timing === 'pay_at_delivery' &&
     (order.payment_status === 'paid' || order.payment_status === 'authorized');
 
-  if (availableActions.length === 0 && !showWaiting) {
+  const hasBar =
+    rankedActions.primary ||
+    rankedActions.companion ||
+    rankedActions.overflow.length > 0;
+
+  if (!hasBar && !showWaiting) {
     return null;
   }
 
@@ -828,74 +871,9 @@ const AgentActions: React.FC<AgentActionsProps> = ({
           payAtDeliveryPaid={payAtDeliveryPaid}
         />
       ) : null}
-      <Box
-        sx={{
-          display: 'flex',
-          gap: mobileView ? 1 : 2,
-          flexDirection: mobileView ? 'column' : 'row',
-          flexWrap: mobileView ? 'nowrap' : 'wrap',
-          justifyContent: mobileView ? 'stretch' : 'flex-end',
-        }}
-      >
-        {availableActions.map((action, index) => {
-          const isClaimAction = (action as any).isClaim;
-          const button = (
-            <Button
-              key={index}
-              type="button"
-              variant={mobileView ? 'contained' : isClaimAction ? 'contained' : 'outlined'}
-              color={action.color}
-              onClick={action.action}
-              disabled={loading || action.disabled}
-              startIcon={loading ? <CircularProgress size={16} /> : action.icon}
-              size={mobileView ? 'large' : isClaimAction ? 'large' : 'medium'}
-              fullWidth={mobileView}
-              sx={{
-                minWidth: mobileView ? 'auto' : isClaimAction ? 180 : 120,
-                fontSize: mobileView
-                  ? '0.9rem'
-                  : isClaimAction
-                  ? '1rem'
-                  : '0.875rem',
-                fontWeight: isClaimAction ? 700 : 500,
-                py: mobileView ? 1.5 : isClaimAction ? 1.5 : 1,
-                px: mobileView ? 2 : isClaimAction ? 3 : 2,
-                boxShadow: mobileView
-                  ? isClaimAction
-                    ? '0 4px 14px 0 rgba(25, 118, 210, 0.39)'
-                    : '0 2px 8px 0 rgba(0, 0, 0, 0.15)'
-                  : isClaimAction
-                  ? '0 4px 14px 0 rgba(25, 118, 210, 0.39)'
-                  : 'none',
-                '&:hover': isClaimAction
-                  ? {
-                      boxShadow: mobileView
-                        ? '0 6px 20px 0 rgba(25, 118, 210, 0.5)'
-                        : '0 6px 20px 0 rgba(25, 118, 210, 0.5)',
-                      transform: 'translateY(-2px)',
-                    }
-                  : mobileView
-                  ? {
-                      boxShadow: '0 4px 12px 0 rgba(0, 0, 0, 0.2)',
-                      transform: 'translateY(-1px)',
-                    }
-                  : {},
-                transition: 'all 0.3s ease-in-out',
-              }}
-            >
-              {action.label}
-            </Button>
-          );
-
-          return (action as any).tooltip ? (
-            <Tooltip key={index} title={(action as any).tooltip}>
-              <span>{button}</span>
-            </Tooltip>
-          ) : (
-            button
-          );
-        })}
-      </Box>
+      {hasBar ? (
+        <OrderActionBar plain ranked={rankedActions} handlers={handlers} />
+      ) : null}
 
       <ClaimOrderDialog
         open={showClaimDialog}

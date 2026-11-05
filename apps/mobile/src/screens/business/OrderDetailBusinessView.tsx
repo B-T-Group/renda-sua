@@ -1,30 +1,23 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import {
-  ActivityIndicator,
-  Button,
-  SegmentedButtons,
-  Text,
-} from 'react-native-paper';
+import { ActivityIndicator, Button, Text } from 'react-native-paper';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { BottomOverlaySnackbar } from '../../components/feedback/BottomOverlaySnackbar';
-import { BusinessOrderHeroCard } from '../../components/business/BusinessOrderHeroCard';
 import { BusinessOrderItemsCard } from '../../components/business/BusinessOrderItemsCard';
 import { BusinessOrderRowActions } from '../../components/business/BusinessOrderRowActions';
-import { FirstOrderJourneyCard } from '../../components/business/FirstOrderJourneyCard';
+import { StatusPill } from '../../components/common/StatusPill';
 import { SectionCard } from '../../components/common/SectionCard';
 import { ContactCard } from '../../components/orders/shared/ContactCard';
+import { ExpandableSection } from '../../components/common/ExpandableSection';
 import { InfoRow } from '../../components/common/InfoRow';
-import { OrderPhaseBanner } from '../../components/orders/OrderPhaseBanner';
+import { OrderNowLine } from '../../components/orders/OrderActionBar';
 import { ShippingTrackingCard } from '../../components/orders/ShippingTrackingCard';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useBusinessOrderDetail } from '../../hooks/business/useBusinessOrderDetail';
-import { useDashboardAggregates } from '../../hooks/business/useDashboardAggregates';
-import { useFirstOrderJourney } from '../../hooks/business/useFirstOrderJourney';
 import type { Address } from '../../types/agent';
 import { getBusinessOrderActions } from '../../utils/businessOrderActions';
 import { useOrdersApi } from '../../contexts/OrdersApiContext';
@@ -37,8 +30,12 @@ import {
 import { formatPreferredDate, formatTimeSlotValue } from '../../utils/deliveryWindowUtils';
 import { isCarrierShipping } from '../../utils/fulfillmentMethod';
 import { recipientContact } from '../../orders/model/helpers';
-import { orderToPhaseInput, resolveOrderPhase } from '../../utils/orderPhase';
+import {
+  orderToPhaseInput,
+  resolveOrderPhase,
+} from '../../utils/orderPhase';
 import { OrderClientSummaryCard } from '../shared/orderDetail/OrderClientSummaryCard';
+import { orderStatusStripeColor } from '../../utils/clientOrderListDisplay';
 
 type OrderDetailParams = {
   orderId: string;
@@ -54,8 +51,6 @@ type Props = {
   };
   navigation: NativeStackNavigationProp<Record<string, object | undefined>>;
 };
-
-type BusinessTab = 'details' | 'delivery';
 
 function formatAddress(addr: Address | undefined): string {
   if (!addr) return '—';
@@ -76,20 +71,16 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { mode } = useOrdersApi();
   const { order, loading, error, refetch } = useBusinessOrderDetail(orderId);
-  const { data: aggregates } = useDashboardAggregates(Boolean(order?.business_id));
-  const firstOrderJourney = useFirstOrderJourney({
-    order,
-    businessId: order?.business_id,
-    ordersTotal: aggregates?.ordersTotal,
-    source: 'detail',
-  });
-
-  const [tab, setTab] = useState<BusinessTab>('details');
   const [snack, setSnack] = useState<string | null>(null);
 
   const onOrderMutated = useCallback(() => {
     void refetch();
   }, [refetch]);
+
+  const phaseInfo = useMemo(
+    () => (order ? resolveOrderPhase(orderToPhaseInput(order), 'business') : null),
+    [order]
+  );
 
   if (loading && !order) {
     return (
@@ -121,10 +112,12 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
   const isShipping = isCarrierShipping(order.fulfillment_method);
   const slotLabel = formatOrderTimeWindowLabel(order, locale);
   const primaryWindow = resolveOrderTimeWindow(order);
-  const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), 'business');
-  const showStickyActions =
-    phaseInfo.primaryActionId !== 'none' &&
-    getBusinessOrderActions(order, { mode }).length > 0;
+  const showStickyActions = getBusinessOrderActions(order, { mode }).length > 0;
+  const status = order.current_status ?? 'unknown';
+  const nowTitle = t(`common.orderStatus.${status}`, status);
+  const nowSubtitle = phaseInfo?.nextStepKey
+    ? t(phaseInfo.nextStepKey, '')
+    : null;
 
   const itemsCardStyle = {
     marginBottom: spacing.xs,
@@ -145,7 +138,35 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refetch()} />}
       >
-        <BusinessOrderHeroCard order={order} locale={locale} onRefetch={() => void refetch()} />
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: spacing.sm,
+            gap: spacing.sm,
+          }}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text variant="titleLarge" style={{ color: colors.text.primary }} numberOfLines={1}>
+              {t('orders.orderNumber', 'Order #{{orderNumber}}', {
+                orderNumber: order.order_number,
+              })}
+            </Text>
+            <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 2 }}>
+              {t('orders.placedOn', 'Placed on')} {formatWhen(locale, order.created_at)}
+            </Text>
+          </View>
+          <StatusPill
+            compact
+            label={t(`common.orderStatus.${status}`, status)}
+            backgroundColor={`${orderStatusStripeColor(status, colors)}28`}
+            borderColor={`${orderStatusStripeColor(status, colors)}55`}
+            textColor={colors.text.primary}
+          />
+        </View>
+
+        <OrderNowLine title={nowTitle} subtitle={nowSubtitle || undefined} />
 
         {order.acceptance_state === 'scheduled' ? (
           <SectionCard
@@ -157,9 +178,7 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
                 ? t(
                     'business.orders.scheduledDetail',
                     'Confirmation timer starts at {{when}}. You can confirm early anytime.',
-                    {
-                      when: formatWhen(locale, order.acceptance_activates_at),
-                    }
+                    { when: formatWhen(locale, order.acceptance_activates_at) }
                   )
                 : t(
                     'business.orders.scheduledEarly',
@@ -169,175 +188,126 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
           </SectionCard>
         ) : null}
 
-        {firstOrderJourney ? (
-          <FirstOrderJourneyCard journey={firstOrderJourney} />
-        ) : (
-          <OrderPhaseBanner order={order} role="business" />
-        )}
+        <BusinessOrderItemsCard order={order} locale={locale} cardStyle={itemsCardStyle} />
 
-        <OrderClientSummaryCard
-          order={order}
-          locale={locale}
-          onRefetch={() => void refetch()}
-          onNotify={(msg) => setSnack(msg)}
-        />
+        <ExpandableSection title={t('orders.detail.peopleAndPlace', 'People & place')}>
+          {recipient ? (
+            <View style={{ marginBottom: spacing.xs }}>
+              <ContactCard
+                title={t('orders.deliveryContactRecipient', 'Recipient')}
+                contact={{
+                  ...recipient,
+                  subtitle: t('orders.recipientReceives', 'Receives this order'),
+                }}
+              />
+            </View>
+          ) : null}
 
-        {recipient ? (
-          <View style={{ marginBottom: spacing.xs }}>
-            <ContactCard
-              title={t('orders.deliveryContactRecipient', 'Recipient')}
-              contact={{
-                ...recipient,
-                subtitle: t('orders.recipientReceives', 'Receives this order'),
-              }}
+          <InfoRow
+            icon="account-outline"
+            label={t('business.orders.detailClient', 'Customer')}
+            value={clientName || '—'}
+          />
+          {order.client?.user?.email ? (
+            <InfoRow
+              icon="email-outline"
+              label={t('common.email', 'Email')}
+              value={order.client.user.email}
             />
-          </View>
-        ) : null}
-
-        <SegmentedButtons
-          value={tab}
-          onValueChange={(v) => setTab(v as BusinessTab)}
-          style={{ marginBottom: spacing.sm }}
-          density="small"
-          buttons={[
-            { value: 'details', label: t('business.orders.tabDetails', 'Details') },
-            {
-              value: 'delivery',
-              label: isShipping
-                ? t('business.orders.tabShipping', 'Shipping')
-                : isPickup
-                ? t('business.orders.tabFulfillment', 'Pickup')
-                : t('business.orders.tabDelivery', 'Delivery'),
-            },
-          ]}
-        />
-
-        {tab === 'details' ? (
-          <BusinessOrderItemsCard order={order} locale={locale} cardStyle={itemsCardStyle} />
-        ) : null}
-
-        {tab === 'delivery' ? (
-          <>
-            <SectionCard
-              title={t('business.orders.detailClient', 'Customer')}
-              style={{ marginBottom: spacing.xs }}
+          ) : null}
+          {clientPhone ? (
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.xs }}
+              onPress={() => void Linking.openURL(`tel:${clientPhone}`)}
             >
-              <InfoRow
-                icon="account-outline"
-                label={t('common.name', 'Name')}
-                value={clientName || '—'}
-              />
-              {order.client?.user?.email ? (
-                <InfoRow
-                  icon="email-outline"
-                  label={t('common.email', 'Email')}
-                  value={order.client.user.email}
-                />
-              ) : null}
-              {clientPhone ? (
-                <Pressable
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.xs }}
-                  onPress={() => void Linking.openURL(`tel:${clientPhone}`)}
-                >
-                  <MaterialCommunityIcons name="phone" size={16} color={colors.primary.main} />
-                  <Text style={{ color: colors.primary.main }}>{clientPhone}</Text>
-                </Pressable>
-              ) : null}
-            </SectionCard>
+              <MaterialCommunityIcons name="phone" size={16} color={colors.primary.main} />
+              <Text style={{ color: colors.primary.main }}>{clientPhone}</Text>
+            </Pressable>
+          ) : null}
 
-            <SectionCard
-              title={
-                isPickup
-                  ? t('business.orders.detailPickupLocation', 'Store pickup')
-                  : isShipping
-                    ? t('orders.shipping.shipTo', 'Ship to')
-                    : t('business.orders.detailLocations', 'Pickup & delivery')
+          <InfoRow
+            icon="store-outline"
+            label={t('business.orders.card.pickupLocation', 'Pickup')}
+            value={
+              [order.business_location?.name, formatAddress(order.business_location?.address)]
+                .filter(Boolean)
+                .join(' · ') || '—'
+            }
+            vertical
+          />
+          {!isPickup ? (
+            <InfoRow
+              icon="map-marker-outline"
+              label={
+                isShipping
+                  ? t('orders.shipping.shipTo', 'Ship to')
+                  : t('orders.deliveryAddressLabel', 'Delivery address')
               }
-              style={{ marginBottom: spacing.xs }}
+              value={formatAddress(order.delivery_address) || '—'}
+              vertical
+            />
+          ) : null}
+
+          {primaryWindow || slotLabel ? (
+            <View style={{ marginTop: spacing.sm }}>
+              <Text variant="labelMedium" style={{ color: colors.text.secondary, marginBottom: 4 }}>
+                {isPickup
+                  ? t('business.orders.detailPickupSlot', 'Pickup slot')
+                  : t('business.orders.detailDeliveryWindows', 'Delivery windows')}
+              </Text>
+              {(isPickup && primaryWindow ? [primaryWindow] : order.delivery_time_windows ?? []).map(
+                (w) => (
+                  <View key={w.id} style={{ marginBottom: spacing.sm }}>
+                    <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
+                      {w.preferred_date ? formatPreferredDate(w.preferred_date, locale) : '—'}
+                    </Text>
+                    <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 2 }}>
+                      {w.time_slot_start && w.time_slot_end
+                        ? `${formatTimeSlotValue(w.time_slot_start, locale)} – ${formatTimeSlotValue(w.time_slot_end, locale)}`
+                        : ''}
+                      {w.slot?.slot_name ? ` · ${w.slot.slot_name}` : ''}
+                    </Text>
+                  </View>
+                )
+              )}
+            </View>
+          ) : null}
+
+          {isShipping ? (
+            <ShippingTrackingCard
+              carrier={order.shipping_carrier}
+              trackingNumber={order.shipping_tracking_number}
+              shippedAt={order.shipped_at}
+            />
+          ) : null}
+
+          {!isPickup && !isShipping ? (
+            <InfoRow
+              icon="account-tie-outline"
+              label={t('business.orders.card.agent', 'Agent')}
+              value={agentLabel ?? t('business.orders.card.unassignedAgent', 'Not assigned yet')}
+            />
+          ) : null}
+          {agentPhone ? (
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.xs }}
+              onPress={() => void Linking.openURL(`tel:${agentPhone}`)}
             >
-              <InfoRow
-                icon="store-outline"
-                label={t('business.orders.card.pickupLocation', 'Pickup')}
-                value={
-                  [order.business_location?.name, formatAddress(order.business_location?.address)]
-                    .filter(Boolean)
-                    .join(' · ') || '—'
-                }
-                vertical
-              />
-              {!isPickup ? (
-                <InfoRow
-                  icon="map-marker-outline"
-                  label={t('orders.deliveryAddressLabel', 'Delivery address')}
-                  value={formatAddress(order.delivery_address) || '—'}
-                  vertical
-                />
-              ) : null}
-            </SectionCard>
+              <MaterialCommunityIcons name="phone" size={16} color={colors.primary.main} />
+              <Text style={{ color: colors.primary.main }}>{agentPhone}</Text>
+            </Pressable>
+          ) : null}
+        </ExpandableSection>
 
-            {primaryWindow || slotLabel ? (
-              <SectionCard
-                title={
-                  isPickup
-                    ? t('business.orders.detailPickupSlot', 'Pickup slot')
-                    : t('business.orders.detailDeliveryWindows', 'Delivery windows')
-                }
-                style={{ marginBottom: spacing.xs }}
-              >
-                {(isPickup && primaryWindow ? [primaryWindow] : order.delivery_time_windows ?? []).map(
-                  (w) => (
-                    <View key={w.id} style={{ marginBottom: spacing.sm }}>
-                      <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
-                        {w.preferred_date ? formatPreferredDate(w.preferred_date, locale) : '—'}
-                      </Text>
-                      <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 2 }}>
-                        {w.time_slot_start && w.time_slot_end
-                          ? `${formatTimeSlotValue(w.time_slot_start, locale)} – ${formatTimeSlotValue(w.time_slot_end, locale)}`
-                          : ''}
-                        {w.slot?.slot_name ? ` · ${w.slot.slot_name}` : ''}
-                      </Text>
-                      {w.special_instructions ? (
-                        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 4 }}>
-                          {w.special_instructions}
-                        </Text>
-                      ) : null}
-                    </View>
-                  )
-                )}
-              </SectionCard>
-            ) : null}
-
-            {isShipping ? (
-              <ShippingTrackingCard
-                carrier={order.shipping_carrier}
-                trackingNumber={order.shipping_tracking_number}
-                shippedAt={order.shipped_at}
-              />
-            ) : null}
-
-            {!isPickup && !isShipping ? (
-              <SectionCard
-                title={t('business.orders.card.agent', 'Agent')}
-                style={{ marginBottom: spacing.xs }}
-              >
-                <InfoRow
-                  icon="account-tie-outline"
-                  label={t('common.name', 'Name')}
-                  value={agentLabel ?? t('business.orders.card.unassignedAgent', 'Not assigned yet')}
-                />
-                {agentPhone ? (
-                  <Pressable
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: spacing.xs }}
-                    onPress={() => void Linking.openURL(`tel:${agentPhone}`)}
-                  >
-                    <MaterialCommunityIcons name="phone" size={16} color={colors.primary.main} />
-                    <Text style={{ color: colors.primary.main }}>{agentPhone}</Text>
-                  </Pressable>
-                ) : null}
-              </SectionCard>
-            ) : null}
-          </>
-        ) : null}
+        <ExpandableSection title={t('orders.detail.money', 'Money')}>
+          <OrderClientSummaryCard
+            order={order}
+            locale={locale}
+            onRefetch={() => void refetch()}
+            onNotify={(msg) => setSnack(msg)}
+            hidePaymentActions
+          />
+        </ExpandableSection>
       </ScrollView>
 
       {showStickyActions ? (

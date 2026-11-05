@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Button,
   Divider,
@@ -17,37 +16,35 @@ import { ClientPickupPaymentSheet } from '../../../components/client/ClientPicku
 import { NoAgentOptionsSheet } from '../../../components/client/NoAgentOptionsSheet';
 import { SendDeliveryPinButton } from '../../../components/client/SendDeliveryPinButton';
 import { navigateToDeliveryConfirm } from '../../../navigation/rootNavigationRef';
-import { ClientConfirmReceiptCard } from '../../../components/client/ClientConfirmReceiptCard';
 import { ReportDeliveryProblemDialog } from '../../../components/dialogs/ReportDeliveryProblemDialog';
 import { StatusPill } from '../../../components/common/StatusPill';
-import { SectionCard } from '../../../components/common/SectionCard';
+import { ExpandableSection } from '../../../components/common/ExpandableSection';
 import { InfoRow } from '../../../components/common/InfoRow';
 import { RateOrderModal, type RateOrderMode } from '../../../components/dialogs/RateOrderModal';
-import { OrderPhaseBanner } from '../../../components/orders/OrderPhaseBanner';
-import { OrderJourneyTimeline } from '../../../components/client/OrderJourneyTimeline';
 import { ClientTrackingHero } from '../../../components/client/ClientTrackingHero';
 import { ClientRefundRequestButton } from '../../../components/client/ClientRefundRequestButton';
-import { FirstOrderJourneyCard } from '../../../components/client/FirstOrderJourneyCard';
 import { ShippingTrackingCard } from '../../../components/orders/ShippingTrackingCard';
 import { ContactCard } from '../../../components/orders/shared/ContactCard';
 import { OrderBusyDemandBanner } from '../../../components/client/OrderBusyDemandBanner';
+import {
+  OrderActionBar,
+  OrderExceptionLine,
+  OrderNowLine,
+} from '../../../components/orders/OrderActionBar';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { useMainTabContentBottomPadding } from '../../../hooks/useMainTabContentBottomPadding';
 import { useOrderDetail } from '../../../hooks/useOrderDetail';
-import { useClientOrders } from '../../../hooks/useClientOrders';
-import { useFirstOrderClientJourney } from '../../../hooks/client/useFirstOrderClientJourney';
 import { useOrderRatingEligibility } from '../../../hooks/useOrderRatingEligibility';
 import { useCancellationPreview } from '../../../hooks/useCancellationPreview';
 import { agentApi } from '../../../services/agentApi';
 import type { Address, Order, OrderItem } from '../../../types/agent';
-import { clientCanCancelOrder, clientShowAgentLocation, clientShowDeliveryPin, clientShowNoAgentOptions } from '../../../utils/clientOrderActions';
-import { useDeliveryConfirmation } from '../../../hooks/useDeliveryConfirmation';
 import {
-  clientCanShowConfirmReceipt,
-  resolveUsesLegacyPin,
-} from '../../../utils/deliveryConfirmationUi';
-import { getClientOrderJourney } from '../../../utils/clientOrderJourney';
-import { isOrderRefundRequestAllowed } from '../../../utils/orderRefundWindow';
+  clientCanCancelOrder,
+  clientShowAgentLocation,
+  clientShowNoAgentOptions,
+} from '../../../utils/clientOrderActions';
+import { useDeliveryConfirmation } from '../../../hooks/useDeliveryConfirmation';
+import { resolveUsesLegacyPin } from '../../../utils/deliveryConfirmationUi';
 import { trackCancellationEvent } from '../../../utils/cancellationAnalytics';
 import {
   orderItemImageUrl,
@@ -66,9 +63,9 @@ import {
   orderToPhaseInput,
   resolveOrderPhase,
 } from '../../../utils/orderPhase';
+import { rankClientOrderDetailActions } from '../../../utils/rankClientOrderDetailActions';
 import { OrderClientSummaryCard } from './OrderClientSummaryCard';
 import { EatInUnavailableNotice } from '../../../components/orders/EatInUnavailableNotice';
-import { ClientOrderJourneyCard } from '../../../components/client/ClientOrderJourneyCard';
 import {
   buildClientOrderViewModel,
   type ClientOrderViewModel,
@@ -76,8 +73,8 @@ import {
 } from '../../../orders/model';
 import type { OrderDetailScreenProps } from './types';
 import {
-  isDepositPending,
   hasLivePendingDepositTx,
+  isDepositPending,
   remainingAfterDeposit,
 } from '../../../utils/depositResume';
 import { leaveClientOrderDetail } from '../../../utils/clientOrderDetailBack';
@@ -118,10 +115,6 @@ function itemLabel(item: OrderItem): string {
   const name = item.item?.name ?? item.item_name ?? '—';
   const variant = item.variant_name?.trim();
   return variant ? `${name} · ${variant}` : name;
-}
-
-function isTerminalClientOrder(status: string) {
-  return ['cancelled', 'failed', 'refunded'].includes(status);
 }
 
 function ClientOrderHeroCard({
@@ -206,27 +199,6 @@ function ClientOrderHeroCard({
         {formatWhen(locale, order.created_at)}
       </Text>
 
-      {vm?.heroTitle ? (
-        <Text variant="titleMedium" style={{ fontWeight: '700', marginTop: spacing.sm, color: colors.text.primary }}>
-          {vm.heroTitle}
-        </Text>
-      ) : null}
-      {vm?.etaText ? (
-        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs }}>
-          {vm.etaText}
-        </Text>
-      ) : null}
-      {vm?.nextStepMessage ? (
-        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs }}>
-          {vm.nextStepMessage}
-        </Text>
-      ) : null}
-
-      {isTerminalClientOrder(status) && !vm?.heroTitle ? (
-        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.sm }}>
-          {t(`common.orderStatus.${status}`, status)}
-        </Text>
-      ) : null}
     </View>
   );
 }
@@ -235,8 +207,7 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const { orderId, rate: rateIntent } = route.params;
   const { t, i18n } = useTranslation();
   const locale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
-  const { colors, spacing, borderRadius } = useTheme();
-  const insets = useSafeAreaInsets();
+  const { colors, spacing } = useTheme();
   const tabPad = useMainTabContentBottomPadding(24);
   const { order, loading, error, refetch } = useOrderDetail(orderId);
   const { state: confirmState, refetch: refetchConfirm } = useDeliveryConfirmation(
@@ -245,23 +216,8 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     order?.fulfillment_method
   );
   const usesLegacyPin = resolveUsesLegacyPin(confirmState);
-  const canConfirmDelivery = clientCanShowConfirmReceipt({
-    status: order?.current_status,
-    fulfillmentMethod: order?.fulfillment_method,
-    isGift: order?.is_third_party_recipient,
-    giftBuyerCanConfirm: confirmState?.giftBuyerCanConfirm,
-    usesLegacyPin,
-    paymentTiming: order?.payment_timing,
-    paymentMethod: order?.payment_method,
-    paymentStatus: order?.payment_status,
-    payAfterMerchantConfirm: order?.pay_after_merchant_confirm,
-  });
   const [problemOpen, setProblemOpen] = useState(false);
-  const { orders, loading: ordersLoading, error: ordersError } = useClientOrders(true);
-  const firstOrderJourney = useFirstOrderClientJourney({
-    order,
-    clientOrders: ordersLoading || ordersError ? null : orders,
-  });
+  const [refundOpen, setRefundOpen] = useState(false);
 
   const [mapOpen, setMapOpen] = useState(false);
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -379,86 +335,68 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     orderToPhaseInput(order, { usesLegacyPin }),
     'client'
   );
-  const primaryActionId = phaseInfo.primaryActionId;
   const canShowRatePrimary = !!(
     eligibility?.canRateAgent || eligibility?.canRateItem
   );
-  
-  // Check for deposit pending state
   const depositIsPending = isDepositPending(order);
-  
-  const stickyPrimaryId =
-    reorderFlow.enabled
-      ? 'reorder'
-      : primaryActionId === 'rate' && !canShowRatePrimary
-        ? 'none'
-        : primaryActionId;
-  const showStickyPrimary = [
-    'pay',
-    'send_pin',
-    'rate',
-    'complete',
-    ...(canConfirmDelivery ? [] : ['confirm_receipt']),
-    'reorder',
-  ].includes(stickyPrimaryId);
-  
-  // Determine the label for the sticky primary button
-  let primaryLabelKey: string;
-  let primaryLabelDefault: string;
-  
-  if (stickyPrimaryId === 'reorder') {
-    primaryLabelKey = 'orders.reorder.cta';
-    primaryLabelDefault = 'Reorder';
-  } else if (stickyPrimaryId === 'pay') {
+  const ranked = rankClientOrderDetailActions(order, {
+    canRate: canShowRatePrimary,
+    reorderEnabled: reorderFlow.enabled,
+    confirmReceiptOnCard: false,
+    usesLegacyPin,
+  });
+  const stickyPrimaryId = ranked.primary?.id ?? 'none';
+  const showStickyBar =
+    !!ranked.primary || !!ranked.companion || ranked.overflow.length > 0;
+
+  let primaryLabel: string | undefined;
+  if (stickyPrimaryId === 'pay') {
     if (depositIsPending) {
-      // Deposit pending: show "Pay deposit" CTA
-      primaryLabelKey = 'deposit.payDepositCta';
-      primaryLabelDefault = 'Pay deposit · {{amount}} {{currency}}';
-    } else if (order.payment_timing === 'pay_at_pickup') {
-      // Pay at pickup: show remainder when deposit already paid
-      if ((order.deposit_amount ?? 0) > 0 && order.deposit_status === 'paid') {
-        primaryLabelKey = 'orders.payAtPickup.ctaAmount';
-        primaryLabelDefault = 'Pay now · {{amount}} {{currency}}';
-      } else {
-        primaryLabelKey = 'orders.payAtPickup.cta';
-        primaryLabelDefault = 'Pay now';
-      }
-    } else {
-      // Default pay label
-      [primaryLabelKey, primaryLabelDefault] = ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
+      primaryLabel = t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
+        amount: order.deposit_amount ?? 0,
+        currency: order.currency || 'XAF',
+      });
+    } else if (
+      order.payment_timing === 'pay_at_pickup' &&
+      (order.deposit_amount ?? 0) > 0 &&
+      order.deposit_status === 'paid'
+    ) {
+      primaryLabel = t('orders.payAtPickup.ctaAmount', 'Pay now · {{amount}} {{currency}}', {
+        amount: remainingAfterDeposit(order),
+        currency: order.currency || 'XAF',
+      });
+    } else if (ORDER_PRIMARY_ACTION_LABEL.pay) {
+      const [key, fallback] = ORDER_PRIMARY_ACTION_LABEL.pay;
+      primaryLabel = t(key, fallback);
     }
-  } else {
-    [primaryLabelKey, primaryLabelDefault] = ORDER_PRIMARY_ACTION_LABEL[stickyPrimaryId];
   }
-  
+
   const showCancel = clientCanCancelOrder(order);
   const showNoAgentOptions = clientShowNoAgentOptions(order);
-  
-  // Determine if cancel should show forfeit warning (Out for delivery or Ready for pickup)
-  const isForfeitRiskState = 
-    order.current_status === 'out_for_delivery' || 
+  const isForfeitRiskState =
+    order.current_status === 'out_for_delivery' ||
     order.current_status === 'ready_for_pickup';
   const depositAmount = order.deposit_amount ?? null;
-  const showForfeitDialog = showCancel && isForfeitRiskState && depositAmount != null && depositAmount > 0;
-  
+  const showForfeitDialog =
+    showCancel && isForfeitRiskState && depositAmount != null && depositAmount > 0;
+
   const scrollPad = {
     paddingHorizontal: spacing.sm,
     paddingTop: spacing.sm,
-    paddingBottom: showStickyPrimary || showCancel ? 120 : tabPad,
+    paddingBottom: showStickyBar ? 140 : tabPad,
   };
   const cur = order.currency || 'XAF';
-  const showPin = clientShowDeliveryPin(order, usesLegacyPin);
   const showMap = clientShowAgentLocation(status, order.fulfillment_method);
   const isShipping = isCarrierShipping(order.fulfillment_method);
-  const journey = getClientOrderJourney(order);
-  const pinInJourney = showPin && journey.emphasizePinCta;
-  const showPinInActions = showPin && !pinInJourney;
-  const itemRatingLocked =
-    !!eligibility &&
-    !eligibility.canRateItem &&
-    !!eligibility.itemRatingUnlocksAt &&
-    new Date(eligibility.itemRatingUnlocksAt) > new Date() &&
-    eligibility.items.some((i) => !i.rated);
+  const nowSubtitle =
+    clientVm?.nextStepMessage ||
+    (phaseInfo.nextStepKey ? t(phaseInfo.nextStepKey, '') : null);
+  const nowTitle =
+    clientVm?.heroTitle ?? t(`common.orderStatus.${status}`, status);
+  const orderNowSubtitle =
+    [nowSubtitle, clientVm?.etaText].filter(Boolean).join('\n') || undefined;
+  const showTrackingHero =
+    phaseInfo.phase === 'in_delivery' || showMap;
 
   const runCompleteOrder = async () => {
     setActionLoading(true);
@@ -647,18 +585,16 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
     }
   };
 
-  const onStickyPrimaryPress = () => {
-    if (stickyPrimaryId === 'reorder') {
+  const onBarAction = (actionId: string) => {
+    if (actionId === 'reorder') {
       void reorderFlow.onReorderPress();
       return;
     }
-    if (stickyPrimaryId === 'pay') {
-      // Check for deposit pending first
+    if (actionId === 'pay') {
       if (depositIsPending) {
         void runPayDeposit();
         return;
       }
-      // Cooked-food MoMo after confirm: retry lives in the payment summary card.
       if (
         order.pay_after_merchant_confirm === true &&
         order.current_status === 'confirmed'
@@ -666,16 +602,14 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
         scrollRef.current?.scrollTo({ y: paymentSectionY.current, animated: true });
         return;
       }
-      // Then check for pay at pickup
       if (order.payment_timing === 'pay_at_pickup') {
         setPayPickupOpen(true);
         return;
       }
-      // Default: scroll to payment section
       scrollRef.current?.scrollTo({ y: paymentSectionY.current, animated: true });
       return;
     }
-    if (stickyPrimaryId === 'rate') {
+    if (actionId === 'rate') {
       const mode = eligibility?.canRateAgent
         ? 'agent'
         : eligibility?.canRateItem
@@ -684,18 +618,72 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
       if (mode) setRateMode(mode);
       return;
     }
-    if (stickyPrimaryId === 'confirm_receipt') {
+    if (actionId === 'confirm_receipt') {
+      if (confirmState?.confirmVariant && !confirmState.isStripeRail) {
+        void navigateToDeliveryConfirm(order.id, 'in_app');
+        return;
+      }
       void runConfirmReceipt();
       return;
     }
-    if (stickyPrimaryId === 'complete') void runCompleteOrder();
+    if (actionId === 'complete') {
+      void runCompleteOrder();
+      return;
+    }
+    if (actionId === 'cancel') {
+      if (showForfeitDialog) {
+        setForfeitCancelOpen(true);
+      } else {
+        setCancelOpen(true);
+      }
+      trackCancellationEvent('cancellation_dialog_opened', {
+        orderId: order.id,
+        orderStatus: status,
+        paymentSource: (order as { payment_source?: string }).payment_source ?? '',
+      });
+      return;
+    }
+    if (actionId === 'ask_if_ready') {
+      void (async () => {
+        setActionLoading(true);
+        try {
+          await agentApi.orders.remindReady(orderId);
+          setSnack(
+            t(
+              'orderActions.askIfReadySuccess',
+              'We asked the store if your order is ready'
+            )
+          );
+          void refetch();
+        } catch (e: unknown) {
+          setSnack(
+            e instanceof Error
+              ? e.message
+              : t('common.genericError', 'Something went wrong.')
+          );
+        } finally {
+          setActionLoading(false);
+        }
+      })();
+      return;
+    }
+    if (actionId === 'switch_to_pickup') {
+      setNoAgentOpen(true);
+      return;
+    }
+    if (actionId === 'request_refund') {
+      setRefundOpen(true);
+      return;
+    }
+    if (actionId === 'report_problem') {
+      setProblemOpen(true);
+    }
   };
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
       <ScrollView ref={scrollRef} contentContainerStyle={scrollPad} showsVerticalScrollIndicator={false}>
 
-        {/* ── Timeline ─────────────────────────────────────────────────── */}
         <EatInUnavailableNotice order={order} />
 
         <ClientOrderHeroCard
@@ -706,94 +694,40 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           onRefetch={() => void refetch()}
         />
 
-        {firstOrderJourney ? (
-          <FirstOrderJourneyCard
-            journey={firstOrderJourney}
-            storeAddress={order.business_location?.address}
-            storeName={order.business_location?.name}
-          />
-        ) : (
-          <OrderPhaseBanner order={order} role="client" />
-        )}
-
-        {firstOrderJourney ? null : (
-          <OrderJourneyTimeline
-            input={orderToPhaseInput(order)}
-            agentName={order.assigned_agent?.user?.first_name}
-          />
-        )}
-        <ClientTrackingHero
-          phase={phaseInfo.phase}
-          status={order.current_status}
-          fulfillment={order.fulfillment_method}
-          agentName={order.assigned_agent?.user?.first_name}
-          storeName={order.business_location?.name}
-          storeAddress={order.business_location?.address?.address_line_1}
-          onOpenMap={phaseInfo.phase === 'in_delivery' ? () => setMapOpen(true) : undefined}
-        />
-
-        {canConfirmDelivery ? (
-          <ClientConfirmReceiptCard
-            state={confirmState}
-            busy={actionLoading}
-            onConfirm={() => void runConfirmReceipt()}
-            onReportProblem={() => setProblemOpen(true)}
-            onOpenConfirmScreen={
-              confirmState?.confirmVariant && !confirmState.isStripeRail
-                ? () => void navigateToDeliveryConfirm(order.id, 'in_app')
-                : undefined
-            }
-          />
-        ) : null}
+        <OrderNowLine title={nowTitle} subtitle={orderNowSubtitle} />
 
         {showNoAgentOptions ? (
-          <View style={{ marginBottom: SECTION_GAP }}>
-            <View
-              style={{
-                backgroundColor: colors.warning.main + '15',
-                borderRadius: borderRadius.md,
-                padding: spacing.md,
-                gap: spacing.sm,
-              }}
-            >
-              <Text variant="titleSmall" style={{ color: colors.warning.dark }}>
-                {t('orders.noAgent.bannerTitle', "We couldn't find a nearby courier")}
-              </Text>
-              <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-                {t(
-                  'orders.noAgent.bannerBody',
-                  'Switch to store pickup (fee waived) or cancel the order.'
-                )}
-              </Text>
-              <Button mode="contained-tonal" onPress={() => setNoAgentOpen(true)}>
-                {t('orders.noAgent.viewOptions', 'View options')}
-              </Button>
-            </View>
-          </View>
+          <OrderExceptionLine
+            title={t('orders.noAgent.bannerTitle', "We couldn't find a nearby courier")}
+            body={t(
+              'orders.noAgent.bannerBody',
+              'Switch to store pickup (fee waived) or cancel the order.'
+            )}
+            actionLabel={t('orders.noAgent.viewOptions', 'View options')}
+            onAction={() => setNoAgentOpen(true)}
+          />
         ) : null}
 
         {order.current_status === 'pending' &&
         (order.busy_extra_prep_minutes ?? 0) > 0 &&
         order.estimated_prep_minutes ? (
-          <View style={{ marginBottom: SECTION_GAP }}>
-            <OrderBusyDemandBanner
-              estimatedPrepMinutes={order.estimated_prep_minutes}
-              showActions={false}
-            />
-          </View>
+          <OrderBusyDemandBanner
+            estimatedPrepMinutes={order.estimated_prep_minutes}
+            showActions={false}
+          />
         ) : null}
 
-        {firstOrderJourney ? null : (
-          <View style={{ marginBottom: SECTION_GAP }}>
-            <ClientOrderJourneyCard
-              order={order}
-              variant="full"
-              showPinAction={false}
-              onPinSent={onPinSent}
-              onPinError={onPinError}
-            />
-          </View>
-        )}
+        {showTrackingHero ? (
+          <ClientTrackingHero
+            phase={phaseInfo.phase}
+            status={order.current_status}
+            fulfillment={order.fulfillment_method}
+            agentName={order.assigned_agent?.user?.first_name}
+            storeName={order.business_location?.name}
+            storeAddress={order.business_location?.address?.address_line_1}
+            onOpenMap={showMap ? () => setMapOpen(true) : undefined}
+          />
+        ) : null}
 
         {isShipping ? (
           <ShippingTrackingCard
@@ -803,90 +737,10 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           />
         ) : null}
 
-        {isOrderRefundRequestAllowed(order.completed_at) ? (
-          <ClientRefundRequestButton orderId={order.id} />
-        ) : null}
-
-        {/* ── Rating CTAs (eligibility-driven) ─────────────────────────── */}
-        {eligibility &&
-        (eligibility.canRateAgent || eligibility.canRateItem || itemRatingLocked) ? (
-          <SectionCard title={t('rating.sectionTitle', 'Rate this order')} style={styles.section}>
-            <View style={styles.actionsRow}>
-              {eligibility.canRateAgent ? (
-                <Button
-                  mode="contained"
-                  icon="star"
-                  onPress={() => setRateMode('agent')}
-                  style={styles.actionBtn}
-                  contentStyle={styles.actionBtnContent}
-                >
-                  {t('rating.rateAgentCta', 'Rate delivery agent')}
-                </Button>
-              ) : null}
-              {eligibility.canRateItem ? (
-                <Button
-                  mode="contained"
-                  icon="star"
-                  onPress={() => setRateMode('item')}
-                  style={styles.actionBtn}
-                  contentStyle={styles.actionBtnContent}
-                >
-                  {t('rating.rateItemsCta', 'Rate your items')}
-                </Button>
-              ) : null}
-            </View>
-            {itemRatingLocked && eligibility.itemRatingUnlocksAt ? (
-              <Text
-                variant="bodySmall"
-                style={{ color: colors.text.secondary, marginTop: spacing.xs }}
-              >
-                {t('rating.itemRatingUnlocksOn', 'You can rate your items from {{date}}', {
-                  date: new Date(eligibility.itemRatingUnlocksAt).toLocaleDateString(locale),
-                })}
-              </Text>
-            ) : null}
-          </SectionCard>
-        ) : null}
-
-        {/* ── Actions (prominent primary actions) ──────────────────────── */}
-        {(showPinInActions || showMap) ? (
-          <SectionCard title={t('orders.clientManage.actionsTitle', 'Actions')} style={styles.section}>
-            <View style={styles.actionsRow}>
-              {showMap ? (
-                <Button mode="contained" icon="map" onPress={() => setMapOpen(true)} style={styles.actionBtn} contentStyle={styles.actionBtnContent}>
-                  {t('orders.viewOnMap', 'View agent on map')}
-                </Button>
-              ) : null}
-              {showPinInActions ? (
-                <View style={styles.actionBtn}>
-                  <SendDeliveryPinButton
-                    orderId={orderId}
-                    pinAudience={isStorePickupOrder(order) ? 'business' : 'agent'}
-                    onSent={onPinSent}
-                    onError={onPinError}
-                  />
-                </View>
-              ) : null}
-            </View>
-          </SectionCard>
-        ) : null}
-
-        {/* ── Payment summary ───────────────────────────────────────────── */}
-        <View onLayout={(event) => { paymentSectionY.current = event.nativeEvent.layout.y; }}>
-          <OrderClientSummaryCard
-            order={order}
-            locale={locale}
-            cardStyle={styles.section}
-            onRefetch={() => void refetch()}
-            onNotify={(msg) => setSnack(msg)}
-            onAwaitingPayment={(params) =>
-              navigation.navigate('MobileMoneyAwaitingPayment', params)
-            }
-          />
-        </View>
-
-        {/* ── Items ────────────────────────────────────────────────────── */}
-        <SectionCard title={t('orders.orderItems', 'Items')} style={styles.section}>
+        <ExpandableSection
+          title={t('orders.orderItems', 'Items')}
+          defaultExpanded
+        >
           {(order.order_items ?? []).map((oi, idx) => {
             const imageUri = orderItemImageUrl(oi);
             return (
@@ -900,17 +754,35 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
                       resizeMode="cover"
                     />
                   ) : (
-                    <View style={[styles.itemThumb, styles.itemThumbFallback, { backgroundColor: colors.pageBackground, borderColor: colors.divider }]}>
-                      <MaterialCommunityIcons name="package-variant-closed" size={24} color={colors.text.secondary} />
+                    <View
+                      style={[
+                        styles.itemThumb,
+                        styles.itemThumbFallback,
+                        {
+                          backgroundColor: colors.pageBackground,
+                          borderColor: colors.divider,
+                        },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name="package-variant-closed"
+                        size={24}
+                        color={colors.text.secondary}
+                      />
                     </View>
                   )}
                   <View style={{ flex: 1, minWidth: 0 }}>
                     <Text variant="bodyLarge" numberOfLines={2}>
                       {itemLabel(oi)}
                     </Text>
-                    <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 2 }}>
+                    <Text
+                      variant="bodySmall"
+                      style={{ color: colors.text.secondary, marginTop: 2 }}
+                    >
                       {t('orders.quantity', 'Qty')}: {oi.quantity}
-                      {oi.total_price != null ? ` · ${formatCurrency(oi.total_price, cur, locale)}` : ''}
+                      {oi.total_price != null
+                        ? ` · ${formatCurrency(oi.total_price, cur, locale)}`
+                        : ''}
                     </Text>
                   </View>
                 </View>
@@ -928,29 +800,59 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
               />
             </>
           ) : null}
-        </SectionCard>
+        </ExpandableSection>
 
-        {clientVm?.contacts.recipient ? (
-          <View style={styles.section}>
-            <ContactCard
-              title={t('orders.deliveryContactRecipient', 'Recipient')}
-              contact={{
-                ...clientVm.contacts.recipient,
-                subtitle: t('orders.recipientReceives', 'Receives this order'),
-              }}
-            />
-          </View>
-        ) : null}
-
-        {/* ── Delivery / Pickup ─────────────────────────────────────────── */}
-        <SectionCard
-          title={
-            isPickup
-              ? t('orders.pickupSection', 'Store pickup')
-              : t('orders.deliveryLabel', 'Delivery')
-          }
-          style={styles.section}
+        <View
+          onLayout={(event) => {
+            paymentSectionY.current = event.nativeEvent.layout.y;
+          }}
         >
+          <ExpandableSection title={t('orders.detail.money', 'Money')}>
+            <OrderClientSummaryCard
+              order={order}
+              locale={locale}
+              onRefetch={() => void refetch()}
+              onNotify={(msg) => setSnack(msg)}
+              onAwaitingPayment={(params) =>
+                navigation.navigate('MobileMoneyAwaitingPayment', params)
+              }
+              hidePaymentActions
+            />
+          </ExpandableSection>
+        </View>
+
+        <ExpandableSection title={t('orders.detail.peopleAndPlace', 'People & place')}>
+          {clientVm?.contacts.recipient ? (
+            <View style={{ marginBottom: spacing.sm }}>
+              <ContactCard
+                title={t('orders.deliveryContactRecipient', 'Recipient')}
+                contact={{
+                  ...clientVm.contacts.recipient,
+                  subtitle: t('orders.recipientReceives', 'Receives this order'),
+                }}
+              />
+            </View>
+          ) : null}
+          {clientVm?.contacts.business ? (
+            <View style={{ marginBottom: spacing.sm }}>
+              <ContactCard
+                title={
+                  isPickup
+                    ? t('orders.contact.store', 'Store contact')
+                    : t('orders.client.actions.contactBusiness', 'Contact business')
+                }
+                contact={clientVm.contacts.business}
+              />
+            </View>
+          ) : null}
+          {clientVm?.contacts.agent ? (
+            <View style={{ marginBottom: spacing.sm }}>
+              <ContactCard
+                title={t('orders.client.actions.contactAgent', 'Contact delivery agent')}
+                contact={clientVm.contacts.agent}
+              />
+            </View>
+          ) : null}
           <InfoRow
             icon="storefront-outline"
             label={
@@ -975,26 +877,14 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
               truncate={false}
             />
           ) : null}
-          {isPickup && clientVm?.contacts.business ? (
-            <>
-              <Divider style={{ marginVertical: spacing.xs }} />
-              <ContactCard
-                title={t('orders.contact.store', 'Store contact')}
-                contact={clientVm.contacts.business}
-              />
-            </>
-          ) : null}
           {!isPickup ? (
-            <>
-              <Divider style={{ marginVertical: spacing.xs }} />
-              <InfoRow
-                icon="map-marker-outline"
-                label={t('orders.deliveryAddressLabel', 'Deliver to')}
-                value={formatAddress(order.delivery_address) || '—'}
-                vertical
-                truncate={false}
-              />
-            </>
+            <InfoRow
+              icon="map-marker-outline"
+              label={t('orders.deliveryAddressLabel', 'Deliver to')}
+              value={formatAddress(order.delivery_address) || '—'}
+              vertical
+              truncate={false}
+            />
           ) : null}
           {slotWindow || slotLabel || (order.delivery_time_windows?.length ?? 0) > 0 ? (
             <>
@@ -1027,84 +917,30 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
               ) : null}
             </>
           ) : null}
-        </SectionCard>
+        </ExpandableSection>
 
       </ScrollView>
 
-      {showStickyPrimary || showCancel ? (
-        <View
-          style={{
-            paddingHorizontal: spacing.sm,
-            paddingTop: spacing.sm,
-            paddingBottom: insets.bottom + spacing.sm,
-            borderTopWidth: 1,
-            borderTopColor: colors.divider,
-            backgroundColor: colors.surface,
-            gap: spacing.sm,
-          }}
-        >
-          {stickyPrimaryId === 'send_pin' ? (
-            <SendDeliveryPinButton
-              orderId={orderId}
-              pinAudience={isStorePickupOrder(order) ? 'business' : 'agent'}
-              onSent={onPinSent}
-              onError={onPinError}
-            />
-          ) : showStickyPrimary ? (
-            <Button
-              mode="contained"
-              buttonColor={stickyPrimaryId === 'pay' ? colors.cta.main : undefined}
-              textColor={stickyPrimaryId === 'pay' ? colors.cta.contrast : undefined}
-              loading={
-                stickyPrimaryId === 'reorder'
-                  ? reorderFlow.loading
-                  : actionLoading || payDepositLoading
-              }
-              onPress={onStickyPrimaryPress}
-              accessibilityLabel={
-                stickyPrimaryId === 'reorder'
-                  ? t('orders.reorder.ctaA11y', 'Reorder this order')
-                  : undefined
-              }
-            >
-              {depositIsPending
-                ? t('deposit.payDepositCta', 'Pay deposit · {{amount}} {{currency}}', {
-                    amount: order.deposit_amount ?? 0,
-                    currency: order.currency || 'XAF',
-                  })
-                : stickyPrimaryId === 'pay' &&
-                    order.payment_timing === 'pay_at_pickup' &&
-                    (order.deposit_amount ?? 0) > 0 &&
-                    order.deposit_status === 'paid'
-                  ? t(primaryLabelKey, primaryLabelDefault, {
-                      amount: remainingAfterDeposit(order),
-                      currency: order.currency || 'XAF',
-                    })
-                  : t(primaryLabelKey, primaryLabelDefault)}
-            </Button>
-          ) : null}
-          {showCancel ? (
-          <Button
-            mode="outlined"
-            textColor={colors.error.main}
-            icon="close-circle-outline"
-            onPress={() => {
-              if (showForfeitDialog) {
-                setForfeitCancelOpen(true);
-              } else {
-                setCancelOpen(true);
-              }
-              trackCancellationEvent('cancellation_dialog_opened', {
-                orderId: order.id,
-                orderStatus: status,
-                paymentSource: (order as any).payment_source ?? '',
-              });
-            }}
-          >
-            {t('orderActions.cancelOrder', 'Cancel order')}
-          </Button>
-          ) : null}
-        </View>
+      {showStickyBar ? (
+        <OrderActionBar
+          ranked={ranked}
+          primaryLabel={primaryLabel}
+          accentPrimary={stickyPrimaryId === 'pay'}
+          busy={actionLoading || payDepositLoading || reorderFlow.loading}
+          renderPrimary={
+            stickyPrimaryId === 'send_pin'
+              ? () => (
+                  <SendDeliveryPinButton
+                    orderId={orderId}
+                    pinAudience={isStorePickupOrder(order) ? 'business' : 'agent'}
+                    onSent={onPinSent}
+                    onError={onPinError}
+                  />
+                )
+              : null
+          }
+          onAction={onBarAction}
+        />
       ) : null}
 
       <AgentLocationMapModal visible={mapOpen} orderId={orderId} onDismiss={() => setMapOpen(false)} />
@@ -1221,6 +1057,16 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
         onAdd={reorderFlow.onAdd}
         onDismiss={reorderFlow.onDismissSheet}
       />
+      <ClientRefundRequestButton
+        orderId={order.id}
+        hideButton
+        open={refundOpen}
+        onOpenChange={setRefundOpen}
+        onSubmitted={() => {
+          setSnack(t('orders.refunds.requested', 'Your refund request was sent.'));
+          void refetch();
+        }}
+      />
       <Snackbar
         visible={!!(snack || reorderFlow.snack)}
         onDismiss={() => {
@@ -1237,10 +1083,6 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  section: { marginBottom: SECTION_GAP },
-  actionsRow: { flexDirection: 'column', gap: 8 },
-  actionBtn: { borderRadius: 16 },
-  actionBtnContent: { height: 48 },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   itemThumb: { width: 52, height: 52, borderRadius: 10 },
   itemThumbFallback: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },

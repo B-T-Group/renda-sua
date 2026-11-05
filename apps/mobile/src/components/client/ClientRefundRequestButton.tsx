@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -7,25 +7,64 @@ import { AppButton } from '../common/AppButton';
 import { AppText } from '../common/AppText';
 import { BottomSheet } from '../common/BottomSheet';
 
-const REASONS: RefundRequestReason[] = ['not_delivered', 'wrong_item', 'damaged', 'quality_issue', 'missing_parts', 'other'];
+const REASONS: RefundRequestReason[] = [
+  'not_delivered',
+  'wrong_item',
+  'damaged',
+  'quality_issue',
+  'missing_parts',
+  'other',
+];
+
+type Props = {
+  orderId: string;
+  /** Controlled sheet — when set, hides the inline button. */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  onSubmitted?: () => void;
+  /** Hide the outline button (sheet-only mode for sticky bar). */
+  hideButton?: boolean;
+};
 
 /** Asks for a refund through the existing order refund endpoint. */
-export function ClientRefundRequestButton({ orderId }: { orderId: string }) {
+export function ClientRefundRequestButton({
+  orderId,
+  open: controlledOpen,
+  onOpenChange,
+  onSubmitted,
+  hideButton,
+}: Props) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const { createRefundRequest, loading, error } = useOrderRefunds();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const [done, setDone] = useState(false);
+
+  const isControlled = controlledOpen !== undefined;
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
+
+  useEffect(() => {
+    if (controlledOpen === true) setDone(false);
+  }, [controlledOpen]);
 
   const submit = async (reason: RefundRequestReason) => {
     try {
       await createRefundRequest(orderId, { reason });
       setDone(true);
       setOpen(false);
+      onSubmitted?.();
     } catch {
       /* error is stored on the hook */
     }
   };
+
+  if (done && hideButton) {
+    return null;
+  }
 
   if (done) {
     return (
@@ -36,14 +75,20 @@ export function ClientRefundRequestButton({ orderId }: { orderId: string }) {
   }
 
   return (
-    <View style={{ marginBottom: spacing.md }}>
-      <AppButton
-        label={t('orders.refunds.request', 'Request a refund')}
-        variant="outline"
-        size="medium"
-        onPress={() => setOpen(true)}
-      />
-      <BottomSheet visible={open} onClose={() => setOpen(false)} title={t('orders.refunds.request', 'Request a refund')}>
+    <View style={{ marginBottom: hideButton ? 0 : spacing.md }}>
+      {hideButton ? null : (
+        <AppButton
+          label={t('orders.refunds.request', 'Request a refund')}
+          variant="outline"
+          size="medium"
+          onPress={() => setOpen(true)}
+        />
+      )}
+      <BottomSheet
+        visible={open === true}
+        onClose={() => setOpen(false)}
+        title={t('orders.refunds.request', 'Request a refund')}
+      >
         {REASONS.map((reason) => (
           <Pressable
             key={reason}
@@ -51,11 +96,15 @@ export function ClientRefundRequestButton({ orderId }: { orderId: string }) {
             onPress={() => void submit(reason)}
             style={{ minHeight: 44, justifyContent: 'center' }}
           >
-            <AppText role="body">{t(`orders.refunds.reasons.${reason}`, reasonLabel(reason))}</AppText>
+            <AppText role="body">
+              {t(`orders.refunds.reasons.${reason}`, reasonLabel(reason))}
+            </AppText>
           </Pressable>
         ))}
         {error ? (
-          <AppText role="bodySmall" color={colors.error.main}>{error}</AppText>
+          <AppText role="bodySmall" color={colors.error.main}>
+            {error}
+          </AppText>
         ) : null}
       </BottomSheet>
     </View>

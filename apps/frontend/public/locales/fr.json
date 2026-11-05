@@ -5326,6 +5326,13 @@
       "noTableKitchen": "Il n'y a pas de table. Le client a été prévenu. S'il approuve le paiement, préparez la commande à emporter.",
       "noTableClient": "Il n'y a pas de table. Approuvez la demande de paiement pour emporter, ou annulez la commande."
     },
+    "actionBar": {
+      "more": "Plus d'actions"
+    },
+    "detail": {
+      "money": "Paiement",
+      "peopleAndPlace": "Personnes et lieu"
+    },
     "cashReconciliationViewBanner": "Affichage des commandes en attente de rapprochement espèces. Ouvrez une commande pour encaisser le paiement mobile et déclencher les versements.",
     "cashReconciliationClearFilter": "Afficher toutes les commandes",
     "noCashReconciliationOrders": "Aucune commande n'est en attente de rapprochement espèces pour le moment.",

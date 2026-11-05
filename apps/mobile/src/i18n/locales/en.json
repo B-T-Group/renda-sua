@@ -424,6 +424,13 @@
       "noTableKitchen": "There is no table. The customer was told. If they approve the payment, prepare this as take out.",
       "noTableClient": "There is no table. Approve the payment request to take this order out, or cancel it."
     },
+    "actionBar": {
+      "more": "More actions"
+    },
+    "detail": {
+      "money": "Money",
+      "peopleAndPlace": "People & place"
+    },
     "item": "item",
     "items": "items",
     "pickupLabel": "Pick up from",

@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
@@ -25,9 +25,9 @@ import { useIsStripeRail } from '../../../hooks/useIsStripeRail';
 import { agentApi } from '../../../services/agentApi';
 import type { Order } from '../../../types/agent';
 import { Portal, Dialog, Button, Text as PaperText, Snackbar } from 'react-native-paper';
-import { DedicatedReleaseCard } from '../../../components/dedicated/DedicatedReleaseCard';
 import { DedicatedHeadsUpCard } from '../../../components/dedicated/DedicatedHeadsUpCard';
 import { DesignatedOrderCard } from '../../../components/dedicated/DesignatedOrderCard';
+import { OrderActionBar } from '../../../components/orders/OrderActionBar';
 import { AgentClaimConfirmDialog } from '../../../components/dialogs/AgentClaimConfirmDialog';
 import { ClaimTopupFormDialog } from '../../../components/dialogs/ClaimTopupFormDialog';
 import { MarkPaidCashExceptionDialog } from '../../../components/dialogs/MarkPaidCashExceptionDialog';
@@ -42,7 +42,6 @@ import { ActionLoadingDialog } from '../../../components/feedback/ActionLoadingD
 import { hasCashExceptionBlockingDeposit } from '../../../utils/depositResume';
 import { AgentOrderInlineDelivery } from '../../../components/agent/AgentOrderInlineDelivery';
 import { AgentOrderStatusUrgencyRow } from '../../../components/agent/AgentOrderStatusUrgencyRow';
-import { AgentOrderDetailMoreSheet } from '../../../components/agent/AgentOrderDetailMoreSheet';
 import { useStore } from '../../../stores/RootStore';
 import { resolveDefaultClaimTopupPhone } from '../../../utils/defaultClaimTopupPhone';
 import { claimAwaitingParams } from '../../../utils/claimAwaitingNav';
@@ -53,7 +52,6 @@ import {
 } from '../../../utils/agentClaimSetupGate';
 import { mergeOrderForDeliverySuccess } from '../../../utils/mergeOrderForDeliverySuccess';
 import { orderNeedsPayAtDeliveryAgentActions } from '../../../utils/orderPaymentAgentActions';
-import { resolveAmountDueAfterDeposit } from '../../../utils/depositResume';
 import type { OrderDetailScreenProps } from './types';
 import { ExpandableSection } from '../../../components/common/ExpandableSection';
 import {
@@ -61,19 +59,11 @@ import {
   type OrderViewModelContext,
 } from '../../../orders/model';
 import { orderStatusStripeColor } from '../../../utils/clientOrderListDisplay';
-import {
-  agentOrderDetailMoreItems,
-  type AgentOrderMoreItemId,
-} from '../../../utils/agentOrderDetailMoreItems';
-import { resolveAgentOrderPrimaryCta } from '../../../utils/resolveAgentOrderPrimaryCta';
+import { rankAgentOrderDetailActions } from '../../../utils/rankAgentOrderDetailActions';
 import { useDeliveryConfirmation } from '../../../hooks/useDeliveryConfirmation';
 import { captureAndUploadDeliveryProof } from '../../../services/deliveryProofUpload';
 import { resolveUsesLegacyPin } from '../../../utils/deliveryConfirmationUi';
 import type { DeliveryProofPhotoInput } from '../../../types/deliveryConfirmation';
-
-export const AgentOrderDetailMoreRegisterContext = createContext<{
-  setMorePress: (press: (() => void) | null) => void;
-}>({ setMorePress: () => undefined });
 
 type Props = OrderDetailScreenProps;
 
@@ -217,9 +207,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
   const [dropSnack, setDropSnack] = useState<string | null>(null);
   /** Designated agent first owns this order's offer / release UI (hides the legacy cards). */
   const [isDesignated, setIsDesignated] = useState(false);
-  const [moreSheetVisible, setMoreSheetVisible] = useState(false);
   const [footerHeight, setFooterHeight] = useState(0);
-  const { setMorePress } = useContext(AgentOrderDetailMoreRegisterContext);
 
   const prevVerifiedRef = useRef(isVerified);
   useEffect(() => {
@@ -312,38 +300,32 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
     }
   }, [orderId, refetchOrder, requestPickupDelay, t]);
 
-  const moreItems = useMemo(
+  const rankedActions = useMemo(
     () =>
       order
-        ? agentOrderDetailMoreItems({
+        ? rankAgentOrderDetailActions({
             status: order.current_status,
             assignedAgentId: order.assigned_agent_id,
-            pickupExtensionMinutes: order.pickup_extension_minutes,
+            agentSuspended: agentStatus === 'suspended',
             needsPayAtDeliveryActions: orderNeedsPayAtDeliveryAgentActions(order),
+            canSubmitFallback: confirmState?.canSubmitFallback === true,
+            pickupExtensionMinutes: order.pickup_extension_minutes,
             cashExceptionBlocked: hasCashExceptionBlockingDeposit(order),
           })
-        : [],
-    [order]
+        : { primary: null, companion: null, overflow: [] },
+    [order, agentStatus, confirmState?.canSubmitFallback]
   );
 
-  const openMore = useCallback(() => setMoreSheetVisible(true), []);
-
-  useEffect(() => {
-    if (moreItems.length === 0) {
-      setMorePress(null);
-      return () => setMorePress(null);
-    }
-    setMorePress(() => openMore);
-    return () => setMorePress(null);
-  }, [moreItems.length, openMore, setMorePress]);
-
-  const handleMoreSelect = useCallback((id: AgentOrderMoreItemId) => {
-    if (id === 'runningLate') void handleRunningLate();
-    else if (id === 'release') setDropConfirmVisible(true);
-    else if (id === 'reportIssue') setReportModalVisible(true);
-    else if (id === 'failDelivery') setFailModalVisible(true);
-    else setShowCashExceptionDialog(true);
-  }, [handleRunningLate]);
+  const handleBarAction = useCallback(
+    (id: string) => {
+      if (id === 'runningLate') void handleRunningLate();
+      else if (id === 'release') setDropConfirmVisible(true);
+      else if (id === 'reportIssue') setReportModalVisible(true);
+      else if (id === 'failDelivery') setFailModalVisible(true);
+      else if (id === 'markPaidCash') setShowCashExceptionDialog(true);
+    },
+    [handleRunningLate]
+  );
 
   const handlePayAtDeliveryRequestSubmit = useCallback(
     async (phoneOverride?: string) => {
@@ -794,16 +776,12 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
 
   const status = order.current_status;
   const showClientPii = showClientPiiToAgent(order);
-  const needsPayAtDeliveryActions = orderNeedsPayAtDeliveryAgentActions(order);
-  const agentAmountDue = resolveAmountDueAfterDeposit(order);
   const statusLabel = t(`common.orderStatus.${status}`, status);
-  const primaryCta = resolveAgentOrderPrimaryCta({
-    status,
-    assignedAgentId: order.assigned_agent_id,
-    agentSuspended: agentStatus === 'suspended',
-    needsPayAtDeliveryActions,
-    canSubmitFallback: confirmState?.canSubmitFallback === true,
-  });
+  const showStickyBar =
+    !!rankedActions.primary ||
+    !!rankedActions.companion ||
+    rankedActions.overflow.length > 0;
+  const primaryId = rankedActions.primary?.id ?? null;
   const showWaitingCard =
     status === 'awaiting_client_confirmation' || status === 'pending_auto_complete';
   const payAtDeliveryPaid =
@@ -841,7 +819,7 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         contentContainerStyle={[
           styles.scroll,
           {
-            paddingBottom: primaryCta ? footerHeight : tabScrollBottomPad,
+            paddingBottom: showStickyBar ? footerHeight : tabScrollBottomPad,
           },
         ]}
         showsVerticalScrollIndicator={false}
@@ -872,13 +850,10 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         />
 
         {!isDesignated ? (
-          <>
-            <DedicatedReleaseCard order={order} onReleased={goBack} onRefresh={refetchOrder} />
-            <DedicatedHeadsUpCard
-              orderId={order?.id}
-              enabled={status === 'ready_for_pickup' && !order?.assigned_agent_id}
-            />
-          </>
+          <DedicatedHeadsUpCard
+            orderId={order?.id}
+            enabled={status === 'ready_for_pickup' && !order?.assigned_agent_id}
+          />
         ) : null}
 
         <View style={[styles.headerCard, cardStyle]}>
@@ -934,77 +909,10 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
             ) : null}
           </ExpandableSection>
         )}
-
-        {/* Montants – progressive disclosure */}
-        <ExpandableSection title={t('agent.orders.detail.financial', 'Amounts')}>
-          {order.subtotal != null && (
-            <View style={styles.financialRow}>
-              <Text style={[styles.financialLabel, { color: colors.text.secondary }, typography.body2]}>
-                {t('agent.orders.detail.subtotal')}
-              </Text>
-              <Text style={[styles.financialValue, { color: colors.text.primary }, typography.body2]}>
-                {order.subtotal} {order.currency}
-              </Text>
-            </View>
-          )}
-          {(order.base_delivery_fee != null || order.delivery_commission != null) && (
-            <View style={styles.financialRow}>
-              <Text style={[styles.financialLabel, { color: colors.text.secondary }, typography.body2]}>
-                {t('agent.orders.detail.deliveryFee')}
-              </Text>
-              <Text style={[styles.financialValue, { color: colors.text.primary }, typography.body2]}>
-                {order.base_delivery_fee ?? order.delivery_commission ?? 0} {order.currency}
-              </Text>
-            </View>
-          )}
-          {order.tax_amount != null && order.tax_amount > 0 && (
-            <View style={styles.financialRow}>
-              <Text style={[styles.financialLabel, { color: colors.text.secondary }, typography.body2]}>
-                {t('agent.orders.detail.tax')}
-              </Text>
-              <Text style={[styles.financialValue, { color: colors.text.primary }, typography.body2]}>
-                {order.tax_amount} {order.currency}
-              </Text>
-            </View>
-          )}
-          {order.total_amount != null && (
-            <View style={[styles.financialRow, styles.financialRowTotal]}>
-              <Text style={[styles.financialLabel, { color: colors.text.primary }, typography.subtitle2]}>
-                {t('agent.orders.detail.total')}
-              </Text>
-              <Text style={[styles.financialValue, { color: colors.text.primary }, typography.subtitle2]}>
-                {order.total_amount} {order.currency}
-              </Text>
-            </View>
-          )}
-          {(order.deposit_amount ?? 0) > 0 && order.deposit_status === 'paid' ? (
-            <>
-              <View style={styles.financialRow}>
-                <Text style={[styles.financialLabel, { color: colors.text.secondary }, typography.body2]}>
-                  {t('agent.orders.detail.depositPaid', 'Deposit paid')}
-                </Text>
-                <Text style={[styles.financialValue, { color: colors.text.primary }, typography.body2]}>
-                  {order.deposit_amount} {order.currency}
-                </Text>
-              </View>
-              {agentAmountDue != null ? (
-                <View style={[styles.financialRow, styles.financialRowTotal]}>
-                  <Text style={[styles.financialLabel, { color: colors.text.primary }, typography.subtitle2]}>
-                    {t('agent.orders.detail.amountDue', 'Amount due')}
-                  </Text>
-                  <Text style={[styles.financialValue, { color: colors.primary.main }, typography.subtitle2]}>
-                    {agentAmountDue} {order.currency}
-                  </Text>
-                </View>
-              ) : null}
-            </>
-          ) : null}
-        </ExpandableSection>
       </ScrollView>
 
-      {primaryCta ? (
+      {showStickyBar ? (
         <View
-          onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
           style={[
             styles.stickyActions,
             {
@@ -1014,99 +922,132 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
             },
           ]}
         >
-          {primaryCta === 'claim' ? (
-            <Pressable
-              style={[
-                styles.actionBtn,
-                {
-                  backgroundColor: ordersCanClaim ? colors.primary.main : colors.surface,
-                  borderWidth: ordersCanClaim ? 0 : 1,
-                  borderColor: colors.primary.main,
-                  borderRadius: borderRadius.md,
-                },
-              ]}
-              onPress={handleClaimStart}
-              disabled={actionLoading || claimLoading}
-            >
-              {claimLoading ? (
-                <ActivityIndicator size="small" color={ordersCanClaim ? colors.primary.contrast : colors.primary.main} />
-              ) : (
-                <>
-                  <MaterialCommunityIcons
-                    name={ordersCanClaim ? 'hand-back-right-outline' : 'lock-outline'}
-                    size={20}
-                    color={ordersCanClaim ? colors.primary.contrast : colors.primary.main}
-                  />
-                  <Text style={[styles.actionBtnText, { color: ordersCanClaim ? colors.primary.contrast : colors.primary.main }, typography.button]}>
-                    {claimButtonLabel}
-                  </Text>
-                </>
-              )}
-            </Pressable>
-          ) : null}
-          {primaryCta === 'pickUp' ? (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
-              onPress={() => setLifecycleActionConfirm('pickUp')}
-              disabled={actionLoading}
-            >
-              <MaterialCommunityIcons name="package-variant" size={20} color={colors.primary.contrast} />
-              <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
-                {t('agent.orders.detail.pickUp')}
-              </Text>
-            </Pressable>
-          ) : null}
-          {primaryCta === 'outForDelivery' ? (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
-              onPress={() => setLifecycleActionConfirm('outForDelivery')}
-              disabled={actionLoading}
-            >
-              <MaterialCommunityIcons name="map-marker-path" size={20} color={colors.primary.contrast} />
-              <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
-                {t('agent.orders.detail.outForDelivery')}
-              </Text>
-            </Pressable>
-          ) : null}
-          {primaryCta === 'requestPayment' ? (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.success.main, borderRadius: borderRadius.md }]}
-              onPress={() => setShowRequestPayAtDeliveryDialog(true)}
-              disabled={actionLoading || payAtDeliveryDialogLoading}
-            >
-              <MaterialCommunityIcons name="cellphone-message" size={20} color={colors.primary.contrast} />
-              <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
-                {t('agent.orders.payAtDelivery.requestPayment', { defaultValue: 'Request payment' })}
-              </Text>
-            </Pressable>
-          ) : null}
-          {primaryCta === 'markDelivered' ? (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
-              onPress={() => void handleMarkDelivered()}
-              disabled={actionLoading}
-            >
-              <MaterialCommunityIcons name="check-circle" size={20} color={colors.primary.contrast} />
-              <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
-                {t('agent.orders.detail.markDelivered')}
-              </Text>
-            </Pressable>
-          ) : null}
-          {primaryCta === 'clientCouldNotConfirm' ? (
-            <Pressable
-              style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
-              onPress={() => {
-                setFallbackError(null);
-                setFallbackSheetVisible(true);
-              }}
-              disabled={actionLoading}
-            >
-              <MaterialCommunityIcons name="camera" size={20} color={colors.primary.contrast} />
-              <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
-                {t('orders.clientConfirm.agentFallbackCta', "Client couldn't confirm")}
-              </Text>
-            </Pressable>
-          ) : null}
+          <OrderActionBar
+            plain
+            ranked={rankedActions}
+            busy={actionLoading || claimLoading || payAtDeliveryDialogLoading}
+            onAction={handleBarAction}
+            onLayoutHeight={setFooterHeight}
+            renderPrimary={() => {
+              if (primaryId === 'claim') {
+                return (
+                  <Pressable
+                    style={[
+                      styles.actionBtn,
+                      {
+                        backgroundColor: ordersCanClaim ? colors.primary.main : colors.surface,
+                        borderWidth: ordersCanClaim ? 0 : 1,
+                        borderColor: colors.primary.main,
+                        borderRadius: borderRadius.md,
+                      },
+                    ]}
+                    onPress={handleClaimStart}
+                    disabled={actionLoading || claimLoading}
+                  >
+                    {claimLoading ? (
+                      <ActivityIndicator
+                        size="small"
+                        color={ordersCanClaim ? colors.primary.contrast : colors.primary.main}
+                      />
+                    ) : (
+                      <>
+                        <MaterialCommunityIcons
+                          name={ordersCanClaim ? 'hand-back-right-outline' : 'lock-outline'}
+                          size={20}
+                          color={ordersCanClaim ? colors.primary.contrast : colors.primary.main}
+                        />
+                        <Text
+                          style={[
+                            styles.actionBtnText,
+                            {
+                              color: ordersCanClaim ? colors.primary.contrast : colors.primary.main,
+                            },
+                            typography.button,
+                          ]}
+                        >
+                          {claimButtonLabel}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                );
+              }
+              if (primaryId === 'pickUp') {
+                return (
+                  <Pressable
+                    style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
+                    onPress={() => setLifecycleActionConfirm('pickUp')}
+                    disabled={actionLoading}
+                  >
+                    <MaterialCommunityIcons name="package-variant" size={20} color={colors.primary.contrast} />
+                    <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
+                      {t('agent.orders.detail.pickUp')}
+                    </Text>
+                  </Pressable>
+                );
+              }
+              if (primaryId === 'outForDelivery') {
+                return (
+                  <Pressable
+                    style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
+                    onPress={() => setLifecycleActionConfirm('outForDelivery')}
+                    disabled={actionLoading}
+                  >
+                    <MaterialCommunityIcons name="map-marker-path" size={20} color={colors.primary.contrast} />
+                    <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
+                      {t('agent.orders.detail.outForDelivery')}
+                    </Text>
+                  </Pressable>
+                );
+              }
+              if (primaryId === 'requestPayment') {
+                return (
+                  <Pressable
+                    style={[styles.actionBtn, { backgroundColor: colors.success.main, borderRadius: borderRadius.md }]}
+                    onPress={() => setShowRequestPayAtDeliveryDialog(true)}
+                    disabled={actionLoading || payAtDeliveryDialogLoading}
+                  >
+                    <MaterialCommunityIcons name="cellphone-message" size={20} color={colors.primary.contrast} />
+                    <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
+                      {t('agent.orders.payAtDelivery.requestPayment', { defaultValue: 'Request payment' })}
+                    </Text>
+                  </Pressable>
+                );
+              }
+              if (primaryId === 'markDelivered') {
+                return (
+                  <Pressable
+                    style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
+                    onPress={() => void handleMarkDelivered()}
+                    disabled={actionLoading}
+                  >
+                    <MaterialCommunityIcons name="check-circle" size={20} color={colors.primary.contrast} />
+                    <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
+                      {t('agent.orders.detail.markDelivered')}
+                    </Text>
+                  </Pressable>
+                );
+              }
+              if (primaryId === 'clientCouldNotConfirm') {
+                return (
+                  <Pressable
+                    style={[styles.actionBtn, { backgroundColor: colors.primary.main, borderRadius: borderRadius.md }]}
+                    onPress={() => {
+                      setFallbackError(null);
+                      setFallbackSheetVisible(true);
+                    }}
+                    disabled={actionLoading}
+                  >
+                    <MaterialCommunityIcons name="camera" size={20} color={colors.primary.contrast} />
+                    <Text style={[styles.actionBtnText, { color: colors.primary.contrast }, typography.button]}>
+                      {t('orders.clientConfirm.agentFallbackCta', "Client couldn't confirm")}
+                    </Text>
+                  </Pressable>
+                );
+              }
+              return null;
+            }}
+          />
         </View>
       ) : null}
 
@@ -1291,13 +1232,6 @@ export default function OrderDetailAgentView({ route, navigation }: Props) {
         onConfirm={() => void handleConfirmDropOrder()}
       />
 
-      <AgentOrderDetailMoreSheet
-        visible={moreSheetVisible}
-        items={moreItems}
-        onClose={() => setMoreSheetVisible(false)}
-        onSelect={handleMoreSelect}
-      />
-
       <AppModal visible={reportModalVisible} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalContent, { backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
@@ -1416,15 +1350,8 @@ const styles = StyleSheet.create({
   scroll: { padding: 16 },
   headerCard: {},
   orderNum: {},
-  statusChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  statusChipText: {},
   placedOn: {},
-  sectionTitle: { marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 },
   sectionValue: { marginBottom: 4 },
-  financialRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  financialRowTotal: { marginTop: 4 },
-  financialLabel: {},
-  financialValue: {},
   stickyActions: {
     borderTopWidth: 1,
     paddingHorizontal: 16,

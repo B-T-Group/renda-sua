@@ -1,6 +1,4 @@
-import { Cancel, CheckCircle, NotificationsActive, Payments, Replay, Storefront, Undo } from '@mui/icons-material';
-import { Box, Button } from '@mui/material';
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBackendOrders } from '../../hooks/useBackendOrders';
 import { useClientReorderFlow } from '../../hooks/useClientReorderFlow';
@@ -18,6 +16,14 @@ import {
 } from '../../utils/deliveryConfirmationUi';
 import { EatInUnavailableNotice } from './EatInUnavailableNotice';
 import { ReorderCartConflictDialog } from './ReorderCartConflictDialog';
+import {
+  OrderActionBar,
+  type OrderActionBarHandler,
+} from './OrderActionBar';
+import {
+  rankOrderDetailActions,
+  type RankedOrderAction,
+} from '../../utils/rankOrderDetailActions';
 
 interface ClientActionsProps {
   order: OrderData;
@@ -55,6 +61,7 @@ const ClientActions: React.FC<ClientActionsProps> = ({
   order,
   onActionComplete,
   onShowNotification,
+  onShowHistory,
   hideDeliveryPin = false,
   deliveryPinFullWidth = false,
 }) => {
@@ -235,77 +242,76 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     }
   };
 
-  const getAvailableActions = () => {
-    const actions: Array<{
-      label: string;
-      action: () => void;
-      color: 'error' | 'warning' | 'success' | 'cta' | 'primary';
-      icon: React.ReactNode;
-      variant?: 'outlined' | 'contained';
-      loading?: boolean;
-    }> = [];
+  const rankedActions = useMemo(() => {
+    const actions: RankedOrderAction[] = [];
+    const push = (
+      id: string,
+      labelKey: string,
+      defaultLabel: string,
+      opts?: { destructive?: boolean; preferred?: boolean }
+    ) => {
+      if (actions.some((a) => a.id === id)) return;
+      actions.push({
+        id,
+        labelKey,
+        defaultLabel,
+        destructive: opts?.destructive,
+        preferred: opts?.preferred,
+      });
+    };
 
+    if (reorderFlow.enabled) {
+      push('reorder', 'orders.reorder.cta', 'Reorder', { preferred: true });
+    }
     if (clientCanPayAtPickup(order)) {
-      actions.push({
-        label: t('orders.payAtPickup.cta', 'Pay now'),
-        action: () => setPayPickupOpen(true),
-        color: 'cta',
-        icon: <Payments />,
-        variant: 'contained',
+      push('pay', 'orders.payAtPickup.cta', 'Pay now', {
+        preferred: !reorderFlow.enabled,
       });
     }
-
-    if (clientCanAskIfReady(order)) {
-      actions.push({
-        label: t('orderActions.askIfReady', 'Ask if my order is ready'),
-        action: () => void handleAskIfReady(),
-        color: 'primary',
-        icon: <NotificationsActive />,
-        variant: 'outlined',
-        loading: remindingReady,
-      });
-    }
-
     if (
       order.fulfillment_method === 'shipping' &&
       ['shipped', 'in_delivery'].includes(order.current_status)
     ) {
-      actions.push({
-        label: t('orderActions.confirmReceipt', 'Confirm receipt'),
-        action: () => void handleConfirmReceipt(),
-        color: 'success',
-        icon: <CheckCircle />,
-        variant: 'contained',
-        loading: completing,
+      push('confirm_receipt', 'orderActions.confirmReceipt', 'Confirm receipt', {
+        preferred: !reorderFlow.enabled,
       });
     }
-
     if (
       order.fulfillment_method === 'pickup' &&
       order.current_status === 'ready_for_pickup' &&
       (order.payment_status === 'paid' || order.payment_status === 'authorized')
     ) {
-      actions.push({
-        label: t('orders.actions.complete', 'Complete order'),
-        action: () => void handleCompletePickup(),
-        color: 'success',
-        icon: <CheckCircle />,
-        variant: 'contained',
-        loading: completing,
+      push('complete', 'orders.actions.complete', 'Complete order', {
+        preferred: !reorderFlow.enabled,
       });
     }
-
     if (order.current_status === 'delivered') {
-      actions.push({
-        label: t('orders.actions.completeOrder', 'Complete Order'),
-        action: () => void handleCompleteOrder(),
-        color: 'success',
-        icon: <CheckCircle />,
-        variant: 'contained',
-        loading: completing,
+      push('complete', 'orders.actions.completeOrder', 'Complete Order', {
+        preferred: !reorderFlow.enabled,
       });
     }
-
+    // Doorstep confirm/report uses ClientConfirmReceiptActions in this sticky bar.
+    if (clientCanAskIfReady(order)) {
+      push('ask_if_ready', 'orderActions.askIfReady', 'Ask if my order is ready');
+    }
+    if (
+      order.current_status === 'ready_for_pickup' &&
+      !order.assigned_agent_id &&
+      order.fulfillment_method !== 'pickup' &&
+      !!order.dispatch_exhausted_at
+    ) {
+      push(
+        'switch_to_pickup',
+        'orders.noAgent.switchToPickup',
+        'Switch to store pickup (fee waived)'
+      );
+    }
+    if (
+      order.current_status === 'complete' &&
+      isWithinRefundWindow(order.completed_at)
+    ) {
+      push('request_refund', 'orders.refunds.requestButton', 'Request refund');
+    }
     if (
       [
         'pending_payment',
@@ -315,60 +321,72 @@ const ClientActions: React.FC<ClientActionsProps> = ({
         'confirmed',
       ].includes(order.current_status)
     ) {
-      actions.push({
-        label: t('orderActions.cancelOrder', 'Cancel Order'),
-        action: handleCancelClick,
-        color: 'error',
-        icon: <Cancel />,
+      push('cancel', 'orderActions.cancelOrder', 'Cancel Order', {
+        destructive: true,
       });
     }
-
-    if (
-      order.current_status === 'ready_for_pickup' &&
-      !order.assigned_agent_id &&
-      order.fulfillment_method !== 'pickup' &&
-      !!order.dispatch_exhausted_at
-    ) {
-      actions.push({
-        label: t(
-          'orders.noAgent.switchToPickup',
-          'Switch to store pickup (fee waived)'
-        ),
-        action: () => void handleSwitchToPickup(),
-        color: 'success',
-        icon: <Storefront />,
-        variant: 'contained',
-        loading: switchingToPickup,
-      });
+    if (onShowHistory) {
+      push('view_history', 'orders.actions.viewHistory', 'View History');
     }
+    return rankOrderDetailActions(
+      actions,
+      actions.find((a) => a.preferred)?.id
+    );
+  }, [order, reorderFlow.enabled, canConfirmDelivery, onShowHistory]);
 
-    if (
-      order.current_status === 'complete' &&
-      isWithinRefundWindow(order.completed_at)
-    ) {
-      actions.push({
-        label: t('orders.refunds.requestButton', 'Request refund'),
-        action: () => setRefundOpen(true),
-        color: 'warning',
-        icon: <Undo />,
-      });
-    }
-
-    if (reorderFlow.enabled) {
-      actions.unshift({
-        label: t('orders.reorder.cta', 'Reorder'),
-        action: () => void reorderFlow.onReorderPress(),
-        color: 'primary',
-        icon: <Replay />,
-        variant: 'contained',
-        loading: reorderFlow.loading,
-      });
-    }
-
-    return actions;
+  const handlers: Record<string, OrderActionBarHandler> = {
+    reorder: {
+      id: 'reorder',
+      onClick: () => void reorderFlow.onReorderPress(),
+      loading: reorderFlow.loading,
+    },
+    pay: {
+      id: 'pay',
+      onClick: () => setPayPickupOpen(true),
+    },
+    confirm_receipt: {
+      id: 'confirm_receipt',
+      onClick: () => void handleConfirmReceipt(),
+      loading: completing,
+    },
+    complete: {
+      id: 'complete',
+      onClick: () => {
+        if (
+          order.fulfillment_method === 'pickup' &&
+          order.current_status === 'ready_for_pickup'
+        ) {
+          void handleCompletePickup();
+        } else {
+          void handleCompleteOrder();
+        }
+      },
+      loading: completing,
+    },
+    ask_if_ready: {
+      id: 'ask_if_ready',
+      onClick: () => void handleAskIfReady(),
+      loading: remindingReady,
+    },
+    switch_to_pickup: {
+      id: 'switch_to_pickup',
+      onClick: () => void handleSwitchToPickup(),
+      loading: switchingToPickup,
+    },
+    request_refund: {
+      id: 'request_refund',
+      onClick: () => setRefundOpen(true),
+    },
+    cancel: {
+      id: 'cancel',
+      onClick: handleCancelClick,
+    },
+    view_history: {
+      id: 'view_history',
+      onClick: () => onShowHistory?.(),
+    },
   };
 
-  const availableActions = getAvailableActions();
   const payAfterDelivery =
     order.pay_after_merchant_confirm === true &&
     order.fulfillment_method !== 'pickup';
@@ -384,12 +402,13 @@ const ClientActions: React.FC<ClientActionsProps> = ({
       order.current_status
     );
 
-  if (
-    availableActions.length === 0 &&
-    !showPin &&
-    !reorderFlow.enabled &&
-    !canConfirmDelivery
-  ) {
+  const hasBar =
+    rankedActions.primary ||
+    rankedActions.companion ||
+    rankedActions.overflow.length > 0 ||
+    showPin;
+
+  if (!hasBar && !canConfirmDelivery && !reorderFlow.enabled) {
     return <EatInUnavailableNotice order={order} />;
   }
 
@@ -397,63 +416,30 @@ const ClientActions: React.FC<ClientActionsProps> = ({
     <>
       <EatInUnavailableNotice order={order} />
       {canConfirmDelivery ? (
-        <Box sx={{ mb: 2 }}>
-          <ClientConfirmReceiptActions
-            state={confirmState}
-            busy={completing}
-            onConfirm={() => void handleConfirmReceipt()}
-            onReportProblem={(description) => void handleReportProblem(description)}
-          />
-        </Box>
+        <ClientConfirmReceiptActions
+          state={confirmState}
+          busy={completing}
+          onConfirm={() => void handleConfirmReceipt()}
+          onReportProblem={(description) => void handleReportProblem(description)}
+        />
       ) : null}
-      {(availableActions.length > 0 || showPin) && (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {showPin && (
-            <ClientDeliveryPinButton
-              orderId={order.id}
-              pinAudience={
-                order.fulfillment_method === 'pickup' ? 'business' : 'agent'
-              }
-              onShowNotification={onShowNotification}
-              fullWidth={deliveryPinFullWidth}
-              size="medium"
-            />
-          )}
-          {availableActions.length > 0 && (
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: { xs: 'column', sm: 'row' },
-                flexWrap: { sm: 'wrap' },
-                gap: 2,
-                justifyContent: { xs: 'stretch', sm: 'flex-end' },
-              }}
-            >
-              {availableActions.map((action, index) => (
-                <Button
-                  key={index}
-                  variant={action.variant ?? 'outlined'}
-                  color={action.color}
-                  onClick={action.action}
-                  startIcon={action.icon}
-                  disabled={Boolean(action.loading)}
-                  aria-label={
-                    action.label === t('orders.reorder.cta', 'Reorder')
-                      ? t('orders.reorder.ctaA11y', 'Reorder this order')
-                      : undefined
-                  }
-                  sx={{
-                    minWidth: { xs: 0, sm: 120 },
-                    width: { xs: '100%', sm: 'auto' },
-                  }}
-                >
-                  {action.label}
-                </Button>
-              ))}
-            </Box>
-          )}
-        </Box>
-      )}
+      {showPin ? (
+        <ClientDeliveryPinButton
+          orderId={order.id}
+          pinAudience={
+            order.fulfillment_method === 'pickup' ? 'business' : 'agent'
+          }
+          onShowNotification={onShowNotification}
+          fullWidth={deliveryPinFullWidth}
+          size="medium"
+        />
+      ) : null}
+      <OrderActionBar
+        plain
+        ranked={rankedActions}
+        handlers={handlers}
+        accentPrimary={rankedActions.primary?.id === 'pay'}
+      />
 
       <CancellationReasonModal
         open={cancelModalOpen}

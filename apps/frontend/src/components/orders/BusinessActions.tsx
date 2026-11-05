@@ -1,14 +1,5 @@
 import {
-  Cancel,
-  CheckCircle,
-  AttachMoney as RefundIcon,
-  LocalShipping,
-  PaymentsOutlined,
-} from '@mui/icons-material';
-import {
-  Box,
   Button,
-  CircularProgress,
   TextField,
   Dialog,
   DialogActions,
@@ -58,6 +49,14 @@ import { hasCashExceptionBlockingDeposit } from '../../utils/depositRemainder';
 import RequestPayAtPickupPaymentDialog from '../dialogs/RequestPayAtPickupPaymentDialog';
 import { MobilePaymentPhoneVerifyModal } from '../dialogs/MobilePaymentPhoneVerifyModal';
 import type { MobilePaymentPhone } from '../../hooks/useMobilePaymentPhones';
+import {
+  OrderActionBar,
+  type OrderActionBarHandler,
+} from './OrderActionBar';
+import {
+  rankOrderDetailActions,
+  type RankedOrderAction,
+} from '../../utils/rankOrderDetailActions';
 
 /** ISO 3166-1 alpha-2 from order addresses; falls back when missing or not a 2-letter code. */
 function resolveOrderPhoneCountryIso2(order: OrderData): string {
@@ -429,42 +428,44 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
     }
   };
 
-  const getAvailableActions = () => {
-    const actions: Array<{
-      label: string;
-      action: () => void | Promise<void>;
-      color: 'success' | 'primary' | 'error' | 'warning';
-      icon: JSX.Element;
-      isPrintLabel?: boolean;
-    }> = [];
+  const rankedActions = useMemo(() => {
+    const actions: RankedOrderAction[] = [];
+    const push = (
+      id: string,
+      labelKey: string,
+      defaultLabel: string,
+      opts?: { destructive?: boolean; preferred?: boolean }
+    ) => {
+      if (actions.some((a) => a.id === id)) return;
+      actions.push({
+        id,
+        labelKey,
+        defaultLabel,
+        destructive: opts?.destructive,
+        preferred: opts?.preferred,
+      });
+    };
 
-    // Owner-only: no /delegate equivalents (matches mobile DELEGATE_HIDDEN_ACTIONS)
     if (
       !isDelegate &&
       order.reconciliation_status === 'pending_manual_reconciliation' &&
       !hasCashExceptionBlockingDeposit(order)
     ) {
-      actions.push({
-        label: t('orders.reconciliation.button', 'Reconcile cash exception'),
-        action: () => setReconcileDialogOpen(true),
-        color: 'warning' as const,
-        icon: <RefundIcon />,
-      });
+      push(
+        'reconcile',
+        'orders.reconciliation.button',
+        'Reconcile cash exception',
+        { preferred: true }
+      );
     }
 
     switch (order.current_status) {
       case 'pending':
-        actions.push({
-          label: t('orderActions.confirmOrder', 'Confirm Order'),
-          action: handleConfirmOrder,
-          color: 'success' as const,
-          icon: <CheckCircle />,
+        push('confirm', 'orderActions.confirmOrder', 'Confirm Order', {
+          preferred: true,
         });
-        actions.push({
-          label: t('orderActions.cancelOrder', 'Cancel Order'),
-          action: handleCancelClick,
-          color: 'error' as const,
-          icon: <Cancel />,
+        push('cancel', 'orderActions.cancelOrder', 'Cancel Order', {
+          destructive: true,
         });
         break;
 
@@ -475,38 +476,33 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
           isCookedFoodAwaitingClientPayment(order) &&
           ['confirmed', 'preparing'].includes(order.current_status || '')
         ) {
-          actions.push({
-            label: t('orderActions.cancelOrder', 'Cancel Order'),
-            action: handleCancelClick,
-            color: 'error' as const,
-            icon: <Cancel />,
+          push('cancel', 'orderActions.cancelOrder', 'Cancel Order', {
+            destructive: true,
+            preferred: true,
           });
           break;
         }
         if (order.fulfillment_method === 'shipping') {
-          actions.push({
-            label: t('orderActions.markAsShipped', 'Mark as shipped'),
-            action: handleMarkShipped,
-            color: 'success' as const,
-            icon: <LocalShipping />,
+          push('markShipped', 'orderActions.markAsShipped', 'Mark as shipped', {
+            preferred: true,
           });
         } else if (order.current_status !== 'awaiting_shipment') {
-          actions.push({
-            label:
-              order.current_status === 'preparing'
-                ? t('orderActions.completePreparation', 'Complete Preparation')
-                : t('orderActions.readyForPickup', 'Ready'),
-            action: handleCompletePreparation,
-            color: 'success' as const,
-            icon: <CheckCircle />,
-          });
+          if (order.current_status === 'preparing') {
+            push(
+              'completePreparation',
+              'orderActions.completePreparation',
+              'Complete Preparation',
+              { preferred: true }
+            );
+          } else {
+            push('readyForPickup', 'orderActions.readyForPickup', 'Ready', {
+              preferred: true,
+            });
+          }
         }
         if (businessMayCancelOrder(order)) {
-          actions.push({
-            label: t('orderActions.cancelOrder', 'Cancel Order'),
-            action: handleCancelClick,
-            color: 'error' as const,
-            icon: <Cancel />,
+          push('cancel', 'orderActions.cancelOrder', 'Cancel Order', {
+            destructive: true,
           });
         }
         break;
@@ -515,32 +511,29 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
       case 'awaiting_client_confirmation':
       case 'pending_auto_complete':
         if (!isDelegate) {
-          actions.push({
-            label: t('orders.overwriteCode.button', 'Generate overwrite code'),
-            action: handleGenerateOverwriteCode,
-            color: 'primary' as const,
-            icon: <CheckCircle />,
-          });
+          push(
+            'generateOverwriteCode',
+            'orders.overwriteCode.button',
+            'Generate overwrite code',
+            { preferred: true }
+          );
         }
         break;
 
       case 'ready_for_pickup':
         if (order.fulfillment_method === 'shipping') {
-          actions.push({
-            label: t('orderActions.markAsShipped', 'Mark as shipped'),
-            action: handleMarkShipped,
-            color: 'success' as const,
-            icon: <LocalShipping />,
+          push('markShipped', 'orderActions.markAsShipped', 'Mark as shipped', {
+            preferred: true,
           });
           break;
         }
         if (order.fulfillment_method === 'pickup') {
-          actions.push({
-            label: t('orderActions.pickupFollowUp', 'Pickup follow-up'),
-            action: () => setNoshowDialogOpen(true),
-            color: 'primary' as const,
-            icon: <LocalShipping />,
-          });
+          push(
+            'pickupFollowUp',
+            'orderActions.pickupFollowUp',
+            'Pickup follow-up',
+            { preferred: true }
+          );
           const paid =
             order.payment_status === 'paid' ||
             order.payment_status === 'authorized';
@@ -549,24 +542,18 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
             order.payment_timing === 'pay_at_pickup' &&
             order.pay_after_merchant_confirm !== true
           ) {
-            actions.push({
-              label: t(
-                'orderActions.requestPickupPayment',
-                'Request pickup payment'
-              ),
-              action: () => setPickupPaymentDialogOpen(true),
-              color: 'primary' as const,
-              icon: <PaymentsOutlined />,
-            });
+            push(
+              'requestPickupPayment',
+              'orderActions.requestPickupPayment',
+              'Request pickup payment'
+            );
           }
           break;
         }
         if (isCookedFoodReadyFailEligible(order as any)) {
-          actions.push({
-            label: t('orderActions.failPickup', 'Mark pickup failed'),
-            action: () => setFailPickupDialogOpen(true),
-            color: 'error' as const,
-            icon: <Cancel />,
+          push('failPickup', 'orderActions.failPickup', 'Mark pickup failed', {
+            destructive: true,
+            preferred: true,
           });
           break;
         }
@@ -574,12 +561,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
       case 'delivered':
         if (!isDelegate) {
-          actions.push({
-            label: t('orders.actions.completeOrder', 'Complete Order'),
-            action: handleCompleteOrder,
-            color: 'success' as const,
-            icon: <CheckCircle />,
-          });
+          push(
+            'completeOrder',
+            'orders.actions.completeOrder',
+            'Complete Order',
+            { preferred: true }
+          );
         }
         break;
 
@@ -588,15 +575,12 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
 
       case 'refund_requested':
         if (!isDelegate) {
-          actions.push({
-            label: t(
-              'orders.refunds.manageInDashboard',
-              'Manage refund request'
-            ),
-            action: () => navigate('/business/refunds'),
-            color: 'warning' as const,
-            icon: <RefundIcon />,
-          });
+          push(
+            'manageRefund',
+            'orders.refunds.manageInDashboard',
+            'Manage refund request',
+            { preferred: true }
+          );
         }
         break;
 
@@ -615,69 +599,98 @@ const BusinessActions: React.FC<BusinessActionsProps> = ({
         break;
     }
 
-    const hasCancelAction = actions.some((a) => a.action === handleCancelClick);
-    if (
-      businessMayCancelDeferredUncollectedOrder(order) &&
-      !hasCancelAction
-    ) {
-      actions.push({
-        label: t('orderActions.cancelOrder', 'Cancel Order'),
-        action: handleCancelClick,
-        color: 'error' as const,
-        icon: <Cancel />,
+    const hasCancel = actions.some((a) => a.id === 'cancel');
+    if (businessMayCancelDeferredUncollectedOrder(order) && !hasCancel) {
+      push('cancel', 'orderActions.cancelOrder', 'Cancel Order', {
+        destructive: true,
       });
     }
 
     if (!isDelegate && canPrintLabel) {
-      actions.push({
-        label: t('orderActions.printLabel', 'Print label'),
-        action: handlePrintLabel,
-        color: 'primary' as const,
-        icon: <LocalShipping />,
-        isPrintLabel: true,
-      });
+      push('printLabel', 'orderActions.printLabel', 'Print label');
     }
 
-    return actions;
+    return rankOrderDetailActions(
+      actions,
+      actions.find((a) => a.preferred)?.id
+    );
+  }, [order, isDelegate, canPrintLabel]);
+
+  const handlers: Record<string, OrderActionBarHandler> = {
+    reconcile: {
+      id: 'reconcile',
+      onClick: () => setReconcileDialogOpen(true),
+      loading,
+    },
+    confirm: {
+      id: 'confirm',
+      onClick: handleConfirmOrder,
+      loading,
+    },
+    cancel: {
+      id: 'cancel',
+      onClick: handleCancelClick,
+    },
+    markShipped: {
+      id: 'markShipped',
+      onClick: () => void handleMarkShipped(),
+      loading,
+    },
+    completePreparation: {
+      id: 'completePreparation',
+      onClick: () => void handleCompletePreparation(),
+      loading,
+    },
+    readyForPickup: {
+      id: 'readyForPickup',
+      onClick: () => void handleCompletePreparation(),
+      loading,
+    },
+    generateOverwriteCode: {
+      id: 'generateOverwriteCode',
+      onClick: () => void handleGenerateOverwriteCode(),
+      loading,
+    },
+    pickupFollowUp: {
+      id: 'pickupFollowUp',
+      onClick: () => setNoshowDialogOpen(true),
+    },
+    requestPickupPayment: {
+      id: 'requestPickupPayment',
+      onClick: () => setPickupPaymentDialogOpen(true),
+    },
+    failPickup: {
+      id: 'failPickup',
+      onClick: () => setFailPickupDialogOpen(true),
+    },
+    completeOrder: {
+      id: 'completeOrder',
+      onClick: () => void handleCompleteOrder(),
+      loading,
+    },
+    manageRefund: {
+      id: 'manageRefund',
+      onClick: () => navigate('/business/refunds'),
+    },
+    printLabel: {
+      id: 'printLabel',
+      onClick: () => void handlePrintLabel(),
+      loading: printLabelLoading,
+    },
   };
 
-  const availableActions = getAvailableActions();
+  const hasBar =
+    rankedActions.primary ||
+    rankedActions.companion ||
+    rankedActions.overflow.length > 0;
 
-  if (availableActions.length === 0) {
+  if (!hasBar) {
     return null;
   }
 
   return (
     <>
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 2,
-          flexWrap: 'wrap',
-          justifyContent: 'flex-end',
-        }}
-      >
-        {availableActions.map((action, index) => {
-          const isLoadingAction = action.isPrintLabel
-            ? printLabelLoading
-            : loading && action.action !== handleCancelClick;
-          return (
-            <Button
-              key={index}
-              variant="outlined"
-              color={action.color}
-              onClick={action.action}
-              disabled={isLoadingAction}
-              startIcon={
-                isLoadingAction ? <CircularProgress size={16} /> : action.icon
-              }
-              sx={{ minWidth: 120 }}
-            >
-              {action.label}
-            </Button>
-          );
-        })}
-      </Box>
+      <OrderActionBar plain ranked={rankedActions} handlers={handlers} />
 
       {/* Cancellation Reason Modal */}
       <CancellationReasonModal

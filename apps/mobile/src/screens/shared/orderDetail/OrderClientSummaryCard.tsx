@@ -54,6 +54,8 @@ type Props = {
   cardStyle?: object;
   onRefetch?: () => void | Promise<void>;
   onNotify?: (message: string) => void;
+  /** Hide retry/pay-deposit buttons when the sticky bar owns those actions. */
+  hidePaymentActions?: boolean;
   onAwaitingPayment?: (params: {
     orderIds: string[];
     phoneE164: string;
@@ -112,6 +114,7 @@ export function OrderClientSummaryCard({
   cardStyle,
   onRefetch,
   onNotify,
+  hidePaymentActions,
   onAwaitingPayment,
 }: Props) {
   const { t } = useTranslation();
@@ -134,8 +137,14 @@ export function OrderClientSummaryCard({
   );
 
   const depositIsPending = isDepositPending(order);
-  const canRetry = showRetryPayNow(order) && !!onRefetch && !!onNotify;
-  const canPayDeposit = depositIsPending && !!onRefetch && !!onNotify && !!onAwaitingPayment;
+  const canRetry =
+    !hidePaymentActions && showRetryPayNow(order) && !!onRefetch && !!onNotify;
+  const canPayDeposit =
+    !hidePaymentActions &&
+    depositIsPending &&
+    !!onRefetch &&
+    !!onNotify &&
+    !!onAwaitingPayment;
 
   const handleRetryPayment = useCallback(async () => {
     if (!onRefetch || !onNotify) return;
