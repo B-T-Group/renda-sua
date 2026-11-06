@@ -43,6 +43,25 @@ describe('in-flight mobile payment queries', () => {
     ).resolves.toBeNull();
   });
 
+  it('treats a successful order collect as collection proof', async () => {
+    const { db, executeQuery } = service([{ id: 'tx-ok' }]);
+
+    await expect(db.hasSuccessfulOrderPayment('ORD-1', '  ')).resolves.toBe(
+      true
+    );
+    expect(executeQuery.mock.calls[0][1]).toEqual({ ids: ['ORD-1'] });
+    const query = queryOf(executeQuery);
+    expect(query).toContain('payment_entity: { _eq: order }');
+    expect(query).toContain('status: { _eq: "success" }');
+    expect(query).toContain('entity_id: { _in: $ids }');
+  });
+
+  it('returns false when no successful order collect exists', async () => {
+    const { db } = service([]);
+
+    await expect(db.hasSuccessfulOrderPayment('ORD-1')).resolves.toBe(false);
+  });
+
   it('lists give-change withdrawals that are still pending only', async () => {
     const { db, executeQuery } = service();
 

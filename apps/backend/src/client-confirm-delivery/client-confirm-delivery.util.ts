@@ -58,27 +58,65 @@ const CASH_EXCEPTION_RECON = new Set([
   'pending_manual_reconciliation',
   'reconciled',
 ]);
+const MOBILE_PAD_SOURCES = new Set(['mobile_payment', 'mobile_money']);
+
+export type DoorstepPaymentOrder = {
+  payment_timing?: string | null;
+  payment_method?: string | null;
+  payment_status?: string | null;
+  payment_source?: string | null;
+  pay_after_merchant_confirm?: boolean | null;
+  reconciliation_status?: string | null;
+  total_amount?: number | string | null;
+  deposit_amount?: number | string | null;
+  deposit_status?: string | null;
+};
 
 /**
  * Classic pay-at-delivery / pay-on-delivery that has not been collected.
  * Pay-after-confirm is collected before delivery. A cash exception is collected
  * off-rail and settles later in reconciliation, so it is not unpaid here.
  */
-export function isUnpaidPayAtDelivery(order: {
-  payment_timing?: string | null;
-  payment_method?: string | null;
-  payment_status?: string | null;
-  pay_after_merchant_confirm?: boolean | null;
-  reconciliation_status?: string | null;
-}): boolean {
+export function isUnpaidPayAtDelivery(order: DoorstepPaymentOrder): boolean {
   if (order.pay_after_merchant_confirm === true) return false;
-  const doorstep =
-    order.payment_timing === 'pay_at_delivery' ||
-    order.payment_method === 'pay_on_delivery';
-  if (!doorstep) return false;
+  if (!isClassicDoorstepPad(order)) return false;
   if (COLLECTED_PAYMENT.has(order.payment_status ?? '')) return false;
   if (CASH_EXCEPTION_RECON.has(order.reconciliation_status ?? '')) return false;
   return true;
+}
+
+/**
+ * `payment_status=paid` is not proof of a mobile-payment PAD collect.
+ * Require a successful MoMo row unless a cash exception or collected deposit
+ * already covers the remainder (NODE-NESTJS-4H / 4J).
+ */
+export function needsMobilePadCollectionProof(
+  order: DoorstepPaymentOrder
+): boolean {
+  if (order.pay_after_merchant_confirm === true) return false;
+  if (!isClassicDoorstepPad(order)) return false;
+  if (!COLLECTED_PAYMENT.has(order.payment_status ?? '')) return false;
+  if (CASH_EXCEPTION_RECON.has(order.reconciliation_status ?? '')) return false;
+  if (!MOBILE_PAD_SOURCES.has(order.payment_source ?? '')) return false;
+  return doorstepRemainderDue(order) > 0;
+}
+
+function isClassicDoorstepPad(order: DoorstepPaymentOrder): boolean {
+  return (
+    order.payment_timing === 'pay_at_delivery' ||
+    order.payment_method === 'pay_on_delivery'
+  );
+}
+
+function doorstepRemainderDue(order: DoorstepPaymentOrder): number {
+  if (order.total_amount == null) return 1;
+  const total = Number(order.total_amount) || 0;
+  const deposit = Number(order.deposit_amount) || 0;
+  const depositCollected =
+    (order.deposit_status === 'paid' || order.deposit_status === 'applied') &&
+    deposit > 0;
+  if (!depositCollected) return total;
+  return Math.max(0, total - deposit);
 }
 
 export function isPendingAutoComplete(status: string | null | undefined): boolean {

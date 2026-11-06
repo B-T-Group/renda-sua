@@ -38,6 +38,8 @@ import {
   canOverwriteFromStatus,
   isClientConfirmDeliveryOrder,
   isUnpaidPayAtDelivery,
+  needsMobilePadCollectionProof,
+  type DoorstepPaymentOrder,
   overwriteGenerationStatusError,
   shouldMintDeliveryPin,
   usesLegacyDeliveryPin,
@@ -12734,17 +12736,7 @@ export class OrdersService {
     if (order.current_status === 'complete') {
       return { alreadyComplete: true, order };
     }
-    if (isUnpaidPayAtDelivery(order)) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'PAY_AT_DELIVERY_UNPAID',
-          message:
-            'Collect pay-at-delivery payment before completing this order.',
-        },
-        HttpStatus.CONFLICT
-      );
-    }
+    await this.assertCollectedDoorstepPayment(order);
     const updated = await this.winClientConfirmComplete(orderId, !!opts.fromDisputed);
     if (!updated) {
       return { alreadyComplete: true, order: await this.getOrderDetails(orderId) };
@@ -12759,6 +12751,40 @@ export class OrdersService {
     );
     await this.runCompletionSideEffects(order);
     return { alreadyComplete: false, order: updated };
+  }
+
+  private unpaidDoorstepConflict(): never {
+    throw new HttpException(
+      {
+        success: false,
+        error: 'PAY_AT_DELIVERY_UNPAID',
+        message: 'Collect pay-at-delivery payment before completing this order.',
+      },
+      HttpStatus.CONFLICT
+    );
+  }
+
+  private async assertCollectedDoorstepPayment(
+    order: DoorstepPaymentOrder & { id: string; order_number?: string | null }
+  ): Promise<void> {
+    if (isUnpaidPayAtDelivery(order)) this.unpaidDoorstepConflict();
+    if (!needsMobilePadCollectionProof(order)) return;
+    const collected = await this.hasSuccessfulMobilePadPayment(order);
+    if (!collected) this.unpaidDoorstepConflict();
+  }
+
+  private async hasSuccessfulMobilePadPayment(order: {
+    id: string;
+    order_number?: string | null;
+  }): Promise<boolean> {
+    try {
+      return await this.mobilePaymentsDatabaseService.hasSuccessfulOrderPayment(
+        order.order_number ?? '',
+        order.id
+      );
+    } catch {
+      return false;
+    }
   }
 
   private async winClientConfirmComplete(

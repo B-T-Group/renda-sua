@@ -71,6 +71,9 @@ function buildService(overrides: Record<string, any> = {}) {
       message: 'Receipt confirmed; order complete',
     }),
   };
+  const mobilePayments = {
+    hasSuccessfulOrderPayment: jest.fn().mockResolvedValue(true),
+  };
   const support = {
     createTicket: jest.fn().mockResolvedValue({ id: 'ticket-1' }),
   };
@@ -87,6 +90,7 @@ function buildService(overrides: Record<string, any> = {}) {
     marketConfig as any,
     orderStatus as any,
     orders as any,
+    mobilePayments as any,
     support as any,
     recipientNotifications as any,
     notifier as any
@@ -99,6 +103,7 @@ function buildService(overrides: Record<string, any> = {}) {
     marketConfig,
     orderStatus,
     orders,
+    mobilePayments,
     support,
     recipientNotifications,
     notifier,
@@ -210,6 +215,56 @@ describe('ClientConfirmDeliveryService', () => {
       client.svc.reportProblem('order-1', { type: 'delivery_failed', reason: 'not_received' })
     ).rejects.toMatchObject({ status: 409 });
     expect(client.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects markDelivered and confirm when paid mobile PAD has no successful collect', async () => {
+    const unproven = deliveryOrder({
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'paid',
+      payment_source: 'mobile_payment',
+      total_amount: 1500,
+    });
+    const agent = buildService();
+    agent.mobilePayments.hasSuccessfulOrderPayment.mockResolvedValue(false);
+    agent.repo.loadOrder.mockResolvedValue(unproven);
+    await expect(agent.svc.markDelivered('order-1')).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(agent.orderStatus.updateOrderStatus).not.toHaveBeenCalled();
+
+    const client = buildService();
+    client.mobilePayments.hasSuccessfulOrderPayment.mockResolvedValue(false);
+    client.users.getUser.mockResolvedValue({
+      id: 'client-user',
+      active_persona: 'client',
+      client: { id: 'c1' },
+    });
+    client.repo.loadOrder.mockResolvedValue({
+      ...unproven,
+      current_status: AWAITING_CLIENT_CONFIRMATION,
+    });
+    await expect(client.svc.confirmReceipt('order-1')).rejects.toMatchObject({
+      status: 409,
+    });
+    expect(client.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+  });
+
+  it('still marks delivered once a paid mobile PAD has a successful collect', async () => {
+    const ctx = buildService();
+    ctx.repo.loadOrder.mockResolvedValue(
+      deliveryOrder({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+      })
+    );
+    const result = await ctx.svc.markDelivered('order-1');
+    expect(result.status).toBe(AWAITING_CLIENT_CONFIRMATION);
+    expect(ctx.mobilePayments.hasSuccessfulOrderPayment).toHaveBeenCalledWith(
+      'ORD-1',
+      'order-1'
+    );
   });
 
   it('still marks delivered once pay-at-delivery is collected', async () => {
@@ -1181,6 +1236,22 @@ describe('MoMo Delivered → client Complete', () => {
       }
     });
 
+    it('does not auto-complete a paid mobile PAD without a successful collect', async () => {
+      const ctx = momoCtx();
+      ctx.mobilePayments.hasSuccessfulOrderPayment.mockResolvedValue(false);
+      ctx.repo.dueMomoAutoComplete.mockResolvedValue(['order-1']);
+      ctx.repo.loadOrder.mockResolvedValue(
+        due({
+          payment_timing: 'pay_at_delivery',
+          payment_status: 'paid',
+          payment_source: 'mobile_payment',
+          total_amount: 1500,
+        })
+      );
+      expect((await ctx.svc.autoCompleteDue(NOW)).completed).toBe(0);
+      expect(ctx.orders.completeAfterClientConfirmation).not.toHaveBeenCalled();
+    });
+
     it('does not auto-complete an unpaid pay-on-delivery order', async () => {
       const ctx = momoCtx();
       ctx.repo.dueMomoAutoComplete.mockResolvedValue(['order-1']);
@@ -1472,6 +1543,24 @@ describe('MoMo Delivered → client Complete', () => {
       const collected: any = await ctx.svc.getState('order-1');
       expect(collected.canComplete).toBe(true);
       expect(collected.canReport).toBe(true);
+    });
+
+    it('hides complete while paid mobile PAD has no successful collect', async () => {
+      const ctx = momoCtx();
+      asClient(ctx);
+      ctx.mobilePayments.hasSuccessfulOrderPayment.mockResolvedValue(false);
+      ctx.repo.loadOrder.mockResolvedValue(
+        deliveryOrder({
+          current_status: AWAITING_CLIENT_CONFIRMATION,
+          payment_timing: 'pay_at_delivery',
+          payment_status: 'paid',
+          payment_source: 'mobile_payment',
+          total_amount: 1500,
+        })
+      );
+      const state: any = await ctx.svc.getState('order-1');
+      expect(state.canComplete).toBe(false);
+      expect(state.canReport).toBe(false);
     });
   });
 });
