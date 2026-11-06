@@ -27,6 +27,8 @@ export interface DesignatedOffer {
   estimatedEarnings: number | null;
   currency: string | null;
   details: DesignatedOfferDetails | null;
+  /** Ignore on Home only; hub still shows the card for planning. */
+  dismissedFromHome?: boolean;
 }
 
 export interface DesignatedUpcoming {

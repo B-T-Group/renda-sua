@@ -16,14 +16,15 @@ function offer(over: Partial<DesignatedOffer>): DesignatedOffer {
 }
 
 describe('earlyDesignatedOffers', () => {
-  it('keeps only early-phase offers', () => {
+  it('keeps only early-phase offers that are not Home-ignored', () => {
     expect(
       earlyDesignatedOffers([
         offer({ orderId: 'a', phase: 'early' }),
         offer({ orderId: 'b', phase: 'gate' }),
-        offer({ orderId: 'c', phase: 'early' }),
+        offer({ orderId: 'c', phase: 'early', dismissedFromHome: true }),
+        offer({ orderId: 'd', phase: 'early', dismissedFromHome: false }),
       ]).map((o) => o.orderId)
-    ).toEqual(['a', 'c']);
+    ).toEqual(['a', 'd']);
   });
 
   it('returns an empty list for missing input', () => {

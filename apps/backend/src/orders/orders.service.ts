@@ -3214,6 +3214,17 @@ export class OrdersService {
       request.orderId,
       agent.id
     );
+    // Coverage Take: create/refresh an early dedicated offer when the agent is
+    // designated for the store/slot but never got (or lost) the offer row.
+    if (
+      !activeOffer &&
+      (await this.designatedFirst?.ensureEarlyOfferForAgent(request.orderId, agent.id))
+    ) {
+      activeOffer = await this.orderOffersService.getActiveOfferForAgent(
+        request.orderId,
+        agent.id
+      );
+    }
     // Designated agent first: a late accept wins while the order is still unassigned.
     if (
       !activeOffer &&

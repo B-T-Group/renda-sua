@@ -1,31 +1,54 @@
 import React, { useCallback, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { Button, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTheme } from '../../contexts/ThemeContext';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
+import { agentApi } from '../../services/agentApi';
 import { navigateToOrderFromPush } from '../../navigation/rootNavigationRef';
-import type { DesignatedMineResponse } from '../../types/designated';
+import type { DesignatedMineResponse, DesignatedOffer } from '../../types/designated';
 import { formatDateTime, formatWindow } from '../../utils/designatedFirst';
 
-/** Designated agent first: my early offers and upcoming designated orders (tap opens the order). */
+/** Designated agent first: coverage/early offers (Take) and assigned upcoming (tap opens). */
 export function DesignatedListSection() {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const [list, setList] = useState<DesignatedMineResponse | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const reload = useCallback(async () => {
+    try {
+      const res = await dedicatedAgentsService.getDesignatedMine();
+      setList(res);
+      setError(null);
+    } catch {
+      // Keep last good list.
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      dedicatedAgentsService
-        .getDesignatedMine()
-        .then((res) => !cancelled && setList(res))
-        .catch(() => undefined);
-      return () => {
-        cancelled = true;
-      };
-    }, [])
+      void reload();
+    }, [reload])
+  );
+
+  const take = useCallback(
+    async (orderId: string) => {
+      setBusyId(orderId);
+      setError(null);
+      try {
+        await agentApi.orders.acceptOffer(orderId);
+        await reload();
+      } catch {
+        setError(t('designatedFirst.error', 'Could not update. Try again.'));
+        await reload();
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [reload, t]
   );
 
   const offers = list?.offers ?? [];
@@ -38,21 +61,21 @@ export function DesignatedListSection() {
       <Text variant="titleSmall" style={{ color: colors.text.primary }}>
         {t('designatedFirst.list.title', 'My designated deliveries')}
       </Text>
+      {error ? (
+        <Text variant="bodySmall" style={{ color: colors.error.main }}>
+          {error}
+        </Text>
+      ) : null}
       {offers.map((o) => (
-        <Pressable key={`o-${o.orderId}`} style={rowStyle} onPress={() => navigateToOrderFromPush(o.orderId, 'agent')}>
-          <Text variant="labelMedium" style={{ color: colors.primary.main }}>
-            {t('designatedFirst.list.offerBadge', 'Offer')}
-          </Text>
-          <Text variant="bodyMedium" style={{ color: colors.text.primary, flex: 1 }}>
-            {[o.details?.businessName, o.details?.date, formatWindow(o.details?.windowStart, o.details?.windowEnd)].filter(Boolean).join(' · ')}
-          </Text>
-          <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-            {t('designatedFirst.offer.acceptBeforeShort', {
-              defaultValue: 'Accept before {{time}}',
-              time: formatDateTime(o.expiresAt, i18n.language),
-            })}
-          </Text>
-        </Pressable>
+        <OfferRow
+          key={`o-${o.orderId}`}
+          offer={o}
+          rowStyle={rowStyle}
+          busy={busyId === o.orderId}
+          onTake={() => void take(o.orderId)}
+          language={i18n.language}
+          colors={colors}
+        />
       ))}
       {upcoming.map((u) => (
         <Pressable key={`u-${u.orderId}`} style={rowStyle} onPress={() => navigateToOrderFromPush(u.orderId, 'agent')}>
@@ -73,6 +96,52 @@ export function DesignatedListSection() {
   );
 }
 
+function OfferRow({
+  offer,
+  rowStyle,
+  busy,
+  onTake,
+  language,
+  colors,
+}: {
+  offer: DesignatedOffer;
+  rowStyle: object[];
+  busy: boolean;
+  onTake: () => void;
+  language: string;
+  colors: { primary: { main: string }; text: { primary: string; secondary: string } };
+}) {
+  const { t } = useTranslation();
+  const claimable = offer.phase === 'early' || offer.phase === 'gate';
+  return (
+    <View style={[rowStyle, styles.offerCard]}>
+      <Pressable style={styles.offerBody} onPress={() => navigateToOrderFromPush(offer.orderId, 'agent')}>
+        <Text variant="labelMedium" style={{ color: colors.primary.main }}>
+          {t('designatedFirst.list.offerBadge', 'Offer')}
+        </Text>
+        <Text variant="bodyMedium" style={{ color: colors.text.primary, flex: 1 }}>
+          {[offer.details?.businessName, offer.details?.date, formatWindow(offer.details?.windowStart, offer.details?.windowEnd)]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+        <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+          {t('designatedFirst.offer.acceptBeforeShort', {
+            defaultValue: 'Accept before {{time}}',
+            time: formatDateTime(offer.expiresAt, language),
+          })}
+        </Text>
+      </Pressable>
+      {claimable ? (
+        <Button mode="contained" onPress={onTake} loading={busy} disabled={busy} compact>
+          {t('designatedFirst.home.take', "I'll take this")}
+        </Button>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   row: { borderWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
+  offerCard: { flexDirection: 'column', alignItems: 'stretch' },
+  offerBody: { gap: 2 },
 });

@@ -5152,6 +5152,32 @@ describe('OrdersService', () => {
       });
     });
 
+    it('coverage Take ensures an early offer when none is active, then accepts', async () => {
+      arrangeClaim({ holdAmount: 0, balance: 0 });
+      jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+      const offers = {
+        getActiveOfferForAgent: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValue({ id: 'offer-1', expires_at: 'x', offer_kind: 'dedicated' }),
+        dedicatedAcceptAssignment: jest.fn().mockResolvedValue({ source: 'dedicated_offer', dedicatedAssignmentId: 'as-9' }),
+        markOfferLost: jest.fn(),
+      };
+      loose().orderOffersService = offers;
+      loose().designatedFirst = {
+        ensureEarlyOfferForAgent: jest.fn().mockResolvedValue(true),
+        reopenLateOffer: jest.fn().mockResolvedValue(false),
+      };
+      const assign = jest.spyOn(loose(), 'assignOrderToAgent').mockResolvedValue({ id: 'order-123' });
+      await service.acceptOrderOffer({ orderId: 'order-123' });
+      expect(loose().designatedFirst.ensureEarlyOfferForAgent).toHaveBeenCalledWith('order-123', 'agent-123');
+      expect(offers.dedicatedAcceptAssignment).toHaveBeenCalledWith('order-123', 'agent-123');
+      expect(assign).toHaveBeenCalledWith('order-123', 'agent-123', 'assigned_to_agent', {
+        source: 'dedicated_offer',
+        dedicatedAssignmentId: 'as-9',
+      });
+    });
+
     describe('#594 DEV QA N1: an open-pool claim while holding a live dedicated offer', () => {
       const stampOffer = { source: 'dedicated_offer' as const, dedicatedAssignmentId: 'as-9', maxActiveOrders: 2, countOffers: false };
       const offers = (kind: string | null, accept: () => Promise<unknown>) => {

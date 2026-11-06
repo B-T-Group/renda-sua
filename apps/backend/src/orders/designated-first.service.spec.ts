@@ -493,7 +493,16 @@ describe('DesignatedFirstService', () => {
     const t = setup();
     t.hasura.executeQuery.mockResolvedValue({
       order_offers: [
-        { order_id: 'o1', phase: null, expires_at: GATE, payload: null, estimated_earnings: 500, currency: 'XAF', created_at: NOW.toISOString() },
+        {
+          order_id: 'o1',
+          phase: null,
+          expires_at: GATE,
+          payload: null,
+          estimated_earnings: 500,
+          currency: 'XAF',
+          created_at: NOW.toISOString(),
+          dashboard_dismissed_at: null,
+        },
       ],
       orders: [
         {
@@ -517,9 +526,10 @@ describe('DesignatedFirstService', () => {
           delivery_time_windows: [],
         },
       ],
+      dedicated_agent_assignments: [],
     });
     const list = await t.service.listForAgent('a1', NOW);
-    expect(list.offers[0]).toMatchObject({ orderId: 'o1', phase: 'gate', details: null });
+    expect(list.offers[0]).toMatchObject({ orderId: 'o1', phase: 'gate', details: null, dismissedFromHome: false });
     expect(list.upcoming[0]).toMatchObject({ orderId: 'o2', freeRelease: true, storeName: 'ACEGUARD Bastos' });
     expect(list.upcoming[1]).toMatchObject({ orderId: 'o3', freeRelease: false, confirmedAt: 'stamped' });
 
@@ -527,8 +537,136 @@ describe('DesignatedFirstService', () => {
     await expect(t.service.listForAgent('a1', NOW)).resolves.toEqual({ offers: [], upcoming: [] });
   });
 
+  it('merges coverage-matched pre-gate orders and keeps Home-dismissed offers', async () => {
+    const t = setup();
+    t.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q.includes('DesignatedAgentOffers')) {
+        return {
+          order_offers: [
+            {
+              order_id: 'o1',
+              phase: 'early',
+              expires_at: GATE,
+              payload: { businessName: 'ACEGUARD Bastos' },
+              estimated_earnings: 500,
+              currency: 'XAF',
+              created_at: NOW.toISOString(),
+              dashboard_dismissed_at: NOW.toISOString(),
+            },
+          ],
+          orders: [],
+        };
+      }
+      if (q.includes('AgentCoverageAssignments')) {
+        return {
+          dedicated_agent_assignments: [
+            { business_location_id: 'loc1', slot_key: 'morning', off_today_date: null },
+            { business_location_id: 'loc1', slot_key: 'evening', off_today_date: NOW.toISOString().slice(0, 10) },
+          ],
+        };
+      }
+      if (q.includes('AgentCoverageOrders')) {
+        return {
+          orders: [
+            {
+              id: 'o1',
+              order_number: 'ORD-1',
+              business_location_id: 'loc1',
+              coverage_slot_key: 'morning',
+              currency: 'XAF',
+              dispatch_ready_at: GATE,
+              pickup_by: WINDOW,
+              fulfillment_timing: 'scheduled',
+              business_location: { name: 'ACEGUARD Bastos', address: { city: 'Yaoundé', country: 'CM' } },
+              delivery_address: { city: 'Yaoundé', state: 'Centre' },
+              delivery_time_windows: [
+                { slot_id: 's1', preferred_date: '2026-11-10', is_confirmed: true, time_slot_start: '09:00:00', time_slot_end: '11:00:00' },
+              ],
+            },
+            {
+              id: 'o4',
+              order_number: 'ORD-4',
+              business_location_id: 'loc1',
+              coverage_slot_key: 'morning',
+              currency: 'XAF',
+              dispatch_ready_at: GATE,
+              pickup_by: WINDOW,
+              fulfillment_timing: 'scheduled',
+              business_location: { name: 'ACEGUARD Bastos', address: { city: 'Yaoundé', country: 'CM' } },
+              delivery_address: { city: 'Yaoundé', state: 'Centre' },
+              delivery_time_windows: [
+                { slot_id: 's1', preferred_date: '2026-11-10', is_confirmed: true, time_slot_start: '09:00:00', time_slot_end: '11:00:00' },
+              ],
+            },
+            {
+              id: 'o5',
+              order_number: 'ORD-5',
+              business_location_id: 'loc1',
+              coverage_slot_key: 'evening',
+              currency: 'XAF',
+              dispatch_ready_at: GATE,
+              pickup_by: WINDOW,
+              fulfillment_timing: 'scheduled',
+              business_location: { name: 'ACEGUARD Bastos', address: { city: 'Yaoundé', country: 'CM' } },
+              delivery_address: { city: 'Yaoundé', state: 'Centre' },
+              delivery_time_windows: [
+                { slot_id: 's2', preferred_date: '2026-11-10', is_confirmed: true, time_slot_start: '17:00:00', time_slot_end: '19:00:00' },
+              ],
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    const list = await t.service.listForAgent('a1', NOW);
+    expect(list.offers.map((o) => o.orderId)).toEqual(['o1', 'o4']);
+    expect(list.offers[0]).toMatchObject({ dismissedFromHome: true, details: { businessName: 'ACEGUARD Bastos' } });
+    expect(list.offers[1]).toMatchObject({
+      orderId: 'o4',
+      phase: 'early',
+      dismissedFromHome: false,
+      details: expect.objectContaining({ businessName: 'ACEGUARD Bastos', gateAt: GATE }),
+    });
+  });
+
+  it('ensures a quiet early offer for an eligible coverage agent', async () => {
+    const t = setup();
+    jest.spyOn(t.service, 'load').mockResolvedValue({
+      order: order({ dispatch_mode: null }),
+      offers: [],
+    });
+    t.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      t.mutations.push({ q, v });
+      if (q.includes('RefreshDesignatedEarlyOffer')) {
+        return { update_order_offers: { affected_rows: 0 } };
+      }
+      if (q.includes('insert_order_offers')) {
+        return { insert_order_offers: { returning: [{ agent_id: 'a1' }] } };
+      }
+      return { update_orders: { affected_rows: 1 } };
+    });
+    await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(true);
+    expect(t.mutations.some((m) => m.q.includes('insert_order_offers'))).toBe(true);
+    expect(t.notifications.sendOrderOfferPush).not.toHaveBeenCalled();
+  });
+
+  it('ensure returns false for a non-coverage agent or declined offer', async () => {
+    const t = setup();
+    t.coverage.evaluate.mockResolvedValue({ eligible: [] });
+    jest.spyOn(t.service, 'load').mockResolvedValue({ order: order(), offers: [] });
+    await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(false);
+
+    const declined = setup();
+    jest.spyOn(declined.service, 'load').mockResolvedValue({
+      order: order(),
+      offers: [{ id: 'x', agent_id: 'a1', user_id: 'u1', status: 'declined', phase: 'early', expires_at: GATE, reminder_sent_at: null } as any],
+    });
+    await expect(declined.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(false);
+  });
+
   it('dismisses an open dedicated offer without changing status', async () => {
     const t = setup();
+    jest.spyOn(t.service, 'ensureEarlyOfferForAgent').mockResolvedValue(true);
     const out = await t.service.dismissDashboardOffer('o1', 'a1', NOW);
     expect(out.dismissedAt).toBe(NOW.toISOString());
     const dismiss = t.mutations.find((m) => m.q.includes('DismissDesignatedDashboardOffer'));
@@ -539,13 +677,13 @@ describe('DesignatedFirstService', () => {
 
   it('refuses dismiss when no open offer matches', async () => {
     const t = setup();
+    jest.spyOn(t.service, 'ensureEarlyOfferForAgent').mockResolvedValue(false);
     t.hasura.executeMutation.mockResolvedValue({ update_order_offers: { affected_rows: 0 } });
     await expect(t.service.dismissDashboardOffer('o1', 'other', NOW)).rejects.toMatchObject({
       status: 409,
       response: expect.objectContaining({ error: 'NOT_OFFERED' }),
     });
   });
-
   it('sends an open-offer reminder only to claimed rows that have a user', async () => {
     const t = setup();
     const at = new Date('2026-11-10T07:18:00.000Z');

@@ -90,6 +90,29 @@ interface DesignatedOfferRow {
   dedicated_attempt?: number | null;
 }
 
+interface CoverageOrderRow {
+  id: string;
+  order_number: string;
+  business_location_id: string;
+  coverage_slot_key: string | null;
+  currency: string;
+  dispatch_ready_at: string | null;
+  pickup_by: string | null;
+  fulfillment_timing: string | null;
+  business_location?: {
+    name?: string | null;
+    address?: { city?: string | null; country?: string | null } | null;
+  } | null;
+  delivery_address?: { city?: string | null; state?: string | null } | null;
+  delivery_time_windows?: Array<{
+    slot_id: string | null;
+    preferred_date: string | null;
+    is_confirmed: boolean | null;
+    time_slot_start?: string | null;
+    time_slot_end?: string | null;
+  }>;
+}
+
 const ORDER_FIELDS = `
   id order_number business_id business_location_id current_status assigned_agent_id assignment_source
   fulfillment_method fulfillment_timing subtotal currency verified_agent_delivery coverage_slot_key
@@ -262,11 +285,10 @@ const AGENT_OFFERS_QUERY = `
         offer_kind: { _eq: "dedicated" }
         status: { _eq: "offered" }
         expires_at: { _gt: $now }
-        dashboard_dismissed_at: { _is_null: true }
       }
       order_by: { expires_at: asc }
     ) {
-      order_id phase expires_at payload estimated_earnings currency created_at
+      order_id phase expires_at payload estimated_earnings currency created_at dashboard_dismissed_at
     }
     orders(
       where: {
@@ -280,6 +302,71 @@ const AGENT_OFFERS_QUERY = `
       business_location { name }
       delivery_time_windows(order_by: { created_at: desc }, limit: 1) { preferred_date time_slot_start time_slot_end }
     }
+  }
+`;
+
+/** Active store/slot coverage for this agent (planning list, not offer-gated). */
+const AGENT_COVERAGE_ASSIGNMENTS_QUERY = `
+  query AgentCoverageAssignments($agentId: uuid!) {
+    dedicated_agent_assignments(
+      where: { agent_id: { _eq: $agentId }, status: { _eq: "active" } }
+    ) {
+      business_location_id
+      slot_key
+      off_today_date
+    }
+  }
+`;
+
+/** Pre-gate ready delivery orders on locations the agent covers (filtered to slot pairs in code). */
+const AGENT_COVERAGE_ORDERS_QUERY = `
+  query AgentCoverageOrders($locationIds: [uuid!]!, $slotKeys: [String!]!, $now: timestamptz!) {
+    orders(
+      where: {
+        current_status: { _eq: "ready_for_pickup" }
+        assigned_agent_id: { _is_null: true }
+        fulfillment_method: { _eq: "delivery" }
+        dispatch_ready_at: { _gt: $now }
+        business_location_id: { _in: $locationIds }
+        coverage_slot_key: { _in: $slotKeys }
+      }
+      order_by: { dispatch_ready_at: asc }
+      limit: 50
+    ) {
+      id order_number business_location_id coverage_slot_key currency
+      dispatch_ready_at pickup_by fulfillment_timing
+      business_location { name address { city country } }
+      delivery_address { city state }
+      delivery_time_windows(order_by: { created_at: desc }, limit: 1) {
+        slot_id preferred_date is_confirmed time_slot_start time_slot_end
+      }
+    }
+  }
+`;
+
+/** Quiet ensure for Take/Ignore: reopen offered/expired dedicated rows without a push. */
+const REFRESH_EARLY_OFFER = `
+  mutation RefreshDesignatedEarlyOffer(
+    $orderId: uuid!, $agentId: uuid!, $expiresAt: timestamptz!, $payload: jsonb
+    $earnings: numeric, $currency: String
+  ) {
+    update_order_offers(
+      where: {
+        order_id: { _eq: $orderId }
+        agent_id: { _eq: $agentId }
+        offer_kind: { _eq: "dedicated" }
+        status: { _in: ["offered", "expired"] }
+      }
+      _set: {
+        status: "offered"
+        phase: "early"
+        expires_at: $expiresAt
+        payload: $payload
+        estimated_earnings: $earnings
+        currency: $currency
+        responded_at: null
+      }
+    ) { affected_rows }
   }
 `;
 
@@ -559,14 +646,16 @@ export class DesignatedFirstService {
   }
 
   /**
-   * Home/hub Ignore: stamp dashboard_dismissed_at on the caller's open dedicated offer.
-   * Does not decline the offer, so a reminder push can still be accepted until the gate.
+   * Home Ignore: stamp dashboard_dismissed_at on the caller's open dedicated offer.
+   * Ensures a coverage early offer exists first so Ignore works without a prior push.
+   * Does not decline; hub still lists the card; push accept still works until the gate.
    */
   async dismissDashboardOffer(
     orderId: string,
     agentId: string,
     now: Date = new Date()
   ): Promise<{ dismissedAt: string }> {
+    await this.ensureEarlyOfferForAgent(orderId, agentId, now);
     const at = now.toISOString();
     const res = await this.hasura.executeMutation<{
       update_order_offers: { affected_rows: number } | null;
@@ -582,6 +671,30 @@ export class DesignatedFirstService {
       agentId,
     });
     return { dismissedAt: at };
+  }
+
+  /**
+   * Ensure this coverage agent has an open early dedicated offer (no push).
+   * Used by Take when the offer row is missing and by Ignore for coverage cards.
+   */
+  async ensureEarlyOfferForAgent(orderId: string, agentId: string, now: Date = new Date()): Promise<boolean> {
+    try {
+      const { order, offers } = await this.load(orderId);
+      if (this.hasLiveDedicatedOffer(offers, agentId, now)) return true;
+      const ctx = await this.coverageEnsureContext(order, offers, agentId, now);
+      if (!ctx || !order) return false;
+      await this.stampMode(order.id, 'designated_first');
+      return this.writeQuietEarlyOffer(order, ctx.agent, ctx.slot, ctx.gateAt, ctx.config, now, offers);
+    } catch (error) {
+      this.logger.warn(`Ensure early offer failed for ${orderId}: ${this.msg(error)}`);
+      return false;
+    }
+  }
+
+  private hasLiveDedicatedOffer(offers: DesignatedOfferRow[], agentId: string, now: Date): boolean {
+    return offers.some(
+      (o) => o.agent_id === agentId && o.status === 'offered' && new Date(o.expires_at).getTime() > now.getTime()
+    );
   }
 
   /** "Still on it": the agent confirms the order they hold. */
@@ -654,7 +767,10 @@ export class DesignatedFirstService {
     }
   }
 
-  /** Agent list: open designated offers (with the pre-accept payload) and upcoming designated orders. */
+  /**
+   * Agent list: open dedicated offers (incl. Home-dismissed) merged with pre-gate
+   * ready orders on the agent's active store/slot coverage, plus assigned upcoming.
+   */
   async listForAgent(agentId: string, now: Date = new Date()) {
     const res = await this.hasura.executeQuery<{
       order_offers: Array<{
@@ -665,6 +781,7 @@ export class DesignatedFirstService {
         estimated_earnings: number | null;
         currency: string | null;
         created_at: string;
+        dashboard_dismissed_at: string | null;
       }>;
       orders: Array<{
         id: string;
@@ -677,32 +794,11 @@ export class DesignatedFirstService {
         delivery_time_windows?: Array<{ preferred_date: string | null; time_slot_start: string | null; time_slot_end: string | null }>;
       }>;
     }>(AGENT_OFFERS_QUERY, { agentId, now: now.toISOString() });
+    const offers = this.mapOfferRows(res?.order_offers ?? []);
+    const coverage = await this.coverageOffersForAgent(agentId, now, new Set(offers.map((o) => o.orderId)));
     return {
-      offers: (res?.order_offers ?? []).map((o) => ({
-        orderId: o.order_id,
-        phase: o.phase ?? 'gate',
-        expiresAt: o.expires_at,
-        offeredAt: o.created_at,
-        estimatedEarnings: o.estimated_earnings,
-        currency: o.currency,
-        details: o.payload ?? null,
-      })),
-      upcoming: (res?.orders ?? []).map((o) => {
-        const w = o.delivery_time_windows?.[0];
-        return {
-          orderId: o.id,
-          orderNumber: o.order_number,
-          storeName: o.business_location?.name ?? null,
-          date: w?.preferred_date ?? null,
-          windowStart: w?.time_slot_start ?? null,
-          windowEnd: w?.time_slot_end ?? null,
-          pickupBy: o.pickup_by,
-          gateAt: o.dispatch_ready_at,
-          releaseCutoffAt: o.designated_release_cutoff_at,
-          freeRelease: !!o.designated_release_cutoff_at && new Date(o.designated_release_cutoff_at).getTime() > now.getTime(),
-          confirmedAt: o.designated_confirmed_at,
-        };
-      }),
+      offers: [...offers, ...coverage],
+      upcoming: this.mapUpcomingRows(res?.orders ?? [], now),
     };
   }
 
@@ -716,6 +812,294 @@ export class DesignatedFirstService {
   }
 
   // ---- internals ----
+
+  private mapOfferRows(
+    rows: Array<{
+      order_id: string;
+      phase: string | null;
+      expires_at: string;
+      payload: DesignatedOfferPayload | null;
+      estimated_earnings: number | null;
+      currency: string | null;
+      created_at: string;
+      dashboard_dismissed_at: string | null;
+    }>
+  ) {
+    return rows.map((o) => ({
+      orderId: o.order_id,
+      phase: o.phase ?? 'gate',
+      expiresAt: o.expires_at,
+      offeredAt: o.created_at,
+      estimatedEarnings: o.estimated_earnings,
+      currency: o.currency,
+      details: o.payload ?? null,
+      dismissedFromHome: !!o.dashboard_dismissed_at,
+    }));
+  }
+
+  private mapUpcomingRows(
+    rows: Array<{
+      id: string;
+      order_number: string;
+      pickup_by: string | null;
+      dispatch_ready_at: string | null;
+      designated_release_cutoff_at: string | null;
+      designated_confirmed_at: string | null;
+      business_location?: { name?: string | null } | null;
+      delivery_time_windows?: Array<{ preferred_date: string | null; time_slot_start: string | null; time_slot_end: string | null }>;
+    }>,
+    now: Date
+  ) {
+    return rows.map((o) => {
+      const w = o.delivery_time_windows?.[0];
+      return {
+        orderId: o.id,
+        orderNumber: o.order_number,
+        storeName: o.business_location?.name ?? null,
+        date: w?.preferred_date ?? null,
+        windowStart: w?.time_slot_start ?? null,
+        windowEnd: w?.time_slot_end ?? null,
+        pickupBy: o.pickup_by,
+        gateAt: o.dispatch_ready_at,
+        releaseCutoffAt: o.designated_release_cutoff_at,
+        freeRelease: !!o.designated_release_cutoff_at && new Date(o.designated_release_cutoff_at).getTime() > now.getTime(),
+        confirmedAt: o.designated_confirmed_at,
+      };
+    });
+  }
+
+  private async coverageOffersForAgent(agentId: string, now: Date, knownOrderIds: Set<string>) {
+    const pairs = await this.activeCoveragePairs(agentId, now);
+    if (pairs.length === 0) return [];
+    const locationIds = [...new Set(pairs.map((p) => p.locationId))];
+    const slotKeys = [...new Set(pairs.map((p) => p.slotKey))];
+    const pairSet = new Set(pairs.map((p) => `${p.locationId}:${p.slotKey}`));
+    const res = await this.hasura
+      .executeQuery<{ orders: CoverageOrderRow[] }>(AGENT_COVERAGE_ORDERS_QUERY, {
+        locationIds,
+        slotKeys,
+        now: now.toISOString(),
+      })
+      .catch(() => null);
+    return (res?.orders ?? [])
+      .filter((o) => this.coverageOrderMatches(o, pairSet, knownOrderIds))
+      .map((o) => this.synthesizeCoverageOffer(o, now));
+  }
+
+  private async activeCoveragePairs(agentId: string, now: Date): Promise<Array<{ locationId: string; slotKey: string }>> {
+    const today = now.toISOString().slice(0, 10);
+    const res = await this.hasura
+      .executeQuery<{
+        dedicated_agent_assignments: Array<{
+          business_location_id: string;
+          slot_key: string;
+          off_today_date: string | null;
+        }>;
+      }>(AGENT_COVERAGE_ASSIGNMENTS_QUERY, { agentId })
+      .catch(() => null);
+    return (res?.dedicated_agent_assignments ?? [])
+      .filter((a) => a.off_today_date !== today)
+      .map((a) => ({ locationId: a.business_location_id, slotKey: a.slot_key }));
+  }
+
+  private coverageOrderMatches(order: CoverageOrderRow, pairSet: Set<string>, knownOrderIds: Set<string>): boolean {
+    if (knownOrderIds.has(order.id)) return false;
+    if (!order.coverage_slot_key || !pairSet.has(`${order.business_location_id}:${order.coverage_slot_key}`)) {
+      return false;
+    }
+    const window = order.delivery_time_windows?.[0];
+    return isDedicatedEligibleOrder({
+      fulfillmentTiming: order.fulfillment_timing,
+      hasDeliveryWindow: !!window?.slot_id && !!window?.preferred_date,
+      windowConfirmed: window?.is_confirmed,
+      requireConfirmedWindow: true,
+    });
+  }
+
+  private synthesizeCoverageOffer(order: CoverageOrderRow, now: Date) {
+    const window = order.delivery_time_windows?.[0];
+    const gateAt = order.dispatch_ready_at ?? now.toISOString();
+    const businessName = order.business_location?.name || 'the store';
+    return {
+      orderId: order.id,
+      phase: 'early',
+      expiresAt: gateAt,
+      offeredAt: now.toISOString(),
+      estimatedEarnings: null as number | null,
+      currency: order.currency,
+      dismissedFromHome: false,
+      details: {
+        date: window?.preferred_date ?? null,
+        windowStart: window?.time_slot_start ?? null,
+        windowEnd: window?.time_slot_end ?? null,
+        gateAt,
+        businessName,
+        pickupArea: designatedArea({ city: order.business_location?.address?.city, state: null }),
+        dropoffArea: designatedArea(order.delivery_address),
+        pickupKm: null,
+        dropoffKm: null,
+        distanceOrigin: null,
+        commission: null,
+        currency: order.currency,
+        releaseCutoffAt: null,
+      } satisfies DesignatedOfferPayload,
+    };
+  }
+
+  private async coverageEnsureContext(
+    order: DesignatedOrder | null,
+    offers: DesignatedOfferRow[],
+    agentId: string,
+    now: Date
+  ): Promise<{ agent: DedicatedEligibleAgent; slot: ResolvedDedicatedSlot; gateAt: Date; config: DedicatedAgentsConfig } | null> {
+    if (!this.isPreGateDispatchable(order, offers, agentId, now)) return null;
+    const window = order!.delivery_time_windows?.[0];
+    const config = await this.dedicatedConfig.getConfig(isoCountryCode(order!.business_location?.address?.country));
+    if (!config.enabled || !config.designatedFirstEnabled) return null;
+    const gateAt = new Date(order!.dispatch_ready_at as string);
+    const slot = await this.coverage.resolveSlot({
+      locationId: order!.business_location_id,
+      preferredDate: window?.preferred_date as string,
+      slotId: window?.slot_id as string,
+    });
+    if (!slot) return null;
+    const agent = (await this.eligibleAgents(order!, slot)).find((a) => a.agentId === agentId);
+    if (!agent?.userId) return null;
+    return { agent, slot, gateAt, config };
+  }
+
+  private isPreGateDispatchable(
+    order: DesignatedOrder | null,
+    offers: DesignatedOfferRow[],
+    agentId: string,
+    now: Date
+  ): order is DesignatedOrder {
+    if (!order) return false;
+    if (order.current_status !== 'ready_for_pickup' || order.assigned_agent_id || order.fulfillment_method !== 'delivery') {
+      return false;
+    }
+    if (offers.some((o) => o.agent_id === agentId && o.status === 'declined')) return false;
+    const window = order.delivery_time_windows?.[0];
+    if (
+      !order.coverage_slot_key ||
+      !isDedicatedEligibleOrder({
+        fulfillmentTiming: order.fulfillment_timing,
+        hasDeliveryWindow: !!window?.slot_id && !!window?.preferred_date,
+        windowConfirmed: window?.is_confirmed,
+        requireConfirmedWindow: true,
+      })
+    ) {
+      return false;
+    }
+    const gateAt = order.dispatch_ready_at ? new Date(order.dispatch_ready_at) : null;
+    return !!gateAt && gateAt.getTime() > now.getTime();
+  }
+
+  private async writeQuietEarlyOffer(
+    order: DesignatedOrder,
+    agent: DedicatedEligibleAgent,
+    slot: ResolvedDedicatedSlot,
+    gateAt: Date,
+    config: DedicatedAgentsConfig,
+    now: Date,
+    prior: DesignatedOfferRow[]
+  ): Promise<boolean> {
+    const payload = await this.quietOfferPayload(order, agent.agentId, slot, gateAt, config, now);
+    if (await this.refreshEarlyOfferRow(order.id, agent.agentId, gateAt, payload)) return true;
+    await this.insertQuietEarlyOffer(order, agent, payload, gateAt, now, prior);
+    return true;
+  }
+
+  private async refreshEarlyOfferRow(
+    orderId: string,
+    agentId: string,
+    gateAt: Date,
+    payload: DesignatedOfferPayload
+  ): Promise<boolean> {
+    const refreshed = await this.hasura.executeMutation<{ update_order_offers: { affected_rows: number } | null }>(
+      REFRESH_EARLY_OFFER,
+      {
+        orderId,
+        agentId,
+        expiresAt: gateAt.toISOString(),
+        payload,
+        earnings: payload.commission,
+        currency: payload.currency,
+      }
+    );
+    return (refreshed?.update_order_offers?.affected_rows ?? 0) > 0;
+  }
+
+  private async insertQuietEarlyOffer(
+    order: DesignatedOrder,
+    agent: DedicatedEligibleAgent,
+    payload: DesignatedOfferPayload,
+    gateAt: Date,
+    now: Date,
+    prior: DesignatedOfferRow[]
+  ): Promise<void> {
+    const attempt = (prior.find((o) => o.agent_id === agent.agentId)?.dedicated_attempt ?? 0) + 1;
+    const objects = orderAssignmentsForLocking([
+      {
+        order_id: order.id,
+        agent_id: agent.agentId,
+        user_id: agent.userId,
+        status: 'offered',
+        offer_kind: 'dedicated',
+        phase: 'early',
+        payload,
+        decline_reason: null,
+        distance_km: payload.pickupKm,
+        estimated_earnings: payload.commission,
+        currency: payload.currency,
+        expires_at: gateAt.toISOString(),
+        created_at: now.toISOString(),
+        responded_at: null,
+        reminder_sent_at: null,
+        dedicated_attempt: attempt,
+      },
+    ]);
+    await runAssignmentWrite(() => this.hasura.executeMutation(UPSERT_EARLY_OFFERS, { objects }));
+  }
+
+  private async quietOfferPayload(
+    order: DesignatedOrder,
+    agentId: string,
+    slot: ResolvedDedicatedSlot,
+    gateAt: Date,
+    config: DedicatedAgentsConfig,
+    now: Date
+  ): Promise<DesignatedOfferPayload> {
+    const earnings = await this.agentEarnings(order);
+    const origin = (await this.agentOrigins([agentId], now)).get(agentId)?.origin ?? null;
+    const pickup = toPoint(order.business_location?.address?.latitude, order.business_location?.address?.longitude);
+    const dropoff = toPoint(order.delivery_address?.latitude, order.delivery_address?.longitude);
+    const window = order.delivery_time_windows?.[0];
+    const windowStart = order.pickup_by ? new Date(order.pickup_by) : null;
+    const cutoff = windowStart ? designatedReleaseCutoffAt(windowStart, config.designatedReleaseCutoffMinutes) : null;
+    return {
+      date: window?.preferred_date ?? slot.date,
+      windowStart: window?.time_slot_start ?? slot.startTime,
+      windowEnd: window?.time_slot_end ?? slot.endTime,
+      gateAt: gateAt.toISOString(),
+      businessName: order.business_location?.name || order.business?.name || 'the store',
+      pickupArea: designatedArea({ city: order.business_location?.address?.city, state: null }),
+      dropoffArea: designatedArea(order.delivery_address),
+      pickupKm: origin && pickup ? Number(haversineKm(origin.point, pickup).toFixed(1)) : null,
+      dropoffKm: pickup && dropoff ? Number(haversineKm(pickup, dropoff).toFixed(1)) : null,
+      distanceOrigin: origin?.source ?? null,
+      commission: earnings.amount,
+      currency: earnings.currency,
+      releaseCutoffAt: cutoff?.toISOString() ?? null,
+    };
+  }
+
+  private async agentEarnings(order: DesignatedOrder): Promise<{ amount: number | null; currency: string }> {
+    return this.commissionsService
+      .calculateAgentEarnings(order.id, true)
+      .then((e) => ({ amount: e.totalEarnings ?? null, currency: e.currency ?? order.currency }))
+      .catch(() => ({ amount: null as number | null, currency: order.currency }));
+  }
 
   private dueFor(order: DesignatedOrder, offers: DesignatedOfferRow[], now: Date, config: DedicatedAgentsConfig, timeZone: string | null) {
     const openEarly = offers.filter((o) => o.status === 'offered' && o.phase === 'early');

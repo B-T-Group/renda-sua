@@ -95,7 +95,7 @@ export function DesignatedHomeOffersSection({ onAccepted }: Props) {
       <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
         {t(
           'designatedFirst.home.subtitle',
-          'Orders already offered for your slot. Take one now if you missed the notification.'
+          'Upcoming orders for your dedicated stores and slots. Take one now to plan ahead — even if you missed the notification.'
         )}
       </Text>
       {error ? (

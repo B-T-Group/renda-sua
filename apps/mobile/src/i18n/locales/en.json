@@ -8276,7 +8276,7 @@
     },
     "home": {
       "title": "Your upcoming dedicated deliveries",
-      "subtitle": "Orders already offered for your slot. Take one now if you missed the notification.",
+      "subtitle": "Upcoming orders for your dedicated stores and slots. Take one now to plan ahead — even if you missed the notification.",
       "opensAt": "Dispatch opens {{time}}",
       "take": "I'll take this",
       "ignore": "Ignore"

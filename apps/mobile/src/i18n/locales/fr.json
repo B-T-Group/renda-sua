@@ -8198,7 +8198,7 @@
     },
     "home": {
       "title": "Vos prochaines livraisons dédiées",
-      "subtitle": "Commandes déjà proposées pour votre créneau. Prenez-en une si vous avez manqué la notification.",
+      "subtitle": "Commandes à venir pour vos magasins et créneaux dédiés. Prenez-en une maintenant pour planifier — même si vous avez manqué la notification.",
       "opensAt": "Dispatch à {{time}}",
       "take": "Je la prends",
       "ignore": "Ignorer"
