@@ -53,6 +53,44 @@ describe('clientCanShowConfirmReceipt', () => {
     ).toBe(true);
   });
 
+  it('hides pay-on-delivery until collected, and keeps pay-after-confirm visible', () => {
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        paymentMethod: 'pay_on_delivery',
+        paymentStatus: null,
+      })
+    ).toBe(false);
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        paymentTiming: 'pay_at_delivery',
+        paymentStatus: 'authorized',
+      })
+    ).toBe(true);
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        paymentTiming: 'pay_at_delivery',
+        paymentStatus: 'pending',
+        payAfterMerchantConfirm: true,
+      })
+    ).toBe(true);
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        isGift: true,
+        giftBuyerCanConfirm: true,
+        paymentMethod: 'pay_on_delivery',
+        paymentStatus: 'pending',
+      })
+    ).toBe(false);
+  });
+
   it('shows confirm for a non-gift client from out_for_delivery', () => {
     expect(
       clientCanShowConfirmReceipt({
