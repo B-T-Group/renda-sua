@@ -1392,57 +1392,6 @@ export default observer(function CartCheckoutScreen() {
           </View>
         ))}
 
-        {fulfillmentConfirmed && fulfillment === 'shipping' ? (
-          <NoticeBanner
-            style={{ marginBottom: spacing.sm }}
-            tone="info"
-            icon="package-variant-closed"
-            message={t(
-              'client.placeOrder.shippingNotice',
-              'The seller ships this with a carrier. Pay now to place the order.'
-            )}
-          />
-        ) : null}
-
-        {/* Diaspora payment notice (Stripe pay-now only) */}
-        {fulfillmentConfirmed && isDiaspora ? (
-          <NoticeBanner
-            style={{ marginBottom: spacing.sm }}
-            tone="info"
-            icon="credit-card-outline"
-            message={
-              fulfillment === 'pickup'
-                ? t(
-                    'diaspora.paymentNoticePickup',
-                    'Pay by card now. Funds held until the recipient picks up the order.'
-                  )
-                : t(
-                    'diaspora.paymentNoticeDelivery',
-                    'Pay by card now. Funds held until the recipient receives the order.'
-                  )
-            }
-          />
-        ) : null}
-
-        {fulfillmentConfirmed &&
-        fulfillment === 'pickup' &&
-        !isDiaspora &&
-        !(preflightConfig?.schedule_allowed === false && !resolvedIsStripeRail) ? (
-          <NoticeBanner
-            style={{ marginBottom: spacing.sm }}
-            tone="info"
-            icon="store-check-outline"
-            message={
-              resolvedIsStripeRail
-                ? t(
-                    'client.placeOrder.pickupHintStripe',
-                    'Pay securely by card when you place your order, then pick up at the store.'
-                  )
-                : t('client.placeOrder.pickupHint', 'Pay when you pick up at the store.')
-            }
-          />
-        ) : null}
-
         {fulfillment === 'delivery' && deliveryKnownUnavailable ? (
           <NoticeBanner
             style={{ marginBottom: spacing.sm }}
@@ -1466,6 +1415,42 @@ export default observer(function CartCheckoutScreen() {
             }
             onAction={pickupEligible ? switchToPickupFromUnavailable : undefined}
           />
+        ) : null}
+
+        {windowSectionVisible && fulfillment === 'pickup' ? (
+          <View
+            onLayout={(event) => {
+              windowSectionY.current = event.nativeEvent.layout.y;
+            }}
+          >
+            <GuidedCheckoutCard
+              title={t(
+                'client.placeOrder.deliveryWindow.pickupTitle',
+                'When will you pick up your order?'
+              )}
+            >
+              <PlaceOrderDeliveryWindowBlock
+                countryCode={preflightConfig?.groups?.[0]?.seller_country?.trim() ?? ''}
+                stateCode={preflightConfig?.groups?.[0]?.seller_state?.trim() ?? ''}
+                enabled={Boolean(
+                  preflightConfig?.groups?.[0]?.seller_country?.trim() &&
+                    preflightConfig?.groups?.[0]?.seller_state?.trim()
+                )}
+                fulfillment="pickup"
+                businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
+                scheduleRequired={!!preflightConfig?.schedule_required}
+                allowSchedule={preflightConfig?.schedule_allowed !== false}
+                payAfterConfirm={isCookedFoodMoMoPayAfter}
+                payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
+                estimatedReadyAt={preflightConfig?.estimated_ready_at}
+                estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
+                opensAt={preflightConfig?.opens_at}
+                onReadyChange={onDwReadyChange}
+                onCommit={onDwCommit}
+                onLabelChange={onWindowLabel}
+              />
+            </GuidedCheckoutCard>
+          </View>
         ) : null}
 
         {fulfillmentConfirmed && fulfillmentNeedsAddress(fulfillment) && !sendingOrderHome ? (
@@ -1522,12 +1507,12 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
-        <View
-          onLayout={(event) => {
-            windowSectionY.current = event.nativeEvent.layout.y;
-          }}
-        >
-          {windowSectionVisible && fulfillment === 'delivery' && selectedAddress ? (
+        {windowSectionVisible && fulfillment === 'delivery' && selectedAddress ? (
+          <View
+            onLayout={(event) => {
+              windowSectionY.current = event.nativeEvent.layout.y;
+            }}
+          >
             <GuidedCheckoutCard
               title={t(
                 'client.placeOrder.deliveryWindow.title',
@@ -1553,38 +1538,59 @@ export default observer(function CartCheckoutScreen() {
                 onLabelChange={onWindowLabel}
               />
             </GuidedCheckoutCard>
-          ) : null}
+          </View>
+        ) : null}
 
-          {windowSectionVisible && fulfillment === 'pickup' ? (
-            <GuidedCheckoutCard
-              title={t(
-                'client.placeOrder.deliveryWindow.pickupTitle',
-                'When will you pick up your order?'
-              )}
-            >
-              <PlaceOrderDeliveryWindowBlock
-                countryCode={preflightConfig?.groups?.[0]?.seller_country?.trim() ?? ''}
-                stateCode={preflightConfig?.groups?.[0]?.seller_state?.trim() ?? ''}
-                enabled={Boolean(
-                  preflightConfig?.groups?.[0]?.seller_country?.trim() &&
-                    preflightConfig?.groups?.[0]?.seller_state?.trim()
-                )}
-                fulfillment="pickup"
-                businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
-                scheduleRequired={!!preflightConfig?.schedule_required}
-                allowSchedule={preflightConfig?.schedule_allowed !== false}
-                payAfterConfirm={isCookedFoodMoMoPayAfter}
-                payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
-                estimatedReadyAt={preflightConfig?.estimated_ready_at}
-                estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
-                opensAt={preflightConfig?.opens_at}
-                onReadyChange={onDwReadyChange}
-                onCommit={onDwCommit}
-                onLabelChange={onWindowLabel}
-              />
-            </GuidedCheckoutCard>
-          ) : null}
-        </View>
+        {fulfillmentConfirmed && fulfillment === 'shipping' ? (
+          <NoticeBanner
+            style={{ marginBottom: spacing.sm }}
+            tone="info"
+            icon="package-variant-closed"
+            message={t(
+              'client.placeOrder.shippingNotice',
+              'The seller ships this with a carrier. Pay now to place the order.'
+            )}
+          />
+        ) : null}
+
+        {/* Diaspora payment notice (Stripe pay-now only) */}
+        {fulfillmentConfirmed && isDiaspora ? (
+          <NoticeBanner
+            style={{ marginBottom: spacing.sm }}
+            tone="info"
+            icon="credit-card-outline"
+            message={
+              fulfillment === 'pickup'
+                ? t(
+                    'diaspora.paymentNoticePickup',
+                    'Pay by card now. Funds held until the recipient picks up the order.'
+                  )
+                : t(
+                    'diaspora.paymentNoticeDelivery',
+                    'Pay by card now. Funds held until the recipient receives the order.'
+                  )
+            }
+          />
+        ) : null}
+
+        {fulfillmentConfirmed &&
+        fulfillment === 'pickup' &&
+        !isDiaspora &&
+        !(preflightConfig?.schedule_allowed === false && !resolvedIsStripeRail) ? (
+          <NoticeBanner
+            style={{ marginBottom: spacing.sm }}
+            tone="info"
+            icon="store-check-outline"
+            message={
+              resolvedIsStripeRail
+                ? t(
+                    'client.placeOrder.pickupHintStripe',
+                    'Pay securely by card when you place your order, then pick up at the store.'
+                  )
+                : t('client.placeOrder.pickupHint', 'Pay when you pick up at the store.')
+            }
+          />
+        ) : null}
 
         {fulfillmentConfirmed && isCookedFoodMoMoPayAfter ? (
           <View style={{ marginBottom: spacing.sm }}>

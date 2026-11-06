@@ -27,6 +27,16 @@ export function isSlotBookable(s: DeliveryTimeSlot): boolean {
   return Boolean(s.is_available && s.available_capacity > 0);
 }
 
+/** Keep only calendar days that still have at least one bookable slot. */
+export function ymDsWithBookableSlots(
+  byDate: Array<{ date: string; slots: DeliveryTimeSlot[] }>
+): string[] {
+  return byDate
+    .filter((day) => day.slots.some(isSlotBookable))
+    .map((day) => day.date)
+    .sort();
+}
+
 export function pickPreferredSlot(slots: DeliveryTimeSlot[]): DeliveryTimeSlot | null {
   const ok = (s: DeliveryTimeSlot) => isSlotBookable(s);
   const morning = slots.find((s) => ok(s) && s.slot_name.toLowerCase().includes('morning'));

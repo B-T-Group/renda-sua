@@ -205,9 +205,7 @@ export function DeliveryWindowPicker({
 
   if (!enabled) return null;
 
-  // Always keep the day strip visible once we have calendar options — even when
-  // the selected day has zero slots. Hiding it made pickup look like there was
-  // no date/time UI at all ("No slots for this date" with nothing to tap).
+  // dayOptions only includes dates with at least one bookable slot.
   const showDayStrip = !dw.loading && !dw.error && dw.dayOptions.length > 0;
   const showSlotList = showDayStrip && dw.slots.length > 0;
   const showEmptySlots =
