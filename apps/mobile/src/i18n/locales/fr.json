@@ -8195,6 +8195,13 @@
       "empty": "Aucune livraison dédiée pour le moment.",
       "offerBadge": "Offre",
       "assignedBadge": "Assignée"
+    },
+    "home": {
+      "title": "Vos prochaines livraisons dédiées",
+      "subtitle": "Commandes déjà proposées pour votre créneau. Prenez-en une si vous avez manqué la notification.",
+      "opensAt": "Dispatch à {{time}}",
+      "take": "Je la prends",
+      "ignore": "Ignorer"
     }
   }
 }

@@ -213,6 +213,25 @@ const CLAIM_OFFER_REMINDERS = `
   }
 `;
 
+/** Ignore on home/hub: hide without declining so a push accept still works. */
+const DISMISS_DASHBOARD_OFFER = `
+  mutation DismissDesignatedDashboardOffer(
+    $orderId: uuid!, $agentId: uuid!, $now: timestamptz!, $at: timestamptz!
+  ) {
+    update_order_offers(
+      where: {
+        order_id: { _eq: $orderId }
+        agent_id: { _eq: $agentId }
+        offer_kind: { _eq: "dedicated" }
+        status: { _eq: "offered" }
+        expires_at: { _gt: $now }
+        dashboard_dismissed_at: { _is_null: true }
+      }
+      _set: { dashboard_dismissed_at: $at }
+    ) { affected_rows }
+  }
+`;
+
 const RELIABILITY_EVENT = `
   mutation InsertAgentReliabilityEvent($object: agent_reliability_events_insert_input!) {
     insert_agent_reliability_events_one(
@@ -243,6 +262,7 @@ const AGENT_OFFERS_QUERY = `
         offer_kind: { _eq: "dedicated" }
         status: { _eq: "offered" }
         expires_at: { _gt: $now }
+        dashboard_dismissed_at: { _is_null: true }
       }
       order_by: { expires_at: asc }
     ) {
@@ -536,6 +556,32 @@ export class DesignatedFirstService {
     } catch (error) {
       this.logger.warn(`Designated accept stamp failed for ${orderId}: ${this.msg(error)}`);
     }
+  }
+
+  /**
+   * Home/hub Ignore: stamp dashboard_dismissed_at on the caller's open dedicated offer.
+   * Does not decline the offer, so a reminder push can still be accepted until the gate.
+   */
+  async dismissDashboardOffer(
+    orderId: string,
+    agentId: string,
+    now: Date = new Date()
+  ): Promise<{ dismissedAt: string }> {
+    const at = now.toISOString();
+    const res = await this.hasura.executeMutation<{
+      update_order_offers: { affected_rows: number } | null;
+    }>(DISMISS_DASHBOARD_OFFER, { orderId, agentId, now: at, at });
+    if ((res?.update_order_offers?.affected_rows ?? 0) < 1) {
+      throw new HttpException(
+        { error: 'NOT_OFFERED', message: 'No open designated offer to hide' },
+        HttpStatus.CONFLICT
+      );
+    }
+    emitServerSiteEvent(this.siteEventsService, 'dedicated.dashboard_offer_dismissed', {
+      orderId,
+      agentId,
+    });
+    return { dismissedAt: at };
   }
 
   /** "Still on it": the agent confirms the order they hold. */

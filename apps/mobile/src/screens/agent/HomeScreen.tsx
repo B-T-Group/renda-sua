@@ -52,6 +52,7 @@ import { FeatureCard } from '../../components/common/FeatureCard';
 import { AssistantHomeEntry } from '../../components/common/AssistantHomeEntry';
 import DedicatedOpportunitiesHomeCard from '../../components/agent/DedicatedOpportunitiesHomeCard';
 import DedicatedStoresHomeCard from '../../components/agent/DedicatedStoresHomeCard';
+import { DesignatedHomeOffersSection } from '../../components/dedicated/DesignatedHomeOffersSection';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import type { AppNavScreen } from '../../navigation/AppNavigator';
 import type { RootStackParamList as AgentRootStackParamList } from '../../navigation/AgentRootNavigator';
@@ -706,6 +707,13 @@ export default function HomeScreen() {
 
         {showDelivery ? (
         <>
+        <DesignatedHomeOffersSection
+          onAccepted={() => {
+            void refetchOpenOrders();
+            void refetchAgentOrders();
+          }}
+        />
+
         {/* ── SECTION 1: Available Deliveries ── */}
         <View style={[styles.section, { paddingHorizontal: spacing.md }]}>
           <View style={styles.sectionHeader}>

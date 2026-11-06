@@ -18004,6 +18004,15 @@ export class OrdersService {
     return { success: true, ...(await this.designatedFirst.confirm(orderId, agent.id)) };
   }
 
+  /** Home/hub Ignore: hide the early offer without declining it. */
+  async dismissDesignatedOffer(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can dismiss an offer');
+    const agent = this.requireAgentRecord(user);
+    if (!this.designatedFirst) throw new HttpException('Unavailable', HttpStatus.NOT_FOUND);
+    return { success: true, ...(await this.designatedFirst.dismissDashboardOffer(orderId, agent.id)) };
+  }
+
   /** "Can't make it": free before the 2 h cutoff, a strike after it (no money fee). */
   async releaseDesignated(orderId: string, rawReason?: unknown) {
     const user = await this.hasuraUserService.getUser();

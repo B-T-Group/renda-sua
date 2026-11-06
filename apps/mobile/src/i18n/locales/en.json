@@ -8273,6 +8273,13 @@
       "empty": "No designated deliveries right now.",
       "offerBadge": "Offer",
       "assignedBadge": "Assigned"
+    },
+    "home": {
+      "title": "Your upcoming dedicated deliveries",
+      "subtitle": "Orders already offered for your slot. Take one now if you missed the notification.",
+      "opensAt": "Dispatch opens {{time}}",
+      "take": "I'll take this",
+      "ignore": "Ignore"
     }
   }
 }

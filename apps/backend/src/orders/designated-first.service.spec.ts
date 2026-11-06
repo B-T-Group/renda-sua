@@ -527,6 +527,25 @@ describe('DesignatedFirstService', () => {
     await expect(t.service.listForAgent('a1', NOW)).resolves.toEqual({ offers: [], upcoming: [] });
   });
 
+  it('dismisses an open dedicated offer without changing status', async () => {
+    const t = setup();
+    const out = await t.service.dismissDashboardOffer('o1', 'a1', NOW);
+    expect(out.dismissedAt).toBe(NOW.toISOString());
+    const dismiss = t.mutations.find((m) => m.q.includes('DismissDesignatedDashboardOffer'));
+    expect(dismiss?.v).toMatchObject({ orderId: 'o1', agentId: 'a1', at: NOW.toISOString() });
+    expect(dismiss?.q).toContain('dashboard_dismissed_at');
+    expect(dismiss?.q).not.toContain('status: "declined"');
+  });
+
+  it('refuses dismiss when no open offer matches', async () => {
+    const t = setup();
+    t.hasura.executeMutation.mockResolvedValue({ update_order_offers: { affected_rows: 0 } });
+    await expect(t.service.dismissDashboardOffer('o1', 'other', NOW)).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ error: 'NOT_OFFERED' }),
+    });
+  });
+
   it('sends an open-offer reminder only to claimed rows that have a user', async () => {
     const t = setup();
     const at = new Date('2026-11-10T07:18:00.000Z');
