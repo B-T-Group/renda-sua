@@ -88,16 +88,9 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// Mock expo-modules-core
-jest.mock('expo-modules-core', () => ({
-  requireNativeModule: jest.fn(),
-  NativeModulesProxy: {},
-  EventEmitter: jest.fn(() => ({
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-  })),
-  requireOptionalNativeModule: jest.fn(),
-}));
+// Mock expo native modules pulled in by agentApi / secure store.
+jest.mock('expo-modules-core', () => require('../test-stubs/expo-modules-core'));
+jest.mock('expo-secure-store', () => require('../test-stubs/expo-secure-store'));
 
 // Mock expo-localization
 jest.mock('expo-localization', () => ({

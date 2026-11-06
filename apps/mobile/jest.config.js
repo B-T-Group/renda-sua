@@ -8,6 +8,8 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup-render-tests.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^expo-secure-store$': '<rootDir>/src/test-stubs/expo-secure-store.ts',
+    '^expo-modules-core$': '<rootDir>/src/test-stubs/expo-modules-core.ts',
     '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$':
       '<rootDir>/src/__mocks__/fileMock.js',
   },
