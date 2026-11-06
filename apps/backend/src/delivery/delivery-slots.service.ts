@@ -41,6 +41,16 @@ export interface SlotCapacity {
   available_capacity: number;
 }
 
+/**
+ * Order statuses whose delivery window no longer holds a slot place.
+ * Windows rows are kept for history; capacity only counts live orders.
+ */
+export const SLOT_RELEASING_ORDER_STATUSES = [
+  'cancelled',
+  'failed',
+  'refunded',
+] as const;
+
 @Injectable()
 export class DeliverySlotsService {
   private readonly logger = new Logger(DeliverySlotsService.name);
@@ -76,11 +86,7 @@ export class DeliverySlotsService {
       if (slots.length === 0) return [];
 
       const slotsWithinBusinessHours = businessLocationId
-        ? await this.filterSlotsByBusinessHours(
-            slots,
-            businessLocationId,
-            date
-          )
+        ? await this.filterSlotsByBusinessHours(slots, businessLocationId, date)
         : slots;
       if (slotsWithinBusinessHours.length === 0) return [];
 
@@ -176,7 +182,11 @@ export class DeliverySlotsService {
     const slotIds = slots.map((slot) => slot.id);
     const capacityResponse = await this.hasuraSystemService.executeQuery(
       `
-        query GetSlotCapacities($slot_ids: [uuid!]!, $date: date!) {
+        query GetSlotCapacities(
+          $slot_ids: [uuid!]!
+          $date: date!
+          $released_statuses: [order_status!]!
+        ) {
           delivery_time_slots(where: { id: { _in: $slot_ids } }) {
             id
             max_orders_per_slot
@@ -184,14 +194,19 @@ export class DeliverySlotsService {
           delivery_time_windows(
             where: {
               slot_id: { _in: $slot_ids },
-              preferred_date: { _eq: $date }
+              preferred_date: { _eq: $date },
+              order: { current_status: { _nin: $released_statuses } }
             }
           ) {
             slot_id
           }
         }
       `,
-      { slot_ids: slotIds, date }
+      {
+        slot_ids: slotIds,
+        date,
+        released_statuses: [...SLOT_RELEASING_ORDER_STATUSES],
+      }
     );
 
     const slotCapacityMap = new Map<string, number>();
@@ -240,7 +255,11 @@ export class DeliverySlotsService {
   async checkSlotCapacity(slotId: string, date: string): Promise<SlotCapacity> {
     try {
       const query = `
-        query CheckSlotCapacity($slot_id: uuid!, $date: date!) {
+        query CheckSlotCapacity(
+          $slot_id: uuid!
+          $date: date!
+          $released_statuses: [order_status!]!
+        ) {
           delivery_time_slots_by_pk(id: $slot_id) {
             id
             max_orders_per_slot
@@ -248,7 +267,8 @@ export class DeliverySlotsService {
           delivery_time_windows_aggregate(
             where: {
               slot_id: { _eq: $slot_id },
-              preferred_date: { _eq: $date }
+              preferred_date: { _eq: $date },
+              order: { current_status: { _nin: $released_statuses } }
             }
           ) {
             aggregate {
@@ -261,6 +281,7 @@ export class DeliverySlotsService {
       const response = await this.hasuraSystemService.executeQuery(query, {
         slot_id: slotId,
         date: date,
+        released_statuses: [...SLOT_RELEASING_ORDER_STATUSES],
       });
 
       const slot = response.delivery_time_slots_by_pk;
@@ -347,7 +368,11 @@ export class DeliverySlotsService {
       const startDayOffset = nowInTimezone.hour >= 12 ? 1 : 0;
       const maxDaysToCheck = 30; // Check up to 30 days in the future
 
-      for (let dayOffset = startDayOffset; dayOffset < maxDaysToCheck; dayOffset++) {
+      for (
+        let dayOffset = startDayOffset;
+        dayOffset < maxDaysToCheck;
+        dayOffset++
+      ) {
         const checkDate = nowInTimezone.plus({ days: dayOffset });
         const dateStr = checkDate.toFormat('yyyy-MM-dd');
 
@@ -415,9 +440,13 @@ export class DeliverySlotsService {
     businessLocationId: string,
     countryCode: string
   ): Promise<DeliveryTimeSlot[]> {
-    if (!(await this.dedicatedAgentsConfig.isEnabled(countryCode))) return slots;
+    if (!(await this.dedicatedAgentsConfig.isEnabled(countryCode)))
+      return slots;
     const response = await this.hasuraSystemService.executeQuery<{
-      business_location_pickup_slots: Array<{ slot_key: string; is_enabled: boolean }>;
+      business_location_pickup_slots: Array<{
+        slot_key: string;
+        is_enabled: boolean;
+      }>;
     }>(
       `
         query BusinessLocationDisabledPickupSlots($id: uuid!) {

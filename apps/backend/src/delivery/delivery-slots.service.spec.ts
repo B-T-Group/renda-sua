@@ -5,6 +5,7 @@ import {
   DEFAULT_DELIVERY_SLOT_STATE,
   DeliverySlotsService,
   DeliveryTimeSlot,
+  SLOT_RELEASING_ORDER_STATUSES,
 } from './delivery-slots.service';
 
 describe('DeliverySlotsService', () => {
@@ -122,8 +123,75 @@ describe('DeliverySlotsService', () => {
     expect(slots).toEqual([]);
   });
 
+  describe('capacity ignores windows of cancelled/failed/refunded orders', () => {
+    it('getAvailableSlots filters released order statuses in the capacity query', async () => {
+      hasura.executeQuery.mockImplementation(async (q: string, vars: any) => {
+        if (vars?.slot_ids) {
+          expect(q).toContain('current_status: { _nin: $released_statuses }');
+          expect(vars.released_statuses).toEqual(
+            expect.arrayContaining(['cancelled', 'failed', 'refunded'])
+          );
+          // Hasura returns only live-order windows after the filter.
+          return {
+            delivery_time_slots: [
+              { id: 'state-slot-1', max_orders_per_slot: 10 },
+            ],
+            delivery_time_windows: [{ slot_id: 'state-slot-1' }],
+          };
+        }
+        return {
+          delivery_time_slots: vars?.state === 'Littoral' ? [stateSlot] : [],
+        };
+      });
+
+      const slots = await service.getAvailableSlots(
+        'CM',
+        'Littoral',
+        futureDate,
+        false,
+        'Africa/Douala'
+      );
+      expect(slots[0].available_capacity).toBe(9);
+      expect(slots[0].is_available).toBe(true);
+    });
+
+    it('checkSlotCapacity filters released order statuses', async () => {
+      hasura.executeQuery.mockResolvedValue({
+        delivery_time_slots_by_pk: { id: 's1', max_orders_per_slot: 10 },
+        delivery_time_windows_aggregate: { aggregate: { count: 3 } },
+      });
+      const res = await service.checkSlotCapacity('s1', futureDate);
+      const [q, vars] = hasura.executeQuery.mock.calls[0];
+      expect(q).toContain('current_status: { _nin: $released_statuses }');
+      expect(vars.released_statuses).toEqual([
+        ...SLOT_RELEASING_ORDER_STATUSES,
+      ]);
+      expect(res.available_capacity).toBe(7);
+    });
+
+    it('does not release in-flight or completed statuses', () => {
+      for (const st of [
+        'pending',
+        'confirmed',
+        'out_for_delivery',
+        'delivered',
+        'complete',
+      ]) {
+        expect(
+          SLOT_RELEASING_ORDER_STATUSES as readonly string[]
+        ).not.toContain(st);
+      }
+    });
+  });
+
   describe('#594 AC-B5: only enabled pickup slots, behind dedicated_agents_enabled', () => {
-    const slot = (id: string, name: string, start: string, end: string, type: 'standard' | 'fast' = 'standard'): DeliveryTimeSlot => ({
+    const slot = (
+      id: string,
+      name: string,
+      start: string,
+      end: string,
+      type: 'standard' | 'fast' = 'standard'
+    ): DeliveryTimeSlot => ({
       ...stateSlot,
       id,
       slot_name: name,
@@ -140,35 +208,67 @@ describe('DeliverySlotsService', () => {
     const fast = [slot('mf', 'Morning', '08:00:00', '12:00:00', 'fast')];
 
     function stubWithPickup(disabled: string[]) {
-      hasura.executeQuery.mockImplementation(async (query: string, vars: { slot_ids?: string[]; slot_type?: string; id?: string }) => {
-        if (vars?.slot_ids) {
+      hasura.executeQuery.mockImplementation(
+        async (
+          query: string,
+          vars: { slot_ids?: string[]; slot_type?: string; id?: string }
+        ) => {
+          if (vars?.slot_ids) {
+            return {
+              delivery_time_slots: (vars.slot_ids as string[]).map((id) => ({
+                id,
+                max_orders_per_slot: 10,
+              })),
+              delivery_time_windows: [],
+            };
+          }
+          if (query.includes('BusinessLocationHours'))
+            return { business_locations_by_pk: { operating_hours: null } };
+          if (query.includes('BusinessLocationDisabledPickupSlots')) {
+            expect(vars).toEqual({ id: 'loc-1' });
+            return {
+              business_location_pickup_slots: disabled.map((slot_key) => ({
+                slot_key,
+                is_enabled: false,
+              })),
+            };
+          }
           return {
-            delivery_time_slots: (vars.slot_ids as string[]).map((id) => ({ id, max_orders_per_slot: 10 })),
-            delivery_time_windows: [],
+            delivery_time_slots: vars?.slot_type === 'fast' ? fast : standard,
           };
         }
-        if (query.includes('BusinessLocationHours')) return { business_locations_by_pk: { operating_hours: null } };
-        if (query.includes('BusinessLocationDisabledPickupSlots')) {
-          expect(vars).toEqual({ id: 'loc-1' });
-          return { business_location_pickup_slots: disabled.map((slot_key) => ({ slot_key, is_enabled: false })) };
-        }
-        return { delivery_time_slots: vars?.slot_type === 'fast' ? fast : standard };
-      });
+      );
     }
     const pickupQueried = () =>
-      hasura.executeQuery.mock.calls.some(([q]) => String(q).includes('BusinessLocationDisabledPickupSlots'));
+      hasura.executeQuery.mock.calls.some(([q]) =>
+        String(q).includes('BusinessLocationDisabledPickupSlots')
+      );
 
     it('flag on: a slot the business turned off is not offered to clients', async () => {
       dedicatedConfig.isEnabled.mockResolvedValue(true);
       stubWithPickup(['evening']);
-      const slots = await service.getAvailableSlots('CM', 'Littoral', futureDate, false, 'Africa/Douala', 'loc-1');
+      const slots = await service.getAvailableSlots(
+        'CM',
+        'Littoral',
+        futureDate,
+        false,
+        'Africa/Douala',
+        'loc-1'
+      );
       expect(slots.map((s) => s.id)).toEqual(['m', 'a']);
       expect(dedicatedConfig.isEnabled).toHaveBeenCalledWith('CM');
     });
 
     it('flag off: the list is unchanged and pickup slots are not even read', async () => {
       stubWithPickup(['evening']);
-      const slots = await service.getAvailableSlots('CM', 'Littoral', futureDate, false, 'Africa/Douala', 'loc-1');
+      const slots = await service.getAvailableSlots(
+        'CM',
+        'Littoral',
+        futureDate,
+        false,
+        'Africa/Douala',
+        'loc-1'
+      );
       expect(slots.map((s) => s.id)).toEqual(['m', 'a', 'e']);
       expect(pickupQueried()).toBe(false);
     });
@@ -176,9 +276,22 @@ describe('DeliverySlotsService', () => {
     it('fast slots and calls without a location are never filtered', async () => {
       dedicatedConfig.isEnabled.mockResolvedValue(true);
       stubWithPickup(['morning']);
-      const fastSlots = await service.getAvailableSlots('CM', 'Littoral', futureDate, true, 'Africa/Douala', 'loc-1');
+      const fastSlots = await service.getAvailableSlots(
+        'CM',
+        'Littoral',
+        futureDate,
+        true,
+        'Africa/Douala',
+        'loc-1'
+      );
       expect(fastSlots.map((s) => s.id)).toEqual(['mf']);
-      const noLocation = await service.getAvailableSlots('CM', 'Littoral', futureDate, false, 'Africa/Douala');
+      const noLocation = await service.getAvailableSlots(
+        'CM',
+        'Littoral',
+        futureDate,
+        false,
+        'Africa/Douala'
+      );
       expect(noLocation.map((s) => s.id)).toEqual(['m', 'a', 'e']);
       expect(pickupQueried()).toBe(false);
     });

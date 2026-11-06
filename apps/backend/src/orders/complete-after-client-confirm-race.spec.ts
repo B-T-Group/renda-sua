@@ -110,6 +110,23 @@ describe('OrdersService.completeAfterClientConfirmation race', () => {
     expect(svc.processOrderDeliveryPayment).toHaveBeenCalledWith('order-1');
   });
 
+  it('refuses to complete an unpaid pay-at-delivery order', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      current_status: 'out_for_delivery',
+      client: { user_id: 'client-user' },
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'pending',
+    });
+
+    await expect(
+      svc.completeAfterClientConfirmation('order-1', 'Client confirmed')
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(svc.updateOrderStatusWithSingleRetry).not.toHaveBeenCalled();
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+  });
+
   it('does not settle when the order is already complete', async () => {
     const svc = build(false);
     svc.getOrderDetails.mockResolvedValue({

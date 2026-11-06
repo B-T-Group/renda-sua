@@ -26,6 +26,33 @@ describe('clientCanShowConfirmReceipt', () => {
     ).toBe(true);
   });
 
+  it('hides confirm while pay-at-delivery is still unpaid and out for delivery', () => {
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        paymentTiming: 'pay_at_delivery',
+        paymentStatus: 'pending',
+      })
+    ).toBe(false);
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'out_for_delivery',
+        fulfillmentMethod: 'delivery',
+        paymentTiming: 'pay_at_delivery',
+        paymentStatus: 'paid',
+      })
+    ).toBe(true);
+    expect(
+      clientCanShowConfirmReceipt({
+        status: 'awaiting_client_confirmation',
+        fulfillmentMethod: 'delivery',
+        paymentTiming: 'pay_at_delivery',
+        paymentStatus: 'pending',
+      })
+    ).toBe(true);
+  });
+
   it('shows confirm for a non-gift client from out_for_delivery', () => {
     expect(
       clientCanShowConfirmReceipt({

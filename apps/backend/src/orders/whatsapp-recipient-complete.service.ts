@@ -128,7 +128,7 @@ export class WhatsAppRecipientCompleteService {
   }): RecipientCompleteOutcome {
     if (result.postCompletionClaim) return 'already_complete';
     if (!result.success) return 'not_allowed';
-    return 'failed';
+    return 'reported';
   }
 
   private reply(

@@ -37,6 +37,7 @@ import {
 import {
   canOverwriteFromStatus,
   isClientConfirmDeliveryOrder,
+  isUnpaidPayAtDelivery,
   overwriteGenerationStatusError,
   shouldMintDeliveryPin,
   usesLegacyDeliveryPin,
@@ -12732,6 +12733,17 @@ export class OrdersService {
     }
     if (order.current_status === 'complete') {
       return { alreadyComplete: true, order };
+    }
+    if (isUnpaidPayAtDelivery(order)) {
+      throw new HttpException(
+        {
+          success: false,
+          error: 'PAY_AT_DELIVERY_UNPAID',
+          message:
+            'Collect pay-at-delivery payment before completing this order.',
+        },
+        HttpStatus.CONFLICT
+      );
     }
     const updated = await this.winClientConfirmComplete(orderId, !!opts.fromDisputed);
     if (!updated) {

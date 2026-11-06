@@ -10,6 +10,10 @@ export type ClientConfirmVisibilityInput = {
   isGift?: boolean | null;
   giftBuyerCanConfirm?: boolean | null;
   usesLegacyPin?: boolean | null;
+  paymentTiming?: string | null;
+  paymentMethod?: string | null;
+  paymentStatus?: string | null;
+  payAfterMerchantConfirm?: boolean | null;
 };
 
 export function isClientConfirmCompletableStatus(status?: string | null): boolean {
@@ -28,8 +32,20 @@ export function clientCanShowConfirmReceipt(
   if (!isDeliveryFulfillment(input.fulfillmentMethod)) return false;
   if (input.usesLegacyPin === true) return false;
   if (!isClientConfirmCompletableStatus(input.status)) return false;
+  if (hidesUnpaidDoorstepConfirm(input)) return false;
   if (input.isGift) return input.giftBuyerCanConfirm === true;
   return true;
+}
+
+/** Doorstep collection is still open. Confirm would skip the MoMo prompt. */
+function hidesUnpaidDoorstepConfirm(input: ClientConfirmVisibilityInput): boolean {
+  if (input.status !== 'out_for_delivery') return false;
+  if (input.payAfterMerchantConfirm === true) return false;
+  const doorstep =
+    input.paymentTiming === 'pay_at_delivery' ||
+    input.paymentMethod === 'pay_on_delivery';
+  if (!doorstep) return false;
+  return input.paymentStatus !== 'paid' && input.paymentStatus !== 'authorized';
 }
 
 export function clientShowPendingAutoCompleteNotice(

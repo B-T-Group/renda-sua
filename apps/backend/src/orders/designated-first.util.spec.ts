@@ -5,6 +5,7 @@ import {
   eveningBeforeAt,
   haversineKm,
   pickDistanceOrigin,
+  toPoint,
   type DesignatedTickState,
 } from './designated-first.util';
 
@@ -48,7 +49,12 @@ describe('designated-first util', () => {
     const home = { lat: 1, lng: 1 };
     expect(pickDistanceOrigin({ lat: 2, lng: 2, updatedAt: '2026-11-08T09:50:00Z' }, home, now)?.source).toBe('gps');
     expect(pickDistanceOrigin({ lat: 2, lng: 2, updatedAt: '2026-11-08T09:00:00Z' }, home, now)?.source).toBe('home');
+    expect(pickDistanceOrigin({ lat: 2, lng: 2, updatedAt: '2026-11-08T09:00:00Z' }, null, now)?.source).toBe('gps');
     expect(pickDistanceOrigin(null, null, now)).toBeNull();
+    expect(toPoint(0, 0)).toBeNull();
+    expect(toPoint('nope', 1)).toBeNull();
+    expect(toPoint(null, 1)).toBeNull();
+    expect(toPoint('3.8', '11.5')).toEqual({ lat: 3.8, lng: 11.5 });
   });
 
   it('labels the area by city and region only (no street address)', () => {
@@ -70,6 +76,26 @@ describe('designated-first util', () => {
       expect(
         designatedDueActions(base({ openEarlyOffer: true, openReminderSentAt: 'x', now: new Date('2026-11-10T07:20:00Z') })).due
       ).toEqual([]);
+    });
+
+    it('counts a tick up to 90 seconds early, and drops the evening notice once T-60 is due', () => {
+      const dueAt = new Date('2026-11-10T07:18:00.000Z');
+      const withinSlack = designatedDueActions(
+        base({ openEarlyOffer: true, now: new Date(dueAt.getTime() - 90_000) })
+      );
+      expect(withinSlack.due).toEqual(['open_offer_reminder']);
+      const tooEarly = designatedDueActions(
+        base({ openEarlyOffer: true, now: new Date(dueAt.getTime() - 90_001) })
+      );
+      expect(tooEarly.due).toEqual([]);
+      const atSoon = designatedDueActions(
+        base({
+          designatedAssigned: true,
+          acceptedAt: '2026-11-08T09:00:00Z',
+          now: new Date('2026-11-10T07:00:00.000Z'),
+        })
+      );
+      expect(atSoon.due).toEqual(['soon_reminder']);
     });
 
     it('schedules evening-before (19:00 local) then T-60 for an early accept', () => {

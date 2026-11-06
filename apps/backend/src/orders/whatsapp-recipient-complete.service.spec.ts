@@ -237,4 +237,32 @@ describe('WhatsAppRecipientCompleteService', () => {
     expect(result.handled).toBe(true);
     expect(result.message).toContain('déjà terminée');
   });
+
+  it('tells the recipient a problem report is with support', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [{ entity_id: 'order-1' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'order-1',
+          order_number: 'ORD-9',
+          recipient_phone: '+24177123456',
+          fulfillment_country: 'GA',
+        },
+      });
+    clientConfirm.handleRecipientAction.mockResolvedValue({
+      success: true,
+      status: 'disputed',
+    });
+
+    const result = await service.handleDeliveryConfirm({
+      fromPhone: '24177123456',
+      contextMessageId: 'wamid.d1',
+      action: 'problem',
+    });
+
+    expect(result.message).toContain('ORD-9');
+    expect(result.message).toContain('support');
+  });
 });
