@@ -89,6 +89,9 @@ function world() {
       assignment_source: null as string | null,
       dedicated_assignment_id: null as string | null,
       dedicated_release_until: null as string | null,
+      dispatch_mode: null as string | null,
+      designated_accepted_at: null as string | null,
+      designated_release_cutoff_at: null as string | null,
       reassignment_count: 0,
       pickup_due_at: null as string | null,
       pickup_state: null as string | null,
@@ -357,6 +360,16 @@ function world() {
           },
         };
       }
+      case 'DesignatedReleaseOrder':
+        return {
+          orders_by_pk: {
+            dispatch_mode: state.order.dispatch_mode,
+            dispatch_ready_at: state.order.dispatch_ready_at,
+            designated_release_cutoff_at: state.order.designated_release_cutoff_at,
+            designated_accepted_at: state.order.designated_accepted_at,
+            business: { user_id: 'biz-user', user: { preferred_language: 'en' } },
+          },
+        };
       case 'OrderHold':
         return {
           order_holds: state.holds.filter((h) => h.status === 'active'),
@@ -617,6 +630,39 @@ function world() {
         return { update_order_holds: { affected_rows: 1 } };
       case 'DedicatedReleaseHistory':
         return { insert_order_status_history: { affected_rows: 1 } };
+      case 'ClearDesignatedStamps':
+        Object.assign(state.order, {
+          assignment_source: null,
+          dedicated_assignment_id: null,
+          dedicated_release_until: null,
+          designated_accepted_at: null,
+          designated_release_cutoff_at: null,
+        });
+        return { update_orders_by_pk: { id: vars.id } };
+      case 'ReleaseDesignatedFree': {
+        const o = state.order;
+        const cutoff = o.designated_release_cutoff_at
+          ? Date.parse(o.designated_release_cutoff_at)
+          : 0;
+        const ok =
+          o.current_status === 'assigned_to_agent' &&
+          o.assigned_agent_id === vars.agentId &&
+          o.dispatch_mode === 'designated_first' &&
+          cutoff > Date.parse(String(vars.now));
+        if (!ok) return { update_orders: { affected_rows: 0 } };
+        Object.assign(o, {
+          assigned_agent_id: null,
+          current_status: 'ready_for_pickup',
+          assignment_source: null,
+          dedicated_assignment_id: null,
+          dedicated_release_until: null,
+          designated_accepted_at: null,
+          designated_release_cutoff_at: null,
+          pickup_due_at: null,
+          pickup_state: null,
+        });
+        return { update_orders: { affected_rows: 1 } };
+      }
       case 'UpsertOffers':
         for (const obj of vars.objects ?? []) {
           state.offers = state.offers.filter(
@@ -2010,6 +2056,39 @@ describe('#594 PR 5 dedicated fallback at the scheduled dispatch gate', () => {
           secondsLeft: 1,
         },
       ]);
+    });
+
+    it('clears leftover designated stamps after a successful auto-release', async () => {
+      const w = await autoAssigned();
+      jest.setSystemTime(at(10));
+      await w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', null);
+      expect(w.state.mutations).toContain('ClearDesignatedStamps');
+    });
+
+    it('designated-first auto-assign "Can\'t take this" keeps the gate and does not inherit stamps', async () => {
+      const gateAt = at(7200).toISOString();
+      const cutoff = at(3600).toISOString();
+      const w = await autoAssigned();
+      Object.assign(w.state.order, {
+        dispatch_mode: 'designated_first',
+        designated_accepted_at: NOW.toISOString(),
+        designated_release_cutoff_at: cutoff,
+        dispatch_ready_at: gateAt,
+      });
+      jest.setSystemTime(at(10));
+      await expect(
+        w.reassignment.releaseDedicatedAutoAssignment(ORDER, 'int', 'busy')
+      ).resolves.toMatchObject({ success: true, mode: 'free' });
+      expect(w.state.order).toMatchObject({
+        current_status: 'ready_for_pickup',
+        assigned_agent_id: null,
+        designated_accepted_at: null,
+        designated_release_cutoff_at: null,
+        dispatch_ready_at: gateAt,
+      });
+      expect(w.state.mutations).toContain('ReleaseDesignatedFree');
+      expect(w.state.mutations).not.toContain('ReleaseDedicatedAutoAssignment');
+      expect(w.schedule.scheduleDispatchRound).not.toHaveBeenCalled();
     });
 
     describe('structured release log (PE: no reliability signal, measurable later)', () => {
