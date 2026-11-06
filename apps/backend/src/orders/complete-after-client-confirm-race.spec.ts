@@ -155,6 +155,57 @@ describe('OrdersService.completeAfterClientConfirmation race', () => {
     }
   );
 
+  it('refuses paid mobile PAD when no successful collect exists', async () => {
+    const svc = build(false);
+    svc.mobilePaymentsDatabaseService = {
+      hasSuccessfulOrderPayment: jest.fn().mockResolvedValue(false),
+    };
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      order_number: 'ORD-1',
+      current_status: 'awaiting_client_confirmation',
+      client: { user_id: 'client-user' },
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'paid',
+      payment_source: 'mobile_payment',
+      total_amount: 1500,
+    });
+
+    await expect(
+      svc.completeAfterClientConfirmation('order-1', 'Client confirmed')
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ error: 'PAY_AT_DELIVERY_UNPAID' }),
+    });
+    expect(svc.updateOrderStatusWithSingleRetry).not.toHaveBeenCalled();
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+  });
+
+  it('settles paid mobile PAD after a successful collect', async () => {
+    const svc = build(false);
+    svc.mobilePaymentsDatabaseService = {
+      hasSuccessfulOrderPayment: jest.fn().mockResolvedValue(true),
+    };
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      order_number: 'ORD-1',
+      current_status: 'awaiting_client_confirmation',
+      client: { user_id: 'client-user' },
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'paid',
+      payment_source: 'mobile_payment',
+      total_amount: 1500,
+    });
+
+    const result = await svc.completeAfterClientConfirmation(
+      'order-1',
+      'Client confirmed'
+    );
+
+    expect(result.alreadyComplete).toBe(false);
+    expect(svc.processOrderPayment).toHaveBeenCalledWith('order-1');
+  });
+
   it('refuses pay-on-delivery when no payment status was recorded', async () => {
     const svc = build(false);
     svc.getOrderDetails.mockResolvedValue({

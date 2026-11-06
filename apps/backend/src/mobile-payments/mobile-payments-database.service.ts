@@ -4,6 +4,10 @@ import { buildShortReferenceForMyPVit } from './providers/mypvit.service';
 import { normalizeProviderMessage } from './normalize-provider-message';
 import { safeErrorMessage } from '../common/utils/safe-error-log.util';
 
+function uniqueEntityIds(entityIds: string[]): string[] {
+  return [...new Set(entityIds.map((id) => id.trim()).filter(Boolean))];
+}
+
 export interface MobilePaymentTransaction {
   id: string;
   reference: string;
@@ -549,6 +553,28 @@ export class MobilePaymentsDatabaseService {
       mobile_payment_transactions: MobilePaymentTransaction[];
     }>(query, { orderNumber });
     return response.mobile_payment_transactions?.[0] ?? null;
+  }
+
+  /** True when a successful order collect exists for any of the given entity ids. */
+  async hasSuccessfulOrderPayment(...entityIds: string[]): Promise<boolean> {
+    const ids = uniqueEntityIds(entityIds);
+    if (ids.length === 0) return false;
+    const response = await this.hasuraService.executeQuery<{
+      mobile_payment_transactions: Array<{ id: string }>;
+    }>(
+      `query HasSuccessfulOrderPayment($ids: [String!]!) {
+        mobile_payment_transactions(
+          where: {
+            payment_entity: { _eq: order }
+            status: { _eq: "success" }
+            entity_id: { _in: $ids }
+          }
+          limit: 1
+        ) { id }
+      }`,
+      { ids }
+    );
+    return (response.mobile_payment_transactions?.length ?? 0) > 0;
   }
 
   /**

@@ -10,8 +10,12 @@ export interface ClientConfirmOrder {
   payment_timing?: string | null;
   payment_method?: string | null;
   payment_status?: string | null;
+  payment_source?: string | null;
   pay_after_merchant_confirm?: boolean | null;
   reconciliation_status?: string | null;
+  total_amount?: number | null;
+  deposit_amount?: number | null;
+  deposit_status?: string | null;
   delivery_pin_hash?: string | null;
   delivery_confirmation_method?: string | null;
   client_confirmation_requested_at?: string | null;

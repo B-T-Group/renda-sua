@@ -4,6 +4,7 @@ import {
   graceElapsed,
   isClientConfirmDeliveryOrder,
   isUnpaidPayAtDelivery,
+  needsMobilePadCollectionProof,
   shouldMintDeliveryPin,
   usesLegacyDeliveryPin,
 } from './client-confirm-delivery.util';
@@ -125,6 +126,70 @@ describe('client-confirm-delivery.util', () => {
         pay_after_merchant_confirm: false,
       })
     ).toBe(true);
+  });
+
+  it('requires MoMo proof for paid mobile-payment PAD with a remainder due', () => {
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+      })
+    ).toBe(true);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_method: 'pay_on_delivery',
+        payment_status: 'authorized',
+        payment_source: 'mobile_money',
+        total_amount: 1500,
+      })
+    ).toBe(true);
+  });
+
+  it('does not require MoMo proof when cash, deposit, or another rail already covers PAD', () => {
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+        reconciliation_status: 'pending_manual_reconciliation',
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+        deposit_amount: 1500,
+        deposit_status: 'paid',
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        total_amount: 1500,
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'credit_card',
+        total_amount: 1500,
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+      })
+    ).toBe(false);
   });
 
   it('allows confirm from out_for_delivery, awaiting, and pending auto-complete', () => {
