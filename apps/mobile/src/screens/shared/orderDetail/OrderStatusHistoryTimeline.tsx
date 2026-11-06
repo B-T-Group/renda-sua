@@ -5,6 +5,7 @@ import { Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
 import { StatusPill } from '../../../components/common/StatusPill';
 import type { Order } from '../../../types/agent';
+import { orderStatusChipColors } from '../../../utils/orderStatusChipColors';
 
 type HistoryEntry = NonNullable<Order['order_status_history']>[number];
 
@@ -37,10 +38,10 @@ export function OrderStatusHistoryTimeline({ entries, locale }: Props) {
   );
 
   return (
-    <View style={{ paddingTop: spacing.xs, paddingHorizontal: spacing.xxs }}>
+    <View style={{ paddingTop: spacing.xs, paddingBottom: spacing.sm, paddingHorizontal: spacing.xxs }}>
       {sorted.map((h, idx) => {
-        const latest = idx === 0;
         const actor = actorName(h);
+        const tone = orderStatusChipColors(h.status, colors);
         return (
           <View key={h.id} style={styles.row}>
             <View style={styles.rail}>
@@ -48,7 +49,7 @@ export function OrderStatusHistoryTimeline({ entries, locale }: Props) {
                 style={[
                   styles.dot,
                   {
-                    backgroundColor: latest ? colors.primary.main : colors.text.disabled,
+                    backgroundColor: tone.dotColor,
                     borderColor: colors.surface,
                   },
                 ]}
@@ -65,9 +66,9 @@ export function OrderStatusHistoryTimeline({ entries, locale }: Props) {
                 <StatusPill
                   compact
                   label={t(`common.orderStatus.${h.status}`, h.status)}
-                  backgroundColor={colors.pageBackground}
-                  borderColor={colors.divider}
-                  textColor={colors.text.primary}
+                  backgroundColor={tone.backgroundColor}
+                  borderColor={tone.borderColor}
+                  textColor={tone.textColor}
                 />
                 {h.previous_status ? (
                   <Text variant="bodySmall" style={{ color: colors.text.secondary, flex: 1 }} numberOfLines={2}>

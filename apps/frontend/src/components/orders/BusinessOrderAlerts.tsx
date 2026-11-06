@@ -53,7 +53,7 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
             message: activatesAt
               ? t(
                   'business.orders.scheduledNotice',
-                  '📅 Future order worth {{revenue}}. Confirmation timer starts at {{when}}. You can confirm early anytime.',
+                  'Confirm by {{when}} to keep this order worth {{revenue}} on track. You can confirm earlier.',
                   {
                     revenue: formatCurrency(revenue),
                     when: new Date(activatesAt).toLocaleString(undefined, {
@@ -64,7 +64,7 @@ const BusinessOrderAlerts: React.FC<BusinessOrderAlertsProps> = ({
                 )
               : t(
                   'business.orders.scheduledNoticeEarly',
-                  '📅 Future order worth {{revenue}}. You can confirm early anytime.',
+                  'Confirm this order worth {{revenue}} to keep it on track.',
                   { revenue: formatCurrency(revenue) }
                 ),
           });

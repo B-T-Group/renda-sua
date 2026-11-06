@@ -61,12 +61,21 @@ import { DiasporaCheckoutBanner } from '../../components/checkout/DiasporaChecko
 import { RecipientPicker } from '../../components/checkout/RecipientPicker';
 import { PayerChargeSummary } from '../../components/checkout/PayerChargeSummary';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
+import { GuidedCheckoutCard } from '../../components/checkout/GuidedCheckoutCard';
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
 import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
 import { formatCatalogMoney } from '../../utils/catalogInventoryDisplay';
 import { resolveDepositAmount, isMoMoDepositCheckoutPath, preflightDepositCopy } from '../../types/deposit';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
-import { checkoutStickyDisabledReason } from '../../utils/checkoutStickyDisabledReason';
+import {
+  checkoutEtaLine,
+  checkoutWindowSectionVisible,
+  checkoutWindowStickyText,
+} from '../../utils/checkoutWindowSummary';
+import {
+  checkoutStickyDisabledReason,
+  checkoutStickyDisabledReasonCode,
+} from '../../utils/checkoutStickyDisabledReason';
 import { isAddressComplete } from '../../utils/addressCompleteness';
 import {
   cartShippingAvailability,
@@ -153,6 +162,9 @@ export default observer(function CartCheckoutScreen() {
   const [snack, setSnack] = useState<string | null>(null);
   const [deliveryScheduleOk, setDeliveryScheduleOk] = useState(true);
   const [deliveryWindow, setDeliveryWindow] = useState<ClientDeliveryWindowPayload | null>(null);
+  const [deliveryWindowLabel, setDeliveryWindowLabel] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const windowSectionY = useRef(0);
   const [addAddressModalVisible, setAddAddressModalVisible] = useState(false);
   const [addAddressForm, setAddAddressForm] = useState<DeliveryAddressFormValue>(BLANK_ADDRESS_FORM);
   const [addAddressSaving, setAddAddressSaving] = useState(false);
@@ -433,6 +445,7 @@ export default observer(function CartCheckoutScreen() {
   useEffect(() => {
     setDeliveryScheduleOk(true);
     setDeliveryWindow(null);
+    setDeliveryWindowLabel(null);
   }, [fulfillment]);
 
   // Clear recipient when fulfillment country changes (not on initial mount)
@@ -462,6 +475,14 @@ export default observer(function CartCheckoutScreen() {
 
   const onDwCommit = useCallback((w: ClientDeliveryWindowPayload | null) => {
     setDeliveryWindow(w);
+  }, []);
+
+  const onWindowLabel = useCallback((label: string | null) => {
+    setDeliveryWindowLabel(label);
+  }, []);
+
+  const scrollToWindow = useCallback(() => {
+    scrollRef.current?.scrollTo({ y: Math.max(0, windowSectionY.current - 8), animated: true });
   }, []);
 
   const businessGroups = useMemo(() => [...cart.groupedByBusiness.values()] as CartLine[][], [cart.groupedByBusiness, cart.items]);
@@ -966,7 +987,7 @@ export default observer(function CartCheckoutScreen() {
     (currentLocation.status === 'idle' || currentLocation.status === 'resolving');
   const cartAddressMissing =
     fulfillmentNeedsAddress(fulfillment) && !deliveryAddressId && !hideShopperAddressBook;
-  const stickyDisabledReason = checkoutStickyDisabledReason({
+  const stickyReasonInput = {
     recipientIncomplete: isRecipientDraftIncomplete(someoneElseReceiving, recipient),
     recipientAddressMissing: captureRecipientAddress && !deliveryAddressId,
     momoMissing: needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId,
@@ -1001,7 +1022,37 @@ export default observer(function CartCheckoutScreen() {
       currentLocation.status === 'resolving'
         ? t('orders.currentLocationResolving', 'Finding your current location…')
         : t('checkout.resolving', 'Preparing your checkout…'),
+  };
+  const stickyDisabledReason = checkoutStickyDisabledReason(stickyReasonInput);
+  const windowIsStickyBlocker = checkoutStickyDisabledReasonCode(stickyReasonInput) === 'window';
+  const windowSectionVisible = checkoutWindowSectionVisible({
+    confirmed: fulfillmentConfirmed,
+    fulfillment,
+    country:
+      fulfillment === 'pickup'
+        ? preflightConfig?.groups?.[0]?.seller_country
+        : selectedAddress?.country,
+    state:
+      fulfillment === 'pickup'
+        ? preflightConfig?.groups?.[0]?.seller_state
+        : selectedAddress?.state,
   });
+  const windowNeedsChoice = fulfillmentNeedsWindow(fulfillment) && !deliveryScheduleOk;
+  const windowStickyText = checkoutWindowStickyText({
+    needsChoice: windowNeedsChoice,
+    windowLabel: deliveryWindowLabel,
+    asapTitle:
+      fulfillment === 'pickup'
+        ? t('client.placeOrder.deliveryWindow.asapPickupTitle', 'Pick up as soon as possible')
+        : t('client.placeOrder.deliveryWindow.asapTitle', 'Deliver as soon as possible'),
+    etaLine: checkoutEtaLine(
+      preflightConfig?.estimated_ready_at,
+      preflightConfig?.estimated_fulfill_by,
+      (eta) => t('client.placeOrder.deliveryWindow.asapEta', 'Usually ready {{eta}}', { eta })
+    ),
+    missingLabel: t('client.placeOrder.deliveryWindow.pickSlot', 'Select a time slot'),
+  });
+  const showWindowSummary = windowSectionVisible && (deliveryScheduleOk || !windowIsStickyBlocker);
 
   const onSubmit = useCallback(async () => {
     if (submitting || !canSubmit) return;
@@ -1211,6 +1262,7 @@ export default observer(function CartCheckoutScreen() {
       keyboardVerticalOffset={keyboardVerticalOffset}
     >
       <ScrollView
+        ref={scrollRef}
         {...keyboardAwareScrollProps}
         style={{ flex: 1 }}
         contentContainerStyle={{ padding: spacing.md, paddingBottom: spacing.md }}
@@ -1470,47 +1522,69 @@ export default observer(function CartCheckoutScreen() {
           />
         ) : null}
 
-        {fulfillmentConfirmed && fulfillment === 'delivery' && selectedAddress ? (
-          <PlaceOrderDeliveryWindowBlock
-            countryCode={selectedAddress.country?.trim() ?? ''}
-            stateCode={selectedAddress.state?.trim() ?? ''}
-            enabled={Boolean(selectedAddress.country?.trim() && selectedAddress.state?.trim())}
-            businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
-            scheduleRequired={!!preflightConfig?.schedule_required}
-            allowSchedule={preflightConfig?.schedule_allowed !== false}
-            payAfterConfirm={isCookedFoodMoMoPayAfter}
-            payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
-            estimatedReadyAt={preflightConfig?.estimated_ready_at}
-            estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
-            opensAt={preflightConfig?.opens_at}
-            coveredSlots={deliveryCoverage.coveredSlots}
-            value={deliveryWindow}
-            onReadyChange={onDwReadyChange}
-            onCommit={onDwCommit}
-          />
-        ) : null}
+        <View
+          onLayout={(event) => {
+            windowSectionY.current = event.nativeEvent.layout.y;
+          }}
+        >
+          {windowSectionVisible && fulfillment === 'delivery' && selectedAddress ? (
+            <GuidedCheckoutCard
+              title={t(
+                'client.placeOrder.deliveryWindow.title',
+                'When are you available for delivery?'
+              )}
+            >
+              <PlaceOrderDeliveryWindowBlock
+                countryCode={selectedAddress.country?.trim() ?? ''}
+                stateCode={selectedAddress.state?.trim() ?? ''}
+                enabled={Boolean(selectedAddress.country?.trim() && selectedAddress.state?.trim())}
+                businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
+                scheduleRequired={!!preflightConfig?.schedule_required}
+                allowSchedule={preflightConfig?.schedule_allowed !== false}
+                payAfterConfirm={isCookedFoodMoMoPayAfter}
+                payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
+                estimatedReadyAt={preflightConfig?.estimated_ready_at}
+                estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
+                opensAt={preflightConfig?.opens_at}
+                coveredSlots={deliveryCoverage.coveredSlots}
+                value={deliveryWindow}
+                onReadyChange={onDwReadyChange}
+                onCommit={onDwCommit}
+                onLabelChange={onWindowLabel}
+              />
+            </GuidedCheckoutCard>
+          ) : null}
 
-        {fulfillmentConfirmed && fulfillment === 'pickup' ? (
-          <PlaceOrderDeliveryWindowBlock
-            countryCode={preflightConfig?.groups?.[0]?.seller_country?.trim() ?? ''}
-            stateCode={preflightConfig?.groups?.[0]?.seller_state?.trim() ?? ''}
-            enabled={Boolean(
-              preflightConfig?.groups?.[0]?.seller_country?.trim() &&
-                preflightConfig?.groups?.[0]?.seller_state?.trim()
-            )}
-            fulfillment="pickup"
-            businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
-            scheduleRequired={!!preflightConfig?.schedule_required}
-            allowSchedule={preflightConfig?.schedule_allowed !== false}
-            payAfterConfirm={isCookedFoodMoMoPayAfter}
-            payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
-            estimatedReadyAt={preflightConfig?.estimated_ready_at}
-            estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
-            opensAt={preflightConfig?.opens_at}
-            onReadyChange={onDwReadyChange}
-            onCommit={onDwCommit}
-          />
-        ) : null}
+          {windowSectionVisible && fulfillment === 'pickup' ? (
+            <GuidedCheckoutCard
+              title={t(
+                'client.placeOrder.deliveryWindow.pickupTitle',
+                'When will you pick up your order?'
+              )}
+            >
+              <PlaceOrderDeliveryWindowBlock
+                countryCode={preflightConfig?.groups?.[0]?.seller_country?.trim() ?? ''}
+                stateCode={preflightConfig?.groups?.[0]?.seller_state?.trim() ?? ''}
+                enabled={Boolean(
+                  preflightConfig?.groups?.[0]?.seller_country?.trim() &&
+                    preflightConfig?.groups?.[0]?.seller_state?.trim()
+                )}
+                fulfillment="pickup"
+                businessLocationId={preflightConfig?.groups?.[0]?.business_location_id}
+                scheduleRequired={!!preflightConfig?.schedule_required}
+                allowSchedule={preflightConfig?.schedule_allowed !== false}
+                payAfterConfirm={isCookedFoodMoMoPayAfter}
+                payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
+                estimatedReadyAt={preflightConfig?.estimated_ready_at}
+                estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
+                opensAt={preflightConfig?.opens_at}
+                onReadyChange={onDwReadyChange}
+                onCommit={onDwCommit}
+                onLabelChange={onWindowLabel}
+              />
+            </GuidedCheckoutCard>
+          ) : null}
+        </View>
 
         {fulfillmentConfirmed && isCookedFoodMoMoPayAfter ? (
           <View style={{ marginBottom: spacing.sm }}>
@@ -1668,6 +1742,15 @@ export default observer(function CartCheckoutScreen() {
             loading={submitting}
             disabled={!canSubmit || submitting}
             disabledReason={stickyDisabledReason}
+            timeSummary={showWindowSummary ? windowStickyText : undefined}
+            timeSummaryHint={
+              fulfillment === 'pickup'
+                ? t('client.placeOrder.deliveryWindow.changePickupTime', 'Change pickup time')
+                : t('client.placeOrder.deliveryWindow.changeTime', 'Change delivery time')
+            }
+            timeSummaryAttention={windowNeedsChoice}
+            onTimeSummaryPress={scrollToWindow}
+            onDisabledReasonPress={windowIsStickyBlocker ? scrollToWindow : undefined}
           />
         )}
       </View>

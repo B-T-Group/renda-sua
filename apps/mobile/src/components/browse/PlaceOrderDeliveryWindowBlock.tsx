@@ -7,6 +7,7 @@ import { DeliveryWindowPicker } from '../common/DeliveryWindowPicker';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { DedicatedCoveredSlot } from '../../types/checkout';
 import type { ClientDeliveryWindowPayload } from '../../types/deliveryWindow';
+import { formatCheckoutClock, formatCheckoutEtaRange, formatWindowChoiceLabel } from '../../utils/deliveryWindowUtils';
 
 export interface PlaceOrderDeliveryWindowBlockProps {
   countryCode: string;
@@ -41,6 +42,8 @@ export interface PlaceOrderDeliveryWindowBlockProps {
   value?: ClientDeliveryWindowPayload | null;
   onReadyChange: (ok: boolean) => void;
   onCommit: (window: ClientDeliveryWindowPayload | null) => void;
+  /** Display label for a chosen slot. Null means as soon as possible. */
+  onLabelChange?: (label: string | null) => void;
 }
 
 export function PlaceOrderDeliveryWindowBlock({
@@ -60,6 +63,7 @@ export function PlaceOrderDeliveryWindowBlock({
   value,
   onReadyChange,
   onCommit,
+  onLabelChange,
 }: PlaceOrderDeliveryWindowBlockProps) {
   if (fulfillment !== 'pickup' && coveredSlots && coveredSlots.length > 0) {
     return (
@@ -69,6 +73,7 @@ export function PlaceOrderDeliveryWindowBlock({
         value={value}
         onReadyChange={onReadyChange}
         onCommit={onCommit}
+        onLabelChange={onLabelChange}
       />
     );
   }
@@ -88,8 +93,36 @@ export function PlaceOrderDeliveryWindowBlock({
       opensAt={opensAt}
       onReadyChange={onReadyChange}
       onCommit={onCommit}
+      onLabelChange={onLabelChange}
     />
   );
+}
+
+const SLOT_KEY_FALLBACK: Record<string, string> = {
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  evening: 'Evening',
+};
+
+function coveredWindowLabel(
+  window: ClientDeliveryWindowPayload | null,
+  slots: DedicatedCoveredSlot[],
+  locale: string,
+  translate: (key: string, fallback: string) => string
+): string | null {
+  if (!window) return null;
+  const slot = slots.find(
+    (item) => item.slot_id === window.slot_id && item.date === window.preferred_date
+  );
+  if (!slot) return null;
+  const name = slot.slot_key
+    ? translate(
+        `client.placeOrder.deliveryWindow.slotKey.${slot.slot_key}`,
+        SLOT_KEY_FALLBACK[slot.slot_key] ?? slot.slot_key
+      )
+    : '';
+  const range = slot.start && slot.end ? `${slot.start}–${slot.end}` : '';
+  return formatWindowChoiceLabel(slot.date, [name, range], locale);
 }
 
 /** #594: scheduled-only delivery for the dedicated-covered slots (no ASAP). */
@@ -99,14 +132,16 @@ function CoveredOnlyBlock({
   value,
   onReadyChange,
   onCommit,
+  onLabelChange,
 }: {
   enabled: boolean;
   slots: DedicatedCoveredSlot[];
   value?: ClientDeliveryWindowPayload | null;
   onReadyChange: (ok: boolean) => void;
   onCommit: (window: ClientDeliveryWindowPayload | null) => void;
+  onLabelChange?: (label: string | null) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const [selected, setSelected] = useState<ClientDeliveryWindowPayload | null>(null);
 
@@ -115,8 +150,9 @@ function CoveredOnlyBlock({
       setSelected(window);
       onCommit(window);
       onReadyChange(window != null);
+      onLabelChange?.(coveredWindowLabel(window, slots, i18n.language, t));
     },
-    [onCommit, onReadyChange]
+    [i18n.language, onCommit, onLabelChange, onReadyChange, slots, t]
   );
 
   if (!enabled) return null;
@@ -169,6 +205,7 @@ function StandardDeliveryWindowBlock({
   opensAt,
   onReadyChange,
   onCommit,
+  onLabelChange,
 }: Omit<PlaceOrderDeliveryWindowBlockProps, 'coveredSlots'>) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
@@ -183,6 +220,7 @@ function StandardDeliveryWindowBlock({
       setScheduling(false);
       onCommit(null);
       onReadyChange(true);
+      onLabelChange?.(null);
     }
   }, [allowSchedule]);
 
@@ -193,6 +231,7 @@ function StandardDeliveryWindowBlock({
       setScheduling(false);
       onCommit(null);
       onReadyChange(true);
+      onLabelChange?.(null);
     }
     prevScheduleRequired.current = effectiveScheduleRequired;
   }, [effectiveScheduleRequired]);
@@ -201,11 +240,12 @@ function StandardDeliveryWindowBlock({
     if (!enabled || showPicker) return;
     onReadyChange(true);
     onCommit(null);
+    onLabelChange?.(null);
   }, [enabled, showPicker]);
 
   if (!enabled) return null;
 
-  const etaLabel = formatEtaRange(estimatedReadyAt, estimatedFulfillBy);
+  const etaLabel = formatCheckoutEtaRange(estimatedReadyAt, estimatedFulfillBy);
   const closedCopy = isPickup
     ? t(
         'client.placeOrder.deliveryWindow.storeClosedPickup',
@@ -255,7 +295,7 @@ function StandardDeliveryWindowBlock({
           {opensAt ? (
             <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs }}>
               {t('client.placeOrder.deliveryWindow.opensAt', 'Opens {{time}}', {
-                time: formatClock(opensAt),
+                time: formatCheckoutClock(opensAt),
               })}
             </Text>
           ) : null}
@@ -291,6 +331,7 @@ function StandardDeliveryWindowBlock({
           businessLocationId={businessLocationId}
           onReadyChange={onReadyChange}
           onSelectionChange={onCommit}
+          onLabelChange={onLabelChange}
         />
       ) : null}
 
@@ -303,6 +344,7 @@ function StandardDeliveryWindowBlock({
               setScheduling(false);
               onCommit(null);
               onReadyChange(true);
+              onLabelChange?.(null);
               return;
             }
             setScheduling(true);
@@ -326,20 +368,6 @@ function StandardDeliveryWindowBlock({
       ) : null}
     </View>
   );
-}
-
-function formatClock(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
-}
-
-function formatEtaRange(readyAt?: string | null, fulfillBy?: string | null): string | null {
-  if (!readyAt && !fulfillBy) return null;
-  const a = readyAt ? formatClock(readyAt) : '';
-  const b = fulfillBy ? formatClock(fulfillBy) : '';
-  if (a && b && a !== b) return `${a}–${b}`;
-  return a || b || null;
 }
 
 const styles = StyleSheet.create({

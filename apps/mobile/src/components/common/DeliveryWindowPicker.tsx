@@ -5,7 +5,28 @@ import { ActivityIndicator, Button, RadioButton, Text } from 'react-native-paper
 import { useTheme } from '../../contexts/ThemeContext';
 import { usePlaceOrderDeliveryWindow } from '../../hooks/usePlaceOrderDeliveryWindow';
 import type { ClientDeliveryWindowPayload, DeliveryTimeSlot } from '../../types/deliveryWindow';
-import { formatSlotTimeRange } from '../../utils/deliveryWindowUtils';
+import { formatSlotTimeRange, formatWindowChoiceLabel } from '../../utils/deliveryWindowUtils';
+
+function publishWindowSelection(
+  enabled: boolean,
+  canProceed: boolean,
+  preferredDate: string | null,
+  slotId: string | null,
+  slots: DeliveryTimeSlot[],
+  locale: string,
+  onSelectionChange: (value: ClientDeliveryWindowPayload | null) => void,
+  onLabelChange?: (label: string | null) => void
+): void {
+  if (!enabled || !canProceed || !preferredDate || !slotId) {
+    onSelectionChange(null);
+    onLabelChange?.(null);
+    return;
+  }
+  onSelectionChange({ slot_id: slotId, preferred_date: preferredDate });
+  const selected = slots.find((item) => item.id === slotId);
+  const extras = selected ? [selected.slot_name, formatSlotTimeRange(selected)] : [];
+  onLabelChange?.(formatWindowChoiceLabel(preferredDate, extras, locale));
+}
 
 function dayParts(ymd: string, locale: string): { weekday: string; dayMonth: string } {
   const d = new Date(`${ymd}T12:00:00`);
@@ -130,6 +151,8 @@ export interface DeliveryWindowPickerProps {
   businessLocationId?: string;
   onSelectionChange: (value: ClientDeliveryWindowPayload | null) => void;
   onReadyChange?: (ready: boolean) => void;
+  /** Human label for the selected slot. Null when nothing is selected. */
+  onLabelChange?: (label: string | null) => void;
 }
 
 export function DeliveryWindowPicker({
@@ -141,8 +164,9 @@ export function DeliveryWindowPicker({
   businessLocationId,
   onSelectionChange,
   onReadyChange,
+  onLabelChange,
 }: DeliveryWindowPickerProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing } = useTheme();
   const isPickup = fulfillment === 'pickup';
   const dw = usePlaceOrderDeliveryWindow({
@@ -158,16 +182,26 @@ export function DeliveryWindowPicker({
   }, [dw.canProceedWithOrder, onReadyChange]);
 
   useEffect(() => {
-    if (!enabled) {
-      onSelectionChange(null);
-      return;
-    }
-    if (dw.canProceedWithOrder && dw.preferredDate && dw.slotId) {
-      onSelectionChange({ slot_id: dw.slotId, preferred_date: dw.preferredDate });
-    } else {
-      onSelectionChange(null);
-    }
-  }, [dw.canProceedWithOrder, dw.preferredDate, dw.slotId, enabled, onSelectionChange]);
+    publishWindowSelection(
+      enabled,
+      dw.canProceedWithOrder,
+      dw.preferredDate,
+      dw.slotId,
+      dw.slots,
+      i18n.language,
+      onSelectionChange,
+      onLabelChange
+    );
+  }, [
+    dw.canProceedWithOrder,
+    dw.preferredDate,
+    dw.slotId,
+    dw.slots,
+    enabled,
+    i18n.language,
+    onLabelChange,
+    onSelectionChange,
+  ]);
 
   if (!enabled) return null;
 

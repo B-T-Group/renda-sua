@@ -13,6 +13,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { BottomOverlaySnackbar } from '../../components/feedback/BottomOverlaySnackbar';
 import { BusinessOrderHeroCard } from '../../components/business/BusinessOrderHeroCard';
+import { BusinessOrderTimingCard } from '../../components/business/BusinessOrderTimingCard';
 import { BusinessOrderItemsCard } from '../../components/business/BusinessOrderItemsCard';
 import { BusinessOrderRowActions } from '../../components/business/BusinessOrderRowActions';
 import { FirstOrderJourneyCard } from '../../components/business/FirstOrderJourneyCard';
@@ -30,11 +31,8 @@ import { getBusinessOrderActions } from '../../utils/businessOrderActions';
 import { useOrdersApi } from '../../contexts/OrdersApiContext';
 import {
   businessOrderAgentLabel,
-  formatOrderTimeWindowLabel,
   isStorePickupOrder,
-  resolveOrderTimeWindow,
 } from '../../utils/businessOrderListDisplay';
-import { formatPreferredDate, formatTimeSlotValue } from '../../utils/deliveryWindowUtils';
 import { isCarrierShipping } from '../../utils/fulfillmentMethod';
 import { recipientContact } from '../../orders/model/helpers';
 import { orderToPhaseInput, resolveOrderPhase } from '../../utils/orderPhase';
@@ -119,8 +117,6 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
   const agentPhone = order.assigned_agent?.user?.phone_number;
   const isPickup = isStorePickupOrder(order);
   const isShipping = isCarrierShipping(order.fulfillment_method);
-  const slotLabel = formatOrderTimeWindowLabel(order, locale);
-  const primaryWindow = resolveOrderTimeWindow(order);
   const phaseInfo = resolveOrderPhase(orderToPhaseInput(order), 'business');
   const showStickyActions =
     phaseInfo.primaryActionId !== 'none' &&
@@ -146,6 +142,7 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void refetch()} />}
       >
         <BusinessOrderHeroCard order={order} locale={locale} onRefetch={() => void refetch()} />
+        <BusinessOrderTimingCard order={order} locale={locale} />
 
         {order.acceptance_state === 'scheduled' ? (
           <SectionCard
@@ -156,14 +153,14 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
               {order.acceptance_activates_at
                 ? t(
                     'business.orders.scheduledDetail',
-                    'Confirmation timer starts at {{when}}. You can confirm early anytime.',
+                    'Confirm by {{when}} to keep this order on track. You can confirm earlier.',
                     {
                       when: formatWhen(locale, order.acceptance_activates_at),
                     }
                   )
                 : t(
                     'business.orders.scheduledEarly',
-                    'This future order is waiting. You can confirm early anytime.'
+                    'Confirm this order to keep it on track.'
                   )}
             </Text>
           </SectionCard>
@@ -274,38 +271,6 @@ export default function OrderDetailBusinessView({ route, navigation }: Props) {
                 />
               ) : null}
             </SectionCard>
-
-            {primaryWindow || slotLabel ? (
-              <SectionCard
-                title={
-                  isPickup
-                    ? t('business.orders.detailPickupSlot', 'Pickup slot')
-                    : t('business.orders.detailDeliveryWindows', 'Delivery windows')
-                }
-                style={{ marginBottom: spacing.xs }}
-              >
-                {(isPickup && primaryWindow ? [primaryWindow] : order.delivery_time_windows ?? []).map(
-                  (w) => (
-                    <View key={w.id} style={{ marginBottom: spacing.sm }}>
-                      <Text variant="bodyMedium" style={{ fontWeight: '600' }}>
-                        {w.preferred_date ? formatPreferredDate(w.preferred_date, locale) : '—'}
-                      </Text>
-                      <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 2 }}>
-                        {w.time_slot_start && w.time_slot_end
-                          ? `${formatTimeSlotValue(w.time_slot_start, locale)} – ${formatTimeSlotValue(w.time_slot_end, locale)}`
-                          : ''}
-                        {w.slot?.slot_name ? ` · ${w.slot.slot_name}` : ''}
-                      </Text>
-                      {w.special_instructions ? (
-                        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 4 }}>
-                          {w.special_instructions}
-                        </Text>
-                      ) : null}
-                    </View>
-                  )
-                )}
-              </SectionCard>
-            ) : null}
 
             {isShipping ? (
               <ShippingTrackingCard

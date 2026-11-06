@@ -76,6 +76,10 @@ export const BusinessOrderDetails: React.FC<BusinessOrderDetailsProps> = ({
         ) : null}
       </HeroActionCard>
 
+      <Box sx={{ mb: 2 }}>
+        <DeliveryWindowCard order={order} />
+      </Box>
+
       {alerts}
 
       <Grid container spacing={2} sx={{ mb: 2 }}>
@@ -122,7 +126,6 @@ export const BusinessOrderDetails: React.FC<BusinessOrderDetailsProps> = ({
 
       <Stack spacing={2}>
         <ProductList items={vm.items} />
-        <DeliveryWindowCard order={order} />
         {vm.paymentStatusLabel ? (
           <Typography variant="body2">
             {t('orders.paymentStatus', 'Payment')}: {vm.paymentStatusLabel}

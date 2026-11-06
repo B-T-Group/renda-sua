@@ -73,6 +73,23 @@ export function resolveOrderTimeWindow(order: Order): TimeWindow | null {
   return confirmed ?? windows[0] ?? null;
 }
 
+export type BusinessOrderTiming =
+  | { kind: 'none' }
+  | { kind: 'asap'; pickup: boolean }
+  | { kind: 'scheduled'; pickup: boolean; window: TimeWindow };
+
+/** ASAP means fulfill now. A chosen window is the customer's slot. Shipping has neither. */
+export function resolveBusinessOrderTiming(order: Order): BusinessOrderTiming {
+  if (order.fulfillment_method === 'shipping') return { kind: 'none' };
+  const pickup = isStorePickupOrder(order);
+  const timing = order.fulfillment_timing;
+  if (timing === 'asap') return { kind: 'asap', pickup };
+  const window = resolveOrderTimeWindow(order);
+  if (window) return { kind: 'scheduled', pickup, window };
+  if (timing === 'scheduled') return { kind: 'none' };
+  return { kind: 'asap', pickup };
+}
+
 export function formatOrderTimeWindowLabel(order: Order, locale: string): string | null {
   if ((order as BusinessOrder).fulfillment_timing === 'asap' || order.fulfillment_timing === 'asap') {
     return locale.startsWith('fr') ? 'Dès que possible' : 'As soon as possible';

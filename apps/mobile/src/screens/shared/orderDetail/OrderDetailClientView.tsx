@@ -24,6 +24,7 @@ import { SectionCard } from '../../../components/common/SectionCard';
 import { InfoRow } from '../../../components/common/InfoRow';
 import { RateOrderModal, type RateOrderMode } from '../../../components/dialogs/RateOrderModal';
 import { OrderPhaseBanner } from '../../../components/orders/OrderPhaseBanner';
+import { OrderFulfillmentCard } from '../../../components/orders/OrderFulfillmentCard';
 import { OrderJourneyTimeline } from '../../../components/client/OrderJourneyTimeline';
 import { ClientTrackingHero } from '../../../components/client/ClientTrackingHero';
 import { ClientRefundRequestButton } from '../../../components/client/ClientRefundRequestButton';
@@ -39,7 +40,7 @@ import { useFirstOrderClientJourney } from '../../../hooks/client/useFirstOrderC
 import { useOrderRatingEligibility } from '../../../hooks/useOrderRatingEligibility';
 import { useCancellationPreview } from '../../../hooks/useCancellationPreview';
 import { agentApi } from '../../../services/agentApi';
-import type { Address, Order, OrderItem } from '../../../types/agent';
+import type { Order, OrderItem } from '../../../types/agent';
 import { clientCanCancelOrder, clientShowAgentLocation, clientShowDeliveryPin, clientShowNoAgentOptions } from '../../../utils/clientOrderActions';
 import { useDeliveryConfirmation } from '../../../hooks/useDeliveryConfirmation';
 import {
@@ -59,6 +60,7 @@ import {
   resolveOrderTimeWindow,
 } from '../../../utils/businessOrderListDisplay';
 import { formatPreferredDate, formatTimeSlotValue } from '../../../utils/deliveryWindowUtils';
+import { payAfterPayByDeadline } from '../../../utils/payAfterConfirm';
 import { formatCurrency } from '../../../utils/formatters';
 import { isCarrierShipping } from '../../../utils/fulfillmentMethod';
 import {
@@ -88,26 +90,22 @@ type Props = OrderDetailScreenProps;
 
 const SECTION_GAP = 12;
 
-function formatAddress(addr: Address | undefined): string {
-  if (!addr) return '';
-  return [addr.address_line_1, addr.address_line_2, addr.city, addr.state, addr.postal_code, addr.country]
-    .filter(Boolean)
-    .join(', ');
-}
+type WindowLike = {
+  preferred_date?: string | null;
+  time_slot_start?: string | null;
+  time_slot_end?: string | null;
+  slot?: { slot_name?: string | null } | null;
+};
 
-/** One address field per line so store pickup details stay fully readable. */
-function formatAddressMultiline(addr: Address | undefined): string {
-  if (!addr) return '';
-  return [
-    addr.address_line_1,
-    addr.address_line_2,
-    addr.city,
-    addr.state,
-    addr.postal_code,
-    addr.country,
-  ]
-    .filter(Boolean)
-    .join('\n');
+function describeWindow(window: WindowLike, locale: string): string {
+  const date = window.preferred_date ? formatPreferredDate(window.preferred_date, locale) : '';
+  const time =
+    window.time_slot_start && window.time_slot_end
+      ? `${formatTimeSlotValue(window.time_slot_start, locale)} – ${formatTimeSlotValue(window.time_slot_end, locale)}`
+      : '';
+  const name = window.slot?.slot_name?.trim();
+  const clock = [time, name ? `(${name})` : ''].filter(Boolean).join(' ');
+  return [date, clock].filter(Boolean).join(' · ');
 }
 
 function formatWhen(locale: string, iso: string): string {
@@ -140,6 +138,9 @@ function ClientOrderHeroCard({
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const isPickup = isStorePickupOrder(order);
+  const statusLabel = vm?.statusMessage ?? t(`common.orderStatus.${status}`, status);
+  const heroTitle = vm?.heroTitle?.trim() ?? '';
+  const showHeroTitle = heroTitle.length > 0 && heroTitle.toLowerCase() !== statusLabel.trim().toLowerCase();
 
   const shell = useMemo(
     () => ({
@@ -191,7 +192,7 @@ function ClientOrderHeroCard({
         />
         <StatusPill
           compact
-          label={vm?.statusMessage ?? t(`common.orderStatus.${status}`, status)}
+          label={statusLabel}
           backgroundColor={`${orderStatusStripeColor(status, colors)}28`}
           borderColor={`${orderStatusStripeColor(status, colors)}55`}
           textColor={colors.text.primary}
@@ -206,19 +207,14 @@ function ClientOrderHeroCard({
         {formatWhen(locale, order.created_at)}
       </Text>
 
-      {vm?.heroTitle ? (
+      {showHeroTitle ? (
         <Text variant="titleMedium" style={{ fontWeight: '700', marginTop: spacing.sm, color: colors.text.primary }}>
-          {vm.heroTitle}
+          {vm?.heroTitle}
         </Text>
       ) : null}
       {vm?.etaText ? (
         <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs }}>
           {vm.etaText}
-        </Text>
-      ) : null}
-      {vm?.nextStepMessage ? (
-        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs }}>
-          {vm.nextStepMessage}
         </Text>
       ) : null}
 
@@ -375,6 +371,17 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
   const isPickup = isStorePickupOrder(order);
   const slotWindow = resolveOrderTimeWindow(order);
   const slotLabel = formatOrderTimeWindowLabel(order, locale);
+  const windowRows =
+    isPickup && slotWindow
+      ? [slotWindow]
+      : order.delivery_time_windows?.length
+        ? order.delivery_time_windows
+        : slotWindow
+          ? [slotWindow]
+          : [];
+  const windowValue =
+    windowRows.map((window) => describeWindow(window, locale)).filter(Boolean).join('\n') ||
+    slotLabel;
   const phaseInfo = resolveOrderPhase(
     orderToPhaseInput(order, { usesLegacyPin }),
     'client'
@@ -712,14 +719,15 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
             storeAddress={order.business_location?.address}
             storeName={order.business_location?.name}
           />
-        ) : (
-          <OrderPhaseBanner order={order} role="client" />
-        )}
+        ) : payAfterPayByDeadline(order) ? (
+          <OrderPhaseBanner order={order} role="client" omitNextStep />
+        ) : null}
 
         {firstOrderJourney ? null : (
           <OrderJourneyTimeline
             input={orderToPhaseInput(order)}
             agentName={order.assigned_agent?.user?.first_name}
+            showMessage={false}
           />
         )}
         <ClientTrackingHero
@@ -942,92 +950,50 @@ export default function OrderDetailClientView({ route, navigation }: Props) {
           </View>
         ) : null}
 
-        {/* ── Delivery / Pickup ─────────────────────────────────────────── */}
-        <SectionCard
+        <OrderFulfillmentCard
+          style={styles.section}
           title={
             isPickup
               ? t('orders.pickupSection', 'Store pickup')
               : t('orders.deliveryLabel', 'Delivery')
           }
-          style={styles.section}
-        >
-          <InfoRow
-            icon="storefront-outline"
-            label={
-              isPickup
+          locale={locale}
+          places={[
+            {
+              icon: 'storefront-outline',
+              label: isPickup
                 ? t('orders.pickupLabel', 'Pick up from')
-                : t('orders.merchantLocationLabel', 'From store')
-            }
-            value={order.business_location?.name ?? '—'}
-            vertical
-            truncate={false}
-          />
-          {formatAddressMultiline(order.business_location?.address) ? (
-            <InfoRow
-              icon="map-marker-outline"
-              label={
-                isPickup
-                  ? t('orders.pickupAddressLabel', 'Store address')
-                  : t('orders.merchantAddressLabel', 'Store address')
-              }
-              value={formatAddressMultiline(order.business_location?.address)}
-              vertical
-              truncate={false}
+                : t('orders.merchantLocationLabel', 'From store'),
+              name: order.business_location?.name,
+              address: order.business_location?.address,
+            },
+            ...(!isPickup
+              ? [
+                  {
+                    icon: 'map-marker-outline' as const,
+                    label: t('orders.deliveryAddressLabel', 'Deliver to'),
+                    address: order.delivery_address,
+                  },
+                ]
+              : []),
+          ]}
+          windowLabel={
+            windowValue
+              ? isPickup
+                ? t('orders.clientManage.pickupTime', 'Pickup time')
+                : t('orders.clientManage.deliveryTime', 'Delivery time')
+              : null
+          }
+          windowValue={windowValue}
+        />
+        {isPickup && clientVm?.contacts.business ? (
+          <View style={styles.section}>
+            <ContactCard
+              title={t('orders.contact.store', 'Store contact')}
+              contact={clientVm.contacts.business}
             />
-          ) : null}
-          {isPickup && clientVm?.contacts.business ? (
-            <>
-              <Divider style={{ marginVertical: spacing.xs }} />
-              <ContactCard
-                title={t('orders.contact.store', 'Store contact')}
-                contact={clientVm.contacts.business}
-              />
-            </>
-          ) : null}
-          {!isPickup ? (
-            <>
-              <Divider style={{ marginVertical: spacing.xs }} />
-              <InfoRow
-                icon="map-marker-outline"
-                label={t('orders.deliveryAddressLabel', 'Deliver to')}
-                value={formatAddress(order.delivery_address) || '—'}
-                vertical
-                truncate={false}
-              />
-            </>
-          ) : null}
-          {slotWindow || slotLabel || (order.delivery_time_windows?.length ?? 0) > 0 ? (
-            <>
-              <Divider style={{ marginVertical: spacing.xs }} />
-              <Text style={[styles.subLabel, { color: colors.text.secondary }]}>
-                {isPickup
-                  ? t('orders.clientManage.pickupSlot', 'Pickup slot')
-                  : t('orders.clientManage.whenAvailable', 'Scheduled window')}
-              </Text>
-              {(isPickup && slotWindow
-                ? [slotWindow]
-                : order.delivery_time_windows?.length
-                  ? order.delivery_time_windows
-                  : slotWindow
-                    ? [slotWindow]
-                    : []
-              ).map((w) => (
-                <Text key={w.id} variant="bodyMedium" style={{ marginTop: 2 }}>
-                  {w.preferred_date ? formatPreferredDate(w.preferred_date, locale) : ''}
-                  {w.time_slot_start && w.time_slot_end
-                    ? ` · ${formatTimeSlotValue(w.time_slot_start, locale)} – ${formatTimeSlotValue(w.time_slot_end, locale)}`
-                    : ''}
-                  {w.slot?.slot_name ? ` (${w.slot.slot_name})` : ''}
-                </Text>
-              ))}
-              {!order.delivery_time_windows?.length && !slotWindow && slotLabel ? (
-                <Text variant="bodyMedium" style={{ marginTop: 2 }}>
-                  {slotLabel}
-                </Text>
-              ) : null}
-            </>
-          ) : null}
-        </SectionCard>
+          </View>
+        ) : null}
 
       </ScrollView>
 
@@ -1244,5 +1210,4 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4 },
   itemThumb: { width: 52, height: 52, borderRadius: 10 },
   itemThumbFallback: { alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
-  subLabel: { fontSize: 12, fontWeight: '600', marginBottom: 4 },
 });
