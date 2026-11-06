@@ -45,6 +45,8 @@ interface DedicatedReleaseOrder {
   assignment_source: string | null;
   dedicated_assignment_id: string | null;
   dedicated_release_until: string | null;
+  /** Set when designated-first auto-assigned this internal agent at ready. */
+  dispatch_mode?: string | null;
   business_location?: { address?: { country?: string | null } | null } | null;
   assigned_agent?: { id: string; user_id: string | null } | null;
   /** Pickup monitoring state, restored if the release has to be undone (QA #608 N1). */
@@ -557,6 +559,13 @@ export class OrderReassignmentService {
         'Only an automatic dedicated assignment can be released'
       );
     }
+    // Designated-first auto-assign reuses `dedicated_auto` with the hours-long
+    // cutoff as dedicated_release_until. The 120 s auto-release path would open
+    // the gate immediately and leave designated stamps for the next agent.
+    if (order.dispatch_mode === 'designated_first') {
+      log('delegated_designated');
+      return this.releaseDesignated(orderId, agentId, reason, now);
+    }
     const until = order.dedicated_release_until
       ? new Date(order.dedicated_release_until).getTime()
       : 0;
@@ -656,6 +665,7 @@ export class OrderReassignmentService {
       });
       return this.refuse('release_failed', 'Could not release the order');
     }
+    await this.clearLeftoverDesignatedStamps(order.id);
     await this.insertAgentHistory(
       order.id,
       userId,
@@ -731,7 +741,7 @@ export class OrderReassignmentService {
       `query DedicatedReleaseOrder($id: uuid!) {
         orders_by_pk(id: $id) {
           id order_number current_status assigned_agent_id currency
-          assignment_source dedicated_assignment_id dedicated_release_until
+          assignment_source dedicated_assignment_id dedicated_release_until dispatch_mode
           pickup_state pickup_due_at pickup_reminder_sent_at pickup_at_risk_at pickup_overdue_at
           pickup_extension_minutes pickup_paused_at pickup_pause_reason pickup_pause_remaining_ms
           last_agent_distance_m last_agent_progress_at agent_arrived_pickup_at
