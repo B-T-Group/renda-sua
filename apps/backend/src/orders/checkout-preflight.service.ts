@@ -21,7 +21,6 @@ import { buildDeliveryAvailabilityContext } from '../delivery-availability/build
 import { DeliveryAvailabilityService } from '../delivery-availability/delivery-availability.service';
 import {
   DeliveryAvailabilityResult,
-  DeliveryUnavailableReason,
   toPublicDeliveryAvailability,
 } from '../delivery-availability/delivery-availability.types';
 import {
@@ -1418,9 +1417,9 @@ export class CheckoutPreflightService {
   /**
    * Client-safe availability for one seller group. With #594 dedicated agents
    * on for the seller country it adds `delivery_asap_available` (today's
-   * rules, unchanged) and `dedicated_covered_slots`: the scheduled slots a
-   * dedicated agent covers when the only failure is "no agent nearby". Flag
-   * off -> exactly the previous shape.
+   * rules, unchanged) and `dedicated_covered_slots`: scheduled slots a
+   * dedicated agent covers when ASAP is unavailable (schedule-allowed +
+   * location). Flag off -> exactly the previous shape.
    */
   private async groupDeliveryAvailability(
     result: DeliveryAvailabilityResult | undefined,
@@ -1470,11 +1469,11 @@ export class CheckoutPreflightService {
     const location = params.group.inventoryRows[0]?.business_location;
     const locationId: string | undefined =
       location?.id ?? params.group.businessLocationId;
-    const onlyNoNearbyAgent =
-      !result.available &&
-      result.reason === DeliveryUnavailableReason.NO_ELIGIBLE_AGENT;
+    // ASAP stays reason-blind for `available`. When ASAP is out, still list
+    // dedicated covered slots in the horizon so checkout can offer scheduled-only
+    // delivery (not only when the ASAP reason is NO_ELIGIBLE_AGENT).
     let covered: DedicatedCoveredSlot[] = [];
-    if (onlyNoNearbyAgent && params.scheduleAllowed && locationId) {
+    if (!result.available && params.scheduleAllowed && locationId) {
       covered = await coverage.coveredSlots({
         locationId,
         country,

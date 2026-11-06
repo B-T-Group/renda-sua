@@ -44,10 +44,18 @@ function slot(key: Key, available = true): AvailableSlot {
 function world() {
   const state = {
     flag: true,
+    maxActiveOrders: 10 as number | null,
     pickupSlots: [] as Array<{ slot_key: string; is_enabled: boolean; pickup_time: string | null }>,
     assignments: [] as Array<{ id: string; agent_id: string; slot_key: string; status: string; off_today_date: string | null }>,
     agents: new Map<string, { id: string; user_id: string; is_verified: boolean; is_internal: boolean; status: string; focus: string }>(),
     balances: new Map<string, number>(),
+    /** Active dedicated orders used for date-scoped load caps. */
+    loadOrders: [] as Array<{
+      id: string;
+      assigned_agent_id: string;
+      current_status: string;
+      preferred_date: string | null;
+    }>,
     slotsByDate: new Map<string, AvailableSlot[]>(),
     queries: [] as string[],
   };
@@ -77,7 +85,15 @@ function world() {
             .map((a) => ({ ...a, agent: state.agents.get(a.agent_id) ?? null })),
         };
       case 'DedicatedAgentLoad':
-        return { orders: [], order_offers: [] };
+        return {
+          orders: state.loadOrders.map((o) => ({
+            id: o.id,
+            assigned_agent_id: o.assigned_agent_id,
+            current_status: o.current_status,
+            delivery_time_windows: o.preferred_date ? [{ preferred_date: o.preferred_date }] : [],
+          })),
+          order_offers: [],
+        };
       case 'DedicatedAgentBalances':
         return {
           accounts: (vars.userIds as string[])
@@ -88,6 +104,9 @@ function world() {
         return {
           application_configurations: [
             { config_key: 'dedicated_agents_enabled', boolean_value: state.flag, country_code: null },
+            ...(state.maxActiveOrders != null
+              ? [{ config_key: 'dedicated_max_active_orders', number_value: state.maxActiveOrders, country_code: null }]
+              : []),
           ],
         };
       default:
@@ -217,12 +236,31 @@ describe('DedicatedCheckoutCoverageService.coveredSlots', () => {
     await expect(w.service.coveredSlots(params({ verifiedAgentDelivery: true }))).resolves.toEqual([]);
   });
 
-  it('Off today hides only today\'s slots, and eligibility is checked once per slot for later days', async () => {
+  it('Off today hides only today\'s slots; later days are checked per calendar date', async () => {
     const w = world();
     w.addAgent('a', 'afternoon', { offToday: '2026-10-18' });
     for (const d of ['2026-10-18', '2026-10-19', '2026-10-20']) w.state.slotsByDate.set(d, [slot('afternoon')]);
     expect(keys(await w.service.coveredSlots(params()))).toEqual(['2026-10-19 afternoon', '2026-10-20 afternoon']);
-    expect(w.state.queries.filter((q) => q === 'DedicatedSlotAssignments')).toHaveLength(2);
+    // One eligibility pass per (slot, date) — today + two later days.
+    expect(w.state.queries.filter((q) => q === 'DedicatedSlotAssignments')).toHaveLength(3);
+  });
+
+  it('date-scoped load caps do not collapse day N and day N+1 into one answer', async () => {
+    const w = world();
+    w.state.maxActiveOrders = 1;
+    w.addAgent('a', 'afternoon');
+    w.state.loadOrders.push({
+      id: 'ord-full',
+      assigned_agent_id: 'a',
+      current_status: 'assigned_to_agent',
+      preferred_date: '2026-10-19',
+    });
+    for (const d of ['2026-10-18', '2026-10-19', '2026-10-20']) w.state.slotsByDate.set(d, [slot('afternoon')]);
+
+    expect(keys(await w.service.coveredSlots(params()))).toEqual([
+      '2026-10-18 afternoon',
+      '2026-10-20 afternoon',
+    ]);
   });
 
   it('a slot lookup error -> [] (checkout behaves as today)', async () => {

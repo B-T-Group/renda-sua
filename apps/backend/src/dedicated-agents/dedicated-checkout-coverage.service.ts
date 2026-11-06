@@ -91,8 +91,9 @@ export class DedicatedCheckoutCoverageService {
 
       const eligibility = new Map<string, Promise<boolean>>();
       const isCovered = (slotKey: DedicatedSlotKey, date: string): Promise<boolean> => {
-        // Off today only matters for today's slots; every later date shares one answer.
-        const memo = `${slotKey}|${date === today ? date : 'later'}`;
+        // Date-scoped load caps (capPerSlotDay) differ per calendar day, so memo
+        // by date — do not collapse day N and day N+1 into one "later" answer.
+        const memo = `${slotKey}|${date}`;
         let pending = eligibility.get(memo);
         if (!pending) {
           pending = this.coverage
@@ -106,6 +107,7 @@ export class DedicatedCheckoutCoverageService {
               currency: params.currency,
               verifiedAgentDelivery: params.verifiedAgentDelivery,
               slotDate: date,
+              capPerSlotDay: true,
               now,
             })
             .then((agents) => agents.length > 0);

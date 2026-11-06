@@ -1195,17 +1195,31 @@ describe('CheckoutPreflightService', () => {
       expect(dedicatedCoverage.coveredSlots).not.toHaveBeenCalled();
     });
 
-    it('blocked for another reason (service area off) -> no covered slots', async () => {
+    it('ASAP unavailable for a non-agent reason still lists dedicated covered slots when schedule is allowed', async () => {
       mockInventory([locatedRow()]);
       availability({
-        'biz-1': { available: false, estimatedDeliveryMinutes: null, reason: 'SERVICE_AREA_DISABLED', ruleId: 'service-area-enabled' },
+        'biz-1': {
+          available: false,
+          estimatedDeliveryMinutes: null,
+          reason: 'SERVICE_AREA_DISABLED',
+          ruleId: 'service-area-enabled',
+        },
       });
       dedicatedCoverage.isEnabled.mockResolvedValue(true);
+      dedicatedCoverage.coveredSlots.mockResolvedValue([slotEntry('2026-10-19', 'afternoon')]);
 
       const result = await service.resolve(deliveryDto([['inv-1', 1]]), false);
 
-      expect(result.groups[0]?.delivery_availability?.dedicated_covered_slots).toEqual([]);
-      expect(dedicatedCoverage.coveredSlots).not.toHaveBeenCalled();
+      expect(result.groups[0]?.delivery_availability).toEqual({
+        available: false,
+        estimated_delivery_minutes: null,
+        delivery_asap_available: false,
+        dedicated_covered_slots: [slotEntry('2026-10-19', 'afternoon')],
+      });
+      expect(result.delivery_availability?.dedicated_covered_slots).toEqual([
+        slotEntry('2026-10-19', 'afternoon'),
+      ]);
+      expect(dedicatedCoverage.coveredSlots).toHaveBeenCalledTimes(1);
     });
 
     it('cooked-food group (ASAP only) -> no covered slots', async () => {
