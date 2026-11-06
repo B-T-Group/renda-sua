@@ -942,7 +942,11 @@ export class LoginService {
     const newSessionId = await this.sessionStore.rotateSession(live.id);
     if (!newSessionId) {
       throw new HttpException(
-        { success: false, error: 'Session rotation failed' },
+        {
+          success: false,
+          error: 'Session rotation failed',
+          message: 'Session rotation failed',
+        },
         HttpStatus.UNAUTHORIZED
       );
     }

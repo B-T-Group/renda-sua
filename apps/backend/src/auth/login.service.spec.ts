@@ -959,7 +959,11 @@ describe('LoginService start, lockout, and session gates', () => {
 
       await expect(service.refreshSession('sid-1')).rejects.toMatchObject({
         status: HttpStatus.UNAUTHORIZED,
-        response: { error: 'Session rotation failed' },
+        message: 'Session rotation failed',
+        response: {
+          error: 'Session rotation failed',
+          message: 'Session rotation failed',
+        },
       });
       expect(sessionStore.deleteSession).not.toHaveBeenCalled();
     });
