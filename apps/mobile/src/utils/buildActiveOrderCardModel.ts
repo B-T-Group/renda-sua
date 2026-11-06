@@ -9,7 +9,12 @@ import {
   isCompletedOrderStatus,
   isTerminalOrderStatus,
 } from './orderListGrouping';
-import { businessOrderUnitsCount } from './businessOrderListDisplay';
+import {
+  businessOrderLineSummaries,
+  businessOrderUnitsCount,
+  formatOrderTimeWindowLabel,
+  type BusinessOrderLineSummary,
+} from './businessOrderListDisplay';
 import { formatCurrency } from './formatters';
 import { resolveOrderPricing } from './orderAmounts';
 import type { BusinessOrder } from '../types/business/orders';
@@ -18,9 +23,8 @@ export type ActiveOrderCardUrgency = 'warning' | 'primary' | 'info' | 'neutral';
 
 export type ActiveOrderCardDestination =
   | { kind: 'order_detail' }
-  | { kind: 'incoming_overlay' }
   | { kind: 'refunds' }
-  /** Run the merchant primary action on the dashboard (mark ready, pickup, etc.). */
+  /** Run the merchant primary action on the dashboard (accept, mark ready, pickup, etc.). */
   | { kind: 'perform_action' };
 
 export interface ActiveOrderCardModel {
@@ -28,6 +32,13 @@ export interface ActiveOrderCardModel {
   orderNumber: string;
   customerName: string | null;
   itemCount: number;
+  /** Line names + qty for accept decisions (capped). */
+  lineSummaries: BusinessOrderLineSummary[];
+  moreLinesCount: number;
+  fulfillmentKey: string;
+  fulfillmentDefault: string;
+  /** Pickup/delivery slot or ASAP; null when shipping / unknown. */
+  slotLabel: string | null;
   totalLabel: string;
   status: string;
   phase: OrderPhase;
@@ -63,6 +74,28 @@ function isPickup(order: BusinessOrder): boolean {
     order.fulfillment_method === 'pickup' ||
     order.payment_timing === 'pay_at_pickup'
   );
+}
+
+function fulfillmentCopy(order: BusinessOrder): {
+  key: string;
+  defaultValue: string;
+} {
+  if (order.fulfillment_method === 'shipping') {
+    return {
+      key: 'business.dashboard.activeOrders.fulfillment.shipping',
+      defaultValue: 'Shipping',
+    };
+  }
+  if (isPickup(order)) {
+    return {
+      key: 'business.dashboard.activeOrders.fulfillment.pickup',
+      defaultValue: 'Pickup',
+    };
+  }
+  return {
+    key: 'business.dashboard.activeOrders.fulfillment.delivery',
+    defaultValue: 'Delivery',
+  };
 }
 
 function awaitingCustomerPayment(
@@ -243,7 +276,7 @@ function ctaFor(
     return {
       key: 'business.dashboard.activeOrders.cta.accept',
       defaultValue: 'Accept Order',
-      destination: { kind: 'incoming_overlay' },
+      destination: { kind: 'perform_action' },
     };
   }
   if (phase === 'prepare' && primaryActionId === 'none') {
@@ -377,6 +410,8 @@ export function buildActiveOrderCardModel(
     customerCompletes
   );
   const itemCount = businessOrderUnitsCount(order);
+  const { lines, moreCount } = businessOrderLineSummaries(order, 3);
+  const fulfillment = fulfillmentCopy(order);
   const pricing = resolveOrderPricing(order as Order);
   const currency = order.currency || 'XAF';
 
@@ -385,6 +420,11 @@ export function buildActiveOrderCardModel(
     orderNumber: order.order_number,
     customerName: customerName(order),
     itemCount,
+    lineSummaries: lines,
+    moreLinesCount: moreCount,
+    fulfillmentKey: fulfillment.key,
+    fulfillmentDefault: fulfillment.defaultValue,
+    slotLabel: formatOrderTimeWindowLabel(order as Order, locale),
     totalLabel: formatCurrency(pricing.total, currency, locale),
     status,
     phase: phaseInfo.phase,

@@ -19,6 +19,7 @@ import AgentOrderDetailScreen from '../screens/agent/AgentOrderDetailScreen';
 import UserOrderMessagesScreen from '../screens/shared/UserOrderMessagesScreen';
 import EarningsScreen from '../screens/agent/EarningsScreen';
 import AgentBusinessReferralScreen from '../screens/agent/AgentBusinessReferralScreen';
+import AgentBusinessesHubScreen from '../screens/agent/AgentBusinessesHubScreen';
 import DedicatedHubScreen from '../screens/agent/DedicatedHubScreen';
 import DedicatedOpportunityDetailScreen from '../screens/agent/DedicatedOpportunityDetailScreen';
 import ProfileScreen from '../screens/shared/ProfileScreen';
@@ -40,6 +41,8 @@ import {
   AssistantHeaderTitle,
   AssistantHeaderRight,
 } from '../components/assistant/AssistantHeaderComponents';
+import { AssistantLauncherHost } from '../components/assistant/launcher/AssistantLauncherHost';
+import { markLauncherInteraction } from '../components/assistant/launcher/launcherSignals';
 import MessagesScreen from '../screens/shared/MessagesScreen';
 import ThreadDetailScreen from '../screens/shared/ThreadDetailScreen';
 import SupportTicketsScreen from '../screens/shared/SupportTicketsScreen';
@@ -102,6 +105,7 @@ export type AgentRootStackParamList = {
   PaymentScheduleDetail: { assignmentId: string };
   CashAdvanceDrawSuccess: CashAdvanceDrawSuccessParams;
   AgentBusinessReferral: undefined;
+  AgentBusinessesHub: { tab?: 'dedicated' | 'referred' } | undefined;
   Profile: undefined;
   NotificationPreferences: undefined;
   AgentAvailability: undefined;
@@ -291,7 +295,10 @@ function AgentNavigatorChrome() {
   const store = useStore();
   return (
     <AgentHomeFocusProvider>
-      <View style={[styles.flex, { backgroundColor: colors.pageBackground }]}>
+      <View
+        style={[styles.flex, { backgroundColor: colors.pageBackground }]}
+        onTouchStart={onAgentRootTouch}
+      >
       <View style={{ paddingTop: insets.top }}>
         <AgentStatusBar />
         <PersistentActiveDeliveryHeader />
@@ -372,6 +379,13 @@ function AgentNavigatorChrome() {
             component={AgentBusinessReferralScreen}
             options={{
               title: t('agent.businessReferrals.navTitle', 'Refer a business'),
+            }}
+          />
+          <RootStack.Screen
+            name="AgentBusinessesHub"
+            component={AgentBusinessesHubScreen}
+            options={{
+              title: t('agent.myBusinesses.navTitle', 'Businesses'),
             }}
           />
           <RootStack.Screen name="Profile" component={ProfileScreen} options={{ title: 'Profil' }} />
@@ -472,10 +486,13 @@ function AgentNavigatorChrome() {
           />
         </RootStack.Navigator>
       </SafeAreaInsetsContext.Provider>
+      <AssistantLauncherHost persona="agent" />
       </View>
     </AgentHomeFocusProvider>
   );
 }
+
+const onAgentRootTouch = () => markLauncherInteraction();
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },

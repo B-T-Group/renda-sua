@@ -5,6 +5,8 @@ interface AgentHomeFocusValue {
   setHomeFocused: (focused: boolean) => void;
   isOrderDetailFocused: boolean;
   setOrderDetailFocused: (focused: boolean) => void;
+  isOrdersFocused: boolean;
+  setOrdersFocused: (focused: boolean) => void;
 }
 
 const AgentHomeFocusContext = createContext<AgentHomeFocusValue>({
@@ -12,14 +14,24 @@ const AgentHomeFocusContext = createContext<AgentHomeFocusValue>({
   setHomeFocused: () => undefined,
   isOrderDetailFocused: false,
   setOrderDetailFocused: () => undefined,
+  isOrdersFocused: false,
+  setOrdersFocused: () => undefined,
 });
 
 export function AgentHomeFocusProvider({ children }: { children: ReactNode }) {
   const [isHomeFocused, setHomeFocused] = useState(false);
   const [isOrderDetailFocused, setOrderDetailFocused] = useState(false);
+  const [isOrdersFocused, setOrdersFocused] = useState(false);
   const value = useMemo(
-    () => ({ isHomeFocused, setHomeFocused, isOrderDetailFocused, setOrderDetailFocused }),
-    [isHomeFocused, isOrderDetailFocused]
+    () => ({
+      isHomeFocused,
+      setHomeFocused,
+      isOrderDetailFocused,
+      setOrderDetailFocused,
+      isOrdersFocused,
+      setOrdersFocused,
+    }),
+    [isHomeFocused, isOrderDetailFocused, isOrdersFocused]
   );
   return (
     <AgentHomeFocusContext.Provider value={value}>

@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
-  Alert,
-  Linking,
   Platform,
   Pressable,
   RefreshControl,
@@ -22,23 +20,17 @@ import { useOpenOrders } from '../../hooks/useOpenOrders';
 import { useAgentVerificationStatus } from '../../hooks/useAgentVerificationStatus';
 import { useStripeConnect } from '../../hooks/useStripeConnect';
 import { useMainTabContentBottomPadding } from '../../hooks/useMainTabContentBottomPadding';
-import { agentApi } from '../../services/agentApi';
 import type { Order } from '../../types/agent';
 import { clientDisplayName } from '../../utils/orderCardHelpers';
-import { orderModifiedAtMs } from '../../utils/orderListSort';
+import { compareOpenOrdersForAgent } from '../../utils/agentOpenOrderCard';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
-import { AgentClaimConfirmDialog } from '../../components/dialogs/AgentClaimConfirmDialog';
-import { useAgentLocationFeatures } from '../../hooks/useAgentLocationFeatures';
-import { ClaimTopupFormDialog } from '../../components/dialogs/ClaimTopupFormDialog';
 import { SimpleMessageDialog } from '../../components/dialogs/SimpleMessageDialog';
-import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
+import { useOpenOrderClaim } from '../../hooks/useOpenOrderClaim';
+import { useDedicatedStoreLocationIds } from '../../hooks/useDedicatedStoreLocationIds';
 import { OrderCardCompact } from '../../components/agent/OrderCardCompact';
 import { OrderMapView } from '../../components/agent/OrderMapView';
 import { OrderViewToggle } from '../../components/agent/OrderViewToggle';
 import type { OrderViewMode } from '../../components/agent/OrderViewToggle';
-import { useStore } from '../../stores/RootStore';
-import { resolveDefaultClaimTopupPhone } from '../../utils/defaultClaimTopupPhone';
-import { claimAwaitingParams } from '../../utils/claimAwaitingNav';
 import {
   agentClaimEnabled,
   agentIdVerificationPending,
@@ -50,7 +42,6 @@ import { useAgentContractStatus } from '../../hooks/useAgentContractStatus';
 
 export default function OpenOrdersScreen() {
   const { t } = useTranslation();
-  const { auth } = useStore();
   const { colors, spacing, borderRadius } = useTheme();
   const navigation = useNavigation<any>();
   const tabScrollBottomPad = useMainTabContentBottomPadding(24);
@@ -103,93 +94,18 @@ export default function OpenOrdersScreen() {
     }
   }, [stripeReady, refetch]);
 
-  const [claimingId, setClaimingId] = useState<string | null>(null);
-  const [topupModalOrderId, setTopupModalOrderId] = useState<string | null>(null);
-  const [topupPhone, setTopupPhone] = useState('');
-  const [claimConfirm, setClaimConfirm] = useState<{ order: Order; holdAmount: number } | null>(null);
   const [infoDialog, setInfoDialog] = useState<{ title: string; message: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [viewMode, setViewMode] = useState<OrderViewMode>('list');
-
-  const {
-    consent,
-    canClaim: locationCanClaim,
-    osForegroundGranted,
-    promptPermissionsWithDisclosure,
-    runPermissionFlow,
-    disclosurePermissionLoading,
-  } = useAgentLocationFeatures();
-
-  const handleLocationBlocked = useCallback(() => {
-    if (consent === 'not_shown') {
-      void promptPermissionsWithDisclosure?.();
-      return;
-    }
-    if (consent === 'deferred') {
-      Alert.alert(
-        t('agent.locationTracking.deferredNudgeTitle', 'Location required'),
-        t('agent.locationTracking.deferredNudgeMessage', 'Accept location disclosure and enable location permissions.'),
-        [
-          { text: t('common.cancel', 'Cancel'), style: 'cancel' },
-          { text: t('agent.locationTracking.enableTracking', 'Enable tracking'), onPress: () => void runPermissionFlow?.() },
-        ]
-      );
-      return;
-    }
-    if (consent === 'accepted' && !osForegroundGranted) {
-      Alert.alert(
-        t('agent.locationTracking.enableSettingsTitle', 'Enable location'),
-        t('agent.locationTracking.enableSettingsMessage', 'Turn on location in your device settings.'),
-        [
-          { text: t('common.cancel', 'Cancel'), style: 'cancel' },
-          { text: t('agent.locationTracking.openSettings', 'Open device settings'), onPress: () => void Linking.openSettings() },
-        ]
-      );
-    }
-  }, [consent, osForegroundGranted, promptPermissionsWithDisclosure, runPermissionFlow, t]);
-
-  const showStripeClaimFundingUnavailable = useCallback(() => {
-    setInfoDialog({
-      title: t('agent.claimOrder.stripeFundingUnavailableTitle', 'Claim unavailable'),
-      message: t(
-        'agent.claimOrder.stripeFundingUnavailableBody',
-        'This order requires account funding, but Mobile Money top-up is not available in your country. Please contact support.'
-      ),
-    });
-  }, [t]);
-
-  const executeClaimOrder = useCallback(
-    async (order: Order) => {
-      setClaimingId(order.id);
-      try {
-        const availability = await agentApi.orders.getClaimAvailability(order.id);
-        if (!availability.orderOpenStatus) {
-          setInfoDialog({
-            title: t('orders.orderNoLongerOpenTitle', { defaultValue: 'Order not available' }),
-            message: availability.message || t('orders.orderNoLongerOpenMessage', { defaultValue: 'This order is no longer available.' }),
-          });
-          await refetch();
-          return;
-        }
-        if (availability.needsTopUpToClaim) {
-          if (isStripeRail) {
-            showStripeClaimFundingUnavailable();
-            return;
-          }
-          setTopupPhone(await resolveDefaultClaimTopupPhone(auth.user));
-          setTopupModalOrderId(order.id);
-          return;
-        }
-        await claimOrder(order.id);
-      } catch (e) {
-        setInfoDialog({ title: t('common.error'), message: e instanceof Error ? e.message : t('messages.orderClaimError', { defaultValue: 'Failed to claim order' }) });
-      } finally {
-        setClaimingId(null);
-      }
-    },
-    [auth.user, claimOrder, isStripeRail, refetch, showStripeClaimFundingUnavailable, t]
-  );
+  const dedicatedLocationIds = useDedicatedStoreLocationIds();
+  const claim = useOpenOrderClaim({
+    orders: openOrders,
+    refetch,
+    claimOrder,
+    claimOrderWithTopup,
+    isStripeRail,
+  });
 
   useFocusEffect(
     useCallback(() => {
@@ -274,131 +190,15 @@ export default function OpenOrdersScreen() {
     t,
   ]);
 
-  const confirmClaimOrder = useCallback(
-    async (order: Order) => {
+  const handleAccept = useCallback(
+    (order: Order) => {
       if (!effectiveCanClaim) {
         handleSetupRequired();
         return;
       }
-      if (!locationCanClaim) {
-        handleLocationBlocked();
-        return;
-      }
-      await executeClaimOrder(order);
+      void claim.startClaim(order);
     },
-    [
-      effectiveCanClaim,
-      locationCanClaim,
-      executeClaimOrder,
-      handleLocationBlocked,
-      handleSetupRequired,
-    ]
-  );
-
-  const handleClaimPress = useCallback(
-    async (order: Order) => {
-      setClaimingId(order.id);
-      try {
-        const availability = await agentApi.orders.getClaimAvailability(order.id);
-        if (!availability.orderOpenStatus) {
-          setInfoDialog({
-            title: t('orders.orderNoLongerOpenTitle', { defaultValue: 'Order not available' }),
-            message: availability.message || t('orders.orderNoLongerOpenMessage', { defaultValue: 'This order is no longer available.' }),
-          });
-          await refetch();
-          return;
-        }
-        if (availability.hasEnoughFundsForHold) {
-          setClaimConfirm({ order, holdAmount: isStripeRail ? 0 : availability.holdAmount ?? 0 });
-          return;
-        }
-        if (isStripeRail) {
-          showStripeClaimFundingUnavailable();
-          return;
-        }
-        setTopupPhone(await resolveDefaultClaimTopupPhone(auth.user));
-        setTopupModalOrderId(order.id);
-      } catch (e) {
-        setInfoDialog({ title: t('common.error'), message: e instanceof Error ? e.message : t('messages.orderClaimError', { defaultValue: 'Failed to claim order' }) });
-      } finally {
-        setClaimingId(null);
-      }
-    },
-    [auth.user, confirmClaimOrder, isStripeRail, refetch, showStripeClaimFundingUnavailable, t]
-  );
-
-  const onConfirmClaimWithTopup = useCallback(async (phoneE164: string) => {
-    const id = topupModalOrderId;
-    if (!id) return;
-    setClaimingId(id);
-    try {
-      const availability = await agentApi.orders.getClaimAvailability(id);
-      if (!availability.orderOpenStatus) {
-        setTopupModalOrderId(null);
-        setTopupPhone('');
-        setInfoDialog({
-          title: t('orders.orderNoLongerOpenTitle', { defaultValue: 'Order not available' }),
-          message: availability.message || t('orders.orderNoLongerOpenMessage', { defaultValue: 'This order is no longer available.' }),
-        });
-        await refetch();
-        return;
-      }
-      if (availability.hasEnoughFundsForHold) {
-        setTopupModalOrderId(null);
-        setTopupPhone('');
-        const order = openOrders.find((o) => o.id === id);
-        if (order) {
-          setClaimConfirm({ order, holdAmount: isStripeRail ? 0 : availability.holdAmount ?? 0 });
-        } else {
-          await refetch();
-        }
-        return;
-      }
-      if (isStripeRail) {
-        setTopupModalOrderId(null);
-        setTopupPhone('');
-        showStripeClaimFundingUnavailable();
-        return;
-      }
-      setTopupModalOrderId(null);
-      setTopupPhone('');
-      if (!locationCanClaim) { handleLocationBlocked(); return; }
-      const response = await claimOrderWithTopup(id, phoneE164);
-      const order = openOrders.find((item) => item.id === id);
-      const awaiting = claimAwaitingParams({
-        orderId: id,
-        orderNumber: order?.order_number,
-        phoneE164,
-        currency: order?.currency,
-        response,
-      });
-      if (!awaiting) {
-        setInfoDialog({
-          title: t('common.error'),
-          message: t('messages.orderClaimError', { defaultValue: 'Failed to claim order' }),
-        });
-        return;
-      }
-      navigation.navigate('ClaimAwaitingPayment', awaiting);
-    } catch (e) {
-      setInfoDialog({ title: t('common.error'), message: e instanceof Error ? e.message : 'Failed to claim order' });
-    } finally {
-      setClaimingId(null);
-    }
-  }, [locationCanClaim, claimOrderWithTopup, handleLocationBlocked, isStripeRail, navigation, openOrders, refetch, showStripeClaimFundingUnavailable, t, topupModalOrderId]);
-
-  const closeTopupModal = useCallback(() => {
-    setTopupModalOrderId(null);
-    setTopupPhone('');
-  }, []);
-
-  const sortByExpressThenDate = useCallback(
-    (a: Order, b: Order) => {
-      if (a.requires_fast_delivery && !b.requires_fast_delivery) return -1;
-      if (!a.requires_fast_delivery && b.requires_fast_delivery) return 1;
-      return orderModifiedAtMs(b) - orderModifiedAtMs(a);
-    },
-    []
+    [claim, effectiveCanClaim, handleSetupRequired]
   );
 
   const filteredOrders = useMemo(() => {
@@ -413,8 +213,11 @@ export default function OpenOrdersScreen() {
   }, [openOrders, searchQuery]);
 
   const sortedOrders = useMemo(
-    () => filteredOrders.filter((o) => o.current_status === 'ready_for_pickup').sort(sortByExpressThenDate),
-    [filteredOrders, sortByExpressThenDate]
+    () =>
+      filteredOrders
+        .filter((o) => o.current_status === 'ready_for_pickup')
+        .sort((a, b) => compareOpenOrdersForAgent(a, b, dedicatedLocationIds)),
+    [dedicatedLocationIds, filteredOrders]
   );
 
   const goToOrderDetail = useCallback(
@@ -424,39 +227,19 @@ export default function OpenOrdersScreen() {
     [navigation]
   );
 
-  const handleAccept = useCallback(
-    (order: Order) => {
-      if (!effectiveCanClaim) {
-        handleSetupRequired();
-        return;
-      }
-      if (!locationCanClaim) {
-        handleLocationBlocked();
-        return;
-      }
-      void handleClaimPress(order);
-    },
-    [
-      effectiveCanClaim,
-      locationCanClaim,
-      handleClaimPress,
-      handleLocationBlocked,
-      handleSetupRequired,
-    ]
-  );
-
   const renderItem = useCallback(
     ({ item }: { item: Order }) => (
       <OrderCardCompact
         order={item}
         onAccept={() => handleAccept(item)}
         onViewDetails={() => goToOrderDetail(item.id)}
-        isBusy={claimingId === item.id}
+        isBusy={claim.claimingId === item.id}
         claimEnabled={effectiveCanClaim}
         acceptLabel={effectiveCanClaim ? undefined : claimBlockedLabel}
+        dedicatedLocationIds={dedicatedLocationIds}
       />
     ),
-    [claimBlockedLabel, claimingId, effectiveCanClaim, goToOrderDetail, handleAccept]
+    [claim.claimingId, claimBlockedLabel, effectiveCanClaim, goToOrderDetail, handleAccept]
   );
 
   const keyExtractor = useCallback((item: Order) => item.id, []);
@@ -551,14 +334,14 @@ export default function OpenOrdersScreen() {
         />
       ) : null}
 
-      {effectiveCanClaim && !locationCanClaim && agentStatus !== 'suspended' ? (
+      {effectiveCanClaim && !claim.locationCanClaim && agentStatus !== 'suspended' ? (
         <NoticeBanner
           style={[styles.banner, { marginHorizontal: spacing.md }]}
           tone="warning"
           icon="map-marker-off-outline"
           message={t('agent.locationTracking.claimRestrictedNotice', 'Enable location to claim orders.')}
           actionLabel={t('agent.locationTracking.openSettings', 'Enable location')}
-          onAction={handleLocationBlocked}
+          onAction={claim.onLocationBlocked}
         />
       ) : null}
 
@@ -670,12 +453,13 @@ export default function OpenOrdersScreen() {
           orders={sortedOrders}
           onAccept={handleAccept}
           onViewDetails={goToOrderDetail}
-          busyOrderId={claimingId}
+          busyOrderId={claim.claimingId}
           refreshing={loading}
           onRefresh={() => void refetch()}
           contentBottomPadding={tabScrollBottomPad}
           claimEnabled={effectiveCanClaim}
           claimBlockedLabel={claimBlockedLabel}
+          dedicatedLocationIds={dedicatedLocationIds}
         />
       ) : (
       <FlashList
@@ -725,39 +509,13 @@ export default function OpenOrdersScreen() {
       />
       )}
 
-      {/* Dialogs */}
-      <AgentClaimConfirmDialog
-        visible={!!claimConfirm}
-        order={claimConfirm?.order ?? null}
-        holdAmount={claimConfirm?.holdAmount ?? 0}
-        onDismiss={() => setClaimConfirm(null)}
-        onConfirm={() => {
-          if (!claimConfirm) return;
-          const o = claimConfirm.order;
-          setClaimConfirm(null);
-          void confirmClaimOrder(o);
-        }}
-      />
-      <ClaimTopupFormDialog
-        visible={!!topupModalOrderId}
-        order={topupModalOrderId ? openOrders.find((o) => o.id === topupModalOrderId) ?? null : null}
-        phone={topupPhone}
-        onChangePhone={setTopupPhone}
-        onDismiss={closeTopupModal}
-        onConfirm={(e164) => void onConfirmClaimWithTopup(e164)}
-        confirming={!!topupModalOrderId && claimingId === topupModalOrderId}
-      />
+      {claim.dialogs}
       <SimpleMessageDialog
         visible={!!infoDialog}
         title={infoDialog?.title ?? ''}
         message={infoDialog?.message ?? ''}
         dismissLabel={t('common.ok', { defaultValue: 'OK' })}
         onDismiss={() => setInfoDialog(null)}
-      />
-      <ActionLoadingDialog
-        visible={!!claimingId || disclosurePermissionLoading}
-        action={claimingId ? 'claim' : 'generic_update'}
-        message={claimingId ? t('agent.claimOrder.processing', 'Claiming order…') : t('agent.locationTracking.disclosureProcessing', 'Setting up location…')}
       />
     </SafeAreaView>
   );

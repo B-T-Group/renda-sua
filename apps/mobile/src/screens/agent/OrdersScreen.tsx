@@ -15,6 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useAgentHomeFocus } from '../../contexts/AgentHomeFocusContext';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
 import { useActiveDeliveryPinForComplete } from '../../hooks/useActiveDeliveryPinForComplete';
 import { useFailedDeliveryReasons } from '../../hooks/useFailedDeliveryReasons';
@@ -73,6 +74,7 @@ function primaryActionForOrder(
 export default function OrdersScreen({ navigation }: { navigation: Nav }) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
+  const { setOrdersFocused } = useAgentHomeFocus();
   const listBottomPadding = useMainTabContentBottomPadding();
   const failLang = i18n.language?.startsWith('fr') ? 'fr' : 'en';
   const { reasons: failReasons } = useFailedDeliveryReasons(failLang);
@@ -97,12 +99,15 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
   const [actionBusyOrderId, setActionBusyOrderId] = useState<string | null>(null);
 
   // Reset filter and refresh data every time this screen comes into focus
-  // (tab press from another tab, pop back from OrderDetail, etc.)
+  // (tab press from another tab, pop back from OrderDetail, etc.).
+  // Hide the global Active Delivery banner here — the list already shows those orders.
   useFocusEffect(
     useCallback(() => {
+      setOrdersFocused(true);
       setStatusFilter('all');
       void refetch();
-    }, [refetch])
+      return () => setOrdersFocused(false);
+    }, [refetch, setOrdersFocused])
   );
   const [loadingOverlayKind, setLoadingOverlayKind] = useState<ActionLoadingKind | null>(null);
   const [lifecycle, setLifecycle] = useState<{ orderId: string; key: LifecycleActionKey } | null>(null);

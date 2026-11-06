@@ -11,14 +11,35 @@ export function businessOrderItemTitle(order: BusinessOrder): string {
   return `${first} +${lines.length - 1}`;
 }
 
-function lineItemLabel(line: OrderItem): string {
+export type BusinessOrderLineSummary = {
+  id: string;
+  name: string;
+  quantity: number;
+};
+
+/** First `max` lines for dashboard cards; `moreCount` is remaining SKUs. */
+export function businessOrderLineSummaries(
+  order: BusinessOrder,
+  max = 3
+): { lines: BusinessOrderLineSummary[]; moreCount: number } {
+  const items = order.order_items ?? [];
+  const lines = items.slice(0, Math.max(0, max)).map((line, index) => ({
+    id: line.id || `line-${index}`,
+    name: lineItemName(line),
+    quantity: Number(line.quantity) || 1,
+  }));
+  return { lines, moreCount: Math.max(0, items.length - lines.length) };
+}
+
+function lineItemName(line: OrderItem): string {
   const name = line.item_name?.trim() || line.item?.name?.trim();
   const variant = line.variant_name?.trim();
-  const label = name
-    ? variant
-      ? `${name} · ${variant}`
-      : name
-    : `Item`;
+  if (!name) return 'Item';
+  return variant ? `${name} · ${variant}` : name;
+}
+
+function lineItemLabel(line: OrderItem): string {
+  const label = lineItemName(line);
   const qty = Number(line.quantity) || 1;
   return qty > 1 ? `${label} ×${qty}` : label;
 }

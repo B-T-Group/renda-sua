@@ -14,6 +14,7 @@ export interface ClientHomeOrderCardProps {
   width: number;
   onPressCard: () => void;
   onPressCta: () => void;
+  ctaLoading?: boolean;
 }
 
 function urgencyBorder(
@@ -31,6 +32,7 @@ export function ClientHomeOrderCard({
   width,
   onPressCard,
   onPressCta,
+  ctaLoading = false,
 }: ClientHomeOrderCardProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius, shadows } = useTheme();
@@ -67,7 +69,7 @@ export function ClientHomeOrderCard({
         )}
         style={({ pressed }) => [
           styles.body,
-          { opacity: pressed ? 0.96 : 1, padding: spacing.md },
+          { opacity: pressed ? 0.96 : 1, padding: spacing.md, paddingBottom: 0 },
         ]}
       >
         <View style={styles.topRow}>
@@ -92,15 +94,19 @@ export function ClientHomeOrderCard({
         >
           {subtitle}
         </Text>
+      </Pressable>
+      <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.md }}>
         <Button
           mode="contained"
           onPress={onPressCta}
+          loading={ctaLoading}
+          disabled={ctaLoading}
           style={{ marginTop: spacing.sm }}
           contentStyle={{ height: 40 }}
         >
           {cta}
         </Button>
-      </Pressable>
+      </View>
     </View>
   );
 }

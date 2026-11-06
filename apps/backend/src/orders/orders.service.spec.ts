@@ -4643,6 +4643,37 @@ describe('OrdersService', () => {
       expect(result.canClaim).toBe(false);
       expect(result.previewMode).toBe('country');
       expect(result.orders).toHaveLength(1);
+      expect(result.orders[0].my_dedicated_store).toBe(false);
+    });
+
+    it('marks open orders from the agent dedicated stores', async () => {
+      hasuraUserService.getUser.mockResolvedValue(previewAgentUser);
+      const dedicatedOrder = {
+        ...openOrderRow,
+        business_location: {
+          id: 'loc-1',
+          address: { country: 'CM', state: 'Littoral' },
+        },
+      };
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetAgentStatus')) {
+          return { agents_by_pk: { status: 'active' } };
+        }
+        if (query.includes('OpenOrders')) {
+          return { orders: [dedicatedOrder, openOrderRow] };
+        }
+        if (query.includes('AgentDedicatedStores')) {
+          return {
+            dedicated_agent_assignments: [{ business_location_id: 'loc-1' }],
+          };
+        }
+        return {};
+      });
+
+      const result = await service.getOpenOrders();
+
+      expect(result.orders[0].my_dedicated_store).toBe(true);
+      expect(result.orders[1].my_dedicated_store).toBe(false);
     });
 
     it('returns country listing with canClaim true for verified agents without state', async () => {

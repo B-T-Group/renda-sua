@@ -30,3 +30,5 @@ export function EarnDeliveringIllustration({ size = 120 }: Props) {
     </View>
   );
 }
+
+export default EarnDeliveringIllustration;

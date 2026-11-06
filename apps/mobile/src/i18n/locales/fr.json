@@ -2351,6 +2351,12 @@
         "itemCount_one": "{{count}} article",
         "itemCount_other": "{{count}} articles",
         "itemCount": "{{count}} articles",
+        "moreItems": "+{{count}} de plus",
+        "fulfillment": {
+          "pickup": "Retrait",
+          "delivery": "Livraison",
+          "shipping": "Expédition"
+        },
         "receivedJustNow": "Reçue à l'instant",
         "receivedMinutes": "Reçue il y a {{count}} minutes",
         "receivedHours": "Reçue il y a {{count}} heures",
@@ -4897,6 +4903,17 @@
       "claimed": "Commandes Déjà Réclamées",
       "noOrdersFound": "Aucune commande disponible pour la collecte",
       "claimButton": "Réclamer",
+      "youEarn": "Vous gagnez",
+      "yourStore": "Votre magasin",
+      "yourStoreHint": "Les commandes de vos magasins dédiés portent la mention Votre magasin. Les créneaux dédiés à venir sont listés au-dessus.",
+      "dropoffAsap": "Livraison dès que possible",
+      "dropoffAsapShort": "Au plus tôt",
+      "dropoffToday": "Aujourd'hui",
+      "dropoffTomorrow": "Demain",
+      "youToStore": "Distance jusqu’au point de collecte · {{km}} km",
+      "storeToDropoff": "Collecte → livraison · {{km}} km",
+      "dropoffWhen": "Livraison {{when}}",
+      "dropoffScheduled": "Livraison planifiée",
       "claimWithHold": "Réclamer (caution)",
       "hold": "Caution",
       "fastDelivery": "Express",
@@ -5318,6 +5335,20 @@
       "momoBody": "Ajoutez un numéro de versement pour commencer à prendre des livraisons.",
       "pendingTitle": "Pièce d’identité en cours de vérification",
       "pendingBody": "Vous pourrez prendre des livraisons une fois votre pièce approuvée."
+    },
+    "myBusinesses": {
+      "navTitle": "Commerces",
+      "menuSubtitle": "Magasins dédiés et commerces que vous parrainez",
+      "homeTitle": "Commerces",
+      "homeDedicatedLabel": "Magasins dédiés",
+      "homeReferredLabel": "Parrainés",
+      "tabDedicated": "Dédiés",
+      "tabReferred": "Parrainés",
+      "dedicatedStoresTitle": "Vos magasins dédiés",
+      "dedicatedEmpty": "Vous n’êtes dédié à aucun magasin pour le moment. Parcourez les offres pour postuler.",
+      "browseOpportunities": "Voir les offres",
+      "manageStores": "Gérer les magasins",
+      "openDedicatedHub": "Ouvrir le hub dédié"
     }
   },
   "agentOrder": {
@@ -7168,7 +7199,11 @@
     "client": {
       "ordersPendingPayment": {
         "title": "Commandes en attente de paiement",
-        "subtitle": "{{count}} commande(s) nécessite(nt) votre attention."
+        "subtitle": "{{count}} commande(s) doivent encore être payées."
+      },
+      "ordersAwaitingConfirmation": {
+        "title": "En attente de confirmation",
+        "subtitle": "{{count}} commande(s) en attente de confirmation du magasin."
       },
       "activeDelivery": {
         "title": "Commande en route",

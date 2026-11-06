@@ -373,13 +373,31 @@ export class DashboardService {
   }
 
   private async getClientActions(clientId: string): Promise<ActionsNeededDto> {
-    const [pendingOrders, actionRequired] = await Promise.all([
-      this.countClientOrdersByStatus(clientId, ['pending', 'pending_payment']),
-      this.countClientActiveDeliveries(clientId),
-    ]);
+    const [awaitingPayment, awaitingConfirmation, actionRequired] =
+      await Promise.all([
+        this.countClientOrdersByStatus(clientId, ['pending_payment']),
+        this.countClientOrdersByStatus(clientId, ['pending']),
+        this.countClientActiveDeliveries(clientId),
+      ]);
     const raw: Array<Omit<ActionItemDto, 'count'> & { count: number }> = [
-      { id: 'orders_pending_payment', kind: 'orders_pending_payment', priority: 'high', count: pendingOrders },
-      { id: 'active_delivery', kind: 'active_delivery', priority: 'normal', count: actionRequired },
+      {
+        id: 'orders_pending_payment',
+        kind: 'orders_pending_payment',
+        priority: 'high',
+        count: awaitingPayment,
+      },
+      {
+        id: 'orders_awaiting_confirmation',
+        kind: 'orders_awaiting_confirmation',
+        priority: 'normal',
+        count: awaitingConfirmation,
+      },
+      {
+        id: 'active_delivery',
+        kind: 'active_delivery',
+        priority: 'normal',
+        count: actionRequired,
+      },
     ];
     return this.buildDto(raw);
   }

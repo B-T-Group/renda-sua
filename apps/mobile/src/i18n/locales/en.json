@@ -2418,6 +2418,12 @@
         "itemCount_one": "{{count}} item",
         "itemCount_other": "{{count}} items",
         "itemCount": "{{count}} items",
+        "moreItems": "+{{count}} more",
+        "fulfillment": {
+          "pickup": "Pickup",
+          "delivery": "Delivery",
+          "shipping": "Shipping"
+        },
         "receivedJustNow": "Received just now",
         "receivedMinutes": "Received {{count}} minutes ago",
         "receivedHours": "Received {{count}} hours ago",
@@ -4990,6 +4996,17 @@
       "claimed": "Already Claimed Orders",
       "noOrdersFound": "No orders available for pickup",
       "claimButton": "Claim",
+      "youEarn": "You earn",
+      "yourStore": "Your store",
+      "yourStoreHint": "Orders from your dedicated stores are tagged Your store. Upcoming dedicated slots are listed above.",
+      "dropoffAsap": "Drop off as soon as possible",
+      "dropoffAsapShort": "ASAP",
+      "dropoffToday": "Today",
+      "dropoffTomorrow": "Tomorrow",
+      "youToStore": "Distance to pickup · {{km}} km",
+      "storeToDropoff": "Pickup to drop-off · {{km}} km",
+      "dropoffWhen": "Drop off {{when}}",
+      "dropoffScheduled": "Scheduled drop-off",
       "claimWithHold": "Claim (with hold)",
       "hold": "Hold",
       "fastDelivery": "Express",
@@ -5411,6 +5428,20 @@
       "momoBody": "Add a payout number to start claiming deliveries.",
       "pendingTitle": "ID under review",
       "pendingBody": "You can claim deliveries once your ID is approved."
+    },
+    "myBusinesses": {
+      "navTitle": "Businesses",
+      "menuSubtitle": "Dedicated stores and businesses you refer",
+      "homeTitle": "Businesses",
+      "homeDedicatedLabel": "Dedicated stores",
+      "homeReferredLabel": "Referred",
+      "tabDedicated": "Dedicated",
+      "tabReferred": "Referred",
+      "dedicatedStoresTitle": "Your dedicated stores",
+      "dedicatedEmpty": "You are not a dedicated agent for any store yet. Browse openings to apply.",
+      "browseOpportunities": "Browse opportunities",
+      "manageStores": "Manage stores",
+      "openDedicatedHub": "Open dedicated hub"
     }
   },
   "agentOrder": {
@@ -7246,7 +7277,11 @@
     "client": {
       "ordersPendingPayment": {
         "title": "Orders awaiting payment",
-        "subtitle": "{{count}} order(s) need your attention."
+        "subtitle": "{{count}} order(s) still need to be paid."
+      },
+      "ordersAwaitingConfirmation": {
+        "title": "Waiting for confirmation",
+        "subtitle": "{{count}} order(s) waiting for the store to confirm."
       },
       "activeDelivery": {
         "title": "Order on its way",

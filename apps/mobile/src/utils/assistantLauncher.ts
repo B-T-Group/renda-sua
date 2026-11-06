@@ -4,21 +4,22 @@
  * the first-run nudge and the attention caps. Pure so vitest covers it.
  */
 
-export type LauncherPersona = 'client' | 'guest';
-/** Who is looking at the assistant (agent / business keep the static icon). */
-export type AssistantViewer = LauncherPersona | 'agent' | 'business';
+export type LauncherPersona = 'client' | 'guest' | 'agent';
+/** Who is looking at the assistant (business keeps the static icon). */
+export type AssistantViewer = LauncherPersona | 'business';
 
 export const ASSISTANT_LAUNCHER_FLAG = 'assistant_launcher_v1' as const;
 
-/** Client / guest see the Renda character; agent and business keep smart-toy. */
+/** Client, guest, and agent see the Renda character; business keeps smart-toy. */
 export function assistantViewer(isAuthenticated: boolean, activePersona: string | null | undefined): AssistantViewer {
   if (!isAuthenticated) return 'guest';
   if (activePersona === 'client') return 'client';
+  if (activePersona === 'agent') return 'agent';
   return activePersona === 'business' ? 'business' : 'agent';
 }
 
 export function canSeeRendaCharacter(viewer: AssistantViewer): boolean {
-  return viewer === 'client' || viewer === 'guest';
+  return viewer === 'client' || viewer === 'guest' || viewer === 'agent';
 }
 
 const SHARED_BROWSE_ROUTES = ['CategoriesBrowse', 'CollectionDetail', 'StoresList', 'StoreDetail'] as const;
@@ -34,6 +35,15 @@ export const LAUNCHER_ALLOWLIST: Record<LauncherPersona, ReadonlySet<string>> = 
     'OrderDetail',
   ]),
   guest: new Set(['GuestBrowse', 'GuestFoods', 'GuestRentals', ...SHARED_BROWSE_ROUTES]),
+  agent: new Set([
+    'Dashboard',
+    'OpenOrders',
+    'Orders',
+    'OrdersList',
+    'OrderDetail',
+    'Pay',
+    'Menu',
+  ]),
 };
 
 export const TAB_ROUTES: ReadonlySet<string> = new Set([
@@ -44,6 +54,12 @@ export const TAB_ROUTES: ReadonlySet<string> = new Set([
   'GuestBrowse',
   'GuestFoods',
   'GuestRentals',
+  'Dashboard',
+  'OpenOrders',
+  'Orders',
+  'OrdersList',
+  'Pay',
+  'Menu',
 ]);
 
 /** Screens that mount BrowseCartFab (shown when the cart has lines). */
@@ -73,15 +89,15 @@ export type LauncherVisibilityInput = {
 
 export function shouldShowLauncher(i: LauncherVisibilityInput): boolean {
   if (!i.flagOn || !i.mounted) return false;
-  if (i.viewer !== 'client' && i.viewer !== 'guest') return false;
+  if (i.viewer === 'business') return false;
   if (!isLauncherRoute(i.viewer, i.route)) return false;
   return !i.keyboardOpen && !i.suppressed && !i.ftueShowing && !i.marketPromptShowing;
 }
 
 /**
  * One entry point at a time: with the flag on, the header assistant button
- * hides wherever the launcher is allowed for a client / guest. Until the first
- * flags answer (`flagsResolved`), client / guest get no header button either,
+ * hides wherever the launcher is allowed for a client / guest / agent. Until the
+ * first flags answer (`flagsResolved`), those personas get no header button either,
  * so it never flashes in and then out when the flag resolves on.
  */
 export function shouldHideHeaderAssistantButton(
@@ -90,7 +106,7 @@ export function shouldHideHeaderAssistantButton(
   route: string,
   flagsResolved = true
 ): boolean {
-  if (viewer !== 'client' && viewer !== 'guest') return false;
+  if (viewer === 'business') return false;
   if (!flagsResolved) return true;
   if (!flagOn) return false;
   return isLauncherRoute(viewer, route);

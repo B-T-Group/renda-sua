@@ -1,8 +1,9 @@
 export function shouldHidePersistentActiveDeliveryHeader(input: {
   isHomeFocused: boolean;
   isOrderDetailFocused: boolean;
+  isOrdersFocused?: boolean;
   hasActiveOrder: boolean;
 }): boolean {
   if (!input.hasActiveOrder) return true;
-  return input.isHomeFocused || input.isOrderDetailFocused;
+  return input.isHomeFocused || input.isOrderDetailFocused || !!input.isOrdersFocused;
 }

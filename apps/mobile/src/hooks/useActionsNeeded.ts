@@ -462,16 +462,38 @@ function buildClientItems(
       case 'orders_pending_payment':
         return {
           kind: action.kind,
-          title: t('actionsNeeded.client.ordersPendingPayment.title', 'Orders awaiting payment'),
+          title: t(
+            'actionsNeeded.client.ordersPendingPayment.title',
+            'Orders awaiting payment'
+          ),
           subtitle: t(
             'actionsNeeded.client.ordersPendingPayment.subtitle',
-            '{{count}} order(s) need your attention.',
+            '{{count}} order(s) still need to be paid.',
             { count: action.count }
           ),
           icon: 'credit-card-clock-outline',
           count: action.count,
           priority: action.priority,
-          onPress: () => navigation.navigate('ClientMainTabs', { screen: 'ClientOrders' } as any),
+          onPress: () =>
+            navigation.navigate('ClientMainTabs', { screen: 'ClientOrders' } as any),
+        };
+      case 'orders_awaiting_confirmation':
+        return {
+          kind: action.kind,
+          title: t(
+            'actionsNeeded.client.ordersAwaitingConfirmation.title',
+            'Waiting for confirmation'
+          ),
+          subtitle: t(
+            'actionsNeeded.client.ordersAwaitingConfirmation.subtitle',
+            '{{count}} order(s) waiting for the store to confirm.',
+            { count: action.count }
+          ),
+          icon: 'store-check-outline',
+          count: action.count,
+          priority: action.priority,
+          onPress: () =>
+            navigation.navigate('ClientMainTabs', { screen: 'ClientOrders' } as any),
         };
       case 'active_delivery':
         return {
@@ -485,7 +507,8 @@ function buildClientItems(
           icon: 'truck-delivery-outline',
           count: action.count,
           priority: action.priority,
-          onPress: () => navigation.navigate('ClientMainTabs', { screen: 'ClientOrders' } as any),
+          onPress: () =>
+            navigation.navigate('ClientMainTabs', { screen: 'ClientOrders' } as any),
         };
       case 'rental_payment_due':
       case 'rentals_payment_due':

@@ -1,11 +1,10 @@
 /**
- * Floating Renda launcher (#451 spec §1), behind client flag
- * `assistant_launcher_v1` (default off; read via ClientFlagsContext, which uses
- * the #458 clientFlagsLoader). Mounted once per Client / Guest root navigator;
- * the allowlist is the focused route, so it never shows on checkout, auth,
- * chat, item detail, reels, or behind sheets / the keyboard / FTUE / the
- * market prompt. Mounts deferred and stays at the resting offset (does not
- * ride the floating pill's hide-on-scroll).
+ * Floating Renda launcher (#451 spec §1), behind flag `assistant_launcher_v1`
+ * (default off; read via ClientFlagsContext / #458 clientFlagsLoader). Mounted
+ * once per Client / Guest / Agent root navigator; the allowlist is the focused
+ * route, so it never shows on checkout, auth, chat, item detail, reels, or
+ * behind sheets / the keyboard / FTUE / the market prompt. Mounts deferred and
+ * stays at the resting offset (does not ride the floating pill's hide-on-scroll).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Pressable, StyleSheet, View } from 'react-native';

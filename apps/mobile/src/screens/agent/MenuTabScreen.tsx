@@ -33,6 +33,7 @@ const ROOT_STACK_SCREENS: AppNavScreen[] = [
   'UserPurchaseCredits',
   'UserPaymentPrograms',
   'AgentBusinessReferral',
+  'AgentBusinessesHub',
   'Profile',
   'NotificationPreferences',
   'AgentAvailability',
@@ -64,7 +65,12 @@ function MenuTabScreen() {
   } = useManualAppUpdateCheck();
   const navigation = useNavigation<{
     navigate: (name: AppNavScreen, params?: { segment?: 'commissions' | 'deliveries' | 'objectives' | 'wallet' }) => void;
-    getParent: () => { navigate: (name: AppNavScreen, params?: { segment?: 'opportunities' | 'stores' }) => void } | undefined;
+    getParent: () => {
+      navigate: (
+        name: AppNavScreen,
+        params?: { segment?: 'opportunities' | 'stores'; tab?: 'dedicated' | 'referred' }
+      ) => void;
+    } | undefined;
   }>();
   const rootNav = navigation.getParent();
   const locationCtx = useAgentLocationOptional();
@@ -74,9 +80,9 @@ function MenuTabScreen() {
   const logoutSheet = useLogoutAccountSheet();
 
   const goTo = useCallback(
-    (screen: AppNavScreen) => {
+    (screen: AppNavScreen, params?: { tab?: 'dedicated' | 'referred' }) => {
       if (ROOT_STACK_SCREENS.includes(screen) && rootNav) {
-        rootNav.navigate(screen);
+        rootNav.navigate(screen, params);
       } else {
         navigation.navigate(screen);
       }
@@ -186,15 +192,20 @@ function MenuTabScreen() {
             )}
             onPress={() => goTo('UserPaymentPrograms')}
           />
-          {showCommercial ? (
+          {showCommercial || showDelivery ? (
             <UserMenuRow
               icon="storefront-outline"
-              label={t('agent.businessReferrals.navTitle', 'Refer a business')}
+              label={t('agent.myBusinesses.navTitle', 'Businesses')}
               subtitle={t(
-                'agent.businessReferrals.menuSubtitle',
-                'Commissions, duties, and your referral code'
+                'agent.myBusinesses.menuSubtitle',
+                'Dedicated stores and businesses you refer'
               )}
-              onPress={() => goTo('AgentBusinessReferral')}
+              onPress={() =>
+                goTo(
+                  'AgentBusinessesHub',
+                  showCommercial && !showDelivery ? { tab: 'referred' } : { tab: 'dedicated' }
+                )
+              }
             />
           ) : null}
           {isStripeRail ? (

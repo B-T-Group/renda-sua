@@ -20,7 +20,7 @@ export const PersistentActiveDeliveryHeader = observer(function PersistentActive
   const { colors, spacing, borderRadius } = useTheme();
   const navigation = useNavigation<any>();
   const delivery = useAgentActiveDelivery();
-  const { isHomeFocused, isOrderDetailFocused } = useAgentHomeFocus();
+  const { isHomeFocused, isOrderDetailFocused, isOrdersFocused } = useAgentHomeFocus();
 
   const goToOrders = useCallback(() => {
     navigation.navigate('MainTabs', { screen: 'Orders' });
@@ -30,6 +30,7 @@ export const PersistentActiveDeliveryHeader = observer(function PersistentActive
     shouldHidePersistentActiveDeliveryHeader({
       isHomeFocused,
       isOrderDetailFocused,
+      isOrdersFocused,
       hasActiveOrder: Boolean(delivery.activeOrder),
     })
   ) {

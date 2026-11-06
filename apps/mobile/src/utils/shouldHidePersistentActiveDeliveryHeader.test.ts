@@ -16,12 +16,13 @@ describe('shouldHidePersistentActiveDeliveryHeader', () => {
       shouldHidePersistentActiveDeliveryHeader({
         isHomeFocused: false,
         isOrderDetailFocused: false,
+        isOrdersFocused: false,
         hasActiveOrder: true,
       })
     ).toBe(false);
   });
 
-  it('hides on Home and AgentOrderDetail the same way', () => {
+  it('hides on Home, Active Orders, and AgentOrderDetail', () => {
     expect(
       shouldHidePersistentActiveDeliveryHeader({
         isHomeFocused: true,
@@ -33,6 +34,14 @@ describe('shouldHidePersistentActiveDeliveryHeader', () => {
       shouldHidePersistentActiveDeliveryHeader({
         isHomeFocused: false,
         isOrderDetailFocused: true,
+        hasActiveOrder: true,
+      })
+    ).toBe(true);
+    expect(
+      shouldHidePersistentActiveDeliveryHeader({
+        isHomeFocused: false,
+        isOrderDetailFocused: false,
+        isOrdersFocused: true,
         hasActiveOrder: true,
       })
     ).toBe(true);

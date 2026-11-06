@@ -10007,8 +10007,22 @@ export class OrdersService {
           }
           currency
           current_status
+          fulfillment_timing
+          preferred_delivery_time
+          estimated_delivery_time
+          promised_fulfill_by
+          requires_fast_delivery
+          delivery_time_window_id
           verified_agent_delivery
           created_at
+          delivery_time_windows(order_by: { created_at: desc }, limit: 1) {
+            id
+            preferred_date
+            time_slot_start
+            time_slot_end
+            is_confirmed
+            slot { slot_name }
+          }
           order_items {
             id
             quantity
@@ -10079,13 +10093,57 @@ export class OrdersService {
       ordersWithAgentCaution,
       locationCoords
     );
+    const ordersWithDedicated = await this.attachDedicatedStoreFlags(
+      agent.id,
+      ordersWithDistance
+    );
 
     return {
       success: true,
-      orders: ordersWithDistance,
+      orders: ordersWithDedicated,
       canClaim,
       previewMode,
     };
+  }
+
+  /** True when this agent still covers the pickup store (active or paused). */
+  private async attachDedicatedStoreFlags(
+    agentId: string,
+    orders: any[]
+  ): Promise<any[]> {
+    if (!orders.length) return orders;
+    const covered = await this.dedicatedStoreLocationIds(agentId);
+    return orders.map((order) => ({
+      ...order,
+      my_dedicated_store: covered.has(order.business_location?.id),
+    }));
+  }
+
+  private async dedicatedStoreLocationIds(agentId: string): Promise<Set<string>> {
+    const ids = new Set<string>();
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        dedicated_agent_assignments: Array<{ business_location_id?: string | null }>;
+      }>(
+        `query AgentDedicatedStores($agentId: uuid!) {
+          dedicated_agent_assignments(
+            where: {
+              agent_id: { _eq: $agentId }
+              status: { _in: ["active", "paused"] }
+            }
+          ) { business_location_id }
+        }`,
+        { agentId }
+      );
+      for (const row of res?.dedicated_agent_assignments ?? []) {
+        if (row.business_location_id) ids.add(row.business_location_id);
+      }
+    } catch (error: any) {
+      this.logger.warn(
+        `Dedicated store flags skipped: ${error?.message ?? error}`
+      );
+    }
+    return ids;
   }
 
   async checkOrderClaimAvailability(

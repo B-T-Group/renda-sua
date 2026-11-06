@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
@@ -18,6 +18,9 @@ import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import { useAgentXafWallet } from '../../hooks/useAgentXafWallet';
 import { resolveDisplayCurrency, useUserCurrency } from '../../hooks/useUserCurrency';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
+import { useOpenOrderClaim } from '../../hooks/useOpenOrderClaim';
+import { useDedicatedStoreLocationIds } from '../../hooks/useDedicatedStoreLocationIds';
+import { compareOpenOrdersForAgent } from '../../utils/agentOpenOrderCard';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
 import { useAgentVerificationStatus } from '../../hooks/useAgentVerificationStatus';
 import { useHoldPercentage } from '../../hooks/useHoldPercentage';
@@ -28,7 +31,6 @@ import { ListCardSkeleton } from '../../components/common/DashboardSkeleton';
 import { SkeletonBone } from '../../components/common/SkeletonBone';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
-import { AgentReferredBusinessesHero } from '../../components/agent/AgentReferredBusinessesHero';
 import { ReferralPayoutSnapshot } from '../../components/common/ReferralPayoutSnapshot';
 import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
@@ -49,9 +51,9 @@ import { AgentActivationChecklist } from '../../components/agent/AgentActivation
 import { AgentNowSection } from '../../components/agent/AgentNowSection';
 import { AgentObjectiveFocusCard } from '../../components/agent/AgentObjectiveFocusCard';
 import { FeatureCard } from '../../components/common/FeatureCard';
-import { AssistantHomeEntry } from '../../components/common/AssistantHomeEntry';
+import AgentStayNearbyTip from '../../components/agent/AgentStayNearbyTip';
 import DedicatedOpportunitiesHomeCard from '../../components/agent/DedicatedOpportunitiesHomeCard';
-import DedicatedStoresHomeCard from '../../components/agent/DedicatedStoresHomeCard';
+import AgentBusinessesHomeCard from '../../components/agent/AgentBusinessesHomeCard';
 import { DesignatedHomeOffersSection } from '../../components/dedicated/DesignatedHomeOffersSection';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import type { AppNavScreen } from '../../navigation/AppNavigator';
@@ -65,7 +67,6 @@ import { useReferralProjectedPayout } from '../../hooks/useReferralProjectedPayo
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { mobilePaymentPhonesApi } from '../../services/mobilePaymentPhonesApi';
-import { EarnDeliveringIllustration } from '../../components/illustrations/EarnDeliveringIllustration';
 import { ProfilePhotoTipIllustration } from '../../components/illustrations/ProfilePhotoTipIllustration';
 import { useProfileMe } from '../../hooks/useProfileMe';
 import {
@@ -105,7 +106,14 @@ export default function HomeScreen() {
   const { projection: referralPayout, refresh: refetchReferralPayout } =
     useReferralProjectedPayout('agent', !!auth.isAuthenticated);
   const { currency: meCurrency } = useUserCurrency(!!auth.isAuthenticated);
-  const { openOrders, loading: openOrdersLoading, refetch: refetchOpenOrders, canClaim: ordersCanClaim } = useOpenOrders();
+  const {
+    openOrders,
+    loading: openOrdersLoading,
+    refetch: refetchOpenOrders,
+    canClaim: ordersCanClaim,
+    claimOrder,
+    claimOrderWithTopup,
+  } = useOpenOrders();
   const contractStatus = useAgentContractStatus();
   const {
     isVerified,
@@ -151,6 +159,14 @@ export default function HomeScreen() {
   const [walletSnack, setWalletSnack] = useState<string | null>(null);
   const [infoDialog, setInfoDialog] = useState<{ title: string; message: string } | null>(null);
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const dedicatedLocationIds = useDedicatedStoreLocationIds();
+  const claim = useOpenOrderClaim({
+    orders: openOrders,
+    refetch: refetchOpenOrders,
+    claimOrder,
+    claimOrderWithTopup,
+    isStripeRail: walletIsStripeRail,
+  });
 
   const { setHomeFocused } = useAgentHomeFocus();
   const { items: actionsNeededItems, refresh: refreshActionsNeeded, dismissAll } =
@@ -219,7 +235,13 @@ export default function HomeScreen() {
   }, [isVerified, refetchOpenOrders]);
 
   const activeOrders = agentOrdersCategorized.active;
-  const previewOpenOrders = openOrders.slice(0, MAX_HOME_ORDERS);
+  const previewOpenOrders = useMemo(
+    () =>
+      [...openOrders]
+        .sort((a, b) => compareOpenOrdersForAgent(a, b, dedicatedLocationIds))
+        .slice(0, MAX_HOME_ORDERS),
+    [dedicatedLocationIds, openOrders]
+  );
   const previewActiveOrders = activeOrders.slice(0, MAX_HOME_ORDERS);
   const showActiveOrdersSection = showDelivery && activeOrders.length > 0;
   const homeActionsNeededItems = filterAgentHomeActionsNeeded(
@@ -274,6 +296,7 @@ export default function HomeScreen() {
           route === 'StoreDetail' ||
           route === 'Earnings' ||
           route === 'AgentBusinessReferral' ||
+          route === 'AgentBusinessesHub' ||
           route === 'Documents' ||
           route === 'Profile' ||
           route === 'AssistantChat')
@@ -387,7 +410,7 @@ export default function HomeScreen() {
     })();
   }, [fetchPhones, goTo, phones, refetchOpenOrders, refetchVerification]);
 
-  const handlePreviewOrderAction = useCallback(() => {
+  const handlePreviewOrderAction = useCallback((order: (typeof openOrders)[number]) => {
     if (contractStatus && agentNeedsContract(contractStatus)) {
       (navigation as any).navigate('AgentAgreement');
       return;
@@ -414,9 +437,9 @@ export default function HomeScreen() {
       goToMomoSetup();
       return;
     }
-    goToAvailableOrders();
+    void claim.startClaim(order);
   }, [
-    goToAvailableOrders,
+    claim,
     contractStatus,
     goToDocuments,
     goToMomoSetup,
@@ -485,11 +508,17 @@ export default function HomeScreen() {
         }
       >
         <TintedHeaderBlock
-          style={{ marginHorizontal: 0 }}
-          contentStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}
+          style={{
+            marginHorizontal: spacing.md,
+            marginBottom: spacing.sm,
+            paddingBottom: spacing.sm,
+            borderTopLeftRadius: borderRadius.lg,
+            borderTopRightRadius: borderRadius.lg,
+          }}
+          contentStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs }}
         >
           <View style={styles.header}>
-            <Text variant="headlineSmall" style={[styles.pageTitle, { color: colors.text.primary }]}>
+            <Text variant="titleLarge" style={[styles.pageTitle, { color: colors.text.primary, flex: 1 }]}>
               {t('nav.home', 'Home')}
             </Text>
             <NotificationBellButton
@@ -511,14 +540,14 @@ export default function HomeScreen() {
         </TintedHeaderBlock>
 
         <View style={{ paddingHorizontal: spacing.md }}>
-          <AssistantHomeEntry
-            onPress={() => goTo('AssistantChat')}
-            style={{ marginBottom: spacing.md }}
-          />
-          {showDelivery ? (
-            <DedicatedStoresHomeCard
-              onPress={() =>
-                (navigation.getParent() as any)?.navigate('DedicatedHub', { segment: 'stores' })
+          {showDelivery || showCommercial ? (
+            <AgentBusinessesHomeCard
+              showDedicated={showDelivery}
+              showReferred={showCommercial}
+              referredCount={referredBusinessCount}
+              referredLoading={referredLoading && referredBusinessCount == null}
+              onOpen={(tab) =>
+                (navigation.getParent() as any)?.navigate('AgentBusinessesHub', { tab })
               }
             />
           ) : null}
@@ -588,22 +617,8 @@ export default function HomeScreen() {
                 }
                 onRefreshOrders={() => refetchAgentOrders()}
               />
-              <FeatureCard
-                title={t('ftue.education.agentTipTitle', 'Tip: stay nearby')}
-                message={t(
-                  'ftue.education.agentTipMessage',
-                  'Going available near busy stores helps you get offers faster.'
-                )}
-                illustration={<EarnDeliveringIllustration size={96} />}
-              />
+              <AgentStayNearbyTip />
             </>
-          ) : null}
-          {showCommercial ? (
-            <AgentReferredBusinessesHero
-              count={referredBusinessCount}
-              loading={referredLoading && referredBusinessCount == null}
-              onPress={() => goTo('AgentBusinessReferral')}
-            />
           ) : null}
         </View>
 
@@ -728,6 +743,19 @@ export default function HomeScreen() {
               </View>
             )}
           </View>
+          {openOrders.some(
+            (order) =>
+              order.my_dedicated_store ||
+              (order.business_location?.id != null &&
+                dedicatedLocationIds.has(order.business_location.id))
+          ) ? (
+            <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 2 }}>
+              {t(
+                'agent.openOrders.yourStoreHint',
+                'Orders from your dedicated stores are tagged Your store. Upcoming dedicated slots are listed above.'
+              )}
+            </Text>
+          ) : null}
         </View>
 
         {openOrdersLoading && openOrders.length === 0 ? (
@@ -760,10 +788,11 @@ export default function HomeScreen() {
               <OrderCardCompact
                 key={order.id}
                 order={order}
-                onAccept={handlePreviewOrderAction}
+                onAccept={() => handlePreviewOrderAction(order)}
                 onViewDetails={() => goToOrderDetail(order.id)}
                 claimEnabled={homeClaimEnabled}
                 acceptLabel={claimBlockedLabel}
+                dedicatedLocationIds={dedicatedLocationIds}
               />
             ))}
             {openOrders.length > MAX_HOME_ORDERS && (
@@ -1042,6 +1071,7 @@ export default function HomeScreen() {
         dismissLabel={t('common.ok', 'OK')}
         onDismiss={() => setInfoDialog(null)}
       />
+      {claim.dialogs}
       <MobilePaymentPhoneVerifyModal
         visible={phoneModalOpen}
         mode={phones[0] ? 'verify' : 'add'}
@@ -1063,7 +1093,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
   content: { paddingTop: 8 },
-  header: { paddingBottom: 4, paddingTop: 12 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 4,
+    paddingTop: 4,
+    gap: 8,
+  },
   pageTitle: { fontWeight: '700' },
   banner: { marginBottom: 12 },
   addressBanner: {
