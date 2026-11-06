@@ -87,6 +87,46 @@ describe('client-confirm-delivery.util', () => {
     ).toBe(false);
   });
 
+  it('treats authorized and a reconciled cash exception as collected', () => {
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'authorized',
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_method: 'pay_on_delivery',
+        payment_status: 'authorized',
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        reconciliation_status: 'reconciled',
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: null,
+      })
+    ).toBe(true);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_method: 'pay_on_delivery',
+      })
+    ).toBe(true);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        pay_after_merchant_confirm: false,
+      })
+    ).toBe(true);
+  });
+
   it('allows confirm from out_for_delivery, awaiting, and pending auto-complete', () => {
     expect(canConfirmFromStatus('out_for_delivery')).toBe(true);
     expect(canConfirmFromStatus('awaiting_client_confirmation')).toBe(true);

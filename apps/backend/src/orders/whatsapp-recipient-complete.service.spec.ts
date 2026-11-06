@@ -265,4 +265,33 @@ describe('WhatsAppRecipientCompleteService', () => {
     expect(result.message).toContain('ORD-9');
     expect(result.message).toContain('support');
   });
+
+  it('tells an English recipient the problem report is on hold', async () => {
+    hasura.executeQuery
+      .mockResolvedValueOnce({
+        notification_events: [{ entity_id: 'order-1' }],
+      })
+      .mockResolvedValueOnce({
+        orders_by_pk: {
+          id: 'order-1',
+          order_number: 'ORD-9',
+          recipient_phone: '+14155550100',
+          fulfillment_country: 'US',
+        },
+      });
+    clientConfirm.handleRecipientAction.mockResolvedValue({
+      success: true,
+      status: 'disputed',
+    });
+
+    const result = await service.handleDeliveryConfirm({
+      fromPhone: '+14155550100',
+      contextMessageId: 'wamid.d1',
+      action: 'problem',
+    });
+
+    expect(result.message).toContain('ORD-9');
+    expect(result.message).toContain('on hold');
+    expect(result.message).not.toContain('could not be completed');
+  });
 });

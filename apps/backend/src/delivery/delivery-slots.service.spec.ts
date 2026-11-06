@@ -128,9 +128,9 @@ describe('DeliverySlotsService', () => {
       hasura.executeQuery.mockImplementation(async (q: string, vars: any) => {
         if (vars?.slot_ids) {
           expect(q).toContain('current_status: { _nin: $released_statuses }');
-          expect(vars.released_statuses).toEqual(
-            expect.arrayContaining(['cancelled', 'failed', 'refunded'])
-          );
+          expect(vars.released_statuses).toEqual([
+            ...SLOT_RELEASING_ORDER_STATUSES,
+          ]);
           // Hasura returns only live-order windows after the filter.
           return {
             delivery_time_slots: [
@@ -167,6 +167,77 @@ describe('DeliverySlotsService', () => {
         ...SLOT_RELEASING_ORDER_STATUSES,
       ]);
       expect(res.available_capacity).toBe(7);
+    });
+
+    it('treats a slot with only released windows as fully open', async () => {
+      hasura.executeQuery.mockImplementation(async (_q: string, vars: any) => {
+        if (vars?.slot_ids) {
+          expect(vars.released_statuses).toEqual([
+            ...SLOT_RELEASING_ORDER_STATUSES,
+          ]);
+          return {
+            delivery_time_slots: [
+              { id: 'state-slot-1', max_orders_per_slot: 10 },
+            ],
+            delivery_time_windows: [],
+          };
+        }
+        return {
+          delivery_time_slots: vars?.state === 'Littoral' ? [stateSlot] : [],
+        };
+      });
+
+      const slots = await service.getAvailableSlots(
+        'CM',
+        'Littoral',
+        futureDate,
+        false,
+        'Africa/Douala'
+      );
+      expect(slots[0].available_capacity).toBe(10);
+      expect(slots[0].is_available).toBe(true);
+    });
+
+    it('keeps a slot full when every counted window is still live', async () => {
+      hasura.executeQuery.mockImplementation(async (_q: string, vars: any) => {
+        if (vars?.slot_ids) {
+          return {
+            delivery_time_slots: [
+              { id: 'state-slot-1', max_orders_per_slot: 2 },
+            ],
+            delivery_time_windows: [
+              { slot_id: 'state-slot-1' },
+              { slot_id: 'state-slot-1' },
+            ],
+          };
+        }
+        return {
+          delivery_time_slots: vars?.state === 'Littoral' ? [stateSlot] : [],
+        };
+      });
+
+      const slots = await service.getAvailableSlots(
+        'CM',
+        'Littoral',
+        futureDate,
+        false,
+        'Africa/Douala'
+      );
+      expect(slots[0].available_capacity).toBe(0);
+      expect(slots[0].is_available).toBe(false);
+    });
+
+    it('treats a missing capacity aggregate as zero live bookings', async () => {
+      hasura.executeQuery.mockResolvedValue({
+        delivery_time_slots_by_pk: { id: 's1', max_orders_per_slot: 4 },
+        delivery_time_windows_aggregate: null,
+      });
+      const res = await service.checkSlotCapacity('s1', futureDate);
+      expect(res).toMatchObject({
+        booked_count: 0,
+        total_capacity: 4,
+        available_capacity: 4,
+      });
     });
 
     it('does not release in-flight or completed statuses', () => {
