@@ -352,9 +352,12 @@ export class SessionStoreService implements OnModuleDestroy {
   ): Promise<T> {
     const existing = this.refreshLocks.get(lockKey);
     if (existing) return existing as Promise<T>;
-    const run = this.executeRefreshWithLock(lockKey, work);
+    // Chain finally on the returned promise. `void run.finally(...)` creates
+    // a second rejection that becomes an unhandledRejection after Nest 401s.
+    const run = this.executeRefreshWithLock(lockKey, work).finally(() =>
+      this.refreshLocks.delete(lockKey)
+    );
     this.refreshLocks.set(lockKey, run);
-    void run.finally(() => this.refreshLocks.delete(lockKey));
     return run;
   }
 
@@ -442,9 +445,10 @@ export class SessionStoreService implements OnModuleDestroy {
   async rotateSession(oldSessionId: string): Promise<string | null> {
     const inflight = this.rotationLocks.get(oldSessionId);
     if (inflight) return inflight;
-    const run = this.rotateUnlocked(oldSessionId);
+    const run = this.rotateUnlocked(oldSessionId).finally(() =>
+      this.rotationLocks.delete(oldSessionId)
+    );
     this.rotationLocks.set(oldSessionId, run);
-    void run.finally(() => this.rotationLocks.delete(oldSessionId));
     return run;
   }
 
