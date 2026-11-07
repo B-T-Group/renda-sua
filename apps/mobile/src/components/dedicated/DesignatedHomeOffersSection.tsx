@@ -52,8 +52,9 @@ export function DesignatedHomeOffersSection({ onAccepted }: Props) {
         await agentApi.orders.acceptOffer(orderId);
         setOffers((prev) => prev.filter((o) => o.orderId !== orderId));
         onAccepted?.();
-      } catch {
-        setError(t('designatedFirst.error', 'Could not update. Try again.'));
+      } catch (err: unknown) {
+        const message = err instanceof Error && err.message.trim() ? err.message : null;
+        setError(message ?? t('designatedFirst.error', 'Could not update. Try again.'));
         await reload();
       } finally {
         setBusyId(null);

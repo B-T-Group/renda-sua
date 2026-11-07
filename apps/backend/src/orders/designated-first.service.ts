@@ -344,6 +344,21 @@ const AGENT_COVERAGE_ORDERS_QUERY = `
   }
 `;
 
+/** Orders this agent already declined as dedicated — keep them off coverage Take cards. */
+const AGENT_DECLINED_DEDICATED_QUERY = `
+  query AgentDeclinedDedicated($agentId: uuid!) {
+    order_offers(
+      where: {
+        agent_id: { _eq: $agentId }
+        offer_kind: { _eq: "dedicated" }
+        status: { _eq: "declined" }
+      }
+    ) {
+      order_id
+    }
+  }
+`;
+
 /** Quiet ensure for Take/Ignore: reopen offered/expired dedicated rows without a push. */
 const REFRESH_EARLY_OFFER = `
   mutation RefreshDesignatedEarlyOffer(
@@ -874,6 +889,8 @@ export class DesignatedFirstService {
     const locationIds = [...new Set(pairs.map((p) => p.locationId))];
     const slotKeys = [...new Set(pairs.map((p) => p.slotKey))];
     const pairSet = new Set(pairs.map((p) => `${p.locationId}:${p.slotKey}`));
+    // Declined early offers must not reappear as coverage Take cards (ensure also refuses them).
+    const blocked = new Set([...knownOrderIds, ...(await this.declinedDedicatedOrderIds(agentId))]);
     const res = await this.hasura
       .executeQuery<{ orders: CoverageOrderRow[] }>(AGENT_COVERAGE_ORDERS_QUERY, {
         locationIds,
@@ -882,8 +899,17 @@ export class DesignatedFirstService {
       })
       .catch(() => null);
     return (res?.orders ?? [])
-      .filter((o) => this.coverageOrderMatches(o, pairSet, knownOrderIds))
+      .filter((o) => this.coverageOrderMatches(o, pairSet, blocked))
       .map((o) => this.synthesizeCoverageOffer(o, now));
+  }
+
+  private async declinedDedicatedOrderIds(agentId: string): Promise<string[]> {
+    const res = await this.hasura
+      .executeQuery<{ order_offers: Array<{ order_id: string }> }>(AGENT_DECLINED_DEDICATED_QUERY, {
+        agentId,
+      })
+      .catch(() => null);
+    return (res?.order_offers ?? []).map((o) => o.order_id);
   }
 
   private async activeCoveragePairs(agentId: string, now: Date): Promise<Array<{ locationId: string; slotKey: string }>> {
@@ -963,9 +989,75 @@ export class DesignatedFirstService {
       slotId: window?.slot_id as string,
     });
     if (!slot) return null;
-    const agent = (await this.eligibleAgents(order!, slot)).find((a) => a.agentId === agentId);
+    // Match acceptAssignment: a live/coverage Take must not fail on slot prefs or other open offers.
+    const agent = await this.takeEligibleAgent(order!, slot, agentId);
     if (!agent?.userId) return null;
     return { agent, slot, gateAt, config };
+  }
+
+  /** Coverage Take ensure: match acceptAssignment prefs/offer flags; money deferred to claim. */
+  private async takeEligibleAgent(
+    order: DesignatedOrder,
+    slot: ResolvedDedicatedSlot,
+    agentId: string
+  ): Promise<DedicatedEligibleAgent | null> {
+    const rail = await this.paymentRoutingService.resolveRailForBusiness(order.business_id);
+    const result = await this.coverage.evaluate(this.takeEvaluateParams(order, slot, rail));
+    const mine = result.eligible.find((a) => a.agentId === agentId);
+    if (mine) return mine;
+    return this.takeAgentDespiteMoney(result.rejected, agentId);
+  }
+
+  private takeEvaluateParams(order: DesignatedOrder, slot: ResolvedDedicatedSlot, rail: string) {
+    return {
+      locationId: order.business_location_id,
+      slotKey: slot.slotKey,
+      fulfillmentTiming: order.fulfillment_timing,
+      hasDeliveryWindow: true,
+      windowConfirmed: true,
+      requireConfirmedWindow: true,
+      rail: rail as 'mobile_money' | 'stripe',
+      subtotal: Number(order.subtotal) || 0,
+      currency: order.currency,
+      verifiedAgentDelivery: order.verified_agent_delivery === true,
+      excludeOrderId: order.id,
+      ignoreSlotPrefs: true,
+      ignoreOutstandingOffers: true,
+      slotDate: slot.date,
+      capPerSlotDay: true,
+    };
+  }
+
+  private async takeAgentDespiteMoney(
+    rejected: Array<{ agentId: string; assignmentId: string; reason: string }>,
+    agentId: string
+  ): Promise<DedicatedEligibleAgent | null> {
+    const money = rejected.find(
+      (a) => a.agentId === agentId && (a.reason === 'negative_balance' || a.reason === 'insufficient_balance')
+    );
+    if (!money) return null;
+    const userId = await this.agentUserId(money.agentId);
+    if (!userId) return null;
+    return {
+      agentId: money.agentId,
+      userId,
+      isInternal: false,
+      assignmentId: money.assignmentId,
+      activeOrders: 0,
+      outstandingDedicatedOffers: 0,
+      holdAmount: 0,
+      availableBalance: null,
+    };
+  }
+
+  private async agentUserId(agentId: string): Promise<string | null> {
+    const res = await this.hasura
+      .executeQuery<{ agents_by_pk: { user_id: string | null } | null }>(
+        `query DesignatedAgentUser($id: uuid!) { agents_by_pk(id: $id) { user_id } }`,
+        { id: agentId }
+      )
+      .catch(() => null);
+    return res?.agents_by_pk?.user_id ?? null;
   }
 
   private isPreGateDispatchable(

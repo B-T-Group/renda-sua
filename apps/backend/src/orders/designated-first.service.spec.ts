@@ -557,6 +557,9 @@ describe('DesignatedFirstService', () => {
           orders: [],
         };
       }
+      if (q.includes('AgentDeclinedDedicated')) {
+        return { order_offers: [] };
+      }
       if (q.includes('AgentCoverageAssignments')) {
         return {
           dedicated_agent_assignments: [
@@ -629,6 +632,49 @@ describe('DesignatedFirstService', () => {
     });
   });
 
+  it('does not synthesize coverage offers for orders the agent already declined', async () => {
+    const t = setup();
+    t.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q.includes('DesignatedAgentOffers')) {
+        return { order_offers: [], orders: [] };
+      }
+      if (q.includes('AgentDeclinedDedicated')) {
+        return { order_offers: [{ order_id: 'o4' }] };
+      }
+      if (q.includes('AgentCoverageAssignments')) {
+        return {
+          dedicated_agent_assignments: [
+            { business_location_id: 'loc1', slot_key: 'morning', off_today_date: null },
+          ],
+        };
+      }
+      if (q.includes('AgentCoverageOrders')) {
+        return {
+          orders: [
+            {
+              id: 'o4',
+              order_number: 'ORD-4',
+              business_location_id: 'loc1',
+              coverage_slot_key: 'morning',
+              currency: 'XAF',
+              dispatch_ready_at: GATE,
+              pickup_by: WINDOW,
+              fulfillment_timing: 'scheduled',
+              business_location: { name: 'ACEGUARD Bastos', address: { city: 'Yaoundé', country: 'CM' } },
+              delivery_address: { city: 'Yaoundé', state: 'Centre' },
+              delivery_time_windows: [
+                { slot_id: 's1', preferred_date: '2026-11-10', is_confirmed: true, time_slot_start: '09:00:00', time_slot_end: '11:00:00' },
+              ],
+            },
+          ],
+        };
+      }
+      return {};
+    });
+    const list = await t.service.listForAgent('a1', NOW);
+    expect(list.offers).toEqual([]);
+  });
+
   it('ensures a quiet early offer for an eligible coverage agent', async () => {
     const t = setup();
     jest.spyOn(t.service, 'load').mockResolvedValue({
@@ -646,13 +692,39 @@ describe('DesignatedFirstService', () => {
       return { update_orders: { affected_rows: 1 } };
     });
     await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(true);
+    expect(t.coverage.evaluate).toHaveBeenCalledWith(
+      expect.objectContaining({ ignoreSlotPrefs: true, ignoreOutstandingOffers: true })
+    );
     expect(t.mutations.some((m) => m.q.includes('insert_order_offers'))).toBe(true);
     expect(t.notifications.sendOrderOfferPush).not.toHaveBeenCalled();
   });
 
+  it('ensure still creates an offer when only money blocks eligibility', async () => {
+    const t = setup();
+    t.coverage.evaluate.mockResolvedValue({
+      eligible: [],
+      rejected: [{ agentId: 'a1', assignmentId: 'as1', reason: 'insufficient_balance' }],
+    });
+    t.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q.includes('DesignatedAgentUser')) return { agents_by_pk: { user_id: 'u1' } };
+      return {};
+    });
+    jest.spyOn(t.service, 'load').mockResolvedValue({ order: order({ dispatch_mode: null }), offers: [] });
+    t.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      t.mutations.push({ q, v });
+      if (q.includes('RefreshDesignatedEarlyOffer')) return { update_order_offers: { affected_rows: 0 } };
+      if (q.includes('insert_order_offers')) {
+        return { insert_order_offers: { returning: [{ agent_id: 'a1' }] } };
+      }
+      return { update_orders: { affected_rows: 1 } };
+    });
+    await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(true);
+    expect(t.mutations.some((m) => m.q.includes('insert_order_offers'))).toBe(true);
+  });
+
   it('ensure returns false for a non-coverage agent or declined offer', async () => {
     const t = setup();
-    t.coverage.evaluate.mockResolvedValue({ eligible: [] });
+    t.coverage.evaluate.mockResolvedValue({ eligible: [], rejected: [] });
     jest.spyOn(t.service, 'load').mockResolvedValue({ order: order(), offers: [] });
     await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(false);
 

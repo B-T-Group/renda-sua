@@ -41,8 +41,9 @@ export function DesignatedListSection() {
       try {
         await agentApi.orders.acceptOffer(orderId);
         await reload();
-      } catch {
-        setError(t('designatedFirst.error', 'Could not update. Try again.'));
+      } catch (err: unknown) {
+        const message = err instanceof Error && err.message.trim() ? err.message : null;
+        setError(message ?? t('designatedFirst.error', 'Could not update. Try again.'));
         await reload();
       } finally {
         setBusyId(null);
