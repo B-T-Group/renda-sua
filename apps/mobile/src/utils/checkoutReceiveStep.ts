@@ -22,3 +22,14 @@ export function checkoutReviewDisabledReason(
     windowMissing: false,
   });
 }
+
+/**
+ * True only for hardware/gesture/header back. RESET after pay must leave the screen.
+ */
+export function isCheckoutBackNavigation(actionType: string): boolean {
+  return (
+    actionType === 'GO_BACK' ||
+    actionType === 'POP' ||
+    actionType === 'POP_TO_TOP'
+  );
+}

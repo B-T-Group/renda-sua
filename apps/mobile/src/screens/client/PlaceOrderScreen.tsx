@@ -58,6 +58,7 @@ import { ReservationDepositExplainer } from '../../components/checkout/Reservati
 import {
   checkoutReceiveDisabledReason,
   checkoutReviewDisabledReason,
+  isCheckoutBackNavigation,
   type CheckoutFlowStep,
 } from '../../utils/checkoutReceiveStep';
 import { useClientAddresses } from '../../hooks/useClientAddresses';
@@ -1327,6 +1328,8 @@ export default function PlaceOrderScreen() {
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (event) => {
       if (checkoutStep !== 'review') return;
+      // Do not block RESET after Stripe/MoMo success — only header/gesture back.
+      if (!isCheckoutBackNavigation(event.data.action.type)) return;
       event.preventDefault();
       goToReceiveStep();
     });

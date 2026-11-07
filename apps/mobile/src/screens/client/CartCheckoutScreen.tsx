@@ -76,6 +76,7 @@ import {
 import {
   checkoutReceiveDisabledReason,
   checkoutReviewDisabledReason,
+  isCheckoutBackNavigation,
   type CheckoutFlowStep,
 } from '../../utils/checkoutReceiveStep';
 import { isAddressComplete } from '../../utils/addressCompleteness';
@@ -1118,6 +1119,8 @@ export default observer(function CartCheckoutScreen() {
   useEffect(() => {
     const unsubscribe = navigation.addListener('beforeRemove', (event) => {
       if (checkoutStep !== 'review') return;
+      // Do not block RESET after Stripe/MoMo success — only header/gesture back.
+      if (!isCheckoutBackNavigation(event.data.action.type)) return;
       event.preventDefault();
       goToReceiveStep();
     });

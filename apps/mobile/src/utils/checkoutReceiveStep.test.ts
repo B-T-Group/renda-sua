@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkoutReceiveDisabledReason,
   checkoutReviewDisabledReason,
+  isCheckoutBackNavigation,
 } from './checkoutReceiveStep';
 
 const texts = {
@@ -51,5 +52,16 @@ describe('checkoutReviewDisabledReason', () => {
         base({ addressMissing: true, windowMissing: true, momoMissing: true })
       )
     ).toBe('momo');
+  });
+});
+
+describe('isCheckoutBackNavigation', () => {
+  it('treats back and pop as back, and reset/navigate as leave', () => {
+    expect(isCheckoutBackNavigation('GO_BACK')).toBe(true);
+    expect(isCheckoutBackNavigation('POP')).toBe(true);
+    expect(isCheckoutBackNavigation('POP_TO_TOP')).toBe(true);
+    expect(isCheckoutBackNavigation('RESET')).toBe(false);
+    expect(isCheckoutBackNavigation('NAVIGATE')).toBe(false);
+    expect(isCheckoutBackNavigation('REPLACE')).toBe(false);
   });
 });
