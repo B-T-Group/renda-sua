@@ -11341,6 +11341,14 @@ export class OrdersService {
     const result = await this.hasuraSystemService.executeMutation(mutation, {
       orderId: request.orderId,
     });
+    // Coverage Take reopens leftover `accepted` dedicated rows. Decline this
+    // agent and clear designated stamps so they cannot reclaim and the next
+    // agent does not inherit their cutoff/strike window (#770 sibling).
+    await this.orderReassignmentService.afterDroppedDesignatedAssignment(
+      request.orderId,
+      agent.id,
+      user.id
+    );
     // Add order status history entry
     await this.createStatusHistoryEntry(
       request.orderId,

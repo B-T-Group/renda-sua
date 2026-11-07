@@ -787,6 +787,11 @@ describe('DesignatedFirstService', () => {
     );
     expect(t.mutations.some((m) => m.q.includes('insert_order_offers'))).toBe(true);
     expect(t.notifications.sendOrderOfferPush).not.toHaveBeenCalled();
+    const refresh = t.mutations.find((m) => m.q.includes('RefreshDesignatedEarlyOffer'));
+    expect(refresh?.q).toContain('assigned_agent_id: { _is_null: true }');
+    expect(refresh?.q).toContain('current_status: { _eq: ready_for_pickup }');
+    expect(refresh?.q).toContain('status: { _in: ["offered", "expired", "cancelled", "accepted"] }');
+    expect(refresh?.q).not.toMatch(/status: \{ _in: \[[^\]]*declined/);
   });
 
   it('ensure works when designated_first is off but dedicated agents are on', async () => {
