@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -30,7 +31,12 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 import { ListCardSkeleton } from '../../components/common/DashboardSkeleton';
 import { SkeletonBone } from '../../components/common/SkeletonBone';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
+import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
+import type { ActionLoadingKind } from '../../components/feedback/actionLoadingKinds';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
+import { APP_FEATURES } from '../../constants/appFeatures';
+import type { Order } from '../../types/agent';
+import { isCarrierShipping } from '../../utils/fulfillmentMethod';
 import { ReferralPayoutSnapshot } from '../../components/common/ReferralPayoutSnapshot';
 import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
@@ -85,6 +91,7 @@ import {
 import { useAgentHomeFocus } from '../../contexts/AgentHomeFocusContext';
 
 const MAX_HOME_ORDERS = 3;
+type LifecycleActionKey = 'pickUp' | 'startTransit' | 'outForDelivery';
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -121,7 +128,16 @@ export default function HomeScreen() {
     loading: verificationLoading,
     refetch: refetchVerification,
   } = useAgentVerificationStatus();
-  const { categorized: agentOrdersCategorized, refetch: refetchAgentOrders } = useAgentOrders();
+  const {
+    categorized: agentOrdersCategorized,
+    refetch: refetchAgentOrders,
+    pickUp,
+    startTransit,
+    outForDelivery,
+  } = useAgentOrders();
+  const [lifecycle, setLifecycle] = useState<{ orderId: string; key: LifecycleActionKey } | null>(null);
+  const [actionBusyOrderId, setActionBusyOrderId] = useState<string | null>(null);
+  const [loadingOverlayKind, setLoadingOverlayKind] = useState<ActionLoadingKind | null>(null);
   const { holdPercentage, refetch: refetchHold } = useHoldPercentage(true);
   const {
     wallet: xafWallet,
@@ -380,6 +396,59 @@ export default function HomeScreen() {
       (navigation as any).navigate('Orders', { screen: 'OrderDetail', params: { orderId } });
     },
     [navigation]
+  );
+
+  const runLifecycleAction = useCallback(
+    async (orderId: string, key: LifecycleActionKey) => {
+      if (key === 'pickUp') await pickUp(orderId);
+      else if (key === 'startTransit') await startTransit(orderId);
+      else await outForDelivery(orderId);
+    },
+    [outForDelivery, pickUp, startTransit]
+  );
+
+  const handleLifecycleConfirm = useCallback(async () => {
+    if (!lifecycle) return;
+    const { orderId, key } = lifecycle;
+    const overlay: ActionLoadingKind =
+      key === 'pickUp' ? 'pick_up' : key === 'startTransit' ? 'start_transit' : 'out_for_delivery';
+    setLifecycle(null);
+    setLoadingOverlayKind(overlay);
+    setActionBusyOrderId(orderId);
+    try {
+      await runLifecycleAction(orderId, key);
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), e instanceof Error ? e.message : String(e));
+    } finally {
+      setActionBusyOrderId(null);
+      setLoadingOverlayKind(null);
+    }
+  }, [lifecycle, runLifecycleAction, t]);
+
+  const handleActiveOrderPrimaryAction = useCallback(
+    (order: Order) => {
+      if (isCarrierShipping(order.fulfillment_method)) {
+        goToOrderDetail(order.id);
+        return;
+      }
+      switch (order.current_status) {
+        case 'assigned_to_agent':
+          setLifecycle({ orderId: order.id, key: 'pickUp' });
+          return;
+        case 'picked_up':
+          setLifecycle({
+            orderId: order.id,
+            key: APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT ? 'startTransit' : 'outForDelivery',
+          });
+          return;
+        case 'in_transit':
+          setLifecycle({ orderId: order.id, key: 'outForDelivery' });
+          return;
+        default:
+          goToOrderDetail(order.id);
+      }
+    },
+    [goToOrderDetail]
   );
 
   const goToAvailableOrders = useCallback(() => {
@@ -848,8 +917,9 @@ export default function HomeScreen() {
                   key={order.id}
                   order={order}
                   primaryActionLabel={primaryLabel}
-                  onPrimaryAction={() => goToOrderDetail(order.id)}
+                  onPrimaryAction={() => handleActiveOrderPrimaryAction(order)}
                   onViewDetails={() => goToOrderDetail(order.id)}
+                  isBusy={actionBusyOrderId === order.id}
                 />
               );
             })}
@@ -1072,6 +1142,34 @@ export default function HomeScreen() {
         onDismiss={() => setInfoDialog(null)}
       />
       {claim.dialogs}
+      {lifecycle ? (
+        (() => {
+          const cfg = {
+            pickUp: {
+              title: t('agent.orders.detail.actionConfirm.pickUpTitle', 'Confirm pickup'),
+              msg: t('agent.orders.detail.actionConfirm.pickUpMessage', 'Mark as picked up?'),
+            },
+            startTransit: {
+              title: t('agent.orders.detail.actionConfirm.inTransitTitle', 'Confirm in transit'),
+              msg: t('agent.orders.detail.actionConfirm.inTransitMessage', 'Mark as in transit?'),
+            },
+            outForDelivery: {
+              title: t('agent.orders.detail.actionConfirm.outForDeliveryTitle', 'Confirm out for delivery'),
+              msg: t('agent.orders.detail.actionConfirm.outForDeliveryMessage', 'Mark as out for delivery?'),
+            },
+          }[lifecycle.key];
+          Alert.alert(cfg.title, cfg.msg, [
+            { text: t('common.cancel', 'Cancel'), style: 'cancel', onPress: () => setLifecycle(null) },
+            { text: t('common.confirm', 'Confirm'), onPress: () => void handleLifecycleConfirm() },
+          ]);
+          return null;
+        })()
+      ) : null}
+      <ActionLoadingDialog
+        visible={loadingOverlayKind != null}
+        action={loadingOverlayKind ?? 'generic_update'}
+        message={undefined}
+      />
       <MobilePaymentPhoneVerifyModal
         visible={phoneModalOpen}
         mode={phones[0] ? 'verify' : 'add'}
