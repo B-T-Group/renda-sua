@@ -4290,6 +4290,16 @@
       "addNotes": "Ajouter des instructions particulières",
       "notesPlaceholder": "Allergies, code d’accès, niveau d’épices…",
       "submit": "Passer la commande",
+      "review": {
+        "continue": "Continuer",
+        "edit": "Modifier",
+        "choicesTitle": "Vos choix",
+        "quantity": "Quantité",
+        "method": "Mode de réception",
+        "address": "Adresse",
+        "time": "Horaire",
+        "receipt": "Total de la commande"
+      },
       "kitchenClosed": {
         "title": "Cuisine fermée",
         "nextOpening": "Prochaine ouverture",
@@ -4337,7 +4347,6 @@
         "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer. Toute votre commande est payée après confirmation.",
         "dedicatedScheduledOnly": "Livraison programmée uniquement pour ce magasin en ce moment",
         "dedicatedScheduledOnlyHint": "Choisissez l’un des créneaux ci-dessous.",
-        "dedicatedPickupAt": "Récupérée au magasin à {{time}}",
         "slotKey": {
           "morning": "Matin",
           "afternoon": "Après-midi",

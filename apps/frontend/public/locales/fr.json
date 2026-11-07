@@ -6074,7 +6074,6 @@
       "confirmedBy": "Confirmé par",
       "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer. Toute votre commande est payée après confirmation.",
       "dedicatedScheduledOnly": "Livraison programmée uniquement pour ce magasin en ce moment. Choisissez l’un des créneaux ci-dessous.",
-      "dedicatedPickupAt": "Récupérée au magasin à {{time}}",
       "slotKey": {
         "morning": "Matin",
         "afternoon": "Après-midi",

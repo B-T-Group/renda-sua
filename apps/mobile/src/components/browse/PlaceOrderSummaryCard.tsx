@@ -45,6 +45,8 @@ export interface PlaceOrderSummaryCardProps {
   showDepositBreakdown?: boolean;
   /** When true, hide fee/total rows (shown in sticky checkout bar instead). */
   hideFinancialSummary?: boolean;
+  /** When true, hide the coupon entry (moved to the review step). */
+  hideCoupon?: boolean;
 }
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -91,6 +93,7 @@ export function PlaceOrderSummaryCard({
   depositAmount,
   showDepositBreakdown,
   hideFinancialSummary = false,
+  hideCoupon = false,
 }: PlaceOrderSummaryCardProps) {
   const { t } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
@@ -198,58 +201,62 @@ export function PlaceOrderSummaryCard({
 
             <Divider style={{ marginVertical: spacing.sm }} />
           </>
-        ) : (
+        ) : hideCoupon ? null : (
           <Divider style={{ marginVertical: spacing.sm }} />
         )}
 
-        <View style={{ alignItems: 'flex-start', marginBottom: spacing.xs }}>
-          {appliedDiscountCode && discountPercentage > 0 ? (
-            <Text variant="bodySmall" style={{ color: colors.secondary.main, marginBottom: spacing.xs }}>
-              {t('client.placeOrder.discountCode.applied', '{{pct}}% off with {{code}}', {
-                pct: discountPercentage,
-                code: appliedDiscountCode,
-              })}
-            </Text>
-          ) : null}
-          <Button mode="text" compact icon="ticket-percent-outline" onPress={() => setCouponExpanded(true)}>
-            {t('client.placeOrder.discountCode.haveCoupon', 'Have a coupon?')}
-          </Button>
-        </View>
-        <BottomSheet
-            visible={couponExpanded}
-            onClose={() => setCouponExpanded(false)}
-            title={t('client.placeOrder.discountCode.label', 'Discount code')}
-          >
-            <BottomSheetTextInput
-              value={discountDraft}
-              onChangeText={onDiscountDraftChange}
-              placeholder={t('client.placeOrder.discountCode.placeholder', 'Code')}
-              editable={!discountLoading}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              style={{
-                borderWidth: 1,
-                borderColor: colors.borderStrong,
-                borderRadius: 8,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                color: colors.text.primary,
-              }}
-            />
-            <Button mode="contained" onPress={() => void onApplyDiscount()} loading={discountLoading} disabled={!discountDraft.trim()} style={{ marginTop: spacing.sm }}>
-              {t('client.placeOrder.discountCode.apply', 'Apply')}
-            </Button>
-            {appliedDiscountCode ? (
-              <Button mode="text" compact onPress={onClearDiscount}>
-                {t('client.placeOrder.discountCode.clear', 'Remove code')}
+        {!hideCoupon ? (
+          <>
+            <View style={{ alignItems: 'flex-start', marginBottom: spacing.xs }}>
+              {appliedDiscountCode && discountPercentage > 0 ? (
+                <Text variant="bodySmall" style={{ color: colors.secondary.main, marginBottom: spacing.xs }}>
+                  {t('client.placeOrder.discountCode.applied', '{{pct}}% off with {{code}}', {
+                    pct: discountPercentage,
+                    code: appliedDiscountCode,
+                  })}
+                </Text>
+              ) : null}
+              <Button mode="text" compact icon="ticket-percent-outline" onPress={() => setCouponExpanded(true)}>
+                {t('client.placeOrder.discountCode.haveCoupon', 'Have a coupon?')}
               </Button>
-            ) : null}
-            {discountError ? (
-              <Text variant="bodySmall" style={{ color: colors.error.main, marginTop: spacing.xs }}>
-                {discountError}
-              </Text>
-            ) : null}
-          </BottomSheet>
+            </View>
+            <BottomSheet
+              visible={couponExpanded}
+              onClose={() => setCouponExpanded(false)}
+              title={t('client.placeOrder.discountCode.label', 'Discount code')}
+            >
+              <BottomSheetTextInput
+                value={discountDraft}
+                onChangeText={onDiscountDraftChange}
+                placeholder={t('client.placeOrder.discountCode.placeholder', 'Code')}
+                editable={!discountLoading}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                style={{
+                  borderWidth: 1,
+                  borderColor: colors.borderStrong,
+                  borderRadius: 8,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  color: colors.text.primary,
+                }}
+              />
+              <Button mode="contained" onPress={() => void onApplyDiscount()} loading={discountLoading} disabled={!discountDraft.trim()} style={{ marginTop: spacing.sm }}>
+                {t('client.placeOrder.discountCode.apply', 'Apply')}
+              </Button>
+              {appliedDiscountCode ? (
+                <Button mode="text" compact onPress={onClearDiscount}>
+                  {t('client.placeOrder.discountCode.clear', 'Remove code')}
+                </Button>
+              ) : null}
+              {discountError ? (
+                <Text variant="bodySmall" style={{ color: colors.error.main, marginTop: spacing.xs }}>
+                  {discountError}
+                </Text>
+              ) : null}
+            </BottomSheet>
+          </>
+        ) : null}
 
         {!hideFinancialSummary ? (
           <>

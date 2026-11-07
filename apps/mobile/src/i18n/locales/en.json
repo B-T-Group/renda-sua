@@ -4383,6 +4383,16 @@
       "addNotes": "Add special instructions",
       "notesPlaceholder": "Allergies, gate code, spice level…",
       "submit": "Place order",
+      "review": {
+        "continue": "Continue",
+        "edit": "Edit",
+        "choicesTitle": "Your choices",
+        "quantity": "Quantity",
+        "method": "How you get it",
+        "address": "Address",
+        "time": "Time",
+        "receipt": "Order total"
+      },
       "kitchenClosed": {
         "title": "Kitchen closed",
         "nextOpening": "Next opening",
@@ -4430,7 +4440,6 @@
         "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation.",
         "dedicatedScheduledOnly": "Scheduled delivery only for this store right now",
         "dedicatedScheduledOnlyHint": "Choose one of the times below.",
-        "dedicatedPickupAt": "Picked up from the store at {{time}}",
         "slotKey": {
           "morning": "Morning",
           "afternoon": "Afternoon",
