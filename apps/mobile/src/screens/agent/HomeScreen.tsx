@@ -45,7 +45,14 @@ import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import { AgentWithdrawDialog } from '../../components/dialogs/AgentWithdrawDialog';
 import { AgentAccountTransactionsDialog } from '../../components/dialogs/AgentAccountTransactionsDialog';
 import { SimpleMessageDialog } from '../../components/dialogs/SimpleMessageDialog';
+import { CompleteDeliveryPinDialog } from '../../components/dialogs/CompleteDeliveryPinDialog';
+import { DeliveryCompleteSuccessModal } from '../../components/dialogs/DeliveryCompleteSuccessModal';
+import { RequestPayAtDeliveryDialog } from '../../components/dialogs/RequestPayAtDeliveryDialog';
 import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePaymentPhoneVerifyModal';
+import { useActiveDeliveryPinForComplete } from '../../hooks/useActiveDeliveryPinForComplete';
+import { agentApi } from '../../services/agentApi';
+import { mergeOrderForDeliverySuccess } from '../../utils/mergeOrderForDeliverySuccess';
+import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
 import { PendingWithdrawalsSection } from '../../components/wallet/PendingWithdrawalsSection';
 import { OrderCardCompact } from '../../components/agent/OrderCardCompact';
 import { OrderCardActive } from '../../components/agent/OrderCardCompact';
@@ -134,10 +141,27 @@ export default function HomeScreen() {
     pickUp,
     startTransit,
     outForDelivery,
+    markDelivered,
+    completeDelivery,
+    initiatePayAtDeliveryPayment,
   } = useAgentOrders();
   const [lifecycle, setLifecycle] = useState<{ orderId: string; key: LifecycleActionKey } | null>(null);
   const [actionBusyOrderId, setActionBusyOrderId] = useState<string | null>(null);
   const [loadingOverlayKind, setLoadingOverlayKind] = useState<ActionLoadingKind | null>(null);
+  const [completePinOrder, setCompletePinOrder] = useState<Order | null>(null);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  const [deliverySuccessOrder, setDeliverySuccessOrder] = useState<Order | null>(null);
+  const [requestPayOrder, setRequestPayOrder] = useState<Order | null>(null);
+  const [payDialogLoading, setPayDialogLoading] = useState(false);
+  const completePinVisible = completePinOrder !== null;
+  const {
+    autoSharedPin,
+    autoPinMessageId,
+    resolvingSharedPin,
+    noSharedPin,
+    resetSharedPinState,
+  } = useActiveDeliveryPinForComplete(completePinOrder?.id, completePinVisible);
   const { holdPercentage, refetch: refetchHold } = useHoldPercentage(true);
   const {
     wallet: xafWallet,
@@ -425,6 +449,108 @@ export default function HomeScreen() {
     }
   }, [lifecycle, runLifecycleAction, t]);
 
+  const closeCompletePinDialog = useCallback(() => {
+    setCompletePinOrder(null);
+    setCompleteError(null);
+    resetSharedPinState();
+  }, [resetSharedPinState]);
+
+  const startCompleteDelivery = useCallback(
+    async (order: Order) => {
+      setActionBusyOrderId(order.id);
+      try {
+        const state = await agentApi.orders.getDeliveryConfirmation(order.id);
+        if (state.usesLegacyPin) {
+          setCompletePinOrder(order);
+          setCompleteError(null);
+          return;
+        }
+        await markDelivered(order.id);
+        Alert.alert(
+          t('common.done', { defaultValue: 'Done' }),
+          t('orders.clientConfirm.agentWaiting', 'Waiting for the client to confirm')
+        );
+      } catch (e: unknown) {
+        Alert.alert(t('common.error'), e instanceof Error ? e.message : String(e));
+      } finally {
+        setActionBusyOrderId(null);
+      }
+    },
+    [markDelivered, t]
+  );
+
+  const handleCompleteWithSharedPin = useCallback(async () => {
+    const snap = completePinOrder;
+    if (!snap) return;
+    setCompleteSubmitting(true);
+    setCompleteError(null);
+    setActionBusyOrderId(snap.id);
+    try {
+      const res = await completeDelivery(snap.id, {
+        useLatestSharedPin: true,
+        pinMessageId: autoPinMessageId ?? undefined,
+      });
+      closeCompletePinDialog();
+      setDeliverySuccessOrder(mergeOrderForDeliverySuccess(snap, res.order ?? null));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setCompleteError(msg);
+      Alert.alert(t('common.error'), msg);
+    } finally {
+      setCompleteSubmitting(false);
+      setActionBusyOrderId(null);
+    }
+  }, [autoPinMessageId, closeCompletePinDialog, completeDelivery, completePinOrder, t]);
+
+  const handleCompleteDeliverySubmit = useCallback(
+    async (pin: string) => {
+      const trimmed = pin.trim();
+      const snap = completePinOrder;
+      if (!snap || trimmed.length !== 4) {
+        setCompleteError(t('orders.completeDelivery.invalidPin', 'The PIN must be exactly 4 digits.'));
+        return;
+      }
+      setCompleteSubmitting(true);
+      setCompleteError(null);
+      setActionBusyOrderId(snap.id);
+      try {
+        const res = await completeDelivery(snap.id, { pin: trimmed });
+        closeCompletePinDialog();
+        setDeliverySuccessOrder(mergeOrderForDeliverySuccess(snap, res.order ?? null));
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setCompleteError(msg);
+        Alert.alert(t('common.error'), msg);
+      } finally {
+        setCompleteSubmitting(false);
+        setActionBusyOrderId(null);
+      }
+    },
+    [closeCompletePinDialog, completeDelivery, completePinOrder, t]
+  );
+
+  const handlePayAtDeliveryRequest = useCallback(
+    async (phoneOverride?: string) => {
+      if (!requestPayOrder) return;
+      setPayDialogLoading(true);
+      setActionBusyOrderId(requestPayOrder.id);
+      try {
+        await initiatePayAtDeliveryPayment(requestPayOrder.id, phoneOverride);
+        setRequestPayOrder(null);
+        Alert.alert(
+          t('common.done', { defaultValue: 'Done' }),
+          t('agent.orders.payAtDelivery.successRequest', { defaultValue: 'Payment request sent.' })
+        );
+      } catch (e: unknown) {
+        Alert.alert(t('common.error'), e instanceof Error ? e.message : String(e));
+      } finally {
+        setPayDialogLoading(false);
+        setActionBusyOrderId(null);
+      }
+    },
+    [initiatePayAtDeliveryPayment, requestPayOrder, t]
+  );
+
   const handleActiveOrderPrimaryAction = useCallback(
     (order: Order) => {
       if (isCarrierShipping(order.fulfillment_method)) {
@@ -444,11 +570,18 @@ export default function HomeScreen() {
         case 'in_transit':
           setLifecycle({ orderId: order.id, key: 'outForDelivery' });
           return;
+        case 'out_for_delivery':
+          if (orderNeedsPayAtDeliveryAgentActions(order)) {
+            setRequestPayOrder(order);
+            return;
+          }
+          void startCompleteDelivery(order);
+          return;
         default:
           goToOrderDetail(order.id);
       }
     },
-    [goToOrderDetail]
+    [goToOrderDetail, startCompleteDelivery]
   );
 
   const goToAvailableOrders = useCallback(() => {
@@ -1165,8 +1298,35 @@ export default function HomeScreen() {
           return null;
         })()
       ) : null}
+      <CompleteDeliveryPinDialog
+        visible={completePinVisible}
+        onDismiss={closeCompletePinDialog}
+        onSubmit={(pin) => void handleCompleteDeliverySubmit(pin)}
+        onSubmitSharedPin={() => void handleCompleteWithSharedPin()}
+        submitting={completeSubmitting}
+        errorText={completeError}
+        onPinEdited={() => setCompleteError(null)}
+        autoSharedPin={autoSharedPin}
+        resolvingSharedPin={resolvingSharedPin}
+        noSharedPin={noSharedPin}
+      />
+      <DeliveryCompleteSuccessModal
+        visible={!!deliverySuccessOrder}
+        order={deliverySuccessOrder}
+        onClose={() => setDeliverySuccessOrder(null)}
+      />
+      <RequestPayAtDeliveryDialog
+        visible={!!requestPayOrder}
+        order={requestPayOrder}
+        submitting={payDialogLoading}
+        onDismiss={() => setRequestPayOrder(null)}
+        onSendRequest={handlePayAtDeliveryRequest}
+      />
       <ActionLoadingDialog
-        visible={loadingOverlayKind != null}
+        visible={
+          loadingOverlayKind != null ||
+          (actionBusyOrderId !== null && !completePinVisible && requestPayOrder === null)
+        }
         action={loadingOverlayKind ?? 'generic_update'}
         message={undefined}
       />
