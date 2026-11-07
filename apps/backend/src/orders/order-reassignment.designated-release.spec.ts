@@ -271,3 +271,43 @@ describe('OrderReassignmentService.releaseDedicatedAutoAssignment designated-fir
     expect(t.s.clearLeftoverDesignatedStamps).toHaveBeenCalledWith('o1');
   });
 });
+
+describe('OrderReassignmentService.afterDroppedDesignatedAssignment', () => {
+  function leftover(over: Record<string, unknown> = {}) {
+    const t = build();
+    t.hasura.executeQuery.mockResolvedValue({
+      orders_by_pk: {
+        dispatch_mode: 'designated_first',
+        assignment_source: 'dedicated_offer',
+        designated_accepted_at: '2026-11-08T09:00:00Z',
+        ...over,
+      },
+    });
+    return t;
+  }
+
+  it('declines the leftover dedicated row and clears stamps so Take cannot reclaim', async () => {
+    const t = leftover();
+    await t.service.afterDroppedDesignatedAssignment('o1', 'a1', 'u1');
+    const exclusion = t.mutations.find((m) => m.q.includes('RecordDedicatedRelease'));
+    expect(exclusion?.v.object).toMatchObject({
+      order_id: 'o1',
+      agent_id: 'a1',
+      user_id: 'u1',
+      status: 'declined',
+      offer_kind: 'dedicated',
+    });
+    expect(t.mutations.some((m) => m.q.includes('ClearDesignatedStamps'))).toBe(true);
+  });
+
+  it('skips a marketplace drop that was never designated or dedicated', async () => {
+    const t = leftover({
+      dispatch_mode: null,
+      assignment_source: 'open_claim',
+      designated_accepted_at: null,
+    });
+    await t.service.afterDroppedDesignatedAssignment('o1', 'a1', 'u1');
+    expect(t.mutations.some((m) => m.q.includes('RecordDedicatedRelease'))).toBe(false);
+    expect(t.mutations.some((m) => m.q.includes('ClearDesignatedStamps'))).toBe(false);
+  });
+});

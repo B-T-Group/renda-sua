@@ -1041,15 +1041,106 @@ export class OrderReassignmentService {
         );
       return false;
     }
-    // After the hold is released the original agent is gone. Clear their
-    // designated stamps here (not in the unassign CAS) so a reverted drop
-    // keeps the same agent's free-release window and confirmation state.
-    await this.clearLeftoverDesignatedStamps(order.id);
+    // After the hold is released the original agent is gone. Decline their
+    // dedicated row and clear stamps here (not in the unassign CAS) so a
+    // reverted drop keeps the same agent's window, and Coverage Take cannot
+    // reopen the leftover accepted offer.
+    await this.afterDroppedDesignatedAssignment(
+      order.id,
+      order.assigned_agent_id,
+      order.assigned_agent?.user_id
+    );
     await this.insertHistory(
       order.id,
       'System reassigned order after pickup SLA'
     );
     return true;
+  }
+
+  /**
+   * After Drop / pickup-SLA unassign: decline the leftover dedicated row so
+   * Coverage Take cannot refresh `accepted` back to `offered`, and clear
+   * per-agent designated stamps so the next assignee is not struck.
+   */
+  async afterDroppedDesignatedAssignment(
+    orderId: string,
+    agentId: string | null,
+    userId: string | null | undefined
+  ): Promise<void> {
+    if (!agentId) return;
+    const leftover = await this.loadDesignatedDropLeftover(orderId);
+    if (!this.wasDesignatedAssignment(leftover)) return;
+    if (userId) await this.recordDroppedAgentExclusion(orderId, agentId, userId);
+    await this.clearLeftoverDesignatedStamps(orderId);
+  }
+
+  private async loadDesignatedDropLeftover(orderId: string): Promise<{
+    dispatch_mode: string | null;
+    assignment_source: string | null;
+    designated_accepted_at: string | null;
+  } | null> {
+    const res = await this.hasura
+      .executeQuery<{
+        orders_by_pk: {
+          dispatch_mode: string | null;
+          assignment_source: string | null;
+          designated_accepted_at: string | null;
+        } | null;
+      }>(
+        `query DesignatedDropLeftover($id: uuid!) {
+          orders_by_pk(id: $id) { dispatch_mode assignment_source designated_accepted_at }
+        }`,
+        { id: orderId }
+      )
+      .catch(() => null);
+    return res?.orders_by_pk ?? null;
+  }
+
+  private wasDesignatedAssignment(
+    leftover: {
+      dispatch_mode: string | null;
+      assignment_source: string | null;
+      designated_accepted_at: string | null;
+    } | null
+  ): boolean {
+    if (!leftover) return false;
+    return (
+      leftover.dispatch_mode === 'designated_first' ||
+      leftover.assignment_source === 'dedicated_offer' ||
+      leftover.assignment_source === 'dedicated_auto' ||
+      !!leftover.designated_accepted_at
+    );
+  }
+
+  private async recordDroppedAgentExclusion(
+    orderId: string,
+    agentId: string,
+    userId: string
+  ): Promise<void> {
+    const nowIso = new Date().toISOString();
+    try {
+      await runAssignmentWrite(() =>
+        this.hasura.executeMutation(RECORD_DEDICATED_RELEASE_MUTATION, {
+          object: {
+            order_id: orderId,
+            agent_id: agentId,
+            user_id: userId,
+            status: 'declined',
+            offer_kind: 'dedicated',
+            decline_reason: 'other',
+            expires_at: nowIso,
+            created_at: nowIso,
+            responded_at: nowIso,
+          },
+        })
+      );
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Dropped-agent dedicated exclusion not recorded for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
   /**

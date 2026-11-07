@@ -361,9 +361,10 @@ const AGENT_DECLINED_DEDICATED_QUERY = `
 
 /**
  * Quiet ensure for Take/Ignore: reopen a prior dedicated row without a push.
- * Includes cancelled/accepted leftovers (order still unassigned) so Hasura's
+ * Includes cancelled/accepted leftovers (failed-claim rows) so Hasura's
  * insert-on-conflict (expired-only) cannot no-op and leave Take with no offer.
- * Declined stays excluded — those agents are not re-offered.
+ * Declined stays excluded — Drop / Can't make it / pickup SLA must not reclaim.
+ * Join-guard: never reopen while another agent already holds the order.
  */
 const REFRESH_EARLY_OFFER = `
   mutation RefreshDesignatedEarlyOffer(
@@ -376,6 +377,7 @@ const REFRESH_EARLY_OFFER = `
         agent_id: { _eq: $agentId }
         offer_kind: { _eq: "dedicated" }
         status: { _in: ["offered", "expired", "cancelled", "accepted"] }
+        order: { assigned_agent_id: { _is_null: true }, current_status: { _eq: ready_for_pickup } }
       }
       _set: {
         status: "offered"

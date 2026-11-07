@@ -406,6 +406,7 @@ describe('OrdersService', () => {
             reportIssueAndRelease: jest.fn(),
             reassignOrder: jest.fn(),
             releaseDedicatedAutoAssignment: jest.fn(),
+            afterDroppedDesignatedAssignment: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -5207,6 +5208,31 @@ describe('OrdersService', () => {
         source: 'dedicated_offer',
         dedicatedAssignmentId: 'as-9',
       });
+    });
+
+    it('Drop of a designated assignment excludes the agent so Coverage Take cannot reclaim', async () => {
+      hasuraUserService.getUser.mockResolvedValue(agentUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({ jwtDefaultRole: 'agent', jwtAllowedRoles: ['agent'] });
+      jest.spyOn(loose(), 'getOrderDetails').mockResolvedValue({
+        id: 'order-123',
+        current_status: 'assigned_to_agent',
+        assigned_agent_id: 'agent-123',
+        currency: 'XAF',
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders_by_pk: { id: 'order-123', current_status: 'ready_for_pickup', assigned_agent_id: null },
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'account-1', available_balance: 0 });
+      jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+      jest.spyOn(loose(), 'getOrCreateOrderHold').mockResolvedValue({ id: 'hold-1', agent_hold_amount: 0 });
+      jest.spyOn(loose(), 'updateOrderHold').mockResolvedValue(undefined);
+      jest.spyOn(loose(), 'releaseDroppedAgentHold').mockResolvedValue(undefined);
+      await service.dropOrder({ orderId: 'order-123' });
+      expect(loose().orderReassignmentService.afterDroppedDesignatedAssignment).toHaveBeenCalledWith(
+        'order-123',
+        'agent-123',
+        'agent-123'
+      );
     });
 
     describe('#594 DEV QA N1: an open-pool claim while holding a live dedicated offer', () => {
