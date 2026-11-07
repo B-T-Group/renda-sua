@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import { FlashList } from '@shopify/flash-list';
 import Animated from 'react-native-reanimated';
 import { useNavigation } from '@react-navigation/native';
@@ -17,11 +17,12 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useInventoryCatalog } from '@/hooks/useInventoryCatalog';
 import { useSearchSuggestions, type SearchSuggestion } from '@/hooks/useSearchSuggestions';
 import type { ClientRootStackParamList } from '@/navigation/types';
+import type { CatalogStore } from '@/types/stores';
 import { loadRecentSearches, rememberSearch } from '@/utils/recentSearches';
 
 export function SearchScreen() {
   const { t } = useTranslation();
-  const { colors, spacing } = useTheme();
+  const { colors, spacing, borderRadius } = useTheme();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const rootNav = navigation.getParent<NativeStackNavigationProp<ClientRootStackParamList> | undefined>();
@@ -29,7 +30,11 @@ export function SearchScreen() {
   const [submitted, setSubmitted] = useState('');
   const [recent, setRecent] = useState<string[]>([]);
   const { suggestions, loading: suggesting } = useSearchSuggestions(query);
-  const catalog = useInventoryCatalog({ search: submitted, sort: 'relevance', enabled: submitted.length >= 2 });
+  const catalog = useInventoryCatalog({
+    search: submitted,
+    sort: 'relevance',
+    enabled: submitted.length >= 2,
+  });
 
   useEffect(() => {
     void loadRecentSearches().then(setRecent);
@@ -47,14 +52,22 @@ export function SearchScreen() {
     setSubmitted('');
   }, []);
 
+  const navigateRoot = useCallback(() => {
+    return rootNav ?? (navigation as unknown as NativeStackNavigationProp<ClientRootStackParamList>);
+  }, [navigation, rootNav]);
+
   const openItem = useCallback(
     (inventoryItemId: string) => {
-      (rootNav ?? (navigation as unknown as NativeStackNavigationProp<ClientRootStackParamList>)).navigate(
-        'InventoryItemDetail',
-        { inventoryItemId }
-      );
+      navigateRoot().navigate('InventoryItemDetail', { inventoryItemId });
     },
-    [navigation, rootNav]
+    [navigateRoot]
+  );
+
+  const openStore = useCallback(
+    (businessId: string) => {
+      navigateRoot().navigate('StoreDetail', { businessId });
+    },
+    [navigateRoot]
   );
 
   const showResults = submitted.length >= 2;
@@ -75,6 +88,15 @@ export function SearchScreen() {
           data={catalog.items}
           keyExtractor={(item) => item.id}
           numColumns={2}
+          ListHeaderComponent={
+            catalog.matchedStores.length > 0 ? (
+              <MatchedStoresHeader
+                stores={catalog.matchedStores}
+                onOpenStore={openStore}
+                title={t('client.search.matchingStores', 'Matching stores')}
+              />
+            ) : null
+          }
           ListEmptyComponent={
             catalog.loading ? (
               <ListRowSkeleton />
@@ -103,7 +125,13 @@ export function SearchScreen() {
               <Pressable
                 key={term}
                 onPress={() => submit(term)}
-                style={{ minHeight: 36, justifyContent: 'center', paddingHorizontal: spacing.sm, borderRadius: 999, backgroundColor: colors.surfaceInput }}
+                style={{
+                  minHeight: 36,
+                  justifyContent: 'center',
+                  paddingHorizontal: spacing.sm,
+                  borderRadius: 999,
+                  backgroundColor: colors.surfaceInput,
+                }}
               >
                 <AppText role="label">{term}</AppText>
               </Pressable>
@@ -113,11 +141,20 @@ export function SearchScreen() {
           {suggestions.map((suggestion) => (
             <Pressable
               key={suggestionKey(suggestion)}
-              onPress={() => onSuggestion(suggestion, submit, openItem)}
-              style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}
+              onPress={() => onSuggestion(suggestion, submit, openItem, openStore)}
+              style={{
+                minHeight: 52,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: spacing.sm,
+              }}
             >
               {suggestion.kind === 'product' ? (
-                <AppImage uri={suggestion.imageUrl} recyclingKey={suggestion.inventoryId} style={{ width: 40, height: 40, borderRadius: 8 }} />
+                <AppImage
+                  uri={suggestion.imageUrl}
+                  recyclingKey={suggestion.inventoryId}
+                  style={{ width: 40, height: 40, borderRadius: borderRadius.sm }}
+                />
               ) : null}
               <AppText role="body">{suggestionLabel(suggestion)}</AppText>
             </Pressable>
@@ -128,9 +165,69 @@ export function SearchScreen() {
   );
 }
 
+function MatchedStoresHeader({
+  stores,
+  onOpenStore,
+  title,
+}: {
+  stores: CatalogStore[];
+  onOpenStore: (businessId: string) => void;
+  title: string;
+}) {
+  const { colors, spacing, borderRadius } = useTheme();
+  return (
+    <View style={{ paddingHorizontal: spacing.md, marginBottom: spacing.md }}>
+      <AppText role="label" style={{ marginBottom: spacing.sm }}>
+        {title}
+      </AppText>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+          {stores.map((store) => (
+            <Pressable
+              key={store.business_location_id}
+              onPress={() => onOpenStore(store.business_location_id)}
+              style={{
+                width: 140,
+                padding: spacing.sm,
+                borderRadius: borderRadius.md,
+                backgroundColor: colors.surface,
+                borderWidth: 1,
+                borderColor: colors.divider,
+              }}
+            >
+              {store.logo_url ? (
+                <AppImage
+                  uri={store.logo_url}
+                  recyclingKey={store.business_location_id}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: borderRadius.sm,
+                    marginBottom: spacing.xs,
+                  }}
+                />
+              ) : null}
+              <AppText role="label" numberOfLines={1}>
+                {store.name}
+              </AppText>
+              {store.city ? (
+                <AppText role="caption" numberOfLines={1}>
+                  {store.city}
+                </AppText>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
+  );
+}
+
 function suggestionKey(suggestion: SearchSuggestion): string {
   if (suggestion.kind === 'product') return `p-${suggestion.inventoryId}`;
-  if (suggestion.kind === 'seller') return `s-${suggestion.businessId}`;
+  if (suggestion.kind === 'seller') {
+    return `s-${suggestion.businessLocationId ?? suggestion.businessId}`;
+  }
   return `${suggestion.kind}-${suggestion.value}`;
 }
 
@@ -140,13 +237,18 @@ function suggestionLabel(suggestion: SearchSuggestion): string {
   return suggestion.value;
 }
 
-function onSuggestion(suggestion: SearchSuggestion, submit: (term: string) => void, openItem: (id: string) => void) {
+function onSuggestion(
+  suggestion: SearchSuggestion,
+  submit: (term: string) => void,
+  openItem: (id: string) => void,
+  openStore: (businessId: string) => void
+) {
   if (suggestion.kind === 'product') {
     openItem(suggestion.inventoryId);
     return;
   }
   if (suggestion.kind === 'seller') {
-    submit(suggestion.name);
+    openStore(suggestion.businessLocationId ?? suggestion.businessId);
     return;
   }
   submit(suggestion.value);

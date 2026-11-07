@@ -15,14 +15,22 @@ export function HeaderSearchPopover() {
   const { suggestions } = useInventorySearchSuggestions({ q: query }, { enabled: open });
   const visible = open && query.trim().length >= 2 && suggestions.length > 0;
 
-  const choose = (inventoryId: string | null, term: string) => {
+  const choose = (
+    inventoryId: string | null,
+    term: string,
+    storeLocationId?: string
+  ) => {
     setOpen(false);
     setQuery('');
     if (inventoryId) {
       navigate(`/items/${inventoryId}`);
       return;
     }
-    navigate(`/items?q=${encodeURIComponent(term)}`);
+    if (storeLocationId) {
+      navigate(`/store/${storeLocationId}`);
+      return;
+    }
+    navigate(`/items?search=${encodeURIComponent(term)}`);
   };
 
   return (
@@ -44,8 +52,13 @@ export function HeaderSearchPopover() {
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => setOpen(true)}
           onBlur={() => window.setTimeout(() => setOpen(false), 180)}
-          placeholder={t('client.search.placeholder', 'Search products')}
-          inputProps={{ 'aria-label': t('client.search.placeholder', 'Search products') }}
+          placeholder={t('client.search.placeholder', 'Search products and stores')}
+          inputProps={{
+            'aria-label': t(
+              'client.search.placeholder',
+              'Search products and stores'
+            ),
+          }}
           sx={{ color: '#fff', fontSize: 14, flex: 1 }}
         />
       </Box>
@@ -67,8 +80,15 @@ export function HeaderSearchPopover() {
                       ? suggestion.name
                       : suggestion.value;
                 const id = suggestion.kind === 'product' ? suggestion.inventoryId : null;
+                const storeId =
+                  suggestion.kind === 'seller'
+                    ? suggestion.businessLocationId
+                    : undefined;
                 return (
-                  <ListItemButton key={`${suggestion.kind}-${label}`} onMouseDown={() => choose(id, label)}>
+                  <ListItemButton
+                    key={`${suggestion.kind}-${label}`}
+                    onMouseDown={() => choose(id, label, storeId)}
+                  >
                     <ListItemText primary={label} />
                   </ListItemButton>
                 );

@@ -4504,7 +4504,8 @@
       "placeholder": "Rechercher un produit, un magasin, un repas",
       "emptyTitle": "Aucun résultat",
       "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
-      "recent": "Recherches récentes"
+      "recent": "Recherches récentes",
+      "matchingStores": "Magasins correspondants"
     },
     "following": {
       "title": "Abonnements",

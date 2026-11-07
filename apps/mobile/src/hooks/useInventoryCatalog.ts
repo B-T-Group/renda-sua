@@ -9,6 +9,7 @@ import type {
   InventorySortMode,
   SortControlState,
 } from '../types/inventoryCatalog';
+import type { CatalogStore } from '../types/stores';
 import { filterFoodCatalogItems } from '../utils/foodAvailability';
 
 const PAGE_SIZE = 25;
@@ -65,6 +66,7 @@ export function useInventoryCatalog({
   includeUnavailable = false,
 }: UseInventoryCatalogOptions) {
   const [items, setItems] = useState<CatalogInventoryItem[]>([]);
+  const [matchedStores, setMatchedStores] = useState<CatalogStore[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,7 +120,13 @@ export function useInventoryCatalog({
           setError(envelope.message || 'Request failed');
           return;
         }
-        const { items: chunk, totalPages: tp, total: t, discovery } = envelope.data;
+        const {
+          items: chunk,
+          totalPages: tp,
+          total: t,
+          discovery,
+          matched_stores,
+        } = envelope.data;
         const visible =
           food_only === true ? filterFoodCatalogItems(chunk) : chunk;
         // If the API ignored food_only, do not keep a marketplace-sized total
@@ -128,6 +136,9 @@ export function useInventoryCatalog({
         setTotal(leakedNonFood ? visible.length : t);
         setPage(nextPage);
         setItems((prev) => (append ? [...prev, ...visible] : visible));
+        if (!append) {
+          setMatchedStores(matched_stores ?? []);
+        }
         setEffectiveSort(discovery?.sort);
         setSortControl(discovery?.sort_control);
       } catch (e: unknown) {
@@ -135,7 +146,10 @@ export function useInventoryCatalog({
         if (e instanceof Error && e.name === 'AbortError') return;
         const msg = e instanceof Error ? e.message : 'Failed to load';
         setError(msg);
-        if (!append) setItems([]);
+        if (!append) {
+          setItems([]);
+          setMatchedStores([]);
+        }
       } finally {
         if (!controller.signal.aborted) {
           setLoading(false);
@@ -171,6 +185,7 @@ export function useInventoryCatalog({
       abortRef.current?.abort();
       abortRef.current = null;
       setItems([]);
+      setMatchedStores([]);
       setLoading(false);
       setLoadingMore(false);
       setPage(1);
@@ -194,6 +209,7 @@ export function useInventoryCatalog({
 
   return {
     items,
+    matchedStores,
     loading,
     loadingMore,
     error,

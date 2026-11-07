@@ -18,6 +18,8 @@ export interface BrowseStoresStripProps {
   loading: boolean;
   onStoreClick: (businessLocationId: string) => void;
   onSeeAll?: () => void;
+  /** Override the default “Browse by store locations” heading. */
+  title?: string;
 }
 
 function StorePill({
@@ -131,6 +133,7 @@ const BrowseStoresStrip: React.FC<BrowseStoresStripProps> = ({
   loading,
   onStoreClick,
   onSeeAll,
+  title,
 }) => {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -186,7 +189,7 @@ const BrowseStoresStrip: React.FC<BrowseStoresStripProps> = ({
             variant="overline"
             sx={{ fontWeight: 700, letterSpacing: '0.1em', color: 'text.secondary' }}
           >
-            {t('stores.rowTitle', 'Browse by store locations')}
+            {title ?? t('stores.rowTitle', 'Browse by store locations')}
           </Typography>
         </Box>
         {onSeeAll ? (

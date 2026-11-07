@@ -4933,6 +4933,9 @@
     }
   },
   "client": {
+    "search": {
+      "placeholder": "Search products and stores"
+    },
     "orders": {
       "agentAssigned": "🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!",
       "assignedToAgentNotice": "An agent has been assigned to your order and will pick it up soon.",
@@ -7590,6 +7593,7 @@
       "searchHint": "Press Enter or tap the search icon to run your query.",
       "clearSearch": "Clear search",
       "searchPlaceholder": "Search for items, shops, or categories…",
+      "matchingStores": "Matching stores",
       "suggestions": {
         "products": "Products",
         "categories": "Categories",

@@ -4597,7 +4597,8 @@
       "placeholder": "Search products, stores, food",
       "emptyTitle": "No matches",
       "emptyBody": "Try a product, a store, or a category.",
-      "recent": "Recent searches"
+      "recent": "Recent searches",
+      "matchingStores": "Matching stores"
     },
     "following": {
       "title": "Following",

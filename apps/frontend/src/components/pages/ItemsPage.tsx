@@ -449,6 +449,7 @@ const ItemsPage: React.FC = () => {
 
   const {
     inventoryItems,
+    matchedStores,
     loading,
     loadingMore,
     error,
@@ -1388,6 +1389,18 @@ const ItemsPage: React.FC = () => {
             <BrowseStoresStrip
               stores={featuredStores}
               loading={storesLoading}
+              onStoreClick={(id) => navigate(`/store/${id}`)}
+              onSeeAll={() => navigate('/stores')}
+            />
+          </Box>
+        ) : null}
+
+        {searchTerm.trim() && matchedStores.length > 0 ? (
+          <Box sx={{ px: { xs: 1, sm: 2 } }}>
+            <BrowseStoresStrip
+              stores={matchedStores}
+              loading={false}
+              title={t('public.items.matchingStores', 'Matching stores')}
               onStoreClick={(id) => navigate(`/store/${id}`)}
               onSeeAll={() => navigate('/stores')}
             />
