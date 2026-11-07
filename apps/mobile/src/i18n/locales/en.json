@@ -5447,10 +5447,21 @@
       "tabDedicated": "Dedicated",
       "tabReferred": "Referred",
       "dedicatedStoresTitle": "Your dedicated stores",
-      "dedicatedEmpty": "You are not a dedicated agent for any store yet. Browse openings to apply.",
-      "browseOpportunities": "Browse opportunities",
+      "dedicatedEmpty": "You are not a dedicated agent for any store yet. Apply to openings below.",
+      "browseOpportunities": "Browse store openings",
       "manageStores": "Manage stores",
-      "openDedicatedHub": "Open dedicated hub"
+      "openDedicatedHub": "Open dedicated hub",
+      "explainerTitle": "Two things on this tab",
+      "ordersExplainerTitle": "Dedicated orders",
+      "ordersExplainerBody": "Deliveries from your dedicated stores that you can take now",
+      "hubExplainerTitle": "Dedicated hub",
+      "hubExplainerBody": "Where you apply to new store openings or manage the stores you already cover",
+      "openingsTitleCount": "{{count}} store opening to apply",
+      "openingsTitleCount_plural": "{{count}} store openings to apply",
+      "openingsTitleEmpty": "Browse store openings",
+      "openingsSubtitle": "New dedicated delivery spots at nearby stores — apply to join",
+      "hubManageTitle": "Dedicated hub",
+      "hubManageSubtitle": "Manage your stores and see all openings in one place"
     }
   },
   "agentOrder": {
@@ -8319,9 +8330,10 @@
       "stillOnIt": "Still on it"
     },
     "list": {
-      "title": "My designated deliveries",
-      "empty": "No designated deliveries right now.",
-      "offerBadge": "Offer",
+      "title": "Dedicated orders",
+      "subtitle": "Orders from your dedicated stores that you can take",
+      "empty": "No dedicated orders to take right now.",
+      "offerBadge": "Available",
       "assignedBadge": "Assigned"
     },
     "home": {

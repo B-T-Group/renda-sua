@@ -5354,10 +5354,21 @@
       "tabDedicated": "Dédiés",
       "tabReferred": "Parrainés",
       "dedicatedStoresTitle": "Vos magasins dédiés",
-      "dedicatedEmpty": "Vous n’êtes dédié à aucun magasin pour le moment. Parcourez les offres pour postuler.",
-      "browseOpportunities": "Voir les offres",
+      "dedicatedEmpty": "Vous n’êtes dédié à aucun magasin pour le moment. Postulez aux ouvertures ci-dessous.",
+      "browseOpportunities": "Voir les ouvertures",
       "manageStores": "Gérer les magasins",
-      "openDedicatedHub": "Ouvrir le hub dédié"
+      "openDedicatedHub": "Ouvrir le hub dédié",
+      "explainerTitle": "Deux choses sur cet onglet",
+      "ordersExplainerTitle": "Commandes dédiées",
+      "ordersExplainerBody": "Livraisons de vos magasins dédiés que vous pouvez prendre maintenant",
+      "hubExplainerTitle": "Hub dédié",
+      "hubExplainerBody": "Où postuler à de nouvelles ouvertures de magasins ou gérer ceux que vous couvrez déjà",
+      "openingsTitleCount": "{{count}} ouverture de magasin à postuler",
+      "openingsTitleCount_plural": "{{count}} ouvertures de magasins à postuler",
+      "openingsTitleEmpty": "Voir les ouvertures de magasins",
+      "openingsSubtitle": "Nouveaux postes de livraison dédiée près de vous — postulez pour rejoindre",
+      "hubManageTitle": "Hub dédié",
+      "hubManageSubtitle": "Gérez vos magasins et voyez toutes les ouvertures au même endroit"
     }
   },
   "agentOrder": {
@@ -8241,9 +8252,10 @@
       "stillOnIt": "Toujours dispo"
     },
     "list": {
-      "title": "Mes livraisons dédiées",
-      "empty": "Aucune livraison dédiée pour le moment.",
-      "offerBadge": "Offre",
+      "title": "Commandes dédiées",
+      "subtitle": "Commandes de vos magasins dédiés que vous pouvez prendre",
+      "empty": "Aucune commande dédiée à prendre pour le moment.",
+      "offerBadge": "Disponible",
       "assignedBadge": "Assignée"
     },
     "home": {

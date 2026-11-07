@@ -11,7 +11,7 @@ import type { DesignatedMineResponse, DesignatedOffer } from '../../types/design
 import { formatDateTime, formatWindow } from '../../utils/designatedFirst';
 
 /** Designated agent first: coverage/early offers (Take) and assigned upcoming (tap opens). */
-export function DesignatedListSection() {
+export function DesignatedListSection({ showWhenEmpty = false }: { showWhenEmpty?: boolean }) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const [list, setList] = useState<DesignatedMineResponse | null>(null);
@@ -54,17 +54,29 @@ export function DesignatedListSection() {
 
   const offers = list?.offers ?? [];
   const upcoming = list?.upcoming ?? [];
-  if (!offers.length && !upcoming.length) return null;
+  const isEmpty = !offers.length && !upcoming.length;
+  if (isEmpty && !showWhenEmpty) return null;
   const rowStyle = [styles.row, { borderColor: colors.divider, borderRadius: borderRadius.sm, padding: spacing.sm }];
 
   return (
     <View style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.sm, gap: spacing.xs }} testID="designated-list">
-      <Text variant="titleSmall" style={{ color: colors.text.primary }}>
-        {t('designatedFirst.list.title', 'My designated deliveries')}
+      <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '700' }}>
+        {t('designatedFirst.list.title', 'Dedicated orders')}
+      </Text>
+      <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+        {t(
+          'designatedFirst.list.subtitle',
+          'Orders from your dedicated stores that you can take'
+        )}
       </Text>
       {error ? (
         <Text variant="bodySmall" style={{ color: colors.error.main }}>
           {error}
+        </Text>
+      ) : null}
+      {isEmpty ? (
+        <Text variant="bodyMedium" style={{ color: colors.text.secondary }}>
+          {t('designatedFirst.list.empty', 'No dedicated orders to take right now.')}
         </Text>
       ) : null}
       {offers.map((o) => (
@@ -118,7 +130,7 @@ function OfferRow({
     <View style={[rowStyle, styles.offerCard]}>
       <Pressable style={styles.offerBody} onPress={() => navigateToOrderFromPush(offer.orderId, 'agent')}>
         <Text variant="labelMedium" style={{ color: colors.primary.main }}>
-          {t('designatedFirst.list.offerBadge', 'Offer')}
+          {t('designatedFirst.list.offerBadge', 'Available')}
         </Text>
         <Text variant="bodyMedium" style={{ color: colors.text.primary, flex: 1 }}>
           {[offer.details?.businessName, offer.details?.date, formatWindow(offer.details?.windowStart, offer.details?.windowEnd)]
