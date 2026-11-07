@@ -675,6 +675,96 @@ describe('DesignatedFirstService', () => {
     expect(list.offers).toEqual([]);
   });
 
+  function coverageOrder(over: Record<string, unknown> = {}) {
+    return {
+      id: 'o4',
+      order_number: 'ORD-4',
+      business_location_id: 'loc1',
+      coverage_slot_key: 'morning',
+      currency: 'XAF',
+      dispatch_ready_at: GATE,
+      pickup_by: WINDOW,
+      fulfillment_timing: 'scheduled',
+      business_location: { name: 'ACEGUARD Bastos', address: { city: 'Yaoundé', country: 'CM' } },
+      delivery_address: { city: 'Yaoundé', state: 'Centre' },
+      delivery_time_windows: [
+        { slot_id: 's1', preferred_date: '2026-11-10', is_confirmed: true, time_slot_start: '09:00:00', time_slot_end: '11:00:00' },
+      ],
+      ...over,
+    };
+  }
+
+  it('drops unconfirmed and mismatched coverage orders, and still lists when the declined lookup fails', async () => {
+    const t = setup();
+    t.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q.includes('DesignatedAgentOffers')) return { order_offers: [], orders: [] };
+      if (q.includes('AgentDeclinedDedicated')) throw new Error('declined down');
+      if (q.includes('AgentCoverageAssignments')) {
+        return {
+          dedicated_agent_assignments: [
+            { business_location_id: 'loc1', slot_key: 'morning', off_today_date: null },
+          ],
+        };
+      }
+      if (q.includes('AgentCoverageOrders')) {
+        return {
+          orders: [
+            coverageOrder(),
+            coverageOrder({
+              id: 'o5',
+              delivery_time_windows: [
+                { slot_id: 's1', preferred_date: '2026-11-10', is_confirmed: false, time_slot_start: '09:00:00', time_slot_end: '11:00:00' },
+              ],
+            }),
+            coverageOrder({ id: 'o6', business_location_id: 'loc2' }),
+            coverageOrder({
+              id: 'o7',
+              delivery_time_windows: [{ preferred_date: '2026-11-10', is_confirmed: true, time_slot_start: '09:00:00', time_slot_end: '11:00:00' }],
+            }),
+          ],
+        };
+      }
+      return {};
+    });
+    const list = await t.service.listForAgent('a1', NOW);
+    expect(list.offers.map((o) => o.orderId)).toEqual(['o4']);
+  });
+
+  it('keeps real offers when the coverage order query fails', async () => {
+    const t = setup();
+    t.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q.includes('DesignatedAgentOffers')) {
+        return {
+          order_offers: [
+            {
+              order_id: 'o1',
+              phase: 'early',
+              expires_at: GATE,
+              payload: null,
+              estimated_earnings: null,
+              currency: 'XAF',
+              created_at: NOW.toISOString(),
+              dashboard_dismissed_at: null,
+            },
+          ],
+          orders: [],
+        };
+      }
+      if (q.includes('AgentDeclinedDedicated')) return { order_offers: [] };
+      if (q.includes('AgentCoverageAssignments')) {
+        return {
+          dedicated_agent_assignments: [
+            { business_location_id: 'loc1', slot_key: 'morning', off_today_date: null },
+          ],
+        };
+      }
+      if (q.includes('AgentCoverageOrders')) throw new Error('coverage down');
+      return {};
+    });
+    const list = await t.service.listForAgent('a1', NOW);
+    expect(list.offers.map((o) => o.orderId)).toEqual(['o1']);
+  });
+
   it('ensures a quiet early offer for an eligible coverage agent', async () => {
     const t = setup();
     jest.spyOn(t.service, 'load').mockResolvedValue({
@@ -739,6 +829,169 @@ describe('DesignatedFirstService', () => {
     });
     await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(true);
     expect(t.mutations.some((m) => m.q.includes('insert_order_offers'))).toBe(true);
+  });
+
+  function quietMutations(
+    t: ReturnType<typeof setup>,
+    refreshRows: number | (() => number),
+    inserted: boolean
+  ) {
+    let refreshes = 0;
+    t.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      t.mutations.push({ q, v });
+      if (q.includes('RefreshDesignatedEarlyOffer')) {
+        refreshes += 1;
+        const rows = typeof refreshRows === 'function' ? refreshRows() : refreshRows;
+        return { update_order_offers: { affected_rows: refreshes === 1 ? rows : 1 } };
+      }
+      if (q.includes('insert_order_offers')) {
+        return { insert_order_offers: { returning: inserted ? [{ agent_id: 'a1' }] : [] } };
+      }
+      return { update_orders: { affected_rows: 1 } };
+    });
+    return () => refreshes;
+  }
+
+  it('reopens a cancelled leftover offer and does not insert a second row', async () => {
+    const t = setup();
+    jest.spyOn(t.service, 'load').mockResolvedValue({
+      order: order({ dispatch_mode: null }),
+      offers: [
+        {
+          id: 'x',
+          agent_id: 'a1',
+          user_id: 'u1',
+          status: 'cancelled',
+          phase: 'early',
+          expires_at: GATE,
+          dedicated_attempt: 2,
+          reminder_sent_at: null,
+        } as any,
+      ],
+    });
+    quietMutations(t, 1, false);
+    await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(true);
+    const refresh = t.mutations.find((m) => m.q.includes('RefreshDesignatedEarlyOffer'));
+    expect(refresh?.q).toContain('"cancelled"');
+    expect(refresh?.q).toContain('"accepted"');
+    expect(refresh?.q).toContain('dashboard_dismissed_at: null');
+    expect(refresh?.q).not.toContain('"declined"');
+    expect(t.mutations.some((m) => m.q.includes('insert_order_offers'))).toBe(false);
+    expect(t.notifications.sendOrderOfferPush).not.toHaveBeenCalled();
+  });
+
+  it('inserts the next attempt when refresh misses, then retries refresh if the insert conflicts', async () => {
+    const t = setup();
+    jest.spyOn(t.service, 'load').mockResolvedValue({
+      order: order({ dispatch_mode: null }),
+      offers: [
+        {
+          id: 'x',
+          agent_id: 'a1',
+          user_id: 'u1',
+          status: 'accepted',
+          phase: 'early',
+          expires_at: GATE,
+          dedicated_attempt: 2,
+          reminder_sent_at: null,
+        } as any,
+      ],
+    });
+    const refreshes = quietMutations(t, 0, false);
+    await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(true);
+    expect(refreshes()).toBe(2);
+    const insert = t.mutations.find((m) => m.q.includes('insert_order_offers'));
+    expect(insert?.v.objects[0].dedicated_attempt).toBe(3);
+    expect(insert?.v.objects[0].status).toBe('offered');
+  });
+
+  it('returns false when a leftover row cannot be reopened or inserted', async () => {
+    const t = setup();
+    jest.spyOn(t.service, 'load').mockResolvedValue({
+      order: order({ dispatch_mode: null }),
+      offers: [],
+    });
+    t.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      t.mutations.push({ q, v });
+      if (q.includes('RefreshDesignatedEarlyOffer')) return { update_order_offers: { affected_rows: 0 } };
+      if (q.includes('insert_order_offers')) return { insert_order_offers: { returning: [] } };
+      return { update_orders: { affected_rows: 1 } };
+    });
+    await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(false);
+    expect(t.mutations.filter((m) => m.q.includes('RefreshDesignatedEarlyOffer'))).toHaveLength(2);
+  });
+
+  it('opens a quiet offer from the active assignment when evaluate rejects a non-money gate', async () => {
+    const t = setup();
+    t.coverage.evaluate.mockResolvedValue({
+      eligible: [],
+      rejected: [{ agentId: 'a1', assignmentId: 'as1', reason: 'slot_prefs' }],
+    });
+    t.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q.includes('TakeCoverageAssignment')) {
+        return { dedicated_agent_assignments: [{ id: 'as-live', agent: { user_id: 'u-assign' } }] };
+      }
+      return {};
+    });
+    jest.spyOn(t.service, 'load').mockResolvedValue({ order: order({ dispatch_mode: null }), offers: [] });
+    quietMutations(t, 0, true);
+    await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(true);
+    const asked = t.hasura.executeQuery.mock.calls.find(([q]) => String(q).includes('TakeCoverageAssignment'));
+    expect(asked?.[1]).toEqual({ agentId: 'a1', locationId: 'loc1', slotKey: 'morning' });
+    expect(t.mutations.find((m) => m.q.includes('insert_order_offers'))?.v.objects[0].user_id).toBe('u-assign');
+  });
+
+  it('does not use the assignment fallback when the slot, user, or gate does not qualify', async () => {
+    const mismatched = setup();
+    mismatched.coverage.resolveSlot.mockResolvedValue({
+      slotKey: 'evening',
+      date: '2026-11-10',
+      startTime: '17:00',
+      endTime: '19:00',
+      timeZone: 'Africa/Douala',
+    });
+    mismatched.coverage.evaluate.mockResolvedValue({
+      eligible: [],
+      rejected: [{ agentId: 'a1', assignmentId: 'as1', reason: 'off_today' }],
+    });
+    jest.spyOn(mismatched.service, 'load').mockResolvedValue({ order: order(), offers: [] });
+    await expect(mismatched.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(false);
+    expect(mismatched.hasura.executeQuery.mock.calls.some(([q]) => String(q).includes('TakeCoverageAssignment'))).toBe(false);
+
+    const noUser = setup();
+    noUser.coverage.evaluate.mockResolvedValue({
+      eligible: [],
+      rejected: [{ agentId: 'a1', assignmentId: 'as1', reason: 'negative_balance' }],
+    });
+    noUser.hasura.executeQuery.mockImplementation(async (q: string) => {
+      if (q.includes('DesignatedAgentUser')) return { agents_by_pk: { user_id: null } };
+      if (q.includes('TakeCoverageAssignment')) {
+        return { dedicated_agent_assignments: [{ id: 'as-live', agent: { user_id: null } }] };
+      }
+      return {};
+    });
+    jest.spyOn(noUser.service, 'load').mockResolvedValue({ order: order(), offers: [] });
+    await expect(noUser.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(false);
+
+    const gated = setup();
+    jest.spyOn(gated.service, 'load').mockResolvedValue({
+      order: order({ dispatch_ready_at: NOW.toISOString() }),
+      offers: [],
+    });
+    await expect(gated.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(false);
+    expect(gated.coverage.evaluate).not.toHaveBeenCalled();
+
+    const unconfirmed = setup();
+    jest.spyOn(unconfirmed.service, 'load').mockResolvedValue({
+      order: order({
+        delivery_time_windows: [
+          { slot_id: 's1', preferred_date: '2026-11-10', is_confirmed: false, time_slot_start: '09:00:00', time_slot_end: '11:00:00' },
+        ],
+      }),
+      offers: [],
+    });
+    await expect(unconfirmed.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(false);
+    expect(unconfirmed.coverage.evaluate).not.toHaveBeenCalled();
   });
 
   it('ensure returns false for a non-coverage agent or declined offer', async () => {
