@@ -18,10 +18,12 @@ import { AppText } from '../common/AppText';
 type Props = {
   input: OrderPhaseInput;
   agentName?: string | null;
+  /** Hide the sentence above the stepper when a journey card already explains the status. */
+  showMessage?: boolean;
 };
 
 /** A short narrative of where the order is, without raw status enums. */
-export function OrderJourneyTimeline({ input, agentName }: Props) {
+export function OrderJourneyTimeline({ input, agentName, showMessage = true }: Props) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const pickup = isClientJourneyPickup(input);
@@ -42,8 +44,8 @@ export function OrderJourneyTimeline({ input, agentName }: Props) {
   );
   return (
     <View style={{ paddingVertical: spacing.sm }}>
-      <AppText role="h3">{message}</AppText>
-      <View style={[styles.track, { backgroundColor: colors.border, marginTop: spacing.md }]}>
+      {showMessage ? <AppText role="h3">{message}</AppText> : null}
+      <View style={[styles.track, { backgroundColor: colors.border, marginTop: showMessage ? spacing.md : 0 }]}>
         <Animated.View style={[styles.fill, bar, { backgroundColor: colors.primary.main }]} />
       </View>
       <View style={[styles.row, { marginTop: spacing.sm }]}>

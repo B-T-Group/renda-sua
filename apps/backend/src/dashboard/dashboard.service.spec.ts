@@ -117,9 +117,16 @@ describe('DashboardService', () => {
         client: { id: 'client-1' },
       });
       hasuraSystemService.executeQuery.mockImplementation(
-        async (query: string) => {
+        async (query: string, vars?: { statuses?: string[] }) => {
           if (query.includes('ClientPendingOrders')) {
-            return { orders_aggregate: { aggregate: { count: 3 } } };
+            const statuses = vars?.statuses ?? [];
+            if (statuses.includes('pending_payment')) {
+              return { orders_aggregate: { aggregate: { count: 2 } } };
+            }
+            if (statuses.includes('pending')) {
+              return { orders_aggregate: { aggregate: { count: 1 } } };
+            }
+            return { orders_aggregate: { aggregate: { count: 0 } } };
           }
           if (query.includes('ClientActiveDeliveries')) {
             return { orders_aggregate: { aggregate: { count: 1 } } };
@@ -130,21 +137,21 @@ describe('DashboardService', () => {
 
       const result = await service.getActionsNeeded();
 
-      const pendingCall = hasuraSystemService.executeQuery.mock.calls.find(
+      const pendingCalls = hasuraSystemService.executeQuery.mock.calls.filter(
         ([query]) => String(query).includes('ClientPendingOrders')
       );
       const activeCall = hasuraSystemService.executeQuery.mock.calls.find(
         ([query]) => String(query).includes('ClientActiveDeliveries')
       );
 
-      expect(String(pendingCall?.[0])).toContain(
-        '$statuses: [order_status!]!'
+      expect(String(pendingCalls[0]?.[0])).toContain('$statuses: [order_status!]!');
+      expect(String(pendingCalls[0]?.[0])).not.toContain('$statuses: [String!]!');
+      expect(pendingCalls.map(([, vars]) => vars)).toEqual(
+        expect.arrayContaining([
+          { clientId: 'client-1', statuses: ['pending_payment'] },
+          { clientId: 'client-1', statuses: ['pending'] },
+        ])
       );
-      expect(String(pendingCall?.[0])).not.toContain('$statuses: [String!]!');
-      expect(pendingCall?.[1]).toEqual({
-        clientId: 'client-1',
-        statuses: ['pending', 'pending_payment'],
-      });
 
       expect(String(activeCall?.[0])).toContain('$statuses: [order_status!]!');
       expect(activeCall?.[1]).toEqual({
@@ -155,8 +162,52 @@ describe('DashboardService', () => {
       expect(result.totalCount).toBe(4);
       expect(result.actions.map((a) => a.id)).toEqual([
         'orders_pending_payment',
+        'orders_awaiting_confirmation',
         'active_delivery',
       ]);
+      expect(result.actions).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            id: 'orders_pending_payment',
+            count: 2,
+            priority: 'high',
+          }),
+          expect.objectContaining({
+            id: 'orders_awaiting_confirmation',
+            count: 1,
+            priority: 'normal',
+          }),
+        ])
+      );
+    });
+
+    it('keeps a merchant-pending order out of the payment action', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'client',
+        active_persona: 'client',
+        client: { id: 'client-1' },
+      });
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string, vars?: { statuses?: string[] }) => {
+          if (query.includes('ClientPendingOrders')) {
+            const statuses = vars?.statuses ?? [];
+            if (statuses.includes('pending_payment')) {
+              return { orders_aggregate: { aggregate: { count: 0 } } };
+            }
+            if (statuses.includes('pending') && statuses.length === 1) {
+              return { orders_aggregate: { aggregate: { count: 3 } } };
+            }
+          }
+          return { orders_aggregate: { aggregate: { count: 0 } } };
+        }
+      );
+
+      const result = await service.getActionsNeeded();
+
+      expect(result.actions.map((a) => a.id)).toEqual(['orders_awaiting_confirmation']);
+      expect(result.actions[0]).toMatchObject({ count: 3, priority: 'normal' });
+      expect(result.totalCount).toBe(3);
     });
 
     it('omits zero-count actions and sorts critical before high', async () => {

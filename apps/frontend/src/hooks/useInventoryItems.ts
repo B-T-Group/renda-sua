@@ -187,6 +187,19 @@ export interface GetInventoryItemsQuery {
   enabled?: boolean;
 }
 
+export interface MatchedCatalogStore {
+  business_location_id: string;
+  business_id: string;
+  name: string;
+  city?: string | null;
+  logo_url: string | null;
+  item_count: number;
+  is_verified: boolean;
+  can_accept_orders: boolean;
+  is_storefront_visible: boolean;
+  distance_meters?: number | null;
+}
+
 export interface PaginatedInventoryItems {
   items: InventoryItem[];
   total: number;
@@ -198,6 +211,8 @@ export interface PaginatedInventoryItems {
     sort: InventorySortMode;
     sort_control: 'hidden' | 'disabled' | 'enabled';
   };
+  /** Stores whose name matched the search query (when search is active). */
+  matched_stores?: MatchedCatalogStore[];
 }
 
 export interface ApiResponse {
@@ -229,6 +244,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     totalPages: number;
     discovery?: PaginatedInventoryItems['discovery'];
   } | null>(null);
+  const [matchedStores, setMatchedStores] = useState<MatchedCatalogStore[]>([]);
 
   const apiClient = useApiClient();
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -261,6 +277,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
     if (query.enabled === false) {
       setInventoryItems([]);
       setPagination(null);
+      setMatchedStores([]);
       setLoading(false);
       setLoadingMore(false);
       setError(null);
@@ -369,6 +386,9 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
             discovery: response.data.data.discovery,
           }),
         });
+        if (!isLoadMore) {
+          setMatchedStores(response.data.data.matched_stores ?? []);
+        }
       } else {
         setError(response.data.message || 'Failed to fetch inventory items');
       }
@@ -439,6 +459,7 @@ export const useInventoryItems = (query: GetInventoryItemsQuery = {}) => {
 
   return {
     inventoryItems,
+    matchedStores,
     loading,
     loadingMore,
     error,

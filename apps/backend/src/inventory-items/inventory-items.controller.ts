@@ -208,7 +208,8 @@ export class InventoryItemsController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Filter stores by location name (substring)',
+    description:
+      'Filter stores by location or business name (substring, case-insensitive)',
   })
   @ApiQuery({
     name: 'country_code',
@@ -447,6 +448,11 @@ export class InventoryItemsController {
             page: { type: 'number' },
             limit: { type: 'number' },
             totalPages: { type: 'number' },
+            matched_stores: {
+              type: 'array',
+              description:
+                'When search is set: up to 8 stores whose location or business name matched',
+            },
           },
         },
         message: { type: 'string' },
@@ -469,7 +475,8 @@ export class InventoryItemsController {
     name: 'search',
     required: false,
     type: String,
-    description: 'Search term for item name, description, SKU, or brand',
+    description:
+      'Search term for item name, description, SKU, or brand, and for store location or business names (matched store listings are included after product hits)',
   })
   @ApiQuery({
     name: 'category',

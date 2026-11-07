@@ -131,6 +131,17 @@ describe('InventoryItemsService.buildInventoryCatalogWhere', () => {
     expect(json).toContain('"_in":["CA","CM"]');
   });
 
+  it('matches location or business name when storeNameQuery is set', async () => {
+    const { buildWhere, whereJson } = createService();
+    const built = await buildWhere({ storeNameQuery: 'Acme' });
+
+    expect(built).toHaveProperty('where');
+    const json = whereJson(built as { where: Record<string, unknown> });
+    expect(json).toContain('"_ilike":"%Acme%"');
+    expect(json).toContain('"business_location"');
+    expect(json).toContain('"business"');
+  });
+
   it('restricts the catalog to one business when business_id is set', async () => {
     const { buildWhere, whereJson } = createService();
     const built = await buildWhere({ business_id: '  biz-credit-1  ' });
@@ -534,6 +545,10 @@ describe('InventoryItemsService.getInventoryItems export flags', () => {
 
   it('wires export_only, search, and store rails to the catalog where-builder', async () => {
     const { service, buildWhere } = createService();
+    jest
+      .spyOn(service as any, 'fetchAllCatalogInventoryRows')
+      .mockResolvedValue([]);
+    jest.spyOn(service, 'getTopInventoryStores').mockResolvedValue([]);
 
     await service.getInventoryItems({
       export_only: true,
@@ -564,6 +579,13 @@ describe('InventoryItemsService.getInventoryItems export flags', () => {
       })
     );
     expect(buildWhere.mock.calls[2][0]).toEqual(
+      expect.objectContaining({
+        export_only: false,
+        includeExportInSearch: true,
+        storeNameQuery: 'phone',
+      })
+    );
+    expect(buildWhere.mock.calls[3][0]).toEqual(
       expect.objectContaining({
         includeExportListings: true,
         export_only: false,
@@ -884,6 +906,81 @@ describe('InventoryItemsService store directory partner filters', () => {
         business_location_id: 'loc-b',
         is_partner: false,
       }),
+    ]);
+  });
+
+  it('keeps a store when the business name matches the search', async () => {
+    const service = createService();
+    jest.spyOn(service as any, 'fetchStoreLocationDetailsByIds').mockResolvedValue(
+      new Map([
+        ['loc-a', { ...locA, business_name: 'Groupe BT Retail' }],
+        ['loc-b', { ...locB, business_name: 'Other Co' }],
+      ])
+    );
+
+    const rows = await service.getTopInventoryStores(20, {
+      country_code: 'CM',
+      search: 'groupe bt',
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        business_location_id: 'loc-a',
+        is_partner: true,
+      }),
+    ]);
+  });
+});
+
+describe('InventoryItemsService search store union helpers', () => {
+  function createService() {
+    return new InventoryItemsService(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any
+    );
+  }
+
+  it('merges store listings after product matches without duplicates', () => {
+    const service = createService() as any;
+    const merged = service.mergeCatalogRowsProductFirst(
+      [
+        { id: 'inv-p1', item_id: 'item-1' },
+        { id: 'inv-p2', item_id: 'item-2' },
+      ],
+      [
+        { id: 'inv-p1', item_id: 'item-1' },
+        { id: 'inv-s1', item_id: 'item-3' },
+        { id: 'inv-s2', item_id: 'item-2' },
+      ]
+    );
+
+    expect(merged.rows.map((row: { id: string }) => row.id)).toEqual([
+      'inv-p1',
+      'inv-p2',
+      'inv-s1',
+    ]);
+    expect([...merged.productItemIds].sort()).toEqual(['item-1', 'item-2']);
+  });
+
+  it('orders product matches ahead of store-only listings', () => {
+    const service = createService() as any;
+    const sorted = service.preferProductMatchesFirst(
+      [
+        { item_id: 'store-only' },
+        { item_id: 'product-hit' },
+        { item_id: 'another-store' },
+      ],
+      new Set(['product-hit'])
+    );
+
+    expect(sorted.map((row: { item_id: string }) => row.item_id)).toEqual([
+      'product-hit',
+      'store-only',
+      'another-store',
     ]);
   });
 });

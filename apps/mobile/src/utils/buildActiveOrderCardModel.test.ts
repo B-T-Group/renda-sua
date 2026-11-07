@@ -82,17 +82,35 @@ describe('isActiveOrderStatus / partition', () => {
 });
 
 describe('buildActiveOrderCardModel', () => {
-  it('maps pending to Accept Order / incoming overlay', () => {
+  it('maps pending to Accept Order / in-place confirm with lines and slot', () => {
     const model = buildActiveOrderCardModel(
-      order({ id: 'o1', current_status: 'pending' }),
+      order({
+        id: 'o1',
+        current_status: 'pending',
+        fulfillment_method: 'pickup',
+        fulfillment_timing: 'scheduled',
+        delivery_time_windows: [
+          {
+            id: 'w1',
+            preferred_date: '2026-08-14',
+            time_slot_start: '10:00',
+            time_slot_end: '12:00',
+          },
+        ],
+      }),
       t
     );
     expect(model.titleDefault).toBe('New Order');
     expect(model.ctaDefault).toBe('Accept Order');
-    expect(model.destination).toEqual({ kind: 'incoming_overlay' });
+    expect(model.destination).toEqual({ kind: 'perform_action' });
     expect(model.urgency).toBe('warning');
     expect(model.itemCount).toBe(2);
     expect(model.customerName).toBe('Ada Lovelace');
+    expect(model.fulfillmentDefault).toBe('Pickup');
+    expect(model.lineSummaries).toEqual([
+      { id: 'i1', name: 'Widget', quantity: 2 },
+    ]);
+    expect(model.slotLabel).toContain('2026');
   });
 
   it('maps scheduled pending to Open Order instead of Accept overlay', () => {

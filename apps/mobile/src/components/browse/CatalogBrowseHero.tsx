@@ -9,6 +9,7 @@ import { PagedCarousel } from '../common/PagedCarousel';
 import { ClientHomeOrdersStrip } from '../client/ClientHomeOrdersStrip';
 import { CatalogTrustStrip } from './CatalogTrustStrip';
 import type { Order } from '../../types/agent';
+import type { OrderPrimaryActionId } from '../../utils/orderPhase';
 import { HeroCarouselSlide } from './HeroCarousel/HeroCarouselSlide';
 import {
   buildHeroSlides,
@@ -29,6 +30,8 @@ export interface CatalogBrowseHeroProps {
   homeOrders?: Order[];
   homeOrdersTotalActive?: number;
   onOpenHomeOrder?: (order: Order) => void;
+  onHomeOrderCta?: (order: Order, primaryActionId: OrderPrimaryActionId) => void;
+  homeOrderCtaBusyId?: string | null;
   onSeeAllHomeOrders?: () => void;
   nearbyAgentsCount?: number;
   onHeroSlidePress?: (slideId: HeroSlideId) => void;
@@ -43,6 +46,8 @@ function CatalogBrowseHeroBase({
   homeOrders,
   homeOrdersTotalActive = 0,
   onOpenHomeOrder,
+  onHomeOrderCta,
+  homeOrderCtaBusyId = null,
   onSeeAllHomeOrders,
   nearbyAgentsCount = 0,
   onHeroSlidePress,
@@ -301,6 +306,8 @@ function CatalogBrowseHeroBase({
             orders={homeOrders}
             totalActive={homeOrdersTotalActive}
             onOpenOrder={onOpenHomeOrder}
+            onPressCta={onHomeOrderCta}
+            ctaBusyOrderId={homeOrderCtaBusyId}
             onSeeAll={onSeeAllHomeOrders}
           />
         ) : null}

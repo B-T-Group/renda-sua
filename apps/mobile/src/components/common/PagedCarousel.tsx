@@ -142,6 +142,10 @@ export function PagedCarousel<T>({
         showsHorizontalScrollIndicator={false}
         decelerationRate="fast"
         bounces={false}
+        // Nested in vertical ScrollViews (e.g. business dashboard): without this,
+        // taller pages can measure as height 0 and the carousel disappears.
+        style={{ flexGrow: 0 }}
+        removeClippedSubviews={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
         getItemLayout={getItemLayout}

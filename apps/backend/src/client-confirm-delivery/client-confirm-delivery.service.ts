@@ -7,6 +7,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { HasuraUserService } from '../hasura/hasura-user.service';
+import { MobilePaymentsDatabaseService } from '../mobile-payments/mobile-payments-database.service';
 import { OrderStatusService } from '../orders/order-status.service';
 import { OrdersService } from '../orders/orders.service';
 import { SupportService } from '../support/support.service';
@@ -47,6 +48,7 @@ import {
   isClientConfirmDeliveryOrder,
   isAwaitingClientConfirmation,
   isUnpaidPayAtDelivery,
+  needsMobilePadCollectionProof,
   usesLegacyDeliveryPin,
 } from './client-confirm-delivery.util';
 import { OrderRecipientNotificationsService } from '../notifications/order-recipient-notifications.service';
@@ -62,6 +64,7 @@ export class ClientConfirmDeliveryService {
     private readonly orderStatus: OrderStatusService,
     @Inject(forwardRef(() => OrdersService))
     private readonly orders: OrdersService,
+    private readonly mobilePayments: MobilePaymentsDatabaseService,
     private readonly support: SupportService,
     private readonly recipientNotifications: OrderRecipientNotificationsService,
     private readonly notifier: DeliveryConfirmNotifier
@@ -72,7 +75,7 @@ export class ClientConfirmDeliveryService {
     const order = await this.requireOrder(orderId);
     this.assertNotLegacyPin(order);
     this.assertOutForDelivery(order);
-    this.assertDoorstepPaymentCollected(order);
+    await this.assertDoorstepPaymentCollected(order);
     await this.orderStatus.updateOrderStatus(orderId, AWAITING_CLIENT_CONFIRMATION, {
       viaSystem: true,
     });
@@ -114,7 +117,7 @@ export class ClientConfirmDeliveryService {
       };
     }
     this.assertConfirmable(order);
-    this.assertDoorstepPaymentCollected(order);
+    await this.assertDoorstepPaymentCollected(order);
     const resolved =
       method === 'client' && order.is_third_party_recipient ? 'buyer' : method;
     await this.assertConfirmerAllowed(order, resolved);
@@ -175,7 +178,7 @@ export class ClientConfirmDeliveryService {
     }
     this.assertConfirmable(order);
     if (order.current_status === 'out_for_delivery') {
-      this.assertDoorstepPaymentCollected(order);
+      await this.assertDoorstepPaymentCollected(order);
     }
     await this.assertConfirmerAllowed(order, 'client');
     const at = new Date().toISOString();
@@ -263,7 +266,7 @@ export class ClientConfirmDeliveryService {
       market.isStripeRail &&
       elapsed;
     const variant = deliveryConfirmVariant(order, now);
-    const unpaid = isUnpaidPayAtDelivery(order);
+    const unpaid = await this.doorstepPaymentMissing(order);
     const confirmable =
       viewerRole === 'client' &&
       !usesLegacyDeliveryPin(order) &&
@@ -453,7 +456,7 @@ export class ClientConfirmDeliveryService {
     }
     if (
       order.current_status === 'out_for_delivery' &&
-      isUnpaidPayAtDelivery(order)
+      (await this.doorstepPaymentMissing(order))
     ) {
       return {
         success: false,
@@ -598,7 +601,7 @@ export class ClientConfirmDeliveryService {
     const order = await this.repo.loadOrder(orderId);
     if (!order || order.current_status !== AWAITING_CLIENT_CONFIRMATION) return false;
     if (order.dispute_opened_at) return false;
-    if (isUnpaidPayAtDelivery(order)) return false;
+    if (await this.doorstepPaymentMissing(order)) return false;
     const deadline = Date.parse(order.auto_complete_deadline_at ?? '');
     if (Number.isNaN(deadline) || deadline > now.getTime()) return false;
     const market = await this.marketConfig.forOrder(order);
@@ -810,8 +813,10 @@ export class ClientConfirmDeliveryService {
     }
   }
 
-  private assertDoorstepPaymentCollected(order: ClientConfirmOrder): void {
-    if (!isUnpaidPayAtDelivery(order)) return;
+  private async assertDoorstepPaymentCollected(
+    order: ClientConfirmOrder
+  ): Promise<void> {
+    if (!(await this.doorstepPaymentMissing(order))) return;
     throw new HttpException(
       {
         success: false,
@@ -820,6 +825,29 @@ export class ClientConfirmDeliveryService {
       },
       HttpStatus.CONFLICT
     );
+  }
+
+  private async doorstepPaymentMissing(
+    order: ClientConfirmOrder
+  ): Promise<boolean> {
+    if (isUnpaidPayAtDelivery(order)) return true;
+    if (!needsMobilePadCollectionProof(order)) return false;
+    return !(await this.successfulMobilePadPayment(order));
+  }
+
+  private async successfulMobilePadPayment(
+    order: ClientConfirmOrder
+  ): Promise<boolean> {
+    const orderNumber = order.order_number?.trim();
+    if (!orderNumber) return false;
+    try {
+      return await this.mobilePayments.hasSuccessfulOrderPayment(
+        orderNumber,
+        order.id
+      );
+    } catch {
+      return false;
+    }
   }
 
   private assertOutForDelivery(order: ClientConfirmOrder): void {

@@ -1880,6 +1880,18 @@ export class OrdersController {
     return this.ordersService.confirmDesignated(orderId);
   }
 
+  @Post(':id/designated-dismiss')
+  @ApiOperation({
+    summary:
+      'Hide a future designated offer from the agent home and hub without declining it (reminder push can still be accepted)',
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({ status: 200, description: 'Offer hidden from dashboard lists' })
+  @ApiResponse({ status: 409, description: 'No open designated offer to hide' })
+  async dismissDesignated(@Param('id') orderId: string) {
+    return this.ordersService.dismissDesignatedOffer(orderId);
+  }
+
   @Post(':id/designated-release')
   @ApiOperation({
     summary:

@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CtaButton } from './AppButton';
@@ -29,6 +29,14 @@ export interface CheckoutStickyActionBarProps {
   topContent?: ReactNode;
   /** Line items for subtotal / fees / discounts before the total. */
   breakdown?: CheckoutStickyBreakdownLine[];
+  /** Chosen delivery or pickup time. Tapping scrolls back to the picker. */
+  timeSummary?: string;
+  onTimeSummaryPress?: () => void;
+  /** True when a slot still has to be chosen. */
+  timeSummaryAttention?: boolean;
+  timeSummaryHint?: string;
+  /** Makes the disabled-reason line jump to the section the shopper must fix. */
+  onDisabledReasonPress?: () => void;
 }
 
 /**
@@ -45,6 +53,11 @@ export function CheckoutStickyActionBar({
   disabledReason,
   topContent,
   breakdown,
+  timeSummary,
+  onTimeSummaryPress,
+  timeSummaryAttention,
+  timeSummaryHint,
+  onDisabledReasonPress,
 }: CheckoutStickyActionBarProps) {
   const insets = useSafeAreaInsets();
   const { colors, spacing, borderRadius, shadows, typography } = useTheme();
@@ -69,6 +82,15 @@ export function CheckoutStickyActionBar({
       ]}
     >
       {topContent ? <View>{topContent}</View> : null}
+
+      {timeSummary && onTimeSummaryPress ? (
+        <TimeSummaryRow
+          label={timeSummary}
+          hint={timeSummaryHint}
+          attention={timeSummaryAttention}
+          onPress={onTimeSummaryPress}
+        />
+      ) : null}
 
       {hasBreakdown ? (
         <View style={{ gap: 4 }}>
@@ -156,24 +178,82 @@ export function CheckoutStickyActionBar({
         fullWidth
       />
       {disabled && disabledReason ? (
-        <Text
-          style={[
-            typography.caption,
-            {
-              color: colors.text.secondary,
-              textAlign: 'center',
-              marginTop: -spacing.xxs,
-            },
-          ]}
-        >
-          {disabledReason}
-        </Text>
+        <DisabledReason
+          reason={disabledReason}
+          onPress={onDisabledReasonPress}
+        />
       ) : null}
     </View>
   );
 }
 
+function TimeSummaryRow({
+  label,
+  hint,
+  attention,
+  onPress,
+}: {
+  label: string;
+  hint?: string;
+  attention?: boolean;
+  onPress: () => void;
+}) {
+  const { colors, typography } = useTheme();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={hint}
+      onPress={onPress}
+      style={styles.summaryPress}
+    >
+      <Text
+        style={[
+          typography.caption,
+          {
+            color: attention ? colors.primary.main : colors.text.primary,
+            fontWeight: '600',
+            textAlign: 'center',
+          },
+        ]}
+        numberOfLines={2}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function DisabledReason({ reason, onPress }: { reason: string; onPress?: () => void }) {
+  const { colors, spacing, typography } = useTheme();
+  const color = onPress ? colors.primary.main : colors.text.secondary;
+  const text = (
+    <Text
+      style={[typography.caption, { color, textAlign: 'center', fontWeight: onPress ? '600' : '400' }]}
+    >
+      {reason}
+    </Text>
+  );
+  if (!onPress) {
+    return <View style={{ marginTop: -spacing.xxs }}>{text}</View>;
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={reason}
+      onPress={onPress}
+      style={[styles.summaryPress, { marginTop: -spacing.xxs }]}
+    >
+      {text}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
+  summaryPress: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
   wrapper: {},
   breakdownRow: {
     flexDirection: 'row',

@@ -9,6 +9,7 @@ import { CatalogBrowseActiveFilterChips } from './CatalogBrowseActiveFilterChips
 import type { Order } from '../../types/agent';
 import type { CatalogFilterState } from '../../types/catalogFilter';
 import type { Theme } from '../../theme';
+import type { OrderPrimaryActionId } from '../../utils/orderPhase';
 import type { HeroSlideId } from './HeroCarousel/heroSlideConfig';
 
 /** Discovery sort control (#342, flag on only). Replaces the legacy sort chip. */
@@ -32,6 +33,8 @@ export interface BrowseCatalogListHeaderProps {
   homeOrders?: Order[];
   homeOrdersTotalActive?: number;
   onOpenHomeOrder?: (order: Order) => void;
+  onHomeOrderCta?: (order: Order, primaryActionId: OrderPrimaryActionId) => void;
+  homeOrderCtaBusyId?: string | null;
   onSeeAllHomeOrders?: () => void;
   nearbyAgentsCount?: number;
   onHeroSlidePress?: (slideId: HeroSlideId) => void;
@@ -72,6 +75,8 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
   homeOrders,
   homeOrdersTotalActive = 0,
   onOpenHomeOrder,
+  onHomeOrderCta,
+  homeOrderCtaBusyId = null,
   onSeeAllHomeOrders,
   nearbyAgentsCount = 0,
   onHeroSlidePress,
@@ -113,6 +118,8 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
               orders={homeOrders}
               totalActive={homeOrdersTotalActive}
               onOpenOrder={onOpenHomeOrder}
+              onPressCta={onHomeOrderCta}
+              ctaBusyOrderId={homeOrderCtaBusyId}
               onSeeAll={onSeeAllHomeOrders}
             />
           ) : null}
@@ -128,6 +135,8 @@ export const BrowseCatalogListHeader = memo(function BrowseCatalogListHeader({
           homeOrders={homeOrders}
           homeOrdersTotalActive={homeOrdersTotalActive}
           onOpenHomeOrder={onOpenHomeOrder}
+          onHomeOrderCta={onHomeOrderCta}
+          homeOrderCtaBusyId={homeOrderCtaBusyId}
           onSeeAllHomeOrders={onSeeAllHomeOrders}
           nearbyAgentsCount={nearbyAgentsCount}
           onHeroSlidePress={onHeroSlidePress}

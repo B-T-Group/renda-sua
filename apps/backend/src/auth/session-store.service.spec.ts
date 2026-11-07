@@ -51,6 +51,24 @@ function sessionData(overrides: Partial<SessionData> = {}): SessionData {
   };
 }
 
+async function captureUnhandledRejections(
+  work: () => Promise<void>
+): Promise<unknown[]> {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => {
+    unhandled.push(reason);
+  };
+  process.on('unhandledRejection', onUnhandled);
+  try {
+    await work();
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+    return unhandled;
+  } finally {
+    process.off('unhandledRejection', onUnhandled);
+  }
+}
+
 describe('SessionStoreService', () => {
   const originalNodeEnv = process.env.NODE_ENV;
   const originalJwt = process.env.JWT_SECRET;
@@ -188,6 +206,33 @@ describe('SessionStoreService', () => {
     expect(runs).toBe(1);
     expect(first).toBe('done-1');
     expect(second).toBe('done-1');
+  });
+
+  it('does not emit an unhandledRejection when exclusive refresh work fails', async () => {
+    const store = memoryStore();
+    const err = new Error('refresh failed');
+    const unhandled = await captureUnhandledRejections(async () => {
+      await expect(
+        store.runExclusiveRefresh('fam-1', () => Promise.reject(err))
+      ).rejects.toBe(err);
+    });
+    expect(unhandled).toEqual([]);
+    await expect(
+      store.runExclusiveRefresh('fam-1', async () => 'ok')
+    ).resolves.toBe('ok');
+  });
+
+  it('does not emit an unhandledRejection when rotation work fails', async () => {
+    const store = memoryStore();
+    jest
+      .spyOn(store, 'getSession')
+      .mockRejectedValue(new Error('session store unavailable'));
+    const unhandled = await captureUnhandledRejections(async () => {
+      await expect(store.rotateSession('sid-1')).rejects.toThrow(
+        'session store unavailable'
+      );
+    });
+    expect(unhandled).toEqual([]);
   });
 
   it('returns the successor when a just-rotated session is presented again', async () => {

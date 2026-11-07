@@ -1,172 +1,127 @@
-import React, { useCallback, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { Button, SegmentedButtons, Text, TextInput } from 'react-native-paper';
+import type { ReactNode } from 'react';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
+import { Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
-import { businessApi } from '../../services/businessApi';
+import type { Order } from '../../types/agent';
+import {
+  resolveBusinessOrderTiming,
+  type BusinessOrderTiming,
+} from '../../utils/businessOrderListDisplay';
+import { formatPreferredDate, formatTimeSlotValue } from '../../utils/deliveryWindowUtils';
 
-const LEAD_CHOICES = ['30', '60', '120'] as const;
+type Scheduled = Extract<BusinessOrderTiming, { kind: 'scheduled' }>;
 
-function secondsToMinutes(sec: number): string {
-  return String(Math.max(1, Math.round(sec / 60)));
+export function BusinessOrderTimingCard({ order, locale }: { order: Order; locale: string }) {
+  const timing = resolveBusinessOrderTiming(order);
+  if (timing.kind === 'none') return null;
+  if (timing.kind === 'asap') return <AsapTiming pickup={timing.pickup} />;
+  return <ScheduledTiming pickup={timing.pickup} window={timing.window} locale={locale} />;
 }
 
-function minutesToSeconds(mins: string): number | null {
-  const n = Number(mins);
-  if (!Number.isFinite(n) || n < 1) return null;
-  return Math.round(n * 60);
-}
-
-export function BusinessOrderTimingCard() {
+function AsapTiming({ pickup }: { pickup: boolean }) {
   const { t } = useTranslation();
-  const { colors, spacing, borderRadius, shadows } = useTheme();
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [asapMins, setAsapMins] = useState('5');
-  const [futureMins, setFutureMins] = useState('15');
-  const [leadMins, setLeadMins] = useState('30');
-  const [prepMins, setPrepMins] = useState('25');
-  const [message, setMessage] = useState<string | null>(null);
-
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await businessApi.orders.getOrderTiming();
-      setAsapMins(secondsToMinutes(data.effective.acceptance_timeout_seconds));
-      setFutureMins(
-        secondsToMinutes(data.effective.future_acceptance_timeout_seconds)
-      );
-      setLeadMins(String(data.effective.order_activation_lead_minutes));
-      setPrepMins(String(data.effective.default_estimated_prep_minutes));
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useFocusEffect(
-    useCallback(() => {
-      void refresh();
-    }, [refresh])
-  );
-
-  const save = async () => {
-    const asapSec = minutesToSeconds(asapMins);
-    const futureSec = minutesToSeconds(futureMins);
-    const prep = Number(prepMins);
-    const lead = Number(leadMins);
-    if (asapSec == null || futureSec == null || !Number.isFinite(prep)) {
-      setMessage(
-        t('businessOrderTiming.invalid', 'Enter valid timing values.')
-      );
-      return;
-    }
-    setSaving(true);
-    setMessage(null);
-    try {
-      await businessApi.orders.updateOrderTiming({
-        acceptance_timeout_seconds: asapSec,
-        future_acceptance_timeout_seconds: futureSec,
-        order_activation_lead_minutes: lead,
-        default_estimated_prep_minutes: Math.round(prep),
-      });
-      setMessage(t('businessOrderTiming.saved', 'Timing settings saved.'));
-      await refresh();
-    } catch (e: unknown) {
-      setMessage(
-        e instanceof Error
-          ? e.message
-          : t('businessOrderTiming.saveFailed', 'Could not save timing.')
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
+  const body = pickup
+    ? t('business.orders.timing.asapPickup', 'The customer will pick this up as soon as it is ready.')
+    : t('business.orders.timing.asapDelivery', 'The customer wants this delivered as soon as possible.');
   return (
-    <View
-      style={[
-        styles.card,
-        shadows.sm,
-        {
-          backgroundColor: colors.surface,
-          borderColor: colors.divider,
-          borderRadius: borderRadius.lg,
-          padding: spacing.md,
-          gap: spacing.sm,
-        },
-      ]}
-    >
-      <Text variant="titleMedium" style={{ color: colors.text.primary }}>
-        {t('businessOrderTiming.title', 'Order confirmation timing')}
-      </Text>
-      <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-        {t(
-          'businessOrderTiming.help',
-          'ASAP orders start the confirm timer immediately. Future orders activate before prep begins.'
-        )}
-      </Text>
+    <TimingShell icon="clock-fast" tone="now" title={t('business.orders.timing.fulfillNow', 'Fulfill now')}>
+      <Body>{body}</Body>
+    </TimingShell>
+  );
+}
 
-      <TextInput
-        mode="outlined"
-        label={t('businessOrderTiming.asapMinutes', 'ASAP confirm window (minutes)')}
-        value={asapMins}
-        onChangeText={setAsapMins}
-        keyboardType="number-pad"
-        disabled={loading || saving}
-      />
-      <TextInput
-        mode="outlined"
-        label={t(
-          'businessOrderTiming.futureMinutes',
-          'Future-order confirm window (minutes)'
-        )}
-        value={futureMins}
-        onChangeText={setFutureMins}
-        keyboardType="number-pad"
-        disabled={loading || saving}
-      />
-      <Text variant="labelLarge" style={{ color: colors.text.primary }}>
-        {t(
-          'businessOrderTiming.activationLead',
-          'Activate before prep starts'
-        )}
-      </Text>
-      <SegmentedButtons
-        value={leadMins}
-        onValueChange={setLeadMins}
-        buttons={LEAD_CHOICES.map((v) => ({
-          value: v,
-          label: t('businessOrderTiming.leadOption', '{{mins}} min', {
-            mins: v,
-          }),
-          disabled: loading || saving,
-        }))}
-      />
-      <TextInput
-        mode="outlined"
-        label={t('businessOrderTiming.prepMinutes', 'Default prep time (minutes)')}
-        value={prepMins}
-        onChangeText={setPrepMins}
-        keyboardType="number-pad"
-        disabled={loading || saving}
-      />
+function ScheduledTiming({
+  pickup,
+  window,
+  locale,
+}: {
+  pickup: boolean;
+  window: Scheduled['window'];
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  const title = pickup
+    ? t('business.orders.timing.pickupTitle', 'Pickup time the customer chose')
+    : t('business.orders.timing.deliveryTitle', 'Delivery time the customer chose');
+  return (
+    <TimingShell icon="calendar-clock" tone="slot" title={title}>
+      <SlotLines window={window} locale={locale} />
+    </TimingShell>
+  );
+}
 
-      {message ? (
-        <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
-          {message}
+function SlotLines({ window, locale }: { window: Scheduled['window']; locale: string }) {
+  const { colors, spacing } = useTheme();
+  const range =
+    window.time_slot_start && window.time_slot_end
+      ? `${formatTimeSlotValue(window.time_slot_start, locale)} – ${formatTimeSlotValue(window.time_slot_end, locale)}`
+      : '';
+  const when = [range, window.slot?.slot_name?.trim()].filter(Boolean).join(' · ');
+  return (
+    <View>
+      <Text variant="titleMedium" style={{ fontWeight: '700', color: colors.text.primary, marginTop: 2 }}>
+        {window.preferred_date ? formatPreferredDate(window.preferred_date, locale) : '—'}
+      </Text>
+      {when ? <Text variant="bodyLarge" style={{ color: colors.text.primary, marginTop: 2 }}>{when}</Text> : null}
+      {window.special_instructions ? (
+        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xs }}>
+          {window.special_instructions}
         </Text>
       ) : null}
-
-      <Button mode="contained" loading={saving} disabled={loading || saving} onPress={() => void save()}>
-        {t('common.save', 'Save')}
-      </Button>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  card: { borderWidth: 1 },
-});
+function Body({ children }: { children: string }) {
+  const { colors } = useTheme();
+  return (
+    <Text variant="bodyMedium" style={{ color: colors.text.secondary, marginTop: 2 }}>
+      {children}
+    </Text>
+  );
+}
+
+function TimingShell({
+  icon,
+  tone,
+  title,
+  children,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  tone: 'now' | 'slot';
+  title: string;
+  children: ReactNode;
+}) {
+  const { colors, spacing, borderRadius } = useTheme();
+  const now = tone === 'now';
+  return (
+    <View
+      accessibilityRole="summary"
+      style={{
+        marginBottom: spacing.xs,
+        padding: spacing.md,
+        borderRadius: borderRadius.md,
+        backgroundColor: now ? colors.warningTint : colors.surface,
+        borderWidth: now ? 0 : 1,
+        borderColor: colors.primary.main,
+        flexDirection: 'row',
+        gap: spacing.sm,
+        alignItems: 'flex-start',
+      }}
+    >
+      <MaterialCommunityIcons
+        name={icon}
+        size={28}
+        color={now ? colors.warning.main : colors.primary.main}
+      />
+      <View style={{ flex: 1 }}>
+        <Text variant={now ? 'titleMedium' : 'labelMedium'} style={{ fontWeight: now ? '700' : '600', color: now ? colors.text.primary : colors.text.secondary }}>
+          {title}
+        </Text>
+        {children}
+      </View>
+    </View>
+  );
+}

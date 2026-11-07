@@ -5,7 +5,13 @@ export type SearchSuggestion =
   | { kind: 'term'; value: string }
   | { kind: 'product'; inventoryId: string; title: string; price: number; currency: string; imageUrl?: string | null }
   | { kind: 'category'; value: string }
-  | { kind: 'seller'; businessId: string; name: string };
+  | {
+      kind: 'seller';
+      businessId: string;
+      businessLocationId?: string;
+      name: string;
+      logoUrl?: string | null;
+    };
 
 export function useSearchSuggestions(query: string) {
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([]);

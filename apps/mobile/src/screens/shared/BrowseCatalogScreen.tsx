@@ -50,6 +50,7 @@ import type {
 } from '../../types/inventoryCatalog';
 import type { CatalogFilterState } from '../../types/catalogFilter';
 import type { Order } from '../../types/agent';
+import type { OrderPrimaryActionId } from '../../utils/orderPhase';
 import type { CatalogFeedRow } from '../../hooks/useCatalogFeedComposition';
 import { buildCatalogFilterOptions } from '../../utils/catalogFilterOptions';
 import { InventoryCatalogCard } from '../../components/browse/InventoryCatalogCard';
@@ -195,6 +196,8 @@ export interface BrowseCatalogScreenProps {
   homeOrders?: Order[];
   homeOrdersTotalActive?: number;
   onOpenHomeOrder?: (order: Order) => void;
+  onHomeOrderCta?: (order: Order, primaryActionId: OrderPrimaryActionId) => void;
+  homeOrderCtaBusyId?: string | null;
   onSeeAllHomeOrders?: () => void;
   /** Available delivery agents near the client; hidden when 0. */
   nearbyAgentsCount?: number;
@@ -234,6 +237,8 @@ function BrowseCatalogScreenInner({
   homeOrders,
   homeOrdersTotalActive = 0,
   onOpenHomeOrder,
+  onHomeOrderCta,
+  homeOrderCtaBusyId = null,
   onSeeAllHomeOrders,
   nearbyAgentsCount = 0,
   inventoryRequestsWithAuth = false,
@@ -268,11 +273,25 @@ function BrowseCatalogScreenInner({
   const isWideHero = width >= 640;
   const listRef = useRef<FlashListRef<CatalogFeedRow>>(null);
   const headerScroll = useSharedValue(0);
+  /** Header grows after mount (orders/discovery); FlashList can jump down — pin top until user scrolls. */
+  const userDraggedListRef = useRef(false);
+  const bootstrapUntilRef = useRef(Date.now() + 2500);
   const { onHeroSlidePress } = useHeroCarouselActions(() => {
+    userDraggedListRef.current = true;
     listRef.current?.scrollToOffset({ offset: 280, animated: true });
   });
 
   const scrollY = useRef(new Animated.Value(0)).current;
+  const resetListScrollMetrics = useCallback(() => {
+    scrollY.setValue(0);
+    headerScroll.value = 0;
+  }, [headerScroll, scrollY]);
+  const pinListToTopIfBootstrapping = useCallback(() => {
+    if (userDraggedListRef.current) return;
+    if (Date.now() > bootstrapUntilRef.current) return;
+    listRef.current?.scrollToOffset({ offset: 0, animated: false });
+    resetListScrollMetrics();
+  }, [resetListScrollMetrics]);
   const onFeedScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = event.nativeEvent.contentOffset.y;
@@ -282,6 +301,9 @@ function BrowseCatalogScreenInner({
     },
     [headerScroll, reportTabBarScroll, scrollY]
   );
+  const onFeedScrollBeginDrag = useCallback(() => {
+    userDraggedListRef.current = true;
+  }, []);
   const stickyHeaderStyle = useAnimatedStyle(() => ({
     opacity: interpolate(headerScroll.value, [0, 48], [1, 0], Extrapolation.CLAMP),
     maxHeight: interpolate(headerScroll.value, [0, 72], [140, 0], Extrapolation.CLAMP),
@@ -398,11 +420,11 @@ function BrowseCatalogScreenInner({
     countryCode: catalogCountryCode,
     state: catalogState,
     origin: catalogOrigin,
-    category: catalogFilters.category,
+    category: foodOnly ? FOOD_CATEGORY_NAME : catalogFilters.category,
     subcategory: catalogFilters.subcategory,
     brand: catalogFilters.brand,
     business_name: catalogFilters.business,
-    collection: catalogFilters.collection,
+    collection: foodOnly ? undefined : catalogFilters.collection,
     food_only: foodOnly || undefined,
     export_only: exportOnly || undefined,
     withAuth: inventoryRequestsWithAuth,
@@ -767,9 +789,12 @@ function BrowseCatalogScreenInner({
   const handleStorePress = useCallback(
     (inventoryItemId: string, businessLocationId: string) => {
       trackView(inventoryItemId);
-      onStorePress?.(businessLocationId);
+      onStorePress?.(
+        businessLocationId,
+        foodOnly ? { foodOnly: true } : undefined
+      );
     },
-    [onStorePress, trackView]
+    [foodOnly, onStorePress, trackView]
   );
 
   const buyLabel = t('public.items.buyNow', 'Buy');
@@ -982,6 +1007,8 @@ function BrowseCatalogScreenInner({
           homeOrders={homeOrders}
           homeOrdersTotalActive={homeOrdersTotalActive}
           onOpenHomeOrder={onOpenHomeOrder}
+          onHomeOrderCta={onHomeOrderCta}
+          homeOrderCtaBusyId={homeOrderCtaBusyId}
           onSeeAllHomeOrders={onSeeAllHomeOrders}
           nearbyAgentsCount={nearbyAgentsCount}
           onHeroSlidePress={onHeroSlidePress}
@@ -1082,6 +1109,8 @@ function BrowseCatalogScreenInner({
       homeOrders,
       homeOrdersTotalActive,
       onOpenHomeOrder,
+      onHomeOrderCta,
+      homeOrderCtaBusyId,
       onSeeAllHomeOrders,
       nearbyAgentsCount,
       onHeroSlidePress,
@@ -1117,6 +1146,29 @@ function BrowseCatalogScreenInner({
       discoveryExtra,
     ]
   );
+
+  /** FlashList skips header updates unless header deps are in extraData. */
+  const listExtraData = useMemo(
+    () => ({
+      homeOrderSig: (homeOrders ?? [])
+        .map((order) => `${order.id}:${order.current_status}`)
+        .join('|'),
+      homeOrdersTotalActive,
+      homeOrderCtaBusyId,
+    }),
+    [homeOrderCtaBusyId, homeOrders, homeOrdersTotalActive]
+  );
+
+  const feedRowCount = showAllRestaurants ? 0 : feedRows.length;
+  useEffect(() => {
+    pinListToTopIfBootstrapping();
+    const t1 = setTimeout(pinListToTopIfBootstrapping, 50);
+    const t2 = setTimeout(pinListToTopIfBootstrapping, 350);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [feedRowCount, listExtraData.homeOrderSig, pinListToTopIfBootstrapping]);
 
   const renderFeedRow = useCallback(
     ({ item: row }: { item: CatalogFeedRow }) => {
@@ -1307,6 +1359,7 @@ function BrowseCatalogScreenInner({
         data={showAllRestaurants ? [] : feedRows}
         keyExtractor={keyExtractorRow}
         ListHeaderComponent={listHeaderElement}
+        extraData={listExtraData}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         renderItem={renderFeedRow}
@@ -1319,6 +1372,8 @@ function BrowseCatalogScreenInner({
           />
         }
         onScroll={onFeedScroll}
+        onScrollBeginDrag={onFeedScrollBeginDrag}
+        onContentSizeChange={pinListToTopIfBootstrapping}
         scrollEventThrottle={16}
         onEndReached={() => {
           if (!showAllRestaurants && canLoadMore) loadMore();

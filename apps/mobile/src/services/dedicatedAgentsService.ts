@@ -217,6 +217,11 @@ export class DedicatedAgentsService {
     return api.post<{ success: boolean }>(`/orders/${orderId}/designated-confirm`);
   }
 
+  /** Ignore on home/hub: hide without declining (push accept still works until the gate). */
+  async dismissDesignated(orderId: string): Promise<{ success: boolean; dismissedAt: string }> {
+    return api.post<{ success: boolean; dismissedAt: string }>(`/orders/${orderId}/designated-dismiss`);
+  }
+
   /** "Can't make it": free before the cutoff, a strike after it (no money). */
   async releaseDesignated(orderId: string, reason: string): Promise<{ success: boolean; late?: boolean }> {
     return api.post<{ success: boolean; late?: boolean }>(`/orders/${orderId}/designated-release`, { reason });

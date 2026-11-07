@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, View } from 'react-native';
-import { Button, Text } from 'react-native-paper';
+import { Button, IconButton, Text } from 'react-native-paper';
 import { useTheme } from '../../contexts/ThemeContext';
 
 type Props = {
@@ -9,6 +9,8 @@ type Props = {
   illustration?: React.ReactNode;
   actionLabel?: string;
   onAction?: () => void;
+  onDismiss?: () => void;
+  dismissLabel?: string;
 };
 
 export function FeatureCard({
@@ -17,6 +19,8 @@ export function FeatureCard({
   illustration,
   actionLabel,
   onAction,
+  onDismiss,
+  dismissLabel,
 }: Props) {
   const { colors, spacing, borderRadius, shadows } = useTheme();
   return (
@@ -34,6 +38,16 @@ export function FeatureCard({
         },
       ]}
     >
+      {onDismiss ? (
+        <IconButton
+          icon="close"
+          size={18}
+          onPress={onDismiss}
+          accessibilityLabel={dismissLabel || 'Dismiss'}
+          style={styles.dismiss}
+          iconColor={colors.text.muted}
+        />
+      ) : null}
       {illustration ? <View style={styles.art}>{illustration}</View> : null}
       <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '700' }}>
         {title}
@@ -55,6 +69,7 @@ export function FeatureCard({
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: 1 },
+  card: { borderWidth: 1, position: 'relative' },
   art: { alignItems: 'center' },
+  dismiss: { position: 'absolute', top: 0, right: 0, margin: 0, zIndex: 1 },
 });

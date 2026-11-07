@@ -11,11 +11,14 @@ import {
   buildClientHomeOrderCardModel,
   type ClientHomeOrderCardModel,
 } from '../../utils/buildClientHomeOrderCardModel';
+import type { OrderPrimaryActionId } from '../../utils/orderPhase';
 
 export interface ClientHomeOrdersStripProps {
   orders: Order[];
   totalActive: number;
   onOpenOrder: (order: Order) => void;
+  onPressCta?: (order: Order, primaryActionId: OrderPrimaryActionId) => void;
+  ctaBusyOrderId?: string | null;
   onSeeAll?: () => void;
 }
 
@@ -23,6 +26,8 @@ export function ClientHomeOrdersStrip({
   orders,
   totalActive,
   onOpenOrder,
+  onPressCta,
+  ctaBusyOrderId = null,
   onSeeAll,
 }: ClientHomeOrdersStripProps) {
   const { t } = useTranslation();
@@ -51,10 +56,15 @@ export function ClientHomeOrdersStrip({
         model={item.model}
         width={width}
         onPressCard={() => onOpenOrder(item.order)}
-        onPressCta={() => onOpenOrder(item.order)}
+        onPressCta={() =>
+          onPressCta
+            ? onPressCta(item.order, item.model.primaryActionId)
+            : onOpenOrder(item.order)
+        }
+        ctaLoading={ctaBusyOrderId === item.order.id}
       />
     ),
-    [onOpenOrder]
+    [ctaBusyOrderId, onOpenOrder, onPressCta]
   );
 
   if (models.length === 0) return null;
@@ -96,6 +106,7 @@ export function ClientHomeOrdersStrip({
 
       {pageWidth > 0 ? (
         <PagedCarousel
+          key={models.map((item) => `${item.order.id}:${item.model.status}`).join('|')}
           data={models}
           keyExtractor={(item) => item.order.id}
           renderItem={renderItem}

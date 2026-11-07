@@ -38,6 +38,8 @@ import {
   canOverwriteFromStatus,
   isClientConfirmDeliveryOrder,
   isUnpaidPayAtDelivery,
+  needsMobilePadCollectionProof,
+  type DoorstepPaymentOrder,
   overwriteGenerationStatusError,
   shouldMintDeliveryPin,
   usesLegacyDeliveryPin,
@@ -3212,6 +3214,17 @@ export class OrdersService {
       request.orderId,
       agent.id
     );
+    // Coverage Take: create/refresh an early dedicated offer when the agent is
+    // designated for the store/slot but never got (or lost) the offer row.
+    if (
+      !activeOffer &&
+      (await this.designatedFirst?.ensureEarlyOfferForAgent(request.orderId, agent.id))
+    ) {
+      activeOffer = await this.orderOffersService.getActiveOfferForAgent(
+        request.orderId,
+        agent.id
+      );
+    }
     // Designated agent first: a late accept wins while the order is still unassigned.
     if (
       !activeOffer &&
@@ -3223,14 +3236,7 @@ export class OrdersService {
       );
     }
     if (!activeOffer) {
-      throw new HttpException(
-        {
-          message:
-            'This delivery offer has expired. Check the available orders list.',
-          error: 'OFFER_EXPIRED',
-        },
-        HttpStatus.CONFLICT
-      );
+      throw await this.offerAcceptUnavailableError(request.orderId);
     }
 
     // #594: a dedicated offer re-checks AC-E2 and stamps the dedicated assignment.
@@ -3260,6 +3266,42 @@ export class OrdersService {
         );
       }
       throw error;
+    }
+  }
+
+  /** Prefer a dedicated Take message when the order was coverage-based (no offer row yet). */
+  private async offerAcceptUnavailableError(orderId: string): Promise<HttpException> {
+    const dedicated = await this.orderHasCoverageSlot(orderId);
+    return new HttpException(
+      dedicated
+        ? {
+            message:
+              'Could not take this dedicated delivery. It may no longer be available — refresh and try again.',
+            error: 'DEDICATED_TAKE_UNAVAILABLE',
+            code: 'DEDICATED_TAKE_UNAVAILABLE',
+          }
+        : {
+            message:
+              'This delivery offer has expired. Check the available orders list.',
+            error: 'OFFER_EXPIRED',
+          },
+      HttpStatus.CONFLICT
+    );
+  }
+
+  private async orderHasCoverageSlot(orderId: string): Promise<boolean> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        orders_by_pk: { coverage_slot_key: string | null } | null;
+      }>(
+        `query OfferAcceptCoverage($id: uuid!) {
+          orders_by_pk(id: $id) { coverage_slot_key }
+        }`,
+        { id: orderId }
+      );
+      return !!res?.orders_by_pk?.coverage_slot_key;
+    } catch {
+      return false;
     }
   }
 
@@ -9994,8 +10036,22 @@ export class OrdersService {
           }
           currency
           current_status
+          fulfillment_timing
+          preferred_delivery_time
+          estimated_delivery_time
+          promised_fulfill_by
+          requires_fast_delivery
+          delivery_time_window_id
           verified_agent_delivery
           created_at
+          delivery_time_windows(order_by: { created_at: desc }, limit: 1) {
+            id
+            preferred_date
+            time_slot_start
+            time_slot_end
+            is_confirmed
+            slot { slot_name }
+          }
           order_items {
             id
             quantity
@@ -10066,13 +10122,57 @@ export class OrdersService {
       ordersWithAgentCaution,
       locationCoords
     );
+    const ordersWithDedicated = await this.attachDedicatedStoreFlags(
+      agent.id,
+      ordersWithDistance
+    );
 
     return {
       success: true,
-      orders: ordersWithDistance,
+      orders: ordersWithDedicated,
       canClaim,
       previewMode,
     };
+  }
+
+  /** True when this agent still covers the pickup store (active or paused). */
+  private async attachDedicatedStoreFlags(
+    agentId: string,
+    orders: any[]
+  ): Promise<any[]> {
+    if (!orders.length) return orders;
+    const covered = await this.dedicatedStoreLocationIds(agentId);
+    return orders.map((order) => ({
+      ...order,
+      my_dedicated_store: covered.has(order.business_location?.id),
+    }));
+  }
+
+  private async dedicatedStoreLocationIds(agentId: string): Promise<Set<string>> {
+    const ids = new Set<string>();
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        dedicated_agent_assignments: Array<{ business_location_id?: string | null }>;
+      }>(
+        `query AgentDedicatedStores($agentId: uuid!) {
+          dedicated_agent_assignments(
+            where: {
+              agent_id: { _eq: $agentId }
+              status: { _in: ["active", "paused"] }
+            }
+          ) { business_location_id }
+        }`,
+        { agentId }
+      );
+      for (const row of res?.dedicated_agent_assignments ?? []) {
+        if (row.business_location_id) ids.add(row.business_location_id);
+      }
+    } catch (error: any) {
+      this.logger.warn(
+        `Dedicated store flags skipped: ${error?.message ?? error}`
+      );
+    }
+    return ids;
   }
 
   async checkOrderClaimAvailability(
@@ -11241,6 +11341,14 @@ export class OrdersService {
     const result = await this.hasuraSystemService.executeMutation(mutation, {
       orderId: request.orderId,
     });
+    // Coverage Take reopens leftover `accepted` dedicated rows. Decline this
+    // agent and clear designated stamps so they cannot reclaim and the next
+    // agent does not inherit their cutoff/strike window (#770 sibling).
+    await this.orderReassignmentService.afterDroppedDesignatedAssignment(
+      request.orderId,
+      agent.id,
+      user.id
+    );
     // Add order status history entry
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -12734,17 +12842,7 @@ export class OrdersService {
     if (order.current_status === 'complete') {
       return { alreadyComplete: true, order };
     }
-    if (isUnpaidPayAtDelivery(order)) {
-      throw new HttpException(
-        {
-          success: false,
-          error: 'PAY_AT_DELIVERY_UNPAID',
-          message:
-            'Collect pay-at-delivery payment before completing this order.',
-        },
-        HttpStatus.CONFLICT
-      );
-    }
+    await this.assertCollectedDoorstepPayment(order);
     const updated = await this.winClientConfirmComplete(orderId, !!opts.fromDisputed);
     if (!updated) {
       return { alreadyComplete: true, order: await this.getOrderDetails(orderId) };
@@ -12759,6 +12857,40 @@ export class OrdersService {
     );
     await this.runCompletionSideEffects(order);
     return { alreadyComplete: false, order: updated };
+  }
+
+  private unpaidDoorstepConflict(): never {
+    throw new HttpException(
+      {
+        success: false,
+        error: 'PAY_AT_DELIVERY_UNPAID',
+        message: 'Collect pay-at-delivery payment before completing this order.',
+      },
+      HttpStatus.CONFLICT
+    );
+  }
+
+  private async assertCollectedDoorstepPayment(
+    order: DoorstepPaymentOrder & { id: string; order_number?: string | null }
+  ): Promise<void> {
+    if (isUnpaidPayAtDelivery(order)) this.unpaidDoorstepConflict();
+    if (!needsMobilePadCollectionProof(order)) return;
+    const collected = await this.hasSuccessfulMobilePadPayment(order);
+    if (!collected) this.unpaidDoorstepConflict();
+  }
+
+  private async hasSuccessfulMobilePadPayment(order: {
+    id: string;
+    order_number?: string | null;
+  }): Promise<boolean> {
+    try {
+      return await this.mobilePaymentsDatabaseService.hasSuccessfulOrderPayment(
+        order.order_number ?? '',
+        order.id
+      );
+    } catch {
+      return false;
+    }
   }
 
   private async winClientConfirmComplete(
@@ -17976,6 +18108,15 @@ export class OrdersService {
     const agent = this.requireAgentRecord(user);
     if (!this.designatedFirst) throw new HttpException('Unavailable', HttpStatus.NOT_FOUND);
     return { success: true, ...(await this.designatedFirst.confirm(orderId, agent.id)) };
+  }
+
+  /** Home/hub Ignore: hide the early offer without declining it. */
+  async dismissDesignatedOffer(orderId: string) {
+    const user = await this.hasuraUserService.getUser();
+    this.requireActivePersona(user, 'agent', 'Only agents can dismiss an offer');
+    const agent = this.requireAgentRecord(user);
+    if (!this.designatedFirst) throw new HttpException('Unavailable', HttpStatus.NOT_FOUND);
+    return { success: true, ...(await this.designatedFirst.dismissDashboardOffer(orderId, agent.id)) };
   }
 
   /** "Can't make it": free before the 2 h cutoff, a strike after it (no money fee). */

@@ -94,7 +94,7 @@ export function useClientOrders(enabled = true) {
   );
 
   const refresh = useCallback(() => {
-    void fetchOrders(lastFiltersRef.current);
+    return fetchOrders(lastFiltersRef.current);
   }, [fetchOrders]);
 
   useFocusEffect(

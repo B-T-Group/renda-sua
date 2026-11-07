@@ -41,10 +41,10 @@ describe('viewer / persona gating', () => {
     expect(assistantViewer(true, null)).toBe('agent');
   });
 
-  it('only client and guest see the character', () => {
+  it('client, guest, and agent see the character', () => {
     expect(canSeeRendaCharacter('client')).toBe(true);
     expect(canSeeRendaCharacter('guest')).toBe(true);
-    expect(canSeeRendaCharacter('agent')).toBe(false);
+    expect(canSeeRendaCharacter('agent')).toBe(true);
     expect(canSeeRendaCharacter('business')).toBe(false);
   });
 });
@@ -60,9 +60,10 @@ describe('flag gating + allowlist', () => {
     expect(shouldShowLauncher({ ...visible, mounted: false })).toBe(false);
   });
 
-  it('never shows for agent / business', () => {
-    expect(shouldShowLauncher({ ...visible, viewer: 'agent' })).toBe(false);
+  it('never shows for business; agent shows on dashboard when allowed', () => {
     expect(shouldShowLauncher({ ...visible, viewer: 'business' })).toBe(false);
+    expect(shouldShowLauncher({ ...visible, viewer: 'agent', route: 'Dashboard' })).toBe(true);
+    expect(shouldShowLauncher({ ...visible, viewer: 'agent', route: 'AssistantChat' })).toBe(false);
   });
 
   it('uses the per-persona allowlist', () => {
@@ -72,8 +73,12 @@ describe('flag gating + allowlist', () => {
     for (const r of ['GuestBrowse', 'GuestFoods', 'GuestRentals', 'StoreDetail', 'StoresList']) {
       expect(isLauncherRoute('guest', r)).toBe(true);
     }
+    for (const r of ['Dashboard', 'OpenOrders', 'OrdersList', 'OrderDetail', 'Pay', 'Menu']) {
+      expect(isLauncherRoute('agent', r)).toBe(true);
+    }
     expect(isLauncherRoute('guest', 'ClientBrowse')).toBe(false);
     expect(isLauncherRoute('guest', 'OrderDetail')).toBe(false);
+    expect(isLauncherRoute('agent', 'ClientBrowse')).toBe(false);
   });
 
   it('is hidden on checkout, auth, chat, item detail and reels', () => {
@@ -122,9 +127,11 @@ describe('flag gating + allowlist', () => {
     // Resolved off: the header button shows; resolved on: the launcher owns the screen.
     expect(shouldHideHeaderAssistantButton(false, 'client', 'ClientBrowse', true)).toBe(false);
     expect(shouldHideHeaderAssistantButton(true, 'client', 'ClientBrowse', true)).toBe(true);
-    // Agent / business never wait on the launcher flag.
+    // Business never waits on the launcher flag.
     expect(shouldHideHeaderAssistantButton(false, 'business', 'ClientBrowse', false)).toBe(false);
-    expect(shouldHideHeaderAssistantButton(false, 'agent', 'ClientBrowse', false)).toBe(false);
+    // Agent waits until flags resolve, then hides the header where the orb is allowed.
+    expect(shouldHideHeaderAssistantButton(false, 'agent', 'Dashboard', false)).toBe(true);
+    expect(shouldHideHeaderAssistantButton(true, 'agent', 'Dashboard', true)).toBe(true);
   });
 });
 

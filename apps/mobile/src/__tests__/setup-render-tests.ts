@@ -88,15 +88,24 @@ jest.mock('react-native-safe-area-context', () => {
   };
 });
 
-// Mock expo-modules-core
+// Stub Expo natives pulled in by agentApi / secure store.
+// Keep factories inline — do not require() the jest.config moduleNameMapper
+// stubs here or Jest re-enters the mock and stack-overflows (OpportunitiesUx /
+// PreferredSlots).
 jest.mock('expo-modules-core', () => ({
-  requireNativeModule: jest.fn(),
+  requireNativeModule: jest.fn(() => ({})),
+  requireOptionalNativeModule: jest.fn(() => null),
   NativeModulesProxy: {},
   EventEmitter: jest.fn(() => ({
     addListener: jest.fn(),
     removeListener: jest.fn(),
   })),
-  requireOptionalNativeModule: jest.fn(),
+}));
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(async () => null),
+  setItemAsync: jest.fn(async () => undefined),
+  deleteItemAsync: jest.fn(async () => undefined),
+  isAvailableAsync: jest.fn(async () => true),
 }));
 
 // Mock expo-localization

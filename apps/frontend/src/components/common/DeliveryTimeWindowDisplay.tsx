@@ -22,10 +22,61 @@ interface DeliveryTimeWindowDisplayProps {
   order: OrderData;
 }
 
+function isStorePickup(order: OrderData): boolean {
+  return order.fulfillment_method === 'pickup' || order.payment_timing === 'pay_at_pickup';
+}
+
+function isFulfillNow(order: OrderData): boolean {
+  if (order.fulfillment_method === 'shipping') return false;
+  if (order.fulfillment_timing === 'scheduled') return false;
+  if (order.fulfillment_timing === 'asap') return true;
+  return !order.delivery_time_windows?.length;
+}
+
+function chosenWindow(order: OrderData) {
+  const windows = order.delivery_time_windows ?? [];
+  return windows.find((w) => w.is_confirmed) ?? windows[0] ?? null;
+}
+
+function FulfillNowNotice({ pickup }: { pickup: boolean }) {
+  const { t } = useTranslation();
+  const body = pickup
+    ? t(
+        'orders.deliveryTimeWindow.asapPickup',
+        'The customer will pick this up as soon as it is ready.'
+      )
+    : t(
+        'orders.deliveryTimeWindow.asapDelivery',
+        'The customer wants this delivered as soon as possible.'
+      );
+  return (
+    <Card sx={{ border: 1, borderColor: 'warning.main' }}>
+      <CardContent>
+        <Stack direction="row" spacing={1.5} alignItems="flex-start">
+          <Warning color="warning" />
+          <Box>
+            <Typography variant="h6" fontWeight={700}>
+              {t('orders.deliveryTimeWindow.fulfillNow', 'Fulfill now')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {body}
+            </Typography>
+          </Box>
+        </Stack>
+      </CardContent>
+    </Card>
+  );
+}
+
 const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
   order,
 }) => {
   const { t } = useTranslation();
+  const pickup = isStorePickup(order);
+
+  if (isFulfillNow(order)) {
+    return <FulfillNowNotice pickup={pickup} />;
+  }
 
   if (
     !order.delivery_time_windows ||
@@ -138,18 +189,29 @@ const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
     }
   };
 
+  const chosen = chosenWindow(order);
+  if (!chosen) return null;
+
   return (
     <Card>
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <Schedule color="primary" />
           <Typography variant="h6" fontWeight="bold">
-            {t('orders.deliveryTimeWindow.title', 'Delivery Time Window')}
+            {pickup
+              ? t(
+                  'orders.deliveryTimeWindow.customerPickup',
+                  'Pickup time the customer chose'
+                )
+              : t(
+                  'orders.deliveryTimeWindow.customerDelivery',
+                  'Delivery time the customer chose'
+                )}
           </Typography>
         </Box>
 
         <Stack spacing={2}>
-          {order.delivery_time_windows.map((window, index) => (
+          {[chosen].map((window, index) => (
             <Box key={window.id || index}>
               <Grid container spacing={2} alignItems="center">
                 {/* Date and Time Information */}
@@ -275,13 +337,6 @@ const DeliveryTimeWindowDisplay: React.FC<DeliveryTimeWindowDisplayProps> = ({
               )}
 
               {/* Divider between windows */}
-              {index < order.delivery_time_windows.length - 1 && (
-                <Box sx={{ mt: 2, mb: 1 }}>
-                  <hr
-                    style={{ border: 'none', borderTop: '1px solid #e0e0e0' }}
-                  />
-                </Box>
-              )}
             </Box>
           ))}
         </Stack>

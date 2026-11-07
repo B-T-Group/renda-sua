@@ -492,7 +492,12 @@ export function OrderClientSummaryCard({
           onPress={() => setHistoryOpen((o) => !o)}
           titleStyle={{ fontWeight: '700', color: colors.text.primary, fontSize: 15 }}
           descriptionStyle={{ color: colors.text.secondary, fontSize: 12 }}
-          style={{ backgroundColor: colors.pageBackground, borderRadius: borderRadius.sm, marginHorizontal: -4 }}
+          style={{
+            backgroundColor: colors.pageBackground,
+            borderRadius: borderRadius.sm,
+            marginHorizontal: -4,
+            marginBottom: spacing.sm,
+          }}
         >
           <OrderStatusHistoryTimeline entries={history} locale={locale} />
         </List.Accordion>

@@ -4,6 +4,7 @@ import {
   businessOrderUnitsCount,
   formatOrderTimeWindowLabel,
   isStorePickupOrder,
+  resolveBusinessOrderTiming,
   resolveOrderTimeWindow,
 } from './businessOrderListDisplay';
 import type { BusinessOrder } from '../types/business/orders';
@@ -71,5 +72,35 @@ describe('businessOrderListDisplay', () => {
     });
     expect(resolveOrderTimeWindow(o)?.id).toBe('w2');
     expect(formatOrderTimeWindowLabel(o, 'en-US')).toContain('2026');
+  });
+
+  it('treats ASAP as fulfill now, even when no window exists', () => {
+    const asap = resolveBusinessOrderTiming(order({ fulfillment_timing: 'asap' }));
+    expect(asap).toEqual({ kind: 'asap', pickup: false });
+    const implied = resolveBusinessOrderTiming(order({ fulfillment_method: 'delivery' }));
+    expect(implied.kind).toBe('asap');
+  });
+
+  it('shows the window the customer chose', () => {
+    const timing = resolveBusinessOrderTiming(
+      order({
+        fulfillment_timing: 'scheduled',
+        fulfillment_method: 'pickup',
+        delivery_time_window_id: 'w2',
+        delivery_time_windows: [
+          { id: 'w1', preferred_date: '2026-07-01', time_slot_start: '09:00', time_slot_end: '12:00' },
+          { id: 'w2', preferred_date: '2026-07-02', time_slot_start: '16:00', time_slot_end: '20:00', slot: { slot_name: 'Evening' } },
+        ],
+      })
+    );
+    expect(timing.kind).toBe('scheduled');
+    if (timing.kind === 'scheduled') {
+      expect(timing.pickup).toBe(true);
+      expect(timing.window.id).toBe('w2');
+    }
+  });
+
+  it('skips timing for carrier shipping', () => {
+    expect(resolveBusinessOrderTiming(order({ fulfillment_method: 'shipping' })).kind).toBe('none');
   });
 });

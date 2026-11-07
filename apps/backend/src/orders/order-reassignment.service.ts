@@ -45,6 +45,8 @@ interface DedicatedReleaseOrder {
   assignment_source: string | null;
   dedicated_assignment_id: string | null;
   dedicated_release_until: string | null;
+  /** Set when designated-first auto-assigned this internal agent at ready. */
+  dispatch_mode?: string | null;
   business_location?: { address?: { country?: string | null } | null } | null;
   assigned_agent?: { id: string; user_id: string | null } | null;
   /** Pickup monitoring state, restored if the release has to be undone (QA #608 N1). */
@@ -557,6 +559,13 @@ export class OrderReassignmentService {
         'Only an automatic dedicated assignment can be released'
       );
     }
+    // Designated-first auto-assign reuses `dedicated_auto` with the hours-long
+    // cutoff as dedicated_release_until. The 120 s auto-release path would open
+    // the gate immediately and leave designated stamps for the next agent.
+    if (order.dispatch_mode === 'designated_first') {
+      log('delegated_designated');
+      return this.releaseDesignated(orderId, agentId, reason, now);
+    }
     const until = order.dedicated_release_until
       ? new Date(order.dedicated_release_until).getTime()
       : 0;
@@ -656,6 +665,7 @@ export class OrderReassignmentService {
       });
       return this.refuse('release_failed', 'Could not release the order');
     }
+    await this.clearLeftoverDesignatedStamps(order.id);
     await this.insertAgentHistory(
       order.id,
       userId,
@@ -731,7 +741,7 @@ export class OrderReassignmentService {
       `query DedicatedReleaseOrder($id: uuid!) {
         orders_by_pk(id: $id) {
           id order_number current_status assigned_agent_id currency
-          assignment_source dedicated_assignment_id dedicated_release_until
+          assignment_source dedicated_assignment_id dedicated_release_until dispatch_mode
           pickup_state pickup_due_at pickup_reminder_sent_at pickup_at_risk_at pickup_overdue_at
           pickup_extension_minutes pickup_paused_at pickup_pause_reason pickup_pause_remaining_ms
           last_agent_distance_m last_agent_progress_at agent_arrived_pickup_at
@@ -1031,15 +1041,106 @@ export class OrderReassignmentService {
         );
       return false;
     }
-    // After the hold is released the original agent is gone. Clear their
-    // designated stamps here (not in the unassign CAS) so a reverted drop
-    // keeps the same agent's free-release window and confirmation state.
-    await this.clearLeftoverDesignatedStamps(order.id);
+    // After the hold is released the original agent is gone. Decline their
+    // dedicated row and clear stamps here (not in the unassign CAS) so a
+    // reverted drop keeps the same agent's window, and Coverage Take cannot
+    // reopen the leftover accepted offer.
+    await this.afterDroppedDesignatedAssignment(
+      order.id,
+      order.assigned_agent_id,
+      order.assigned_agent?.user_id
+    );
     await this.insertHistory(
       order.id,
       'System reassigned order after pickup SLA'
     );
     return true;
+  }
+
+  /**
+   * After Drop / pickup-SLA unassign: decline the leftover dedicated row so
+   * Coverage Take cannot refresh `accepted` back to `offered`, and clear
+   * per-agent designated stamps so the next assignee is not struck.
+   */
+  async afterDroppedDesignatedAssignment(
+    orderId: string,
+    agentId: string | null,
+    userId: string | null | undefined
+  ): Promise<void> {
+    if (!agentId) return;
+    const leftover = await this.loadDesignatedDropLeftover(orderId);
+    if (!this.wasDesignatedAssignment(leftover)) return;
+    if (userId) await this.recordDroppedAgentExclusion(orderId, agentId, userId);
+    await this.clearLeftoverDesignatedStamps(orderId);
+  }
+
+  private async loadDesignatedDropLeftover(orderId: string): Promise<{
+    dispatch_mode: string | null;
+    assignment_source: string | null;
+    designated_accepted_at: string | null;
+  } | null> {
+    const res = await this.hasura
+      .executeQuery<{
+        orders_by_pk: {
+          dispatch_mode: string | null;
+          assignment_source: string | null;
+          designated_accepted_at: string | null;
+        } | null;
+      }>(
+        `query DesignatedDropLeftover($id: uuid!) {
+          orders_by_pk(id: $id) { dispatch_mode assignment_source designated_accepted_at }
+        }`,
+        { id: orderId }
+      )
+      .catch(() => null);
+    return res?.orders_by_pk ?? null;
+  }
+
+  private wasDesignatedAssignment(
+    leftover: {
+      dispatch_mode: string | null;
+      assignment_source: string | null;
+      designated_accepted_at: string | null;
+    } | null
+  ): boolean {
+    if (!leftover) return false;
+    return (
+      leftover.dispatch_mode === 'designated_first' ||
+      leftover.assignment_source === 'dedicated_offer' ||
+      leftover.assignment_source === 'dedicated_auto' ||
+      !!leftover.designated_accepted_at
+    );
+  }
+
+  private async recordDroppedAgentExclusion(
+    orderId: string,
+    agentId: string,
+    userId: string
+  ): Promise<void> {
+    const nowIso = new Date().toISOString();
+    try {
+      await runAssignmentWrite(() =>
+        this.hasura.executeMutation(RECORD_DEDICATED_RELEASE_MUTATION, {
+          object: {
+            order_id: orderId,
+            agent_id: agentId,
+            user_id: userId,
+            status: 'declined',
+            offer_kind: 'dedicated',
+            decline_reason: 'other',
+            expires_at: nowIso,
+            created_at: nowIso,
+            responded_at: nowIso,
+          },
+        })
+      );
+    } catch (error: unknown) {
+      this.logger.warn(
+        `Dropped-agent dedicated exclusion not recorded for ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
+    }
   }
 
   /**

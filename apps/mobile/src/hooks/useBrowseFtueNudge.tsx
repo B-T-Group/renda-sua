@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { observer } from 'mobx-react-lite';
 import { ContextualNudgeCard } from '../components/common/ContextualNudgeCard';
 import { FavoritesIllustration } from '../components/illustrations/FavoritesIllustration';
-import { EarnDeliveringIllustration } from '../components/illustrations/EarnDeliveringIllustration';
+import EarnDeliveringIllustration from '../components/illustrations/EarnDeliveringIllustration';
 import { OnboardingMerchantIllustration } from '../components/illustrations/OnboardingMerchantIllustration';
 import { NudgeService } from '../services/nudges/NudgeService';
 import { useStore } from '../stores/RootStore';

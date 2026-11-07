@@ -77,9 +77,11 @@ interface Props {
   };
   role: OrderPhaseRole;
   action?: React.ReactNode;
+  /** Journey card already explains the next step. Keep pay-by warnings only. */
+  omitNextStep?: boolean;
 }
 
-export function OrderPhaseBanner({ order, role, action }: Props) {
+export function OrderPhaseBanner({ order, role, action, omitNextStep = false }: Props) {
   const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius, typography } = useTheme();
   const info = resolveOrderPhase(orderToPhaseInput(order), role);
@@ -132,7 +134,7 @@ export function OrderPhaseBanner({ order, role, action }: Props) {
           {t('orders.nextStep.label', 'Next step')}
         </Text>
       </View>
-      {info.nextStepKey ? (
+      {!omitNextStep && info.nextStepKey ? (
         <Text style={[typography.body2, { color: colors.text.primary }]}>
           {t(info.nextStepKey, '')}
         </Text>

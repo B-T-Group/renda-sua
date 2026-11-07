@@ -124,14 +124,6 @@ const CoveredDeliverySlotPicker: React.FC<CoveredDeliverySlotPickerProps> = ({
                               {slot.start} - {slot.end}
                             </Typography>
                           </Box>
-                          {slot.pickup_time ? (
-                            <Typography variant="caption" color="text.secondary">
-                              {t('orders.deliveryTimeWindow.dedicatedPickupAt', {
-                                time: slot.pickup_time,
-                                defaultValue: `Picked up from the store at ${slot.pickup_time}`,
-                              })}
-                            </Typography>
-                          ) : null}
                           {selected ? (
                             <Box display="flex" alignItems="center" color="primary.main">
                               <CheckCircle sx={{ mr: 0.5, fontSize: 16 }} />

@@ -797,6 +797,8 @@
       "tabRatings": "Avis",
       "locationsTitle": "Retrait et livraison",
       "whenAvailable": "Quand serez-vous disponible ?",
+      "deliveryTime": "Heure de livraison",
+      "pickupTime": "Heure de retrait",
       "messagesTitle": "Messages sur la commande",
       "messageHint": "Échangez avec le magasin ou le livreur",
       "messagePlaceholder": "Écrire un message…",
@@ -2349,6 +2351,12 @@
         "itemCount_one": "{{count}} article",
         "itemCount_other": "{{count}} articles",
         "itemCount": "{{count}} articles",
+        "moreItems": "+{{count}} de plus",
+        "fulfillment": {
+          "pickup": "Retrait",
+          "delivery": "Livraison",
+          "shipping": "Expédition"
+        },
         "receivedJustNow": "Reçue à l'instant",
         "receivedMinutes": "Reçue il y a {{count}} minutes",
         "receivedHours": "Reçue il y a {{count}} heures",
@@ -2652,6 +2660,13 @@
       "detailClient": "Client",
       "detailLocations": "Retrait et livraison",
       "detailDeliveryWindows": "Créneaux de livraison",
+      "timing": {
+        "fulfillNow": "À préparer maintenant",
+        "asapDelivery": "Le client veut cette livraison dès que possible.",
+        "asapPickup": "Le client viendra chercher la commande dès qu’elle sera prête.",
+        "deliveryTitle": "Créneau de livraison choisi par le client",
+        "pickupTitle": "Créneau de retrait choisi par le client"
+      },
       "detailOrderNotes": "Notes de commande",
       "detailMessagesTitle": "Messages de commande",
       "detailMessagesHint": "Échangez avec le client ou le livreur",
@@ -2684,8 +2699,8 @@
       "cashPending": "Espèces",
       "scheduled": "Planifiée",
       "scheduledActivates": "Active à {{when}}",
-      "scheduledDetail": "Le délai de confirmation commence à {{when}}. Vous pouvez confirmer plus tôt.",
-      "scheduledEarly": "Cette commande future attend. Vous pouvez confirmer dès maintenant.",
+      "scheduledDetail": "Confirmez avant le {{when}} pour que la commande reste dans les temps. Vous pouvez confirmer plus tôt.",
+      "scheduledEarly": "Confirmez cette commande pour qu’elle reste dans les temps.",
       "actionFailed": "Échec de l’action",
       "reconcileFailed": "Échec du rapprochement",
       "confirmPickupFailed": "Échec de la confirmation du retrait",
@@ -4275,6 +4290,16 @@
       "addNotes": "Ajouter des instructions particulières",
       "notesPlaceholder": "Allergies, code d’accès, niveau d’épices…",
       "submit": "Passer la commande",
+      "review": {
+        "continue": "Continuer",
+        "edit": "Modifier",
+        "choicesTitle": "Vos choix",
+        "quantity": "Quantité",
+        "method": "Mode de réception",
+        "address": "Adresse",
+        "time": "Horaire",
+        "receipt": "Total de la commande"
+      },
       "kitchenClosed": {
         "title": "Cuisine fermée",
         "nextOpening": "Prochaine ouverture",
@@ -4292,6 +4317,12 @@
         "asapPickupTitle": "Retirer dès que possible",
         "asapSubtitle": "La préparation commence dès que le magasin confirme.",
         "asapEta": "Habituellement prêt {{eta}}",
+        "nowChoiceTitle": "Maintenant",
+        "laterChoiceTitle": "Plus tard",
+        "nowChoicePickupHint": "Dès que c’est prêt",
+        "nowChoiceDeliveryHint": "Dès que possible",
+        "laterChoicePickupHint": "Choisir une date et une heure de retrait",
+        "laterChoiceDeliveryHint": "Choisir une date et une heure de livraison",
         "cookedFoodAsapPickup": "Nous commencerons la préparation dès confirmation de la cuisine.",
         "cookedFoodAsapDelivery": "Nous commencerons la préparation dès confirmation de la cuisine.",
         "cookedFoodAsapPayAfterConfirm": "Nous commencerons la préparation une fois que la cuisine aura confirmé et reçu votre paiement.",
@@ -4310,11 +4341,12 @@
         "pickupDate": "Date de retrait",
         "scrollDaysHint": "Faites défiler horizontalement pour voir plus de dates.",
         "pickSlot": "Sélectionner un créneau horaire",
+        "changeTime": "Modifier l’heure de livraison",
+        "changePickupTime": "Modifier l’heure de retrait",
         "unavailable": "Indisponible",
         "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer. Toute votre commande est payée après confirmation.",
         "dedicatedScheduledOnly": "Livraison programmée uniquement pour ce magasin en ce moment",
         "dedicatedScheduledOnlyHint": "Choisissez l’un des créneaux ci-dessous.",
-        "dedicatedPickupAt": "Récupérée au magasin à {{time}}",
         "slotKey": {
           "morning": "Matin",
           "afternoon": "Après-midi",
@@ -4472,7 +4504,8 @@
       "placeholder": "Rechercher un produit, un magasin, un repas",
       "emptyTitle": "Aucun résultat",
       "emptyBody": "Essayez un produit, un magasin ou une catégorie.",
-      "recent": "Recherches récentes"
+      "recent": "Recherches récentes",
+      "matchingStores": "Magasins correspondants"
     },
     "following": {
       "title": "Abonnements",
@@ -4880,6 +4913,17 @@
       "claimed": "Commandes Déjà Réclamées",
       "noOrdersFound": "Aucune commande disponible pour la collecte",
       "claimButton": "Réclamer",
+      "youEarn": "Vous gagnez",
+      "yourStore": "Votre magasin",
+      "yourStoreHint": "Les commandes de vos magasins dédiés portent la mention Votre magasin. Les créneaux dédiés à venir sont listés au-dessus.",
+      "dropoffAsap": "Livraison dès que possible",
+      "dropoffAsapShort": "Au plus tôt",
+      "dropoffToday": "Aujourd'hui",
+      "dropoffTomorrow": "Demain",
+      "youToStore": "Distance jusqu’au point de collecte · {{km}} km",
+      "storeToDropoff": "Collecte → livraison · {{km}} km",
+      "dropoffWhen": "Livraison {{when}}",
+      "dropoffScheduled": "Livraison planifiée",
       "claimWithHold": "Réclamer (caution)",
       "hold": "Caution",
       "fastDelivery": "Express",
@@ -5301,6 +5345,31 @@
       "momoBody": "Ajoutez un numéro de versement pour commencer à prendre des livraisons.",
       "pendingTitle": "Pièce d’identité en cours de vérification",
       "pendingBody": "Vous pourrez prendre des livraisons une fois votre pièce approuvée."
+    },
+    "myBusinesses": {
+      "navTitle": "Commerces",
+      "menuSubtitle": "Magasins dédiés et commerces que vous parrainez",
+      "homeTitle": "Commerces",
+      "homeDedicatedLabel": "Magasins dédiés",
+      "homeReferredLabel": "Parrainés",
+      "tabDedicated": "Dédiés",
+      "tabReferred": "Parrainés",
+      "dedicatedStoresTitle": "Vos magasins dédiés",
+      "dedicatedEmpty": "Vous n’êtes dédié à aucun magasin pour le moment. Postulez aux ouvertures ci-dessous.",
+      "browseOpportunities": "Voir les ouvertures",
+      "manageStores": "Gérer les magasins",
+      "openDedicatedHub": "Ouvrir le hub dédié",
+      "explainerTitle": "Deux choses sur cet onglet",
+      "ordersExplainerTitle": "Commandes dédiées",
+      "ordersExplainerBody": "Livraisons de vos magasins dédiés que vous pouvez prendre maintenant",
+      "hubExplainerTitle": "Hub dédié",
+      "hubExplainerBody": "Où postuler à de nouvelles ouvertures de magasins ou gérer ceux que vous couvrez déjà",
+      "openingsTitleCount": "{{count}} ouverture de magasin à postuler",
+      "openingsTitleCount_plural": "{{count}} ouvertures de magasins à postuler",
+      "openingsTitleEmpty": "Voir les ouvertures de magasins",
+      "openingsSubtitle": "Nouveaux postes de livraison dédiée près de vous — postulez pour rejoindre",
+      "hubManageTitle": "Hub dédié",
+      "hubManageSubtitle": "Gérez vos magasins et voyez toutes les ouvertures au même endroit"
     }
   },
   "agentOrder": {
@@ -7151,7 +7220,11 @@
     "client": {
       "ordersPendingPayment": {
         "title": "Commandes en attente de paiement",
-        "subtitle": "{{count}} commande(s) nécessite(nt) votre attention."
+        "subtitle": "{{count}} commande(s) doivent encore être payées."
+      },
+      "ordersAwaitingConfirmation": {
+        "title": "En attente de confirmation",
+        "subtitle": "{{count}} commande(s) en attente de confirmation du magasin."
       },
       "activeDelivery": {
         "title": "Commande en route",
@@ -8180,10 +8253,18 @@
       "stillOnIt": "Toujours dispo"
     },
     "list": {
-      "title": "Mes livraisons dédiées",
-      "empty": "Aucune livraison dédiée pour le moment.",
-      "offerBadge": "Offre",
+      "title": "Commandes dédiées",
+      "subtitle": "Commandes de vos magasins dédiés que vous pouvez prendre",
+      "empty": "Aucune commande dédiée à prendre pour le moment.",
+      "offerBadge": "Disponible",
       "assignedBadge": "Assignée"
+    },
+    "home": {
+      "title": "Vos prochaines livraisons dédiées",
+      "subtitle": "Commandes à venir pour vos magasins et créneaux dédiés. Prenez-en une maintenant pour planifier — même si vous avez manqué la notification.",
+      "opensAt": "Dispatch à {{time}}",
+      "take": "Je la prends",
+      "ignore": "Ignorer"
     }
   }
 }

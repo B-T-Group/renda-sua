@@ -4581,8 +4581,8 @@
       "paymentPendingCancellable": "Le paiement du client est en attente depuis plus d'1 heure. Vous pouvez maintenant annuler cette commande pour libérer l'inventaire.",
       "paymentPendingNotice": "Le paiement du client est toujours en attente. ${formatTimeRemaining(\n              timeRemaining\n            )} avant que vous puissiez annuler cette commande.",
       "pendingNotice": "💰 Nouvelle commande d'une valeur de {{revenue}} ! Le client attend la confirmation. Confirmez rapidement pour assurer la satisfaction du client et sécuriser cette vente.",
-      "scheduledNotice": "📅 Commande future d'une valeur de {{revenue}}. Le délai de confirmation commence à {{when}}. Vous pouvez confirmer plus tôt.",
-      "scheduledNoticeEarly": "📅 Commande future d'une valeur de {{revenue}}. Vous pouvez confirmer dès maintenant.",
+      "scheduledNotice": "Confirmez avant le {{when}} pour que cette commande de {{revenue}} reste dans les temps. Vous pouvez confirmer plus tôt.",
+      "scheduledNoticeEarly": "Confirmez cette commande de {{revenue}} pour qu’elle reste dans les temps.",
       "pickedUpNotice": "La commande a été récupérée par l'agent et est livrée au client.",
       "refundedNotice": "La commande a été remboursée au client.",
       "subtitle": "Gérez et suivez toutes vos commandes clients",
@@ -4655,6 +4655,9 @@
     }
   },
   "client": {
+    "search": {
+      "placeholder": "Rechercher des produits et des boutiques"
+    },
     "orders": {
       "agentAssigned": "🚚 Excellent! An agent has claimed your order and will pick it up shortly. Your delivery is now in progress!",
       "assignedToAgentNotice": "An agent has been assigned to your order and will pick it up soon.",
@@ -6026,6 +6029,11 @@
     },
     "deliveryTimeWindow": {
       "title": "Quand serez-vous disponible ?",
+      "fulfillNow": "À préparer maintenant",
+      "asapDelivery": "Le client veut cette livraison dès que possible.",
+      "asapPickup": "Le client viendra chercher la commande dès qu’elle sera prête.",
+      "customerDelivery": "Créneau de livraison choisi par le client",
+      "customerPickup": "Créneau de retrait choisi par le client",
       "availabilityTitle": "Quand êtes-vous disponible pour la livraison ?",
       "reviewSectionTitle": "Récapitulatif de votre livraison",
       "reviewSummary": "Nous livrerons à {{address}} le {{date}} entre {{start}} et {{end}}.",
@@ -6069,7 +6077,6 @@
       "confirmedBy": "Confirmé par",
       "storeAsapPayAfterConfirm": "Le magasin confirmera d’abord votre commande. Nous vous demanderons ensuite de payer. Toute votre commande est payée après confirmation.",
       "dedicatedScheduledOnly": "Livraison programmée uniquement pour ce magasin en ce moment. Choisissez l’un des créneaux ci-dessous.",
-      "dedicatedPickupAt": "Récupérée au magasin à {{time}}",
       "slotKey": {
         "morning": "Matin",
         "afternoon": "Après-midi",
@@ -7306,6 +7313,7 @@
       "searchHint": "Appuyez sur Entrée ou touchez l’icône de recherche pour lancer votre requête.",
       "clearSearch": "Effacer la recherche",
       "searchPlaceholder": "Rechercher des articles, des boutiques ou des catégories…",
+      "matchingStores": "Boutiques correspondantes",
       "suggestions": {
         "products": "Produits",
         "categories": "Catégories",

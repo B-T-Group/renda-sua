@@ -211,6 +211,7 @@ export const SERVER_SITE_EVENT_TYPES = [
   'dedicated.open_offer_reminder_sent',
   'dedicated.reminder_sent',
   'dedicated.designated_confirmed',
+  'dedicated.dashboard_offer_dismissed',
   'dedicated.unconfirmed_at_gate',
   'dedicated.release_free',
   'dedicated.release_late',

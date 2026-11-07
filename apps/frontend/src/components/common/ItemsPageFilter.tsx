@@ -516,6 +516,11 @@ const ItemsPageFilter: React.FC<ItemsPageFilterProps> = ({
                     eventType: SITE_EVENT_INVENTORY_SEARCH_SUGGESTION_SELECT,
                     metadata: { kind: 'seller', value: value.name },
                   });
+                  if (value.businessLocationId) {
+                    setSearchDraft('');
+                    navigate(`/store/${value.businessLocationId}`);
+                    return;
+                  }
                   setSearchDraft(value.name);
                   onSearchSubmit(value.name.trim());
                   return;

@@ -4,6 +4,7 @@ import {
   graceElapsed,
   isClientConfirmDeliveryOrder,
   isUnpaidPayAtDelivery,
+  needsMobilePadCollectionProof,
   shouldMintDeliveryPin,
   usesLegacyDeliveryPin,
 } from './client-confirm-delivery.util';
@@ -83,6 +84,169 @@ describe('client-confirm-delivery.util', () => {
       isUnpaidPayAtDelivery({
         payment_timing: 'pay_now',
         payment_status: 'paid',
+      })
+    ).toBe(false);
+  });
+
+  it('treats authorized and a reconciled cash exception as collected', () => {
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'authorized',
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_method: 'pay_on_delivery',
+        payment_status: 'authorized',
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        reconciliation_status: 'reconciled',
+      })
+    ).toBe(false);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: null,
+      })
+    ).toBe(true);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_method: 'pay_on_delivery',
+      })
+    ).toBe(true);
+    expect(
+      isUnpaidPayAtDelivery({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        pay_after_merchant_confirm: false,
+      })
+    ).toBe(true);
+  });
+
+  it('requires MoMo proof for paid mobile-payment PAD with a remainder due', () => {
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+      })
+    ).toBe(true);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_method: 'pay_on_delivery',
+        payment_status: 'authorized',
+        payment_source: 'mobile_money',
+        total_amount: 1500,
+      })
+    ).toBe(true);
+  });
+
+  it('does not require MoMo proof when cash, deposit, or another rail already covers PAD', () => {
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+        reconciliation_status: 'pending_manual_reconciliation',
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+        deposit_amount: 1500,
+        deposit_status: 'paid',
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        total_amount: 1500,
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'credit_card',
+        total_amount: 1500,
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'pending',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+      })
+    ).toBe(false);
+  });
+
+  it('still requires MoMo proof when the total is missing or the deposit does not cover it', () => {
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: null,
+      })
+    ).toBe(true);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_money',
+        total_amount: '2000',
+        deposit_amount: '500',
+        deposit_status: 'applied',
+      })
+    ).toBe(true);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'authorized',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+        deposit_amount: 1500,
+        deposit_status: 'pending',
+      })
+    ).toBe(true);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_method: 'pay_on_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+        deposit_amount: 1500,
+        deposit_status: 'applied',
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        reconciliation_status: 'reconciled',
+        total_amount: 1500,
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        pay_after_merchant_confirm: true,
+        total_amount: 1500,
       })
     ).toBe(false);
   });

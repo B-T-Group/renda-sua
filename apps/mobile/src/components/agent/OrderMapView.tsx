@@ -33,6 +33,7 @@ export interface OrderMapViewProps {
   contentBottomPadding?: number;
   claimEnabled?: boolean;
   claimBlockedLabel?: string;
+  dedicatedLocationIds?: ReadonlySet<string>;
 }
 
 interface OrderMapCommands {
@@ -204,6 +205,7 @@ export function OrderMapView({
   contentBottomPadding = 24,
   claimEnabled = true,
   claimBlockedLabel,
+  dedicatedLocationIds,
 }: OrderMapViewProps) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
@@ -487,6 +489,7 @@ export function OrderMapView({
                 isBusy={busyOrderId === selectedOrder.id}
                 claimEnabled={claimEnabled}
                 acceptLabel={claimEnabled ? undefined : claimBlockedLabel}
+                dedicatedLocationIds={dedicatedLocationIds}
               />
             </View>
           ) : null}

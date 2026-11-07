@@ -406,6 +406,7 @@ describe('OrdersService', () => {
             reportIssueAndRelease: jest.fn(),
             reassignOrder: jest.fn(),
             releaseDedicatedAutoAssignment: jest.fn(),
+            afterDroppedDesignatedAssignment: jest.fn().mockResolvedValue(undefined),
           },
         },
         {
@@ -4643,6 +4644,37 @@ describe('OrdersService', () => {
       expect(result.canClaim).toBe(false);
       expect(result.previewMode).toBe('country');
       expect(result.orders).toHaveLength(1);
+      expect(result.orders[0].my_dedicated_store).toBe(false);
+    });
+
+    it('marks open orders from the agent dedicated stores', async () => {
+      hasuraUserService.getUser.mockResolvedValue(previewAgentUser);
+      const dedicatedOrder = {
+        ...openOrderRow,
+        business_location: {
+          id: 'loc-1',
+          address: { country: 'CM', state: 'Littoral' },
+        },
+      };
+      hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
+        if (query.includes('GetAgentStatus')) {
+          return { agents_by_pk: { status: 'active' } };
+        }
+        if (query.includes('OpenOrders')) {
+          return { orders: [dedicatedOrder, openOrderRow] };
+        }
+        if (query.includes('AgentDedicatedStores')) {
+          return {
+            dedicated_agent_assignments: [{ business_location_id: 'loc-1' }],
+          };
+        }
+        return {};
+      });
+
+      const result = await service.getOpenOrders();
+
+      expect(result.orders[0].my_dedicated_store).toBe(true);
+      expect(result.orders[1].my_dedicated_store).toBe(false);
     });
 
     it('returns country listing with canClaim true for verified agents without state', async () => {
@@ -5150,6 +5182,107 @@ describe('OrdersService', () => {
         source: 'dedicated_offer',
         dedicatedAssignmentId: 'as-9',
       });
+    });
+
+    it('coverage Take ensures an early offer when none is active, then accepts', async () => {
+      arrangeClaim({ holdAmount: 0, balance: 0 });
+      jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+      const offers = {
+        getActiveOfferForAgent: jest
+          .fn()
+          .mockResolvedValueOnce(null)
+          .mockResolvedValue({ id: 'offer-1', expires_at: 'x', offer_kind: 'dedicated' }),
+        dedicatedAcceptAssignment: jest.fn().mockResolvedValue({ source: 'dedicated_offer', dedicatedAssignmentId: 'as-9' }),
+        markOfferLost: jest.fn(),
+      };
+      loose().orderOffersService = offers;
+      loose().designatedFirst = {
+        ensureEarlyOfferForAgent: jest.fn().mockResolvedValue(true),
+        reopenLateOffer: jest.fn().mockResolvedValue(false),
+      };
+      const assign = jest.spyOn(loose(), 'assignOrderToAgent').mockResolvedValue({ id: 'order-123' });
+      await service.acceptOrderOffer({ orderId: 'order-123' });
+      expect(loose().designatedFirst.ensureEarlyOfferForAgent).toHaveBeenCalledWith('order-123', 'agent-123');
+      expect(offers.dedicatedAcceptAssignment).toHaveBeenCalledWith('order-123', 'agent-123');
+      expect(assign).toHaveBeenCalledWith('order-123', 'agent-123', 'assigned_to_agent', {
+        source: 'dedicated_offer',
+        dedicatedAssignmentId: 'as-9',
+      });
+    });
+
+    it('Drop of a designated assignment excludes the agent so Coverage Take cannot reclaim', async () => {
+      hasuraUserService.getUser.mockResolvedValue(agentUser);
+      hasuraUserService.sessionPersonaContext.mockReturnValue({ jwtDefaultRole: 'agent', jwtAllowedRoles: ['agent'] });
+      jest.spyOn(loose(), 'getOrderDetails').mockResolvedValue({
+        id: 'order-123',
+        current_status: 'assigned_to_agent',
+        assigned_agent_id: 'agent-123',
+        currency: 'XAF',
+      });
+      hasuraSystemService.executeMutation.mockResolvedValue({
+        update_orders_by_pk: { id: 'order-123', current_status: 'ready_for_pickup', assigned_agent_id: null },
+      });
+      hasuraSystemService.getAccount.mockResolvedValue({ id: 'account-1', available_balance: 0 });
+      jest.spyOn(loose(), 'createStatusHistoryEntry').mockResolvedValue(undefined);
+      jest.spyOn(loose(), 'getOrCreateOrderHold').mockResolvedValue({ id: 'hold-1', agent_hold_amount: 0 });
+      jest.spyOn(loose(), 'updateOrderHold').mockResolvedValue(undefined);
+      jest.spyOn(loose(), 'releaseDroppedAgentHold').mockResolvedValue(undefined);
+      await service.dropOrder({ orderId: 'order-123' });
+      expect(loose().orderReassignmentService.afterDroppedDesignatedAssignment).toHaveBeenCalledWith(
+        'order-123',
+        'agent-123',
+        'agent-123'
+      );
+    });
+
+    it('coverage Take that cannot open an offer is unavailable, not an expired open-pool offer', async () => {
+      arrangeClaim({ holdAmount: 0, balance: 0 });
+      const offers = {
+        getActiveOfferForAgent: jest.fn().mockResolvedValue(null),
+        dedicatedAcceptAssignment: jest.fn(),
+        markOfferLost: jest.fn(),
+      };
+      loose().orderOffersService = offers;
+      loose().designatedFirst = {
+        ensureEarlyOfferForAgent: jest.fn().mockResolvedValue(false),
+        reopenLateOffer: jest.fn().mockResolvedValue(false),
+      };
+      const assign = jest.spyOn(loose(), 'assignOrderToAgent').mockResolvedValue({ id: 'order-123' });
+
+      const accept = () => service.acceptOrderOffer({ orderId: 'order-123' });
+      const responseOf = async () => {
+        const err = await accept().catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(HttpException);
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
+        return (err as HttpException).getResponse() as { error?: string; code?: string; message?: string };
+      };
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { coverage_slot_key: 'morning' },
+      });
+      await expect(responseOf()).resolves.toMatchObject({
+        error: 'DEDICATED_TAKE_UNAVAILABLE',
+        code: 'DEDICATED_TAKE_UNAVAILABLE',
+        message: expect.stringContaining('dedicated delivery'),
+      });
+      expect(loose().designatedFirst.ensureEarlyOfferForAgent).toHaveBeenCalledWith('order-123', 'agent-123');
+      expect(loose().designatedFirst.reopenLateOffer).toHaveBeenCalledWith('order-123', 'agent-123');
+      const coverageCall = hasuraSystemService.executeQuery.mock.calls.find(([q]) =>
+        String(q).includes('OfferAcceptCoverage')
+      );
+      expect(coverageCall?.[1]).toEqual({ id: 'order-123' });
+
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: { coverage_slot_key: null } });
+      expect(await responseOf()).toMatchObject({ error: 'OFFER_EXPIRED' });
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: { coverage_slot_key: '' } });
+      expect(await responseOf()).toMatchObject({ error: 'OFFER_EXPIRED' });
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: null });
+      expect(await responseOf()).toMatchObject({ error: 'OFFER_EXPIRED' });
+      hasuraSystemService.executeQuery.mockRejectedValue(new Error('hasura down'));
+      expect(await responseOf()).toMatchObject({ error: 'OFFER_EXPIRED' });
+
+      expect(offers.dedicatedAcceptAssignment).not.toHaveBeenCalled();
+      expect(assign).not.toHaveBeenCalled();
     });
 
     describe('#594 DEV QA N1: an open-pool claim while holding a live dedicated offer', () => {

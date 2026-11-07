@@ -25,7 +25,10 @@ import {
   isPayAfterConfirmBadgeVisible,
   isLocationPurchaseEnabled,
 } from './inventory-catalog-eligibility.util';
-import { buildLexicalItemSearchOr } from './inventory-lexical-search.util';
+import {
+  buildLexicalItemSearchOr,
+  buildStoreNameSearchOr,
+} from './inventory-lexical-search.util';
 import {
   buildInventoryItemNotFoundShareHtml,
   buildInventoryItemShareHtml,
@@ -307,6 +310,8 @@ export type InventorySearchSuggestion =
   | {
       kind: 'seller';
       businessId: string;
+      /** Location UUID for storefront navigation when known. */
+      businessLocationId?: string;
       name: string;
       logoUrl?: string | null;
     };
@@ -345,6 +350,11 @@ export interface PaginatedInventoryItems {
   totalPages: number;
   /** Present only when `discovery_sort_v1` is on (#342). */
   discovery?: { sort: DiscoverySort; sort_control: SortControlState };
+  /**
+   * Stores whose location or business name matched `search` (max 8).
+   * Only set when a free-text search is active.
+   */
+  matched_stores?: TopInventoryStoreRow[];
 }
 
 type CatalogShopperRegion = {
@@ -807,6 +817,8 @@ export class InventoryItemsService {
     searchItemIds?: string[];
     searchSkuQuery?: string;
     searchTextQuery?: string;
+    /** Match listings at stores whose location or business name contains this. */
+    storeNameQuery?: string;
     category?: string;
     subcategory?: string;
     location_name?: string;
@@ -840,6 +852,7 @@ export class InventoryItemsService {
       searchItemIds,
       searchSkuQuery,
       searchTextQuery,
+      storeNameQuery,
       category,
       subcategory,
       location_name,
@@ -912,6 +925,9 @@ export class InventoryItemsService {
           ? { item: { id: { _in: [] as string[] } } }
           : { _or: orClause }
       );
+    }
+    if (storeNameQuery?.trim()) {
+      whereConditions.push(buildStoreNameSearchOr(storeNameQuery.trim()));
     }
     if (category) {
       whereConditions.push({
@@ -1390,6 +1406,7 @@ export class InventoryItemsService {
         id: string;
         business_id: string;
         name: string;
+        business_name: string | null;
         city: string | null;
         is_verified: boolean;
         can_accept_orders: boolean;
@@ -1414,6 +1431,7 @@ export class InventoryItemsService {
           is_active
           logo_url
           business {
+            name
             is_verified
             can_accept_orders
             is_storefront_visible
@@ -1440,6 +1458,7 @@ export class InventoryItemsService {
       is_active?: boolean;
       logo_url?: string | null;
       business?: {
+        name?: string | null;
         is_verified?: boolean;
         can_accept_orders?: boolean;
         is_storefront_visible?: boolean;
@@ -1461,6 +1480,7 @@ export class InventoryItemsService {
           id: loc.id,
           business_id: loc.business_id,
           name: loc.name,
+          business_name: loc.business?.name?.trim() || null,
           city: loc.address?.city?.trim() || null,
           is_active: loc.is_active === true,
           is_verified: loc.business?.is_verified === true,
@@ -1622,13 +1642,16 @@ export class InventoryItemsService {
 
   private async applyStoreDirectoryFilters(
     counts: Map<string, number>,
-    byId: Map<string, { business_id: string; name: string }>,
+    byId: Map<
+      string,
+      { business_id: string; name: string; business_name?: string | null }
+    >,
     query: { search?: string; partners_only?: boolean }
   ): Promise<void> {
     const q = query.search?.trim().toLowerCase();
     if (q) {
       for (const [id, loc] of byId) {
-        if (!loc.name.toLowerCase().includes(q)) {
+        if (!this.storeDirectoryNameMatches(loc, q)) {
           counts.delete(id);
           byId.delete(id);
         }
@@ -1642,6 +1665,14 @@ export class InventoryItemsService {
         byId.delete(id);
       }
     }
+  }
+
+  private storeDirectoryNameMatches(
+    loc: { name: string; business_name?: string | null },
+    q: string
+  ): boolean {
+    if (loc.name.toLowerCase().includes(q)) return true;
+    return (loc.business_name ?? '').toLowerCase().includes(q);
   }
 
   private async activePartnerBusinessIds(): Promise<Set<string>> {
@@ -1818,10 +1849,9 @@ export class InventoryItemsService {
     }
 
     const hasSearch = Boolean(search?.trim());
-    const built = await this.buildInventoryCatalogWhere({
+    const whereBase = {
       is_active,
       include_unavailable: effectiveIncludeUnavailable,
-      ...catalogSearch,
       category,
       subcategory,
       location_name,
@@ -1841,6 +1871,10 @@ export class InventoryItemsService {
       export_only: export_only === true,
       includeExportListings: Boolean(business_location_id?.trim()),
       includeExportInSearch: hasSearch && export_only !== true,
+    };
+    const built = await this.buildInventoryCatalogWhere({
+      ...whereBase,
+      ...catalogSearch,
     });
     if ('unsupported' in built) {
       return {
@@ -1852,131 +1886,33 @@ export class InventoryItemsService {
       };
     }
     const { where } = built;
+    const includeStoreMatches = this.shouldIncludeStoreNameMatches({
+      hasSearch,
+      business_location_id,
+      business_id,
+      similarItemIds: query.similar_item_ids,
+    });
+    const storeWhere = includeStoreMatches
+      ? await this.buildStoreNameCatalogWhere(whereBase, search!.trim())
+      : null;
 
     try {
-      const total = await this.countDistinctCatalogItemIds(where);
-      if (total === 0) {
-        return {
-          items: [],
-          total: 0,
-          page,
-          limit,
-          totalPages: 0,
-        };
-      }
-      const rawItems = await this.fetchAllCatalogInventoryRows(where);
-      if (rawItems.length >= INVENTORY_CATALOG_FETCH_MAX) {
-        this.logger.warn(
-          `Inventory catalog: reached fetch cap (${INVENTORY_CATALOG_FETCH_MAX}); de-dupe may be incomplete.`
-        );
-      }
-      const items: InventoryItem[] = rawItems.map((inv: any) =>
-        this.mapItemTagsToTags(inv)
-      );
-      const itemsWithPayments = await this.attachPaymentsEnabledToItemsAsync(
-        items
-      );
-      const inventoryIds = itemsWithPayments.map((i) => i.id);
-      const viewsMap = await this.getViewCountsByInventoryIds(inventoryIds);
-      const dealsMap = await this.getActiveDealsByInventoryIds(inventoryIds);
-      const itemsWithViewsAndDeals = itemsWithPayments.map((item) => {
-        const viewsCount = viewsMap[item.id] ?? 0;
-        const deal = dealsMap[item.id];
-        const originalPrice = item.selling_price;
-        if (!deal) {
-          return {
-            ...item,
-            viewsCount,
-            hasActiveDeal: false,
-            original_price: originalPrice,
-            discounted_price: originalPrice,
-            deal_end_at: undefined,
-          };
-        }
-        const discounted = this.applyDealPrice(
-          originalPrice,
-          deal.discount_type,
-          deal.discount_value
-        );
-        return {
-          ...item,
-          viewsCount,
-          hasActiveDeal: true,
-          original_price: originalPrice,
-          discounted_price: discounted,
-          deal_discount_type: deal.discount_type,
-          deal_discount_value: deal.discount_value,
-          deal_end_at: deal.end_at,
-        };
-      });
-      const relevanceSignals =
-        await this.getRelevanceSignalsFromPastOrders(clientId);
-      const listOrigin = await this.resolveTopLocationsOrigin(query);
-      const shopperRegion = listOrigin
-        ? await this.resolveShopperRegion(query)
-        : null;
-      const withHaversine = this.applyHaversineDistanceForRanking(
-        itemsWithViewsAndDeals,
-        listOrigin,
-        shopperRegion
-      );
-      const withRatings = await this.attachRatingAggregates(withHaversine);
-      let sorted: InventoryItem[];
-      if (query.discovery) {
-        sorted = await this.rankForDiscovery({
-          items: withRatings,
-          mode: query.discovery.sort,
-          clientId,
-          relevanceSignals,
-          semanticScores,
-          country: country_code,
-        });
-      } else {
-        const winners = await this.pickBestListingPerItem(
-          withRatings,
-          sort,
-          clientId,
-          relevanceSignals
-        );
-        sorted = await this.applySortByMode(
-          winners,
-          sort,
-          clientId,
-          relevanceSignals
-        );
-        if (semanticScores?.size) {
-          sorted = this.applySemanticPrimarySort(sorted, semanticScores);
-        }
-      }
-      sorted = this.attachFoodAvailability(sorted);
-      if (food_only) {
-        sorted = this.sortOpenFoodFirst(sorted);
-      }
-      const totalPages = Math.ceil(total / limit);
-      const listOffset = (page - 1) * limit;
-      const pageItems = sorted.slice(listOffset, listOffset + limit);
-      const withLikes = await this.attachLikeState(pageItems);
-      if (query.discovery) {
-        const nowMs = Date.now();
-        return {
-          items: withLikes.map((item) => ({ ...item, ...trustSignals(item, nowMs) })),
-          total,
-          page,
-          limit,
-          totalPages,
-          discovery: {
-            sort: query.discovery.sort,
-            sort_control: sortControlState(total),
-          },
-        };
-      }
-      return {
-        items: withLikes,
-        total,
+      return await this.assembleInventoryListPage({
+        where,
+        storeWhere,
+        includeStoreMatches,
+        search: search?.trim(),
         page,
         limit,
-        totalPages,
-      };
+        sort,
+        food_only,
+        clientId,
+        country_code,
+        state,
+        query,
+        semanticScores,
+        discovery: query.discovery,
+      });
     } catch (error) {
       if (error instanceof HttpException) {
         throw error;
@@ -1988,6 +1924,282 @@ export class InventoryItemsService {
         { cause: error instanceof Error ? error : undefined }
       );
     }
+  }
+
+  private shouldIncludeStoreNameMatches(params: {
+    hasSearch: boolean;
+    business_location_id?: string;
+    business_id?: string;
+    similarItemIds?: string[];
+  }): boolean {
+    if (!params.hasSearch || params.similarItemIds) return false;
+    if (params.business_location_id?.trim()) return false;
+    if (params.business_id?.trim()) return false;
+    return true;
+  }
+
+  private async buildStoreNameCatalogWhere(
+    whereBase: Record<string, unknown>,
+    storeNameQuery: string
+  ): Promise<Record<string, unknown> | null> {
+    const built = await this.buildInventoryCatalogWhere({
+      ...(whereBase as any),
+      storeNameQuery,
+    });
+    if ('unsupported' in built) return null;
+    return built.where;
+  }
+
+  private mergeCatalogRowsProductFirst(
+    productRows: any[],
+    storeRows: any[]
+  ): { rows: any[]; productItemIds: Set<string> } {
+    const productItemIds = new Set<string>(
+      productRows.map((row) => String(row.item_id)).filter(Boolean)
+    );
+    const seenInventory = new Set(productRows.map((row) => String(row.id)));
+    const storeOnly = storeRows.filter((row) => {
+      const itemId = String(row.item_id ?? '');
+      const invId = String(row.id ?? '');
+      if (productItemIds.has(itemId)) return false;
+      if (seenInventory.has(invId)) return false;
+      seenInventory.add(invId);
+      return true;
+    });
+    return { rows: [...productRows, ...storeOnly], productItemIds };
+  }
+
+  private preferProductMatchesFirst(
+    sorted: InventoryItem[],
+    productItemIds: Set<string>
+  ): InventoryItem[] {
+    if (productItemIds.size === 0) return sorted;
+    const productFirst = sorted.filter((item) =>
+      productItemIds.has(item.item_id)
+    );
+    const storeOnly = sorted.filter(
+      (item) => !productItemIds.has(item.item_id)
+    );
+    return [...productFirst, ...storeOnly];
+  }
+
+  private async assembleInventoryListPage(params: {
+    where: Record<string, unknown>;
+    storeWhere: Record<string, unknown> | null;
+    includeStoreMatches: boolean;
+    search?: string;
+    page: number;
+    limit: number;
+    sort: InventorySortMode;
+    food_only: boolean;
+    clientId: string | null;
+    country_code?: string;
+    state?: string;
+    query: GetInventoryItemsQuery;
+    semanticScores?: Map<string, number>;
+    discovery?: { sort: DiscoverySort };
+  }): Promise<PaginatedInventoryItems> {
+    const {
+      where,
+      storeWhere,
+      includeStoreMatches,
+      search,
+      page,
+      limit,
+      sort,
+      food_only,
+      clientId,
+      country_code,
+      query,
+      semanticScores,
+    } = params;
+    const countWhere = storeWhere ? { _or: [where, storeWhere] } : where;
+    const total = await this.countDistinctCatalogItemIds(countWhere);
+    if (total === 0) {
+      return { items: [], total: 0, page, limit, totalPages: 0 };
+    }
+    const productRaw = await this.fetchAllCatalogInventoryRows(where);
+    const storeRaw = storeWhere
+      ? await this.fetchAllCatalogInventoryRows(storeWhere)
+      : [];
+    const { rows: rawItems, productItemIds } = this.mergeCatalogRowsProductFirst(
+      productRaw,
+      storeRaw
+    );
+    if (rawItems.length >= INVENTORY_CATALOG_FETCH_MAX) {
+      this.logger.warn(
+        `Inventory catalog: reached fetch cap (${INVENTORY_CATALOG_FETCH_MAX}); de-dupe may be incomplete.`
+      );
+    }
+    let sorted = await this.rankFetchedCatalogRows({
+      rawItems,
+      sort,
+      food_only,
+      clientId,
+      country_code,
+      query,
+      semanticScores,
+      discovery: params.discovery,
+    });
+    if (includeStoreMatches && storeRaw.length > 0) {
+      sorted = this.preferProductMatchesFirst(sorted, productItemIds);
+    }
+    const totalPages = Math.ceil(total / limit);
+    const listOffset = (page - 1) * limit;
+    const pageItems = sorted.slice(listOffset, listOffset + limit);
+    const withLikes = await this.attachLikeState(pageItems);
+    const matched_stores = includeStoreMatches
+      ? await this.getTopInventoryStores(8, {
+          search,
+          country_code,
+          state: params.state,
+          origin_lat: query.origin_lat,
+          origin_lng: query.origin_lng,
+          food_only: food_only || undefined,
+        })
+      : undefined;
+    if (params.discovery) {
+      const nowMs = Date.now();
+      return {
+        items: withLikes.map((item) => ({
+          ...item,
+          ...trustSignals(item, nowMs),
+        })),
+        total,
+        page,
+        limit,
+        totalPages,
+        discovery: {
+          sort: params.discovery.sort,
+          sort_control: sortControlState(total),
+        },
+        matched_stores,
+      };
+    }
+    return {
+      items: withLikes,
+      total,
+      page,
+      limit,
+      totalPages,
+      matched_stores,
+    };
+  }
+
+  private async rankFetchedCatalogRows(params: {
+    rawItems: any[];
+    sort: InventorySortMode;
+    food_only: boolean;
+    clientId: string | null;
+    country_code?: string;
+    query: GetInventoryItemsQuery;
+    semanticScores?: Map<string, number>;
+    discovery?: { sort: DiscoverySort };
+  }): Promise<InventoryItem[]> {
+    const {
+      rawItems,
+      sort,
+      food_only,
+      clientId,
+      country_code,
+      query,
+      semanticScores,
+    } = params;
+    const items: InventoryItem[] = rawItems.map((inv: any) =>
+      this.mapItemTagsToTags(inv)
+    );
+    const itemsWithPayments = await this.attachPaymentsEnabledToItemsAsync(
+      items
+    );
+    const inventoryIds = itemsWithPayments.map((i) => i.id);
+    const viewsMap = await this.getViewCountsByInventoryIds(inventoryIds);
+    const dealsMap = await this.getActiveDealsByInventoryIds(inventoryIds);
+    const itemsWithViewsAndDeals = itemsWithPayments.map((item) =>
+      this.attachDealAndViews(item, viewsMap, dealsMap)
+    );
+    const relevanceSignals =
+      await this.getRelevanceSignalsFromPastOrders(clientId);
+    const listOrigin = await this.resolveTopLocationsOrigin(query);
+    const shopperRegion = listOrigin
+      ? await this.resolveShopperRegion(query)
+      : null;
+    const withHaversine = this.applyHaversineDistanceForRanking(
+      itemsWithViewsAndDeals,
+      listOrigin,
+      shopperRegion
+    );
+    const withRatings = await this.attachRatingAggregates(withHaversine);
+    let sorted: InventoryItem[];
+    if (params.discovery) {
+      sorted = await this.rankForDiscovery({
+        items: withRatings,
+        mode: params.discovery.sort,
+        clientId,
+        relevanceSignals,
+        semanticScores,
+        country: country_code,
+      });
+    } else {
+      const winners = await this.pickBestListingPerItem(
+        withRatings,
+        sort,
+        clientId,
+        relevanceSignals
+      );
+      sorted = await this.applySortByMode(
+        winners,
+        sort,
+        clientId,
+        relevanceSignals
+      );
+      if (semanticScores?.size) {
+        sorted = this.applySemanticPrimarySort(sorted, semanticScores);
+      }
+    }
+    sorted = this.attachFoodAvailability(sorted);
+    return food_only ? this.sortOpenFoodFirst(sorted) : sorted;
+  }
+
+  private attachDealAndViews(
+    item: InventoryItem,
+    viewsMap: Record<string, number>,
+    dealsMap: Record<
+      string,
+      {
+        discount_type: 'percentage' | 'fixed';
+        discount_value: number;
+        end_at: string;
+      }
+    >
+  ): InventoryItem {
+    const viewsCount = viewsMap[item.id] ?? 0;
+    const deal = dealsMap[item.id];
+    const originalPrice = item.selling_price;
+    if (!deal) {
+      return {
+        ...item,
+        viewsCount,
+        hasActiveDeal: false,
+        original_price: originalPrice,
+        discounted_price: originalPrice,
+        deal_end_at: undefined,
+      };
+    }
+    const discounted = this.applyDealPrice(
+      originalPrice,
+      deal.discount_type,
+      deal.discount_value
+    );
+    return {
+      ...item,
+      viewsCount,
+      hasActiveDeal: true,
+      original_price: originalPrice,
+      discounted_price: discounted,
+      deal_discount_type: deal.discount_type,
+      deal_discount_value: deal.discount_value,
+      deal_end_at: deal.end_at,
+    };
   }
 
   /**
@@ -2341,12 +2553,34 @@ export class InventoryItemsService {
     const businessId = business?.id;
     if (!businessId || seenSellers.has(businessId)) return;
     seenSellers.add(businessId);
+    const locationName = row?.business_location?.name?.trim();
     suggestions.push({
       kind: 'seller',
       businessId,
-      name: business?.name ?? '',
+      businessLocationId: row?.business_location?.id || undefined,
+      name: locationName || business?.name || '',
       logoUrl: row?.business_location?.logo_url ?? null,
     });
+  }
+
+  private appendStoreNameSellerSuggestions(params: {
+    stores: TopInventoryStoreRow[];
+    suggestions: InventorySearchSuggestion[];
+    seenSellers: Set<string>;
+  }) {
+    const { stores, suggestions, seenSellers } = params;
+    for (const store of stores) {
+      if (seenSellers.size >= 5) break;
+      if (!store.business_id || seenSellers.has(store.business_id)) continue;
+      seenSellers.add(store.business_id);
+      suggestions.push({
+        kind: 'seller',
+        businessId: store.business_id,
+        businessLocationId: store.business_location_id,
+        name: store.name,
+        logoUrl: store.logo_url,
+      });
+    }
   }
 
   private tryAddTermSuggestions(params: {
@@ -2372,7 +2606,10 @@ export class InventoryItemsService {
   private buildSuggestionsFromRows(
     rows: any[],
     q: string
-  ): InventorySearchSuggestion[] {
+  ): {
+    suggestions: InventorySearchSuggestion[];
+    seenSellers: Set<string>;
+  } {
     const suggestions: InventorySearchSuggestion[] = [{ kind: 'term', value: q }];
     const seenProducts = new Set<string>();
     const seenCategories = new Set<string>();
@@ -2386,7 +2623,7 @@ export class InventoryItemsService {
       this.tryAddSellerSuggestion({ row, suggestions, seenSellers });
       this.tryAddTermSuggestions({ row, suggestions, seenTerms });
     }
-    return suggestions;
+    return { suggestions, seenSellers };
   }
 
   async getInventorySearchSuggestions(
@@ -2443,6 +2680,8 @@ export class InventoryItemsService {
             }
           }
           business_location {
+            id
+            name
             logo_url
             business {
               id
@@ -2466,7 +2705,22 @@ export class InventoryItemsService {
             return sb - sa;
           })
         : rows;
-    return this.buildSuggestionsFromRows(sortedRows, q);
+    const { suggestions, seenSellers } = this.buildSuggestionsFromRows(
+      sortedRows,
+      q
+    );
+    const matchedStores = await this.getTopInventoryStores(5, {
+      search: q,
+      country_code,
+      state,
+      food_only: query.food_only,
+    });
+    this.appendStoreNameSellerSuggestions({
+      stores: matchedStores,
+      suggestions,
+      seenSellers,
+    });
+    return suggestions;
   }
 
   /**

@@ -121,23 +121,27 @@ export function ActiveOrdersCarousel({
         </Text>
       </View>
       {pageWidth > 0 ? (
-        <PagedCarousel
-          data={models}
-          keyExtractor={(item) => item.order.id}
-          renderItem={renderItem}
-          pageWidth={pageWidth}
-          autoAdvanceMs={null}
-          showDots={orders.length > 1}
-          accessibilityLabelForIndex={(index, total) =>
-            t(
-              'business.dashboard.activeOrders.pageA11y',
-              'Order {{current}} of {{total}}',
-              { current: index + 1, total }
-            )
-          }
-        />
+        models.length === 1 ? (
+          renderItem({ item: models[0], index: 0, width: pageWidth })
+        ) : (
+          <PagedCarousel
+            data={models}
+            keyExtractor={(item) => item.order.id}
+            renderItem={renderItem}
+            pageWidth={pageWidth}
+            autoAdvanceMs={null}
+            showDots
+            accessibilityLabelForIndex={(index, total) =>
+              t(
+                'business.dashboard.activeOrders.pageA11y',
+                'Order {{current}} of {{total}}',
+                { current: index + 1, total }
+              )
+            }
+          />
+        )
       ) : (
-        <View style={{ minHeight: 180 }} />
+        <View style={{ minHeight: 220 }} />
       )}
     </Animated.View>
   );

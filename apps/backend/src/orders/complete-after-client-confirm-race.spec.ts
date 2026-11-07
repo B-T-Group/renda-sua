@@ -127,6 +127,127 @@ describe('OrdersService.completeAfterClientConfirmation race', () => {
     expect(svc.processOrderPayment).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['paid', 'pay_at_delivery', undefined],
+    ['authorized', 'pay_at_delivery', undefined],
+    ['pending', 'pay_at_delivery', 'reconciled'],
+  ])(
+    'still settles a collected doorstep order (%s, recon %s)',
+    async (payment_status, payment_timing, reconciliation_status) => {
+      const svc = build(false);
+      svc.getOrderDetails.mockResolvedValue({
+        id: 'order-1',
+        current_status: 'awaiting_client_confirmation',
+        client: { user_id: 'client-user' },
+        payment_timing,
+        payment_status,
+        reconciliation_status,
+      });
+
+      const result = await svc.completeAfterClientConfirmation(
+        'order-1',
+        'Client confirmed'
+      );
+
+      expect(result.alreadyComplete).toBe(false);
+      expect(svc.processOrderPayment).toHaveBeenCalledWith('order-1');
+      expect(svc.processOrderDeliveryPayment).toHaveBeenCalledWith('order-1');
+    }
+  );
+
+  it('refuses paid mobile PAD when no successful collect exists', async () => {
+    const svc = build(false);
+    svc.mobilePaymentsDatabaseService = {
+      hasSuccessfulOrderPayment: jest.fn().mockResolvedValue(false),
+    };
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      order_number: 'ORD-1',
+      current_status: 'awaiting_client_confirmation',
+      client: { user_id: 'client-user' },
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'paid',
+      payment_source: 'mobile_payment',
+      total_amount: 1500,
+    });
+
+    await expect(
+      svc.completeAfterClientConfirmation('order-1', 'Client confirmed')
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ error: 'PAY_AT_DELIVERY_UNPAID' }),
+    });
+    expect(svc.updateOrderStatusWithSingleRetry).not.toHaveBeenCalled();
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+  });
+
+  it('settles paid mobile PAD after a successful collect', async () => {
+    const svc = build(false);
+    svc.mobilePaymentsDatabaseService = {
+      hasSuccessfulOrderPayment: jest.fn().mockResolvedValue(true),
+    };
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      order_number: 'ORD-1',
+      current_status: 'awaiting_client_confirmation',
+      client: { user_id: 'client-user' },
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'paid',
+      payment_source: 'mobile_payment',
+      total_amount: 1500,
+    });
+
+    const result = await svc.completeAfterClientConfirmation(
+      'order-1',
+      'Client confirmed'
+    );
+
+    expect(result.alreadyComplete).toBe(false);
+    expect(svc.processOrderPayment).toHaveBeenCalledWith('order-1');
+  });
+
+  it('refuses pay-on-delivery when no payment status was recorded', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      current_status: 'out_for_delivery',
+      client: { user_id: 'client-user' },
+      payment_method: 'pay_on_delivery',
+      payment_status: null,
+    });
+
+    await expect(
+      svc.completeAfterClientConfirmation('order-1', 'Client confirmed')
+    ).rejects.toMatchObject({
+      status: 409,
+      response: expect.objectContaining({ error: 'PAY_AT_DELIVERY_UNPAID' }),
+    });
+    expect(svc.updateOrderStatusWithSingleRetry).not.toHaveBeenCalled();
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+  });
+
+  it('does not 409 a pay-at-delivery cash exception that is still pending reconciliation', async () => {
+    const svc = build(false);
+    svc.getOrderDetails.mockResolvedValue({
+      id: 'order-1',
+      current_status: 'awaiting_client_confirmation',
+      client: { user_id: 'client-user' },
+      payment_timing: 'pay_at_delivery',
+      payment_status: 'pending',
+      reconciliation_status: 'pending_manual_reconciliation',
+    });
+
+    const result = await svc.completeAfterClientConfirmation(
+      'order-1',
+      'Client confirmed'
+    );
+
+    expect(result.alreadyComplete).toBe(false);
+    expect(svc.updateOrderStatusWithSingleRetry).toHaveBeenCalled();
+    expect(svc.processOrderPayment).not.toHaveBeenCalled();
+    expect(svc.processOrderDeliveryPayment).not.toHaveBeenCalled();
+  });
+
   it('does not settle when the order is already complete', async () => {
     const svc = build(false);
     svc.getOrderDetails.mockResolvedValue({

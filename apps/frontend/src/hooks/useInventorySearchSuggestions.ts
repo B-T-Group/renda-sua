@@ -12,7 +12,13 @@ export type InventorySearchSuggestion =
       currency: string;
     }
   | { kind: 'category'; value: string }
-  | { kind: 'seller'; businessId: string; name: string; logoUrl?: string | null };
+  | {
+      kind: 'seller';
+      businessId: string;
+      businessLocationId?: string;
+      name: string;
+      logoUrl?: string | null;
+    };
 
 export type UseInventorySearchSuggestionsParams = {
   q: string;

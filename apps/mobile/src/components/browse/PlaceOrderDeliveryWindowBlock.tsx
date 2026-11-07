@@ -1,12 +1,21 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTranslation } from 'react-i18next';
-import { Button, Text } from 'react-native-paper';
+import { Text } from 'react-native-paper';
 import { CoveredDeliverySlotPicker } from '../common/CoveredDeliverySlotPicker';
 import { DeliveryWindowPicker } from '../common/DeliveryWindowPicker';
 import { useTheme } from '../../contexts/ThemeContext';
 import type { DedicatedCoveredSlot } from '../../types/checkout';
 import type { ClientDeliveryWindowPayload } from '../../types/deliveryWindow';
+import { formatCheckoutClock, formatCheckoutEtaRange, formatWindowChoiceLabel } from '../../utils/deliveryWindowUtils';
 
 export interface PlaceOrderDeliveryWindowBlockProps {
   countryCode: string;
@@ -41,6 +50,8 @@ export interface PlaceOrderDeliveryWindowBlockProps {
   value?: ClientDeliveryWindowPayload | null;
   onReadyChange: (ok: boolean) => void;
   onCommit: (window: ClientDeliveryWindowPayload | null) => void;
+  /** Display label for a chosen slot. Null means as soon as possible. */
+  onLabelChange?: (label: string | null) => void;
 }
 
 export function PlaceOrderDeliveryWindowBlock({
@@ -60,6 +71,7 @@ export function PlaceOrderDeliveryWindowBlock({
   value,
   onReadyChange,
   onCommit,
+  onLabelChange,
 }: PlaceOrderDeliveryWindowBlockProps) {
   if (fulfillment !== 'pickup' && coveredSlots && coveredSlots.length > 0) {
     return (
@@ -69,6 +81,7 @@ export function PlaceOrderDeliveryWindowBlock({
         value={value}
         onReadyChange={onReadyChange}
         onCommit={onCommit}
+        onLabelChange={onLabelChange}
       />
     );
   }
@@ -88,8 +101,36 @@ export function PlaceOrderDeliveryWindowBlock({
       opensAt={opensAt}
       onReadyChange={onReadyChange}
       onCommit={onCommit}
+      onLabelChange={onLabelChange}
     />
   );
+}
+
+const SLOT_KEY_FALLBACK: Record<string, string> = {
+  morning: 'Morning',
+  afternoon: 'Afternoon',
+  evening: 'Evening',
+};
+
+function coveredWindowLabel(
+  window: ClientDeliveryWindowPayload | null,
+  slots: DedicatedCoveredSlot[],
+  locale: string,
+  translate: (key: string, fallback: string) => string
+): string | null {
+  if (!window) return null;
+  const slot = slots.find(
+    (item) => item.slot_id === window.slot_id && item.date === window.preferred_date
+  );
+  if (!slot) return null;
+  const name = slot.slot_key
+    ? translate(
+        `client.placeOrder.deliveryWindow.slotKey.${slot.slot_key}`,
+        SLOT_KEY_FALLBACK[slot.slot_key] ?? slot.slot_key
+      )
+    : '';
+  const range = slot.start && slot.end ? `${slot.start}–${slot.end}` : '';
+  return formatWindowChoiceLabel(slot.date, [name, range], locale);
 }
 
 /** #594: scheduled-only delivery for the dedicated-covered slots (no ASAP). */
@@ -99,14 +140,16 @@ function CoveredOnlyBlock({
   value,
   onReadyChange,
   onCommit,
+  onLabelChange,
 }: {
   enabled: boolean;
   slots: DedicatedCoveredSlot[];
   value?: ClientDeliveryWindowPayload | null;
   onReadyChange: (ok: boolean) => void;
   onCommit: (window: ClientDeliveryWindowPayload | null) => void;
+  onLabelChange?: (label: string | null) => void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
   const [selected, setSelected] = useState<ClientDeliveryWindowPayload | null>(null);
 
@@ -115,8 +158,9 @@ function CoveredOnlyBlock({
       setSelected(window);
       onCommit(window);
       onReadyChange(window != null);
+      onLabelChange?.(coveredWindowLabel(window, slots, i18n.language, t));
     },
-    [onCommit, onReadyChange]
+    [i18n.language, onCommit, onLabelChange, onReadyChange, slots, t]
   );
 
   if (!enabled) return null;
@@ -154,6 +198,68 @@ function CoveredOnlyBlock({
   );
 }
 
+function TimingChoiceOption({
+  selected,
+  title,
+  subtitle,
+  icon,
+  onPress,
+}: {
+  selected: boolean;
+  title: string;
+  subtitle: string;
+  icon: ComponentProps<typeof MaterialCommunityIcons>['name'];
+  onPress: () => void;
+}) {
+  const { colors, spacing, borderRadius, typography } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityState={{ checked: selected }}
+      accessibilityLabel={`${title}. ${subtitle}`}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: spacing.sm,
+        paddingVertical: spacing.sm,
+        paddingHorizontal: spacing.sm,
+        borderWidth: 1.5,
+        borderColor: selected ? colors.primary.main : colors.borderStrong,
+        backgroundColor: selected ? colors.primaryTint : colors.surface,
+        borderRadius: borderRadius.md,
+      }}
+    >
+      <MaterialCommunityIcons
+        name={selected ? 'radiobox-marked' : 'radiobox-blank'}
+        size={22}
+        color={selected ? colors.primary.main : colors.text.secondary}
+        style={{ marginTop: 1 }}
+      />
+      <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+          <MaterialCommunityIcons
+            name={icon}
+            size={16}
+            color={selected ? colors.primary.main : colors.text.secondary}
+          />
+          <Text
+            style={[
+              typography.subtitle2,
+              { fontWeight: '700', color: selected ? colors.primary.dark : colors.text.primary },
+            ]}
+          >
+            {title}
+          </Text>
+        </View>
+        <Text style={[typography.caption, { color: colors.text.secondary, lineHeight: 18 }]}>
+          {subtitle}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
 function StandardDeliveryWindowBlock({
   countryCode,
   stateCode,
@@ -169,6 +275,7 @@ function StandardDeliveryWindowBlock({
   opensAt,
   onReadyChange,
   onCommit,
+  onLabelChange,
 }: Omit<PlaceOrderDeliveryWindowBlockProps, 'coveredSlots'>) {
   const { t } = useTranslation();
   const { colors, spacing, borderRadius } = useTheme();
@@ -183,6 +290,7 @@ function StandardDeliveryWindowBlock({
       setScheduling(false);
       onCommit(null);
       onReadyChange(true);
+      onLabelChange?.(null);
     }
   }, [allowSchedule]);
 
@@ -193,6 +301,7 @@ function StandardDeliveryWindowBlock({
       setScheduling(false);
       onCommit(null);
       onReadyChange(true);
+      onLabelChange?.(null);
     }
     prevScheduleRequired.current = effectiveScheduleRequired;
   }, [effectiveScheduleRequired]);
@@ -201,11 +310,12 @@ function StandardDeliveryWindowBlock({
     if (!enabled || showPicker) return;
     onReadyChange(true);
     onCommit(null);
+    onLabelChange?.(null);
   }, [enabled, showPicker]);
 
   if (!enabled) return null;
 
-  const etaLabel = formatEtaRange(estimatedReadyAt, estimatedFulfillBy);
+  const etaLabel = formatCheckoutEtaRange(estimatedReadyAt, estimatedFulfillBy);
   const closedCopy = isPickup
     ? t(
         'client.placeOrder.deliveryWindow.storeClosedPickup',
@@ -235,6 +345,116 @@ function StandardDeliveryWindowBlock({
           'We’ll start preparing when the kitchen confirms.'
         );
 
+  const nowSubtitle = !allowSchedule
+    ? cookedFoodAsapCopy
+    : etaLabel
+      ? t('client.placeOrder.deliveryWindow.asapEta', 'Usually ready {{eta}}', { eta: etaLabel })
+      : isPickup
+        ? t(
+            'client.placeOrder.deliveryWindow.nowChoicePickupHint',
+            'As soon as it’s ready'
+          )
+        : t(
+            'client.placeOrder.deliveryWindow.nowChoiceDeliveryHint',
+            'As soon as possible'
+          );
+
+  const laterSubtitle = isPickup
+    ? t(
+        'client.placeOrder.deliveryWindow.laterChoicePickupHint',
+        'Choose a pickup date and time'
+      )
+    : t(
+        'client.placeOrder.deliveryWindow.laterChoiceDeliveryHint',
+        'Choose a delivery date and time'
+      );
+
+  const selectNow = () => {
+    setScheduling(false);
+    onCommit(null);
+    onReadyChange(true);
+    onLabelChange?.(null);
+  };
+
+  const selectLater = () => {
+    setScheduling(true);
+    onReadyChange(false);
+  };
+
+  let body: ReactNode;
+  if (effectiveScheduleRequired) {
+    body = (
+      <>
+        <View style={{ marginBottom: spacing.sm }}>
+          <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '600' }}>
+            {closedCopy}
+          </Text>
+          {opensAt ? (
+            <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs }}>
+              {t('client.placeOrder.deliveryWindow.opensAt', 'Opens {{time}}', {
+                time: formatCheckoutClock(opensAt),
+              })}
+            </Text>
+          ) : null}
+        </View>
+        <DeliveryWindowPicker
+          countryCode={countryCode}
+          stateCode={stateCode}
+          enabled={enabled}
+          fulfillment={fulfillment}
+          businessLocationId={businessLocationId}
+          onReadyChange={onReadyChange}
+          onSelectionChange={onCommit}
+          onLabelChange={onLabelChange}
+        />
+      </>
+    );
+  } else if (!allowSchedule) {
+    body = (
+      <View>
+        <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '600' }}>
+          {isPickup
+            ? t('client.placeOrder.deliveryWindow.asapPickupTitle', 'Pick up as soon as possible')
+            : t('client.placeOrder.deliveryWindow.asapTitle', 'Deliver as soon as possible')}
+        </Text>
+        <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs, lineHeight: 20 }}>
+          {cookedFoodAsapCopy}
+        </Text>
+      </View>
+    );
+  } else {
+    body = (
+      <View accessibilityRole="radiogroup" style={{ gap: spacing.sm }}>
+        <TimingChoiceOption
+          selected={!scheduling}
+          title={t('client.placeOrder.deliveryWindow.nowChoiceTitle', 'Now')}
+          subtitle={nowSubtitle}
+          icon={isPickup ? 'clock-fast' : 'truck-fast-outline'}
+          onPress={selectNow}
+        />
+        <TimingChoiceOption
+          selected={scheduling}
+          title={t('client.placeOrder.deliveryWindow.laterChoiceTitle', 'Later')}
+          subtitle={laterSubtitle}
+          icon="calendar-clock"
+          onPress={selectLater}
+        />
+        {showPicker ? (
+          <DeliveryWindowPicker
+            countryCode={countryCode}
+            stateCode={stateCode}
+            enabled={enabled}
+            fulfillment={fulfillment}
+            businessLocationId={businessLocationId}
+            onReadyChange={onReadyChange}
+            onSelectionChange={onCommit}
+            onLabelChange={onLabelChange}
+          />
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View
       style={[
@@ -247,99 +467,9 @@ function StandardDeliveryWindowBlock({
         },
       ]}
     >
-      {effectiveScheduleRequired ? (
-        <View style={{ marginBottom: spacing.sm }}>
-          <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '600' }}>
-            {closedCopy}
-          </Text>
-          {opensAt ? (
-            <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs }}>
-              {t('client.placeOrder.deliveryWindow.opensAt', 'Opens {{time}}', {
-                time: formatClock(opensAt),
-              })}
-            </Text>
-          ) : null}
-        </View>
-      ) : (
-        <View style={{ marginBottom: spacing.sm }}>
-          <Text variant="titleSmall" style={{ color: colors.text.primary, fontWeight: '600' }}>
-            {isPickup
-              ? t('client.placeOrder.deliveryWindow.asapPickupTitle', 'Pick up as soon as possible')
-              : t('client.placeOrder.deliveryWindow.asapTitle', 'Deliver as soon as possible')}
-          </Text>
-          <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: spacing.xxs, lineHeight: 20 }}>
-            {!allowSchedule
-              ? cookedFoodAsapCopy
-              : etaLabel
-                ? t('client.placeOrder.deliveryWindow.asapEta', 'Usually ready {{eta}}', {
-                    eta: etaLabel,
-                  })
-                : t(
-                    'client.placeOrder.deliveryWindow.asapSubtitle',
-                    'We’ll start preparing as soon as the store confirms.'
-                  )}
-          </Text>
-        </View>
-      )}
-
-      {showPicker ? (
-        <DeliveryWindowPicker
-          countryCode={countryCode}
-          stateCode={stateCode}
-          enabled={enabled}
-          fulfillment={fulfillment}
-          businessLocationId={businessLocationId}
-          onReadyChange={onReadyChange}
-          onSelectionChange={onCommit}
-        />
-      ) : null}
-
-      {allowSchedule && !effectiveScheduleRequired ? (
-        <Button
-          mode="text"
-          compact
-          onPress={() => {
-            if (scheduling) {
-              setScheduling(false);
-              onCommit(null);
-              onReadyChange(true);
-              return;
-            }
-            setScheduling(true);
-            onReadyChange(false);
-          }}
-        >
-          {scheduling
-            ? isPickup
-              ? t('client.placeOrder.deliveryWindow.backToAsapPickup', 'Pick up as soon as possible')
-              : t('client.placeOrder.deliveryWindow.backToAsap', 'Deliver as soon as possible')
-            : isPickup
-              ? t(
-                  'client.placeOrder.deliveryWindow.schedulePickupLink',
-                  'Schedule pickup for a future date'
-                )
-              : t(
-                  'client.placeOrder.deliveryWindow.scheduleDeliveryLink',
-                  'Schedule delivery for a future date'
-                )}
-        </Button>
-      ) : null}
+      {body}
     </View>
   );
-}
-
-function formatClock(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' });
-}
-
-function formatEtaRange(readyAt?: string | null, fulfillBy?: string | null): string | null {
-  if (!readyAt && !fulfillBy) return null;
-  const a = readyAt ? formatClock(readyAt) : '';
-  const b = fulfillBy ? formatClock(fulfillBy) : '';
-  if (a && b && a !== b) return `${a}–${b}`;
-  return a || b || null;
 }
 
 const styles = StyleSheet.create({

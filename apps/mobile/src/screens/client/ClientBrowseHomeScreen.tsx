@@ -7,8 +7,9 @@ import { useTranslation } from 'react-i18next';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { observer } from 'mobx-react-lite';
-import { Snackbar } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomOverlaySnackbar } from '../../components/feedback/BottomOverlaySnackbar';
+import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
 import { BrowseCatalogScreen } from '../shared/BrowseCatalogScreen';
 import ClientRentalsHomeScreen from './ClientRentalsHomeScreen';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
@@ -42,6 +43,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { spacing } from '../../theme';
 import { selectClientHomeOrders } from '../../utils/selectClientHomeOrders';
 import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
+import { useClientHomeOrderCta } from '../../hooks/useClientHomeOrderCta';
 import type { Order } from '../../types/agent';
 
 /** Client browse tab: catalog + navigation to item detail on the root stack. */
@@ -49,12 +51,13 @@ function ClientBrowseHomeScreenBase() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { tabBarOverlayHeight } = useTabBarGeometry();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<ClientMainTabParamList, 'ClientBrowse'>>();
   const { auth, persona } = useStore();
   const [snack, setSnack] = useState<string | null>(null);
   const clientBrowseOrders = auth.isAuthenticated && persona.activePersona === 'client';
-  const { orders } = useClientOrders(clientBrowseOrders);
+  const { orders, refresh: refreshOrders } = useClientOrders(clientBrowseOrders);
   const { count: nearbyAgentsCount } = useNearbyAgentsCount(clientBrowseOrders);
   const { unreadCount } = useNotifications();
 
@@ -94,6 +97,13 @@ function ClientBrowseHomeScreenBase() {
     },
     [rootNav]
   );
+
+  const { onPressCta: onHomeOrderCta, busyOrderId: homeOrderCtaBusyId } =
+    useClientHomeOrderCta({
+      onOpenOrder: onOpenHomeOrder,
+      onMutated: refreshOrders,
+      onSnack: setSnack,
+    });
 
   const onSeeAllHomeOrders = useCallback(() => {
     tabNav.navigate('ClientOrders');
@@ -256,6 +266,8 @@ function ClientBrowseHomeScreenBase() {
         homeOrders={homeOrders}
         homeOrdersTotalActive={homeOrdersTotalActive}
         onOpenHomeOrder={homeOrders.length > 0 ? onOpenHomeOrder : undefined}
+        onHomeOrderCta={homeOrders.length > 0 ? onHomeOrderCta : undefined}
+        homeOrderCtaBusyId={homeOrderCtaBusyId}
         onSeeAllHomeOrders={
           homeOrdersTotalActive > homeOrders.length ? onSeeAllHomeOrders : undefined
         }
@@ -299,9 +311,14 @@ function ClientBrowseHomeScreenBase() {
         onConfirm={variantFlow.onPickerConfirm}
         confirmLabel={variantFlow.confirmLabel}
       />
-      <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={2500}>
+      <BottomOverlaySnackbar
+        visible={!!snack}
+        onDismiss={() => setSnack(null)}
+        duration={2500}
+        bottomGap={tabBarOverlayHeight + 12}
+      >
         {snack}
-      </Snackbar>
+      </BottomOverlaySnackbar>
     </View>
   );
 }

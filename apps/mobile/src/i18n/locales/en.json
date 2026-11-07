@@ -861,6 +861,8 @@
       "tabRatings": "Ratings",
       "locationsTitle": "Pickup & delivery",
       "whenAvailable": "When will you be available?",
+      "deliveryTime": "Delivery time",
+      "pickupTime": "Pickup time",
       "messagesTitle": "Order messages",
       "messageHint": "Chat with the store or agent",
       "messagePlaceholder": "Write a message…",
@@ -2416,6 +2418,12 @@
         "itemCount_one": "{{count}} item",
         "itemCount_other": "{{count}} items",
         "itemCount": "{{count}} items",
+        "moreItems": "+{{count}} more",
+        "fulfillment": {
+          "pickup": "Pickup",
+          "delivery": "Delivery",
+          "shipping": "Shipping"
+        },
         "receivedJustNow": "Received just now",
         "receivedMinutes": "Received {{count}} minutes ago",
         "receivedHours": "Received {{count}} hours ago",
@@ -2723,6 +2731,13 @@
       "detailClient": "Customer",
       "detailLocations": "Pickup & delivery",
       "detailDeliveryWindows": "Delivery windows",
+      "timing": {
+        "fulfillNow": "Fulfill now",
+        "asapDelivery": "The customer wants this delivered as soon as possible.",
+        "asapPickup": "The customer will pick this up as soon as it is ready.",
+        "deliveryTitle": "Delivery time the customer chose",
+        "pickupTitle": "Pickup time the customer chose"
+      },
       "detailOrderNotes": "Order notes",
       "detailMessagesTitle": "Order messages",
       "detailMessagesHint": "Chat with the customer or delivery agent",
@@ -2755,8 +2770,8 @@
       "cashPending": "Cash recon.",
       "scheduled": "Scheduled",
       "scheduledActivates": "Activates {{when}}",
-      "scheduledDetail": "Confirmation timer starts at {{when}}. You can confirm early anytime.",
-      "scheduledEarly": "This future order is waiting. You can confirm early anytime.",
+      "scheduledDetail": "Confirm by {{when}} to keep this order on track. You can confirm earlier.",
+      "scheduledEarly": "Confirm this order to keep it on track.",
       "actionFailed": "Action failed",
       "reconcileFailed": "Reconciliation failed",
       "confirmPickupFailed": "Failed to confirm pickup",
@@ -4368,6 +4383,16 @@
       "addNotes": "Add special instructions",
       "notesPlaceholder": "Allergies, gate code, spice level…",
       "submit": "Place order",
+      "review": {
+        "continue": "Continue",
+        "edit": "Edit",
+        "choicesTitle": "Your choices",
+        "quantity": "Quantity",
+        "method": "How you get it",
+        "address": "Address",
+        "time": "Time",
+        "receipt": "Order total"
+      },
       "kitchenClosed": {
         "title": "Kitchen closed",
         "nextOpening": "Next opening",
@@ -4385,6 +4410,12 @@
         "asapPickupTitle": "Pick up as soon as possible",
         "asapSubtitle": "We’ll start preparing as soon as the store confirms.",
         "asapEta": "Usually ready {{eta}}",
+        "nowChoiceTitle": "Now",
+        "laterChoiceTitle": "Later",
+        "nowChoicePickupHint": "As soon as it’s ready",
+        "nowChoiceDeliveryHint": "As soon as possible",
+        "laterChoicePickupHint": "Choose a pickup date and time",
+        "laterChoiceDeliveryHint": "Choose a delivery date and time",
         "cookedFoodAsapPickup": "We’ll start preparing when the kitchen confirms.",
         "cookedFoodAsapDelivery": "We’ll start preparing when the kitchen confirms.",
         "cookedFoodAsapPayAfterConfirm": "We’ll start preparing once the kitchen confirms and receives your payment.",
@@ -4403,11 +4434,12 @@
         "pickupDate": "Pickup date",
         "scrollDaysHint": "Swipe sideways for more dates.",
         "pickSlot": "Select a time slot",
+        "changeTime": "Change delivery time",
+        "changePickupTime": "Change pickup time",
         "unavailable": "Unavailable",
         "storeAsapPayAfterConfirm": "The store will confirm your order first. We’ll then ask you to pay. Your whole order is paid after confirmation.",
         "dedicatedScheduledOnly": "Scheduled delivery only for this store right now",
         "dedicatedScheduledOnlyHint": "Choose one of the times below.",
-        "dedicatedPickupAt": "Picked up from the store at {{time}}",
         "slotKey": {
           "morning": "Morning",
           "afternoon": "Afternoon",
@@ -4565,7 +4597,8 @@
       "placeholder": "Search products, stores, food",
       "emptyTitle": "No matches",
       "emptyBody": "Try a product, a store, or a category.",
-      "recent": "Recent searches"
+      "recent": "Recent searches",
+      "matchingStores": "Matching stores"
     },
     "following": {
       "title": "Following",
@@ -4973,6 +5006,17 @@
       "claimed": "Already Claimed Orders",
       "noOrdersFound": "No orders available for pickup",
       "claimButton": "Claim",
+      "youEarn": "You earn",
+      "yourStore": "Your store",
+      "yourStoreHint": "Orders from your dedicated stores are tagged Your store. Upcoming dedicated slots are listed above.",
+      "dropoffAsap": "Drop off as soon as possible",
+      "dropoffAsapShort": "ASAP",
+      "dropoffToday": "Today",
+      "dropoffTomorrow": "Tomorrow",
+      "youToStore": "Distance to pickup · {{km}} km",
+      "storeToDropoff": "Pickup to drop-off · {{km}} km",
+      "dropoffWhen": "Drop off {{when}}",
+      "dropoffScheduled": "Scheduled drop-off",
       "claimWithHold": "Claim (with hold)",
       "hold": "Hold",
       "fastDelivery": "Express",
@@ -5394,6 +5438,31 @@
       "momoBody": "Add a payout number to start claiming deliveries.",
       "pendingTitle": "ID under review",
       "pendingBody": "You can claim deliveries once your ID is approved."
+    },
+    "myBusinesses": {
+      "navTitle": "Businesses",
+      "menuSubtitle": "Dedicated stores and businesses you refer",
+      "homeTitle": "Businesses",
+      "homeDedicatedLabel": "Dedicated stores",
+      "homeReferredLabel": "Referred",
+      "tabDedicated": "Dedicated",
+      "tabReferred": "Referred",
+      "dedicatedStoresTitle": "Your dedicated stores",
+      "dedicatedEmpty": "You are not a dedicated agent for any store yet. Apply to openings below.",
+      "browseOpportunities": "Browse store openings",
+      "manageStores": "Manage stores",
+      "openDedicatedHub": "Open dedicated hub",
+      "explainerTitle": "Two things on this tab",
+      "ordersExplainerTitle": "Dedicated orders",
+      "ordersExplainerBody": "Deliveries from your dedicated stores that you can take now",
+      "hubExplainerTitle": "Dedicated hub",
+      "hubExplainerBody": "Where you apply to new store openings or manage the stores you already cover",
+      "openingsTitleCount": "{{count}} store opening to apply",
+      "openingsTitleCount_plural": "{{count}} store openings to apply",
+      "openingsTitleEmpty": "Browse store openings",
+      "openingsSubtitle": "New dedicated delivery spots at nearby stores — apply to join",
+      "hubManageTitle": "Dedicated hub",
+      "hubManageSubtitle": "Manage your stores and see all openings in one place"
     }
   },
   "agentOrder": {
@@ -7229,7 +7298,11 @@
     "client": {
       "ordersPendingPayment": {
         "title": "Orders awaiting payment",
-        "subtitle": "{{count}} order(s) need your attention."
+        "subtitle": "{{count}} order(s) still need to be paid."
+      },
+      "ordersAwaitingConfirmation": {
+        "title": "Waiting for confirmation",
+        "subtitle": "{{count}} order(s) waiting for the store to confirm."
       },
       "activeDelivery": {
         "title": "Order on its way",
@@ -8258,10 +8331,18 @@
       "stillOnIt": "Still on it"
     },
     "list": {
-      "title": "My designated deliveries",
-      "empty": "No designated deliveries right now.",
-      "offerBadge": "Offer",
+      "title": "Dedicated orders",
+      "subtitle": "Orders from your dedicated stores that you can take",
+      "empty": "No dedicated orders to take right now.",
+      "offerBadge": "Available",
       "assignedBadge": "Assigned"
+    },
+    "home": {
+      "title": "Your upcoming dedicated deliveries",
+      "subtitle": "Upcoming orders for your dedicated stores and slots. Take one now to plan ahead — even if you missed the notification.",
+      "opensAt": "Dispatch opens {{time}}",
+      "take": "I'll take this",
+      "ignore": "Ignore"
     }
   }
 }

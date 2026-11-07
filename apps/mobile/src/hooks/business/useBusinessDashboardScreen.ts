@@ -58,7 +58,10 @@ import {
   navigateBusinessRentals,
   navigateBusinessSaleItems,
 } from '../../utils/navigateBusinessTabs';
-import type { ActiveOrderCardModel } from '../../utils/buildActiveOrderCardModel';
+import {
+  buildActiveOrderCardModel,
+  type ActiveOrderCardModel,
+} from '../../utils/buildActiveOrderCardModel';
 
 type Nav = NativeStackNavigationProp<BusinessRootStackParamList>;
 
@@ -67,7 +70,7 @@ function locationNeedsVerifiedPhone(loc: BusinessLocation): boolean {
 }
 
 export function useBusinessDashboardScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors } = useTheme();
   const { flags } = useClientFlags();
   const navigation = useNavigation<Nav>();
@@ -1066,36 +1069,8 @@ export function useBusinessDashboardScreen() {
     });
   }, [businessId, me?.business?.name, t]);
 
-  const presentIncomingOverlay = useCallback(
-    async (order: BusinessOrder) => {
-      try {
-        const res = await businessApi.orders.getById(order.id);
-        const live = res.order;
-        const canPresentInterrupt =
-          live?.current_status === 'pending' &&
-          live.acceptance_state !== 'scheduled';
-        if (!canPresentInterrupt) {
-          navigation.navigate('BusinessOrderDetail', { orderId: order.id });
-          return;
-        }
-      } catch {
-        navigation.navigate('BusinessOrderDetail', { orderId: order.id });
-        return;
-      }
-      if (incomingOrder.visible && incomingOrder.orderId === order.id) {
-        return;
-      }
-      void incomingOrder.present(order.id);
-    },
-    [navigation, incomingOrder]
-  );
-
   const runActiveOrderCta = useCallback(
     (order: BusinessOrder, model: ActiveOrderCardModel) => {
-      if (model.destination.kind === 'incoming_overlay') {
-        void presentIncomingOverlay(order);
-        return;
-      }
       if (model.destination.kind === 'refunds') {
         navigation.navigate('BusinessRefundsList');
         return;
@@ -1107,7 +1082,7 @@ export function useBusinessDashboardScreen() {
       }
       navigation.navigate('BusinessOrderDetail', { orderId: order.id });
     },
-    [navigation, presentIncomingOverlay]
+    [navigation]
   );
 
   const openActiveOrder = useCallback(
@@ -1151,28 +1126,8 @@ export function useBusinessDashboardScreen() {
     if (id === 'first_order_congrats') {
       const first = activeOrdersState.orders[0];
       if (first) {
-        openActiveOrder(first, {
-          orderId: first.id,
-          orderNumber: first.order_number,
-          customerName: null,
-          itemCount: 0,
-          totalLabel: '',
-          status: first.current_status || '',
-          phase: 'confirm',
-          primaryActionId: 'confirm',
-          titleKey: 'business.dashboard.activeOrders.titles.newOrder',
-          titleDefault: 'New Order',
-          subtitleKey: 'business.dashboard.activeOrders.subtitles.newOrder',
-          subtitleDefault: 'A customer is waiting for your response.',
-          ctaKey: 'business.dashboard.activeOrders.cta.accept',
-          ctaDefault: 'Accept Order',
-          urgency: 'warning',
-          createdAt: first.created_at,
-          destination:
-            first.current_status === 'pending'
-              ? { kind: 'incoming_overlay' }
-              : { kind: 'order_detail' },
-        });
+        const locale = i18n.language.startsWith('fr') ? 'fr-FR' : 'en-US';
+        onActiveOrderCta(first, buildActiveOrderCardModel(first, t, locale));
         return;
       }
       navigateBusinessOrdersTab(navigation);
@@ -1232,7 +1187,9 @@ export function useBusinessDashboardScreen() {
     onPreviewStore,
     onOpenInsights,
     activeOrdersState.orders,
-    openActiveOrder,
+    onActiveOrderCta,
+    i18n.language,
+    t,
   ]);
 
   const onMerchantTipDismiss = useCallback(() => {

@@ -10,3 +10,18 @@ export function buildLexicalItemSearchOr(q: string): Record<string, unknown> {
     ],
   };
 }
+
+/** Hasura `_or` matching location display name or business (seller) name. */
+export function buildStoreNameSearchOr(q: string): Record<string, unknown> {
+  const pattern = `%${q}%`;
+  return {
+    _or: [
+      { business_location: { name: { _ilike: pattern } } },
+      {
+        business_location: {
+          business: { name: { _ilike: pattern } },
+        },
+      },
+    ],
+  };
+}

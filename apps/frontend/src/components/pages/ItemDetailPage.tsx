@@ -1478,7 +1478,13 @@ export default function ItemDetailPage() {
                     variant="body2"
                     fontWeight={500}
                     component={location.id ? RouterLink : 'span'}
-                    to={location.id ? `/store/${location.id}` : undefined}
+                    to={
+                      location.id
+                        ? foodAvailability
+                          ? `/store/${location.id}?menu=food`
+                          : `/store/${location.id}`
+                        : undefined
+                    }
                     aria-label={t('stores.openStoreA11y', 'Open store {{name}}', { name: business.name })}
                     sx={location.id ? {
                       color: 'primary.main',
@@ -1502,7 +1508,11 @@ export default function ItemDetailPage() {
                     <Button
                       size="small"
                       component={RouterLink}
-                      to={`/store/${location.id}`}
+                      to={
+                        foodAvailability
+                          ? `/store/${location.id}?menu=food`
+                          : `/store/${location.id}`
+                      }
                       sx={{ ml: 0.5 }}
                     >
                       {t('stores.viewStore', 'View store')}

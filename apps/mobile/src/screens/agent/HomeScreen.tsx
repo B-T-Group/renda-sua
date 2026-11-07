@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -18,6 +19,9 @@ import { useAgentEarningsSummary } from '../../hooks/useAgentEarningsSummary';
 import { useAgentXafWallet } from '../../hooks/useAgentXafWallet';
 import { resolveDisplayCurrency, useUserCurrency } from '../../hooks/useUserCurrency';
 import { useOpenOrders } from '../../hooks/useOpenOrders';
+import { useOpenOrderClaim } from '../../hooks/useOpenOrderClaim';
+import { useDedicatedStoreLocationIds } from '../../hooks/useDedicatedStoreLocationIds';
+import { compareOpenOrdersForAgent } from '../../utils/agentOpenOrderCard';
 import { useAgentOrders } from '../../hooks/useAgentOrders';
 import { useAgentVerificationStatus } from '../../hooks/useAgentVerificationStatus';
 import { useHoldPercentage } from '../../hooks/useHoldPercentage';
@@ -27,8 +31,12 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 import { ListCardSkeleton } from '../../components/common/DashboardSkeleton';
 import { SkeletonBone } from '../../components/common/SkeletonBone';
 import { DashboardComposingOverlay } from '../../components/feedback/DashboardComposingOverlay';
+import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
+import type { ActionLoadingKind } from '../../components/feedback/actionLoadingKinds';
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
-import { AgentReferredBusinessesHero } from '../../components/agent/AgentReferredBusinessesHero';
+import { APP_FEATURES } from '../../constants/appFeatures';
+import type { Order } from '../../types/agent';
+import { isCarrierShipping } from '../../utils/fulfillmentMethod';
 import { ReferralPayoutSnapshot } from '../../components/common/ReferralPayoutSnapshot';
 import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
@@ -37,7 +45,14 @@ import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import { AgentWithdrawDialog } from '../../components/dialogs/AgentWithdrawDialog';
 import { AgentAccountTransactionsDialog } from '../../components/dialogs/AgentAccountTransactionsDialog';
 import { SimpleMessageDialog } from '../../components/dialogs/SimpleMessageDialog';
+import { CompleteDeliveryPinDialog } from '../../components/dialogs/CompleteDeliveryPinDialog';
+import { DeliveryCompleteSuccessModal } from '../../components/dialogs/DeliveryCompleteSuccessModal';
+import { RequestPayAtDeliveryDialog } from '../../components/dialogs/RequestPayAtDeliveryDialog';
 import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePaymentPhoneVerifyModal';
+import { useActiveDeliveryPinForComplete } from '../../hooks/useActiveDeliveryPinForComplete';
+import { agentApi } from '../../services/agentApi';
+import { mergeOrderForDeliverySuccess } from '../../utils/mergeOrderForDeliverySuccess';
+import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
 import { PendingWithdrawalsSection } from '../../components/wallet/PendingWithdrawalsSection';
 import { OrderCardCompact } from '../../components/agent/OrderCardCompact';
 import { OrderCardActive } from '../../components/agent/OrderCardCompact';
@@ -49,9 +64,10 @@ import { AgentActivationChecklist } from '../../components/agent/AgentActivation
 import { AgentNowSection } from '../../components/agent/AgentNowSection';
 import { AgentObjectiveFocusCard } from '../../components/agent/AgentObjectiveFocusCard';
 import { FeatureCard } from '../../components/common/FeatureCard';
-import { AssistantHomeEntry } from '../../components/common/AssistantHomeEntry';
+import AgentStayNearbyTip from '../../components/agent/AgentStayNearbyTip';
 import DedicatedOpportunitiesHomeCard from '../../components/agent/DedicatedOpportunitiesHomeCard';
-import DedicatedStoresHomeCard from '../../components/agent/DedicatedStoresHomeCard';
+import AgentBusinessesHomeCard from '../../components/agent/AgentBusinessesHomeCard';
+import { DesignatedHomeOffersSection } from '../../components/dedicated/DesignatedHomeOffersSection';
 import { useActionsNeeded } from '../../hooks/useActionsNeeded';
 import type { AppNavScreen } from '../../navigation/AppNavigator';
 import type { RootStackParamList as AgentRootStackParamList } from '../../navigation/AgentRootNavigator';
@@ -64,7 +80,6 @@ import { useReferralProjectedPayout } from '../../hooks/useReferralProjectedPayo
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { useMobilePaymentPhones } from '../../hooks/useMobilePaymentPhones';
 import { mobilePaymentPhonesApi } from '../../services/mobilePaymentPhonesApi';
-import { EarnDeliveringIllustration } from '../../components/illustrations/EarnDeliveringIllustration';
 import { ProfilePhotoTipIllustration } from '../../components/illustrations/ProfilePhotoTipIllustration';
 import { useProfileMe } from '../../hooks/useProfileMe';
 import {
@@ -83,6 +98,7 @@ import {
 import { useAgentHomeFocus } from '../../contexts/AgentHomeFocusContext';
 
 const MAX_HOME_ORDERS = 3;
+type LifecycleActionKey = 'pickUp' | 'startTransit' | 'outForDelivery';
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -104,7 +120,14 @@ export default function HomeScreen() {
   const { projection: referralPayout, refresh: refetchReferralPayout } =
     useReferralProjectedPayout('agent', !!auth.isAuthenticated);
   const { currency: meCurrency } = useUserCurrency(!!auth.isAuthenticated);
-  const { openOrders, loading: openOrdersLoading, refetch: refetchOpenOrders, canClaim: ordersCanClaim } = useOpenOrders();
+  const {
+    openOrders,
+    loading: openOrdersLoading,
+    refetch: refetchOpenOrders,
+    canClaim: ordersCanClaim,
+    claimOrder,
+    claimOrderWithTopup,
+  } = useOpenOrders();
   const contractStatus = useAgentContractStatus();
   const {
     isVerified,
@@ -112,7 +135,33 @@ export default function HomeScreen() {
     loading: verificationLoading,
     refetch: refetchVerification,
   } = useAgentVerificationStatus();
-  const { categorized: agentOrdersCategorized, refetch: refetchAgentOrders } = useAgentOrders();
+  const {
+    categorized: agentOrdersCategorized,
+    refetch: refetchAgentOrders,
+    pickUp,
+    startTransit,
+    outForDelivery,
+    markDelivered,
+    completeDelivery,
+    initiatePayAtDeliveryPayment,
+  } = useAgentOrders();
+  const [lifecycle, setLifecycle] = useState<{ orderId: string; key: LifecycleActionKey } | null>(null);
+  const [actionBusyOrderId, setActionBusyOrderId] = useState<string | null>(null);
+  const [loadingOverlayKind, setLoadingOverlayKind] = useState<ActionLoadingKind | null>(null);
+  const [completePinOrder, setCompletePinOrder] = useState<Order | null>(null);
+  const [completeError, setCompleteError] = useState<string | null>(null);
+  const [completeSubmitting, setCompleteSubmitting] = useState(false);
+  const [deliverySuccessOrder, setDeliverySuccessOrder] = useState<Order | null>(null);
+  const [requestPayOrder, setRequestPayOrder] = useState<Order | null>(null);
+  const [payDialogLoading, setPayDialogLoading] = useState(false);
+  const completePinVisible = completePinOrder !== null;
+  const {
+    autoSharedPin,
+    autoPinMessageId,
+    resolvingSharedPin,
+    noSharedPin,
+    resetSharedPinState,
+  } = useActiveDeliveryPinForComplete(completePinOrder?.id, completePinVisible);
   const { holdPercentage, refetch: refetchHold } = useHoldPercentage(true);
   const {
     wallet: xafWallet,
@@ -150,6 +199,14 @@ export default function HomeScreen() {
   const [walletSnack, setWalletSnack] = useState<string | null>(null);
   const [infoDialog, setInfoDialog] = useState<{ title: string; message: string } | null>(null);
   const [phoneModalOpen, setPhoneModalOpen] = useState(false);
+  const dedicatedLocationIds = useDedicatedStoreLocationIds();
+  const claim = useOpenOrderClaim({
+    orders: openOrders,
+    refetch: refetchOpenOrders,
+    claimOrder,
+    claimOrderWithTopup,
+    isStripeRail: walletIsStripeRail,
+  });
 
   const { setHomeFocused } = useAgentHomeFocus();
   const { items: actionsNeededItems, refresh: refreshActionsNeeded, dismissAll } =
@@ -218,7 +275,13 @@ export default function HomeScreen() {
   }, [isVerified, refetchOpenOrders]);
 
   const activeOrders = agentOrdersCategorized.active;
-  const previewOpenOrders = openOrders.slice(0, MAX_HOME_ORDERS);
+  const previewOpenOrders = useMemo(
+    () =>
+      [...openOrders]
+        .sort((a, b) => compareOpenOrdersForAgent(a, b, dedicatedLocationIds))
+        .slice(0, MAX_HOME_ORDERS),
+    [dedicatedLocationIds, openOrders]
+  );
   const previewActiveOrders = activeOrders.slice(0, MAX_HOME_ORDERS);
   const showActiveOrdersSection = showDelivery && activeOrders.length > 0;
   const homeActionsNeededItems = filterAgentHomeActionsNeeded(
@@ -273,6 +336,7 @@ export default function HomeScreen() {
           route === 'StoreDetail' ||
           route === 'Earnings' ||
           route === 'AgentBusinessReferral' ||
+          route === 'AgentBusinessesHub' ||
           route === 'Documents' ||
           route === 'Profile' ||
           route === 'AssistantChat')
@@ -358,6 +422,168 @@ export default function HomeScreen() {
     [navigation]
   );
 
+  const runLifecycleAction = useCallback(
+    async (orderId: string, key: LifecycleActionKey) => {
+      if (key === 'pickUp') await pickUp(orderId);
+      else if (key === 'startTransit') await startTransit(orderId);
+      else await outForDelivery(orderId);
+    },
+    [outForDelivery, pickUp, startTransit]
+  );
+
+  const handleLifecycleConfirm = useCallback(async () => {
+    if (!lifecycle) return;
+    const { orderId, key } = lifecycle;
+    const overlay: ActionLoadingKind =
+      key === 'pickUp' ? 'pick_up' : key === 'startTransit' ? 'start_transit' : 'out_for_delivery';
+    setLifecycle(null);
+    setLoadingOverlayKind(overlay);
+    setActionBusyOrderId(orderId);
+    try {
+      await runLifecycleAction(orderId, key);
+    } catch (e: unknown) {
+      Alert.alert(t('common.error'), e instanceof Error ? e.message : String(e));
+    } finally {
+      setActionBusyOrderId(null);
+      setLoadingOverlayKind(null);
+    }
+  }, [lifecycle, runLifecycleAction, t]);
+
+  const closeCompletePinDialog = useCallback(() => {
+    setCompletePinOrder(null);
+    setCompleteError(null);
+    resetSharedPinState();
+  }, [resetSharedPinState]);
+
+  const startCompleteDelivery = useCallback(
+    async (order: Order) => {
+      setActionBusyOrderId(order.id);
+      try {
+        const state = await agentApi.orders.getDeliveryConfirmation(order.id);
+        if (state.usesLegacyPin) {
+          setCompletePinOrder(order);
+          setCompleteError(null);
+          return;
+        }
+        await markDelivered(order.id);
+        Alert.alert(
+          t('common.done', { defaultValue: 'Done' }),
+          t('orders.clientConfirm.agentWaiting', 'Waiting for the client to confirm')
+        );
+      } catch (e: unknown) {
+        Alert.alert(t('common.error'), e instanceof Error ? e.message : String(e));
+      } finally {
+        setActionBusyOrderId(null);
+      }
+    },
+    [markDelivered, t]
+  );
+
+  const handleCompleteWithSharedPin = useCallback(async () => {
+    const snap = completePinOrder;
+    if (!snap) return;
+    setCompleteSubmitting(true);
+    setCompleteError(null);
+    setActionBusyOrderId(snap.id);
+    try {
+      const res = await completeDelivery(snap.id, {
+        useLatestSharedPin: true,
+        pinMessageId: autoPinMessageId ?? undefined,
+      });
+      closeCompletePinDialog();
+      setDeliverySuccessOrder(mergeOrderForDeliverySuccess(snap, res.order ?? null));
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setCompleteError(msg);
+      Alert.alert(t('common.error'), msg);
+    } finally {
+      setCompleteSubmitting(false);
+      setActionBusyOrderId(null);
+    }
+  }, [autoPinMessageId, closeCompletePinDialog, completeDelivery, completePinOrder, t]);
+
+  const handleCompleteDeliverySubmit = useCallback(
+    async (pin: string) => {
+      const trimmed = pin.trim();
+      const snap = completePinOrder;
+      if (!snap || trimmed.length !== 4) {
+        setCompleteError(t('orders.completeDelivery.invalidPin', 'The PIN must be exactly 4 digits.'));
+        return;
+      }
+      setCompleteSubmitting(true);
+      setCompleteError(null);
+      setActionBusyOrderId(snap.id);
+      try {
+        const res = await completeDelivery(snap.id, { pin: trimmed });
+        closeCompletePinDialog();
+        setDeliverySuccessOrder(mergeOrderForDeliverySuccess(snap, res.order ?? null));
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setCompleteError(msg);
+        Alert.alert(t('common.error'), msg);
+      } finally {
+        setCompleteSubmitting(false);
+        setActionBusyOrderId(null);
+      }
+    },
+    [closeCompletePinDialog, completeDelivery, completePinOrder, t]
+  );
+
+  const handlePayAtDeliveryRequest = useCallback(
+    async (phoneOverride?: string) => {
+      if (!requestPayOrder) return;
+      setPayDialogLoading(true);
+      setActionBusyOrderId(requestPayOrder.id);
+      try {
+        await initiatePayAtDeliveryPayment(requestPayOrder.id, phoneOverride);
+        setRequestPayOrder(null);
+        Alert.alert(
+          t('common.done', { defaultValue: 'Done' }),
+          t('agent.orders.payAtDelivery.successRequest', { defaultValue: 'Payment request sent.' })
+        );
+      } catch (e: unknown) {
+        Alert.alert(t('common.error'), e instanceof Error ? e.message : String(e));
+      } finally {
+        setPayDialogLoading(false);
+        setActionBusyOrderId(null);
+      }
+    },
+    [initiatePayAtDeliveryPayment, requestPayOrder, t]
+  );
+
+  const handleActiveOrderPrimaryAction = useCallback(
+    (order: Order) => {
+      if (isCarrierShipping(order.fulfillment_method)) {
+        goToOrderDetail(order.id);
+        return;
+      }
+      switch (order.current_status) {
+        case 'assigned_to_agent':
+          setLifecycle({ orderId: order.id, key: 'pickUp' });
+          return;
+        case 'picked_up':
+          setLifecycle({
+            orderId: order.id,
+            key: APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT ? 'startTransit' : 'outForDelivery',
+          });
+          return;
+        case 'in_transit':
+          setLifecycle({ orderId: order.id, key: 'outForDelivery' });
+          return;
+        case 'out_for_delivery':
+          if (orderNeedsPayAtDeliveryAgentActions(order)) {
+            setRequestPayOrder(order);
+            return;
+          }
+          void startCompleteDelivery(order);
+          return;
+        default:
+          goToOrderDetail(order.id);
+      }
+    },
+    [goToOrderDetail, startCompleteDelivery]
+  );
+
   const goToAvailableOrders = useCallback(() => {
     (navigation as any).navigate('OpenOrders');
   }, [navigation]);
@@ -386,7 +612,7 @@ export default function HomeScreen() {
     })();
   }, [fetchPhones, goTo, phones, refetchOpenOrders, refetchVerification]);
 
-  const handlePreviewOrderAction = useCallback(() => {
+  const handlePreviewOrderAction = useCallback((order: (typeof openOrders)[number]) => {
     if (contractStatus && agentNeedsContract(contractStatus)) {
       (navigation as any).navigate('AgentAgreement');
       return;
@@ -413,9 +639,9 @@ export default function HomeScreen() {
       goToMomoSetup();
       return;
     }
-    goToAvailableOrders();
+    void claim.startClaim(order);
   }, [
-    goToAvailableOrders,
+    claim,
     contractStatus,
     goToDocuments,
     goToMomoSetup,
@@ -484,11 +710,17 @@ export default function HomeScreen() {
         }
       >
         <TintedHeaderBlock
-          style={{ marginHorizontal: 0 }}
-          contentStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}
+          style={{
+            marginHorizontal: spacing.md,
+            marginBottom: spacing.sm,
+            paddingBottom: spacing.sm,
+            borderTopLeftRadius: borderRadius.lg,
+            borderTopRightRadius: borderRadius.lg,
+          }}
+          contentStyle={{ paddingHorizontal: spacing.md, paddingTop: spacing.xs }}
         >
           <View style={styles.header}>
-            <Text variant="headlineSmall" style={[styles.pageTitle, { color: colors.text.primary }]}>
+            <Text variant="titleLarge" style={[styles.pageTitle, { color: colors.text.primary, flex: 1 }]}>
               {t('nav.home', 'Home')}
             </Text>
             <NotificationBellButton
@@ -510,14 +742,14 @@ export default function HomeScreen() {
         </TintedHeaderBlock>
 
         <View style={{ paddingHorizontal: spacing.md }}>
-          <AssistantHomeEntry
-            onPress={() => goTo('AssistantChat')}
-            style={{ marginBottom: spacing.md }}
-          />
-          {showDelivery ? (
-            <DedicatedStoresHomeCard
-              onPress={() =>
-                (navigation.getParent() as any)?.navigate('DedicatedHub', { segment: 'stores' })
+          {showDelivery || showCommercial ? (
+            <AgentBusinessesHomeCard
+              showDedicated={showDelivery}
+              showReferred={showCommercial}
+              referredCount={referredBusinessCount}
+              referredLoading={referredLoading && referredBusinessCount == null}
+              onOpen={(tab) =>
+                (navigation.getParent() as any)?.navigate('AgentBusinessesHub', { tab })
               }
             />
           ) : null}
@@ -587,22 +819,8 @@ export default function HomeScreen() {
                 }
                 onRefreshOrders={() => refetchAgentOrders()}
               />
-              <FeatureCard
-                title={t('ftue.education.agentTipTitle', 'Tip: stay nearby')}
-                message={t(
-                  'ftue.education.agentTipMessage',
-                  'Going available near busy stores helps you get offers faster.'
-                )}
-                illustration={<EarnDeliveringIllustration size={96} />}
-              />
+              <AgentStayNearbyTip />
             </>
-          ) : null}
-          {showCommercial ? (
-            <AgentReferredBusinessesHero
-              count={referredBusinessCount}
-              loading={referredLoading && referredBusinessCount == null}
-              onPress={() => goTo('AgentBusinessReferral')}
-            />
           ) : null}
         </View>
 
@@ -706,6 +924,13 @@ export default function HomeScreen() {
 
         {showDelivery ? (
         <>
+        <DesignatedHomeOffersSection
+          onAccepted={() => {
+            void refetchOpenOrders();
+            void refetchAgentOrders();
+          }}
+        />
+
         {/* ── SECTION 1: Available Deliveries ── */}
         <View style={[styles.section, { paddingHorizontal: spacing.md }]}>
           <View style={styles.sectionHeader}>
@@ -720,6 +945,19 @@ export default function HomeScreen() {
               </View>
             )}
           </View>
+          {openOrders.some(
+            (order) =>
+              order.my_dedicated_store ||
+              (order.business_location?.id != null &&
+                dedicatedLocationIds.has(order.business_location.id))
+          ) ? (
+            <Text variant="bodySmall" style={{ color: colors.text.secondary, marginTop: 2 }}>
+              {t(
+                'agent.openOrders.yourStoreHint',
+                'Orders from your dedicated stores are tagged Your store. Upcoming dedicated slots are listed above.'
+              )}
+            </Text>
+          ) : null}
         </View>
 
         {openOrdersLoading && openOrders.length === 0 ? (
@@ -752,10 +990,11 @@ export default function HomeScreen() {
               <OrderCardCompact
                 key={order.id}
                 order={order}
-                onAccept={handlePreviewOrderAction}
+                onAccept={() => handlePreviewOrderAction(order)}
                 onViewDetails={() => goToOrderDetail(order.id)}
                 claimEnabled={homeClaimEnabled}
                 acceptLabel={claimBlockedLabel}
+                dedicatedLocationIds={dedicatedLocationIds}
               />
             ))}
             {openOrders.length > MAX_HOME_ORDERS && (
@@ -811,8 +1050,9 @@ export default function HomeScreen() {
                   key={order.id}
                   order={order}
                   primaryActionLabel={primaryLabel}
-                  onPrimaryAction={() => goToOrderDetail(order.id)}
+                  onPrimaryAction={() => handleActiveOrderPrimaryAction(order)}
                   onViewDetails={() => goToOrderDetail(order.id)}
+                  isBusy={actionBusyOrderId === order.id}
                 />
               );
             })}
@@ -1034,6 +1274,62 @@ export default function HomeScreen() {
         dismissLabel={t('common.ok', 'OK')}
         onDismiss={() => setInfoDialog(null)}
       />
+      {claim.dialogs}
+      {lifecycle ? (
+        (() => {
+          const cfg = {
+            pickUp: {
+              title: t('agent.orders.detail.actionConfirm.pickUpTitle', 'Confirm pickup'),
+              msg: t('agent.orders.detail.actionConfirm.pickUpMessage', 'Mark as picked up?'),
+            },
+            startTransit: {
+              title: t('agent.orders.detail.actionConfirm.inTransitTitle', 'Confirm in transit'),
+              msg: t('agent.orders.detail.actionConfirm.inTransitMessage', 'Mark as in transit?'),
+            },
+            outForDelivery: {
+              title: t('agent.orders.detail.actionConfirm.outForDeliveryTitle', 'Confirm out for delivery'),
+              msg: t('agent.orders.detail.actionConfirm.outForDeliveryMessage', 'Mark as out for delivery?'),
+            },
+          }[lifecycle.key];
+          Alert.alert(cfg.title, cfg.msg, [
+            { text: t('common.cancel', 'Cancel'), style: 'cancel', onPress: () => setLifecycle(null) },
+            { text: t('common.confirm', 'Confirm'), onPress: () => void handleLifecycleConfirm() },
+          ]);
+          return null;
+        })()
+      ) : null}
+      <CompleteDeliveryPinDialog
+        visible={completePinVisible}
+        onDismiss={closeCompletePinDialog}
+        onSubmit={(pin) => void handleCompleteDeliverySubmit(pin)}
+        onSubmitSharedPin={() => void handleCompleteWithSharedPin()}
+        submitting={completeSubmitting}
+        errorText={completeError}
+        onPinEdited={() => setCompleteError(null)}
+        autoSharedPin={autoSharedPin}
+        resolvingSharedPin={resolvingSharedPin}
+        noSharedPin={noSharedPin}
+      />
+      <DeliveryCompleteSuccessModal
+        visible={!!deliverySuccessOrder}
+        order={deliverySuccessOrder}
+        onClose={() => setDeliverySuccessOrder(null)}
+      />
+      <RequestPayAtDeliveryDialog
+        visible={!!requestPayOrder}
+        order={requestPayOrder}
+        submitting={payDialogLoading}
+        onDismiss={() => setRequestPayOrder(null)}
+        onSendRequest={handlePayAtDeliveryRequest}
+      />
+      <ActionLoadingDialog
+        visible={
+          loadingOverlayKind != null ||
+          (actionBusyOrderId !== null && !completePinVisible && requestPayOrder === null)
+        }
+        action={loadingOverlayKind ?? 'generic_update'}
+        message={undefined}
+      />
       <MobilePaymentPhoneVerifyModal
         visible={phoneModalOpen}
         mode={phones[0] ? 'verify' : 'add'}
@@ -1055,7 +1351,14 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
   content: { paddingTop: 8 },
-  header: { paddingBottom: 4, paddingTop: 12 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 4,
+    paddingTop: 4,
+    gap: 8,
+  },
   pageTitle: { fontWeight: '700' },
   banner: { marginBottom: 12 },
   addressBanner: {

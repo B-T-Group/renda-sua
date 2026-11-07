@@ -122,6 +122,8 @@ export interface Order {
   agent_hold_amount?: number;
   /** Approximate km from agent GPS to pickup (open orders). */
   pickup_distance_km?: number | null;
+  /** Pickup location is one of this agent's dedicated stores. */
+  my_dedicated_store?: boolean;
   client: Client;
   business: Business;
   business_location: BusinessLocation;

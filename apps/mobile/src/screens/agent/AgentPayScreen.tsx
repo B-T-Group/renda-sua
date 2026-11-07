@@ -25,7 +25,11 @@ export default function AgentPayScreen() {
   const { colors, spacing } = useTheme();
   const bottomPad = useMainTabContentBottomPadding(24);
   const route = useRoute<RouteProp<MainTabParamList, 'Pay'>>();
-  const navigation = useNavigation<{ getParent: () => { navigate: (name: string) => void } | undefined }>();
+  const navigation = useNavigation<{
+    getParent: () => {
+      navigate: (name: string, params?: { tab?: 'dedicated' | 'referred' }) => void;
+    } | undefined;
+  }>();
   const [segment, setSegment] = useState<PaySegment>(route.params?.segment ?? 'commissions');
   const [status, setStatus] = useState<PayBoardStatus>('unpaid');
   const { board, loading, error, refetch } = useAgentPayBoard(status);
@@ -44,7 +48,7 @@ export default function AgentPayScreen() {
       : [];
 
   const openReferrals = useCallback(() => {
-    navigation.getParent()?.navigate('AgentBusinessReferral');
+    navigation.getParent()?.navigate('AgentBusinessesHub', { tab: 'referred' });
   }, [navigation]);
 
   return (

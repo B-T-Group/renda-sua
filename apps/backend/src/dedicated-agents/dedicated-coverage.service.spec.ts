@@ -32,6 +32,8 @@ interface FakeAgent {
 function world() {
   const state = {
     flag: true,
+    /** When set, dedicated_agents_enabled is only true for this ISO country (not global). */
+    flagCountry: null as string | null,
     maxActiveOrders: 10 as number | null,
     country: 'CM',
     timezone: 'Africa/Douala',
@@ -101,7 +103,13 @@ function world() {
       case 'DedicatedAgentsConfig':
         return {
           application_configurations: [
-            { config_key: 'dedicated_agents_enabled', boolean_value: state.flag, country_code: null },
+            { config_key: 'dedicated_agents_enabled', boolean_value: false, country_code: null },
+            {
+              config_key: 'dedicated_agents_enabled',
+              boolean_value: state.flag,
+              country_code:
+                state.flagCountry ?? (state.country.length === 2 ? state.country : 'CM'),
+            },
             ...(state.maxActiveOrders != null
               ? [{ config_key: 'dedicated_max_active_orders', number_value: state.maxActiveOrders, country_code: null }]
               : []),
@@ -476,6 +484,15 @@ describe('DedicatedCoverageService.resolveSlot', () => {
     const off = world();
     off.state.flag = false;
     await expect(off.service.resolveSlot(q)).resolves.toBeNull();
+  });
+
+  it('maps location country names (Canada) to ISO so per-country dedicated flags still resolve slots', async () => {
+    const w = world();
+    w.state.country = 'Canada';
+    w.state.flagCountry = 'CA';
+    await expect(
+      w.service.resolveSlot({ locationId: LOCATION, preferredDate: '2026-11-07', slotId: 'cm-m' })
+    ).resolves.toMatchObject({ slotKey: 'morning', slotId: 'cm-m' });
   });
 });
 

@@ -32,6 +32,7 @@ describe('InventoryItemsService.getInventorySearchSuggestions', () => {
       } as any,
       {} as any
     );
+    jest.spyOn(service, 'getTopInventoryStores').mockResolvedValue([]);
     return { service, executeQuery };
   }
 
@@ -77,6 +78,8 @@ describe('InventoryItemsService.getInventorySearchSuggestions', () => {
                 item_tags: [],
               },
               business_location: {
+                id: 'loc-1',
+                name: 'Shop Douala',
                 logo_url: null,
                 business: { id: 'biz-1', name: 'Shop' },
               },
@@ -99,6 +102,48 @@ describe('InventoryItemsService.getInventorySearchSuggestions', () => {
           inventoryId: 'inv-1',
           currency: 'XAF',
           available: true,
+        }),
+      ])
+    );
+  });
+
+  it('adds a seller suggestion when only the store name matches', async () => {
+    const { service, executeQuery } = createService();
+    executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('ValidateLocationSupport')) {
+        return { supported_country_states: [{ id: '1' }] };
+      }
+      if (query.includes('InventorySearchSuggestions')) {
+        return { business_inventory: [] };
+      }
+      return {};
+    });
+    jest.spyOn(service, 'getTopInventoryStores').mockResolvedValue([
+      {
+        business_location_id: 'loc-9',
+        business_id: 'biz-9',
+        name: 'Acme Market',
+        city: 'Douala',
+        logo_url: null,
+        item_count: 12,
+        is_verified: true,
+        can_accept_orders: true,
+        is_storefront_visible: true,
+      },
+    ]);
+
+    const suggestions = await service.getInventorySearchSuggestions({
+      q: 'acme',
+      country_code: 'CM',
+    });
+
+    expect(suggestions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: 'seller',
+          businessId: 'biz-9',
+          businessLocationId: 'loc-9',
+          name: 'Acme Market',
         }),
       ])
     );

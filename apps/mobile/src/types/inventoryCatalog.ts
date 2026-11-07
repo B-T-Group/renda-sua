@@ -4,6 +4,7 @@ import type {
   ItemVariant,
 } from './business/itemVariant';
 import type { FoodAvailability } from './food';
+import type { CatalogStore } from './stores';
 
 export type InventorySortMode = 'relevance' | 'fastest' | 'cheapest' | 'top_rated' | 'deals';
 export type DiscoverySortMode = 'recommended' | 'relevance' | 'popular' | 'rating' | 'newest';
@@ -127,6 +128,8 @@ export interface PaginatedCatalogInventory {
     sort: DiscoverySortMode;
     sort_control: SortControlState;
   };
+  /** Stores whose location or business name matched `search`. */
+  matched_stores?: CatalogStore[];
 }
 
 export interface InventoryItemsApiEnvelope {

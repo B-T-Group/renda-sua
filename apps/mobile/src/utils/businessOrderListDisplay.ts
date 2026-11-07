@@ -11,14 +11,35 @@ export function businessOrderItemTitle(order: BusinessOrder): string {
   return `${first} +${lines.length - 1}`;
 }
 
-function lineItemLabel(line: OrderItem): string {
+export type BusinessOrderLineSummary = {
+  id: string;
+  name: string;
+  quantity: number;
+};
+
+/** First `max` lines for dashboard cards; `moreCount` is remaining SKUs. */
+export function businessOrderLineSummaries(
+  order: BusinessOrder,
+  max = 3
+): { lines: BusinessOrderLineSummary[]; moreCount: number } {
+  const items = order.order_items ?? [];
+  const lines = items.slice(0, Math.max(0, max)).map((line, index) => ({
+    id: line.id || `line-${index}`,
+    name: lineItemName(line),
+    quantity: Number(line.quantity) || 1,
+  }));
+  return { lines, moreCount: Math.max(0, items.length - lines.length) };
+}
+
+function lineItemName(line: OrderItem): string {
   const name = line.item_name?.trim() || line.item?.name?.trim();
   const variant = line.variant_name?.trim();
-  const label = name
-    ? variant
-      ? `${name} · ${variant}`
-      : name
-    : `Item`;
+  if (!name) return 'Item';
+  return variant ? `${name} · ${variant}` : name;
+}
+
+function lineItemLabel(line: OrderItem): string {
+  const label = lineItemName(line);
   const qty = Number(line.quantity) || 1;
   return qty > 1 ? `${label} ×${qty}` : label;
 }
@@ -71,6 +92,23 @@ export function resolveOrderTimeWindow(order: Order): TimeWindow | null {
   }
   const confirmed = windows.find((w) => w.is_confirmed);
   return confirmed ?? windows[0] ?? null;
+}
+
+export type BusinessOrderTiming =
+  | { kind: 'none' }
+  | { kind: 'asap'; pickup: boolean }
+  | { kind: 'scheduled'; pickup: boolean; window: TimeWindow };
+
+/** ASAP means fulfill now. A chosen window is the customer's slot. Shipping has neither. */
+export function resolveBusinessOrderTiming(order: Order): BusinessOrderTiming {
+  if (order.fulfillment_method === 'shipping') return { kind: 'none' };
+  const pickup = isStorePickupOrder(order);
+  const timing = order.fulfillment_timing;
+  if (timing === 'asap') return { kind: 'asap', pickup };
+  const window = resolveOrderTimeWindow(order);
+  if (window) return { kind: 'scheduled', pickup, window };
+  if (timing === 'scheduled') return { kind: 'none' };
+  return { kind: 'asap', pickup };
 }
 
 export function formatOrderTimeWindowLabel(order: Order, locale: string): string | null {

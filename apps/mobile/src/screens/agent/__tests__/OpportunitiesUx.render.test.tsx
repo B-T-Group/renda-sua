@@ -38,10 +38,11 @@ jest.mock('@react-navigation/native', () => ({
   ...jest.requireActual('@react-navigation/native'),
   useFocusEffect: (cb: () => any) => jest.requireActual('react').useEffect(cb, [cb]),
 }));
-jest.mock('react-native-safe-area-context', () => ({
-  ...jest.requireActual('react-native-safe-area-context'),
-  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
+// DesignatedListSection pulls agentApi → SecureStore; hub UX tests do not need it.
+jest.mock('../../../components/dedicated/DesignatedListSection', () => ({
+  DesignatedListSection: () => null,
 }));
+jest.mock('../../../services/agentApi', () => ({ agentApi: {} }));
 
 const mockPick = jest.fn();
 jest.mock('../../../hooks/useProfilePhotoUpload', () => ({

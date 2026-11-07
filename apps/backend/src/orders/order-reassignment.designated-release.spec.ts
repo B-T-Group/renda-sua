@@ -206,3 +206,108 @@ describe('OrderReassignmentService.releaseDesignated', () => {
     expect(gone.reassign).not.toHaveBeenCalled();
   });
 });
+
+describe('OrderReassignmentService.releaseDedicatedAutoAssignment designated-first', () => {
+  function autoAssigned(over: Record<string, unknown> = {}) {
+    const t = build();
+    t.s.fetchDedicatedReleaseOrder.mockResolvedValue({
+      id: 'o1',
+      order_number: 'ORD-1',
+      current_status: 'assigned_to_agent',
+      assigned_agent_id: 'a1',
+      currency: 'XAF',
+      assignment_source: 'dedicated_auto',
+      dedicated_release_until: CUTOFF,
+      dispatch_mode: 'designated_first',
+      assigned_agent: { user_id: 'u1' },
+      ...over,
+    });
+    return t;
+  }
+
+  it('hands a designated-first auto-assign to designated release so the gate stays and stamps are not inherited', async () => {
+    const t = autoAssigned();
+    const designated = jest.spyOn(t.service, 'releaseDesignated');
+    const out = await t.service.releaseDedicatedAutoAssignment(
+      'o1',
+      'a1',
+      null,
+      new Date('2026-11-09T12:00:00Z')
+    );
+    expect(out).toMatchObject({ success: true, mode: 'free' });
+    expect(designated).toHaveBeenCalledWith('o1', 'a1', null, expect.any(Date));
+    expect(t.s.redispatch).not.toHaveBeenCalled();
+    expect(t.mutations.find((m) => m.q.includes('ReleaseDedicatedAutoAssignment'))).toBeUndefined();
+    expect(t.mutations.find((m) => m.q.includes('ReleaseDesignatedFree'))).toBeDefined();
+  });
+
+  it('after the designated cutoff: late designated release, not the 120 s window_closed refusal', async () => {
+    const t = autoAssigned();
+    const out = await t.service.releaseDedicatedAutoAssignment(
+      'o1',
+      'a1',
+      'busy' as any,
+      new Date('2026-11-10T06:30:00Z')
+    );
+    expect(out).toMatchObject({ success: true, mode: 'late' });
+    expect(t.reassign).toHaveBeenCalledWith('o1', 'designated_late_release');
+    expect(t.mutations.find((m) => m.q.includes('ReleaseDedicatedAutoAssignment'))).toBeUndefined();
+  });
+
+  it('non-designated auto-assign still uses the 120 s dedicated-auto path', async () => {
+    const t = autoAssigned({ dispatch_mode: null });
+    t.s.clearLeftoverDesignatedStamps = jest.fn(async () => undefined);
+    const designated = jest.spyOn(t.service, 'releaseDesignated');
+    const out = await t.service.releaseDedicatedAutoAssignment(
+      'o1',
+      'a1',
+      'busy' as any,
+      new Date('2026-11-09T12:00:00Z')
+    );
+    expect(out).toMatchObject({ success: true });
+    expect(designated).not.toHaveBeenCalled();
+    expect(t.mutations.find((m) => m.q.includes('ReleaseDedicatedAutoAssignment'))).toBeDefined();
+    expect(t.s.redispatch).toHaveBeenCalledWith('o1');
+    expect(t.s.clearLeftoverDesignatedStamps).toHaveBeenCalledWith('o1');
+  });
+});
+
+describe('OrderReassignmentService.afterDroppedDesignatedAssignment', () => {
+  function leftover(over: Record<string, unknown> = {}) {
+    const t = build();
+    t.hasura.executeQuery.mockResolvedValue({
+      orders_by_pk: {
+        dispatch_mode: 'designated_first',
+        assignment_source: 'dedicated_offer',
+        designated_accepted_at: '2026-11-08T09:00:00Z',
+        ...over,
+      },
+    });
+    return t;
+  }
+
+  it('declines the leftover dedicated row and clears stamps so Take cannot reclaim', async () => {
+    const t = leftover();
+    await t.service.afterDroppedDesignatedAssignment('o1', 'a1', 'u1');
+    const exclusion = t.mutations.find((m) => m.q.includes('RecordDedicatedRelease'));
+    expect(exclusion?.v.object).toMatchObject({
+      order_id: 'o1',
+      agent_id: 'a1',
+      user_id: 'u1',
+      status: 'declined',
+      offer_kind: 'dedicated',
+    });
+    expect(t.mutations.some((m) => m.q.includes('ClearDesignatedStamps'))).toBe(true);
+  });
+
+  it('skips a marketplace drop that was never designated or dedicated', async () => {
+    const t = leftover({
+      dispatch_mode: null,
+      assignment_source: 'open_claim',
+      designated_accepted_at: null,
+    });
+    await t.service.afterDroppedDesignatedAssignment('o1', 'a1', 'u1');
+    expect(t.mutations.some((m) => m.q.includes('RecordDedicatedRelease'))).toBe(false);
+    expect(t.mutations.some((m) => m.q.includes('ClearDesignatedStamps'))).toBe(false);
+  });
+});

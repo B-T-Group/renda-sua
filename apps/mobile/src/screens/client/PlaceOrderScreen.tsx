@@ -21,6 +21,7 @@ import {
   SegmentedButtons,
   Snackbar,
   Text,
+  TextInput,
 } from 'react-native-paper';
 import { agentApi } from '../../services/agentApi';
 import { checkoutAnalytics } from '../../services/checkoutAnalytics';
@@ -50,9 +51,16 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 import { DiasporaCheckoutBanner } from '../../components/checkout/DiasporaCheckoutBanner';
 import { RecipientPicker } from '../../components/checkout/RecipientPicker';
 import { PayerChargeSummary } from '../../components/checkout/PayerChargeSummary';
+import { CheckoutChoiceSummary } from '../../components/checkout/CheckoutChoiceSummary';
 import { CheckoutProgressStepper } from '../../components/checkout/CheckoutProgressStepper';
 import { PaymentMethodLockedRow } from '../../components/checkout/PaymentMethodLockedRow';
 import { ReservationDepositExplainer } from '../../components/checkout/ReservationDepositExplainer';
+import {
+  checkoutReceiveDisabledReason,
+  checkoutReviewDisabledReason,
+  isCheckoutBackNavigation,
+  type CheckoutFlowStep,
+} from '../../utils/checkoutReceiveStep';
 import { useClientAddresses } from '../../hooks/useClientAddresses';
 import { resolveDepositAmount, isMoMoDepositCheckoutPath, preflightDepositCopy } from '../../types/deposit';
 import { useClientProfileForPlaceOrder } from '../../hooks/useClientProfileForPlaceOrder';
@@ -75,7 +83,11 @@ import {
 } from '../../utils/catalogInventoryDisplay';
 import { alignCatalogAddressToCscFields } from '../../utils/addressRegionMatch';
 import { checkoutPreflightBlocker } from '../../utils/checkoutPreflightBlocker';
-import { checkoutStickyDisabledReason } from '../../utils/checkoutStickyDisabledReason';
+import {
+  checkoutEtaLine,
+  checkoutWindowSectionVisible,
+  checkoutWindowStickyText,
+} from '../../utils/checkoutWindowSummary';
 import { isAddressComplete } from '../../utils/addressCompleteness';
 import {
   cartShippingAvailability,
@@ -170,8 +182,12 @@ export default function PlaceOrderScreen() {
   const [payTiming, setPayTiming] = useState<PayTiming>('pay_at_delivery');
   const [instructions, setInstructions] = useState('');
   const [snack, setSnack] = useState<string | null>(null);
+  const [checkoutStep, setCheckoutStep] = useState<CheckoutFlowStep>('receive');
+  const [couponExpanded, setCouponExpanded] = useState(false);
   const [deliveryScheduleOk, setDeliveryScheduleOk] = useState(true);
   const [deliveryWindow, setDeliveryWindow] = useState<ClientDeliveryWindowPayload | null>(null);
+  const [deliveryWindowLabel, setDeliveryWindowLabel] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const [addAddressModalVisible, setAddAddressModalVisible] = useState(false);
   const [addAddressForm, setAddAddressForm] = useState<DeliveryAddressFormValue>(BLANK_ADDRESS_FORM);
   const [addAddressSaving, setAddAddressSaving] = useState(false);
@@ -363,11 +379,16 @@ export default function PlaceOrderScreen() {
     setDeliveryWindow(w);
   }, []);
 
+  const onWindowLabel = useCallback((label: string | null) => {
+    setDeliveryWindowLabel(label);
+  }, []);
+
   // Switching fulfillment mode invalidates any previously selected schedule,
   // since delivery and pickup fetch slots for different locations/hours.
   useEffect(() => {
     setDeliveryScheduleOk(true);
     setDeliveryWindow(null);
+    setDeliveryWindowLabel(null);
   }, [fulfillment]);
 
   const defaultVariantLabel = t('orders.variant.defaultOption', 'Default');
@@ -1023,7 +1044,6 @@ export default function PlaceOrderScreen() {
 
   const fulfillmentChoice = (
     <PlaceOrderFulfillmentChoice
-      compact
       value={fulfillment}
       onChange={chooseFulfillment}
       deliveryHidden={!deliveryOffered}
@@ -1060,7 +1080,7 @@ export default function PlaceOrderScreen() {
     deliveryHidden: !deliveryOffered,
     shippingAvailable: shippingEnabled,
   });
-  const stickyFulfillment =
+  const scrollFulfillment =
     fulfillmentOptions === 0
       ? null
       : fulfillmentOptions === 1
@@ -1182,13 +1202,52 @@ export default function PlaceOrderScreen() {
     linkedMoMo.selectedPhoneId,
   ]);
 
+  const canContinueReceive = useMemo(() => {
+    if (!item || submitting) return false;
+    if (!fulfillmentConfirmed) return false;
+    const variantOk = dbVariants.length === 0 || !!variantId;
+    const addrOk = fulfillment === 'pickup' || !!deliveryAddressId;
+    const qtyOk = quantity >= minQ && quantity <= maxQ;
+    const scheduleOk = !fulfillmentNeedsWindow(fulfillment) || deliveryScheduleOk;
+    if (checkoutBlocker) return false;
+    if (preflightRequest && preflightLoading) return false;
+    if (stripeDeliveryAddressIncomplete) return false;
+    if (fulfillment === 'delivery' && !deliveryOffered) return false;
+    if (fulfillment === 'shipping' && (!preflightConfig || !shippingEligible)) {
+      return false;
+    }
+    if (isRecipientDraftIncomplete(someoneElseReceiving, recipient)) return false;
+    return variantOk && addrOk && qtyOk && scheduleOk;
+  }, [
+    checkoutBlocker,
+    dbVariants.length,
+    deliveryAddressId,
+    deliveryOffered,
+    deliveryScheduleOk,
+    fulfillment,
+    fulfillmentConfirmed,
+    item,
+    maxQ,
+    minQ,
+    preflightConfig,
+    preflightLoading,
+    preflightRequest,
+    quantity,
+    recipient,
+    shippingEligible,
+    someoneElseReceiving,
+    stripeDeliveryAddressIncomplete,
+    submitting,
+    variantId,
+  ]);
+
   const locatingDelivery =
     fulfillmentNeedsAddress(fulfillment) &&
     addressesForDelivery.length === 0 &&
     !captureRecipientAddress &&
     (currentLocation.status === 'idle' || currentLocation.status === 'resolving');
 
-  const stickyDisabledReason = checkoutStickyDisabledReason({
+  const stickyReasonInput = {
     recipientIncomplete: isRecipientDraftIncomplete(someoneElseReceiving, recipient),
     recipientAddressMissing: captureRecipientAddress && !deliveryAddressId,
     momoMissing: needsLinkedMoMoPhone && !linkedMoMo.selectedPhoneId,
@@ -1220,7 +1279,119 @@ export default function PlaceOrderScreen() {
       currentLocation.status === 'resolving'
         ? t('orders.currentLocationResolving', 'Finding your current location…')
         : t('checkout.resolving', 'Preparing your checkout…'),
+  };
+  const stickyDisabledReason =
+    checkoutStep === 'receive'
+      ? checkoutReceiveDisabledReason(stickyReasonInput)
+      : checkoutReviewDisabledReason(stickyReasonInput);
+  const windowSectionVisible = checkoutWindowSectionVisible({
+    confirmed: fulfillmentConfirmed,
+    fulfillment,
+    country:
+      fulfillment === 'pickup'
+        ? item?.business_location?.address?.country
+        : selectedAddress?.country,
+    state:
+      fulfillment === 'pickup'
+        ? item?.business_location?.address?.state
+        : selectedAddress?.state,
   });
+  const windowStickyText = checkoutWindowStickyText({
+    needsChoice: fulfillmentNeedsWindow(fulfillment) && !deliveryScheduleOk,
+    windowLabel: deliveryWindowLabel,
+    asapTitle:
+      fulfillment === 'pickup'
+        ? t('client.placeOrder.deliveryWindow.asapPickupTitle', 'Pick up as soon as possible')
+        : t('client.placeOrder.deliveryWindow.asapTitle', 'Deliver as soon as possible'),
+    etaLine: checkoutEtaLine(
+      preflightConfig?.estimated_ready_at,
+      preflightConfig?.estimated_fulfill_by,
+      (eta) => t('client.placeOrder.deliveryWindow.asapEta', 'Usually ready {{eta}}', { eta })
+    ),
+    missingLabel: t('client.placeOrder.deliveryWindow.pickSlot', 'Select a time slot'),
+  });
+
+  const goToReceiveStep = useCallback(() => {
+    setCheckoutStep('receive');
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+  }, []);
+
+  const goToReviewStep = useCallback(() => {
+    setCheckoutStep('review');
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+  }, []);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
+      if (checkoutStep !== 'review') return;
+      // Do not block RESET after Stripe/MoMo success — only header/gesture back.
+      if (!isCheckoutBackNavigation(event.data.action.type)) return;
+      event.preventDefault();
+      goToReceiveStep();
+    });
+    return unsubscribe;
+  }, [checkoutStep, goToReceiveStep, navigation]);
+
+  const fulfillmentMethodLabel = useMemo(() => {
+    const eatInAvailable = pickupEnabled && Boolean(item && isFoodCatalogItem(item));
+    if (fulfillment === 'pickup') {
+      if (eatInAvailable && eatIn) {
+        return t('orders.eatIn.eatIn', 'Eat in');
+      }
+      if (eatInAvailable) {
+        return t('orders.eatIn.takeOut', 'Take out');
+      }
+      return t('client.placeOrder.pickup', 'Pick it up');
+    }
+    if (fulfillment === 'shipping') {
+      return t('client.placeOrder.shipping', 'Ship to me');
+    }
+    return t('client.placeOrder.delivery', 'Get it delivered');
+  }, [eatIn, fulfillment, item, pickupEnabled, t]);
+
+  const choiceSummaryRows = useMemo(() => {
+    const rows: { key: string; label: string; value: string }[] = [
+      {
+        key: 'quantity',
+        label: t('client.placeOrder.review.quantity', 'Quantity'),
+        value: String(quantity),
+      },
+      {
+        key: 'method',
+        label: t('client.placeOrder.review.method', 'How you get it'),
+        value: fulfillmentMethodLabel,
+      },
+    ];
+    if (fulfillmentNeedsAddress(fulfillment) && selectedAddress) {
+      rows.push({
+        key: 'address',
+        label: t('client.placeOrder.review.address', 'Address'),
+        value: [selectedAddress.address_line_1, selectedAddress.city, selectedAddress.state, selectedAddress.country]
+          .filter(Boolean)
+          .join(', '),
+      });
+    }
+    if (windowSectionVisible) {
+      rows.push({
+        key: 'slot',
+        label: t('client.placeOrder.review.time', 'Time'),
+        value: windowStickyText,
+      });
+    }
+    return rows;
+  }, [
+    fulfillment,
+    fulfillmentMethodLabel,
+    quantity,
+    selectedAddress,
+    t,
+    windowSectionVisible,
+    windowStickyText,
+  ]);
 
   const onSubmit = useCallback(async () => {
     if (!item || submitting || !canSubmit) return;
@@ -1464,6 +1635,7 @@ export default function PlaceOrderScreen() {
       keyboardVerticalOffset={keyboardVerticalOffset}
     >
       <ScrollView
+        ref={scrollRef}
         {...keyboardAwareScrollProps}
         style={{ flex: 1 }}
         contentContainerStyle={{
@@ -1477,60 +1649,246 @@ export default function PlaceOrderScreen() {
             { key: 'checkout', label: t('checkout.progress.checkout', 'Checkout') },
             { key: 'pay', label: t('checkout.progress.pay', 'Pay') },
           ]}
-          currentStep="checkout"
+          currentStep={checkoutStep === 'review' ? 'pay' : 'checkout'}
         />
 
-        {/* Diaspora checkout banner + recipient (always someone-else when diaspora) */}
-        {fulfillmentConfirmed && isDiaspora ? (
+        {checkoutStep === 'receive' ? (
           <>
-            <DiasporaCheckoutBanner
-              diaspora={diasporaContext}
-              style={{ marginBottom: spacing.sm }}
-            />
+            {fulfillmentConfirmed && isDiaspora ? (
+              <>
+                <DiasporaCheckoutBanner
+                  diaspora={diasporaContext}
+                  style={{ marginBottom: spacing.sm }}
+                />
 
-            <RecipientPicker
-              recipient={recipient}
-              onChange={setRecipient}
-              onSavedSelectionChange={onSavedRecipientSelection}
-              country={sellerCountry}
-              defaultCountryCode={
-                sellerCountry && (sellerCountry === 'CM' || sellerCountry === 'GA')
-                  ? (sellerCountry as CountryCode)
-                  : undefined
+                <RecipientPicker
+                  recipient={recipient}
+                  onChange={setRecipient}
+                  onSavedSelectionChange={onSavedRecipientSelection}
+                  country={sellerCountry}
+                  defaultCountryCode={
+                    sellerCountry && (sellerCountry === 'CM' || sellerCountry === 'GA')
+                      ? (sellerCountry as CountryCode)
+                      : undefined
+                  }
+                  disabled={submitting}
+                  style={{ marginBottom: spacing.sm }}
+                />
+              </>
+            ) : null}
+
+            {fulfillmentConfirmed &&
+            fulfillmentNeedsAddress(fulfillment) &&
+            sendingOrderHome &&
+            !hideShopperAddressBook ? (
+              <>
+                <PlaceOrderDeliveryAddressBlock
+                  addresses={addressesForDelivery}
+                  selectedId={deliveryAddressId}
+                  onSelect={selectDeliveryAddress}
+                  loading={addrLoading}
+                  error={addrError}
+                  onRetry={() => void refetchAddresses()}
+                  onAddAddress={openAddAddressModal}
+                  currentLocationStatus={currentLocation.status}
+                  warnIncomplete={resolvedIsStripeRail}
+                  title={recipientAddressTitle}
+                  helperText={t(
+                    'diaspora.recipientAddressHelp',
+                    'Enter the address where the recipient will receive this order. We share it with the delivery agent.'
+                  )}
+                  emptyMessage={t(
+                    'diaspora.recipientAddressEmpty',
+                    'Add the recipient’s delivery address in the destination country.'
+                  )}
+                  addCta={t('diaspora.addRecipientAddress', 'Add recipient address')}
+                />
+                {stripeDeliveryAddressIncomplete ? (
+                  <NoticeBanner
+                    style={{ marginBottom: spacing.sm }}
+                    tone="warning"
+                    icon="map-marker-alert-outline"
+                    message={t(
+                      'checkout.incompleteAddress.banner',
+                      'Your delivery address is incomplete. Add city, region, and postal code to continue with card payment.'
+                    )}
+                    actionLabel={t('checkout.incompleteAddress.cta', 'Complete address')}
+                    onAction={openCompleteSelectedAddress}
+                  />
+                ) : null}
+              </>
+            ) : null}
+
+            <PlaceOrderSummaryCard
+              thumb={thumb}
+              itemName={item.item.name}
+              storeName={item.business_location?.name ?? ''}
+              currency={currency}
+              unitMoney={unitMoney}
+              quantity={quantity}
+              subtotal={lineSubtotal}
+              fulfillment={fulfillment}
+              fulfillmentPending={!fulfillmentConfirmed}
+              deliveryFeeLoading={
+                fulfillment === 'shipping' ? preflightLoading : deliveryFeeState.loading
               }
-              disabled={submitting}
-              style={{ marginBottom: spacing.sm }}
+              deliveryFeeError={
+                fulfillment === 'shipping' ? null : deliveryFeeState.error
+              }
+              deliveryAddressMissing={deliveryAddressMissing}
+              deliveryAmount={deliveryAmount}
+              deliveryFullBefore={deliveryFullBefore}
+              showFirstDeliveryDiscount={showFirstDeliveryDiscount}
+              firstDeliveryDiscountAmount={firstDeliveryDiscountAmount}
+              discountDraft={discountCode.draft}
+              onDiscountDraftChange={discountCode.setDraft}
+              onApplyDiscount={discountCode.apply}
+              onClearDiscount={discountCode.clear}
+              discountLoading={discountCode.loading}
+              discountError={discountCode.error}
+              appliedDiscountCode={discountCode.appliedCode}
+              discountPercentage={discountCode.percentage}
+              discountAmount={discountAmount}
+              grandTotal={Number((grandTotal + serviceFee).toFixed(2))}
+              serviceFee={serviceFee}
+              depositAmount={depositAmount}
+              showDepositBreakdown={depositAmount != null && depositAmount > 0}
+              showTaxAtCheckoutNotice={
+                preflightConfig?.tax_notice === 'calculated_at_checkout'
+              }
+              hideFinancialSummary
+              hideCoupon
             />
-          </>
-        ) : null}
 
-        {fulfillmentConfirmed &&
-        fulfillmentNeedsAddress(fulfillment) &&
-        sendingOrderHome &&
-        !hideShopperAddressBook ? (
-          <>
-            <PlaceOrderDeliveryAddressBlock
-              addresses={addressesForDelivery}
-              selectedId={deliveryAddressId}
-              onSelect={selectDeliveryAddress}
-              loading={addrLoading}
-              error={addrError}
-              onRetry={() => void refetchAddresses()}
-              onAddAddress={openAddAddressModal}
-            currentLocationStatus={currentLocation.status}
-              warnIncomplete={resolvedIsStripeRail}
-              title={recipientAddressTitle}
-              helperText={t(
-                'diaspora.recipientAddressHelp',
-                'Enter the address where the recipient will receive this order. We share it with the delivery agent.'
-              )}
-              emptyMessage={t(
-                'diaspora.recipientAddressEmpty',
-                'Add the recipient’s delivery address in the destination country.'
-              )}
-              addCta={t('diaspora.addRecipientAddress', 'Add recipient address')}
-            />
-            {stripeDeliveryAddressIncomplete ? (
+            {variants.length > 0 && item ? (
+              <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
+                <VariantOptionPicker
+                  variants={variants}
+                  value={variantId}
+                  onChange={setVariantId}
+                  listingSellingPrice={item.selling_price}
+                  priceOverrides={item.variant_price_overrides}
+                  hasActiveDeal={item.hasActiveDeal}
+                  originalPrice={item.original_price}
+                  discountedPrice={item.discounted_price}
+                  currency={item.item.currency || 'XAF'}
+                />
+              </View>
+            ) : null}
+
+            <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
+              <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
+                {t('client.placeOrder.quantity', 'Quantity')}
+              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
+                <IconButton icon="minus" mode="outlined" disabled={quantity <= minQ} onPress={() => setQuantity((q) => Math.max(minQ, q - 1))} />
+                <Text variant="titleMedium" style={{ minWidth: 32, textAlign: 'center' }}>
+                  {quantity}
+                </Text>
+                <IconButton icon="plus" mode="outlined" disabled={quantity >= maxQ} onPress={() => setQuantity((q) => Math.min(maxQ, q + 1))} />
+                <Text variant="bodySmall" style={{ color: colors.text.secondary, flex: 1 }}>
+                  {t('client.placeOrder.quantityHint', 'Max {{max}} available', { max: maxQ })}
+                </Text>
+              </View>
+            </View>
+
+            {scrollFulfillment ? (
+              <View style={{ marginBottom: spacing.sm }}>{scrollFulfillment}</View>
+            ) : null}
+
+            {fulfillment === 'delivery' && deliveryKnownUnavailable ? (
+              <NoticeBanner
+                style={{ marginBottom: spacing.sm }}
+                tone="warning"
+                icon="truck-remove-outline"
+                message={
+                  pickupEnabled
+                    ? t(
+                        'client.placeOrder.deliveryUnavailablePickup',
+                        'Delivery is currently unavailable. You can still pick up this order at the store.'
+                      )
+                    : t(
+                        'client.placeOrder.deliveryUnavailable',
+                        'Delivery is currently unavailable.'
+                      )
+                }
+                actionLabel={
+                  pickupEnabled
+                    ? t('client.placeOrder.switchToPickup', 'Switch to pickup')
+                    : undefined
+                }
+                onAction={pickupEnabled ? switchToPickupFromUnavailable : undefined}
+              />
+            ) : null}
+
+            {windowSectionVisible && fulfillment === 'pickup' ? (
+              <GuidedCheckoutCard
+                title={t(
+                  'client.placeOrder.deliveryWindow.pickupTitle',
+                  'When will you pick up your order?'
+                )}
+              >
+                <PlaceOrderDeliveryWindowBlock
+                  countryCode={item.business_location?.address?.country?.trim() ?? ''}
+                  stateCode={item.business_location?.address?.state?.trim() ?? ''}
+                  enabled={Boolean(
+                    item.business_location?.address?.country?.trim() &&
+                      item.business_location?.address?.state?.trim()
+                  )}
+                  fulfillment="pickup"
+                  businessLocationId={item.business_location?.id ?? ''}
+                  scheduleRequired={!!preflightConfig?.schedule_required}
+                  allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
+                  payAfterConfirm={isCookedFoodMoMoPayAfter}
+                  payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
+                  estimatedReadyAt={preflightConfig?.estimated_ready_at}
+                  estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
+                  opensAt={preflightConfig?.opens_at}
+                  onReadyChange={onDwReadyChange}
+                  onCommit={onDwCommit}
+                  onLabelChange={onWindowLabel}
+                />
+              </GuidedCheckoutCard>
+            ) : null}
+
+            {fulfillmentConfirmed && fulfillmentNeedsAddress(fulfillment) && !sendingOrderHome ? (
+              <PlaceOrderDeliveryAddressBlock
+                addresses={addressesForDelivery}
+                selectedId={deliveryAddressId}
+                onSelect={selectDeliveryAddress}
+                loading={addrLoading}
+                error={addrError}
+                onRetry={() => void refetchAddresses()}
+                onAddAddress={openAddAddressModal}
+                currentLocationStatus={currentLocation.status}
+                onUseCurrentLocation={() => void currentLocation.resolve()}
+                warnIncomplete={resolvedIsStripeRail}
+                title={captureRecipientAddress ? recipientAddressTitle : undefined}
+                helperText={
+                  captureRecipientAddress
+                    ? t(
+                        'diaspora.recipientAddressHelp',
+                        'Enter the address where the recipient will receive this order. We share it with the delivery agent.'
+                      )
+                    : undefined
+                }
+                emptyMessage={
+                  captureRecipientAddress
+                    ? t(
+                        'diaspora.recipientAddressEmpty',
+                        'Add the recipient’s delivery address in the destination country.'
+                      )
+                    : undefined
+                }
+                addCta={
+                  captureRecipientAddress
+                    ? t('diaspora.addRecipientAddress', 'Add recipient address')
+                    : undefined
+                }
+              />
+            ) : null}
+
+            {stripeDeliveryAddressIncomplete && !sendingOrderHome ? (
               <NoticeBanner
                 style={{ marginBottom: spacing.sm }}
                 tone="warning"
@@ -1543,350 +1901,278 @@ export default function PlaceOrderScreen() {
                 onAction={openCompleteSelectedAddress}
               />
             ) : null}
+
+            {windowSectionVisible && fulfillment === 'delivery' && selectedAddress ? (
+              <GuidedCheckoutCard
+                title={t(
+                  'client.placeOrder.deliveryWindow.title',
+                  'When are you available for delivery?'
+                )}
+              >
+                <PlaceOrderDeliveryWindowBlock
+                  countryCode={selectedAddress.country?.trim() ?? ''}
+                  stateCode={selectedAddress.state?.trim() ?? ''}
+                  enabled={Boolean(selectedAddress.country?.trim() && selectedAddress.state?.trim())}
+                  businessLocationId={item.business_location?.id ?? ''}
+                  scheduleRequired={!!preflightConfig?.schedule_required}
+                  allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
+                  payAfterConfirm={isCookedFoodMoMoPayAfter}
+                  payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
+                  estimatedReadyAt={preflightConfig?.estimated_ready_at}
+                  estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
+                  opensAt={preflightConfig?.opens_at}
+                  coveredSlots={deliveryCoverage.coveredSlots}
+                  value={deliveryWindow}
+                  onReadyChange={onDwReadyChange}
+                  onCommit={onDwCommit}
+                  onLabelChange={onWindowLabel}
+                />
+              </GuidedCheckoutCard>
+            ) : null}
           </>
-        ) : null}
-
-        {depositAmount != null &&
-        depositAmount > 0 &&
-        !isCookedFoodOrder &&
-        !isDiaspora &&
-        !resolvedIsStripeRail ? (
-          <ReservationDepositExplainer
-            depositAmount={depositAmount}
-            currency={currency}
-            minimumApplied={depositCopy.minimumApplied}
-            percent={depositCopy.percent}
-            style={{ marginBottom: spacing.sm }}
-          />
-        ) : null}
-
-        <PlaceOrderSummaryCard
-          thumb={thumb}
-          itemName={item.item.name}
-          storeName={item.business_location?.name ?? ''}
-          currency={currency}
-          unitMoney={unitMoney}
-          quantity={quantity}
-          subtotal={lineSubtotal}
-          fulfillment={fulfillment}
-          fulfillmentPending={!fulfillmentConfirmed}
-          deliveryFeeLoading={
-            fulfillment === 'shipping' ? preflightLoading : deliveryFeeState.loading
-          }
-          deliveryFeeError={
-            fulfillment === 'shipping' ? null : deliveryFeeState.error
-          }
-          deliveryAddressMissing={deliveryAddressMissing}
-          deliveryAmount={deliveryAmount}
-          deliveryFullBefore={deliveryFullBefore}
-          showFirstDeliveryDiscount={showFirstDeliveryDiscount}
-          firstDeliveryDiscountAmount={firstDeliveryDiscountAmount}
-          discountDraft={discountCode.draft}
-          onDiscountDraftChange={discountCode.setDraft}
-          onApplyDiscount={discountCode.apply}
-          onClearDiscount={discountCode.clear}
-          discountLoading={discountCode.loading}
-          discountError={discountCode.error}
-          appliedDiscountCode={discountCode.appliedCode}
-          discountPercentage={discountCode.percentage}
-          discountAmount={discountAmount}
-          grandTotal={Number((grandTotal + serviceFee).toFixed(2))}
-          serviceFee={serviceFee}
-          depositAmount={depositAmount}
-          showDepositBreakdown={depositAmount != null && depositAmount > 0}
-          showTaxAtCheckoutNotice={
-            preflightConfig?.tax_notice === 'calculated_at_checkout'
-          }
-          hideFinancialSummary
-        />
-
-        {variants.length > 0 && item ? (
-          <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-            <VariantOptionPicker
-              variants={variants}
-              value={variantId}
-              onChange={setVariantId}
-              listingSellingPrice={item.selling_price}
-              priceOverrides={item.variant_price_overrides}
-              hasActiveDeal={item.hasActiveDeal}
-              originalPrice={item.original_price}
-              discountedPrice={item.discounted_price}
-              currency={item.item.currency || 'XAF'}
-            />
-          </View>
-        ) : null}
-
-        <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-          <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
-            {t('client.placeOrder.quantity', 'Quantity')}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <IconButton icon="minus" mode="outlined" disabled={quantity <= minQ} onPress={() => setQuantity((q) => Math.max(minQ, q - 1))} />
-            <Text variant="titleMedium" style={{ minWidth: 32, textAlign: 'center' }}>
-              {quantity}
-            </Text>
-            <IconButton icon="plus" mode="outlined" disabled={quantity >= maxQ} onPress={() => setQuantity((q) => Math.min(maxQ, q + 1))} />
-            <Text variant="bodySmall" style={{ color: colors.text.secondary, flex: 1 }}>
-              {t('client.placeOrder.quantityHint', 'Max {{max}} available', { max: maxQ })}
-            </Text>
-          </View>
-        </View>
-
-        {fulfillmentConfirmed && fulfillment === 'shipping' ? (
-          <NoticeBanner
-            style={{ marginBottom: spacing.sm }}
-            tone="info"
-            icon="package-variant-closed"
-            message={t(
-              'client.placeOrder.shippingNotice',
-              'The seller ships this with a carrier. Pay now to place the order.'
-            )}
-          />
-        ) : null}
-
-        {/* Diaspora payment notice (Stripe pay-now only) */}
-        {fulfillmentConfirmed && isDiaspora ? (
-          <NoticeBanner
-            style={{ marginBottom: spacing.sm }}
-            tone="info"
-            icon="credit-card-outline"
-            message={
-              fulfillment === 'pickup'
-                ? t(
-                    'diaspora.paymentNoticePickup',
-                    'Pay by card now. Funds held until the recipient picks up the order.'
-                  )
-                : t(
-                    'diaspora.paymentNoticeDelivery',
-                    'Pay by card now. Funds held until the recipient receives the order.'
-                  )
-            }
-          />
-        ) : null}
-
-        {fulfillmentConfirmed &&
-        fulfillment === 'pickup' &&
-        !isDiaspora &&
-        !(item != null && isFoodCatalogItem(item) && !resolvedIsStripeRail) ? (
-          <NoticeBanner
-            style={{ marginBottom: spacing.sm }}
-            tone="info"
-            icon="store-check-outline"
-            message={
-              resolvedIsStripeRail
-                ? t(
-                    'client.placeOrder.pickupHintStripe',
-                    'Pay securely by card when you place your order, then pick up at the store.'
-                  )
-                : t('client.placeOrder.pickupHint', 'Pay when you pick up at the store.')
-            }
-          />
-        ) : null}
-
-        {fulfillment === 'delivery' && deliveryKnownUnavailable ? (
-          <NoticeBanner
-            style={{ marginBottom: spacing.sm }}
-            tone="warning"
-            icon="truck-remove-outline"
-            message={
-              pickupEnabled
-                ? t(
-                    'client.placeOrder.deliveryUnavailablePickup',
-                    'Delivery is currently unavailable. You can still pick up this order at the store.'
-                  )
-                : t(
-                    'client.placeOrder.deliveryUnavailable',
-                    'Delivery is currently unavailable.'
-                  )
-            }
-            actionLabel={
-              pickupEnabled
-                ? t('client.placeOrder.switchToPickup', 'Switch to pickup')
-                : undefined
-            }
-            onAction={pickupEnabled ? switchToPickupFromUnavailable : undefined}
-          />
-        ) : null}
-
-        {fulfillmentConfirmed && fulfillmentNeedsAddress(fulfillment) && !sendingOrderHome ? (
-          <PlaceOrderDeliveryAddressBlock
-            addresses={addressesForDelivery}
-            selectedId={deliveryAddressId}
-            onSelect={selectDeliveryAddress}
-            loading={addrLoading}
-            error={addrError}
-            onRetry={() => void refetchAddresses()}
-            onAddAddress={openAddAddressModal}
-            currentLocationStatus={currentLocation.status}
-            onUseCurrentLocation={() => void currentLocation.resolve()}
-            warnIncomplete={resolvedIsStripeRail}
-            title={captureRecipientAddress ? recipientAddressTitle : undefined}
-            helperText={
-              captureRecipientAddress
-                ? t(
-                    'diaspora.recipientAddressHelp',
-                    'Enter the address where the recipient will receive this order. We share it with the delivery agent.'
-                  )
-                : undefined
-            }
-            emptyMessage={
-              captureRecipientAddress
-                ? t(
-                    'diaspora.recipientAddressEmpty',
-                    'Add the recipient’s delivery address in the destination country.'
-                  )
-                : undefined
-            }
-            addCta={
-              captureRecipientAddress
-                ? t('diaspora.addRecipientAddress', 'Add recipient address')
-                : undefined
-            }
-          />
-        ) : null}
-
-        {stripeDeliveryAddressIncomplete && !sendingOrderHome ? (
-          <NoticeBanner
-            style={{ marginBottom: spacing.sm }}
-            tone="warning"
-            icon="map-marker-alert-outline"
-            message={t(
-              'checkout.incompleteAddress.banner',
-              'Your delivery address is incomplete. Add city, region, and postal code to continue with card payment.'
-            )}
-            actionLabel={t('checkout.incompleteAddress.cta', 'Complete address')}
-            onAction={openCompleteSelectedAddress}
-          />
-        ) : null}
-
-        {fulfillmentConfirmed && fulfillment === 'delivery' && selectedAddress ? (
-          <GuidedCheckoutCard title={t('client.placeOrder.addressAndTime', 'Address and time')}>
-          <PlaceOrderDeliveryWindowBlock
-            countryCode={selectedAddress.country?.trim() ?? ''}
-            stateCode={selectedAddress.state?.trim() ?? ''}
-            enabled={Boolean(selectedAddress.country?.trim() && selectedAddress.state?.trim())}
-            businessLocationId={item.business_location?.id ?? ''}
-            scheduleRequired={!!preflightConfig?.schedule_required}
-            allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
-            payAfterConfirm={isCookedFoodMoMoPayAfter}
-            payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
-            estimatedReadyAt={preflightConfig?.estimated_ready_at}
-            estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
-            opensAt={preflightConfig?.opens_at}
-            coveredSlots={deliveryCoverage.coveredSlots}
-            value={deliveryWindow}
-            onReadyChange={onDwReadyChange}
-            onCommit={onDwCommit}
-          />
-          </GuidedCheckoutCard>
-        ) : null}
-
-        {fulfillmentConfirmed && fulfillment === 'pickup' ? (
-          <PlaceOrderDeliveryWindowBlock
-            countryCode={item.business_location?.address?.country?.trim() ?? ''}
-            stateCode={item.business_location?.address?.state?.trim() ?? ''}
-            enabled={Boolean(
-              item.business_location?.address?.country?.trim() &&
-                item.business_location?.address?.state?.trim()
-            )}
-            fulfillment="pickup"
-            businessLocationId={item.business_location?.id ?? ''}
-            scheduleRequired={!!preflightConfig?.schedule_required}
-            allowSchedule={preflightConfig?.schedule_allowed !== false && !isFoodCatalogItem(item)}
-            payAfterConfirm={isCookedFoodMoMoPayAfter}
-            payAfterCopyVariant={payAfterCopyVariantForPreflight(preflightConfig)}
-            estimatedReadyAt={preflightConfig?.estimated_ready_at}
-            estimatedFulfillBy={preflightConfig?.estimated_fulfill_by}
-            opensAt={preflightConfig?.opens_at}
-            onReadyChange={onDwReadyChange}
-            onCommit={onDwCommit}
-          />
-        ) : null}
-
-        {/* Diaspora: show indicative FX estimate when available */}
-        {fulfillmentConfirmed && isDiaspora && diasporaContext?.payer_charge_estimate ? (
-          <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
-            <PayerChargeSummary diaspora={diasporaContext} locale={t('common.locale', 'en')} />
-          </View>
-        ) : null}
-
-        {/* Payment timing (Pay now / Pay at delivery) — hidden for cooked-food MoMo */}
-        {fulfillmentConfirmed &&
-        fulfillment === 'delivery' &&
-        payAtDeliveryEnabled &&
-        !isDiaspora &&
-        momoPayNowDeliveryEnabled &&
-        !isCookedFoodMoMoPayAfter ? (
-          <GuidedCheckoutCard title={t('client.placeOrder.paymentTiming', 'Payment')}>
-            <SegmentedButtons
-              value={payTiming === 'pay_at_delivery' ? 'pad' : 'now'}
-              onValueChange={(v) => setPayTiming(v === 'pad' ? 'pay_at_delivery' : 'pay_now')}
-              buttons={[
-                { value: 'now', label: t('client.placeOrder.payNow', 'Pay now') },
-                { value: 'pad', label: t('client.placeOrder.payAtDelivery', 'Pay at delivery') },
-              ]}
-            />
-          </GuidedCheckoutCard>
-        ) : null}
-
-        {/* Payment method (country-locked) - driven by preflight, not client country */}
-        {fulfillmentConfirmed && preflightConfig ? (
+        ) : (
           <>
+            <CheckoutChoiceSummary rows={choiceSummaryRows} onEdit={goToReceiveStep} />
+
+            {depositAmount != null &&
+            depositAmount > 0 &&
+            !isCookedFoodOrder &&
+            !isDiaspora &&
+            !resolvedIsStripeRail ? (
+              <ReservationDepositExplainer
+                depositAmount={depositAmount}
+                currency={currency}
+                minimumApplied={depositCopy.minimumApplied}
+                percent={depositCopy.percent}
+                style={{ marginBottom: spacing.sm }}
+              />
+            ) : null}
+
+            {fulfillmentConfirmed && fulfillment === 'shipping' ? (
+              <NoticeBanner
+                style={{ marginBottom: spacing.sm }}
+                tone="info"
+                icon="package-variant-closed"
+                message={t(
+                  'client.placeOrder.shippingNotice',
+                  'The seller ships this with a carrier. Pay now to place the order.'
+                )}
+              />
+            ) : null}
+
+            {fulfillmentConfirmed && isDiaspora ? (
+              <NoticeBanner
+                style={{ marginBottom: spacing.sm }}
+                tone="info"
+                icon="credit-card-outline"
+                message={
+                  fulfillment === 'pickup'
+                    ? t(
+                        'diaspora.paymentNoticePickup',
+                        'Pay by card now. Funds held until the recipient picks up the order.'
+                      )
+                    : t(
+                        'diaspora.paymentNoticeDelivery',
+                        'Pay by card now. Funds held until the recipient receives the order.'
+                      )
+                }
+              />
+            ) : null}
+
+            {fulfillmentConfirmed &&
+            fulfillment === 'pickup' &&
+            !isDiaspora &&
+            !(item != null && isFoodCatalogItem(item) && !resolvedIsStripeRail) ? (
+              <NoticeBanner
+                style={{ marginBottom: spacing.sm }}
+                tone="info"
+                icon="store-check-outline"
+                message={
+                  resolvedIsStripeRail
+                    ? t(
+                        'client.placeOrder.pickupHintStripe',
+                        'Pay securely by card when you place your order, then pick up at the store.'
+                      )
+                    : t('client.placeOrder.pickupHint', 'Pay when you pick up at the store.')
+                }
+              />
+            ) : null}
+
+            {fulfillmentConfirmed && isDiaspora && diasporaContext?.payer_charge_estimate ? (
+              <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
+                <PayerChargeSummary diaspora={diasporaContext} locale={t('common.locale', 'en')} />
+              </View>
+            ) : null}
+
+            {fulfillmentConfirmed &&
+            fulfillment === 'delivery' &&
+            payAtDeliveryEnabled &&
+            !isDiaspora &&
+            momoPayNowDeliveryEnabled &&
+            !isCookedFoodMoMoPayAfter ? (
+              <GuidedCheckoutCard title={t('client.placeOrder.paymentTiming', 'Payment')}>
+                <SegmentedButtons
+                  value={payTiming === 'pay_at_delivery' ? 'pad' : 'now'}
+                  onValueChange={(v) => setPayTiming(v === 'pad' ? 'pay_at_delivery' : 'pay_now')}
+                  buttons={[
+                    { value: 'now', label: t('client.placeOrder.payNow', 'Pay now') },
+                    { value: 'pad', label: t('client.placeOrder.payAtDelivery', 'Pay at delivery') },
+                  ]}
+                />
+              </GuidedCheckoutCard>
+            ) : null}
+
+            {fulfillmentConfirmed && preflightConfig ? (
+              <>
+                <View
+                  style={[
+                    styles.block,
+                    styles.paymentMethodBlock,
+                    { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md },
+                  ]}
+                >
+                  <PaymentMethodLockedRow
+                    method={resolvedIsStripeRail ? 'stripe' : 'mobile_money'}
+                    countryIsos={[sellerCountry]}
+                  />
+                </View>
+
+                {!isDiaspora && !resolvedIsStripeRail ? (
+                  <PlaceOrderPaymentBlock
+                    isStripeRail={false}
+                    profileLoading={profileLoading || linkedMoMo.phonesLoading}
+                    profilePhone={profilePhone}
+                    linkedPhone={linkedMoMo.linkedPhone}
+                    onChangePhonePress={linkedMoMo.openChangePhone}
+                    onLinkProfilePress={() => void linkedMoMo.linkProfilePhone()}
+                    linkingBusy={linkedMoMo.linkingBusy}
+                  />
+                ) : null}
+              </>
+            ) : null}
+
+            {couponExpanded || discountCode.appliedCode ? (
+              <View style={[styles.block, { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md }]}>
+                <Text variant="titleSmall">{t('client.placeOrder.discountCode.label', 'Discount code')}</Text>
+                <TextInput
+                  mode="outlined"
+                  value={discountCode.draft}
+                  onChangeText={discountCode.setDraft}
+                  style={{ marginTop: spacing.sm }}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+                <View style={{ flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm }}>
+                  <Button mode="contained-tonal" onPress={() => void discountCode.apply()} loading={discountCode.loading}>
+                    {t('client.placeOrder.discountCode.apply', 'Apply')}
+                  </Button>
+                  {discountCode.appliedCode ? (
+                    <Button mode="text" onPress={discountCode.clear}>
+                      {t('client.placeOrder.discountCode.clear', 'Clear')}
+                    </Button>
+                  ) : null}
+                </View>
+                {discountCode.error ? (
+                  <Text style={{ color: colors.error.main, marginTop: spacing.xs }}>{discountCode.error}</Text>
+                ) : null}
+              </View>
+            ) : (
+              <View style={{ alignItems: 'flex-start', marginBottom: spacing.sm }}>
+                <Button
+                  mode="text"
+                  compact
+                  icon="ticket-percent-outline"
+                  onPress={() => setCouponExpanded(true)}
+                >
+                  {t('client.placeOrder.discountCode.haveCoupon', 'Have a coupon?')}
+                </Button>
+              </View>
+            )}
+
+            <PlaceOrderSpecialInstructions
+              value={instructions}
+              onChangeText={setInstructions}
+            />
+
             <View
               style={[
                 styles.block,
-                styles.paymentMethodBlock,
                 { borderColor: colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.md },
               ]}
             >
-              <PaymentMethodLockedRow
-                method={resolvedIsStripeRail ? 'stripe' : 'mobile_money'}
-                countryIsos={[sellerCountry]}
-              />
+              <Text variant="titleSmall" style={{ marginBottom: spacing.sm }}>
+                {t('client.placeOrder.review.receipt', 'Order total')}
+              </Text>
+              {stickyBreakdown.map((line) => (
+                <View
+                  key={`${line.label}-${line.value}`}
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    marginBottom: spacing.xs,
+                    gap: spacing.sm,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+                      {line.label}
+                    </Text>
+                    {line.hint ? (
+                      <Text variant="bodySmall" style={{ color: colors.text.secondary }}>
+                        {line.hint}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text
+                    variant="bodySmall"
+                    style={{
+                      fontWeight: line.tone === 'emphasize' ? '800' : '600',
+                      color:
+                        line.tone === 'success'
+                          ? colors.success.main
+                          : line.tone === 'secondary'
+                            ? colors.text.secondary
+                            : colors.text.primary,
+                    }}
+                  >
+                    {line.value}
+                  </Text>
+                </View>
+              ))}
             </View>
 
-            {/* Hide payment phone on diaspora (Stripe only) + show locked MoMo phone for local */}
-            {!isDiaspora && !resolvedIsStripeRail ? (
-              <PlaceOrderPaymentBlock
-                isStripeRail={false}
-                profileLoading={profileLoading || linkedMoMo.phonesLoading}
-                profilePhone={profilePhone}
-                linkedPhone={linkedMoMo.linkedPhone}
-                onChangePhonePress={linkedMoMo.openChangePhone}
-                onLinkProfilePress={() => void linkedMoMo.linkProfilePhone()}
-                linkingBusy={linkedMoMo.linkingBusy}
+            {checkoutBlocker &&
+            checkoutBlocker.code !== 'COOKED_FOOD_STORE_CLOSED' ? (
+              <NoticeBanner
+                tone="error"
+                icon="alert-circle-outline"
+                message={checkoutBlocker.message}
+                style={{ marginTop: spacing.sm }}
               />
             ) : null}
           </>
-        ) : null}
-
-        <PlaceOrderSpecialInstructions
-          value={instructions}
-          onChangeText={setInstructions}
-        />
-
-        {checkoutBlocker &&
-        checkoutBlocker.code !== 'COOKED_FOOD_STORE_CLOSED' ? (
-          <NoticeBanner
-            tone="error"
-            icon="alert-circle-outline"
-            message={checkoutBlocker.message}
-            style={{ marginTop: spacing.sm }}
-          />
-        ) : null}
+        )}
       </ScrollView>
 
       <View>
         {checkoutBlocker?.code === 'COOKED_FOOD_STORE_CLOSED' ? (
           <KitchenClosedStickyPanel
-            topContent={stickyFulfillment}
             details={checkoutBlocker.details}
             message={checkoutBlocker.message}
           />
+        ) : checkoutStep === 'receive' ? (
+          <CheckoutStickyActionBar
+            label={t('client.placeOrder.review.continue', 'Continue')}
+            total={stickyBreakdown.find((line) => line.tone === 'emphasize')?.value}
+            onPress={() => {
+              if (canContinueReceive) goToReviewStep();
+            }}
+            disabled={!canContinueReceive}
+            disabledReason={stickyDisabledReason}
+          />
         ) : (
           <CheckoutStickyActionBar
-            topContent={stickyFulfillment}
-            breakdown={stickyBreakdown}
             label={
               resolvedIsStripeRail
                 ? t('checkout.payNow', 'Pay now')
@@ -1899,6 +2185,7 @@ export default function PlaceOrderScreen() {
                     ? t('client.placeOrder.submit', 'Place order')
                     : t('checkout.payWithMoMo', 'Pay with MoMo')
             }
+            total={stickyBreakdown.find((line) => line.tone === 'emphasize')?.value}
             onPress={() => { if (!submitting) void onSubmit(); }}
             loading={submitting}
             disabled={!canSubmit}
