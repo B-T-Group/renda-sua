@@ -1,5 +1,6 @@
 import { Platform, type ViewStyle } from 'react-native';
-import { Portal, Snackbar, type SnackbarProps } from 'react-native-paper';
+import { Portal, Snackbar } from 'react-native-paper';
+import type { SnackbarProps } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** Keeps snackbars above navigation, dialogs, and scrollable list content. */

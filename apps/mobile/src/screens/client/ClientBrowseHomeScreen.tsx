@@ -7,8 +7,9 @@ import { useTranslation } from 'react-i18next';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { observer } from 'mobx-react-lite';
-import { Snackbar } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BottomOverlaySnackbar } from '../../components/feedback/BottomOverlaySnackbar';
+import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
 import { BrowseCatalogScreen } from '../shared/BrowseCatalogScreen';
 import ClientRentalsHomeScreen from './ClientRentalsHomeScreen';
 import { CatalogVariantPickerDialog } from '../../components/browse/CatalogVariantPickerDialog';
@@ -50,6 +51,7 @@ function ClientBrowseHomeScreenBase() {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { tabBarOverlayHeight } = useTabBarGeometry();
   const navigation = useNavigation();
   const route = useRoute<RouteProp<ClientMainTabParamList, 'ClientBrowse'>>();
   const { auth, persona } = useStore();
@@ -309,9 +311,14 @@ function ClientBrowseHomeScreenBase() {
         onConfirm={variantFlow.onPickerConfirm}
         confirmLabel={variantFlow.confirmLabel}
       />
-      <Snackbar visible={!!snack} onDismiss={() => setSnack(null)} duration={2500}>
+      <BottomOverlaySnackbar
+        visible={!!snack}
+        onDismiss={() => setSnack(null)}
+        duration={2500}
+        bottomGap={tabBarOverlayHeight + 12}
+      >
         {snack}
-      </Snackbar>
+      </BottomOverlaySnackbar>
     </View>
   );
 }

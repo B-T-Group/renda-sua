@@ -420,11 +420,11 @@ function BrowseCatalogScreenInner({
     countryCode: catalogCountryCode,
     state: catalogState,
     origin: catalogOrigin,
-    category: catalogFilters.category,
+    category: foodOnly ? FOOD_CATEGORY_NAME : catalogFilters.category,
     subcategory: catalogFilters.subcategory,
     brand: catalogFilters.brand,
     business_name: catalogFilters.business,
-    collection: catalogFilters.collection,
+    collection: foodOnly ? undefined : catalogFilters.collection,
     food_only: foodOnly || undefined,
     export_only: exportOnly || undefined,
     withAuth: inventoryRequestsWithAuth,
@@ -789,9 +789,12 @@ function BrowseCatalogScreenInner({
   const handleStorePress = useCallback(
     (inventoryItemId: string, businessLocationId: string) => {
       trackView(inventoryItemId);
-      onStorePress?.(businessLocationId);
+      onStorePress?.(
+        businessLocationId,
+        foodOnly ? { foodOnly: true } : undefined
+      );
     },
-    [onStorePress, trackView]
+    [foodOnly, onStorePress, trackView]
   );
 
   const buyLabel = t('public.items.buyNow', 'Buy');

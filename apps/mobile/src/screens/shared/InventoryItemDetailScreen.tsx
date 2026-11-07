@@ -944,7 +944,10 @@ function InventoryItemDetailScreen() {
                   navigation as {
                     navigate: (name: string, params: object) => void;
                   }
-                ).navigate('StoreDetail', { businessId: loc.id });
+                ).navigate('StoreDetail', {
+                  businessId: loc.id,
+                  ...(isFood ? { foodOnly: true } : {}),
+                });
               }}
               accessibilityRole="button"
               accessibilityLabel={t(
@@ -991,7 +994,10 @@ function InventoryItemDetailScreen() {
                     navigation as {
                       navigate: (name: string, params: object) => void;
                     }
-                  ).navigate('StoreDetail', { businessId: loc.id });
+                  ).navigate('StoreDetail', {
+                    businessId: loc.id,
+                    ...(isFood ? { foodOnly: true } : {}),
+                  });
                 }}
               >
                 {t('stores.viewStore', 'View store')}

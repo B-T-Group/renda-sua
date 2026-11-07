@@ -1,8 +1,10 @@
-import type { SnackbarProps } from 'react-native-paper';
 import { useTabBarGeometry } from '../../navigation/tabBarGeometry';
-import { BottomOverlaySnackbar } from './BottomOverlaySnackbar';
+import {
+  BottomOverlaySnackbar,
+  type BottomOverlaySnackbarProps,
+} from './BottomOverlaySnackbar';
 
-type TabAwareSnackbarProps = Omit<SnackbarProps, 'wrapperStyle'> & {
+type TabAwareSnackbarProps = Omit<BottomOverlaySnackbarProps, 'bottomGap'> & {
   /** Extra gap above the tab bar (default 12). */
   tabBarGap?: number;
 };
