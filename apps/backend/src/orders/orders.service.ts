@@ -3236,14 +3236,7 @@ export class OrdersService {
       );
     }
     if (!activeOffer) {
-      throw new HttpException(
-        {
-          message:
-            'This delivery offer has expired. Check the available orders list.',
-          error: 'OFFER_EXPIRED',
-        },
-        HttpStatus.CONFLICT
-      );
+      throw await this.offerAcceptUnavailableError(request.orderId);
     }
 
     // #594: a dedicated offer re-checks AC-E2 and stamps the dedicated assignment.
@@ -3273,6 +3266,42 @@ export class OrdersService {
         );
       }
       throw error;
+    }
+  }
+
+  /** Prefer a dedicated Take message when the order was coverage-based (no offer row yet). */
+  private async offerAcceptUnavailableError(orderId: string): Promise<HttpException> {
+    const dedicated = await this.orderHasCoverageSlot(orderId);
+    return new HttpException(
+      dedicated
+        ? {
+            message:
+              'Could not take this dedicated delivery. It may no longer be available — refresh and try again.',
+            error: 'DEDICATED_TAKE_UNAVAILABLE',
+            code: 'DEDICATED_TAKE_UNAVAILABLE',
+          }
+        : {
+            message:
+              'This delivery offer has expired. Check the available orders list.',
+            error: 'OFFER_EXPIRED',
+          },
+      HttpStatus.CONFLICT
+    );
+  }
+
+  private async orderHasCoverageSlot(orderId: string): Promise<boolean> {
+    try {
+      const res = await this.hasuraSystemService.executeQuery<{
+        orders_by_pk: { coverage_slot_key: string | null } | null;
+      }>(
+        `query OfferAcceptCoverage($id: uuid!) {
+          orders_by_pk(id: $id) { coverage_slot_key }
+        }`,
+        { id: orderId }
+      );
+      return !!res?.orders_by_pk?.coverage_slot_key;
+    } catch {
+      return false;
     }
   }
 

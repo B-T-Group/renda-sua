@@ -699,6 +699,25 @@ describe('DesignatedFirstService', () => {
     expect(t.notifications.sendOrderOfferPush).not.toHaveBeenCalled();
   });
 
+  it('ensure works when designated_first is off but dedicated agents are on', async () => {
+    const t = setup({ designatedFirstEnabled: false });
+    jest.spyOn(t.service, 'load').mockResolvedValue({
+      order: order({ dispatch_mode: null }),
+      offers: [],
+    });
+    t.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      t.mutations.push({ q, v });
+      if (q.includes('RefreshDesignatedEarlyOffer')) {
+        return { update_order_offers: { affected_rows: 0 } };
+      }
+      if (q.includes('insert_order_offers')) {
+        return { insert_order_offers: { returning: [{ agent_id: 'a1' }] } };
+      }
+      return { update_orders: { affected_rows: 1 } };
+    });
+    await expect(t.service.ensureEarlyOfferForAgent('o1', 'a1', NOW)).resolves.toBe(true);
+  });
+
   it('ensure still creates an offer when only money blocks eligibility', async () => {
     const t = setup();
     t.coverage.evaluate.mockResolvedValue({

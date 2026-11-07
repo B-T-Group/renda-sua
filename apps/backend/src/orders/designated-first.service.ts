@@ -359,7 +359,12 @@ const AGENT_DECLINED_DEDICATED_QUERY = `
   }
 `;
 
-/** Quiet ensure for Take/Ignore: reopen offered/expired dedicated rows without a push. */
+/**
+ * Quiet ensure for Take/Ignore: reopen a prior dedicated row without a push.
+ * Includes cancelled/accepted leftovers (order still unassigned) so Hasura's
+ * insert-on-conflict (expired-only) cannot no-op and leave Take with no offer.
+ * Declined stays excluded — those agents are not re-offered.
+ */
 const REFRESH_EARLY_OFFER = `
   mutation RefreshDesignatedEarlyOffer(
     $orderId: uuid!, $agentId: uuid!, $expiresAt: timestamptz!, $payload: jsonb
@@ -370,7 +375,7 @@ const REFRESH_EARLY_OFFER = `
         order_id: { _eq: $orderId }
         agent_id: { _eq: $agentId }
         offer_kind: { _eq: "dedicated" }
-        status: { _in: ["offered", "expired"] }
+        status: { _in: ["offered", "expired", "cancelled", "accepted"] }
       }
       _set: {
         status: "offered"
@@ -380,6 +385,7 @@ const REFRESH_EARLY_OFFER = `
         estimated_earnings: $earnings
         currency: $currency
         responded_at: null
+        dashboard_dismissed_at: null
       }
     ) { affected_rows }
   }
@@ -981,7 +987,9 @@ export class DesignatedFirstService {
     if (!this.isPreGateDispatchable(order, offers, agentId, now)) return null;
     const window = order!.delivery_time_windows?.[0];
     const config = await this.dedicatedConfig.getConfig(isoCountryCode(order!.business_location?.address?.country));
-    if (!config.enabled || !config.designatedFirstEnabled) return null;
+    // Coverage Take cards are assignment-based (dedicated agents). Do not require
+    // designated_first_enabled here — that flag gates proactive offer-at-ready / push.
+    if (!config.enabled) return null;
     const gateAt = new Date(order!.dispatch_ready_at as string);
     const slot = await this.coverage.resolveSlot({
       locationId: order!.business_location_id,
@@ -990,9 +998,51 @@ export class DesignatedFirstService {
     });
     if (!slot) return null;
     // Match acceptAssignment: a live/coverage Take must not fail on slot prefs or other open offers.
-    const agent = await this.takeEligibleAgent(order!, slot, agentId);
+    const agent =
+      (await this.takeEligibleAgent(order!, slot, agentId)) ??
+      (await this.takeAgentFromAssignment(order!, slot, agentId));
     if (!agent?.userId) return null;
     return { agent, slot, gateAt, config };
+  }
+
+  /** Fallback when evaluate rejects soft gates: active store/slot assignment is enough to open a quiet offer. */
+  private async takeAgentFromAssignment(
+    order: DesignatedOrder,
+    slot: ResolvedDedicatedSlot,
+    agentId: string
+  ): Promise<DedicatedEligibleAgent | null> {
+    if (!order.coverage_slot_key || order.coverage_slot_key !== slot.slotKey) return null;
+    const res = await this.hasura
+      .executeQuery<{
+        dedicated_agent_assignments: Array<{ id: string; agent?: { user_id: string | null } | null }>;
+      }>(
+        `query TakeCoverageAssignment($agentId: uuid!, $locationId: uuid!, $slotKey: String!) {
+          dedicated_agent_assignments(
+            where: {
+              agent_id: { _eq: $agentId }
+              business_location_id: { _eq: $locationId }
+              slot_key: { _eq: $slotKey }
+              status: { _eq: "active" }
+            }
+            limit: 1
+          ) { id agent { user_id } }
+        }`,
+        { agentId, locationId: order.business_location_id, slotKey: slot.slotKey }
+      )
+      .catch(() => null);
+    const row = res?.dedicated_agent_assignments?.[0];
+    const userId = row?.agent?.user_id ?? null;
+    if (!row || !userId) return null;
+    return {
+      agentId,
+      userId,
+      assignmentId: row.id,
+      isInternal: false,
+      activeOrders: 0,
+      outstandingDedicatedOffers: 0,
+      holdAmount: 0,
+      availableBalance: null,
+    };
   }
 
   /** Coverage Take ensure: match acceptAssignment prefs/offer flags; money deferred to claim. */
@@ -1098,8 +1148,10 @@ export class DesignatedFirstService {
   ): Promise<boolean> {
     const payload = await this.quietOfferPayload(order, agent.agentId, slot, gateAt, config, now);
     if (await this.refreshEarlyOfferRow(order.id, agent.agentId, gateAt, payload)) return true;
-    await this.insertQuietEarlyOffer(order, agent, payload, gateAt, now, prior);
-    return true;
+    const inserted = await this.insertQuietEarlyOffer(order, agent, payload, gateAt, now, prior);
+    if (inserted) return true;
+    // Conflict with a declined/other row that refresh skipped: last try refresh again.
+    return this.refreshEarlyOfferRow(order.id, agent.agentId, gateAt, payload);
   }
 
   private async refreshEarlyOfferRow(
@@ -1129,7 +1181,7 @@ export class DesignatedFirstService {
     gateAt: Date,
     now: Date,
     prior: DesignatedOfferRow[]
-  ): Promise<void> {
+  ): Promise<boolean> {
     const attempt = (prior.find((o) => o.agent_id === agent.agentId)?.dedicated_attempt ?? 0) + 1;
     const objects = orderAssignmentsForLocking([
       {
@@ -1151,7 +1203,12 @@ export class DesignatedFirstService {
         dedicated_attempt: attempt,
       },
     ]);
-    await runAssignmentWrite(() => this.hasura.executeMutation(UPSERT_EARLY_OFFERS, { objects }));
+    const res = await runAssignmentWrite(() =>
+      this.hasura.executeMutation<{
+        insert_order_offers: { returning: Array<{ agent_id: string }> } | null;
+      }>(UPSERT_EARLY_OFFERS, { objects })
+    );
+    return (res?.insert_order_offers?.returning?.length ?? 0) > 0;
   }
 
   private async quietOfferPayload(

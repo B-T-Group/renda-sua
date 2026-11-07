@@ -6,6 +6,7 @@ import { DeliveryConfigService } from '../delivery-configs/delivery-configs.serv
 import { DEFAULT_DELIVERY_SLOT_STATE } from '../delivery/delivery-slots.service';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { MID_FULFILLMENT_STATUSES } from '../orders/order-cleanup.constants';
+import { isoCountryCode } from '../orders/delivery-pricing.util';
 import { resolveTimeZone } from '../restock-alerts/restock-time.util';
 import { DedicatedAgentsConfigService } from './dedicated-agents-config.service';
 import type { DedicatedAgentsConfig, DedicatedSlotKey } from './dedicated-agents.constants';
@@ -406,7 +407,8 @@ export class DedicatedCoverageService {
       business_locations_by_pk: LocationContextRow | null;
     }>(DEDICATED_LOCATION_CONTEXT_QUERY, { locationId });
     const row = res?.business_locations_by_pk;
-    const country = row?.address?.country?.trim().toUpperCase();
+    // Normalize "Canada" / "Cameroon" etc. to ISO so country config + slot rows match.
+    const country = isoCountryCode(row?.address?.country);
     if (!row || !country) return null;
     const config = await this.configService.getConfig(country);
     if (!config.enabled) return null;
