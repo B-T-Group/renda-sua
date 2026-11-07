@@ -192,6 +192,65 @@ describe('client-confirm-delivery.util', () => {
     ).toBe(false);
   });
 
+  it('still requires MoMo proof when the total is missing or the deposit does not cover it', () => {
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: null,
+      })
+    ).toBe(true);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_money',
+        total_amount: '2000',
+        deposit_amount: '500',
+        deposit_status: 'applied',
+      })
+    ).toBe(true);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'authorized',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+        deposit_amount: 1500,
+        deposit_status: 'pending',
+      })
+    ).toBe(true);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_method: 'pay_on_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        total_amount: 1500,
+        deposit_amount: 1500,
+        deposit_status: 'applied',
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        reconciliation_status: 'reconciled',
+        total_amount: 1500,
+      })
+    ).toBe(false);
+    expect(
+      needsMobilePadCollectionProof({
+        payment_timing: 'pay_at_delivery',
+        payment_status: 'paid',
+        payment_source: 'mobile_payment',
+        pay_after_merchant_confirm: true,
+        total_amount: 1500,
+      })
+    ).toBe(false);
+  });
+
   it('allows confirm from out_for_delivery, awaiting, and pending auto-complete', () => {
     expect(canConfirmFromStatus('out_for_delivery')).toBe(true);
     expect(canConfirmFromStatus('awaiting_client_confirmation')).toBe(true);

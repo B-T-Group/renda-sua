@@ -181,6 +181,35 @@ describe('DashboardService', () => {
       );
     });
 
+    it('keeps a merchant-pending order out of the payment action', async () => {
+      hasuraUserService.getUser.mockResolvedValue({
+        id: 'u1',
+        user_type_id: 'client',
+        active_persona: 'client',
+        client: { id: 'client-1' },
+      });
+      hasuraSystemService.executeQuery.mockImplementation(
+        async (query: string, vars?: { statuses?: string[] }) => {
+          if (query.includes('ClientPendingOrders')) {
+            const statuses = vars?.statuses ?? [];
+            if (statuses.includes('pending_payment')) {
+              return { orders_aggregate: { aggregate: { count: 0 } } };
+            }
+            if (statuses.includes('pending') && statuses.length === 1) {
+              return { orders_aggregate: { aggregate: { count: 3 } } };
+            }
+          }
+          return { orders_aggregate: { aggregate: { count: 0 } } };
+        }
+      );
+
+      const result = await service.getActionsNeeded();
+
+      expect(result.actions.map((a) => a.id)).toEqual(['orders_awaiting_confirmation']);
+      expect(result.actions[0]).toMatchObject({ count: 3, priority: 'normal' });
+      expect(result.totalCount).toBe(3);
+    });
+
     it('omits zero-count actions and sorts critical before high', async () => {
       hasuraUserService.getUser.mockResolvedValue({
         id: 'u1',

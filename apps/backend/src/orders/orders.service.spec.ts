@@ -5235,6 +5235,56 @@ describe('OrdersService', () => {
       );
     });
 
+    it('coverage Take that cannot open an offer is unavailable, not an expired open-pool offer', async () => {
+      arrangeClaim({ holdAmount: 0, balance: 0 });
+      const offers = {
+        getActiveOfferForAgent: jest.fn().mockResolvedValue(null),
+        dedicatedAcceptAssignment: jest.fn(),
+        markOfferLost: jest.fn(),
+      };
+      loose().orderOffersService = offers;
+      loose().designatedFirst = {
+        ensureEarlyOfferForAgent: jest.fn().mockResolvedValue(false),
+        reopenLateOffer: jest.fn().mockResolvedValue(false),
+      };
+      const assign = jest.spyOn(loose(), 'assignOrderToAgent').mockResolvedValue({ id: 'order-123' });
+
+      const accept = () => service.acceptOrderOffer({ orderId: 'order-123' });
+      const responseOf = async () => {
+        const err = await accept().catch((e: unknown) => e);
+        expect(err).toBeInstanceOf(HttpException);
+        expect((err as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
+        return (err as HttpException).getResponse() as { error?: string; code?: string; message?: string };
+      };
+
+      hasuraSystemService.executeQuery.mockResolvedValue({
+        orders_by_pk: { coverage_slot_key: 'morning' },
+      });
+      await expect(responseOf()).resolves.toMatchObject({
+        error: 'DEDICATED_TAKE_UNAVAILABLE',
+        code: 'DEDICATED_TAKE_UNAVAILABLE',
+        message: expect.stringContaining('dedicated delivery'),
+      });
+      expect(loose().designatedFirst.ensureEarlyOfferForAgent).toHaveBeenCalledWith('order-123', 'agent-123');
+      expect(loose().designatedFirst.reopenLateOffer).toHaveBeenCalledWith('order-123', 'agent-123');
+      const coverageCall = hasuraSystemService.executeQuery.mock.calls.find(([q]) =>
+        String(q).includes('OfferAcceptCoverage')
+      );
+      expect(coverageCall?.[1]).toEqual({ id: 'order-123' });
+
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: { coverage_slot_key: null } });
+      expect(await responseOf()).toMatchObject({ error: 'OFFER_EXPIRED' });
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: { coverage_slot_key: '' } });
+      expect(await responseOf()).toMatchObject({ error: 'OFFER_EXPIRED' });
+      hasuraSystemService.executeQuery.mockResolvedValue({ orders_by_pk: null });
+      expect(await responseOf()).toMatchObject({ error: 'OFFER_EXPIRED' });
+      hasuraSystemService.executeQuery.mockRejectedValue(new Error('hasura down'));
+      expect(await responseOf()).toMatchObject({ error: 'OFFER_EXPIRED' });
+
+      expect(offers.dedicatedAcceptAssignment).not.toHaveBeenCalled();
+      expect(assign).not.toHaveBeenCalled();
+    });
+
     describe('#594 DEV QA N1: an open-pool claim while holding a live dedicated offer', () => {
       const stampOffer = { source: 'dedicated_offer' as const, dedicatedAssignmentId: 'as-9', maxActiveOrders: 2, countOffers: false };
       const offers = (kind: string | null, accept: () => Promise<unknown>) => {
