@@ -30,6 +30,7 @@ import { DeliveryCompleteSuccessModal } from '../../components/dialogs/DeliveryC
 import { FailDeliveryReasonDialog } from '../../components/dialogs/FailDeliveryReasonDialog';
 import { MarkPaidCashExceptionDialog } from '../../components/dialogs/MarkPaidCashExceptionDialog';
 import { RequestPayAtDeliveryDialog } from '../../components/dialogs/RequestPayAtDeliveryDialog';
+import { ConfirmActionDialog } from '../../components/dialogs/ConfirmActionDialog';
 import { ActionLoadingDialog } from '../../components/feedback/ActionLoadingDialog';
 import { OrderCardActive } from '../../components/agent/OrderCardCompact';
 import { statusToPrimaryAction } from '../../components/agent/DeliveryStatusIndicator';
@@ -39,10 +40,15 @@ import { useOrdersActivityPartition } from '../../hooks/useOrdersActivityPartiti
 import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
 import { isCarrierShipping } from '../../utils/fulfillmentMethod';
 import { APP_FEATURES } from '../../constants/appFeatures';
+import {
+  AGENT_LIST_LIFECYCLE_CONFIRM,
+  isAgentListLifecycleBusy,
+  type AgentListLifecycleAction,
+} from '../../utils/agentListLifecycleConfirm';
 
 type Nav = NativeStackNavigationProp<OrdersStackParamList, 'OrdersList'>;
 type StatusFilter = 'all' | 'active' | 'completed' | 'cancelled';
-type LifecycleActionKey = 'pickUp' | 'startTransit' | 'outForDelivery';
+type LifecycleActionKey = AgentListLifecycleAction;
 
 /** Determine the single primary action for a card given its status. */
 function primaryActionForOrder(
@@ -364,7 +370,7 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
     ({ item }: { item: Order }) => {
       const primaryActionLabel = statusToPrimaryAction(item.current_status, t) ?? t('common.details', 'Details');
       const primaryAction = getPrimaryAction(item);
-      const isBusy = actionBusyOrderId === item.id;
+      const isBusy = isAgentListLifecycleBusy(item.id, actionBusyOrderId, lifecycle?.orderId);
 
       return (
         <OrderCardActive
@@ -376,7 +382,7 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
         />
       );
     },
-    [actionBusyOrderId, getPrimaryAction, openDetail, t]
+    [actionBusyOrderId, getPrimaryAction, lifecycle?.orderId, openDetail, t]
   );
 
   const keyExtractor = useCallback((item: Order) => item.id, []);
@@ -459,7 +465,11 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
                   statusToPrimaryAction(order.current_status, t) ??
                   t('common.details', 'Details');
                 const primaryAction = getPrimaryAction(order);
-                const isBusy = actionBusyOrderId === order.id;
+                const isBusy = isAgentListLifecycleBusy(
+                  order.id,
+                  actionBusyOrderId,
+                  lifecycle?.orderId
+                );
                 return (
                   <OrderCardActive
                     order={order}
@@ -515,21 +525,29 @@ export default function OrdersScreen({ navigation }: { navigation: Nav }) {
         }
       />
 
-      {/* Lifecycle confirm dialog (reuses Alert) */}
-      {lifecycle ? (
-        (() => {
-          const cfg = {
-            pickUp: { title: t('agent.orders.detail.actionConfirm.pickUpTitle', 'Confirm pickup'), msg: t('agent.orders.detail.actionConfirm.pickUpMessage', 'Mark as picked up?') },
-            startTransit: { title: t('agent.orders.detail.actionConfirm.inTransitTitle', 'Confirm in transit'), msg: t('agent.orders.detail.actionConfirm.inTransitMessage', 'Mark as in transit?') },
-            outForDelivery: { title: t('agent.orders.detail.actionConfirm.outForDeliveryTitle', 'Confirm out for delivery'), msg: t('agent.orders.detail.actionConfirm.outForDeliveryMessage', 'Mark as out for delivery?') },
-          }[lifecycle.key];
-          Alert.alert(cfg.title, cfg.msg, [
-            { text: t('common.cancel', 'Cancel'), style: 'cancel', onPress: () => setLifecycle(null) },
-            { text: t('common.confirm', 'Confirm'), onPress: () => void handleLifecycleConfirm() },
-          ]);
-          return null;
-        })()
-      ) : null}
+      <ConfirmActionDialog
+        visible={lifecycle != null}
+        title={
+          lifecycle
+            ? t(
+                AGENT_LIST_LIFECYCLE_CONFIRM[lifecycle.key].titleKey,
+                AGENT_LIST_LIFECYCLE_CONFIRM[lifecycle.key].titleDef
+              )
+            : ''
+        }
+        message={
+          lifecycle
+            ? t(
+                AGENT_LIST_LIFECYCLE_CONFIRM[lifecycle.key].messageKey,
+                AGENT_LIST_LIFECYCLE_CONFIRM[lifecycle.key].messageDef
+              )
+            : ''
+        }
+        cancelLabel={t('common.cancel', 'Cancel')}
+        confirmLabel={t('common.confirm', 'Confirm')}
+        onDismiss={() => setLifecycle(null)}
+        onConfirm={() => void handleLifecycleConfirm()}
+      />
 
       <CompleteDeliveryPinDialog
         visible={completePinVisible}

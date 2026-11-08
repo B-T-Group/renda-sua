@@ -45,6 +45,7 @@ import { purchaseCreditShopTarget } from '../../utils/purchaseCredits';
 import { AgentWithdrawDialog } from '../../components/dialogs/AgentWithdrawDialog';
 import { AgentAccountTransactionsDialog } from '../../components/dialogs/AgentAccountTransactionsDialog';
 import { SimpleMessageDialog } from '../../components/dialogs/SimpleMessageDialog';
+import { ConfirmActionDialog } from '../../components/dialogs/ConfirmActionDialog';
 import { CompleteDeliveryPinDialog } from '../../components/dialogs/CompleteDeliveryPinDialog';
 import { DeliveryCompleteSuccessModal } from '../../components/dialogs/DeliveryCompleteSuccessModal';
 import { RequestPayAtDeliveryDialog } from '../../components/dialogs/RequestPayAtDeliveryDialog';
@@ -53,6 +54,11 @@ import { useActiveDeliveryPinForComplete } from '../../hooks/useActiveDeliveryPi
 import { agentApi } from '../../services/agentApi';
 import { mergeOrderForDeliverySuccess } from '../../utils/mergeOrderForDeliverySuccess';
 import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
+import {
+  AGENT_LIST_LIFECYCLE_CONFIRM,
+  isAgentListLifecycleBusy,
+  type AgentListLifecycleAction,
+} from '../../utils/agentListLifecycleConfirm';
 import { PendingWithdrawalsSection } from '../../components/wallet/PendingWithdrawalsSection';
 import { OrderCardCompact } from '../../components/agent/OrderCardCompact';
 import { OrderCardActive } from '../../components/agent/OrderCardCompact';
@@ -98,7 +104,7 @@ import {
 import { useAgentHomeFocus } from '../../contexts/AgentHomeFocusContext';
 
 const MAX_HOME_ORDERS = 3;
-type LifecycleActionKey = 'pickUp' | 'startTransit' | 'outForDelivery';
+type LifecycleActionKey = AgentListLifecycleAction;
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -1052,7 +1058,7 @@ export default function HomeScreen() {
                   primaryActionLabel={primaryLabel}
                   onPrimaryAction={() => handleActiveOrderPrimaryAction(order)}
                   onViewDetails={() => goToOrderDetail(order.id)}
-                  isBusy={actionBusyOrderId === order.id}
+                  isBusy={isAgentListLifecycleBusy(order.id, actionBusyOrderId, lifecycle?.orderId)}
                 />
               );
             })}
@@ -1275,29 +1281,29 @@ export default function HomeScreen() {
         onDismiss={() => setInfoDialog(null)}
       />
       {claim.dialogs}
-      {lifecycle ? (
-        (() => {
-          const cfg = {
-            pickUp: {
-              title: t('agent.orders.detail.actionConfirm.pickUpTitle', 'Confirm pickup'),
-              msg: t('agent.orders.detail.actionConfirm.pickUpMessage', 'Mark as picked up?'),
-            },
-            startTransit: {
-              title: t('agent.orders.detail.actionConfirm.inTransitTitle', 'Confirm in transit'),
-              msg: t('agent.orders.detail.actionConfirm.inTransitMessage', 'Mark as in transit?'),
-            },
-            outForDelivery: {
-              title: t('agent.orders.detail.actionConfirm.outForDeliveryTitle', 'Confirm out for delivery'),
-              msg: t('agent.orders.detail.actionConfirm.outForDeliveryMessage', 'Mark as out for delivery?'),
-            },
-          }[lifecycle.key];
-          Alert.alert(cfg.title, cfg.msg, [
-            { text: t('common.cancel', 'Cancel'), style: 'cancel', onPress: () => setLifecycle(null) },
-            { text: t('common.confirm', 'Confirm'), onPress: () => void handleLifecycleConfirm() },
-          ]);
-          return null;
-        })()
-      ) : null}
+      <ConfirmActionDialog
+        visible={lifecycle != null}
+        title={
+          lifecycle
+            ? t(
+                AGENT_LIST_LIFECYCLE_CONFIRM[lifecycle.key].titleKey,
+                AGENT_LIST_LIFECYCLE_CONFIRM[lifecycle.key].titleDef
+              )
+            : ''
+        }
+        message={
+          lifecycle
+            ? t(
+                AGENT_LIST_LIFECYCLE_CONFIRM[lifecycle.key].messageKey,
+                AGENT_LIST_LIFECYCLE_CONFIRM[lifecycle.key].messageDef
+              )
+            : ''
+        }
+        cancelLabel={t('common.cancel', 'Cancel')}
+        confirmLabel={t('common.confirm', 'Confirm')}
+        onDismiss={() => setLifecycle(null)}
+        onConfirm={() => void handleLifecycleConfirm()}
+      />
       <CompleteDeliveryPinDialog
         visible={completePinVisible}
         onDismiss={closeCompletePinDialog}
