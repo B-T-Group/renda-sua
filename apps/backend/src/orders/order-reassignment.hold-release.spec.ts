@@ -11,6 +11,8 @@ describe('OrderReassignmentService hold release safety', () => {
     dropAffected?: number;
     reassignmentCount?: number;
     clearError?: unknown;
+    /** Pickup SLA of a designated order must decline the leftover offer. */
+    designated?: boolean;
   }) {
     const releaseSuccess = opts?.releaseSuccess ?? true;
     const holdStatus = opts?.holdStatus ?? 'active';
@@ -18,6 +20,24 @@ describe('OrderReassignmentService hold release safety', () => {
     const dropAffected = opts?.dropAffected ?? 1;
 
     const executeQuery = jest.fn(async (query: string) => {
+      if (query.includes('DesignatedDropLeftover')) {
+        if (opts?.designated === false) {
+          return {
+            orders_by_pk: {
+              dispatch_mode: null,
+              assignment_source: 'open_claim',
+              designated_accepted_at: null,
+            },
+          };
+        }
+        return {
+          orders_by_pk: {
+            dispatch_mode: 'designated_first',
+            assignment_source: 'dedicated_offer',
+            designated_accepted_at: '2026-11-08T09:00:00Z',
+          },
+        };
+      }
       if (query.includes('ReassignOrder')) {
         return {
           orders_by_pk: {
@@ -160,6 +180,45 @@ describe('OrderReassignmentService hold release safety', () => {
     expect(mutation).toContain('designated_confirmed_at: null');
     expect(mutation).toContain('designated_unconfirmed_flagged_at: null');
     expect(mutation).toContain('assignment_source: null');
+    const exclusion = executeMutation.mock.calls.find((c) =>
+      String(c[0]).includes('RecordDedicatedRelease')
+    );
+    expect(exclusion?.[1]).toEqual({
+      object: expect.objectContaining({
+        order_id: 'order-1',
+        agent_id: 'agent-1',
+        user_id: 'agent-user-1',
+        status: 'declined',
+        offer_kind: 'dedicated',
+        decline_reason: 'other',
+      }),
+    });
+    const exclusionAt = executeMutation.mock.calls.findIndex((c) =>
+      String(c[0]).includes('RecordDedicatedRelease')
+    );
+    const clearAt = executeMutation.mock.calls.findIndex((c) =>
+      String(c[0]).includes('ClearDesignatedStamps')
+    );
+    expect(exclusionAt).toBeGreaterThanOrEqual(0);
+    expect(clearAt).toBeGreaterThan(exclusionAt);
+  });
+
+  it('does not decline or clear stamps on a marketplace pickup-SLA drop', async () => {
+    const { service, executeMutation } = buildService({ designated: false });
+
+    const result = await service.reassignOrder('order-1', 'pickup_sla');
+
+    expect(result.success).toBe(true);
+    expect(
+      executeMutation.mock.calls.some((c) =>
+        String(c[0]).includes('RecordDedicatedRelease')
+      )
+    ).toBe(false);
+    expect(
+      executeMutation.mock.calls.some((c) =>
+        String(c[0]).includes('ClearDesignatedStamps')
+      )
+    ).toBe(false);
   });
 
   it('does not clear stamps when the unassign loses the compare-and-swap', async () => {
@@ -181,6 +240,11 @@ describe('OrderReassignmentService hold release safety', () => {
         String(c[0]).includes('ReleaseAgentOrderHold')
       )
     ).toBe(false);
+    expect(
+      executeMutation.mock.calls.some((c) =>
+        String(c[0]).includes('RecordDedicatedRelease')
+      )
+    ).toBe(false);
   });
 
   it('still clears stamps on a strike-out drop, which does not redispatch', async () => {
@@ -192,6 +256,14 @@ describe('OrderReassignmentService hold release safety', () => {
 
     expect(result.success).toBe(true);
     expect(result.message).toContain('escalated');
+    expect(
+      executeMutation.mock.calls.some(
+        (c) =>
+          String(c[0]).includes('RecordDedicatedRelease') &&
+          c[1]?.object?.agent_id === 'agent-1' &&
+          c[1]?.object?.status === 'declined'
+      )
+    ).toBe(true);
     expect(
       executeMutation.mock.calls.some(
         (c) =>
@@ -233,6 +305,11 @@ describe('OrderReassignmentService hold release safety', () => {
     expect(
       executeMutation.mock.calls.some((c) =>
         String(c[0]).includes('ClearDesignatedStamps')
+      )
+    ).toBe(false);
+    expect(
+      executeMutation.mock.calls.some((c) =>
+        String(c[0]).includes('RecordDedicatedRelease')
       )
     ).toBe(false);
   });

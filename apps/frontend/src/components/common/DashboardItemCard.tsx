@@ -36,7 +36,7 @@ import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useAuthGate } from '../../contexts/AuthGateContext';
 import { useAuthFunnelTracking } from '../../hooks/useAuthFunnelTracking';
 import { InventoryItem } from '../../hooks/useInventoryItems';
-import { isFoodCatalogItem } from '../../constants/food';
+import { catalogStorePath, isFoodCatalogItem } from '../../constants/food';
 import { useProductInterest } from '../../hooks/useProductInterest';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
 import {
@@ -148,9 +148,10 @@ const DashboardItemCardReady: React.FC<DashboardItemCardProps> = ({
   const defaultOptionLabel = t('orders.variant.defaultOption', 'Default');
 
   const business = inventory.business_location.business;
-  const storeHref = isFoodCatalogItem(inventory)
-    ? `/store/${inventory.business_location.id}?menu=food`
-    : `/store/${inventory.business_location.id}`;
+  const storeHref = catalogStorePath(
+    inventory.business_location.id,
+    isFoodCatalogItem(inventory)
+  );
   const merchantCanAcceptOrders =
     business.can_accept_orders ?? business.is_verified ?? false;
   const paymentsEnabled = inventory.payments_enabled !== false;

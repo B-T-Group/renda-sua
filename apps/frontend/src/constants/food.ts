@@ -83,6 +83,11 @@ export function placeOrderMaxQuantity(
   return Math.max(1, stockCap);
 }
 
+/** Food items keep `menu=food` so the store page does not mix in groceries. */
+export function catalogStorePath(locationId: string, foodMenu: boolean): string {
+  return foodMenu ? `/store/${locationId}?menu=food` : `/store/${locationId}`;
+}
+
 /** Drops non-food rows that leak into a Foods browse page and fixes paging. */
 export function applyFoodOnlyCatalogFilter<T extends FoodCatalogRow>(
   rawItems: T[],

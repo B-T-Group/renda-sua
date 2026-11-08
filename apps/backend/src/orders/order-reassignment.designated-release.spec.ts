@@ -310,4 +310,67 @@ describe('OrderReassignmentService.afterDroppedDesignatedAssignment', () => {
     expect(t.mutations.some((m) => m.q.includes('RecordDedicatedRelease'))).toBe(false);
     expect(t.mutations.some((m) => m.q.includes('ClearDesignatedStamps'))).toBe(false);
   });
+
+  it('does not query or write when the dropped agent id is missing', async () => {
+    const t = leftover();
+    t.hasura.executeQuery.mockClear();
+    await t.service.afterDroppedDesignatedAssignment('o1', null, 'u1');
+    await t.service.afterDroppedDesignatedAssignment('o1', '', 'u1');
+    expect(t.hasura.executeQuery).not.toHaveBeenCalled();
+    expect(t.mutations).toHaveLength(0);
+  });
+
+  it('still clears stamps when the agent user id is missing, without a declined row', async () => {
+    const t = leftover();
+    await t.service.afterDroppedDesignatedAssignment('o1', 'a1', null);
+    await t.service.afterDroppedDesignatedAssignment('o1', 'a1', '');
+    expect(t.mutations.some((m) => m.q.includes('RecordDedicatedRelease'))).toBe(false);
+    expect(t.mutations.filter((m) => m.q.includes('ClearDesignatedStamps'))).toHaveLength(2);
+  });
+
+  it('still clears stamps when the declined-offer write fails', async () => {
+    const t = leftover();
+    t.hasura.executeMutation.mockImplementation(async (q: string, v: any) => {
+      t.mutations.push({ q, v });
+      if (q.includes('RecordDedicatedRelease')) throw new Error('unique violation');
+      return { update_orders: { affected_rows: 1 } };
+    });
+    const warn = jest.spyOn((t.service as any).logger, 'warn').mockImplementation(() => undefined);
+
+    await t.service.afterDroppedDesignatedAssignment('o1', 'a1', 'u1');
+
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('Dropped-agent dedicated exclusion not recorded for o1: unique violation')
+    );
+    expect(t.mutations.some((m) => m.q.includes('ClearDesignatedStamps'))).toBe(true);
+    warn.mockRestore();
+  });
+
+  it('writes nothing when the leftover lookup fails or the order is gone', async () => {
+    const thrown = leftover();
+    thrown.hasura.executeQuery.mockRejectedValue(new Error('hasura down'));
+    await thrown.service.afterDroppedDesignatedAssignment('o1', 'a1', 'u1');
+    expect(thrown.mutations).toHaveLength(0);
+
+    const gone = leftover();
+    gone.hasura.executeQuery.mockResolvedValue({ orders_by_pk: null });
+    await gone.service.afterDroppedDesignatedAssignment('o1', 'a1', 'u1');
+    expect(gone.mutations).toHaveLength(0);
+  });
+
+  it.each([
+    ['dedicated_auto', { dispatch_mode: null, assignment_source: 'dedicated_auto', designated_accepted_at: null }],
+    ['accepted stamp only', { dispatch_mode: null, assignment_source: 'open_claim', designated_accepted_at: '2026-11-08T09:00:00Z' }],
+  ])('still excludes a %s drop so Take cannot refresh the accepted row', async (_label, over) => {
+    const t = leftover(over);
+    await t.service.afterDroppedDesignatedAssignment('o1', 'a1', 'u1');
+    expect(t.mutations.find((m) => m.q.includes('RecordDedicatedRelease'))?.v.object).toMatchObject({
+      status: 'declined',
+      offer_kind: 'dedicated',
+      decline_reason: 'other',
+      agent_id: 'a1',
+      user_id: 'u1',
+    });
+    expect(t.mutations.some((m) => m.q.includes('ClearDesignatedStamps'))).toBe(true);
+  });
 });
