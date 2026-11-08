@@ -21,6 +21,33 @@ export function sortDedicatedSlotKeys(keys: string[]): string[] {
   });
 }
 
+export type BusinessesHubTab = 'dedicated' | 'referred';
+
+/** Openings the agent can still apply to. Applied and blocked rows do not count. */
+export function countApplicableDedicatedOpenings(
+  opportunities:
+    | Array<{ disabledReason?: string | null; application?: unknown }>
+    | null
+    | undefined
+): number {
+  return (opportunities ?? []).filter((row) => !row.disabledReason && !row.application)
+    .length;
+}
+
+/**
+ * Initial My Businesses tab. A route param is ignored when that persona focus is off.
+ */
+export function resolveBusinessesHubTab(
+  param: BusinessesHubTab | undefined,
+  showDelivery: boolean,
+  showCommercial: boolean
+): BusinessesHubTab {
+  if (param === 'dedicated' && showDelivery) return 'dedicated';
+  if (param === 'referred' && showCommercial) return 'referred';
+  if (showDelivery) return 'dedicated';
+  return 'referred';
+}
+
 /** Agent Home "My dedicated stores": one row per store (removed assignments left out). */
 export function groupDedicatedHomeStores(assignments: MyDedicatedAssignment[] | null | undefined): DedicatedHomeStore[] {
   const byStore = new Map<string, DedicatedHomeStore>();

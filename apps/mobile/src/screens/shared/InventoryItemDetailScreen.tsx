@@ -27,6 +27,7 @@ import { FoodAvailabilityChip } from '../../components/food/FoodAvailabilityChip
 import { FoodScheduleList } from '../../components/food/FoodScheduleList';
 import type { CatalogInventoryItem } from '../../types/inventoryCatalog';
 import { isFoodOrderBlocked, isFoodCatalogItem } from '../../utils/foodAvailability';
+import { storeDetailParams } from '../../utils/storeDetailParams';
 import { TrustBadge } from '../../components/common/TrustBadge';
 import { EntityRatingsSection } from '../../components/rating/EntityRatingsSection';
 import { StarRatingDisplay } from '../../components/rating/StarRatingDisplay';
@@ -944,10 +945,7 @@ function InventoryItemDetailScreen() {
                   navigation as {
                     navigate: (name: string, params: object) => void;
                   }
-                ).navigate('StoreDetail', {
-                  businessId: loc.id,
-                  ...(isFood ? { foodOnly: true } : {}),
-                });
+                ).navigate('StoreDetail', storeDetailParams(loc.id, isFood));
               }}
               accessibilityRole="button"
               accessibilityLabel={t(
@@ -994,10 +992,7 @@ function InventoryItemDetailScreen() {
                     navigation as {
                       navigate: (name: string, params: object) => void;
                     }
-                  ).navigate('StoreDetail', {
-                    businessId: loc.id,
-                    ...(isFood ? { foodOnly: true } : {}),
-                  });
+                  ).navigate('StoreDetail', storeDetailParams(loc.id, isFood));
                 }}
               >
                 {t('stores.viewStore', 'View store')}

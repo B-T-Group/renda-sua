@@ -36,7 +36,7 @@ import type { ActionLoadingKind } from '../../components/feedback/actionLoadingK
 import { useDashboardComposingSession } from '../../hooks/useDashboardComposingSession';
 import { APP_FEATURES } from '../../constants/appFeatures';
 import type { Order } from '../../types/agent';
-import { isCarrierShipping } from '../../utils/fulfillmentMethod';
+import { resolveAgentOrderPrimaryAction } from '../../utils/agentOrderPrimaryAction';
 import { ReferralPayoutSnapshot } from '../../components/common/ReferralPayoutSnapshot';
 import { StoreCreditsSnapshot } from '../../components/credits/StoreCreditsSnapshot';
 import { usePurchaseCredits } from '../../hooks/usePurchaseCredits';
@@ -52,7 +52,6 @@ import { MobilePaymentPhoneVerifyModal } from '../../components/dialogs/MobilePa
 import { useActiveDeliveryPinForComplete } from '../../hooks/useActiveDeliveryPinForComplete';
 import { agentApi } from '../../services/agentApi';
 import { mergeOrderForDeliverySuccess } from '../../utils/mergeOrderForDeliverySuccess';
-import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
 import { PendingWithdrawalsSection } from '../../components/wallet/PendingWithdrawalsSection';
 import { OrderCardCompact } from '../../components/agent/OrderCardCompact';
 import { OrderCardActive } from '../../components/agent/OrderCardCompact';
@@ -553,31 +552,26 @@ export default function HomeScreen() {
 
   const handleActiveOrderPrimaryAction = useCallback(
     (order: Order) => {
-      if (isCarrierShipping(order.fulfillment_method)) {
-        goToOrderDetail(order.id);
-        return;
-      }
-      switch (order.current_status) {
-        case 'assigned_to_agent':
+      const action = resolveAgentOrderPrimaryAction(order, {
+        markInTransit: APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT,
+      });
+      switch (action) {
+        case 'pickUp':
           setLifecycle({ orderId: order.id, key: 'pickUp' });
           return;
-        case 'picked_up':
-          setLifecycle({
-            orderId: order.id,
-            key: APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT ? 'startTransit' : 'outForDelivery',
-          });
+        case 'startTransit':
+          setLifecycle({ orderId: order.id, key: 'startTransit' });
           return;
-        case 'in_transit':
+        case 'outForDelivery':
           setLifecycle({ orderId: order.id, key: 'outForDelivery' });
           return;
-        case 'out_for_delivery':
-          if (orderNeedsPayAtDeliveryAgentActions(order)) {
-            setRequestPayOrder(order);
-            return;
-          }
+        case 'requestPayment':
+          setRequestPayOrder(order);
+          return;
+        case 'completeDelivery':
           void startCompleteDelivery(order);
           return;
-        default:
+        case 'openDetail':
           goToOrderDetail(order.id);
       }
     },
