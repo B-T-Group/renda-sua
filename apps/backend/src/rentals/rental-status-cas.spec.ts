@@ -369,7 +369,7 @@ describe('wallet confirm and hold', () => {
       executeMutation,
     };
     svc.accountsService = {
-      registerTransaction: jest.fn().mockResolvedValue({ success: true }),
+      registerHoldIfNotExists: jest.fn().mockResolvedValue({ success: true }),
     };
     await Object.getPrototypeOf(svc).placeHoldForBooking.call(
       svc,
@@ -380,10 +380,11 @@ describe('wallet confirm and hold', () => {
     );
     expect(executeMutation.mock.calls[0][0]).toContain('status: { _eq: cancelled }');
     expect(executeMutation.mock.calls[0][0]).not.toContain('insert_rental_holds');
-    expect(svc.accountsService.registerTransaction).toHaveBeenCalledTimes(1);
-    expect(svc.accountsService.registerTransaction).toHaveBeenCalledWith(
-      expect.objectContaining({ transactionType: 'hold', amount: 20 })
-    );
+    const held = svc.accountsService.registerHoldIfNotExists.mock.calls[0][0];
+    expect(held.amount).toBe(20);
+    expect(held.referenceId).not.toBe('b1');
+    expect(held.idempotencyKey).toBe(`rental:b1:hold:${held.referenceId}`);
+    expect(executeMutation.mock.calls[0][1].attemptId).toBe(held.referenceId);
   });
 
   it('does not revert a confirmed booking when another confirm owns the hold row', async () => {
@@ -402,7 +403,8 @@ describe('wallet confirm and hold', () => {
         ),
     };
     svc.accountsService = {
-      registerTransaction: jest.fn().mockResolvedValue({ success: true }),
+      registerHoldIfNotExists: jest.fn().mockResolvedValue({ success: true }),
+      registerReleaseIfNotExists: jest.fn().mockResolvedValue({ success: true }),
     };
     svc.markBookingPaymentStatus = jest.fn();
     svc.casBooking = jest.fn();
@@ -415,9 +417,12 @@ describe('wallet confirm and hold', () => {
     expect(svc.markBookingPaymentStatus).toHaveBeenCalledWith('b1', 'paid');
     expect(svc.casBooking).not.toHaveBeenCalled();
     expect(svc.fetchBooking).not.toHaveBeenCalled();
-    expect(svc.accountsService.registerTransaction).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ transactionType: 'release', referenceId: 'b1' })
+    const held = svc.accountsService.registerHoldIfNotExists.mock.calls[0][0];
+    const released = svc.accountsService.registerReleaseIfNotExists.mock.calls[0][0];
+    expect(released.referenceId).toBe(held.referenceId);
+    expect(released.referenceId).not.toBe('b1');
+    expect(released.idempotencyKey).toBe(
+      `rental:b1:hold:${held.referenceId}:release`
     );
   });
 
@@ -430,16 +435,18 @@ describe('wallet confirm and hold', () => {
       executeMutation: jest.fn().mockRejectedValue(new Error('insert failed')),
     };
     svc.accountsService = {
-      registerTransaction: jest.fn().mockResolvedValue({ success: true }),
+      registerHoldIfNotExists: jest.fn().mockResolvedValue({ success: true }),
+      registerReleaseIfNotExists: jest.fn().mockResolvedValue({ success: true }),
     };
     await expect(
       Object.getPrototypeOf(svc).placeHoldForBooking.call(svc, 'b1', 'c1', 20, 'XAF')
     ).rejects.toThrow('insert failed');
-    expect(svc.accountsService.registerTransaction).toHaveBeenLastCalledWith(
+    const held = svc.accountsService.registerHoldIfNotExists.mock.calls[0][0];
+    expect(svc.accountsService.registerReleaseIfNotExists).toHaveBeenCalledWith(
       expect.objectContaining({
-        transactionType: 'release',
-        referenceId: 'b1',
+        referenceId: held.referenceId,
         amount: 20,
+        idempotencyKey: `rental:b1:hold:${held.referenceId}:release`,
       })
     );
   });

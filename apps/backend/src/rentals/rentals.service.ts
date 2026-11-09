@@ -54,6 +54,17 @@ import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment
 import { isActivePersona } from '../users/persona.util';
 import { casUpdateRentalBooking } from './rental-booking-cas';
 import {
+  assertLedgerResult,
+  rentalLedgerKey,
+  rentalProceedsLeg,
+} from './rental-ledger';
+import {
+  decideRentalMomoRetry,
+  isRentalMomoUniqueViolation,
+  rentalMomoIdempotencyKey,
+  newRentalMomoReference,
+} from './rental-momo-idempotency';
+import {
   formatDistanceMeters,
   haversineMeters,
   parseOptionalLatLng,
@@ -2153,7 +2164,6 @@ export class RentalsService {
         paymentPending: true,
       };
     }
-    const paymentReference = this.createRentalPaymentReference();
     await this.initiateRentalBookingPayment({
       bookingNumber: params.bookingNumber,
       amount: params.amount,
@@ -2162,7 +2172,7 @@ export class RentalsService {
       userId: params.userId,
       phoneNumber: params.phoneNumber,
       email: params.email,
-      reference: paymentReference,
+      purpose: 'contract',
       paymentEntity: 'rental_booking',
       itemCountry: params.itemCountry,
     });
@@ -2352,7 +2362,7 @@ export class RentalsService {
     userId: string;
     phoneNumber: string;
     email?: string | null;
-    reference: string;
+    purpose: 'contract' | 'overtime';
     paymentEntity: 'rental_booking';
     itemCountry?: string | null;
   }): Promise<void> {
@@ -2368,19 +2378,15 @@ export class RentalsService {
       : this.mobilePaymentsService.getProvider(params.phoneNumber);
 
     const isMyPVitLike = provider === 'mypvit';
-
-    // MyPVit-style providers validate:
-    // - `reference` must be alphanumeric
-    // - `free_info` (mapped from our `description`) must be <= 15 chars
+    const reference = newRentalMomoReference(params.purpose);
     const providerReference = isMyPVitLike
-      ? params.reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15)
-      : params.reference;
-
+      ? reference.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15)
+      : reference;
     const descriptionShort = isMyPVitLike
       ? providerReference
       : `rental booking ${params.bookingNumber}`;
 
-    const transaction = await this.mobilePaymentsDatabaseService.createTransaction({
+    const opened = await this.openRentalMomoTransaction({
       reference: providerReference,
       amount: params.amount,
       currency: params.currency,
@@ -2393,7 +2399,13 @@ export class RentalsService {
       transaction_type: 'PAYMENT',
       payment_entity: params.paymentEntity,
       entity_id: params.bookingNumber,
+      idempotency_key: rentalMomoIdempotencyKey(
+        params.bookingNumber,
+        params.purpose
+      ),
     });
+    if (!opened.send) return;
+    const transaction = opened.tx;
 
     const paymentRequest: MobilePaymentRequest = {
       amount: params.amount,
@@ -2408,7 +2420,7 @@ export class RentalsService {
 
     const paymentResponse = await this.mobilePaymentsService.initiatePayment(
       paymentRequest,
-      providerReference,
+      transaction.reference || providerReference,
       params.userId
     );
 
@@ -3111,20 +3123,25 @@ export class RentalsService {
     if (!businessAccount?.id) {
       throw new HttpException('Business account missing', HttpStatus.BAD_REQUEST);
     }
-    await this.accountsService.registerTransaction({
+    const leg = rentalProceedsLeg(label);
+    const paid = await this.accountsService.registerTransaction({
       accountId: clientAccount.id,
       amount,
       transactionType: 'payment',
       memo: `Rental ${label} ${booking.id}`,
       referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, `${leg}:payment`),
     });
-    await this.accountsService.registerTransaction({
+    assertLedgerResult(paid, `${leg} payment`);
+    const credited = await this.accountsService.registerTransaction({
       accountId: businessAccount.id,
       amount,
       transactionType: 'deposit',
       memo: `Rental ${label} proceeds ${booking.id}`,
       referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, `${leg}:proceeds`),
     });
+    assertLedgerResult(credited, `${leg} proceeds`);
   }
 
   /** Stripe capture credits the client wallet first so payment + proceeds net to zero. */
@@ -3136,13 +3153,15 @@ export class RentalsService {
       booking.client.user_id,
       booking.currency
     );
-    await this.accountsService.registerTransaction({
+    const credited = await this.accountsService.registerTransaction({
       accountId: clientAccount.id,
       amount,
       transactionType: 'deposit',
       memo: `Stripe rental capture ${booking.id}`,
       referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, 'stripe-capture:credit'),
     });
+    assertLedgerResult(credited, 'stripe capture credit');
   }
 
   /** Push a mobile-money request for outstanding overtime at return. */
@@ -3166,7 +3185,7 @@ export class RentalsService {
       userId: booking.client.user_id,
       phoneNumber: clientUser?.phone_number || '',
       email: clientUser?.email,
-      reference: this.createRentalPaymentReference(),
+      purpose: 'overtime',
       paymentEntity: 'rental_booking',
       itemCountry: resolveItemCountry(
         booking.rental_location_listing?.business_location?.address?.country
@@ -3455,7 +3474,7 @@ export class RentalsService {
         userId: clientUserId,
         phoneNumber: clientUser?.phone_number || '',
         email: clientUser?.email,
-        reference: this.createRentalPaymentReference(),
+        purpose: 'contract',
         paymentEntity: 'rental_booking',
         itemCountry: resolveItemCountry(
           booking.rental_location_listing?.business_location?.address?.country
@@ -4025,14 +4044,86 @@ export class RentalsService {
   }
 
   /**
-   * Provider reference used for mobile-money initiation/callback lookups.
-   * MyPVit requires alphanumeric and a max `free_info` length (handled via description).
-   * This mirrors the reference style used for orders.
+   * One mobile-money row per booking and purpose. A pending row is reused.
+   * A failed row releases its key so a later attempt can insert again.
    */
-  private createRentalPaymentReference(): string {
-    const timestamp = Date.now().toString().slice(-8);
-    const random = Math.random().toString(36).substr(2, 4);
-    return `R${timestamp}${random}`;
+  private async openRentalMomoTransaction(data: {
+    reference: string;
+    amount: number;
+    currency: string;
+    description: string;
+    provider: string;
+    payment_method: string;
+    customer_phone: string;
+    customer_email?: string;
+    account_id: string;
+    transaction_type: 'PAYMENT';
+    payment_entity: 'rental_booking';
+    entity_id: string;
+    idempotency_key: string;
+  }): Promise<{ tx: { id: string; reference: string; transaction_id?: string | null }; send: boolean }> {
+    try {
+      const tx = await this.mobilePaymentsDatabaseService.createTransaction(data);
+      return { tx, send: true };
+    } catch (error) {
+      if (!isRentalMomoUniqueViolation(error)) throw error;
+      return this.resumeRentalMomoTransaction(data);
+    }
+  }
+
+  private async resumeRentalMomoTransaction(data: {
+    entity_id: string;
+    idempotency_key: string;
+    reference: string;
+    amount: number;
+    currency: string;
+    description: string;
+    provider: string;
+    payment_method: string;
+    customer_phone: string;
+    customer_email?: string;
+    account_id: string;
+    transaction_type: 'PAYMENT';
+    payment_entity: 'rental_booking';
+  }): Promise<{ tx: { id: string; reference: string; transaction_id?: string | null }; send: boolean }> {
+    const existing = await this.findRentalMomoByKey(
+      data.entity_id,
+      data.idempotency_key
+    );
+    const decision = decideRentalMomoRetry(existing);
+    if (!existing || decision === 'replace') {
+      if (existing) await this.clearRentalMomoKey(existing.id);
+      const tx = await this.mobilePaymentsDatabaseService.createTransaction(data);
+      return { tx, send: true };
+    }
+    return { tx: existing, send: decision === 'send' };
+  }
+
+  private async findRentalMomoByKey(entityId: string, key: string) {
+    const result = await this.hasuraSystemService.executeQuery<{
+      mobile_payment_transactions: Array<{
+        id: string;
+        reference: string;
+        status: string;
+        transaction_id?: string | null;
+        created_at?: string | null;
+      }>;
+    }>(
+      `query RentalMomoByKey($entityId: String!, $key: String!) {
+        mobile_payment_transactions(
+          where: { entity_id: { _eq: $entityId }, idempotency_key: { _eq: $key } }
+          limit: 1
+        ) { id reference status transaction_id created_at }
+      }`,
+      { entityId, key }
+    );
+    return result.mobile_payment_transactions?.[0] ?? null;
+  }
+
+  private async clearRentalMomoKey(id: string): Promise<void> {
+    await this.mobilePaymentsDatabaseService.updateTransaction(id, {
+      idempotency_key: null,
+    });
   }
 
   private bookingWindowsNestedInput(req: any) {
@@ -4095,18 +4186,17 @@ export class RentalsService {
       throw new Error('Client user not found');
     }
     const account = await this.hasuraSystemService.getAccount(userId, currency);
-    const hold = await this.accountsService.registerTransaction({
+    const attemptId = crypto.randomUUID();
+    const hold = await this.accountsService.registerHoldIfNotExists({
       accountId: account.id,
       amount: total,
-      transactionType: 'hold',
       memo: `Rental hold for booking ${bookingId}`,
-      referenceId: bookingId,
+      referenceId: attemptId,
+      idempotencyKey: rentalLedgerKey(bookingId, `hold:${attemptId}`),
     });
-    if (!hold.success) {
-      throw new Error(hold.error || 'Hold failed');
-    }
+    assertLedgerResult(hold, 'hold');
     const releaseOwnLedgerHold = () =>
-      this.releaseLedgerHold(account.id, bookingId, total);
+      this.releaseRentalHold(bookingId, total, account.id, attemptId);
     try {
       if (existing?.status === 'cancelled') {
         const revived = await this.hasuraSystemService.executeMutation<{
@@ -4115,6 +4205,7 @@ export class RentalsService {
           bookingId,
           amount: total,
           currency,
+          attemptId,
         });
         if ((revived.update_rental_holds?.affected_rows ?? 0) > 0) return;
         await releaseOwnLedgerHold();
@@ -4127,32 +4218,13 @@ export class RentalsService {
           client_hold_amount: total,
           currency,
           status: 'active',
+          ledger_attempt_id: attemptId,
         },
       });
     } catch (error) {
       await releaseOwnLedgerHold();
       if (this.holdRowTakenBySomeoneElse(error)) return;
       throw error;
-    }
-  }
-
-  /** Release the ledger hold this call just created. Does not touch the hold row. */
-  private async releaseLedgerHold(
-    accountId: string,
-    bookingId: string,
-    amount: number
-  ): Promise<void> {
-    const released = await this.accountsService.registerTransaction({
-      accountId,
-      amount,
-      transactionType: 'release',
-      memo: `Release rental hold ${bookingId}`,
-      referenceId: bookingId,
-    });
-    if (!released.success) {
-      this.logger.error(
-        `releaseLedgerHold ${bookingId}: ${released.error || 'release failed'}`
-      );
     }
   }
 
@@ -4188,13 +4260,12 @@ export class RentalsService {
       userId,
       booking.currency
     );
-    await this.accountsService.registerTransaction({
-      accountId: account.id,
-      amount: Number(h.client_hold_amount),
-      transactionType: 'release',
-      memo: `Release rental hold ${bookingId}`,
-      referenceId: bookingId,
-    });
+    await this.releaseRentalHold(
+      bookingId,
+      Number(h.client_hold_amount),
+      account.id,
+      this.holdAttemptId(h, bookingId)
+    );
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
       bookingId,
       from: 'active',
@@ -4204,9 +4275,14 @@ export class RentalsService {
 
   private async getHold(bookingId: string) {
     const r = await this.hasuraSystemService.executeQuery<{
-      rental_holds: Array<{ id: string; client_hold_amount: number; status: string }>;
+      rental_holds: Array<{
+        id: string;
+        client_hold_amount: number;
+        status: string;
+        ledger_attempt_id?: string | null;
+      }>;
     }>(
-      `query H($bid: uuid!) { rental_holds(where: { rental_booking_id: { _eq: $bid } }) { id client_hold_amount status currency } }`,
+      `query H($bid: uuid!) { rental_holds(where: { rental_booking_id: { _eq: $bid } }) { id client_hold_amount status currency ledger_attempt_id } }`,
       { bid: bookingId }
     );
     return r.rental_holds?.[0] ?? null;
@@ -4214,51 +4290,94 @@ export class RentalsService {
 
   private async settleBooking(booking: any) {
     const h = await this.getHold(booking.id);
-    if (!h || h.status !== 'active') {
+    if (!h || h.status === 'cancelled') {
       throw new HttpException('Hold not active', HttpStatus.BAD_REQUEST);
     }
-    const amount = Number(booking.total_amount);
-    const clientUserId = booking.client.user_id;
+    const accounts = await this.rentalSettlementAccounts(booking);
+    await this.releaseRentalHold(
+      booking.id,
+      Number(h.client_hold_amount),
+      accounts.clientAccountId,
+      this.holdAttemptId(h, booking.id)
+    );
+    await this.postContractSettlement(booking, accounts, Number(booking.total_amount));
+    if (h.status !== 'active') return;
+    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
+      bookingId: booking.id,
+      from: 'active',
+      status: 'completed',
+    });
+  }
+
+  private holdAttemptId(
+    hold: { ledger_attempt_id?: string | null },
+    bookingId: string
+  ): string {
+    return hold.ledger_attempt_id || bookingId;
+  }
+
+  private async releaseRentalHold(
+    bookingId: string,
+    amount: number,
+    accountId: string,
+    attemptId: string
+  ): Promise<void> {
+    const released = await this.accountsService.registerReleaseIfNotExists({
+      accountId,
+      amount,
+      memo: `Release rental hold ${bookingId}`,
+      referenceId: attemptId,
+      idempotencyKey: rentalLedgerKey(bookingId, `hold:${attemptId}:release`),
+    });
+    assertLedgerResult(released, 'hold release');
+  }
+
+  private async rentalSettlementAccounts(booking: any): Promise<{
+    clientAccountId: string;
+    businessAccountId: string;
+  }> {
     const clientAccount = await this.hasuraSystemService.getAccount(
-      clientUserId,
+      booking.client.user_id,
       booking.currency
     );
     const locId = booking.rental_location_listing?.business_location_id;
     if (!locId) {
       throw new HttpException('Location missing', HttpStatus.BAD_REQUEST);
     }
-    const businessAccount = await this.hasuraSystemService.ensureAccountForBusinessLocation(
-      locId
-    );
-    if (!businessAccount?.id) {
-      throw new HttpException('Business account missing', HttpStatus.BAD_REQUEST);
+    const businessAccount =
+      await this.hasuraSystemService.ensureAccountForBusinessLocation(locId);
+    if (!businessAccount?.id || !clientAccount?.id) {
+      throw new HttpException('Account missing', HttpStatus.BAD_REQUEST);
     }
-    await this.accountsService.registerTransaction({
-      accountId: clientAccount.id,
-      amount: Number(h.client_hold_amount),
-      transactionType: 'release',
-      memo: `Release rental hold ${booking.id}`,
-      referenceId: booking.id,
-    });
-    await this.accountsService.registerTransaction({
-      accountId: clientAccount.id,
+    return {
+      clientAccountId: clientAccount.id,
+      businessAccountId: businessAccount.id,
+    };
+  }
+
+  private async postContractSettlement(
+    booking: any,
+    accounts: { clientAccountId: string; businessAccountId: string },
+    amount: number
+  ): Promise<void> {
+    const paid = await this.accountsService.registerTransaction({
+      accountId: accounts.clientAccountId,
       amount,
       transactionType: 'payment',
       memo: `Rental payment ${booking.id}`,
       referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, 'contract:payment'),
     });
-    await this.accountsService.registerTransaction({
-      accountId: businessAccount.id,
+    assertLedgerResult(paid, 'contract payment');
+    const credited = await this.accountsService.registerTransaction({
+      accountId: accounts.businessAccountId,
       amount,
       transactionType: 'deposit',
       memo: `Rental proceeds ${booking.id}`,
       referenceId: booking.id,
+      idempotencyKey: rentalLedgerKey(booking.id, 'contract:proceeds'),
     });
-    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
-      bookingId: booking.id,
-      from: 'active',
-      status: 'completed',
-    });
+    assertLedgerResult(credited, 'contract proceeds');
   }
 
   private async patchBooking(id: string, _set: Record<string, unknown>) {
