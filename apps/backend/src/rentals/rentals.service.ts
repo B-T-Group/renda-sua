@@ -2845,10 +2845,16 @@ export class RentalsService {
     } else {
       await this.verifyPinAttempt(bookingId, booking, pin);
     }
-    const won = await this.casBooking(bookingId, ['confirmed'], {
-      status: 'active',
-      actual_start_at: new Date().toISOString(),
-    });
+    let won = false;
+    try {
+      won = await this.casBooking(bookingId, ['confirmed'], {
+        status: 'active',
+        actual_start_at: new Date().toISOString(),
+      });
+    } catch (error) {
+      if (!hasOw) await this.refundRentalPinAttempt(bookingId);
+      throw error;
+    }
     if (!won) {
       if (!hasOw) await this.refundRentalPinAttempt(bookingId);
       return this.alreadyActiveOrConflict(bookingId);
