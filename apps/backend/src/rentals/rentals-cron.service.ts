@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { HasuraSystemService } from '../hasura/hasura-system.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { casUpdateRentalBooking } from './rental-booking-cas';
 import * as Q from './rentals-queries';
 
 /** Grace after the scheduled start before an unpaid reservation is released. */
@@ -170,11 +171,17 @@ export class RentalsCronService {
     if (!booking || booking.status !== 'reserved' || booking.actual_start_at) {
       return;
     }
-    await this.patchBooking(bookingId, {
-      status: 'cancelled',
-      payment_status: 'cancelled',
-      contract_expires_at: null,
-    });
+    const won = await casUpdateRentalBooking(
+      this.hasuraSystemService,
+      bookingId,
+      ['reserved'],
+      {
+        status: 'cancelled',
+        payment_status: 'cancelled',
+        contract_expires_at: null,
+      }
+    );
+    if (!won) return;
     await this.logHistory(
       bookingId,
       'cancelled',
@@ -212,10 +219,13 @@ export class RentalsCronService {
     bookingId: string,
     requestId: string
   ): Promise<void> {
-    await this.patchBooking(bookingId, {
-      status: 'cancelled',
-      contract_expires_at: null,
-    });
+    const won = await casUpdateRentalBooking(
+      this.hasuraSystemService,
+      bookingId,
+      ['proposed'],
+      { status: 'cancelled', contract_expires_at: null }
+    );
+    if (!won) return;
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
       id: requestId,
       status: 'expired',
@@ -236,10 +246,13 @@ export class RentalsCronService {
   ): Promise<void> {
     const booking = await this.fetchBooking(bookingId);
     if (!booking || booking.status !== 'active') return;
-    await this.patchBooking(bookingId, {
-      status: 'awaiting_return',
-      period_ended_notified_at: nowIso,
-    });
+    const won = await casUpdateRentalBooking(
+      this.hasuraSystemService,
+      bookingId,
+      ['active'],
+      { status: 'awaiting_return', period_ended_notified_at: nowIso }
+    );
+    if (!won) return;
     await this.logHistory(
       bookingId,
       'awaiting_return',

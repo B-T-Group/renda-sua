@@ -52,6 +52,7 @@ import { StripePaymentsDatabaseService } from '../stripe-payments/stripe-payment
 import { StripeService } from '../stripe-payments/stripe.service';
 import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
 import { isActivePersona } from '../users/persona.util';
+import { casUpdateRentalBooking } from './rental-booking-cas';
 import {
   formatDistanceMeters,
   haversineMeters,
@@ -1266,22 +1267,7 @@ export class RentalsService {
     if (req.status === 'available') {
       const booking = req.rental_booking as { id?: string; status?: string } | null | undefined;
       if (booking?.id && booking.status === 'proposed') {
-        await this.cancelStripeAuthorizationIfAny(
-          await this.fetchBooking(booking.id)
-        );
-        await this.patchBooking(booking.id, {
-          status: 'cancelled',
-          payment_status: 'cancelled',
-          contract_expires_at: null,
-        });
-        await this.logHistory(
-          booking.id,
-          'cancelled',
-          'proposed',
-          user.id,
-          'client',
-          'Client withdrew before confirming'
-        );
+        await this.cancelProposedBooking(booking.id, user.id);
       }
       await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
         id: requestId,
@@ -2036,12 +2022,13 @@ export class RentalsService {
     requestId: string,
     userId: string
   ): Promise<RentalBookingActionResult> {
-    await this.patchBooking(bookingId, {
+    const won = await this.casBooking(bookingId, ['proposed'], {
       status: 'reserved',
       contract_expires_at: null,
       payment_timing: 'pay_at_pickup',
       payment_status: 'pending',
     });
+    if (!won) return this.reserveReplayResult(bookingId);
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
       id: requestId,
       status: 'booked',
@@ -2329,18 +2316,18 @@ export class RentalsService {
     previousStatus: string | null = 'proposed',
     notes = 'Booking confirmed'
   ): Promise<void> {
-    await this.patchBooking(bookingId, {
+    const from = previousStatus ?? 'proposed';
+    const won = await this.casBooking(bookingId, [from], {
       status: 'confirmed',
       contract_expires_at: null,
     });
+    if (!won && !(await this.confirmedBookingNeedsPin(bookingId))) return;
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
       id: requestId,
       status: 'booked',
     });
-    const pin = this.deliveryPinService.generatePin();
-    const hash = this.deliveryPinService.hashPin(bookingId, pin);
-    await this.setBookingPinHash(bookingId, hash);
-    await this.deliveryPinService.setPinForClient(bookingId, pin);
+    await this.ensureStartPinOnce(bookingId);
+    if (!won) return;
     await this.logHistory(bookingId, 'confirmed', previousStatus, clientUserId, 'client', notes);
     try {
       const booking = await this.fetchBooking(bookingId);
@@ -2503,20 +2490,11 @@ export class RentalsService {
     // Idempotency: already confirmed / cancelled / completed.
   }
 
-  /** Wallet credit landed: hold the contract, mark paid, confirm + PIN. */
+  /** Wallet credit landed: confirm + PIN, then hold the contract and mark paid. */
   private async confirmBookingAfterContractPayment(
     booking: any,
     bookingNumber: string
   ): Promise<void> {
-    const hold = await this.getHold(booking.id);
-    if (!hold || hold.status !== 'active') {
-      await this.placeHoldForBooking(
-        booking.id,
-        booking.client_id,
-        Number(booking.total_amount),
-        booking.currency
-      );
-    }
     const clientUserId = booking.client?.user_id as string | undefined;
     if (!clientUserId) {
       this.logger.warn(
@@ -2524,7 +2502,6 @@ export class RentalsService {
       );
       return;
     }
-    await this.markBookingPaymentStatus(booking.id, 'paid');
     await this.finalizeRentalBookingConfirmation(
       booking.id,
       booking.rental_request_id,
@@ -2534,6 +2511,18 @@ export class RentalsService {
         ? 'Contract paid at pickup'
         : 'Booking confirmed'
     );
+    const fresh = await this.fetchBooking(booking.id);
+    if (fresh?.status !== 'confirmed' && fresh?.status !== 'active') return;
+    const hold = await this.getHold(booking.id);
+    if (!hold || hold.status !== 'active') {
+      await this.placeHoldForBooking(
+        booking.id,
+        booking.client_id,
+        Number(booking.total_amount),
+        booking.currency
+      );
+    }
+    await this.markBookingPaymentStatus(booking.id, 'paid');
   }
 
   /**
@@ -2606,13 +2595,24 @@ export class RentalsService {
         HttpStatus.BAD_REQUEST
       );
     }
-    await this.releaseHoldIfNeeded(bookingId, booking);
-    await this.cancelStripeAuthorizationIfAny(booking);
-    await this.patchBooking(bookingId, {
+    const from = booking.status as string;
+    const won = await this.casBooking(bookingId, [from], {
       status: 'cancelled',
       payment_status: 'cancelled',
       contract_expires_at: null,
     });
+    if (!won) return this.alreadyCancelledOrConflict(bookingId);
+    try {
+      await this.releaseHoldIfNeeded(bookingId, booking);
+      await this.cancelStripeAuthorizationIfAny(booking);
+    } catch (error) {
+      await this.casBooking(bookingId, ['cancelled'], {
+        status: from,
+        payment_status: booking.payment_status,
+        contract_expires_at: booking.contract_expires_at,
+      });
+      throw error;
+    }
     const cancelledBy: 'client' | 'business' = isClient ? 'client' : 'business';
     await this.logHistory(
       bookingId,
@@ -2746,11 +2746,11 @@ export class RentalsService {
     } else {
       await this.verifyPinAttempt(bookingId, booking, pin);
     }
-    const now = new Date().toISOString();
-    await this.patchBooking(bookingId, {
+    const won = await this.casBooking(bookingId, ['confirmed'], {
       status: 'active',
-      actual_start_at: now,
+      actual_start_at: new Date().toISOString(),
     });
+    if (!won) return this.alreadyActiveOrConflict(bookingId);
     await this.logHistory(bookingId, 'active', 'confirmed', user.id, 'business', 'Start PIN verified');
     return { success: true };
   }
@@ -2818,36 +2818,31 @@ export class RentalsService {
     );
     const settlement = this.computeRentalSettlement(booking, actualEndAt);
     if (booking.payment_status === 'authorized') {
-      await this.settleStripeAuthorizedBooking(booking, settlement);
-    } else {
-      const settled = await this.settleWalletHeldBooking(booking, settlement);
-      if (!settled) {
-        if (previousStatus === 'active') {
-          await this.patchBooking(bookingId, { status: 'awaiting_return' });
-          await this.logHistory(
-            bookingId,
-            'awaiting_return',
-            'active',
-            user.id,
-            'business',
-            'Return recorded; overtime payment pending'
-          );
-        }
-        return {
-          success: true,
-          overtimeDue: true,
-          overtimeAmount: settlement.overtimeAmount,
-          paymentPending: true,
-        };
-      }
+      const won = await this.runCompletion(
+        bookingId,
+        previousStatus,
+        user.id,
+        'business',
+        () => this.settleStripeAuthorizedBooking(booking, settlement)
+      );
+      return this.completionResult(won, settlement.overtimeAmount);
     }
-    await this.completeRentalBookingAfterSettle(
+    if (await this.overtimeNeedsMobileMoney(booking, settlement.overtimeAmount)) {
+      return this.deferReturnForOvertimePayment(
+        booking,
+        settlement.overtimeAmount,
+        previousStatus,
+        user.id
+      );
+    }
+    const won = await this.runCompletion(
       bookingId,
+      previousStatus,
       user.id,
       'business',
-      previousStatus === 'active' ? 'active' : 'awaiting_return'
+      () => this.settleWalletHeldBooking(booking, settlement)
     );
-    return { success: true, overtimeAmount: settlement.overtimeAmount };
+    return this.completionResult(won, settlement.overtimeAmount);
   }
 
   /**
@@ -2861,8 +2856,15 @@ export class RentalsService {
     const existing = booking.actual_end_at as string | null | undefined;
     if (existing) return existing;
     const iso = this.normalizeReturnActualEndAt(booking, actualEndAtInput);
-    await this.patchBooking(booking.id, { actual_end_at: iso });
-    return iso;
+    const stamped = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings: {
+        returning: Array<{ actual_end_at: string }>;
+      } | null;
+    }>(Q.STAMP_RENTAL_ACTUAL_END_IF_ABSENT, { id: booking.id, at: iso });
+    const written = stamped.update_rental_bookings?.returning?.[0]?.actual_end_at;
+    if (written) return written;
+    const fresh = await this.fetchBooking(booking.id);
+    return (fresh?.actual_end_at as string | undefined) ?? iso;
   }
 
   private normalizeReturnActualEndAt(
@@ -2973,9 +2975,8 @@ export class RentalsService {
 
   /**
    * Wallet/mobile-money settle: release the contract hold and pay the business.
-   * Overtime (no deposit on these rails) is charged from the wallet when the
-   * balance covers it; otherwise a mobile-money push is sent and the booking
-   * stays `awaiting_return` until the overtime payment lands.
+   * Overtime is charged from the wallet when the balance covers it. The caller
+   * sends the mobile-money push before this runs when it does not.
    */
   private async settleWalletHeldBooking(
     booking: any,
@@ -2993,22 +2994,20 @@ export class RentalsService {
       booking.currency
     );
     if (
-      Number(clientAccount?.available_balance ?? 0) >= settlement.overtimeAmount
+      Number(clientAccount?.available_balance ?? 0) < settlement.overtimeAmount
     ) {
-      await this.settleBooking(booking);
-      await this.registerRentalProceedsLedger(
-        booking,
-        settlement.overtimeAmount,
-        'Overtime'
+      throw new HttpException(
+        'Client balance no longer covers overtime',
+        HttpStatus.CONFLICT
       );
-      return true;
     }
-    await this.initiateRentalOvertimePayment(
+    await this.settleBooking(booking);
+    await this.registerRentalProceedsLedger(
       booking,
       settlement.overtimeAmount,
-      clientAccount.id
+      'Overtime'
     );
-    return false;
+    return true;
   }
 
   /** Charge the client wallet and credit the business account for `amount`. */
@@ -3097,30 +3096,207 @@ export class RentalsService {
   /** Overtime mobile-money payment landed: ledger it, settle the hold, complete. */
   private async finalizeRentalOvertimeAfterPayment(booking: any): Promise<void> {
     const overtime = Number(booking.overtime_amount) || 0;
-    await this.registerRentalProceedsLedger(booking, overtime, 'Overtime');
-    const hold = await this.getHold(booking.id);
-    if (hold?.status === 'active') {
-      await this.settleBooking(booking);
-    }
-    await this.completeRentalBookingAfterSettle(booking.id, null, 'system');
+    await this.runCompletion(booking.id, 'awaiting_return', null, 'system', async () => {
+      await this.registerRentalProceedsLedger(booking, overtime, 'Overtime');
+      const hold = await this.getHold(booking.id);
+      if (hold?.status === 'active') await this.settleBooking(booking);
+    });
   }
 
-  private async completeRentalBookingAfterSettle(
+  /**
+   * Claim `completed` before money moves. A loser settles nothing.
+   * A thrown settle puts the booking back so a retry can win.
+   */
+  private async runCompletion(
     bookingId: string,
+    from: 'active' | 'awaiting_return',
     userId: string | null,
     changedByType: 'business' | 'system',
-    previousStatus: 'active' | 'awaiting_return' = 'awaiting_return'
-  ): Promise<void> {
-    await this.updateBookingStatus(bookingId, 'completed');
+    settle: () => Promise<unknown>
+  ): Promise<boolean> {
+    const won = await this.casBooking(bookingId, [from], { status: 'completed' });
+    if (!won) return false;
+    try {
+      await settle();
+    } catch (error) {
+      await this.casBooking(bookingId, ['completed'], { status: from });
+      throw error;
+    }
     await this.logHistory(
       bookingId,
       'completed',
-      previousStatus,
+      from,
       userId,
       changedByType,
       'Return confirmed'
     );
     await this.deliveryPinService.clearPinForOrder(bookingId);
+    return true;
+  }
+
+  private completionResult(won: boolean, overtimeAmount: number) {
+    return won
+      ? { success: true, overtimeAmount }
+      : { success: true, alreadyCompleted: true, overtimeAmount };
+  }
+
+  private async overtimeNeedsMobileMoney(
+    booking: any,
+    overtimeAmount: number
+  ): Promise<boolean> {
+    if (overtimeAmount <= 0) return false;
+    const account = await this.hasuraSystemService.getAccount(
+      booking.client.user_id,
+      booking.currency
+    );
+    return Number(account?.available_balance ?? 0) < overtimeAmount;
+  }
+
+  private async deferReturnForOvertimePayment(
+    booking: any,
+    overtimeAmount: number,
+    previous: 'active' | 'awaiting_return',
+    userId: string
+  ) {
+    const open = await this.casBooking(
+      booking.id,
+      ['active', 'awaiting_return'],
+      { overtime_amount: overtimeAmount }
+    );
+    if (!open) return this.completionResult(false, overtimeAmount);
+    await this.noteAwaitingReturn(booking.id, previous, userId);
+    await this.pushOvertimeCharge(booking, overtimeAmount);
+    return {
+      success: true,
+      overtimeDue: true,
+      overtimeAmount,
+      paymentPending: true,
+    };
+  }
+
+  private async noteAwaitingReturn(
+    bookingId: string,
+    previous: 'active' | 'awaiting_return',
+    userId: string
+  ): Promise<void> {
+    if (previous !== 'active') return;
+    const won = await this.casBooking(bookingId, ['active'], {
+      status: 'awaiting_return',
+    });
+    if (!won) return;
+    await this.logHistory(
+      bookingId,
+      'awaiting_return',
+      'active',
+      userId,
+      'business',
+      'Return recorded; overtime payment pending'
+    );
+  }
+
+  private async pushOvertimeCharge(booking: any, overtimeAmount: number) {
+    const clientAccount = await this.hasuraSystemService.getAccount(
+      booking.client.user_id,
+      booking.currency
+    );
+    if (!clientAccount?.id) {
+      throw new HttpException('Client account missing', HttpStatus.BAD_REQUEST);
+    }
+    await this.initiateRentalOvertimePayment(
+      booking,
+      overtimeAmount,
+      clientAccount.id
+    );
+  }
+
+  private casBooking(
+    id: string,
+    from: string[],
+    set: Record<string, unknown>
+  ): Promise<boolean> {
+    return casUpdateRentalBooking(this.hasuraSystemService, id, from, set);
+  }
+
+  private async alreadyCancelledOrConflict(bookingId: string) {
+    const fresh = await this.fetchBooking(bookingId);
+    if (fresh?.status === 'cancelled') return { success: true };
+    throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+  }
+
+  private async alreadyActiveOrConflict(bookingId: string) {
+    const fresh = await this.fetchBooking(bookingId);
+    if (fresh?.status === 'active') return { success: true };
+    throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+  }
+
+  private async reserveReplayResult(
+    bookingId: string
+  ): Promise<RentalBookingActionResult> {
+    const fresh = await this.fetchBooking(bookingId);
+    if (fresh?.status === 'reserved' || fresh?.status === 'confirmed') {
+      return {
+        success: true,
+        bookingId,
+        payment_rail: 'mobile_money',
+        reserved: fresh.status === 'reserved',
+      };
+    }
+    throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+  }
+
+  private async confirmedBookingNeedsPin(bookingId: string): Promise<boolean> {
+    const fresh = await this.fetchBooking(bookingId);
+    return fresh?.status === 'confirmed' && !fresh.rental_start_pin_hash;
+  }
+
+  private async ensureStartPinOnce(bookingId: string): Promise<void> {
+    const pin = this.deliveryPinService.generatePin();
+    const hash = this.deliveryPinService.hashPin(bookingId, pin);
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings: { affected_rows: number } | null;
+    }>(Q.SET_RENTAL_PIN_IF_ABSENT, { id: bookingId, pinHash: hash });
+    if ((result.update_rental_bookings?.affected_rows ?? 0) !== 1) return;
+    await this.deliveryPinService.setPinForClient(bookingId, pin);
+  }
+
+  private async cancelProposedBooking(
+    bookingId: string,
+    userId: string
+  ): Promise<void> {
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || booking.status !== 'proposed') {
+      throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+    }
+    const won = await this.casBooking(bookingId, ['proposed'], {
+      status: 'cancelled',
+      payment_status: 'cancelled',
+      contract_expires_at: null,
+    });
+    if (!won) {
+      throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+    }
+    try {
+      await this.cancelStripeAuthorizationIfAny(booking);
+    } catch (error) {
+      await this.restoreProposedBooking(booking);
+      throw error;
+    }
+    await this.logHistory(
+      bookingId,
+      'cancelled',
+      'proposed',
+      userId,
+      'client',
+      'Client withdrew before confirming'
+    );
+  }
+
+  private async restoreProposedBooking(booking: any): Promise<void> {
+    await this.casBooking(booking.id, ['cancelled'], {
+      status: 'proposed',
+      payment_status: booking.payment_status,
+      contract_expires_at: booking.contract_expires_at,
+    });
   }
 
   private async fetchUserContact(
@@ -3893,6 +4069,7 @@ export class RentalsService {
     });
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
       bookingId,
+      from: 'active',
       status: 'cancelled',
     });
   }
@@ -3951,17 +4128,9 @@ export class RentalsService {
     });
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_HOLD_STATUS, {
       bookingId: booking.id,
+      from: 'active',
       status: 'completed',
     });
-  }
-
-  private async updateBookingStatus(id: string, status: string) {
-    await this.hasuraSystemService.executeMutation(
-      `mutation U($id: uuid!, $s: rental_booking_status_enum!) {
-        update_rental_bookings_by_pk(pk_columns: { id: $id }, _set: { status: $s }) { id }
-      }`,
-      { id, s: status }
-    );
   }
 
   private async patchBooking(id: string, _set: Record<string, unknown>) {
