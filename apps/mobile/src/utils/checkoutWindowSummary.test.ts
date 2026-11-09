@@ -28,6 +28,22 @@ describe('checkoutWindowSectionVisible', () => {
         state: 'LT',
       })
     ).toBe(false);
+    expect(
+      checkoutWindowSectionVisible({
+        confirmed: false,
+        fulfillment: 'delivery',
+        country: 'CM',
+        state: 'LT',
+      })
+    ).toBe(false);
+    expect(
+      checkoutWindowSectionVisible({
+        confirmed: true,
+        fulfillment: 'pickup',
+        country: 'CM',
+        state: ' ',
+      })
+    ).toBe(false);
   });
 });
 
@@ -62,6 +78,17 @@ describe('checkoutWindowStickyText', () => {
         windowLabel: 'Sat, Nov 7 · Morning',
       })
     ).toBe('Select a time slot');
+  });
+
+  it('keeps the as-soon-as-possible title when there is no ready window', () => {
+    expect(
+      checkoutWindowStickyText({
+        ...base,
+        needsChoice: false,
+        windowLabel: '',
+        etaLine: null,
+      })
+    ).toBe('Deliver as soon as possible');
   });
 });
 
