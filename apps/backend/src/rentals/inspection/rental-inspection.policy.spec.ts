@@ -382,6 +382,11 @@ describe('inspection SQL enforces the same gates', () => {
     expect(sql).toContain("'rental_inspection_enabled'");
     expect(sql).toMatch(/'rental_inspection_enabled'[\s\S]*false/);
   });
+
+  it('rejects damage_upheld without a positive damage amount (NODE-NESTJS-4N)', () => {
+    expect(sql).toContain("p_outcome = 'damage_upheld' AND (p_damage IS NULL OR p_damage <= 0)");
+    expect(sql).toContain("RAISE EXCEPTION 'rental_inspection_damage_amount'");
+  });
 });
 
 function gate(state: ReturnMoneyState) {

@@ -7,12 +7,14 @@ import {
   IsInt,
   IsNumber,
   IsOptional,
+  IsPositive,
   IsString,
   IsUUID,
   Max,
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
   ValidateNested,
 } from 'class-validator';
 
@@ -128,9 +130,12 @@ export class DecideInspectionDisputeDto {
   @MaxLength(2000)
   reason!: string;
 
-  @ApiPropertyOptional()
-  @IsOptional()
+  @ApiPropertyOptional({
+    description: 'Required and must be greater than 0 when outcome is damage_upheld',
+  })
+  @ValidateIf((dto: DecideInspectionDisputeDto) => dto.outcome === 'damage_upheld')
+  @Type(() => Number)
   @IsNumber()
-  @Min(0)
+  @IsPositive()
   damageAmount?: number;
 }

@@ -5,7 +5,7 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { isActivePersona } from '../../users/persona.util';
 import { RentalsService } from '../rentals.service';
 import { RentalInspectionFlags } from './rental-inspection-flags.service';
-import { inspectionUpdateRequired } from './rental-inspection.errors';
+import { inspectionRejected, inspectionUpdateRequired, requireInspectionDamageAmount } from './rental-inspection.errors';
 import {
   DEFAULT_MIN_PHOTOS,
   DEFAULT_REMINDER_HOURS,
@@ -25,6 +25,12 @@ export interface InspectionDraftUnit {
   physicalLabel: string | null;
 }
 type Decision = 'accept' | 'correction' | 'dispute';
+
+const DECIDE_MUTATION = `mutation Decide($id: uuid!, $actor: uuid!, $outcome: String!, $reason: String!, $damage: numeric) {
+  rental_apply_inspection_decision(args: {
+    p_booking_id: $id, p_actor: $actor, p_outcome: $outcome, p_reason: $reason, p_damage: $damage
+  }) { id decision }
+}`;
 
 interface BookingRow {
   id: string;
@@ -179,21 +185,55 @@ export class RentalInspectionService {
 
   async decide(bookingId: string, actorId: string, outcome: string, reason: string, damageAmount?: number) {
     if (!reason?.trim()) throw new HttpException('A reason is required', HttpStatus.BAD_REQUEST);
-    const dispute = await this.one(
-      'rental_apply_inspection_decision',
-      `mutation Decide($id: uuid!, $actor: uuid!, $outcome: String!, $reason: String!, $damage: numeric) {
-        rental_apply_inspection_decision(args: {
-          p_booking_id: $id, p_actor: $actor, p_outcome: $outcome, p_reason: $reason, p_damage: $damage
-        }) { id decision }
-      }`,
-      { id: bookingId, actor: actorId, outcome, reason: reason.trim(), damage: damageAmount ?? null }
-    );
-    if (!dispute) throw new HttpException('No open review for this rental', HttpStatus.CONFLICT);
+    const damage = requireInspectionDamageAmount(outcome, damageAmount);
+    await this.applyDecision(bookingId, actorId, outcome, reason.trim(), damage);
+    await this.afterDecision(bookingId);
+    return { decided: true, outcome };
+  }
+
+  private async applyDecision(
+    bookingId: string,
+    actorId: string,
+    outcome: string,
+    reason: string,
+    damage: number | null
+  ) {
+    try {
+      const dispute = await this.one(
+        'rental_apply_inspection_decision',
+        DECIDE_MUTATION,
+        { id: bookingId, actor: actorId, outcome, reason, damage }
+      );
+      if (!dispute) throw new HttpException('No open review for this rental', HttpStatus.CONFLICT);
+      return dispute;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw this.decisionError(error);
+    }
+  }
+
+  private async afterDecision(bookingId: string) {
     const booking = await this.booking(bookingId);
     await this.notice(booking, 'decided', booking.client.user_id);
     await this.notice(booking, 'decided', booking.business.user_id);
     await this.rentals.settleEnrolledRental(bookingId);
-    return { decided: true, outcome };
+  }
+
+  private decisionError(error: any): HttpException {
+    const text = JSON.stringify(error?.response ?? error?.message ?? error);
+    if (text.includes('rental_inspection_damage_amount')) {
+      return inspectionRejected(
+        'RENTAL_INSPECTION_DAMAGE_AMOUNT',
+        'Upholding damage requires a positive damage amount'
+      );
+    }
+    if (text.includes('rental_inspection_decision_missing')) {
+      return new HttpException('No open review for this rental', HttpStatus.CONFLICT);
+    }
+    if (text.includes('rental_inspection_decision')) {
+      return inspectionRejected('RENTAL_INSPECTION_DECISION', 'That review decision is not valid');
+    }
+    return new HttpException('Review could not be decided', HttpStatus.CONFLICT);
   }
 
   async listOpenDisputes() {
