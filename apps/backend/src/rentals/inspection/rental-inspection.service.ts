@@ -231,71 +231,89 @@ export class RentalInspectionService {
   }
 
   private async acceptPickup(booking: BookingRow & { actorId: string }, versionId: string) {
-    const row = await this.one(
+    await this.oneAck(
       'rental_accept_pickup_version',
       `mutation AcceptPickup($id: uuid!, $version: uuid!, $actor: uuid!) {
         rental_accept_pickup_version(args: { p_booking_id: $id, p_version_id: $version, p_actor: $actor }) { id }
       }`,
-      { id: booking.id, version: versionId, actor: booking.actorId }
+      { id: booking.id, version: versionId, actor: booking.actorId },
+      'That report changed. Review it again.'
     );
-    if (!row) throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
     await this.notice(booking, 'pickup_accepted', booking.business.user_id);
     return { accepted: true };
   }
 
   private async acceptReturn(booking: BookingRow & { actorId: string }, versionId: string) {
-    const row = await this.one(
+    await this.oneAck(
       'rental_accept_return_version',
       `mutation AcceptReturn($id: uuid!, $version: uuid!, $actor: uuid!) {
         rental_accept_return_version(args: { p_booking_id: $id, p_version_id: $version, p_actor: $actor }) { id }
       }`,
-      { id: booking.id, version: versionId, actor: booking.actorId }
+      { id: booking.id, version: versionId, actor: booking.actorId },
+      'That report changed. Review it again.'
     );
-    if (!row) throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
     await this.rentals.settleEnrolledRental(booking.id);
     return { accepted: true };
   }
 
   private async disputeReturn(booking: BookingRow & { actorId: string }, versionId: string, reason: string) {
     const hours = await this.flags.numberConfig('rental_inspection_return_review_hours', null, DEFAULT_REVIEW_HOURS);
-    const row = await this.one(
+    await this.oneAck(
       'rental_open_return_dispute',
       `mutation Dispute($id: uuid!, $version: uuid!, $actor: uuid!, $reason: String!, $hours: Int!) {
         rental_open_return_dispute(args: {
           p_booking_id: $id, p_version_id: $version, p_actor: $actor, p_reason: $reason, p_review_hours: $hours
         }) { id }
       }`,
-      { id: booking.id, version: versionId, actor: booking.actorId, reason, hours: Math.round(hours) }
+      { id: booking.id, version: versionId, actor: booking.actorId, reason, hours: Math.round(hours) },
+      'That report can no longer be disputed'
     );
-    if (!row) throw new HttpException('That report can no longer be disputed', HttpStatus.CONFLICT);
     await this.notice(booking, 'disputed', booking.business.user_id);
     return { disputed: true };
   }
 
   private async requestCorrection(booking: BookingRow & { actorId: string }, stage: InspectionStage, versionId: string, reason: string) {
-    try {
-      const row = await this.one(
-        'rental_request_correction',
-        `mutation RequestCorrection($id: uuid!, $stage: String!, $version: uuid!, $actor: uuid!, $reason: String!) {
-          rental_request_correction(args: {
-            p_booking_id: $id, p_stage: $stage, p_version_id: $version, p_actor: $actor, p_reason: $reason
-          }) { id }
-        }`,
-        { id: booking.id, stage, version: versionId, actor: booking.actorId, reason }
-      );
-      if (!row) {
-        throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
-      }
-    } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      const text = JSON.stringify(error?.response ?? error?.message ?? error);
-      if (text.includes('rental_inspection_correction_conflict') || text.includes('Uniqueness violation')) {
-        throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
-      }
-      throw error;
-    }
+    await this.oneAck(
+      'rental_request_correction',
+      `mutation RequestCorrection($id: uuid!, $stage: String!, $version: uuid!, $actor: uuid!, $reason: String!) {
+        rental_request_correction(args: {
+          p_booking_id: $id, p_stage: $stage, p_version_id: $version, p_actor: $actor, p_reason: $reason
+        }) { id }
+      }`,
+      { id: booking.id, stage, version: versionId, actor: booking.actorId, reason },
+      'That report changed. Review it again.'
+    );
     await this.notice(booking, 'correction', booking.business.user_id);
     return { correctionRequested: true };
+  }
+
+  private async oneAck(
+    field: string,
+    mutation: string,
+    variables: Record<string, unknown>,
+    conflict: string
+  ): Promise<Record<string, unknown>> {
+    try {
+      const row = await this.one(field, mutation, variables);
+      if (!row) throw new HttpException(conflict, HttpStatus.CONFLICT);
+      return row;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      if (this.ackAlreadyRecorded(error)) throw new HttpException(conflict, HttpStatus.CONFLICT);
+      throw error;
+    }
+  }
+
+  private ackAlreadyRecorded(error: any): boolean {
+    const text = JSON.stringify(error?.response ?? error?.message ?? error);
+    return (
+      text.includes('rental_inspection_ack_conflict') ||
+      text.includes('rental_inspection_correction_conflict') ||
+      text.includes('pickup_accept_conflict') ||
+      text.includes('return_accept_conflict') ||
+      text.includes('Uniqueness violation') ||
+      text.includes('rental_inspection_acks_version_id_persona_key')
+    );
   }
 
   private async ensureUnits(booking: BookingRow): Promise<UnitRow[]> {
