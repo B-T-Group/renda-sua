@@ -426,6 +426,44 @@ describe('wallet confirm and hold', () => {
     );
   });
 
+  it('does not release the winner hold when marking paid fails after a lost insert', async () => {
+    svc.getHold = jest.fn().mockResolvedValue(null);
+    svc.hasuraSystemService = {
+      executeQuery: jest.fn().mockResolvedValue({
+        clients_by_pk: { user_id: 'client-user' },
+      }),
+      getAccount: jest.fn().mockResolvedValue({ id: 'acc' }),
+      executeMutation: jest
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'Uniqueness violation. duplicate key value violates unique constraint "rental_holds_unique_booking"'
+          )
+        ),
+    };
+    svc.accountsService = {
+      registerHoldIfNotExists: jest.fn().mockResolvedValue({ success: true }),
+      registerReleaseIfNotExists: jest.fn().mockResolvedValue({ success: true }),
+    };
+    svc.markBookingPaymentStatus = jest
+      .fn()
+      .mockRejectedValue(new Error('paid stamp failed'));
+    svc.casBooking = jest.fn();
+    svc.fetchBooking = jest.fn();
+    svc.releaseHoldIfNeeded = jest.fn();
+    svc.placeHoldForBooking = Object.getPrototypeOf(svc).placeHoldForBooking;
+    await expect(
+      svc.finishConfirmedWalletHold(
+        booking({ status: 'confirmed', payment_status: 'pending' }),
+        'proposed'
+      )
+    ).rejects.toThrow('paid stamp failed');
+    expect(svc.releaseHoldIfNeeded).not.toHaveBeenCalled();
+    expect(svc.casBooking).not.toHaveBeenCalled();
+    expect(svc.fetchBooking).not.toHaveBeenCalled();
+    expect(svc.accountsService.registerReleaseIfNotExists).toHaveBeenCalledTimes(1);
+  });
+
   it('releases the ledger hold when the hold row cannot be saved', async () => {
     svc.hasuraSystemService = {
       executeQuery: jest.fn().mockResolvedValue({

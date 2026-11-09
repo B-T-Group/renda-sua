@@ -2576,19 +2576,25 @@ export class RentalsService {
     booking: any,
     previousStatus: 'proposed' | 'reserved'
   ): Promise<void> {
+    let releaseOnFailure = true;
     try {
       const hold = await this.getHold(booking.id);
       if (!hold || hold.status !== 'active') {
-        await this.placeHoldForBooking(
+        const placed = await this.placeHoldForBooking(
           booking.id,
           booking.client_id,
           Number(booking.total_amount),
           booking.currency
         );
+        releaseOnFailure = placed === 'own';
+      } else {
+        releaseOnFailure = false;
       }
       await this.markBookingPaymentStatus(booking.id, 'paid');
     } catch (error) {
-      await this.revertUnpaidConfirmation(booking, previousStatus);
+      if (releaseOnFailure) {
+        await this.revertUnpaidConfirmation(booking, previousStatus);
+      }
       throw error;
     }
   }
@@ -4172,9 +4178,9 @@ export class RentalsService {
     clientId: string,
     total: number,
     currency: string
-  ) {
+  ): Promise<'own' | 'other'> {
     const existing = await this.getHold(bookingId);
-    if (existing?.status === 'active') return;
+    if (existing?.status === 'active') return 'other';
     const clientRow = await this.hasuraSystemService.executeQuery<{
       clients_by_pk: { user_id: string };
     }>(
@@ -4207,9 +4213,9 @@ export class RentalsService {
           currency,
           attemptId,
         });
-        if ((revived.update_rental_holds?.affected_rows ?? 0) > 0) return;
+        if ((revived.update_rental_holds?.affected_rows ?? 0) > 0) return 'own';
         await releaseOwnLedgerHold();
-        return;
+        return 'other';
       }
       await this.hasuraSystemService.executeMutation(Q.INSERT_RENTAL_HOLD, {
         object: {
@@ -4221,9 +4227,10 @@ export class RentalsService {
           ledger_attempt_id: attemptId,
         },
       });
+      return 'own';
     } catch (error) {
       await releaseOwnLedgerHold();
-      if (this.holdRowTakenBySomeoneElse(error)) return;
+      if (this.holdRowTakenBySomeoneElse(error)) return 'other';
       throw error;
     }
   }
