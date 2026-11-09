@@ -103,4 +103,65 @@ describe('businessOrderListDisplay', () => {
   it('skips timing for carrier shipping', () => {
     expect(resolveBusinessOrderTiming(order({ fulfillment_method: 'shipping' })).kind).toBe('none');
   });
+
+  it('does not call a scheduled order ASAP when its window is missing', () => {
+    expect(
+      resolveBusinessOrderTiming(
+        order({ fulfillment_timing: 'scheduled', fulfillment_method: 'delivery' })
+      )
+    ).toEqual({ kind: 'none' });
+    expect(
+      resolveBusinessOrderTiming(
+        order({
+          fulfillment_timing: 'asap',
+          fulfillment_method: 'delivery',
+          payment_timing: 'pay_at_pickup',
+        })
+      )
+    ).toEqual({ kind: 'asap', pickup: true });
+  });
+
+  it('uses the confirmed window when the linked id is gone, else the first window', () => {
+    const confirmed = order({
+      delivery_time_window_id: 'gone',
+      delivery_time_windows: [
+        { id: 'w1', preferred_date: '2026-07-01', is_confirmed: false },
+        { id: 'w2', preferred_date: '2026-07-03', is_confirmed: true },
+      ],
+    });
+    expect(resolveOrderTimeWindow(confirmed)?.id).toBe('w2');
+
+    const first = order({
+      delivery_time_window_id: 'gone',
+      delivery_time_windows: [
+        { id: 'w1', preferred_date: '2026-07-01' },
+        { id: 'w2', preferred_date: '2026-07-03' },
+      ],
+    });
+    expect(resolveOrderTimeWindow(first)?.id).toBe('w1');
+  });
+
+  it('labels ASAP in the shopper language and falls back to the slot name', () => {
+    const asap = order({
+      fulfillment_timing: 'asap',
+      delivery_time_windows: [
+        { id: 'w1', preferred_date: '2026-07-02', time_slot_start: '16:00', time_slot_end: '20:00' },
+      ],
+    });
+    expect(formatOrderTimeWindowLabel(asap, 'en-US')).toBe('As soon as possible');
+    expect(formatOrderTimeWindowLabel(asap, 'fr-CA')).toBe('Dès que possible');
+
+    const named = order({
+      delivery_time_windows: [
+        { id: 'w1', preferred_date: '2026-07-02', slot: { slot_name: 'Evening' } },
+      ],
+    });
+    const label = formatOrderTimeWindowLabel(named, 'en-US');
+    expect(label).toContain('Evening');
+    expect(label).not.toContain('–');
+
+    expect(
+      formatOrderTimeWindowLabel(order({ delivery_time_windows: [{ id: 'w1' }] }), 'en-US')
+    ).toBeNull();
+  });
 });
