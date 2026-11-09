@@ -19,6 +19,14 @@ describe('rental start PIN security', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     (svc as any).hasuraSystemService = hasura;
+    hasura.executeQuery.mockResolvedValue({
+      rental_bookings_by_pk: {
+        inspection_policy_version: null,
+        pickup_ack_current: false,
+        pickup_accepted_version_id: null,
+        pickup_current_version_id: null,
+      },
+    });
     (svc as any).deliveryPinService = pins;
     (svc as any).patchBooking = jest.fn().mockResolvedValue(undefined);
     (svc as any).logHistory = jest.fn().mockResolvedValue(undefined);

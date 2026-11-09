@@ -1,0 +1,3 @@
+function:
+  name: rental_mark_started
+  schema: public

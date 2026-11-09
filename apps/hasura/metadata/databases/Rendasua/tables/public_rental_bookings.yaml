@@ -66,6 +66,9 @@ select_permissions:
         - actual_start_at
         - actual_end_at
         - contract_expires_at
+        - inspection_policy_version
+        - return_handed_back_at
+        - return_resolution
         - created_at
         - updated_at
       filter:
@@ -99,6 +102,9 @@ select_permissions:
         - actual_start_at
         - actual_end_at
         - contract_expires_at
+        - inspection_policy_version
+        - return_handed_back_at
+        - return_resolution
         - created_at
         - updated_at
       filter:

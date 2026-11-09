@@ -258,9 +258,44 @@ export class AwsService {
     }
   }
 
-  /**
-   * Check whether an object exists in S3.
-   */
+  /** Head an object without downloading it. Returns null when it is missing. */
+  async headObjectMeta(
+    bucketName: string,
+    key: string
+  ): Promise<{ contentLength: number; contentType: string; versionId: string | null } | null> {
+    try {
+      const head = await this.s3Client.send(new HeadObjectCommand({ Bucket: bucketName, Key: key }));
+      return {
+        contentLength: Number(head.ContentLength ?? 0),
+        contentType: head.ContentType ?? '',
+        versionId: head.VersionId ?? null,
+      };
+    } catch (error: any) {
+      const status = error?.$metadata?.httpStatusCode;
+      if (status === 404 || error?.name === 'NotFound') return null;
+      throw new Error(`Failed to read S3 object: ${error.message || 'Unknown error'}`);
+    }
+  }
+
+  async readObjectBytes(bucketName: string, key: string): Promise<Buffer> {
+    const out = await this.s3Client.send(new GetObjectCommand({ Bucket: bucketName, Key: key }));
+    if (!out.Body) throw new Error('S3 object was empty');
+    return Buffer.from(await out.Body.transformToByteArray());
+  }
+
+  async putPrivateObject(
+    bucketName: string,
+    key: string,
+    body: Buffer,
+    contentType: string
+  ): Promise<string | null> {
+    const out = await this.s3Client.send(
+      new PutObjectCommand({ Bucket: bucketName, Key: key, Body: body, ContentType: contentType })
+    );
+    return out.VersionId ?? null;
+  }
+
+  /** Check whether an object exists in S3. */
   async objectExists(bucketName: string, key: string): Promise<boolean> {
     if (!bucketName) throw new Error('Bucket name is required');
     if (!key) throw new Error('Object key is required');

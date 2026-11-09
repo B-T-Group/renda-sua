@@ -258,13 +258,13 @@ export const GET_RENTAL_REQUEST_FULL = `
           start_time
           end_time
         }
-        rental_item {
+          rental_item {
           id
           business_id
           currency
           is_active
           name
-          business { name }
+          business { name user_id }
         }
         business_location {
           address { country }
@@ -1166,7 +1166,38 @@ export const LIST_EXPIRED_PROPOSED_RENTAL_BOOKINGS = `
 `;
 
 export const LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS = `
-  query ListExpiredReservedRentalBookings($cutoff: timestamptz!) {
+  query ListExpiredReservedRentalBookings($cutoff: timestamptz!, $now: timestamptz!) {
+    rental_bookings(
+      where: {
+        status: { _eq: reserved }
+        actual_start_at: { _is_null: true }
+        _or: [
+          {
+            inspection_policy_version: { _is_null: true }
+            start_at: { _lte: $cutoff }
+          }
+          {
+            inspection_policy_version: { _is_null: false }
+            pickup_inspection_pending: { _eq: false }
+            _or: [
+              { reserved_cancel_after: { _lte: $now } }
+              {
+                reserved_cancel_after: { _is_null: true }
+                start_at: { _lte: $cutoff }
+              }
+            ]
+          }
+        ]
+      }
+    ) {
+      id
+    }
+  }
+`;
+
+/** Used only when the inspection columns are not migrated yet. */
+export const LIST_EXPIRED_RESERVED_RENTAL_BOOKINGS_LEGACY = `
+  query ListExpiredReservedRentalBookingsLegacy($cutoff: timestamptz!) {
     rental_bookings(
       where: {
         status: { _eq: reserved }

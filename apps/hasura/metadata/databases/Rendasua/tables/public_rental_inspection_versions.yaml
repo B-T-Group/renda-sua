@@ -1,0 +1,22 @@
+table:
+  name: rental_inspection_versions
+  schema: public
+object_relationships:
+  - name: inspection
+    using:
+      foreign_key_constraint_on: inspection_id
+array_relationships:
+  - name: items
+    using:
+      foreign_key_constraint_on:
+        column: version_id
+        table:
+          name: rental_inspection_items
+          schema: public
+  - name: acks
+    using:
+      foreign_key_constraint_on:
+        column: version_id
+        table:
+          name: rental_inspection_acks
+          schema: public

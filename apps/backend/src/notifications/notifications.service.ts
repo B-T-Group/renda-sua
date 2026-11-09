@@ -128,6 +128,7 @@ import {
   buildRentalBookingRequestPush,
   buildRentalBookingReservedPush,
   buildRentalEndingSoonPush,
+  buildRentalInspectionNotice,
   buildRentalPeriodEndedPush,
   buildRentalRequestAcceptedPush,
   buildRentalRequestRejectedPush,
@@ -3602,6 +3603,27 @@ export class NotificationsService {
       this.logger.error(
         `sendClientRentalRequestRejectedEmail: ${error?.message ?? String(error)}`
       );
+    }
+  }
+
+  async sendRentalInspectionNotice(params: {
+    userId: string | null | undefined;
+    kind: Parameters<typeof buildRentalInspectionNotice>[0]['kind'];
+    rentalItemName: string;
+    bookingId: string;
+    preferredLanguage?: string | null;
+  }): Promise<void> {
+    if (!params.userId) return;
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    const msg = buildRentalInspectionNotice(params);
+    try {
+      await this.sendPushNotificationByUserId(params.userId, msg.title, msg.body, {
+        type: 'rental_inspection',
+        rentalBookingId: params.bookingId,
+        url: `/rentals/bookings/${params.bookingId}`,
+      });
+    } catch (error: any) {
+      this.logger.warn(`sendRentalInspectionNotice: ${error?.message ?? error}`);
     }
   }
 

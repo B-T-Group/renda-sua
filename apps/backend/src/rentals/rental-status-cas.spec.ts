@@ -70,6 +70,11 @@ describe('rental completion compare-and-set', () => {
         business: { id: 'biz' },
       }),
     };
+    svc.hasuraSystemService = {
+      executeQuery: jest.fn().mockResolvedValue({
+        rental_bookings_by_pk: { inspection_policy_version: null },
+      }),
+    };
   });
 
   it('skips overtime settlement when another caller already completed', async () => {
@@ -217,7 +222,17 @@ describe('wallet confirm and hold', () => {
     svc.notificationsService = {
       sendRentalBookingConfirmedPush: jest.fn(),
     };
-    svc.hasuraSystemService = { executeMutation: jest.fn() };
+    svc.hasuraSystemService = {
+      executeMutation: jest.fn(),
+      executeQuery: jest.fn().mockResolvedValue({
+        rental_bookings_by_pk: {
+          inspection_policy_version: null,
+          pickup_ack_current: false,
+          pickup_accepted_version_id: null,
+          pickup_current_version_id: null,
+        },
+      }),
+    };
     svc.releaseHoldIfNeeded = jest.fn();
     svc.placeHoldForBooking = jest.fn();
     svc.getHold = jest.fn().mockResolvedValue(null);
