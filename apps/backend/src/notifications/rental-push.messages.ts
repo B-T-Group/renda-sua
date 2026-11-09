@@ -147,3 +147,71 @@ export function buildRentalBookingRequestPush(params: {
       : `A request for ${params.rentalItemName} is waiting for your response.`,
   };
 }
+
+export function buildRentalInspectionNotice(params: {
+  kind:
+    | 'review_pickup'
+    | 'review_return'
+    | 'correction'
+    | 'pickup_accepted'
+    | 'return_reminder'
+    | 'escalated'
+    | 'disputed'
+    | 'decided';
+  rentalItemName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const item = params.rentalItemName;
+  const copy: Record<typeof params.kind, { title: string; body: string }> = {
+    review_pickup: {
+      title: fr ? "Vérifiez l'état des lieux" : 'Review item condition',
+      body: fr
+        ? `L'état des lieux de départ pour ${item} est prêt.`
+        : `The pickup condition report for ${item} is ready to review.`,
+    },
+    review_return: {
+      title: fr ? 'Vérifiez le retour' : 'Review the return',
+      body: fr
+        ? `Comparez le retour de ${item} aux photos de départ.`
+        : `Compare the return of ${item} with the pickup photos.`,
+    },
+    correction: {
+      title: fr ? 'Correction demandée' : 'Correction requested',
+      body: fr
+        ? `Le client a demandé une correction pour ${item}.`
+        : `The renter asked for a correction on ${item}.`,
+    },
+    pickup_accepted: {
+      title: fr ? 'État des lieux accepté' : 'Condition report accepted',
+      body: fr
+        ? `Le client a accepté l'état des lieux de ${item}.`
+        : `The renter accepted the condition report for ${item}.`,
+    },
+    return_reminder: {
+      title: fr ? 'Retour en attente de votre avis' : 'Please review the return',
+      body: fr
+        ? `Merci de vérifier le retour de ${item}. Sans réponse, un humain examinera le dossier.`
+        : `Please review the return of ${item}. If you do not respond, a person will review it.`,
+    },
+    escalated: {
+      title: fr ? 'Examen du retour' : 'Return under review',
+      body: fr
+        ? `Le retour de ${item} est examiné par le support. Aucun dommage n'est accepté automatiquement.`
+        : `Support is reviewing the return of ${item}. A damage claim is never accepted automatically.`,
+    },
+    disputed: {
+      title: fr ? 'Désaccord signalé' : 'Disagreement reported',
+      body: fr
+        ? `Un désaccord a été signalé sur le retour de ${item}.`
+        : `A disagreement was reported on the return of ${item}.`,
+    },
+    decided: {
+      title: fr ? 'Décision sur le retour' : 'Return decision',
+      body: fr
+        ? `Le support a tranché le retour de ${item}.`
+        : `Support decided the return of ${item}.`,
+    },
+  };
+  return copy[params.kind];
+}

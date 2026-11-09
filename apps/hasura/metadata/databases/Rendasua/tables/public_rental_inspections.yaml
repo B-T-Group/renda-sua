@@ -1,0 +1,29 @@
+table:
+  name: rental_inspections
+  schema: public
+object_relationships:
+  - name: rental_booking
+    using:
+      foreign_key_constraint_on: rental_booking_id
+array_relationships:
+  - name: versions
+    using:
+      foreign_key_constraint_on:
+        column: inspection_id
+        table:
+          name: rental_inspection_versions
+          schema: public
+  - name: items
+    using:
+      foreign_key_constraint_on:
+        column: inspection_id
+        table:
+          name: rental_inspection_items
+          schema: public
+  - name: media
+    using:
+      foreign_key_constraint_on:
+        column: inspection_id
+        table:
+          name: rental_inspection_media
+          schema: public

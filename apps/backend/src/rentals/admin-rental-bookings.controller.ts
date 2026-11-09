@@ -1,5 +1,7 @@
 import {
+  Body,
   Controller,
+  Get,
   HttpCode,
   HttpStatus,
   Param,
@@ -7,12 +9,16 @@ import {
   Post,
   Req,
   UseGuards,
+  UsePipes,
+  ValidationPipe,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
 import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
+import { DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
+import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { RentalsService } from './rentals.service';
 
 interface RequestWithUser extends Request {
@@ -33,8 +39,12 @@ interface RequestWithUser extends Request {
 )
 @RequirePermissions(PlatformPermissions.MODERATE_RENTALS)
 @ApiBearerAuth()
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class AdminRentalBookingsController {
-  constructor(private readonly rentalsService: RentalsService) {}
+  constructor(
+    private readonly rentalsService: RentalsService,
+    private readonly inspections: RentalInspectionService
+  ) {}
 
   @Post('bookings/:id/start-overwrite-code')
   @HttpCode(HttpStatus.OK)
@@ -47,6 +57,30 @@ export class AdminRentalBookingsController {
     return this.rentalsService.issueStartOverwriteCodeForSupport(
       bookingId,
       req.user.id
+    );
+  }
+
+  @Get('inspection-disputes')
+  @ApiOperation({ summary: 'Open and escalated rental inspection reviews' })
+  listDisputes() {
+    return this.inspections.listOpenDisputes();
+  }
+
+  @Post('bookings/:id/inspection-decision')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Decide a rental inspection dispute (reason required)' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  decide(
+    @Param('id', ParseUUIDPipe) bookingId: string,
+    @Body() body: DecideInspectionDisputeDto,
+    @Req() req: RequestWithUser
+  ) {
+    return this.inspections.decide(
+      bookingId,
+      req.user.id,
+      body.outcome,
+      body.reason,
+      body.damageAmount
     );
   }
 }
