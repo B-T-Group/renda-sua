@@ -2877,18 +2877,23 @@ export class OrdersService {
     }
     await this.verifyOrderDeliveryPinForBusiness(order, pinTrimmed);
 
-    // Re-read payment fields so a concurrent wallet settle is not double-captured.
-    const orderForCapture = (await this.getOrderDetails(orderId)) ?? order;
-    // Capture authorized card PI only. Skips wallet / already-paid orders.
-    await this.captureStripeAuthorizedOrderIfNeeded(orderForCapture);
+    try {
+      // Re-read payment fields so a concurrent wallet settle is not double-captured.
+      const orderForCapture = (await this.getOrderDetails(orderId)) ?? order;
+      // Capture authorized card PI only. Skips wallet / already-paid orders.
+      await this.captureStripeAuthorizedOrderIfNeeded(orderForCapture);
 
-    // Settlement and completion are idempotent.
-    await this.processOrderPayment(orderId);
-    await this.processOrderDeliveryPayment(orderId);
-    await this.completeOrderWithSideEffects(
-      order,
-      'Order completed after client pickup confirmation'
-    );
+      // Settlement and completion are idempotent.
+      await this.processOrderPayment(orderId);
+      await this.processOrderDeliveryPayment(orderId);
+      await this.completeOrderWithSideEffects(
+        order,
+        'Order completed after client pickup confirmation'
+      );
+    } catch (error) {
+      await this.refundOrderPinAttempt(orderId);
+      throw error;
+    }
 
     if (pinMessageId) {
       await this.deliveryPinShareService.markPinConsumed(orderId, pinMessageId);
@@ -2907,13 +2912,6 @@ export class OrdersService {
     order: Orders,
     pin: string
   ): Promise<void> {
-    const attempts = (order as any).delivery_pin_attempts ?? 0;
-    if (attempts >= this.deliveryPinService.getMaxPinAttempts()) {
-      throw new HttpException(
-        'Maximum PIN attempts reached for this order. Ask the client to contact support.',
-        HttpStatus.FORBIDDEN
-      );
-    }
     const hash = (order as any).delivery_pin_hash;
     if (!hash) {
       throw new HttpException(
@@ -2921,17 +2919,20 @@ export class OrdersService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const valid = this.deliveryPinService.verifyPin(order.id, pin, hash);
-    if (!valid) {
-      const newAttempts = attempts + 1;
-      await this.incrementOrderDeliveryPinAttempts(order.id);
-      if (newAttempts >= this.deliveryPinService.getMaxPinAttempts()) {
-        throw new HttpException(
-          'Maximum PIN attempts reached for this order.',
-          HttpStatus.FORBIDDEN
-        );
-      }
-      throw new HttpException('Invalid PIN', HttpStatus.FORBIDDEN);
+    const claimed = await this.claimOrderDeliveryPinAttempt(order.id);
+    if (claimed == null) {
+      throw new HttpException(
+        'Maximum PIN attempts reached for this order. Ask the client to contact support.',
+        HttpStatus.FORBIDDEN
+      );
+    }
+    if (!this.deliveryPinService.verifyPin(order.id, pin, hash)) {
+      throw new HttpException(
+        claimed >= this.deliveryPinService.getMaxPinAttempts()
+          ? 'Maximum PIN attempts reached for this order.'
+          : 'Invalid PIN',
+        HttpStatus.FORBIDDEN
+      );
     }
     await this.upgradeLegacyDeliveryPinHash(order.id, pin, hash);
   }
@@ -4029,16 +4030,6 @@ export class OrdersService {
       );
     }
 
-    const attempts = (order as any).delivery_pin_attempts ?? 0;
-    if (attempts >= this.deliveryPinService.getMaxPinAttempts()) {
-      if (hasResolvedPin) {
-        throw new HttpException(
-          'Maximum PIN attempts reached for this order. Use an overwrite code from the business if available.',
-          HttpStatus.FORBIDDEN
-        );
-      }
-    }
-
     if (hasResolvedPin) {
       const hash = (order as any).delivery_pin_hash;
       if (!hash) {
@@ -4047,15 +4038,20 @@ export class OrdersService {
           HttpStatus.BAD_REQUEST
         );
       }
+      const claimed = await this.claimOrderDeliveryPinAttempt(request.orderId);
+      if (claimed == null) {
+        throw new HttpException(
+          'Maximum PIN attempts reached for this order. Use an overwrite code from the business if available.',
+          HttpStatus.FORBIDDEN
+        );
+      }
       const valid = this.deliveryPinService.verifyPin(
         request.orderId,
         pinToUse!,
         hash
       );
       if (!valid) {
-        const newAttempts = attempts + 1;
-        await this.incrementOrderDeliveryPinAttempts(request.orderId);
-        if (newAttempts >= this.deliveryPinService.getMaxPinAttempts()) {
+        if (claimed >= this.deliveryPinService.getMaxPinAttempts()) {
           await this.recordPinFailedStrikeAndMaybeSuspend(
             agent.id,
             request.orderId
@@ -4094,44 +4090,49 @@ export class OrdersService {
       }
     }
 
-    await this.hasuraSystemService.executeMutation(
-      `mutation StampDeliveryConfirmMethod($id: uuid!, $method: String!, $at: timestamptz!) {
-        update_orders(
-          where: { id: { _eq: $id }, delivery_confirmation_method: { _is_null: true } }
-          _set: { delivery_confirmation_method: $method, client_confirmed_at: $at }
-        ) { affected_rows }
-      }`,
-      {
-        id: request.orderId,
-        method: hasResolvedPin ? 'pin' : 'overwrite',
-        at: new Date().toISOString(),
+    let updatedOrder: any;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation StampDeliveryConfirmMethod($id: uuid!, $method: String!, $at: timestamptz!) {
+          update_orders(
+            where: { id: { _eq: $id }, delivery_confirmation_method: { _is_null: true } }
+            _set: { delivery_confirmation_method: $method, client_confirmed_at: $at }
+          ) { affected_rows }
+        }`,
+        {
+          id: request.orderId,
+          method: hasResolvedPin ? 'pin' : 'overwrite',
+          at: new Date().toISOString(),
+        }
+      );
+
+      if (isClientConfirmDeliveryOrder(order)) {
+        return await this.completeClientConfirmByOverwrite(request.orderId);
       }
-    );
 
-    if (isClientConfirmDeliveryOrder(order)) {
-      return this.completeClientConfirmByOverwrite(request.orderId);
-    }
+      await this.processOrderDeliveryPayment(request.orderId);
 
-    await this.processOrderDeliveryPayment(request.orderId);
-
-    let lostCompletionRace = false;
-    const updatedOrder = await this.updateOrderStatusWithSingleRetry(
-      request.orderId,
-      'complete',
-      {
-        viaCompleteDelivery: true,
-        onSameStatusReplay: () => { lostCompletionRace = true; },
+      let lostCompletionRace = false;
+      updatedOrder = await this.updateOrderStatusWithSingleRetry(
+        request.orderId,
+        'complete',
+        {
+          viaCompleteDelivery: true,
+          onSameStatusReplay: () => { lostCompletionRace = true; },
+        }
+      );
+      if (lostCompletionRace) {
+        // The other complete-delivery owns the tail. Do not refund the PIN:
+        // the delivery did complete.
+        return {
+          success: true,
+          order: updatedOrder,
+          message: 'Delivery already completed',
+        };
       }
-    );
-    if (lostCompletionRace) {
-      // A parallel complete-delivery already flipped the order and owns the
-      // completion tail (inventory, history, receipt, messages, loyalty).
-      // completed_at was set atomically by that update; never rewrite it.
-      return {
-        success: true,
-        order: updatedOrder,
-        message: 'Delivery already completed',
-      };
+    } catch (error) {
+      if (hasResolvedPin) await this.refundOrderPinAttempt(request.orderId);
+      throw error;
     }
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -4449,23 +4450,59 @@ export class OrdersService {
     });
   }
 
-  private async incrementOrderDeliveryPinAttempts(orderId: string): Promise<void> {
-    const order = await this.getOrderDetails(orderId);
-    const current = (order as any)?.delivery_pin_attempts ?? 0;
-    const mutation = `
-      mutation IncrementDeliveryPinAttempts($orderId: uuid!, $newAttempts: Int!) {
-        update_orders_by_pk(
-          pk_columns: { id: $orderId }
-          _set: { delivery_pin_attempts: $newAttempts }
+  /**
+   * Consume one PIN attempt before it is checked. Returns the new count, or
+   * null when the order is already at the cap (no PIN comparison).
+   */
+  private async claimOrderDeliveryPinAttempt(
+    orderId: string
+  ): Promise<number | null> {
+    const max = this.deliveryPinService.getMaxPinAttempts();
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_orders: {
+        affected_rows: number;
+        returning: Array<{ delivery_pin_attempts: number }>;
+      } | null;
+    }>(
+      `mutation ClaimDeliveryPinAttempt($orderId: uuid!, $max: Int!) {
+        update_orders(
+          where: {
+            id: { _eq: $orderId }
+            delivery_pin_attempts: { _lt: $max }
+          }
+          _inc: { delivery_pin_attempts: 1 }
         ) {
-          id
+          affected_rows
+          returning { delivery_pin_attempts }
         }
-      }
-    `;
-    await this.hasuraSystemService.executeMutation(mutation, {
-      orderId,
-      newAttempts: current + 1,
-    });
+      }`,
+      { orderId, max }
+    );
+    const row = result.update_orders;
+    if (!row?.affected_rows) return null;
+    return row.returning?.[0]?.delivery_pin_attempts ?? max;
+  }
+
+  /** Give back an attempt when a correct PIN's delivery failed for another reason. */
+  private async refundOrderPinAttempt(orderId: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation RefundDeliveryPinAttempt($orderId: uuid!) {
+          update_orders(
+            where: {
+              id: { _eq: $orderId }
+              delivery_pin_attempts: { _gt: 0 }
+            }
+            _inc: { delivery_pin_attempts: -1 }
+          ) { affected_rows }
+        }`,
+        { orderId }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `refundOrderPinAttempt ${orderId}: ${error?.message ?? error}`
+      );
+    }
   }
 
   private async setOrderDeliveryOverwriteUsedAt(orderId: string): Promise<void> {

@@ -25,17 +25,20 @@ describe('rental start PIN security', () => {
     (svc as any).fetchBooking = jest.fn();
   });
 
-  it('rejects a correct PIN once the attempt lock is reached', async () => {
+  it('rejects a correct PIN when the attempt claim loses', async () => {
     const pin = '1234';
     const hash = pins.hashPin('booking-1', pin);
+    hasura.executeMutation.mockResolvedValue({
+      update_rental_bookings: { affected_rows: 0, returning: [] },
+    });
     await expect(
       (svc as any).verifyPinAttempt(
         'booking-1',
-        { rental_start_pin_hash: hash, rental_start_pin_attempts: 3 },
+        { rental_start_pin_hash: hash, rental_start_pin_attempts: 0 },
         pin
       )
     ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
-    expect(hasura.executeMutation).not.toHaveBeenCalled();
+    expect((svc as any).patchBooking).not.toHaveBeenCalled();
   });
 
   it('still accepts a legacy hash and rewrites it as a peppered hash', async () => {
@@ -45,6 +48,12 @@ describe('rental start PIN security', () => {
       .createHash('sha256')
       .update('booking-1' + pin, 'utf8')
       .digest('hex');
+    hasura.executeMutation.mockResolvedValue({
+      update_rental_bookings: {
+        affected_rows: 1,
+        returning: [{ rental_start_pin_attempts: 3 }],
+      },
+    });
     await (svc as any).verifyPinAttempt(
       'booking-1',
       { rental_start_pin_hash: legacy, rental_start_pin_attempts: 2 },
@@ -58,16 +67,72 @@ describe('rental start PIN security', () => {
     );
   });
 
-  it('stops incrementing once the conditional update loses the race', async () => {
+  it('gives the attempt back when a correct PIN cannot start the rental', async () => {
+    const pin = '1234';
+    const hash = pins.hashPin('booking-1', pin);
     hasura.executeMutation.mockResolvedValue({
-      update_rental_bookings: { affected_rows: 0, returning: [] },
+      update_rental_bookings: {
+        affected_rows: 1,
+        returning: [{ rental_start_pin_attempts: 3 }],
+      },
     });
+    (svc as any).hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'biz-user',
+        active_persona: 'business',
+        business: { id: 'biz' },
+      }),
+    };
+    (svc as any).fetchBooking.mockResolvedValue({
+      id: 'booking-1',
+      business_id: 'biz',
+      status: 'confirmed',
+      rental_start_pin_hash: hash,
+      rental_start_pin_attempts: 2,
+    });
+    (svc as any).casBooking = jest.fn().mockResolvedValue(false);
+    (svc as any).logger = { error: jest.fn(), warn: jest.fn() };
     await expect(
-      (svc as any).recordFailedRentalPinAttempt('booking-1')
-    ).rejects.toBeInstanceOf(HttpException);
-    await expect(
-      (svc as any).recordFailedRentalPinAttempt('booking-1')
-    ).rejects.toMatchObject({ message: 'Too many attempts' });
+      svc.verifyRentalStartPin('booking-1', { pin })
+    ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+    const refund = hasura.executeMutation.mock.calls
+      .map((call) => String(call[0]))
+      .find((query) => query.includes('RefundRentalPinAttempt'));
+    expect(refund).toContain('rental_start_pin_attempts: { _gt: 0 }');
+  });
+
+  it('gives the attempt back when the status update throws', async () => {
+    const pin = '1234';
+    const hash = pins.hashPin('booking-1', pin);
+    hasura.executeMutation.mockResolvedValue({
+      update_rental_bookings: {
+        affected_rows: 1,
+        returning: [{ rental_start_pin_attempts: 3 }],
+      },
+    });
+    (svc as any).hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'biz-user',
+        active_persona: 'business',
+        business: { id: 'biz' },
+      }),
+    };
+    (svc as any).fetchBooking.mockResolvedValue({
+      id: 'booking-1',
+      business_id: 'biz',
+      status: 'confirmed',
+      rental_start_pin_hash: hash,
+      rental_start_pin_attempts: 2,
+    });
+    (svc as any).casBooking = jest.fn().mockRejectedValue(new Error('db down'));
+    (svc as any).logger = { error: jest.fn(), warn: jest.fn() };
+    await expect(svc.verifyRentalStartPin('booking-1', { pin })).rejects.toThrow(
+      'db down'
+    );
+    const refund = hasura.executeMutation.mock.calls
+      .map((call) => String(call[0]))
+      .find((query) => query.includes('RefundRentalPinAttempt'));
+    expect(refund).toContain('rental_start_pin_attempts: { _gt: 0 }');
   });
 
   it('refuses a business-minted overwrite code', async () => {

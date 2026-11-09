@@ -2845,11 +2845,20 @@ export class RentalsService {
     } else {
       await this.verifyPinAttempt(bookingId, booking, pin);
     }
-    const won = await this.casBooking(bookingId, ['confirmed'], {
-      status: 'active',
-      actual_start_at: new Date().toISOString(),
-    });
-    if (!won) return this.alreadyActiveOrConflict(bookingId);
+    let won = false;
+    try {
+      won = await this.casBooking(bookingId, ['confirmed'], {
+        status: 'active',
+        actual_start_at: new Date().toISOString(),
+      });
+    } catch (error) {
+      if (!hasOw) await this.refundRentalPinAttempt(bookingId);
+      throw error;
+    }
+    if (!won) {
+      if (!hasOw) await this.refundRentalPinAttempt(bookingId);
+      return this.alreadyActiveOrConflict(bookingId);
+    }
     await this.logHistory(bookingId, 'active', 'confirmed', user.id, 'business', 'Start PIN verified');
     return { success: true };
   }
@@ -4402,10 +4411,55 @@ export class RentalsService {
       throw new HttpException('PIN not set', HttpStatus.BAD_REQUEST);
     }
     this.assertRentalPinNotLocked(booking.rental_start_pin_attempts);
+    const claimed = await this.claimRentalPinAttempt(bookingId);
+    if (claimed == null) {
+      throw new HttpException('Too many attempts', HttpStatus.FORBIDDEN);
+    }
     if (!this.deliveryPinService.verifyPin(bookingId, pin, hash)) {
-      await this.recordFailedRentalPinAttempt(bookingId);
+      throw new HttpException(
+        claimed >= this.deliveryPinService.getMaxPinAttempts()
+          ? 'Too many attempts'
+          : 'Invalid PIN',
+        HttpStatus.FORBIDDEN
+      );
     }
     await this.upgradeLegacyRentalPinHash(bookingId, pin, hash);
+  }
+
+  /** Take one attempt before the PIN is checked so parallel guesses share one counter. */
+  private async claimRentalPinAttempt(bookingId: string): Promise<number | null> {
+    const max = this.deliveryPinService.getMaxPinAttempts();
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings: {
+        affected_rows: number;
+        returning: Array<{ rental_start_pin_attempts: number }>;
+      } | null;
+    }>(Q.INCREMENT_RENTAL_PIN_ATTEMPTS, { id: bookingId, max });
+    const row = result.update_rental_bookings;
+    if (!row?.affected_rows) return null;
+    return row.returning?.[0]?.rental_start_pin_attempts ?? max;
+  }
+
+  /** Give back an attempt when a correct PIN's start failed for another reason. */
+  private async refundRentalPinAttempt(bookingId: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation RefundRentalPinAttempt($id: uuid!) {
+          update_rental_bookings(
+            where: {
+              id: { _eq: $id }
+              rental_start_pin_attempts: { _gt: 0 }
+            }
+            _inc: { rental_start_pin_attempts: -1 }
+          ) { affected_rows }
+        }`,
+        { id: bookingId }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `refundRentalPinAttempt ${bookingId}: ${error?.message ?? error}`
+      );
+    }
   }
 
   private assertRentalPinNotLocked(attempts: number | null | undefined): void {
@@ -4413,22 +4467,6 @@ export class RentalsService {
     if ((attempts ?? 0) >= max) {
       throw new HttpException('Too many attempts', HttpStatus.FORBIDDEN);
     }
-  }
-
-  private async recordFailedRentalPinAttempt(bookingId: string): Promise<never> {
-    const max = this.deliveryPinService.getMaxPinAttempts();
-    const result = await this.hasuraSystemService.executeMutation<{
-      update_rental_bookings: {
-        affected_rows: number;
-        returning: Array<{ rental_start_pin_attempts: number }>;
-      };
-    }>(Q.INCREMENT_RENTAL_PIN_ATTEMPTS, { id: bookingId, max });
-    const row = result.update_rental_bookings;
-    const next = row?.returning?.[0]?.rental_start_pin_attempts ?? max;
-    if (!row?.affected_rows || next >= max) {
-      throw new HttpException('Too many attempts', HttpStatus.FORBIDDEN);
-    }
-    throw new HttpException('Invalid PIN', HttpStatus.FORBIDDEN);
   }
 
   private async upgradeLegacyRentalPinHash(
