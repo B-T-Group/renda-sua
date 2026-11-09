@@ -32,3 +32,19 @@ export function inspectionRejected(code: string, message: string): HttpException
     HttpStatus.BAD_REQUEST
   );
 }
+
+export function inspectionStaleReport(): HttpException {
+  return new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
+}
+
+/** Hasura unique (version_id, persona) or the correction SQL conflict. */
+export function isInspectionAckConflict(error: unknown): boolean {
+  const err = error as { response?: unknown; message?: unknown };
+  const text = JSON.stringify(err?.response ?? err?.message ?? error ?? '').toLowerCase();
+  return (
+    text.includes('rental_inspection_correction_conflict') ||
+    text.includes('rental_inspection_acks_version_id_persona_key') ||
+    text.includes('uniqueness violation') ||
+    text.includes('duplicate key')
+  );
+}

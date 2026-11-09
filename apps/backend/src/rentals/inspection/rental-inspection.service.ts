@@ -5,7 +5,11 @@ import { NotificationsService } from '../../notifications/notifications.service'
 import { isActivePersona } from '../../users/persona.util';
 import { RentalsService } from '../rentals.service';
 import { RentalInspectionFlags } from './rental-inspection-flags.service';
-import { inspectionUpdateRequired } from './rental-inspection.errors';
+import {
+  inspectionStaleReport,
+  inspectionUpdateRequired,
+  isInspectionAckConflict,
+} from './rental-inspection.errors';
 import {
   DEFAULT_MIN_PHOTOS,
   DEFAULT_REMINDER_HOURS,
@@ -116,9 +120,7 @@ export class RentalInspectionService {
   async acknowledge(bookingId: string, stage: InspectionStage, versionId: string, decision: Decision, reason?: string) {
     const booking = await this.requireClient(bookingId);
     const current = stage === 'pickup' ? booking.pickup_current_version_id : booking.return_current_version_id;
-    if (current !== versionId) {
-      throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
-    }
+    if (current !== versionId) throw inspectionStaleReport();
     if (decision !== 'accept' && !reason?.trim()) {
       throw new HttpException('A written reason is required', HttpStatus.BAD_REQUEST);
     }
@@ -231,34 +233,37 @@ export class RentalInspectionService {
   }
 
   private async acceptPickup(booking: BookingRow & { actorId: string }, versionId: string) {
-    const row = await this.one(
+    const row = await this.ackRow(
       'rental_accept_pickup_version',
       `mutation AcceptPickup($id: uuid!, $version: uuid!, $actor: uuid!) {
         rental_accept_pickup_version(args: { p_booking_id: $id, p_version_id: $version, p_actor: $actor }) { id }
       }`,
       { id: booking.id, version: versionId, actor: booking.actorId }
     );
-    if (!row) throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
+    if (!row) {
+      await this.replayIfSame(versionId, 'accept');
+      return { accepted: true };
+    }
     await this.notice(booking, 'pickup_accepted', booking.business.user_id);
     return { accepted: true };
   }
 
   private async acceptReturn(booking: BookingRow & { actorId: string }, versionId: string) {
-    const row = await this.one(
+    const row = await this.ackRow(
       'rental_accept_return_version',
       `mutation AcceptReturn($id: uuid!, $version: uuid!, $actor: uuid!) {
         rental_accept_return_version(args: { p_booking_id: $id, p_version_id: $version, p_actor: $actor }) { id }
       }`,
       { id: booking.id, version: versionId, actor: booking.actorId }
     );
-    if (!row) throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
+    if (!row) await this.replayIfSame(versionId, 'accept');
     await this.rentals.settleEnrolledRental(booking.id);
     return { accepted: true };
   }
 
   private async disputeReturn(booking: BookingRow & { actorId: string }, versionId: string, reason: string) {
     const hours = await this.flags.numberConfig('rental_inspection_return_review_hours', null, DEFAULT_REVIEW_HOURS);
-    const row = await this.one(
+    const row = await this.ackRow(
       'rental_open_return_dispute',
       `mutation Dispute($id: uuid!, $version: uuid!, $actor: uuid!, $reason: String!, $hours: Int!) {
         rental_open_return_dispute(args: {
@@ -267,33 +272,30 @@ export class RentalInspectionService {
       }`,
       { id: booking.id, version: versionId, actor: booking.actorId, reason, hours: Math.round(hours) }
     );
-    if (!row) throw new HttpException('That report can no longer be disputed', HttpStatus.CONFLICT);
+    if (!row) {
+      await this.replayIfSame(versionId, 'dispute');
+      return { disputed: true };
+    }
     await this.notice(booking, 'disputed', booking.business.user_id);
     return { disputed: true };
   }
 
-  private async requestCorrection(booking: BookingRow & { actorId: string }, stage: InspectionStage, versionId: string, reason: string) {
-    try {
-      const row = await this.one(
-        'rental_request_correction',
-        `mutation RequestCorrection($id: uuid!, $stage: String!, $version: uuid!, $actor: uuid!, $reason: String!) {
-          rental_request_correction(args: {
-            p_booking_id: $id, p_stage: $stage, p_version_id: $version, p_actor: $actor, p_reason: $reason
-          }) { id }
-        }`,
-        { id: booking.id, stage, version: versionId, actor: booking.actorId, reason }
-      );
-      if (!row) {
-        throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
-      }
-    } catch (error: any) {
-      if (error instanceof HttpException) throw error;
-      const text = JSON.stringify(error?.response ?? error?.message ?? error);
-      if (text.includes('rental_inspection_correction_conflict') || text.includes('Uniqueness violation')) {
-        throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
-      }
-      throw error;
-    }
+  private async requestCorrection(
+    booking: BookingRow & { actorId: string },
+    stage: InspectionStage,
+    versionId: string,
+    reason: string
+  ) {
+    const row = await this.ackRow(
+      'rental_request_correction',
+      `mutation RequestCorrection($id: uuid!, $stage: String!, $version: uuid!, $actor: uuid!, $reason: String!) {
+        rental_request_correction(args: {
+          p_booking_id: $id, p_stage: $stage, p_version_id: $version, p_actor: $actor, p_reason: $reason
+        }) { id }
+      }`,
+      { id: booking.id, stage, version: versionId, actor: booking.actorId, reason }
+    );
+    if (!row) throw inspectionStaleReport();
     await this.notice(booking, 'correction', booking.business.user_id);
     return { correctionRequested: true };
   }
@@ -746,5 +748,24 @@ export class RentalInspectionService {
   ): Promise<T | null> {
     const result = await this.hasura.executeMutation<Record<string, T[]>>(mutation, variables);
     return result[field]?.[0] ?? null;
+  }
+
+  private async ackRow<T extends Record<string, unknown>>(
+    field: string,
+    mutation: string,
+    variables: Record<string, unknown>
+  ): Promise<T | null> {
+    try {
+      return await this.one<T>(field, mutation, variables);
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      if (isInspectionAckConflict(error)) return null;
+      throw error;
+    }
+  }
+
+  private async replayIfSame(versionId: string, decision: Decision): Promise<void> {
+    const existing = await this.clientDecision(versionId);
+    if (existing !== decision) throw inspectionStaleReport();
   }
 }
