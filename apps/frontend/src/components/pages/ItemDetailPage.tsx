@@ -50,6 +50,7 @@ import { useCart } from '../../contexts/CartContext';
 import { useSessionAuth } from '../../contexts/SessionAuthContext';
 import { useUserProfileContext } from '../../contexts/UserProfileContext';
 import { useInventoryItem } from '../../hooks/useInventoryItem';
+import { catalogStorePath } from '../../constants/food';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import { useProductInterest } from '../../hooks/useProductInterest';
 import { ProductInterestDialog } from '../product-interest/ProductInterestDialog';
@@ -1480,9 +1481,7 @@ export default function ItemDetailPage() {
                     component={location.id ? RouterLink : 'span'}
                     to={
                       location.id
-                        ? foodAvailability
-                          ? `/store/${location.id}?menu=food`
-                          : `/store/${location.id}`
+                        ? catalogStorePath(location.id, Boolean(foodAvailability))
                         : undefined
                     }
                     aria-label={t('stores.openStoreA11y', 'Open store {{name}}', { name: business.name })}
@@ -1508,11 +1507,7 @@ export default function ItemDetailPage() {
                     <Button
                       size="small"
                       component={RouterLink}
-                      to={
-                        foodAvailability
-                          ? `/store/${location.id}?menu=food`
-                          : `/store/${location.id}`
-                      }
+                      to={catalogStorePath(location.id, Boolean(foodAvailability))}
                       sx={{ ml: 0.5 }}
                     >
                       {t('stores.viewStore', 'View store')}

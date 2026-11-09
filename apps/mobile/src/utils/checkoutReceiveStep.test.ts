@@ -41,6 +41,14 @@ describe('checkoutReceiveDisabledReason', () => {
     expect(checkoutReceiveDisabledReason(base({ addressMissing: true }))).toBe('address');
     expect(checkoutReceiveDisabledReason(base({ windowMissing: true }))).toBe('window');
   });
+
+  it('blocks Continue on a missing recipient address and still ignores MoMo', () => {
+    expect(
+      checkoutReceiveDisabledReason(
+        base({ recipientAddressMissing: true, momoMissing: true, windowMissing: true })
+      )
+    ).toBe('recipient address');
+  });
 });
 
 describe('checkoutReviewDisabledReason', () => {
@@ -52,6 +60,16 @@ describe('checkoutReviewDisabledReason', () => {
         base({ addressMissing: true, windowMissing: true, momoMissing: true })
       )
     ).toBe('momo');
+    expect(
+      checkoutReviewDisabledReason(
+        base({
+          recipientIncomplete: true,
+          recipientAddressMissing: true,
+          blockerCode: 'OTHER',
+          blockerMessage: 'Out of range',
+        })
+      )
+    ).toBe('Out of range');
   });
 });
 

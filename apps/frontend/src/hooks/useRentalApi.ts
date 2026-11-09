@@ -718,16 +718,6 @@ export function useRentalApi() {
     [api]
   );
 
-  const generateOverwrite = useCallback(
-    async (bookingId: string) => {
-      const { data } = await api.post(
-        `/rentals/bookings/${bookingId}/start-overwrite-code`
-      );
-      return data as { overwriteCode: string };
-    },
-    [api]
-  );
-
   const confirmReturn = useCallback(
     async (bookingId: string, body?: { actualEndAt?: string }) => {
       const { data } = await api.post(
@@ -793,7 +783,6 @@ export function useRentalApi() {
     verifyStartPin,
     shareStartPin,
     getActiveStartPin,
-    generateOverwrite,
     confirmReturn,
     deleteBusinessRentalListing,
     deleteBusinessRentalItem,

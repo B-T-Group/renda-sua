@@ -43,7 +43,6 @@ export default function BusinessRentalBookingDetailScreen() {
   const [busy, setBusy] = useState(false);
   const [snack, setSnack] = useState<string | null>(null);
   const [pin, setPin] = useState('');
-  const [overwriteCode, setOverwriteCode] = useState<string | null>(null);
   const [overwriteInput, setOverwriteInput] = useState('');
   const [pinDialog, setPinDialog] = useState(false);
   const [overwriteDialog, setOverwriteDialog] = useState(false);
@@ -145,32 +144,14 @@ export default function BusinessRentalBookingDetailScreen() {
     }
   }, [pinDialog, autoSharedPin, showManualPin]);
 
-  const generateOverwrite = useCallback(async () => {
-    setBusy(true);
-    try {
-      const res = await rentalsApi.generateOverwriteCode(bookingId);
-      setOverwriteCode(res.overwriteCode);
-      setOverwriteDialog(true);
-    } catch (e: unknown) {
-      setSnack(
-        e instanceof Error
-          ? e.message
-          : t('business.rentals.overwriteFailed', 'Could not generate code')
-      );
-    } finally {
-      setBusy(false);
-    }
-  }, [bookingId, t]);
-
   const applyOverwrite = useCallback(async () => {
     setBusy(true);
     try {
       await rentalsApi.verifyStartPin(bookingId, {
-        overwriteCode: overwriteInput.trim() || overwriteCode || undefined,
+        overwriteCode: overwriteInput.trim() || undefined,
       });
       setOverwriteDialog(false);
       setOverwriteInput('');
-      setOverwriteCode(null);
       setSnack(t('rentals.started', 'Rental started'));
       await load();
     } catch (e: unknown) {
@@ -182,7 +163,7 @@ export default function BusinessRentalBookingDetailScreen() {
     } finally {
       setBusy(false);
     }
-  }, [bookingId, load, overwriteCode, overwriteInput, t]);
+  }, [bookingId, load, overwriteInput, t]);
 
   const openReturnDialog = useCallback(() => {
     const parts = localDateTimeParts(new Date());
@@ -454,12 +435,12 @@ export default function BusinessRentalBookingDetailScreen() {
 
       {canVerify ? (
         <Button
-          mode="outlined"
-          style={{ marginTop: spacing.md }}
+          mode="text"
+          style={{ marginTop: spacing.sm }}
           disabled={busy}
-          onPress={() => void generateOverwrite()}
+          onPress={() => setOverwriteDialog(true)}
         >
-          {t('rentals.genOverwrite', 'Generate overwrite code')}
+          {t('rentals.enterSupportCode', 'Enter support code')}
         </Button>
       ) : null}
 
@@ -587,16 +568,17 @@ export default function BusinessRentalBookingDetailScreen() {
         </Dialog>
 
         <Dialog visible={overwriteDialog} onDismiss={() => setOverwriteDialog(false)}>
-          <Dialog.Title>{t('rentals.overwrite', 'Overwrite')}</Dialog.Title>
+          <Dialog.Title>{t('rentals.enterSupportCode', 'Enter support code')}</Dialog.Title>
           <Dialog.Content>
-            {overwriteCode ? (
-              <Text style={{ marginBottom: 12, fontWeight: '700', fontSize: 20 }}>
-                {overwriteCode}
-              </Text>
-            ) : null}
+            <Text style={{ marginBottom: 12, color: colors.text.secondary }}>
+              {t(
+                'rentals.supportCodeHint',
+                'Ask the client for their start PIN. A support code is only for when the client cannot share it, and only support can issue one.'
+              )}
+            </Text>
             <TextInput
               label={t('rentals.overwriteCode', 'Overwrite code')}
-              value={overwriteInput || overwriteCode || ''}
+              value={overwriteInput}
               onChangeText={setOverwriteInput}
               mode="outlined"
             />

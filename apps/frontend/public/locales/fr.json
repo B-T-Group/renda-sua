@@ -6874,6 +6874,8 @@
     "verifyStart": "Valider le démarrage",
     "started": "Location démarrée",
     "genOverwrite": "Générer un code de contournement",
+    "enterSupportCode": "Saisir le code support",
+    "supportCodeHint": "Demandez le code de démarrage au client. Un code support ne sert que si le client ne peut pas le communiquer, et seul le support peut l'émettre.",
     "overwrite": "Contournement",
     "confirmReturn": "Confirmer le retour",
     "completed": "Terminé et réglé",

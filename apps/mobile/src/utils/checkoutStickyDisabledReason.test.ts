@@ -48,5 +48,16 @@ describe('checkoutStickyDisabledReason', () => {
         addressMissing: true,
       })
     ).toBe('address');
+    expect(
+      reason({
+        blockerCode: 'COOKED_FOOD_STORE_CLOSED',
+        blockerMessage: 'Kitchen closed',
+      })
+    ).toBeUndefined();
+    expect(reason({ blockerCode: 'OTHER', blockerMessage: '' })).toBeUndefined();
+  });
+
+  it('asks for the recipient address before a missing MoMo number', () => {
+    expect(reason({ recipientAddressMissing: true, momoMissing: true })).toBe('recipient address');
   });
 });

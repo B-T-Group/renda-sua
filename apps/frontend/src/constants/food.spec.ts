@@ -1,5 +1,6 @@
 import {
   applyFoodOnlyCatalogFilter,
+  catalogStorePath,
   FOOD_CATEGORY_NAME,
   FOOD_ORDER_SOFT_MAX,
   isFoodCatalogItem,
@@ -51,6 +52,13 @@ describe('isFoodCatalogItem', () => {
         },
       })
     ).toBe(true);
+  });
+});
+
+describe('catalogStorePath', () => {
+  it('keeps a food item on the food menu and a grocery item on the full store', () => {
+    expect(catalogStorePath('loc-1', true)).toBe('/store/loc-1?menu=food');
+    expect(catalogStorePath('loc-1', false)).toBe('/store/loc-1');
   });
 });
 

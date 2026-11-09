@@ -13,15 +13,18 @@ import { DesignatedListSection } from '../../components/dedicated/DesignatedList
 import { StatusPill } from '../../components/common/StatusPill';
 import dedicatedAgentsService from '../../services/dedicatedAgentsService';
 import {
+  countApplicableDedicatedOpenings,
   groupDedicatedHomeStores,
+  resolveBusinessesHubTab,
   sortDedicatedSlotKeys,
+  type BusinessesHubTab,
   type DedicatedHomeStore,
 } from '../../utils/dedicatedStoresHome';
 import { useAgentFocus } from '../../hooks/useAgentFocus';
 import { spacing } from '../../theme/spacing';
 
 type Props = NativeStackScreenProps<AgentRootStackParamList, 'AgentBusinessesHub'>;
-type Tab = 'dedicated' | 'referred';
+type Tab = BusinessesHubTab;
 type HubSegment = 'stores' | 'opportunities';
 
 export default function AgentBusinessesHubScreen({ route, navigation }: Props) {
@@ -29,7 +32,7 @@ export default function AgentBusinessesHubScreen({ route, navigation }: Props) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { showDelivery, showCommercial } = useAgentFocus(true);
-  const initial = resolveInitialTab(route.params?.tab, showDelivery, showCommercial);
+  const initial = resolveBusinessesHubTab(route.params?.tab, showDelivery, showCommercial);
   const [tab, setTab] = useState<Tab>(initial);
   const [stores, setStores] = useState<DedicatedHomeStore[]>([]);
   const [openingCount, setOpeningCount] = useState<number | null>(null);
@@ -52,8 +55,7 @@ export default function AgentBusinessesHubScreen({ route, navigation }: Props) {
   const loadOpeningCount = useCallback(async () => {
     try {
       const res = await dedicatedAgentsService.getOpportunities();
-      const open = (res?.opportunities ?? []).filter((o) => !o.disabledReason && !o.application);
-      setOpeningCount(open.length);
+      setOpeningCount(countApplicableDedicatedOpenings(res?.opportunities));
     } catch {
       setOpeningCount(null);
     }
@@ -126,17 +128,6 @@ export default function AgentBusinessesHubScreen({ route, navigation }: Props) {
       </ScrollView>
     </View>
   );
-}
-
-function resolveInitialTab(
-  param: Tab | undefined,
-  showDelivery: boolean,
-  showCommercial: boolean
-): Tab {
-  if (param === 'dedicated' && showDelivery) return 'dedicated';
-  if (param === 'referred' && showCommercial) return 'referred';
-  if (showDelivery) return 'dedicated';
-  return 'referred';
 }
 
 function DedicatedTab({

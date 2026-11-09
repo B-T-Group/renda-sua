@@ -65,6 +65,35 @@ describe('agentDropoffFact', () => {
       kind: 'scheduled',
       when: null,
     });
+    expect(openOrderNeedsDropoff(order({ fulfillment_timing: 'scheduled' }))).toBe(true);
+  });
+
+  it('treats a window without a timing field as scheduled, not ASAP', () => {
+    const fact = agentDropoffFact(
+      order({
+        delivery_time_windows: [
+          {
+            preferred_date: '2026-11-07',
+            time_slot_start: '10:00',
+            time_slot_end: '12:00',
+            slot: { slot_name: 'Morning' },
+          },
+        ],
+      }),
+      'en-US'
+    );
+    expect(fact?.kind).toBe('scheduled');
+    expect(openOrderNeedsDropoff(order({
+      fulfillment_timing: 'scheduled',
+      delivery_time_windows: [
+        {
+          preferred_date: '2026-11-07',
+          time_slot_start: '10:00',
+          time_slot_end: '12:00',
+          slot: { slot_name: 'Morning' },
+        },
+      ],
+    }))).toBe(false);
   });
 });
 
@@ -72,6 +101,27 @@ describe('open order dropoff merge', () => {
   it('asks for detail when the list row has no timing', () => {
     expect(openOrderNeedsDropoff(order({}))).toBe(true);
     expect(openOrderNeedsDropoff(order({ fulfillment_timing: 'asap' }))).toBe(false);
+  });
+
+  it('keeps the list window when the detail payload has no windows', () => {
+    const merged = mergeOpenOrderDropoff(
+      order({
+        fulfillment_timing: 'scheduled',
+        delivery_time_windows: [
+          {
+            preferred_date: '2026-11-06',
+            time_slot_start: '08:00',
+            time_slot_end: '12:00',
+            slot: { slot_name: 'Morning' },
+          },
+        ],
+      }),
+      { delivery_time_windows: [], fulfillment_timing: undefined }
+    );
+    const fact = agentDropoffFact(merged, 'en-US');
+    expect(fact?.kind).toBe('scheduled');
+    if (fact?.kind !== 'scheduled') return;
+    expect(fact.when).toContain('Morning');
   });
 
   it('copies the confirmed window onto the list row', () => {
@@ -117,6 +167,43 @@ describe('compactDropoff', () => {
       slot: 'Evening',
       range: '4–8 PM',
     });
+  });
+
+  it('marks tomorrow and a later date, and does not use the English collapse off-pattern', () => {
+    const now = new Date(2026, 10, 6, 16, 30);
+    const row = (
+      date: string,
+      start: string,
+      end: string
+    ) =>
+      order({
+        delivery_time_windows: [
+          { preferred_date: date, time_slot_start: start, time_slot_end: end, slot: { slot_name: 'Slot' } },
+        ],
+      });
+
+    expect(compactDropoff(row('2026-11-07', '16:00', '20:00'), 'en-US', now)?.day).toBe('tomorrow');
+    expect(compactDropoff(row('2026-11-09', '16:00', '20:00'), 'en-US', now)?.day).toBe('date');
+    expect(compactDropoff(row('2026-11-06', '12:00', '16:00'), 'en-US', now)?.range).toBe('12–4 PM');
+    expect(compactDropoff(row('2026-11-06', '00:00', '01:00'), 'en-US', now)?.range).toBe('12–1 AM');
+    expect(compactDropoff(row('2026-11-06', '08:00', '12:00'), 'en-US', now)?.range).not.toBe('8–12 AM');
+    expect(compactDropoff(row('2026-11-06', '16:00', '20:00'), 'fr-CA', now)?.range).not.toBe('4–8 PM');
+    expect(compactDropoff(row('2026-11-06', '25:00', '26:00'), 'en-US', now)?.range).not.toMatch(
+      /^\d+–\d+ (AM|PM)$/
+    );
+  });
+
+  it('returns nothing without a window and keeps a slot-only drop-off', () => {
+    expect(compactDropoff(order({}), 'en-US')).toBeNull();
+    expect(
+      compactDropoff(
+        order({ delivery_time_windows: [{ slot: { slot_name: '  Evening  ' } }] }),
+        'en-US'
+      )
+    ).toEqual({ day: 'date', dateLabel: null, slot: 'Evening', range: null });
+    expect(
+      compactDropoff(order({ delivery_time_windows: [{ preferred_date: 'not-a-date' }] }), 'en-US', new Date(2026, 10, 6))
+    ).toMatchObject({ day: 'date', dateLabel: 'not-a-date' });
   });
 });
 
@@ -183,5 +270,31 @@ describe('compareOpenOrdersForAgent', () => {
     const dedicated = order({ id: 'd', my_dedicated_store: true });
     const express = order({ id: 'e', requires_fast_delivery: true });
     expect([express, dedicated].sort(compareOpenOrdersForAgent).map((o) => o.id)).toEqual(['d', 'e']);
+  });
+
+  it('treats a known location as dedicated, then express, then the newest update', () => {
+    const byLocation = order({
+      id: 'loc',
+      business_location: {
+        id: 'loc-ded',
+        name: 'Shop',
+        location_type: 'store',
+        address: {} as Order['business_location']['address'],
+      },
+      updated_at: '2026-11-01T00:00:00.000Z',
+    });
+    const express = order({
+      id: 'exp',
+      requires_fast_delivery: true,
+      updated_at: '2026-11-02T00:00:00.000Z',
+    });
+    const older = order({ id: 'old', updated_at: '2026-11-03T00:00:00.000Z' });
+    const newer = order({ id: 'new', updated_at: '2026-11-08T00:00:00.000Z' });
+    const ids = new Set(['loc-ded']);
+    expect(
+      [older, express, newer, byLocation]
+        .sort((a, b) => compareOpenOrdersForAgent(a, b, ids))
+        .map((row) => row.id)
+    ).toEqual(['loc', 'exp', 'new', 'old']);
   });
 });

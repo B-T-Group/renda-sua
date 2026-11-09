@@ -930,6 +930,27 @@ describe('InventoryItemsService store directory partner filters', () => {
       }),
     ]);
   });
+
+  it('drops every store when neither the location nor the business name matches', async () => {
+    const rows = await createService().getTopInventoryStores(20, {
+      country_code: 'CM',
+      search: '  pharmacy  ',
+    });
+
+    expect(rows).toEqual([]);
+  });
+
+  it('does not filter the directory on a blank search', async () => {
+    const rows = await createService().getTopInventoryStores(20, {
+      country_code: 'CM',
+      search: '   ',
+    });
+
+    expect(rows.map((row) => row.business_location_id).sort()).toEqual([
+      'loc-a',
+      'loc-b',
+    ]);
+  });
 });
 
 describe('InventoryItemsService search store union helpers', () => {
@@ -982,6 +1003,93 @@ describe('InventoryItemsService search store union helpers', () => {
       'store-only',
       'another-store',
     ]);
+  });
+
+  it('keeps a store row with no item id and drops a repeated inventory id', () => {
+    const service = createService() as any;
+    const merged = service.mergeCatalogRowsProductFirst(
+      [{ id: 'inv-p', item_id: '' }],
+      [
+        { id: 'inv-s', item_id: '' },
+        { id: 'inv-s', item_id: 'item-x' },
+        { id: 'inv-s2' },
+      ]
+    );
+
+    expect(merged.rows.map((row: { id: string }) => row.id)).toEqual([
+      'inv-p',
+      'inv-s',
+      'inv-s2',
+    ]);
+    expect([...merged.productItemIds]).toEqual([]);
+  });
+
+  it('leaves ranking order alone when nothing was a product match', () => {
+    const service = createService() as any;
+    const sorted = [{ item_id: 'b' }, { item_id: 'a' }];
+
+    expect(service.preferProductMatchesFirst(sorted, new Set())).toBe(sorted);
+  });
+
+  it('skips the store-name union on a store page, a business filter, similar items, and a blank search', () => {
+    const service = createService() as any;
+
+    expect(service.shouldIncludeStoreNameMatches({ hasSearch: true })).toBe(true);
+    expect(service.shouldIncludeStoreNameMatches({ hasSearch: false })).toBe(false);
+    expect(
+      service.shouldIncludeStoreNameMatches({
+        hasSearch: true,
+        business_location_id: '  loc-1  ',
+      })
+    ).toBe(false);
+    expect(
+      service.shouldIncludeStoreNameMatches({
+        hasSearch: true,
+        business_location_id: '   ',
+      })
+    ).toBe(true);
+    expect(
+      service.shouldIncludeStoreNameMatches({ hasSearch: true, business_id: 'biz-1' })
+    ).toBe(false);
+    expect(
+      service.shouldIncludeStoreNameMatches({ hasSearch: true, business_id: '   ' })
+    ).toBe(true);
+    expect(
+      service.shouldIncludeStoreNameMatches({ hasSearch: true, similarItemIds: [] })
+    ).toBe(false);
+  });
+
+  it('does not repeat a seller already suggested and stops at five', () => {
+    const service = createService() as any;
+    const suggestions: Array<{ businessId: string; name: string }> = [];
+    const seenSellers = new Set(['biz-1', 'biz-2', 'biz-3', 'biz-4']);
+    const store = (businessId: string, locationId: string, name: string) => ({
+      business_id: businessId,
+      business_location_id: locationId,
+      name,
+      logo_url: null,
+    });
+
+    service.appendStoreNameSellerSuggestions({
+      stores: [
+        store('biz-1', 'loc-1', 'Already'),
+        store('', 'loc-x', 'No business'),
+        store('biz-5', 'loc-5', 'Fifth'),
+        store('biz-6', 'loc-6', 'Sixth'),
+      ],
+      suggestions,
+      seenSellers,
+    });
+
+    expect(suggestions).toEqual([
+      expect.objectContaining({
+        kind: 'seller',
+        businessId: 'biz-5',
+        businessLocationId: 'loc-5',
+        name: 'Fifth',
+      }),
+    ]);
+    expect(seenSellers.has('biz-6')).toBe(false);
   });
 });
 

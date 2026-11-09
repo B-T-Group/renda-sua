@@ -60,9 +60,7 @@ select_permissions:
         - payment_timing
         - payment_status
         - end_reminder_sent_at
-        - rental_start_pin_hash
         - rental_start_pin_attempts
-        - rental_start_overwrite_code_hash
         - rental_start_overwrite_code_used_at
         - period_ended_notified_at
         - actual_start_at

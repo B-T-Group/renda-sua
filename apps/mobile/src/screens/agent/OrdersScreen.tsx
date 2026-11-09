@@ -36,8 +36,7 @@ import { statusToPrimaryAction } from '../../components/agent/DeliveryStatusIndi
 import type { ActionLoadingKind } from '../../components/feedback/actionLoadingKinds';
 import { OrdersActivityGroupedFooter } from '../../components/orders/OrdersActivityGroupedFooter';
 import { useOrdersActivityPartition } from '../../hooks/useOrdersActivityPartition';
-import { orderNeedsPayAtDeliveryAgentActions } from '../../utils/orderPaymentAgentActions';
-import { isCarrierShipping } from '../../utils/fulfillmentMethod';
+import { resolveAgentOrderPrimaryAction } from '../../utils/agentOrderPrimaryAction';
 import { APP_FEATURES } from '../../constants/appFeatures';
 
 type Nav = NativeStackNavigationProp<OrdersStackParamList, 'OrdersList'>;
@@ -55,18 +54,21 @@ function primaryActionForOrder(
     onRequestPayment: () => void;
   }
 ): (() => void) | null {
-  if (isCarrierShipping(order.fulfillment_method)) return null;
-  const payAt = orderNeedsPayAtDeliveryAgentActions(order);
-  switch (order.current_status) {
-    case 'assigned_to_agent':
+  const action = resolveAgentOrderPrimaryAction(order, {
+    markInTransit: APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT,
+  });
+  switch (action) {
+    case 'pickUp':
       return callbacks.onPickUp;
-    case 'picked_up':
-      return APP_FEATURES.AGENT_MARK_AS_IN_TRANSIT ? callbacks.onStartTransit : callbacks.onOutForDelivery;
-    case 'in_transit':
+    case 'startTransit':
+      return callbacks.onStartTransit;
+    case 'outForDelivery':
       return callbacks.onOutForDelivery;
-    case 'out_for_delivery':
-      return payAt ? callbacks.onRequestPayment : callbacks.onCompleteDelivery;
-    default:
+    case 'completeDelivery':
+      return callbacks.onCompleteDelivery;
+    case 'requestPayment':
+      return callbacks.onRequestPayment;
+    case 'openDetail':
       return null;
   }
 }

@@ -431,6 +431,30 @@ export const INSERT_RENTAL_BOOKING = `
   }
 `;
 
+export const REACTIVATE_RENTAL_HOLD = `
+  mutation ReactivateRentalHold(
+    $bookingId: uuid!
+    $amount: numeric!
+    $currency: currency_enum!
+    $attemptId: uuid!
+  ) {
+    update_rental_holds(
+      where: {
+        rental_booking_id: { _eq: $bookingId }
+        status: { _eq: cancelled }
+      }
+      _set: {
+        status: active
+        client_hold_amount: $amount
+        currency: $currency
+        ledger_attempt_id: $attemptId
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
 export const INSERT_RENTAL_HOLD = `
   mutation InsertRentalHold($object: rental_holds_insert_input!) {
     insert_rental_holds_one(object: $object) {
@@ -624,21 +648,73 @@ export const UPDATE_RENTAL_BOOKING_STATUS = `
 `;
 
 export const INCREMENT_RENTAL_PIN_ATTEMPTS = `
-  mutation IncRentalPinAttempts($id: uuid!, $attempts: Int!) {
-    update_rental_bookings_by_pk(
-      pk_columns: { id: $id }
-      _set: { rental_start_pin_attempts: $attempts }
+  mutation IncRentalPinAttempts($id: uuid!, $max: Int!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        rental_start_pin_attempts: { _lt: $max }
+      }
+      _inc: { rental_start_pin_attempts: 1 }
     ) {
-      id
-      rental_start_pin_attempts
+      affected_rows
+      returning { rental_start_pin_attempts }
+    }
+  }
+`;
+
+export const CAS_UPDATE_RENTAL_BOOKING = `
+  mutation CasUpdateRentalBooking(
+    $id: uuid!
+    $from: [rental_booking_status_enum!]!
+    $set: rental_bookings_set_input!
+  ) {
+    update_rental_bookings(
+      where: { id: { _eq: $id }, status: { _in: $from } }
+      _set: $set
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+export const STAMP_RENTAL_ACTUAL_END_IF_ABSENT = `
+  mutation StampRentalActualEndIfAbsent($id: uuid!, $at: timestamptz!) {
+    update_rental_bookings(
+      where: { id: { _eq: $id }, actual_end_at: { _is_null: true } }
+      _set: { actual_end_at: $at }
+    ) {
+      affected_rows
+      returning { actual_end_at }
+    }
+  }
+`;
+
+export const SET_RENTAL_PIN_IF_ABSENT = `
+  mutation SetRentalPinIfAbsent($id: uuid!, $pinHash: String!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        status: { _eq: confirmed }
+        rental_start_pin_hash: { _is_null: true }
+      }
+      _set: { rental_start_pin_hash: $pinHash, rental_start_pin_attempts: 0 }
+    ) {
+      affected_rows
     }
   }
 `;
 
 export const UPDATE_RENTAL_HOLD_STATUS = `
-  mutation UpdateRentalHoldStatus($bookingId: uuid!, $status: rental_hold_status_enum!) {
+  mutation UpdateRentalHoldStatus(
+    $bookingId: uuid!
+    $from: rental_hold_status_enum!
+    $status: rental_hold_status_enum!
+  ) {
     update_rental_holds(
-      where: { rental_booking_id: { _eq: $bookingId } }
+      where: {
+        rental_booking_id: { _eq: $bookingId }
+        status: { _eq: $from }
+      }
       _set: { status: $status }
     ) {
       affected_rows
