@@ -624,13 +624,16 @@ export const UPDATE_RENTAL_BOOKING_STATUS = `
 `;
 
 export const INCREMENT_RENTAL_PIN_ATTEMPTS = `
-  mutation IncRentalPinAttempts($id: uuid!, $attempts: Int!) {
-    update_rental_bookings_by_pk(
-      pk_columns: { id: $id }
-      _set: { rental_start_pin_attempts: $attempts }
+  mutation IncRentalPinAttempts($id: uuid!, $max: Int!) {
+    update_rental_bookings(
+      where: {
+        id: { _eq: $id }
+        rental_start_pin_attempts: { _lt: $max }
+      }
+      _inc: { rental_start_pin_attempts: 1 }
     ) {
-      id
-      rental_start_pin_attempts
+      affected_rows
+      returning { rental_start_pin_attempts }
     }
   }
 `;

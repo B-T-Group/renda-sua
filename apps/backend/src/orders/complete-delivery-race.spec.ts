@@ -33,6 +33,7 @@ describe('OrdersService.completeDelivery race and completed_at', () => {
     svc.deliveryPinService = {
       getMaxPinAttempts: jest.fn().mockReturnValue(5),
       verifyOverwriteCode: jest.fn().mockReturnValue(true),
+      isLegacyHash: jest.fn().mockReturnValue(false),
       clearPinForOrder: jest.fn(),
     };
     svc.setOrderDeliveryOverwriteUsedAt = jest.fn();

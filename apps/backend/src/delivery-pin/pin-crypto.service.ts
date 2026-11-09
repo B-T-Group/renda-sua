@@ -29,6 +29,14 @@ export class PinCryptoService {
     return Buffer.concat([iv, tag, encrypted]).toString('base64');
   }
 
+  /** Domain-separated HMAC. Same key as PIN encryption, so no extra secret. */
+  hmacHex(purpose: string, material: string): string {
+    return crypto
+      .createHmac('sha256', this.key)
+      .update(`${purpose}\0${material}`, 'utf8')
+      .digest('hex');
+  }
+
   decrypt(ciphertext: string): string | null {
     try {
       const data = Buffer.from(ciphertext, 'base64');

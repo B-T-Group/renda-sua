@@ -2933,6 +2933,7 @@ export class OrdersService {
       }
       throw new HttpException('Invalid PIN', HttpStatus.FORBIDDEN);
     }
+    await this.upgradeLegacyDeliveryPinHash(order.id, pin, hash);
   }
 
   private assertConfirmClientPickupAllowed(
@@ -4066,6 +4067,7 @@ export class OrdersService {
         }
         throw new HttpException('Invalid PIN', HttpStatus.FORBIDDEN);
       }
+      await this.upgradeLegacyDeliveryPinHash(request.orderId, pinToUse!, hash);
     } else {
       const overwriteHash = (order as any).delivery_overwrite_code_hash;
       if (!overwriteHash) {
@@ -4082,6 +4084,11 @@ export class OrdersService {
       if (!valid) {
         throw new HttpException('Invalid overwrite code', HttpStatus.FORBIDDEN);
       }
+      await this.upgradeLegacyOverwriteHash(
+        request.orderId,
+        request.overwriteCode!,
+        overwriteHash
+      );
       if (!isClientConfirmDeliveryOrder(order)) {
         await this.setOrderDeliveryOverwriteUsedAt(request.orderId);
       }
@@ -7620,6 +7627,13 @@ export class OrdersService {
       await this.ensurePickupPinIfNeeded(order);
     }
     const pin = await this.deliveryPinService.getPinForClient(orderId);
+    if (pin) {
+      await this.upgradeLegacyDeliveryPinHash(
+        orderId,
+        pin,
+        (order as { delivery_pin_hash?: string | null }).delivery_pin_hash
+      );
+    }
     if (!pin) {
       const orderHasPinFlow = !!(order as { delivery_pin_hash?: string })
         ?.delivery_pin_hash;
@@ -14358,6 +14372,42 @@ export class OrdersService {
         safeErrorMessage(error)
       );
       return false; // Default to false on error
+    }
+  }
+
+  private async upgradeLegacyDeliveryPinHash(
+    orderId: string,
+    pin: string,
+    hash?: string | null
+  ): Promise<void> {
+    if (!hash || !this.deliveryPinService.isLegacyHash(hash)) return;
+    try {
+      await this.setOrderDeliveryPinHash(
+        orderId,
+        this.deliveryPinService.hashPin(orderId, pin)
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not upgrade delivery PIN hash for ${orderId}: ${error?.message}`
+      );
+    }
+  }
+
+  private async upgradeLegacyOverwriteHash(
+    orderId: string,
+    code: string,
+    hash?: string | null
+  ): Promise<void> {
+    if (!hash || !this.deliveryPinService.isLegacyHash(hash)) return;
+    try {
+      await this.persistOverwriteHash(
+        orderId,
+        this.deliveryPinService.hashOverwriteCode(orderId, code)
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not upgrade overwrite hash for ${orderId}: ${error?.message}`
+      );
     }
   }
 
