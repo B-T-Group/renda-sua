@@ -1,4 +1,4 @@
-import { HttpException } from '@nestjs/common';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { RentalsCronService } from './rentals-cron.service';
 import { casUpdateRentalBooking } from './rental-booking-cas';
 import { RentalsService } from './rentals.service';
@@ -118,7 +118,7 @@ describe('rental completion compare-and-set', () => {
 });
 
 describe('rental cancel compare-and-set', () => {
-  it('does not release the hold when the booking is already cancelled', async () => {
+  it('releases a hold that appears when cancel is replayed after cancellation', async () => {
     svc.hasuraUserService = {
       getUser: jest.fn().mockResolvedValue({
         id: 'client-user',
@@ -131,13 +131,16 @@ describe('rental cancel compare-and-set', () => {
       .mockResolvedValueOnce(
         booking({ status: 'confirmed', actual_start_at: null })
       )
-      .mockResolvedValueOnce({ status: 'cancelled' });
+      .mockResolvedValueOnce({ status: 'cancelled', client: { user_id: 'client-user' } });
     svc.casBooking = jest.fn().mockResolvedValue(false);
     svc.releaseHoldIfNeeded = jest.fn();
     await expect(svc.cancelRentalBooking('b1')).resolves.toEqual({
       success: true,
     });
-    expect(svc.releaseHoldIfNeeded).not.toHaveBeenCalled();
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({ status: 'cancelled' })
+    );
   });
 
   it('rejects a cancel that lost to a different status', async () => {
@@ -217,7 +220,6 @@ describe('wallet confirm and hold', () => {
     svc.hasuraSystemService = { executeMutation: jest.fn() };
     svc.releaseHoldIfNeeded = jest.fn();
     svc.placeHoldForBooking = jest.fn();
-    svc.markBookingPaymentStatus = jest.fn();
     svc.getHold = jest.fn().mockResolvedValue(null);
   });
 
@@ -406,16 +408,19 @@ describe('wallet confirm and hold', () => {
       registerHoldIfNotExists: jest.fn().mockResolvedValue({ success: true }),
       registerReleaseIfNotExists: jest.fn().mockResolvedValue({ success: true }),
     };
-    svc.markBookingPaymentStatus = jest.fn();
-    svc.casBooking = jest.fn();
+    svc.casBooking = jest.fn().mockResolvedValue(true);
     svc.fetchBooking = jest.fn();
     svc.placeHoldForBooking = Object.getPrototypeOf(svc).placeHoldForBooking;
-    await svc.finishConfirmedWalletHold(
-      booking({ status: 'confirmed', payment_status: 'pending' }),
-      'proposed'
-    );
-    expect(svc.markBookingPaymentStatus).toHaveBeenCalledWith('b1', 'paid');
-    expect(svc.casBooking).not.toHaveBeenCalled();
+    await expect(
+      svc.finishConfirmedWalletHold(
+        booking({ status: 'confirmed', payment_status: 'pending' }),
+        'proposed'
+      )
+    ).resolves.toBe(true);
+    expect(svc.casBooking).toHaveBeenCalledWith('b1', ['confirmed', 'active'], {
+      payment_status: 'paid',
+    });
+    expect(svc.releaseHoldIfNeeded).not.toHaveBeenCalled();
     expect(svc.fetchBooking).not.toHaveBeenCalled();
     const held = svc.accountsService.registerHoldIfNotExists.mock.calls[0][0];
     const released = svc.accountsService.registerReleaseIfNotExists.mock.calls[0][0];
@@ -445,10 +450,7 @@ describe('wallet confirm and hold', () => {
       registerHoldIfNotExists: jest.fn().mockResolvedValue({ success: true }),
       registerReleaseIfNotExists: jest.fn().mockResolvedValue({ success: true }),
     };
-    svc.markBookingPaymentStatus = jest
-      .fn()
-      .mockRejectedValue(new Error('paid stamp failed'));
-    svc.casBooking = jest.fn();
+    svc.casBooking = jest.fn().mockRejectedValue(new Error('paid stamp failed'));
     svc.fetchBooking = jest.fn();
     svc.releaseHoldIfNeeded = jest.fn();
     svc.placeHoldForBooking = Object.getPrototypeOf(svc).placeHoldForBooking;
@@ -459,7 +461,7 @@ describe('wallet confirm and hold', () => {
       )
     ).rejects.toThrow('paid stamp failed');
     expect(svc.releaseHoldIfNeeded).not.toHaveBeenCalled();
-    expect(svc.casBooking).not.toHaveBeenCalled();
+    expect(svc.casBooking).toHaveBeenCalledTimes(1);
     expect(svc.fetchBooking).not.toHaveBeenCalled();
     expect(svc.accountsService.registerReleaseIfNotExists).toHaveBeenCalledTimes(1);
   });
@@ -487,5 +489,200 @@ describe('wallet confirm and hold', () => {
         idempotencyKey: `rental:b1:hold:${held.referenceId}:release`,
       })
     );
+  });
+
+  it('returns 409 when cancel wins after confirm and before the hold is kept', async () => {
+    svc.hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'business-user',
+        active_persona: 'business',
+        business: { id: 'biz' },
+      }),
+    };
+    svc.hasuraSystemService.getAccount = jest
+      .fn()
+      .mockResolvedValue({ id: 'acc', available_balance: 1000 });
+    const reserved = booking({
+      status: 'reserved',
+      payment_status: 'pending',
+      actual_start_at: null,
+      rental_request_id: 'req',
+    });
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValueOnce(reserved)
+      .mockResolvedValue(booking({ status: 'confirmed', payment_status: 'pending' }));
+    svc.casBooking = jest
+      .fn()
+      .mockResolvedValueOnce(true)
+      .mockResolvedValueOnce(false);
+    svc.placeHoldForBooking = jest.fn().mockResolvedValue('own');
+    const error = await svc.initiateRentalPickupPayment('b1').catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
+    expect(svc.placeHoldForBooking).toHaveBeenCalledWith('b1', 'c1', 160, 'XAF');
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalledWith('b1', reserved);
+    expect(svc.casBooking).toHaveBeenCalledWith('b1', ['confirmed', 'active'], {
+      payment_status: 'paid',
+    });
+    expect(svc.casBooking).not.toHaveBeenCalledWith(
+      'b1',
+      ['confirmed'],
+      expect.objectContaining({ status: 'reserved' })
+    );
+  });
+
+  it('returns 409 when a wallet retry loses the booking before the hold is kept', async () => {
+    svc.hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'client-user',
+        active_persona: 'client',
+        client: { id: 'c1' },
+        email: 'a@b.c',
+      }),
+    };
+    const proposed = booking({
+      status: 'proposed',
+      client_id: 'c1',
+      payment_status: 'pending',
+      contract_expires_at: '2099-01-01T00:00:00.000Z',
+      booking_number: 'RB1',
+      rental_request_id: 'req',
+      rental_pricing_snapshot: {
+        version: 1,
+        currency: 'XAF',
+        total: 160,
+        computedAt: '2026-07-01T00:00:00.000Z',
+      },
+    });
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValueOnce(proposed)
+      .mockResolvedValue(booking({ status: 'confirmed', payment_status: 'pending' }));
+    svc.hasuraSystemService.getAccount = jest
+      .fn()
+      .mockResolvedValue({ id: 'acc', available_balance: 1000 });
+    svc.paymentRoutingService = {
+      resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+    };
+    svc.casBooking = jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    svc.placeHoldForBooking = jest.fn().mockResolvedValue('own');
+    const error = await svc.retryBookingPayment('b1').catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(HttpException);
+    expect((error as HttpException).getStatus()).toBe(HttpStatus.CONFLICT);
+    expect(svc.placeHoldForBooking).toHaveBeenCalled();
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
+  });
+
+  it('releases a MoMo hold when cancel wins before the booking is marked paid', async () => {
+    const proposed = booking({
+      status: 'proposed',
+      payment_status: 'pending',
+      contract_expires_at: '2026-07-18T00:00:00.000Z',
+      rental_request_id: 'req',
+    });
+    svc.casBooking = jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValue(booking({ status: 'confirmed', payment_status: 'pending' }));
+    svc.placeHoldForBooking = jest.fn().mockResolvedValue('own');
+    await svc.confirmBookingAfterContractPayment(proposed, 'RB1');
+    expect(svc.placeHoldForBooking).toHaveBeenCalled();
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
+    expect(svc.casBooking).toHaveBeenLastCalledWith('b1', ['confirmed', 'active'], {
+      payment_status: 'paid',
+    });
+  });
+
+  it('does not mark a repaired confirmed booking paid after cancel wins', async () => {
+    svc.fetchBookingByBookingNumber = jest.fn().mockResolvedValue(
+      booking({
+        status: 'confirmed',
+        payment_status: 'pending',
+        payment_timing: 'pay_at_pickup',
+      })
+    );
+    svc.casBooking = jest.fn().mockResolvedValue(false);
+    svc.placeHoldForBooking = jest.fn().mockResolvedValue('own');
+    await svc.processRentalBookingPayment({ entity_id: 'RB1' });
+    expect(svc.placeHoldForBooking).toHaveBeenCalled();
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
+    expect(svc.casBooking).toHaveBeenCalledWith('b1', ['confirmed', 'active'], {
+      payment_status: 'paid',
+    });
+  });
+
+  it('voids a card authorization when the booking is already cancelled', async () => {
+    svc.fetchBookingByBookingNumber = jest.fn().mockResolvedValue(
+      booking({
+        status: 'proposed',
+        payment_status: 'pending',
+        booking_number: 'RB1',
+        rental_request_id: 'req',
+        client: { user_id: 'client-user' },
+      })
+    );
+    svc.casBooking = jest.fn().mockResolvedValue(false);
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValue(booking({ status: 'cancelled', booking_number: 'RB1' }));
+    svc.cancelStripeAuthorizationIfAny = jest.fn();
+    svc.patchBooking = jest.fn();
+    await svc.processRentalBookingAuthorization({ entity_id: 'RB1', amount: 50 });
+    expect(svc.patchBooking).not.toHaveBeenCalled();
+    expect(svc.placeHoldForBooking).not.toHaveBeenCalled();
+    expect(svc.casBooking).toHaveBeenCalledWith(
+      'b1',
+      ['proposed'],
+      expect.objectContaining({
+        payment_status: 'authorized',
+        authorized_amount: 50,
+        payment_timing: 'pay_now',
+      })
+    );
+    expect(svc.cancelStripeAuthorizationIfAny).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'cancelled', booking_number: 'RB1' })
+    );
+  });
+
+  it('voids the card when confirm loses after the authorization stamp', async () => {
+    svc.fetchBookingByBookingNumber = jest.fn().mockResolvedValue(
+      booking({
+        status: 'proposed',
+        payment_status: 'pending',
+        booking_number: 'RB1',
+        rental_request_id: 'req',
+        client: { user_id: 'client-user' },
+      })
+    );
+    svc.casBooking = jest.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValue(booking({ status: 'cancelled', booking_number: 'RB1' }));
+    svc.cancelStripeAuthorizationIfAny = jest.fn();
+    await svc.processRentalBookingAuthorization({ entity_id: 'RB1', amount: 50 });
+    expect(svc.cancelStripeAuthorizationIfAny).toHaveBeenCalled();
+    expect(svc.casBooking).toHaveBeenCalledWith(
+      'b1',
+      ['proposed'],
+      expect.objectContaining({ status: 'confirmed' })
+    );
+  });
+
+  it('keeps a card authorization that confirms', async () => {
+    svc.fetchBookingByBookingNumber = jest.fn().mockResolvedValue(
+      booking({
+        status: 'proposed',
+        payment_status: 'pending',
+        booking_number: 'RB1',
+        rental_request_id: 'req',
+        client: { user_id: 'client-user' },
+      })
+    );
+    svc.casBooking = jest.fn().mockResolvedValue(true);
+    svc.fetchBooking = jest.fn().mockResolvedValue(booking({ status: 'confirmed' }));
+    svc.cancelStripeAuthorizationIfAny = jest.fn();
+    await svc.processRentalBookingAuthorization({ entity_id: 'RB1', amount: 50 });
+    expect(svc.cancelStripeAuthorizationIfAny).not.toHaveBeenCalled();
   });
 });

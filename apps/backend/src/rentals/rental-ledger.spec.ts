@@ -314,4 +314,61 @@ describe('rental hold attempts against the ledger', () => {
     expect(mem.hold()?.ledger_attempt_id).toBe(winnerAttempt);
     expect(mem.hold()?.status).toBe('active');
   });
+
+  it('releases a hold that lands after cancel already looked, and a second release does not move money', async () => {
+    const mem = memoryLedger();
+    const svc: any = Object.create(RentalsService.prototype);
+    svc.logger = { error: jest.fn() };
+    svc.hasuraSystemService = mem.hasura;
+    svc.accountsService = new AccountsService(mem.hasura as any);
+    const client = { client: { user_id: 'client-user' }, currency: 'XAF' };
+    await svc.releaseHoldIfNeeded('b1', client);
+    expect(mem.account.withheld_balance).toBe(0);
+
+    svc.casBooking = jest.fn(async () => {
+      await svc.releaseHoldIfNeeded('b1', client);
+      return false;
+    });
+    const kept = await svc.finishConfirmedWalletHold(
+      {
+        id: 'b1',
+        client_id: 'c1',
+        total_amount: 100,
+        currency: 'XAF',
+        client: { user_id: 'client-user' },
+      },
+      'reserved'
+    );
+    expect(kept).toBe(false);
+    expect(mem.hold()?.status).toBe('cancelled');
+    expect(mem.account.withheld_balance).toBe(0);
+    expect(mem.account.available_balance).toBe(500);
+
+    await svc.releaseHoldIfNeeded('b1', client);
+    expect(mem.account.withheld_balance).toBe(0);
+    expect(mem.account.available_balance).toBe(500);
+  });
+
+  it('keeps the hold and the withheld balance when the paid stamp wins', async () => {
+    const mem = memoryLedger();
+    const svc: any = Object.create(RentalsService.prototype);
+    svc.logger = { error: jest.fn() };
+    svc.hasuraSystemService = mem.hasura;
+    svc.accountsService = new AccountsService(mem.hasura as any);
+    svc.casBooking = jest.fn().mockResolvedValue(true);
+    const kept = await svc.finishConfirmedWalletHold(
+      {
+        id: 'b1',
+        client_id: 'c1',
+        total_amount: 100,
+        currency: 'XAF',
+        client: { user_id: 'client-user' },
+      },
+      'reserved'
+    );
+    expect(kept).toBe(true);
+    expect(mem.hold()?.status).toBe('active');
+    expect(mem.account.withheld_balance).toBe(100);
+    expect(mem.account.available_balance).toBe(400);
+  });
 });
