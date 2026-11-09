@@ -4402,10 +4402,33 @@ export class RentalsService {
       throw new HttpException('PIN not set', HttpStatus.BAD_REQUEST);
     }
     this.assertRentalPinNotLocked(booking.rental_start_pin_attempts);
+    const claimed = await this.claimRentalPinAttempt(bookingId);
+    if (claimed == null) {
+      throw new HttpException('Too many attempts', HttpStatus.FORBIDDEN);
+    }
     if (!this.deliveryPinService.verifyPin(bookingId, pin, hash)) {
-      await this.recordFailedRentalPinAttempt(bookingId);
+      throw new HttpException(
+        claimed >= this.deliveryPinService.getMaxPinAttempts()
+          ? 'Too many attempts'
+          : 'Invalid PIN',
+        HttpStatus.FORBIDDEN
+      );
     }
     await this.upgradeLegacyRentalPinHash(bookingId, pin, hash);
+  }
+
+  /** Take one attempt before the PIN is checked so parallel guesses share one counter. */
+  private async claimRentalPinAttempt(bookingId: string): Promise<number | null> {
+    const max = this.deliveryPinService.getMaxPinAttempts();
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings: {
+        affected_rows: number;
+        returning: Array<{ rental_start_pin_attempts: number }>;
+      } | null;
+    }>(Q.INCREMENT_RENTAL_PIN_ATTEMPTS, { id: bookingId, max });
+    const row = result.update_rental_bookings;
+    if (!row?.affected_rows) return null;
+    return row.returning?.[0]?.rental_start_pin_attempts ?? max;
   }
 
   private assertRentalPinNotLocked(attempts: number | null | undefined): void {

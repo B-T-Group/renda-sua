@@ -25,17 +25,20 @@ describe('rental start PIN security', () => {
     (svc as any).fetchBooking = jest.fn();
   });
 
-  it('rejects a correct PIN once the attempt lock is reached', async () => {
+  it('rejects a correct PIN when the attempt claim loses', async () => {
     const pin = '1234';
     const hash = pins.hashPin('booking-1', pin);
+    hasura.executeMutation.mockResolvedValue({
+      update_rental_bookings: { affected_rows: 0, returning: [] },
+    });
     await expect(
       (svc as any).verifyPinAttempt(
         'booking-1',
-        { rental_start_pin_hash: hash, rental_start_pin_attempts: 3 },
+        { rental_start_pin_hash: hash, rental_start_pin_attempts: 0 },
         pin
       )
     ).rejects.toMatchObject({ status: HttpStatus.FORBIDDEN });
-    expect(hasura.executeMutation).not.toHaveBeenCalled();
+    expect((svc as any).patchBooking).not.toHaveBeenCalled();
   });
 
   it('still accepts a legacy hash and rewrites it as a peppered hash', async () => {
@@ -45,6 +48,12 @@ describe('rental start PIN security', () => {
       .createHash('sha256')
       .update('booking-1' + pin, 'utf8')
       .digest('hex');
+    hasura.executeMutation.mockResolvedValue({
+      update_rental_bookings: {
+        affected_rows: 1,
+        returning: [{ rental_start_pin_attempts: 3 }],
+      },
+    });
     await (svc as any).verifyPinAttempt(
       'booking-1',
       { rental_start_pin_hash: legacy, rental_start_pin_attempts: 2 },
