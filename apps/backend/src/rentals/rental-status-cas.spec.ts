@@ -203,3 +203,175 @@ describe('rental cron compare-and-set', () => {
     expect(cron.notifyReservationExpired).not.toHaveBeenCalled();
   });
 });
+
+describe('wallet confirm and hold', () => {
+  beforeEach(() => {
+    svc.logger = { error: jest.fn(), warn: jest.fn() };
+    svc.logHistory = jest.fn();
+    svc.ensureStartPinOnce = jest.fn();
+    svc.confirmedBookingNeedsPin = jest.fn().mockResolvedValue(false);
+    svc.deliveryPinService = { clearPinForOrder: jest.fn() };
+    svc.notificationsService = {
+      sendRentalBookingConfirmedPush: jest.fn(),
+    };
+    svc.hasuraSystemService = { executeMutation: jest.fn() };
+    svc.releaseHoldIfNeeded = jest.fn();
+    svc.placeHoldForBooking = jest.fn();
+    svc.markBookingPaymentStatus = jest.fn();
+    svc.getHold = jest.fn().mockResolvedValue(null);
+  });
+
+  it('releases a hold and does not confirm when expiry wins', async () => {
+    const proposed = booking({
+      status: 'proposed',
+      payment_status: 'pending',
+      contract_expires_at: '2026-07-18T00:00:00.000Z',
+    });
+    svc.casBooking = jest.fn().mockResolvedValue(false);
+    svc.fetchBooking = jest.fn().mockResolvedValue(
+      booking({ status: 'cancelled', payment_status: 'cancelled' })
+    );
+    await svc.confirmBookingAfterContractPayment(proposed, 'RB1');
+    expect(svc.placeHoldForBooking).not.toHaveBeenCalled();
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalledWith(
+      'b1',
+      expect.objectContaining({ status: 'cancelled' })
+    );
+  });
+
+  it('returns a failed hold to proposed so the webhook can retry', async () => {
+    const proposed = booking({
+      status: 'proposed',
+      payment_status: 'pending',
+      contract_expires_at: '2026-07-18T00:00:00.000Z',
+    });
+    svc.casBooking = jest.fn().mockResolvedValue(true);
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValue(booking({ status: 'confirmed', payment_status: 'pending' }));
+    svc.placeHoldForBooking.mockRejectedValue(new Error('hold failed'));
+    await expect(
+      svc.confirmBookingAfterContractPayment(proposed, 'RB1')
+    ).rejects.toThrow('hold failed');
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
+    expect(svc.casBooking).toHaveBeenLastCalledWith('b1', ['confirmed'], {
+      status: 'proposed',
+      payment_status: 'pending',
+      contract_expires_at: '2026-07-18T00:00:00.000Z',
+      rental_start_pin_hash: null,
+      rental_start_pin_attempts: 0,
+    });
+    expect(svc.deliveryPinService.clearPinForOrder).toHaveBeenCalledWith('b1');
+  });
+
+  it('repairs a confirmed unpaid booking and reverts to reserved when the hold fails', async () => {
+    svc.fetchBookingByBookingNumber = jest.fn().mockResolvedValue(
+      booking({
+        status: 'confirmed',
+        payment_status: 'pending',
+        payment_timing: 'pay_at_pickup',
+      })
+    );
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValue(booking({ status: 'confirmed', payment_status: 'pending' }));
+    svc.placeHoldForBooking.mockRejectedValue(new Error('hold failed'));
+    await expect(
+      svc.processRentalBookingPayment({ entity_id: 'RB1' })
+    ).rejects.toThrow('hold failed');
+    expect(svc.casBooking).toHaveBeenCalledWith(
+      'b1',
+      ['confirmed'],
+      expect.objectContaining({ status: 'reserved' })
+    );
+  });
+
+  it('does not hold a payment retry that lost to expiry', async () => {
+    svc.hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'client-user',
+        active_persona: 'client',
+        client: { id: 'c1' },
+        email: 'a@b.c',
+      }),
+    };
+    const proposed = booking({
+      status: 'proposed',
+      client_id: 'c1',
+      payment_status: 'pending',
+      contract_expires_at: '2099-01-01T00:00:00.000Z',
+      booking_number: 'RB1',
+      rental_request_id: 'req',
+      rental_pricing_snapshot: {
+        version: 1,
+        currency: 'XAF',
+        total: 160,
+        computedAt: '2026-07-01T00:00:00.000Z',
+      },
+    });
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValueOnce(proposed)
+      .mockResolvedValueOnce(booking({ status: 'cancelled' }));
+    svc.hasuraSystemService.getAccount = jest
+      .fn()
+      .mockResolvedValue({ id: 'acc', available_balance: 1000 });
+    svc.paymentRoutingService = {
+      resolveRailForUser: jest.fn().mockResolvedValue('mobile_money'),
+    };
+    svc.casBooking = jest.fn().mockResolvedValue(false);
+    await expect(svc.retryBookingPayment('b1')).rejects.toBeInstanceOf(
+      HttpException
+    );
+    expect(svc.placeHoldForBooking).not.toHaveBeenCalled();
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
+  });
+
+  it('does not hold a pickup payment that lost the reserved claim', async () => {
+    svc.hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'business-user',
+        active_persona: 'business',
+        business: { id: 'biz' },
+      }),
+    };
+    svc.hasuraSystemService.getAccount = jest
+      .fn()
+      .mockResolvedValue({ id: 'acc', available_balance: 1000 });
+    svc.fetchBooking = jest
+      .fn()
+      .mockResolvedValueOnce(
+        booking({ status: 'reserved', payment_status: 'pending', actual_start_at: null })
+      )
+      .mockResolvedValueOnce(booking({ status: 'cancelled' }));
+    svc.casBooking = jest.fn().mockResolvedValue(false);
+    await expect(svc.initiateRentalPickupPayment('b1')).rejects.toBeInstanceOf(
+      HttpException
+    );
+    expect(svc.placeHoldForBooking).not.toHaveBeenCalled();
+    expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
+  });
+
+  it('releases the ledger hold when the hold row cannot be saved', async () => {
+    svc.hasuraSystemService = {
+      executeQuery: jest.fn().mockResolvedValue({
+        clients_by_pk: { user_id: 'client-user' },
+      }),
+      getAccount: jest.fn().mockResolvedValue({ id: 'acc' }),
+      executeMutation: jest.fn().mockRejectedValue(new Error('insert failed')),
+    };
+    svc.accountsService = {
+      registerTransaction: jest.fn().mockResolvedValue({ success: true }),
+    };
+    await expect(
+      Object.getPrototypeOf(svc).placeHoldForBooking.call(svc, 'b1', 'c1', 20, 'XAF')
+    ).rejects.toThrow('insert failed');
+    expect(svc.accountsService.registerTransaction).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        transactionType: 'release',
+        referenceId: 'b1',
+        amount: 20,
+      })
+    );
+  });
+});

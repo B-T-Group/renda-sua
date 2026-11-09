@@ -1216,18 +1216,15 @@ export class RentalsService {
     // reserve-and-pay-at-pickup: wallet if the balance covers, else mobile money.
     const availableBalance = Number(clientAccount?.available_balance ?? 0);
     if (availableBalance >= total) {
-      await this.placeHoldForBooking(
-        bookingId,
-        user.client.id,
-        total,
-        snap.currency
-      );
-      await this.markBookingPaymentStatus(bookingId, 'paid');
-      await this.finalizeRentalBookingConfirmation(
-        bookingId,
-        booking.rental_request_id,
-        user.id
-      );
+      const confirmed = await this.confirmWalletContract({
+        booking,
+        previousStatus: 'proposed',
+        clientUserId: user.id,
+        notes: 'Booking confirmed',
+      });
+      if (!confirmed) {
+        throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+      }
       return {
         success: true,
         bookingId,
@@ -2480,6 +2477,13 @@ export class RentalsService {
       await this.confirmBookingAfterContractPayment(booking, bookingNumber);
       return;
     }
+    if (this.confirmedWalletNeedsHold(booking)) {
+      await this.finishConfirmedWalletHold(
+        booking,
+        this.walletHoldPreviousStatus(booking)
+      );
+      return;
+    }
     if (
       booking.status === 'awaiting_return' &&
       Number(booking.overtime_amount) > 0
@@ -2502,27 +2506,104 @@ export class RentalsService {
       );
       return;
     }
-    await this.finalizeRentalBookingConfirmation(
-      booking.id,
-      booking.rental_request_id,
+    const previous = this.walletHoldPreviousStatus(booking);
+    await this.confirmWalletContract({
+      booking,
+      previousStatus: previous,
       clientUserId,
-      booking.status,
-      booking.status === 'reserved'
-        ? 'Contract paid at pickup'
-        : 'Booking confirmed'
+      notes:
+        previous === 'reserved'
+          ? 'Contract paid at pickup'
+          : 'Booking confirmed',
+    });
+  }
+
+  /**
+   * Claim confirmed before the wallet hold. A lost claim releases any hold
+   * already taken. A hold or paid-stamp failure puts the booking back so a
+   * payment retry can confirm it again.
+   */
+  private async confirmWalletContract(params: {
+    booking: any;
+    previousStatus: 'proposed' | 'reserved';
+    clientUserId: string;
+    notes: string;
+  }): Promise<boolean> {
+    await this.finalizeRentalBookingConfirmation(
+      params.booking.id,
+      params.booking.rental_request_id,
+      params.clientUserId,
+      params.previousStatus,
+      params.notes
     );
-    const fresh = await this.fetchBooking(booking.id);
-    if (fresh?.status !== 'confirmed' && fresh?.status !== 'active') return;
-    const hold = await this.getHold(booking.id);
-    if (!hold || hold.status !== 'active') {
-      await this.placeHoldForBooking(
-        booking.id,
-        booking.client_id,
-        Number(booking.total_amount),
-        booking.currency
+    const fresh = await this.fetchBooking(params.booking.id);
+    if (fresh?.status !== 'confirmed' && fresh?.status !== 'active') {
+      await this.releaseHoldIfNeeded(params.booking.id, fresh ?? params.booking);
+      return false;
+    }
+    await this.finishConfirmedWalletHold(params.booking, params.previousStatus);
+    return true;
+  }
+
+  private confirmedWalletNeedsHold(booking: any): boolean {
+    return (
+      booking.status === 'confirmed' &&
+      booking.payment_status !== 'paid' &&
+      booking.payment_status !== 'authorized'
+    );
+  }
+
+  private walletHoldPreviousStatus(booking: any): 'proposed' | 'reserved' {
+    if (booking.status === 'reserved' || booking.payment_timing === 'pay_at_pickup') {
+      return 'reserved';
+    }
+    return 'proposed';
+  }
+
+  private async finishConfirmedWalletHold(
+    booking: any,
+    previousStatus: 'proposed' | 'reserved'
+  ): Promise<void> {
+    try {
+      const hold = await this.getHold(booking.id);
+      if (!hold || hold.status !== 'active') {
+        await this.placeHoldForBooking(
+          booking.id,
+          booking.client_id,
+          Number(booking.total_amount),
+          booking.currency
+        );
+      }
+      await this.markBookingPaymentStatus(booking.id, 'paid');
+    } catch (error) {
+      await this.revertUnpaidConfirmation(booking, previousStatus);
+      throw error;
+    }
+  }
+
+  private async revertUnpaidConfirmation(
+    booking: any,
+    previousStatus: 'proposed' | 'reserved'
+  ): Promise<void> {
+    try {
+      const fresh = await this.fetchBooking(booking.id);
+      const source = fresh?.client ? fresh : booking;
+      if (fresh?.status === 'active') return;
+      await this.releaseHoldIfNeeded(booking.id, source);
+      if (fresh?.status !== 'confirmed') return;
+      await this.casBooking(booking.id, ['confirmed'], {
+        status: previousStatus,
+        payment_status: booking.payment_status ?? 'pending',
+        contract_expires_at: booking.contract_expires_at ?? null,
+        rental_start_pin_hash: null,
+        rental_start_pin_attempts: 0,
+      });
+      await this.deliveryPinService.clearPinForOrder(booking.id);
+    } catch (error: any) {
+      this.logger.error(
+        `revertUnpaidConfirmation ${booking.id}: ${error?.message ?? error}`
       );
     }
-    await this.markBookingPaymentStatus(booking.id, 'paid');
   }
 
   /**
@@ -3340,20 +3421,15 @@ export class RentalsService {
       booking.currency
     );
     if (Number(clientAccount?.available_balance ?? 0) >= total) {
-      await this.placeHoldForBooking(
-        bookingId,
-        booking.client_id,
-        total,
-        booking.currency
-      );
-      await this.markBookingPaymentStatus(bookingId, 'paid');
-      await this.finalizeRentalBookingConfirmation(
-        bookingId,
-        booking.rental_request_id,
+      const confirmed = await this.confirmWalletContract({
+        booking,
+        previousStatus: 'reserved',
         clientUserId,
-        'reserved',
-        'Contract paid at pickup (wallet)'
-      );
+        notes: 'Contract paid at pickup (wallet)',
+      });
+      if (!confirmed) {
+        throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+      }
       return { success: true, bookingId, payment_rail: 'wallet', confirmed: true };
     }
     return this.pushMomoPickupPayment(booking, clientAccount.id, clientUserId);
@@ -4027,15 +4103,26 @@ export class RentalsService {
     if (!hold.success) {
       throw new Error(hold.error || 'Hold failed');
     }
-    await this.hasuraSystemService.executeMutation(Q.INSERT_RENTAL_HOLD, {
-      object: {
-        rental_booking_id: bookingId,
-        client_id: clientId,
-        client_hold_amount: total,
-        currency,
-        status: 'active',
-      },
-    });
+    try {
+      await this.hasuraSystemService.executeMutation(Q.INSERT_RENTAL_HOLD, {
+        object: {
+          rental_booking_id: bookingId,
+          client_id: clientId,
+          client_hold_amount: total,
+          currency,
+          status: 'active',
+        },
+      });
+    } catch (error) {
+      await this.accountsService.registerTransaction({
+        accountId: account.id,
+        amount: total,
+        transactionType: 'release',
+        memo: `Release rental hold ${bookingId}`,
+        referenceId: bookingId,
+      });
+      throw error;
+    }
   }
 
   private async deleteBooking(id: string) {
