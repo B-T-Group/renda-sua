@@ -2322,19 +2322,19 @@ export class RentalsService {
     clientUserId: string,
     previousStatus: string | null = 'proposed',
     notes = 'Booking confirmed'
-  ): Promise<void> {
+  ): Promise<boolean> {
     const from = previousStatus ?? 'proposed';
     const won = await this.casBooking(bookingId, [from], {
       status: 'confirmed',
       contract_expires_at: null,
     });
-    if (!won && !(await this.confirmedBookingNeedsPin(bookingId))) return;
+    if (!won && !(await this.confirmedBookingNeedsPin(bookingId))) return false;
     await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_STATUS, {
       id: requestId,
       status: 'booked',
     });
     await this.ensureStartPinOnce(bookingId);
-    if (!won) return;
+    if (!won) return true;
     await this.logHistory(bookingId, 'confirmed', previousStatus, clientUserId, 'client', notes);
     try {
       const booking = await this.fetchBooking(bookingId);
@@ -2352,6 +2352,7 @@ export class RentalsService {
         `finalizeRentalBookingConfirmation push: ${error?.message ?? String(error)}`
       );
     }
+    return true;
   }
 
   private async initiateRentalBookingPayment(params: {
@@ -2532,8 +2533,9 @@ export class RentalsService {
 
   /**
    * Claim confirmed before the wallet hold. A lost claim releases any hold
-   * already taken. A hold or paid-stamp failure puts the booking back so a
-   * payment retry can confirm it again.
+   * already taken. Payment is stamped paid only while the booking is still
+   * confirmed or active; a cancel in that gap releases the hold instead.
+   * A hold or paid-stamp failure puts the booking back so payment can retry.
    */
   private async confirmWalletContract(params: {
     booking: any;
@@ -2553,8 +2555,7 @@ export class RentalsService {
       await this.releaseHoldIfNeeded(params.booking.id, fresh ?? params.booking);
       return false;
     }
-    await this.finishConfirmedWalletHold(params.booking, params.previousStatus);
-    return true;
+    return this.finishConfirmedWalletHold(params.booking, params.previousStatus);
   }
 
   private confirmedWalletNeedsHold(booking: any): boolean {
@@ -2572,31 +2573,50 @@ export class RentalsService {
     return 'proposed';
   }
 
+  /**
+   * Place the contract hold, then mark paid only if the booking is still
+   * confirmed or active. A cancel that won in between releases that hold on
+   * the same ledger key and does not leave payment_status paid.
+   */
   private async finishConfirmedWalletHold(
     booking: any,
     previousStatus: 'proposed' | 'reserved'
-  ): Promise<void> {
-    let releaseOnFailure = true;
+  ): Promise<boolean> {
+    const owned = { value: false };
     try {
-      const hold = await this.getHold(booking.id);
-      if (!hold || hold.status !== 'active') {
-        const placed = await this.placeHoldForBooking(
-          booking.id,
-          booking.client_id,
-          Number(booking.total_amount),
-          booking.currency
-        );
-        releaseOnFailure = placed === 'own';
-      } else {
-        releaseOnFailure = false;
-      }
-      await this.markBookingPaymentStatus(booking.id, 'paid');
+      await this.claimWalletHold(booking, owned);
+      return await this.payHoldOrRelease(booking);
     } catch (error) {
-      if (releaseOnFailure) {
+      if (owned.value) {
         await this.revertUnpaidConfirmation(booking, previousStatus);
       }
       throw error;
     }
+  }
+
+  private async claimWalletHold(
+    booking: any,
+    owned: { value: boolean }
+  ): Promise<void> {
+    const hold = await this.getHold(booking.id);
+    if (hold?.status === 'active') return;
+    owned.value = true;
+    const placed = await this.placeHoldForBooking(
+      booking.id,
+      booking.client_id,
+      Number(booking.total_amount),
+      booking.currency
+    );
+    owned.value = placed === 'own';
+  }
+
+  private async payHoldOrRelease(booking: any): Promise<boolean> {
+    const paid = await this.casBooking(booking.id, ['confirmed', 'active'], {
+      payment_status: 'paid',
+    });
+    if (paid) return true;
+    await this.releaseHoldIfNeeded(booking.id, booking);
+    return false;
   }
 
   private async revertUnpaidConfirmation(
@@ -2629,41 +2649,55 @@ export class RentalsService {
    * confirm the booking without moving wallet funds (capture happens at return).
    */
   async processRentalBookingAuthorization(transaction: any): Promise<void> {
-    const bookingNumber = transaction?.entity_id || transaction?.reference;
-    if (!bookingNumber) {
-      this.logger.warn('processRentalBookingAuthorization: missing bookingNumber');
+    const booking = await this.bookingAwaitingCardAuth(transaction);
+    if (!booking) return;
+    const stamped = await this.stampCardAuthorized(
+      booking,
+      Number(transaction.amount)
+    );
+    if (!stamped) {
+      await this.voidCardAuthIfCancelled(booking);
       return;
     }
-    const booking = await this.fetchBookingByBookingNumber(bookingNumber);
-    if (!booking || booking.status !== 'proposed') {
-      return;
-    }
-    const clientUserId = booking.client?.user_id as string | undefined;
-    if (!clientUserId) {
-      this.logger.warn(
-        `processRentalBookingAuthorization: missing client user_id for ${bookingNumber}`
-      );
-      return;
-    }
-    await this.patchBooking(booking.id, {
-      payment_status: 'authorized',
-      authorized_amount: Number(transaction.amount),
-      payment_timing: 'pay_now',
-    });
-    await this.finalizeRentalBookingConfirmation(
+    const confirmed = await this.finalizeRentalBookingConfirmation(
       booking.id,
       booking.rental_request_id,
-      clientUserId,
+      booking.client.user_id as string,
       'proposed',
       'Card authorized (contract + deposit)'
     );
+    if (!confirmed) await this.voidCardAuthIfCancelled(booking);
   }
 
-  private async markBookingPaymentStatus(
-    bookingId: string,
-    status: 'pending' | 'authorized' | 'paid' | 'cancelled'
-  ): Promise<void> {
-    await this.patchBooking(bookingId, { payment_status: status });
+  private async bookingAwaitingCardAuth(transaction: any): Promise<any | null> {
+    const bookingNumber = transaction?.entity_id || transaction?.reference;
+    if (!bookingNumber) {
+      this.logger.warn('processRentalBookingAuthorization: missing bookingNumber');
+      return null;
+    }
+    const booking = await this.fetchBookingByBookingNumber(bookingNumber);
+    if (!booking || booking.status !== 'proposed') return null;
+    if (!booking.client?.user_id) {
+      this.logger.warn(
+        `processRentalBookingAuthorization: missing client user_id for ${bookingNumber}`
+      );
+      return null;
+    }
+    return booking;
+  }
+
+  private async stampCardAuthorized(booking: any, amount: number): Promise<boolean> {
+    return this.casBooking(booking.id, ['proposed'], {
+      payment_status: 'authorized',
+      authorized_amount: amount,
+      payment_timing: 'pay_now',
+    });
+  }
+
+  private async voidCardAuthIfCancelled(booking: any): Promise<void> {
+    const fresh = await this.fetchBooking(booking.id);
+    if (fresh?.status !== 'cancelled') return;
+    await this.cancelStripeAuthorizationIfAny(fresh);
   }
 
   /**
@@ -2702,6 +2736,7 @@ export class RentalsService {
     });
     if (!won) return this.alreadyCancelledOrConflict(bookingId);
     try {
+      // A hold placed after this read is released by the paid-stamp compare-and-set.
       await this.releaseHoldIfNeeded(bookingId, booking);
       await this.cancelStripeAuthorizationIfAny(booking);
     } catch (error) {
@@ -3334,8 +3369,11 @@ export class RentalsService {
 
   private async alreadyCancelledOrConflict(bookingId: string) {
     const fresh = await this.fetchBooking(bookingId);
-    if (fresh?.status === 'cancelled') return { success: true };
-    throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+    if (fresh?.status !== 'cancelled') {
+      throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
+    }
+    await this.releaseHoldIfNeeded(bookingId, fresh);
+    return { success: true };
   }
 
   private async alreadyActiveOrConflict(bookingId: string) {
