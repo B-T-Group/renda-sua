@@ -48,14 +48,14 @@ export class StripeAuthReconcilerService {
           where: {
             capture_method: { _eq: "manual" }
             status: { _in: ["pending", "authorized", "capture_pending"] }
-            payment_entity: { _eq: "order" }
+            payment_entity: { _in: ["order", "rental_booking"] }
           }
           limit: 50
         ) {
           id
           reference
           entity_id
-          reference
+          payment_entity
           stripe_payment_intent_id
           status
         }
@@ -69,7 +69,8 @@ export class StripeAuthReconcilerService {
         await this.syncTransactionFromStripe(
           row.id,
           row.stripe_payment_intent_id,
-          row.entity_id ?? row.reference
+          row.entity_id ?? row.reference,
+          row.payment_entity
         );
       }
     } catch (error: any) {
@@ -80,32 +81,164 @@ export class StripeAuthReconcilerService {
   private async syncTransactionFromStripe(
     txId: string,
     paymentIntentId: string,
-    orderNumber?: string
+    entityId?: string,
+    paymentEntity?: string
   ): Promise<void> {
     try {
       const pi = await this.stripeService.retrievePaymentIntent(paymentIntentId);
       if (pi.status === 'requires_capture' && pi.amount_capturable > 0) {
-        const tx = await this.databaseService.getTransactionById(txId);
-        if (tx?.status === 'pending') {
-          await this.databaseService.updateTransaction(txId, {
-            status: 'authorized',
-            authorized_at: new Date().toISOString(),
-          });
-        }
-      } else if (pi.status === 'canceled') {
-        await this.databaseService.updateTransaction(txId, {
-          status: 'expired',
-          error_message: 'Payment authorization expired or cancelled',
-        });
-        if (orderNumber) {
-          await this.handleStripeAuthorizationLapsed(orderNumber);
-        }
+        await this.markStripeTxAuthorized(txId);
+        return;
       }
+      if (pi.status !== 'canceled') return;
+      await this.handleCanceledStripeAuthorization(txId, entityId, paymentEntity);
     } catch (error: any) {
       this.logger.warn(
         `Could not sync PI ${paymentIntentId}: ${error?.message}`
       );
     }
+  }
+
+  private async markStripeTxAuthorized(txId: string): Promise<void> {
+    const tx = await this.databaseService.getTransactionById(txId);
+    if (tx?.status !== 'pending') return;
+    await this.databaseService.updateTransaction(txId, {
+      status: 'authorized',
+      authorized_at: new Date().toISOString(),
+    });
+  }
+
+  private async handleCanceledStripeAuthorization(
+    txId: string,
+    entityId: string | undefined,
+    paymentEntity: string | undefined
+  ): Promise<void> {
+    if (entityId && paymentEntity === 'rental_booking') {
+      await this.handleRentalAuthorizationLapsed(entityId);
+    } else if (entityId) {
+      await this.handleStripeAuthorizationLapsed(entityId);
+    }
+    await this.databaseService.updateTransaction(txId, {
+      status: 'expired',
+      error_message: 'Payment authorization expired or cancelled',
+    });
+  }
+
+  /**
+   * A lapsed card hold on a rental that has not started is cancelled.
+   * Once the item is out, the booking stays open and support is told once.
+   */
+  private async handleRentalAuthorizationLapsed(
+    bookingNumber: string
+  ): Promise<void> {
+    const booking = await this.fetchAuthorizedRental(bookingNumber);
+    if (!booking) return;
+    if (booking.status === 'proposed') {
+      await this.cancelProposedRentalAfterLapse(booking);
+      return;
+    }
+    if (!this.rentalStillOut(booking.status)) return;
+    await this.noteRentalAuthLapsed(booking);
+  }
+
+  private rentalStillOut(status: string): boolean {
+    return (
+      status === 'confirmed' ||
+      status === 'active' ||
+      status === 'awaiting_return'
+    );
+  }
+
+  private async fetchAuthorizedRental(bookingNumber: string) {
+    const response = await this.hasuraSystemService.executeQuery<{
+      rental_bookings: Array<{
+        id: string;
+        booking_number: string;
+        status: string;
+        payment_status: string;
+      }>;
+    }>(
+      `query AuthorizedRental($bookingNumber: String!) {
+        rental_bookings(
+          where: { booking_number: { _eq: $bookingNumber } }
+          limit: 1
+        ) { id booking_number status payment_status }
+      }`,
+      { bookingNumber }
+    );
+    const booking = response.rental_bookings?.[0];
+    if (!booking || booking.payment_status !== 'authorized') return null;
+    return booking;
+  }
+
+  private async cancelProposedRentalAfterLapse(booking: {
+    id: string;
+    status: string;
+  }): Promise<void> {
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings: { affected_rows: number } | null;
+    }>(
+      `mutation CancelProposedRental($id: uuid!) {
+        update_rental_bookings(
+          where: { id: { _eq: $id }, status: { _eq: proposed } }
+          _set: { status: cancelled, payment_status: cancelled, contract_expires_at: null }
+        ) { affected_rows }
+      }`,
+      { id: booking.id }
+    );
+    if ((result.update_rental_bookings?.affected_rows ?? 0) !== 1) return;
+    await this.insertRentalLapseNote(booking.id, booking.status);
+  }
+
+  private async noteRentalAuthLapsed(booking: {
+    id: string;
+    booking_number: string;
+    status: string;
+  }): Promise<void> {
+    this.logger.warn(
+      `stripe_auth_lapsed_rental booking=${booking.booking_number} id=${booking.id} status=${booking.status}`
+    );
+    if (await this.rentalLapseNoted(booking.id)) return;
+    await this.insertRentalLapseNote(booking.id, booking.status);
+  }
+
+  private async rentalLapseNoted(bookingId: string): Promise<boolean> {
+    const response = await this.hasuraSystemService.executeQuery<{
+      rental_status_history: Array<{ id: string }>;
+    }>(
+      `query RentalLapseNote($id: uuid!) {
+        rental_status_history(
+          where: {
+            rental_booking_id: { _eq: $id }
+            notes: { _eq: "Stripe authorization lapsed" }
+          }
+          limit: 1
+        ) { id }
+      }`,
+      { id: bookingId }
+    );
+    return (response.rental_status_history?.length ?? 0) > 0;
+  }
+
+  private async insertRentalLapseNote(
+    bookingId: string,
+    status: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation NoteRentalLapse($object: rental_status_history_insert_input!) {
+        insert_rental_status_history_one(object: $object) { id }
+      }`,
+      {
+        object: {
+          rental_booking_id: bookingId,
+          status,
+          previous_status: status,
+          changed_by_user_id: null,
+          changed_by_type: 'system',
+          notes: 'Stripe authorization lapsed',
+        },
+      }
+    );
   }
 
   private async handleStripeAuthorizationLapsed(

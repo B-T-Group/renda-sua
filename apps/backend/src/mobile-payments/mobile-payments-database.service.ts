@@ -81,6 +81,8 @@ export interface UpdateTransactionData {
   superseded_by_id?: string | null;
   superseded_reason?: string | null;
   superseded_at?: string | null;
+  /** Cleared when a failed rental attempt is replaced by a new one. */
+  idempotency_key?: string | null;
 }
 
 /** Columns that exist before the #545 migration (safe on hot paths during deploy). */

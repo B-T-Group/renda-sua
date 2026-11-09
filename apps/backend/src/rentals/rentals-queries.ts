@@ -436,6 +436,7 @@ export const REACTIVATE_RENTAL_HOLD = `
     $bookingId: uuid!
     $amount: numeric!
     $currency: currency_enum!
+    $attemptId: uuid!
   ) {
     update_rental_holds(
       where: {
@@ -446,6 +447,7 @@ export const REACTIVATE_RENTAL_HOLD = `
         status: active
         client_hold_amount: $amount
         currency: $currency
+        ledger_attempt_id: $attemptId
       }
     ) {
       affected_rows
