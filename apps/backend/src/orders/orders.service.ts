@@ -2877,18 +2877,23 @@ export class OrdersService {
     }
     await this.verifyOrderDeliveryPinForBusiness(order, pinTrimmed);
 
-    // Re-read payment fields so a concurrent wallet settle is not double-captured.
-    const orderForCapture = (await this.getOrderDetails(orderId)) ?? order;
-    // Capture authorized card PI only. Skips wallet / already-paid orders.
-    await this.captureStripeAuthorizedOrderIfNeeded(orderForCapture);
+    try {
+      // Re-read payment fields so a concurrent wallet settle is not double-captured.
+      const orderForCapture = (await this.getOrderDetails(orderId)) ?? order;
+      // Capture authorized card PI only. Skips wallet / already-paid orders.
+      await this.captureStripeAuthorizedOrderIfNeeded(orderForCapture);
 
-    // Settlement and completion are idempotent.
-    await this.processOrderPayment(orderId);
-    await this.processOrderDeliveryPayment(orderId);
-    await this.completeOrderWithSideEffects(
-      order,
-      'Order completed after client pickup confirmation'
-    );
+      // Settlement and completion are idempotent.
+      await this.processOrderPayment(orderId);
+      await this.processOrderDeliveryPayment(orderId);
+      await this.completeOrderWithSideEffects(
+        order,
+        'Order completed after client pickup confirmation'
+      );
+    } catch (error) {
+      await this.refundOrderPinAttempt(orderId);
+      throw error;
+    }
 
     if (pinMessageId) {
       await this.deliveryPinShareService.markPinConsumed(orderId, pinMessageId);
@@ -4085,44 +4090,49 @@ export class OrdersService {
       }
     }
 
-    await this.hasuraSystemService.executeMutation(
-      `mutation StampDeliveryConfirmMethod($id: uuid!, $method: String!, $at: timestamptz!) {
-        update_orders(
-          where: { id: { _eq: $id }, delivery_confirmation_method: { _is_null: true } }
-          _set: { delivery_confirmation_method: $method, client_confirmed_at: $at }
-        ) { affected_rows }
-      }`,
-      {
-        id: request.orderId,
-        method: hasResolvedPin ? 'pin' : 'overwrite',
-        at: new Date().toISOString(),
+    let updatedOrder: any;
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation StampDeliveryConfirmMethod($id: uuid!, $method: String!, $at: timestamptz!) {
+          update_orders(
+            where: { id: { _eq: $id }, delivery_confirmation_method: { _is_null: true } }
+            _set: { delivery_confirmation_method: $method, client_confirmed_at: $at }
+          ) { affected_rows }
+        }`,
+        {
+          id: request.orderId,
+          method: hasResolvedPin ? 'pin' : 'overwrite',
+          at: new Date().toISOString(),
+        }
+      );
+
+      if (isClientConfirmDeliveryOrder(order)) {
+        return await this.completeClientConfirmByOverwrite(request.orderId);
       }
-    );
 
-    if (isClientConfirmDeliveryOrder(order)) {
-      return this.completeClientConfirmByOverwrite(request.orderId);
-    }
+      await this.processOrderDeliveryPayment(request.orderId);
 
-    await this.processOrderDeliveryPayment(request.orderId);
-
-    let lostCompletionRace = false;
-    const updatedOrder = await this.updateOrderStatusWithSingleRetry(
-      request.orderId,
-      'complete',
-      {
-        viaCompleteDelivery: true,
-        onSameStatusReplay: () => { lostCompletionRace = true; },
+      let lostCompletionRace = false;
+      updatedOrder = await this.updateOrderStatusWithSingleRetry(
+        request.orderId,
+        'complete',
+        {
+          viaCompleteDelivery: true,
+          onSameStatusReplay: () => { lostCompletionRace = true; },
+        }
+      );
+      if (lostCompletionRace) {
+        // The other complete-delivery owns the tail. Do not refund the PIN:
+        // the delivery did complete.
+        return {
+          success: true,
+          order: updatedOrder,
+          message: 'Delivery already completed',
+        };
       }
-    );
-    if (lostCompletionRace) {
-      // A parallel complete-delivery already flipped the order and owns the
-      // completion tail (inventory, history, receipt, messages, loyalty).
-      // completed_at was set atomically by that update; never rewrite it.
-      return {
-        success: true,
-        order: updatedOrder,
-        message: 'Delivery already completed',
-      };
+    } catch (error) {
+      if (hasResolvedPin) await this.refundOrderPinAttempt(request.orderId);
+      throw error;
     }
     await this.createStatusHistoryEntry(
       request.orderId,
@@ -4471,6 +4481,28 @@ export class OrdersService {
     const row = result.update_orders;
     if (!row?.affected_rows) return null;
     return row.returning?.[0]?.delivery_pin_attempts ?? max;
+  }
+
+  /** Give back an attempt when a correct PIN's delivery failed for another reason. */
+  private async refundOrderPinAttempt(orderId: string): Promise<void> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation RefundDeliveryPinAttempt($orderId: uuid!) {
+          update_orders(
+            where: {
+              id: { _eq: $orderId }
+              delivery_pin_attempts: { _gt: 0 }
+            }
+            _inc: { delivery_pin_attempts: -1 }
+          ) { affected_rows }
+        }`,
+        { orderId }
+      );
+    } catch (error: any) {
+      this.logger.error(
+        `refundOrderPinAttempt ${orderId}: ${error?.message ?? error}`
+      );
+    }
   }
 
   private async setOrderDeliveryOverwriteUsedAt(orderId: string): Promise<void> {

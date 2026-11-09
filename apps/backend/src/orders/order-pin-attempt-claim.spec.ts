@@ -84,5 +84,58 @@ describe('order PIN attempt claim', () => {
       'agent-1',
       'order-1'
     );
+    const queries = svc.hasuraSystemService.executeMutation.mock.calls.map(
+      (call: any[]) => String(call[0])
+    );
+    expect(queries.some((query: string) => query.includes('RefundDeliveryPinAttempt'))).toBe(
+      false
+    );
+  });
+
+  it('returns the attempt when a correct PIN hits a completion conflict', async () => {
+    svc.hasuraSystemService.executeMutation.mockImplementation(async (query: string) => {
+      if (String(query).includes('ClaimDeliveryPinAttempt')) {
+        return {
+          update_orders: {
+            affected_rows: 1,
+            returning: [{ delivery_pin_attempts: 1 }],
+          },
+        };
+      }
+      return { update_orders: { affected_rows: 1 } };
+    });
+    svc.hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'agent-user',
+        active_persona: 'agent',
+        agent: { id: 'agent-1' },
+      }),
+    };
+    svc.requireActivePersona = jest.fn();
+    svc.requireAgentRecord = jest.fn().mockReturnValue({ id: 'agent-1' });
+    svc.getOrderDetails = jest.fn().mockResolvedValue({
+      id: 'order-1',
+      assigned_agent_id: 'agent-1',
+      current_status: 'out_for_delivery',
+      assigned_agent: { status: 'active' },
+      delivery_pin_hash: 'hash',
+      delivery_pin_attempts: 0,
+      order_items: [],
+      client: { user_id: 'c' },
+    });
+    svc.logger = { error: jest.fn(), warn: jest.fn() };
+    svc.processOrderDeliveryPayment = jest.fn();
+    svc.updateOrderStatusWithSingleRetry = jest
+      .fn()
+      .mockRejectedValue(new HttpException('conflict', HttpStatus.CONFLICT));
+    await expect(
+      svc.completeDelivery({ orderId: 'order-1', pin: '1234' })
+    ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+    const queries = svc.hasuraSystemService.executeMutation.mock.calls.map(
+      (call: any[]) => String(call[0])
+    );
+    expect(queries.some((query: string) => query.includes('RefundDeliveryPinAttempt'))).toBe(
+      true
+    );
   });
 });

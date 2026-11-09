@@ -67,16 +67,38 @@ describe('rental start PIN security', () => {
     );
   });
 
-  it('stops incrementing once the conditional update loses the race', async () => {
+  it('gives the attempt back when a correct PIN cannot start the rental', async () => {
+    const pin = '1234';
+    const hash = pins.hashPin('booking-1', pin);
     hasura.executeMutation.mockResolvedValue({
-      update_rental_bookings: { affected_rows: 0, returning: [] },
+      update_rental_bookings: {
+        affected_rows: 1,
+        returning: [{ rental_start_pin_attempts: 3 }],
+      },
     });
+    (svc as any).hasuraUserService = {
+      getUser: jest.fn().mockResolvedValue({
+        id: 'biz-user',
+        active_persona: 'business',
+        business: { id: 'biz' },
+      }),
+    };
+    (svc as any).fetchBooking.mockResolvedValue({
+      id: 'booking-1',
+      business_id: 'biz',
+      status: 'confirmed',
+      rental_start_pin_hash: hash,
+      rental_start_pin_attempts: 2,
+    });
+    (svc as any).casBooking = jest.fn().mockResolvedValue(false);
+    (svc as any).logger = { error: jest.fn(), warn: jest.fn() };
     await expect(
-      (svc as any).recordFailedRentalPinAttempt('booking-1')
-    ).rejects.toBeInstanceOf(HttpException);
-    await expect(
-      (svc as any).recordFailedRentalPinAttempt('booking-1')
-    ).rejects.toMatchObject({ message: 'Too many attempts' });
+      svc.verifyRentalStartPin('booking-1', { pin })
+    ).rejects.toMatchObject({ status: HttpStatus.CONFLICT });
+    const refund = hasura.executeMutation.mock.calls
+      .map((call) => String(call[0]))
+      .find((query) => query.includes('RefundRentalPinAttempt'));
+    expect(refund).toContain('rental_start_pin_attempts: { _gt: 0 }');
   });
 
   it('refuses a business-minted overwrite code', async () => {
