@@ -309,6 +309,7 @@ describe('OrdersService', () => {
             getPinForClient: jest.fn().mockResolvedValue('1234'),
             generatePin: jest.fn().mockReturnValue('1234'),
             hashPin: jest.fn().mockReturnValue('hash'),
+            isLegacyHash: jest.fn().mockReturnValue(false),
             setPinForClient: jest.fn(),
           },
         },

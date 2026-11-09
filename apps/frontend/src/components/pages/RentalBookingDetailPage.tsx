@@ -67,7 +67,6 @@ const RentalBookingDetailPage: React.FC = () => {
     verifyStartPin,
     shareStartPin,
     getActiveStartPin,
-    generateOverwrite,
     confirmReturn,
     getBookingPaymentStatus,
     retryBookingPayment,
@@ -771,6 +770,10 @@ const RentalBookingDetailPage: React.FC = () => {
                           label={t('rentals.overwriteCode', 'Overwrite code')}
                           value={ow}
                           onChange={(e) => setOw(e.target.value)}
+                          helperText={t(
+                            'rentals.supportCodeHint',
+                            'Ask the client for their start PIN. A support code is only for when the client cannot share it, and only support can issue one.'
+                          )}
                         />
                       </Stack>
                       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
@@ -797,19 +800,6 @@ const RentalBookingDetailPage: React.FC = () => {
                           }}
                         >
                           {t('rentals.verifyStart', 'Verify start')}
-                        </Button>
-                        <Button
-                          variant="outlined"
-                          onClick={async () => {
-                            try {
-                              const r = await generateOverwrite(bookingId);
-                              setInfo(`${t('rentals.overwrite', 'Overwrite')}: ${r.overwriteCode}`);
-                            } catch (e: unknown) {
-                              setError(e instanceof Error ? e.message : 'Error');
-                            }
-                          }}
-                        >
-                          {t('rentals.genOverwrite', 'Generate overwrite code')}
                         </Button>
                         {cancellableBeforeStart ? (
                           <Button

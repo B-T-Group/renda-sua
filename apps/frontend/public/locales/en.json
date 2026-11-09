@@ -7154,6 +7154,8 @@
     "verifyStart": "Verify start",
     "started": "Rental started",
     "genOverwrite": "Generate overwrite code",
+    "enterSupportCode": "Enter support code",
+    "supportCodeHint": "Ask the client for their start PIN. A support code is only for when the client cannot share it, and only support can issue one.",
     "overwrite": "Overwrite",
     "confirmReturn": "Confirm return",
     "completed": "Completed and settled",

@@ -62,6 +62,9 @@ import * as Q from './rentals-queries';
 
 const RENTAL_DISTANCE_CACHE_TTL = 7776000;
 
+export const RENTAL_OVERWRITE_BUSINESS_FORBIDDEN =
+  "A rental can only be started with the client's PIN. Contact support if the client cannot share it.";
+
 /** Default security deposit = 8x the listing hourly rate (business can overwrite). */
 const RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER = 8;
 
@@ -2752,13 +2755,20 @@ export class RentalsService {
     return { success: true };
   }
 
-  async generateStartOverwriteCode(bookingId: string) {
-    const user = await this.hasuraUserService.getUser();
-    if (!isActivePersona(user, 'business') || !user.business?.id) {
-      throw new HttpException('Only businesses', HttpStatus.FORBIDDEN);
-    }
+  async generateStartOverwriteCode(_bookingId: string): Promise<never> {
+    throw new HttpException(
+      RENTAL_OVERWRITE_BUSINESS_FORBIDDEN,
+      HttpStatus.FORBIDDEN
+    );
+  }
+
+  /** Support-only exception when the client cannot show the start PIN. */
+  async issueStartOverwriteCodeForSupport(
+    bookingId: string,
+    actorUserId: string
+  ): Promise<{ overwriteCode: string }> {
     const booking = await this.fetchBooking(bookingId);
-    if (!booking || booking.business_id !== user.business.id) {
+    if (!booking) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
     }
     if (booking.status !== 'confirmed') {
@@ -2767,6 +2777,14 @@ export class RentalsService {
     const code = crypto.randomBytes(4).toString('hex').toUpperCase();
     const hash = this.deliveryPinService.hashOverwriteCode(bookingId, code);
     await this.patchBooking(bookingId, { rental_start_overwrite_code_hash: hash });
+    await this.logHistory(
+      bookingId,
+      'confirmed',
+      'confirmed',
+      actorUserId || null,
+      'system',
+      'Support issued a rental start code'
+    );
     return { overwriteCode: code };
   }
 
@@ -3963,22 +3981,54 @@ export class RentalsService {
   }
 
   private async verifyPinAttempt(bookingId: string, booking: any, pin: string) {
-    const hash = booking.rental_start_pin_hash;
+    const hash = booking.rental_start_pin_hash as string | undefined;
     if (!hash) {
       throw new HttpException('PIN not set', HttpStatus.BAD_REQUEST);
     }
-    const ok = this.deliveryPinService.verifyPin(bookingId, pin, hash);
-    if (ok) return;
-    const fresh = await this.fetchBooking(bookingId);
-    const next = (fresh?.rental_start_pin_attempts ?? 0) + 1;
-    await this.hasuraSystemService.executeMutation(Q.INCREMENT_RENTAL_PIN_ATTEMPTS, {
-      id: bookingId,
-      attempts: next,
-    });
-    if (next >= this.deliveryPinService.getMaxPinAttempts()) {
+    this.assertRentalPinNotLocked(booking.rental_start_pin_attempts);
+    if (!this.deliveryPinService.verifyPin(bookingId, pin, hash)) {
+      await this.recordFailedRentalPinAttempt(bookingId);
+    }
+    await this.upgradeLegacyRentalPinHash(bookingId, pin, hash);
+  }
+
+  private assertRentalPinNotLocked(attempts: number | null | undefined): void {
+    const max = this.deliveryPinService.getMaxPinAttempts();
+    if ((attempts ?? 0) >= max) {
+      throw new HttpException('Too many attempts', HttpStatus.FORBIDDEN);
+    }
+  }
+
+  private async recordFailedRentalPinAttempt(bookingId: string): Promise<never> {
+    const max = this.deliveryPinService.getMaxPinAttempts();
+    const result = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings: {
+        affected_rows: number;
+        returning: Array<{ rental_start_pin_attempts: number }>;
+      };
+    }>(Q.INCREMENT_RENTAL_PIN_ATTEMPTS, { id: bookingId, max });
+    const row = result.update_rental_bookings;
+    const next = row?.returning?.[0]?.rental_start_pin_attempts ?? max;
+    if (!row?.affected_rows || next >= max) {
       throw new HttpException('Too many attempts', HttpStatus.FORBIDDEN);
     }
     throw new HttpException('Invalid PIN', HttpStatus.FORBIDDEN);
+  }
+
+  private async upgradeLegacyRentalPinHash(
+    bookingId: string,
+    pin: string,
+    hash: string
+  ): Promise<void> {
+    if (!this.deliveryPinService.isLegacyHash(hash)) return;
+    try {
+      const next = this.deliveryPinService.hashPin(bookingId, pin);
+      await this.patchBooking(bookingId, { rental_start_pin_hash: next });
+    } catch (error: any) {
+      this.logger.warn(
+        `Could not upgrade rental PIN hash for ${bookingId}: ${error?.message}`
+      );
+    }
   }
 
   private async resolveRentalCatalogGeo(
@@ -4352,7 +4402,7 @@ export class RentalsService {
   }
 
   private async verifyOverwrite(bookingId: string, booking: any, code: string) {
-    const hash = booking.rental_start_overwrite_code_hash;
+    const hash = booking.rental_start_overwrite_code_hash as string | undefined;
     if (!hash) {
       throw new HttpException('No overwrite code', HttpStatus.BAD_REQUEST);
     }
@@ -4360,7 +4410,11 @@ export class RentalsService {
     if (!ok) {
       throw new HttpException('Invalid overwrite code', HttpStatus.FORBIDDEN);
     }
+    const nextHash = this.deliveryPinService.isLegacyHash(hash)
+      ? this.deliveryPinService.hashOverwriteCode(bookingId, code)
+      : hash;
     await this.patchBooking(bookingId, {
+      rental_start_overwrite_code_hash: nextHash,
       rental_start_overwrite_code_used_at: new Date().toISOString(),
     });
   }

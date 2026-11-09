@@ -661,9 +661,12 @@ export class RentalsController {
 
   @Post('bookings/:id/start-overwrite-code')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Generate start overwrite code (business)' })
+  @ApiOperation({
+    summary:
+      'Rejected. Businesses cannot mint a start code. Support uses the admin route.',
+  })
   @ApiParam({ name: 'id', format: 'uuid' })
-  @ApiResponse({ status: 200, description: 'Code returned once' })
+  @ApiResponse({ status: 403, description: 'Business cannot start a rental alone' })
   async generateOverwrite(@Param('id') bookingId: string) {
     return this.rentalsService.generateStartOverwriteCode(bookingId);
   }
