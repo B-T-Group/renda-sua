@@ -258,9 +258,7 @@ export class AwsService {
     }
   }
 
-  /**
-   * Check whether an object exists in S3.
-   */
+  /** Head an object without downloading it. Returns null when it is missing. */
   async headObjectMeta(
     bucketName: string,
     key: string
@@ -297,6 +295,7 @@ export class AwsService {
     return out.VersionId ?? null;
   }
 
+  /** Check whether an object exists in S3. */
   async objectExists(bucketName: string, key: string): Promise<boolean> {
     if (!bucketName) throw new Error('Bucket name is required');
     if (!key) throw new Error('Object key is required');

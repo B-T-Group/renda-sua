@@ -377,7 +377,8 @@ describe('inspection SQL enforces the same gates', () => {
 
   it('records handback at server time and keeps the flag off', () => {
     expect(sql).toContain('return_handed_back_at = v_at');
-    expect(sql).toContain('actual_end_at = v_at');
+    expect(sql).toContain('actual_end_at = v_end');
+    expect(sql).toContain('LEAST(v_at, COALESCE(v_reported, v_at))');
     expect(sql).toContain("'rental_inspection_enabled'");
     expect(sql).toMatch(/'rental_inspection_enabled'[\s\S]*false/);
   });

@@ -135,15 +135,42 @@ export class RentalInspectionService {
     const booking = await this.requireBusiness(bookingId);
     const row = await this.one(
       'rental_record_handback',
-      `mutation Handback($id: uuid!, $actor: uuid!) {
-        rental_record_handback(args: { p_booking_id: $id, p_actor: $actor }) { id status return_resolution }
+      `mutation Handback($id: uuid!, $actor: uuid!, $note: String) {
+        rental_record_handback(args: { p_booking_id: $id, p_actor: $actor, p_note: $note }) { id status return_resolution }
       }`,
-      { id: bookingId, actor: booking.actorId }
+      { id: bookingId, actor: booking.actorId, note: null }
     );
     if (!row) throw new HttpException('Every unit needs a return report first', HttpStatus.CONFLICT);
     if (booking.status === 'active' && row.status === 'awaiting_return') {
       await this.rentals.noteInspectionHandback(bookingId, booking.actorId);
     }
+    if (row.return_resolution === 'accepted' || row.return_resolution === 'admin_cleared') {
+      await this.rentals.settleEnrolledRental(bookingId);
+    }
+    return { handedBack: true, serverAt: new Date().toISOString() };
+  }
+
+  async recordHandbackAsAdmin(bookingId: string, actorId: string, reason: string) {
+    const note = reason?.trim();
+    if (!note) throw new HttpException('A reason is required', HttpStatus.BAD_REQUEST);
+    const before = await this.booking(bookingId);
+    const row = await this.one(
+      'rental_record_handback',
+      `mutation AdminHandback($id: uuid!, $actor: uuid!, $note: String!) {
+        rental_record_handback(args: { p_booking_id: $id, p_actor: $actor, p_note: $note }) {
+          id status return_resolution
+        }
+      }`,
+      { id: bookingId, actor: actorId, note }
+    );
+    if (!row) throw new HttpException('Every unit needs a return report first', HttpStatus.CONFLICT);
+    await this.rentals.noteInspectionHandback(
+      bookingId,
+      actorId,
+      `Admin recorded physical handback. ${note}`,
+      'system',
+      before.status
+    );
     if (row.return_resolution === 'accepted' || row.return_resolution === 'admin_cleared') {
       await this.rentals.settleEnrolledRental(bookingId);
     }
@@ -246,20 +273,27 @@ export class RentalInspectionService {
   }
 
   private async requestCorrection(booking: BookingRow & { actorId: string }, stage: InspectionStage, versionId: string, reason: string) {
-    await this.hasura.executeMutation(
-      `mutation Correction($object: rental_inspection_acks_insert_input!, $bookingId: uuid!, $stage: String!) {
-        insert_rental_inspection_acks_one(object: $object) { id }
-        update_rental_inspections(
-          where: { rental_booking_id: { _eq: $bookingId }, stage: { _eq: $stage } }
-          _set: { status: "correction_requested" }
-        ) { affected_rows }
-      }`,
-      {
-        bookingId: booking.id,
-        stage,
-        object: { version_id: versionId, actor_user_id: booking.actorId, persona: 'client', decision: 'correction', reason },
+    try {
+      const row = await this.one(
+        'rental_request_correction',
+        `mutation RequestCorrection($id: uuid!, $stage: String!, $version: uuid!, $actor: uuid!, $reason: String!) {
+          rental_request_correction(args: {
+            p_booking_id: $id, p_stage: $stage, p_version_id: $version, p_actor: $actor, p_reason: $reason
+          }) { id }
+        }`,
+        { id: booking.id, stage, version: versionId, actor: booking.actorId, reason }
+      );
+      if (!row) {
+        throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
       }
-    );
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      const text = JSON.stringify(error?.response ?? error?.message ?? error);
+      if (text.includes('rental_inspection_correction_conflict') || text.includes('Uniqueness violation')) {
+        throw new HttpException('That report changed. Review it again.', HttpStatus.CONFLICT);
+      }
+      throw error;
+    }
     await this.notice(booking, 'correction', booking.business.user_id);
     return { correctionRequested: true };
   }
@@ -412,6 +446,9 @@ export class RentalInspectionService {
 
   private submitError(error: any): HttpException {
     const text = JSON.stringify(error?.response ?? error?.message ?? error);
+    if (text.includes('rental_inspection_manifest_stale')) {
+      return new HttpException('A photo changed. Review the report and submit again.', HttpStatus.CONFLICT);
+    }
     if (text.includes('rental_inspection_photos')) {
       return new HttpException('Each unit needs overview, other side, and accessories photos', HttpStatus.BAD_REQUEST);
     }

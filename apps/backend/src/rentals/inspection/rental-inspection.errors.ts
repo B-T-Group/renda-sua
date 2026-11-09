@@ -14,6 +14,18 @@ export function inspectionUpdateRequired(): HttpException {
   );
 }
 
+export function inspectionUnavailable(): HttpException {
+  return new HttpException(
+    {
+      success: false,
+      code: 'RENTAL_INSPECTION_UNAVAILABLE',
+      error: 'Inspection state unavailable',
+      message: 'Inspection state unavailable. Try again.',
+    },
+    HttpStatus.SERVICE_UNAVAILABLE
+  );
+}
+
 export function inspectionRejected(code: string, message: string): HttpException {
   return new HttpException(
     { success: false, code, error: message, message },

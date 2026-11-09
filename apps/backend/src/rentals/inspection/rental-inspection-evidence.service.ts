@@ -40,7 +40,7 @@ export class RentalInspectionEvidenceService {
     await this.assertUnit(bookingId, input.unitId);
     const mediaId = randomUUID();
     const objectKey = inspectionObjectKey(bookingId, mediaId, upload.ext);
-    await this.insertPending(mediaId, inspection.id, input, objectKey, upload, actor.userId);
+    await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId);
     const signed = await this.aws.generateStrictUploadUrl({
       bucketName: this.bucket(),
       key: objectKey,
@@ -64,13 +64,22 @@ export class RentalInspectionEvidenceService {
     this.assertUploaded(head, media);
     const bytes = await this.aws.readObjectBytes(this.bucket(), media.object_key);
     const sha256 = createHash('sha256').update(bytes).digest('hex');
-    const derivative = await this.writeDerivative(media.object_key, bytes);
+    const ext = media.object_key.split('.').pop() || 'jpg';
+    const finalKey = inspectionObjectKey(bookingId, randomUUID(), ext);
+    const copiedVersion = await this.aws.putPrivateObject(
+      this.bucket(),
+      finalKey,
+      bytes,
+      head!.contentType
+    );
+    const derivative = await this.writeDerivative(finalKey, bytes);
     await this.markReady(mediaId, {
       sha256,
       byteSize: bytes.length,
       contentType: head!.contentType,
-      versionId: head!.versionId,
+      versionId: copiedVersion ?? head!.versionId,
       derivativeKey: derivative,
+      objectKey: finalKey,
     });
     return { mediaId, status: 'ready', sha256 };
   }
@@ -149,6 +158,7 @@ export class RentalInspectionEvidenceService {
   }
 
   private async insertPending(
+    bookingId: string,
     mediaId: string,
     inspectionId: string,
     input: EvidencePresignInput,
@@ -156,7 +166,7 @@ export class RentalInspectionEvidenceService {
     upload: { contentType: string; size: number },
     userId: string
   ) {
-    if (!isInspectionEvidenceKey(objectKey, objectKey.split('/')[2])) {
+    if (!isInspectionEvidenceKey(objectKey, bookingId)) {
       throw new HttpException('Invalid evidence key', HttpStatus.BAD_REQUEST);
     }
     await this.hasura.executeMutation(
@@ -193,13 +203,16 @@ export class RentalInspectionEvidenceService {
     const media = await this.mediaRow(mediaId);
     const booking = await this.bookingParty(bookingId);
     const user = await this.users.getUser();
-    const party =
-      (isActivePersona(user, 'business') && user.business?.id === booking.business_id) ||
-      (isActivePersona(user, 'client') && user.client?.id === booking.client_id);
-    if (!media || !party || !isInspectionEvidenceKey(media.object_key, bookingId)) {
+    const client = isActivePersona(user, 'client') && user.client?.id === booking.client_id;
+    const business = isActivePersona(user, 'business') && user.business?.id === booking.business_id;
+    if (!media || (!client && !business) || !isInspectionEvidenceKey(media.object_key, bookingId)) {
       throw new HttpException('Photo not found', HttpStatus.NOT_FOUND);
     }
     if (media.status === 'pending') throw new HttpException('Photo is not ready', HttpStatus.CONFLICT);
+    const draftBusinessPhoto = !media.version_id && media.role !== 'counter';
+    if (client && (draftBusinessPhoto || (media.role === 'counter' && media.created_by !== user.id))) {
+      throw new HttpException('Photo not found', HttpStatus.NOT_FOUND);
+    }
     return media;
   }
 
@@ -210,6 +223,8 @@ export class RentalInspectionEvidenceService {
         object_key: string;
         derivative_key: string | null;
         status: string;
+        version_id: string | null;
+        role: string;
         expected_byte_size: number | null;
         content_type: string | null;
         created_by: string | null;
@@ -217,7 +232,7 @@ export class RentalInspectionEvidenceService {
     }>(
       `query InspectionMedia($id: uuid!) {
         rental_inspection_media_by_pk(id: $id) {
-          id object_key derivative_key status expected_byte_size content_type created_by
+          id object_key derivative_key status version_id role expected_byte_size content_type created_by
         }
       }`,
       { id: mediaId }
@@ -251,7 +266,14 @@ export class RentalInspectionEvidenceService {
 
   private async markReady(
     mediaId: string,
-    proof: { sha256: string; byteSize: number; contentType: string; versionId: string | null; derivativeKey: string }
+    proof: {
+      sha256: string;
+      byteSize: number;
+      contentType: string;
+      versionId: string | null;
+      derivativeKey: string;
+      objectKey: string;
+    }
   ) {
     await this.hasura.executeMutation(
       `mutation ReadyInspectionMedia($id: uuid!, $set: rental_inspection_media_set_input!) {
@@ -264,6 +286,7 @@ export class RentalInspectionEvidenceService {
         id: mediaId,
         set: {
           status: 'ready',
+          object_key: proof.objectKey,
           sha256: proof.sha256,
           byte_size: proof.byteSize,
           content_type: proof.contentType,

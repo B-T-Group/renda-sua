@@ -39,10 +39,15 @@ import {
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
-import { inspectionRejected, inspectionUpdateRequired } from './inspection/rental-inspection.errors';
+import {
+  inspectionRejected,
+  inspectionUnavailable,
+  inspectionUpdateRequired,
+} from './inspection/rental-inspection.errors';
 import {
   decideInspectionEnrolment,
   DEFAULT_STRIPE_REVIEW_HOURS,
+  OVERTIME_PROMPT_BACKOFF_MS,
   pickupStartAllowed,
   priceEnrolledCapture,
   settlementGate,
@@ -1220,6 +1225,11 @@ export class RentalsService {
       : await this.paymentRoutingService.resolveRailForUser(user.id);
     if (rail === 'stripe') {
       this.assertStripeRentalEndWithinAuthWindow(booking.end_at as string);
+      await this.assertEnrolledStripeReviewWindow(
+        bookingId,
+        booking.end_at as string,
+        listingCountry
+      );
       const deposit =
         Math.max(0, Number(booking.security_deposit_amount) || 0) ||
         this.snapshotSecurityDeposit(snap);
@@ -2513,10 +2523,6 @@ export class RentalsService {
       Number(booking.overtime_amount) > 0
     ) {
       const policy = await this.readInspectionPolicy(booking.id);
-      if (policy === undefined) {
-        this.logger?.warn(`overtime callback deferred; inspection policy unread (${booking.id})`);
-        return;
-      }
       if (policy != null) {
         await this.settleEnrolledRental(booking.id);
         return;
@@ -2980,9 +2986,8 @@ export class RentalsService {
         HttpStatus.BAD_REQUEST
       );
     }
-    if ((await this.readInspectionPolicy(bookingId)) != null) {
-      throw inspectionUpdateRequired();
-    }
+    const policy = await this.readInspectionPolicy(bookingId);
+    if (policy != null) throw inspectionUpdateRequired();
     const previousStatus = booking.status as 'active' | 'awaiting_return';
     const actualEndAt = await this.resolveActualReturnAt(
       booking,
@@ -3415,11 +3420,14 @@ export class RentalsService {
     throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
   }
 
-  /** Uses the inspection start function when it is installed. Otherwise the legacy status claim. */
+  /**
+   * The inspection start function is the atomic gate. The legacy status claim
+   * is only for a booking whose policy is known to be null while that function
+   * is not installed yet.
+   */
   private async markInspectionOrLegacyStart(bookingId: string): Promise<boolean> {
+    const policy = await this.readInspectionPolicy(bookingId);
     const at = new Date().toISOString();
-    const legacy = () =>
-      this.casBooking(bookingId, ['confirmed'], { status: 'active', actual_start_at: at });
     try {
       const result = await this.hasuraSystemService.executeMutation<{
         rental_mark_started?: Array<{ id: string }>;
@@ -3429,14 +3437,27 @@ export class RentalsService {
         }`,
         { id: bookingId, at }
       );
-      if (!Object.prototype.hasOwnProperty.call(result ?? {}, 'rental_mark_started')) {
-        return legacy();
+      if (Object.prototype.hasOwnProperty.call(result ?? {}, 'rental_mark_started')) {
+        return (result.rental_mark_started?.length ?? 0) > 0;
       }
-      return (result.rental_mark_started?.length ?? 0) > 0;
+      return this.legacyStartIfUnenrolled(policy, bookingId, at);
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       if (!this.missingInspectionFunction(error)) throw error;
-      return legacy();
+      return this.legacyStartIfUnenrolled(policy, bookingId, at);
     }
+  }
+
+  private legacyStartIfUnenrolled(
+    policy: number | null,
+    bookingId: string,
+    at: string
+  ): Promise<boolean> {
+    if (policy !== null) throw inspectionUnavailable();
+    return this.casBooking(bookingId, ['confirmed'], {
+      status: 'active',
+      actual_start_at: at,
+    });
   }
 
   private missingInspectionFunction(error: any): boolean {
@@ -3549,9 +3570,7 @@ export class RentalsService {
       );
     }
     const startGate = await this.readInspectionStart(bookingId);
-    if (startGate.inspectionPolicyVersion != null && !startGate.pickupAckCurrent) {
-      throw inspectionUpdateRequired();
-    }
+    if (!pickupStartAllowed(startGate)) throw inspectionUpdateRequired();
     const total = Number(booking.total_amount);
     const clientUserId = booking.client.user_id as string;
     const clientAccount = await this.hasuraSystemService.getAccount(
@@ -4361,11 +4380,8 @@ export class RentalsService {
     }
   }
 
-  /**
-   * null = legacy (column present, not enrolled). undefined = the column could
-   * not be read, so callers must not take the enrolled path or the legacy money path.
-   */
-  private async readInspectionPolicy(bookingId: string): Promise<number | null | undefined> {
+  /** null = legacy. A failed read throws 503 so callers retry instead of guessing. */
+  private async readInspectionPolicy(bookingId: string): Promise<number | null> {
     try {
       const result = await this.hasuraSystemService.executeQuery<{
         rental_bookings_by_pk: { inspection_policy_version?: number | null } | null;
@@ -4377,18 +4393,13 @@ export class RentalsService {
       );
       return result.rental_bookings_by_pk?.inspection_policy_version ?? null;
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       this.logger?.warn(`readInspectionPolicy ${bookingId}: ${error?.message ?? error}`);
-      return undefined;
+      throw inspectionUnavailable();
     }
   }
 
   private async readInspectionStart(bookingId: string) {
-    const open = {
-      inspectionPolicyVersion: null as number | null,
-      pickupAckCurrent: true,
-      pickupAcceptedVersionId: null as string | null,
-      pickupCurrentVersionId: null as string | null,
-    };
     try {
       const result = await this.hasuraSystemService.executeQuery<{
         rental_bookings_by_pk: {
@@ -4409,7 +4420,7 @@ export class RentalsService {
         { id: bookingId }
       );
       const row = result.rental_bookings_by_pk;
-      if (!row) return open;
+      if (!row) throw inspectionUnavailable();
       return {
         inspectionPolicyVersion: row.inspection_policy_version ?? null,
         pickupAckCurrent: !!row.pickup_ack_current,
@@ -4417,19 +4428,26 @@ export class RentalsService {
         pickupCurrentVersionId: row.pickup_current_version_id ?? null,
       };
     } catch (error: any) {
+      if (error instanceof HttpException) throw error;
       this.logger?.warn(`readInspectionStart ${bookingId}: ${error?.message ?? error}`);
-      return open;
+      throw inspectionUnavailable();
     }
   }
 
-  async noteInspectionHandback(bookingId: string, actorId: string): Promise<void> {
+  async noteInspectionHandback(
+    bookingId: string,
+    actorId: string,
+    notes = 'Physical handback recorded',
+    changedByType: 'business' | 'system' = 'business',
+    previous = 'active'
+  ): Promise<void> {
     await this.logHistory(
       bookingId,
       'awaiting_return',
-      'active',
+      previous,
       actorId,
-      'business',
-      'Physical handback recorded'
+      changedByType,
+      notes
     );
   }
 
@@ -4439,6 +4457,7 @@ export class RentalsService {
     const fields = booking ? await this.readEnrolledSettlement(bookingId) : null;
     if (!booking || !fields || fields.inspectionPolicyVersion == null) return;
     const gate = settlementGate({ ...fields, status: booking.status });
+    if (fields.settlementAttention) return;
     if (gate.state === 'legacy' || gate.state === 'already' || gate.state === 'blocked') return;
     if (gate.state === 'ready' && !(await this.claimEnrolledSettlement(bookingId))) return;
     await this.finishEnrolledSettlement(booking, fields);
@@ -4454,6 +4473,7 @@ export class RentalsService {
             inspection_policy_version: { _is_null: false }
             return_handed_back_at: { _is_null: false }
             settlement_completed_at: { _is_null: true }
+            settlement_attention: { _is_null: true }
             return_resolution: { _in: ["accepted", "admin_cleared"] }
             status: { _in: [active, awaiting_return, completed] }
           }) { id }
@@ -4484,6 +4504,8 @@ export class RentalsService {
           return_resolution?: string | null;
           settlement_claimed_at?: string | null;
           settlement_completed_at?: string | null;
+          settlement_attention?: string | null;
+          overtime_prompted_at?: string | null;
         } | null;
         rental_inspection_disputes: Array<{ id: string }>;
       }>(
@@ -4494,6 +4516,8 @@ export class RentalsService {
             return_resolution
             settlement_claimed_at
             settlement_completed_at
+            settlement_attention
+            overtime_prompted_at
           }
           rental_inspection_disputes(
             where: { rental_booking_id: { _eq: $id }, status: { _in: ["open", "escalated"] } }
@@ -4512,6 +4536,8 @@ export class RentalsService {
         settlementCompletedAt: row.settlement_completed_at ?? null,
         openDispute: (result.rental_inspection_disputes?.length ?? 0) > 0,
         status: '',
+        settlementAttention: row.settlement_attention ?? null,
+        overtimePromptedAt: row.overtime_prompted_at ?? null,
       };
     } catch (error: any) {
       this.logger?.warn(`readEnrolledSettlement ${bookingId}: ${error?.message ?? error}`);
@@ -4547,8 +4573,7 @@ export class RentalsService {
       return;
     }
     if (await this.overtimeNeedsMobileMoney(fresh, settlement.overtimeAmount)) {
-      await this.patchBooking(fresh.id, { overtime_amount: settlement.overtimeAmount });
-      await this.pushOvertimeCharge(fresh, settlement.overtimeAmount);
+      await this.pushEnrolledOvertimePrompt(fresh, settlement.overtimeAmount, fields.overtimePromptedAt);
       return;
     }
     const won = await this.runCompletion(fresh.id, fresh.status, null, 'system', () =>
@@ -4568,10 +4593,62 @@ export class RentalsService {
       collectDamage: damage > 0,
     });
     const priced = { ...settlement, stripeCharge: quote.charge, overtimeAmount: quote.overtimeTaken };
-    const won = await this.runCompletion(booking.id, booking.status, null, 'system', () =>
-      this.settleStripeAuthorizedBooking(booking, priced)
+    try {
+      const won = await this.runCompletion(booking.id, booking.status, null, 'system', () =>
+        this.settleStripeAuthorizedBooking(booking, priced)
+      );
+      if (won) await this.stampSettlementCompleted(booking.id);
+    } catch (error: any) {
+      if (!this.stripeAuthUncollectable(error)) throw error;
+      await this.markSettlementAttention(booking.id, 'stripe_auth_expired');
+      await this.logHistory(
+        booking.id,
+        booking.status,
+        booking.status,
+        null,
+        'system',
+        'Stripe authorization expired before capture. Flagged for an admin. No further automatic capture.'
+      );
+    }
+  }
+
+  private stripeAuthUncollectable(error: any): boolean {
+    const text = `${error?.message ?? ''} ${JSON.stringify(error?.response ?? '')}`.toLowerCase();
+    return /expired|canceled|cancelled|could not be captured|unexpected_state|cannot capture transaction in status/.test(
+      text
     );
-    if (won) await this.stampSettlementCompleted(booking.id);
+  }
+
+  private async markSettlementAttention(bookingId: string, reason: string): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation FlagInspectionSettlement($id: uuid!, $reason: String!) {
+        update_rental_bookings(
+          where: { id: { _eq: $id }, settlement_attention: { _is_null: true } }
+          _set: { settlement_attention: $reason }
+        ) { affected_rows }
+      }`,
+      { id: bookingId, reason }
+    );
+  }
+
+  /** Reuse a pending overtime prompt. Otherwise wait out the backoff before another push. */
+  private async pushEnrolledOvertimePrompt(
+    booking: any,
+    overtimeAmount: number,
+    promptedAt?: string | null
+  ): Promise<void> {
+    if (promptedAt && Date.now() - new Date(promptedAt).getTime() < OVERTIME_PROMPT_BACKOFF_MS) {
+      return;
+    }
+    const pending = await this.mobilePaymentsDatabaseService.hasPendingRentalBookingPayment(
+      booking.booking_number
+    );
+    if (pending) return;
+    await this.patchBooking(booking.id, {
+      overtime_amount: overtimeAmount,
+      overtime_prompted_at: new Date().toISOString(),
+    });
+    await this.pushOvertimeCharge(booking, overtimeAmount);
   }
 
   private async upheldDamage(bookingId: string): Promise<number> {

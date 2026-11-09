@@ -17,7 +17,7 @@ import type { Request } from 'express';
 import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
 import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
-import { DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
+import { AdminHandbackDto, DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { RentalsService } from './rentals.service';
 
@@ -58,6 +58,18 @@ export class AdminRentalBookingsController {
       bookingId,
       req.user.id
     );
+  }
+
+  @Post('bookings/:id/inspection-handback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Record physical handback at server time when the business does not' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  handback(
+    @Param('id', ParseUUIDPipe) bookingId: string,
+    @Body() body: AdminHandbackDto,
+    @Req() req: RequestWithUser
+  ) {
+    return this.inspections.recordHandbackAsAdmin(bookingId, req.user.id, body.reason);
   }
 
   @Get('inspection-disputes')

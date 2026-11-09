@@ -26,7 +26,7 @@ export function inspectionObjectKey(
   ext: string,
   envName?: string
 ): string {
-  return `${inspectionKeyRoot(envName)}/rental-inspection/${bookingId}/${mediaId}.${ext}`;
+  return `${inspectionKeyRoot(envName)}/rental-inspection/${bookingId.toLowerCase()}/${mediaId.toLowerCase()}.${ext}`;
 }
 
 export function inspectionDerivativeKey(objectKey: string): string {

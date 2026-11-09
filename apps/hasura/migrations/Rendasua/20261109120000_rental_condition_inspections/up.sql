@@ -16,7 +16,9 @@ ALTER TABLE public.rental_bookings
   ADD COLUMN IF NOT EXISTS return_resolution text,
   ADD COLUMN IF NOT EXISTS return_reminder_sent_at timestamptz,
   ADD COLUMN IF NOT EXISTS settlement_claimed_at timestamptz,
-  ADD COLUMN IF NOT EXISTS settlement_completed_at timestamptz;
+  ADD COLUMN IF NOT EXISTS settlement_completed_at timestamptz,
+  ADD COLUMN IF NOT EXISTS settlement_attention text,
+  ADD COLUMN IF NOT EXISTS overtime_prompted_at timestamptz;
 
 DO $$ BEGIN
   ALTER TABLE public.rental_bookings
@@ -41,6 +43,10 @@ COMMENT ON COLUMN public.rental_bookings.return_handed_back_at IS
   'Server time of physical handback. Independent of dispute and settlement.';
 COMMENT ON COLUMN public.rental_bookings.settlement_claimed_at IS
   'Compare-and-set lease so an enrolled rental settles at most once, and not while a dispute or pending acknowledgment is open.';
+COMMENT ON COLUMN public.rental_bookings.settlement_attention IS
+  'Set when automatic settlement cannot continue, such as a Stripe authorization that expired before capture. The sweep skips these rows.';
+COMMENT ON COLUMN public.rental_bookings.overtime_prompted_at IS
+  'Last enrolled overtime mobile-money prompt. The sweep reuses a pending prompt and waits six hours before sending another.';
 
 CREATE TABLE IF NOT EXISTS public.rental_booking_units (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -77,6 +83,7 @@ CREATE TABLE IF NOT EXISTS public.rental_inspection_versions (
   status text NOT NULL CHECK (status IN ('submitted', 'superseded')),
   allocation_version integer NOT NULL CHECK (allocation_version >= 1),
   manifest jsonb NOT NULL,
+  manifest_text text NOT NULL,
   manifest_sha256 text NOT NULL,
   submitted_by uuid,
   submitted_at timestamptz NOT NULL DEFAULT now(),
@@ -237,6 +244,7 @@ BEGIN
        AND NEW.version_no = OLD.version_no
        AND NEW.allocation_version = OLD.allocation_version
        AND NEW.manifest = OLD.manifest
+       AND NEW.manifest_text = OLD.manifest_text
        AND NEW.manifest_sha256 = OLD.manifest_sha256
        AND NEW.submitted_by IS NOT DISTINCT FROM OLD.submitted_by
        AND NEW.submitted_at = OLD.submitted_at
@@ -249,7 +257,10 @@ BEGIN
       RAISE EXCEPTION 'rental_inspection_item_immutable' USING ERRCODE = 'check_violation';
     END IF;
   ELSIF TG_TABLE_NAME = 'rental_inspection_media' THEN
-    IF TG_OP = 'DELETE' OR OLD.status = 'locked' OR NEW.object_key IS DISTINCT FROM OLD.object_key THEN
+    IF TG_OP = 'DELETE' OR OLD.status = 'locked' THEN
+      RAISE EXCEPTION 'rental_inspection_media_immutable' USING ERRCODE = 'check_violation';
+    END IF;
+    IF OLD.status = 'ready' AND NEW.object_key IS DISTINCT FROM OLD.object_key THEN
       RAISE EXCEPTION 'rental_inspection_media_immutable' USING ERRCODE = 'check_violation';
     END IF;
   ELSIF TG_TABLE_NAME = 'rental_inspection_acks' THEN
@@ -413,6 +424,39 @@ BEGIN
     RAISE EXCEPTION 'rental_inspection_manifest' USING ERRCODE = 'check_violation';
   END IF;
 
+  -- Hold pending and ready rows so a finalize cannot land between this check and the lock.
+  PERFORM m.id
+    FROM public.rental_inspection_media m
+   WHERE m.inspection_id = v_inspection.id
+     AND m.version_id IS NULL
+     AND m.status IN ('pending', 'ready')
+   FOR UPDATE;
+  IF EXISTS (
+    SELECT m.id
+      FROM public.rental_inspection_media m
+     WHERE m.inspection_id = v_inspection.id
+       AND m.version_id IS NULL
+       AND m.status = 'ready'
+       AND m.role <> 'counter'
+    EXCEPT
+    SELECT (photo->>'id')::uuid
+      FROM jsonb_array_elements(p_manifest_text::jsonb -> 'units') unit
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(unit -> 'photos', '[]'::jsonb)) photo
+  ) OR EXISTS (
+    SELECT (photo->>'id')::uuid
+      FROM jsonb_array_elements(p_manifest_text::jsonb -> 'units') unit
+      CROSS JOIN LATERAL jsonb_array_elements(COALESCE(unit -> 'photos', '[]'::jsonb)) photo
+    EXCEPT
+    SELECT m.id
+      FROM public.rental_inspection_media m
+     WHERE m.inspection_id = v_inspection.id
+       AND m.version_id IS NULL
+       AND m.status = 'ready'
+       AND m.role <> 'counter'
+  ) THEN
+    RAISE EXCEPTION 'rental_inspection_manifest_stale' USING ERRCODE = 'check_violation';
+  END IF;
+
   SELECT COALESCE(max(version_no), 0) + 1 INTO v_next
     FROM public.rental_inspection_versions
    WHERE inspection_id = v_inspection.id;
@@ -423,10 +467,10 @@ BEGIN
 
   INSERT INTO public.rental_inspection_versions (
     inspection_id, version_no, status, allocation_version,
-    manifest, manifest_sha256, submitted_by
+    manifest, manifest_text, manifest_sha256, submitted_by
   ) VALUES (
     v_inspection.id, v_next, 'submitted', v_booking.allocation_version,
-    p_manifest_text::jsonb, p_manifest_sha256, p_actor
+    p_manifest_text::jsonb, p_manifest_text, p_manifest_sha256, p_actor
   ) RETURNING * INTO v_version;
 
   UPDATE public.rental_inspection_items
@@ -529,18 +573,29 @@ $$;
 
 CREATE OR REPLACE FUNCTION public.rental_record_handback(
   p_booking_id uuid,
-  p_actor uuid
+  p_actor uuid,
+  p_note text DEFAULT NULL
 ) RETURNS SETOF public.rental_bookings
 LANGUAGE plpgsql
 VOLATILE
 AS $$
 DECLARE
   v_at timestamptz := now();
+  v_reported timestamptz;
+  v_end timestamptz;
   v_booking public.rental_bookings%ROWTYPE;
 BEGIN
+  SELECT MIN(a.created_at) INTO v_reported
+    FROM public.rental_inspection_acks a
+    JOIN public.rental_bookings b ON b.return_current_version_id = a.version_id
+   WHERE b.id = p_booking_id
+     AND a.persona = 'client'
+     AND a.decision IN ('accept', 'dispute');
+  v_end := LEAST(v_at, COALESCE(v_reported, v_at));
+
   UPDATE public.rental_bookings b
      SET return_handed_back_at = v_at,
-         actual_end_at = v_at,
+         actual_end_at = v_end,
          return_resolution = COALESCE(b.return_resolution, 'pending'),
          status = CASE
            WHEN b.status::text = 'active' THEN 'awaiting_return'::public.rental_booking_status_enum
@@ -569,8 +624,8 @@ BEGIN
   IF NOT FOUND THEN
     RETURN;
   END IF;
-  INSERT INTO public.rental_custody_events (rental_booking_id, kind, server_at, actor_user_id)
-  VALUES (p_booking_id, 'handback_verified', v_at, p_actor);
+  INSERT INTO public.rental_custody_events (rental_booking_id, kind, server_at, actor_user_id, note)
+  VALUES (p_booking_id, 'handback_verified', v_at, p_actor, NULLIF(btrim(p_note), ''));
   RETURN NEXT v_booking;
 END;
 $$;
@@ -833,6 +888,58 @@ BEGIN
     RETURN;
   END IF;
   RETURN NEXT v_unit;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.rental_request_correction(
+  p_booking_id uuid,
+  p_stage text,
+  p_version_id uuid,
+  p_actor uuid,
+  p_reason text
+) RETURNS SETOF public.rental_inspection_acks
+LANGUAGE plpgsql
+VOLATILE
+AS $$
+DECLARE
+  v_ack public.rental_inspection_acks%ROWTYPE;
+BEGIN
+  IF p_reason IS NULL OR length(btrim(p_reason)) = 0 THEN
+    RAISE EXCEPTION 'rental_inspection_correction_reason' USING ERRCODE = 'check_violation';
+  END IF;
+  INSERT INTO public.rental_inspection_acks (version_id, actor_user_id, persona, decision, reason)
+  SELECT p_version_id, p_actor, 'client', 'correction', btrim(p_reason)
+   WHERE EXISTS (
+     SELECT 1
+       FROM public.rental_bookings b
+       JOIN public.rental_inspections i
+         ON i.rental_booking_id = b.id AND i.stage = p_stage
+       JOIN public.rental_inspection_versions v
+         ON v.id = p_version_id AND v.inspection_id = i.id AND v.status = 'submitted'
+      WHERE b.id = p_booking_id
+        AND b.inspection_policy_version IS NOT NULL
+        AND (
+          (p_stage = 'pickup' AND b.pickup_current_version_id = p_version_id AND b.actual_start_at IS NULL)
+          OR (p_stage = 'return' AND b.return_current_version_id = p_version_id AND b.settlement_claimed_at IS NULL)
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM public.rental_inspection_acks a
+           WHERE a.version_id = p_version_id AND a.persona = 'client'
+        )
+   );
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'rental_inspection_correction_conflict' USING ERRCODE = 'unique_violation';
+  END IF;
+  UPDATE public.rental_inspections
+     SET status = 'correction_requested', updated_at = now()
+   WHERE rental_booking_id = p_booking_id AND stage = p_stage;
+  SELECT * INTO v_ack
+    FROM public.rental_inspection_acks
+   WHERE version_id = p_version_id AND persona = 'client';
+  RETURN NEXT v_ack;
+EXCEPTION
+  WHEN unique_violation THEN
+    RAISE EXCEPTION 'rental_inspection_correction_conflict' USING ERRCODE = 'unique_violation';
 END;
 $$;
 

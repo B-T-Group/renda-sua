@@ -15,6 +15,8 @@ DROP FUNCTION IF EXISTS public.rental_apply_inspection_decision(uuid, uuid, text
 DROP FUNCTION IF EXISTS public.rental_escalate_return_review(uuid, integer);
 DROP FUNCTION IF EXISTS public.rental_open_return_dispute(uuid, uuid, uuid, text, integer);
 DROP FUNCTION IF EXISTS public.rental_accept_return_version(uuid, uuid, uuid);
+DROP FUNCTION IF EXISTS public.rental_request_correction(uuid, text, uuid, uuid, text);
+DROP FUNCTION IF EXISTS public.rental_record_handback(uuid, uuid, text);
 DROP FUNCTION IF EXISTS public.rental_record_handback(uuid, uuid);
 DROP FUNCTION IF EXISTS public.rental_accept_pickup_version(uuid, uuid, uuid);
 DROP FUNCTION IF EXISTS public.rental_submit_inspection(uuid, text, uuid, text, text, integer);
@@ -51,6 +53,8 @@ ALTER TABLE public.rental_bookings
   DROP CONSTRAINT IF EXISTS rental_bookings_inspection_policy_check;
 
 ALTER TABLE public.rental_bookings
+  DROP COLUMN IF EXISTS overtime_prompted_at,
+  DROP COLUMN IF EXISTS settlement_attention,
   DROP COLUMN IF EXISTS settlement_completed_at,
   DROP COLUMN IF EXISTS settlement_claimed_at,
   DROP COLUMN IF EXISTS return_reminder_sent_at,

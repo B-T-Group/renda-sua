@@ -109,6 +109,14 @@ export class PresignInspectionEvidenceDto {
   fileSize!: number;
 }
 
+export class AdminHandbackDto {
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  reason!: string;
+}
+
 export class DecideInspectionDisputeDto {
   @ApiProperty({ enum: ['no_damage', 'damage_upheld', 'damage_rejected'] })
   @IsIn(['no_damage', 'damage_upheld', 'damage_rejected'])

@@ -23,6 +23,12 @@ describe('inspection evidence keys', () => {
     expect(inspectionKeyRoot('production')).toBe('prod');
   });
 
+  it('lowercases booking ids before they are written into the object key', () => {
+    const key = inspectionObjectKey(booking.toUpperCase(), media.toUpperCase(), 'jpg', 'development');
+    expect(key).toBe(`dev/rental-inspection/${booking}/${media}.jpg`);
+    expect(isInspectionEvidenceKey(key, booking.toUpperCase())).toBe(true);
+  });
+
   it('accepts only keys we issued for that booking', () => {
     const key = inspectionObjectKey(booking, media, 'png', 'development');
     expect(isInspectionEvidenceKey(key, booking)).toBe(true);

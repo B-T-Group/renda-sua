@@ -8,6 +8,8 @@ export const DEFAULT_MIN_PHOTOS = 3;
 export const DEFAULT_REMINDER_HOURS = 24;
 export const DEFAULT_REVIEW_HOURS = 48;
 export const RESERVED_UNPAID_GRACE_MINUTES = 60;
+/** Sweep must not send a fresh overtime prompt on every pass. */
+export const OVERTIME_PROMPT_BACKOFF_MS = 6 * 60 * 60 * 1000;
 export const REQUIRED_PHOTO_ROLES = ['overview', 'other_side', 'accessories'] as const;
 
 export const INSPECTION_CODES = {
@@ -103,6 +105,8 @@ export interface SettlementGateBooking {
   settlementCompletedAt: string | null;
   openDispute: boolean;
   status: string;
+  settlementAttention?: string | null;
+  overtimePromptedAt?: string | null;
 }
 
 export type SettlementGate =
