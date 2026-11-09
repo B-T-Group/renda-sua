@@ -352,6 +352,75 @@ describe('wallet confirm and hold', () => {
     expect(svc.releaseHoldIfNeeded).toHaveBeenCalled();
   });
 
+  it('reactivates a cancelled hold row instead of inserting another', async () => {
+    svc.getHold = jest.fn().mockResolvedValue({
+      id: 'h1',
+      status: 'cancelled',
+      client_hold_amount: 20,
+    });
+    const executeMutation = jest
+      .fn()
+      .mockResolvedValue({ update_rental_holds: { affected_rows: 1 } });
+    svc.hasuraSystemService = {
+      executeQuery: jest.fn().mockResolvedValue({
+        clients_by_pk: { user_id: 'client-user' },
+      }),
+      getAccount: jest.fn().mockResolvedValue({ id: 'acc' }),
+      executeMutation,
+    };
+    svc.accountsService = {
+      registerTransaction: jest.fn().mockResolvedValue({ success: true }),
+    };
+    await Object.getPrototypeOf(svc).placeHoldForBooking.call(
+      svc,
+      'b1',
+      'c1',
+      20,
+      'XAF'
+    );
+    expect(executeMutation.mock.calls[0][0]).toContain('status: { _eq: cancelled }');
+    expect(executeMutation.mock.calls[0][0]).not.toContain('insert_rental_holds');
+    expect(svc.accountsService.registerTransaction).toHaveBeenCalledTimes(1);
+    expect(svc.accountsService.registerTransaction).toHaveBeenCalledWith(
+      expect.objectContaining({ transactionType: 'hold', amount: 20 })
+    );
+  });
+
+  it('does not revert a confirmed booking when another confirm owns the hold row', async () => {
+    svc.getHold = jest.fn().mockResolvedValue(null);
+    svc.hasuraSystemService = {
+      executeQuery: jest.fn().mockResolvedValue({
+        clients_by_pk: { user_id: 'client-user' },
+      }),
+      getAccount: jest.fn().mockResolvedValue({ id: 'acc' }),
+      executeMutation: jest
+        .fn()
+        .mockRejectedValue(
+          new Error(
+            'Uniqueness violation. duplicate key value violates unique constraint "rental_holds_unique_booking"'
+          )
+        ),
+    };
+    svc.accountsService = {
+      registerTransaction: jest.fn().mockResolvedValue({ success: true }),
+    };
+    svc.markBookingPaymentStatus = jest.fn();
+    svc.casBooking = jest.fn();
+    svc.fetchBooking = jest.fn();
+    svc.placeHoldForBooking = Object.getPrototypeOf(svc).placeHoldForBooking;
+    await svc.finishConfirmedWalletHold(
+      booking({ status: 'confirmed', payment_status: 'pending' }),
+      'proposed'
+    );
+    expect(svc.markBookingPaymentStatus).toHaveBeenCalledWith('b1', 'paid');
+    expect(svc.casBooking).not.toHaveBeenCalled();
+    expect(svc.fetchBooking).not.toHaveBeenCalled();
+    expect(svc.accountsService.registerTransaction).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ transactionType: 'release', referenceId: 'b1' })
+    );
+  });
+
   it('releases the ledger hold when the hold row cannot be saved', async () => {
     svc.hasuraSystemService = {
       executeQuery: jest.fn().mockResolvedValue({

@@ -431,6 +431,28 @@ export const INSERT_RENTAL_BOOKING = `
   }
 `;
 
+export const REACTIVATE_RENTAL_HOLD = `
+  mutation ReactivateRentalHold(
+    $bookingId: uuid!
+    $amount: numeric!
+    $currency: currency_enum!
+  ) {
+    update_rental_holds(
+      where: {
+        rental_booking_id: { _eq: $bookingId }
+        status: { _eq: cancelled }
+      }
+      _set: {
+        status: active
+        client_hold_amount: $amount
+        currency: $currency
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
 export const INSERT_RENTAL_HOLD = `
   mutation InsertRentalHold($object: rental_holds_insert_input!) {
     insert_rental_holds_one(object: $object) {

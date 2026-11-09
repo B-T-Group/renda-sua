@@ -4082,6 +4082,8 @@ export class RentalsService {
     total: number,
     currency: string
   ) {
+    const existing = await this.getHold(bookingId);
+    if (existing?.status === 'active') return;
     const clientRow = await this.hasuraSystemService.executeQuery<{
       clients_by_pk: { user_id: string };
     }>(
@@ -4103,7 +4105,21 @@ export class RentalsService {
     if (!hold.success) {
       throw new Error(hold.error || 'Hold failed');
     }
+    const releaseOwnLedgerHold = () =>
+      this.releaseLedgerHold(account.id, bookingId, total);
     try {
+      if (existing?.status === 'cancelled') {
+        const revived = await this.hasuraSystemService.executeMutation<{
+          update_rental_holds: { affected_rows: number } | null;
+        }>(Q.REACTIVATE_RENTAL_HOLD, {
+          bookingId,
+          amount: total,
+          currency,
+        });
+        if ((revived.update_rental_holds?.affected_rows ?? 0) > 0) return;
+        await releaseOwnLedgerHold();
+        return;
+      }
       await this.hasuraSystemService.executeMutation(Q.INSERT_RENTAL_HOLD, {
         object: {
           rental_booking_id: bookingId,
@@ -4114,15 +4130,40 @@ export class RentalsService {
         },
       });
     } catch (error) {
-      await this.accountsService.registerTransaction({
-        accountId: account.id,
-        amount: total,
-        transactionType: 'release',
-        memo: `Release rental hold ${bookingId}`,
-        referenceId: bookingId,
-      });
+      await releaseOwnLedgerHold();
+      if (this.holdRowTakenBySomeoneElse(error)) return;
       throw error;
     }
+  }
+
+  /** Release the ledger hold this call just created. Does not touch the hold row. */
+  private async releaseLedgerHold(
+    accountId: string,
+    bookingId: string,
+    amount: number
+  ): Promise<void> {
+    const released = await this.accountsService.registerTransaction({
+      accountId,
+      amount,
+      transactionType: 'release',
+      memo: `Release rental hold ${bookingId}`,
+      referenceId: bookingId,
+    });
+    if (!released.success) {
+      this.logger.error(
+        `releaseLedgerHold ${bookingId}: ${released.error || 'release failed'}`
+      );
+    }
+  }
+
+  private holdRowTakenBySomeoneElse(error: unknown): boolean {
+    const text = JSON.stringify(
+      (error as { response?: unknown; message?: unknown })?.response ??
+        (error as { message?: unknown })?.message ??
+        error ??
+        ''
+    ).toLowerCase();
+    return text.includes('uniqueness violation') || text.includes('duplicate key');
   }
 
   private async deleteBooking(id: string) {
@@ -4227,13 +4268,6 @@ export class RentalsService {
       }`,
       { id, _set }
     );
-  }
-
-  private async setBookingPinHash(id: string, hash: string) {
-    await this.patchBooking(id, {
-      rental_start_pin_hash: hash,
-      rental_start_pin_attempts: 0,
-    });
   }
 
   private async verifyPinAttempt(bookingId: string, booking: any, pin: string) {
