@@ -5,6 +5,22 @@ export const INSPECTION_UPLOAD_TTL_SECONDS = 600;
 export const INSPECTION_VIEW_TTL_SECONDS = 600;
 export const INSPECTION_EVIDENCE_BUCKET = 'rendasua-user-uploads';
 
+/**
+ * Bucket for inspection photos. Prod sets `RENTAL_INSPECTION_BUCKET` to the
+ * dedicated Object Lock bucket. DEV leaves it unset and stays on
+ * `rendasua-user-uploads` with prefix `dev/rental-inspection/`.
+ * `APPEAL_EVIDENCE_BUCKET` remains a fallback so existing DEV/prod wiring is unchanged.
+ */
+export function inspectionEvidenceBucket(
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  return (
+    env.RENTAL_INSPECTION_BUCKET?.trim() ||
+    env.APPEAL_EVIDENCE_BUCKET?.trim() ||
+    INSPECTION_EVIDENCE_BUCKET
+  );
+}
+
 export const INSPECTION_EVIDENCE_TYPES: Readonly<Record<string, string>> = {
   'image/jpeg': 'jpg',
   'image/png': 'png',

@@ -86,6 +86,14 @@ CDK stack `RendasuaUserUploadsBucket` **imports** this existing bucket (does not
 
 Do **not** put appeal evidence in `rendasua-uploads` (public catalog images; not managed here).
 
+### 5) Rental inspection evidence bucket (`rendasua-rental-inspection-evidence-prod`)
+
+Production-only private bucket (Object Lock, no default retention) for rental inspection photos. DEV still uses `rendasua-user-uploads` + `dev/rental-inspection/`.
+
+- CDK stack: `RentalInspectionEvidenceBucket-production` (manual `cdk deploy … --exclusively`; not in `deploy-cdk*.yml`)
+- Nest: set `RENTAL_INSPECTION_BUCKET` in prod only
+- Details: `apps/cdk/RENTAL_INSPECTION_EVIDENCE.md`
+
 ## What can break
 
 - File uploads fail if the IAM credentials lack S3 permissions or bucket CORS is wrong.

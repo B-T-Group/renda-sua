@@ -7,10 +7,10 @@ import { HasuraSystemService } from '../../hasura/hasura-system.service';
 import { HasuraUserService } from '../../hasura/hasura-user.service';
 import { isActivePersona } from '../../users/persona.util';
 import {
-  INSPECTION_EVIDENCE_BUCKET,
   INSPECTION_UPLOAD_TTL_SECONDS,
   INSPECTION_VIEW_TTL_SECONDS,
   inspectionDerivativeKey,
+  inspectionEvidenceBucket,
   inspectionObjectKey,
   isInspectionEvidenceKey,
   validateInspectionUpload,
@@ -99,7 +99,7 @@ export class RentalInspectionEvidenceService {
   }
 
   private bucket(): string {
-    return process.env.APPEAL_EVIDENCE_BUCKET?.trim() || INSPECTION_EVIDENCE_BUCKET;
+    return inspectionEvidenceBucket();
   }
 
   private async actorForUpload(bookingId: string, role: string) {
