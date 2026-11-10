@@ -559,6 +559,7 @@ export function RentalSlotPicker({
               fontWeight: '700',
               textAlign: 'center',
               lineHeight: 20,
+              maxWidth: 150,
             }}
           >
             {t('rentals.searchFirst.signInToRequest', 'Sign in to request a rental')}
