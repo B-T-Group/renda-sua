@@ -256,8 +256,8 @@ describe('enrolled rental gates', () => {
     };
     svc.fetchBooking.mockResolvedValue(booking);
     svc.hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-      if (query.includes('UpheldInspectionDamage')) {
-        return { rental_inspection_disputes: [{ damage_amount: 80 }] };
+      if (query.includes('DecidedInspectionDamage')) {
+        return { rental_inspection_disputes: [{ decision: 'damage_upheld', damage_amount: 80 }] };
       }
       return {
         rental_bookings_by_pk: {
@@ -426,8 +426,8 @@ describe('enrolled rental gates', () => {
     };
     svc.fetchBooking.mockResolvedValue(booking);
     svc.hasuraSystemService.executeQuery.mockImplementation(async (query: string) => {
-      if (String(query).includes('UpheldInspectionDamage')) {
-        return { rental_inspection_disputes: [{ damage_amount: 10 }] };
+      if (String(query).includes('DecidedInspectionDamage')) {
+        return { rental_inspection_disputes: [{ decision: 'damage_upheld', damage_amount: 10 }] };
       }
       return {
         rental_bookings_by_pk: {

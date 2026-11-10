@@ -45,6 +45,7 @@ import {
   inspectionUpdateRequired,
 } from './inspection/rental-inspection.errors';
 import {
+  damageCollectedOnAgree,
   decideInspectionEnrolment,
   DEFAULT_STRIPE_REVIEW_HOURS,
   OVERTIME_PROMPT_BACKOFF_MS,
@@ -4573,6 +4574,10 @@ export class RentalsService {
     const endedAt = (fresh.actual_end_at as string | null) || fields.returnHandedBackAt;
     if (!endedAt) return;
     const settlement = this.computeRentalSettlement(fresh, endedAt);
+    const override = fresh.overtime_amount_override;
+    if (override != null && override !== '' && Number.isFinite(Number(override))) {
+      settlement.overtimeAmount = Math.max(0, Number(override));
+    }
     if (fresh.payment_status === 'authorized') {
       await this.captureEnrolledStripe(fresh, settlement);
       return;
@@ -4588,7 +4593,13 @@ export class RentalsService {
   }
 
   private async captureEnrolledStripe(booking: any, settlement: RentalReturnSettlement): Promise<void> {
-    const damage = await this.upheldDamage(booking.id);
+    const decided = await this.decidedDamage(booking.id);
+    const damage = damageCollectedOnAgree({
+      paymentStatus: booking.payment_status ?? null,
+      claimedAmount: booking.claimed_damage_amount ?? null,
+      upheldAmount: decided.amount,
+      decision: decided.decision,
+    });
     const quote = priceEnrolledCapture({
       contract: settlement.contract,
       overtime: settlement.overtimeAmount,
@@ -4656,24 +4667,65 @@ export class RentalsService {
     await this.pushOvertimeCharge(booking, overtimeAmount);
   }
 
-  private async upheldDamage(bookingId: string): Promise<number> {
+  private async decidedDamage(bookingId: string): Promise<{ decision: string | null; amount: number }> {
     const result = await this.hasuraSystemService.executeQuery<{
-      rental_inspection_disputes: Array<{ damage_amount: number | null }>;
+      rental_inspection_disputes: Array<{ decision: string | null; damage_amount: number | null }>;
     }>(
-      `query UpheldInspectionDamage($id: uuid!) {
+      `query DecidedInspectionDamage($id: uuid!) {
         rental_inspection_disputes(
-          where: {
-            rental_booking_id: { _eq: $id }
-            status: { _eq: "decided" }
-            decision: { _eq: "damage_upheld" }
-          }
+          where: { rental_booking_id: { _eq: $id }, status: { _eq: "decided" } }
           order_by: { decided_at: desc }
           limit: 1
-        ) { damage_amount }
+        ) { decision damage_amount }
       }`,
       { id: bookingId }
     );
-    return Math.max(0, Number(result.rental_inspection_disputes?.[0]?.damage_amount) || 0);
+    const row = result.rental_inspection_disputes?.[0];
+    return {
+      decision: row?.decision ?? null,
+      amount: Math.max(0, Number(row?.damage_amount) || 0),
+    };
+  }
+
+  async adjustEnrolledOvertime(
+    bookingId: string,
+    actorId: string,
+    overtimeAmount: number,
+    reason: string
+  ): Promise<{ overtimeAmount: number; adjusted: true }> {
+    if (!reason?.trim()) throw new HttpException('A reason is required', HttpStatus.BAD_REQUEST);
+    if (!Number.isFinite(Number(overtimeAmount)) || Number(overtimeAmount) < 0) {
+      throw new HttpException('Overtime amount must be zero or more', HttpStatus.BAD_REQUEST);
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking) throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+    if (booking.inspection_policy_version == null) {
+      throw new HttpException('This booking does not use condition inspections', HttpStatus.CONFLICT);
+    }
+    const amount = Number(overtimeAmount);
+    const adjusted = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings?: { affected_rows: number };
+    }>(
+      `mutation AdjustEnrolledOvertime($id: uuid!, $amount: numeric!) {
+        update_rental_bookings(
+          where: { id: { _eq: $id }, settlement_claimed_at: { _is_null: true } }
+          _set: { overtime_amount_override: $amount, updated_at: "now()" }
+        ) { affected_rows }
+      }`,
+      { id: bookingId, amount }
+    );
+    if ((adjusted.update_rental_bookings?.affected_rows ?? 0) !== 1) {
+      throw new HttpException('This rental is already settled', HttpStatus.CONFLICT);
+    }
+    await this.logHistory(
+      bookingId,
+      booking.status,
+      booking.status,
+      actorId,
+      'system',
+      `Support adjusted overtime to ${amount}. ${reason.trim()}`
+    );
+    return { overtimeAmount: amount, adjusted: true };
   }
 
   private async stampSettlementCompleted(bookingId: string): Promise<void> {

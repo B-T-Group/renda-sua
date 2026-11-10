@@ -4,8 +4,13 @@ import { HasuraUserService } from '../../hasura/hasura-user.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { isActivePersona } from '../../users/persona.util';
 import { RentalsService } from '../rentals.service';
+import { RentalInspectionEvidenceService } from './rental-inspection-evidence.service';
 import { RentalInspectionFlags } from './rental-inspection-flags.service';
-import { inspectionUpdateRequired } from './rental-inspection.errors';
+import {
+  inspectionRejected,
+  inspectionUpdateRequired,
+  requireInspectionDamageAmount,
+} from './rental-inspection.errors';
 import {
   DEFAULT_MIN_PHOTOS,
   DEFAULT_REMINDER_HOURS,
@@ -25,6 +30,12 @@ export interface InspectionDraftUnit {
   physicalLabel: string | null;
 }
 type Decision = 'accept' | 'correction' | 'dispute';
+
+const DECIDE_MUTATION = `mutation Decide($id: uuid!, $actor: uuid!, $outcome: String!, $reason: String!, $damage: numeric) {
+  rental_apply_inspection_decision(args: {
+    p_booking_id: $id, p_actor: $actor, p_outcome: $outcome, p_reason: $reason, p_damage: $damage
+  }) { id decision }
+}`;
 
 interface BookingRow {
   id: string;
@@ -66,7 +77,8 @@ export class RentalInspectionService {
     private readonly users: HasuraUserService,
     private readonly flags: RentalInspectionFlags,
     private readonly notices: NotificationsService,
-    private readonly rentals: RentalsService
+    private readonly rentals: RentalsService,
+    private readonly evidence: RentalInspectionEvidenceService
   ) {}
 
   async openDraft(bookingId: string, stage: InspectionStage) {
@@ -91,10 +103,14 @@ export class RentalInspectionService {
     return { success: true };
   }
 
-  async submit(bookingId: string, stage: InspectionStage) {
+  async submit(bookingId: string, stage: InspectionStage, claimedDamageAmount?: number) {
     const booking = await this.requireBusiness(bookingId);
     const inspection = await this.inspectionFor(bookingId, stage);
     if (!inspection) throw new HttpException('Open the draft first', HttpStatus.CONFLICT);
+    // Validate the claim before the version exists, but only store it once the version is created,
+    // so a failed or repeated submit cannot change the amount behind the report the client is reviewing.
+    const claim =
+      stage === 'return' ? await this.returnClaim(inspection.id, claimedDamageAmount) : undefined;
     const manifest = await this.manifestFor(booking, inspection.id, stage);
     const minPhotos = await this.flags.numberConfig(
       'rental_inspection_min_photos',
@@ -102,7 +118,13 @@ export class RentalInspectionService {
       DEFAULT_MIN_PHOTOS
     );
     const version = await this.callSubmit(bookingId, stage, booking, manifest, minPhotos);
-    await this.notice(booking, stage === 'pickup' ? 'review_pickup' : 'review_return', booking.client.user_id);
+    if (claim !== undefined) await this.writeClaim(bookingId, claim);
+    await this.notice(
+      booking,
+      stage === 'pickup' ? 'review_pickup' : 'review_return',
+      booking.client.user_id,
+      'client'
+    );
     return { versionId: version.id, versionNo: version.version_no };
   }
 
@@ -110,7 +132,11 @@ export class RentalInspectionService {
     const viewer = await this.viewer(bookingId);
     const inspection = await this.inspectionFor(bookingId, stage);
     const body = await this.viewOf(bookingId, inspection, viewer.audience);
-    return presentInspection(body, viewer.audience);
+    const presented = presentInspection(body, viewer.audience);
+    const minPhotos = await this.minPhotoCount();
+    const claimedDamageAmount = await this.claimedDamage(bookingId);
+    if (viewer.audience === 'client') return { ...presented, minPhotos, claimedDamageAmount };
+    return { ...presented, minPhotos, claimedDamageAmount, correctionReason: body.correctionReason };
   }
 
   async acknowledge(bookingId: string, stage: InspectionStage, versionId: string, decision: Decision, reason?: string) {
@@ -179,21 +205,57 @@ export class RentalInspectionService {
 
   async decide(bookingId: string, actorId: string, outcome: string, reason: string, damageAmount?: number) {
     if (!reason?.trim()) throw new HttpException('A reason is required', HttpStatus.BAD_REQUEST);
-    const dispute = await this.one(
-      'rental_apply_inspection_decision',
-      `mutation Decide($id: uuid!, $actor: uuid!, $outcome: String!, $reason: String!, $damage: numeric) {
-        rental_apply_inspection_decision(args: {
-          p_booking_id: $id, p_actor: $actor, p_outcome: $outcome, p_reason: $reason, p_damage: $damage
-        }) { id decision }
-      }`,
-      { id: bookingId, actor: actorId, outcome, reason: reason.trim(), damage: damageAmount ?? null }
-    );
-    if (!dispute) throw new HttpException('No open review for this rental', HttpStatus.CONFLICT);
-    const booking = await this.booking(bookingId);
-    await this.notice(booking, 'decided', booking.client.user_id);
-    await this.notice(booking, 'decided', booking.business.user_id);
-    await this.rentals.settleEnrolledRental(bookingId);
+    const damage = requireInspectionDamageAmount(outcome, damageAmount);
+    await this.applyDecision(bookingId, actorId, outcome, reason.trim(), damage);
+    await this.afterDecision(bookingId);
     return { decided: true, outcome };
+  }
+
+  private async applyDecision(
+    bookingId: string,
+    actorId: string,
+    outcome: string,
+    reason: string,
+    damage: number | null
+  ) {
+    try {
+      const dispute = await this.one('rental_apply_inspection_decision', DECIDE_MUTATION, {
+        id: bookingId,
+        actor: actorId,
+        outcome,
+        reason,
+        damage,
+      });
+      if (!dispute) throw new HttpException('No open review for this rental', HttpStatus.CONFLICT);
+      return dispute;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw this.decisionError(error);
+    }
+  }
+
+  private async afterDecision(bookingId: string) {
+    const booking = await this.booking(bookingId);
+    await this.notice(booking, 'decided', booking.client.user_id, 'client');
+    await this.notice(booking, 'decided', booking.business.user_id, 'business');
+    await this.rentals.settleEnrolledRental(bookingId);
+  }
+
+  private decisionError(error: any): HttpException {
+    const text = JSON.stringify(error?.response ?? error?.message ?? error);
+    if (text.includes('rental_inspection_damage_amount')) {
+      return inspectionRejected(
+        'RENTAL_INSPECTION_DAMAGE_AMOUNT',
+        'Upholding damage requires a positive damage amount'
+      );
+    }
+    if (text.includes('rental_inspection_decision_missing')) {
+      return new HttpException('No open review for this rental', HttpStatus.CONFLICT);
+    }
+    if (text.includes('rental_inspection_decision')) {
+      return inspectionRejected('RENTAL_INSPECTION_DECISION', 'That review decision is not valid');
+    }
+    return new HttpException('Review could not be decided', HttpStatus.CONFLICT);
   }
 
   async listOpenDisputes() {
@@ -206,11 +268,23 @@ export class RentalInspectionService {
           order_by: { sla_due_at: asc }
         ) {
           id rental_booking_id version_id status reason opened_at sla_due_at escalated_at
+          rental_booking {
+            booking_number status settlement_attention return_resolution currency
+            rental_location_listing { rental_item { name } }
+          }
         }
       }`,
       {}
     );
     return result.rental_inspection_disputes ?? [];
+  }
+
+  async getAdminCase(bookingId: string) {
+    const booking = await this.adminBooking(bookingId);
+    const pickup = await this.stageForAdmin(bookingId, 'pickup');
+    const returnReport = await this.stageForAdmin(bookingId, 'return');
+    const disputes = await this.disputesFor(bookingId);
+    return { booking, pickup, returnReport, disputes };
   }
 
   async remindAndEscalate(): Promise<number> {
@@ -239,7 +313,7 @@ export class RentalInspectionService {
       { id: booking.id, version: versionId, actor: booking.actorId },
       'That report changed. Review it again.'
     );
-    await this.notice(booking, 'pickup_accepted', booking.business.user_id);
+    await this.notice(booking, 'pickup_accepted', booking.business.user_id, 'business');
     return { accepted: true };
   }
 
@@ -268,7 +342,7 @@ export class RentalInspectionService {
       { id: booking.id, version: versionId, actor: booking.actorId, reason, hours: Math.round(hours) },
       'That report can no longer be disputed'
     );
-    await this.notice(booking, 'disputed', booking.business.user_id);
+    await this.notice(booking, 'disputed', booking.business.user_id, 'business');
     return { disputed: true };
   }
 
@@ -283,7 +357,7 @@ export class RentalInspectionService {
       { id: booking.id, stage, version: versionId, actor: booking.actorId, reason },
       'That report changed. Review it again.'
     );
-    await this.notice(booking, 'correction', booking.business.user_id);
+    await this.notice(booking, 'correction', booking.business.user_id, 'business');
     return { correctionRequested: true };
   }
 
@@ -482,20 +556,68 @@ export class RentalInspectionService {
     audience: 'client' | 'business' | 'admin'
   ) {
     if (!inspection) {
-      return { versionId: null, versionNo: null, allocationVersion: null, submittedAt: null, status: 'draft', units: [], yourDecision: null };
+      return audience === 'client' ? { ...this.emptyView(), status: 'not_ready' } : this.emptyView();
     }
     const current = await this.currentVersion(inspection.id);
-    const units = await this.versionUnits(bookingId, inspection.id, current?.id ?? null);
+    if (audience === 'client' && !current) {
+      return { ...this.emptyView(), status: 'not_ready' };
+    }
+    const editingDraft = inspection.status === 'correction_requested' && audience !== 'client';
+    const units = await this.versionUnits(
+      bookingId,
+      inspection.id,
+      editingDraft ? null : current?.id ?? null
+    );
     const decision = current ? await this.clientDecision(current.id) : null;
+    const correctionReason =
+      audience === 'client' || !current ? null : await this.correctionReason(current.id);
     return {
-      versionId: current?.id ?? null,
+      versionId: editingDraft ? null : current?.id ?? null,
       versionNo: audience === 'client' ? null : current?.version_no ?? null,
       allocationVersion: audience === 'client' ? null : current?.allocation_version ?? null,
-      submittedAt: current?.submitted_at ?? null,
+      submittedAt: editingDraft ? null : current?.submitted_at ?? null,
       status: inspection.status,
       units,
       yourDecision: decision,
+      correctionReason,
     };
+  }
+
+  private emptyView() {
+    return {
+      versionId: null,
+      versionNo: null,
+      allocationVersion: null,
+      submittedAt: null,
+      status: 'draft',
+      units: [],
+      yourDecision: null,
+      correctionReason: null as string | null,
+    };
+  }
+
+  private async minPhotoCount(): Promise<number> {
+    const configured = await this.flags.numberConfig(
+      'rental_inspection_min_photos',
+      null,
+      DEFAULT_MIN_PHOTOS
+    );
+    return Math.max(DEFAULT_MIN_PHOTOS, Math.round(configured));
+  }
+
+  private async correctionReason(versionId: string): Promise<string | null> {
+    const result = await this.hasura.executeQuery<{
+      rental_inspection_acks: Array<{ reason: string | null }>;
+    }>(
+      `query CorrectionReason($id: uuid!) {
+        rental_inspection_acks(
+          where: { version_id: { _eq: $id }, persona: { _eq: "client" }, decision: { _eq: "correction" } }
+          limit: 1
+        ) { reason }
+      }`,
+      { id: versionId }
+    );
+    return result.rental_inspection_acks?.[0]?.reason ?? null;
   }
 
   private async remind(hours: number): Promise<number> {
@@ -520,7 +642,7 @@ export class RentalInspectionService {
     const rows = result.update_rental_bookings?.returning ?? [];
     for (const row of rows) {
       const booking = await this.booking(row.id);
-      await this.notice(booking, 'return_reminder', booking.client.user_id);
+      await this.notice(booking, 'return_reminder', booking.client.user_id, 'client');
     }
     return rows.length;
   }
@@ -550,16 +672,22 @@ export class RentalInspectionService {
       if (!opened) continue;
       count += 1;
       const booking = await this.booking(row.id);
-      await this.notice(booking, 'escalated', booking.client.user_id);
-      await this.notice(booking, 'escalated', booking.business.user_id);
+      await this.notice(booking, 'escalated', booking.client.user_id, 'client');
+      await this.notice(booking, 'escalated', booking.business.user_id, 'business');
     }
     return count;
   }
 
-  private async notice(booking: BookingRow, kind: Parameters<NotificationsService['sendRentalInspectionNotice']>[0]['kind'], userId: string) {
+  private async notice(
+    booking: BookingRow,
+    kind: Parameters<NotificationsService['sendRentalInspectionNotice']>[0]['kind'],
+    userId: string,
+    persona: 'client' | 'business'
+  ) {
     await this.notices.sendRentalInspectionNotice({
       userId,
       kind,
+      persona,
       rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
       bookingId: booking.id,
     });
@@ -601,6 +729,54 @@ export class RentalInspectionService {
       return { audience: 'business' as const };
     }
     throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+  }
+
+  /** Claim for the return draft being submitted: null when no unit is damaged, else a positive amount. */
+  private async returnClaim(inspectionId: string, claimedDamageAmount?: number): Promise<number | null> {
+    if (!(await this.draftDamaged(inspectionId))) return null;
+    const amount = Number(claimedDamageAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw inspectionRejected(
+        'RENTAL_INSPECTION_DAMAGE_AMOUNT',
+        'A damage report needs the amount you are claiming'
+      );
+    }
+    return amount;
+  }
+
+  private async draftDamaged(inspectionId: string): Promise<boolean> {
+    const result = await this.hasura.executeQuery<{ rental_inspection_items: Array<{ id: string }> }>(
+      `query DraftDamage($id: uuid!) {
+        rental_inspection_items(
+          where: { inspection_id: { _eq: $id }, version_id: { _is_null: true }, condition: { _eq: "damaged" } }
+          limit: 1
+        ) { id }
+      }`,
+      { id: inspectionId }
+    );
+    return (result.rental_inspection_items?.length ?? 0) > 0;
+  }
+
+  private async writeClaim(bookingId: string, amount: number | null) {
+    await this.hasura.executeMutation(
+      `mutation SetClaimedDamage($id: uuid!, $amount: numeric) {
+        update_rental_bookings_by_pk(pk_columns: { id: $id }, _set: { claimed_damage_amount: $amount }) { id }
+      }`,
+      { id: bookingId, amount }
+    );
+  }
+
+  private async claimedDamage(bookingId: string): Promise<number | null> {
+    const result = await this.hasura.executeQuery<{
+      rental_bookings_by_pk: { claimed_damage_amount: number | null } | null;
+    }>(
+      `query ClaimedDamage($id: uuid!) {
+        rental_bookings_by_pk(id: $id) { claimed_damage_amount }
+      }`,
+      { id: bookingId }
+    );
+    const amount = result.rental_bookings_by_pk?.claimed_damage_amount;
+    return amount == null ? null : Number(amount);
   }
 
   private async markPending(bookingId: string) {
@@ -755,6 +931,102 @@ export class RentalInspectionService {
       { id: versionId }
     );
     return result.rental_inspection_media ?? [];
+  }
+
+  private async stageForAdmin(bookingId: string, stage: InspectionStage) {
+    const inspection = await this.inspectionFor(bookingId, stage);
+    const body = await this.viewOf(bookingId, inspection, 'admin');
+    const presented = presentInspection(body, 'admin');
+    const units = await this.withPhotoUrls(bookingId, body.units);
+    return { ...presented, minPhotos: await this.minPhotoCount(), correctionReason: body.correctionReason, units };
+  }
+
+  private async withPhotoUrls(
+    bookingId: string,
+    units: Array<{ photos: Array<{ id: string; role: string }> }>
+  ) {
+    return Promise.all(
+      units.map(async (unit) => ({
+        ...unit,
+        photos: await Promise.all(
+          unit.photos.map(async (photo) => {
+            try {
+              const signed = await this.evidence.signForStaff(bookingId, photo.id);
+              return { ...photo, url: signed.url, expiresAt: signed.expiresAt };
+            } catch {
+              return photo;
+            }
+          })
+        ),
+      }))
+    );
+  }
+
+  private async adminBooking(bookingId: string) {
+    const result = await this.hasura.executeQuery<{
+      rental_bookings_by_pk: {
+        id: string;
+        booking_number: string;
+        status: string;
+        currency: string;
+        units_booked: number;
+        payment_timing: string | null;
+        payment_status: string | null;
+        security_deposit_amount: number | null;
+        authorized_amount: number | null;
+        inspection_policy_version: number | null;
+        return_resolution: string | null;
+        return_handed_back_at: string | null;
+        settlement_attention: string | null;
+        rental_location_listing?: { rental_item?: { name?: string } | null } | null;
+      } | null;
+    }>(
+      `query AdminInspectionBooking($id: uuid!) {
+        rental_bookings_by_pk(id: $id) {
+          id booking_number status currency units_booked
+          payment_timing payment_status security_deposit_amount authorized_amount
+          inspection_policy_version return_resolution return_handed_back_at settlement_attention
+          rental_location_listing { rental_item { name } }
+        }
+      }`,
+      { id: bookingId }
+    );
+    const row = result.rental_bookings_by_pk;
+    if (!row) throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
+    return {
+      id: row.id,
+      bookingNumber: row.booking_number,
+      status: row.status,
+      currency: row.currency,
+      unitsBooked: row.units_booked,
+      paymentTiming: row.payment_timing,
+      paymentStatus: row.payment_status,
+      securityDepositAmount: row.security_deposit_amount,
+      authorizedAmount: row.authorized_amount,
+      inspectionPolicyVersion: row.inspection_policy_version,
+      returnResolution: row.return_resolution,
+      returnHandedBackAt: row.return_handed_back_at,
+      settlementAttention: row.settlement_attention,
+      itemName: row.rental_location_listing?.rental_item?.name ?? null,
+    };
+  }
+
+  private async disputesFor(bookingId: string) {
+    const result = await this.hasura.executeQuery<{
+      rental_inspection_disputes: Array<Record<string, unknown>>;
+    }>(
+      `query BookingInspectionDisputes($id: uuid!) {
+        rental_inspection_disputes(
+          where: { rental_booking_id: { _eq: $id } }
+          order_by: { opened_at: desc }
+        ) {
+          id version_id status reason opened_at sla_due_at escalated_at
+          decision decision_reason damage_amount decided_at
+        }
+      }`,
+      { id: bookingId }
+    );
+    return result.rental_inspection_disputes ?? [];
   }
 
   private async one<T extends Record<string, unknown>>(

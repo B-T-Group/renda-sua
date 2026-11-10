@@ -256,6 +256,7 @@ export type ClientRootStackParamList = {
   RentalRequestSubmitted: { requestId?: string };
   ClientMyRentals: undefined;
   RentalBookingDetail: { bookingId: string };
+  ClientInspection: { bookingId: string; stage: 'pickup' | 'return' };
   RentalRateBooking: { bookingId: string };
   NotificationPermission: undefined;
   EnrollPersonaExplain: EnrollPersonaParams;
@@ -335,6 +336,7 @@ export type BusinessRootStackParamList = {
   BusinessRentalAddListing: { itemId: string };
   BusinessRentalAiProposal: { listingId: string };
   BusinessRentalBookingDetail: { bookingId: string };
+  BusinessInspection: { bookingId: string; stage: 'pickup' | 'return' };
   AdminRentalListingsModeration: undefined;
   AdminRentalAiReviews: undefined;
   AdminItemModeration: undefined;

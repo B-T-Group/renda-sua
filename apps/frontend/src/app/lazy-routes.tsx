@@ -111,6 +111,12 @@ export const AdminItemAppealsPage = lazy(() =>
 export const AdminItemAppealDetailPage = lazy(() =>
   import('../components/pages/AdminItemAppealDetailPage')
 );
+export const AdminInspectionDisputesPage = lazy(() =>
+  import('../components/pages/AdminInspectionDisputesPage')
+);
+export const AdminInspectionCasePage = lazy(() =>
+  import('../components/pages/AdminInspectionCasePage')
+);
 export const AdminUserDocumentsPage = lazy(() =>
   import('../components/pages/AdminUserDocumentsPage')
 );

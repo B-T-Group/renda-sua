@@ -18,9 +18,11 @@ import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
+import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
 import { SendRentalStartPinButton } from '../../components/rentals/SendRentalStartPinButton';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useRentalBookingDetail } from '../../hooks/useRentalBookingDetail';
+import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { useIsStripeRail } from '../../hooks/useIsStripeRail';
 import {
@@ -37,6 +39,7 @@ import {
   rentalBookingStatusColors,
   resolveBookingPhase,
 } from '../../utils/rentals';
+import { clientInspectionAction, pickupGate } from '../../utils/rentals/rentalInspection';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
 
@@ -151,7 +154,21 @@ export default function RentalBookingDetailScreen() {
   const canCancel =
     (booking?.status === 'confirmed' || booking?.status === 'reserved') &&
     !booking?.actual_start_at;
-  const canShowPin = booking?.status === 'confirmed';
+  const snapshot = useInspectionSnapshot(bookingId ?? '', booking);
+  const gate = pickupGate({
+    enrolled: snapshot.enrolled,
+    status: booking?.status ?? '',
+    submitted: snapshot.pickup?.status === 'submitted' && !snapshot.pickup.yourDecision,
+    accepted: snapshot.pickup?.yourDecision === 'accept',
+  });
+  const reviewAction = clientInspectionAction({
+    status: booking?.status ?? '',
+    pickup: snapshot.pickup,
+    returnView: snapshot.returnView,
+  });
+  const reviewStage =
+    reviewAction === 'review_pickup' ? 'pickup' : reviewAction === 'review_return' ? 'return' : null;
+  const canShowPin = gate.showStart && !snapshot.loading;
   const isReserved = booking?.status === 'reserved';
   const depositAmount = toAmount(booking?.security_deposit_amount);
   const authorizedAmount = toAmount(booking?.authorized_amount);
@@ -290,7 +307,7 @@ export default function RentalBookingDetailScreen() {
         style={{ flex: 1 }}
         contentContainerStyle={{
           padding: spacing.md,
-          paddingBottom: insets.bottom + (canShowPin || paymentPending ? 100 : spacing.xl),
+          paddingBottom: insets.bottom + (canShowPin || paymentPending || reviewStage ? 100 : spacing.xl),
         }}
         refreshControl={
           <RefreshControl
@@ -384,6 +401,34 @@ export default function RentalBookingDetailScreen() {
             }
           />
         </View>
+
+        {snapshot.enrolled ? (
+          <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+            {reviewStage ? (
+              <Button
+                mode="contained"
+                buttonColor={colors.primary.main}
+                style={{ minHeight: 48 }}
+                onPress={() =>
+                  navigation.navigate('ClientInspection', {
+                    bookingId: booking.id,
+                    stage: reviewStage,
+                  })
+                }
+              >
+                {reviewStage === 'pickup'
+                  ? t('rentalInspection.reviewTitle', 'Review item condition')
+                  : t('rentalInspection.returnReview', 'Review the return against pickup photos')}
+              </Button>
+            ) : null}
+            <InspectionTimeline
+              role="client"
+              booking={booking}
+              pickup={snapshot.pickup}
+              returnView={snapshot.returnView}
+            />
+          </View>
+        ) : null}
 
         {booking.status === 'active' || booking.status === 'awaiting_return' ? (
           <View
@@ -677,7 +722,7 @@ export default function RentalBookingDetailScreen() {
         ) : null}
       </ScrollView>
 
-      {canShowPin || paymentPending ? (
+      {canShowPin || paymentPending || reviewStage ? (
         <View
           style={{
             borderTopWidth: 1,
@@ -696,6 +741,22 @@ export default function RentalBookingDetailScreen() {
               onPress={() => void onRetry()}
             >
               {t('rentals.actions.completePayment', 'Complete payment')}
+            </Button>
+          ) : reviewStage ? (
+            <Button
+              mode="contained"
+              buttonColor={colors.primary.main}
+              style={{ minHeight: 48 }}
+              onPress={() =>
+                navigation.navigate('ClientInspection', {
+                  bookingId: booking.id,
+                  stage: reviewStage,
+                })
+              }
+            >
+              {reviewStage === 'pickup'
+                ? t('rentalInspection.reviewTitle', 'Review item condition')
+                : t('rentalInspection.returnReview', 'Review the return against pickup photos')}
             </Button>
           ) : (
             <SendRentalStartPinButton

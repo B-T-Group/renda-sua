@@ -60,6 +60,7 @@ import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScre
 import RentalRequestSubmittedScreen from '../screens/client/RentalRequestSubmittedScreen';
 import ClientMyRentalsScreen from '../screens/client/ClientMyRentalsScreen';
 import RentalBookingDetailScreen from '../screens/client/RentalBookingDetailScreen';
+import ClientInspectionScreen from '../screens/client/ClientInspectionScreen';
 import RentalRateBookingScreen from '../screens/client/RentalRateBookingScreen';
 import { EnrollPersonaExplainScreen } from '../screens/shared/enroll/EnrollPersonaExplainScreen';
 import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersonaSetupScreen';
@@ -412,6 +413,14 @@ export function ClientRootNavigator() {
           options={{
             title: t('rentals.title', 'Rentals'),
             headerBackTitle: t('client.rentals.tabMyRentals', 'My rentals'),
+          }}
+        />
+        <ClientRootStack.Screen
+          name="ClientInspection"
+          component={ClientInspectionScreen}
+          options={{
+            title: t('rentalInspection.reviewTitle', 'Review item condition'),
+            headerBackTitle: t('rentals.title', 'Rentals'),
           }}
         />
         <ClientRootStack.Screen

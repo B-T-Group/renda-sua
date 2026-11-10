@@ -486,6 +486,10 @@ export const GET_RENTAL_BOOKING_FULL = `
       authorized_amount
       captured_amount
       overtime_amount
+      overtime_amount_override
+      claimed_damage_amount
+      inspection_policy_version
+      reserved_cancel_after
       payment_timing
       payment_status
       actual_start_at
@@ -528,10 +532,17 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       authorized_amount
       captured_amount
       overtime_amount
+      overtime_amount_override
+      claimed_damage_amount
+      reserved_cancel_after
       payment_timing
       payment_status
       actual_start_at
       actual_end_at
+      units_booked
+      inspection_policy_version
+      return_handed_back_at
+      return_resolution
       rental_pricing_snapshot
       client_id
       business_id
