@@ -307,11 +307,10 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
     ).toBe(false);
   });
 
-  it('starts the 60-minute clock when the client accepts, even if that is before the rental start', () => {
+  it('keeps an early accept open until start plus 60 minutes', () => {
     const acceptedAt = new Date(startAt.getTime() - 3 * 60 * 60 * 1000);
     const deadline = extendedReservedDeadline(startAt, acceptedAt);
-    expect(deadline.toISOString()).toBe(new Date(acceptedAt.getTime() + 60 * 60 * 1000).toISOString());
-    expect(deadline.getTime()).toBeLessThan(startAt.getTime() + 60 * 60 * 1000);
+    expect(deadline.toISOString()).toBe(new Date(startAt.getTime() + 60 * 60 * 1000).toISOString());
     expect(
       reservedBookingExpired({
         now: new Date(acceptedAt.getTime() + 30 * 60 * 1000),
@@ -321,6 +320,13 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
         reservedCancelAfter: deadline,
       })
     ).toBe(false);
+  });
+
+  it('starts a late accept 60 minutes after accept', () => {
+    const acceptedAt = new Date(startAt.getTime() + 2 * 60 * 60 * 1000);
+    const deadline = extendedReservedDeadline(startAt, acceptedAt);
+    expect(deadline.toISOString()).toBe(new Date(acceptedAt.getTime() + 60 * 60 * 1000).toISOString());
+    expect(deadline.getTime()).toBeGreaterThan(startAt.getTime() + 60 * 60 * 1000);
   });
 });
 
@@ -422,6 +428,23 @@ describe('inspection SQL enforces the same gates', () => {
     expect(sql).toContain("RAISE EXCEPTION 'rental_inspection_damage_amount'");
   });
 
+  it('stores a return claim in the same update as the new version', () => {
+    const atomic = readFileSync(
+      join(__dirname, '../../../../hasura/migrations/Rendasua/20261110060000_rental_submit_claim_atomic/up.sql'),
+      'utf8'
+    );
+    const updateAt = atomic.indexOf('return_current_version_id = v_version.id');
+    const whereAt = atomic.indexOf('settlement_claimed_at IS NULL', updateAt);
+    expect(atomic.slice(updateAt, whereAt)).toContain('claimed_damage_amount = CASE');
+    expect(atomic.indexOf("RAISE EXCEPTION 'rental_inspection_damage_amount'")).toBeLessThan(
+      atomic.indexOf('INSERT INTO public.rental_inspection_versions')
+    );
+    expect(atomic).toContain('v_booking.inspection_policy_version IS NULL');
+    const wrapper = atomic.slice(atomic.lastIndexOf('CREATE OR REPLACE FUNCTION public.rental_submit_inspection('));
+    expect(wrapper).toContain('false');
+    expect(wrapper).not.toContain('claimed_damage_amount =');
+  });
+
   it('starts the unpaid clock when Collect payment opens', () => {
     const revised = readFileSync(
       join(__dirname, '../../../../hasura/migrations/Rendasua/20261110013000_rental_inspection_revised_flow/up.sql'),
@@ -431,6 +454,17 @@ describe('inspection SQL enforces the same gates', () => {
     expect(revised).toContain('ADD COLUMN IF NOT EXISTS claimed_damage_amount numeric');
     expect(revised).toContain('ADD COLUMN IF NOT EXISTS overtime_amount_override numeric');
     expect(revised).not.toContain('GREATEST(start_at');
+  });
+
+  it('restores early-accept protection without changing the applied migration', () => {
+    const dir = join(__dirname, '../../../../hasura/migrations/Rendasua/20261110070000_rental_accept_early_deadline');
+    const up = readFileSync(join(dir, 'up.sql'), 'utf8');
+    const down = readFileSync(join(dir, 'down.sql'), 'utf8');
+    expect(up).toContain("THEN GREATEST(start_at + interval '60 minutes', now() + interval '60 minutes')");
+    expect(up).toContain('inspection_policy_version IS NOT NULL');
+    expect(up).toContain('pickup_inspection_pending = false');
+    expect(down).toContain("THEN now() + interval '60 minutes'");
+    expect(down).not.toContain('GREATEST(start_at');
   });
 
   it('records handback at server time and keeps the flag off', () => {

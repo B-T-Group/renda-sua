@@ -192,7 +192,6 @@ describe('return submit stores the damage claim only with a new version', () => 
     svc.manifestFor = jest.fn().mockResolvedValue({ text: '{}', sha256: 'x' });
     svc.flags = { numberConfig: jest.fn().mockResolvedValue(3) };
     svc.callSubmit = submit;
-    svc.writeClaim = jest.fn();
     svc.notice = jest.fn();
     return svc;
   };
@@ -205,28 +204,70 @@ describe('return submit stores the damage claim only with a new version', () => 
       response: expect.objectContaining({ code: 'RENTAL_INSPECTION_DAMAGE_AMOUNT' }),
     });
     expect(submit).not.toHaveBeenCalled();
-    expect(svc.writeClaim).not.toHaveBeenCalled();
   });
 
   it('does not touch the stored claim when the submit fails (retry after a successful submit)', async () => {
     const submit = jest.fn().mockRejectedValue(new HttpException('Report could not be submitted', 409));
-    const svc = build(false, submit);
-    await expect(svc.submit('b1', 'return')).rejects.toBeInstanceOf(HttpException);
-    expect(svc.writeClaim).not.toHaveBeenCalled();
+    const svc = build(true, submit);
+    await expect(svc.submit('b1', 'return', 25000)).rejects.toBeInstanceOf(HttpException);
+    expect(submit).toHaveBeenCalledWith('b1', 'return', expect.anything(), expect.anything(), 3, 25000);
+    expect(svc.notice).not.toHaveBeenCalled();
   });
 
-  it('writes the claim after the version is created', async () => {
+  it('passes the claim into the same submit as the version', async () => {
     const submit = jest.fn().mockResolvedValue({ id: 'v2', version_no: 2 });
     const svc = build(true, submit);
     await expect(svc.submit('b1', 'return', 1500)).resolves.toEqual({ versionId: 'v2', versionNo: 2 });
-    expect(svc.writeClaim).toHaveBeenCalledWith('b1', 1500);
-    expect(submit.mock.invocationCallOrder[0]).toBeLessThan(svc.writeClaim.mock.invocationCallOrder[0]);
+    expect(submit).toHaveBeenCalledWith('b1', 'return', expect.anything(), expect.anything(), 3, 1500);
   });
 
   it('clears the claim when a resubmitted return has no damage', async () => {
     const submit = jest.fn().mockResolvedValue({ id: 'v3', version_no: 3 });
     const svc = build(false, submit);
     await svc.submit('b1', 'return', 1500);
-    expect(svc.writeClaim).toHaveBeenCalledWith('b1', null);
+    expect(submit).toHaveBeenCalledWith('b1', 'return', expect.anything(), expect.anything(), 3, null);
+  });
+});
+
+describe('the version function carries the claim', () => {
+  const call = () => {
+    const svc: any = Object.create(RentalInspectionService.prototype);
+    svc.hasura = {
+      executeMutation: jest.fn().mockResolvedValue({
+        rental_submit_inspection_with_claim: [{ id: 'v', version_no: 1 }],
+      }),
+    };
+    return svc;
+  };
+
+  it('sends the amount on the version mutation and does not update the booking beside it', async () => {
+    const svc = call();
+    await svc.callSubmit('b1', 'return', { actorId: 'user-1' }, { text: '{}', sha256: 'h' }, 3, 40);
+    expect(svc.hasura.executeMutation).toHaveBeenCalledTimes(1);
+    const [query, vars] = svc.hasura.executeMutation.mock.calls[0];
+    expect(query).toContain('rental_submit_inspection_with_claim');
+    expect(query).not.toContain('update_rental_bookings_by_pk');
+    expect(vars).toMatchObject({ claim: 40, setClaim: true });
+  });
+
+  it('asks the function to clear the claim when the return has no damage', async () => {
+    const svc = call();
+    await svc.callSubmit('b1', 'return', { actorId: 'user-1' }, { text: '{}', sha256: 'h' }, 3, null);
+    expect(svc.hasura.executeMutation.mock.calls[0][1]).toMatchObject({ claim: null, setClaim: true });
+  });
+
+  it('leaves the claim out of a pickup submit', async () => {
+    const svc = call();
+    await svc.callSubmit('b1', 'pickup', { actorId: 'user-1' }, { text: '{}', sha256: 'h' }, 3);
+    expect(svc.hasura.executeMutation.mock.calls[0][1]).toMatchObject({ claim: null, setClaim: false });
+  });
+
+  it('does not write the claim when the version function fails', async () => {
+    const svc = call();
+    svc.hasura.executeMutation.mockRejectedValue(new Error('rental_inspection_manifest_stale'));
+    await expect(
+      svc.callSubmit('b1', 'return', { actorId: 'user-1' }, { text: '{}', sha256: 'h' }, 3, 40)
+    ).rejects.toBeInstanceOf(HttpException);
+    expect(svc.hasura.executeMutation).toHaveBeenCalledTimes(1);
   });
 });

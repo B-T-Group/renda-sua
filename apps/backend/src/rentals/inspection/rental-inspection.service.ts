@@ -117,8 +117,7 @@ export class RentalInspectionService {
       null,
       DEFAULT_MIN_PHOTOS
     );
-    const version = await this.callSubmit(bookingId, stage, booking, manifest, minPhotos);
-    if (claim !== undefined) await this.writeClaim(bookingId, claim);
+    const version = await this.callSubmit(bookingId, stage, booking, manifest, minPhotos, claim);
     await this.notice(
       booking,
       stage === 'pickup' ? 'review_pickup' : 'review_return',
@@ -506,16 +505,18 @@ export class RentalInspectionService {
     stage: InspectionStage,
     booking: BookingRow & { actorId?: string },
     manifest: { text: string; sha256: string },
-    minPhotos: number
+    minPhotos: number,
+    claim?: number | null
   ) {
     try {
       const result = await this.hasura.executeMutation<{
-        rental_submit_inspection: Array<{ id: string; version_no: number }>;
+        rental_submit_inspection_with_claim: Array<{ id: string; version_no: number }>;
       }>(
-        `mutation SubmitInspection($id: uuid!, $stage: String!, $actor: uuid!, $text: String!, $hash: String!, $min: Int!) {
-          rental_submit_inspection(args: {
+        `mutation SubmitInspection($id: uuid!, $stage: String!, $actor: uuid!, $text: String!, $hash: String!, $min: Int!, $claim: numeric, $setClaim: Boolean!) {
+          rental_submit_inspection_with_claim(args: {
             p_booking_id: $id, p_stage: $stage, p_actor: $actor,
-            p_manifest_text: $text, p_manifest_sha256: $hash, p_min_photos: $min
+            p_manifest_text: $text, p_manifest_sha256: $hash, p_min_photos: $min,
+            p_claimed_damage_amount: $claim, p_set_claimed_damage: $setClaim
           }) { id version_no }
         }`,
         {
@@ -525,9 +526,11 @@ export class RentalInspectionService {
           text: manifest.text,
           hash: manifest.sha256,
           min: Math.max(DEFAULT_MIN_PHOTOS, Math.round(minPhotos)),
+          claim: claim ?? null,
+          setClaim: claim !== undefined,
         }
       );
-      const version = result.rental_submit_inspection?.[0];
+      const version = result.rental_submit_inspection_with_claim?.[0];
       if (!version) throw new HttpException('Report could not be submitted', HttpStatus.CONFLICT);
       return version;
     } catch (error: any) {
@@ -546,6 +549,12 @@ export class RentalInspectionService {
     }
     if (text.includes('rental_inspection_items_incomplete')) {
       return new HttpException('Record condition, accessories, and wear for every unit', HttpStatus.BAD_REQUEST);
+    }
+    if (text.includes('rental_inspection_damage_amount')) {
+      return inspectionRejected(
+        'RENTAL_INSPECTION_DAMAGE_AMOUNT',
+        'A damage report needs the amount you are claiming'
+      );
     }
     return new HttpException('Report could not be submitted', HttpStatus.CONFLICT);
   }
@@ -755,15 +764,6 @@ export class RentalInspectionService {
       { id: inspectionId }
     );
     return (result.rental_inspection_items?.length ?? 0) > 0;
-  }
-
-  private async writeClaim(bookingId: string, amount: number | null) {
-    await this.hasura.executeMutation(
-      `mutation SetClaimedDamage($id: uuid!, $amount: numeric) {
-        update_rental_bookings_by_pk(pk_columns: { id: $id }, _set: { claimed_damage_amount: $amount }) { id }
-      }`,
-      { id: bookingId, amount }
-    );
   }
 
   private async claimedDamage(bookingId: string): Promise<number | null> {

@@ -4,8 +4,8 @@ export const RENTAL_INSPECTION_EVIDENCE_BUCKET_NAME =
 
 /**
  * Staging PUT, finalize rewrite, and EXIF-stripped derivative all live under
- * this prefix. Nest keys are `{dev|prod}/rental-inspection/{bookingId}/{uuid}.ext`;
- * this bucket is production-only, so the code writes `prod/rental-inspection/`.
+ * this prefix. Nest final keys are `{dev|prod}/rental-inspection/{bookingId}/{uuid}.ext`.
+ * Browser PUTs use `{env}/rental-inspection/pending/`. This bucket is production-only.
  */
 export const RENTAL_INSPECTION_EVIDENCE_PREFIX = 'prod/rental-inspection/';
 
@@ -32,7 +32,11 @@ export const RENTAL_INSPECTION_EVIDENCE_CORS_METHODS = [
 export const RENTAL_INSPECTION_EVIDENCE_CORS_HEADERS = [
   'Content-Type',
   'Content-Length',
+  'x-amz-checksum-sha256',
 ] as const;
+
+/** Staging PUTs only. Lifecycle expiry is scoped to this prefix and nowhere else. */
+export const RENTAL_INSPECTION_PENDING_PREFIX = `${RENTAL_INSPECTION_EVIDENCE_PREFIX}pending/`;
 
 export const RENTAL_INSPECTION_EVIDENCE_ACCESS_POLICY_NAME =
   'rendasua-rental-inspection-evidence-prod';

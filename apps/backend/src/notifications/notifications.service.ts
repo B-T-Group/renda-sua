@@ -3389,6 +3389,64 @@ export class NotificationsService {
     }
   }
 
+  /** In-app row plus push. WhatsApp is left for a later template. Never throws. */
+  async sendRentalAvailabilityNotice(params: {
+    userId: string;
+    listingId: string;
+    title: string;
+    body: string;
+  }): Promise<boolean> {
+    const userId = params.userId?.trim();
+    if (!userId) return false;
+    const inApp = await this.insertRentalAvailabilityMessage(userId, params);
+    await this.pushRentalAvailability(userId, params);
+    return inApp;
+  }
+
+  private async insertRentalAvailabilityMessage(
+    userId: string,
+    params: { listingId: string; body: string }
+  ): Promise<boolean> {
+    try {
+      await this.hasuraSystemService.executeMutation(
+        `mutation InsertRentalAvailable($object: user_messages_insert_input!) {
+          insert_user_messages_one(object: $object) { id }
+        }`,
+        {
+          object: {
+            user_id: userId,
+            entity_type: 'rental_availability_alert',
+            entity_id: params.listingId,
+            message_type: 'RENTAL_AVAILABLE',
+            message: params.body,
+            message_payload: { listingId: params.listingId, path: `rentals/listings/${params.listingId}` },
+          },
+        }
+      );
+      return true;
+    } catch (error: any) {
+      this.logger.warn(`rental availability in-app failed: ${error?.message ?? error}`);
+      return false;
+    }
+  }
+
+  private async pushRentalAvailability(
+    userId: string,
+    params: { listingId: string; title: string; body: string }
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    try {
+      const links = this.deepLinkService.rentalListing(params.listingId);
+      await this.sendPushNotificationByUserId(userId, params.title, params.body, {
+        type: 'rental_availability',
+        listingId: params.listingId,
+        url: links.path.replace(/^\//, ''),
+      });
+    } catch (error: any) {
+      this.logger.warn(`rental availability push failed: ${error?.message ?? error}`);
+    }
+  }
+
   async sendBusinessProductInterestNotification(
     payload: BusinessProductInterestNotificationPayload
   ): Promise<void> {

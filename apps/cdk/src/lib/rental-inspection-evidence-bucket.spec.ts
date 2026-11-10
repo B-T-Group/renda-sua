@@ -10,6 +10,7 @@ import {
   RENTAL_INSPECTION_EVIDENCE_CORS_ORIGINS,
   RENTAL_INSPECTION_EVIDENCE_PREFIX,
   RENTAL_INSPECTION_OBJECT_LOCK_RETENTION_DAYS,
+  RENTAL_INSPECTION_PENDING_PREFIX,
 } from './rental-inspection-evidence-config';
 
 const ACCOUNT = '235680477887';
@@ -183,6 +184,59 @@ describe('RentalInspectionEvidenceBucketStack', () => {
         ]),
       },
     });
+  });
+
+  it('expires only the pending prefix, including delete markers, and nowhere else', () => {
+    const template = synthStack();
+    const buckets = template.findResources('AWS::S3::Bucket');
+    const bucket = Object.values(buckets)[0] as {
+      Properties?: {
+        LifecycleConfiguration?: {
+          Rules?: Array<{
+            Prefix?: string;
+            ExpirationInDays?: number;
+            NoncurrentVersionExpiration?: { NoncurrentDays?: number };
+            ExpiredObjectDeleteMarker?: boolean;
+          }>;
+        };
+      };
+    };
+    const rules = bucket.Properties?.LifecycleConfiguration?.Rules ?? [];
+    expect(rules).toEqual([
+      expect.objectContaining({
+        Prefix: RENTAL_INSPECTION_PENDING_PREFIX,
+        ExpirationInDays: 2,
+        NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+        Status: 'Enabled',
+      }),
+      expect.objectContaining({
+        Prefix: RENTAL_INSPECTION_PENDING_PREFIX,
+        ExpiredObjectDeleteMarker: true,
+        Status: 'Enabled',
+      }),
+    ]);
+    const withNoncurrent = rules.filter((rule) => rule.NoncurrentVersionExpiration);
+    expect(withNoncurrent).toHaveLength(1);
+    expect(withNoncurrent[0].Prefix).toBe(RENTAL_INSPECTION_PENDING_PREFIX);
+  });
+
+  it('denies PutObject on non-pending keys when If-None-Match is absent', () => {
+    const template = synthStack();
+    template.hasResourceProperties('AWS::S3::BucketPolicy', {
+      PolicyDocument: {
+        Statement: Match.arrayWith([
+          Match.objectLike({
+            Sid: 'DenyPutWithoutIfNoneMatchExceptPending',
+            Effect: 'Deny',
+            Action: 's3:PutObject',
+            Condition: { Null: { 's3:if-none-match': 'true' } },
+          }),
+        ]),
+      },
+    });
+    const raw = JSON.stringify(template.toJSON());
+    expect(raw).toContain(`/${RENTAL_INSPECTION_PENDING_PREFIX}*`);
+    expect(raw).toContain('NotResource');
   });
 
   it('does not enable auto-delete of objects', () => {

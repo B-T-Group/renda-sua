@@ -38,6 +38,7 @@ import {
 } from './dto/rental-pricing-snapshot.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
+import { peakConcurrentUnits as sweepPeakUnits } from './rental-capacity';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
   inspectionRejected,
@@ -140,6 +141,8 @@ export interface ListPublicRentalListingsQuery {
   page?: number;
   limit?: number;
   q?: string;
+  /** Search-first only: also match `q` against the category name. Legacy browse leaves this unset. */
+  matchCategoryName?: boolean;
   category_id?: string;
   min_price?: number;
   max_price?: number;
@@ -392,42 +395,36 @@ export class RentalsService {
   async listPublicRentalListings(
     query: ListPublicRentalListingsQuery = {}
   ): Promise<PaginatedPublicRentalListings> {
-    const sort = normalizeRentalSort(query.sort);
     const page = Math.max(1, Number(query.page) || 1);
     const limit = Math.min(50, Math.max(1, Number(query.limit) || 20));
+    const items = await this.collectPublicRentalListings(query);
+    const start = (page - 1) * limit;
+    return { items: items.slice(start, start + limit), total: items.length, page, limit };
+  }
+
+  /** Full filtered catalog, already sorted. Dated search reorders this by availability. */
+  async collectPublicRentalListings(
+    query: ListPublicRentalListingsQuery = {}
+  ): Promise<PublicRentalListingRow[]> {
+    const sort = normalizeRentalSort(query.sort);
     const geo = await this.resolveRentalCatalogGeo(query.country_code, query.state);
     if (geo.filterMode === 'specific' && (geo.country || geo.state)) {
       const ok = await this.inventoryItemsService.isCatalogLocationSupported(
         geo.country,
         geo.state
       );
-      if (!ok) {
-        return { items: [], total: 0, page, limit };
-      }
+      if (!ok) return [];
     }
-    const baseWhere = await this.buildRentalListingWhere(
-      geo.filterMode,
-      geo.country,
-      geo.state
-    );
-    const where = this.applyCatalogFilters(
-      this.whereExcludingActiveProposedContracts(baseWhere),
-      query
-    );
+    const baseWhere = await this.buildRentalListingWhere(geo.filterMode, geo.country, geo.state);
+    const where = this.applyCatalogFilters(this.whereExcludingActiveProposedContracts(baseWhere), query);
     const r = await this.hasuraSystemService.executeQuery<{
       rental_location_listings: PublicRentalListingRow[];
-    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, {
-      where,
-      order_by: [{ updated_at: 'desc' }],
-    });
+    }>(Q.LIST_PUBLIC_RENTAL_LISTINGS, { where, order_by: [{ updated_at: 'desc' }] });
     let rows = r.rental_location_listings ?? [];
     rows = await this.filterListingsByPaymentsEnabled(rows);
     rows = await this.enrichRentalListingsWithDistance(rows, query);
     rows = this.sortRentalListingRows(rows, sort);
-    rows = this.filterListingsByPrice(rows, query.min_price, query.max_price);
-    const total = rows.length;
-    const start = (page - 1) * limit;
-    return { items: rows.slice(start, start + limit), total, page, limit };
+    return this.filterListingsByPrice(rows, query.min_price, query.max_price);
   }
 
   async getTopRentalLocations(
@@ -697,6 +694,9 @@ export class RentalsService {
         _or: [
           { rental_item: { name: { _ilike: `%${q}%` } } },
           { rental_item: { description: { _ilike: `%${q}%` } } },
+          ...(query.matchCategoryName
+            ? [{ rental_item: { rental_category: { name: { _ilike: `%${q}%` } } } }]
+            : []),
         ],
       });
     }
@@ -4095,22 +4095,7 @@ export class RentalsService {
     rangeStartMs: number,
     rangeEndMs: number
   ): number {
-    const events: Array<{ t: number; delta: number }> = [];
-    for (const w of windows) {
-      const s = Math.max(w.startMs, rangeStartMs);
-      const e = Math.min(w.endMs, rangeEndMs);
-      if (e <= s) continue;
-      events.push({ t: s, delta: w.units });
-      events.push({ t: e, delta: -w.units });
-    }
-    events.sort((a, b) => a.t - b.t || a.delta - b.delta);
-    let cur = 0;
-    let peak = 0;
-    for (const e of events) {
-      cur += e.delta;
-      if (cur > peak) peak = cur;
-    }
-    return peak;
+    return sweepPeakUnits(windows, rangeStartMs, rangeEndMs);
   }
 
   private async assertUnitsAvailableNotBelowCommitted(

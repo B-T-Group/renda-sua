@@ -175,6 +175,8 @@
 - "!include public_rental_listing_weekly_availability.yaml"
 - "!include public_rental_location_listings.yaml"
 - "!include public_rental_requests.yaml"
+- "!include public_rental_availability_notices.yaml"
+- "!include public_rental_availability_subscriptions.yaml"
 - "!include public_rental_status_history.yaml"
 - "!include public_representative_commission_accruals.yaml"
 - "!include public_representative_commission_deductions.yaml"
