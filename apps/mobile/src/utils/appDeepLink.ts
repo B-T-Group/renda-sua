@@ -65,6 +65,7 @@ export function targetPersonaForDeepLinkPath(path: string): PersonaSlug | null {
   }
   const head = segments[0];
   if (head === 'admin' || head === 'items') return 'business';
+  if (head === 'rentals' && segments[1] === 'listings' && segments[2]) return 'client';
   if (head === 'rentals' && segments[1] === 'requests') return 'business';
   if (head === 'deliveries') return 'agent';
   // Delivery-confirm links always open in the shopper (client) shell.
@@ -83,6 +84,7 @@ export type DeepLinkTarget =
   | { type: 'verification' }
   | { type: 'rentalRequests' }
   | { type: 'rental'; id: string }
+  | { type: 'rentalListing'; id: string }
   | { type: 'food'; id?: string }
   | { type: 'store'; id: string }
   | { type: 'inventoryItem'; id: string }
@@ -133,6 +135,9 @@ function matchDeepLinkRest(
   if (head === 'verification') return { type: 'verification' };
   if (head === 'rentals' && segments[1] === 'requests') {
     return { type: 'rentalRequests' };
+  }
+  if (head === 'rentals' && segments[1] === 'listings' && segments[2]) {
+    return { type: 'rentalListing', id: segments[2] };
   }
   if (head === 'rentals' && segments[1] === 'bookings' && segments[2]) {
     return { type: 'rental', id: segments[2] };

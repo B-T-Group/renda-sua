@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -31,8 +31,12 @@ import type {
 } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney } from '../../utils/rentals';
+import { allDaySelectionsForRange } from '../../utils/rentals/rentalSearchPreset';
+import type { RentalDateRange } from '../../utils/rentals/rentalSearchDates';
 
-type DetailParams = { RentalListingDetail: { listingId: string } };
+type DetailParams = {
+  RentalListingDetail: { listingId: string; startDate?: string; endDate?: string; openRequest?: boolean };
+};
 
 const WEEKDAY_KEYS = [
   'sunday',
@@ -104,6 +108,9 @@ export default function RentalListingDetailScreen() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [requestSheetOpen, setRequestSheetOpen] = useState(false);
+  const startDate = route.params?.startDate;
+  const endDate = route.params?.endDate;
+  const openRequest = route.params?.openRequest === true;
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -151,6 +158,25 @@ export default function RentalListingDetailScreen() {
     [navigation]
   );
 
+  const presetRange: RentalDateRange | null = useMemo(() => {
+    if (!startDate || !endDate) return null;
+    const start = Date.parse(`${startDate}T00:00:00Z`);
+    const end = Date.parse(`${endDate}T00:00:00Z`);
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+    const dayCount = Math.round((end - start) / 86_400_000);
+    if (dayCount < 1 || dayCount > 30) return null;
+    return { startDate, endDate, dayCount };
+  }, [endDate, startDate]);
+  const presetSelections = useMemo(
+    () => (presetRange ? allDaySelectionsForRange(presetRange, listing?.weekly_availability ?? []) : []),
+    [listing?.weekly_availability, presetRange]
+  );
+  const openedRequest = useRef(false);
+  useEffect(() => {
+    if (!listing || !openRequest || openedRequest.current) return;
+    openedRequest.current = true;
+    setRequestSheetOpen(true);
+  }, [listing, openRequest]);
   const currency = listing?.rental_item.currency || 'XAF';
   const weeklySorted = useMemo(() => {
     const rows = listing?.weekly_availability ?? [];
@@ -222,6 +248,7 @@ export default function RentalListingDetailScreen() {
     currency,
     onLoginRequired,
     onSubmitted: auth.isAuthenticated ? onSubmitted : undefined,
+    initialSelections: presetSelections,
   };
 
   return (
@@ -667,9 +694,18 @@ export default function RentalListingDetailScreen() {
     </View>
 
     <RentalRequestSheet
+      key={presetSelections.map((row) => `${row.id}:${row.startMs}`).join('|') || 'request'}
       visible={requestSheetOpen}
       onDismiss={() => setRequestSheetOpen(false)}
       listingName={item.name}
+      datesBanner={
+        presetRange
+          ? t(
+              'rentals.searchFirst.datesFromSearch',
+              'Dates from your search — change them if needed. Nothing is charged until the business accepts.'
+            )
+          : undefined
+      }
       {...pickerProps}
     />
     <ImageLightbox

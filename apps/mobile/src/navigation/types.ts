@@ -169,7 +169,12 @@ export type GuestRootStackParamList = {
         reorderBanner?: 'business_closed' | 'address_invalid';
       }
     | undefined;
-  RentalListingDetail: { listingId: string };
+  RentalListingDetail: {
+    listingId: string;
+    startDate?: string;
+    endDate?: string;
+    openRequest?: boolean;
+  };
   CategoriesBrowse: undefined;
   AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
 };
@@ -252,7 +257,12 @@ export type ClientRootStackParamList = {
   UserPurchaseCredits: undefined;
   UserPaymentPrograms: undefined;
   CashAdvanceDrawSuccess: CashAdvanceDrawSuccessParams;
-  RentalListingDetail: { listingId: string };
+  RentalListingDetail: {
+    listingId: string;
+    startDate?: string;
+    endDate?: string;
+    openRequest?: boolean;
+  };
   RentalRequestSubmitted: { requestId?: string };
   ClientMyRentals: undefined;
   RentalBookingDetail: { bookingId: string };

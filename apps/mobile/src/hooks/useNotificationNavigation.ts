@@ -42,6 +42,8 @@ function inferPersonaForMessage(
       if (enrolled.includes('client')) return 'client';
       if (enrolled.includes('business')) return 'business';
       return null;
+    case 'rental_availability_alert':
+      return 'client';
     case 'order':
       if (active === 'client' || active === 'agent' || active === 'business') {
         return active;
@@ -240,6 +242,16 @@ export function useNotificationNavigation(): (msg: UserMessage) => NotificationN
                 });
               })();
             }),
+          };
+        }
+
+        case 'rental_availability_alert': {
+          if (!enrolled.includes('client')) return null;
+          return {
+            label: 'rentalListingDetail',
+            navigate: withPersona('client', () =>
+              navigation.navigate('RentalListingDetail', { listingId: entity_id })
+            ),
           };
         }
 

@@ -79,6 +79,8 @@ export interface RentalSlotPickerProps {
   onSubmitted?: (requestId: string) => void;
   /** When true, omits outer card chrome (for bottom sheets). */
   embedded?: boolean;
+  /** Dates chosen in search. Shown as all-day rows and submitted at the daily rate. */
+  initialSelections?: SelectionRange[];
 }
 
 export function RentalSlotPicker({
@@ -95,6 +97,7 @@ export function RentalSlotPicker({
   onLoginRequired,
   onSubmitted,
   embedded = false,
+  initialSelections = [],
 }: RentalSlotPickerProps) {
   const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -107,8 +110,8 @@ export function RentalSlotPicker({
   const [startMs, setStartMs] = useState<number | ''>('');
   const [endMs, setEndMs] = useState<number | ''>('');
   const [allDayChecked, setAllDayChecked] = useState(false);
-  const [selections, setSelections] = useState<SelectionRange[]>([]);
-  const [showAdvancedRanges, setShowAdvancedRanges] = useState(false);
+  const [selections, setSelections] = useState<SelectionRange[]>(initialSelections);
+  const [showAdvancedRanges, setShowAdvancedRanges] = useState(initialSelections.length > 0);
   const [unitsRequested, setUnitsRequested] = useState(1);
   const [notes, setNotes] = useState('');
   const [msg, setMsg] = useState<string | null>(null);

@@ -16,12 +16,14 @@ export interface RentalRequestSheetProps extends RentalSlotPickerProps {
   visible: boolean;
   onDismiss: () => void;
   listingName?: string;
+  datesBanner?: string;
 }
 
 export function RentalRequestSheet({
   visible,
   onDismiss,
   listingName,
+  datesBanner,
   ...pickerProps
 }: RentalRequestSheetProps) {
   const { t } = useTranslation();
@@ -68,6 +70,16 @@ export function RentalRequestSheet({
               numberOfLines={2}
             >
               {listingName}
+            </Text>
+          ) : null}
+          {datesBanner ? (
+            <Text
+              style={[
+                typography.body2,
+                { color: colors.text.secondary, paddingHorizontal: spacing.md, marginTop: spacing.xs },
+              ]}
+            >
+              {datesBanner}
             </Text>
           ) : null}
           <ScrollView
