@@ -215,3 +215,19 @@ export function buildRentalInspectionNotice(params: {
   };
   return copy[params.kind];
 }
+
+export function buildRentalAvailablePush(params: {
+  itemName: string;
+  startAt: string;
+  endAt: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  const dates = `${params.startAt.slice(0, 10)} – ${params.endAt.slice(0, 10)}`;
+  return {
+    title: fr ? 'Une location est libre' : 'A rental is free',
+    body: fr
+      ? `${params.itemName} est libre pour vos dates (${dates}).`
+      : `${params.itemName} is free for your dates (${dates}).`,
+  };
+}
