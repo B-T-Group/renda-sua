@@ -3,6 +3,7 @@ import {
   INSPECTION_UPLOAD_TTL_SECONDS,
   INSPECTION_VIEW_TTL_SECONDS,
   inspectionDerivativeKey,
+  inspectionEvidenceBucket,
   inspectionKeyRoot,
   inspectionObjectKey,
   isInspectionEvidenceKey,
@@ -51,5 +52,21 @@ describe('inspection evidence keys', () => {
     expect(validateInspectionUpload('image/jpg', 1000).contentType).toBe('image/jpeg');
     expect(() => validateInspectionUpload('image/svg+xml', 1000)).toThrow();
     expect(() => validateInspectionUpload('image/jpeg', 9 * 1024 * 1024)).toThrow();
+  });
+
+  it('keeps DEV on the shared uploads bucket and lets prod set RENTAL_INSPECTION_BUCKET', () => {
+    expect(inspectionEvidenceBucket({})).toBe('rendasua-user-uploads');
+    expect(inspectionEvidenceBucket({ RENTAL_INSPECTION_BUCKET: '  ' })).toBe(
+      'rendasua-user-uploads'
+    );
+    expect(
+      inspectionEvidenceBucket({ APPEAL_EVIDENCE_BUCKET: 'rs-private-evidence' })
+    ).toBe('rs-private-evidence');
+    expect(
+      inspectionEvidenceBucket({
+        APPEAL_EVIDENCE_BUCKET: 'rs-private-evidence',
+        RENTAL_INSPECTION_BUCKET: 'rendasua-rental-inspection-evidence-prod',
+      })
+    ).toBe('rendasua-rental-inspection-evidence-prod');
   });
 });
