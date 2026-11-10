@@ -54,6 +54,63 @@ describe('rental capacity', () => {
     });
     expect(next).toBe(sunday + day);
   });
+
+  it('treats a missing weekly row as open and a single closed day as closed', () => {
+    const thursday = Date.UTC(2026, 10, 12);
+    expect(weekdaysOpen(null, thursday, thursday + day)).toBe(true);
+    expect(weekdaysOpen([], thursday, thursday + 2 * day)).toBe(true);
+    expect(
+      weekdaysOpen([{ weekday: 1, is_available: true }], thursday, thursday + day)
+    ).toBe(true);
+    expect(
+      weekdaysOpen([{ weekday: 5, is_available: false }], thursday, thursday + 2 * day)
+    ).toBe(false);
+  });
+
+  it('does not hold a proposed booking without a live contract', () => {
+    expect(isHeldBooking('proposed', null, start)).toBe(false);
+    expect(isHeldBooking('proposed', undefined, start)).toBe(false);
+    expect(isHeldBooking('proposed', new Date(start).toISOString(), start)).toBe(false);
+    expect(isHeldBooking('active', null, start)).toBe(true);
+    expect(isHeldBooking('awaiting_return', null, start)).toBe(true);
+  });
+
+  it('uses a floor of one unit and stops when the requested units do not fit', () => {
+    expect(unitsStillFree(0, [], start, start + day)).toBe(true);
+    expect(unitsStillFree(Number.NaN, [], start, start + day)).toBe(true);
+    expect(unitsStillFree(1, [], start, start + day, 2)).toBe(false);
+  });
+
+  it('returns null when the stay has no length or nothing frees inside the horizon', () => {
+    const origin = Date.UTC(2026, 0, 1);
+    expect(
+      nextFreeStartMs({
+        unitsAvailable: 1,
+        windows: [],
+        startMs: origin,
+        endMs: origin,
+        nowMs: origin,
+      })
+    ).toBeNull();
+    expect(
+      nextFreeStartMs({
+        unitsAvailable: 1,
+        windows: [{ startMs: origin, endMs: origin + 46 * day, units: 1 }],
+        startMs: origin,
+        endMs: origin + day,
+        nowMs: origin,
+      })
+    ).toBeNull();
+    expect(
+      nextFreeStartMs({
+        unitsAvailable: 1,
+        windows: [{ startMs: origin, endMs: origin + 45 * day, units: 1 }],
+        startMs: origin,
+        endMs: origin + day,
+        nowMs: origin,
+      })
+    ).toBe(origin + 45 * day);
+  });
 });
 
 describe('dated rental search totals', () => {
@@ -72,6 +129,33 @@ describe('dated rental search totals', () => {
     expect(booked.available).toBe(false);
     expect(booked.totalForDates).toBeNull();
     expect(booked.nextAvailableDate).toBe('2026-11-15');
+    expect(totalForDates(Number.NaN, 2)).toBe(0);
+    expect(totalForDates(10.1, 3)).toBe(30.3);
+  });
+
+  it('hides the total when a closed weekday blocks the requested days', () => {
+    const range = parseSearchDateRange('2026-11-15', '2026-11-16');
+    if (!range) throw new Error('expected a date range');
+    const blocked = availabilityForListing({
+      unitsAvailable: 1,
+      windows: [],
+      weekly: [{ weekday: 0, is_available: false }],
+      range,
+      nowMs: Date.UTC(2026, 10, 10),
+      pricePerDay: 1000,
+    });
+    expect(blocked.available).toBe(false);
+    expect(blocked.totalForDates).toBeNull();
+    expect(blocked.nextAvailableDate).toBe('2026-11-16');
+    const never = availabilityForListing({
+      unitsAvailable: 1,
+      windows: [],
+      weekly: [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, is_available: false })),
+      range,
+      nowMs: Date.UTC(2026, 10, 10),
+      pricePerDay: 1000,
+    });
+    expect(never.nextAvailableDate).toBeNull();
   });
 
   it('rejects a reversed or same-day exclusive range', () => {

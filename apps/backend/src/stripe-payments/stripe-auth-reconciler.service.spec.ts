@@ -40,15 +40,67 @@ describe('StripeAuthReconcilerService rentals', () => {
       booking_number: 'RB1',
       status: 'proposed',
       payment_status: 'authorized',
+      actual_start_at: null,
     };
     await rec.handleCanceledStripeAuthorization('tx1', 'RB1', 'rental_booking');
-    expect(mutations[0].query).toContain('status: { _eq: proposed }');
+    expect(mutations[0].query).toContain('actual_start_at: { _is_null: true }');
+    expect(mutations[0].vars.status).toBe('proposed');
     expect(mutations[1].vars.object.notes).toBe('Stripe authorization lapsed');
     expect(rec.databaseService.updateTransaction).toHaveBeenCalledWith(
       'tx1',
       expect.objectContaining({ status: 'expired' })
     );
     expect(rec.orderSystemJobsService.onOrderPaymentFailed).not.toHaveBeenCalled();
+  });
+
+  it('cancels a confirmed rental that has not started when the card authorization is canceled', async () => {
+    const { rec, mutations } = reconciler();
+    rec.booking = {
+      id: 'b1',
+      booking_number: 'RB1',
+      status: 'confirmed',
+      payment_status: 'authorized',
+      actual_start_at: null,
+    };
+    await rec.handleCanceledStripeAuthorization('tx1', 'RB1', 'rental_booking');
+    expect(mutations[0].vars.status).toBe('confirmed');
+    expect(mutations[0].query).toContain('payment_status: { _eq: authorized }');
+    expect(rec.databaseService.updateTransaction).toHaveBeenCalledWith(
+      'tx1',
+      expect.objectContaining({ status: 'expired' })
+    );
+  });
+
+  it('does not expire the card row when the unstarted cancel loses', async () => {
+    const { rec } = reconciler();
+    rec.cancelRows = 0;
+    rec.booking = {
+      id: 'b1',
+      booking_number: 'RB1',
+      status: 'confirmed',
+      payment_status: 'authorized',
+      actual_start_at: null,
+    };
+    await expect(
+      rec.handleCanceledStripeAuthorization('tx1', 'RB1', 'rental_booking')
+    ).rejects.toThrow(/Could not cancel unstarted rental RB1/);
+    expect(rec.databaseService.updateTransaction).not.toHaveBeenCalled();
+  });
+
+  it('leaves a confirmed rental that already started open and notes the lapse', async () => {
+    const { rec, mutations } = reconciler();
+    rec.booking = {
+      id: 'b1',
+      booking_number: 'RB1',
+      status: 'confirmed',
+      payment_status: 'authorized',
+      actual_start_at: '2026-11-01T12:00:00.000Z',
+    };
+    await rec.handleCanceledStripeAuthorization('tx1', 'RB1', 'rental_booking');
+    expect(mutations.some((m) => m.query.includes('update_rental_bookings'))).toBe(
+      false
+    );
+    expect(mutations[0].vars.object.notes).toBe('Stripe authorization lapsed');
   });
 
   it('leaves an out rental open and notes the lapse once', async () => {
