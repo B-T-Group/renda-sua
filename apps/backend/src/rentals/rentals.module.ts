@@ -11,11 +11,14 @@ import { RentalBookingMessagingService } from './rental-booking-messaging.servic
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { RentalInspectionsController } from './rental-inspections.controller';
 import { RentalsController } from './rentals.controller';
+import { RentalSearchController } from './rental-search.controller';
 import { RentalsCronService } from './rentals-cron.service';
 import { RentalInspectionEvidenceService } from './inspection/rental-inspection-evidence.service';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { RentalsService } from './rentals.service';
+import { RentalSearchService } from './rental-search.service';
+import { RentalAvailabilityService } from './rental-availability.service';
 
 @Module({
   imports: [
@@ -26,9 +29,11 @@ import { RentalsService } from './rentals.service';
     StripePaymentsModule,
     RentalListingAiReviewModule,
   ],
-  controllers: [RentalsController, RentalInspectionsController, AdminRentalBookingsController],
+  controllers: [RentalsController, RentalSearchController, RentalInspectionsController, AdminRentalBookingsController],
   providers: [
     RentalsService,
+    RentalSearchService,
+    RentalAvailabilityService,
     RentalsCronService,
     RentalPaymentCallbackHandler,
     RentalStartPinShareService,

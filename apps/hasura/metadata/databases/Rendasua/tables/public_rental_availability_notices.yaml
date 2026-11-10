@@ -1,0 +1,13 @@
+table:
+  name: rental_availability_notices
+  schema: public
+object_relationships:
+  - name: subscription
+    using:
+      foreign_key_constraint_on: subscription_id
+  - name: user
+    using:
+      foreign_key_constraint_on: user_id
+  - name: listing
+    using:
+      foreign_key_constraint_on: listing_id
