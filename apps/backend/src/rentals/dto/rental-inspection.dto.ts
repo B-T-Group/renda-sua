@@ -109,10 +109,13 @@ export class PresignInspectionEvidenceDto {
   @Min(1)
   fileSize!: number;
 
-  @ApiProperty({ description: 'SHA-256 hex of the file bytes' })
+  @ApiPropertyOptional({
+    description: 'SHA-256 hex of the file bytes. Signed as x-amz-checksum-sha256 when present.',
+  })
+  @IsOptional()
   @IsString()
   @Matches(/^[0-9a-f]{64}$/i)
-  sha256!: string;
+  sha256?: string;
 }
 
 export class AdminHandbackDto {

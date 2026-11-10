@@ -55,6 +55,19 @@ export function inspectionPendingObjectKey(
   return `${inspectionKeyRoot(envName)}/rental-inspection/pending/${bookingId.toLowerCase()}/${mediaId.toLowerCase()}.${ext}`;
 }
 
+/**
+ * When true, presign rejects a missing sha256.
+ * Default false so current clients can upload.
+ * Must be turned on before any default retention is set on the prod bucket:
+ * Object Lock default retention rejects a PUT with no Content-MD5 or checksum.
+ */
+export function inspectionChecksumRequired(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  const value = env.RENTAL_INSPECTION_REQUIRE_CHECKSUM?.trim().toLowerCase();
+  return value === 'true' || value === '1';
+}
+
 /** Base64 `x-amz-checksum-sha256` value for a hex SHA-256 of the file bytes. */
 export function inspectionChecksumHeader(sha256Hex: string): string {
   const hex = sha256Hex.trim().toLowerCase();
@@ -62,6 +75,21 @@ export function inspectionChecksumHeader(sha256Hex: string): string {
     throw evidenceError('Evidence sha256 must be 64 hex characters');
   }
   return Buffer.from(hex, 'hex').toString('base64');
+}
+
+/** Sign a provided digest. Omit it unless the config requires one. */
+export function resolveInspectionChecksum(
+  sha256: string | undefined,
+  env: NodeJS.ProcessEnv = process.env
+): string | undefined {
+  const raw = sha256?.trim() ?? '';
+  if (!raw) {
+    if (inspectionChecksumRequired(env)) {
+      throw evidenceError('Evidence sha256 is required');
+    }
+    return undefined;
+  }
+  return inspectionChecksumHeader(raw);
 }
 
 export function inspectionDerivativeKey(objectKey: string): string {

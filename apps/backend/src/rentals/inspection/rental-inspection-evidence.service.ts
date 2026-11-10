@@ -9,8 +9,8 @@ import { isActivePersona } from '../../users/persona.util';
 import {
   INSPECTION_UPLOAD_TTL_SECONDS,
   INSPECTION_VIEW_TTL_SECONDS,
-  inspectionChecksumHeader,
   inspectionDerivativeKey,
+  resolveInspectionChecksum,
   inspectionEvidenceBucket,
   inspectionObjectKey,
   inspectionPendingObjectKey,
@@ -24,7 +24,7 @@ export interface EvidencePresignInput {
   role: string;
   contentType: string;
   fileSize: number;
-  sha256: string;
+  sha256?: string;
 }
 
 @Injectable()
@@ -39,7 +39,7 @@ export class RentalInspectionEvidenceService {
 
   async presign(bookingId: string, input: EvidencePresignInput) {
     const upload = validateInspectionUpload(input.contentType, input.fileSize);
-    const checksum = inspectionChecksumHeader(input.sha256);
+    const checksum = resolveInspectionChecksum(input.sha256);
     const actor = await this.actorForUpload(bookingId, input.role);
     const inspection = await this.draftInspection(bookingId, input.role);
     await this.assertUnit(bookingId, input.unitId);
@@ -62,7 +62,7 @@ export class RentalInspectionEvidenceService {
       headers: {
         'Content-Type': upload.contentType,
         'Content-Length': String(upload.size),
-        'x-amz-checksum-sha256': checksum,
+        ...(checksum ? { 'x-amz-checksum-sha256': checksum } : {}),
       },
     };
   }

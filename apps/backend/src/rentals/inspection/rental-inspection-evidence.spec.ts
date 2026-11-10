@@ -3,6 +3,8 @@ import {
   INSPECTION_UPLOAD_TTL_SECONDS,
   INSPECTION_VIEW_TTL_SECONDS,
   inspectionChecksumHeader,
+  inspectionChecksumRequired,
+  resolveInspectionChecksum,
   inspectionDerivativeKey,
   inspectionEvidenceBucket,
   inspectionKeyRoot,
@@ -73,6 +75,20 @@ describe('inspection evidence keys', () => {
     expect(() => inspectionChecksumHeader('abcd')).toThrow();
   });
 
+  it('leaves sha256 optional unless RENTAL_INSPECTION_REQUIRE_CHECKSUM is on', () => {
+    const hex = 'ab'.repeat(32);
+    expect(inspectionChecksumRequired({})).toBe(false);
+    expect(inspectionChecksumRequired({ RENTAL_INSPECTION_REQUIRE_CHECKSUM: 'false' })).toBe(false);
+    expect(inspectionChecksumRequired({ RENTAL_INSPECTION_REQUIRE_CHECKSUM: 'true' })).toBe(true);
+    expect(resolveInspectionChecksum(undefined, {})).toBeUndefined();
+    expect(resolveInspectionChecksum('  ', {})).toBeUndefined();
+    expect(resolveInspectionChecksum(hex, {})).toBe(Buffer.from(hex, 'hex').toString('base64'));
+    expect(() => resolveInspectionChecksum('abcd', {})).toThrow();
+    expect(() =>
+      resolveInspectionChecksum(undefined, { RENTAL_INSPECTION_REQUIRE_CHECKSUM: '1' })
+    ).toThrow(/sha256 is required/);
+  });
+
   it('keeps DEV on the shared uploads bucket and lets prod set RENTAL_INSPECTION_BUCKET', () => {
     expect(inspectionEvidenceBucket({})).toBe('rendasua-user-uploads');
     expect(inspectionEvidenceBucket({ RENTAL_INSPECTION_BUCKET: '  ' })).toBe(
@@ -121,5 +137,20 @@ describe('final inspection writes do not overwrite', () => {
       checksumSha256: checksum,
     });
     expect(out.signedHeaders).toEqual(expect.arrayContaining(['x-amz-checksum-sha256', 'content-type', 'content-length']));
+  });
+
+  it('presigns without a checksum header when sha256 is omitted', async () => {
+    const { AwsService } = require('../../aws/aws.service');
+    const svc = new AwsService({
+      get: () => ({ region: 'ca-central-1', accessKeyId: 'AKIDEXAMPLE', secretAccessKey: 'test-only' }),
+    });
+    const out = await svc.generateStrictUploadUrl({
+      bucketName: 'rendasua-user-uploads',
+      key: 'dev/rental-inspection/pending/11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222222.jpg',
+      contentType: 'image/jpeg',
+      contentLength: 1200,
+    });
+    expect(out.signedHeaders).not.toContain('x-amz-checksum-sha256');
+    expect(out.signedHeaders).toEqual(expect.arrayContaining(['content-type', 'content-length']));
   });
 });

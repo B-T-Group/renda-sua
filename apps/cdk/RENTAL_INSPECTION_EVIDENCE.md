@@ -51,13 +51,13 @@ The bucket policy denies `s3:PutObject` when `s3:if-none-match` is null, except 
 
 ## Checksum on the browser PUT
 
-Presign requires the file's SHA-256 hex and signs `x-amz-checksum-sha256` (base64 of that digest) with Content-Type and Content-Length. CORS allows that header. A full-body checksum has to be known before the signature, so the client computes it. Do not turn on the SDK's flexible/trailing checksum: an empty-body CRC signed into the URL makes a browser PUT 403. When a default retention is added later, S3 requires Content-MD5 or a checksum header; this signed header is that checksum.
+`sha256` on presign is optional. When the client sends a 64-character hex digest, Nest signs `x-amz-checksum-sha256` (base64 of that digest) with Content-Type and Content-Length. When it is omitted, the PUT is signed as before. `RENTAL_INSPECTION_REQUIRE_CHECKSUM` defaults to false. It must be turned on before any default retention is set on the prod bucket: Object Lock default retention rejects a PUT with no Content-MD5 or checksum header. CORS already allows `x-amz-checksum-sha256`. Do not turn on the SDK's flexible/trailing checksum: an empty-body CRC signed into the URL makes a browser PUT 403.
 
-`apps/frontend/src/services/rentalInspectionApi.ts` on the inspection UI branch already copies `signed.headers` onto the PUT. It still needs to hash the file and send `sha256` on `POST .../evidence/presign`. Same change for `apps/mobile/src/services/rentalInspectionApi.ts`. This PR does not edit that branch.
+`apps/frontend/src/services/rentalInspectionApi.ts` and `apps/mobile/src/services/rentalInspectionApi.ts` on the inspection UI branch can keep omitting `sha256`. When they add it, they should hash the file, send `sha256` on presign, and keep copying `signed.headers` onto the PUT. This PR does not edit that branch.
 
 ## Evidence flow this bucket matches
 
-1. `POST .../evidence/presign` — Nest signs a PUT for `{env}/rental-inspection/pending/{bookingId}/{mediaId}.{jpg|png|webp}` (Content-Type, Content-Length, and `x-amz-checksum-sha256` pinned, 10 minutes).
+1. `POST .../evidence/presign` — Nest signs a PUT for `{env}/rental-inspection/pending/{bookingId}/{mediaId}.{jpg|png|webp}` (Content-Type and Content-Length pinned, plus `x-amz-checksum-sha256` when the client sent `sha256`, 10 minutes).
 2. Browser/app PUTs the file directly (web needs CORS; native mobile does not).
 3. `POST .../evidence/:mediaId/finalize` — Nest HEADs and GETs the pending object, hashes it, **PutObject**s a new UUID at `{env}/rental-inspection/{bookingId}/{uuid}.ext` with `If-None-Match: *` (not CopyObject), then PutObjects an EXIF-stripped `{uuid}.view.jpg` the same way. Pending keys are not evidence.
 4. `GET .../evidence/:mediaId/url` — short-lived presigned GET of the derivative.
