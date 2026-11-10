@@ -10,9 +10,12 @@ import {
   INSPECTION_UPLOAD_TTL_SECONDS,
   INSPECTION_VIEW_TTL_SECONDS,
   inspectionDerivativeKey,
+  resolveInspectionChecksum,
   inspectionEvidenceBucket,
   inspectionObjectKey,
+  inspectionPendingObjectKey,
   isInspectionEvidenceKey,
+  isInspectionPendingKey,
   validateInspectionUpload,
 } from './rental-inspection-evidence';
 
@@ -21,6 +24,7 @@ export interface EvidencePresignInput {
   role: string;
   contentType: string;
   fileSize: number;
+  sha256?: string;
 }
 
 @Injectable()
@@ -35,17 +39,19 @@ export class RentalInspectionEvidenceService {
 
   async presign(bookingId: string, input: EvidencePresignInput) {
     const upload = validateInspectionUpload(input.contentType, input.fileSize);
+    const checksum = resolveInspectionChecksum(input.sha256);
     const actor = await this.actorForUpload(bookingId, input.role);
     const inspection = await this.draftInspection(bookingId, input.role);
     await this.assertUnit(bookingId, input.unitId);
     const mediaId = randomUUID();
-    const objectKey = inspectionObjectKey(bookingId, mediaId, upload.ext);
+    const objectKey = inspectionPendingObjectKey(bookingId, mediaId, upload.ext);
     await this.insertPending(bookingId, mediaId, inspection.id, input, objectKey, upload, actor.userId);
     const signed = await this.aws.generateStrictUploadUrl({
       bucketName: this.bucket(),
       key: objectKey,
       contentType: upload.contentType,
       contentLength: upload.size,
+      checksumSha256: checksum,
       expiresIn: INSPECTION_UPLOAD_TTL_SECONDS,
     });
     return {
@@ -53,7 +59,11 @@ export class RentalInspectionEvidenceService {
       objectKey,
       uploadUrl: signed.url,
       expiresAt: signed.expiresAt,
-      headers: { 'Content-Type': upload.contentType, 'Content-Length': String(upload.size) },
+      headers: {
+        'Content-Type': upload.contentType,
+        'Content-Length': String(upload.size),
+        ...(checksum ? { 'x-amz-checksum-sha256': checksum } : {}),
+      },
     };
   }
 
@@ -70,7 +80,8 @@ export class RentalInspectionEvidenceService {
       this.bucket(),
       finalKey,
       bytes,
-      head!.contentType
+      head!.contentType,
+      { ifNoneMatch: true }
     );
     const derivative = await this.writeDerivative(finalKey, bytes);
     await this.markReady(mediaId, {
@@ -183,7 +194,7 @@ export class RentalInspectionEvidenceService {
     upload: { contentType: string; size: number },
     userId: string
   ) {
-    if (!isInspectionEvidenceKey(objectKey, bookingId)) {
+    if (!isInspectionPendingKey(objectKey, bookingId) || isInspectionEvidenceKey(objectKey, bookingId)) {
       throw new HttpException('Invalid evidence key', HttpStatus.BAD_REQUEST);
     }
     await this.hasura.executeMutation(
@@ -208,7 +219,11 @@ export class RentalInspectionEvidenceService {
 
   private async ownMedia(bookingId: string, mediaId: string) {
     const media = await this.mediaRow(mediaId);
-    if (!media || !isInspectionEvidenceKey(media.object_key, bookingId)) {
+    const uploadKey =
+      media?.status === 'pending'
+        ? isInspectionPendingKey(media.object_key, bookingId)
+        : !!media && isInspectionEvidenceKey(media.object_key, bookingId);
+    if (!media || !uploadKey) {
       throw new HttpException('Photo not found', HttpStatus.NOT_FOUND);
     }
     const user = await this.users.getUser();
@@ -277,7 +292,9 @@ export class RentalInspectionEvidenceService {
       throw new HttpException('Photo could not be processed', HttpStatus.BAD_REQUEST);
     }
     const derivativeKey = inspectionDerivativeKey(objectKey);
-    await this.aws.putPrivateObject(this.bucket(), derivativeKey, stripped, 'image/jpeg');
+    await this.aws.putPrivateObject(this.bucket(), derivativeKey, stripped, 'image/jpeg', {
+      ifNoneMatch: true,
+    });
     return derivativeKey;
   }
 

@@ -10,6 +10,7 @@ import {
   RENTAL_INSPECTION_EVIDENCE_CORS_ORIGINS,
   RENTAL_INSPECTION_EVIDENCE_PREFIX,
   RENTAL_INSPECTION_OBJECT_LOCK_RETENTION_DAYS,
+  RENTAL_INSPECTION_PENDING_PREFIX,
 } from './rental-inspection-evidence-config';
 
 export interface RentalInspectionEvidenceBucketStackProps extends cdk.StackProps {
@@ -33,6 +34,7 @@ export class RentalInspectionEvidenceBucketStack extends cdk.Stack {
     const retentionDays = this.resolveRetentionDays(props);
     this.bucket = this.createBucket(retentionDays);
     this.denyDeletesExceptAccountRoot(this.bucket);
+    this.denyUnconditionalPutOnFinalKeys(this.bucket);
     this.accessPolicy = this.createUnattachedAccessPolicy();
     this.outputBucketName();
   }
@@ -59,7 +61,27 @@ export class RentalInspectionEvidenceBucketStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       autoDeleteObjects: false,
       cors: [this.browserUploadCorsRule()],
+      // A future default retention must not lock pending objects. Governance
+      // retention would keep staging PUTs past this expiry.
+      lifecycleRules: this.pendingUploadLifecycle(),
     });
+  }
+
+  private pendingUploadLifecycle(): s3.LifecycleRule[] {
+    const prefix = RENTAL_INSPECTION_PENDING_PREFIX;
+    return [
+      {
+        id: 'expire-pending-inspection-uploads',
+        prefix,
+        expiration: cdk.Duration.days(2),
+        noncurrentVersionExpiration: cdk.Duration.days(1),
+      },
+      {
+        id: 'expire-pending-inspection-delete-markers',
+        prefix,
+        expiredObjectDeleteMarker: true,
+      },
+    ];
   }
 
   private governanceRetention(
@@ -99,6 +121,26 @@ export class RentalInspectionEvidenceBucketStack extends cdk.Stack {
         resources: [bucket.bucketArn, bucket.arnForObjects('*')],
         conditions: {
           ArnNotEquals: { 'aws:PrincipalArn': accountRootArn },
+        },
+      })
+    );
+  }
+
+  /**
+   * Final keys (and derivatives) cannot be overwritten. Pending PUTs stay
+   * unconditional so a browser can retry the same staging key.
+   * DEV buckets do not have this statement.
+   */
+  private denyUnconditionalPutOnFinalKeys(bucket: s3.Bucket): void {
+    bucket.addToResourcePolicy(
+      new iam.PolicyStatement({
+        sid: 'DenyPutWithoutIfNoneMatchExceptPending',
+        effect: iam.Effect.DENY,
+        principals: [new iam.AnyPrincipal()],
+        actions: ['s3:PutObject'],
+        notResources: [bucket.arnForObjects(`${RENTAL_INSPECTION_PENDING_PREFIX}*`)],
+        conditions: {
+          Null: { 's3:if-none-match': 'true' },
         },
       })
     );
