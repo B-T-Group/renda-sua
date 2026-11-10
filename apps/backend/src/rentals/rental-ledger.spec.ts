@@ -1,10 +1,12 @@
 import { HttpException } from '@nestjs/common';
 import { AccountsService } from '../accounts/accounts.service';
 import { RentalsService } from './rentals.service';
-import { assertLedgerResult, rentalLedgerKey } from './rental-ledger';
+import { assertLedgerResult, rentalLedgerKey, rentalProceedsLeg } from './rental-ledger';
 import {
   decideRentalMomoRetry,
+  isRentalMomoUniqueViolation,
   newRentalMomoReference,
+  rentalMomoIdempotencyKey,
   RENTAL_MOMO_PENDING_MAX_AGE_MS,
 } from './rental-momo-idempotency';
 
@@ -34,6 +36,45 @@ describe('rental ledger keys', () => {
     expect(decideRentalMomoRetry({ status: 'failed', transaction_id: null })).toBe(
       'replace'
     );
+  });
+
+  it('sends a first prompt, skips a live one, and replaces one that is exactly five minutes old', () => {
+    const now = Date.UTC(2026, 10, 10, 12);
+    const fresh = new Date(now).toISOString();
+    const exact = new Date(now - RENTAL_MOMO_PENDING_MAX_AGE_MS).toISOString();
+    expect(decideRentalMomoRetry(null, now)).toBe('send');
+    expect(decideRentalMomoRetry({ status: 'success', transaction_id: 'p' }, now)).toBe('skip');
+    expect(decideRentalMomoRetry({ status: 'pending', created_at: fresh }, now)).toBe('send');
+    expect(decideRentalMomoRetry({ status: 'processing', created_at: fresh }, now)).toBe('skip');
+    expect(
+      decideRentalMomoRetry({ status: 'pending', transaction_id: 'p', created_at: 'nope' }, now)
+    ).toBe('skip');
+    expect(
+      decideRentalMomoRetry({ status: 'pending', transaction_id: 'p', created_at: exact }, now)
+    ).toBe('replace');
+    expect(rentalMomoIdempotencyKey('RB1', 'overtime')).toBe('rental-momo:RB1:overtime');
+    const overtime = newRentalMomoReference('overtime', now);
+    expect(overtime.startsWith('o')).toBe(true);
+    expect(overtime).toMatch(/^[a-zA-Z0-9]{1,15}$/);
+  });
+
+  it('recognizes a unique-index failure and names the ledger leg', () => {
+    expect(isRentalMomoUniqueViolation({ message: 'Uniqueness violation' })).toBe(true);
+    expect(
+      isRentalMomoUniqueViolation({ response: { errors: [{ message: 'duplicate key' }] } })
+    ).toBe(true);
+    expect(isRentalMomoUniqueViolation({ message: 'timeout' })).toBe(false);
+    expect(isRentalMomoUniqueViolation(null)).toBe(false);
+    expect(rentalProceedsLeg('Overtime')).toBe('overtime');
+    expect(rentalProceedsLeg('Contract')).toBe('stripe-capture');
+    expect(() => assertLedgerResult(null, 'capture')).toThrow('Rental capture failed');
+    expect(() => assertLedgerResult({ success: false }, 'capture')).toThrow(HttpException);
+    try {
+      assertLedgerResult({ success: false }, 'capture');
+    } catch (error) {
+      expect((error as HttpException).getStatus()).toBe(502);
+      expect((error as HttpException).message).toBe('Rental capture failed');
+    }
   });
 });
 

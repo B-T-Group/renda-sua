@@ -16,6 +16,7 @@ import {
   DEFAULT_REMINDER_HOURS,
   DEFAULT_REVIEW_HOURS,
   buildManifest,
+  inspectionSubmitLocked,
   presentInspection,
   unitDisplayLabel,
   type ManifestUnit,
@@ -46,7 +47,11 @@ interface BookingRow {
   allocation_version: number;
   inspection_policy_version: number | null;
   pickup_current_version_id: string | null;
+  pickup_ack_current?: boolean;
+  pickup_accepted_version_id?: string | null;
   return_current_version_id: string | null;
+  return_resolution?: string | null;
+  settlement_claimed_at?: string | null;
   booking_number: string;
   client: { user_id: string };
   business: { user_id: string };
@@ -107,6 +112,7 @@ export class RentalInspectionService {
     const booking = await this.requireBusiness(bookingId);
     const inspection = await this.inspectionFor(bookingId, stage);
     if (!inspection) throw new HttpException('Open the draft first', HttpStatus.CONFLICT);
+    this.assertSubmitOpen(booking, stage);
     // Validate the claim before the version exists, but only store it once the version is created,
     // so a failed or repeated submit cannot change the amount behind the report the client is reviewing.
     const claim =
@@ -556,6 +562,12 @@ export class RentalInspectionService {
         'A damage report needs the amount you are claiming'
       );
     }
+    if (
+      text.includes('rental_inspection_return_locked') ||
+      text.includes('rental_inspection_stage_closed')
+    ) {
+      return new HttpException('The client already responded to this report', HttpStatus.CONFLICT);
+    }
     return new HttpException('Report could not be submitted', HttpStatus.CONFLICT);
   }
 
@@ -709,6 +721,21 @@ export class RentalInspectionService {
     if (!pickup && !back) throw new HttpException('This inspection is closed', HttpStatus.CONFLICT);
   }
 
+  private assertSubmitOpen(booking: BookingRow, stage: InspectionStage) {
+    if (
+      inspectionSubmitLocked(
+        {
+          pickupAckCurrent: booking.pickup_ack_current,
+          returnResolution: booking.return_resolution,
+          settlementClaimedAt: booking.settlement_claimed_at,
+        },
+        stage
+      )
+    ) {
+      throw new HttpException('The client already responded to this report', HttpStatus.CONFLICT);
+    }
+  }
+
   private async requireBusiness(bookingId: string) {
     const user = await this.users.getUser();
     const booking = await this.booking(bookingId);
@@ -796,8 +823,9 @@ export class RentalInspectionService {
       `query InspectionBooking($id: uuid!) {
         rental_bookings_by_pk(id: $id) {
           id status business_id client_id units_booked allocation_version
-          inspection_policy_version pickup_current_version_id return_current_version_id
-          booking_number
+          inspection_policy_version pickup_current_version_id pickup_ack_current
+          pickup_accepted_version_id return_current_version_id return_resolution
+          settlement_claimed_at booking_number
           client { user_id }
           business { user_id }
           rental_location_listing { rental_item { name } }

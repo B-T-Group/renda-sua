@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   allUnitsReviewed,
+  businessCanReplaceReport,
   classifyInspectionError,
   clientInspectionAction,
   damageRail,
@@ -142,6 +143,13 @@ describe('client review and money copy', () => {
     );
     expect(damageRail({ payment_status: 'paid', security_deposit_amount: 0, authorized_amount: 0 })).toBe('recorded');
     expect(returnHasDamage(view({ units: [unit({ condition: 'damaged' })] }))).toBe(true);
+  });
+
+  it('stops the business replacing a report after accept or dispute', () => {
+    expect(businessCanReplaceReport(view())).toBe(true);
+    expect(businessCanReplaceReport(view({ yourDecision: 'correction' }))).toBe(true);
+    expect(businessCanReplaceReport(view({ yourDecision: 'accept' }))).toBe(false);
+    expect(businessCanReplaceReport(view({ yourDecision: 'dispute' }))).toBe(false);
   });
 
   it('maps 426 and 409 to a refetch', () => {

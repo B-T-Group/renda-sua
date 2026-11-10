@@ -87,6 +87,22 @@ export interface PickupGateBooking {
   pickupCurrentVersionId: string | null;
 }
 
+/** True when a new version would undo a client accept, dispute, or settlement claim. */
+export function inspectionSubmitLocked(
+  booking: {
+    pickupAckCurrent?: boolean | null;
+    returnResolution?: string | null;
+    settlementClaimedAt?: string | null;
+  },
+  stage: 'pickup' | 'return'
+): boolean {
+  if (booking.settlementClaimedAt) return true;
+  if (stage === 'pickup') return !!booking.pickupAckCurrent;
+  return ['accepted', 'disputed', 'review', 'admin_cleared'].includes(
+    booking.returnResolution ?? ''
+  );
+}
+
 /** Mirrors rental_mark_started. Legacy bookings are always allowed. */
 export function pickupStartAllowed(booking: PickupGateBooking): boolean {
   if (booking.inspectionPolicyVersion == null) return true;

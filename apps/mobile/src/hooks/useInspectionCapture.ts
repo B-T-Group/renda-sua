@@ -17,6 +17,7 @@ import {
   handbackEnabled,
   normalizeAccessories,
   photoRolesForMinimum,
+  businessCanReplaceReport,
   reportReadyToSubmit,
   sameConditionPayload,
   type InspectionStage,
@@ -236,19 +237,27 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     });
   }, [minPhotos, pickupView?.units, stage, units]);
 
-  const canSubmit = minPhotos != null && !unsynced && !isOffline && readyUnits.every(Boolean) && reportReadyToSubmit(
-    readyUnits.filter((row): row is NonNullable<typeof row> => !!row).map((row) => ({
-      unitId: row.unitId,
-      slotIndex: row.slotIndex,
-      displayLabel: row.displayLabel,
-      physicalLabel: row.physicalLabel,
-      condition: row.condition,
-      accessories: row.accessories,
-      wear: row.wear,
-      photos: row.photos,
-    })),
-    minPhotos
-  );
+  const canSubmit =
+    minPhotos != null &&
+    !unsynced &&
+    !isOffline &&
+    businessCanReplaceReport(view) &&
+    readyUnits.every(Boolean) &&
+    reportReadyToSubmit(
+      readyUnits
+        .filter((row): row is NonNullable<typeof row> => !!row)
+        .map((row) => ({
+          unitId: row.unitId,
+          slotIndex: row.slotIndex,
+          displayLabel: row.displayLabel,
+          physicalLabel: row.physicalLabel,
+          condition: row.condition,
+          accessories: row.accessories,
+          wear: row.wear,
+          photos: row.photos,
+        })),
+      minPhotos
+    );
 
   const saveAndNext = async () => {
     if (!current || minPhotos == null) return;
