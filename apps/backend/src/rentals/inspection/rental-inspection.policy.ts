@@ -185,9 +185,10 @@ export function reservedBookingExpired(input: ReservedExpiryInput): boolean {
   return input.now.getTime() >= deadline.getTime();
 }
 
-/** 60 minutes from the moment Collect payment opens. Inspection time is not included. */
-export function extendedReservedDeadline(_startAt: Date, acceptedAt: Date): Date {
-  return new Date(acceptedAt.getTime() + RESERVED_UNPAID_GRACE_MINUTES * 60000);
+/** Later of start+60 and accept+60. An early accept stays open until the start window. */
+export function extendedReservedDeadline(startAt: Date, acceptedAt: Date): Date {
+  const graceMs = RESERVED_UNPAID_GRACE_MINUTES * 60000;
+  return new Date(Math.max(startAt.getTime() + graceMs, acceptedAt.getTime() + graceMs));
 }
 
 /**
