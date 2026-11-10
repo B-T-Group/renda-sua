@@ -4,17 +4,13 @@ import { CommonActions } from '@react-navigation/native';
 import { loadExpoNotifications } from '../services/expoNotificationsLoader';
 import { rootNavigationRef } from '../navigation/rootNavigationRef';
 import { useStore } from '../stores/RootStore';
-
-type RentalPushTarget =
-  | { kind: 'booking'; bookingId: string }
-  | { kind: 'request'; requestId: string }
-  | { kind: 'myRentals' };
-
-type PendingRentalOpen = {
-  target: RentalPushTarget;
-  persona: 'client' | 'business' | 'agent' | null;
-  kind: string;
-};
+import {
+  pendingRentalOpen,
+  personaForPendingReplay,
+  rentalPushRoute,
+  type PendingRentalOpen,
+  type RentalPushTarget,
+} from '../utils/rentals/rentalPushNavigation';
 
 let pendingRentalFromNotification: PendingRentalOpen | null = null;
 
@@ -59,73 +55,22 @@ function parseRentalPushPayload(
   return null;
 }
 
-function inspectionScreen(
-  persona: 'client' | 'business' | null,
-  kind: string,
-  bookingId: string
-): { name: string; params: { bookingId: string; stage?: 'pickup' | 'return' } } | null {
-  if (persona === 'client' && (kind === 'review_pickup' || kind === 'correction')) {
-    return { name: 'ClientInspection', params: { bookingId, stage: 'pickup' } };
-  }
-  if (persona === 'client' && (kind === 'review_return' || kind === 'return_reminder')) {
-    return { name: 'ClientInspection', params: { bookingId, stage: 'return' } };
-  }
-  if (persona === 'business' && (kind === 'correction' || kind === 'pickup_accepted')) {
-    return { name: 'BusinessInspection', params: { bookingId, stage: 'pickup' } };
-  }
-  if (persona === 'business' && (kind === 'disputed' || kind === 'review_return')) {
-    return { name: 'BusinessInspection', params: { bookingId, stage: 'return' } };
-  }
-  return null;
-}
-
 function navigateRentalTarget(
   target: RentalPushTarget,
   persona: 'client' | 'business' | 'agent' | null,
   inspectionKind = ''
 ): boolean {
   if (!rootNavigationRef.isReady()) return false;
-  if (target.kind === 'booking') {
-    const screen = inspectionScreen(
-      persona === 'client' || persona === 'business' ? persona : null,
-      inspectionKind,
-      target.bookingId
-    );
-    if (screen) {
-      rootNavigationRef.dispatch(CommonActions.navigate(screen));
-      return true;
-    }
-    if (persona === 'business') {
-      rootNavigationRef.dispatch(
-        CommonActions.navigate({
-          name: 'BusinessRentalBookingDetail',
-          params: { bookingId: target.bookingId },
-        })
-      );
-      return true;
-    }
-    rootNavigationRef.dispatch(
-      CommonActions.navigate({
-        name: 'RentalBookingDetail',
-        params: { bookingId: target.bookingId },
-      })
-    );
-    return true;
-  }
-  if (persona === 'business') {
-    rootNavigationRef.dispatch(
-      CommonActions.navigate({
-        name: 'BusinessRentalsStudio',
-      })
-    );
-    return true;
-  }
-  rootNavigationRef.dispatch(
-    CommonActions.navigate({
-      name: 'ClientMyRentals',
-    })
-  );
+  rootNavigationRef.dispatch(CommonActions.navigate(rentalPushRoute(target, persona, inspectionKind)));
   return true;
+}
+
+function replayPendingRental(activePersona: 'client' | 'business' | 'agent' | null): void {
+  const pending = pendingRentalFromNotification;
+  if (!pending) return;
+  if (navigateRentalTarget(pending.target, personaForPendingReplay(pending.persona, activePersona), pending.kind)) {
+    pendingRentalFromNotification = null;
+  }
 }
 
 /**
@@ -162,11 +107,14 @@ export function useNotificationOpenedRentalNavigation(navReady: boolean): void {
       if (!parsed) return;
       const requested = data?.persona === 'client' || data?.persona === 'business' ? data.persona : null;
       const kind = typeof data?.inspectionKind === 'string' ? data.inspectionKind : '';
-      const shell =
-        requested ??
-        (activePersona === 'client' || activePersona === 'business' ? activePersona : null);
-      const open = () =>
-        navigateRentalTarget(parsed, shell, kind);
+      const shell = personaForPendingReplay(
+        requested,
+        activePersona === 'client' || activePersona === 'business' ? activePersona : null
+      );
+      const open = () => navigateRentalTarget(parsed, shell, kind);
+      const queue = () => {
+        pendingRentalFromNotification = pendingRentalOpen(parsed, requested, kind);
+      };
       if (
         requested &&
         requested !== activePersona &&
@@ -174,11 +122,11 @@ export function useNotificationOpenedRentalNavigation(navReady: boolean): void {
         !persona.pickingPersona
       ) {
         void persona.selectPersona(requested).then(() => {
-          if (!open()) pendingRentalFromNotification = { target: parsed, persona: shell, kind };
+          if (!open()) queue();
         });
         return;
       }
-      if (!canOpenApp || !open()) pendingRentalFromNotification = { target: parsed, persona: shell, kind };
+      if (!canOpenApp || !open()) queue();
     };
 
     const sub = notificationsMod.addNotificationResponseReceivedListener((response) => {
@@ -208,21 +156,17 @@ export function useNotificationOpenedRentalNavigation(navReady: boolean): void {
 
   useEffect(() => {
     if (!navReady || !canOpenApp) return;
-    const pending = pendingRentalFromNotification;
-    if (!pending) return;
-    if (navigateRentalTarget(pending.target, pending.persona, pending.kind)) {
-      pendingRentalFromNotification = null;
-    }
+    replayPendingRental(
+      activePersona === 'client' || activePersona === 'business' ? activePersona : null
+    );
   }, [navReady, canOpenApp, activePersona]);
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active' || !canOpenApp) return;
-      const pending = pendingRentalFromNotification;
-      if (!pending) return;
-      if (navigateRentalTarget(pending.target, pending.persona, pending.kind)) {
-        pendingRentalFromNotification = null;
-      }
+      replayPendingRental(
+        activePersona === 'client' || activePersona === 'business' ? activePersona : null
+      );
     });
     return () => sub.remove();
   }, [canOpenApp, activePersona]);
