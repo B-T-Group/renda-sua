@@ -170,6 +170,12 @@ export function clientCanRespond(view: InspectionView | null): boolean {
   return !!view?.versionId && view.status === 'submitted' && !view.yourDecision;
 }
 
+/** A new version is allowed until the client accepts or disputes this one. */
+export function businessCanReplaceReport(view: { yourDecision?: string | null } | null): boolean {
+  const decision = view?.yourDecision;
+  return decision !== 'accept' && decision !== 'dispute';
+}
+
 export type ClientInspectionAction = 'review_pickup' | 'review_return' | 'none';
 
 export function clientInspectionAction(input: {
