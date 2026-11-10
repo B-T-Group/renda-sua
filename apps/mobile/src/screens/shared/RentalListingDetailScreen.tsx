@@ -21,47 +21,16 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ImageLightbox } from '../../components/common/ImageLightbox';
 import { StatusPill } from '../../components/common/StatusPill';
 import { TrustBadge } from '../../components/common/TrustBadge';
-import { RentalRequestSheet } from '../../components/rentals/RentalRequestSheet';
-import { RentalSearchDateSheet } from '../../components/rentals/search/RentalSearchDateSheet';
 import { useTheme } from '../../contexts/ThemeContext';
-import { useRentalCatalogGeoParams } from '../../hooks/useRentalCatalogGeoParams';
 import { useRentalListingDetail } from '../../hooks/useRentalListingDetail';
-import { useStore } from '../../stores/RootStore';
-import type {
-  ClientRootStackParamList,
-  GuestRootStackParamList,
-} from '../../navigation/types';
-import { searchRentals } from '../../services/rentalSearchApi';
+import type { ClientRootStackParamList } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
-import { formatRentalMoney, formatSearchMoney } from '../../utils/rentals';
+import { formatRentalMoney } from '../../utils/rentals';
 import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
-import {
-  formatRangeDates,
-  formatSingleDate,
-  marketTimeZone,
-  publishRentalSearchStay,
-  type RentalDateRange,
-} from '../../utils/rentals/rentalSearchDates';
-import {
-  allDaySelectionsForRange,
-  quoteRentalSelections,
-  stayRequestState,
-  type StayHit,
-} from '../../utils/rentals/rentalSearchPreset';
 
 type DetailParams = {
   RentalListingDetail: { listingId: string; startDate?: string; endDate?: string; openRequest?: boolean };
 };
-
-function rangeFromParams(startDate?: string, endDate?: string): RentalDateRange | null {
-  if (!startDate || !endDate) return null;
-  const start = Date.parse(`${startDate}T00:00:00Z`);
-  const end = Date.parse(`${endDate}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
-  const dayCount = Math.round((end - start) / 86_400_000);
-  if (dayCount < 1 || dayCount > 30) return null;
-  return { startDate, endDate, dayCount };
-}
 
 const WEEKDAY_KEYS = [
   'sunday',
@@ -120,20 +89,17 @@ function todayCloseLabel(
 const BOTTOM_BAR_HEIGHT = 120;
 
 export default function RentalListingDetailScreen() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const { auth } = useStore();
-  const geo = useRentalCatalogGeoParams();
   const route = useRoute<RouteProp<DetailParams, 'RentalListingDetail'>>();
   const navigation = useNavigation();
   const listingId = route.params?.listingId;
-  const { listing, bookedWindows, loading, error, refetch } = useRentalListingDetail(listingId);
+  const { listing, loading, error, refetch } = useRentalListingDetail(listingId);
   const [galleryIdx, setGalleryIdx] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [requestSheetOpen, setRequestSheetOpen] = useState(false);
   const startDate = route.params?.startDate;
   const endDate = route.params?.endDate;
   const openRequest = route.params?.openRequest === true;
@@ -166,97 +132,20 @@ export default function RentalListingDetailScreen() {
     [images.length, width]
   );
 
-  const onLoginRequired = useCallback(() => {
-    const parent = navigation.getParent() ?? navigation;
-    (parent as unknown as NativeStackNavigationProp<GuestRootStackParamList>).navigate(
-      'GuestTabs',
-      { screen: 'GuestAuth', params: { screen: 'Login' } }
-    );
-  }, [navigation]);
-
-  const onSubmitted = useCallback(
-    (requestId: string) => {
-      (navigation as unknown as NativeStackNavigationProp<ClientRootStackParamList>).navigate(
-        'RentalRequestSubmitted',
-        { requestId }
-      );
-    },
-    [navigation]
-  );
-
-  const [stay, setStay] = useState<RentalDateRange | null>(() => rangeFromParams(startDate, endDate));
-  const [editOpen, setEditOpen] = useState(false);
-  const [draftStay, setDraftStay] = useState<RentalDateRange | null>(stay);
-  const [stayHit, setStayHit] = useState<StayHit | null | undefined>(undefined);
-  const [checkingStay, setCheckingStay] = useState(false);
-  const presetSelections = useMemo(
-    () =>
-      stay
-        ? allDaySelectionsForRange(
-            stay,
-            listing?.weekly_availability ?? [],
-            Number(listing?.base_price_per_day) || 0
-          )
-        : [],
-    [listing?.base_price_per_day, listing?.weekly_availability, stay]
-  );
-  const quotedTotal = useMemo(() => {
-    if (!presetSelections.length || !listing) return null;
-    return quoteRentalSelections(
-      presetSelections,
-      Number(listing.base_price_per_hour) || 0,
-      Number(listing.base_price_per_day) || 0
-    );
-  }, [listing, presetSelections]);
-  const stayState = stayRequestState(checkingStay ? undefined : stayHit);
-  const commitStay = useCallback(
-    async (next: RentalDateRange) => {
-      setStay(next);
-      setStayHit(undefined);
-      setCheckingStay(true);
-      publishRentalSearchStay(next);
-      const name = listing?.rental_item?.name;
-      if (!listing || !name) {
-        setCheckingStay(false);
-        return;
-      }
-      try {
-        const page = await searchRentals({
-          q: name,
-          country_code: geo.country_code,
-          state: geo.state,
-          start_date: next.startDate,
-          end_date: next.endDate,
-          limit: 20,
-        });
-        const found = page.listings.find((row) => row.listing.id === listing.id) ?? null;
-        setStayHit(
-          found
-            ? {
-                available: found.available,
-                nextAvailableDate: found.nextAvailableDate,
-                totalForDates: found.totalForDates,
-              }
-            : null
-        );
-      } catch {
-        setStayHit(undefined);
-      } finally {
-        setCheckingStay(false);
-      }
-    },
-    [geo.country_code, geo.state, listing]
-  );
-  const openDateEditor = useCallback(() => {
-    setDraftStay(stay);
-    setEditOpen(true);
-  }, [stay]);
+  const openRequestScreen = useCallback(() => {
+    if (!listingId) return;
+    (navigation as NativeStackNavigationProp<ClientRootStackParamList>).navigate('RentalRequest', {
+      listingId,
+      startDate,
+      endDate,
+    });
+  }, [endDate, listingId, navigation, startDate]);
   const openedRequest = useRef(false);
   useEffect(() => {
     if (!listing || !openRequest || openedRequest.current) return;
     openedRequest.current = true;
-    setRequestSheetOpen(true);
-  }, [listing, openRequest]);
+    openRequestScreen();
+  }, [listing, openRequest, openRequestScreen]);
   const currency = listing?.rental_item.currency || 'XAF';
   const weeklySorted = useMemo(() => {
     const rows = listing?.weekly_availability ?? [];
@@ -314,40 +203,6 @@ export default function RentalListingDetailScreen() {
       : null,
     t('rentals.detail.minHoursSnapshot', '{{h}}h minimum', { h: listing.min_rental_hours }),
   ].filter(Boolean);
-
-  const pickerProps = {
-    listingId: listing.id,
-    isAuthenticated: auth.isAuthenticated,
-    bookedWindows,
-    minRentalHours: listing.min_rental_hours,
-    maxRentalHours: listing.max_rental_hours,
-    unitsAvailable: Number(listing.units_available) || 1,
-    weeklyAvailability: listing.weekly_availability,
-    basePricePerHour: hourlyPrice,
-    basePricePerDay: dailyPrice,
-    currency,
-    onLoginRequired,
-    onSubmitted: auth.isAuthenticated ? onSubmitted : undefined,
-    initialSelections: presetSelections,
-    datesFilled: Boolean(stay),
-    requestBlocked: stayState.status === 'blocked',
-    requestBusy: checkingStay,
-    onSeeDates: openDateEditor,
-  };
-  const dateLine = stay
-    ? t('rentals.searchFirst.sheetDateLine', '{{range}} · {{days}}', {
-        range: formatRangeDates(stay, i18n.language),
-        days: t('rentals.searchFirst.dayCount', '{{count}} days', { count: stay.dayCount }),
-      })
-    : undefined;
-  const unavailableLabel =
-    stayState.status === 'blocked'
-      ? stayState.nextAvailableDate
-        ? t('rentals.searchFirst.availableFrom', 'Available from {{date}}', {
-            date: formatSingleDate(stayState.nextAvailableDate, i18n.language),
-          })
-        : t('rentals.searchFirst.unavailableForDates', 'Not available for these dates')
-      : undefined;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
@@ -724,7 +579,7 @@ export default function RentalListingDetailScreen() {
           <Button
             mode="contained"
             style={{ marginTop: spacing.sm }}
-            onPress={() => setRequestSheetOpen(true)}
+            onPress={openRequestScreen}
             disabled={!acceptsOrders}
           >
             {acceptsOrders
@@ -774,7 +629,7 @@ export default function RentalListingDetailScreen() {
       </View>
       <Button
         mode="contained"
-        onPress={() => setRequestSheetOpen(true)}
+        onPress={openRequestScreen}
         disabled={!acceptsOrders}
         contentStyle={styles.ctaBtnContent}
         labelStyle={styles.ctaBtnLabel}
@@ -793,35 +648,6 @@ export default function RentalListingDetailScreen() {
       </Button>
     </View>
 
-    <RentalRequestSheet
-      key={presetSelections.map((row) => `${row.id}:${row.startMs}`).join('|') || 'request'}
-      visible={requestSheetOpen && !editOpen}
-      onDismiss={() => setRequestSheetOpen(false)}
-      listingName={item.name}
-      dateLine={dateLine}
-      onEditDates={stay ? openDateEditor : undefined}
-      unavailableLabel={unavailableLabel}
-      quoteLabel={
-        quotedTotal != null && !unavailableLabel
-          ? t('rentals.searchFirst.sheetTotal', 'Total · {{amount}}', {
-              amount: formatSearchMoney(quotedTotal, currency, i18n.language),
-            })
-          : undefined
-      }
-      {...pickerProps}
-    />
-    <RentalSearchDateSheet
-      visible={editOpen}
-      value={draftStay}
-      timeZone={marketTimeZone(geo.country_code)}
-      onChange={setDraftStay}
-      onApply={() => {
-        if (!draftStay || draftStay.dayCount < 1 || draftStay.dayCount > 30) return;
-        setEditOpen(false);
-        void commitStay(draftStay);
-      }}
-      onClose={() => setEditOpen(false)}
-    />
     <ImageLightbox
       visible={lightboxOpen}
       images={images}

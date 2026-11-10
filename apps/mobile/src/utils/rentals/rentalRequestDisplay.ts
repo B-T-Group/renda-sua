@@ -97,9 +97,10 @@ function groupedDigits(amount: number, separator: string): string {
 }
 
 /**
- * Search cards, the request sheet, and date totals.
+ * Search cards and date totals.
  * English keeps the code in front (`FCFA 1,140`). French puts it after the
  * amount, with a narrow no-break space as the thousands separator and before FCFA.
+ * The request screen uses `formatRequestAmount` (`760 FCFA`) instead.
  */
 export function formatSearchMoney(amount: number, currency: string, language: string): string {
   const code = currency.toUpperCase();
