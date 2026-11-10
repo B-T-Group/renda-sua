@@ -3612,15 +3612,20 @@ export class NotificationsService {
     rentalItemName: string;
     bookingId: string;
     preferredLanguage?: string | null;
+    persona?: 'client' | 'business';
   }): Promise<void> {
     if (!params.userId) return;
     if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
     const msg = buildRentalInspectionNotice(params);
+    const persona = params.persona ? `?persona=${params.persona}` : '';
+    const url = `/rentals/bookings/${params.bookingId}${persona}`;
     try {
       await this.sendPushNotificationByUserId(params.userId, msg.title, msg.body, {
         type: 'rental_inspection',
         rentalBookingId: params.bookingId,
-        url: `/rentals/bookings/${params.bookingId}`,
+        inspectionKind: params.kind,
+        persona: params.persona ?? '',
+        url,
       });
     } catch (error: any) {
       this.logger.warn(`sendRentalInspectionNotice: ${error?.message ?? error}`);

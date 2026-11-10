@@ -305,10 +305,17 @@ export interface RentalBookingDetail {
   authorized_amount?: number | string | null;
   captured_amount?: number | string | null;
   overtime_amount?: number | string | null;
+  overtime_amount_override?: number | string | null;
+  claimed_damage_amount?: number | string | null;
+  reserved_cancel_after?: string | null;
   payment_timing?: 'pay_now' | 'pay_at_pickup' | null;
   payment_status?: 'pending' | 'authorized' | 'paid' | 'cancelled' | null;
   actual_start_at?: string | null;
   actual_end_at?: string | null;
+  units_booked?: number | null;
+  inspection_policy_version?: number | null;
+  return_handed_back_at?: string | null;
+  return_resolution?: string | null;
   rental_pricing_snapshot?: unknown;
   client_id: string;
   business_id: string;

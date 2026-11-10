@@ -69,6 +69,9 @@ select_permissions:
         - inspection_policy_version
         - return_handed_back_at
         - return_resolution
+        - reserved_cancel_after
+        - claimed_damage_amount
+        - overtime_amount_override
         - created_at
         - updated_at
       filter:
@@ -105,6 +108,9 @@ select_permissions:
         - inspection_policy_version
         - return_handed_back_at
         - return_resolution
+        - reserved_cancel_after
+        - claimed_damage_amount
+        - overtime_amount_override
         - created_at
         - updated_at
       filter:

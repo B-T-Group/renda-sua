@@ -118,6 +118,28 @@ export class PresignInspectionEvidenceDto {
   sha256?: string;
 }
 
+export class SubmitInspectionDto {
+  @ApiPropertyOptional({ description: 'Business claim. Required when a return unit is damaged.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  claimedDamageAmount?: number;
+}
+
+export class AdjustOvertimeDto {
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  overtimeAmount!: number;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  reason!: string;
+}
+
 export class AdminHandbackDto {
   @ApiProperty()
   @IsString()
@@ -137,9 +159,11 @@ export class DecideInspectionDisputeDto {
   @MaxLength(2000)
   reason!: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({
+    description:
+      'Optional here. damage_upheld still requires a positive amount; the service returns 400 RENTAL_INSPECTION_DAMAGE_AMOUNT.',
+  })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
+  @Type(() => Number)
   damageAmount?: number;
 }

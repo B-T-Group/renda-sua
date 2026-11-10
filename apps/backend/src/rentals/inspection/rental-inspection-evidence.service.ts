@@ -95,6 +95,23 @@ export class RentalInspectionEvidenceService {
     return { mediaId, status: 'ready', sha256 };
   }
 
+  /** Staff read of a stripped photo. Callers must already be an admin route. */
+  async signForStaff(bookingId: string, mediaId: string) {
+    const media = await this.mediaRow(mediaId);
+    if (!media || !isInspectionEvidenceKey(media.object_key, bookingId)) {
+      throw new HttpException('Photo not found', HttpStatus.NOT_FOUND);
+    }
+    if (media.status === 'pending' || !media.derivative_key) {
+      throw new HttpException('Photo is not ready', HttpStatus.CONFLICT);
+    }
+    const signed = await this.aws.generatePresignedDownloadUrl({
+      bucketName: this.bucket(),
+      key: media.derivative_key,
+      expiresIn: INSPECTION_VIEW_TTL_SECONDS,
+    });
+    return { mediaId, url: signed.url, expiresAt: signed.expiresAt, role: media.role };
+  }
+
   async viewUrl(bookingId: string, mediaId: string, original = false) {
     const media = await this.readableMedia(bookingId, mediaId);
     const key = original ? media.object_key : media.derivative_key;

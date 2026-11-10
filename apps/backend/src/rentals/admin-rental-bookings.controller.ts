@@ -18,7 +18,7 @@ import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
 import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
 import { IssueRentalStartOverwriteDto } from './dto/issue-rental-start-overwrite.dto';
-import { AdminHandbackDto, DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
+import { AdjustOvertimeDto, AdminHandbackDto, DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { RentalsService } from './rentals.service';
 
@@ -63,6 +63,23 @@ export class AdminRentalBookingsController {
     );
   }
 
+  @Post('bookings/:id/overtime-adjustment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Adjust derived overtime for an enrolled rental (reason required)' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  adjustOvertime(
+    @Param('id', ParseUUIDPipe) bookingId: string,
+    @Body() body: AdjustOvertimeDto,
+    @Req() req: RequestWithUser
+  ) {
+    return this.rentalsService.adjustEnrolledOvertime(
+      bookingId,
+      req.user.id,
+      body.overtimeAmount,
+      body.reason
+    );
+  }
+
   @Post('bookings/:id/inspection-handback')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Record physical handback at server time when the business does not' })
@@ -79,6 +96,13 @@ export class AdminRentalBookingsController {
   @ApiOperation({ summary: 'Open and escalated rental inspection reviews' })
   listDisputes() {
     return this.inspections.listOpenDisputes();
+  }
+
+  @Get('bookings/:id/inspection-case')
+  @ApiOperation({ summary: 'Pickup and return reports, photos, and settlement flags' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  inspectionCase(@Param('id', ParseUUIDPipe) bookingId: string) {
+    return this.inspections.getAdminCase(bookingId);
   }
 
   @Post('bookings/:id/inspection-decision')

@@ -9,6 +9,7 @@ import {
   applySettlementClaim,
   applyStart,
   buildManifest,
+  damageCollectedOnAgree,
   decideInspectionEnrolment,
   extendedReservedDeadline,
   missingPhotoRequirements,
@@ -239,6 +240,46 @@ describe('damage capture', () => {
   });
 });
 
+describe('damage collected when the client agrees', () => {
+  it('captures the business claim from a card hold and records wallet claims only', () => {
+    expect(
+      damageCollectedOnAgree({
+        paymentStatus: 'authorized',
+        claimedAmount: 40,
+        upheldAmount: 0,
+        decision: null,
+      })
+    ).toBe(40);
+    expect(
+      damageCollectedOnAgree({
+        paymentStatus: 'paid',
+        claimedAmount: 25000,
+        upheldAmount: 0,
+        decision: null,
+      })
+    ).toBe(0);
+  });
+
+  it('uses an admin decision instead of the claim, and does not let a rejection fall back to the claim', () => {
+    expect(
+      damageCollectedOnAgree({
+        paymentStatus: 'authorized',
+        claimedAmount: 40,
+        upheldAmount: 25,
+        decision: 'damage_upheld',
+      })
+    ).toBe(25);
+    expect(
+      damageCollectedOnAgree({
+        paymentStatus: 'authorized',
+        claimedAmount: 40,
+        upheldAmount: 0,
+        decision: 'damage_rejected',
+      })
+    ).toBe(0);
+  });
+});
+
 describe('reserved auto-cancel while pickup inspection is pending', () => {
   const startAt = new Date(NOW.getTime() - 2 * 60 * 60 * 1000);
 
@@ -266,10 +307,11 @@ describe('reserved auto-cancel while pickup inspection is pending', () => {
     ).toBe(false);
   });
 
-  it('extends the deadline to 60 minutes after acceptance when that is later than start+60', () => {
-    const acceptedAt = NOW;
+  it('starts the 60-minute clock when the client accepts, even if that is before the rental start', () => {
+    const acceptedAt = new Date(startAt.getTime() - 3 * 60 * 60 * 1000);
     const deadline = extendedReservedDeadline(startAt, acceptedAt);
     expect(deadline.toISOString()).toBe(new Date(acceptedAt.getTime() + 60 * 60 * 1000).toISOString());
+    expect(deadline.getTime()).toBeLessThan(startAt.getTime() + 60 * 60 * 1000);
     expect(
       reservedBookingExpired({
         now: new Date(acceptedAt.getTime() + 30 * 60 * 1000),
@@ -292,8 +334,8 @@ describe('photos, labels, and client view', () => {
     expect(missingPhotoRequirements(['overview', 'other_side', 'accessories', 'wear'], 4)).toEqual([]);
   });
 
-  it('labels slots Unit A, Unit B, Unit C', () => {
-    expect([1, 2, 3].map(unitDisplayLabel)).toEqual(['Unit A', 'Unit B', 'Unit C']);
+  it('labels slots Unit 1, Unit 2, Unit 3', () => {
+    expect([1, 2, 3].map(unitDisplayLabel)).toEqual(['Unit 1', 'Unit 2', 'Unit 3']);
   });
 
   it('hides report version numbers from the client and shows them to the business', () => {
@@ -373,6 +415,22 @@ describe('inspection SQL enforces the same gates', () => {
     expect(sql).toContain('rental_inspection_version_immutable');
     expect(sql).toContain('rental_inspection_media_immutable');
     expect(sql).toContain("BEFORE UPDATE OR DELETE");
+  });
+
+  it('rejects damage_upheld without a positive damage amount', () => {
+    expect(sql).toContain("p_outcome = 'damage_upheld' AND (p_damage IS NULL OR p_damage <= 0)");
+    expect(sql).toContain("RAISE EXCEPTION 'rental_inspection_damage_amount'");
+  });
+
+  it('starts the unpaid clock when Collect payment opens', () => {
+    const revised = readFileSync(
+      join(__dirname, '../../../../hasura/migrations/Rendasua/20261110013000_rental_inspection_revised_flow/up.sql'),
+      'utf8'
+    );
+    expect(revised).toContain("THEN now() + interval '60 minutes'");
+    expect(revised).toContain('ADD COLUMN IF NOT EXISTS claimed_damage_amount numeric');
+    expect(revised).toContain('ADD COLUMN IF NOT EXISTS overtime_amount_override numeric');
+    expect(revised).not.toContain('GREATEST(start_at');
   });
 
   it('records handback at server time and keeps the flag off', () => {

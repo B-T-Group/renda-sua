@@ -570,6 +570,14 @@ function App() {
                 element={<LazyPages.AdminItemAppealDetailPage />}
               />
               <Route
+                path="/admin/rental-inspections"
+                element={<LazyPages.AdminInspectionDisputesPage />}
+              />
+              <Route
+                path="/admin/rental-inspections/:bookingId"
+                element={<LazyPages.AdminInspectionCasePage />}
+              />
+              <Route
                 path="/admin/configurations"
                 element={<LazyPages.AdminConfigurationPage />}
               />

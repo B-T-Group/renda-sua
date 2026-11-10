@@ -126,6 +126,23 @@ describe('resolveDeepLinkTarget', () => {
     expect(resolveDeepLinkTarget('item')).toEqual({ type: 'dashboard' });
   });
 
+  it('opens a rental booking and switches persona when the inspection link names one', () => {
+    const id = '11111111-1111-4111-8111-111111111111';
+    expect(extractAppPath(`rendasua://rentals/bookings/${id}?persona=client`)).toBe(
+      `rentals/bookings/${id}?persona=client`
+    );
+    expect(extractAppPath(`https://rendasua.com/app/rentals/bookings/${id}?persona=business`)).toBe(
+      `rentals/bookings/${id}?persona=business`
+    );
+    expect(extractAppPath(`https://rendasua.com/store/abc?ref=wa`)).toBe('store/abc');
+    expect(targetPersonaForDeepLinkPath(`rentals/bookings/${id}?persona=client`)).toBe('client');
+    expect(targetPersonaForDeepLinkPath(`rentals/bookings/${id}`)).toBeNull();
+    expect(resolveDeepLinkTarget(`rentals/bookings/${id}?persona=business`)).toEqual({
+      type: 'rental',
+      id,
+    });
+  });
+
   it('opens a store and keeps the active persona', () => {
     expect(resolveDeepLinkTarget('store/abc')).toEqual({
       type: 'store',
