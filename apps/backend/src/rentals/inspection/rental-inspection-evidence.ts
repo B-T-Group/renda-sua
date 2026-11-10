@@ -45,6 +45,25 @@ export function inspectionObjectKey(
   return `${inspectionKeyRoot(envName)}/rental-inspection/${bookingId.toLowerCase()}/${mediaId.toLowerCase()}.${ext}`;
 }
 
+/** Browser PUT target. Never a finalized evidence key. */
+export function inspectionPendingObjectKey(
+  bookingId: string,
+  mediaId: string,
+  ext: string,
+  envName?: string
+): string {
+  return `${inspectionKeyRoot(envName)}/rental-inspection/pending/${bookingId.toLowerCase()}/${mediaId.toLowerCase()}.${ext}`;
+}
+
+/** Base64 `x-amz-checksum-sha256` value for a hex SHA-256 of the file bytes. */
+export function inspectionChecksumHeader(sha256Hex: string): string {
+  const hex = sha256Hex.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(hex)) {
+    throw evidenceError('Evidence sha256 must be 64 hex characters');
+  }
+  return Buffer.from(hex, 'hex').toString('base64');
+}
+
 export function inspectionDerivativeKey(objectKey: string): string {
   return objectKey.replace(/\.(jpg|png|webp)$/, '.view.jpg');
 }
@@ -66,9 +85,21 @@ export function validateInspectionUpload(
   return { contentType: normalized, ext, size };
 }
 
+const FINAL_KEY_RE =
+  /^(dev|prod)\/rental-inspection\/([0-9a-f-]{36})\/([0-9a-f-]{36})\.(jpg|png|webp)$/i;
+const PENDING_KEY_RE =
+  /^(dev|prod)\/rental-inspection\/pending\/([0-9a-f-]{36})\/([0-9a-f-]{36})\.(jpg|png|webp)$/i;
+
+/** Final evidence only. A pending upload key is never evidence. */
 export function isInspectionEvidenceKey(raw: unknown, bookingId: string): boolean {
+  if (typeof raw !== 'string' || raw.includes('/pending/') || !UUID_RE.test(bookingId)) return false;
+  const match = FINAL_KEY_RE.exec(raw);
+  return !!match && match[2].toLowerCase() === bookingId.toLowerCase() && UUID_RE.test(match[3]);
+}
+
+export function isInspectionPendingKey(raw: unknown, bookingId: string): boolean {
   if (typeof raw !== 'string' || !UUID_RE.test(bookingId)) return false;
-  const match = /^(dev|prod)\/rental-inspection\/([0-9a-f-]{36})\/([0-9a-f-]{36})\.(jpg|png|webp)$/i.exec(raw);
+  const match = PENDING_KEY_RE.exec(raw);
   return !!match && match[2].toLowerCase() === bookingId.toLowerCase() && UUID_RE.test(match[3]);
 }
 

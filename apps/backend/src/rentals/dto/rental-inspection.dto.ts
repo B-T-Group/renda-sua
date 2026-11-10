@@ -9,6 +9,7 @@ import {
   IsOptional,
   IsString,
   IsUUID,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -107,6 +108,11 @@ export class PresignInspectionEvidenceDto {
   @IsInt()
   @Min(1)
   fileSize!: number;
+
+  @ApiProperty({ description: 'SHA-256 hex of the file bytes' })
+  @IsString()
+  @Matches(/^[0-9a-f]{64}$/i)
+  sha256!: string;
 }
 
 export class AdminHandbackDto {
