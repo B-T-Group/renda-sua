@@ -32,3 +32,18 @@ export function inspectionRejected(code: string, message: string): HttpException
     HttpStatus.BAD_REQUEST
   );
 }
+
+/** Mirrors rental_apply_inspection_decision: damage_upheld needs p_damage > 0. */
+export function requireInspectionDamageAmount(
+  outcome: string,
+  damageAmount?: number | null
+): number | null {
+  if (outcome !== 'damage_upheld') return null;
+  if (damageAmount == null || !Number.isFinite(Number(damageAmount)) || Number(damageAmount) <= 0) {
+    throw inspectionRejected(
+      'RENTAL_INSPECTION_DAMAGE_AMOUNT',
+      'Upholding damage requires a positive damage amount'
+    );
+  }
+  return Number(damageAmount);
+}

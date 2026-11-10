@@ -43,7 +43,7 @@ export default function ClientInspectionScreen() {
     );
   }
 
-  if (!unit) {
+  if (!unit || model.view?.status === 'not_ready') {
     return (
       <View style={[styles.center, { backgroundColor: colors.pageBackground, padding: spacing.md }]}>
         <Text style={[typography.body1, { color: colors.text.primary, textAlign: 'center' }]}>

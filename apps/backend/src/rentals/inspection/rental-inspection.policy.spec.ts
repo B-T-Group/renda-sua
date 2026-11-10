@@ -375,6 +375,11 @@ describe('inspection SQL enforces the same gates', () => {
     expect(sql).toContain("BEFORE UPDATE OR DELETE");
   });
 
+  it('rejects damage_upheld without a positive damage amount', () => {
+    expect(sql).toContain("p_outcome = 'damage_upheld' AND (p_damage IS NULL OR p_damage <= 0)");
+    expect(sql).toContain("RAISE EXCEPTION 'rental_inspection_damage_amount'");
+  });
+
   it('records handback at server time and keeps the flag off', () => {
     expect(sql).toContain('return_handed_back_at = v_at');
     expect(sql).toContain('actual_end_at = v_end');

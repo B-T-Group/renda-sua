@@ -197,7 +197,7 @@ export function RentalInspectionPanel({
         <Typography variant="overline">{t('rentalInspection.timelineTitle', 'Timeline')}</Typography>
         <Timeline role={role} booking={booking} pickup={model.pickup} returnView={model.returnView} />
       </Box>
-      {role === 'client' && stage && view && view.units.length === 0 ? (
+      {role === 'client' && (model.pickup?.status === 'not_ready' || model.returnView?.status === 'not_ready') ? (
         <Alert severity="info">{t('rentalInspection.businessRecording', 'The business is recording the condition report.')}</Alert>
       ) : null}
       {stage && view && unit && draft ? (
