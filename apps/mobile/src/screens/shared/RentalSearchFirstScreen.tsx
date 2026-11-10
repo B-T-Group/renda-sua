@@ -33,6 +33,11 @@ import {
   type RentalDateRange,
 } from '../../utils/rentals/rentalSearchDates';
 import { loadRecentSearches, rememberSearch } from '../../utils/rentals/recentRentalSearches';
+import {
+  allDaySelectionsForRange,
+  dailyTotalDiffersFromQuote,
+  quoteRentalSelections,
+} from '../../utils/rentals/rentalSearchPreset';
 
 const SORTS = ['relevance', 'newest', 'cheapest', 'expensive'] as const;
 type SortName = (typeof SORTS)[number];
@@ -289,14 +294,21 @@ export function RentalSearchFirstScreen({
 
 function toCard(hit: RentalSearchHit, range: RentalDateRange | null, locale: string): RentalSearchCardModel {
   const image = hit.listing?.rental_item?.rental_item_images?.[0];
+  const pricePerDay = Number(hit.pricePerDay) || Number(hit.listing.base_price_per_day) || 0;
+  const pricePerHour = Number(hit.listing.base_price_per_hour) || 0;
+  const windows = range
+    ? allDaySelectionsForRange(range, hit.listing.weekly_availability ?? [], pricePerDay)
+    : [];
+  const quote = windows.length ? quoteRentalSelections(windows, pricePerHour, pricePerDay) : null;
   return {
     id: hit.listing.id,
     name: hit.listing.rental_item?.name ?? '',
     imageUrl: image?.display_url ?? image?.image_url,
-    pricePerDay: Number(hit.pricePerDay) || Number(hit.listing.base_price_per_day) || 0,
+    pricePerDay,
     currency: hit.listing.rental_item?.currency || 'XAF',
     available: hit.available,
     totalForDates: hit.totalForDates,
+    totalIsEstimate: dailyTotalDiffersFromQuote(hit.totalForDates, quote),
     dayCount: hit.dayCount,
     nextAvailableDate: hit.nextAvailableDate,
     rangeLabel: range ? formatRangeDates(range, locale) : null,

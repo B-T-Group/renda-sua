@@ -17,6 +17,7 @@ export interface RentalRequestSheetProps extends RentalSlotPickerProps {
   onDismiss: () => void;
   listingName?: string;
   datesBanner?: string;
+  quoteLabel?: string;
 }
 
 export function RentalRequestSheet({
@@ -24,6 +25,7 @@ export function RentalRequestSheet({
   onDismiss,
   listingName,
   datesBanner,
+  quoteLabel,
   ...pickerProps
 }: RentalRequestSheetProps) {
   const { t } = useTranslation();
@@ -80,6 +82,22 @@ export function RentalRequestSheet({
               ]}
             >
               {datesBanner}
+            </Text>
+          ) : null}
+          {quoteLabel ? (
+            <Text
+              testID="rental-request-quote"
+              style={[
+                typography.subtitle1,
+                {
+                  color: colors.primary.main,
+                  fontWeight: '700',
+                  paddingHorizontal: spacing.md,
+                  marginTop: spacing.xs,
+                },
+              ]}
+            >
+              {quoteLabel}
             </Text>
           ) : null}
           <ScrollView

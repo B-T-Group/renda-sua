@@ -14,6 +14,8 @@ export interface RentalSearchCardModel {
   currency: string;
   available: boolean | null;
   totalForDates: number | null;
+  /** Daily total can differ from the booking quote, so the card says est. */
+  totalIsEstimate: boolean;
   dayCount: number | null;
   nextAvailableDate: string | null;
   rangeLabel: string | null;
@@ -71,11 +73,16 @@ export function RentalSearchResultCard({
           {daily} {t('rentals.searchFirst.perDay', '/ day')}
         </Text>
         {card.available && card.totalForDates != null && card.dayCount ? (
-          <Text style={{ color: colors.text.secondary }}>
-            {t('rentals.searchFirst.totalFor', 'Total · {{amount}} for {{count}} days', {
-              amount: formatRentalMoney(card.totalForDates, card.currency),
-              count: card.dayCount,
-            })}
+          <Text style={{ color: colors.text.secondary }} testID={`rental-search-total-${card.id}`}>
+            {card.totalIsEstimate
+              ? t('rentals.searchFirst.totalEstimate', 'Est. {{amount}} for {{count}} days', {
+                  amount: formatRentalMoney(card.totalForDates, card.currency),
+                  count: card.dayCount,
+                })
+              : t('rentals.searchFirst.totalFor', 'Total · {{amount}} for {{count}} days', {
+                  amount: formatRentalMoney(card.totalForDates, card.currency),
+                  count: card.dayCount,
+                })}
           </Text>
         ) : null}
         {!card.rangeLabel ? (

@@ -18,6 +18,7 @@ const canon: RentalSearchCardModel = {
   currency: 'XAF',
   available: true,
   totalForDates: 75000,
+  totalIsEstimate: false,
   dayCount: 3,
   nextAvailableDate: null,
   rangeLabel: '12–15 Nov',
@@ -140,7 +141,9 @@ describe('search-first rentals', () => {
     });
     expect(view.getByText('Canon EOS R50 kit')).toBeTruthy();
     expect(view.getByText('Free 12–15 Nov')).toBeTruthy();
+    expect(view.getByText(/Total ·/)).toBeTruthy();
     expect(view.getByText(/75/)).toBeTruthy();
+    expect(view.queryByText(/Est\./)).toBeNull();
     await act(async () => {
       fireEvent.press(view.getByTestId('rental-search-rent-canon'));
     });
@@ -273,6 +276,16 @@ describe('search-first rentals', () => {
       fireEvent.press(view.getByTestId('rental-search-day-2026-12-02'));
     });
     expect(view.getByText('Cette période compte 31 jours. Choisissez 30 jours ou moins.')).toBeTruthy();
+  });
+
+  it('labels a daily total as an estimate when the booking quote differs', async () => {
+    const view = await renderSearch({
+      mode: 'results',
+      query: 'scaffold',
+      dates: { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 },
+      cards: [{ ...canon, totalForDates: 760, dayCount: 2, totalIsEstimate: true, rangeLabel: '14–16 Nov' }],
+    });
+    expect(view.getByText(/Est\./)).toBeTruthy();
   });
 
   it('asks for dates in formal French', async () => {

@@ -31,7 +31,7 @@ import type {
 } from '../../navigation/types';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney } from '../../utils/rentals';
-import { allDaySelectionsForRange } from '../../utils/rentals/rentalSearchPreset';
+import { allDaySelectionsForRange, quoteRentalSelections } from '../../utils/rentals/rentalSearchPreset';
 import type { RentalDateRange } from '../../utils/rentals/rentalSearchDates';
 
 type DetailParams = {
@@ -168,9 +168,24 @@ export default function RentalListingDetailScreen() {
     return { startDate, endDate, dayCount };
   }, [endDate, startDate]);
   const presetSelections = useMemo(
-    () => (presetRange ? allDaySelectionsForRange(presetRange, listing?.weekly_availability ?? []) : []),
-    [listing?.weekly_availability, presetRange]
+    () =>
+      presetRange
+        ? allDaySelectionsForRange(
+            presetRange,
+            listing?.weekly_availability ?? [],
+            Number(listing?.base_price_per_day) || 0
+          )
+        : [],
+    [listing?.base_price_per_day, listing?.weekly_availability, presetRange]
   );
+  const quotedTotal = useMemo(() => {
+    if (!presetSelections.length || !listing) return null;
+    return quoteRentalSelections(
+      presetSelections,
+      Number(listing.base_price_per_hour) || 0,
+      Number(listing.base_price_per_day) || 0
+    );
+  }, [listing, presetSelections]);
   const openedRequest = useRef(false);
   useEffect(() => {
     if (!listing || !openRequest || openedRequest.current) return;
@@ -704,6 +719,13 @@ export default function RentalListingDetailScreen() {
               'rentals.searchFirst.datesFromSearch',
               'Dates from your search — change them if needed. Nothing is charged until the business accepts.'
             )
+          : undefined
+      }
+      quoteLabel={
+        quotedTotal != null
+          ? t('rentals.searchFirst.sheetTotal', 'Total · {{amount}}', {
+              amount: formatRentalMoney(quotedTotal, currency),
+            })
           : undefined
       }
       {...pickerProps}
