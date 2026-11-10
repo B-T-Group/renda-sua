@@ -91,5 +91,7 @@ function utcDayMs(value?: string): number | null {
   if (!value) return null;
   const match = DATE.exec(value);
   if (!match) return null;
-  return Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  const ms = Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  // Date.UTC rolls 2026-13-01 or 2026-02-31 over to a real day; reject anything that is not that calendar day.
+  return new Date(ms).toISOString().slice(0, 10) === value ? ms : null;
 }
