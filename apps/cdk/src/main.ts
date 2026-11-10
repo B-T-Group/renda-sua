@@ -4,6 +4,7 @@ import 'source-map-support/register';
 import { FedapayMonitoringStack } from './lib/fedapay-monitoring-stack';
 import { HasuraEc2EnvironmentStack } from './lib/hasura-ec2-infrastructure-stack';
 import { RendasuaInfrastructureStack } from './lib/rendasua-infrastructure-stack';
+import { RentalInspectionEvidenceBucketStack } from './lib/rental-inspection-evidence-bucket';
 import { UserUploadsBucketStack } from './lib/user-uploads-bucket';
 
 const app = new cdk.App();
@@ -32,6 +33,19 @@ new UserUploadsBucketStack(app, 'RendasuaUserUploadsBucket', {
     region: awsRegion,
   },
 });
+
+// Prod-only rental inspection evidence. Not in deploy-cdk*.yml — deploy by hand:
+//   cdk deploy RentalInspectionEvidenceBucket-production --exclusively
+new RentalInspectionEvidenceBucketStack(
+  app,
+  'RentalInspectionEvidenceBucket-production',
+  {
+    env: {
+      account: awsAccount,
+      region: awsRegion,
+    },
+  }
+);
 
 // FedaPay monitoring stacks for dev and production environments
 // These monitor the backend log groups for the fedapay_live_record_incomplete marker
