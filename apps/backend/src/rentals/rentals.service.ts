@@ -2940,8 +2940,13 @@ export class RentalsService {
   /** Support-only exception when the client cannot show the start PIN. */
   async issueStartOverwriteCodeForSupport(
     bookingId: string,
-    actorUserId: string
+    actorUserId: string,
+    reason: string
   ): Promise<{ overwriteCode: string }> {
+    const note = reason?.trim();
+    if (!note) {
+      throw new HttpException('A written reason is required', HttpStatus.BAD_REQUEST);
+    }
     const booking = await this.fetchBooking(bookingId);
     if (!booking) {
       throw new HttpException('Not found', HttpStatus.NOT_FOUND);
@@ -2958,7 +2963,7 @@ export class RentalsService {
       'confirmed',
       actorUserId || null,
       'system',
-      'Support issued a rental start code'
+      `Support issued a rental start code. ${note}`
     );
     return { overwriteCode: code };
   }
