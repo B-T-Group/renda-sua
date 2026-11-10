@@ -141,6 +141,11 @@ describe('resolveDeepLinkTarget', () => {
       type: 'rental',
       id,
     });
+    expect(resolveDeepLinkTarget(`rentals/listings/${id}`)).toEqual({
+      type: 'rentalListing',
+      id,
+    });
+    expect(targetPersonaForDeepLinkPath(`rentals/listings/${id}`)).toBe('client');
   });
 
   it('opens a store and keeps the active persona', () => {

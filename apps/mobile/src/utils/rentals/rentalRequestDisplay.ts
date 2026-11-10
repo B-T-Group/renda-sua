@@ -87,6 +87,31 @@ export function parseRentalPricingSnapshot(
   return { total, currency, securityDeposit, lines };
 }
 
+const NARROW_NO_BREAK_SPACE = '\u202f';
+
+function groupedDigits(amount: number, separator: string): string {
+  const rounded = Math.round(amount);
+  const sign = rounded < 0 ? '-' : '';
+  const digits = String(Math.abs(rounded));
+  return `${sign}${digits.replace(/\B(?=(\d{3})+(?!\d))/g, separator)}`;
+}
+
+/**
+ * Search cards, the request sheet, and date totals.
+ * English keeps the code in front (`FCFA 1,140`). French puts it after the
+ * amount, with a narrow no-break space as the thousands separator and before FCFA.
+ */
+export function formatSearchMoney(amount: number, currency: string, language: string): string {
+  const code = currency.toUpperCase();
+  if (code === 'XAF' || code === 'FCFA') {
+    if (language.toLowerCase().startsWith('fr')) {
+      return `${groupedDigits(amount, NARROW_NO_BREAK_SPACE)}${NARROW_NO_BREAK_SPACE}FCFA`;
+    }
+    return `FCFA ${groupedDigits(amount, ',')}`;
+  }
+  return formatRentalMoney(amount, currency);
+}
+
 export function formatRentalMoney(amount: number, currency: string): string {
   try {
     return new Intl.NumberFormat(undefined, {

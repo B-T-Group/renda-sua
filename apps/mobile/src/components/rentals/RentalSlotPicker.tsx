@@ -79,6 +79,15 @@ export interface RentalSlotPickerProps {
   onSubmitted?: (requestId: string) => void;
   /** When true, omits outer card chrome (for bottom sheets). */
   embedded?: boolean;
+  /** Dates chosen in search. Shown as all-day rows and submitted at the daily rate. */
+  initialSelections?: SelectionRange[];
+  /** Search dates are already on the sheet, so the empty-state prompt stays hidden. */
+  datesFilled?: boolean;
+  /** The chosen dates are booked. The request cannot be submitted. */
+  requestBlocked?: boolean;
+  /** A date edit is still asking the server, so the request stays disabled. */
+  requestBusy?: boolean;
+  onSeeDates?: () => void;
 }
 
 export function RentalSlotPicker({
@@ -95,6 +104,11 @@ export function RentalSlotPicker({
   onLoginRequired,
   onSubmitted,
   embedded = false,
+  initialSelections = [],
+  datesFilled = false,
+  requestBlocked = false,
+  requestBusy = false,
+  onSeeDates,
 }: RentalSlotPickerProps) {
   const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -107,8 +121,8 @@ export function RentalSlotPicker({
   const [startMs, setStartMs] = useState<number | ''>('');
   const [endMs, setEndMs] = useState<number | ''>('');
   const [allDayChecked, setAllDayChecked] = useState(false);
-  const [selections, setSelections] = useState<SelectionRange[]>([]);
-  const [showAdvancedRanges, setShowAdvancedRanges] = useState(false);
+  const [selections, setSelections] = useState<SelectionRange[]>(initialSelections);
+  const [showAdvancedRanges, setShowAdvancedRanges] = useState(initialSelections.length > 0);
   const [unitsRequested, setUnitsRequested] = useState(1);
   const [notes, setNotes] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
@@ -412,6 +426,7 @@ export function RentalSlotPicker({
   ]);
 
   const openConfirm = () => {
+    if (requestBlocked || requestBusy) return;
     setMsg(null);
     const err = validateBeforeSubmit();
     if (err) {
@@ -422,6 +437,7 @@ export function RentalSlotPicker({
   };
 
   const submitRequest = async () => {
+    if (requestBlocked || requestBusy) return;
     const err = validateBeforeSubmit();
     if (err) {
       setMsg(err);
@@ -480,27 +496,45 @@ export function RentalSlotPicker({
         },
       ];
 
+  if (requestBlocked) {
+    return (
+      <View style={cardStyle}>
+        <Button
+          mode="outlined"
+          icon="calendar"
+          onPress={onSeeDates}
+          style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}
+          testID="rental-request-see-dates"
+        >
+          {t('rentals.searchFirst.seeDates', 'See dates')}
+        </Button>
+      </View>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <View style={cardStyle}>
         {!embedded ? (
-          <>
-            <Text style={[typography.subtitle1, { color: colors.text.primary }]}>
-              {t('rentals.requestRental', 'Request this rental')}
-            </Text>
-            <Text style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}>
-              {t('rentals.detail.requestSubtitle', 'Choose your dates. The business will confirm availability.')}
-            </Text>
-          </>
-        ) : (
-          <Text style={[typography.body2, { color: colors.text.secondary }]}>
+          <Text style={[typography.subtitle1, { color: colors.text.primary }]}>
+            {t('rentals.requestRental', 'Request this rental')}
+          </Text>
+        ) : null}
+        {datesFilled ? null : (
+          <Text
+            testID="rental-request-choose-dates"
+            style={[typography.body2, { color: colors.text.secondary, marginTop: embedded ? 0 : spacing.xs }]}
+          >
             {t('rentals.detail.requestSubtitle', 'Choose your dates. The business will confirm availability.')}
           </Text>
         )}
-        <Button
-          mode="contained"
-          style={{ marginTop: spacing.md }}
+        <Pressable
+          testID="rental-request-sign-in"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: requestBusy }}
+          disabled={requestBusy}
           onPress={() => {
+            if (requestBusy) return;
             if (onLoginRequired) {
               onLoginRequired();
               return;
@@ -509,9 +543,28 @@ export function RentalSlotPicker({
               navigation as unknown as NativeStackNavigationProp<GuestRootStackParamList>
             ).navigate('GuestTabs', { screen: 'GuestAuth', params: { screen: 'Login' } });
           }}
+          style={{
+            marginTop: spacing.md,
+            backgroundColor: colors.primary.main,
+            opacity: requestBusy ? 0.5 : 1,
+            borderRadius: borderRadius.md,
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            alignItems: 'center',
+          }}
         >
-          {t('client.rentals.loginToRequest', 'Sign in to request a rental')}
-        </Button>
+          <Text
+            style={{
+              color: colors.primary.contrast,
+              fontWeight: '700',
+              textAlign: 'center',
+              lineHeight: 20,
+              maxWidth: 150,
+            }}
+          >
+            {t('rentals.searchFirst.signInToRequest', 'Sign in to request a rental')}
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -776,7 +829,7 @@ export function RentalSlotPicker({
         mode="contained"
         style={{ marginTop: spacing.md }}
         onPress={openConfirm}
-        disabled={effectiveSelections.length === 0}
+        disabled={requestBlocked || requestBusy || effectiveSelections.length === 0}
       >
         {t('rentals.submitRequest', 'Submit request')}
       </Button>
