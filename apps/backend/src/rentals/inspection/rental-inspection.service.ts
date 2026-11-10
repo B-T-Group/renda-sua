@@ -103,10 +103,11 @@ export class RentalInspectionService {
     return { success: true };
   }
 
-  async submit(bookingId: string, stage: InspectionStage) {
+  async submit(bookingId: string, stage: InspectionStage, claimedDamageAmount?: number) {
     const booking = await this.requireBusiness(bookingId);
     const inspection = await this.inspectionFor(bookingId, stage);
     if (!inspection) throw new HttpException('Open the draft first', HttpStatus.CONFLICT);
+    if (stage === 'return') await this.storeClaimedDamage(bookingId, inspection.id, claimedDamageAmount);
     const manifest = await this.manifestFor(booking, inspection.id, stage);
     const minPhotos = await this.flags.numberConfig(
       'rental_inspection_min_photos',
@@ -129,8 +130,9 @@ export class RentalInspectionService {
     const body = await this.viewOf(bookingId, inspection, viewer.audience);
     const presented = presentInspection(body, viewer.audience);
     const minPhotos = await this.minPhotoCount();
-    if (viewer.audience === 'client') return { ...presented, minPhotos };
-    return { ...presented, minPhotos, correctionReason: body.correctionReason };
+    const claimedDamageAmount = await this.claimedDamage(bookingId);
+    if (viewer.audience === 'client') return { ...presented, minPhotos, claimedDamageAmount };
+    return { ...presented, minPhotos, claimedDamageAmount, correctionReason: body.correctionReason };
   }
 
   async acknowledge(bookingId: string, stage: InspectionStage, versionId: string, decision: Decision, reason?: string) {
@@ -723,6 +725,57 @@ export class RentalInspectionService {
       return { audience: 'business' as const };
     }
     throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
+  }
+
+  private async storeClaimedDamage(bookingId: string, inspectionId: string, claimedDamageAmount?: number) {
+    const damaged = await this.draftDamaged(inspectionId);
+    if (!damaged) {
+      await this.writeClaim(bookingId, null);
+      return;
+    }
+    const amount = Number(claimedDamageAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw inspectionRejected(
+        'RENTAL_INSPECTION_DAMAGE_AMOUNT',
+        'A damage report needs the amount you are claiming'
+      );
+    }
+    await this.writeClaim(bookingId, amount);
+  }
+
+  private async draftDamaged(inspectionId: string): Promise<boolean> {
+    const result = await this.hasura.executeQuery<{ rental_inspection_items: Array<{ id: string }> }>(
+      `query DraftDamage($id: uuid!) {
+        rental_inspection_items(
+          where: { inspection_id: { _eq: $id }, version_id: { _is_null: true }, condition: { _eq: "damaged" } }
+          limit: 1
+        ) { id }
+      }`,
+      { id: inspectionId }
+    );
+    return (result.rental_inspection_items?.length ?? 0) > 0;
+  }
+
+  private async writeClaim(bookingId: string, amount: number | null) {
+    await this.hasura.executeMutation(
+      `mutation SetClaimedDamage($id: uuid!, $amount: numeric) {
+        update_rental_bookings_by_pk(pk_columns: { id: $id }, _set: { claimed_damage_amount: $amount }) { id }
+      }`,
+      { id: bookingId, amount }
+    );
+  }
+
+  private async claimedDamage(bookingId: string): Promise<number | null> {
+    const result = await this.hasura.executeQuery<{
+      rental_bookings_by_pk: { claimed_damage_amount: number | null } | null;
+    }>(
+      `query ClaimedDamage($id: uuid!) {
+        rental_bookings_by_pk(id: $id) { claimed_damage_amount }
+      }`,
+      { id: bookingId }
+    );
+    const amount = result.rental_bookings_by_pk?.claimed_damage_amount;
+    return amount == null ? null : Number(amount);
   }
 
   private async markPending(bookingId: string) {

@@ -17,6 +17,7 @@ import {
   AcknowledgeInspectionDto,
   PresignInspectionEvidenceDto,
   SaveInspectionItemsDto,
+  SubmitInspectionDto,
 } from './dto/rental-inspection.dto';
 import { RentalInspectionEvidenceService } from './inspection/rental-inspection-evidence.service';
 import {
@@ -59,9 +60,10 @@ export class RentalInspectionsController {
   @ApiOperation({ summary: 'Submit an immutable inspection version (business)' })
   submit(
     @Param('bookingId', ParseUUIDPipe) bookingId: string,
-    @Param('stage') stage: string
+    @Param('stage') stage: string,
+    @Body() body: SubmitInspectionDto
   ) {
-    return this.inspections.submit(bookingId, this.stage(stage));
+    return this.inspections.submit(bookingId, this.stage(stage), body?.claimedDamageAmount);
   }
 
   @Get(':stage')

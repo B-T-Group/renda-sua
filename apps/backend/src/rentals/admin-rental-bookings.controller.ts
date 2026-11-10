@@ -18,7 +18,7 @@ import { AdminAuthGuard } from '../admin/admin-auth.guard';
 import { RequirePermissions, RequireRoles } from '../rbac/permissions.decorator';
 import { PlatformPermissions, PlatformRoles } from '../rbac/platform-permissions';
 import { IssueRentalStartOverwriteDto } from './dto/issue-rental-start-overwrite.dto';
-import { AdminHandbackDto, DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
+import { AdjustOvertimeDto, AdminHandbackDto, DecideInspectionDisputeDto } from './dto/rental-inspection.dto';
 import { RentalInspectionService } from './inspection/rental-inspection.service';
 import { RentalsService } from './rentals.service';
 
@@ -59,6 +59,23 @@ export class AdminRentalBookingsController {
     return this.rentalsService.issueStartOverwriteCodeForSupport(
       bookingId,
       req.user.id,
+      body.reason
+    );
+  }
+
+  @Post('bookings/:id/overtime-adjustment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Adjust derived overtime for an enrolled rental (reason required)' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  adjustOvertime(
+    @Param('id', ParseUUIDPipe) bookingId: string,
+    @Body() body: AdjustOvertimeDto,
+    @Req() req: RequestWithUser
+  ) {
+    return this.rentalsService.adjustEnrolledOvertime(
+      bookingId,
+      req.user.id,
+      body.overtimeAmount,
       body.reason
     );
   }

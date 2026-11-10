@@ -5,6 +5,7 @@ import {
   IsArray,
   IsIn,
   IsInt,
+  IsNumber,
   IsOptional,
   IsString,
   IsUUID,
@@ -106,6 +107,28 @@ export class PresignInspectionEvidenceDto {
   @IsInt()
   @Min(1)
   fileSize!: number;
+}
+
+export class SubmitInspectionDto {
+  @ApiPropertyOptional({ description: 'Business claim. Required when a return unit is damaged.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  claimedDamageAmount?: number;
+}
+
+export class AdjustOvertimeDto {
+  @ApiProperty()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  overtimeAmount!: number;
+
+  @ApiProperty()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(2000)
+  reason!: string;
 }
 
 export class AdminHandbackDto {

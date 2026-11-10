@@ -174,7 +174,7 @@ export interface ReservedExpiryInput {
   graceMinutes?: number;
 }
 
-/** Pause the start+60 cancel while a pickup inspection is pending; extend after accept. */
+/** Pause cancel while a pickup inspection is pending. After accept, use the stored deadline. */
 export function reservedBookingExpired(input: ReservedExpiryInput): boolean {
   if (input.policyVersion != null && input.pickupInspectionPending) return false;
   const graceMs = (input.graceMinutes ?? RESERVED_UNPAID_GRACE_MINUTES) * 60000;
@@ -185,10 +185,26 @@ export function reservedBookingExpired(input: ReservedExpiryInput): boolean {
   return input.now.getTime() >= deadline.getTime();
 }
 
-export function extendedReservedDeadline(startAt: Date, acceptedAt: Date): Date {
-  const fromStart = startAt.getTime() + RESERVED_UNPAID_GRACE_MINUTES * 60000;
-  const fromAccept = acceptedAt.getTime() + RESERVED_UNPAID_GRACE_MINUTES * 60000;
-  return new Date(Math.max(fromStart, fromAccept));
+/** 60 minutes from the moment Collect payment opens. Inspection time is not included. */
+export function extendedReservedDeadline(_startAt: Date, acceptedAt: Date): Date {
+  return new Date(acceptedAt.getTime() + RESERVED_UNPAID_GRACE_MINUTES * 60000);
+}
+
+/**
+ * Card "I agree" captures the business claim from the hold.
+ * A later admin decision replaces that claim. Wallet and MoMo capture nothing.
+ */
+export function damageCollectedOnAgree(input: {
+  paymentStatus: string | null;
+  claimedAmount: number | null;
+  upheldAmount: number;
+  decision: string | null;
+}): number {
+  if (input.paymentStatus !== 'authorized') return 0;
+  if (input.decision === 'damage_upheld') return round2(Math.max(0, input.upheldAmount));
+  if (input.decision === 'no_damage' || input.decision === 'damage_rejected') return 0;
+  const claimed = Number(input.claimedAmount);
+  return Number.isFinite(claimed) && claimed > 0 ? round2(claimed) : 0;
 }
 
 export function missingPhotoRequirements(roles: string[], minPhotos: number): string[] {
@@ -200,9 +216,6 @@ export function missingPhotoRequirements(roles: string[], minPhotos: number): st
 }
 
 export function unitDisplayLabel(slotIndex: number): string {
-  if (slotIndex >= 1 && slotIndex <= 26) {
-    return `Unit ${String.fromCharCode(64 + slotIndex)}`;
-  }
   return `Unit ${slotIndex}`;
 }
 
