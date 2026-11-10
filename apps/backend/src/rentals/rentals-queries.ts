@@ -532,6 +532,10 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       payment_status
       actual_start_at
       actual_end_at
+      units_booked
+      inspection_policy_version
+      return_handed_back_at
+      return_resolution
       rental_pricing_snapshot
       client_id
       business_id

@@ -489,6 +489,19 @@ export function useBusinessDashboardModules({
         path: '/admin/rental-listings/moderation',
       },
       {
+        title: t('business.dashboard.manageInspectionDisputes', 'Inspection disputes'),
+        description: t(
+          'business.dashboard.manageInspectionDisputesDescription',
+          'Review rental condition disputes, record a decision, or confirm a missing handback.'
+        ),
+        icon: <RentalModerationIcon sx={{ fontSize: 40 }} />,
+        count: null,
+        color: brandTokens.warning.main,
+        requiredPermission: PlatformPermissions.MODERATE_RENTALS,
+        section: 'moderation',
+        path: '/admin/rental-inspections',
+      },
+      {
         title: t(
           'business.dashboard.manageRentalAiReviews',
           'Rental AI review audit'

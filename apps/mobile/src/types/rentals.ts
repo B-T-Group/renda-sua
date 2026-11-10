@@ -210,6 +210,10 @@ export interface RentalBookingDetail {
   payment_status?: RentalBookingPaymentState | string | null;
   actual_start_at?: string | null;
   actual_end_at?: string | null;
+  units_booked?: number | null;
+  inspection_policy_version?: number | null;
+  return_handed_back_at?: string | null;
+  return_resolution?: string | null;
   rental_pricing_snapshot?: unknown;
   client_id: string;
   business_id: string;

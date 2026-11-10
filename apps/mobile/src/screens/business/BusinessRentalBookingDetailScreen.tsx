@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   ActivityIndicator,
   Button,
@@ -15,7 +16,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusPill } from '../../components/common/StatusPill';
 import { OrderMessageComposer } from '../../components/messaging/OrderMessageComposer';
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
+import { InspectionBanner } from '../../components/rentals/inspection/InspectionChrome';
+import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
 import { useTheme } from '../../contexts/ThemeContext';
+import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
 import { useActiveRentalStartPin } from '../../hooks/useActiveRentalStartPin';
 import { useRentalBookingMessages } from '../../hooks/useRentalBookingMessages';
 import { rentalsApi } from '../../services/rentalsApi';
@@ -27,6 +31,12 @@ import {
   rentalBookingStatusColors,
   resolveBookingPhase,
 } from '../../utils/rentals';
+import {
+  classifyInspectionError,
+  pickupGate,
+  showEnrolledReturn,
+  showLegacyReturnPicker,
+} from '../../utils/rentals/rentalInspection';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessRentalBookingDetail'>;
 
@@ -35,6 +45,7 @@ export default function BusinessRentalBookingDetailScreen() {
   const { colors, spacing, typography, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const route = useRoute<Route>();
+  const navigation = useNavigation<NativeStackNavigationProp<BusinessRootStackParamList>>();
   const bookingId = route.params.bookingId;
 
   const [booking, setBooking] = useState<RentalBookingDetail | null>(null);
@@ -66,6 +77,7 @@ export default function BusinessRentalBookingDetailScreen() {
     resetSharedPinState,
   } = useActiveRentalStartPin(bookingId, pinDialog);
   const [showManualPin, setShowManualPin] = useState(false);
+  const snapshot = useInspectionSnapshot(bookingId, booking);
 
   const load = useCallback(async (opts?: { soft?: boolean }) => {
     if (!opts?.soft) setLoading(true);
@@ -125,7 +137,7 @@ export default function BusinessRentalBookingDetailScreen() {
       setSnack(t('rentals.started', 'Rental started'));
       await load();
     } catch (e: unknown) {
-      setSnack(e instanceof Error ? e.message : t('business.rentals.pinFailed', 'PIN failed'));
+      setSnack(inspectionFailure(e, t) ?? (e instanceof Error ? e.message : t('business.rentals.pinFailed', 'PIN failed')));
     } finally {
       setBusy(false);
     }
@@ -156,9 +168,10 @@ export default function BusinessRentalBookingDetailScreen() {
       await load();
     } catch (e: unknown) {
       setSnack(
-        e instanceof Error
-          ? e.message
-          : t('business.rentals.overwriteFailed', 'Could not start rental')
+        inspectionFailure(e, t) ??
+          (e instanceof Error
+            ? e.message
+            : t('business.rentals.overwriteFailed', 'Could not start rental'))
       );
     } finally {
       setBusy(false);
@@ -219,9 +232,10 @@ export default function BusinessRentalBookingDetailScreen() {
       await load();
     } catch (e: unknown) {
       setSnack(
-        e instanceof Error
-          ? e.message
-          : t('rentals.bookingDetail.pickupPaymentError', 'Could not collect payment')
+        inspectionFailure(e, t) ??
+          (e instanceof Error
+            ? e.message
+            : t('rentals.bookingDetail.pickupPaymentError', 'Could not collect payment'))
       );
     } finally {
       setBusy(false);
@@ -266,10 +280,17 @@ export default function BusinessRentalBookingDetailScreen() {
   const phaseInfo = resolveBookingPhase(booking.status, 'business');
   const client = booking.client?.user;
   const clientName = [client?.first_name, client?.last_name].filter(Boolean).join(' ');
-  const canVerify = booking.status === 'confirmed';
-  const canReturn =
-    booking.status === 'awaiting_return' || booking.status === 'active';
+  const gate = pickupGate({
+    enrolled: snapshot.enrolled,
+    status: booking.status,
+    submitted: snapshot.pickup?.status === 'submitted' && !snapshot.pickup.yourDecision,
+    accepted: snapshot.pickup?.yourDecision === 'accept',
+  });
+  const canVerify = gate.showStart && !snapshot.loading;
+  const canReturn = showLegacyReturnPicker(snapshot.enrolled, booking.status);
+  const showReturnInspection = showEnrolledReturn(snapshot.enrolled, booking.status);
   const isReserved = booking.status === 'reserved';
+  const showCollectPayment = gate.showCollectPayment && !snapshot.loading;
   const canCancel =
     (booking.status === 'confirmed' || isReserved) && !booking.actual_start_at;
   const depositAmount = Math.max(0, Number(booking.security_deposit_amount) || 0);
@@ -351,7 +372,7 @@ export default function BusinessRentalBookingDetailScreen() {
           bookingStatus={booking.status}
           role="business"
           action={
-            isReserved ? (
+            showCollectPayment ? (
               <Button
                 mode="contained"
                 loading={busy}
@@ -433,10 +454,43 @@ export default function BusinessRentalBookingDetailScreen() {
         ) : null}
       </View>
 
-      {canVerify ? (
+      {snapshot.enrolled ? (
+        <View style={{ marginTop: spacing.md, gap: spacing.sm }}>
+          {gate.mode === 'waiting' ? (
+            <InspectionBanner tone="warning">
+              {booking.status === 'reserved'
+                ? t('rentalInspection.waitingBeforePayment', 'The client reviews the report before you collect payment.')
+                : t('rentalInspection.waitingBeforeCode', 'The client reviews the report before a support code can start the rental.')}
+            </InspectionBanner>
+          ) : null}
+          {(gate.mode === 'capture' || gate.mode === 'waiting') && (booking.status === 'reserved' || booking.status === 'confirmed') ? (
+            <Button
+              mode="contained"
+              buttonColor={colors.cta.main}
+              style={{ minHeight: 48 }}
+              onPress={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'pickup' })}
+            >
+              {t('rentalInspection.pickupTitle', 'Pickup condition')}
+            </Button>
+          ) : null}
+          {showReturnInspection ? (
+            <Button
+              mode="contained"
+              buttonColor={colors.cta.main}
+              style={{ minHeight: 48 }}
+              onPress={() => navigation.navigate('BusinessInspection', { bookingId, stage: 'return' })}
+            >
+              {t('rentalInspection.returnTitle', 'Return condition')}
+            </Button>
+          ) : null}
+          <InspectionTimeline role="business" booking={booking} pickup={snapshot.pickup} returnView={snapshot.returnView} />
+        </View>
+      ) : null}
+
+      {canVerify && gate.showOverwrite ? (
         <Button
           mode="text"
-          style={{ marginTop: spacing.sm }}
+          style={{ marginTop: spacing.sm, minHeight: 48 }}
           disabled={busy}
           onPress={() => setOverwriteDialog(true)}
         >
@@ -741,6 +795,23 @@ function combineLocalDateTime(date: string, time: string): string | null {
   const d = new Date(y, mo, day, h, mi, 0, 0);
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
+}
+
+function inspectionFailure(
+  error: unknown,
+  t: (key: string, fallback: string) => string
+): string | null {
+  const kind = classifyInspectionError(error);
+  if (kind === 'conflict') {
+    return t('rentalInspection.reportChanged', 'That report changed. Review it again.');
+  }
+  if (kind === 'update_required') {
+    return t(
+      'rentalInspection.updateRequired',
+      'This rental uses condition inspections. Review the report here, or update the app if this screen is missing.'
+    );
+  }
+  return null;
 }
 
 const styles = StyleSheet.create({

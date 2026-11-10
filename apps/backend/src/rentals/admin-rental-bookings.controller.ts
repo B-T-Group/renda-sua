@@ -78,6 +78,13 @@ export class AdminRentalBookingsController {
     return this.inspections.listOpenDisputes();
   }
 
+  @Get('bookings/:id/inspection-case')
+  @ApiOperation({ summary: 'Pickup and return reports, photos, and settlement flags' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  inspectionCase(@Param('id', ParseUUIDPipe) bookingId: string) {
+    return this.inspections.getAdminCase(bookingId);
+  }
+
   @Post('bookings/:id/inspection-decision')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Decide a rental inspection dispute (reason required)' })
