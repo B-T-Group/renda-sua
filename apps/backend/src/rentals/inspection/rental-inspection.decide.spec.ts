@@ -227,6 +227,37 @@ describe('return submit stores the damage claim only with a new version', () => 
     await svc.submit('b1', 'return', 1500);
     expect(submit).toHaveBeenCalledWith('b1', 'return', expect.anything(), expect.anything(), 3, null);
   });
+
+  it('does not submit a return the client already accepted', async () => {
+    const submit = jest.fn();
+    const svc = build(true, submit);
+    svc.requireBusiness = jest.fn().mockResolvedValue({
+      id: 'b1',
+      pickup_ack_current: false,
+      return_resolution: 'accepted',
+      settlement_claimed_at: null,
+      client: { user_id: 'client-user' },
+      business: { user_id: 'biz-user' },
+    });
+    await expect(svc.submit('b1', 'return', 25000)).rejects.toMatchObject({ status: 409 });
+    expect(submit).not.toHaveBeenCalled();
+    expect(svc.notice).not.toHaveBeenCalled();
+  });
+
+  it('does not submit a pickup the client already accepted', async () => {
+    const submit = jest.fn();
+    const svc = build(false, submit);
+    svc.requireBusiness = jest.fn().mockResolvedValue({
+      id: 'b1',
+      pickup_ack_current: true,
+      return_resolution: null,
+      settlement_claimed_at: null,
+      client: { user_id: 'client-user' },
+      business: { user_id: 'biz-user' },
+    });
+    await expect(svc.submit('b1', 'pickup')).rejects.toMatchObject({ status: 409 });
+    expect(submit).not.toHaveBeenCalled();
+  });
 });
 
 describe('the version function carries the claim', () => {
@@ -268,6 +299,15 @@ describe('the version function carries the claim', () => {
     await expect(
       svc.callSubmit('b1', 'return', { actorId: 'user-1' }, { text: '{}', sha256: 'h' }, 3, 40)
     ).rejects.toBeInstanceOf(HttpException);
+    expect(svc.hasura.executeMutation).toHaveBeenCalledTimes(1);
+  });
+
+  it('maps an accepted-return lock to HTTP 409 without a follow-up write', async () => {
+    const svc = call();
+    svc.hasura.executeMutation.mockRejectedValue(new Error('rental_inspection_return_locked'));
+    await expect(
+      svc.callSubmit('b1', 'return', { actorId: 'user-1' }, { text: '{}', sha256: 'h' }, 3, 40)
+    ).rejects.toMatchObject({ status: 409, message: 'The client already responded to this report' });
     expect(svc.hasura.executeMutation).toHaveBeenCalledTimes(1);
   });
 });

@@ -14,6 +14,7 @@ import {
   extendedReservedDeadline,
   missingPhotoRequirements,
   pickupStartAllowed,
+  inspectionSubmitLocked,
   presentInspection,
   priceEnrolledCapture,
   reservedBookingExpired,
@@ -426,6 +427,32 @@ describe('inspection SQL enforces the same gates', () => {
   it('rejects damage_upheld without a positive damage amount', () => {
     expect(sql).toContain("p_outcome = 'damage_upheld' AND (p_damage IS NULL OR p_damage <= 0)");
     expect(sql).toContain("RAISE EXCEPTION 'rental_inspection_damage_amount'");
+  });
+
+  it('does not replace a report the client already accepted', () => {
+    expect(inspectionSubmitLocked({ pickupAckCurrent: true }, 'pickup')).toBe(true);
+    expect(inspectionSubmitLocked({ pickupAckCurrent: false }, 'pickup')).toBe(false);
+    expect(inspectionSubmitLocked({ returnResolution: 'accepted' }, 'return')).toBe(true);
+    expect(inspectionSubmitLocked({ returnResolution: 'disputed' }, 'return')).toBe(true);
+    expect(inspectionSubmitLocked({ returnResolution: 'pending' }, 'return')).toBe(false);
+    expect(inspectionSubmitLocked({ returnResolution: null }, 'return')).toBe(false);
+    expect(
+      inspectionSubmitLocked({ returnResolution: 'pending', settlementClaimedAt: 'now' }, 'return')
+    ).toBe(true);
+  });
+
+  it('locks submit after accept in SQL so a new version cannot reset the claim', () => {
+    const locked = readFileSync(
+      join(
+        __dirname,
+        '../../../../hasura/migrations/Rendasua/20261110150000_rental_inspection_lock_accepted_submit/up.sql'
+      ),
+      'utf8'
+    );
+    expect(locked).toContain('OR v_booking.pickup_ack_current THEN');
+    expect(locked).toContain("'disputed', 'review', 'admin_cleared', 'accepted'");
+    expect(locked).toContain("WHEN return_resolution IS NULL THEN 'pending'");
+    expect(locked).not.toContain("return_resolution = 'accepted' THEN 'pending'");
   });
 
   it('stores a return claim in the same update as the new version', () => {
