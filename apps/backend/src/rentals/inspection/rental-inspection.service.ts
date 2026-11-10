@@ -550,7 +550,7 @@ export class RentalInspectionService {
     audience: 'client' | 'business' | 'admin'
   ) {
     if (!inspection) {
-      return this.emptyView();
+      return audience === 'client' ? { ...this.emptyView(), status: 'not_ready' } : this.emptyView();
     }
     const current = await this.currentVersion(inspection.id);
     if (audience === 'client' && !current) {

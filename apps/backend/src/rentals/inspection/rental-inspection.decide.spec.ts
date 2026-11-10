@@ -1,4 +1,6 @@
-import { BadRequestException, HttpException, ValidationPipe } from '@nestjs/common';
+import { HttpException, ValidationPipe } from '@nestjs/common';
+import { PIPES_METADATA } from '@nestjs/common/constants';
+import { AdminRentalBookingsController } from '../admin-rental-bookings.controller';
 import { DecideInspectionDisputeDto } from '../dto/rental-inspection.dto';
 import { requireInspectionDamageAmount } from './rental-inspection.errors';
 import { RentalInspectionService } from './rental-inspection.service';
@@ -27,21 +29,47 @@ describe('requireInspectionDamageAmount', () => {
   });
 });
 
-describe('DecideInspectionDisputeDto', () => {
-  const pipe = new ValidationPipe({ transform: true, whitelist: true });
+describe('POST admin/rentals/bookings/:id/inspection-decision', () => {
+  const pipes = Reflect.getMetadata(PIPES_METADATA, AdminRentalBookingsController) as ValidationPipe[];
+  const pipe = pipes.find((item) => item instanceof ValidationPipe);
   const meta = { type: 'body' as const, metatype: DecideInspectionDisputeDto };
-  const run = (body: unknown) => pipe.transform(body, meta);
+  const bookingId = '11111111-1111-4111-8111-111111111111';
+  const req = { user: { id: 'admin-1' } } as any;
+  let inspections: any;
+  let controller: AdminRentalBookingsController;
 
-  it('accepts damage_upheld with a positive amount', async () => {
-    await expect(
-      run({ outcome: 'damage_upheld', reason: 'QA decision', damageAmount: 40 })
-    ).resolves.toMatchObject({ outcome: 'damage_upheld', damageAmount: 40 });
+  beforeEach(() => {
+    inspections = Object.create(RentalInspectionService.prototype);
+    inspections.one = jest.fn();
+    inspections.notice = jest.fn();
+    inspections.booking = jest.fn();
+    inspections.rentals = { settleEnrolledRental: jest.fn() };
+    controller = new AdminRentalBookingsController({} as any, inspections);
   });
 
-  it('accepts no_damage without an amount', async () => {
-    await expect(run({ outcome: 'no_damage', reason: 'QA decision' })).resolves.toMatchObject({
-      outcome: 'no_damage',
+  async function decide(body: unknown) {
+    const parsed = await pipe!.transform(body, meta);
+    return controller.decide(bookingId, parsed, req);
+  }
+
+  it('uses the controller ValidationPipe', () => {
+    expect(pipe).toBeInstanceOf(ValidationPipe);
+  });
+
+  it('decides damage_upheld when the amount is positive', async () => {
+    inspections.one.mockResolvedValue({ id: 'dispute-1', decision: 'damage_upheld' });
+    inspections.booking.mockResolvedValue({
+      client: { user_id: 'client-user' },
+      business: { user_id: 'biz-user' },
     });
+    await expect(
+      decide({ outcome: 'damage_upheld', reason: 'QA decision', damageAmount: 40 })
+    ).resolves.toEqual({ decided: true, outcome: 'damage_upheld' });
+    expect(inspections.one).toHaveBeenCalledWith(
+      'rental_apply_inspection_decision',
+      expect.any(String),
+      expect.objectContaining({ damage: 40, outcome: 'damage_upheld' })
+    );
   });
 
   it.each([
@@ -49,9 +77,13 @@ describe('DecideInspectionDisputeDto', () => {
     ['amount null', { outcome: 'damage_upheld', reason: 'QA decision', damageAmount: null }],
     ['amount zero', { outcome: 'damage_upheld', reason: 'QA decision', damageAmount: 0 }],
     ['amount negative', { outcome: 'damage_upheld', reason: 'QA decision', damageAmount: -5 }],
-  ])('rejects damage_upheld when %s', async (_label, body) => {
-    const error = await run(body).catch((caught: unknown) => caught);
-    expect(error).toBeInstanceOf(BadRequestException);
+    ['amount NaN', { outcome: 'damage_upheld', reason: 'QA decision', damageAmount: Number.NaN }],
+  ])('returns RENTAL_INSPECTION_DAMAGE_AMOUNT when %s', async (_label, body) => {
+    await expect(decide(body)).rejects.toMatchObject({
+      status: 400,
+      response: expect.objectContaining({ code: 'RENTAL_INSPECTION_DAMAGE_AMOUNT' }),
+    });
+    expect(inspections.one).not.toHaveBeenCalled();
   });
 });
 
@@ -106,6 +138,17 @@ describe('RentalInspectionService.decide', () => {
 
 describe('client inspection reads hide an unsubmitted draft', () => {
   const svc: any = Object.create(RentalInspectionService.prototype);
+
+  it('returns not_ready to the client when no inspection row exists yet', async () => {
+    const view = await svc.viewOf('b1', null, 'client');
+    expect(view).toMatchObject({ status: 'not_ready', units: [], versionId: null });
+  });
+
+  it('keeps an empty draft for the business when no inspection row exists yet', async () => {
+    const view = await svc.viewOf('b1', null, 'business');
+    expect(view.status).toBe('draft');
+    expect(view.units).toEqual([]);
+  });
 
   it('returns no units to the client before the first submit', async () => {
     svc.currentVersion = jest.fn().mockResolvedValue(null);
