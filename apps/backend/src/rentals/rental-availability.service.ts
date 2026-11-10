@@ -10,6 +10,8 @@ import { buildRentalAvailablePush } from '../notifications/rental-push.messages'
 
 const SUBSCRIPTION_TTL_MS = 30 * 86_400_000;
 const MAX_ATTEMPTS = 5;
+/** Anti-spam: active subscriptions one user may hold at once. */
+export const MAX_ACTIVE_SUBSCRIPTIONS_PER_USER = 10;
 
 @Injectable()
 export class RentalAvailabilityService {
@@ -31,8 +33,17 @@ export class RentalAvailabilityService {
     if (!queryNorm && !dto.category_id) {
       throw new HttpException('A search or category is required', HttpStatus.BAD_REQUEST);
     }
+    if (range.startMs < startOfUtcToday()) {
+      throw new HttpException('start_date cannot be in the past', HttpStatus.BAD_REQUEST);
+    }
     const existing = await this.findActive(user.id, queryNorm, dto, range);
     if (existing) return existing;
+    if ((await this.countActive(user.id)) >= MAX_ACTIVE_SUBSCRIPTIONS_PER_USER) {
+      throw new HttpException(
+        `You can have at most ${MAX_ACTIVE_SUBSCRIPTIONS_PER_USER} active availability alerts`,
+        HttpStatus.TOO_MANY_REQUESTS
+      );
+    }
     return this.insert(user.id, user.client.id, queryNorm, dto, range);
   }
 
@@ -100,6 +111,13 @@ export class RentalAvailabilityService {
       (item.category_id ?? null) === (dto.category_id ?? null)
     );
     return row ? toDto(row) : null;
+  }
+
+  private async countActive(userId: string): Promise<number> {
+    const res = await this.hasura.executeQuery<{
+      rental_availability_subscriptions_aggregate: { aggregate: { count: number } | null };
+    }>(COUNT_ACTIVE, { userId, now: new Date().toISOString() });
+    return res.rental_availability_subscriptions_aggregate?.aggregate?.count ?? 0;
   }
 
   private async insert(
@@ -211,8 +229,16 @@ function subscriptionObject(
     start_at: new Date(range.startMs).toISOString(),
     end_at: new Date(range.endMs).toISOString(),
     status: 'active',
-    expires_at: new Date(Date.now() + SUBSCRIPTION_TTL_MS).toISOString(),
+    // An alert after the start day is useless: expire at the end of the start day (max 30 days).
+    expires_at: new Date(
+      Math.min(Date.now() + SUBSCRIPTION_TTL_MS, Math.max(range.startMs + 86_400_000, Date.now() + 3_600_000))
+    ).toISOString(),
   };
+}
+
+function startOfUtcToday(): number {
+  const d = new Date();
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
 }
 
 function toDto(row: SubRow) {
@@ -279,6 +305,16 @@ const FIND_ACTIVE = `
     }, limit: 5) {
       id status expires_at start_at end_at category_id
     }
+  }
+`;
+
+const COUNT_ACTIVE = `
+  query CountActiveRentalAvailabilitySubs($userId: uuid!, $now: timestamptz!) {
+    rental_availability_subscriptions_aggregate(where: {
+      user_id: { _eq: $userId }
+      status: { _eq: "active" }
+      expires_at: { _gt: $now }
+    }) { aggregate { count } }
   }
 `;
 

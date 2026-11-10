@@ -1,4 +1,4 @@
-import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, Min } from 'class-validator';
+import { IsIn, IsInt, IsOptional, IsString, IsUUID, Matches, Max, MaxLength, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -6,14 +6,17 @@ const DATE = /^\d{4}-\d{2}-\d{2}$/;
 export class RentalSearchQueryDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   q?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   country_code?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   state?: string;
 
   @IsOptional()
@@ -60,24 +63,29 @@ export class RentalSearchQueryDto {
 
 export class RentalSuggestQueryDto {
   @IsString()
+  @MaxLength(100)
   q!: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   country_code?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   state?: string;
 }
 
 export class RentalTopCategoriesQueryDto {
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   country_code?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   state?: string;
 
   @IsOptional()
@@ -91,6 +99,7 @@ export class RentalTopCategoriesQueryDto {
 export class CreateRentalAvailabilitySubscriptionDto {
   @IsOptional()
   @IsString()
+  @MaxLength(100)
   q?: string;
 
   @IsOptional()
@@ -99,10 +108,12 @@ export class CreateRentalAvailabilitySubscriptionDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(64)
   country_code?: string;
 
   @IsOptional()
   @IsString()
+  @MaxLength(80)
   state?: string;
 
   @Matches(DATE)

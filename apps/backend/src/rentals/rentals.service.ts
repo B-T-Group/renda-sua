@@ -141,6 +141,8 @@ export interface ListPublicRentalListingsQuery {
   page?: number;
   limit?: number;
   q?: string;
+  /** Search-first only: also match `q` against the category name. Legacy browse leaves this unset. */
+  matchCategoryName?: boolean;
   category_id?: string;
   min_price?: number;
   max_price?: number;
@@ -692,7 +694,9 @@ export class RentalsService {
         _or: [
           { rental_item: { name: { _ilike: `%${q}%` } } },
           { rental_item: { description: { _ilike: `%${q}%` } } },
-          { rental_item: { rental_category: { name: { _ilike: `%${q}%` } } } },
+          ...(query.matchCategoryName
+            ? [{ rental_item: { rental_category: { name: { _ilike: `%${q}%` } } } }]
+            : []),
         ],
       });
     }

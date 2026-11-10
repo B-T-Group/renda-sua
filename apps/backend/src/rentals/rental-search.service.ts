@@ -30,6 +30,7 @@ export class RentalSearchService {
       country_code: query.country_code,
       state: query.state,
       q: query.q,
+      matchCategoryName: true,
       category_id: query.category_id,
       sort: query.sort,
       operation_mode: query.operation_mode,

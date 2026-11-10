@@ -8,6 +8,7 @@ describe('RentalAvailabilityService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] }).setSystemTime(new Date('2026-11-10T12:00:00.000Z'));
     users.getUser.mockResolvedValue({ id: 'user-1', client: { id: 'client-1' }, active_persona: 'client' });
   });
 
@@ -32,6 +33,45 @@ describe('RentalAvailabilityService', () => {
     });
     expect(row.id).toBe('sub-1');
     expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  afterEach(() => jest.useRealTimers());
+
+  it('rejects a start date in the past', async () => {
+    await expect(
+      service.subscribe({ q: 'drone', start_date: '2026-11-09', end_date: '2026-11-12' })
+    ).rejects.toMatchObject({ status: 400 });
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('caps active subscriptions per user', async () => {
+    hasura.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('CountActiveRental')) {
+        return { rental_availability_subscriptions_aggregate: { aggregate: { count: 10 } } };
+      }
+      return { rental_availability_subscriptions: [] };
+    });
+    await expect(
+      service.subscribe({ q: 'tent', start_date: '2026-11-20', end_date: '2026-11-22' })
+    ).rejects.toMatchObject({ status: 429 });
+    expect(hasura.executeMutation).not.toHaveBeenCalled();
+  });
+
+  it('expires the alert at the end of the start day when that is sooner than 30 days', async () => {
+    hasura.executeQuery.mockImplementation(async (query: string) => {
+      if (query.includes('CountActiveRental')) {
+        return { rental_availability_subscriptions_aggregate: { aggregate: { count: 0 } } };
+      }
+      return { rental_availability_subscriptions: [] };
+    });
+    hasura.executeMutation.mockResolvedValue({
+      insert_rental_availability_subscriptions_one: {
+        id: 'sub-2', status: 'active', expires_at: 'x', start_at: 'x', end_at: 'x',
+      },
+    });
+    await service.subscribe({ q: 'tent', start_date: '2026-11-12', end_date: '2026-11-14' });
+    const insert = hasura.executeMutation.mock.calls.find((call) => String(call[0]).includes('InsertRental'));
+    expect(insert?.[1].object.expires_at).toBe('2026-11-13T00:00:00.000Z');
   });
 
   it('sends push and the in-app notice once, then marks the row sent', async () => {
