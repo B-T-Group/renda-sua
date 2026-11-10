@@ -4,6 +4,7 @@ import {
   dailyTotalDiffersFromQuote,
   quoteRentalSelections,
   requestWindowIso,
+  stayRequestState,
 } from './rentalSearchPreset';
 
 const openAllDay = [0, 1, 2, 3, 4, 5, 6].map((weekday) => ({
@@ -56,5 +57,16 @@ describe('rental search preset', () => {
     expect(quote).toBe(768);
     expect(dailyTotalDiffersFromQuote(760, quote)).toBe(true);
     expect(dailyTotalDiffersFromQuote(760, 760)).toBe(false);
+  });
+
+  it('blocks a request when the edited dates are booked', () => {
+    expect(stayRequestState(undefined)).toEqual({ status: 'open' });
+    expect(stayRequestState({ available: true, nextAvailableDate: null, totalForDates: 800 })).toEqual({
+      status: 'open',
+    });
+    expect(
+      stayRequestState({ available: false, nextAvailableDate: '2026-11-16', totalForDates: null })
+    ).toEqual({ status: 'blocked', nextAvailableDate: '2026-11-16' });
+    expect(stayRequestState(null)).toEqual({ status: 'blocked', nextAvailableDate: null });
   });
 });

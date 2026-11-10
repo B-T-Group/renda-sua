@@ -81,6 +81,13 @@ export interface RentalSlotPickerProps {
   embedded?: boolean;
   /** Dates chosen in search. Shown as all-day rows and submitted at the daily rate. */
   initialSelections?: SelectionRange[];
+  /** Search dates are already on the sheet, so the empty-state prompt stays hidden. */
+  datesFilled?: boolean;
+  /** The chosen dates are booked. The request cannot be submitted. */
+  requestBlocked?: boolean;
+  /** A date edit is still asking the server, so the request stays disabled. */
+  requestBusy?: boolean;
+  onSeeDates?: () => void;
 }
 
 export function RentalSlotPicker({
@@ -98,6 +105,10 @@ export function RentalSlotPicker({
   onSubmitted,
   embedded = false,
   initialSelections = [],
+  datesFilled = false,
+  requestBlocked = false,
+  requestBusy = false,
+  onSeeDates,
 }: RentalSlotPickerProps) {
   const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -415,6 +426,7 @@ export function RentalSlotPicker({
   ]);
 
   const openConfirm = () => {
+    if (requestBlocked || requestBusy) return;
     setMsg(null);
     const err = validateBeforeSubmit();
     if (err) {
@@ -425,6 +437,7 @@ export function RentalSlotPicker({
   };
 
   const submitRequest = async () => {
+    if (requestBlocked || requestBusy) return;
     const err = validateBeforeSubmit();
     if (err) {
       setMsg(err);
@@ -483,27 +496,44 @@ export function RentalSlotPicker({
         },
       ];
 
+  if (requestBlocked) {
+    return (
+      <View style={cardStyle}>
+        <Button
+          mode="outlined"
+          icon="calendar"
+          onPress={onSeeDates}
+          style={{ marginTop: spacing.sm, alignSelf: 'flex-start' }}
+          testID="rental-request-see-dates"
+        >
+          {t('rentals.searchFirst.seeDates', 'See dates')}
+        </Button>
+      </View>
+    );
+  }
+
   if (!isAuthenticated) {
     return (
       <View style={cardStyle}>
         {!embedded ? (
-          <>
-            <Text style={[typography.subtitle1, { color: colors.text.primary }]}>
-              {t('rentals.requestRental', 'Request this rental')}
-            </Text>
-            <Text style={[typography.body2, { color: colors.text.secondary, marginTop: spacing.xs }]}>
-              {t('rentals.detail.requestSubtitle', 'Choose your dates. The business will confirm availability.')}
-            </Text>
-          </>
-        ) : (
-          <Text style={[typography.body2, { color: colors.text.secondary }]}>
+          <Text style={[typography.subtitle1, { color: colors.text.primary }]}>
+            {t('rentals.requestRental', 'Request this rental')}
+          </Text>
+        ) : null}
+        {datesFilled ? null : (
+          <Text
+            testID="rental-request-choose-dates"
+            style={[typography.body2, { color: colors.text.secondary, marginTop: embedded ? 0 : spacing.xs }]}
+          >
             {t('rentals.detail.requestSubtitle', 'Choose your dates. The business will confirm availability.')}
           </Text>
         )}
         <Button
           mode="contained"
           style={{ marginTop: spacing.md }}
+          disabled={requestBusy}
           onPress={() => {
+            if (requestBusy) return;
             if (onLoginRequired) {
               onLoginRequired();
               return;
@@ -779,7 +809,7 @@ export function RentalSlotPicker({
         mode="contained"
         style={{ marginTop: spacing.md }}
         onPress={openConfirm}
-        disabled={effectiveSelections.length === 0}
+        disabled={requestBlocked || requestBusy || effectiveSelections.length === 0}
       >
         {t('rentals.submitRequest', 'Submit request')}
       </Button>

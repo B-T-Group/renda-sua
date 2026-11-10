@@ -6,6 +6,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppModal } from '../common/AppModal';
@@ -17,6 +18,9 @@ export interface RentalRequestSheetProps extends RentalSlotPickerProps {
   onDismiss: () => void;
   listingName?: string;
   datesBanner?: string;
+  dateLine?: string;
+  onEditDates?: () => void;
+  unavailableLabel?: string;
   quoteLabel?: string;
 }
 
@@ -25,6 +29,9 @@ export function RentalRequestSheet({
   onDismiss,
   listingName,
   datesBanner,
+  dateLine,
+  onEditDates,
+  unavailableLabel,
   quoteLabel,
   ...pickerProps
 }: RentalRequestSheetProps) {
@@ -74,6 +81,31 @@ export function RentalRequestSheet({
               {listingName}
             </Text>
           ) : null}
+          {dateLine ? (
+            <View style={[styles.dateLine, { paddingHorizontal: spacing.md, marginTop: spacing.xs }]}>
+              <Text
+                testID="rental-request-dates"
+                style={[typography.subtitle1, { color: colors.text.primary, fontWeight: '700', flex: 1 }]}
+              >
+                {dateLine}
+              </Text>
+              {onEditDates ? (
+                <Pressable
+                  onPress={onEditDates}
+                  testID="rental-request-edit-dates"
+                  accessibilityRole="button"
+                  accessibilityLabel={t('rentals.searchFirst.edit', 'Edit')}
+                  style={styles.editDates}
+                  hitSlop={8}
+                >
+                  <MaterialCommunityIcons name="pencil-outline" size={18} color={colors.primary.main} />
+                  <Text style={{ color: colors.primary.main, fontWeight: '700' }}>
+                    {t('rentals.searchFirst.edit', 'Edit')}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
           {datesBanner ? (
             <Text
               style={[
@@ -84,7 +116,23 @@ export function RentalRequestSheet({
               {datesBanner}
             </Text>
           ) : null}
-          {quoteLabel ? (
+          {unavailableLabel ? (
+            <Text
+              testID="rental-request-unavailable"
+              style={[
+                typography.subtitle2,
+                {
+                  color: colors.warning.dark,
+                  fontWeight: '700',
+                  paddingHorizontal: spacing.md,
+                  marginTop: spacing.xs,
+                },
+              ]}
+            >
+              {unavailableLabel}
+            </Text>
+          ) : null}
+          {quoteLabel && !unavailableLabel ? (
             <Text
               testID="rental-request-quote"
               style={[
@@ -133,5 +181,15 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginTop: 10,
     marginBottom: 8,
+  },
+  dateLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  editDates: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
 });

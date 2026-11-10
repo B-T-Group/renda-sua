@@ -1,9 +1,12 @@
 import {
   describeRentalDateRange,
   formatRangeDates,
+  formatSheetDateLine,
   nearbyRanges,
+  publishRentalSearchStay,
   rangeFromNextStart,
   rentalDateRange,
+  subscribeRentalSearchStay,
   todayRange,
   weekendRange,
   weekRange,
@@ -34,6 +37,21 @@ describe('rental search dates', () => {
       endDate: '2026-11-21',
       dayCount: 3,
     });
+  });
+
+  it('writes the request-sheet date line in English and French', () => {
+    const range = { startDate: '2026-11-14', endDate: '2026-11-16', dayCount: 2 };
+    expect(formatSheetDateLine(range, 'en', '2 days')).toBe('14–16 Nov · 2 days');
+    expect(formatSheetDateLine(range, 'fr', '2 jours')).toBe('14–16 nov. · 2 jours');
+  });
+
+  it('tells the results list when the request sheet changes dates', () => {
+    const seen: string[] = [];
+    const stop = subscribeRentalSearchStay((range) => seen.push(range.startDate));
+    publishRentalSearchStay({ startDate: '2026-11-16', endDate: '2026-11-19', dayCount: 3 });
+    stop();
+    publishRentalSearchStay({ startDate: '2026-11-20', endDate: '2026-11-21', dayCount: 1 });
+    expect(seen).toEqual(['2026-11-16']);
   });
 
   it('reports a span over 30 days instead of dropping it', () => {

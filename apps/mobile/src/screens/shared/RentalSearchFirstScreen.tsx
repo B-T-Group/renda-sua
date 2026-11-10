@@ -30,6 +30,7 @@ import {
   MAX_RENTAL_SEARCH_DAYS,
   nearbyRanges,
   rangeFromNextStart,
+  subscribeRentalSearchStay,
   type RentalDateRange,
 } from '../../utils/rentals/rentalSearchDates';
 import { loadRecentSearches, rememberSearch } from '../../utils/rentals/recentRentalSearches';
@@ -91,6 +92,16 @@ export function RentalSearchFirstScreen({
   useEffect(() => {
     void loadRecentSearches(storage).then(setRecent);
   }, []);
+
+  useEffect(
+    () =>
+      subscribeRentalSearchStay((next) => {
+        setDates(next);
+        setDraftDates(next);
+        setDatesSkipped(true);
+      }),
+    []
+  );
 
   useEffect(() => {
     if (mode !== 'results' && mode !== 'browse') return;
@@ -307,7 +318,7 @@ function toCard(hit: RentalSearchHit, range: RentalDateRange | null, locale: str
     pricePerDay,
     currency: hit.listing.rental_item?.currency || 'XAF',
     available: hit.available,
-    totalForDates: hit.totalForDates,
+    totalForDates: quote == null ? hit.totalForDates : quote,
     totalIsEstimate: dailyTotalDiffersFromQuote(hit.totalForDates, quote),
     dayCount: hit.dayCount,
     nextAvailableDate: hit.nextAvailableDate,

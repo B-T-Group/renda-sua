@@ -81,6 +81,23 @@ export function quoteRentalSelections(
   return Number(total.toFixed(2));
 }
 
+export type StayHit = {
+  available: boolean | null;
+  nextAvailableDate: string | null;
+  totalForDates: number | null;
+};
+
+/** Undefined means the dates have not been rechecked yet, so the request stays open. */
+export function stayRequestState(
+  hit: StayHit | null | undefined
+): { status: 'open' } | { status: 'blocked'; nextAvailableDate: string | null } {
+  if (hit === undefined) return { status: 'open' };
+  if (hit === null || hit.available === false) {
+    return { status: 'blocked', nextAvailableDate: hit?.nextAvailableDate ?? null };
+  }
+  return { status: 'open' };
+}
+
 export function dailyTotalDiffersFromQuote(
   dailyTotal: number | null,
   quote: number | null

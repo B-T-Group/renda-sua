@@ -116,6 +116,26 @@ export function nearbyRanges(range: RentalDateRange, now = new Date()): RentalDa
   });
 }
 
+/** "14–16 Nov · 2 days" — `daysLabel` is already translated. */
+export function formatSheetDateLine(range: RentalDateRange, locale: string, daysLabel: string): string {
+  return `${formatRangeDates(range, locale)} · ${daysLabel}`;
+}
+
+type StayListener = (range: RentalDateRange) => void;
+const stayListeners = new Set<StayListener>();
+
+/** The results list listens so an edit on the request sheet updates every card. */
+export function subscribeRentalSearchStay(listener: StayListener): () => void {
+  stayListeners.add(listener);
+  return () => {
+    stayListeners.delete(listener);
+  };
+}
+
+export function publishRentalSearchStay(range: RentalDateRange): void {
+  stayListeners.forEach((listener) => listener(range));
+}
+
 export function formatRangeDates(range: RentalDateRange, locale: string): string {
   const startMs = utcDayMs(range.startDate);
   const endMs = utcDayMs(range.endDate);
