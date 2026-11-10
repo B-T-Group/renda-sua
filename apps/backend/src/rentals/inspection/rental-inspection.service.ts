@@ -107,7 +107,10 @@ export class RentalInspectionService {
     const booking = await this.requireBusiness(bookingId);
     const inspection = await this.inspectionFor(bookingId, stage);
     if (!inspection) throw new HttpException('Open the draft first', HttpStatus.CONFLICT);
-    if (stage === 'return') await this.storeClaimedDamage(bookingId, inspection.id, claimedDamageAmount);
+    // Validate the claim before the version exists, but only store it once the version is created,
+    // so a failed or repeated submit cannot change the amount behind the report the client is reviewing.
+    const claim =
+      stage === 'return' ? await this.returnClaim(inspection.id, claimedDamageAmount) : undefined;
     const manifest = await this.manifestFor(booking, inspection.id, stage);
     const minPhotos = await this.flags.numberConfig(
       'rental_inspection_min_photos',
@@ -115,6 +118,7 @@ export class RentalInspectionService {
       DEFAULT_MIN_PHOTOS
     );
     const version = await this.callSubmit(bookingId, stage, booking, manifest, minPhotos);
+    if (claim !== undefined) await this.writeClaim(bookingId, claim);
     await this.notice(
       booking,
       stage === 'pickup' ? 'review_pickup' : 'review_return',
@@ -727,12 +731,9 @@ export class RentalInspectionService {
     throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
   }
 
-  private async storeClaimedDamage(bookingId: string, inspectionId: string, claimedDamageAmount?: number) {
-    const damaged = await this.draftDamaged(inspectionId);
-    if (!damaged) {
-      await this.writeClaim(bookingId, null);
-      return;
-    }
+  /** Claim for the return draft being submitted: null when no unit is damaged, else a positive amount. */
+  private async returnClaim(inspectionId: string, claimedDamageAmount?: number): Promise<number | null> {
+    if (!(await this.draftDamaged(inspectionId))) return null;
     const amount = Number(claimedDamageAmount);
     if (!Number.isFinite(amount) || amount <= 0) {
       throw inspectionRejected(
@@ -740,7 +741,7 @@ export class RentalInspectionService {
         'A damage report needs the amount you are claiming'
       );
     }
-    await this.writeClaim(bookingId, amount);
+    return amount;
   }
 
   private async draftDamaged(inspectionId: string): Promise<boolean> {

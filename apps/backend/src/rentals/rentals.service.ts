@@ -4703,7 +4703,20 @@ export class RentalsService {
       throw new HttpException('This booking does not use condition inspections', HttpStatus.CONFLICT);
     }
     const amount = Number(overtimeAmount);
-    await this.patchBooking(bookingId, { overtime_amount_override: amount });
+    const adjusted = await this.hasuraSystemService.executeMutation<{
+      update_rental_bookings?: { affected_rows: number };
+    }>(
+      `mutation AdjustEnrolledOvertime($id: uuid!, $amount: numeric!) {
+        update_rental_bookings(
+          where: { id: { _eq: $id }, settlement_claimed_at: { _is_null: true } }
+          _set: { overtime_amount_override: $amount, updated_at: "now()" }
+        ) { affected_rows }
+      }`,
+      { id: bookingId, amount }
+    );
+    if ((adjusted.update_rental_bookings?.affected_rows ?? 0) !== 1) {
+      throw new HttpException('This rental is already settled', HttpStatus.CONFLICT);
+    }
     await this.logHistory(
       bookingId,
       booking.status,

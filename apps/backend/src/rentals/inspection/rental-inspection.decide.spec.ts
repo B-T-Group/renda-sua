@@ -181,3 +181,52 @@ describe('HttpException remap helper', () => {
     expect(error.getStatus()).toBe(409);
   });
 });
+
+describe('return submit stores the damage claim only with a new version', () => {
+  const build = (damaged: boolean, submit: jest.Mock) => {
+    const svc: any = Object.create(RentalInspectionService.prototype);
+    const booking = { id: 'b1', client: { user_id: 'client-user' }, business: { user_id: 'biz-user' } };
+    svc.requireBusiness = jest.fn().mockResolvedValue(booking);
+    svc.inspectionFor = jest.fn().mockResolvedValue({ id: 'ins', status: 'draft' });
+    svc.draftDamaged = jest.fn().mockResolvedValue(damaged);
+    svc.manifestFor = jest.fn().mockResolvedValue({ text: '{}', sha256: 'x' });
+    svc.flags = { numberConfig: jest.fn().mockResolvedValue(3) };
+    svc.callSubmit = submit;
+    svc.writeClaim = jest.fn();
+    svc.notice = jest.fn();
+    return svc;
+  };
+
+  it('rejects a damaged return without a claim before any write', async () => {
+    const submit = jest.fn();
+    const svc = build(true, submit);
+    await expect(svc.submit('b1', 'return')).rejects.toMatchObject({
+      status: 400,
+      response: expect.objectContaining({ code: 'RENTAL_INSPECTION_DAMAGE_AMOUNT' }),
+    });
+    expect(submit).not.toHaveBeenCalled();
+    expect(svc.writeClaim).not.toHaveBeenCalled();
+  });
+
+  it('does not touch the stored claim when the submit fails (retry after a successful submit)', async () => {
+    const submit = jest.fn().mockRejectedValue(new HttpException('Report could not be submitted', 409));
+    const svc = build(false, submit);
+    await expect(svc.submit('b1', 'return')).rejects.toBeInstanceOf(HttpException);
+    expect(svc.writeClaim).not.toHaveBeenCalled();
+  });
+
+  it('writes the claim after the version is created', async () => {
+    const submit = jest.fn().mockResolvedValue({ id: 'v2', version_no: 2 });
+    const svc = build(true, submit);
+    await expect(svc.submit('b1', 'return', 1500)).resolves.toEqual({ versionId: 'v2', versionNo: 2 });
+    expect(svc.writeClaim).toHaveBeenCalledWith('b1', 1500);
+    expect(submit.mock.invocationCallOrder[0]).toBeLessThan(svc.writeClaim.mock.invocationCallOrder[0]);
+  });
+
+  it('clears the claim when a resubmitted return has no damage', async () => {
+    const submit = jest.fn().mockResolvedValue({ id: 'v3', version_no: 3 });
+    const svc = build(false, submit);
+    await svc.submit('b1', 'return', 1500);
+    expect(svc.writeClaim).toHaveBeenCalledWith('b1', null);
+  });
+});
