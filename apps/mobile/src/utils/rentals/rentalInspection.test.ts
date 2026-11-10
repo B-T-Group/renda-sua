@@ -4,6 +4,7 @@ import {
   classifyInspectionError,
   clientInspectionAction,
   damageRail,
+  derivedOvertime,
   handbackEnabled,
   isInspectionEnrolled,
   photoRolesForMinimum,
@@ -72,7 +73,7 @@ describe('enrolled pickup gate', () => {
     const ready = pickupGate({ enrolled: true, status: 'reserved', submitted: true, accepted: true });
     expect(ready.showCollectPayment).toBe(true);
     expect(pickupGate({ enrolled: true, status: 'confirmed', submitted: true, accepted: true }).showOverwrite).toBe(
-      true
+      false
     );
   });
 
@@ -111,6 +112,28 @@ describe('client review and money copy', () => {
       })
     ).toBe('review_return');
     expect(allUnitsReviewed(['a', 'b'], new Set(['a']))).toBe(false);
+  });
+
+  it('derives overtime from the server handback and keeps a support override read-only', () => {
+    const end = '2026-11-09T16:00:00.000Z';
+    const back = '2026-11-09T18:40:00.000Z';
+    expect(
+      derivedOvertime({
+        end_at: end,
+        return_handed_back_at: back,
+        units_booked: 1,
+        rental_pricing_snapshot: { ratePerHour: 4000 },
+      })
+    ).toEqual({ hours: 3, amount: 12000, adjusted: false });
+    expect(
+      derivedOvertime({
+        end_at: end,
+        return_handed_back_at: back,
+        units_booked: 1,
+        overtime_amount_override: 8000,
+        rental_pricing_snapshot: { ratePerHour: 4000 },
+      })?.adjusted
+    ).toBe(true);
   });
 
   it('uses card copy only when a deposit is authorized', () => {

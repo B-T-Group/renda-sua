@@ -9510,6 +9510,24 @@
     "adminSaveDecision": "Enregistrer la décision",
     "adminHandback": "Enregistrer la remise",
     "adminSaveFailed": "Impossible d’enregistrer la décision.",
-    "businessRecording": "Le commerçant enregistre l’état des lieux."
+    "businessRecording": "Le commerçant enregistre l’état des lieux.",
+    "agreeCapture": "J'accepte · prélever {{amount}}",
+    "overwriteSupportOnly": "Les codes de remplacement sont émis par le support Rendasua seulement — ils ne sont pas affichés ici.",
+    "agreeRecord": "J'accepte · enregistrer la réclamation",
+    "cardAgree": "Si vous acceptez, nous prélevons {{amount}} sur l'autorisation de votre carte. Le loyer et les heures supplémentaires se règlent comme d'habitude.",
+    "recordedAgree": "Si vous acceptez, nous enregistrons seulement la réclamation. Aucun prélèvement automatique. Le support Rendasua règle le paiement. Le loyer et les heures supplémentaires se règlent comme d'habitude.",
+    "railCard": "L'autorisation de la carte reste ouverte jusqu'à votre accord, qui prélève le montant convenu, ou jusqu'à la décision du support.",
+    "railRecorded": "Mobile Money / portefeuille : la réclamation de dommage est seulement enregistrée. Le loyer et les heures supplémentaires peuvent être réglés. Le support Rendasua règle le paiement des dommages. Rien n'est débité automatiquement.",
+    "autoCancel": "Annulation automatique si impayé : {{minutes}} min. L'horloge a commencé à l'ouverture de l'encaissement. Le temps de l'état des lieux n'est pas compté.",
+    "claimedAmount": "Montant que vous réclamez",
+    "claimedAmountShown": "Réclamé {{amount}}",
+    "handbackReadOnly": "Heure de remise · {{time}} (serveur, lecture seule)",
+    "overtimeReadOnly": "Heures supplémentaires · {{amount}} (calculées à partir de la remise)",
+    "overtimeAdjusted": "Heures supplémentaires · {{amount}} (ajustées par le support)",
+    "unitReady": "Prêt",
+    "unitProgress": "En cours",
+    "unitTodo": "À faire",
+    "adminOvertime": "Ajuster les heures supplémentaires",
+    "adminOvertimeAmount": "Montant des heures supplémentaires"
   }
 }

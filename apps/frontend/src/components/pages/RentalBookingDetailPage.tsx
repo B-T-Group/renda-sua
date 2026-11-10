@@ -38,6 +38,7 @@ import {
   parseRentalSelectionWindows,
 } from '../../utils/rentalRequestDisplay';
 import { messagesDefaultExpanded } from '../../utils/rentalPhase';
+import { unpaidCancelMinutesLeft } from '../../utils/rentalInspection';
 
 const PAYMENT_POLL_MS = 4000;
 
@@ -507,12 +508,21 @@ const RentalBookingDetailPage: React.FC = () => {
                     </Button>
                   </Stack>
                 ) : showCollect ? (
-                  <Button
-                    variant="contained"
-                    onClick={() => void handlePickupPayment()}
-                  >
-                    {t('rentals.actions.collectPayment', 'Collect payment')}
-                  </Button>
+                  <Stack spacing={1}>
+                    {inspection.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
+                      <Alert severity="warning">
+                        {t('rentalInspection.autoCancel', 'Auto-cancel if unpaid: {{minutes}} min left. The clock started when Collect payment opened. Inspection time is not included.', {
+                          minutes: unpaidCancelMinutesLeft(booking.reserved_cancel_after),
+                        })}
+                      </Alert>
+                    ) : null}
+                    <Button
+                      variant="contained"
+                      onClick={() => void handlePickupPayment()}
+                    >
+                      {t('rentals.actions.collectPayment', 'Collect payment')}
+                    </Button>
+                  </Stack>
                 ) : showVerify ? (
                   <Button
                     variant="contained"
@@ -822,6 +832,11 @@ const RentalBookingDetailPage: React.FC = () => {
                           value={pin}
                           onChange={(e) => setPin(e.target.value)}
                         />
+                        {inspection.enrolled ? (
+                          <Typography color="text.secondary">
+                            {t('rentalInspection.overwriteSupportOnly', 'Overwrite codes are issued by Rendasua support only — not shown here.')}
+                          </Typography>
+                        ) : (
                         <TextField
                           fullWidth
                           label={t('rentals.overwriteCode', 'Overwrite code')}
@@ -832,6 +847,7 @@ const RentalBookingDetailPage: React.FC = () => {
                             'Ask the client for their start PIN. A support code is only for when the client cannot share it, and only support can issue one.'
                           )}
                         />
+                        )}
                       </Stack>
                       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
                         <Button
@@ -846,7 +862,7 @@ const RentalBookingDetailPage: React.FC = () => {
                               } else {
                                 await verifyStartPin(bookingId, {
                                   pin: pin || undefined,
-                                  overwriteCode: ow || undefined,
+                                  overwriteCode: inspection.enrolled ? undefined : ow || undefined,
                                 });
                               }
                               setInfo(t('rentals.started', 'Rental started'));

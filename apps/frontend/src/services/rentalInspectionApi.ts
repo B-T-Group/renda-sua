@@ -28,8 +28,8 @@ export function createRentalInspectionApi(api: AxiosInstance) {
         physicalLabel?: string;
       }>
     ) => api.put(`${root(bookingId)}/${stage}/items`, { items }).then((res) => res.data),
-    submit: (bookingId: string, stage: InspectionStage) =>
-      api.post(`${root(bookingId)}/${stage}/submit`).then((res) => res.data),
+    submit: (bookingId: string, stage: InspectionStage, claimedDamageAmount?: number) =>
+      api.post(`${root(bookingId)}/${stage}/submit`, claimedDamageAmount == null ? {} : { claimedDamageAmount }).then((res) => res.data),
     acknowledge: (
       bookingId: string,
       stage: InspectionStage,

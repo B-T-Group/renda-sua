@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../../contexts/ThemeContext';
-import type { InspectionView } from '../../../utils/rentals/rentalInspection';
+import { damageRail, type InspectionView } from '../../../utils/rentals/rentalInspection';
 
 export interface TimelineBooking {
   status: string;
@@ -68,7 +68,11 @@ export function InspectionTimeline({
       title: t('rentalInspection.timelineSettlement', 'Settlement'),
       detail: openReview
         ? t('rentalInspection.timelineSettlementWaiting', 'Blocked while review is open')
-        : undefined,
+        : role === 'business' && returnView?.units.some((unit) => unit.condition === 'damaged')
+          ? damageRail(booking) === 'card'
+            ? t('rentalInspection.railCard', 'The card hold stays open until the client agrees, which captures the agreed amount, or until support decides.')
+            : t('rentalInspection.railRecorded', 'MoMo / wallet: the damage claim is record-only. Rent and overtime can settle. Rendasua support resolves any damage payment. Nothing is debited automatically.')
+          : undefined,
     },
   ];
   return (

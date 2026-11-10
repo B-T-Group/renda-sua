@@ -44,9 +44,15 @@ export async function saveInspectionItems(
 
 export async function submitInspection(
   bookingId: string,
-  stage: InspectionStage
+  stage: InspectionStage,
+  claimedDamageAmount?: number
 ): Promise<{ versionId: string; versionNo?: number }> {
-  return apiRequest(`${root(bookingId)}/${stage}/submit`, { method: 'POST' });
+  return apiRequest(`${root(bookingId)}/${stage}/submit`, {
+    method: 'POST',
+    body: JSON.stringify(
+      claimedDamageAmount == null ? {} : { claimedDamageAmount }
+    ),
+  });
 }
 
 export async function getInspection(

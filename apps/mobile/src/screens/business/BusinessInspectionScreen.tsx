@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ActivityIndicator, Button, Text, TextInput } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { InspectionBanner, UnitTabs } from '../../components/rentals/inspection/
 import { InspectionPhotoSlots } from '../../components/rentals/inspection/InspectionPhotoSlots';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionCapture } from '../../hooks/useInspectionCapture';
+import { derivedOvertime } from '../../utils/rentals/rentalInspection';
 import type { BusinessRootStackParamList } from '../../navigation/types';
 
 type Route = RouteProp<BusinessRootStackParamList, 'BusinessInspection'>;
@@ -19,7 +20,10 @@ export default function BusinessInspectionScreen() {
   const route = useRoute<Route>();
   const stage = route.params.stage;
   const model = useInspectionCapture(route.params.bookingId, stage);
+  const [claim, setClaim] = useState('');
   const unit = model.current;
+  const needsClaim = stage === 'return' && model.units.some((row) => row.returnChoice === 'damage' || row.condition === 'damaged');
+  const overtime = model.booking ? derivedOvertime(model.booking) : null;
 
   if (model.loading || !unit) {
     return (
@@ -44,6 +48,18 @@ export default function BusinessInspectionScreen() {
         {stage === 'return' ? (
           <InspectionBanner tone="success">
             {t('rentalInspection.wholeReturn', 'Whole booking return · all units together — no partial returns')}
+          </InspectionBanner>
+        ) : null}
+        {stage === 'return' && model.booking?.return_handed_back_at ? (
+          <InspectionBanner tone="info">
+            {t('rentalInspection.handbackReadOnly', 'Handback time · {{time}} (server, read-only)', {
+              time: model.booking.return_handed_back_at,
+            })}
+            {overtime
+              ? `\n${overtime.adjusted
+                ? t('rentalInspection.overtimeAdjusted', 'Overtime · {{amount}} (adjusted by support)', { amount: overtime.amount })
+                : t('rentalInspection.overtimeReadOnly', 'Overtime · {{amount}} (from the handback time)', { amount: overtime.amount })}`
+              : ''}
           </InspectionBanner>
         ) : null}
         {message ? <InspectionBanner tone={model.error === 'conflict' ? 'warning' : 'info'}>{message}</InspectionBanner> : null}
@@ -108,13 +124,22 @@ export default function BusinessInspectionScreen() {
           />
         ) : null}
         {stage === 'return' && unit.returnChoice === 'damage' ? (
-          <TextInput
-            mode="outlined"
-            multiline
-            label={t('rentalInspection.describeDamage', 'Describe damage')}
-            value={unit.wear}
-            onChangeText={(wear) => model.update({ wear })}
-          />
+          <>
+            <TextInput
+              mode="outlined"
+              multiline
+              label={t('rentalInspection.describeDamage', 'Describe damage')}
+              value={unit.wear}
+              onChangeText={(wear) => model.update({ wear })}
+            />
+            <TextInput
+              mode="outlined"
+              keyboardType="decimal-pad"
+              label={t('rentalInspection.claimedAmount', 'Amount you are claiming')}
+              value={claim}
+              onChangeText={setClaim}
+            />
+          </>
         ) : (
           <>
             <Pressable accessibilityRole="button" onPress={() => model.update({ noWear: !unit.noWear, wear: '' })} style={styles.check}>
@@ -150,7 +175,7 @@ export default function BusinessInspectionScreen() {
         <Button mode="contained" buttonColor={colors.cta.main} style={styles.action} disabled={model.busy} loading={model.busy} onPress={() => void model.saveAndNext()}>
           {t('rentalInspection.saveUnitNext', 'Save unit · next')}
         </Button>
-        <Button mode="contained" buttonColor={colors.cta.dark} style={styles.action} disabled={!model.canSubmit || model.busy} onPress={() => void model.submit()}>
+        <Button mode="contained" buttonColor={colors.cta.dark} style={styles.action} disabled={!model.canSubmit || model.busy || (needsClaim && !(Number(claim) > 0))} onPress={() => void model.submit(needsClaim ? Number(claim) : undefined)}>
           {stage === 'return'
             ? t('rentalInspection.submitReturn', 'Submit return report')
             : t('rentalInspection.submitReport', 'Submit report')}

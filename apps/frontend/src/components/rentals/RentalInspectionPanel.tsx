@@ -18,6 +18,7 @@ import {
   allUnitsReviewed,
   correctionReasonText,
   damageRail,
+  derivedOvertime,
   handbackEnabled,
   photoRolesForMinimum,
   reportReadyToSubmit,
@@ -38,6 +39,10 @@ interface PanelBooking {
   return_resolution?: string | null;
   actual_start_at?: string | null;
   units_booked?: number | null;
+  end_at?: string | null;
+  currency?: string | null;
+  overtime_amount_override?: number | string | null;
+  rental_pricing_snapshot?: unknown;
 }
 
 const ROLE_KEY: Record<string, [string, string]> = {
@@ -79,6 +84,7 @@ export function RentalInspectionPanel({
   const [panel, setPanel] = useState<'review' | 'correction' | 'dispute'>('review');
   const [reasons, setReasons] = useState<string[]>([]);
   const [details, setDetails] = useState('');
+  const [claim, setClaim] = useState('');
   const [offline, setOffline] = useState(!navigator.onLine);
   const draftOpened = useRef(false);
 
@@ -174,7 +180,8 @@ export function RentalInspectionPanel({
       return;
     }
     await run(async () => {
-      await model.api.submit(bookingId, stage);
+      const amount = Number(claim);
+      await model.api.submit(bookingId, stage, stage === 'return' && amount > 0 ? amount : undefined);
     }, 'submitted');
   };
 
@@ -197,6 +204,32 @@ export function RentalInspectionPanel({
         <Typography variant="overline">{t('rentalInspection.timelineTitle', 'Timeline')}</Typography>
         <Timeline role={role} booking={booking} pickup={model.pickup} returnView={model.returnView} />
       </Box>
+      {role === 'business' && stage === 'pickup' && view ? (
+        <Stack spacing={1}>
+          {view.units.map((row) => {
+            const ready = !!row.condition && row.photos.length >= (view.minPhotos ?? 3);
+            const started = !!row.condition || row.photos.length > 0 || !!row.wear;
+            return (
+              <Stack key={row.unitId} direction="row" spacing={1} sx={{ alignItems: 'center', minHeight: 48 }}>
+                <Typography sx={{ flex: 1 }}>{row.displayLabel}</Typography>
+                <Chip label={ready ? t('rentalInspection.unitReady', 'Ready') : started ? t('rentalInspection.unitProgress', 'In progress') : t('rentalInspection.unitTodo', 'To do')} />
+              </Stack>
+            );
+          })}
+        </Stack>
+      ) : null}
+      {role === 'business' && stage === 'return' && booking.return_handed_back_at ? (
+        <Alert severity="info">
+          {t('rentalInspection.handbackReadOnly', 'Handback time · {{time}} (server, read-only)', { time: booking.return_handed_back_at })}
+          {(() => {
+            const overtime = derivedOvertime(booking);
+            if (!overtime) return null;
+            return ` · ${overtime.adjusted
+              ? t('rentalInspection.overtimeAdjusted', 'Overtime · {{amount}} (adjusted by support)', { amount: overtime.amount })
+              : t('rentalInspection.overtimeReadOnly', 'Overtime · {{amount}} (from the handback time)', { amount: overtime.amount })}`;
+          })()}
+        </Alert>
+      ) : null}
       {role === 'client' && (model.pickup?.status === 'not_ready' || model.returnView?.status === 'not_ready') ? (
         <Alert severity="info">{t('rentalInspection.businessRecording', 'The business is recording the condition report.')}</Alert>
       ) : null}
@@ -229,8 +262,8 @@ export function RentalInspectionPanel({
           {role === 'client' && damaged ? (
             <Alert severity="warning" sx={{ mt: 1 }}>
               {damageRail(booking) === 'card'
-                ? t('rentalInspection.cardDamage', 'Damage can only come from the card deposit, after a person reviews it. The rental amount and overtime settle as usual.')
-                : t('rentalInspection.recordedDamage', 'This damage claim is recorded for review. It is not charged automatically. The rental amount and overtime settle as usual.')}
+                ? t('rentalInspection.cardAgree', 'If you agree, we capture {{amount}} from your card hold. Rent and overtime settle as usual.', { amount: view.claimedDamageAmount ?? '' })
+                : t('rentalInspection.recordedAgree', 'If you agree, we record the claim only. No money moves automatically. Rendasua support resolves any payment. Rent and overtime settle as usual.')}
               {' '}
               {t('rentalInspection.respondSoon', 'Respond soon. Reminder in 24 hours. A person reviews it after 48 hours if you do not reply. A damage claim is never accepted automatically.')}
             </Alert>
@@ -263,13 +296,16 @@ export function RentalInspectionPanel({
               ) : null}
             </Stack>
           ) : null}
+          {role === 'business' && stage === 'return' ? (
+            <TextField sx={{ mt: 1 }} label={t('rentalInspection.claimedAmount', 'Amount you are claiming')} value={claim} onChange={(event) => setClaim(event.target.value)} helperText={booking.currency ?? ''} />
+          ) : null}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 2 }}>
             {role === 'business' ? (
               <>
                 <Button variant="contained" color="success" sx={{ minHeight: 48 }} disabled={busy || view.status === 'submitted'} onClick={() => void saveUnit()}>
                   {t('rentalInspection.saveUnitNext', 'Save unit · next')}
                 </Button>
-                <Button variant="contained" sx={{ minHeight: 48 }} disabled={busy || minPhotos == null || offline || view.status === 'submitted'} onClick={() => void submit()}>
+                <Button variant="contained" sx={{ minHeight: 48 }} disabled={busy || minPhotos == null || offline || view.status === 'submitted' || (stage === 'return' && returnHasDamage(view) && !(Number(claim) > 0))} onClick={() => void submit()}>
                   {stage === 'return'
                     ? t('rentalInspection.submitReturn', 'Submit return report')
                     : t('rentalInspection.submitReport', 'Submit report')}
@@ -289,7 +325,9 @@ export function RentalInspectionPanel({
                   onClick={() => void run(() => model.api.acknowledge(bookingId, stage, { versionId: view.versionId!, decision: 'accept' }).then(() => undefined), 'accepted')}
                 >
                   {damaged
-                    ? t('rentalInspection.agreeReport', 'I agree with this report')
+                    ? damageRail(booking) === 'card'
+                      ? t('rentalInspection.agreeCapture', 'I agree · capture {{amount}}', { amount: view.claimedDamageAmount ?? '' })
+                      : t('rentalInspection.agreeRecord', 'I agree · record claim')
                     : stage === 'return'
                       ? t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')
                       : t('rentalInspection.acceptReport', 'Accept this condition report')}
@@ -527,7 +565,11 @@ function Timeline({
     t('rentalInspection.timelineReturnDamage', 'Return inspection'),
     openReview
       ? t('rentalInspection.timelineSettlementWaiting', 'Blocked while review is open')
-      : t('rentalInspection.timelineSettlement', 'Settlement'),
+      : role === 'business' && returnHasDamage(returnView)
+        ? damageRail(booking) === 'card'
+          ? t('rentalInspection.railCard', 'The card hold stays open until the client agrees, which captures the agreed amount, or until support decides.')
+          : t('rentalInspection.railRecorded', 'MoMo / wallet: the damage claim is record-only. Rent and overtime can settle. Rendasua support resolves any damage payment. Nothing is debited automatically.')
+        : t('rentalInspection.timelineSettlement', 'Settlement'),
   ];
   const done = [
     true,

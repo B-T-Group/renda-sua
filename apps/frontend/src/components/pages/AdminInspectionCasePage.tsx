@@ -67,6 +67,8 @@ const AdminInspectionCasePage: React.FC = () => {
   const [reason, setReason] = useState('');
   const [amount, setAmount] = useState('');
   const [handbackReason, setHandbackReason] = useState('');
+  const [overtimeAmount, setOvertimeAmount] = useState('');
+  const [overtimeReason, setOvertimeReason] = useState('');
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -174,6 +176,32 @@ const AdminInspectionCasePage: React.FC = () => {
         <TextField label={t('rentalInspection.adminReason', 'Reason')} value={reason} onChange={(event) => setReason(event.target.value)} required multiline />
         <Button variant="contained" sx={{ minHeight: 48 }} disabled={busy || !reason.trim()} onClick={() => void decide()}>
           {t('rentalInspection.adminSaveDecision', 'Save decision')}
+        </Button>
+        <Typography variant="h6">{t('rentalInspection.adminOvertime', 'Adjust overtime')}</Typography>
+        <TextField label={t('rentalInspection.adminOvertimeAmount', 'Overtime amount')} value={overtimeAmount} onChange={(event) => setOvertimeAmount(event.target.value)} />
+        <TextField label={t('rentalInspection.adminReason', 'Reason')} value={overtimeReason} onChange={(event) => setOvertimeReason(event.target.value)} required />
+        <Button
+          variant="outlined"
+          sx={{ minHeight: 48 }}
+          disabled={busy || !overtimeReason.trim() || overtimeAmount.trim() === '' || Number(overtimeAmount) < 0}
+          onClick={() => void (async () => {
+            setBusy(true);
+            setError(null);
+            try {
+              await api.post(`/admin/rentals/bookings/${bookingId}/overtime-adjustment`, {
+                overtimeAmount: Number(overtimeAmount),
+                reason: overtimeReason.trim(),
+              });
+              setOvertimeReason('');
+              await load();
+            } catch (err: unknown) {
+              setError(err instanceof Error ? err.message : t('rentalInspection.adminSaveFailed', 'Could not save the decision.'));
+            } finally {
+              setBusy(false);
+            }
+          })()}
+        >
+          {t('rentalInspection.adminOvertime', 'Adjust overtime')}
         </Button>
         <Typography variant="h6">{t('rentalInspection.adminHandback', 'Record handback')}</Typography>
         <TextField label={t('rentalInspection.adminReason', 'Reason')} value={handbackReason} onChange={(event) => setHandbackReason(event.target.value)} required />

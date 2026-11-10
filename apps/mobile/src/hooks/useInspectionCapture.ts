@@ -270,7 +270,7 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
     }
   };
 
-  const submit = async () => {
+  const submit = async (claimedDamageAmount?: number) => {
     if (!canSubmit) return;
     setBusy(true);
     try {
@@ -287,7 +287,7 @@ export function useInspectionCapture(bookingId: string, stage: InspectionStage) 
           physicalLabel: row.physicalLabel ?? undefined,
         }))
       );
-      await submitInspection(bookingId, stage);
+      await submitInspection(bookingId, stage, claimedDamageAmount);
       await load();
       setNotice('submitted');
     } catch (err: unknown) {

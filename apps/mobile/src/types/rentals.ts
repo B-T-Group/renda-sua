@@ -206,6 +206,9 @@ export interface RentalBookingDetail {
   authorized_amount?: number | string | null;
   captured_amount?: number | string | null;
   overtime_amount?: number | string | null;
+  overtime_amount_override?: number | string | null;
+  claimed_damage_amount?: number | string | null;
+  reserved_cancel_after?: string | null;
   payment_timing?: RentalPaymentTiming | string | null;
   payment_status?: RentalBookingPaymentState | string | null;
   actual_start_at?: string | null;

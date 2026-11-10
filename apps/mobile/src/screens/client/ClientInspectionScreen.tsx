@@ -103,8 +103,14 @@ export default function ClientInspectionScreen() {
         {damaged ? (
           <InspectionBanner tone="warning">
             {rail === 'card'
-              ? t('rentalInspection.cardDamage', 'Damage can only come from the card deposit, after a person reviews it. The rental amount and overtime settle as usual.')
-              : t('rentalInspection.recordedDamage', 'This damage claim is recorded for review. It is not charged automatically. The rental amount and overtime settle as usual.')}
+              ? t('rentalInspection.cardAgree', 'If you agree, we capture {{amount}} from your card hold. Rent and overtime settle as usual.', {
+                  amount: model.view?.claimedDamageAmount ?? '',
+                })
+              : t('rentalInspection.recordedAgree', 'If you agree, we record the claim only. No money moves automatically. Rendasua support resolves any payment. Rent and overtime settle as usual.')}
+            {' '}
+            {model.view?.claimedDamageAmount != null
+              ? t('rentalInspection.claimedAmountShown', 'Claimed {{amount}}', { amount: model.view.claimedDamageAmount })
+              : ''}
             {' '}
             {t('rentalInspection.respondSoon', 'Respond soon. Reminder in 24 hours. A person reviews it after 48 hours if you do not reply. A damage claim is never accepted automatically.')}
           </InspectionBanner>
@@ -144,7 +150,9 @@ export default function ClientInspectionScreen() {
           <>
             <Button mode="contained" buttonColor={colors.primary.main} style={styles.action} disabled={!reviewed || model.busy || !model.view?.versionId} onPress={() => void model.accept()}>
               {damaged
-                ? t('rentalInspection.agreeReport', 'I agree with this report')
+                ? rail === 'card'
+                  ? t('rentalInspection.agreeCapture', 'I agree · capture {{amount}}', { amount: model.view?.claimedDamageAmount ?? '' })
+                  : t('rentalInspection.agreeRecord', 'I agree · record claim')
                 : stage === 'return'
                   ? t('rentalInspection.confirmNoDisagreement', 'Confirm · no disagreement')
                   : t('rentalInspection.acceptReport', 'Accept this condition report')}

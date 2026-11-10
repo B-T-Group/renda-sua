@@ -37,6 +37,7 @@ export interface InspectionView {
   allocationVersion?: number | null;
   minPhotos?: number;
   correctionReason?: string | null;
+  claimedDamageAmount?: number | null;
 }
 
 export const REQUIRED_PHOTO_ROLES: PhotoRole[] = ['overview', 'other_side', 'accessories'];
@@ -132,7 +133,7 @@ export function pickupGate(input: PickupGateInput): PickupGate {
       mode: 'ready',
       showCollectPayment: reserved,
       showStart: confirmed,
-      showOverwrite: confirmed,
+      showOverwrite: false,
     };
   }
   return {
@@ -230,4 +231,39 @@ export function sameConditionPayload(pickup: InspectionUnit | undefined): {
     accessories: pickup?.accessories ?? [],
     wear: pickup?.wear?.trim() || 'none',
   };
+}
+
+export function unpaidCancelMinutesLeft(
+  reservedCancelAfter: string | null | undefined,
+  now = Date.now()
+): number | null {
+  if (!reservedCancelAfter) return null;
+  const at = new Date(reservedCancelAfter).getTime();
+  if (!Number.isFinite(at)) return null;
+  return Math.max(0, Math.ceil((at - now) / 60000));
+}
+
+export function derivedOvertime(booking: {
+  end_at?: string | null;
+  return_handed_back_at?: string | null;
+  units_booked?: number | string | null;
+  overtime_amount_override?: number | string | null;
+  rental_pricing_snapshot?: unknown;
+}): { hours: number; amount: number; adjusted: boolean } | null {
+  const end = booking.end_at ? new Date(booking.end_at).getTime() : Number.NaN;
+  const back = booking.return_handed_back_at ? new Date(booking.return_handed_back_at).getTime() : Number.NaN;
+  if (!Number.isFinite(end) || !Number.isFinite(back)) return null;
+  const hours = Math.max(0, Math.ceil((back - end) / 3600000));
+  const units = Math.max(1, Number(booking.units_booked) || 1);
+  const snapshot = booking.rental_pricing_snapshot;
+  const record = snapshot && typeof snapshot === 'object' ? snapshot as { ratePerHour?: number; lines?: Array<{ kind?: string; ratePerHour?: number }> } : null;
+  const lines = record?.lines ?? [];
+  const hourlyLine = lines.find((line) => line.kind === 'hourly');
+  const hourly = Number(hourlyLine?.ratePerHour) || Number(record?.ratePerHour) || 0;
+  const derived = Number((hours * hourly * units).toFixed(2));
+  const override = booking.overtime_amount_override;
+  if (override != null && override !== '' && Number.isFinite(Number(override))) {
+    return { hours, amount: Math.max(0, Number(override)), adjusted: true };
+  }
+  return { hours, amount: derived, adjusted: false };
 }

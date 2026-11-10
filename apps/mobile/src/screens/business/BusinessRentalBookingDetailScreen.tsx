@@ -18,6 +18,7 @@ import { OrderMessageComposer } from '../../components/messaging/OrderMessageCom
 import { RentalPhaseBanner } from '../../components/rentals/RentalPhaseBanner';
 import { InspectionBanner } from '../../components/rentals/inspection/InspectionChrome';
 import { InspectionTimeline } from '../../components/rentals/inspection/InspectionTimeline';
+import { unpaidCancelMinutesLeft } from '../../utils/rentals/rentalInspection';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useInspectionSnapshot } from '../../hooks/useInspectionSnapshot';
 import { useActiveRentalStartPin } from '../../hooks/useActiveRentalStartPin';
@@ -373,15 +374,24 @@ export default function BusinessRentalBookingDetailScreen() {
           role="business"
           action={
             showCollectPayment ? (
-              <Button
-                mode="contained"
-                loading={busy}
-                disabled={busy}
-                onPress={() => void collectPickupPayment()}
-                style={{ marginTop: 4 }}
-              >
-                {t('rentals.actions.collectPayment', 'Collect payment')}
-              </Button>
+              <>
+                {snapshot.enrolled && unpaidCancelMinutesLeft(booking.reserved_cancel_after) != null ? (
+                  <Text style={{ color: colors.text.secondary, marginBottom: 8 }}>
+                    {t('rentalInspection.autoCancel', 'Auto-cancel if unpaid: {{minutes}} min left. The clock started when Collect payment opened. Inspection time is not included.', {
+                      minutes: unpaidCancelMinutesLeft(booking.reserved_cancel_after),
+                    })}
+                  </Text>
+                ) : null}
+                <Button
+                  mode="contained"
+                  loading={busy}
+                  disabled={busy}
+                  onPress={() => void collectPickupPayment()}
+                  style={{ marginTop: 4 }}
+                >
+                  {t('rentals.actions.collectPayment', 'Collect payment')}
+                </Button>
+              </>
             ) : canVerify ? (
               <Button
                 mode="contained"
@@ -487,6 +497,11 @@ export default function BusinessRentalBookingDetailScreen() {
         </View>
       ) : null}
 
+      {canVerify && snapshot.enrolled ? (
+        <Text style={{ color: colors.text.secondary, marginTop: spacing.sm }}>
+          {t('rentalInspection.overwriteSupportOnly', 'Overwrite codes are issued by Rendasua support only — not shown here.')}
+        </Text>
+      ) : null}
       {canVerify && gate.showOverwrite ? (
         <Button
           mode="text"
