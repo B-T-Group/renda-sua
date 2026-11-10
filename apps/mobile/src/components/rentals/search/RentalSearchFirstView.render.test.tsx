@@ -9,6 +9,7 @@ import {
 } from './RentalSearchFirstView';
 import type { RentalSearchCardModel } from './RentalSearchResultCard';
 import type { RentalDateRange } from '@/utils/rentals/rentalSearchDates';
+import { RentalSearchDateSheet } from './RentalSearchDateSheet';
 
 const canon: RentalSearchCardModel = {
   id: 'canon',
@@ -202,6 +203,76 @@ describe('search-first rentals', () => {
     });
     expect(view.queryByTestId('rental-search-dates-blank')).toBeNull();
     expect(view.getByTestId('rental-search-apply-dates')).toBeTruthy();
+  });
+
+  it('explains a range over 30 days in English and does not apply it', async () => {
+    const onApply = jest.fn();
+    const onChange = jest.fn();
+    function Sheet() {
+      const [value, setValue] = useState<RentalDateRange | null>(null);
+      return (
+        <ThemeProvider>
+          <RentalSearchDateSheet
+            visible
+            now={new Date(2026, 10, 10)}
+            value={value}
+            onChange={(range) => {
+              onChange(range);
+              setValue(range);
+            }}
+            onApply={onApply}
+            onClose={() => undefined}
+          />
+        </ThemeProvider>
+      );
+    }
+    const view = await renderWithProviders(<Sheet />);
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-day-2026-11-01'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-cal-next'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-day-2026-12-02'));
+    });
+    expect(view.getByTestId('rental-search-dates-too-long').props.children).toContain('31 days');
+    expect(view.getByText(/30 days or fewer/)).toBeTruthy();
+    expect(onChange).toHaveBeenLastCalledWith(null);
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-apply-dates'));
+    });
+    expect(onApply).not.toHaveBeenCalled();
+  });
+
+  it('explains the 30-day limit in formal French', async () => {
+    await i18n.changeLanguage('fr');
+    function Sheet() {
+      const [value, setValue] = useState<RentalDateRange | null>(null);
+      return (
+        <ThemeProvider>
+          <RentalSearchDateSheet
+            visible
+            now={new Date(2026, 10, 10)}
+            value={value}
+            onChange={setValue}
+            onApply={() => undefined}
+            onClose={() => undefined}
+          />
+        </ThemeProvider>
+      );
+    }
+    const view = await renderWithProviders(<Sheet />);
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-day-2026-11-01'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-cal-next'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-day-2026-12-02'));
+    });
+    expect(view.getByText('Cette période compte 31 jours. Choisissez 30 jours ou moins.')).toBeTruthy();
   });
 
   it('asks for dates in formal French', async () => {

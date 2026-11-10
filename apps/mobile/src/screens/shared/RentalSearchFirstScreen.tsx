@@ -27,6 +27,7 @@ import storage from '../../services/storage/StorageService';
 import { useStore } from '../../stores/RootStore';
 import {
   formatRangeDates,
+  MAX_RENTAL_SEARCH_DAYS,
   nearbyRanges,
   rangeFromNextStart,
   type RentalDateRange,
@@ -162,7 +163,7 @@ export function RentalSearchFirstScreen({
   );
 
   const onApplyDates = useCallback(() => {
-    if (!draftDates) return;
+    if (!draftDates || draftDates.dayCount < 1 || draftDates.dayCount > MAX_RENTAL_SEARCH_DAYS) return;
     setDates(draftDates);
     setDateSheetOpen(false);
     setDatesSkipped(true);

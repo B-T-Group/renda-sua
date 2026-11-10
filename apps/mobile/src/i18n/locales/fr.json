@@ -6094,6 +6094,8 @@
       "notified": "Vous serez prévenu une seule fois.",
       "datesSheetTitle": "Quand en avez-vous besoin ?",
       "datesBlank": "Choisissez un début et une fin, ou un raccourci.",
+      "datesPickEnd": "Choisissez maintenant la date de fin.",
+      "datesTooLong": "Cette période compte {{count}} jours. Choisissez 30 jours ou moins.",
       "today": "Aujourd'hui",
       "weekend": "Ce week-end",
       "oneWeek": "1 semaine",

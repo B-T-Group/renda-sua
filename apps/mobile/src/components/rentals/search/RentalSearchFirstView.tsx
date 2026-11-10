@@ -48,7 +48,7 @@ export interface RentalSearchFirstViewProps {
   onBack: () => void;
   onOpenDates: () => void;
   onSkipDates: () => void;
-  onDraftDates: (range: RentalDateRange) => void;
+  onDraftDates: (range: RentalDateRange | null) => void;
   onApplyDates: () => void;
   onCloseDates: () => void;
   onCategory: (id: string) => void;

@@ -1,8 +1,15 @@
+export const MAX_RENTAL_SEARCH_DAYS = 30;
+
 export interface RentalDateRange {
   startDate: string;
   endDate: string;
   dayCount: number;
 }
+
+export type RentalDateRangeResult =
+  | { status: 'ok'; range: RentalDateRange }
+  | { status: 'too_long'; startDate: string; endDate: string; dayCount: number }
+  | { status: 'invalid' };
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -28,15 +35,31 @@ export function addLocalDays(date: Date, days: number): Date {
   return next;
 }
 
-export function rentalDateRange(start: Date, end: Date): RentalDateRange | null {
+export function parseIsoLocal(iso: string): Date | null {
+  const ms = utcDayMs(iso);
+  if (ms == null) return null;
+  const utc = new Date(ms);
+  return new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate());
+}
+
+/** End date is exclusive. A span longer than 30 days is reported, not dropped. */
+export function describeRentalDateRange(start: Date, end: Date): RentalDateRangeResult {
   const startDate = formatIsoDate(start);
   const endDate = formatIsoDate(end);
   const startMs = utcDayMs(startDate);
   const endMs = utcDayMs(endDate);
-  if (startMs == null || endMs == null || endMs <= startMs) return null;
+  if (startMs == null || endMs == null || endMs <= startMs) return { status: 'invalid' };
   const dayCount = Math.round((endMs - startMs) / 86_400_000);
-  if (dayCount < 1 || dayCount > 30) return null;
-  return { startDate, endDate, dayCount };
+  if (dayCount < 1) return { status: 'invalid' };
+  if (dayCount > MAX_RENTAL_SEARCH_DAYS) {
+    return { status: 'too_long', startDate, endDate, dayCount };
+  }
+  return { status: 'ok', range: { startDate, endDate, dayCount } };
+}
+
+export function rentalDateRange(start: Date, end: Date): RentalDateRange | null {
+  const described = describeRentalDateRange(start, end);
+  return described.status === 'ok' ? described.range : null;
 }
 
 export function todayRange(now = new Date()): RentalDateRange {

@@ -1,7 +1,9 @@
 import {
+  describeRentalDateRange,
   formatRangeDates,
   nearbyRanges,
   rangeFromNextStart,
+  rentalDateRange,
   todayRange,
   weekendRange,
   weekRange,
@@ -31,6 +33,22 @@ describe('rental search dates', () => {
       startDate: '2026-11-18',
       endDate: '2026-11-21',
       dayCount: 3,
+    });
+  });
+
+  it('reports a span over 30 days instead of dropping it', () => {
+    const start = new Date(2026, 10, 1);
+    const end = new Date(2026, 11, 2);
+    expect(describeRentalDateRange(start, end)).toEqual({
+      status: 'too_long',
+      startDate: '2026-11-01',
+      endDate: '2026-12-02',
+      dayCount: 31,
+    });
+    expect(rentalDateRange(start, end)).toBeNull();
+    expect(describeRentalDateRange(start, new Date(2026, 11, 1))).toEqual({
+      status: 'ok',
+      range: { startDate: '2026-11-01', endDate: '2026-12-01', dayCount: 30 },
     });
   });
 });

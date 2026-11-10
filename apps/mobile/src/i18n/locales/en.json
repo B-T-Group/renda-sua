@@ -6148,6 +6148,8 @@
       "notified": "You'll be notified once.",
       "datesSheetTitle": "When do you need it?",
       "datesBlank": "Choose a start and end, or a shortcut.",
+      "datesPickEnd": "Now choose the end date.",
+      "datesTooLong": "This range is {{count}} days. Choose 30 days or fewer.",
       "today": "Today",
       "weekend": "This weekend",
       "oneWeek": "1 week",
