@@ -34,6 +34,7 @@ import type {
 import { searchRentals } from '../../services/rentalSearchApi';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
 import { formatRentalMoney, formatSearchMoney } from '../../utils/rentals';
+import { rentalCategoryLabel } from '../../utils/rentals/rentalCategoryIcon';
 import {
   formatRangeDates,
   formatSingleDate,
@@ -467,7 +468,9 @@ export default function RentalListingDetailScreen() {
             {priceSnapshotParts.join(' · ')}
           </Text>
           <Text style={[typography.body2, { color: colors.text.secondary, marginTop: 4 }]}>
-            {item.rental_category?.name}
+            {item.rental_category?.name
+              ? rentalCategoryLabel(item.rental_category.name, (key, fallback) => t(key, fallback))
+              : null}
             {item.business?.name
               ? ` · ${t('rentals.detail.offeredBy', 'Offered by')} ${item.business.name}`
               : ''}

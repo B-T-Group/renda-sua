@@ -24,6 +24,22 @@ export function rentalCategoryIcon(name: string): IconName {
   return RULES.find(([pattern]) => pattern.test(name))?.[1] ?? 'tag-outline';
 }
 
+/** Seeded `rental_categories` rows. The table stores one English `name` and a slug, with no translation column. */
+const SEEDED_CATEGORY_KEYS: Record<string, string> = {
+  vehicles: 'rentals.searchFirst.categoryVehicles',
+  equipment: 'rentals.searchFirst.categoryEquipment',
+  events: 'rentals.searchFirst.categoryEvents',
+  other: 'rentals.searchFirst.categoryOther',
+};
+
+export function rentalCategoryLabel(
+  name: string,
+  translate: (key: string, fallback: string) => string
+): string {
+  const key = SEEDED_CATEGORY_KEYS[name.trim().toLowerCase()];
+  return key ? translate(key, name) : name;
+}
+
 export function splitTopCategories<T>(
   categories: T[],
   visible = RENTAL_CATEGORY_ROW

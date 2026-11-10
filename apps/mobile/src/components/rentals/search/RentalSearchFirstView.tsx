@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { rentalCategoryIcon } from '../../../utils/rentals/rentalCategoryIcon';
+import { rentalCategoryIcon, rentalCategoryLabel } from '../../../utils/rentals/rentalCategoryIcon';
 import { formatRangeDates, type RentalDateRange } from '../../../utils/rentals/rentalSearchDates';
 import { RentalSearchDateSheet } from './RentalSearchDateSheet';
 import { RentalSearchResultCard, type RentalSearchCardModel } from './RentalSearchResultCard';
@@ -241,7 +241,9 @@ function CategoryRow({ categories, moreCategories, moreOpen, activeCategoryId, o
             <View style={[styles.iconBubble, { backgroundColor: active ? colors.primary.main : colors.surface, borderColor: colors.divider }]}>
               <MaterialCommunityIcons name={rentalCategoryIcon(category.name)} size={22} color={active ? colors.primary.contrast : colors.text.primary} />
             </View>
-            <Text numberOfLines={1} style={{ color: colors.text.primary, fontSize: 12 }}>{category.name}</Text>
+            <Text numberOfLines={1} style={{ color: colors.text.primary, fontSize: 12 }}>
+              {rentalCategoryLabel(category.name, (key, fallback) => t(key, fallback))}
+            </Text>
           </Pressable>
         );
       })}
@@ -255,18 +257,31 @@ function CategoryRow({ categories, moreCategories, moreOpen, activeCategoryId, o
   );
 }
 
-function Typing({ suggestions, recent, onSuggestion, onRecent }: RentalSearchFirstViewProps) {
+function Typing({ suggestions, recent, query, onSuggestion, onRecent, onSubmitQuery }: RentalSearchFirstViewProps) {
   const { t } = useTranslation();
   const { colors, borderRadius } = useTheme();
+  const label = (name: string) => rentalCategoryLabel(name, (key, fallback) => t(key, fallback));
+  const trimmed = query.trim();
   return (
     <View>
-      <Text style={[styles.section, { color: colors.text.secondary }]}>{t('rentals.searchFirst.suggestions', 'SUGGESTIONS')}</Text>
+      {suggestions.length > 0 ? (
+        <Text style={[styles.section, { color: colors.text.secondary }]}>{t('rentals.searchFirst.suggestions', 'SUGGESTIONS')}</Text>
+      ) : trimmed ? (
+        <Pressable onPress={onSubmitQuery} testID="rental-search-run-query" style={[styles.suggest, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: borderRadius.md }]}>
+          <MaterialCommunityIcons name="magnify" size={18} color={colors.text.secondary} />
+          <Text style={{ color: colors.text.primary, fontWeight: '600' }}>
+            {t('rentals.searchFirst.searchFor', 'Search for “{{query}}”', { query: trimmed })}
+          </Text>
+        </Pressable>
+      ) : null}
       {suggestions.map((row) => (
         <Pressable key={`${row.kind}-${row.id}`} onPress={() => onSuggestion(row)} testID={`rental-search-suggestion-${row.id}`} style={[styles.suggest, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: borderRadius.md }]}>
           <MaterialCommunityIcons name={row.kind === 'category' ? rentalCategoryIcon(row.label) : 'magnify'} size={18} color={colors.text.secondary} />
           <View>
-            <Text style={{ color: colors.text.primary, fontWeight: '600' }}>{row.label}</Text>
-            {row.subtitle ? <Text style={{ color: colors.text.secondary }}>{row.subtitle}</Text> : null}
+            <Text style={{ color: colors.text.primary, fontWeight: '600' }}>
+              {row.kind === 'category' ? label(row.label) : row.label}
+            </Text>
+            {row.subtitle ? <Text style={{ color: colors.text.secondary }}>{label(row.subtitle)}</Text> : null}
           </View>
         </Pressable>
       ))}
@@ -286,10 +301,13 @@ function Typing({ suggestions, recent, onSuggestion, onRecent }: RentalSearchFir
 function Filters(props: RentalSearchFirstViewProps) {
   const { t } = useTranslation();
   const activeName = [...props.categories, ...props.moreCategories].find((row) => row.id === props.activeCategoryId)?.name;
+  const activeLabel = activeName
+    ? rentalCategoryLabel(activeName, (key, fallback) => t(key, fallback))
+    : undefined;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-      {props.mode !== 'browse' && activeName ? (
-        <Chip label={activeName} active onPress={() => props.onCategory(props.activeCategoryId ?? '')} />
+      {props.mode !== 'browse' && activeLabel ? (
+        <Chip label={activeLabel} active onPress={() => props.onCategory(props.activeCategoryId ?? '')} />
       ) : null}
       <Chip label={t('rentals.searchFirst.price', 'Price')} active={props.sortLabel === 'cheapest'} onPress={props.onToggleCheapest} />
       <Chip label={props.sortLabel === 'relevance' ? t('rentals.searchFirst.sort', 'Sort') : props.sortLabel} active={props.sortLabel !== 'relevance'} onPress={props.onCycleSort} />

@@ -1,4 +1,4 @@
-import { rentalCategoryIcon, splitTopCategories } from './rentalCategoryIcon';
+import { rentalCategoryIcon, rentalCategoryLabel, splitTopCategories } from './rentalCategoryIcon';
 
 describe('rental category icons', () => {
   it('gives the live top categories distinct icons and falls back for unknown names', () => {
@@ -9,6 +9,20 @@ describe('rental category icons', () => {
     expect(rentalCategoryIcon('Mystery crate')).toBe('tag-outline');
     const icons = ['Equipment', 'Écouteur sans fils', 'Téléphone', 'Other'].map(rentalCategoryIcon);
     expect(new Set(icons).size).toBe(icons.length);
+  });
+
+  it('translates the seeded English category names and leaves stored names alone', () => {
+    const fr: Record<string, string> = {
+      'rentals.searchFirst.categoryEquipment': 'Équipement',
+      'rentals.searchFirst.categoryOther': 'Autre',
+      'rentals.searchFirst.categoryVehicles': 'Véhicules',
+      'rentals.searchFirst.categoryEvents': 'Événements',
+    };
+    const translate = (key: string, fallback: string) => fr[key] ?? fallback;
+    expect(rentalCategoryLabel('Equipment', translate)).toBe('Équipement');
+    expect(rentalCategoryLabel(' other ', translate)).toBe('Autre');
+    expect(rentalCategoryLabel('Écouteur sans fils', translate)).toBe('Écouteur sans fils');
+    expect(rentalCategoryLabel('Téléphone', translate)).toBe('Téléphone');
   });
 
   it('keeps five tiles beside More', () => {

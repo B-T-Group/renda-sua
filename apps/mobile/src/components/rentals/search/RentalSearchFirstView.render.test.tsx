@@ -142,6 +142,7 @@ describe('search-first rentals', () => {
       onRent,
       onSeeDates,
     });
+    expect(view.getByText('2 matches · available for your dates first')).toBeTruthy();
     expect(view.getByText('Canon EOS R50 kit')).toBeTruthy();
     expect(view.getByText('Free 12–15 Nov')).toBeTruthy();
     expect(view.getByText(/Total ·/)).toBeTruthy();
@@ -333,9 +334,37 @@ describe('search-first rentals', () => {
   });
 
   it('hides the recent header when nothing has been searched', async () => {
-    const view = await renderSearch({ mode: 'typing', query: 'zz', suggestions: [], recent: [] });
-    expect(view.getByText('SUGGESTIONS')).toBeTruthy();
+    const view = await renderSearch({ mode: 'typing', query: '', suggestions: [], recent: [] });
+    expect(view.queryByText('SUGGESTIONS')).toBeNull();
     expect(view.queryByText('RECENT')).toBeNull();
+    expect(view.queryByTestId('rental-search-run-query')).toBeNull();
+  });
+
+  it('offers to search the typed query when nothing is suggested', async () => {
+    const onSubmitQuery = jest.fn();
+    const view = await renderSearch({
+      mode: 'typing',
+      query: 'zzzz',
+      suggestions: [],
+      recent: [],
+      onSubmitQuery,
+    });
+    expect(view.queryByText('SUGGESTIONS')).toBeNull();
+    expect(view.getByText('Search for “zzzz”')).toBeTruthy();
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-run-query'));
+    });
+    expect(onSubmitQuery).toHaveBeenCalled();
+  });
+
+  it('uses the singular result count for one listing', async () => {
+    const view = await renderSearch({
+      mode: 'results',
+      dates: { startDate: '2026-11-10', endDate: '2026-11-17', dayCount: 7 },
+      cards: [canon],
+    });
+    expect(view.getByText('1 match · available for your dates first')).toBeTruthy();
+    expect(view.queryByText(/1 matches/)).toBeNull();
   });
 
   it('keeps the browse tile and drops the duplicate category chip', async () => {
@@ -353,5 +382,44 @@ describe('search-first rentals', () => {
     await i18n.changeLanguage('fr');
     const view = await renderSearch({ marketLabel: 'Cameroon' });
     expect(view.getByText('Cameroun')).toBeTruthy();
+  });
+
+  it('translates seeded categories and the empty-search row in French', async () => {
+    await i18n.changeLanguage('fr');
+    const view = await renderSearch({
+      mode: 'typing',
+      query: 'zzzz',
+      suggestions: [],
+    });
+    expect(view.getByText('Rechercher « zzzz »')).toBeTruthy();
+    expect(view.queryByText('SUGGESTIONS')).toBeNull();
+  });
+
+  it('translates the seeded category names on a French browse screen', async () => {
+    await i18n.changeLanguage('fr');
+    const results = await renderSearch({
+      mode: 'browse',
+      categories: [
+        { id: 'equip', name: 'Equipment' },
+        { id: 'other', name: 'Other' },
+        { id: 'phones', name: 'Téléphone' },
+      ],
+      cards: [canon],
+    });
+    expect(results.getByText('Équipement')).toBeTruthy();
+    expect(results.getByText('Autre')).toBeTruthy();
+    expect(results.getByText('Téléphone')).toBeTruthy();
+    expect(results.queryByText('Equipment')).toBeNull();
+    expect(results.getByText("1 location · ajoutez des dates pour trier par disponibilité")).toBeTruthy();
+  });
+
+  it('uses the French plural when more than one listing matches', async () => {
+    await i18n.changeLanguage('fr');
+    const view = await renderSearch({
+      mode: 'results',
+      dates: { startDate: '2026-11-10', endDate: '2026-11-17', dayCount: 7 },
+      cards: [canon, nikon],
+    });
+    expect(view.getByText("2 résultats · les dates libres d'abord")).toBeTruthy();
   });
 });
