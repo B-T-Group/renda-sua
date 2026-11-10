@@ -27,6 +27,7 @@ import storage from '../../services/storage/StorageService';
 import { useStore } from '../../stores/RootStore';
 import {
   formatRangeDates,
+  marketTimeZone,
   MAX_RENTAL_SEARCH_DAYS,
   nearbyRanges,
   rangeFromNextStart,
@@ -34,6 +35,7 @@ import {
   type RentalDateRange,
 } from '../../utils/rentals/rentalSearchDates';
 import { loadRecentSearches, rememberSearch } from '../../utils/rentals/recentRentalSearches';
+import { splitTopCategories } from '../../utils/rentals/rentalCategoryIcon';
 import {
   allDaySelectionsForRange,
   dailyTotalDiffersFromQuote,
@@ -194,12 +196,13 @@ export function RentalSearchFirstScreen({
     () => hits.map((hit) => toCard(hit, dates, i18n.language)),
     [dates, hits, i18n.language]
   );
-  const shown = categories.slice(0, 6);
-  const extra = categories.slice(6);
+  const { shown, extra } = splitTopCategories(categories);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.pageBackground, paddingTop: applyTopSafeArea ? insets.top : 0 }}>
+    <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
       <RentalSearchFirstView
+        topInset={applyTopSafeArea ? insets.top : 0}
+        timeZone={marketTimeZone(geo.country_code)}
         marketLabel={selectedMarket?.name ?? ''}
         mode={mode}
         query={query}

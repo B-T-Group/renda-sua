@@ -160,6 +160,42 @@ export function formatSingleDate(iso: string, locale: string): string {
   }).format(new Date(ms));
 }
 
+const MARKET_TIME_ZONES: Record<string, string> = {
+  CM: 'Africa/Douala',
+  GA: 'Africa/Libreville',
+  TG: 'Africa/Lome',
+};
+
+/** IANA zone for a market, so "today" follows the market clock rather than the phone. */
+export function marketTimeZone(countryCode?: string | null): string | undefined {
+  if (!countryCode) return undefined;
+  return MARKET_TIME_ZONES[countryCode.toUpperCase()];
+}
+
+/** Calendar year/month/day in a timezone. Month is 1-based. */
+export function calendarDateInTimeZone(
+  now: Date,
+  timeZone?: string
+): { year: number; month: number; day: number; iso: string } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timeZone || undefined,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now);
+    const year = Number(parts.find((part) => part.type === 'year')?.value);
+    const month = Number(parts.find((part) => part.type === 'month')?.value);
+    const day = Number(parts.find((part) => part.type === 'day')?.value);
+    if (!year || !month || !day) throw new Error('incomplete');
+    const iso = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    return { year, month, day, iso };
+  } catch {
+    const iso = formatIsoDate(now);
+    return { year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate(), iso };
+  }
+}
+
 export function eachDateKey(range: RentalDateRange): string[] {
   const keys: string[] = [];
   const start = utcDayMs(range.startDate);

@@ -65,6 +65,8 @@ export interface RentalSearchFirstViewProps {
   similar: RentalSearchCategory[];
   onNotify: () => void;
   bottomInset: number;
+  topInset?: number;
+  timeZone?: string;
 }
 
 export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
@@ -81,9 +83,22 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
   const showDates = props.dates
     ? `${formatRangeDates(props.dates, i18n.language)} · ${t('rentals.searchFirst.dayCount', '{{count}} days', { count: props.dates.dayCount })}`
     : null;
+  const marketLabel = props.marketLabel.replace(
+    /\bCameroon\b/g,
+    t('rentals.searchFirst.marketCameroon', 'Cameroon')
+  );
   return (
     <View style={{ flex: 1, backgroundColor: colors.pageBackground }} testID={`rental-search-${props.mode}`}>
-      <ScrollView contentContainerStyle={{ padding: spacing.md, paddingBottom: props.bottomInset + spacing.lg }} keyboardShouldPersistTaps="handled">
+      <View
+        testID="rental-search-pinned"
+        style={{
+          backgroundColor: colors.pageBackground,
+          paddingTop: (props.topInset ?? 0) + spacing.sm,
+          paddingHorizontal: spacing.md,
+          paddingBottom: spacing.xs,
+          zIndex: 2,
+        }}
+      >
         <View style={styles.header}>
           {props.mode === 'landing' ? <View style={styles.backSpacer} /> : (
             <Pressable onPress={props.onBack} accessibilityRole="button" testID="rental-search-back">
@@ -94,7 +109,7 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
           <View style={styles.backSpacer} />
         </View>
         {props.mode === 'landing' ? (
-          <Text style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>{props.marketLabel}</Text>
+          <Text style={{ color: colors.text.secondary, marginBottom: spacing.sm }}>{marketLabel}</Text>
         ) : null}
         <View style={[styles.search, { borderColor: props.mode === 'typing' ? colors.primary.main : colors.divider, backgroundColor: colors.surface, borderRadius: borderRadius.lg }]}>
           <MaterialCommunityIcons name="magnify" size={22} color={colors.text.secondary} />
@@ -120,6 +135,11 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
           ) : null}
         </View>
         <DateRow {...props} label={showDates} />
+      </View>
+      <ScrollView
+        contentContainerStyle={{ paddingHorizontal: spacing.md, paddingBottom: props.bottomInset + spacing.lg }}
+        keyboardShouldPersistTaps="handled"
+      >
         {props.mode === 'typing' ? <Typing {...props} /> : null}
         {props.mode === 'landing' ? <Landing {...props} /> : null}
         {props.mode === 'browse' || props.mode === 'results' ? <Filters {...props} /> : null}
@@ -128,6 +148,7 @@ export function RentalSearchFirstView(props: RentalSearchFirstViewProps) {
       <RentalSearchDateSheet
         visible={props.dateSheetOpen}
         value={props.draftDates}
+        timeZone={props.timeZone}
         onChange={props.onDraftDates}
         onApply={props.onApplyDates}
         onClose={props.onCloseDates}
@@ -202,9 +223,6 @@ function Landing(props: RentalSearchFirstViewProps) {
         <Text style={{ color: colors.text.secondary, textAlign: 'center', marginTop: 8 }}>
           {t('rentals.searchFirst.emptyLanding', 'Search or pick a category')}
         </Text>
-        <Text style={{ color: colors.text.secondary, textAlign: 'center' }}>
-          {t('rentals.searchFirst.noFeed', 'No scrolling feed on landing')}
-        </Text>
       </View>
     </View>
   );
@@ -215,7 +233,7 @@ function CategoryRow({ categories, moreCategories, moreOpen, activeCategoryId, o
   const { colors } = useTheme();
   const shown = moreOpen ? [...categories, ...moreCategories] : categories;
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.iconRow}>
+    <View style={styles.iconRow}>
       {shown.map((category) => {
         const active = category.id === activeCategoryId;
         return (
@@ -233,7 +251,7 @@ function CategoryRow({ categories, moreCategories, moreOpen, activeCategoryId, o
         </View>
         <Text style={{ color: colors.text.primary, fontSize: 12 }}>{t('rentals.searchFirst.more', 'More')}</Text>
       </Pressable>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -252,7 +270,9 @@ function Typing({ suggestions, recent, onSuggestion, onRecent }: RentalSearchFir
           </View>
         </Pressable>
       ))}
-      <Text style={[styles.section, { color: colors.text.secondary }]}>{t('rentals.searchFirst.recent', 'RECENT')}</Text>
+      {recent.length > 0 ? (
+        <Text style={[styles.section, { color: colors.text.secondary }]}>{t('rentals.searchFirst.recent', 'RECENT')}</Text>
+      ) : null}
       {recent.map((term, index) => (
         <Pressable key={`${term}-${index}`} onPress={() => onRecent(term)} testID={`rental-search-recent-${index}`} style={[styles.suggest, { backgroundColor: colors.surface, borderColor: colors.divider, borderRadius: borderRadius.md }]}>
           <MaterialCommunityIcons name="clock-outline" size={18} color={colors.text.secondary} />
@@ -268,7 +288,7 @@ function Filters(props: RentalSearchFirstViewProps) {
   const activeName = [...props.categories, ...props.moreCategories].find((row) => row.id === props.activeCategoryId)?.name;
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-      {activeName ? (
+      {props.mode !== 'browse' && activeName ? (
         <Chip label={activeName} active onPress={() => props.onCategory(props.activeCategoryId ?? '')} />
       ) : null}
       <Chip label={t('rentals.searchFirst.price', 'Price')} active={props.sortLabel === 'cheapest'} onPress={props.onToggleCheapest} />
@@ -361,7 +381,7 @@ const styles = StyleSheet.create({
   input: { flex: 1, fontSize: 16, paddingVertical: 10 },
   dateRow: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, padding: 12, gap: 10 },
   section: { fontSize: 12, fontWeight: '700', letterSpacing: 0.4, marginTop: 16, marginBottom: 8 },
-  iconRow: { gap: 12, paddingVertical: 4 },
+  iconRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, paddingVertical: 4 },
   iconItem: { width: 72, alignItems: 'center', gap: 4 },
   iconBubble: { width: 52, height: 52, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   browseRow: { marginTop: 12 },

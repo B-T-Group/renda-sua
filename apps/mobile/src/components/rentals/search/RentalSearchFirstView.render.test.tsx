@@ -106,7 +106,10 @@ describe('search-first rentals', () => {
     expect(view.getByTestId('rental-search-skip-dates')).toBeTruthy();
     expect(view.getByTestId('rental-search-browse-all')).toBeTruthy();
     expect(view.getByText('Cameras')).toBeTruthy();
-    expect(view.getByText('No scrolling feed on landing')).toBeTruthy();
+    expect(view.getByText('Search or pick a category')).toBeTruthy();
+    expect(view.getByTestId('rental-search-more')).toBeTruthy();
+    expect(view.getByTestId('rental-search-pinned')).toBeTruthy();
+    expect(view.queryByText('No scrolling feed on landing')).toBeNull();
     expect(view.queryByText('My rentals')).toBeNull();
     expect(view.queryByText('Canon EOS R50 kit')).toBeNull();
   });
@@ -201,11 +204,41 @@ describe('search-first rentals', () => {
     }
     const view = await renderWithProviders(<Sheet />);
     expect(view.getByTestId('rental-search-dates-blank')).toBeTruthy();
+    expect(view.getByText('Today')).toBeTruthy();
+    expect(view.getByText('This weekend')).toBeTruthy();
+    expect(view.getByText('1 week')).toBeTruthy();
     await act(async () => {
       fireEvent.press(view.getByTestId('rental-search-quick-today'));
     });
+    expect(view.getByTestId('rental-search-quick-today').props.accessibilityState).toMatchObject({ selected: true });
     expect(view.queryByTestId('rental-search-dates-blank')).toBeNull();
     expect(view.getByTestId('rental-search-apply-dates')).toBeTruthy();
+  });
+
+  it('greys out days before today and opens on the current month', async () => {
+    const onChange = jest.fn();
+    const view = await renderWithProviders(
+      <ThemeProvider>
+        <RentalSearchDateSheet
+          visible
+          now={new Date(2026, 10, 10)}
+          timeZone="Africa/Douala"
+          value={null}
+          onChange={onChange}
+          onApply={() => undefined}
+          onClose={() => undefined}
+        />
+      </ThemeProvider>
+    );
+    expect(view.getByText('November 2026')).toBeTruthy();
+    expect(view.getByTestId('rental-search-day-2026-11-01').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(view.getByTestId('rental-search-day-2026-11-09').props.accessibilityState).toMatchObject({ disabled: true });
+    expect(view.getByTestId('rental-search-cal-prev').props.accessibilityState).toMatchObject({ disabled: true });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-day-2026-11-01'));
+    });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(view.getByTestId('rental-search-dates-blank')).toBeTruthy();
   });
 
   it('explains a range over 30 days in English and does not apply it', async () => {
@@ -231,13 +264,13 @@ describe('search-first rentals', () => {
     }
     const view = await renderWithProviders(<Sheet />);
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-11-01'));
+      fireEvent.press(view.getByTestId('rental-search-day-2026-11-10'));
     });
     await act(async () => {
       fireEvent.press(view.getByTestId('rental-search-cal-next'));
     });
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-12-02'));
+      fireEvent.press(view.getByTestId('rental-search-day-2026-12-11'));
     });
     expect(view.getByTestId('rental-search-dates-too-long').props.children).toContain('31 days');
     expect(view.getByText(/30 days or fewer/)).toBeTruthy();
@@ -267,13 +300,13 @@ describe('search-first rentals', () => {
     }
     const view = await renderWithProviders(<Sheet />);
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-11-01'));
+      fireEvent.press(view.getByTestId('rental-search-day-2026-11-10'));
     });
     await act(async () => {
       fireEvent.press(view.getByTestId('rental-search-cal-next'));
     });
     await act(async () => {
-      fireEvent.press(view.getByTestId('rental-search-day-2026-12-02'));
+      fireEvent.press(view.getByTestId('rental-search-day-2026-12-11'));
     });
     expect(view.getByText('Cette période compte 31 jours. Choisissez 30 jours ou moins.')).toBeTruthy();
   });
@@ -294,5 +327,31 @@ describe('search-first rentals', () => {
     expect(view.getByText('QUAND EN AVEZ-VOUS BESOIN ?')).toBeTruthy();
     expect(view.getByText('Ajoutez le début et la fin')).toBeTruthy();
     expect(view.getByText('Ignorer')).toBeTruthy();
+    expect(view.getByText('Locations')).toBeTruthy();
+    expect(view.getByText(/pour vos dates/)).toBeTruthy();
+    expect(view.queryByText('Aucun fil à faire défiler sur cette page')).toBeNull();
+  });
+
+  it('hides the recent header when nothing has been searched', async () => {
+    const view = await renderSearch({ mode: 'typing', query: 'zz', suggestions: [], recent: [] });
+    expect(view.getByText('SUGGESTIONS')).toBeTruthy();
+    expect(view.queryByText('RECENT')).toBeNull();
+  });
+
+  it('keeps the browse tile and drops the duplicate category chip', async () => {
+    const view = await renderSearch({
+      mode: 'browse',
+      categories: [{ id: 'equip', name: 'Equipment' }],
+      activeCategoryId: 'equip',
+      cards: [],
+    });
+    expect(view.getAllByText('Equipment')).toHaveLength(1);
+    expect(view.getByTestId('rental-search-more')).toBeTruthy();
+  });
+
+  it('names Cameroon in French on the landing', async () => {
+    await i18n.changeLanguage('fr');
+    const view = await renderSearch({ marketLabel: 'Cameroon' });
+    expect(view.getByText('Cameroun')).toBeTruthy();
   });
 });

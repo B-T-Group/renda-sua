@@ -33,10 +33,11 @@ import type {
 } from '../../navigation/types';
 import { searchRentals } from '../../services/rentalSearchApi';
 import { merchantCanAcceptOrders } from '../../utils/merchantLifecycle';
-import { formatRentalMoney } from '../../utils/rentals';
+import { formatRentalMoney, formatSearchMoney } from '../../utils/rentals';
 import {
   formatRangeDates,
   formatSingleDate,
+  marketTimeZone,
   publishRentalSearchStay,
   type RentalDateRange,
 } from '../../utils/rentals/rentalSearchDates';
@@ -800,7 +801,7 @@ export default function RentalListingDetailScreen() {
       quoteLabel={
         quotedTotal != null && !unavailableLabel
           ? t('rentals.searchFirst.sheetTotal', 'Total · {{amount}}', {
-              amount: formatRentalMoney(quotedTotal, currency),
+              amount: formatSearchMoney(quotedTotal, currency, i18n.language),
             })
           : undefined
       }
@@ -809,6 +810,7 @@ export default function RentalListingDetailScreen() {
     <RentalSearchDateSheet
       visible={editOpen}
       value={draftStay}
+      timeZone={marketTimeZone(geo.country_code)}
       onChange={setDraftStay}
       onApply={() => {
         if (!draftStay || draftStay.dayCount < 1 || draftStay.dayCount > 30) return;

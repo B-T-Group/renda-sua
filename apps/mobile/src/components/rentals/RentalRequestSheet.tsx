@@ -133,20 +133,31 @@ export function RentalRequestSheet({
             </Text>
           ) : null}
           {quoteLabel && !unavailableLabel ? (
-            <Text
-              testID="rental-request-quote"
-              style={[
-                typography.subtitle1,
-                {
-                  color: colors.primary.main,
-                  fontWeight: '700',
-                  paddingHorizontal: spacing.md,
-                  marginTop: spacing.xs,
-                },
-              ]}
-            >
-              {quoteLabel}
-            </Text>
+            <View style={{ paddingHorizontal: spacing.md, marginTop: spacing.xs }}>
+              <Text
+                testID="rental-request-quote"
+                style={[
+                  typography.subtitle1,
+                  {
+                    color: colors.primary.main,
+                    fontWeight: '700',
+                  },
+                ]}
+              >
+                {quoteLabel}
+              </Text>
+              {dateLine ? (
+                <Text
+                  testID="rental-request-trust"
+                  style={[typography.caption, { color: colors.text.secondary, marginTop: 2 }]}
+                >
+                  {t(
+                    'rentals.searchFirst.nothingCharged',
+                    'Nothing is charged until the business accepts.'
+                  )}
+                </Text>
+              ) : null}
+            </View>
           ) : null}
           <ScrollView
             keyboardShouldPersistTaps="handled"

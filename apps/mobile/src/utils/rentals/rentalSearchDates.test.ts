@@ -1,7 +1,9 @@
 import {
+  calendarDateInTimeZone,
   describeRentalDateRange,
   formatRangeDates,
   formatSheetDateLine,
+  marketTimeZone,
   nearbyRanges,
   publishRentalSearchStay,
   rangeFromNextStart,
@@ -52,6 +54,16 @@ describe('rental search dates', () => {
     stop();
     publishRentalSearchStay({ startDate: '2026-11-20', endDate: '2026-11-21', dayCount: 1 });
     expect(seen).toEqual(['2026-11-16']);
+  });
+
+  it('uses the Cameroon clock for today, including just before UTC midnight', () => {
+    expect(marketTimeZone('cm')).toBe('Africa/Douala');
+    expect(calendarDateInTimeZone(new Date('2026-11-09T23:30:00Z'), 'Africa/Douala')).toMatchObject({
+      year: 2026,
+      month: 11,
+      day: 10,
+      iso: '2026-11-10',
+    });
   });
 
   it('reports a span over 30 days instead of dropping it', () => {

@@ -528,9 +528,10 @@ export function RentalSlotPicker({
             {t('rentals.detail.requestSubtitle', 'Choose your dates. The business will confirm availability.')}
           </Text>
         )}
-        <Button
-          mode="contained"
-          style={{ marginTop: spacing.md }}
+        <Pressable
+          testID="rental-request-sign-in"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: requestBusy }}
           disabled={requestBusy}
           onPress={() => {
             if (requestBusy) return;
@@ -542,9 +543,27 @@ export function RentalSlotPicker({
               navigation as unknown as NativeStackNavigationProp<GuestRootStackParamList>
             ).navigate('GuestTabs', { screen: 'GuestAuth', params: { screen: 'Login' } });
           }}
+          style={{
+            marginTop: spacing.md,
+            backgroundColor: colors.primary.main,
+            opacity: requestBusy ? 0.5 : 1,
+            borderRadius: borderRadius.md,
+            paddingVertical: 12,
+            paddingHorizontal: 16,
+            alignItems: 'center',
+          }}
         >
-          {t('client.rentals.loginToRequest', 'Sign in to request a rental')}
-        </Button>
+          <Text
+            style={{
+              color: colors.primary.contrast,
+              fontWeight: '700',
+              textAlign: 'center',
+              lineHeight: 20,
+            }}
+          >
+            {t('rentals.searchFirst.signInToRequest', 'Sign in to request a rental')}
+          </Text>
+        </Pressable>
       </View>
     );
   }

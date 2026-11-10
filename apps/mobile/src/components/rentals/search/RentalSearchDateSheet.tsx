@@ -5,12 +5,12 @@ import { Button, Text } from 'react-native-paper';
 import { AppModal } from '../../common/AppModal';
 import { useTheme } from '../../../contexts/ThemeContext';
 import {
+  calendarDateInTimeZone,
   describeRentalDateRange,
   formatIsoDate,
   formatRangeDates,
   MAX_RENTAL_SEARCH_DAYS,
   parseIsoLocal,
-  startOfLocalDay,
   todayRange,
   weekRange,
   weekendRange,
@@ -21,6 +21,7 @@ export function RentalSearchDateSheet({
   visible,
   value,
   now = new Date(),
+  timeZone,
   onChange,
   onApply,
   onClose,
@@ -28,13 +29,17 @@ export function RentalSearchDateSheet({
   visible: boolean;
   value: RentalDateRange | null;
   now?: Date;
+  /** Market zone. Past days and the opening month follow this clock. */
+  timeZone?: string;
   onChange: (range: RentalDateRange | null) => void;
   onApply: () => void;
   onClose: () => void;
 }) {
   const { t, i18n } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
-  const [cursor, setCursor] = useState(() => startOfLocalDay(now));
+  const today = calendarDateInTimeZone(now, timeZone);
+  const marketNow = new Date(today.year, today.month - 1, today.day, 12);
+  const [cursor, setCursor] = useState(() => new Date(today.year, today.month - 1, 1));
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
   const [tooLong, setTooLong] = useState<number | null>(null);
@@ -44,18 +49,20 @@ export function RentalSearchDateSheet({
     setStart(value?.startDate ?? null);
     setEnd(value?.endDate ?? null);
     setTooLong(null);
-    const anchor = value ? parseIsoLocal(value.startDate) : startOfLocalDay(now);
-    if (anchor) setCursor(anchor);
+    const opened = calendarDateInTimeZone(now, timeZone);
+    const anchor = value && value.startDate >= opened.iso ? parseIsoLocal(value.startDate) : null;
+    setCursor(anchor ?? new Date(opened.year, opened.month - 1, 1));
     // Reset only when the sheet opens. A too-long tap clears `value` and must keep the selection.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
   const picks = [
-    { id: 'today', label: t('rentals.searchFirst.today', 'Today'), range: todayRange(now) },
-    { id: 'weekend', label: t('rentals.searchFirst.weekend', 'This weekend'), range: weekendRange(now) },
-    { id: 'week', label: t('rentals.searchFirst.oneWeek', '1 week'), range: weekRange(now) },
+    { id: 'today', label: t('rentals.searchFirst.today', 'Today'), range: todayRange(marketNow) },
+    { id: 'weekend', label: t('rentals.searchFirst.weekend', 'This weekend'), range: weekendRange(marketNow) },
+    { id: 'week', label: t('rentals.searchFirst.oneWeek', '1 week'), range: weekRange(marketNow) },
   ];
   const canApply = Boolean(value) && tooLong == null && (value?.dayCount ?? 0) <= MAX_RENTAL_SEARCH_DAYS;
+  const atCurrentMonth = cursor.getFullYear() === today.year && cursor.getMonth() === today.month - 1;
   const monthLabel = new Intl.DateTimeFormat(i18n.language, { month: 'long', year: 'numeric' }).format(cursor);
   const cells = monthCells(cursor.getFullYear(), cursor.getMonth());
 
@@ -69,6 +76,7 @@ export function RentalSearchDateSheet({
   }
 
   function onDay(iso: string) {
+    if (iso < today.iso) return;
     if (!start || end) {
       setStart(iso);
       setEnd(null);
@@ -140,8 +148,16 @@ export function RentalSearchDateSheet({
             </Text>
           ) : null}
           <View style={styles.monthRow}>
-            <Pressable onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1))} testID="rental-search-cal-prev" accessibilityRole="button">
-              <Text style={{ color: colors.primary.main, fontWeight: '700' }}>‹</Text>
+            <Pressable
+              onPress={() => {
+                if (atCurrentMonth) return;
+                setCursor(new Date(cursor.getFullYear(), cursor.getMonth() - 1, 1));
+              }}
+              testID="rental-search-cal-prev"
+              accessibilityRole="button"
+              accessibilityState={{ disabled: atCurrentMonth }}
+            >
+              <Text style={{ color: atCurrentMonth ? colors.text.disabled : colors.primary.main, fontWeight: '700' }}>‹</Text>
             </Pressable>
             <Text style={{ color: colors.text.primary, fontWeight: '700' }}>{monthLabel}</Text>
             <Pressable onPress={() => setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1))} testID="rental-search-cal-next" accessibilityRole="button">
@@ -152,13 +168,16 @@ export function RentalSearchDateSheet({
             {cells.map((day, index) => {
               if (!day) return <View key={`pad-${index}`} style={styles.day} />;
               const iso = formatIsoDate(day);
-              const selected = iso === start || iso === end;
-              const inside = Boolean(start && end && iso > start && iso < end);
+              const past = iso < today.iso;
+              const selected = !past && (iso === start || iso === end);
+              const inside = !past && Boolean(start && end && iso > start && iso < end);
               return (
                 <Pressable
                   key={iso}
                   testID={`rental-search-day-${iso}`}
                   onPress={() => onDay(iso)}
+                  disabled={past}
+                  accessibilityState={{ disabled: past }}
                   style={[
                     styles.day,
                     {
@@ -167,7 +186,7 @@ export function RentalSearchDateSheet({
                     },
                   ]}
                 >
-                  <Text style={{ color: selected ? colors.primary.contrast : colors.text.primary, fontSize: 13 }}>
+                  <Text style={{ color: past ? colors.text.disabled : selected ? colors.primary.contrast : colors.text.primary, fontSize: 13 }}>
                     {day.getDate()}
                   </Text>
                 </Pressable>
@@ -175,17 +194,36 @@ export function RentalSearchDateSheet({
             })}
           </View>
           <View style={styles.picks}>
-            {picks.map((pick) => (
-              <Button
-                key={pick.id}
-                mode={value?.startDate === pick.range.startDate && value.endDate === pick.range.endDate ? 'contained' : 'outlined'}
-                buttonColor={colors.primary.main}
-                onPress={() => choose(pick.range)}
-                testID={`rental-search-quick-${pick.id}`}
-              >
-                {pick.label}
-              </Button>
-            ))}
+            {picks.map((pick) => {
+              const selected = value?.startDate === pick.range.startDate && value?.endDate === pick.range.endDate;
+              return (
+                <Pressable
+                  key={pick.id}
+                  onPress={() => choose(pick.range)}
+                  testID={`rental-search-quick-${pick.id}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  style={[
+                    styles.pick,
+                    {
+                      backgroundColor: selected ? colors.primary.main : colors.surface,
+                      borderColor: colors.primary.main,
+                      borderRadius: borderRadius.md,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      color: selected ? colors.primary.contrast : colors.primary.main,
+                      fontWeight: '700',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {pick.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
           <Button
             mode="contained"
@@ -219,5 +257,6 @@ const styles = StyleSheet.create({
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   day: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
-  picks: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 8 },
+  picks: { flexDirection: 'row', gap: 8, marginVertical: 8 },
+  pick: { flex: 1, borderWidth: 1, minHeight: 40, paddingHorizontal: 6, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
 });

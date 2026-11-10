@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
 import { useTheme } from '../../../contexts/ThemeContext';
-import { formatRentalMoney } from '../../../utils/rentals';
+import { formatSearchMoney } from '../../../utils/rentals';
 import { formatSingleDate } from '../../../utils/rentals/rentalSearchDates';
 
 export interface RentalSearchCardModel {
@@ -32,7 +32,7 @@ export function RentalSearchResultCard({
 }) {
   const { t, i18n } = useTranslation();
   const { colors, borderRadius, spacing } = useTheme();
-  const daily = formatRentalMoney(card.pricePerDay, card.currency);
+  const daily = formatSearchMoney(card.pricePerDay, card.currency, i18n.language);
   const showAvailability = card.available != null && card.rangeLabel;
   return (
     <View
@@ -76,11 +76,11 @@ export function RentalSearchResultCard({
           <Text style={{ color: colors.text.secondary }} testID={`rental-search-total-${card.id}`}>
             {card.totalIsEstimate
               ? t('rentals.searchFirst.totalEstimate', 'Est. {{amount}} for {{count}} days', {
-                  amount: formatRentalMoney(card.totalForDates, card.currency),
+                  amount: formatSearchMoney(card.totalForDates, card.currency, i18n.language),
                   count: card.dayCount,
                 })
               : t('rentals.searchFirst.totalFor', 'Total · {{amount}} for {{count}} days', {
-                  amount: formatRentalMoney(card.totalForDates, card.currency),
+                  amount: formatSearchMoney(card.totalForDates, card.currency, i18n.language),
                   count: card.dayCount,
                 })}
           </Text>

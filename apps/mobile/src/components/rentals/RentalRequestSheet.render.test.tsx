@@ -57,6 +57,7 @@ describe('rental request sheet dates', () => {
     });
     expect(view.getByTestId('rental-request-dates').props.children).toBe('14–16 Nov · 2 days');
     expect(view.getByText('Total · FCFA 800')).toBeTruthy();
+    expect(view.getByText('Nothing is charged until the business accepts.')).toBeTruthy();
     expect(view.queryByTestId('rental-request-choose-dates')).toBeNull();
     await act(async () => {
       fireEvent.press(view.getByTestId('rental-request-edit-dates'));
@@ -70,9 +71,12 @@ describe('rental request sheet dates', () => {
       dateLine: dateLine(),
       onEditDates: () => undefined,
       datesFilled: true,
+      quoteLabel: 'Total · 800 FCFA',
     });
     expect(view.getByTestId('rental-request-dates').props.children).toBe('14–16 nov. · 2 jours');
     expect(view.getByText('Modifier')).toBeTruthy();
+    expect(view.getByText('Se connecter pour demander')).toBeTruthy();
+    expect(view.getByText('Rien n’est débité tant que l’entreprise n’a pas accepté.')).toBeTruthy();
   });
 
   it('keeps the empty-date prompt when no dates are filled', async () => {
