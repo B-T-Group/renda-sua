@@ -85,6 +85,19 @@ function openedDayCount(rows: SelectionRange[]): number {
   return allDay || rows.length;
 }
 
+function selectionPeriodWindows(rows: SelectionRange[]) {
+  return rows.map((row) => {
+    const start = localPickerInstantToRequestParts(row.startMs);
+    const end = localPickerInstantToRequestParts(row.endMs);
+    return {
+      billing: row.billing,
+      calendar_date: row.calendarDate,
+      start_at: requestedSlotUtcIso(start.dateKey, start.hour, start.minute),
+      end_at: requestedSlotUtcIso(end.dateKey, end.hour, end.minute),
+    };
+  });
+}
+
 function formatSlotTime(ms: number, locale?: string): string {
   try {
     return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(
@@ -639,20 +652,10 @@ export function RentalSlotPicker({
     const dayCountLabel = (count: number) =>
       t('rentals.requestForm.dayCount', '{{count}} day', { count });
     const shownDateLine = modifying && effectiveSelections.length
-      ? formatRentalPeriod(
-          effectiveSelections.map((row) => {
-            const start = localPickerInstantToRequestParts(row.startMs);
-            const end = localPickerInstantToRequestParts(row.endMs);
-            return {
-              billing: row.billing,
-              calendar_date: row.calendarDate,
-              start_at: requestedSlotUtcIso(start.dateKey, start.hour, start.minute),
-              end_at: requestedSlotUtcIso(end.dateKey, end.hour, end.minute),
-            };
-          }),
-          i18n.language,
-          dayCountLabel
-        )
+      ? formatRentalPeriod(selectionPeriodWindows(effectiveSelections), i18n.language, dayCountLabel)
+      : dateLine;
+    const savedDateLine = modifying && savedSelections?.length
+      ? formatRentalPeriod(selectionPeriodWindows(savedSelections), i18n.language, dayCountLabel)
       : dateLine;
     const selectedKeys = selectedRequestDateKeys(selections);
     const price = requestBlocked
@@ -814,7 +817,7 @@ export function RentalSlotPicker({
           rows={[
             {
               label: t('rentals.modify.dates', 'Dates'),
-              from: dateLine ?? '',
+              from: savedDateLine ?? '',
               to: shownDateLine ?? '',
             },
             {
