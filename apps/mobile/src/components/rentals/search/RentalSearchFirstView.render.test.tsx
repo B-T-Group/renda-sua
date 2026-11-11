@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { StyleSheet } from 'react-native';
 import { act, cleanup, fireEvent } from '@testing-library/react-native';
 import { renderWithProviders } from '@/__tests__/test-utils';
 import { ThemeProvider } from '@/contexts/ThemeContext';
@@ -86,6 +87,35 @@ function renderSearch(over: Partial<RentalSearchFirstViewProps> = {}) {
     <ThemeProvider>
       <RentalSearchFirstView {...props(over)} />
     </ThemeProvider>
+  );
+}
+
+type StyledNode = { props: { style?: unknown }; children: Array<StyledNode | string> };
+
+function firstChild(node: StyledNode): StyledNode | null {
+  const child = node.children.find((item) => typeof item !== 'string');
+  return child ?? null;
+}
+
+function centeredDay(cell: StyledNode): boolean {
+  const cellStyle = StyleSheet.flatten(cell.props.style);
+  const wrap = firstChild(cell);
+  const text = wrap ? firstChild(wrap) : null;
+  const wrapStyle = wrap ? StyleSheet.flatten(wrap.props.style) : null;
+  const textStyle = text ? StyleSheet.flatten(text.props.style) : null;
+  return (
+    cellStyle?.alignItems === 'center' &&
+    cellStyle?.justifyContent === 'center' &&
+    cellStyle?.lineHeight == null &&
+    cellStyle?.paddingTop == null &&
+    wrapStyle?.alignItems === 'center' &&
+    wrapStyle?.justifyContent === 'center' &&
+    textStyle?.textAlign === 'center' &&
+    textStyle?.textAlignVertical === 'center' &&
+    textStyle?.includeFontPadding === false &&
+    textStyle?.lineHeight == null &&
+    textStyle?.padding === 0 &&
+    textStyle?.paddingTop === 0
   );
 }
 
@@ -240,6 +270,37 @@ describe('search-first rentals', () => {
     });
     expect(onChange).not.toHaveBeenCalled();
     expect(view.getByTestId('rental-search-dates-blank')).toBeTruthy();
+    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-01'))).toBe(true);
+  });
+
+  it('centers day numbers for open, in-range, and range-end cells', async () => {
+    function Sheet() {
+      const [value, setValue] = useState<RentalDateRange | null>(null);
+      return (
+        <ThemeProvider>
+          <RentalSearchDateSheet
+            visible
+            now={new Date(2026, 10, 10)}
+            value={value}
+            onChange={setValue}
+            onApply={() => undefined}
+            onClose={() => undefined}
+          />
+        </ThemeProvider>
+      );
+    }
+    const view = await renderWithProviders(<Sheet />);
+    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-20'))).toBe(true);
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-day-2026-11-11'));
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId('rental-search-day-2026-11-19'));
+    });
+    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-11'))).toBe(true);
+    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-15'))).toBe(true);
+    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-19'))).toBe(true);
+    expect(centeredDay(view.getByTestId('rental-search-day-2026-11-01'))).toBe(true);
   });
 
   it('explains a range over 30 days in English and does not apply it', async () => {

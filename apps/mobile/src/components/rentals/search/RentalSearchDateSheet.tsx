@@ -43,6 +43,7 @@ export function RentalSearchDateSheet({
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
   const [tooLong, setTooLong] = useState<number | null>(null);
+  const [daySize, setDaySize] = useState(0);
 
   useEffect(() => {
     if (!visible) return;
@@ -164,9 +165,15 @@ export function RentalSearchDateSheet({
               <Text style={{ color: colors.primary.main, fontWeight: '700' }}>›</Text>
             </Pressable>
           </View>
-          <View style={styles.grid}>
+          <View
+            style={styles.grid}
+            onLayout={(event) => {
+              const next = event.nativeEvent.layout.width / 7;
+              setDaySize((prev) => (Math.abs(prev - next) < 0.5 ? prev : next));
+            }}
+          >
             {cells.map((day, index) => {
-              if (!day) return <View key={`pad-${index}`} style={styles.day} />;
+              if (!day) return <View key={`pad-${index}`} style={[styles.day, dayFrame(daySize)]} />;
               const iso = formatIsoDate(day);
               const past = iso < today.iso;
               const selected = !past && (iso === start || iso === end);
@@ -180,15 +187,17 @@ export function RentalSearchDateSheet({
                   accessibilityState={{ disabled: past }}
                   style={[
                     styles.day,
+                    dayFrame(daySize),
                     {
                       backgroundColor: selected ? colors.primary.main : inside ? colors.primary.main + '22' : 'transparent',
                       borderRadius: borderRadius.sm,
                     },
                   ]}
                 >
-                  <Text style={{ color: past ? colors.text.disabled : selected ? colors.primary.contrast : colors.text.primary, fontSize: 13 }}>
-                    {day.getDate()}
-                  </Text>
+                  <DayNumber
+                    label={day.getDate()}
+                    color={past ? colors.text.disabled : selected ? colors.primary.contrast : colors.text.primary}
+                  />
                 </Pressable>
               );
             })}
@@ -243,6 +252,19 @@ export function RentalSearchDateSheet({
   );
 }
 
+function dayFrame(size: number): { width: number; height: number } | null {
+  if (size <= 0) return null;
+  return { width: size, height: size };
+}
+
+function DayNumber({ label, color }: { label: number; color: string }) {
+  return (
+    <View pointerEvents="none" style={styles.dayNumberWrap}>
+      <Text style={[styles.dayNumber, { color }]}>{label}</Text>
+    </View>
+  );
+}
+
 function monthCells(year: number, month: number): Array<Date | null> {
   const first = new Date(year, month, 1);
   const count = new Date(year, month + 1, 0).getDate();
@@ -256,7 +278,27 @@ const styles = StyleSheet.create({
   sheet: { gap: 8 },
   monthRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 },
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  day: { width: '14.28%', aspectRatio: 1, alignItems: 'center', justifyContent: 'center' },
+  day: {
+    width: '14.28%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayNumberWrap: {
+    flex: 1,
+    alignSelf: 'stretch',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayNumber: {
+    fontSize: 13,
+    textAlign: 'center',
+    textAlignVertical: 'center',
+    includeFontPadding: false,
+    margin: 0,
+    padding: 0,
+    paddingTop: 0,
+  },
   picks: { flexDirection: 'row', gap: 8, marginVertical: 8 },
   pick: { flex: 1, borderWidth: 1, minHeight: 40, paddingHorizontal: 6, paddingVertical: 8, alignItems: 'center', justifyContent: 'center' },
 });
