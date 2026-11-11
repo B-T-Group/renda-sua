@@ -24,6 +24,7 @@ import {
   rentalEditWindowOpen,
   rentalSelectionFingerprint,
   RENTAL_EDIT_LEAD_MS,
+  readPriceConfirmQuote,
 } from './rentalRequestFormat';
 
 const NBSP = '\u00A0';
@@ -489,5 +490,15 @@ describe('bookingRequestedPeriodLines', () => {
   it('returns nothing when the booking has neither windows nor a span', () => {
     expect(bookingPeriodWindows([], null)).toEqual([]);
     expect(bookingRequestedPeriodLines([], { start_at: '', end_at: '' }, 'en', days)).toEqual([]);
+  });
+});
+
+describe('readPriceConfirmQuote', () => {
+  it('reads the server quote only from PRICE_CONFIRM_REQUIRED', () => {
+    expect(readPriceConfirmQuote({
+      code: 'PRICE_CONFIRM_REQUIRED',
+      data: { quote: { total: 1140, currency: 'XAF', previousTotal: 760 } },
+    })).toEqual({ total: 1140, currency: 'XAF', previousTotal: 760 });
+    expect(readPriceConfirmQuote({ code: 'RENTAL_REQUEST_UNAVAILABLE' })).toBeNull();
   });
 });
