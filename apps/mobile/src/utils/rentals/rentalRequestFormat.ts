@@ -1,7 +1,6 @@
 import { formatSelectionLabel, localDateKey, type SelectionRange } from './rentalRequestScheduleUtils';
 import { formatRentalMoney } from './rentalRequestDisplay';
 
-const NARROW_NO_BREAK_SPACE = '\u202f';
 const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function groupedDigits(amount: number, separator: string): string {
@@ -27,7 +26,7 @@ export function formatRequestAmount(amount: number, currency: string, language: 
   const code = currency.toUpperCase();
   if (code === 'XAF' || code === 'FCFA') {
     const french = language.toLowerCase().startsWith('fr');
-    const grouped = groupedDigits(amount, french ? NARROW_NO_BREAK_SPACE : ',');
+    const grouped = groupedDigits(amount, ' ');
     return `${grouped} FCFA`;
   }
   return formatRentalMoney(amount, currency);
@@ -160,4 +159,121 @@ function hourlyPriceCopy(
 
 function withUnits(line: string, units: number): string {
   return units > 1 ? `${line} × ${units}` : line;
+}
+
+const EN_DASH = '\u2013';
+
+export type PeriodWindow = {
+  billing?: string;
+  calendar_date?: string;
+  start_at: string;
+  end_at: string;
+};
+
+/** Listing wall clock is stored as UTC components. Never format with the device zone. */
+export const LISTING_TIME_ZONE = 'Africa/Douala';
+export const RENTAL_EDIT_LEAD_MS = 2 * 60 * 60 * 1000;
+
+export function rentalEditWindowOpen(startIso: string, now = Date.now()): boolean {
+  const start = Date.parse(startIso);
+  return Number.isFinite(start) && start > now + RENTAL_EDIT_LEAD_MS;
+}
+
+function monthLabel(isoDate: string, locale: string): string {
+  const date = utcDate(isoDate);
+  if (!date) return '';
+  const french = locale.toLowerCase().startsWith('fr');
+  const raw = new Intl.DateTimeFormat(french ? 'fr' : 'en', { month: 'short', timeZone: 'UTC' }).format(date);
+  return french ? raw : capitalizeFirst(raw.replace(/\./g, ''));
+}
+
+function dayNum(isoDate: string): number {
+  return Number(isoDate.slice(8, 10));
+}
+
+function exclusiveEnd(isoDate: string): string {
+  return addUtcDays(isoDate, 1);
+}
+
+function sameMonth(left: string, right: string): boolean {
+  return left.slice(0, 7) === right.slice(0, 7);
+}
+
+/** `15–17 Nov` from all-day calendar dates, using the exclusive end day. */
+export function formatRentalDateRange(windows: PeriodWindow[], locale: string): string {
+  const days = windows
+    .map((row) => row.calendar_date)
+    .filter((day): day is string => Boolean(day && ISO_DATE.test(day)))
+    .sort();
+  if (!days.length) return '';
+  const start = days[0];
+  const end = exclusiveEnd(days[days.length - 1]);
+  const startMonth = monthLabel(start, locale);
+  const endMonth = monthLabel(end, locale);
+  if (sameMonth(start, end)) return `${dayNum(start)}${EN_DASH}${dayNum(end)} ${endMonth}`;
+  return `${dayNum(start)} ${startMonth} ${EN_DASH} ${dayNum(end)} ${endMonth}`;
+}
+
+function clock(iso: string): string {
+  const match = /T(\d{2}):(\d{2})/.exec(iso);
+  return match ? `${match[1]}:${match[2]}` : '';
+}
+
+function hourlyLine(row: PeriodWindow, locale: string): string {
+  const day = row.start_at.slice(0, 10);
+  const month = monthLabel(day, locale);
+  return `${dayNum(day)} ${month} · ${clock(row.start_at)}${EN_DASH}${clock(row.end_at)}`;
+}
+
+export function formatRentalPeriod(
+  windows: PeriodWindow[],
+  locale: string,
+  dayCountLabel: (count: number) => string
+): string {
+  if (!windows.length) return '—';
+  const daily = windows.every((row) => row.billing === 'all_day' && row.calendar_date);
+  if (daily) {
+    const count = windows.length;
+    return `${formatRentalDateRange(windows, locale)} · ${dayCountLabel(count)}`;
+  }
+  return windows.map((row) => hourlyLine(row, locale)).join(', ');
+}
+
+export function rentalSelectionFingerprint(
+  rows: Array<{ billing: string; calendarDate?: string; startMs: number; endMs: number }>,
+  units: number,
+  notes: string
+): string {
+  const parts = rows
+    .map((row) => `${row.billing}|${row.calendarDate ?? ''}|${row.startMs}|${row.endMs}`)
+    .sort();
+  return `${parts.join(';')}#${units}#${notes.trim()}`;
+}
+
+export function modifySaveNeedsConfirm(nextTotal: number, previousTotal: number): boolean {
+  return nextTotal > previousTotal + 0.009;
+}
+
+type ChangeSummary = {
+  fields?: string[];
+  dates?: { from: PeriodWindow[]; to: PeriodWindow[] };
+  quantity?: { from: number; to: number };
+};
+
+export function formatChangeDetail(summary: ChangeSummary | null | undefined, locale: string): string {
+  if (!summary?.fields?.length) return '';
+  const bits: string[] = [];
+  if (summary.fields.includes('dates') && summary.dates) {
+    const from = formatRentalDateRange(summary.dates.from, locale);
+    const to = formatRentalDateRange(summary.dates.to, locale);
+    const fromMonth = summary.dates.from[0]?.calendar_date?.slice(0, 7);
+    const toMonth = summary.dates.to[0]?.calendar_date?.slice(0, 7);
+    const left = fromMonth && fromMonth === toMonth ? from.replace(/\s+\S+$/, '') : from;
+    bits.push(`dates ${left} → ${to}`);
+  }
+  if (summary.fields.includes('quantity') && summary.quantity) {
+    bits.push(`quantity ${summary.quantity.from} → ${summary.quantity.to}`);
+  }
+  if (summary.fields.includes('notes')) bits.push('notes');
+  return bits.join(', ');
 }

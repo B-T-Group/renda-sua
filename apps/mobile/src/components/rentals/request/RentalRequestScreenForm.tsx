@@ -24,6 +24,8 @@ export interface RentalRequestScreenFormProps extends RentalRequestScheduleCardP
   sendDisabled: boolean;
   sending: boolean;
   onSend: () => void;
+  previousAmount?: string;
+  legal?: string;
 }
 
 export function RentalRequestScreenForm(props: RentalRequestScreenFormProps) {
@@ -91,6 +93,8 @@ export function RentalRequestScreenForm(props: RentalRequestScreenFormProps) {
         sendDisabled={props.sendDisabled}
         sending={props.sending}
         onSend={props.onSend}
+        previousAmount={props.previousAmount}
+        legal={props.legal}
       />
     </View>
   );

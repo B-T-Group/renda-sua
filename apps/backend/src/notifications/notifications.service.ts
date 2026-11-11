@@ -126,6 +126,7 @@ import {
   buildRentalBookingCancelledPush,
   buildRentalBookingConfirmedPush,
   buildRentalBookingRequestPush,
+  buildRentalRequestUpdatedPush,
   buildRentalBookingReservedPush,
   buildRentalEndingSoonPush,
   buildRentalInspectionNotice,
@@ -3387,6 +3388,76 @@ export class NotificationsService {
         `sendBusinessRentalBookingRequestEmail: ${error?.message ?? String(error)}`
       );
     }
+  }
+
+  /** Push plus an in-app row. Never throws. WhatsApp stays on the original request template. */
+  async sendBusinessRentalRequestUpdated(payload: {
+    businessUserId: string;
+    requestId: string;
+    rentalItemName: string;
+    clientName: string;
+  }): Promise<void> {
+    try {
+      await this.writeRentalRequestUpdatedNotice(payload);
+    } catch (error: any) {
+      this.logger.error(
+        `sendBusinessRentalRequestUpdated: ${error?.message ?? String(error)}`
+      );
+    }
+  }
+
+  private async writeRentalRequestUpdatedNotice(payload: {
+    businessUserId: string;
+    requestId: string;
+    rentalItemName: string;
+    clientName: string;
+  }): Promise<void> {
+    const user = await this.getUserRowForEmail(payload.businessUserId);
+    const msg = buildRentalRequestUpdatedPush({
+      rentalItemName: payload.rentalItemName,
+      clientName: payload.clientName,
+      preferredLanguage: user?.preferred_language,
+    });
+    const links = this.deepLinkService.rentalRequest(payload.requestId);
+    await this.insertRentalRequestUpdatedMessage(payload.businessUserId, payload.requestId, msg.body, links.path);
+    await this.pushRentalRequestUpdated(payload.businessUserId, payload.requestId, msg, links.path);
+  }
+
+  private async insertRentalRequestUpdatedMessage(
+    userId: string,
+    requestId: string,
+    body: string,
+    path: string
+  ): Promise<void> {
+    await this.hasuraSystemService.executeMutation(
+      `mutation InsertRentalRequestUpdated($object: user_messages_insert_input!) {
+        insert_user_messages_one(object: $object) { id }
+      }`,
+      {
+        object: {
+          user_id: userId,
+          entity_type: 'rental_request',
+          entity_id: requestId,
+          message_type: 'RENTAL_REQUEST_UPDATED',
+          message: body,
+          message_payload: { requestId, path },
+        },
+      }
+    );
+  }
+
+  private async pushRentalRequestUpdated(
+    userId: string,
+    requestId: string,
+    msg: { title: string; body: string },
+    path: string
+  ): Promise<void> {
+    if (!this.configService.get<Configuration['push']>('push')?.enabled) return;
+    await this.sendPushNotificationByUserId(userId, msg.title, msg.body, {
+      type: 'rental_request_updated',
+      rentalRequestId: requestId,
+      url: path,
+    });
   }
 
   /** In-app row plus push. WhatsApp is left for a later template. Never throws. */

@@ -1,0 +1,3 @@
+function:
+  name: apply_rental_request_edit
+  schema: public

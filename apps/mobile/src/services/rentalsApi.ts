@@ -241,6 +241,16 @@ export async function getClientBookings(
   return res.data?.bookings ?? [];
 }
 
+export async function modifyRequest(
+  requestId: string,
+  body: CreateRentalRequestBody & { expectedVersion: number }
+): Promise<{ success: boolean; requestId: string; editVersion: number; quotedTotal: number | null }> {
+  return apiRequest(`/rentals/requests/${encodeURIComponent(requestId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+}
+
 export async function createRequest(
   body: CreateRentalRequestBody
 ): Promise<CreateRentalRequestResult> {

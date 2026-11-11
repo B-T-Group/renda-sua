@@ -35,6 +35,7 @@ import type {
   BusinessRentalRequestRow,
   BusinessRentalScheduleRow,
 } from '../../types/rentals';
+import { formatChangeDetail } from '../../utils/rentals/rentalRequestFormat';
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
@@ -70,7 +71,7 @@ const QUEUE_FILTERS: BusinessActionQueue[] = [
 ];
 
 export default function BusinessRentalsStudioScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const listBottomPadding = useMainTabContentBottomPadding(88);
@@ -121,6 +122,7 @@ export default function BusinessRentalsStudioScreen() {
     null
   );
   const [respondReq, setRespondReq] = useState<BusinessRentalRequestRow | null>(null);
+  const [staleBanner, setStaleBanner] = useState(false);
 
   const loadCatalog = useCallback(async () => {
     const list = await rentalsApi.getBusinessItems();
@@ -389,6 +391,19 @@ export default function BusinessRentalsStudioScreen() {
           }
           ListHeaderComponent={
             <View style={{ marginBottom: spacing.md, gap: 8 }}>
+              {staleBanner ? (
+                <View
+                  style={{
+                    backgroundColor: colors.primary.main + '14',
+                    borderRadius: 12,
+                    padding: spacing.sm,
+                  }}
+                >
+                  <Text style={{ color: colors.primary.dark }}>
+                    {t('rentals.modify.staleBanner', 'This request was updated. Review the latest version.')}
+                  </Text>
+                </View>
+              ) : null}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {QUEUE_FILTERS.map((q) => {
                   const selected = queueFilter === q;
@@ -460,20 +475,35 @@ export default function BusinessRentalsStudioScreen() {
                 ]}
               >
                 <View style={styles.rowBetween}>
-                  <Text
-                    style={[typography.subtitle2, { color: colors.text.primary, flex: 1 }]}
-                    numberOfLines={2}
-                  >
-                    {item.rental_location_listing.rental_item.name}
-                  </Text>
                   <StatusPill
                     compact
-                    label={t(phase.labelKey, item.status)}
+                    label={item.status === 'pending' ? t('rentals.modify.requested', 'Requested') : t(phase.labelKey, item.status)}
                     backgroundColor={sc.backgroundColor}
                     textColor={sc.textColor}
                     borderColor={sc.borderColor}
                   />
+                  {(item.change_summary?.fields?.length ?? 0) > 0 ? (
+                    <StatusPill
+                      compact
+                      label={t('rentals.modify.updated', 'Updated')}
+                      backgroundColor={colors.primary.main + '18'}
+                      textColor={colors.primary.main}
+                      borderColor={colors.primary.main + '44'}
+                    />
+                  ) : null}
                 </View>
+                <Text
+                  style={[typography.subtitle2, { color: colors.text.primary, marginTop: 8 }]}
+                >
+                  {item.rental_location_listing.rental_item.name}
+                </Text>
+                {(item.change_summary?.fields?.length ?? 0) > 0 ? (
+                  <Text style={{ color: colors.primary.dark, marginTop: 6, fontSize: 13 }}>
+                    {t('rentals.modify.changed', 'Changed: {{detail}}', {
+                      detail: formatChangeDetail(item.change_summary, i18n.language),
+                    })}
+                  </Text>
+                ) : null}
                 {name ? (
                   <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
                     {name}
@@ -655,6 +685,10 @@ export default function BusinessRentalsStudioScreen() {
           setRespondReq(null);
         }}
         onSuccess={() => void loadRequests()}
+        onStale={() => {
+          setStaleBanner(true);
+          void loadRequests();
+        }}
       />
     </View>
   );

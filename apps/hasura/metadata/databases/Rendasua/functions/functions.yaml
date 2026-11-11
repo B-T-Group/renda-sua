@@ -16,6 +16,7 @@
 - "!include public_rental_record_handback.yaml"
 - "!include public_rental_relabel_unit.yaml"
 - "!include public_rental_request_correction.yaml"
+- "!include public_apply_rental_request_edit.yaml"
 - "!include public_rental_submit_inspection.yaml"
 - "!include public_rental_availability_scan.yaml"
 - "!include public_rental_submit_inspection_with_claim.yaml"

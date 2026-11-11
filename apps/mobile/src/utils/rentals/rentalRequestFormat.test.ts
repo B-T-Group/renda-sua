@@ -8,16 +8,16 @@ import {
   requestDayCount,
   requestUsesDayWording,
   selectedRequestDateKeys,
+  formatChangeDetail,
+  formatRentalPeriod,
 } from './rentalRequestFormat';
-
-const NARROW = '\u202f';
 
 describe('formatRequestAmount', () => {
   it('puts the amount before FCFA in English and French', () => {
     expect(formatRequestAmount(760, 'XAF', 'en')).toBe('760 FCFA');
     expect(formatRequestAmount(380, 'FCFA', 'fr')).toBe('380 FCFA');
-    expect(formatRequestAmount(1140, 'XAF', 'en')).toBe('1,140 FCFA');
-    expect(formatRequestAmount(1140, 'XAF', 'fr')).toBe(`1${NARROW}140 FCFA`);
+    expect(formatRequestAmount(1140, 'XAF', 'en')).toBe('1 140 FCFA');
+    expect(formatRequestAmount(1140, 'XAF', 'fr')).toBe('1 140 FCFA');
   });
 
   it('does not put the currency code in front', () => {
@@ -85,5 +85,44 @@ describe('request chip selection', () => {
     expect(keys).toContain('2026-11-12');
     expect(keys).toContain('2026-12-01');
     expect(keys.indexOf('2026-11-11')).toBeLessThan(keys.indexOf('2026-12-01'));
+  });
+});
+
+const days = (count: number) => (count === 1 ? '1 day' : `${count} days`);
+const jours = (count: number) => (count === 1 ? '1 jour' : `${count} jours`);
+
+describe('formatRentalPeriod', () => {
+  const daily = [
+    { billing: 'all_day', calendar_date: '2026-11-15', start_at: '2026-11-15T00:00:00.000Z', end_at: '2026-11-16T00:00:00.000Z' },
+    { billing: 'all_day', calendar_date: '2026-11-16', start_at: '2026-11-16T00:00:00.000Z', end_at: '2026-11-17T00:00:00.000Z' },
+  ];
+
+  it('shows a daily range in the listing calendar, not a device clock', () => {
+    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201317 Nov · 2 days');
+    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201317 nov. · 2 jours');
+    expect(formatRentalPeriod(daily, 'en', days)).not.toMatch(/PM|AM|2026/);
+  });
+
+  it('shows hourly bookings as a listing wall-clock range', () => {
+    const hourly = [{
+      billing: 'hourly',
+      start_at: '2026-11-15T10:00:00.000Z',
+      end_at: '2026-11-15T14:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(hourly, 'en', days)).toBe('15 Nov · 10:00\u201314:00');
+  });
+
+  it('lists only the fields that changed', () => {
+    const detail = formatChangeDetail({
+      fields: ['dates'],
+      dates: {
+        from: daily,
+        to: [
+          ...daily,
+          { billing: 'all_day', calendar_date: '2026-11-17', start_at: '2026-11-17T00:00:00.000Z', end_at: '2026-11-18T00:00:00.000Z' },
+        ],
+      },
+    }, 'en');
+    expect(detail).toBe('dates 15\u201317 → 15\u201318 Nov');
   });
 });

@@ -135,6 +135,20 @@ export function buildRentalEndingSoonPush(params: {
   };
 }
 
+export function buildRentalRequestUpdatedPush(params: {
+  rentalItemName: string;
+  clientName: string;
+  preferredLanguage?: string | null;
+}): { title: string; body: string } {
+  const fr = normalizeLocale(params.preferredLanguage) === 'fr';
+  return {
+    title: fr ? 'Demande mise à jour' : 'Request updated',
+    body: fr
+      ? `${params.clientName} a mis à jour la demande pour ${params.rentalItemName}. Vérifiez les modifications avant d'accepter.`
+      : `${params.clientName} updated the request for ${params.rentalItemName}. Review the changes before accepting.`,
+  };
+}
+
 export function buildRentalBookingRequestPush(params: {
   rentalItemName: string;
   preferredLanguage?: string | null;

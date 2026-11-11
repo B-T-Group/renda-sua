@@ -1,0 +1,59 @@
+table:
+  name: rental_request_revisions
+  schema: public
+object_relationships:
+  - name: rental_request
+    using:
+      foreign_key_constraint_on: rental_request_id
+  - name: edited_by_user
+    using:
+      foreign_key_constraint_on: edited_by_user_id
+select_permissions:
+  - role: business
+    permission:
+      columns:
+        - id
+        - rental_request_id
+        - version
+        - rental_selection_windows
+        - units_requested
+        - client_request_note
+        - quoted_total
+        - changed_fields
+        - previous_windows
+        - previous_units
+        - previous_note
+        - previous_quoted_total
+        - edited_by_user_id
+        - created_at
+      filter:
+        rental_request:
+          rental_location_listing:
+            rental_item:
+              business:
+                user:
+                  id:
+                    _eq: X-Hasura-User-Id
+  - role: client
+    permission:
+      columns:
+        - id
+        - rental_request_id
+        - version
+        - rental_selection_windows
+        - units_requested
+        - client_request_note
+        - quoted_total
+        - changed_fields
+        - previous_windows
+        - previous_units
+        - previous_note
+        - previous_quoted_total
+        - edited_by_user_id
+        - created_at
+      filter:
+        rental_request:
+          client:
+            user:
+              id:
+                _eq: X-Hasura-User-Id

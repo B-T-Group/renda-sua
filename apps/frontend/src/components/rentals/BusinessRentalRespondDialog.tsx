@@ -26,6 +26,11 @@ import {
 } from '../../utils/rentalPricingLines';
 import { parseRentalSelectionWindows } from '../../utils/rentalRequestDisplay';
 
+function isStaleVersion(error: unknown): boolean {
+  const data = (error as { response?: { data?: { code?: string } } })?.response?.data;
+  return data?.code === 'RENTAL_REQUEST_STALE_VERSION';
+}
+
 const REASON_CODES: UnavailableRentalReasonCode[] = [
   'fully_booked',
   'dates_not_available',
@@ -106,6 +111,7 @@ export interface BusinessRentalRespondDialogProps {
   request: BusinessRentalRequestRow | null;
   onClose: () => void;
   onSuccess: () => void;
+  onStale?: () => void;
   respondRequest: (id: string, body: RespondRentalRequestBody) => Promise<{ success: boolean }>;
 }
 
@@ -115,6 +121,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
   request,
   onClose,
   onSuccess,
+  onStale,
   respondRequest,
 }) => {
   const { t } = useTranslation();
@@ -150,10 +157,16 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         rentalPricingSnapshot: snap,
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
+        expectedVersion: request.edit_version ?? 1,
       });
       onSuccess();
       onClose();
     } catch (e: unknown) {
+      if (isStaleVersion(e)) {
+        onStale?.();
+        onClose();
+        return;
+      }
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         t('business.rentals.respondFailed', 'Could not send response');
@@ -161,7 +174,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, contractHours, onClose, onSuccess, request, respondRequest, t]);
+  }, [availableNote, contractHours, onClose, onStale, onSuccess, request, respondRequest, t]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -180,10 +193,16 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
         status: 'unavailable',
         unavailableReasonCode: reasonCode,
         businessResponseNote: unavailableNote.trim() || undefined,
+        expectedVersion: request.edit_version ?? 1,
       });
       onSuccess();
       onClose();
     } catch (e: unknown) {
+      if (isStaleVersion(e)) {
+        onStale?.();
+        onClose();
+        return;
+      }
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ||
         t('business.rentals.respondFailed', 'Could not send response');
@@ -191,7 +210,7 @@ export const BusinessRentalRespondDialog: React.FC<BusinessRentalRespondDialogPr
     } finally {
       setSubmitting(false);
     }
-  }, [onClose, onSuccess, reasonCode, request, respondRequest, t, unavailableNote]);
+  }, [onClose, onStale, onSuccess, reasonCode, request, respondRequest, t, unavailableNote]);
 
   const offerPreview = useMemo(() => {
     if (!request || mode !== 'available') return null;
