@@ -258,6 +258,71 @@ describe('return submit stores the damage claim only with a new version', () => 
     await expect(svc.submit('b1', 'pickup')).rejects.toMatchObject({ status: 409 });
     expect(submit).not.toHaveBeenCalled();
   });
+
+  it.each(['review', 'admin_cleared'])(
+    'does not submit a return the client left in %s',
+    async (returnResolution) => {
+      const submit = jest.fn();
+      const svc = build(true, submit);
+      svc.requireBusiness = jest.fn().mockResolvedValue({
+        id: 'b1',
+        pickup_ack_current: false,
+        return_resolution: returnResolution,
+        settlement_claimed_at: null,
+        client: { user_id: 'client-user' },
+        business: { user_id: 'biz-user' },
+      });
+      await expect(svc.submit('b1', 'return', 25000)).rejects.toMatchObject({ status: 409 });
+      expect(submit).not.toHaveBeenCalled();
+      expect(svc.notice).not.toHaveBeenCalled();
+    }
+  );
+
+  it('does not submit once settlement has been claimed, even while the return is still pending', async () => {
+    const submit = jest.fn();
+    const svc = build(true, submit);
+    svc.requireBusiness = jest.fn().mockResolvedValue({
+      id: 'b1',
+      pickup_ack_current: false,
+      return_resolution: 'pending',
+      settlement_claimed_at: '2026-11-10T00:00:00.000Z',
+      client: { user_id: 'client-user' },
+      business: { user_id: 'biz-user' },
+    });
+    await expect(svc.submit('b1', 'return', 25000)).rejects.toMatchObject({ status: 409 });
+    await expect(svc.submit('b1', 'pickup')).rejects.toMatchObject({ status: 409 });
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('still accepts a pickup correction after the return was accepted', async () => {
+    const submit = jest.fn().mockResolvedValue({ id: 'v2', version_no: 2 });
+    const svc = build(false, submit);
+    svc.requireBusiness = jest.fn().mockResolvedValue({
+      id: 'b1',
+      pickup_ack_current: false,
+      return_resolution: 'accepted',
+      settlement_claimed_at: null,
+      client: { user_id: 'client-user' },
+      business: { user_id: 'biz-user' },
+    });
+    await expect(svc.submit('b1', 'pickup')).resolves.toEqual({ versionId: 'v2', versionNo: 2 });
+    expect(submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('still accepts a pending return after the pickup was accepted', async () => {
+    const submit = jest.fn().mockResolvedValue({ id: 'v4', version_no: 4 });
+    const svc = build(false, submit);
+    svc.requireBusiness = jest.fn().mockResolvedValue({
+      id: 'b1',
+      pickup_ack_current: true,
+      return_resolution: 'pending',
+      settlement_claimed_at: null,
+      client: { user_id: 'client-user' },
+      business: { user_id: 'biz-user' },
+    });
+    await expect(svc.submit('b1', 'return')).resolves.toEqual({ versionId: 'v4', versionNo: 4 });
+    expect(submit).toHaveBeenCalledWith('b1', 'return', expect.anything(), expect.anything(), 3, null);
+  });
 });
 
 describe('the version function carries the claim', () => {

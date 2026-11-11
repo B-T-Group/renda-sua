@@ -1,3 +1,4 @@
+import { estimateTotalFromSelectionRanges } from './rentalPricingLines';
 import { localPickerInstantToRequestParts, requestedSlotUtcIso } from './rentalRequestUtc';
 import {
   allDaySelectionsForRange,
@@ -57,6 +58,26 @@ describe('rental search preset', () => {
     expect(quote).toBe(768);
     expect(dailyTotalDiffersFromQuote(760, quote)).toBe(true);
     expect(dailyTotalDiffersFromQuote(760, 760)).toBe(false);
+    expect(dailyTotalDiffersFromQuote(null, quote)).toBe(false);
+    expect(dailyTotalDiffersFromQuote(760, null)).toBe(false);
+    expect(dailyTotalDiffersFromQuote(10.004, 10)).toBe(false);
+    expect(dailyTotalDiffersFromQuote(10.01, 10)).toBe(true);
+  });
+
+  it('keeps a listing’s own hours and does not let a midnight close cross into the next day', () => {
+    const rows = allDaySelectionsForRange(
+      { startDate: '2026-11-14', endDate: '2026-11-15', dayCount: 1 },
+      [{ weekday: 6, is_available: true, start_time: '09:00:00', end_time: '24:00:00' }],
+      380
+    );
+    expect(rows).toHaveLength(1);
+    const iso = requestWindowIso(rows[0]);
+    expect(iso.start).toBe('2026-11-14T09:00:00.000Z');
+    expect(iso.end).toBe('2026-11-14T23:59:00.000Z');
+    expect(quoteRentalSelections(rows, 16, 380, 2)).toBe(760);
+    expect(quoteRentalSelections(rows, 16, 380, 2)).toBe(
+      estimateTotalFromSelectionRanges(rows, 16, 380, 2).total
+    );
   });
 
   it('blocks a request when the edited dates are booked', () => {
@@ -64,6 +85,9 @@ describe('rental search preset', () => {
     expect(stayRequestState({ available: true, nextAvailableDate: null, totalForDates: 800 })).toEqual({
       status: 'open',
     });
+    expect(
+      stayRequestState({ available: null, nextAvailableDate: '2026-11-20', totalForDates: null })
+    ).toEqual({ status: 'open' });
     expect(
       stayRequestState({ available: false, nextAvailableDate: '2026-11-16', totalForDates: null })
     ).toEqual({ status: 'blocked', nextAvailableDate: '2026-11-16' });

@@ -6,6 +6,8 @@ import {
   requestChipDateKeys,
   requestChipSelected,
   requestDayCount,
+  requestPriceCopy,
+  requestSelectionLabel,
   requestUsesDayWording,
   selectedRequestDateKeys,
 } from './rentalRequestFormat';
@@ -24,6 +26,12 @@ describe('formatRequestAmount', () => {
     expect(formatRequestAmount(760, 'XAF', 'en').startsWith('FCFA')).toBe(false);
     expect(formatRequestAmount(760, 'XAF', 'fr').startsWith('FCFA')).toBe(false);
   });
+
+  it('keeps a minus and a zero, and treats a fr-CM tag as French', () => {
+    expect(formatRequestAmount(0, 'XAF', 'en')).toBe('0 FCFA');
+    expect(formatRequestAmount(-2500, 'XAF', 'en')).toBe('-2,500 FCFA');
+    expect(formatRequestAmount(-2500, 'xaf', 'fr-CM')).toBe(`-2${NARROW}500 FCFA`);
+  });
 });
 
 describe('formatRequestDay', () => {
@@ -40,6 +48,14 @@ describe('formatRequestDay', () => {
     expect(formatRequestChipDay('2026-11-10')).toBe('10');
     expect(formatRequestChipWeekday('2026-11-11', 'fr')).toBe('Mer.');
   });
+
+  it('leaves a string that is not a calendar day unchanged and drops a leading zero on the chip', () => {
+    expect(formatRequestDay('nope', 'en')).toBe('nope');
+    expect(formatRequestDay('2026-11-11T00:00:00Z', 'en')).toBe('2026-11-11T00:00:00Z');
+    expect(formatRequestChipWeekday('', 'en')).toBe('');
+    expect(formatRequestChipDay('2026-11-05')).toBe('5');
+    expect(formatRequestChipDay('05')).toBe('05');
+  });
 });
 
 describe('request day wording', () => {
@@ -54,9 +70,11 @@ describe('request day wording', () => {
   });
 
   it('keeps hourly wording when any window is hourly', () => {
+    expect(requestUsesDayWording([])).toBe(false);
     expect(requestUsesDayWording([{ billing: 'hourly' }])).toBe(false);
     expect(requestUsesDayWording([...days, { billing: 'hourly' }])).toBe(false);
     expect(requestDayCount([])).toBe(0);
+    expect(requestDayCount([...days, { billing: 'hourly' }])).toBe(2);
   });
 });
 
@@ -85,5 +103,105 @@ describe('request chip selection', () => {
     expect(keys).toContain('2026-11-12');
     expect(keys).toContain('2026-12-01');
     expect(keys.indexOf('2026-11-11')).toBeLessThan(keys.indexOf('2026-12-01'));
+  });
+
+  it('drops a chosen key that is not a date and still lists a chosen day when the window span is zero', () => {
+    expect(requestChipDateKeys('2026-12-01', ['nope', '2026-11-11'], 0)).toEqual(['2026-11-11']);
+  });
+
+  it('lists each chosen day once and falls back to the selection instant when the calendar date is unusable', () => {
+    expect(
+      selectedRequestDateKeys([
+        { calendarDate: '2026-11-11', startMs: 0 },
+        { calendarDate: '2026-11-11', startMs: 5 },
+      ])
+    ).toEqual(['2026-11-11']);
+    expect(
+      selectedRequestDateKeys([{ calendarDate: 'bad', startMs: Date.UTC(2026, 10, 11, 15, 0, 0) }])
+    ).toEqual(['2026-11-11']);
+  });
+});
+
+const copy = (key: string, fallback: string, options?: Record<string, unknown>) =>
+  fallback.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(options?.[name] ?? ''));
+
+describe('request price copy', () => {
+  const day = {
+    id: 'd1',
+    startMs: 0,
+    endMs: 0,
+    billing: 'all_day' as const,
+    calendarDate: '2026-11-11',
+  };
+
+  it('shows an em dash and no breakdown before a day is chosen', () => {
+    expect(
+      requestPriceCopy({
+        rows: [],
+        hours: 0,
+        units: 1,
+        total: 0,
+        dayRate: 380,
+        hourRate: 16,
+        currency: 'XAF',
+        language: 'en',
+        t: copy,
+      })
+    ).toEqual({ totalAmount: '—' });
+  });
+
+  it('writes the day rate after the amount and multiplies only when more than one unit is requested', () => {
+    const one = requestPriceCopy({
+      rows: [day, { ...day, id: 'd2', calendarDate: '2026-11-12' }],
+      hours: 16,
+      units: 1,
+      total: 760,
+      dayRate: 380,
+      hourRate: 16,
+      currency: 'XAF',
+      language: 'en',
+      t: copy,
+    });
+    expect(one.priceLabel).toBe('2 days × 380 FCFA / day');
+    expect(one.priceAmount).toBe('760 FCFA');
+    expect(one.hoursCaption).toBeUndefined();
+
+    const two = requestPriceCopy({
+      rows: [day],
+      hours: 8,
+      units: 2,
+      total: 760,
+      dayRate: 380,
+      hourRate: 16,
+      currency: 'XAF',
+      language: 'en',
+      t: copy,
+    });
+    expect(two.priceLabel).toBe('1 days × 380 FCFA / day × 2');
+  });
+
+  it('keeps the hourly caption and a negative total sign', () => {
+    const hourly = requestPriceCopy({
+      rows: [{ ...day, billing: 'hourly', calendarDate: undefined }],
+      hours: 8,
+      units: 3,
+      total: -128,
+      dayRate: 380,
+      hourRate: 16,
+      currency: 'XAF',
+      language: 'en',
+      t: copy,
+    });
+    expect(hourly.priceLabel).toBe('8 h × 16 FCFA / hour × 3');
+    expect(hourly.hoursCaption).toBe('8 billable hours total');
+    expect(hourly.totalAmount).toBe('-128 FCFA');
+    expect(hourly.priceLabel?.startsWith('FCFA')).toBe(false);
+  });
+
+  it('labels an all-day chip with the weekday and the all-day word', () => {
+    expect(requestSelectionLabel(day, 'en', 'All day')).toBe('Wed 11 Nov · All day');
+    expect(
+      requestSelectionLabel({ ...day, calendarDate: 'bad', startMs: Date.UTC(2026, 10, 11, 15) }, 'en', 'All day')
+    ).toBe('Wed 11 Nov · All day');
   });
 });

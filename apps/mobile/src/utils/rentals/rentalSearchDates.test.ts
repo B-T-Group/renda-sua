@@ -7,6 +7,7 @@ import {
   nearbyRanges,
   publishRentalSearchStay,
   rangeFromNextStart,
+  rangeFromSearchParams,
   rentalDateRange,
   subscribeRentalSearchStay,
   todayRange,
@@ -80,5 +81,22 @@ describe('rental search dates', () => {
       status: 'ok',
       range: { startDate: '2026-11-01', endDate: '2026-12-01', dayCount: 30 },
     });
+  });
+
+  it('keeps a search-link stay only when both dates parse and the exclusive end is 1 to 30 days', () => {
+    expect(rangeFromSearchParams('2026-11-14', '2026-11-16')).toEqual({
+      startDate: '2026-11-14',
+      endDate: '2026-11-16',
+      dayCount: 2,
+    });
+    expect(rangeFromSearchParams('2026-11-01', '2026-12-01')).toMatchObject({ dayCount: 30 });
+    expect(rangeFromSearchParams('2026-11-01', '2026-12-02')).toBeNull();
+    expect(rangeFromSearchParams('2026-11-16', '2026-11-14')).toBeNull();
+    expect(rangeFromSearchParams('2026-11-14', '2026-11-14')).toBeNull();
+    expect(rangeFromSearchParams('2026-11-14')).toBeNull();
+    expect(rangeFromSearchParams(undefined, '2026-11-16')).toBeNull();
+    expect(rangeFromSearchParams('', '2026-11-16')).toBeNull();
+    expect(rangeFromSearchParams('2026-13-01', '2026-13-05')).toBeNull();
+    expect(rangeFromSearchParams(' 2026-11-14', '2026-11-16')).toBeNull();
   });
 });

@@ -146,6 +146,16 @@ describe('resolveDeepLinkTarget', () => {
       id,
     });
     expect(targetPersonaForDeepLinkPath(`rentals/listings/${id}`)).toBe('client');
+    expect(extractAppPath(`https://rendasua.com/app/rentals/bookings/${id}?persona=admin`)).toBe(
+      `rentals/bookings/${id}`
+    );
+    expect(extractAppPath(`rendasua://rentals/bookings/${id}?persona=agent`)).toBe(
+      `rentals/bookings/${id}`
+    );
+    expect(targetPersonaForDeepLinkPath(`rentals/bookings/${id}?persona=agent`)).toBeNull();
+    expect(resolveDeepLinkTarget('rentals/requests')).toEqual({ type: 'rentalRequests' });
+    expect(resolveDeepLinkTarget('rentals/requests/abc')).toEqual({ type: 'rentalRequests' });
+    expect(resolveDeepLinkTarget('rentals/requests?status=open')).toEqual({ type: 'rentalRequests' });
   });
 
   it('opens a store and keeps the active persona', () => {
