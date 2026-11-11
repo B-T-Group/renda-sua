@@ -4054,7 +4054,9 @@ export class RentalsService {
     for (const w of allDay) this.assertAllDayStaysOnDate(w);
   }
 
-  private assertAllDayStaysOnDate(w: RentalRequestWindowEntry) {
+  private assertAllDayStaysOnDate(
+    w: RentalRequestWindowEntry
+  ): asserts w is RentalRequestWindowEntry & { calendarDate: string } {
     if (!w.calendarDate) {
       throw new HttpException('calendarDate is required for all_day windows', HttpStatus.BAD_REQUEST);
     }

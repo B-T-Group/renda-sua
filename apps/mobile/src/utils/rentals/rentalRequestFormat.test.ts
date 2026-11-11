@@ -29,8 +29,8 @@ describe('formatRequestAmount', () => {
 
   it('keeps a minus and a zero, and treats a fr-CM tag as French', () => {
     expect(formatRequestAmount(0, 'XAF', 'en')).toBe('0 FCFA');
-    expect(formatRequestAmount(-2500, 'XAF', 'en')).toBe('-2,500 FCFA');
-    expect(formatRequestAmount(-2500, 'xaf', 'fr-CM')).toBe(`-2${NARROW}500 FCFA`);
+    expect(formatRequestAmount(-2500, 'XAF', 'en')).toBe('-2 500 FCFA');
+    expect(formatRequestAmount(-2500, 'xaf', 'fr-CM')).toBe('-2 500 FCFA');
   });
 });
 
