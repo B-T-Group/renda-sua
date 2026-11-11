@@ -37,11 +37,16 @@ import {
   formatRequestChipWeekday,
   requestChipDateKeys,
   requestChipSelected,
+  formatRentalPeriod,
+  formatRequestAmount,
+  modifySaveNeedsConfirm,
+  rentalSelectionFingerprint,
   requestPriceCopy,
   requestSelectionLabel,
   selectedRequestDateKeys,
   selectionCalendarKey,
 } from '../../utils/rentals/rentalRequestFormat';
+import { RentalModifyPriceSheet } from './RentalModifySheets';
 
 const RENTAL_MIN_START_BUFFER_MS = 2 * 60 * 60 * 1000;
 const DAY_OPTIONS = 14;
@@ -115,6 +120,26 @@ export interface RentalSlotPickerProps {
   dateLine?: string;
   onEditDates?: () => void;
   unavailableLabel?: string;
+  /** Renter edit of a Requested rental. Save stays disabled until something changes. */
+  submitMode?: 'create' | 'modify';
+  initialUnits?: number;
+  initialNotes?: string;
+  previousTotal?: number;
+  /** Selections the request was opened with, when the draft already differs. */
+  savedSelections?: SelectionRange[];
+  onModifySave?: (body: {
+    rentalLocationListingId: string;
+    requestedStartAt: string;
+    requestedEndAt: string;
+    windows: Array<{
+      requestedStartAt: string;
+      requestedEndAt: string;
+      billing?: 'all_day';
+      calendarDate?: string;
+    }>;
+    unitsRequested: number;
+    clientRequestNote?: string;
+  }) => Promise<void>;
 }
 
 export function RentalSlotPicker({
@@ -143,6 +168,12 @@ export function RentalSlotPicker({
   dateLine,
   onEditDates,
   unavailableLabel,
+  submitMode = 'create',
+  initialUnits = 1,
+  initialNotes = '',
+  previousTotal,
+  savedSelections,
+  onModifySave,
 }: RentalSlotPickerProps) {
   const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
@@ -160,8 +191,13 @@ export function RentalSlotPicker({
     layout !== 'screen' && initialSelections.length > 0
   );
   const [builderOpen, setBuilderOpen] = useState(false);
-  const [unitsRequested, setUnitsRequested] = useState(1);
-  const [notes, setNotes] = useState('');
+  const [unitsRequested, setUnitsRequested] = useState(initialUnits);
+  const [notes, setNotes] = useState(initialNotes);
+  const [priceUpOpen, setPriceUpOpen] = useState(false);
+  const openedFingerprint = useMemo(
+    () => rentalSelectionFingerprint(savedSelections ?? initialSelections, initialUnits, initialNotes),
+    [initialNotes, initialSelections, initialUnits, savedSelections]
+  );
   const [msg, setMsg] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [timePicker, setTimePicker] = useState<'start' | 'end' | null>(null);
@@ -543,8 +579,64 @@ export function RentalSlotPicker({
         },
       ];
 
+  const buildModifyBody = () => {
+    const windows = effectiveSelections.map((r) => {
+      const s = localPickerInstantToRequestParts(r.startMs);
+      const e = localPickerInstantToRequestParts(r.endMs);
+      const base = {
+        requestedStartAt: requestedSlotUtcIso(s.dateKey, s.hour, s.minute),
+        requestedEndAt: requestedSlotUtcIso(e.dateKey, e.hour, e.minute),
+      };
+      return r.billing === 'all_day' && r.calendarDate
+        ? { ...base, billing: 'all_day' as const, calendarDate: r.calendarDate }
+        : base;
+    });
+    const starts = effectiveSelections.map((r) => r.startMs);
+    const ends = effectiveSelections.map((r) => r.endMs);
+    const envS = localPickerInstantToRequestParts(Math.min(...starts));
+    const envE = localPickerInstantToRequestParts(Math.max(...ends));
+    return {
+      rentalLocationListingId: listingId,
+      requestedStartAt: requestedSlotUtcIso(envS.dateKey, envS.hour, envS.minute),
+      requestedEndAt: requestedSlotUtcIso(envE.dateKey, envE.hour, envE.minute),
+      windows,
+      unitsRequested,
+      clientRequestNote: notes.trim() || undefined,
+    };
+  };
+
+  const commitModify = async () => {
+    if (!onModifySave) return;
+    setPriceUpOpen(false);
+    try {
+      await onModifySave(buildModifyBody());
+    } catch (e: unknown) {
+      setMsg(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
+    }
+  };
+
   if (layout === 'screen') {
     const allDayLabel = t('rentals.requestForm.allDayLabel', 'All day');
+    const modifying = submitMode === 'modify';
+    const dirty = rentalSelectionFingerprint(effectiveSelections, unitsRequested, notes) !== openedFingerprint;
+    const dayCountLabel = (count: number) =>
+      t('rentals.requestForm.dayCount', '{{count}} day', { count });
+    const shownDateLine = modifying && effectiveSelections.length
+      ? formatRentalPeriod(
+          effectiveSelections.map((row) => {
+            const start = localPickerInstantToRequestParts(row.startMs);
+            const end = localPickerInstantToRequestParts(row.endMs);
+            return {
+              billing: row.billing,
+              calendar_date: row.calendarDate,
+              start_at: requestedSlotUtcIso(start.dateKey, start.hour, start.minute),
+              end_at: requestedSlotUtcIso(end.dateKey, end.hour, end.minute),
+            };
+          }),
+          i18n.language,
+          dayCountLabel
+        )
+      : dateLine;
     const selectedKeys = selectedRequestDateKeys(selections);
     const price = requestBlocked
       ? { totalAmount: '—' }
@@ -570,7 +662,7 @@ export function RentalSlotPicker({
           itemName={itemName ?? ''}
           itemMeta={itemMeta}
           imageUrl={imageUrl}
-          dateLine={dateLine}
+          dateLine={shownDateLine}
           onEditDates={onEditDates}
           datesFilled={datesFilled}
           unavailableLabel={unavailableLabel}
@@ -630,21 +722,46 @@ export function RentalSlotPicker({
           priceAmount={price.priceAmount}
           hoursCaption={price.hoursCaption}
           totalAmount={price.totalAmount}
+          previousAmount={
+            modifying && previousTotal != null && Math.abs(estimatedTotal - previousTotal) > 0.009
+              ? formatRequestAmount(previousTotal, currency, i18n.language)
+              : undefined
+          }
+          legal={
+            modifying
+              ? t('rentals.modify.businessSees', 'The business will see your changes before accepting.')
+              : undefined
+          }
           message={msg}
           sendLabel={
-            isAuthenticated || requestBlocked
-              ? t('rentals.requestForm.confirmSend', 'Send request')
-              : t('rentals.searchFirst.signInToRequest', 'Sign in to request a rental')
+            modifying
+              ? t('rentals.modify.save', 'Save changes')
+              : isAuthenticated || requestBlocked
+                ? t('rentals.requestForm.confirmSend', 'Send request')
+                : t('rentals.searchFirst.signInToRequest', 'Sign in to request a rental')
           }
-          sendIcon={isAuthenticated || requestBlocked ? 'send' : 'login'}
+          sendIcon={modifying ? 'check' : isAuthenticated || requestBlocked ? 'send' : 'login'}
           sendDisabled={
             submitting ||
             requestBlocked ||
             requestBusy ||
-            (isAuthenticated && effectiveSelections.length === 0)
+            (modifying ? !dirty || effectiveSelections.length === 0 : isAuthenticated && effectiveSelections.length === 0)
           }
           sending={submitting}
           onSend={() => {
+            if (modifying) {
+              const err = validateBeforeSubmit();
+              if (err) {
+                setMsg(err);
+                return;
+              }
+              if (modifySaveNeedsConfirm(estimatedTotal, previousTotal ?? estimatedTotal)) {
+                setPriceUpOpen(true);
+                return;
+              }
+              void commitModify();
+              return;
+            }
             if (!isAuthenticated) {
               if (onLoginRequired) {
                 onLoginRequired();
@@ -669,6 +786,35 @@ export function RentalSlotPicker({
           selectedMs={timePicker === 'end' ? endMs : startMs}
           onSelect={selectTime}
           onDismiss={() => setTimePicker(null)}
+        />
+        <RentalModifyPriceSheet
+          visible={priceUpOpen}
+          title={t('rentals.modify.confirmTitle', 'Update your request?')}
+          body={t(
+            'rentals.modify.confirmBody',
+            'The quoted total went up. The business will see these changes before accepting.'
+          )}
+          rows={[
+            {
+              label: t('rentals.modify.dates', 'Dates'),
+              from: dateLine ?? '',
+              to: shownDateLine ?? '',
+            },
+            {
+              label: t('rentals.modify.duration', 'Duration'),
+              from: dayCountLabel(initialSelections.filter((row) => row.billing === 'all_day').length || initialSelections.length),
+              to: dayCountLabel(effectiveSelections.filter((row) => row.billing === 'all_day').length || effectiveSelections.length),
+            },
+            {
+              label: t('rentals.requestForm.total', 'Total'),
+              from: formatRequestAmount(previousTotal ?? 0, currency, i18n.language),
+              to: formatRequestAmount(estimatedTotal, currency, i18n.language),
+            },
+          ]}
+          saveLabel={t('rentals.modify.save', 'Save changes')}
+          keepLabel={t('rentals.modify.keep', 'Keep current')}
+          onSave={() => void commitModify()}
+          onKeep={() => setPriceUpOpen(false)}
         />
       </View>
     );

@@ -70,6 +70,7 @@ describe('RentalsService.createRentalRequest', () => {
         status: 'pending',
         units_requested: 2,
         client_request_note: null,
+        quoted_total: null,
       },
     });
     expect(result).toEqual({ success: true, requestId: 'request-1' });

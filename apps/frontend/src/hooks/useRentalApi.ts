@@ -166,6 +166,7 @@ export interface RespondRentalRequestBody {
   contractExpiryHours?: number;
   unavailableReasonCode?: UnavailableRentalReasonCode;
   businessResponseNote?: string;
+  expectedVersion?: number;
 }
 
 export interface RentalSelectionWindow {
@@ -184,6 +185,12 @@ export interface BusinessRentalRequestRow {
   business_response_note?: string | null;
   client_request_note?: string | null;
   units_requested?: number;
+  edit_version?: number | null;
+  change_summary?: {
+    fields?: string[];
+    dates?: { from: RentalSelectionWindow[]; to: RentalSelectionWindow[] };
+    quantity?: { from: number; to: number };
+  } | null;
   unavailable_reason_code?: string | null;
   expires_at?: string | null;
   responded_at?: string | null;

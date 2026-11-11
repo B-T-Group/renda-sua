@@ -139,7 +139,15 @@ function toNumber(value: string | number): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function RequestAppBar({ title, onBack }: { title: string; onBack: () => void }) {
+export function RequestAppBar({
+  title,
+  heading,
+  onBack,
+}: {
+  title: string;
+  heading?: string;
+  onBack: () => void;
+}) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
@@ -167,7 +175,7 @@ function RequestAppBar({ title, onBack }: { title: string; onBack: () => void })
       </Pressable>
       <View style={styles.titles}>
         <Text style={[styles.title, { color: colors.text.primary }]}>
-          {t('rentals.requestRental', 'Request this rental')}
+          {heading ?? t('rentals.requestRental', 'Request this rental')}
         </Text>
         <Text numberOfLines={1} style={{ color: colors.text.secondary, fontSize: 12 }}>{title}</Text>
       </View>

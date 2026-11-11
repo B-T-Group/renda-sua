@@ -31,6 +31,7 @@ import { UpdateBusinessRentalListingDto } from './dto/update-business-rental-lis
 import { CreateRentalBookingDto } from './dto/create-rental-booking.dto';
 import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment.dto';
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
+import { UpdateRentalRequestDto } from './dto/update-rental-request.dto';
 import { RespondRentalRequestDto } from './dto/respond-rental-request.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
@@ -512,6 +513,18 @@ export class RentalsController {
   @ApiResponse({ status: 201, description: 'Request created' })
   async createRequest(@Body() dto: CreateRentalRequestDto) {
     return this.rentalsService.createRentalRequest(dto);
+  }
+
+  @Patch('requests/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Modify a pending rental request (client)' })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: UpdateRentalRequestDto })
+  @ApiResponse({ status: 200, description: 'Request updated' })
+  @ApiResponse({ status: 404, description: 'Feature off or request missing' })
+  @ApiResponse({ status: 409, description: 'Stale version, closed window, or no longer pending' })
+  async modifyRequest(@Param('id') requestId: string, @Body() dto: UpdateRentalRequestDto) {
+    return this.rentalsService.modifyRentalRequest(requestId, dto);
   }
 
   @Post('requests/:id/respond')

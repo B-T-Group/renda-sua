@@ -11,6 +11,8 @@ export interface RentalRequestStickyBarProps {
   sendDisabled: boolean;
   sending: boolean;
   onSend: () => void;
+  previousAmount?: string;
+  legal?: string;
 }
 
 export function RentalRequestStickyBar({
@@ -20,6 +22,8 @@ export function RentalRequestStickyBar({
   sendDisabled,
   sending,
   onSend,
+  previousAmount,
+  legal,
 }: RentalRequestStickyBarProps) {
   const { t } = useTranslation();
   const { colors, spacing } = useTheme();
@@ -43,12 +47,17 @@ export function RentalRequestStickyBar({
         <Text style={[styles.totalLabel, { color: colors.text.secondary }]}>
           {t('rentals.requestForm.total', 'Total')}
         </Text>
-        <Text testID="rental-request-total" style={[styles.totalValue, { color: colors.primary.main }]}>
-          {totalAmount}
-        </Text>
+        <View style={styles.amounts}>
+          {previousAmount ? (
+            <Text style={[styles.previous, { color: colors.text.secondary }]}>{previousAmount}</Text>
+          ) : null}
+          <Text testID="rental-request-total" style={[styles.totalValue, { color: colors.primary.main }]}>
+            {totalAmount}
+          </Text>
+        </View>
       </View>
       <Text style={[styles.legal, { color: colors.text.secondary }]}>
-        {t('rentals.searchFirst.nothingCharged', 'Nothing is charged until the business accepts.')}
+        {legal ?? t('rentals.searchFirst.nothingCharged', 'Nothing is charged until the business accepts.')}
       </Text>
       <Button
         mode="contained"
@@ -71,6 +80,8 @@ const styles = StyleSheet.create({
   bar: { borderTopWidth: 1, gap: 8 },
   totalRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
   totalLabel: { fontSize: 13, fontWeight: '700' },
+  amounts: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  previous: { fontSize: 14, textDecorationLine: 'line-through' },
   totalValue: { fontSize: 20, fontWeight: '800' },
   legal: { fontSize: 12, lineHeight: 16 },
   sendContent: { height: 48 },

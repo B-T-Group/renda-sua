@@ -21,6 +21,10 @@ import {
 import { useTheme } from '../../../contexts/ThemeContext';
 import { rentalsApi } from '../../../services/rentalsApi';
 
+function isStaleVersion(error: unknown): boolean {
+  return (error as { code?: string }).code === 'RENTAL_REQUEST_STALE_VERSION';
+}
+
 const REASON_CODES: UnavailableRentalReasonCode[] = [
   'fully_booked',
   'dates_not_available',
@@ -35,6 +39,7 @@ export interface BusinessRentalRespondDialogProps {
   request: BusinessRentalRequestRow | null;
   onDismiss: () => void;
   onSuccess: () => void;
+  onStale?: () => void;
 }
 
 function buildPricingSnapshot(req: BusinessRentalRequestRow) {
@@ -57,6 +62,7 @@ export function BusinessRentalRespondDialog({
   request,
   onDismiss,
   onSuccess,
+  onStale,
 }: BusinessRentalRespondDialogProps) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -107,10 +113,16 @@ export function BusinessRentalRespondDialog({
         rentalPricingSnapshot: snap,
         contractExpiryHours: h,
         businessResponseNote: availableNote.trim() || undefined,
+        expectedVersion: request.edit_version ?? 1,
       });
       onSuccess();
       resetAndClose();
     } catch (e: unknown) {
+      if (isStaleVersion(e)) {
+        onStale?.();
+        resetAndClose();
+        return;
+      }
       setError(
         e instanceof Error
           ? e.message
@@ -119,7 +131,7 @@ export function BusinessRentalRespondDialog({
     } finally {
       setSubmitting(false);
     }
-  }, [availableNote, contractHours, onSuccess, request, resetAndClose, t]);
+  }, [availableNote, contractHours, onStale, onSuccess, request, resetAndClose, t]);
 
   const submitUnavailable = useCallback(async () => {
     if (!request) return;
@@ -143,10 +155,16 @@ export function BusinessRentalRespondDialog({
         status: 'unavailable',
         unavailableReasonCode: reasonCode,
         businessResponseNote: unavailableNote.trim() || undefined,
+        expectedVersion: request.edit_version ?? 1,
       });
       onSuccess();
       resetAndClose();
     } catch (e: unknown) {
+      if (isStaleVersion(e)) {
+        onStale?.();
+        resetAndClose();
+        return;
+      }
       setError(
         e instanceof Error
           ? e.message
@@ -155,7 +173,7 @@ export function BusinessRentalRespondDialog({
     } finally {
       setSubmitting(false);
     }
-  }, [onSuccess, reasonCode, request, resetAndClose, t, unavailableNote]);
+  }, [onStale, onSuccess, reasonCode, request, resetAndClose, t, unavailableNote]);
 
   if (!mode) return null;
 

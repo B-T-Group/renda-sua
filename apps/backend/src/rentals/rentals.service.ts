@@ -25,6 +25,7 @@ import {
 } from './dto/update-business-rental-listing.dto';
 import { CreateRentalBookingDto } from './dto/create-rental-booking.dto';
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
+import { UpdateRentalRequestDto } from './dto/update-rental-request.dto';
 import { RentalWeeklyAvailabilityDto } from './dto/create-business-rental-listing.dto';
 import {
   RespondRentalRequestDto,
@@ -39,6 +40,16 @@ import {
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { RentalStartPinShareService } from './rental-start-pin-share.service';
 import { peakConcurrentUnits as sweepPeakUnits } from './rental-capacity';
+import {
+  buildChangeSummary,
+  classifyRentalAccept,
+  classifyRentalEdit,
+  earliestWindowIso,
+  normalizeRequestNote,
+  quotePlanTotal,
+  type RentalEditBlock,
+  type RentalWindowSnapshot,
+} from './rental-request-edit';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
   inspectionRejected,
@@ -852,6 +863,12 @@ export class RentalsService {
         status: 'pending',
         units_requested: unitsRequested,
         client_request_note: note || null,
+        quoted_total: quotePlanTotal(
+          plan.windows,
+          Number(listing.base_price_per_day),
+          Number(listing.base_price_per_hour),
+          unitsRequested
+        ),
       },
     });
     const requestId = row.insert_rental_requests_one.id;
@@ -863,6 +880,212 @@ export class RentalsService {
       user
     );
     return { success: true, requestId };
+  }
+
+  async modifyRentalRequest(requestId: string, dto: UpdateRentalRequestDto) {
+    if (!(await this.isModifyRequestEnabled())) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    const user = await this.requireModifyClient();
+    const req = await this.fetchRequest(requestId);
+    const plan = this.buildCreateRentalRequestPlan(dto as unknown as CreateRentalRequestDto);
+    const units = this.normalizeUnitsRequested(dto.unitsRequested ?? req.units_requested);
+    this.assertModifyStillOpen(req, user.clientId, dto.expectedVersion, plan.envelopeStartIso);
+    await this.validateRentalRequestWindowsPlan(plan, req.rental_location_listing, units);
+    return this.commitRentalRequestEdit(requestId, user, req, dto, plan, units);
+  }
+
+  private async applyRentalRequestEdit(
+    requestId: string,
+    user: { id: string; clientId: string },
+    expectedVersion: number,
+    windows: RentalWindowSnapshot[],
+    units: number,
+    note: string | undefined,
+    changeSummary: ReturnType<typeof buildChangeSummary>
+  ) {
+    try {
+      const saved = await this.hasuraSystemService.executeMutation<{
+        apply_rental_request_edit: Array<{ version: number; quoted_total: string | number | null }>;
+      }>(Q.APPLY_RENTAL_REQUEST_EDIT, {
+        requestId,
+        clientId: user.clientId,
+        actorId: user.id,
+        expectedVersion,
+        windows,
+        units,
+        note: normalizeRequestNote(note),
+        changeSummary,
+        now: new Date().toISOString(),
+      });
+      const row = saved.apply_rental_request_edit?.[0];
+      if (!row) throw new HttpException('Could not save changes', HttpStatus.CONFLICT);
+      return { version: Number(row.version), quoted_total: row.quoted_total == null ? null : Number(row.quoted_total) };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw this.mapEditSqlError(error);
+    }
+  }
+
+  private async notifyBusinessOfRentalEdit(
+    req: { rental_location_listing?: { rental_item?: { name?: string; business?: { user_id?: string } } } },
+    requestId: string,
+    clientName: string
+  ): Promise<void> {
+    const businessUserId = req.rental_location_listing?.rental_item?.business?.user_id;
+    if (!businessUserId) return;
+    await this.notificationsService.sendBusinessRentalRequestUpdated({
+      businessUserId,
+      requestId,
+      rentalItemName: req.rental_location_listing?.rental_item?.name ?? 'Rental',
+      clientName,
+    });
+  }
+
+  private windowSnapshots(req: { rental_selection_windows?: unknown }): RentalWindowSnapshot[] {
+    const rows = Array.isArray(req.rental_selection_windows) ? req.rental_selection_windows : [];
+    return rows.map((row: RentalWindowSnapshot) => ({
+      billing: row.billing,
+      calendar_date: row.calendar_date,
+      start_at: row.start_at,
+      end_at: row.end_at,
+    }));
+  }
+
+  private editHttpError(block: RentalEditBlock | 'forbidden' | 'missing_version'): HttpException {
+    const mapped: Record<string, { status: number; code: string; message: string }> = {
+      not_pending: { status: 409, code: 'RENTAL_REQUEST_ALREADY_ACCEPTED', message: 'The business already accepted this rental.' },
+      stale_version: { status: 409, code: 'RENTAL_REQUEST_STALE_VERSION', message: 'This request was updated. Review the latest version.' },
+      window_closed: { status: 409, code: 'RENTAL_REQUEST_WINDOW_CLOSED', message: 'Changes close 2 hours before the rental starts.' },
+      unavailable: { status: 409, code: 'RENTAL_REQUEST_UNAVAILABLE', message: 'Not available for these dates' },
+      forbidden: { status: 403, code: 'RENTAL_REQUEST_FORBIDDEN', message: 'Forbidden' },
+      missing_version: { status: 400, code: 'RENTAL_REQUEST_VERSION_REQUIRED', message: 'expectedVersion is required' },
+    };
+    const row = mapped[block] ?? mapped.unavailable;
+    return new HttpException({ message: row.message, code: row.code }, row.status);
+  }
+
+  private mapEditSqlError(error: unknown): HttpException {
+    const text = error instanceof Error ? error.message : String(error);
+    if (text.includes('rental_request_not_pending')) return this.editHttpError('not_pending');
+    if (text.includes('rental_request_forbidden')) return this.editHttpError('forbidden');
+    if (text.includes('rental_request_stale_version')) return this.editHttpError('stale_version');
+    if (text.includes('rental_request_window_closed')) return this.editHttpError('window_closed');
+    if (text.includes('rental_request_unavailable')) return this.editHttpError('unavailable');
+    return new HttpException('Could not save changes', HttpStatus.CONFLICT);
+  }
+
+  private async isModifyRequestEnabled(): Promise<boolean> {
+    const rows = await this.hasuraSystemService.executeQuery<{
+      application_configurations: Array<{ boolean_value: boolean | null; country_code: string | null }>;
+    }>(Q.GET_MODIFY_REQUEST_FLAG, {});
+    const global = (rows.application_configurations ?? []).find((row) => row.country_code == null);
+    return global?.boolean_value === true;
+  }
+
+  private assertRespondVersion(
+    req: { status: string; edit_version?: number },
+    dto: RespondRentalRequestDto,
+    requireVersion: boolean
+  ): void {
+    const decision = classifyRentalAccept({
+      status: req.status,
+      version: Number(req.edit_version ?? 1),
+      expectedVersion: dto.expectedVersion ?? null,
+      requireVersion,
+    });
+    if (decision === 'ok') return;
+    if (decision === 'not_pending') {
+      throw new HttpException('Request is not pending', HttpStatus.BAD_REQUEST);
+    }
+    throw this.editHttpError(decision);
+  }
+
+  private async persistRentalResponse(vars: {
+    id: string;
+    version?: number;
+    status: string;
+    snapshot: unknown;
+    note: string | null;
+    unavailableReasonCode: string | null;
+    requestExpiresAt: string | null;
+    respondedAt: string;
+    userId: string;
+  }): Promise<void> {
+    if (vars.version == null) {
+      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, vars);
+      return;
+    }
+    const saved = await this.hasuraSystemService.executeMutation<{
+      update_rental_requests: { affected_rows: number } | null;
+    }>(Q.UPDATE_RENTAL_REQUEST_RESPOND_CAS, vars);
+    if ((saved.update_rental_requests?.affected_rows ?? 0) < 1) {
+      throw await this.rentalRespondConflict(vars.id);
+    }
+  }
+
+  private async rentalRespondConflict(id: string): Promise<HttpException> {
+    const fresh = await this.fetchRequest(id);
+    if (fresh.status !== 'pending') return this.editHttpError('not_pending');
+    return this.editHttpError('stale_version');
+  }
+
+  private async requireModifyClient(): Promise<{ id: string; clientId: string; name: string }> {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
+      throw new HttpException('Only clients can modify rental requests', HttpStatus.FORBIDDEN);
+    }
+    const name = [user.first_name, user.last_name].filter(Boolean).join(' ').trim() || 'A client';
+    return { id: user.id, clientId: user.client.id, name };
+  }
+
+  private assertModifyStillOpen(
+    req: Awaited<ReturnType<RentalsService['fetchRequest']>>,
+    clientId: string,
+    expectedVersion: number,
+    nextStartIso: string
+  ): void {
+    if (req.client_id !== clientId) {
+      throw new HttpException({ message: 'Forbidden', code: 'RENTAL_REQUEST_FORBIDDEN' }, HttpStatus.FORBIDDEN);
+    }
+    const block = classifyRentalEdit({
+      status: req.status,
+      version: Number(req.edit_version ?? 1),
+      expectedVersion,
+      currentStartIso: earliestWindowIso(this.windowSnapshots(req)),
+      nextStartIso,
+      nowMs: Date.now(),
+      unitsFree: true,
+    });
+    if (block !== 'ok') throw this.editHttpError(block);
+  }
+
+  private async commitRentalRequestEdit(
+    requestId: string,
+    user: { id: string; clientId: string; name: string },
+    req: Awaited<ReturnType<RentalsService['fetchRequest']>>,
+    dto: UpdateRentalRequestDto,
+    plan: ReturnType<RentalsService['buildCreateRentalRequestPlan']>,
+    units: number
+  ) {
+    const previous = this.windowSnapshots(req);
+    const next = plan.windows.map((row) => ({
+      billing: row.billing,
+      calendar_date: row.calendarDate,
+      start_at: row.start.toISOString(),
+      end_at: row.end.toISOString(),
+    }));
+    const summary = buildChangeSummary(
+      {
+        windows: previous,
+        units: Number(req.units_requested) || 1,
+        note: req.client_request_note,
+      },
+      { windows: next, units, note: dto.clientRequestNote ?? null }
+    );
+    const saved = await this.applyRentalRequestEdit(requestId, user, dto.expectedVersion, next, units, dto.clientRequestNote, summary);
+    await this.notifyBusinessOfRentalEdit(req, requestId, user.name);
+    return { success: true, requestId, editVersion: saved.version, quotedTotal: saved.quoted_total };
   }
 
   private async emailBusinessNewRentalRequest(
@@ -935,12 +1158,10 @@ export class RentalsService {
       throw new HttpException('Only businesses can respond', HttpStatus.FORBIDDEN);
     }
     const req = await this.fetchRequest(requestId);
-    if (req.status !== 'pending') {
-      throw new HttpException('Request is not pending', HttpStatus.BAD_REQUEST);
-    }
     if (req.rental_location_listing.rental_item.business_id !== user.business.id) {
       throw new HttpException('Forbidden', HttpStatus.FORBIDDEN);
     }
+    this.assertRespondVersion(req, dto, await this.isModifyRequestEnabled());
     const respondedAt = new Date().toISOString();
     if (dto.status === RespondRentalRequestStatusDto.available) {
       await this.respondRentalRequestAvailable(
@@ -981,8 +1202,9 @@ export class RentalsService {
         );
       }
     }
-    await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, {
+    await this.persistRentalResponse({
       id: requestId,
+      version: dto.expectedVersion,
       status: dto.status,
       snapshot: null,
       note: dto.businessResponseNote?.trim() ?? null,
@@ -1036,8 +1258,9 @@ export class RentalsService {
     try {
       const ins = await this.insertProposedBookingRow(req, clientId, snap, total, contractExpiresAt);
       bookingId = ins.insert_rental_bookings_one.id;
-      await this.hasuraSystemService.executeMutation(Q.UPDATE_RENTAL_REQUEST_RESPOND, {
+      await this.persistRentalResponse({
         id: requestId,
+        version: dto.expectedVersion,
         status: dto.status,
         snapshot: snap,
         note: dto.businessResponseNote?.trim() ?? null,

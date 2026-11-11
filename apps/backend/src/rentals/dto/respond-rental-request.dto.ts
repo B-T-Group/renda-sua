@@ -62,4 +62,16 @@ export class RespondRentalRequestDto {
   @IsOptional()
   @IsString()
   businessResponseNote?: string;
+
+  @ApiProperty({
+    required: false,
+    description:
+      'edit_version the business loaded. Required while modify-request is enabled. A mismatch is rejected.',
+    minimum: 1,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion?: number;
 }

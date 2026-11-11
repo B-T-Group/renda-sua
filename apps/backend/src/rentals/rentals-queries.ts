@@ -245,6 +245,10 @@ export const GET_RENTAL_REQUEST_FULL = `
       rental_pricing_snapshot
       rental_location_listing_id
       units_requested
+      edit_version
+      quoted_total
+      change_summary
+      client_request_note
       expires_at
       rental_location_listing {
         id
@@ -318,6 +322,78 @@ export const UPDATE_RENTAL_REQUEST_RESPOND = `
     ) {
       id
       status
+    }
+  }
+`;
+
+export const UPDATE_RENTAL_REQUEST_RESPOND_CAS = `
+  mutation UpdateRentalRequestRespondCas(
+    $id: uuid!
+    $version: Int!
+    $status: rental_request_status_enum!
+    $snapshot: jsonb
+    $note: String
+    $unavailableReasonCode: String
+    $requestExpiresAt: timestamptz
+    $respondedAt: timestamptz!
+    $userId: uuid!
+  ) {
+    update_rental_requests(
+      where: { id: { _eq: $id }, status: { _eq: pending }, edit_version: { _eq: $version } }
+      _set: {
+        status: $status
+        rental_pricing_snapshot: $snapshot
+        business_response_note: $note
+        unavailable_reason_code: $unavailableReasonCode
+        expires_at: $requestExpiresAt
+        responded_at: $respondedAt
+        responded_by_user_id: $userId
+      }
+    ) {
+      affected_rows
+    }
+  }
+`;
+
+export const APPLY_RENTAL_REQUEST_EDIT = `
+  mutation ApplyRentalRequestEdit(
+    $requestId: uuid!
+    $clientId: uuid!
+    $actorId: uuid!
+    $expectedVersion: Int!
+    $windows: jsonb!
+    $units: Int!
+    $note: String
+    $changeSummary: jsonb!
+    $now: timestamptz!
+  ) {
+    apply_rental_request_edit(
+      args: {
+        p_request_id: $requestId
+        p_client_id: $clientId
+        p_actor: $actorId
+        p_expected_version: $expectedVersion
+        p_windows: $windows
+        p_units: $units
+        p_note: $note
+        p_change_summary: $changeSummary
+        p_now: $now
+      }
+    ) {
+      id
+      version
+      quoted_total
+    }
+  }
+`;
+
+export const GET_MODIFY_REQUEST_FLAG = `
+  query GetModifyRequestFlag {
+    application_configurations(
+      where: { config_key: { _eq: "rentals_modify_request_enabled" }, status: { _eq: "active" } }
+    ) {
+      boolean_value
+      country_code
     }
   }
 `;
@@ -972,6 +1048,9 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
       business_response_note
       client_request_note
       units_requested
+      edit_version
+      quoted_total
+      change_summary
       unavailable_reason_code
       rental_pricing_snapshot
       responded_at
@@ -983,10 +1062,12 @@ export const GET_CLIENT_RENTAL_REQUESTS = `
         security_deposit_amount
         business_location {
           name
+          address { city }
         }
         rental_item {
           name
           currency
+          business { name }
         }
       }
       rental_booking {
@@ -1060,6 +1141,9 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
       business_response_note
       client_request_note
       units_requested
+      edit_version
+      quoted_total
+      change_summary
       unavailable_reason_code
       expires_at
       responded_at
@@ -1087,6 +1171,12 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         base_price_per_hour
         base_price_per_day
         security_deposit_amount
+        business_location {
+          name
+          address {
+            city
+          }
+        }
         weekly_availability(order_by: { weekday: asc }) {
           weekday
           is_available
@@ -1096,6 +1186,9 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         rental_item {
           name
           currency
+          business {
+            name
+          }
           rental_item_images(order_by: { display_order: asc }, limit: 1) {
             id
             display_url

@@ -12,7 +12,8 @@ export type ClientFlagKey =
   | 'restock_alerts_v1'
   | 'discovery_sort_v1'
   | 'agent_contract_required'
-  | 'rentals_search_first_enabled';
+  | 'rentals_search_first_enabled'
+  | 'rentals_modify_request_enabled';
 
 export type ClientFlags = Record<ClientFlagKey, boolean>;
 
@@ -33,6 +34,8 @@ export const DEFAULT_CLIENT_FLAGS: ClientFlags = {
   agent_contract_required: true,
   /** Search-first client rentals. Off until UX accepts the new landing. */
   rentals_search_first_enabled: false,
+  /** Renter edits of a Requested rental. Off until a config row turns it on. */
+  rentals_modify_request_enabled: false,
 };
 
 type ClientFlagsResponse = {

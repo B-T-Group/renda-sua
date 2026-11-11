@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   FlatList,
+  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -17,6 +18,7 @@ import {
   SegmentedButtons,
   Text,
 } from 'react-native-paper';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BusinessRentalCatalogCard } from '../../components/business/rentals/BusinessRentalCatalogCard';
 import { BusinessRentalRespondDialog } from '../../components/business/rentals/BusinessRentalRespondDialog';
@@ -35,6 +37,7 @@ import type {
   BusinessRentalRequestRow,
   BusinessRentalScheduleRow,
 } from '../../types/rentals';
+import { formatChangeDetail } from '../../utils/rentals/rentalRequestFormat';
 import {
   formatRentalMoney,
   formatRentalRequestLocalDateTime,
@@ -70,7 +73,7 @@ const QUEUE_FILTERS: BusinessActionQueue[] = [
 ];
 
 export default function BusinessRentalsStudioScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, spacing, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const listBottomPadding = useMainTabContentBottomPadding(88);
@@ -121,6 +124,7 @@ export default function BusinessRentalsStudioScreen() {
     null
   );
   const [respondReq, setRespondReq] = useState<BusinessRentalRequestRow | null>(null);
+  const [staleBanner, setStaleBanner] = useState(false);
 
   const loadCatalog = useCallback(async () => {
     const list = await rentalsApi.getBusinessItems();
@@ -389,6 +393,19 @@ export default function BusinessRentalsStudioScreen() {
           }
           ListHeaderComponent={
             <View style={{ marginBottom: spacing.md, gap: 8 }}>
+              {staleBanner ? (
+                <View
+                  style={{
+                    backgroundColor: colors.primary.main + '14',
+                    borderRadius: 12,
+                    padding: spacing.sm,
+                  }}
+                >
+                  <Text style={{ color: colors.primary.dark }}>
+                    {t('rentals.modify.staleBanner', 'This request was updated. Review the latest version.')}
+                  </Text>
+                </View>
+              ) : null}
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                 {QUEUE_FILTERS.map((q) => {
                   const selected = queueFilter === q;
@@ -447,6 +464,7 @@ export default function BusinessRentalsStudioScreen() {
               .join(' ');
             const bookingId = item.rental_booking?.id;
             const primaryQueue = phase.businessQueue;
+            const place = businessPlace(item);
             return (
               <View
                 style={[
@@ -460,20 +478,44 @@ export default function BusinessRentalsStudioScreen() {
                 ]}
               >
                 <View style={styles.rowBetween}>
-                  <Text
-                    style={[typography.subtitle2, { color: colors.text.primary, flex: 1 }]}
-                    numberOfLines={2}
-                  >
-                    {item.rental_location_listing.rental_item.name}
-                  </Text>
                   <StatusPill
                     compact
-                    label={t(phase.labelKey, item.status)}
+                    label={item.status === 'pending' ? t('rentals.modify.requested', 'Requested') : t(phase.labelKey, item.status)}
                     backgroundColor={sc.backgroundColor}
                     textColor={sc.textColor}
                     borderColor={sc.borderColor}
                   />
+                  {(item.change_summary?.fields?.length ?? 0) > 0 ? (
+                    <StatusPill
+                      compact
+                      label={t('rentals.modify.updated', 'Updated')}
+                      backgroundColor={colors.primary.main + '18'}
+                      textColor={colors.primary.main}
+                      borderColor={colors.primary.main + '44'}
+                    />
+                  ) : null}
                 </View>
+                <View style={[styles.header, { marginTop: 8 }]}>
+                  <ListingThumb item={item} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[typography.subtitle2, { color: colors.text.primary }]}>
+                      {item.rental_location_listing.rental_item.name}
+                    </Text>
+                    {place ? (
+                      <View style={styles.metaRow}>
+                        <MaterialCommunityIcons name="map-marker-outline" size={14} color={colors.text.secondary} />
+                        <Text style={{ color: colors.text.secondary, marginLeft: 4, fontSize: 12, flex: 1 }}>{place}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+                {(item.change_summary?.fields?.length ?? 0) > 0 ? (
+                  <Text style={{ color: colors.primary.dark, marginTop: 6, fontSize: 13 }}>
+                    {t('rentals.modify.changed', 'Changed: {{detail}}', {
+                      detail: formatChangeDetail(item.change_summary, i18n.language),
+                    })}
+                  </Text>
+                ) : null}
                 {name ? (
                   <Text style={{ color: colors.text.secondary, marginTop: 4 }}>
                     {name}
@@ -655,7 +697,33 @@ export default function BusinessRentalsStudioScreen() {
           setRespondReq(null);
         }}
         onSuccess={() => void loadRequests()}
+        onStale={() => {
+          setStaleBanner(true);
+          void loadRequests();
+        }}
       />
+    </View>
+  );
+}
+
+function businessPlace(item: BusinessRentalRequestRow): string {
+  const listing = item.rental_location_listing;
+  return [listing.rental_item.business?.name, listing.business_location?.address?.city]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function ListingThumb({ item }: { item: BusinessRentalRequestRow }) {
+  const { colors, borderRadius } = useTheme();
+  const image = item.rental_location_listing.rental_item.rental_item_images?.[0];
+  const uri = image?.display_url || image?.thumbnail || image?.image_url;
+  return (
+    <View style={[styles.thumb, { backgroundColor: colors.primary.main + '18', borderRadius: borderRadius.md }]}>
+      {uri ? (
+        <Image source={{ uri }} style={styles.thumbImage} resizeMode="cover" />
+      ) : (
+        <MaterialCommunityIcons name="warehouse" size={26} color={colors.primary.main} />
+      )}
     </View>
   );
 }
@@ -664,6 +732,10 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   reqCard: { borderWidth: 1, borderRadius: 12 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  thumb: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  thumbImage: { width: 56, height: 56 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   fab: { position: 'absolute', right: 16 },
   itemChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
