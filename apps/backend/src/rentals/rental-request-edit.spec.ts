@@ -77,6 +77,17 @@ describe('apply_rental_request_edit SQL', () => {
     expect(sql).toContain('edit_version = p_expected_version');
     expect(sql).toContain("status::text IS DISTINCT FROM 'pending'");
     expect(sql).toContain("interval '2 hours'");
-    expect(sql).toContain('IS DISTINCT FROM p_exclude_request_id');
+  });
+
+  it('uses the create hold set and skips other pending requests', () => {
+    const fn = sql.slice(
+      sql.indexOf('FUNCTION public.rental_peak_units_held_except'),
+      sql.indexOf('FUNCTION public.apply_rental_request_edit')
+    );
+    expect(fn).toContain("b.status::text IN ('reserved', 'confirmed', 'active', 'awaiting_return')");
+    expect(fn).toContain("b.status::text = 'proposed' AND b.contract_expires_at > p_now");
+    expect(fn).toContain('b.rental_request_id IS DISTINCT FROM p_exclude_request_id');
+    expect(fn).not.toContain('rental_requests');
+    expect(fn).not.toContain("status = 'pending'");
   });
 });

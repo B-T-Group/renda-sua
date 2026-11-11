@@ -68,7 +68,9 @@ INSERT INTO public.message_types (id, comment)
 VALUES ('RENTAL_REQUEST_UPDATED', 'A renter updated a rental request the business has not accepted yet')
 ON CONFLICT (id) DO NOTHING;
 
--- Booking holds plus other pending requests. p_exclude_request_id is the editor's own hold.
+-- Same holds as rental_peak_units_held (create): reserved, confirmed, active,
+-- awaiting_return, and unexpired proposed. This request's own booking windows
+-- are excluded. Other Requested requests are not holds.
 CREATE OR REPLACE FUNCTION public.rental_peak_units_held_except(
   p_listing_id uuid,
   p_start timestamptz,
@@ -79,7 +81,7 @@ CREATE OR REPLACE FUNCTION public.rental_peak_units_held_except(
 LANGUAGE sql
 STABLE
 AS $$
-  WITH booking_windows AS (
+  WITH windows AS (
     SELECT
       GREATEST(w.start_at, p_start) AS s,
       LEAST(w.end_at, p_end) AS e,
@@ -94,38 +96,6 @@ AS $$
         b.status::text IN ('reserved', 'confirmed', 'active', 'awaiting_return')
         OR (b.status::text = 'proposed' AND b.contract_expires_at > p_now)
       )
-  ),
-  pending_windows AS (
-    SELECT
-      GREATEST(
-        CASE
-          WHEN COALESCE(elem->>'billing', '') = 'all_day'
-            AND elem->>'calendar_date' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-          THEN (elem->>'calendar_date' || 'T00:00:00Z')::timestamptz
-          ELSE (elem->>'start_at')::timestamptz
-        END,
-        p_start
-      ) AS s,
-      LEAST(
-        CASE
-          WHEN COALESCE(elem->>'billing', '') = 'all_day'
-            AND elem->>'calendar_date' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
-          THEN (elem->>'calendar_date' || 'T00:00:00Z')::timestamptz + interval '1 day'
-          ELSE (elem->>'end_at')::timestamptz
-        END,
-        p_end
-      ) AS e,
-      GREATEST(COALESCE(r.units_requested, 1), 1) AS units
-    FROM public.rental_requests r
-    CROSS JOIN LATERAL jsonb_array_elements(COALESCE(r.rental_selection_windows, '[]'::jsonb)) elem
-    WHERE r.rental_location_listing_id = p_listing_id
-      AND r.status = 'pending'
-      AND r.id IS DISTINCT FROM p_exclude_request_id
-  ),
-  windows AS (
-    SELECT s, e, units FROM booking_windows
-    UNION ALL
-    SELECT s, e, units FROM pending_windows
   ),
   events AS (
     SELECT s AS t, units AS delta FROM windows WHERE e > s
