@@ -453,12 +453,16 @@ export interface BusinessRentalRequestRow {
     base_price_per_hour: number;
     base_price_per_day: number;
     weekly_availability?: RentalWeeklyAvailabilityRow[];
+    business_location?: { name?: string | null; address?: { city?: string | null } | null } | null;
     rental_item: {
       name: string;
       currency: string;
+      business?: { name?: string | null } | null;
       rental_item_images?: Array<{
         id: string;
         image_url: string;
+        display_url?: string | null;
+        thumbnail?: string | null;
         alt_text?: string | null;
       }>;
     };

@@ -1,10 +1,12 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Button, Text } from 'react-native-paper';
 import { useTranslation } from 'react-i18next';
 import i18n from '../i18n';
+import { RentalSearchDateSheet } from '../components/rentals/search/RentalSearchDateSheet';
 import { ClientRentalRequestRow } from '../components/rentals/ClientRentalRequestRow';
 import { RentalHubTabs } from '../components/rentals/RentalHubTabs';
 import { RentalModifyBlockedSheet, RentalModifyPriceSheet } from '../components/rentals/RentalModifySheets';
@@ -51,46 +53,73 @@ export function ModifyRentalCapture() {
           updated={scene === 'saved'}
           accepted={scene === 'accepted'}
           closed={scene === 'closed'}
+          toast={scene === 'saved'}
         />
       )}
     </View>
   );
 }
 
-function CardScene({ updated, accepted, closed }: { updated: boolean; accepted: boolean; closed: boolean }) {
+function CardScene({
+  updated,
+  accepted,
+  closed,
+  toast,
+}: {
+  updated: boolean;
+  accepted: boolean;
+  closed: boolean;
+  toast?: boolean;
+}) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const row = fixtureRow(updated, accepted);
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: colors.pageBackground }} contentContainerStyle={{ padding: 16 }}>
-      <Text style={styles.heading}>{t('rentals.hub.title', 'My rentals')}</Text>
-      <RentalHubTabs
-        value="upcoming"
-        onChange={noop}
-        tabs={[
-          { value: 'action_needed', label: t('rentals.hub.toDo', 'To do'), count: 2 },
-          { value: 'upcoming', label: t('rentals.hub.upcoming', 'Upcoming') },
-          { value: 'past', label: t('rentals.hub.past', 'Past') },
-        ]}
-      />
-      <View style={{ height: 12 }} />
-      <ClientRentalRequestRow
-        row={row}
-        modifyState={accepted ? 'hidden' : closed ? 'closed' : 'open'}
-        onModify={noop}
-        onContact={noop}
-        onBookRequest={noop}
-        onCancel={noop}
-        onViewListing={noop}
-        onViewBooking={noop}
-      />
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: colors.pageBackground }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }}>
+        <Text style={styles.heading}>{t('rentals.hub.title', 'My rentals')}</Text>
+        <RentalHubTabs
+          value="upcoming"
+          onChange={noop}
+          tabs={[
+            { value: 'action_needed', label: t('rentals.hub.toDo', 'To do'), count: 2 },
+            { value: 'upcoming', label: t('rentals.hub.upcoming', 'Upcoming') },
+            { value: 'past', label: t('rentals.hub.past', 'Past') },
+          ]}
+        />
+        <View style={{ height: 12 }} />
+        <ClientRentalRequestRow
+          row={row}
+          modifyState={accepted ? 'hidden' : closed ? 'closed' : 'open'}
+          onModify={noop}
+          onContact={noop}
+          onBookRequest={noop}
+          onCancel={noop}
+          onViewListing={noop}
+          onViewBooking={noop}
+        />
+      </ScrollView>
+      {toast ? <SavedToast /> : null}
+    </View>
+  );
+}
+
+function SavedToast() {
+  const { t } = useTranslation();
+  return (
+    <View style={styles.toastWrap} pointerEvents="none">
+      <View style={styles.toast}>
+        <MaterialCommunityIcons name="check" size={18} color="#FFFFFF" />
+        <Text style={styles.toastText}>{t('rentals.modify.saved', 'Request updated')}</Text>
+      </View>
+    </View>
   );
 }
 
 function ModifyScene({ scene }: { scene: string }) {
   const { t, i18n: i18 } = useTranslation();
   const { colors } = useTheme();
+  const [editOpen, setEditOpen] = useState(false);
   const saved = [day('2026-11-15'), day('2026-11-16')];
   const draft = scene === 'conflict'
     ? [day('2026-11-20'), day('2026-11-21')]
@@ -123,8 +152,17 @@ function ModifyScene({ scene }: { scene: string }) {
         itemMeta={i18.language.startsWith('fr') ? 'DEV demo · 380 FCFA / jour' : 'DEV demo · 380 FCFA / day'}
         requestBlocked={scene === 'conflict'}
         unavailableLabel={scene === 'conflict' ? t('rentals.modify.unavailable', 'Not available for these dates') : undefined}
-        onSeeDates={scene === 'conflict' ? noop : undefined}
+        onSeeDates={() => setEditOpen(true)}
+        onEditDates={() => setEditOpen(true)}
         onModifySave={async () => undefined}
+      />
+      <RentalSearchDateSheet
+        visible={editOpen}
+        value={{ startDate: '2026-11-15', endDate: '2026-11-18', dayCount: 3 }}
+        timeZone="Africa/Douala"
+        onChange={noop}
+        onApply={() => setEditOpen(false)}
+        onClose={() => setEditOpen(false)}
       />
       <RentalModifyPriceSheet
         visible={scene === 'confirm'}
@@ -184,7 +222,18 @@ function BusinessScene({ stale }: { stale: boolean }) {
           <StatusPill label={t('rentals.modify.requested', 'Requested')} backgroundColor="#FEF3C7" textColor="#92400E" borderColor="#FCD34D" compact />
           <StatusPill label={t('rentals.modify.updated', 'Updated')} backgroundColor={colors.primary.main + '18'} textColor={colors.primary.main} borderColor={colors.primary.main + '44'} compact />
         </View>
-        <Text style={styles.item}>Echafaudage roulant 4 m</Text>
+        <View style={[styles.header, { marginTop: 12 }]}>
+          <View style={[styles.thumb, { backgroundColor: colors.primary.main + '18' }]}>
+            <MaterialCommunityIcons name="warehouse" size={26} color={colors.primary.main} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.item}>Echafaudage roulant 4 m</Text>
+            <View style={styles.place}>
+              <MaterialCommunityIcons name="map-marker-outline" size={14} color={colors.text.secondary} />
+              <Text style={{ color: colors.text.secondary, marginLeft: 4 }}>Blue · Yaoundé</Text>
+            </View>
+          </View>
+        </View>
         <Text style={{ color: colors.primary.dark, marginTop: 8 }}>{t('rentals.modify.changed', 'Changed: {{detail}}', { detail })}</Text>
         <Text style={{ marginTop: 8, fontWeight: '700' }}>15–18 Nov · 3 days</Text>
         <Text>1 × · 1 140 FCFA</Text>
@@ -262,5 +311,19 @@ const styles = StyleSheet.create({
   banner: { borderRadius: 12, padding: 12, marginBottom: 12 },
   card: { borderWidth: 1, borderRadius: 16, padding: 16 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  item: { fontSize: 16, fontWeight: '800', marginTop: 10 },
+  item: { fontSize: 16, fontWeight: '800' },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  thumb: { width: 56, height: 56, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  place: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  toastWrap: { position: 'absolute', left: 0, right: 0, bottom: 28, alignItems: 'center' },
+  toast: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#111827',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  toastText: { color: '#FFFFFF', fontWeight: '700' },
 });
