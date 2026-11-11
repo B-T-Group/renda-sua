@@ -441,6 +441,25 @@ describe('inspection SQL enforces the same gates', () => {
     ).toBe(true);
   });
 
+  it('locks a review or an admin clear, and a settlement claim locks pickup as well', () => {
+    expect(inspectionSubmitLocked({ returnResolution: 'review' }, 'return')).toBe(true);
+    expect(inspectionSubmitLocked({ returnResolution: 'admin_cleared' }, 'return')).toBe(true);
+    expect(inspectionSubmitLocked({ returnResolution: 'correction' }, 'return')).toBe(false);
+    expect(inspectionSubmitLocked({ returnResolution: '' }, 'return')).toBe(false);
+    expect(
+      inspectionSubmitLocked(
+        { pickupAckCurrent: false, settlementClaimedAt: '2026-11-10T00:00:00.000Z' },
+        'pickup'
+      )
+    ).toBe(true);
+    expect(
+      inspectionSubmitLocked({ pickupAckCurrent: null, returnResolution: 'accepted' }, 'pickup')
+    ).toBe(false);
+    expect(
+      inspectionSubmitLocked({ pickupAckCurrent: true, returnResolution: 'pending' }, 'return')
+    ).toBe(false);
+  });
+
   it('locks submit after accept in SQL so a new version cannot reset the claim', () => {
     const locked = readFileSync(
       join(

@@ -62,6 +62,17 @@ export function rentalDateRange(start: Date, end: Date): RentalDateRange | null 
   return described.status === 'ok' ? described.range : null;
 }
 
+/** Dates from a search link. The end day is exclusive and the stay is at most 30 days. */
+export function rangeFromSearchParams(startDate?: string, endDate?: string): RentalDateRange | null {
+  if (!startDate || !endDate) return null;
+  const start = Date.parse(`${startDate}T00:00:00Z`);
+  const end = Date.parse(`${endDate}T00:00:00Z`);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
+  const dayCount = Math.round((end - start) / 86_400_000);
+  if (dayCount < 1 || dayCount > MAX_RENTAL_SEARCH_DAYS) return null;
+  return { startDate, endDate, dayCount };
+}
+
 export function todayRange(now = new Date()): RentalDateRange {
   const start = startOfLocalDay(now);
   return rentalDateRange(start, addLocalDays(start, 1))!;

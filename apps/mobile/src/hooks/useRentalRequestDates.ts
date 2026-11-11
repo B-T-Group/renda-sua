@@ -14,19 +14,12 @@ import {
   formatSingleDate,
   marketTimeZone,
   publishRentalSearchStay,
+  rangeFromSearchParams,
   type RentalDateRange,
 } from '../utils/rentals/rentalSearchDates';
 import type { SelectionRange } from '../utils/rentals/rentalRequestScheduleUtils';
 
-export function rangeFromSearchParams(startDate?: string, endDate?: string): RentalDateRange | null {
-  if (!startDate || !endDate) return null;
-  const start = Date.parse(`${startDate}T00:00:00Z`);
-  const end = Date.parse(`${endDate}T00:00:00Z`);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
-  const dayCount = Math.round((end - start) / 86_400_000);
-  if (dayCount < 1 || dayCount > 30) return null;
-  return { startDate, endDate, dayCount };
-}
+export { rangeFromSearchParams };
 
 export function useRentalRequestDates(
   listing: RentalListingRow | null,
