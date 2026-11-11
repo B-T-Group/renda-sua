@@ -12,6 +12,7 @@ import {
   selectedRequestDateKeys,
   formatChangeDetail,
   formatRentalPeriod,
+  readPriceConfirmQuote,
 } from './rentalRequestFormat';
 
 describe('formatRequestAmount', () => {
@@ -215,10 +216,16 @@ describe('formatRentalPeriod', () => {
     { billing: 'all_day', calendar_date: '2026-11-16', start_at: '2026-11-16T00:00:00.000Z', end_at: '2026-11-17T00:00:00.000Z' },
   ];
 
-  it('shows a daily range in the listing calendar, not a device clock', () => {
-    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201317 Nov · 2 days');
-    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201317 nov. · 2 jours');
+  it('shows a daily range through the last booked day, not the exclusive end', () => {
+    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201316 Nov · 2 days');
+    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201316 nov. · 2 jours');
     expect(formatRentalPeriod(daily, 'en', days)).not.toMatch(/PM|AM|2026/);
+    const threeDays = [
+      ...daily,
+      { billing: 'all_day', calendar_date: '2026-11-17', start_at: '2026-11-17T00:00:00.000Z', end_at: '2026-11-18T00:00:00.000Z' },
+    ];
+    expect(formatRentalPeriod(threeDays, 'en', days)).toBe('15\u201317 Nov · 3 days');
+    expect(formatRentalPeriod([daily[0]], 'en', days)).toBe('15 Nov · 1 day');
   });
 
   it('shows hourly bookings as a listing wall-clock range', () => {
@@ -241,6 +248,16 @@ describe('formatRentalPeriod', () => {
         ],
       },
     }, 'en');
-    expect(detail).toBe('dates 15\u201317 → 15\u201318 Nov');
+    expect(detail).toBe('dates 15\u201316 → 15\u201317 Nov');
+  });
+});
+
+describe('readPriceConfirmQuote', () => {
+  it('reads the server quote only from PRICE_CONFIRM_REQUIRED', () => {
+    expect(readPriceConfirmQuote({
+      code: 'PRICE_CONFIRM_REQUIRED',
+      data: { quote: { total: 1140, currency: 'XAF', previousTotal: 760 } },
+    })).toEqual({ total: 1140, currency: 'XAF', previousTotal: 760 });
+    expect(readPriceConfirmQuote({ code: 'RENTAL_REQUEST_UNAVAILABLE' })).toBeNull();
   });
 });

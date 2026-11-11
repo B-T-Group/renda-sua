@@ -191,15 +191,11 @@ function dayNum(isoDate: string): number {
   return Number(isoDate.slice(8, 10));
 }
 
-function exclusiveEnd(isoDate: string): string {
-  return addUtcDays(isoDate, 1);
-}
-
 function sameMonth(left: string, right: string): boolean {
   return left.slice(0, 7) === right.slice(0, 7);
 }
 
-/** `15–17 Nov` from all-day calendar dates, using the exclusive end day. */
+/** `15–17 Nov` from the first and last booked all-day calendar dates. */
 export function formatRentalDateRange(windows: PeriodWindow[], locale: string): string {
   const days = windows
     .map((row) => row.calendar_date)
@@ -207,9 +203,10 @@ export function formatRentalDateRange(windows: PeriodWindow[], locale: string): 
     .sort();
   if (!days.length) return '';
   const start = days[0];
-  const end = exclusiveEnd(days[days.length - 1]);
+  const end = days[days.length - 1];
   const startMonth = monthLabel(start, locale);
   const endMonth = monthLabel(end, locale);
+  if (start === end) return `${dayNum(start)} ${startMonth}`;
   if (sameMonth(start, end)) return `${dayNum(start)}${EN_DASH}${dayNum(end)} ${endMonth}`;
   return `${dayNum(start)} ${startMonth} ${EN_DASH} ${dayNum(end)} ${endMonth}`;
 }
@@ -252,6 +249,32 @@ export function rentalSelectionFingerprint(
 
 export function modifySaveNeedsConfirm(nextTotal: number, previousTotal: number): boolean {
   return nextTotal > previousTotal + 0.009;
+}
+
+export interface PriceConfirmQuote {
+  total: number;
+  currency: string;
+  previousTotal: number | null;
+}
+
+/** Server 409 body: the locked re-quote the confirm sheet must show. */
+export function readPriceConfirmQuote(error: unknown): PriceConfirmQuote | null {
+  if (!error || typeof error !== 'object') return null;
+  const row = error as {
+    code?: string;
+    data?: { quote?: { total?: unknown; currency?: unknown; previousTotal?: unknown } };
+  };
+  if (row.code !== 'PRICE_CONFIRM_REQUIRED') return null;
+  const quote = row.data?.quote;
+  const total = Number(quote?.total);
+  const currency = typeof quote?.currency === 'string' ? quote.currency : '';
+  if (!Number.isFinite(total) || !currency) return null;
+  const previous = quote?.previousTotal == null ? null : Number(quote.previousTotal);
+  return {
+    total,
+    currency,
+    previousTotal: previous != null && Number.isFinite(previous) ? previous : null,
+  };
 }
 
 type ChangeSummary = {

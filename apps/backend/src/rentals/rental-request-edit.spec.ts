@@ -5,6 +5,7 @@ import {
   classifyRentalAccept,
   classifyRentalEdit,
   editWindowOpen,
+  parsePriceConfirmQuote,
   RENTAL_EDIT_LEAD_MS,
 } from './rental-request-edit';
 
@@ -89,5 +90,34 @@ describe('apply_rental_request_edit SQL', () => {
     expect(fn).toContain('b.rental_request_id IS DISTINCT FROM p_exclude_request_id');
     expect(fn).not.toContain('rental_requests');
     expect(fn).not.toContain("status = 'pending'");
+  });
+});
+
+describe('price confirm quote', () => {
+  const sql = readFileSync(
+    join(__dirname, '../../../hasura/migrations/Rendasua/20261111190000_rental_request_price_confirm/up.sql'),
+    'utf8'
+  );
+
+  it('parses the locked quote out of the SQL error', () => {
+    expect(parsePriceConfirmQuote(
+      'rental_request_price_confirm_required {"total":1140,"currency":"XAF","previousTotal":760}'
+    )).toEqual({ total: 1140, currency: 'XAF', previousTotal: 760 });
+    expect(parsePriceConfirmQuote('rental_request_stale_version')).toBeNull();
+  });
+
+  it('rejects a higher total before any write unless the confirm matches', () => {
+    const fn = sql.slice(sql.indexOf('FUNCTION public.apply_rental_request_edit'));
+    const raiseAt = fn.indexOf('rental_request_price_confirm_required');
+    const updateAt = fn.indexOf('UPDATE public.rental_requests');
+    expect(raiseAt).toBeGreaterThan(0);
+    expect(updateAt).toBeGreaterThan(raiseAt);
+    expect(fn.indexOf('v_price_confirmed := true')).toBeGreaterThan(raiseAt);
+    expect(fn).toContain('v_total > ROUND(v_req.quoted_total, 2)');
+    expect(fn).toContain('p_confirmed_amount IS NULL');
+    expect(fn).toContain('ROUND(p_confirmed_amount, 2) IS DISTINCT FROM v_total');
+    expect(fn).toContain('upper(btrim(p_confirmed_currency))');
+    expect(fn).toContain('price_confirmed');
+    expect(fn).toContain('previous_quoted_total');
   });
 });

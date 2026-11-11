@@ -46,6 +46,7 @@ import {
   classifyRentalEdit,
   earliestWindowIso,
   normalizeRequestNote,
+  parsePriceConfirmQuote,
   quotePlanTotal,
   type RentalEditBlock,
   type RentalWindowSnapshot,
@@ -902,7 +903,9 @@ export class RentalsService {
     windows: RentalWindowSnapshot[],
     units: number,
     note: string | undefined,
-    changeSummary: ReturnType<typeof buildChangeSummary>
+    changeSummary: ReturnType<typeof buildChangeSummary>,
+    confirmedAmount: number | null,
+    confirmedCurrency: string | null
   ) {
     try {
       const saved = await this.hasuraSystemService.executeMutation<{
@@ -917,6 +920,8 @@ export class RentalsService {
         note: normalizeRequestNote(note),
         changeSummary,
         now: new Date().toISOString(),
+        confirmedAmount,
+        confirmedCurrency,
       });
       const row = saved.apply_rental_request_edit?.[0];
       if (!row) throw new HttpException('Could not save changes', HttpStatus.CONFLICT);
@@ -967,12 +972,25 @@ export class RentalsService {
 
   private mapEditSqlError(error: unknown): HttpException {
     const text = error instanceof Error ? error.message : String(error);
+    const quote = parsePriceConfirmQuote(text);
+    if (quote) return this.priceConfirmError(quote);
     if (text.includes('rental_request_not_pending')) return this.editHttpError('not_pending');
     if (text.includes('rental_request_forbidden')) return this.editHttpError('forbidden');
     if (text.includes('rental_request_stale_version')) return this.editHttpError('stale_version');
     if (text.includes('rental_request_window_closed')) return this.editHttpError('window_closed');
     if (text.includes('rental_request_unavailable')) return this.editHttpError('unavailable');
     return new HttpException('Could not save changes', HttpStatus.CONFLICT);
+  }
+
+  private priceConfirmError(quote: NonNullable<ReturnType<typeof parsePriceConfirmQuote>>): HttpException {
+    return new HttpException(
+      {
+        message: 'The quoted total went up. Confirm the new total to save.',
+        code: 'PRICE_CONFIRM_REQUIRED',
+        quote,
+      },
+      HttpStatus.CONFLICT
+    );
   }
 
   private async isModifyRequestEnabled(): Promise<boolean> {
@@ -1083,7 +1101,17 @@ export class RentalsService {
       },
       { windows: next, units, note: dto.clientRequestNote ?? null }
     );
-    const saved = await this.applyRentalRequestEdit(requestId, user, dto.expectedVersion, next, units, dto.clientRequestNote, summary);
+    const saved = await this.applyRentalRequestEdit(
+      requestId,
+      user,
+      dto.expectedVersion,
+      next,
+      units,
+      dto.clientRequestNote,
+      summary,
+      dto.confirmedTotal?.amount ?? null,
+      dto.confirmedTotal?.currency ?? null
+    );
     await this.notifyBusinessOfRentalEdit(req, requestId, user.name);
     return { success: true, requestId, editVersion: saved.version, quotedTotal: saved.quoted_total };
   }

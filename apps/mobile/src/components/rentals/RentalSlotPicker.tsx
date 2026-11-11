@@ -40,6 +40,8 @@ import {
   formatRentalPeriod,
   formatRequestAmount,
   modifySaveNeedsConfirm,
+  readPriceConfirmQuote,
+  type PriceConfirmQuote,
   rentalSelectionFingerprint,
   requestPriceCopy,
   requestSelectionLabel,
@@ -76,6 +78,24 @@ function addDaysKey(base: string, offset: number): string {
   const mo = String(d.getMonth() + 1).padStart(2, '0');
   const da = String(d.getDate()).padStart(2, '0');
   return `${d.getFullYear()}-${mo}-${da}`;
+}
+
+function openedDayCount(rows: SelectionRange[]): number {
+  const allDay = rows.filter((row) => row.billing === 'all_day').length;
+  return allDay || rows.length;
+}
+
+function selectionPeriodWindows(rows: SelectionRange[]) {
+  return rows.map((row) => {
+    const start = localPickerInstantToRequestParts(row.startMs);
+    const end = localPickerInstantToRequestParts(row.endMs);
+    return {
+      billing: row.billing,
+      calendar_date: row.calendarDate,
+      start_at: requestedSlotUtcIso(start.dateKey, start.hour, start.minute),
+      end_at: requestedSlotUtcIso(end.dateKey, end.hour, end.minute),
+    };
+  });
 }
 
 function formatSlotTime(ms: number, locale?: string): string {
@@ -139,6 +159,7 @@ export interface RentalSlotPickerProps {
     }>;
     unitsRequested: number;
     clientRequestNote?: string;
+    confirmedTotal?: { amount: number; currency: string };
   }) => Promise<void>;
 }
 
@@ -194,6 +215,7 @@ export function RentalSlotPicker({
   const [unitsRequested, setUnitsRequested] = useState(initialUnits);
   const [notes, setNotes] = useState(initialNotes);
   const [priceUpOpen, setPriceUpOpen] = useState(false);
+  const [serverQuote, setServerQuote] = useState<PriceConfirmQuote | null>(null);
   const openedFingerprint = useMemo(
     () => rentalSelectionFingerprint(savedSelections ?? initialSelections, initialUnits, initialNotes),
     [initialNotes, initialSelections, initialUnits, savedSelections]
@@ -605,12 +627,20 @@ export function RentalSlotPicker({
     };
   };
 
-  const commitModify = async () => {
+  const commitModify = async (confirmed?: { amount: number; currency: string }) => {
     if (!onModifySave) return;
     setPriceUpOpen(false);
     try {
-      await onModifySave(buildModifyBody());
+      const body = buildModifyBody();
+      await onModifySave(confirmed ? { ...body, confirmedTotal: confirmed } : body);
+      setServerQuote(null);
     } catch (e: unknown) {
+      const quote = readPriceConfirmQuote(e);
+      if (quote) {
+        setServerQuote(quote);
+        setPriceUpOpen(true);
+        return;
+      }
       setMsg(e instanceof Error ? e.message : t('rentals.requestFailed', 'Request failed'));
     }
   };
@@ -622,20 +652,10 @@ export function RentalSlotPicker({
     const dayCountLabel = (count: number) =>
       t('rentals.requestForm.dayCount', '{{count}} day', { count });
     const shownDateLine = modifying && effectiveSelections.length
-      ? formatRentalPeriod(
-          effectiveSelections.map((row) => {
-            const start = localPickerInstantToRequestParts(row.startMs);
-            const end = localPickerInstantToRequestParts(row.endMs);
-            return {
-              billing: row.billing,
-              calendar_date: row.calendarDate,
-              start_at: requestedSlotUtcIso(start.dateKey, start.hour, start.minute),
-              end_at: requestedSlotUtcIso(end.dateKey, end.hour, end.minute),
-            };
-          }),
-          i18n.language,
-          dayCountLabel
-        )
+      ? formatRentalPeriod(selectionPeriodWindows(effectiveSelections), i18n.language, dayCountLabel)
+      : dateLine;
+    const savedDateLine = modifying && savedSelections?.length
+      ? formatRentalPeriod(selectionPeriodWindows(savedSelections), i18n.language, dayCountLabel)
       : dateLine;
     const selectedKeys = selectedRequestDateKeys(selections);
     const price = requestBlocked
@@ -797,24 +817,32 @@ export function RentalSlotPicker({
           rows={[
             {
               label: t('rentals.modify.dates', 'Dates'),
-              from: dateLine ?? '',
+              from: savedDateLine ?? '',
               to: shownDateLine ?? '',
             },
             {
               label: t('rentals.modify.duration', 'Duration'),
-              from: dayCountLabel(initialSelections.filter((row) => row.billing === 'all_day').length || initialSelections.length),
-              to: dayCountLabel(effectiveSelections.filter((row) => row.billing === 'all_day').length || effectiveSelections.length),
+              from: dayCountLabel(openedDayCount(savedSelections ?? initialSelections)),
+              to: dayCountLabel(openedDayCount(effectiveSelections)),
             },
             {
               label: t('rentals.requestForm.total', 'Total'),
-              from: formatRequestAmount(previousTotal ?? 0, currency, i18n.language),
-              to: formatRequestAmount(estimatedTotal, currency, i18n.language),
+              from: formatRequestAmount(serverQuote?.previousTotal ?? previousTotal ?? 0, serverQuote?.currency ?? currency, i18n.language),
+              to: formatRequestAmount(serverQuote?.total ?? estimatedTotal, serverQuote?.currency ?? currency, i18n.language),
             },
           ]}
           saveLabel={t('rentals.modify.save', 'Save changes')}
           keepLabel={t('rentals.modify.keep', 'Keep current')}
-          onSave={() => void commitModify()}
-          onKeep={() => setPriceUpOpen(false)}
+          onSave={() =>
+            void commitModify({
+              amount: serverQuote?.total ?? estimatedTotal,
+              currency: serverQuote?.currency ?? currency,
+            })
+          }
+          onKeep={() => {
+            setPriceUpOpen(false);
+            setServerQuote(null);
+          }}
         />
       </View>
     );

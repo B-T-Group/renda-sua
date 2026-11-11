@@ -522,7 +522,11 @@ export class RentalsController {
   @ApiBody({ type: UpdateRentalRequestDto })
   @ApiResponse({ status: 200, description: 'Request updated' })
   @ApiResponse({ status: 404, description: 'Feature off or request missing' })
-  @ApiResponse({ status: 409, description: 'Stale version, closed window, or no longer pending' })
+  @ApiResponse({
+    status: 409,
+    description:
+      'Stale version, closed window, no longer pending, or PRICE_CONFIRM_REQUIRED when the re-quote is higher than the confirmed total',
+  })
   async modifyRequest(@Param('id') requestId: string, @Body() dto: UpdateRentalRequestDto) {
     return this.rentalsService.modifyRentalRequest(requestId, dto);
   }

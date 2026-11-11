@@ -24,6 +24,7 @@ select_permissions:
         - previous_units
         - previous_note
         - previous_quoted_total
+        - price_confirmed
         - edited_by_user_id
         - created_at
       filter:
@@ -49,6 +50,7 @@ select_permissions:
         - previous_units
         - previous_note
         - previous_quoted_total
+        - price_confirmed
         - edited_by_user_id
         - created_at
       filter:

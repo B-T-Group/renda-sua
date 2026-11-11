@@ -366,6 +366,8 @@ export const APPLY_RENTAL_REQUEST_EDIT = `
     $note: String
     $changeSummary: jsonb!
     $now: timestamptz!
+    $confirmedAmount: numeric
+    $confirmedCurrency: String
   ) {
     apply_rental_request_edit(
       args: {
@@ -378,6 +380,8 @@ export const APPLY_RENTAL_REQUEST_EDIT = `
         p_note: $note
         p_change_summary: $changeSummary
         p_now: $now
+        p_confirmed_amount: $confirmedAmount
+        p_confirmed_currency: $confirmedCurrency
       }
     ) {
       id
