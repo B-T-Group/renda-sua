@@ -5,7 +5,6 @@ import { ApolloProvider } from '@apollo/client';
 import { SystemBars } from 'react-native-edge-to-edge';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ModifyRentalCaptureApp } from './src/dev/ModifyRentalCapture';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { PaperProvider } from 'react-native-paper';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
@@ -114,13 +113,6 @@ function AppContentBase() {
 
   // ClientFlags + Stripe must mount *after* env hydrate so DEVELOPMENT does not
   // briefly call prod.api (getEnv() defaults to prod until AsyncStorage loads).
-  if (__DEV__ && typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('capture')) {
-    return (
-      <SafeAreaProvider>
-        <ModifyRentalCaptureApp />
-      </SafeAreaProvider>
-    );
-  }
   return (
     <ClientFlagsProvider>
       <StripeAppProvider>
