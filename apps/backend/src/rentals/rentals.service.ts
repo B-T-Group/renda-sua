@@ -3806,6 +3806,7 @@ export class RentalsService {
     );
     this.assertRentalRequestStartsInFuture(earliest);
     this.assertDurationHours(listing, plan.totalHours);
+    this.assertAllDayWindows(plan, listing);
     const weekly = listing.weekly_availability ?? [];
     for (const w of plan.windows) {
       this.assertRequestedWindowInAvailability(w.start, w.end, weekly);
@@ -3821,6 +3822,25 @@ export class RentalsService {
     }
   }
 
+  private assertAllDayWindows(plan: RentalRequestWindowPlan, listing: any) {
+    const allDay = plan.windows.filter((w) => w.billing === 'all_day');
+    if (!allDay.length) return;
+    if (!(Number(listing.base_price_per_day) > 0)) {
+      throw new HttpException('all_day billing requires a daily price', HttpStatus.BAD_REQUEST);
+    }
+    for (const w of allDay) this.assertAllDayStaysOnDate(w);
+  }
+
+  private assertAllDayStaysOnDate(w: RentalRequestWindowEntry) {
+    if (!w.calendarDate) {
+      throw new HttpException('calendarDate is required for all_day windows', HttpStatus.BAD_REQUEST);
+    }
+    const { start, end } = this.utcDayBoundsFromCalendarDate(w.calendarDate);
+    if (w.start < start || w.end > end) {
+      throw new HttpException('all_day window must stay on calendarDate', HttpStatus.BAD_REQUEST);
+    }
+  }
+
   private utcDayBoundsFromCalendarDate(calendarDate: string): { start: Date; end: Date } {
     const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(calendarDate);
     if (!m) {
@@ -3830,6 +3850,9 @@ export class RentalsService {
     const mo = Number(m[2]) - 1;
     const d = Number(m[3]);
     const start = new Date(Date.UTC(y, mo, d, 0, 0, 0, 0));
+    if (start.toISOString().slice(0, 10) !== calendarDate) {
+      throw new HttpException('Invalid calendar_date', HttpStatus.BAD_REQUEST);
+    }
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 1);
     return { start, end };
@@ -3981,11 +4004,9 @@ export class RentalsService {
     let total = 0;
     for (const p of parts) {
       if (p.billing === 'all_day') {
-        if (!p.calendarDate) {
-          throw new HttpException(
-            'all_day window missing calendar_date',
-            HttpStatus.BAD_REQUEST
-          );
+        this.assertAllDayStaysOnDate(p);
+        if (!(ratePerDay > 0)) {
+          throw new HttpException('all_day billing requires a daily price', HttpStatus.BAD_REQUEST);
         }
         const subtotal = Number((ratePerDay * units).toFixed(2));
         total += subtotal;
