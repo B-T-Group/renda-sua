@@ -254,6 +254,32 @@ export function modifySaveNeedsConfirm(nextTotal: number, previousTotal: number)
   return nextTotal > previousTotal + 0.009;
 }
 
+export interface PriceConfirmQuote {
+  total: number;
+  currency: string;
+  previousTotal: number | null;
+}
+
+/** Server 409 body: the locked re-quote the confirm sheet must show. */
+export function readPriceConfirmQuote(error: unknown): PriceConfirmQuote | null {
+  if (!error || typeof error !== 'object') return null;
+  const row = error as {
+    code?: string;
+    data?: { quote?: { total?: unknown; currency?: unknown; previousTotal?: unknown } };
+  };
+  if (row.code !== 'PRICE_CONFIRM_REQUIRED') return null;
+  const quote = row.data?.quote;
+  const total = Number(quote?.total);
+  const currency = typeof quote?.currency === 'string' ? quote.currency : '';
+  if (!Number.isFinite(total) || !currency) return null;
+  const previous = quote?.previousTotal == null ? null : Number(quote.previousTotal);
+  return {
+    total,
+    currency,
+    previousTotal: previous != null && Number.isFinite(previous) ? previous : null,
+  };
+}
+
 type ChangeSummary = {
   fields?: string[];
   dates?: { from: PeriodWindow[]; to: PeriodWindow[] };

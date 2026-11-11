@@ -166,6 +166,74 @@ describe('RentalsService rental request edits', () => {
       expect.objectContaining({ businessUserId: 'biz-user', requestId: 'request-1' })
     );
   });
+
+  const PRICE_ERROR = new Error(
+    'rental_request_price_confirm_required {"total":1140,"currency":"XAF","previousTotal":760}'
+  );
+
+  it('returns 409 and does not notify when a higher price is not confirmed', async () => {
+    const { service, executeMutation, notify } = serviceWith(pendingRequest({ quoted_total: '760' }));
+    executeMutation.mockRejectedValue(PRICE_ERROR);
+    try {
+      await service.modifyRentalRequest('request-1', nextWindows);
+      throw new Error('expected rejection');
+    } catch (error) {
+      expect(codeOf(error)).toBe('PRICE_CONFIRM_REQUIRED');
+      expect((error as HttpException).getStatus()).toBe(409);
+      expect((error as HttpException).getResponse()).toMatchObject({
+        quote: { total: 1140, currency: 'XAF', previousTotal: 760 },
+      });
+    }
+    expect(executeMutation).toHaveBeenCalledTimes(1);
+    expect(executeMutation).toHaveBeenCalledWith(
+      Q.APPLY_RENTAL_REQUEST_EDIT,
+      expect.objectContaining({ confirmedAmount: null, confirmedCurrency: null })
+    );
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('returns 409 when the confirmed amount is not the new total', async () => {
+    const { service, executeMutation, notify } = serviceWith(pendingRequest({ quoted_total: '760' }));
+    executeMutation.mockRejectedValue(PRICE_ERROR);
+    await expect(
+      service.modifyRentalRequest('request-1', { ...nextWindows, confirmedTotal: { amount: 1000, currency: 'XAF' } })
+    ).rejects.toMatchObject({ status: 409 });
+    expect(executeMutation).toHaveBeenCalledWith(
+      Q.APPLY_RENTAL_REQUEST_EDIT,
+      expect.objectContaining({ confirmedAmount: 1000, confirmedCurrency: 'XAF' })
+    );
+    expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('saves a higher price the renter confirmed', async () => {
+    const { service, executeMutation, notify } = serviceWith(pendingRequest({ quoted_total: '760' }));
+    executeMutation.mockResolvedValue({
+      apply_rental_request_edit: [{ version: 2, quoted_total: '1140.00' }],
+    });
+    const saved = await service.modifyRentalRequest('request-1', {
+      ...nextWindows,
+      confirmedTotal: { amount: 1140, currency: 'XAF' },
+    });
+    expect(executeMutation).toHaveBeenCalledWith(
+      Q.APPLY_RENTAL_REQUEST_EDIT,
+      expect.objectContaining({ confirmedAmount: 1140, confirmedCurrency: 'XAF' })
+    );
+    expect(saved).toEqual({ success: true, requestId: 'request-1', editVersion: 2, quotedTotal: 1140 });
+    expect(notify).toHaveBeenCalled();
+  });
+
+  it('saves a lower price without a confirm', async () => {
+    const { service, executeMutation } = serviceWith(pendingRequest({ quoted_total: '1140' }));
+    executeMutation.mockResolvedValue({
+      apply_rental_request_edit: [{ version: 2, quoted_total: '760.00' }],
+    });
+    const saved = await service.modifyRentalRequest('request-1', nextWindows);
+    expect(executeMutation).toHaveBeenCalledWith(
+      Q.APPLY_RENTAL_REQUEST_EDIT,
+      expect.objectContaining({ confirmedAmount: null, confirmedCurrency: null })
+    );
+    expect(saved.quotedTotal).toBe(760);
+  });
 });
 
 describe('RentalsService.respondToRentalRequest version gate', () => {

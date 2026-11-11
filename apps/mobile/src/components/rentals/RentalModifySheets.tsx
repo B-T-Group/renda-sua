@@ -36,10 +36,10 @@ export function RentalModifyPriceSheet({
               <Text style={{ color: colors.primary.main, fontWeight: '800' }}>{row.to}</Text>
             </View>
           ))}
-          <Button mode="contained" icon="check" onPress={onSave} style={{ marginTop: 12 }}>
+          <Button mode="contained" icon="check" onPress={onSave} style={{ marginTop: 12 }} testID="rental-modify-confirm-save">
             {saveLabel}
           </Button>
-          <Button mode="text" onPress={onKeep}>{keepLabel}</Button>
+          <Button mode="text" onPress={onKeep} testID="rental-modify-confirm-keep">{keepLabel}</Button>
         </Pressable>
       </Pressable>
     </AppModal>

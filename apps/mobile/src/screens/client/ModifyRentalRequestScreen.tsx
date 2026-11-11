@@ -45,6 +45,7 @@ export default function ModifyRentalRequestScreen() {
       windows: Array<{ requestedStartAt: string; requestedEndAt: string; billing?: 'all_day'; calendarDate?: string }>;
       unitsRequested: number;
       clientRequestNote?: string;
+      confirmedTotal?: { amount: number; currency: string };
     }) => {
       if (!request) return;
       try {

@@ -12,6 +12,7 @@ import {
   selectedRequestDateKeys,
   formatChangeDetail,
   formatRentalPeriod,
+  readPriceConfirmQuote,
 } from './rentalRequestFormat';
 
 describe('formatRequestAmount', () => {
@@ -242,5 +243,15 @@ describe('formatRentalPeriod', () => {
       },
     }, 'en');
     expect(detail).toBe('dates 15\u201317 → 15\u201318 Nov');
+  });
+});
+
+describe('readPriceConfirmQuote', () => {
+  it('reads the server quote only from PRICE_CONFIRM_REQUIRED', () => {
+    expect(readPriceConfirmQuote({
+      code: 'PRICE_CONFIRM_REQUIRED',
+      data: { quote: { total: 1140, currency: 'XAF', previousTotal: 760 } },
+    })).toEqual({ total: 1140, currency: 'XAF', previousTotal: 760 });
+    expect(readPriceConfirmQuote({ code: 'RENTAL_REQUEST_UNAVAILABLE' })).toBeNull();
   });
 });
