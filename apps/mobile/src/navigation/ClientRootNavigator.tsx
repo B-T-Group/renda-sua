@@ -57,6 +57,7 @@ import UserPaymentProgramsScreen from '../screens/shared/UserPaymentProgramsScre
 import UserPurchaseCreditsScreen from '../screens/shared/UserPurchaseCreditsScreen';
 import CashAdvanceDrawSuccessScreen from '../screens/shared/CashAdvanceDrawSuccessScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
+import RentalRequestScreen from '../screens/shared/RentalRequestScreen';
 import RentalRequestSubmittedScreen from '../screens/client/RentalRequestSubmittedScreen';
 import ClientMyRentalsScreen from '../screens/client/ClientMyRentalsScreen';
 import RentalBookingDetailScreen from '../screens/client/RentalBookingDetailScreen';
@@ -389,6 +390,11 @@ export function ClientRootNavigator() {
             title: t('rentals.title', 'Rentals'),
             headerBackTitle: t('nav.clientTabs.rentals', 'Rentals'),
           }}
+        />
+        <ClientRootStack.Screen
+          name="RentalRequest"
+          component={RentalRequestScreen}
+          options={{ headerShown: false, title: t('rentals.requestRental', 'Request this rental') }}
         />
         <ClientRootStack.Screen
           name="RentalRequestSubmitted"

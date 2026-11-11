@@ -23,6 +23,7 @@ import StoresListScreen from '../screens/shared/StoresListScreen';
 import StoreDetailScreen from '../screens/shared/StoreDetailScreen';
 import CartScreen from '../screens/shared/CartScreen';
 import RentalListingDetailScreen from '../screens/shared/RentalListingDetailScreen';
+import RentalRequestScreen from '../screens/shared/RentalRequestScreen';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
 import { ReelsTabIcon } from '../components/reels/ReelsTabIcon';
 import AssistantChatScreen from '../screens/shared/AssistantChatScreen';
@@ -338,6 +339,11 @@ export function GuestRootNavigator({
             title: t('rentals.title', 'Rentals'),
             headerBackTitle: t('nav.guestTabs.rentals', 'Rentals'),
           }}
+        />
+        <GuestRootStack.Screen
+          name="RentalRequest"
+          component={RentalRequestScreen}
+          options={{ headerShown: false, title: t('rentals.requestRental', 'Request this rental') }}
         />
         <GuestRootStack.Screen
           name="Cart"

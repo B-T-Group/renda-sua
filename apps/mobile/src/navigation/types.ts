@@ -158,6 +158,12 @@ export type StoresListParams = {
   businessId?: string;
 };
 
+export type RentalRequestParams = {
+  listingId: string;
+  startDate?: string;
+  endDate?: string;
+};
+
 export type GuestRootStackParamList = {
   GuestTabs: NavigatorScreenParams<GuestTabParamList> | undefined;
   InventoryItemDetail: InventoryItemDetailParams;
@@ -175,6 +181,7 @@ export type GuestRootStackParamList = {
     endDate?: string;
     openRequest?: boolean;
   };
+  RentalRequest: RentalRequestParams;
   CategoriesBrowse: undefined;
   AssistantChat: { context?: AssistantContext; prefill?: string } | undefined;
 };
@@ -263,6 +270,7 @@ export type ClientRootStackParamList = {
     endDate?: string;
     openRequest?: boolean;
   };
+  RentalRequest: RentalRequestParams;
   RentalRequestSubmitted: { requestId?: string };
   ClientMyRentals: undefined;
   RentalBookingDetail: { bookingId: string };
