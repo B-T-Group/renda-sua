@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  BackHandler,
   FlatList,
   Image,
   Pressable,
@@ -14,6 +15,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Button, Dialog, Portal, Snackbar, Text } from 'react-native-paper';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ClientRentalRequestRow as ClientRentalRequestRowView } from '../../components/rentals/ClientRentalRequestRow';
+import { MyRentalsHeader } from '../../components/rentals/MyRentalsHeader';
 import { RentalHubTabs } from '../../components/rentals/RentalHubTabs';
 import { RentalBookConfirmSheet } from '../../components/rentals/RentalBookConfirmSheet';
 import { StatusPill } from '../../components/common/StatusPill';
@@ -41,6 +43,7 @@ import {
   parseRentalSelectionWindows,
   type RentalHubGroup,
 } from '../../utils/rentals';
+import { leaveMyRentals } from '../../utils/rentals/leaveMyRentals';
 import { rentalEditWindowOpen } from '../../utils/rentals/rentalRequestFormat';
 
 type HubSegment = RentalHubGroup;
@@ -96,6 +99,18 @@ export default function ClientMyRentalsScreen() {
     if (segment !== 'action_needed' && segment !== 'upcoming' && segment !== 'past') return;
     setHubSegment(segment);
   }, [route.params?.segment]);
+
+  const onBack = useCallback(() => {
+    leaveMyRentals(navigation);
+  }, [navigation]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      onBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [onBack]);
 
   const {
     requests,
@@ -359,11 +374,13 @@ export default function ClientMyRentalsScreen() {
   const error = requestsError || bookingsError;
 
   return (
-    <View style={[styles.safe, { backgroundColor: colors.pageBackground }]}>
+    <View style={[styles.safe, { backgroundColor: colors.pageBackground, paddingTop: insets.top }]}>
       <View style={{ paddingHorizontal: spacing.md, paddingTop: spacing.sm }}>
-        <Text style={[typography.h6, { color: colors.text.primary, marginBottom: spacing.sm }]}>
-          {t('rentals.hub.title', 'My rentals')}
-        </Text>
+        <MyRentalsHeader
+          title={t('rentals.hub.title', 'My rentals')}
+          backLabel={t('common.back', 'Back')}
+          onBack={onBack}
+        />
         <RentalHubTabs
           value={hubSegment}
           onChange={setHubSegment}

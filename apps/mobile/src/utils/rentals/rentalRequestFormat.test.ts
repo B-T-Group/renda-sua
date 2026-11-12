@@ -11,6 +11,7 @@ import {
   requestUsesDayWording,
   selectedRequestDateKeys,
   formatChangeDetail,
+  formatListingDeadline,
   formatRentalPeriod,
 } from './rentalRequestFormat';
 
@@ -216,9 +217,38 @@ describe('formatRentalPeriod', () => {
   ];
 
   it('shows a daily range in the listing calendar, not a device clock', () => {
-    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201317 Nov · 2 days');
-    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201317 nov. · 2 jours');
+    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201316 Nov · 2 days');
+    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201316 nov. · 2 jours');
     expect(formatRentalPeriod(daily, 'en', days)).not.toMatch(/PM|AM|2026/);
+  });
+
+  it('treats a same-clock end the next day as one booked day', () => {
+    const overnight = [{
+      start_at: '2026-11-12T08:00:00.000Z',
+      end_at: '2026-11-13T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(overnight, 'en', days)).toBe('12 Nov · 1 day');
+    expect(formatRentalPeriod(overnight, 'fr', jours)).toBe('12 nov. · 1 jour');
+    expect(formatRentalPeriod(overnight, 'en', days)).not.toContain('08:00');
+  });
+
+  it('counts whole days through the last booked day when the return is the same clock', () => {
+    const span = [{
+      start_at: '2026-11-15T08:00:00.000Z',
+      end_at: '2026-11-18T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(span, 'en', days)).toBe('15\u201317 Nov · 3 days');
+    expect(formatRentalPeriod(span, 'fr', jours)).toBe('15\u201317 nov. · 3 jours');
+  });
+
+  it('collapses one all-day calendar date to that day', () => {
+    const one = [{
+      billing: 'all_day',
+      calendar_date: '2026-11-12',
+      start_at: '2026-11-12T08:00:00.000Z',
+      end_at: '2026-11-13T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(one, 'en', days)).toBe('12 Nov · 1 day');
   });
 
   it('shows hourly bookings as a listing wall-clock range', () => {
@@ -241,6 +271,14 @@ describe('formatRentalPeriod', () => {
         ],
       },
     }, 'en');
-    expect(detail).toBe('dates 15\u201317 → 15\u201318 Nov');
+    expect(detail).toBe('dates 15\u201316 → 15\u201317 Nov');
+  });
+});
+
+describe('formatListingDeadline', () => {
+  it('uses the listing wall clock, not a device locale string', () => {
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).toBe('Fri 20 Nov, 10:00');
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'fr')).toBe('ven. 20 nov., 10:00');
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).not.toMatch(/AM|PM|2026/);
   });
 });

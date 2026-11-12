@@ -39,6 +39,7 @@ import {
   rentalBookingStatusColors,
   resolveBookingPhase,
 } from '../../utils/rentals';
+import { formatListingDeadline } from '../../utils/rentals/rentalRequestFormat';
 import { clientInspectionAction, pickupGate } from '../../utils/rentals/rentalInspection';
 
 type Params = { RentalBookingDetail: { bookingId: string } };
@@ -85,7 +86,7 @@ function toAmount(value: number | string | null | undefined): number {
 }
 
 export default function RentalBookingDetailScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { colors, typography, spacing, borderRadius, shadows } = useTheme();
   const insets = useSafeAreaInsets();
   const route = useRoute<RouteProp<Params, 'RentalBookingDetail'>>();
@@ -554,7 +555,7 @@ export default function RentalBookingDetailScreen() {
             {booking.contract_expires_at ? (
               <Text style={[typography.caption, { color: colors.text.secondary, marginTop: 4 }]}>
                 {t('rentals.clientRequests.contractCompleteBy', 'Complete booking by {{date}}', {
-                  date: formatRentalRequestLocalDateTime(booking.contract_expires_at),
+                  date: formatListingDeadline(booking.contract_expires_at, i18n.language),
                 })}
               </Text>
             ) : null}

@@ -417,8 +417,8 @@ export function ClientRootNavigator() {
           name="ClientMyRentals"
           component={ClientMyRentalsScreen}
           options={{
+            headerShown: false,
             title: t('client.rentals.tabMyRentals', 'My rentals'),
-            headerBackTitle: t('nav.clientTabs.rentals', 'Rentals'),
           }}
         />
         <ClientRootStack.Screen

@@ -4,9 +4,9 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { Button, Text } from 'react-native-paper';
 import { StatusPill } from '../common/StatusPill';
 import { useTheme } from '../../contexts/ThemeContext';
+import { fontFamily } from '../../theme/fonts';
 import type { ClientRentalRequestRow as ClientRentalRequest } from '../../types/rentals';
 import {
-  formatRentalRequestLocalDateTime,
   isProposedContractOpen,
   parseRentalPricingSnapshot,
   parseRentalSelectionWindows,
@@ -14,7 +14,11 @@ import {
   resolveRentalPhase,
   rentalPhaseColors,
 } from '../../utils/rentals';
-import { formatRequestAmount, formatRentalPeriod } from '../../utils/rentals/rentalRequestFormat';
+import {
+  formatListingDeadline,
+  formatRequestAmount,
+  formatRentalPeriod,
+} from '../../utils/rentals/rentalRequestFormat';
 
 export interface ClientRentalRequestRowProps {
   row: ClientRentalRequest;
@@ -115,7 +119,9 @@ export function ClientRentalRequestRow({
           <MaterialCommunityIcons name="warehouse" size={26} color={colors.primary.main} />
         </Pressable>
         <View style={styles.flex}>
-          <Text style={[typography.subtitle1, { color: colors.text.primary }]}>{itemName}</Text>
+          <Text style={[typography.subtitle1, { color: colors.text.primary, fontFamily: fontFamily.medium }]}>
+            {itemName}
+          </Text>
           {subtitle ? (
             <Text style={[typography.caption, { color: colors.text.secondary }]}>{subtitle}</Text>
           ) : null}
@@ -130,17 +136,38 @@ export function ClientRentalRequestRow({
 
       <View style={[styles.metaRow, { marginTop: spacing.sm }]}>
         <MaterialCommunityIcons name="calendar-outline" size={16} color={colors.text.secondary} />
-        <Text style={[typography.body2, { color: colors.text.primary, marginLeft: 6, fontWeight: '700' }]}>{period}</Text>
+        <Text
+          style={[
+            typography.body2,
+            {
+              color: colors.text.primary,
+              marginLeft: 6,
+              fontFamily: fontFamily.bold,
+              fontWeight: '700',
+            },
+          ]}
+        >
+          {period}
+        </Text>
       </View>
       {amount ? (
         <Text style={[typography.body2, { color: colors.text.primary, marginTop: 2, marginLeft: 22 }]}>{amount}</Text>
       ) : null}
 
       {row.status === 'available' && deadlineIso ? (
-        <Text style={[typography.caption, { color: canBookNow ? colors.text.secondary : colors.error.main, marginTop: spacing.xs }]}>
+        <Text
+          style={[
+            typography.caption,
+            {
+              color: canBookNow ? colors.text.secondary : colors.error.main,
+              marginTop: spacing.xs,
+              fontFamily: fontFamily.medium,
+            },
+          ]}
+        >
           {canBookNow
             ? t('rentals.clientRequests.contractCompleteBy', 'Complete booking by {{date}}', {
-                date: formatRentalRequestLocalDateTime(deadlineIso),
+                date: formatListingDeadline(deadlineIso, i18n.language),
               })
             : t('rentals.clientRequests.contractExpiredHint', 'This offer has expired. You can send a new request from the listing.')}
         </Text>

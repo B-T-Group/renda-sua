@@ -191,15 +191,14 @@ function dayNum(isoDate: string): number {
   return Number(isoDate.slice(8, 10));
 }
 
-function exclusiveEnd(isoDate: string): string {
-  return addUtcDays(isoDate, 1);
-}
-
 function sameMonth(left: string, right: string): boolean {
   return left.slice(0, 7) === right.slice(0, 7);
 }
 
-/** `15–17 Nov` from all-day calendar dates, using the exclusive end day. */
+/**
+ * `12 Nov` or `15–17 Nov`. `calendar_date` values are booked days, and the last one is included.
+ * Listing wall clock is the Z components (Africa/Douala stored as UTC).
+ */
 export function formatRentalDateRange(windows: PeriodWindow[], locale: string): string {
   const days = windows
     .map((row) => row.calendar_date)
@@ -207,9 +206,10 @@ export function formatRentalDateRange(windows: PeriodWindow[], locale: string): 
     .sort();
   if (!days.length) return '';
   const start = days[0];
-  const end = exclusiveEnd(days[days.length - 1]);
-  const startMonth = monthLabel(start, locale);
+  const end = days[days.length - 1];
   const endMonth = monthLabel(end, locale);
+  if (start === end) return `${dayNum(start)} ${endMonth}`;
+  const startMonth = monthLabel(start, locale);
   if (sameMonth(start, end)) return `${dayNum(start)}${EN_DASH}${dayNum(end)} ${endMonth}`;
   return `${dayNum(start)} ${startMonth} ${EN_DASH} ${dayNum(end)} ${endMonth}`;
 }
@@ -225,18 +225,60 @@ function hourlyLine(row: PeriodWindow, locale: string): string {
   return `${dayNum(day)} ${month} · ${clock(row.start_at)}${EN_DASH}${clock(row.end_at)}`;
 }
 
+/** Booked calendar days. A same-clock end the next morning is the return, not another booked day. */
+function bookedDayKeys(row: PeriodWindow): string[] | null {
+  if (row.billing === 'all_day' && row.calendar_date && ISO_DATE.test(row.calendar_date)) {
+    return [row.calendar_date];
+  }
+  const start = row.start_at.slice(0, 10);
+  const end = row.end_at.slice(0, 10);
+  const startClock = clock(row.start_at);
+  const endClock = clock(row.end_at);
+  if (!ISO_DATE.test(start) || !ISO_DATE.test(end) || !startClock || startClock !== endClock) return null;
+  if (end <= start) return null;
+  const keys: string[] = [];
+  let cursor = start;
+  while (cursor < end && keys.length < 366) {
+    keys.push(cursor);
+    cursor = addUtcDays(cursor, 1);
+  }
+  return keys.length ? keys : null;
+}
+
+function bookedCalendarDates(windows: PeriodWindow[]): string[] | null {
+  const days: string[] = [];
+  for (const row of windows) {
+    const keys = bookedDayKeys(row);
+    if (!keys) return null;
+    days.push(...keys);
+  }
+  const unique = [...new Set(days)].sort();
+  return unique.length ? unique : null;
+}
+
 export function formatRentalPeriod(
   windows: PeriodWindow[],
   locale: string,
   dayCountLabel: (count: number) => string
 ): string {
   if (!windows.length) return '—';
-  const daily = windows.every((row) => row.billing === 'all_day' && row.calendar_date);
-  if (daily) {
-    const count = windows.length;
-    return `${formatRentalDateRange(windows, locale)} · ${dayCountLabel(count)}`;
+  const booked = bookedCalendarDates(windows);
+  if (booked) {
+    const asWindows = booked.map((calendar_date) => ({ calendar_date, start_at: '', end_at: '' }));
+    return `${formatRentalDateRange(asWindows, locale)} · ${dayCountLabel(booked.length)}`;
   }
   return windows.map((row) => hourlyLine(row, locale)).join(', ');
+}
+
+/** `Fri 20 Nov, 10:00` / `ven. 20 nov., 10:00`. Clock is the listing wall time stored on the Z timestamp. */
+export function formatListingDeadline(iso: string, locale: string): string {
+  const day = iso.slice(0, 10);
+  const time = clock(iso);
+  if (!ISO_DATE.test(day) || !time) return iso;
+  const label = formatRequestDay(day, locale);
+  const french = locale.toLowerCase().startsWith('fr');
+  const dayLabel = french ? `${label.charAt(0).toLocaleLowerCase()}${label.slice(1)}` : label;
+  return `${dayLabel}, ${time}`;
 }
 
 export function rentalSelectionFingerprint(
