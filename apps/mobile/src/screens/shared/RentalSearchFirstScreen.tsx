@@ -4,7 +4,10 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { useTranslation } from 'react-i18next';
+import { observer } from 'mobx-react-lite';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useClientFlags } from '../../contexts/ClientFlagsContext';
+import { useSearchFirstMyRentals } from '../../hooks/useMyRentalsLandingEntry';
 import {
   RentalSearchFirstView,
   type RentalSearchMode,
@@ -45,7 +48,7 @@ import {
 const SORTS = ['relevance', 'newest', 'cheapest', 'expensive'] as const;
 type SortName = (typeof SORTS)[number];
 
-export function RentalSearchFirstScreen({
+export const RentalSearchFirstScreen = observer(function RentalSearchFirstScreen({
   withAuth = false,
   applyTopSafeArea = true,
 }: {
@@ -53,11 +56,16 @@ export function RentalSearchFirstScreen({
   applyTopSafeArea?: boolean;
 }) {
   const { i18n } = useTranslation();
+  const { flags } = useClientFlags();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation();
   const { auth } = useStore();
+  const myRentals = useSearchFirstMyRentals(
+    flags.rentals_my_rentals_entry_enabled,
+    auth.isAuthenticated
+  );
   const { selectedMarket } = useMarket();
   const geo = useRentalCatalogGeoParams();
   const [mode, setMode] = useState<RentalSearchMode>('landing');
@@ -224,6 +232,7 @@ export function RentalSearchFirstScreen({
         nearby={dates ? nearbyRanges(dates) : []}
         similar={categories.filter((row) => row.id !== categoryId).slice(0, 3)}
         bottomInset={tabBarHeight}
+        myRentals={myRentals}
         onQueryChange={setQuery}
         onFocusQuery={() => {
           if (mode !== 'typing') setReturnMode(mode);
@@ -304,7 +313,7 @@ export function RentalSearchFirstScreen({
       />
     </View>
   );
-}
+});
 
 function toCard(hit: RentalSearchHit, range: RentalDateRange | null, locale: string): RentalSearchCardModel {
   const image = hit.listing?.rental_item?.rental_item_images?.[0];

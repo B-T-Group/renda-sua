@@ -273,7 +273,9 @@ export type ClientRootStackParamList = {
   RentalRequest: RentalRequestParams;
   RentalRequestSubmitted: { requestId?: string };
   ModifyRentalRequest: { requestId: string };
-  ClientMyRentals: { notice?: 'updated' } | undefined;
+  ClientMyRentals:
+    | { notice?: 'updated'; segment?: 'action_needed' | 'upcoming' | 'past' }
+    | undefined;
   RentalBookingDetail: { bookingId: string };
   ClientInspection: { bookingId: string; stage: 'pickup' | 'return' };
   RentalRateBooking: { bookingId: string };

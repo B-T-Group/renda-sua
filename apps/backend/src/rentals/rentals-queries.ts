@@ -1098,6 +1098,7 @@ export const GET_CLIENT_RENTAL_BOOKINGS = `
       payment_timing
       payment_status
       created_at
+      updated_at
       rental_request_id
       rental_pricing_snapshot
       rental_location_listing {

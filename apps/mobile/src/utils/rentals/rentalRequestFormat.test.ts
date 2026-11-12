@@ -11,6 +11,7 @@ import {
   requestUsesDayWording,
   selectedRequestDateKeys,
   formatChangeDetail,
+  formatListingDeadline,
   formatRentalDateRange,
   formatRentalPeriod,
   modifySaveNeedsConfirm,
@@ -221,9 +222,38 @@ describe('formatRentalPeriod', () => {
   ];
 
   it('shows a daily range in the listing calendar, not a device clock', () => {
-    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201317 Nov · 2 days');
-    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201317 nov. · 2 jours');
+    expect(formatRentalPeriod(daily, 'en', days)).toBe('15\u201316 Nov · 2 days');
+    expect(formatRentalPeriod(daily, 'fr', jours)).toBe('15\u201316 nov. · 2 jours');
     expect(formatRentalPeriod(daily, 'en', days)).not.toMatch(/PM|AM|2026/);
+  });
+
+  it('treats a same-clock end the next day as one booked day', () => {
+    const overnight = [{
+      start_at: '2026-11-12T08:00:00.000Z',
+      end_at: '2026-11-13T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(overnight, 'en', days)).toBe('12 Nov · 1 day');
+    expect(formatRentalPeriod(overnight, 'fr', jours)).toBe('12 nov. · 1 jour');
+    expect(formatRentalPeriod(overnight, 'en', days)).not.toContain('08:00');
+  });
+
+  it('counts whole days through the last booked day when the return is the same clock', () => {
+    const span = [{
+      start_at: '2026-11-15T08:00:00.000Z',
+      end_at: '2026-11-18T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(span, 'en', days)).toBe('15\u201317 Nov · 3 days');
+    expect(formatRentalPeriod(span, 'fr', jours)).toBe('15\u201317 nov. · 3 jours');
+  });
+
+  it('collapses one all-day calendar date to that day', () => {
+    const one = [{
+      billing: 'all_day',
+      calendar_date: '2026-11-12',
+      start_at: '2026-11-12T08:00:00.000Z',
+      end_at: '2026-11-13T08:00:00.000Z',
+    }];
+    expect(formatRentalPeriod(one, 'en', days)).toBe('12 Nov · 1 day');
   });
 
   it('shows hourly bookings as a listing wall-clock range', () => {
@@ -246,16 +276,31 @@ describe('formatRentalPeriod', () => {
         ],
       },
     }, 'en');
-    expect(detail).toBe('dates 15\u201317 → 15\u201318 Nov');
+    expect(detail).toBe('dates 15\u201316 → 15\u201317 Nov');
   });
+});
+
+describe('formatListingDeadline', () => {
+  it('uses the listing wall clock, not a device locale string', () => {
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).toBe('Fri 20 Nov, 10:00');
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'fr')).toBe('ven. 20 nov., 10:00');
+    expect(formatListingDeadline('2026-11-20T10:00:00.000Z', 'en')).not.toMatch(/AM|PM|2026/);
+  });
+});
+
+describe('formatRentalPeriod edges', () => {
+  const daily = [
+    { billing: 'all_day', calendar_date: '2026-11-15', start_at: '2026-11-15T00:00:00.000Z', end_at: '2026-11-16T00:00:00.000Z' },
+    { billing: 'all_day', calendar_date: '2026-11-16', start_at: '2026-11-16T00:00:00.000Z', end_at: '2026-11-17T00:00:00.000Z' },
+  ];
 
   it('keeps both months when the stay crosses a month and falls back to clocks for a mixed stay', () => {
     const cross = [
       { billing: 'all_day', calendar_date: '2026-11-30', start_at: '2026-11-30T00:00:00.000Z', end_at: '2026-12-01T00:00:00.000Z' },
       { billing: 'all_day', calendar_date: '2026-12-01', start_at: '2026-12-01T00:00:00.000Z', end_at: '2026-12-02T00:00:00.000Z' },
     ];
-    expect(formatRentalPeriod(cross, 'en', days)).toBe('30 Nov \u2013 2 Dec · 2 days');
-    expect(formatRentalPeriod(cross, 'fr', jours)).toBe('30 nov. \u2013 2 déc. · 2 jours');
+    expect(formatRentalPeriod(cross, 'en', days)).toBe('30 Nov \u2013 1 Dec · 2 days');
+    expect(formatRentalPeriod(cross, 'fr', jours)).toBe('30 nov. \u2013 1 déc. · 2 jours');
     expect(formatRentalPeriod([], 'en', days)).toBe('\u2014');
 
     const mixed = [
@@ -285,8 +330,8 @@ describe('formatRentalPeriod', () => {
         },
         'en'
       )
-    ).toBe('dates 15\u201316 Nov → 1\u20132 Dec');
-    expect(formatRentalDateRange([daily[0]], 'en')).toBe('15\u201316 Nov');
+    ).toBe('dates 15 Nov → 1 Dec');
+    expect(formatRentalDateRange([daily[0]], 'en')).toBe('15 Nov');
   });
 });
 
