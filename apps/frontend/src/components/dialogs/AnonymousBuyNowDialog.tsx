@@ -36,6 +36,7 @@ import { useAuthGate } from '../../contexts/AuthGateContext';
 import { useApiClient } from '../../hooks/useApiClient';
 import { DETECTED_COUNTRY_STORAGE_KEY } from '../../hooks/useDetectedCountry';
 import { getMetaBrowserContext } from '../../utils/metaBrowserIds';
+import { authorizationParamsWithActivePersona } from '../../utils/activePersonaStorage';
 import { useMarket } from '../../contexts/MarketContext';
 import {
   SITE_EVENT_INVENTORY_CHECKOUT_DIALOG_AUTH_REDIRECT,
@@ -206,11 +207,11 @@ const AnonymousBuyNowDialog: React.FC<AnonymousBuyNowDialogProps> = ({
         }
         trackAuthGateShown('anonymous_buy_now_login');
         await loginWithRedirect({
-          authorizationParams: {
+          authorizationParams: authorizationParamsWithActivePersona({
             connection,
             login_hint: loginHint,
             screen_hint: screenHint,
-          },
+          }),
           appState: { returnTo: returnToPathWithAnon },
         });
       } catch (redirectErr: unknown) {

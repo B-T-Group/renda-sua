@@ -551,7 +551,14 @@ export class LoginService {
       );
     }
     if (isAuthFlowV2(body.flow_version) && body.flowId?.trim()) {
-      return this.verifyLoginOtpFlowV2(body.flowId.trim(), otp, platform, ipAddress, userAgent);
+      return this.verifyLoginOtpFlowV2(
+        body.flowId.trim(),
+        otp,
+        platform,
+        ipAddress,
+        userAgent,
+        body.active_persona
+      );
     }
     const { email, phone } = this.parseIdentifier(body);
     const flowV2 = isAuthFlowV2(body.flow_version);
@@ -566,7 +573,8 @@ export class LoginService {
         email,
         phone,
         otp,
-        identifierKeys
+        identifierKeys,
+        body.active_persona
       );
     }
     const defaultChannel: OtpChannel = email ? 'email' : 'sms';
@@ -582,7 +590,8 @@ export class LoginService {
         userAgent,
         user,
         email,
-        phone
+        phone,
+        body.active_persona
       );
     }
     return this.verifyLoginOtpWithPhone(
@@ -593,25 +602,45 @@ export class LoginService {
       userAgent,
       user,
       email,
-      phone
+      phone,
+      body.active_persona
     );
+  }
+
+  private exchangeEmailOtp(email: string, otp: string, activePersona?: string) {
+    if (this.isTestUser(email, false)) {
+      return activePersona
+        ? this.auth0Service.verifyTestUserEmail(email, otp, activePersona)
+        : this.auth0Service.verifyTestUserEmail(email, otp);
+    }
+    return activePersona
+      ? this.auth0Service.verifyEmailOtp(email, otp, activePersona)
+      : this.auth0Service.verifyEmailOtp(email, otp);
+  }
+
+  private exchangePhoneOtp(phone: string, otp: string, activePersona?: string) {
+    if (this.isTestUser(phone, true)) {
+      return activePersona
+        ? this.auth0Service.verifyTestUserPhone(phone, otp, activePersona)
+        : this.auth0Service.verifyTestUserPhone(phone, otp);
+    }
+    return activePersona
+      ? this.auth0Service.verifySmsOtp(phone, otp, activePersona)
+      : this.auth0Service.verifySmsOtp(phone, otp);
   }
 
   private async verifyLoginOtpUnknownIdentifier(
     email: string,
     phone: string,
     otp: string,
-    lockoutKeys: string[]
+    lockoutKeys: string[],
+    activePersona?: string
   ): Promise<never> {
     try {
       if (email) {
-        await (this.isTestUser(email, false)
-          ? this.auth0Service.verifyTestUserEmail(email, otp)
-          : this.auth0Service.verifyEmailOtp(email, otp));
+        await this.exchangeEmailOtp(email, otp, activePersona);
       } else {
-        await (this.isTestUser(phone, true)
-          ? this.auth0Service.verifyTestUserPhone(phone, otp)
-          : this.auth0Service.verifySmsOtp(phone, otp));
+        await this.exchangePhoneOtp(phone, otp, activePersona);
       }
       await this.recordLockoutSuccess(lockoutKeys);
     } catch (error: any) {
@@ -629,7 +658,8 @@ export class LoginService {
     userAgent?: string,
     knownUser?: LoginUserRow,
     parsedEmail = '',
-    parsedPhone = ''
+    parsedPhone = '',
+    activePersona?: string
   ): Promise<LoginResult> {
     const user = knownUser || (await this.getUserByEmail(email));
     if (!user) {
@@ -648,9 +678,7 @@ export class LoginService {
 
     let tokenData: TokenData;
     try {
-      tokenData = (await (this.isTestUser(email, false)
-        ? this.auth0Service.verifyTestUserEmail(email, otp)
-        : this.auth0Service.verifyEmailOtp(email, otp))) as TokenData;
+      tokenData = (await this.exchangeEmailOtp(email, otp, activePersona)) as TokenData;
     } catch (error: any) {
       await this.recordLockoutFailure(lockoutKeys);
       emitAuthSiteEvent(
@@ -685,7 +713,8 @@ export class LoginService {
     userAgent?: string,
     knownUser?: LoginUserRow,
     parsedEmail = '',
-    parsedPhone = ''
+    parsedPhone = '',
+    activePersona?: string
   ): Promise<LoginResult> {
     const user = knownUser || (await this.getUserByPhoneNumber(phoneNumber));
     if (!user) {
@@ -704,9 +733,11 @@ export class LoginService {
 
     let tokenData: TokenData;
     try {
-      tokenData = (await (this.isTestUser(phoneNumber, true)
-        ? this.auth0Service.verifyTestUserPhone(phoneNumber, otp)
-        : this.auth0Service.verifySmsOtp(phoneNumber, otp))) as TokenData;
+      tokenData = (await this.exchangePhoneOtp(
+        phoneNumber,
+        otp,
+        activePersona
+      )) as TokenData;
     } catch (error: any) {
       await this.recordLockoutFailure(lockoutKeys);
       emitAuthSiteEvent(
@@ -1104,7 +1135,8 @@ export class LoginService {
     otp: string,
     platform: ClientPlatform,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    activePersona?: string
   ): Promise<LoginVerifyServiceResult> {
     const signupResult = await this.tryVerifySignupFlowV2(flowId, otp);
     if (signupResult) return signupResult;
@@ -1113,7 +1145,8 @@ export class LoginService {
       otp,
       platform,
       ipAddress,
-      userAgent
+      userAgent,
+      activePersona
     );
   }
 
@@ -1146,7 +1179,8 @@ export class LoginService {
     otp: string,
     platform: ClientPlatform,
     ipAddress?: string,
-    userAgent?: string
+    userAgent?: string,
+    activePersona?: string
   ): Promise<LoginResult> {
     const record = await this.authFlowV2Store.get(flowId);
     if (!record) {
@@ -1167,7 +1201,8 @@ export class LoginService {
         userAgent,
         user,
         record.email,
-        record.phone
+        record.phone,
+        activePersona
       );
       await this.authFlowV2Store.delete(flowId);
       return result;
@@ -1180,7 +1215,8 @@ export class LoginService {
       userAgent,
       user,
       record.email,
-      record.phone
+      record.phone,
+      activePersona
     );
     await this.authFlowV2Store.delete(flowId);
     return result;

@@ -5,7 +5,8 @@
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getEnv, getTokenRequestAudience } from '../config/auth0';
-import { readHasuraUserId, readStoredPersona, clearActivePersonaStorage } from '../utils/activePersonaStorage';
+import { readHasuraUserId, readStoredPersona, readLoginActivePersona, clearActivePersonaStorage } from '../utils/activePersonaStorage';
+import { tokenRequestBody } from './authPersonaParams';
 import SecureStorageService from './storage/SecureStorageService';
 import StorageService from './storage/StorageService';
 import { ACTIVE_REFRESH_TOKEN_KEY_KEY } from './savedAccount/SavedAccountService';
@@ -113,17 +114,23 @@ export class Auth0DirectService {
     try {
       const { auth0Config } = getEnv();
       const audience = getTokenRequestAudience(auth0Config);
+      const activePersona = await readLoginActivePersona();
       const response = await fetch(`https://${auth0Config.domain}/oauth/token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grant_type: 'password',
-          username: email,
-          password,
-          client_id: auth0Config.clientId,
-          audience,
-          scope: AUTH0_SCOPES,
-        }),
+        body: JSON.stringify(
+          tokenRequestBody(
+            {
+              grant_type: 'password',
+              username: email,
+              password,
+              client_id: auth0Config.clientId,
+              audience,
+              scope: AUTH0_SCOPES,
+            },
+            activePersona
+          )
+        ),
       });
 
       if (!response.ok) {
@@ -252,18 +259,19 @@ export class Auth0DirectService {
         if (!refreshToken) return { ok: false, reason: 'no_refresh_token' };
 
         const { auth0Config } = getEnv();
-        const body: Record<string, string> = {
-          grant_type: 'refresh_token',
-          client_id: auth0Config.clientId,
-          refresh_token: refreshToken,
-        };
-        if (activePersona) {
-          body.active_persona = activePersona;
-        }
         const response = await fetch(`https://${auth0Config.domain}/oauth/token`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify(
+            tokenRequestBody(
+              {
+                grant_type: 'refresh_token',
+                client_id: auth0Config.clientId,
+                refresh_token: refreshToken,
+              },
+              activePersona
+            )
+          ),
         });
 
         if (!response.ok) {

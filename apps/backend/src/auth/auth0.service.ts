@@ -114,43 +114,62 @@ export class Auth0Service {
   private async postPasswordlessToken(
     username: string,
     otp: string,
-    realm: 'email' | 'sms'
+    realm: 'email' | 'sms',
+    activePersona?: string
   ): Promise<Auth0TokenResponse> {
     const { domain, clientId, clientSecret } = this.getPasswordlessApp();
     if (!clientSecret) {
       throw new Error('Auth0 OTP verification configuration is missing');
     }
-    const { data } = await axios.post(`https://${domain}/oauth/token`, {
+    const { data } = await axios.post(
+      `https://${domain}/oauth/token`,
+      this.passwordlessTokenBody(clientId, clientSecret, username, otp, realm, activePersona)
+    );
+    return data;
+  }
+
+  private passwordlessTokenBody(
+    clientId: string,
+    clientSecret: string,
+    username: string,
+    otp: string,
+    realm: 'email' | 'sms',
+    activePersona?: string
+  ): Record<string, string> {
+    const body: Record<string, string> = {
       grant_type: 'http://auth0.com/oauth/grant-type/passwordless/otp',
       client_id: clientId,
       client_secret: clientSecret,
       username,
       otp,
       realm,
-      audience: this.configService.get('auth0')?.audience,
       scope: 'openid profile email offline_access',
-    });
-    return data;
+    };
+    const audience = this.configService.get('auth0')?.audience;
+    if (audience) body.audience = audience;
+    if (activePersona) body.active_persona = activePersona;
+    return body;
   }
 
   private async exchangePasswordlessOtp(
     username: string,
     otp: string,
-    realm: 'email' | 'sms'
+    realm: 'email' | 'sms',
+    activePersona?: string
   ): Promise<Auth0TokenResponse> {
     try {
-      return await this.postPasswordlessToken(username, otp, realm);
+      return await this.postPasswordlessToken(username, otp, realm, activePersona);
     } catch (error: any) {
       this.throwMappedAuth0Error(error, 'Invalid or expired code');
     }
   }
 
-  async verifyEmailOtp(email: string, otp: string) {
-    return this.exchangePasswordlessOtp(email, otp, 'email');
+  async verifyEmailOtp(email: string, otp: string, activePersona?: string) {
+    return this.exchangePasswordlessOtp(email, otp, 'email', activePersona);
   }
 
-  async verifySmsOtp(phoneNumber: string, otp: string) {
-    return this.exchangePasswordlessOtp(phoneNumber, otp, 'sms');
+  async verifySmsOtp(phoneNumber: string, otp: string, activePersona?: string) {
+    return this.exchangePasswordlessOtp(phoneNumber, otp, 'sms', activePersona);
   }
 
   async refreshAccessToken(
@@ -268,7 +287,8 @@ export class Auth0Service {
 
   private async passwordRealmLogin(
     connection: string,
-    username: string
+    username: string,
+    activePersona?: string
   ): Promise<Auth0TokenResponse> {
     const auth0 = this.configService.get('auth0');
     const config = this.getTestUsersConfig();
@@ -277,39 +297,43 @@ export class Auth0Service {
     if (!auth0?.domain || !clientId || !clientSecret || !config) {
       throw new Error('Auth0 test user configuration is missing');
     }
-    const { data } = await axios.post(`https://${auth0.domain}/oauth/token`, {
+    const body: Record<string, string> = {
       grant_type: 'http://auth0.com/oauth/grant-type/password-realm',
       client_id: clientId,
       client_secret: clientSecret,
       username,
       password: config.password,
       realm: connection,
-      audience: auth0.audience,
       scope: 'openid profile email offline_access',
-    });
+    };
+    if (auth0.audience) body.audience = auth0.audience;
+    if (activePersona) body.active_persona = activePersona;
+    const { data } = await axios.post(`https://${auth0.domain}/oauth/token`, body);
     return data;
   }
 
   async verifyTestUserEmail(
     email: string,
-    otp: string
+    otp: string,
+    activePersona?: string
   ): Promise<Auth0TokenResponse> {
     this.assertTestBypassAllowed(this.isTestEmail(email), otp);
     const connection = this.getTestUsersConfig()?.emailConnection || '';
     const username = email.trim().toLowerCase();
     await this.ensureTestUser(connection, { email: username });
-    return this.passwordRealmLogin(connection, username);
+    return this.passwordRealmLogin(connection, username, activePersona);
   }
 
   async verifyTestUserPhone(
     phoneNumber: string,
-    otp: string
+    otp: string,
+    activePersona?: string
   ): Promise<Auth0TokenResponse> {
     this.assertTestBypassAllowed(this.isTestPhone(phoneNumber), otp);
     const connection = this.getTestUsersConfig()?.phoneConnection || '';
     const username = phoneNumber.trim();
     await this.ensureTestUser(connection, { phone_number: username });
-    return this.passwordRealmLogin(connection, username);
+    return this.passwordRealmLogin(connection, username, activePersona);
   }
 
   async deleteAuth0User(sub: string): Promise<void> {
