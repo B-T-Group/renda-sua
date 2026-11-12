@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { observer } from 'mobx-react-lite';
 import { useNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -9,7 +10,9 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { useTheme } from '../contexts/ThemeContext';
 
 import ClientBrowseHomeScreen from '../screens/client/ClientBrowseHomeScreen';
+import ClientCatalogSearchScreen from '../screens/client/ClientCatalogSearchScreen';
 import ClientOrdersScreen from '../screens/client/ClientOrdersScreen';
+import ClientRentalsTabScreen from '../screens/client/ClientRentalsTabScreen';
 import SearchScreen from '../screens/shared/SearchScreen';
 import ClientMenuTabScreen from '../screens/client/ClientMenuTabScreen';
 import ReelsFeedScreen from '../screens/shared/ReelsFeedScreen';
@@ -68,7 +71,7 @@ import { EnrollPersonaExplainScreen } from '../screens/shared/enroll/EnrollPerso
 import { EnrollPersonaSetupScreen } from '../screens/shared/enroll/EnrollPersonaSetupScreen';
 import { EnrollPersonaSuccessScreen } from '../screens/shared/enroll/EnrollPersonaSuccessScreen';
 import { useStore } from '../stores/RootStore';
-import { useResumePendingMyRentals } from '../hooks/useMyRentalsLandingEntry';
+import { useMyRentalsTodoCount, useResumePendingMyRentals } from '../hooks/useMyRentalsLandingEntry';
 import { usePersonaAttentionBadge } from '../hooks/usePersonaAttentionBadge';
 import { useAppIconBadge } from '../hooks/useAppIconBadge';
 import useCheckNotificationPermissionOnStart from '../hooks/useCheckNotificationPermissionOnStart';
@@ -83,9 +86,149 @@ import {
   renderFloatingAnimatedTabBar,
 } from './floatingTabBarVisibility';
 import { useClientFlags } from '../contexts/ClientFlagsContext';
+import { ClientRentalsTabCountContext } from './clientRentalsTabCount';
+import { clientTabOrder, type ClientTabId } from './clientTabOrder';
+import { trackRentalsClientTabTap } from '../utils/rentals/clientRentalsTabAnalytics';
+import { myRentalsEntrySegment } from '../utils/rentals/myRentalsEntry';
 
 const ClientTab = createBottomTabNavigator<ClientMainTabParamList>();
 const ClientRootStack = createNativeStackNavigator<ClientRootStackParamList>();
+
+function clientTabScreens(input: {
+  t: TFunction;
+  badgeColor: string;
+  rentalsBadgeColor: string;
+  attentionBadgeCount: number;
+  rentalsBadge: string | null;
+  todoCount: number;
+}): Record<ClientTabId, React.ReactElement> {
+  const home = input.t('nav.clientTabs.home', 'Home');
+  const search = input.t('nav.clientTabs.search', 'Search');
+  const reels = input.t('nav.clientTabs.reels', 'Reels');
+  const rentals = input.t('nav.clientTabs.rentals', 'Rentals');
+  const orders = input.t('nav.clientTabs.orders', 'Orders');
+  const account = input.t('nav.tabs.account', 'Account');
+  return {
+    ClientBrowse: (
+      <ClientTab.Screen
+        key="ClientBrowse"
+        name="ClientBrowse"
+        component={ClientBrowseHomeScreen}
+        listeners={({ navigation }) => ({
+          tabPress: () => navigation.setParams({ segment: 'all' }),
+        })}
+        options={{
+          tabBarLabel: home,
+          tabBarAccessibilityLabel: home,
+          tabBarBadge: input.attentionBadgeCount > 0 ? input.attentionBadgeCount : undefined,
+          tabBarBadgeStyle: { backgroundColor: input.badgeColor, fontSize: 10 },
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={home}>
+              <MaterialCommunityIcons name={focused ? 'shopping' : 'shopping-outline'} size={24} color={color} />
+            </TabBarIconContent>
+          ),
+        }}
+      />
+    ),
+    ClientSearch: (
+      <ClientTab.Screen
+        key="ClientSearch"
+        name="ClientSearch"
+        component={SearchScreen}
+        options={{
+          tabBarLabel: search,
+          tabBarAccessibilityLabel: search,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={search}>
+              <MaterialCommunityIcons name="magnify" size={24} color={color} />
+            </TabBarIconContent>
+          ),
+        }}
+      />
+    ),
+    ClientReels: (
+      <ClientTab.Screen
+        key="ClientReels"
+        name="ClientReels"
+        component={ReelsFeedScreen}
+        options={{
+          tabBarLabel: reels,
+          tabBarAccessibilityLabel: reels,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={reels}>
+              <ReelsTabIcon color={color} size={30} />
+            </TabBarIconContent>
+          ),
+        }}
+      />
+    ),
+    ClientRentals: (
+      <ClientTab.Screen
+        key="ClientRentals"
+        name="ClientRentals"
+        component={ClientRentalsTabScreen}
+        listeners={({ navigation }) => ({
+          tabPress: () => {
+            const segment = myRentalsEntrySegment(input.todoCount);
+            navigation.setParams({ segment });
+            trackRentalsClientTabTap({ segment, todoCount: input.todoCount });
+          },
+        })}
+        options={{
+          tabBarLabel: rentals,
+          tabBarAccessibilityLabel: rentals,
+          tabBarBadge: input.rentalsBadge ?? undefined,
+          tabBarBadgeStyle: { backgroundColor: input.rentalsBadgeColor, fontSize: 10 },
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={rentals}>
+              <MaterialCommunityIcons
+                name={focused ? 'calendar-check' : 'calendar-check-outline'}
+                size={24}
+                color={color}
+              />
+            </TabBarIconContent>
+          ),
+        }}
+      />
+    ),
+    ClientOrders: (
+      <ClientTab.Screen
+        key="ClientOrders"
+        name="ClientOrders"
+        component={ClientOrdersScreen}
+        options={{
+          tabBarLabel: orders,
+          tabBarAccessibilityLabel: orders,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={orders}>
+              <MaterialCommunityIcons
+                name={focused ? 'clipboard-text' : 'clipboard-text-outline'}
+                size={24}
+                color={color}
+              />
+            </TabBarIconContent>
+          ),
+        }}
+      />
+    ),
+    ClientMenu: (
+      <ClientTab.Screen
+        key="ClientMenu"
+        name="ClientMenu"
+        component={ClientMenuTabScreen}
+        options={{
+          tabBarLabel: account,
+          tabBarAccessibilityLabel: account,
+          tabBarIcon: ({ color, focused }) => (
+            <TabBarIconContent focused={focused} label={account}>
+              <MaterialCommunityIcons name={focused ? 'account' : 'account-outline'} size={24} color={color} />
+            </TabBarIconContent>
+          ),
+        }}
+      />
+    ),
+  };
+}
 
 export type { ClientAppNavScreen, ClientMainTabParamList, ClientRootStackParamList } from './types';
 
@@ -123,6 +266,14 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
   useAppIconBadge(appIconBadgeCount);
   useCheckNotificationPermissionOnStart();
   useResumePendingMyRentals(persona.activePersona === 'client');
+  const rentalsTodo = useMyRentalsTodoCount(
+    flags.rentals_client_tab_enabled,
+    persona.activePersona === 'client'
+  );
+  const tabOrder = clientTabOrder({
+    reelsEnabled: flags.reels_enabled,
+    rentalsTabEnabled: flags.rentals_client_tab_enabled,
+  });
 
   useEffect(() => {
     if (persona.activePersona !== 'client') return;
@@ -175,88 +326,28 @@ const ClientMainTabsScreen = observer(function ClientMainTabsScreen() {
     auth.postAuthResumeInventoryItemId,
   ]);
 
+  const screens = clientTabScreens({
+    t,
+    badgeColor: colors.error.main,
+    rentalsBadgeColor: colors.primary.main,
+    attentionBadgeCount,
+    rentalsBadge: rentalsTodo.badge,
+    todoCount: rentalsTodo.todoCount,
+  });
+
   return (
-    <FloatingTabBarVisibilityProvider>
-      <ClientTab.Navigator
-        initialRouteName="ClientBrowse"
-        safeAreaInsets={floatingSafeAreaInsets}
-        tabBar={flags.floating_nav_enabled ? renderFloatingAnimatedTabBar : undefined}
-        screenOptions={tabBarScreenOptions}
-      >
-      <ClientTab.Screen
-        name="ClientBrowse"
-        component={ClientBrowseHomeScreen}
-        listeners={({ navigation }) => ({
-          tabPress: () => navigation.setParams({ segment: 'all' }),
-        })}
-        options={{
-          tabBarLabel: t('nav.clientTabs.home', 'Home'),
-          tabBarAccessibilityLabel: t('nav.clientTabs.home', 'Home'),
-          tabBarBadge: attentionBadgeCount > 0 ? attentionBadgeCount : undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.error.main, fontSize: 10 },
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.clientTabs.home', 'Home')}>
-              <MaterialCommunityIcons name={focused ? 'shopping' : 'shopping-outline'} size={24} color={color} />
-            </TabBarIconContent>
-          ),
-        }}
-      />
-      <ClientTab.Screen
-        name="ClientSearch"
-        component={SearchScreen}
-        options={{
-          tabBarLabel: t('nav.clientTabs.search', 'Search'),
-          tabBarAccessibilityLabel: t('nav.clientTabs.search', 'Search'),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.clientTabs.search', 'Search')}>
-              <MaterialCommunityIcons name={focused ? 'magnify' : 'magnify'} size={24} color={color} />
-            </TabBarIconContent>
-          ),
-        }}
-      />
-      {flags.reels_enabled ? (
-        <ClientTab.Screen
-          name="ClientReels"
-          component={ReelsFeedScreen}
-          options={{
-            tabBarLabel: t('nav.clientTabs.reels', { defaultValue: 'Reels' }),
-            tabBarAccessibilityLabel: t('nav.clientTabs.reels', { defaultValue: 'Reels' }),
-            tabBarIcon: ({ color, focused }) => (
-              <TabBarIconContent focused={focused} label={t('nav.clientTabs.reels', { defaultValue: 'Reels' })}>
-                <ReelsTabIcon color={color} size={30} />
-              </TabBarIconContent>
-            ),
-          }}
-        />
-      ) : null}
-      <ClientTab.Screen
-        name="ClientOrders"
-        component={ClientOrdersScreen}
-        options={{
-          tabBarLabel: t('nav.clientTabs.orders', { defaultValue: 'Orders' }),
-          tabBarAccessibilityLabel: t('nav.clientTabs.orders', { defaultValue: 'Orders' }),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.clientTabs.orders', { defaultValue: 'Orders' })}>
-              <MaterialCommunityIcons name={focused ? 'clipboard-text' : 'clipboard-text-outline'} size={24} color={color} />
-            </TabBarIconContent>
-          ),
-        }}
-      />
-      <ClientTab.Screen
-        name="ClientMenu"
-        component={ClientMenuTabScreen}
-        options={{
-          tabBarLabel: t('nav.tabs.account', 'Account'),
-          tabBarAccessibilityLabel: t('nav.tabs.account', 'Account'),
-          tabBarIcon: ({ color, focused }) => (
-            <TabBarIconContent focused={focused} label={t('nav.tabs.account', 'Account')}>
-              <MaterialCommunityIcons name={focused ? 'account' : 'account-outline'} size={24} color={color} />
-            </TabBarIconContent>
-          ),
-        }}
-      />
-    </ClientTab.Navigator>
-    </FloatingTabBarVisibilityProvider>
+    <ClientRentalsTabCountContext.Provider value={rentalsTodo.todoCount}>
+      <FloatingTabBarVisibilityProvider>
+        <ClientTab.Navigator
+          initialRouteName="ClientBrowse"
+          safeAreaInsets={floatingSafeAreaInsets}
+          tabBar={flags.floating_nav_enabled ? renderFloatingAnimatedTabBar : undefined}
+          screenOptions={tabBarScreenOptions}
+        >
+          {tabOrder.map((id) => screens[id])}
+        </ClientTab.Navigator>
+      </FloatingTabBarVisibilityProvider>
+    </ClientRentalsTabCountContext.Provider>
   );
 });
 
@@ -281,6 +372,11 @@ export function ClientRootNavigator() {
             headerShown: false,
             title: t('client.placeOrder.successScreen.backToHome', 'Home'),
           }}
+        />
+        <ClientRootStack.Screen
+          name="ClientCatalogSearch"
+          component={ClientCatalogSearchScreen}
+          options={{ headerShown: false, title: t('nav.clientTabs.search', 'Search') }}
         />
         <ClientRootStack.Screen
           name="CategoriesBrowse"

@@ -29,6 +29,8 @@ export const LAUNCHER_ALLOWLIST: Record<LauncherPersona, ReadonlySet<string>> = 
   client: new Set([
     'ClientBrowse',
     'ClientSearch',
+    'ClientCatalogSearch',
+    'ClientRentals',
     'ClientOrders',
     'ClientMenu',
     ...SHARED_BROWSE_ROUTES,
@@ -49,6 +51,7 @@ export const LAUNCHER_ALLOWLIST: Record<LauncherPersona, ReadonlySet<string>> = 
 export const TAB_ROUTES: ReadonlySet<string> = new Set([
   'ClientBrowse',
   'ClientSearch',
+  'ClientRentals',
   'ClientOrders',
   'ClientMenu',
   'GuestBrowse',

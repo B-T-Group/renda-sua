@@ -1282,7 +1282,10 @@
     },
     "clientTabs": {
       "home": "Home",
-      "search": "Search"
+      "search": "Search",
+      "reels": "Reels",
+      "rentals": "Rentals",
+      "orders": "Orders"
     },
     "tabs": {
       "account": "Account",
@@ -6413,6 +6416,7 @@
       "past": "Past",
       "emptyActionNeeded": "Nothing needs your attention right now.",
       "emptyUpcoming": "No upcoming rentals.",
+      "emptyUpcomingHint": "Request a rental and it will show up here.",
       "emptyPast": "No past rentals yet.",
       "emptyAll": "You have no rental requests or bookings yet."
     },

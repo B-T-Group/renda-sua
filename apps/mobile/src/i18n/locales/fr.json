@@ -1225,7 +1225,10 @@
     },
     "clientTabs": {
       "home": "Accueil",
-      "search": "Recherche"
+      "search": "Recherche",
+      "reels": "Reels",
+      "rentals": "Locations",
+      "orders": "Commandes"
     },
     "tabs": {
       "account": "Compte",
@@ -6336,6 +6339,7 @@
       "past": "Passées",
       "emptyActionNeeded": "Rien ne nécessite votre attention pour le moment.",
       "emptyUpcoming": "Aucune location à venir.",
+      "emptyUpcomingHint": "Demandez une location et elle apparaîtra ici.",
       "emptyPast": "Aucune location passée.",
       "emptyAll": "Vous n’avez encore aucune demande ni réservation."
     },

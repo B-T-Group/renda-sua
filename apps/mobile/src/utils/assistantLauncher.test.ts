@@ -67,7 +67,7 @@ describe('flag gating + allowlist', () => {
   });
 
   it('uses the per-persona allowlist', () => {
-    for (const r of ['ClientBrowse', 'ClientSearch', 'ClientOrders', 'ClientMenu', 'CategoriesBrowse', 'CollectionDetail', 'StoresList', 'StoreDetail', 'OrderDetail']) {
+    for (const r of ['ClientBrowse', 'ClientSearch', 'ClientCatalogSearch', 'ClientRentals', 'ClientOrders', 'ClientMenu', 'CategoriesBrowse', 'CollectionDetail', 'StoresList', 'StoreDetail', 'OrderDetail']) {
       expect(isLauncherRoute('client', r)).toBe(true);
     }
     for (const r of ['GuestBrowse', 'GuestFoods', 'GuestRentals', 'StoreDetail', 'StoresList']) {
