@@ -38,13 +38,18 @@ export function UnitTabs({
   active,
   done,
   onSelect,
+  accent = 'business',
 }: {
   labels: string[];
   active: number;
   done: boolean[];
   onSelect: (index: number) => void;
+  accent?: 'client' | 'business';
 }) {
   const { colors, spacing, borderRadius, typography } = useTheme();
+  const selectedBorder = accent === 'client' ? colors.primary.main : colors.cta.main;
+  const selectedFill = accent === 'client' ? colors.primarySubtle : colors.cta.soft;
+  const selectedText = accent === 'client' ? colors.primary.dark : colors.cta.dark;
   return (
     <View style={[styles.row, { gap: spacing.sm }]}>
       {labels.map((label, index) => {
@@ -59,12 +64,12 @@ export function UnitTabs({
               styles.tab,
               {
                 borderRadius: borderRadius.lg,
-                borderColor: selected ? colors.cta.main : colors.border,
-                backgroundColor: selected ? colors.cta.soft : colors.surface,
+                borderColor: selected ? selectedBorder : colors.border,
+                backgroundColor: selected ? selectedFill : colors.surface,
               },
             ]}
           >
-            <Text style={[typography.subtitle2, { color: selected ? colors.cta.dark : colors.text.primary }]}>
+            <Text style={[typography.subtitle2, { color: selected ? selectedText : colors.text.primary }]}>
               {done[index] ? `${label} ✓` : label}
             </Text>
           </Pressable>

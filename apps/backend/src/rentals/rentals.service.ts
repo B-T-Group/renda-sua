@@ -52,11 +52,14 @@ import {
 } from './rental-request-edit';
 import { RentalInspectionFlags } from './inspection/rental-inspection-flags.service';
 import {
+  acceptStartConflict,
+  acceptStartNotEnrolled,
   inspectionRejected,
   inspectionUnavailable,
   inspectionUpdateRequired,
 } from './inspection/rental-inspection.errors';
 import {
+  acceptStartPaymentRail,
   damageCollectedOnAgree,
   decideInspectionEnrolment,
   DEFAULT_STRIPE_REVIEW_HOURS,
@@ -64,6 +67,9 @@ import {
   pickupStartAllowed,
   priceEnrolledCapture,
   settlementGate,
+  type AcceptAndStartResult,
+  type AcceptStartPaymentRail,
+  type PickupGateBooking,
   type SettlementGateBooking,
 } from './inspection/rental-inspection.policy';
 import { ItemActivationValidationService } from '../image-validation/item-activation-validation.service';
@@ -110,6 +116,10 @@ const RENTAL_SECURITY_DEPOSIT_HOURLY_MULTIPLIER = 8;
 
 /** Stripe authorizations expire after ~7 days; keep bookings safely inside that window. */
 const RENTAL_STRIPE_MAX_BOOKING_DAYS = 6;
+
+const ACCEPT_PICKUP_VERSION = `mutation AcceptPickup($id: uuid!, $version: uuid!, $actor: uuid!) {
+  rental_accept_pickup_version(args: { p_booking_id: $id, p_version_id: $version, p_actor: $actor }) { id }
+}`;
 
 export type RentalPaymentRail = 'wallet' | 'stripe' | 'mobile_money';
 
@@ -2615,7 +2625,8 @@ export class RentalsService {
       id: requestId,
       status: 'booked',
     });
-    await this.ensureStartPinOnce(bookingId);
+    const policy = await this.readInspectionPolicy(bookingId);
+    if (policy == null) await this.ensureStartPinOnce(bookingId);
     if (!won) return true;
     await this.logHistory(bookingId, 'confirmed', previousStatus, clientUserId, 'client', notes);
     try {
@@ -2821,6 +2832,7 @@ export class RentalsService {
           ? 'Contract paid at pickup'
           : 'Booking confirmed',
     });
+    await this.startEnrolledAfterPickupPayment(booking);
   }
 
   /**
@@ -3111,6 +3123,7 @@ export class RentalsService {
     if (booking.status !== 'confirmed') {
       throw new HttpException('PIN only for confirmed bookings', HttpStatus.GONE);
     }
+    await this.rejectEnrolledLegacyStart(bookingId);
     const pin = await this.deliveryPinService.getPinForClient(bookingId);
     if (!pin) {
       throw new HttpException(
@@ -3129,7 +3142,262 @@ export class RentalsService {
     if (!booking) {
       throw new HttpException('Booking not found', HttpStatus.NOT_FOUND);
     }
+    const user = await this.hasuraUserService.getUser();
+    if (
+      isActivePersona(user, 'client') &&
+      user.client?.id &&
+      user.client.id === booking.client_id
+    ) {
+      await this.attachAcceptStartPreview(booking);
+    }
     return booking;
+  }
+
+  async acceptAndStartRental(
+    bookingId: string,
+    versionId: string
+  ): Promise<AcceptAndStartResult> {
+    const actor = await this.requireAcceptStartClient(bookingId);
+    const gate = await this.readInspectionStart(bookingId);
+    this.assertAcceptStartOpen(actor.booking, gate, versionId);
+    if (this.acceptStartFinished(actor.booking, gate, versionId)) {
+      return this.replayAcceptStart(actor.booking);
+    }
+    await this.acceptPickupVersion(actor.booking, gate, versionId, actor.userId);
+    return this.payAndStartAccepted(actor.booking);
+  }
+
+  private async requireAcceptStartClient(bookingId: string) {
+    const user = await this.hasuraUserService.getUser();
+    if (!isActivePersona(user, 'client') || !user.client?.id) {
+      throw new HttpException('Only the renter can accept and start', HttpStatus.FORBIDDEN);
+    }
+    const booking = await this.fetchBooking(bookingId);
+    if (!booking || booking.client_id !== user.client.id) {
+      throw new HttpException('Not found', HttpStatus.NOT_FOUND);
+    }
+    if (booking.inspection_policy_version == null) throw acceptStartNotEnrolled();
+    return { booking, userId: user.id as string };
+  }
+
+  private assertAcceptStartOpen(booking: any, gate: PickupGateBooking, versionId: string): void {
+    if (gate.pickupCurrentVersionId !== versionId) throw acceptStartConflict();
+    const open = ['reserved', 'confirmed', 'active', 'awaiting_return', 'completed'];
+    if (!open.includes(booking.status)) {
+      throw acceptStartConflict('This rental can no longer be started.');
+    }
+  }
+
+  private acceptStartFinished(booking: any, gate: PickupGateBooking, versionId: string): boolean {
+    const started = ['active', 'awaiting_return', 'completed'].includes(booking.status);
+    return started && gate.pickupAckCurrent && gate.pickupAcceptedVersionId === versionId;
+  }
+
+  private async acceptPickupVersion(
+    booking: any,
+    gate: PickupGateBooking,
+    versionId: string,
+    actorId: string
+  ): Promise<void> {
+    if (gate.pickupAckCurrent && gate.pickupAcceptedVersionId === versionId) return;
+    await this.writePickupAccept(booking.id, versionId, actorId);
+    await this.notifyPickupAccepted(booking);
+  }
+
+  private async writePickupAccept(bookingId: string, versionId: string, actorId: string) {
+    try {
+      const result = await this.hasuraSystemService.executeMutation<{
+        rental_accept_pickup_version?: Array<{ id: string }>;
+      }>(ACCEPT_PICKUP_VERSION, { id: bookingId, version: versionId, actor: actorId });
+      if ((result?.rental_accept_pickup_version?.length ?? 0) > 0) return;
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      if (!this.acceptConflictText(error)) throw error;
+    }
+    if (await this.versionAlreadyAccepted(bookingId, versionId)) return;
+    throw acceptStartConflict();
+  }
+
+  /** A racing accept of this same version is success, not a new 409. */
+  private async versionAlreadyAccepted(bookingId: string, versionId: string): Promise<boolean> {
+    const gate = await this.readInspectionStart(bookingId);
+    return gate.pickupAckCurrent && gate.pickupAcceptedVersionId === versionId;
+  }
+
+  private acceptConflictText(error: any): boolean {
+    const text = JSON.stringify(error?.response ?? error?.message ?? error);
+    return text.includes('rental_inspection_ack_conflict') || text.includes('Uniqueness violation');
+  }
+
+  private async payAndStartAccepted(booking: any): Promise<AcceptAndStartResult> {
+    const fresh = await this.fetchBooking(booking.id);
+    if (!fresh) throw acceptStartConflict('Booking status changed');
+    const ready = acceptStartPaymentRail({
+      status: fresh.status,
+      paymentStatus: fresh.payment_status,
+      walletCovers: false,
+    });
+    if (fresh.status === 'confirmed' && (ready === 'card' || ready === 'wallet')) {
+      return this.finishAcceptStart(fresh, ready, 0);
+    }
+    if (fresh.status !== 'reserved') throw acceptStartConflict('Booking status changed');
+    return this.payReservedAcceptStart(fresh);
+  }
+
+  private async payReservedAcceptStart(booking: any): Promise<AcceptAndStartResult> {
+    const total = Number(booking.total_amount);
+    const userId = booking.client.user_id as string;
+    const account = await this.hasuraSystemService.getAccount(userId, booking.currency);
+    if (!account?.id) throw new HttpException('Client account missing', HttpStatus.BAD_REQUEST);
+    if (Number(account.available_balance ?? 0) >= total) return this.walletAcceptStart(booking, userId);
+    await this.pushMomoPickupPayment(booking, account.id, userId);
+    return this.acceptStartBody(booking, 'mobile_money', total, false, true);
+  }
+
+  private async walletAcceptStart(booking: any, userId: string): Promise<AcceptAndStartResult> {
+    const total = Number(booking.total_amount);
+    const confirmed = await this.confirmWalletContract({
+      booking,
+      previousStatus: 'reserved',
+      clientUserId: userId,
+      notes: 'Contract paid at pickup (wallet)',
+    });
+    if (!confirmed) throw acceptStartConflict('Booking status changed');
+    const fresh = await this.fetchBooking(booking.id);
+    if (!fresh || (fresh.status !== 'confirmed' && fresh.status !== 'active')) {
+      throw acceptStartConflict('Booking status changed');
+    }
+    if (fresh.status === 'active') return this.acceptStartBody(fresh, 'wallet', total, true, false);
+    return this.finishAcceptStart(fresh, 'wallet', total);
+  }
+
+  private async finishAcceptStart(
+    booking: any,
+    rail: AcceptStartPaymentRail,
+    due: number
+  ): Promise<AcceptAndStartResult> {
+    const won = await this.markInspectionOrLegacyStart(booking.id);
+    if (won) {
+      await this.logHistory(
+        booking.id,
+        'active',
+        'confirmed',
+        booking.client?.user_id ?? null,
+        'client',
+        'Accept and start'
+      );
+    } else {
+      await this.startBlockedOrConflict(booking.id);
+    }
+    return this.acceptStartBody(booking, rail, due, true, false);
+  }
+
+  private async replayAcceptStart(booking: any): Promise<AcceptAndStartResult> {
+    const paid = booking.payment_status === 'authorized' || booking.payment_status === 'paid';
+    const due = paid ? 0 : Number(booking.total_amount) || 0;
+    return this.acceptStartBody(booking, await this.replayPaymentRail(booking), due, true, false, true);
+  }
+
+  private async replayPaymentRail(booking: any): Promise<AcceptStartPaymentRail> {
+    if (booking.payment_status === 'authorized') return 'card';
+    const bookingNumber = booking.booking_number as string | undefined;
+    if (bookingNumber) {
+      const momo = await this.mobilePaymentsDatabaseService.hasSuccessfulRentalBookingPayment(
+        bookingNumber
+      );
+      if (momo) return 'mobile_money';
+    }
+    return 'wallet';
+  }
+
+  private acceptStartBody(
+    booking: any,
+    rail: AcceptStartPaymentRail,
+    due: number,
+    started: boolean,
+    paymentPending: boolean,
+    alreadyStarted = false
+  ): AcceptAndStartResult {
+    return {
+      success: true,
+      accepted: true,
+      started,
+      alreadyStarted,
+      paymentPending,
+      payment_rail: rail,
+      amount_due_at_pickup: due,
+      bookingId: booking.id,
+    };
+  }
+
+  private async notifyPickupAccepted(booking: any): Promise<void> {
+    const userId = booking.business?.user_id as string | undefined;
+    if (!userId) return;
+    try {
+      await this.notificationsService.sendRentalInspectionNotice({
+        userId,
+        kind: 'pickup_accepted',
+        persona: 'business',
+        rentalItemName: booking.rental_location_listing?.rental_item?.name ?? 'Rental',
+        bookingId: booking.id,
+      });
+    } catch (error: any) {
+      this.logger?.warn(`notifyPickupAccepted ${booking.id}: ${error?.message ?? error}`);
+    }
+  }
+
+  private async attachAcceptStartPreview(booking: any): Promise<void> {
+    const preview = await this.previewAcceptStart(booking);
+    if (preview) booking.accept_start_preview = preview;
+  }
+
+  private async previewAcceptStart(booking: any) {
+    if (booking?.inspection_policy_version == null || booking.actual_start_at) return null;
+    if (booking.payment_status === 'authorized') {
+      return { payment_rail: 'card' as const, amount_due_at_pickup: 0 };
+    }
+    if (booking.status === 'confirmed' && booking.payment_status === 'paid') {
+      return { payment_rail: 'wallet' as const, amount_due_at_pickup: 0 };
+    }
+    if (booking.status !== 'reserved') return null;
+    return this.previewReservedRail(booking);
+  }
+
+  private async previewReservedRail(booking: any) {
+    const total = Number(booking.total_amount) || 0;
+    const userId = booking.client?.user?.id ?? booking.client?.user_id;
+    if (!userId) return { payment_rail: 'mobile_money' as const, amount_due_at_pickup: total };
+    try {
+      const account = await this.hasuraSystemService.getAccount(userId, booking.currency);
+      const covers = Number(account?.available_balance ?? 0) >= total;
+      const payment_rail = covers ? ('wallet' as const) : ('mobile_money' as const);
+      return { payment_rail, amount_due_at_pickup: total };
+    } catch {
+      return { payment_rail: 'mobile_money' as const, amount_due_at_pickup: total };
+    }
+  }
+
+  private async rejectEnrolledLegacyStart(bookingId: string): Promise<void> {
+    const policy = await this.readInspectionPolicy(bookingId);
+    if (policy != null) throw inspectionUpdateRequired();
+  }
+
+  private async startEnrolledAfterPickupPayment(booking: any): Promise<void> {
+    if (booking.status !== 'reserved' && booking.payment_timing !== 'pay_at_pickup') return;
+    const gate = await this.readInspectionStart(booking.id);
+    if (gate.inspectionPolicyVersion == null || !pickupStartAllowed(gate)) return;
+    const fresh = await this.fetchBooking(booking.id);
+    if (fresh?.status !== 'confirmed') return;
+    const won = await this.markInspectionOrLegacyStart(booking.id);
+    if (!won) return;
+    await this.logHistory(
+      booking.id,
+      'active',
+      'confirmed',
+      fresh.client?.user_id ?? null,
+      'system',
+      'Started after Mobile Money'
+    );
   }
 
   async verifyRentalStartPin(bookingId: string, body: VerifyRentalStartPinDto) {
@@ -3144,10 +3412,7 @@ export class RentalsService {
     if (booking.status !== 'confirmed') {
       throw new HttpException('Invalid booking status', HttpStatus.BAD_REQUEST);
     }
-    const startGate = await this.readInspectionStart(bookingId);
-    if (startGate.inspectionPolicyVersion != null && !pickupStartAllowed(startGate)) {
-      throw inspectionUpdateRequired();
-    }
+    await this.rejectEnrolledLegacyStart(bookingId);
     const hasOw = !!body.overwriteCode?.trim();
     let pin = body.pin?.trim() || '';
     if (!hasOw && !pin && (body.useLatestSharedPin || body.pinMessageId)) {
@@ -3215,6 +3480,7 @@ export class RentalsService {
     if (booking.status !== 'confirmed') {
       throw new HttpException('Invalid status', HttpStatus.BAD_REQUEST);
     }
+    await this.rejectEnrolledLegacyStart(bookingId);
     const code = crypto.randomBytes(4).toString('hex').toUpperCase();
     const hash = this.deliveryPinService.hashOverwriteCode(bookingId, code);
     await this.patchBooking(bookingId, { rental_start_overwrite_code_hash: hash });
@@ -3678,10 +3944,12 @@ export class RentalsService {
 
   private async startBlockedOrConflict(bookingId: string) {
     const fresh = await this.fetchBooking(bookingId);
-    if (fresh?.status === 'active') return { success: true };
-    const gate = await this.readInspectionStart(bookingId);
-    if (gate.inspectionPolicyVersion != null && !pickupStartAllowed(gate)) {
-      throw inspectionUpdateRequired();
+    if (
+      fresh?.status === 'active' ||
+      fresh?.status === 'awaiting_return' ||
+      fresh?.status === 'completed'
+    ) {
+      return { success: true };
     }
     throw new HttpException('Booking status changed', HttpStatus.CONFLICT);
   }
@@ -3835,8 +4103,7 @@ export class RentalsService {
         HttpStatus.BAD_REQUEST
       );
     }
-    const startGate = await this.readInspectionStart(bookingId);
-    if (!pickupStartAllowed(startGate)) throw inspectionUpdateRequired();
+    await this.rejectEnrolledLegacyStart(bookingId);
     const total = Number(booking.total_amount);
     const clientUserId = booking.client.user_id as string;
     const clientAccount = await this.hasuraSystemService.getAccount(

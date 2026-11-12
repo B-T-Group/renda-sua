@@ -33,6 +33,7 @@ import { RetryRentalBookingPaymentDto } from './dto/retry-rental-booking-payment
 import { CreateRentalRequestDto } from './dto/create-rental-request.dto';
 import { UpdateRentalRequestDto } from './dto/update-rental-request.dto';
 import { RespondRentalRequestDto } from './dto/respond-rental-request.dto';
+import { AcceptAndStartRentalDto } from './dto/accept-and-start-rental.dto';
 import { VerifyRentalStartPinDto } from './dto/verify-rental-start-pin.dto';
 import { ConfirmRentalReturnDto } from './dto/confirm-rental-return.dto';
 import { RentalBookingMessagingService } from './rental-booking-messaging.service';
@@ -590,6 +591,27 @@ export class RentalsController {
   @ApiResponse({ status: 400, description: 'Booking is not reserved' })
   async initiatePickupPayment(@Param('id') bookingId: string) {
     return this.rentalsService.initiateRentalPickupPayment(bookingId);
+  }
+
+  @Post('bookings/:id/accept-and-start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Renter accepts the current pickup report, pays if the contract is due at pickup, and starts an inspected booking',
+  })
+  @ApiParam({ name: 'id', format: 'uuid' })
+  @ApiBody({ type: AcceptAndStartRentalDto })
+  @ApiResponse({ status: 200, description: 'Accepted. started or paymentPending' })
+  @ApiResponse({ status: 400, description: 'RENTAL_ACCEPT_START_NOT_ENROLLED' })
+  @ApiResponse({ status: 403, description: 'Only the renter' })
+  @ApiResponse({ status: 404, description: 'Not the renter of this booking' })
+  @ApiResponse({ status: 409, description: 'RENTAL_ACCEPT_START_CONFLICT' })
+  @ApiResponse({ status: 426, description: 'Not used on this route' })
+  async acceptAndStart(
+    @Param('id') bookingId: string,
+    @Body() body: AcceptAndStartRentalDto
+  ) {
+    return this.rentalsService.acceptAndStartRental(bookingId, body.versionId);
   }
 
   @Get('bookings/:id')

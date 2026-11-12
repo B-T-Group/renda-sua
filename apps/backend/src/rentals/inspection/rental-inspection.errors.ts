@@ -26,6 +26,30 @@ export function inspectionUnavailable(): HttpException {
   );
 }
 
+export function acceptStartNotEnrolled(): HttpException {
+  return new HttpException(
+    {
+      success: false,
+      code: 'RENTAL_ACCEPT_START_NOT_ENROLLED',
+      error: 'This booking uses the start PIN.',
+      message: 'This booking uses the start PIN.',
+    },
+    HttpStatus.BAD_REQUEST
+  );
+}
+
+export function acceptStartConflict(message = 'That report changed. Review it again.'): HttpException {
+  return new HttpException(
+    {
+      success: false,
+      code: 'RENTAL_ACCEPT_START_CONFLICT',
+      error: message,
+      message,
+    },
+    HttpStatus.CONFLICT
+  );
+}
+
 export function inspectionRejected(code: string, message: string): HttpException {
   return new HttpException(
     { success: false, code, error: message, message },

@@ -348,6 +348,27 @@ export async function initiatePickupPayment(
   );
 }
 
+export interface AcceptAndStartResult {
+  success: true;
+  accepted: true;
+  started: boolean;
+  alreadyStarted: boolean;
+  paymentPending: boolean;
+  payment_rail: 'card' | 'wallet' | 'mobile_money';
+  amount_due_at_pickup: number;
+  bookingId: string;
+}
+
+export async function acceptAndStart(
+  bookingId: string,
+  versionId: string
+): Promise<AcceptAndStartResult> {
+  return apiRequest<AcceptAndStartResult>(
+    `/rentals/bookings/${encodeURIComponent(bookingId)}/accept-and-start`,
+    { method: 'POST', body: JSON.stringify({ versionId }) }
+  );
+}
+
 export async function getBusinessItems(
   init?: Init
 ): Promise<BusinessRentalItemRow[]> {
@@ -628,6 +649,7 @@ export const rentalsApi = {
   getStartPin,
   cancelBooking,
   initiatePickupPayment,
+  acceptAndStart,
   getBusinessItems,
   getBusinessItem,
   createBusinessItem,

@@ -624,6 +624,7 @@ export const GET_RENTAL_BOOKING_DETAIL_FOR_VIEWER = `
       business_id
       client {
         user {
+          id
           first_name
           last_name
           phone_number
@@ -1166,6 +1167,7 @@ export const GET_BUSINESS_RENTAL_REQUESTS = `
         payment_status
         total_amount
         overtime_amount
+        inspection_policy_version
       }
       rental_location_listing {
         id

@@ -64,7 +64,11 @@ describe('TrackSiteEventDto', () => {
   });
 
   it('accepts the client Rentals tab events', async () => {
-    for (const eventType of ['rentals_client_tab_tap', 'rentals_client_tab_browse_tap']) {
+    for (const eventType of [
+      'rentals_client_tab_tap',
+      'rentals_client_tab_browse_tap',
+      'rental_accept_and_start_tap',
+    ]) {
       const dto = new TrackSiteEventDto();
       dto.eventType = eventType as any;
       dto.metadata = { source: 'tab', segment: 'action_needed', todo_count: 2 };

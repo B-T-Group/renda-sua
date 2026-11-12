@@ -129,12 +129,7 @@ export function pickupGate(input: PickupGateInput): PickupGate {
     return { mode: 'ready', showCollectPayment: false, showStart: false, showOverwrite: false };
   }
   if (input.accepted) {
-    return {
-      mode: 'ready',
-      showCollectPayment: reserved,
-      showStart: confirmed,
-      showOverwrite: false,
-    };
+    return { mode: 'ready', showCollectPayment: false, showStart: false, showOverwrite: false };
   }
   return {
     mode: input.submitted ? 'waiting' : 'capture',
@@ -142,6 +137,27 @@ export function pickupGate(input: PickupGateInput): PickupGate {
     showStart: false,
     showOverwrite: false,
   };
+}
+
+export function showDidntReceiveLink(input: {
+  enrolled: boolean;
+  startedAt: string | null | undefined;
+  now?: number;
+}): boolean {
+  if (!input.enrolled) return false;
+  return didntReceiveWindowOpen(input.startedAt, input.now ?? Date.now());
+}
+
+export function didntReceiveWindowOpen(
+  startedAt: string | null | undefined,
+  now = Date.now(),
+  minutes = 30
+): boolean {
+  if (!startedAt) return false;
+  const at = new Date(startedAt).getTime();
+  if (!Number.isFinite(at)) return false;
+  const elapsed = now - at;
+  return elapsed >= 0 && elapsed <= minutes * 60000;
 }
 
 export function showLegacyReturnPicker(enrolled: boolean, status: string): boolean {
@@ -184,24 +200,36 @@ export function clientInspectionAction(input: {
   returnView: InspectionView | null;
 }): ClientInspectionAction {
   const beforeStart = input.status === 'reserved' || input.status === 'confirmed';
-  if (beforeStart && clientCanRespond(input.pickup)) return 'review_pickup';
+  const pickupOpen = clientCanRespond(input.pickup) || input.pickup?.yourDecision === 'accept';
+  if (beforeStart && pickupOpen && input.pickup?.status === 'submitted') return 'review_pickup';
   const during = input.status === 'active' || input.status === 'awaiting_return';
   if (during && clientCanRespond(input.returnView)) return 'review_return';
   return 'none';
 }
 
-export type InspectionErrorKind = 'update_required' | 'conflict' | 'other';
+export type InspectionErrorKind = 'update_required' | 'conflict' | 'unavailable' | 'other';
 
 export function classifyInspectionError(error: unknown): InspectionErrorKind {
   const err = error as {
     status?: number;
     code?: string;
+    message?: string;
     response?: { status?: number; data?: { code?: string } };
   };
   const status = err?.status ?? err?.response?.status;
   const code = err?.code ?? err?.response?.data?.code;
   if (status === 426 || code === 'RENTAL_INSPECTION_UPDATE_REQUIRED') return 'update_required';
-  if (status === 409) return 'conflict';
+  if (status === 409 || code === 'RENTAL_ACCEPT_START_CONFLICT') return 'conflict';
+  if (
+    status === 503 ||
+    status === 0 ||
+    code === 'ERR_NETWORK' ||
+    code === 'ECONNABORTED' ||
+    code === 'RENTAL_INSPECTION_UNAVAILABLE' ||
+    (status == null && /network/i.test(String(err?.message ?? '')))
+  ) {
+    return 'unavailable';
+  }
   return 'other';
 }
 

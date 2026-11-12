@@ -113,6 +113,45 @@ export function pickupStartAllowed(booking: PickupGateBooking): boolean {
   );
 }
 
+export const DIDNT_RECEIVE_WINDOW_MINUTES = 30;
+
+export type AcceptStartPaymentRail = 'card' | 'wallet' | 'mobile_money';
+
+export interface AcceptAndStartResult {
+  success: true;
+  accepted: true;
+  started: boolean;
+  alreadyStarted: boolean;
+  paymentPending: boolean;
+  payment_rail: AcceptStartPaymentRail;
+  amount_due_at_pickup: number;
+  bookingId: string;
+}
+
+/** Card is already authorized. Wallet covers the contract. Otherwise Mobile Money. */
+export function acceptStartPaymentRail(input: {
+  status: string;
+  paymentStatus: string | null | undefined;
+  walletCovers: boolean;
+}): AcceptStartPaymentRail | null {
+  if (input.status === 'confirmed' && input.paymentStatus === 'authorized') return 'card';
+  if (input.status === 'confirmed' && input.paymentStatus === 'paid') return 'wallet';
+  if (input.status !== 'reserved') return null;
+  return input.walletCovers ? 'wallet' : 'mobile_money';
+}
+
+export function didntReceiveWindowOpen(
+  startedAt: string | null | undefined,
+  now: Date,
+  minutes = DIDNT_RECEIVE_WINDOW_MINUTES
+): boolean {
+  if (!startedAt) return false;
+  const at = new Date(startedAt).getTime();
+  if (!Number.isFinite(at)) return false;
+  const elapsed = now.getTime() - at;
+  return elapsed >= 0 && elapsed <= minutes * 60000;
+}
+
 export interface SettlementGateBooking {
   inspectionPolicyVersion: number | null;
   returnHandedBackAt: string | null;

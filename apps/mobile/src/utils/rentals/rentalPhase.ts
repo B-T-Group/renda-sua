@@ -216,18 +216,8 @@ const OPEN_BOOKING_STEPS = [
   'completed',
 ] as const;
 
-const RESERVED_BOOKING_STEPS = [
-  'proposed',
-  'reserved',
-  'confirmed',
-  'active',
-  'awaiting_return',
-  'completed',
-] as const;
-
-/** Steps shown on the booking-detail stepper. Reserved inserts its own step. */
-export function bookingDetailTimeline(status: string): string[] {
-  if (status === 'reserved') return [...RESERVED_BOOKING_STEPS];
+/** The booking-detail stepper is the five steps from the status model. Reserved uses that list. */
+export function bookingDetailTimeline(_status: string): string[] {
   return [...OPEN_BOOKING_STEPS];
 }
 
